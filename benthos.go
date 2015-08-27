@@ -22,8 +22,30 @@ THE SOFTWARE.
 
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/jeffail/benthos/input"
+)
+
+//--------------------------------------------------------------------------------------------------
+
+// Config - The benthos configuration struct.
+type Config struct {
+	Input input.Config `json:"input" yaml:"input"`
+}
+
+// NewConfig - Returns a new configuration with default values.
+func NewConfig() Config {
+	return Config{
+		Input: input.NewConfig(),
+	}
+}
+
+//--------------------------------------------------------------------------------------------------
 
 func main() {
 	fmt.Println("This doesn't do anything yet!")
 }
+
+//--------------------------------------------------------------------------------------------------

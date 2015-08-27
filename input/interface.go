@@ -22,7 +22,11 @@ THE SOFTWARE.
 
 package input
 
-import "github.com/jeffail/benthos/message"
+import (
+	"time"
+
+	"github.com/jeffail/benthos/message"
+)
 
 // Type - The standard interface of an input type.
 type Type interface {
@@ -34,5 +38,5 @@ type Type interface {
 
 	// WaitForClose - A blocking call to wait until the input has finished closing down and cleaning
 	// up resources.
-	WaitForClose() error
+	WaitForClose(timeout time.Duration) error
 }

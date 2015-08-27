@@ -22,7 +22,11 @@ THE SOFTWARE.
 
 package input
 
-import "github.com/jeffail/benthos/message"
+import (
+	"time"
+
+	"github.com/jeffail/benthos/message"
+)
 
 //--------------------------------------------------------------------------------------------------
 
@@ -42,7 +46,7 @@ func (m MockType) CloseAsync() {
 }
 
 // WaitForClose - Does nothing.
-func (m MockType) WaitForClose() error {
+func (m MockType) WaitForClose(time.Duration) error {
 	// Do nothing
 	return nil
 }
