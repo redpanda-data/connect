@@ -22,42 +22,15 @@ THE SOFTWARE.
 
 package broker
 
-import (
-	"time"
-
-	"github.com/jeffail/benthos/output"
-	"github.com/jeffail/benthos/types"
-)
+import "testing"
 
 //--------------------------------------------------------------------------------------------------
 
-// MockType - Implements the broker.Type interface.
-type MockType struct {
-	responseChan chan Response
-	messages     <-chan types.Message
-
-	outputs []output.Type
-}
-
-// SetOutputs - Set the broker outputs.
-func (m *MockType) SetOutputs(o []output.Type) {
-	m.outputs = o
-}
-
-// ResponseChan - Returns the errors channel.
-func (m *MockType) ResponseChan() <-chan Response {
-	return m.responseChan
-}
-
-// CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
-	// Do nothing
-}
-
-// WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
-	// Do nothing
-	return nil
+func TestMockInterface(t *testing.T) {
+	m := &MockType{}
+	if Type(m) == nil {
+		t.Errorf("nil Type")
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

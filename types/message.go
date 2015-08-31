@@ -20,44 +20,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package broker
+package types
 
-import (
-	"time"
-
-	"github.com/jeffail/benthos/output"
-	"github.com/jeffail/benthos/types"
-)
-
-//--------------------------------------------------------------------------------------------------
-
-// MockType - Implements the broker.Type interface.
-type MockType struct {
-	responseChan chan Response
-	messages     <-chan types.Message
-
-	outputs []output.Type
+// Message - A struct containing any relevant fields of a benthos message and helper functions.
+type Message struct {
+	Content []byte
 }
-
-// SetOutputs - Set the broker outputs.
-func (m *MockType) SetOutputs(o []output.Type) {
-	m.outputs = o
-}
-
-// ResponseChan - Returns the errors channel.
-func (m *MockType) ResponseChan() <-chan Response {
-	return m.responseChan
-}
-
-// CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
-	// Do nothing
-}
-
-// WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
-	// Do nothing
-	return nil
-}
-
-//--------------------------------------------------------------------------------------------------

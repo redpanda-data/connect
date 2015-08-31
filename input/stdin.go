@@ -27,7 +27,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jeffail/benthos/message"
+	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -47,7 +47,7 @@ func NewSTDINConfig() STDINConfig {
 type STDIN struct {
 	conf Config
 
-	messages chan message.Type
+	messages chan types.Message
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -57,7 +57,7 @@ type STDIN struct {
 func NewSTDIN(conf Config) *STDIN {
 	s := STDIN{
 		conf:       conf,
-		messages:   make(chan message.Type),
+		messages:   make(chan types.Message),
 		closedChan: make(chan struct{}),
 		closeChan:  make(chan struct{}),
 	}
@@ -75,7 +75,7 @@ func (s *STDIN) loop() {
 
 	running := true
 	for running && stdin.Scan() {
-		s.messages <- message.Type{
+		s.messages <- types.Message{
 			Content: stdin.Bytes(),
 		}
 		select {
@@ -89,7 +89,7 @@ func (s *STDIN) loop() {
 }
 
 // ConsumerChan - Returns the messages channel.
-func (s *STDIN) ConsumerChan() <-chan message.Type {
+func (s *STDIN) ConsumerChan() <-chan types.Message {
 	return s.messages
 }
 
@@ -103,7 +103,7 @@ func (s *STDIN) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-s.closedChan:
 	case <-time.After(timeout):
-		return message.ErrTimeout
+		return types.ErrTimeout
 	}
 	return nil
 }

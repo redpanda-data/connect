@@ -22,18 +22,16 @@ THE SOFTWARE.
 
 package output
 
-import "time"
+import "github.com/jeffail/benthos/types"
+
+// Response - The response type returned after each message received.
+type Response error
 
 // Type - The standard interface of an output type.
 type Type interface {
-	// ErrorChan - Returns the channel used for returning the result of a message dispatch, a nil
+	types.Closable
+
+	// ResponseChan - Returns the channel used for returning the result of a message dispatch, a nil
 	// error means the message was succesfully dispatched to the output.
-	ErrorChan() <-chan error
-
-	// CloseAsync - Trigger a closure of this output but do not block until completion.
-	CloseAsync()
-
-	// WaitForClose - A blocking call to wait until the output has finished closing down and cleaning
-	// up resources.
-	WaitForClose(timeout time.Duration) error
+	ResponseChan() <-chan Response
 }

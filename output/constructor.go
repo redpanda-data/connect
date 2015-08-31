@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 package output
 
-import "github.com/jeffail/benthos/message"
+import "github.com/jeffail/benthos/types"
 
 //--------------------------------------------------------------------------------------------------
 
@@ -43,7 +43,7 @@ func NewConfig() Config {
 //--------------------------------------------------------------------------------------------------
 
 // Construct - Create an output type based on an output configuration.
-func Construct(conf Config, messages <-chan message.Type) Type {
+func Construct(conf Config, messages <-chan types.Message) Type {
 	switch conf.Type {
 	case "stdout":
 		return NewSTDOUT(conf, messages)

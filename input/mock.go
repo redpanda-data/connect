@@ -25,18 +25,18 @@ package input
 import (
 	"time"
 
-	"github.com/jeffail/benthos/message"
+	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
 
 // MockType - Implements the input.Type interface.
 type MockType struct {
-	messages chan message.Type
+	messages chan types.Message
 }
 
 // ConsumerChan - Returns the messages channel.
-func (m *MockType) ConsumerChan() <-chan message.Type {
+func (m *MockType) ConsumerChan() <-chan types.Message {
 	return m.messages
 }
 

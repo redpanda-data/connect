@@ -20,44 +20,27 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package broker
+package input
 
-import (
-	"time"
-
-	"github.com/jeffail/benthos/output"
-	"github.com/jeffail/benthos/types"
-)
+import "testing"
 
 //--------------------------------------------------------------------------------------------------
 
-// MockType - Implements the broker.Type interface.
-type MockType struct {
-	responseChan chan Response
-	messages     <-chan types.Message
+func TestInterfaces(t *testing.T) {
+	m := &MockType{}
+	if Type(m) == nil {
+		t.Errorf("mock: nil Type")
+	}
 
-	outputs []output.Type
-}
+	s := &STDIN{}
+	if Type(s) == nil {
+		t.Errorf("stdin: nil Type")
+	}
 
-// SetOutputs - Set the broker outputs.
-func (m *MockType) SetOutputs(o []output.Type) {
-	m.outputs = o
-}
-
-// ResponseChan - Returns the errors channel.
-func (m *MockType) ResponseChan() <-chan Response {
-	return m.responseChan
-}
-
-// CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
-	// Do nothing
-}
-
-// WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
-	// Do nothing
-	return nil
+	h := &HTTP{}
+	if Type(h) == nil {
+		t.Errorf("http: nil Type")
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

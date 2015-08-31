@@ -20,5 +20,5 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-// Package message - Defines any message types used within benthos.
-package message
+// Package types - Defines any general structs and interfaces used throughout the benthos code base.
+package types

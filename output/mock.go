@@ -25,20 +25,20 @@ package output
 import (
 	"time"
 
-	"github.com/jeffail/benthos/message"
+	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
 
 // MockType - Implements the output.Type interface.
 type MockType struct {
-	errs     chan error
-	messages <-chan message.Type
+	responseChan chan Response
+	messages     <-chan types.Message
 }
 
-// ErrorChan - Returns the errors channel.
-func (m *MockType) ErrorChan() <-chan error {
-	return m.errs
+// ResponseChan - Returns the errors channel.
+func (m *MockType) ResponseChan() <-chan Response {
+	return m.responseChan
 }
 
 // CloseAsync - Does nothing.

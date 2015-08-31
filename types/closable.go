@@ -20,44 +20,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package broker
+package types
 
-import (
-	"time"
+import "time"
 
-	"github.com/jeffail/benthos/output"
-	"github.com/jeffail/benthos/types"
-)
+// Closable - Defines a type that can be safely closed down and cleaned up.
+type Closable interface {
+	// CloseAsync - Trigger a closure of this object but do not block until completion.
+	CloseAsync()
 
-//--------------------------------------------------------------------------------------------------
-
-// MockType - Implements the broker.Type interface.
-type MockType struct {
-	responseChan chan Response
-	messages     <-chan types.Message
-
-	outputs []output.Type
+	// WaitForClose - A blocking call to wait until the object has finished closing down and
+	// cleaning up resources.
+	WaitForClose(timeout time.Duration) error
 }
-
-// SetOutputs - Set the broker outputs.
-func (m *MockType) SetOutputs(o []output.Type) {
-	m.outputs = o
-}
-
-// ResponseChan - Returns the errors channel.
-func (m *MockType) ResponseChan() <-chan Response {
-	return m.responseChan
-}
-
-// CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
-	// Do nothing
-}
-
-// WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
-	// Do nothing
-	return nil
-}
-
-//--------------------------------------------------------------------------------------------------

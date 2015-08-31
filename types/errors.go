@@ -20,14 +20,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package message
+package types
 
 import "errors"
-
-// Type - A struct containing any relevant fields of a benthos message and helper functions.
-type Type struct {
-	Content []byte
-}
 
 // Errors used throughout the codebase
 var (

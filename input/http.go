@@ -27,7 +27,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jeffail/benthos/message"
+	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -55,8 +55,8 @@ type HTTP struct {
 	closedChan chan struct{}
 	closeChan  chan struct{}
 
-	internalQueue chan message.Type
-	messages      chan message.Type
+	internalQueue chan types.Message
+	messages      chan types.Message
 	mux           *http.ServeMux
 }
 
@@ -68,8 +68,8 @@ func NewHTTP(conf Config) *HTTP {
 		conf:          conf,
 		closedChan:    make(chan struct{}),
 		closeChan:     make(chan struct{}),
-		internalQueue: make(chan message.Type),
-		messages:      make(chan message.Type),
+		internalQueue: make(chan types.Message),
+		messages:      make(chan types.Message),
 		mux:           mux,
 	}
 
@@ -109,7 +109,7 @@ func (m *HTTP) serveRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m.internalQueue <- message.Type{
+	m.internalQueue <- types.Message{
 		Content: bytes,
 	}
 }
@@ -141,7 +141,7 @@ func (m *HTTP) loop() {
 }
 
 // ConsumerChan - Returns the messages channel.
-func (m *HTTP) ConsumerChan() <-chan message.Type {
+func (m *HTTP) ConsumerChan() <-chan types.Message {
 	return m.messages
 }
 
@@ -155,7 +155,7 @@ func (m *HTTP) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-m.closedChan:
 	case <-time.After(timeout):
-		return message.ErrTimeout
+		return types.ErrTimeout
 	}
 	return nil
 }

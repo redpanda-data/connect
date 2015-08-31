@@ -22,21 +22,12 @@ THE SOFTWARE.
 
 package input
 
-import (
-	"time"
-
-	"github.com/jeffail/benthos/message"
-)
+import "github.com/jeffail/benthos/types"
 
 // Type - The standard interface of an input type.
 type Type interface {
+	types.Closable
+
 	// ConsumerChan - Returns the channel used for consuming messages from this input.
-	ConsumerChan() <-chan message.Type
-
-	// CloseAsync - Trigger a closure of this input but do not block until completion.
-	CloseAsync()
-
-	// WaitForClose - A blocking call to wait until the input has finished closing down and cleaning
-	// up resources.
-	WaitForClose(timeout time.Duration) error
+	ConsumerChan() <-chan types.Message
 }

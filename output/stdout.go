@@ -27,7 +27,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jeffail/benthos/message"
+	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -43,25 +43,25 @@ func NewSTDOUTConfig() STDOUTConfig {
 
 //--------------------------------------------------------------------------------------------------
 
-// STDOUT - An input type that serves STDOUT POST requests.
+// STDOUT - An output type that pushes messages to STDOUT.
 type STDOUT struct {
 	conf Config
 
-	messages <-chan message.Type
-	errs     chan error
+	messages     <-chan types.Message
+	responseChan chan Response
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
 
-// NewSTDOUT - Create a new STDOUT input type.
-func NewSTDOUT(conf Config, messages <-chan message.Type) *STDOUT {
+// NewSTDOUT - Create a new STDOUT output type.
+func NewSTDOUT(conf Config, messages <-chan types.Message) *STDOUT {
 	s := STDOUT{
-		conf:       conf,
-		messages:   messages,
-		errs:       make(chan error),
-		closedChan: make(chan struct{}),
-		closeChan:  make(chan struct{}),
+		conf:         conf,
+		messages:     messages,
+		responseChan: make(chan Response),
+		closedChan:   make(chan struct{}),
+		closeChan:    make(chan struct{}),
 	}
 
 	go s.loop()
@@ -78,32 +78,32 @@ func (s *STDOUT) loop() {
 		select {
 		case msg := <-s.messages:
 			_, err := fmt.Fprintln(os.Stdout, string(msg.Content))
-			s.errs <- err
+			s.responseChan <- Response(err)
 		case _, running = <-s.closeChan:
 			running = false
 		}
 	}
 
-	close(s.errs)
+	close(s.responseChan)
 	close(s.closedChan)
 }
 
-// ErrorChan - Returns the errors channel.
-func (s *STDOUT) ErrorChan() <-chan error {
-	return s.errs
+// ResponseChan - Returns the errors channel.
+func (s *STDOUT) ResponseChan() <-chan Response {
+	return s.responseChan
 }
 
-// CloseAsync - Shuts down the STDOUT input and stops processing requests.
+// CloseAsync - Shuts down the STDOUT output and stops processing messages.
 func (s *STDOUT) CloseAsync() {
 	close(s.closeChan)
 }
 
-// WaitForClose - Blocks until the STDOUT input has closed down.
+// WaitForClose - Blocks until the STDOUT output has closed down.
 func (s *STDOUT) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-s.closedChan:
 	case <-time.After(timeout):
-		return message.ErrTimeout
+		return types.ErrTimeout
 	}
 	return nil
 }

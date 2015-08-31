@@ -22,14 +22,21 @@ THE SOFTWARE.
 
 package broker
 
-import "time"
+import (
+	"github.com/jeffail/benthos/output"
+	"github.com/jeffail/benthos/types"
+)
+
+// Response - A map of ints (output indexes) with corresponding errors.
+type Response map[int]error
 
 // Type - The standard interface of a broker type.
 type Type interface {
-	// CloseAsync - Trigger a closure of this broker but do not block until completion.
-	CloseAsync()
+	types.Closable
 
-	// WaitForClose - A blocking call to wait until the broker has finished closing down and
-	// cleaning up resources.
-	WaitForClose(timeout time.Duration) error
+	// ResponseChan - Returns a response for every input message received.
+	ResponseChan() <-chan Response
+
+	// SetOutputs - Sets the array of outputs to route messages to.
+	SetOutputs([]output.Type)
 }

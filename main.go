@@ -31,8 +31,8 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/input"
-	"github.com/jeffail/benthos/message"
 	"github.com/jeffail/benthos/output"
+	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/path"
@@ -125,7 +125,7 @@ func main() {
 	routerCloseChan := make(chan struct{})
 	routerClosedChan := make(chan struct{})
 	go func() {
-		consumerChan := make(chan message.Type)
+		consumerChan := make(chan types.Message)
 
 		in := input.Construct(config.Input)
 		out := output.Construct(config.Output, consumerChan)
@@ -136,7 +136,7 @@ func main() {
 			case msg := <-in.ConsumerChan():
 				consumerChan <- msg
 				select {
-				case err := <-out.ErrorChan():
+				case err := <-out.ResponseChan():
 					if err != nil {
 						logger.Errorf("Failed to push out message: %v\n", err)
 					}
@@ -153,7 +153,7 @@ func main() {
 		if err := in.WaitForClose(time.Second * 5); err != nil {
 			logger.Errorf("Error closing input: %v\n", err)
 		}
-		for err := range out.ErrorChan() {
+		for err := range out.ResponseChan() {
 			if err != nil {
 				logger.Errorf("Failed to push out message: %v\n", err)
 			}

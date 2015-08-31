@@ -31,32 +31,64 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// MockType - Implements the broker.Type interface.
-type MockType struct {
-	responseChan chan Response
+// OneToMany - A one-to-many broker type.
+type OneToMany struct {
 	messages     <-chan types.Message
+	responseChan chan Response
 
-	outputs []output.Type
+	outputsChan chan []output.Type
+	outputs     []output.Type
+
+	closedChan chan struct{}
+	closeChan  chan struct{}
 }
+
+//--------------------------------------------------------------------------------------------------
 
 // SetOutputs - Set the broker outputs.
-func (m *MockType) SetOutputs(o []output.Type) {
-	m.outputs = o
+func (o *OneToMany) SetOutputs(outs []output.Type) {
+	o.outputsChan <- outs
 }
 
-// ResponseChan - Returns the errors channel.
-func (m *MockType) ResponseChan() <-chan Response {
-	return m.responseChan
+//--------------------------------------------------------------------------------------------------
+
+// loop - Internal loop brokers incoming messages to many outputs.
+func (o *OneToMany) loop() {
+	running := true
+	for running {
+		select {
+		case _ = <-o.messages:
+			// TODO
+			o.responseChan <- Response{}
+		case outs := <-o.outputsChan:
+			o.outputs = outs
+		case _, running = <-o.closeChan:
+			running = false
+		}
+	}
+
+	close(o.responseChan)
+	close(o.closedChan)
 }
 
-// CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
-	// Do nothing
+// ResponseChan - Returns the response channel.
+func (o *OneToMany) ResponseChan() <-chan Response {
+	return o.responseChan
 }
 
-// WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
-	// Do nothing
+// CloseAsync - Shuts down the OneToMany broker and stops processing requests.
+func (o *OneToMany) CloseAsync() {
+	close(o.closeChan)
+	close(o.outputsChan)
+}
+
+// WaitForClose - Blocks until the OneToMany broker has closed down.
+func (o *OneToMany) WaitForClose(timeout time.Duration) error {
+	select {
+	case <-o.closedChan:
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	}
 	return nil
 }
 
