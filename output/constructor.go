@@ -22,8 +22,6 @@ THE SOFTWARE.
 
 package output
 
-import "github.com/jeffail/benthos/types"
-
 //--------------------------------------------------------------------------------------------------
 
 // Config - The all encompassing configuration struct for all output types.
@@ -43,10 +41,10 @@ func NewConfig() Config {
 //--------------------------------------------------------------------------------------------------
 
 // Construct - Create an output type based on an output configuration.
-func Construct(conf Config, messages <-chan types.Message) Type {
+func Construct(conf Config) Type {
 	switch conf.Type {
 	case "stdout":
-		return NewSTDOUT(conf, messages)
+		return NewSTDOUT(conf)
 	default:
 	}
 	return &MockType{}

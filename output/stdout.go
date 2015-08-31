@@ -47,6 +47,8 @@ func NewSTDOUTConfig() STDOUTConfig {
 type STDOUT struct {
 	conf Config
 
+	newMessagesChan chan (<-chan types.Message)
+
 	messages     <-chan types.Message
 	responseChan chan Response
 
@@ -55,13 +57,14 @@ type STDOUT struct {
 }
 
 // NewSTDOUT - Create a new STDOUT output type.
-func NewSTDOUT(conf Config, messages <-chan types.Message) *STDOUT {
+func NewSTDOUT(conf Config) *STDOUT {
 	s := STDOUT{
-		conf:         conf,
-		messages:     messages,
-		responseChan: make(chan Response),
-		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		conf:            conf,
+		newMessagesChan: make(chan (<-chan types.Message)),
+		messages:        nil,
+		responseChan:    make(chan Response),
+		closedChan:      make(chan struct{}),
+		closeChan:       make(chan struct{}),
 	}
 
 	go s.loop()
@@ -79,13 +82,21 @@ func (s *STDOUT) loop() {
 		case msg := <-s.messages:
 			_, err := fmt.Fprintln(os.Stdout, string(msg.Content))
 			s.responseChan <- Response(err)
+		case newChan := <-s.newMessagesChan:
+			s.messages = newChan
 		case _, running = <-s.closeChan:
 			running = false
 		}
 	}
 
 	close(s.responseChan)
+	close(s.newMessagesChan)
 	close(s.closedChan)
+}
+
+// SetReadChan - Assigns a new messages channel for the output to read.
+func (s *STDOUT) SetReadChan(msgs <-chan types.Message) {
+	s.newMessagesChan <- msgs
 }
 
 // ResponseChan - Returns the errors channel.

@@ -36,6 +36,11 @@ type MockType struct {
 	messages     <-chan types.Message
 }
 
+// SetReadChan - Sets the read channel. This implementation is NOT thread safe.
+func (m *MockType) SetReadChan(msgs <-chan types.Message) {
+	m.messages = msgs
+}
+
 // ResponseChan - Returns the errors channel.
 func (m *MockType) ResponseChan() <-chan Response {
 	return m.responseChan

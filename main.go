@@ -128,7 +128,8 @@ func main() {
 		consumerChan := make(chan types.Message)
 
 		in := input.Construct(config.Input)
-		out := output.Construct(config.Output, consumerChan)
+		out := output.Construct(config.Output)
+		out.SetReadChan(consumerChan)
 
 		running := true
 		for running {
