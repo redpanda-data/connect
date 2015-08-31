@@ -20,10 +20,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package input
+package output
 
 import (
-	"bufio"
+	"fmt"
 	"os"
 	"time"
 
@@ -32,32 +32,34 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// STDINConfig - Configuration for the STDIN input type.
-type STDINConfig struct {
+// STDOUTConfig - Configuration for the STDOUT input type.
+type STDOUTConfig struct {
 }
 
-// NewSTDINConfig - Creates a new STDINConfig with default values.
-func NewSTDINConfig() STDINConfig {
-	return STDINConfig{}
+// NewSTDOUTConfig - Creates a new STDOUTConfig with default values.
+func NewSTDOUTConfig() STDOUTConfig {
+	return STDOUTConfig{}
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// STDIN - An input type that serves STDIN POST requests.
-type STDIN struct {
+// STDOUT - An input type that serves STDOUT POST requests.
+type STDOUT struct {
 	conf Config
 
-	messages chan message.Type
+	messages <-chan message.Type
+	errs     chan error
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
 
-// NewSTDIN - Create a new STDIN input type.
-func NewSTDIN(conf Config) *STDIN {
-	s := STDIN{
+// NewSTDOUT - Create a new STDOUT input type.
+func NewSTDOUT(conf Config, messages <-chan message.Type) *STDOUT {
+	s := STDOUT{
 		conf:       conf,
-		messages:   make(chan message.Type),
+		messages:   messages,
+		errs:       make(chan error),
 		closedChan: make(chan struct{}),
 		closeChan:  make(chan struct{}),
 	}
@@ -70,36 +72,34 @@ func NewSTDIN(conf Config) *STDIN {
 //--------------------------------------------------------------------------------------------------
 
 // loop - Internal loop brokers incoming messages to output pipe.
-func (s *STDIN) loop() {
-	stdin := bufio.NewScanner(os.Stdin)
-
+func (s *STDOUT) loop() {
 	running := true
-	for running && stdin.Scan() {
-		s.messages <- message.Type{
-			Content: stdin.Bytes(),
-		}
+	for running {
 		select {
+		case msg := <-s.messages:
+			_, err := fmt.Fprintln(os.Stdout, string(msg.Content))
+			s.errs <- err
 		case _, running = <-s.closeChan:
 			running = false
-		default:
 		}
 	}
 
+	close(s.errs)
 	close(s.closedChan)
 }
 
-// ConsumerChan - Returns the messages channel.
-func (s *STDIN) ConsumerChan() <-chan message.Type {
-	return s.messages
+// ErrorChan - Returns the errors channel.
+func (s *STDOUT) ErrorChan() <-chan error {
+	return s.errs
 }
 
-// CloseAsync - Shuts down the STDIN input and stops processing requests.
-func (s *STDIN) CloseAsync() {
+// CloseAsync - Shuts down the STDOUT input and stops processing requests.
+func (s *STDOUT) CloseAsync() {
 	close(s.closeChan)
 }
 
-// WaitForClose - Blocks until the STDIN input has closed down.
-func (s *STDIN) WaitForClose(timeout time.Duration) error {
+// WaitForClose - Blocks until the STDOUT input has closed down.
+func (s *STDOUT) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-s.closedChan:
 	case <-time.After(timeout):

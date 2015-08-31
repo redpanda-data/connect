@@ -20,32 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package main
-
-import (
-	"fmt"
-
-	"github.com/jeffail/benthos/input"
-)
-
-//--------------------------------------------------------------------------------------------------
-
-// Config - The benthos configuration struct.
-type Config struct {
-	Input input.Config `json:"input" yaml:"input"`
-}
-
-// NewConfig - Returns a new configuration with default values.
-func NewConfig() Config {
-	return Config{
-		Input: input.NewConfig(),
-	}
-}
-
-//--------------------------------------------------------------------------------------------------
-
-func main() {
-	fmt.Println("This doesn't do anything yet!")
-}
-
-//--------------------------------------------------------------------------------------------------
+/*
+Package output - Defines dispatchers of data for a variety of targets. All output types must
+implement interface output.Type.
+*/
+package output
