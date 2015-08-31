@@ -25,7 +25,7 @@ package broker
 import (
 	"time"
 
-	"github.com/jeffail/benthos/output"
+	"github.com/jeffail/benthos/agent"
 	"github.com/jeffail/benthos/types"
 )
 
@@ -36,12 +36,12 @@ type MockType struct {
 	responseChan chan Response
 	messages     <-chan types.Message
 
-	outputs []output.Type
+	agents []agent.Type
 }
 
-// SetOutputs - Set the broker outputs.
-func (m *MockType) SetOutputs(o []output.Type) {
-	m.outputs = o
+// SetAgents - Set the broker agents.
+func (m *MockType) SetAgents(a []agent.Type) {
+	m.agents = a
 }
 
 // ResponseChan - Returns the errors channel.

@@ -20,23 +20,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package broker
+package agent
 
-import (
-	"github.com/jeffail/benthos/agent"
-	"github.com/jeffail/benthos/types"
-)
+import "testing"
 
-// Response - A map of ints (output indexes) with corresponding errors.
-type Response map[int]agent.Response
+//--------------------------------------------------------------------------------------------------
 
-// Type - The standard interface of a broker type.
-type Type interface {
-	types.Closable
-
-	// ResponseChan - Returns a response for every input message received.
-	ResponseChan() <-chan Response
-
-	// SetAgents - Sets the array of agents to route messages to.
-	SetAgents([]agent.Type)
+func TestInterfaces(t *testing.T) {
+	m := &MockType{}
+	if Type(m) == nil {
+		t.Errorf("mock: nil Type")
+	}
 }
+
+//--------------------------------------------------------------------------------------------------

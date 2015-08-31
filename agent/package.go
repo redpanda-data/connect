@@ -20,23 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package broker
-
-import (
-	"github.com/jeffail/benthos/agent"
-	"github.com/jeffail/benthos/types"
-)
-
-// Response - A map of ints (output indexes) with corresponding errors.
-type Response map[int]agent.Response
-
-// Type - The standard interface of a broker type.
-type Type interface {
-	types.Closable
-
-	// ResponseChan - Returns a response for every input message received.
-	ResponseChan() <-chan Response
-
-	// SetAgents - Sets the array of agents to route messages to.
-	SetAgents([]agent.Type)
-}
+/*
+Package agent - Wraps an output and takes ownership of the message channel. This type is used for
+grouping buffered and unbuffered outputs together.
+*/
+package agent

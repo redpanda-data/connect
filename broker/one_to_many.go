@@ -25,7 +25,7 @@ package broker
 import (
 	"time"
 
-	"github.com/jeffail/benthos/output"
+	"github.com/jeffail/benthos/agent"
 	"github.com/jeffail/benthos/types"
 )
 
@@ -36,8 +36,8 @@ type OneToMany struct {
 	messages     <-chan types.Message
 	responseChan chan Response
 
-	outputsChan chan []output.Type
-	outputs     []output.Type
+	agentsChan chan []agent.Type
+	agents     []agent.Type
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -45,9 +45,9 @@ type OneToMany struct {
 
 //--------------------------------------------------------------------------------------------------
 
-// SetOutputs - Set the broker outputs.
-func (o *OneToMany) SetOutputs(outs []output.Type) {
-	o.outputsChan <- outs
+// SetAgents - Set the broker agents.
+func (o *OneToMany) SetAgents(agents []agent.Type) {
+	o.agentsChan <- agents
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -57,11 +57,17 @@ func (o *OneToMany) loop() {
 	running := true
 	for running {
 		select {
-		case _ = <-o.messages:
-			// TODO
-			o.responseChan <- Response{}
-		case outs := <-o.outputsChan:
-			o.outputs = outs
+		case msg := <-o.messages:
+			responses := Response{}
+			for i, a := range o.agents {
+				a.MessageChan() <- msg
+				if r := <-a.ResponseChan(); r != nil {
+					responses[i] = r
+				}
+			}
+			o.responseChan <- responses
+		case agents := <-o.agentsChan:
+			o.agents = agents
 		case _, running = <-o.closeChan:
 			running = false
 		}
@@ -79,7 +85,7 @@ func (o *OneToMany) ResponseChan() <-chan Response {
 // CloseAsync - Shuts down the OneToMany broker and stops processing requests.
 func (o *OneToMany) CloseAsync() {
 	close(o.closeChan)
-	close(o.outputsChan)
+	close(o.agentsChan)
 }
 
 // WaitForClose - Blocks until the OneToMany broker has closed down.

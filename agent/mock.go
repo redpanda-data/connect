@@ -20,23 +20,41 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package broker
+package agent
 
 import (
-	"github.com/jeffail/benthos/agent"
+	"time"
+
 	"github.com/jeffail/benthos/types"
 )
 
-// Response - A map of ints (output indexes) with corresponding errors.
-type Response map[int]agent.Response
+//--------------------------------------------------------------------------------------------------
 
-// Type - The standard interface of a broker type.
-type Type interface {
-	types.Closable
-
-	// ResponseChan - Returns a response for every input message received.
-	ResponseChan() <-chan Response
-
-	// SetAgents - Sets the array of agents to route messages to.
-	SetAgents([]agent.Type)
+// MockType - Implements the output.Type interface.
+type MockType struct {
+	responseChan chan Response
+	messages     chan types.Message
 }
+
+// MessageChan - Returns the errors channel.
+func (m *MockType) MessageChan() chan<- types.Message {
+	return m.messages
+}
+
+// ResponseChan - Returns the errors channel.
+func (m *MockType) ResponseChan() <-chan Response {
+	return m.responseChan
+}
+
+// CloseAsync - Does nothing.
+func (m MockType) CloseAsync() {
+	// Do nothing
+}
+
+// WaitForClose - Does nothing.
+func (m MockType) WaitForClose(time.Duration) error {
+	// Do nothing
+	return nil
+}
+
+//--------------------------------------------------------------------------------------------------

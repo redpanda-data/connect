@@ -20,23 +20,21 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package broker
+package agent
 
-import (
-	"github.com/jeffail/benthos/agent"
-	"github.com/jeffail/benthos/types"
-)
+import "github.com/jeffail/benthos/types"
 
-// Response - A map of ints (output indexes) with corresponding errors.
-type Response map[int]agent.Response
+// Response - The response type returned after each message received.
+type Response error
 
-// Type - The standard interface of a broker type.
+// Type - The standard interface of an agent type.
 type Type interface {
 	types.Closable
 
-	// ResponseChan - Returns a response for every input message received.
-	ResponseChan() <-chan Response
+	// MessageChan - Returns the channel used for sending messages to the Agent.
+	MessageChan() chan<- types.Message
 
-	// SetAgents - Sets the array of agents to route messages to.
-	SetAgents([]agent.Type)
+	// ResponseChan - Returns the channel used for returning the result of a message dispatch, a nil
+	// error means the message was succesfully dispatched to the agent.
+	ResponseChan() <-chan Response
 }
