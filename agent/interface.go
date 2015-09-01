@@ -22,10 +22,10 @@ THE SOFTWARE.
 
 package agent
 
-import "github.com/jeffail/benthos/types"
-
-// Response - The response type returned after each message received.
-type Response error
+import (
+	"github.com/jeffail/benthos/output"
+	"github.com/jeffail/benthos/types"
+)
 
 // Type - The standard interface of an agent type.
 type Type interface {
@@ -36,5 +36,5 @@ type Type interface {
 
 	// ResponseChan - Returns the channel used for returning the result of a message dispatch, a nil
 	// error means the message was succesfully dispatched to the agent.
-	ResponseChan() <-chan Response
+	ResponseChan() <-chan output.Response
 }

@@ -31,31 +31,46 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// MockType - Implements the output.Type interface.
-type MockType struct {
-	responseChan chan output.Response
-	messages     chan types.Message
+// Unbuffered - An agent that wraps an output without buffering.
+type Unbuffered struct {
+	output output.Type
+
+	messages chan types.Message
 }
 
-// MessageChan - Returns the errors channel.
-func (m *MockType) MessageChan() chan<- types.Message {
-	return m.messages
+// NewUnbuffered - Create a new Unbuffered agent type.
+func NewUnbuffered(out output.Type) *Unbuffered {
+	u := Unbuffered{
+		output:   out,
+		messages: make(chan types.Message),
+	}
+
+	out.SetReadChan(u.messages)
+
+	return &u
 }
 
-// ResponseChan - Returns the errors channel.
-func (m *MockType) ResponseChan() <-chan output.Response {
-	return m.responseChan
+//--------------------------------------------------------------------------------------------------
+
+// MessageChan - Returns the messages channel.
+func (u *Unbuffered) MessageChan() chan<- types.Message {
+	return u.messages
 }
 
-// CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
-	// Do nothing
+// ResponseChan - Returns the response channel.
+func (u *Unbuffered) ResponseChan() <-chan output.Response {
+	return u.output.ResponseChan()
 }
 
-// WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
-	// Do nothing
-	return nil
+// CloseAsync - Shuts down the unbuffered output and stops processing messages.
+func (u *Unbuffered) CloseAsync() {
+	u.output.CloseAsync()
+	close(u.messages)
+}
+
+// WaitForClose - Blocks until the unbuffered output has closed down.
+func (u *Unbuffered) WaitForClose(timeout time.Duration) error {
+	return u.output.WaitForClose(timeout)
 }
 
 //--------------------------------------------------------------------------------------------------

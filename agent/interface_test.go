@@ -31,6 +31,16 @@ func TestInterfaces(t *testing.T) {
 	if Type(m) == nil {
 		t.Errorf("mock: nil Type")
 	}
+
+	u := &Unbuffered{}
+	if Type(u) == nil {
+		t.Errorf("unbuffered: nil Type")
+	}
+
+	b := &Buffered{}
+	if Type(b) == nil {
+		t.Errorf("buffered: nil Type")
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

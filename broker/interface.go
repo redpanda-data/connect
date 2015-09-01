@@ -24,11 +24,12 @@ package broker
 
 import (
 	"github.com/jeffail/benthos/agent"
+	"github.com/jeffail/benthos/output"
 	"github.com/jeffail/benthos/types"
 )
 
 // Response - A map of ints (output indexes) with corresponding errors.
-type Response map[int]agent.Response
+type Response map[int]output.Response
 
 // Type - The standard interface of a broker type.
 type Type interface {
