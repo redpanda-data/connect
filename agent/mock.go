@@ -35,16 +35,22 @@ import (
 type MockType struct {
 	responseChan chan output.Response
 	messages     chan types.Message
+	errorsChan   chan []error
 }
 
-// MessageChan - Returns the errors channel.
+// MessageChan - Returns the messages channel.
 func (m *MockType) MessageChan() chan<- types.Message {
 	return m.messages
 }
 
-// ResponseChan - Returns the errors channel.
+// ResponseChan - Returns the response channel.
 func (m *MockType) ResponseChan() <-chan output.Response {
 	return m.responseChan
+}
+
+// ErrorsChan - Returns the errors channel.
+func (m *MockType) ErrorsChan() <-chan []error {
+	return m.errorsChan
 }
 
 // CloseAsync - Does nothing.

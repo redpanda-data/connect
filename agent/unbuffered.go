@@ -62,6 +62,11 @@ func (u *Unbuffered) ResponseChan() <-chan output.Response {
 	return u.output.ResponseChan()
 }
 
+// ErrorsChan - Returns nil since asynchronous errors won't occur.
+func (u *Unbuffered) ErrorsChan() <-chan []error {
+	return nil
+}
+
 // CloseAsync - Shuts down the unbuffered output and stops processing messages.
 func (u *Unbuffered) CloseAsync() {
 	u.output.CloseAsync()

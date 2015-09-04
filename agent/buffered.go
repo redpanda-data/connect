@@ -50,6 +50,7 @@ type Buffered struct {
 
 	messages     chan types.Message
 	responseChan chan output.Response
+	errorsChan   chan []error
 
 	outMessages chan types.Message
 
@@ -67,6 +68,7 @@ func NewBuffered(out output.Type, limit int) *Buffered {
 		messages:     make(chan types.Message),
 		outMessages:  make(chan types.Message),
 		responseChan: make(chan output.Response),
+		errorsChan:   make(chan []error),
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
 	}
@@ -93,7 +95,7 @@ func (b *Buffered) shiftMessage() (types.Message, error) {
 	return msg, nil
 }
 
-func (b *Buffered) unshiftMessage(msg types.Message) error {
+func (b *Buffered) pushMessage(msg types.Message) error {
 	if b.used+cap(msg.Content) > b.limit {
 		return ErrBufferReachedLimit
 	}
@@ -105,27 +107,51 @@ func (b *Buffered) unshiftMessage(msg types.Message) error {
 // loop - Internal loop brokers incoming messages to output pipe.
 func (b *Buffered) loop() {
 	running := true
-	outChan := b.outMessages
+
+	var outChan chan types.Message
+	var lastMsg types.Message
+
+	var errChan chan []error
+	errors := []error{}
+
 	for running {
 		if len(b.buffer) == 0 {
 			outChan = nil
+			lastMsg = types.Message{Content: nil}
 		} else {
 			outChan = b.outMessages
+			lastMsg = b.buffer[0]
+		}
+		if len(errors) == 0 {
+			errChan = nil
+		} else {
+			errChan = b.errorsChan
 		}
 		select {
 		case msg := <-b.messages:
-			err := b.unshiftMessage(msg)
+			err := b.pushMessage(msg)
 			for err != nil && len(b.buffer) > 0 {
 				outChan <- b.buffer[0]
-				b.shiftMessage()
-
-				err = b.unshiftMessage(msg)
+				if _, err = b.shiftMessage(); err != nil {
+					errors = append(errors, err)
+				}
+				res := <-b.output.ResponseChan()
+				if res != nil {
+					errors = append(errors, error(res))
+				}
+				err = b.pushMessage(msg)
 			}
 			b.responseChan <- err
-		case outChan <- b.buffer[0]:
+		case outChan <- lastMsg:
 			if _, err := b.shiftMessage(); err != nil {
-				panic(err) // TODO
+				errors = append(errors, err)
 			}
+			res := <-b.output.ResponseChan()
+			if res != nil {
+				errors = append(errors, error(res))
+			}
+		case errChan <- errors:
+			errors = []error{}
 		case _, running = <-b.closeChan:
 			running = false
 		}
@@ -134,6 +160,7 @@ func (b *Buffered) loop() {
 	close(b.outMessages)
 	b.output.CloseAsync()
 
+	close(b.errorsChan)
 	close(b.responseChan)
 	close(b.closedChan)
 }
@@ -143,9 +170,14 @@ func (b *Buffered) MessageChan() chan<- types.Message {
 	return b.messages
 }
 
-// ResponseChan - Returns the errors channel.
+// ResponseChan - Returns the response channel.
 func (b *Buffered) ResponseChan() <-chan output.Response {
 	return b.responseChan
+}
+
+// ErrorsChan - Returns the errors channel.
+func (b *Buffered) ErrorsChan() <-chan []error {
+	return b.errorsChan
 }
 
 // CloseAsync - Shuts down the Buffered output and stops processing messages.

@@ -37,4 +37,8 @@ type Type interface {
 	// ResponseChan - Returns the channel used for returning the result of a message dispatch, a nil
 	// error means the message was succesfully dispatched to the agent.
 	ResponseChan() <-chan output.Response
+
+	// ErrorsChan - Returns the channel used for returning any accumulated errors. This needs
+	// reading in the same select block where messages are sent as the errors can occur at any time.
+	ErrorsChan() <-chan []error
 }
