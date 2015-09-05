@@ -43,6 +43,22 @@ type OneToMany struct {
 	closeChan  chan struct{}
 }
 
+// NewOneToMany - Create a new OneToMany type by providing agents and a messages channel.
+func NewOneToMany(agents []agent.Type, messages <-chan types.Message) *OneToMany {
+	o := &OneToMany{
+		messages:     messages,
+		responseChan: make(chan Response),
+		agentsChan:   make(chan []agent.Type),
+		agents:       agents,
+		closedChan:   make(chan struct{}),
+		closeChan:    make(chan struct{}),
+	}
+
+	go o.loop()
+
+	return o
+}
+
 //--------------------------------------------------------------------------------------------------
 
 // SetAgents - Set the broker agents.

@@ -20,12 +20,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package types
+package broker
 
-import "errors"
+import (
+	"testing"
 
-// Errors used throughout the codebase
-var (
-	ErrTimeout    = errors.New("action timed out")
-	ErrChanClosed = errors.New("channel was closed unexpectedly")
+	"github.com/jeffail/benthos/agent"
 )
+
+//--------------------------------------------------------------------------------------------------
+
+func TestBasicPropagatorInterface(t *testing.T) {
+	agents := []agent.Type{
+		&agent.MockType{
+			ErrsChan: make(chan []error),
+		},
+	}
+
+	errProp := NewErrPropagator(agents)
+	_ = errProp
+}
+
+//--------------------------------------------------------------------------------------------------

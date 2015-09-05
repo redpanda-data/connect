@@ -29,7 +29,12 @@ import "testing"
 func TestMockInterface(t *testing.T) {
 	m := &MockType{}
 	if Type(m) == nil {
-		t.Errorf("nil Type")
+		t.Errorf("mock: nil Type")
+	}
+
+	o := &OneToMany{}
+	if Type(o) == nil {
+		t.Errorf("OneToMany: nil Type")
 	}
 }
 

@@ -33,24 +33,24 @@ import (
 
 // MockType - Implements the output.Type interface.
 type MockType struct {
-	responseChan chan output.Response
-	messages     chan types.Message
-	errorsChan   chan []error
+	ResChan  chan output.Response
+	Messages chan types.Message
+	ErrsChan chan []error
 }
 
 // MessageChan - Returns the messages channel.
 func (m *MockType) MessageChan() chan<- types.Message {
-	return m.messages
+	return m.Messages
 }
 
 // ResponseChan - Returns the response channel.
 func (m *MockType) ResponseChan() <-chan output.Response {
-	return m.responseChan
+	return m.ResChan
 }
 
 // ErrorsChan - Returns the errors channel.
 func (m *MockType) ErrorsChan() <-chan []error {
-	return m.errorsChan
+	return m.ErrsChan
 }
 
 // CloseAsync - Does nothing.

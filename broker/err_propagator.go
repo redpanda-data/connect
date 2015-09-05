@@ -23,6 +23,7 @@ THE SOFTWARE.
 package broker
 
 import (
+	"reflect"
 	"time"
 
 	"github.com/jeffail/benthos/agent"
@@ -39,17 +40,18 @@ type ErrPropagator struct {
 	agentsChan chan []agent.Type
 	agents     []agent.Type
 
-	outputChan chan<- PropagatedErrs
+	outputChan chan PropagatedErrs
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
 
 // NewErrPropagator - Create a new ErrPropagator type.
-func NewErrPropagator(agents []agent.Type, outputChan chan<- PropagatedErrs) *ErrPropagator {
+func NewErrPropagator(agents []agent.Type) *ErrPropagator {
 	e := ErrPropagator{
-		outputChan: outputChan,
+		agentsChan: make(chan []agent.Type),
 		agents:     agents,
+		outputChan: make(chan PropagatedErrs),
 		closedChan: make(chan struct{}),
 		closeChan:  make(chan struct{}),
 	}
@@ -70,18 +72,80 @@ func (e *ErrPropagator) SetAgents(agents []agent.Type) {
 
 // loop - Internal loop brokers incoming messages to error channel.
 func (e *ErrPropagator) loop() {
+	propErrors := PropagatedErrs{}
+
+	var selectCases []reflect.SelectCase
+	setSelectCases := func() {
+		selectCases = make([]reflect.SelectCase, len(e.agents)+3)
+
+		for i, agent := range e.agents {
+			selectCases[i] = reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(agent.ErrorsChan()),
+			}
+		}
+
+		selectCases[len(e.agents)] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(e.agentsChan),
+		}
+		selectCases[len(e.agents)+1] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(e.closeChan),
+		}
+		selectCases[len(e.agents)+2] = reflect.SelectCase{
+			Dir:  reflect.SelectSend,
+			Send: reflect.ValueOf(propErrors),
+			Chan: reflect.ValueOf(nil),
+		}
+	}
+	setSelectCases()
+
 	running := true
 	for running {
-		select {
-		case agents := <-e.agentsChan:
-			e.agents = agents
-			// TODO
-		case _, running = <-e.closeChan:
-			running = false
+		if len(propErrors) == 0 {
+			selectCases[len(e.agents)+2] = reflect.SelectCase{
+				Dir:  reflect.SelectSend,
+				Send: reflect.ValueOf(propErrors),
+				Chan: reflect.ValueOf(nil),
+			}
+		} else {
+			selectCases[len(e.agents)+2] = reflect.SelectCase{
+				Dir:  reflect.SelectSend,
+				Send: reflect.ValueOf(propErrors),
+				Chan: reflect.ValueOf(e.outputChan),
+			}
+		}
+
+		chosen, val, open := reflect.Select(selectCases)
+		if chosen < len(e.agents) {
+			if !open {
+				propErrors[chosen] = append(propErrors[chosen], types.ErrChanClosed)
+			} else if errs, ok := val.Interface().([]error); ok {
+				propErrors[chosen] = append(propErrors[chosen], errs...)
+			}
+		} else if chosen == len(e.agents) {
+			if running = open; open {
+				if agents, ok := val.Interface().([]agent.Type); ok {
+					e.agents = agents
+					setSelectCases()
+				}
+			}
+		} else if chosen == len(e.agents)+1 {
+		} else if chosen == len(e.agents)+2 {
+			propErrors = PropagatedErrs{}
 		}
 	}
 
+	close(e.outputChan)
 	close(e.closedChan)
+}
+
+//--------------------------------------------------------------------------------------------------
+
+// OutputChan - Returns the channel used to extract propagated errors.
+func (e *ErrPropagator) OutputChan() <-chan PropagatedErrs {
+	return e.outputChan
 }
 
 // CloseAsync - Shuts down the ErrPropagator output and stops processing messages.
