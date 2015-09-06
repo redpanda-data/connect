@@ -1,0 +1,10 @@
+input:
+  type: stdin
+  stdin: {}
+output:
+  type: stdout
+  stdout: {}
+logger:
+  prefix: benthos
+  log_level: INFO
+  add_timestamp: true

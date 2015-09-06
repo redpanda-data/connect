@@ -30,6 +30,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jeffail/benthos/agent"
+	"github.com/jeffail/benthos/broker"
 	"github.com/jeffail/benthos/input"
 	"github.com/jeffail/benthos/output"
 	"github.com/jeffail/benthos/types"
@@ -121,55 +123,59 @@ func main() {
 	}
 	defer stats.Close()
 
-	// DEBUG
-	routerCloseChan := make(chan struct{})
-	routerClosedChan := make(chan struct{})
+	// Create output agents
+	agents := []agent.Type{
+		agent.NewUnbuffered(output.Construct(config.Output)),
+	}
+
+	// Create input and input channel
+	in, inputChan := input.Construct(config.Input), make(chan types.Message)
+
+	// Error propagator
+	errProp := broker.NewErrPropagator(agents)
+
+	// Create broker
+	msgBroker := broker.NewOneToMany(agents, inputChan)
+
+	// Input reader
 	go func() {
-		consumerChan := make(chan types.Message)
-
-		in := input.Construct(config.Input)
-		out := output.Construct(config.Output)
-		out.SetReadChan(consumerChan)
-
-		running := true
-		for running {
-			select {
-			case msg := <-in.ConsumerChan():
-				consumerChan <- msg
-				select {
-				case err := <-out.ResponseChan():
-					if err != nil {
-						logger.Errorf("Failed to push out message: %v\n", err)
-					}
-				case <-time.After(time.Second * 10):
-					logger.Errorf("Timed out waiting for output confirmation")
-				}
-			case _, running = <-routerCloseChan:
-			}
+		for msg := range in.ConsumerChan() {
+			inputChan <- msg
+			<-msgBroker.ResponseChan()
 		}
-
-		in.CloseAsync()
-		out.CloseAsync()
-
-		if err := in.WaitForClose(time.Second * 5); err != nil {
-			logger.Errorf("Error closing input: %v\n", err)
-		}
-		for err := range out.ResponseChan() {
-			if err != nil {
-				logger.Errorf("Failed to push out message: %v\n", err)
-			}
-		}
-		if err := out.WaitForClose(time.Second * 5); err != nil {
-			logger.Errorf("Error closing output: %v\n", err)
-		}
-
-		close(routerClosedChan)
 	}()
+
+	// Error reader
+	go func() {
+		for errs := range errProp.OutputChan() {
+			logger.Errorf("Agent errors: %v\n", errs)
+		}
+	}()
+
+	// Defer clean broker, input and output closure
 	defer func() {
-		close(routerCloseChan)
-		<-routerClosedChan
+		in.CloseAsync()
+		if err := in.WaitForClose(time.Second * 5); err != nil {
+			panic(err)
+		}
+
+		msgBroker.CloseAsync()
+		if err := msgBroker.WaitForClose(time.Second * 5); err != nil {
+			panic(err)
+		}
+
+		errProp.CloseAsync()
+		errProp.WaitForClose(time.Second)
+
+		for _, a := range agents {
+			a.CloseAsync()
+		}
+		for _, a := range agents {
+			if err := a.WaitForClose(time.Second); err != nil {
+				panic(err)
+			}
+		}
 	}()
-	// DEBUG END
 
 	// Internal Statistics HTTP API
 	statsServer, err := log.NewStatsServer(config.StatsServer, logger, stats)

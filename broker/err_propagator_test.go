@@ -23,7 +23,10 @@ THE SOFTWARE.
 package broker
 
 import (
+	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/jeffail/benthos/agent"
 )
@@ -31,14 +34,111 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func TestBasicPropagatorInterface(t *testing.T) {
-	agents := []agent.Type{
-		&agent.MockType{
-			ErrsChan: make(chan []error),
-		},
+	mock1 := &agent.MockType{
+		ErrsChan: make(chan []error),
+	}
+	agents := []agent.Type{mock1}
+	errProp := NewErrPropagator(agents)
+
+	expected := errors.New("test")
+	mock1.ErrsChan <- []error{expected}
+
+	select {
+	case errMap := <-errProp.OutputChan():
+		if len(errMap) == 0 {
+			t.Errorf("Expected an error, received none")
+			return
+		}
+		if actual, ok := errMap[0]; !ok {
+			t.Errorf("No error for element 0")
+		} else if len(actual) != 1 || actual[0] != expected {
+			t.Errorf("Wrong error, %v != %v", actual, []error{expected})
+		}
+	case <-time.After(time.Second):
+		t.Errorf("Timed out waiting for error")
+	}
+}
+
+//--------------------------------------------------------------------------------------------------
+
+func TestPropagatorSwappedAgents(t *testing.T) {
+	mock1 := &agent.MockType{
+		ErrsChan: make(chan []error),
+	}
+	agents := []agent.Type{mock1}
+	errProp := NewErrPropagator([]agent.Type{})
+
+	errProp.SetAgents(agents)
+
+	expected := errors.New("test")
+	mock1.ErrsChan <- []error{expected}
+
+	select {
+	case errMap := <-errProp.OutputChan():
+		if len(errMap) == 0 {
+			t.Errorf("Expected an error, received none")
+			return
+		}
+		if actual, ok := errMap[0]; !ok {
+			t.Errorf("No error for element 0")
+		} else if len(actual) != 1 || actual[0] != expected {
+			t.Errorf("Wrong error, %v != %v", actual, []error{expected})
+		}
+	case <-time.After(time.Second):
+		t.Errorf("Timed out waiting for error")
+	}
+}
+
+//--------------------------------------------------------------------------------------------------
+
+func TestPropagatorMultiAgents(t *testing.T) {
+	chans := []chan []error{
+		make(chan []error),
+		make(chan []error),
+		make(chan []error),
+		make(chan []error),
+		make(chan []error),
+	}
+
+	agents := []agent.Type{}
+	for _, c := range chans {
+		agents = append(agents, &agent.MockType{ErrsChan: c})
 	}
 
 	errProp := NewErrPropagator(agents)
-	_ = errProp
+
+	for i, c := range chans {
+		errs := make([]error, i)
+		for j := range errs {
+			errs[j] = fmt.Errorf("%v", i)
+		}
+		select {
+		case c <- errs:
+		case <-time.After(time.Second):
+			t.Errorf("Timed out pushing errors to channel %v", i)
+		}
+	}
+
+	select {
+	case errMap := <-errProp.OutputChan():
+		if expected, actual := len(chans), len(errMap); expected != actual {
+			t.Errorf("Unexpected number of errors returned, %v != %v", actual, expected)
+			return
+		}
+		for i, errs := range errMap {
+			if len(errs) != i {
+				t.Errorf("Wrong number of errors from chan %v, %v != %v", i, len(errs), i)
+			} else {
+				for j := range errs {
+					if expected, actual := fmt.Sprintf("%v", i), errs[j].Error(); expected != actual {
+						t.Errorf("Wrong error value for channel %v index %v, %v != %v", i, j, actual, expected)
+					}
+				}
+			}
+		}
+	case <-time.After(time.Second):
+		t.Errorf("Timed out waiting for error")
+	}
 }
 
 //--------------------------------------------------------------------------------------------------
