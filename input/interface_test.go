@@ -36,11 +36,6 @@ func TestInterfaces(t *testing.T) {
 	if Type(s) == nil {
 		t.Errorf("stdin: nil Type")
 	}
-
-	h := &HTTP{}
-	if Type(h) == nil {
-		t.Errorf("http: nil Type")
-	}
 }
 
 //--------------------------------------------------------------------------------------------------

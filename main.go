@@ -128,8 +128,11 @@ func main() {
 		agent.NewUnbuffered(output.Construct(config.Output)),
 	}
 
+	inputChan, resChan := make(chan types.Message), make(chan types.Response)
+
 	// Create input and input channel
-	in, inputChan := input.Construct(config.Input), make(chan types.Message)
+	in := input.Construct(config.Input)
+	in.SetResponseChan(resChan)
 
 	// Error propagator
 	errProp := broker.NewErrPropagator(agents)
@@ -142,6 +145,7 @@ func main() {
 		for msg := range in.ConsumerChan() {
 			inputChan <- msg
 			<-msgBroker.ResponseChan()
+			resChan <- nil
 		}
 	}()
 
@@ -171,7 +175,7 @@ func main() {
 			a.CloseAsync()
 		}
 		for _, a := range agents {
-			if err := a.WaitForClose(time.Second); err != nil {
+			if err := a.WaitForClose(time.Second * 5); err != nil {
 				panic(err)
 			}
 		}

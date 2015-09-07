@@ -58,7 +58,7 @@ func (u *Unbuffered) MessageChan() chan<- types.Message {
 }
 
 // ResponseChan - Returns the response channel.
-func (u *Unbuffered) ResponseChan() <-chan output.Response {
+func (u *Unbuffered) ResponseChan() <-chan types.Response {
 	return u.output.ResponseChan()
 }
 

@@ -27,7 +27,6 @@ package input
 // Config - The all encompassing configuration struct for all input types.
 type Config struct {
 	Type  string      `json:"type" yaml:"type"`
-	HTTP  HTTPConfig  `json:"http" yaml:"http"`
 	STDIN STDINConfig `json:"stdin" yaml:"stdin"`
 }
 
@@ -35,7 +34,6 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Type:  "none",
-		HTTP:  NewHTTPConfig(),
 		STDIN: NewSTDINConfig(),
 	}
 }
@@ -45,8 +43,6 @@ func NewConfig() Config {
 // Construct - Create an input type based on an input configuration.
 func Construct(conf Config) Type {
 	switch conf.Type {
-	case "http":
-		return NewHTTP(conf)
 	case "stdin":
 		return NewSTDIN(conf)
 	default:

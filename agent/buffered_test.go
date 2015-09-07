@@ -36,7 +36,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 	var incr, total uint8 = 100, 50
 
 	out := output.MockType{
-		ResChan: make(chan output.Response),
+		ResChan: make(chan types.Response),
 	}
 
 	b := NewBuffered(&out, int(incr)*int(total))
@@ -80,7 +80,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 
 		// Response from output
 		select {
-		case out.ResChan <- output.Response(nil):
+		case out.ResChan <- types.Response(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered response send back %v", i)
 			return
@@ -131,7 +131,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 	// Extract last message
 	select {
 	case <-out.Messages:
-		out.ResChan <- output.Response(nil)
+		out.ResChan <- types.Response(nil)
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for final buffered message read")
 		return
@@ -160,7 +160,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 		}
 
 		select {
-		case out.ResChan <- output.Response(nil):
+		case out.ResChan <- types.Response(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered response send back %v", i)
 			return
@@ -176,7 +176,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 	}
 
 	select {
-	case out.ResChan <- output.Response(nil):
+	case out.ResChan <- types.Response(nil):
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for buffered response send back %v", i)
 		return

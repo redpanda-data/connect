@@ -47,7 +47,8 @@ func NewSTDINConfig() STDINConfig {
 type STDIN struct {
 	conf Config
 
-	messages chan types.Message
+	messages  chan types.Message
+	responses <-chan types.Response
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -58,6 +59,7 @@ func NewSTDIN(conf Config) *STDIN {
 	s := STDIN{
 		conf:       conf,
 		messages:   make(chan types.Message),
+		responses:  nil,
 		closedChan: make(chan struct{}),
 		closeChan:  make(chan struct{}),
 	}
@@ -79,13 +81,21 @@ func (s *STDIN) loop() {
 			Content: stdin.Bytes(),
 		}
 		select {
+		case err := <-s.responses:
+			if err != nil {
+				// TODO
+			}
 		case _, running = <-s.closeChan:
 			running = false
-		default:
 		}
 	}
 
 	close(s.closedChan)
+}
+
+// SetResponseChan - Sets the channel used by the input to validate message receipt.
+func (s *STDIN) SetResponseChan(responses <-chan types.Response) {
+	s.responses = responses
 }
 
 // ConsumerChan - Returns the messages channel.

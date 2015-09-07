@@ -35,6 +35,10 @@ type MockType struct {
 	messages chan types.Message
 }
 
+// SetResponseChan - Sets the channel used for reading responses.
+func (m *MockType) SetResponseChan(<-chan types.Response) {
+}
+
 // ConsumerChan - Returns the messages channel.
 func (m *MockType) ConsumerChan() <-chan types.Message {
 	return m.messages

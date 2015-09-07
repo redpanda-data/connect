@@ -25,7 +25,6 @@ package agent
 import (
 	"time"
 
-	"github.com/jeffail/benthos/output"
 	"github.com/jeffail/benthos/types"
 )
 
@@ -33,7 +32,7 @@ import (
 
 // MockType - Implements the output.Type interface.
 type MockType struct {
-	ResChan  chan output.Response
+	ResChan  chan types.Response
 	Messages chan types.Message
 	ErrsChan chan []error
 }
@@ -44,7 +43,7 @@ func (m *MockType) MessageChan() chan<- types.Message {
 }
 
 // ResponseChan - Returns the response channel.
-func (m *MockType) ResponseChan() <-chan output.Response {
+func (m *MockType) ResponseChan() <-chan types.Response {
 	return m.ResChan
 }
 

@@ -49,7 +49,7 @@ type Buffered struct {
 	used   int
 
 	messages     chan types.Message
-	responseChan chan output.Response
+	responseChan chan types.Response
 	errorsChan   chan []error
 
 	outMessages chan types.Message
@@ -67,7 +67,7 @@ func NewBuffered(out output.Type, limit int) *Buffered {
 		used:         0,
 		messages:     make(chan types.Message),
 		outMessages:  make(chan types.Message),
-		responseChan: make(chan output.Response),
+		responseChan: make(chan types.Response),
 		errorsChan:   make(chan []error),
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
@@ -171,7 +171,7 @@ func (b *Buffered) MessageChan() chan<- types.Message {
 }
 
 // ResponseChan - Returns the response channel.
-func (b *Buffered) ResponseChan() <-chan output.Response {
+func (b *Buffered) ResponseChan() <-chan types.Response {
 	return b.responseChan
 }
 
@@ -182,6 +182,7 @@ func (b *Buffered) ErrorsChan() <-chan []error {
 
 // CloseAsync - Shuts down the Buffered output and stops processing messages.
 func (b *Buffered) CloseAsync() {
+	b.output.CloseAsync()
 	close(b.closeChan)
 	close(b.messages)
 }

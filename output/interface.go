@@ -24,9 +24,6 @@ package output
 
 import "github.com/jeffail/benthos/types"
 
-// Response - The response type returned after each message received.
-type Response error
-
 // Type - The standard interface of an output type.
 type Type interface {
 	types.Closable
@@ -36,5 +33,5 @@ type Type interface {
 
 	// ResponseChan - Returns the channel used for returning the result of a message dispatch, a nil
 	// error means the message was succesfully dispatched to the output.
-	ResponseChan() <-chan Response
+	ResponseChan() <-chan types.Response
 }

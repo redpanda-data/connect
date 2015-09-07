@@ -20,41 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package output
+package types
 
-import (
-	"time"
-
-	"github.com/jeffail/benthos/types"
-)
-
-//--------------------------------------------------------------------------------------------------
-
-// MockType - Implements the output.Type interface.
-type MockType struct {
-	ResChan  chan types.Response
-	Messages <-chan types.Message
-}
-
-// SetReadChan - Sets the read channel. This implementation is NOT thread safe.
-func (m *MockType) SetReadChan(msgs <-chan types.Message) {
-	m.Messages = msgs
-}
-
-// ResponseChan - Returns the errors channel.
-func (m *MockType) ResponseChan() <-chan types.Response {
-	return m.ResChan
-}
-
-// CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
-	// Do nothing
-}
-
-// WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
-	// Do nothing
-	return nil
-}
-
-//--------------------------------------------------------------------------------------------------
+// Response - A response from an output that confirms the input of successful message receipt.
+type Response error

@@ -50,7 +50,7 @@ type STDOUT struct {
 	newMessagesChan chan (<-chan types.Message)
 
 	messages     <-chan types.Message
-	responseChan chan Response
+	responseChan chan types.Response
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -62,7 +62,7 @@ func NewSTDOUT(conf Config) *STDOUT {
 		conf:            conf,
 		newMessagesChan: make(chan (<-chan types.Message)),
 		messages:        nil,
-		responseChan:    make(chan Response),
+		responseChan:    make(chan types.Response),
 		closedChan:      make(chan struct{}),
 		closeChan:       make(chan struct{}),
 	}
@@ -79,11 +79,18 @@ func (s *STDOUT) loop() {
 	running := true
 	for running {
 		select {
-		case msg := <-s.messages:
-			_, err := fmt.Fprintln(os.Stdout, string(msg.Content))
-			s.responseChan <- Response(err)
-		case newChan := <-s.newMessagesChan:
-			s.messages = newChan
+		case msg, open := <-s.messages:
+			// If the messages chan is closed we do not close ourselves as it can replaced.
+			if !open {
+				s.messages = nil
+			} else {
+				_, err := fmt.Fprintln(os.Stdout, string(msg.Content))
+				s.responseChan <- types.Response(err)
+			}
+		case newChan, open := <-s.newMessagesChan:
+			if running = open; running {
+				s.messages = newChan
+			}
 		case _, running = <-s.closeChan:
 			running = false
 		}
@@ -100,7 +107,7 @@ func (s *STDOUT) SetReadChan(msgs <-chan types.Message) {
 }
 
 // ResponseChan - Returns the errors channel.
-func (s *STDOUT) ResponseChan() <-chan Response {
+func (s *STDOUT) ResponseChan() <-chan types.Response {
 	return s.responseChan
 }
 
