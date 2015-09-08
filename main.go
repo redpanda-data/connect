@@ -138,7 +138,8 @@ func main() {
 	errProp := broker.NewErrPropagator(agents)
 
 	// Create broker
-	msgBroker := broker.NewOneToMany(agents, inputChan)
+	msgBroker := broker.NewOneToMany(agents)
+	msgBroker.SetReadChan(inputChan)
 
 	// Input reader
 	go func() {

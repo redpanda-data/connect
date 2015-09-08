@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/agent"
-	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -34,14 +33,8 @@ import (
 // MockType - Implements the broker.Type interface.
 type MockType struct {
 	responseChan chan Response
-	messages     <-chan types.Message
 
 	agents []agent.Type
-}
-
-// SetAgents - Set the broker agents.
-func (m *MockType) SetAgents(a []agent.Type) {
-	m.agents = a
 }
 
 // ResponseChan - Returns the errors channel.

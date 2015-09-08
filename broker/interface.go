@@ -22,10 +22,7 @@ THE SOFTWARE.
 
 package broker
 
-import (
-	"github.com/jeffail/benthos/agent"
-	"github.com/jeffail/benthos/types"
-)
+import "github.com/jeffail/benthos/types"
 
 // Response - A map of ints (output indexes) with corresponding errors.
 type Response map[int]types.Response
@@ -36,7 +33,4 @@ type Type interface {
 
 	// ResponseChan - Returns a response for every input message received.
 	ResponseChan() <-chan Response
-
-	// SetAgents - Sets the array of agents to route messages to.
-	SetAgents([]agent.Type)
 }

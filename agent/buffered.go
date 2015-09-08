@@ -128,7 +128,10 @@ func (b *Buffered) loop() {
 			errChan = b.errorsChan
 		}
 		select {
-		case msg := <-b.messages:
+		case msg, open := <-b.messages:
+			if running = open; !open {
+				continue
+			}
 			err := b.pushMessage(msg)
 			for err != nil && len(b.buffer) > 0 {
 				outChan <- b.buffer[0]
@@ -153,7 +156,6 @@ func (b *Buffered) loop() {
 		case errChan <- errors:
 			errors = []error{}
 		case _, running = <-b.closeChan:
-			running = false
 		}
 	}
 

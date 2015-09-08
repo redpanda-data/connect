@@ -33,8 +33,9 @@ import (
 
 // OneToMany - A one-to-many broker type.
 type OneToMany struct {
-	messages     <-chan types.Message
-	responseChan chan Response
+	newMessagesChan chan (<-chan types.Message)
+	messages        <-chan types.Message
+	responseChan    chan Response
 
 	agentsChan chan []agent.Type
 	agents     []agent.Type
@@ -44,14 +45,15 @@ type OneToMany struct {
 }
 
 // NewOneToMany - Create a new OneToMany type by providing agents and a messages channel.
-func NewOneToMany(agents []agent.Type, messages <-chan types.Message) *OneToMany {
+func NewOneToMany(agents []agent.Type) *OneToMany {
 	o := &OneToMany{
-		messages:     messages,
-		responseChan: make(chan Response),
-		agentsChan:   make(chan []agent.Type),
-		agents:       agents,
-		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		newMessagesChan: make(chan (<-chan types.Message)),
+		messages:        nil,
+		responseChan:    make(chan Response),
+		agentsChan:      make(chan []agent.Type),
+		agents:          agents,
+		closedChan:      make(chan struct{}),
+		closeChan:       make(chan struct{}),
 	}
 
 	go o.loop()
@@ -60,6 +62,11 @@ func NewOneToMany(agents []agent.Type, messages <-chan types.Message) *OneToMany
 }
 
 //--------------------------------------------------------------------------------------------------
+
+// SetReadChan - Assigns a new messages channel for the broker to read.
+func (o *OneToMany) SetReadChan(msgs <-chan types.Message) {
+	o.newMessagesChan <- msgs
+}
 
 // SetAgents - Set the broker agents.
 func (o *OneToMany) SetAgents(agents []agent.Type) {
@@ -73,19 +80,29 @@ func (o *OneToMany) loop() {
 	running := true
 	for running {
 		select {
-		case msg := <-o.messages:
-			responses := Response{}
-			for i, a := range o.agents {
-				a.MessageChan() <- msg
-				if r := <-a.ResponseChan(); r != nil {
-					responses[i] = r
+		case msg, open := <-o.messages:
+			// If the read channel is closed we can continue and wait for a replacement.
+			if !open {
+				o.messages = nil
+			} else {
+				responses := Response{}
+				for i, a := range o.agents {
+					a.MessageChan() <- msg
+					if r := <-a.ResponseChan(); r != nil {
+						responses[i] = r
+					}
 				}
+				o.responseChan <- responses
 			}
-			o.responseChan <- responses
-		case agents := <-o.agentsChan:
-			o.agents = agents
+		case newChan, open := <-o.newMessagesChan:
+			if running = open; running {
+				o.messages = newChan
+			}
+		case agents, open := <-o.agentsChan:
+			if running = open; running {
+				o.agents = agents
+			}
 		case _, running = <-o.closeChan:
-			running = false
 		}
 	}
 
@@ -100,6 +117,7 @@ func (o *OneToMany) ResponseChan() <-chan Response {
 
 // CloseAsync - Shuts down the OneToMany broker and stops processing requests.
 func (o *OneToMany) CloseAsync() {
+	close(o.newMessagesChan)
 	close(o.closeChan)
 	close(o.agentsChan)
 }
