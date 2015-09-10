@@ -24,27 +24,27 @@ package input
 
 import (
 	"bufio"
+	"github.com/jeffail/benthos/types"
+	"github.com/pebbe/zmq4"
 	"os"
 	"time"
-
-	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
 
-// STDINConfig - Configuration for the STDIN input type.
-type STDINConfig struct {
+// ZMQ4Config - Configuration for the ZMQ4 input type.
+type ZMQ4Config struct {
 }
 
-// NewSTDINConfig - Creates a new STDINConfig with default values.
-func NewSTDINConfig() STDINConfig {
-	return STDINConfig{}
+// NewZMQ4Config - Creates a new ZMQ4Config with default values.
+func NewZMQ4Config() ZMQ4Config {
+	return ZMQ4Config{}
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// STDIN - An input type that serves STDIN POST requests.
-type STDIN struct {
+// ZMQ4 - An input type that serves ZMQ4 POST requests.
+type ZMQ4 struct {
 	conf Config
 
 	messages  chan types.Message
@@ -56,9 +56,9 @@ type STDIN struct {
 	closeChan  chan struct{}
 }
 
-// NewSTDIN - Create a new STDIN input type.
-func NewSTDIN(conf Config) *STDIN {
-	s := STDIN{
+// NewZMQ4 - Create a new ZMQ4 input type.
+func NewZMQ4(conf Config) *ZMQ4 {
+	z := ZMQ4{
 		conf:             conf,
 		messages:         make(chan types.Message),
 		responses:        nil,
@@ -67,15 +67,15 @@ func NewSTDIN(conf Config) *STDIN {
 		closeChan:        make(chan struct{}),
 	}
 
-	go s.loop()
+	go z.loop()
 
-	return &s
+	return &z
 }
 
 //--------------------------------------------------------------------------------------------------
 
 // loop - Internal loop brokers incoming messages to output pipe.
-func (s *STDIN) loop() {
+func (z *ZMQ4) loop() {
 	stdin := bufio.NewScanner(os.Stdin)
 
 	var bytes []byte
@@ -83,16 +83,14 @@ func (s *STDIN) loop() {
 
 	running, responsePending := true, false
 	for running {
-		// If no bytes then read a line
+		// If no bytes then read a message
 		if bytes == nil {
-			if running = stdin.Scan(); running {
-				bytes = stdin.Bytes()
-			}
+			// TODO
 		}
 
 		// If we have a line to push out
 		if bytes != nil && !responsePending {
-			msgChan = s.messages
+			msgChan = z.messages
 		} else {
 			msgChan = nil
 		}
@@ -101,46 +99,46 @@ func (s *STDIN) loop() {
 			select {
 			case msgChan <- types.Message{Content: bytes}:
 				responsePending = true
-			case err, open := <-s.responses:
+			case err, open := <-z.responses:
 				if !open {
 					s.responses = nil
 				} else if err == nil {
 					responsePending = false
 					bytes = nil
 				}
-			case newResChan, open := <-s.newResponsesChan:
+			case newResChan, open := <-z.newResponsesChan:
 				if running = open; open {
-					s.responses = newResChan
+					z.responses = newResChan
 				}
-			case _, running = <-s.closeChan:
+			case _, running = <-z.closeChan:
 			}
 		}
 	}
 
-	close(s.messages)
-	close(s.newResponsesChan)
-	close(s.closedChan)
+	close(z.messages)
+	close(z.newResponsesChan)
+	close(z.closedChan)
 }
 
 // SetResponseChan - Sets the channel used by the input to validate message receipt.
-func (s *STDIN) SetResponseChan(responses <-chan types.Response) {
-	s.newResponsesChan <- responses
+func (z *ZMQ4) SetResponseChan(responses <-chan types.Response) {
+	z.newResponsesChan <- responses
 }
 
 // ConsumerChan - Returns the messages channel.
-func (s *STDIN) ConsumerChan() <-chan types.Message {
-	return s.messages
+func (z *ZMQ4) ConsumerChan() <-chan types.Message {
+	return z.messages
 }
 
-// CloseAsync - Shuts down the STDIN input and stops processing requests.
-func (s *STDIN) CloseAsync() {
-	close(s.closeChan)
+// CloseAsync - Shuts down the ZMQ4 input and stops processing requests.
+func (z *ZMQ4) CloseAsync() {
+	close(z.closeChan)
 }
 
-// WaitForClose - Blocks until the STDIN input has closed down.
-func (s *STDIN) WaitForClose(timeout time.Duration) error {
+// WaitForClose - Blocks until the ZMQ4 input has closed down.
+func (z *ZMQ4) WaitForClose(timeout time.Duration) error {
 	select {
-	case <-s.closedChan:
+	case <-z.closedChan:
 	case <-time.After(timeout):
 		return types.ErrTimeout
 	}
