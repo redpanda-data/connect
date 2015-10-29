@@ -28,6 +28,7 @@ package input
 type Config struct {
 	Type  string      `json:"type" yaml:"type"`
 	STDIN STDINConfig `json:"stdin" yaml:"stdin"`
+	ZMQ4  ZMQ4Config  `json:"zmq4" yaml:"zmq4"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
@@ -35,6 +36,7 @@ func NewConfig() Config {
 	return Config{
 		Type:  "none",
 		STDIN: NewSTDINConfig(),
+		ZMQ4:  NewZMQ4Config(),
 	}
 }
 

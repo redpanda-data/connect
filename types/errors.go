@@ -28,4 +28,6 @@ import "errors"
 var (
 	ErrTimeout    = errors.New("action timed out")
 	ErrChanClosed = errors.New("channel was closed unexpectedly")
+
+	ErrInvalidZMQType = errors.New("invalid ZMQ socket type")
 )

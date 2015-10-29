@@ -23,22 +23,29 @@ THE SOFTWARE.
 package input
 
 import (
-	"bufio"
+	"strings"
+	"time"
+
 	"github.com/jeffail/benthos/types"
 	"github.com/pebbe/zmq4"
-	"os"
-	"time"
 )
 
 //--------------------------------------------------------------------------------------------------
 
 // ZMQ4Config - Configuration for the ZMQ4 input type.
 type ZMQ4Config struct {
+	Addresses     []string `json:"addresses"`
+	SocketType    string   `json:"socket_type"`
+	PollTimeoutMS int      `json:"poll_timeout_ms"`
 }
 
 // NewZMQ4Config - Creates a new ZMQ4Config with default values.
 func NewZMQ4Config() ZMQ4Config {
-	return ZMQ4Config{}
+	return ZMQ4Config{
+		Addresses:     []string{"localhost:1234"},
+		SocketType:    "PULL",
+		PollTimeoutMS: 5000,
+	}
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -46,6 +53,9 @@ func NewZMQ4Config() ZMQ4Config {
 // ZMQ4 - An input type that serves ZMQ4 POST requests.
 type ZMQ4 struct {
 	conf Config
+
+	socket *zmq4.Socket
+	poller *zmq4.Poller
 
 	messages  chan types.Message
 	responses <-chan types.Response
@@ -57,7 +67,7 @@ type ZMQ4 struct {
 }
 
 // NewZMQ4 - Create a new ZMQ4 input type.
-func NewZMQ4(conf Config) *ZMQ4 {
+func NewZMQ4(conf Config) (*ZMQ4, error) {
 	z := ZMQ4{
 		conf:             conf,
 		messages:         make(chan types.Message),
@@ -67,17 +77,75 @@ func NewZMQ4(conf Config) *ZMQ4 {
 		closeChan:        make(chan struct{}),
 	}
 
+	t, err := getZMQType(conf.ZMQ4.SocketType)
+	if nil != err {
+		return nil, err
+	}
+
+	ctx, err := zmq4.NewContext()
+	if nil != err {
+		return nil, err
+	}
+
+	if z.socket, err = ctx.NewSocket(t); nil != err {
+		return nil, err
+	}
+
+	for _, address := range conf.ZMQ4.Addresses {
+		if strings.Contains(address, "*") {
+			err = z.socket.Bind(address)
+		} else {
+			err = z.socket.Connect(address)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	z.poller = zmq4.NewPoller()
+	z.poller.Add(z.socket, zmq4.POLLIN)
+
 	go z.loop()
 
-	return &z
+	return &z, nil
+}
+
+//--------------------------------------------------------------------------------------------------
+
+func getZMQType(t string) (zmq4.Type, error) {
+	switch t {
+	case "REQ":
+		return zmq4.REQ, nil
+	case "REP":
+		return zmq4.REP, nil
+	case "DEALER":
+		return zmq4.DEALER, nil
+	case "ROUTER":
+		return zmq4.ROUTER, nil
+	case "PUB":
+		return zmq4.PUB, nil
+	case "SUB":
+		return zmq4.SUB, nil
+	case "XPUB":
+		return zmq4.XPUB, nil
+	case "XSUB":
+		return zmq4.XSUB, nil
+	case "PUSH":
+		return zmq4.PUSH, nil
+	case "PULL":
+		return zmq4.PULL, nil
+	case "PAIR":
+		return zmq4.PAIR, nil
+	case "STREAM":
+		return zmq4.STREAM, nil
+	}
+	return zmq4.PULL, types.ErrInvalidZMQType
 }
 
 //--------------------------------------------------------------------------------------------------
 
 // loop - Internal loop brokers incoming messages to output pipe.
 func (z *ZMQ4) loop() {
-	stdin := bufio.NewScanner(os.Stdin)
-
 	var bytes []byte
 	var msgChan chan<- types.Message
 
@@ -101,7 +169,7 @@ func (z *ZMQ4) loop() {
 				responsePending = true
 			case err, open := <-z.responses:
 				if !open {
-					s.responses = nil
+					z.responses = nil
 				} else if err == nil {
 					responsePending = false
 					bytes = nil

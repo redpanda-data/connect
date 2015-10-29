@@ -37,6 +37,7 @@ import (
 	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util"
 	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
 	"github.com/jeffail/util/path"
 )
 
@@ -44,23 +45,19 @@ import (
 
 // Config - The benthos configuration struct.
 type Config struct {
-	Input       input.Config            `json:"input" yaml:"input"`
-	Output      output.Config           `json:"output" yaml:"output"`
-	Logger      log.LoggerConfig        `json:"logger" yaml:"logger"`
-	Stats       log.StatsConfig         `json:"stats" yaml:"stats"`
-	Riemann     log.RiemannClientConfig `json:"riemann" yaml:"riemann"`
-	StatsServer log.StatsServerConfig   `json:"stats_server" yaml:"stats_server"`
+	Input   input.Config     `json:"input" yaml:"input"`
+	Output  output.Config    `json:"output" yaml:"output"`
+	Logger  log.LoggerConfig `json:"logger" yaml:"logger"`
+	Metrics metrics.Config   `json:"metrics" yaml:"metrics"`
 }
 
 // NewConfig - Returns a new configuration with default values.
 func NewConfig() Config {
 	return Config{
-		Input:       input.NewConfig(),
-		Output:      output.NewConfig(),
-		Logger:      log.DefaultLoggerConfig(),
-		Stats:       log.DefaultStatsConfig(),
-		Riemann:     log.NewRiemannClientConfig(),
-		StatsServer: log.DefaultStatsServerConfig(),
+		Input:   input.NewConfig(),
+		Output:  output.NewConfig(),
+		Logger:  log.DefaultLoggerConfig(),
+		Metrics: metrics.NewConfig(),
 	}
 }
 
@@ -110,15 +107,10 @@ func main() {
 	} else {
 		logger = log.NewLogger(os.Stdout, config.Logger)
 	}
-	stats := log.NewStats(config.Stats)
 
-	if riemannClient, err := log.NewRiemannClient(config.Riemann); err == nil {
-		logger.UseRiemann(riemannClient)
-		stats.UseRiemann(riemannClient)
-
-		defer riemannClient.Close()
-	} else if err != log.ErrEmptyConfigAddress {
-		fmt.Fprintln(os.Stderr, fmt.Sprintf("Riemann client error: %v\n", err))
+	stats, err := metrics.New(config.Metrics)
+	if err != nil {
+		logger.Errorf("Metrics error: %v\n", err)
 		return
 	}
 	defer stats.Close()
@@ -179,19 +171,6 @@ func main() {
 			if err := a.WaitForClose(time.Second * 5); err != nil {
 				panic(err)
 			}
-		}
-	}()
-
-	// Internal Statistics HTTP API
-	statsServer, err := log.NewStatsServer(config.StatsServer, logger, stats)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, fmt.Sprintf("Stats error: %v\n", err))
-		return
-	}
-
-	go func() {
-		if statserr := statsServer.Listen(); statserr != nil {
-			fmt.Fprintln(os.Stderr, fmt.Sprintf("Stats server listen error: %v\n", statserr))
 		}
 	}()
 
