@@ -78,15 +78,22 @@ func NewSTDIN(conf Config) *STDIN {
 func (s *STDIN) loop() {
 	stdin := bufio.NewScanner(os.Stdin)
 
-	var bytes []byte
+	var bytes [][]byte
 	var msgChan chan<- types.Message
 
 	running, responsePending := true, false
 	for running {
 		// If no bytes then read a line
 		if bytes == nil {
-			if running = stdin.Scan(); running {
-				bytes = stdin.Bytes()
+			bytes = make([][]byte, 0)
+			for stdin.Scan() {
+				if len(stdin.Bytes()) == 0 {
+					break
+				}
+				bytes = append(bytes, stdin.Bytes())
+			}
+			if len(bytes) == 0 {
+				bytes = nil
 			}
 		}
 
@@ -99,7 +106,7 @@ func (s *STDIN) loop() {
 
 		if running {
 			select {
-			case msgChan <- types.Message{Content: bytes}:
+			case msgChan <- types.Message{Parts: bytes}:
 				responsePending = true
 			case err, open := <-s.responses:
 				if !open {

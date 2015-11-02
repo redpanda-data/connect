@@ -23,6 +23,7 @@ THE SOFTWARE.
 package output
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"time"
@@ -84,7 +85,7 @@ func (s *STDOUT) loop() {
 			if !open {
 				s.messages = nil
 			} else {
-				_, err := fmt.Fprintln(os.Stdout, string(msg.Content))
+				_, err := fmt.Fprintf(os.Stdout, "%s\n\n", bytes.Join(msg.Parts, []byte("\n")))
 				s.responseChan <- types.Response(err)
 			}
 		case newChan, open := <-s.newMessagesChan:

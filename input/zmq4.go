@@ -146,14 +146,21 @@ func getZMQType(t string) (zmq4.Type, error) {
 
 // loop - Internal loop brokers incoming messages to output pipe.
 func (z *ZMQ4) loop() {
-	var bytes []byte
+	var bytes [][]byte
 	var msgChan chan<- types.Message
+
+	pollTimeout := time.Millisecond * time.Duration(z.conf.ZMQ4.PollTimeoutMS)
 
 	running, responsePending := true, false
 	for running {
 		// If no bytes then read a message
 		if bytes == nil {
-			// TODO
+			polled, err := z.poller.Poll(pollTimeout)
+			if err == nil && len(polled) == 1 {
+				bytes, err = z.socket.RecvMessageBytes(0)
+				if err != nil {
+				}
+			}
 		}
 
 		// If we have a line to push out
@@ -165,7 +172,7 @@ func (z *ZMQ4) loop() {
 
 		if running {
 			select {
-			case msgChan <- types.Message{Content: bytes}:
+			case msgChan <- types.Message{Parts: bytes}:
 				responsePending = true
 			case err, open := <-z.responses:
 				if !open {

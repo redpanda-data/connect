@@ -45,12 +45,13 @@ func TestBasicBufferedAgent(t *testing.T) {
 
 	// Check correct flow no blocking
 	for ; i < total; i++ {
-		msgBytes := make([]byte, int(incr))
-		msgBytes[0] = byte(i)
-		select {
+		msgBytes := make([][]byte, 1)
+		msgBytes[0] = make([]byte, int(incr))
+		msgBytes[0][0] = byte(i)
 
+		select {
 		// Send to agent
-		case b.MessageChan() <- types.Message{Content: msgBytes}:
+		case b.MessageChan() <- types.Message{Parts: msgBytes}:
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered message %v send", i)
 			return
@@ -70,7 +71,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 		// Receive on output
 		select {
 		case outMsg := <-out.Messages:
-			if actual := uint8(outMsg.Content[0]); actual != i {
+			if actual := uint8(outMsg.Parts[0][0]); actual != i {
 				t.Errorf("Wrong order receipt of unbuffered message receive: %v != %v", actual, i)
 			}
 		case <-time.After(time.Second):
@@ -88,10 +89,12 @@ func TestBasicBufferedAgent(t *testing.T) {
 	}
 
 	for i = 0; i < total; i++ {
-		msgBytes := make([]byte, int(incr))
-		msgBytes[0] = byte(i)
+		msgBytes := make([][]byte, 1)
+		msgBytes[0] = make([]byte, int(incr))
+		msgBytes[0][0] = byte(i)
+
 		select {
-		case b.MessageChan() <- types.Message{Content: msgBytes}:
+		case b.MessageChan() <- types.Message{Parts: msgBytes}:
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered message %v send", i)
 			return
@@ -108,9 +111,11 @@ func TestBasicBufferedAgent(t *testing.T) {
 	}
 
 	// Should have reached limit here
-	msgBytes := make([]byte, int(incr))
+	msgBytes := make([][]byte, 1)
+	msgBytes[0] = make([]byte, int(incr))
+
 	select {
-	case b.MessageChan() <- types.Message{Content: msgBytes}:
+	case b.MessageChan() <- types.Message{Parts: msgBytes}:
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for final buffered message send")
 		return
@@ -151,7 +156,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 	for i = 1; i < total; i++ {
 		select {
 		case outMsg := <-out.Messages:
-			if actual := uint8(outMsg.Content[0]); actual != i {
+			if actual := uint8(outMsg.Parts[0][0]); actual != i {
 				t.Errorf("Wrong order receipt of buffered message: %v != %v", actual, i)
 			}
 		case <-time.After(time.Second):

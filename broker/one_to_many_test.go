@@ -53,9 +53,9 @@ func TestBasicOneToMany(t *testing.T) {
 	oTM.SetReadChan(readChan)
 
 	for i := 0; i < nMsgs; i++ {
-		content := []byte(fmt.Sprintf("hello world %v", i))
+		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.Message{Content: content}:
+		case readChan <- types.Message{Parts: content}:
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -63,8 +63,8 @@ func TestBasicOneToMany(t *testing.T) {
 		for j := 0; j < nAgents; j++ {
 			select {
 			case msg := <-mockAgents[j].Messages:
-				if string(msg.Content) != string(content) {
-					t.Errorf("Wrong content returned %s != %s", msg.Content, content)
+				if string(msg.Parts[0]) != string(content[0]) {
+					t.Errorf("Wrong content returned %s != %s", msg.Parts[0], content[0])
 				}
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for broker propagate")

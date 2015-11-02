@@ -88,18 +88,29 @@ func (b *Buffered) shiftMessage() (types.Message, error) {
 	}
 
 	msg := b.buffer[0]
-	b.used = b.used - cap(msg.Content)
-	b.buffer[0].Content = nil
+
+	size := 0
+	for i := range msg.Parts {
+		size += cap(msg.Parts[i])
+	}
+
+	b.used = b.used - size
+	b.buffer[0].Parts = nil
 	b.buffer = b.buffer[1:]
 
 	return msg, nil
 }
 
 func (b *Buffered) pushMessage(msg types.Message) error {
-	if b.used+cap(msg.Content) > b.limit {
+	size := 0
+	for i := range msg.Parts {
+		size += cap(msg.Parts[i])
+	}
+
+	if b.used+size > b.limit {
 		return ErrBufferReachedLimit
 	}
-	b.used = b.used + cap(msg.Content)
+	b.used = b.used + size
 	b.buffer = append(b.buffer, msg)
 	return nil
 }
@@ -117,7 +128,7 @@ func (b *Buffered) loop() {
 	for running {
 		if len(b.buffer) == 0 {
 			outChan = nil
-			lastMsg = types.Message{Content: nil}
+			lastMsg = types.Message{Parts: nil}
 		} else {
 			outChan = b.outMessages
 			lastMsg = b.buffer[0]
