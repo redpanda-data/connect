@@ -95,9 +95,11 @@ func (o *oneToManyNoSelect) loop() {
 			atomic.StoreInt32(&o.running, 0)
 		} else {
 			responses := Response{}
-			for i, a := range o.agents {
-				a.MessageChan() <- msg
-				if r := <-a.ResponseChan(); r != nil {
+			for i := range o.agents {
+				o.agents[i].MessageChan() <- msg
+			}
+			for i := range o.agents {
+				if r := <-o.agents[i].ResponseChan(); r != nil {
 					responses[i] = r
 				}
 			}

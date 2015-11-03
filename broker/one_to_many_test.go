@@ -70,6 +70,8 @@ func TestBasicOneToMany(t *testing.T) {
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
+		}
+		for j := 0; j < nAgents; j++ {
 			select {
 			case mockAgents[j].ResChan <- nil:
 			case <-time.After(time.Second):
@@ -118,6 +120,8 @@ func BenchmarkBasicOneToMany(b *testing.B) {
 		readChan <- types.Message{Parts: content}
 		for j := 0; j < nAgents; j++ {
 			<-mockAgents[j].Messages
+		}
+		for j := 0; j < nAgents; j++ {
 			mockAgents[j].ResChan <- nil
 		}
 		res := <-oTM.ResponseChan()
@@ -156,6 +160,8 @@ func BenchmarkBasicOneToManyNoSelect(b *testing.B) {
 		readChan <- types.Message{Parts: content}
 		for j := 0; j < nAgents; j++ {
 			<-mockAgents[j].Messages
+		}
+		for j := 0; j < nAgents; j++ {
 			mockAgents[j].ResChan <- nil
 		}
 		res := <-oTM.ResponseChan()

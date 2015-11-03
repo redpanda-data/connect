@@ -126,6 +126,7 @@ func (b *Buffered) loop() {
 	errors := []error{}
 
 	for running {
+		// If we do not have buffered messages then set the output chan to nil
 		if len(b.buffer) == 0 {
 			outChan = nil
 			lastMsg = types.Message{Parts: nil}
@@ -133,11 +134,14 @@ func (b *Buffered) loop() {
 			outChan = b.outMessages
 			lastMsg = b.buffer[0]
 		}
+
+		// If we do not have errors to propagate then set the error chan to nil
 		if len(errors) == 0 {
 			errChan = nil
 		} else {
 			errChan = b.errorsChan
 		}
+
 		select {
 		case msg, open := <-b.messages:
 			if running = open; !open {
