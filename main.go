@@ -34,7 +34,6 @@ import (
 	"github.com/jeffail/benthos/broker"
 	"github.com/jeffail/benthos/input"
 	"github.com/jeffail/benthos/output"
-	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
@@ -120,27 +119,21 @@ func main() {
 		agent.NewUnbuffered(output.Construct(config.Output)),
 	}
 
-	inputChan, resChan := make(chan types.Message), make(chan types.Response)
-
 	// Create input and input channel
-	in := input.Construct(config.Input)
-	in.SetResponseChan(resChan)
+	in, err := input.Construct(config.Input)
+	if err != nil {
+		logger.Errorf("Input error: %v\n", err)
+		return
+	}
 
 	// Error propagator
 	errProp := broker.NewErrPropagator(agents)
 
 	// Create broker
 	msgBroker := broker.NewOneToMany(agents)
-	msgBroker.SetReadChan(inputChan)
+	msgBroker.SetReadChan(in.ConsumerChan())
 
-	// Input reader
-	go func() {
-		for msg := range in.ConsumerChan() {
-			inputChan <- msg
-			<-msgBroker.ResponseChan()
-			resChan <- nil
-		}
-	}()
+	in.SetResponseChan(msgBroker.ResponseChan())
 
 	// Error reader
 	go func() {

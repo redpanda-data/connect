@@ -35,15 +35,15 @@ import (
 
 // ZMQ4Config - Configuration for the ZMQ4 input type.
 type ZMQ4Config struct {
-	Addresses     []string `json:"addresses"`
-	SocketType    string   `json:"socket_type"`
-	PollTimeoutMS int      `json:"poll_timeout_ms"`
+	Addresses     []string `json:"addresses" yaml:"addresses"`
+	SocketType    string   `json:"socket_type" yaml:"socket_type"`
+	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 }
 
 // NewZMQ4Config - Creates a new ZMQ4Config with default values.
 func NewZMQ4Config() ZMQ4Config {
 	return ZMQ4Config{
-		Addresses:     []string{"localhost:1234"},
+		Addresses:     []string{"tcp://localhost:1234"},
 		SocketType:    "PULL",
 		PollTimeoutMS: 5000,
 	}
@@ -164,8 +164,11 @@ func (z *ZMQ4) readerLoop() {
 				_ = err
 				// TODO: propagate errors, input type should have error channel.
 			}
+		} else if err != nil {
+			_ = err
 		}
 	}
+
 	close(z.internalMessages)
 }
 
@@ -196,11 +199,11 @@ func (z *ZMQ4) loop() {
 		case bytes, running = <-internalChan:
 		case msgChan <- types.Message{Parts: bytes}:
 			responsePending = true
-		case err, open := <-z.responses:
+		case res, open := <-z.responses:
 			responsePending = false
 			if !open {
 				z.responses = nil
-			} else if err == nil {
+			} else if res.Error() == nil {
 				bytes = nil
 			}
 		case newResChan, open := <-z.newResponsesChan:

@@ -73,7 +73,7 @@ func TestBasicOneToMany(t *testing.T) {
 		}
 		for j := 0; j < nAgents; j++ {
 			select {
-			case mockAgents[j].ResChan <- nil:
+			case mockAgents[j].ResChan <- types.NewSimpleResponse(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -81,8 +81,8 @@ func TestBasicOneToMany(t *testing.T) {
 		}
 		select {
 		case res := <-oTM.ResponseChan():
-			if len(res) != 0 {
-				t.Errorf("Received unexpected errors from broker: %v", res)
+			if res.Error() != nil {
+				t.Errorf("Received unexpected errors from broker: %v", res.Error())
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out responding to broker")
@@ -122,11 +122,11 @@ func BenchmarkBasicOneToMany(b *testing.B) {
 			<-mockAgents[j].Messages
 		}
 		for j := 0; j < nAgents; j++ {
-			mockAgents[j].ResChan <- nil
+			mockAgents[j].ResChan <- types.NewSimpleResponse(nil)
 		}
 		res := <-oTM.ResponseChan()
-		if len(res) != 0 {
-			b.Errorf("Received unexpected errors from broker: %v", res)
+		if res.Error() != nil {
+			b.Errorf("Received unexpected errors from broker: %v", res.Error())
 		}
 	}
 
@@ -162,11 +162,11 @@ func BenchmarkBasicOneToManyNoSelect(b *testing.B) {
 			<-mockAgents[j].Messages
 		}
 		for j := 0; j < nAgents; j++ {
-			mockAgents[j].ResChan <- nil
+			mockAgents[j].ResChan <- types.NewSimpleResponse(nil)
 		}
 		res := <-oTM.ResponseChan()
-		if len(res) != 0 {
-			b.Errorf("Received unexpected errors from broker: %v", res)
+		if res.Error() != nil {
+			b.Errorf("Received unexpected errors from broker: %v", res.Error())
 		}
 	}
 

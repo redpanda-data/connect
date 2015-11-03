@@ -1,0 +1,14 @@
+input:
+  type: zmq4
+  zmq4:
+    addresses:
+      - tcp://localhost:1234
+    socket_type: PULL
+    poll_timeout_ms: 5000
+output:
+  type: stdout
+  stdout: {}
+logger:
+  prefix: benthos
+  log_level: INFO
+  add_timestamp: true

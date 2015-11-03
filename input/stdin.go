@@ -108,10 +108,10 @@ func (s *STDIN) loop() {
 			select {
 			case msgChan <- types.Message{Parts: bytes}:
 				responsePending = true
-			case err, open := <-s.responses:
+			case res, open := <-s.responses:
 				if !open {
 					s.responses = nil
-				} else if err == nil {
+				} else if res.Error() == nil {
 					responsePending = false
 					bytes = nil
 				}

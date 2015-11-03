@@ -35,7 +35,7 @@ import (
 type OneToMany struct {
 	newMessagesChan chan (<-chan types.Message)
 	messages        <-chan types.Message
-	responseChan    chan Response
+	responseChan    chan types.Response
 
 	agentsChan chan []agent.Type
 	agents     []agent.Type
@@ -49,7 +49,7 @@ func NewOneToMany(agents []agent.Type) *OneToMany {
 	o := &OneToMany{
 		newMessagesChan: make(chan (<-chan types.Message)),
 		messages:        nil,
-		responseChan:    make(chan Response),
+		responseChan:    make(chan types.Response),
 		agentsChan:      make(chan []agent.Type),
 		agents:          agents,
 		closedChan:      make(chan struct{}),
@@ -85,13 +85,13 @@ func (o *OneToMany) loop() {
 			if !open {
 				o.messages = nil
 			} else {
-				responses := Response{}
+				responses := types.NewMappedResponse()
 				for i := range o.agents {
 					o.agents[i].MessageChan() <- msg
 				}
 				for i := range o.agents {
-					if r := <-o.agents[i].ResponseChan(); r != nil {
-						responses[i] = r
+					if r := <-o.agents[i].ResponseChan(); r.Error() != nil {
+						responses.Errors[i] = r.Error()
 					}
 				}
 				o.responseChan <- responses
@@ -113,7 +113,7 @@ func (o *OneToMany) loop() {
 }
 
 // ResponseChan - Returns the response channel.
-func (o *OneToMany) ResponseChan() <-chan Response {
+func (o *OneToMany) ResponseChan() <-chan types.Response {
 	return o.responseChan
 }
 

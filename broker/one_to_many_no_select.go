@@ -44,7 +44,7 @@ type oneToManyNoSelect struct {
 	stopped int32
 
 	messages     <-chan types.Message
-	responseChan chan Response
+	responseChan chan types.Response
 
 	agents []agent.Type
 
@@ -58,7 +58,7 @@ func newOneToManyNoSelect(agents []agent.Type) *oneToManyNoSelect {
 		running:      1,
 		stopped:      0,
 		messages:     nil,
-		responseChan: make(chan Response),
+		responseChan: make(chan types.Response),
 		agents:       agents,
 	}
 
@@ -94,13 +94,13 @@ func (o *oneToManyNoSelect) loop() {
 		if !open {
 			atomic.StoreInt32(&o.running, 0)
 		} else {
-			responses := Response{}
+			responses := types.NewMappedResponse()
 			for i := range o.agents {
 				o.agents[i].MessageChan() <- msg
 			}
 			for i := range o.agents {
-				if r := <-o.agents[i].ResponseChan(); r != nil {
-					responses[i] = r
+				if r := <-o.agents[i].ResponseChan(); r.Error() != nil {
+					responses.Errors[i] = r.Error()
 				}
 			}
 			o.responseChan <- responses
@@ -112,7 +112,7 @@ func (o *oneToManyNoSelect) loop() {
 }
 
 // ResponseChan - Returns the response channel.
-func (o *oneToManyNoSelect) ResponseChan() <-chan Response {
+func (o *oneToManyNoSelect) ResponseChan() <-chan types.Response {
 	return o.responseChan
 }
 

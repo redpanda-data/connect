@@ -43,13 +43,15 @@ func NewConfig() Config {
 //--------------------------------------------------------------------------------------------------
 
 // Construct - Create an input type based on an input configuration.
-func Construct(conf Config) Type {
+func Construct(conf Config) (Type, error) {
 	switch conf.Type {
 	case "stdin":
-		return NewSTDIN(conf)
+		return NewSTDIN(conf), nil
+	case "zmq4":
+		return NewZMQ4(conf)
 	default:
 	}
-	return &MockType{}
+	return &MockType{}, nil
 }
 
 //--------------------------------------------------------------------------------------------------

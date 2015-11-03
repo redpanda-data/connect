@@ -59,9 +59,9 @@ func TestBasicBufferedAgent(t *testing.T) {
 
 		// Instant response from agent
 		select {
-		case err := <-b.ResponseChan():
-			if err != nil {
-				t.Error(err)
+		case res := <-b.ResponseChan():
+			if res.Error() != nil {
+				t.Error(res.Error())
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered message %v response", i)
@@ -81,7 +81,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 
 		// Response from output
 		select {
-		case out.ResChan <- types.Response(nil):
+		case out.ResChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered response send back %v", i)
 			return
@@ -100,9 +100,9 @@ func TestBasicBufferedAgent(t *testing.T) {
 			return
 		}
 		select {
-		case err := <-b.ResponseChan():
-			if err != nil {
-				t.Error(err)
+		case res := <-b.ResponseChan():
+			if res.Error() != nil {
+				t.Error(res.Error())
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered message %v response", i)
@@ -123,9 +123,9 @@ func TestBasicBufferedAgent(t *testing.T) {
 
 	// Response should block until buffer is relieved
 	select {
-	case err := <-b.ResponseChan():
-		if err != nil {
-			t.Error(err)
+	case res := <-b.ResponseChan():
+		if res.Error() != nil {
+			t.Error(res.Error())
 		} else {
 			t.Errorf("Overflowed response returned before timeout")
 		}
@@ -136,7 +136,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 	// Extract last message
 	select {
 	case <-out.Messages:
-		out.ResChan <- types.Response(nil)
+		out.ResChan <- types.NewSimpleResponse(nil)
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for final buffered message read")
 		return
@@ -144,9 +144,9 @@ func TestBasicBufferedAgent(t *testing.T) {
 
 	// Response from the last attempt should no longer be blocking
 	select {
-	case err := <-b.ResponseChan():
-		if err != nil {
-			t.Error(err)
+	case res := <-b.ResponseChan():
+		if res.Error() != nil {
+			t.Error(res.Error())
 		}
 	case <-time.After(100 * time.Millisecond):
 		t.Errorf("Final buffered response blocked")
@@ -165,7 +165,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 		}
 
 		select {
-		case out.ResChan <- types.Response(nil):
+		case out.ResChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered response send back %v", i)
 			return
@@ -181,7 +181,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 	}
 
 	select {
-	case out.ResChan <- types.Response(nil):
+	case out.ResChan <- types.NewSimpleResponse(nil):
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for buffered response send back %v", i)
 		return

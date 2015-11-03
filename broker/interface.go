@@ -24,13 +24,10 @@ package broker
 
 import "github.com/jeffail/benthos/types"
 
-// Response - A map of ints (output indexes) with corresponding errors.
-type Response map[int]types.Response
-
 // Type - The standard interface of a broker type.
 type Type interface {
 	types.Closable
 
 	// ResponseChan - Returns a response for every input message received.
-	ResponseChan() <-chan Response
+	ResponseChan() <-chan types.Response
 }

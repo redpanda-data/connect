@@ -86,7 +86,7 @@ func (s *STDOUT) loop() {
 				s.messages = nil
 			} else {
 				_, err := fmt.Fprintf(os.Stdout, "%s\n\n", bytes.Join(msg.Parts, []byte("\n")))
-				s.responseChan <- types.Response(err)
+				s.responseChan <- types.NewSimpleResponse(err)
 			}
 		case newChan, open := <-s.newMessagesChan:
 			if running = open; running {

@@ -154,19 +154,19 @@ func (b *Buffered) loop() {
 					errors = append(errors, err)
 				}
 				res := <-b.output.ResponseChan()
-				if res != nil {
-					errors = append(errors, error(res))
+				if res.Error() != nil {
+					errors = append(errors, res.Error())
 				}
 				err = b.pushMessage(msg)
 			}
-			b.responseChan <- err
+			b.responseChan <- types.NewSimpleResponse(err)
 		case outChan <- lastMsg:
 			if _, err := b.shiftMessage(); err != nil {
 				errors = append(errors, err)
 			}
 			res := <-b.output.ResponseChan()
-			if res != nil {
-				errors = append(errors, error(res))
+			if res.Error() != nil {
+				errors = append(errors, res.Error())
 			}
 		case errChan <- errors:
 			errors = []error{}
