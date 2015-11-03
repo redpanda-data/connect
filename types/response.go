@@ -46,7 +46,7 @@ type MappedResponse struct {
 // Error - Returns nil if no errors are present, otherwise a concatenated blob of errors.
 func (b *MappedResponse) Error() error {
 	if len(b.Errors) > 0 {
-		return errors.New(fmt.Sprintf("%s", b.Errors))
+		return fmt.Errorf("%v", b.Errors)
 	}
 	return nil
 }
