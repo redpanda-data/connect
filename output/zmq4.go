@@ -20,11 +20,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package input
+package output
 
 import (
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/jeffail/benthos/types"
@@ -35,17 +34,15 @@ import (
 
 // ZMQ4Config - Configuration for the ZMQ4 input type.
 type ZMQ4Config struct {
-	Addresses     []string `json:"addresses" yaml:"addresses"`
-	SocketType    string   `json:"socket_type" yaml:"socket_type"`
-	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
+	Addresses  []string `json:"addresses" yaml:"addresses"`
+	SocketType string   `json:"socket_type" yaml:"socket_type"`
 }
 
 // NewZMQ4Config - Creates a new ZMQ4Config with default values.
 func NewZMQ4Config() ZMQ4Config {
 	return ZMQ4Config{
-		Addresses:     []string{"tcp://localhost:1234"},
-		SocketType:    "PULL",
-		PollTimeoutMS: 5000,
+		Addresses:  []string{"tcp://*:1234"},
+		SocketType: "PUSH",
 	}
 }
 
@@ -53,32 +50,28 @@ func NewZMQ4Config() ZMQ4Config {
 
 // ZMQ4 - An input type that serves ZMQ4 POST requests.
 type ZMQ4 struct {
-	running int32
-
 	conf Config
 
 	socket *zmq4.Socket
 
-	internalMessages chan [][]byte
+	newMessagesChan chan (<-chan types.Message)
 
-	messages  chan types.Message
-	responses <-chan types.Response
-
-	newResponsesChan chan (<-chan types.Response)
+	messages     <-chan types.Message
+	responseChan chan types.Response
 
 	closedChan chan struct{}
+	closeChan  chan struct{}
 }
 
 // NewZMQ4 - Create a new ZMQ4 input type.
 func NewZMQ4(conf Config) (*ZMQ4, error) {
 	z := ZMQ4{
-		running:          1,
-		conf:             conf,
-		internalMessages: make(chan [][]byte),
-		messages:         make(chan types.Message),
-		responses:        nil,
-		newResponsesChan: make(chan (<-chan types.Response)),
-		closedChan:       make(chan struct{}),
+		conf:            conf,
+		messages:        nil,
+		responseChan:    make(chan types.Response),
+		newMessagesChan: make(chan (<-chan types.Message)),
+		closedChan:      make(chan struct{}),
+		closeChan:       make(chan struct{}),
 	}
 
 	t, err := getZMQType(conf.ZMQ4.SocketType)
@@ -106,7 +99,6 @@ func NewZMQ4(conf Config) (*ZMQ4, error) {
 		}
 	}
 
-	go z.readerLoop()
 	go z.loop()
 
 	return &z, nil
@@ -116,104 +108,61 @@ func NewZMQ4(conf Config) (*ZMQ4, error) {
 
 func getZMQType(t string) (zmq4.Type, error) {
 	switch t {
-	case "SUB":
-		return zmq4.SUB, nil
-	case "XSUB":
-		return zmq4.XSUB, nil
-	case "PULL":
-		return zmq4.PULL, nil
+	case "PUB":
+		return zmq4.PUB, nil
+	case "XPUB":
+		return zmq4.XPUB, nil
+	case "PUSH":
+		return zmq4.PUSH, nil
 	}
 	return zmq4.PULL, types.ErrInvalidZMQType
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// readerLoop - Internal loop for polling new messages.
-func (z *ZMQ4) readerLoop() {
-	pollTimeout := time.Millisecond * time.Duration(z.conf.ZMQ4.PollTimeoutMS)
-	poller := zmq4.NewPoller()
-	poller.Add(z.socket, zmq4.POLLIN)
-
-	for atomic.LoadInt32(&z.running) == 1 {
-		// If no bytes then read a message
-		polled, err := poller.Poll(pollTimeout)
-		if err == nil && len(polled) == 1 {
-			if bytes, err := z.socket.RecvMessageBytes(0); err == nil {
-				z.internalMessages <- bytes
-			} else {
-				_ = err
-				// TODO: propagate errors, input type should have error channel.
-			}
-		} else if err != nil {
-			_ = err
-		}
-	}
-
-	close(z.internalMessages)
-}
-
 // loop - Internal loop brokers incoming messages to output pipe.
 func (z *ZMQ4) loop() {
-	var bytes [][]byte
-
-	var msgChan chan<- types.Message
-	var internalChan <-chan [][]byte
-
-	running, responsePending := true, false
+	running := true
 	for running {
-		// If we have a line to push out
-		if responsePending {
-			msgChan = nil
-			internalChan = nil
-		} else {
-			if bytes == nil {
-				msgChan = nil
-				internalChan = z.internalMessages
-			} else {
-				msgChan = z.messages
-				internalChan = nil
-			}
-		}
-
 		select {
-		case bytes, running = <-internalChan:
-		case msgChan <- types.Message{Parts: bytes}:
-			responsePending = true
-		case res, open := <-z.responses:
-			responsePending = false
+		case msg, open := <-z.messages:
+			// If the messages chan is closed we do not close ourselves as it can replaced.
 			if !open {
-				z.responses = nil
-			} else if res.Error() == nil {
-				bytes = nil
+				z.messages = nil
+			} else {
+				_, err := z.socket.SendMessage(msg.Parts)
+				z.responseChan <- types.NewSimpleResponse(err)
 			}
-		case newResChan, open := <-z.newResponsesChan:
-			if running = open; open {
-				z.responses = newResChan
+		case newChan, open := <-z.newMessagesChan:
+			if running = open; running {
+				z.messages = newChan
 			}
+		case _, running = <-z.closeChan:
+			running = false
 		}
 	}
 
-	close(z.messages)
-	close(z.newResponsesChan)
+	close(z.responseChan)
+	close(z.newMessagesChan)
 	close(z.closedChan)
 }
 
-// SetResponseChan - Sets the channel used by the input to validate message receipt.
-func (z *ZMQ4) SetResponseChan(responses <-chan types.Response) {
-	z.newResponsesChan <- responses
+// SetReadChan - Assigns a new messages channel for the output to read.
+func (z *ZMQ4) SetReadChan(msgs <-chan types.Message) {
+	z.newMessagesChan <- msgs
 }
 
-// ConsumerChan - Returns the messages channel.
-func (z *ZMQ4) ConsumerChan() <-chan types.Message {
-	return z.messages
+// ResponseChan - Returns the errors channel.
+func (z *ZMQ4) ResponseChan() <-chan types.Response {
+	return z.responseChan
 }
 
-// CloseAsync - Shuts down the ZMQ4 input and stops processing requests.
+// CloseAsync - Shuts down the ZMQ4 output and stops processing messages.
 func (z *ZMQ4) CloseAsync() {
-	atomic.StoreInt32(&z.running, 0)
+	close(z.closeChan)
 }
 
-// WaitForClose - Blocks until the ZMQ4 input has closed down.
+// WaitForClose - Blocks until the ZMQ4 output has closed down.
 func (z *ZMQ4) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-z.closedChan:

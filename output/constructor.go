@@ -28,6 +28,7 @@ package output
 type Config struct {
 	Type   string       `json:"type" yaml:"type"`
 	STDOUT STDOUTConfig `json:"stdout" yaml:"stdout"`
+	ZMQ4   ZMQ4Config   `json:"zmq4" yaml:"zmq4"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
@@ -35,19 +36,22 @@ func NewConfig() Config {
 	return Config{
 		Type:   "none",
 		STDOUT: NewSTDOUTConfig(),
+		ZMQ4:   NewZMQ4Config(),
 	}
 }
 
 //--------------------------------------------------------------------------------------------------
 
 // Construct - Create an output type based on an output configuration.
-func Construct(conf Config) Type {
+func Construct(conf Config) (Type, error) {
 	switch conf.Type {
 	case "stdout":
-		return NewSTDOUT(conf)
+		return NewSTDOUT(conf), nil
+	case "zmq4":
+		return NewZMQ4(conf)
 	default:
 	}
-	return &MockType{}
+	return &MockType{}, nil
 }
 
 //--------------------------------------------------------------------------------------------------

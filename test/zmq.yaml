@@ -6,8 +6,11 @@ input:
     socket_type: PULL
     poll_timeout_ms: 5000
 output:
-  type: stdout
-  stdout: {}
+  type: zmq4
+  zmq4:
+    addresses:
+      - tcp://*:1235
+    socket_type: PUSH
 logger:
   prefix: benthos
   log_level: INFO

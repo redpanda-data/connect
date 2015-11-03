@@ -114,9 +114,15 @@ func main() {
 	}
 	defer stats.Close()
 
+	out, err := output.Construct(config.Output)
+	if err != nil {
+		logger.Errorf("Input error: %v\n", err)
+		return
+	}
+
 	// Create output agents
 	agents := []agent.Type{
-		agent.NewUnbuffered(output.Construct(config.Output)),
+		agent.NewUnbuffered(out),
 	}
 
 	// Create input and input channel
