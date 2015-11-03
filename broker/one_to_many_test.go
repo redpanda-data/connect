@@ -90,3 +90,81 @@ func TestBasicOneToMany(t *testing.T) {
 }
 
 //--------------------------------------------------------------------------------------------------
+
+func BenchmarkBasicOneToMany(b *testing.B) {
+	nAgents, nMsgs := 3, 100000
+
+	agents := []agent.Type{}
+	mockAgents := []*agent.MockType{}
+
+	for i := 0; i < nAgents; i++ {
+		mockAgents = append(mockAgents, &agent.MockType{
+			ResChan:  make(chan types.Response),
+			Messages: make(chan types.Message),
+		})
+		agents = append(agents, mockAgents[i])
+	}
+
+	readChan := make(chan types.Message)
+
+	oTM := NewOneToMany(agents)
+	oTM.SetReadChan(readChan)
+
+	content := [][]byte{[]byte("hello world")}
+
+	b.StartTimer()
+
+	for i := 0; i < nMsgs; i++ {
+		readChan <- types.Message{Parts: content}
+		for j := 0; j < nAgents; j++ {
+			<-mockAgents[j].Messages
+			mockAgents[j].ResChan <- nil
+		}
+		res := <-oTM.ResponseChan()
+		if len(res) != 0 {
+			b.Errorf("Received unexpected errors from broker: %v", res)
+		}
+	}
+
+	b.StopTimer()
+}
+
+func BenchmarkBasicOneToManyNoSelect(b *testing.B) {
+	nAgents, nMsgs := 3, 100000
+
+	agents := []agent.Type{}
+	mockAgents := []*agent.MockType{}
+
+	for i := 0; i < nAgents; i++ {
+		mockAgents = append(mockAgents, &agent.MockType{
+			ResChan:  make(chan types.Response),
+			Messages: make(chan types.Message),
+		})
+		agents = append(agents, mockAgents[i])
+	}
+
+	readChan := make(chan types.Message)
+
+	oTM := newOneToManyNoSelect(agents)
+	oTM.SetReadChan(readChan)
+
+	content := [][]byte{[]byte("hello world")}
+
+	b.StartTimer()
+
+	for i := 0; i < nMsgs; i++ {
+		readChan <- types.Message{Parts: content}
+		for j := 0; j < nAgents; j++ {
+			<-mockAgents[j].Messages
+			mockAgents[j].ResChan <- nil
+		}
+		res := <-oTM.ResponseChan()
+		if len(res) != 0 {
+			b.Errorf("Received unexpected errors from broker: %v", res)
+		}
+	}
+
+	b.StopTimer()
+}
+
+//--------------------------------------------------------------------------------------------------
