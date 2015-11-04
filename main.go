@@ -45,7 +45,7 @@ import (
 // Config - The benthos configuration struct.
 type Config struct {
 	Input   input.Config     `json:"input" yaml:"input"`
-	Output  output.Config    `json:"output" yaml:"output"`
+	Outputs []output.Config  `json:"outputs" yaml:"outputs"`
 	Logger  log.LoggerConfig `json:"logger" yaml:"logger"`
 	Metrics metrics.Config   `json:"metrics" yaml:"metrics"`
 }
@@ -54,7 +54,7 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Input:   input.NewConfig(),
-		Output:  output.NewConfig(),
+		Outputs: []output.Config{output.NewConfig()},
 		Logger:  log.DefaultLoggerConfig(),
 		Metrics: metrics.NewConfig(),
 	}
@@ -99,14 +99,17 @@ func main() {
 	}
 
 	// Logging and stats aggregation
-	// Note: Only log to Stderr if our output is stdout
+	// Note: Only log to Stderr if one of our outputs is stdout
 	var logger *log.Logger
-	if config.Output.Type == "stdout" {
-		logger = log.NewLogger(os.Stderr, config.Logger)
-	} else {
-		logger = log.NewLogger(os.Stdout, config.Logger)
+	for _, outConf := range config.Outputs {
+		if outConf.Type == "stdout" {
+			logger = log.NewLogger(os.Stderr, config.Logger)
+		} else {
+			logger = log.NewLogger(os.Stdout, config.Logger)
+		}
 	}
 
+	// Create our metrics type.
 	stats, err := metrics.New(config.Metrics)
 	if err != nil {
 		logger.Errorf("Metrics error: %v\n", err)
@@ -114,15 +117,17 @@ func main() {
 	}
 	defer stats.Close()
 
-	out, err := output.Construct(config.Output)
-	if err != nil {
-		logger.Errorf("Input error: %v\n", err)
-		return
-	}
+	// Create output agents.
+	agents := []agent.Type{}
 
-	// Create output agents
-	agents := []agent.Type{
-		agent.NewUnbuffered(out),
+	// For each configured output
+	for _, outConf := range config.Outputs {
+		if out, err := output.Construct(outConf); err == nil {
+			agents = append(agents, agent.NewUnbuffered(out))
+		} else {
+			logger.Errorf("Output error: %v\n", err)
+			return
+		}
 	}
 
 	// Create input and input channel

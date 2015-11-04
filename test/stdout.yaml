@@ -1,8 +1,8 @@
 input:
   type: stdin
   stdin: {}
-output:
-  type: stdout
+outputs:
+- type: stdout
   stdout: {}
 logger:
   prefix: benthos
