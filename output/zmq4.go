@@ -147,8 +147,8 @@ func (z *ZMQ4) loop() {
 	close(z.closedChan)
 }
 
-// SetReadChan - Assigns a new messages channel for the output to read.
-func (z *ZMQ4) SetReadChan(msgs <-chan types.Message) {
+// SetMessageChan - Assigns a new messages channel for the output to read.
+func (z *ZMQ4) SetMessageChan(msgs <-chan types.Message) {
 	z.newMessagesChan <- msgs
 }
 

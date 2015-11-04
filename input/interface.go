@@ -27,11 +27,6 @@ import "github.com/jeffail/benthos/types"
 // Type - The standard interface of an input type.
 type Type interface {
 	types.Closable
-
-	// SetResponseChan - Sets the channel read by the input to verify that an output has
-	// successfully forwarded the request. This action is thread safe.
-	SetResponseChan(<-chan types.Response)
-
-	// ConsumerChan - Returns the channel used for consuming messages from this input.
-	ConsumerChan() <-chan types.Message
+	types.MessageSender
+	types.ResponderListener
 }

@@ -27,5 +27,4 @@ import "github.com/jeffail/benthos/types"
 // Type - The standard interface of a broker type.
 type Type interface {
 	types.Closable
-	types.Responder
 }

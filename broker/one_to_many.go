@@ -63,8 +63,8 @@ func NewOneToMany(agents []agent.Type) *OneToMany {
 
 //--------------------------------------------------------------------------------------------------
 
-// SetReadChan - Assigns a new messages channel for the broker to read.
-func (o *OneToMany) SetReadChan(msgs <-chan types.Message) {
+// SetMessageChan - Assigns a new messages channel for the broker to read.
+func (o *OneToMany) SetMessageChan(msgs <-chan types.Message) {
 	o.newMessagesChan <- msgs
 }
 

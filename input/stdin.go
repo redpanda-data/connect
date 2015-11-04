@@ -134,8 +134,8 @@ func (s *STDIN) SetResponseChan(responses <-chan types.Response) {
 	s.newResponsesChan <- responses
 }
 
-// ConsumerChan - Returns the messages channel.
-func (s *STDIN) ConsumerChan() <-chan types.Message {
+// MessageChan - Returns the messages channel.
+func (s *STDIN) MessageChan() <-chan types.Message {
 	return s.messages
 }
 

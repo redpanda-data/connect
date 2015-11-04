@@ -28,7 +28,5 @@ import "github.com/jeffail/benthos/types"
 type Type interface {
 	types.Closable
 	types.Responder
-
-	// SetReadChan - Sets the channel for the output to read. This action is thread safe.
-	SetReadChan(<-chan types.Message)
+	types.MessageReceiver
 }

@@ -50,7 +50,7 @@ func TestBasicOneToMany(t *testing.T) {
 	readChan := make(chan types.Message)
 
 	oTM := NewOneToMany(agents)
-	oTM.SetReadChan(readChan)
+	oTM.SetMessageChan(readChan)
 
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
@@ -110,7 +110,7 @@ func BenchmarkBasicOneToMany(b *testing.B) {
 	readChan := make(chan types.Message)
 
 	oTM := NewOneToMany(agents)
-	oTM.SetReadChan(readChan)
+	oTM.SetMessageChan(readChan)
 
 	content := [][]byte{[]byte("hello world")}
 
@@ -150,7 +150,7 @@ func BenchmarkBasicOneToManyNoSelect(b *testing.B) {
 	readChan := make(chan types.Message)
 
 	oTM := newOneToManyNoSelect(agents)
-	oTM.SetReadChan(readChan)
+	oTM.SetMessageChan(readChan)
 
 	content := [][]byte{[]byte("hello world")}
 

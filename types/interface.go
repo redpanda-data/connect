@@ -26,6 +26,8 @@ import (
 	"time"
 )
 
+//--------------------------------------------------------------------------------------------------
+
 // Closable - Defines a type that can be safely closed down and cleaned up.
 type Closable interface {
 	// CloseAsync - Trigger a closure of this object but do not block until completion.
@@ -36,8 +38,32 @@ type Closable interface {
 	WaitForClose(timeout time.Duration) error
 }
 
+//--------------------------------------------------------------------------------------------------
+
 // Responder - Defines a type that will send a response every time a message is received.
 type Responder interface {
 	// ResponseChan - Returns a response for every input message received.
 	ResponseChan() <-chan Response
 }
+
+// ResponderListener - A type that listens to a Responder type.
+type ResponderListener interface {
+	// SetResponseChan - Sets the channel for reading responses.
+	SetResponseChan(<-chan Response)
+}
+
+//--------------------------------------------------------------------------------------------------
+
+// MessageSender - A type that sends messages to an output.
+type MessageSender interface {
+	// MessageChan - Returns the channel used for consuming messages from this input.
+	MessageChan() <-chan Message
+}
+
+// MessageReceiver - A type that receives messages from an input.
+type MessageReceiver interface {
+	// SetMessageChan - Sets the channel for reading messages.
+	SetMessageChan(<-chan Message)
+}
+
+//--------------------------------------------------------------------------------------------------

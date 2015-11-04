@@ -203,8 +203,8 @@ func (z *ZMQ4) SetResponseChan(responses <-chan types.Response) {
 	z.newResponsesChan <- responses
 }
 
-// ConsumerChan - Returns the messages channel.
-func (z *ZMQ4) ConsumerChan() <-chan types.Message {
+// MessageChan - Returns the messages channel.
+func (z *ZMQ4) MessageChan() <-chan types.Message {
 	return z.messages
 }
 

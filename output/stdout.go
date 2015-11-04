@@ -102,8 +102,8 @@ func (s *STDOUT) loop() {
 	close(s.closedChan)
 }
 
-// SetReadChan - Assigns a new messages channel for the output to read.
-func (s *STDOUT) SetReadChan(msgs <-chan types.Message) {
+// SetMessageChan - Assigns a new messages channel for the output to read.
+func (s *STDOUT) SetMessageChan(msgs <-chan types.Message) {
 	s.newMessagesChan <- msgs
 }
 

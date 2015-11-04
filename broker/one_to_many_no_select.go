@@ -69,8 +69,8 @@ func newOneToManyNoSelect(agents []agent.Type) *oneToManyNoSelect {
 
 //--------------------------------------------------------------------------------------------------
 
-// SetReadChan - Assigns a new messages channel for the broker to read.
-func (o *oneToManyNoSelect) SetReadChan(msgs <-chan types.Message) {
+// SetMessageChan - Assigns a new messages channel for the broker to read.
+func (o *oneToManyNoSelect) SetMessageChan(msgs <-chan types.Message) {
 	o.Lock()
 	defer o.Unlock()
 	o.messages = msgs

@@ -45,7 +45,7 @@ func NewUnbuffered(out output.Type) *Unbuffered {
 		messages: make(chan types.Message),
 	}
 
-	out.SetReadChan(u.messages)
+	out.SetMessageChan(u.messages)
 
 	return &u
 }

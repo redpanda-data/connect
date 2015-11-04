@@ -73,7 +73,7 @@ func NewBuffered(out output.Type, limit int) *Buffered {
 		closeChan:    make(chan struct{}),
 	}
 
-	b.output.SetReadChan(b.outMessages)
+	b.output.SetMessageChan(b.outMessages)
 
 	go b.loop()
 

@@ -142,7 +142,7 @@ func main() {
 
 	// Create broker
 	msgBroker := broker.NewOneToMany(agents)
-	msgBroker.SetReadChan(in.ConsumerChan())
+	msgBroker.SetMessageChan(in.MessageChan())
 
 	in.SetResponseChan(msgBroker.ResponseChan())
 
