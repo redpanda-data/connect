@@ -27,13 +27,10 @@ import "github.com/jeffail/benthos/types"
 // Type - The standard interface of an agent type.
 type Type interface {
 	types.Closable
+	types.Responder
 
 	// MessageChan - Returns the channel used for sending messages to the Agent.
 	MessageChan() chan<- types.Message
-
-	// ResponseChan - Returns the channel used for returning the result of a message dispatch, a nil
-	// error means the message was succesfully dispatched to the agent.
-	ResponseChan() <-chan types.Response
 
 	// ErrorsChan - Returns the channel used for returning any accumulated errors. This needs
 	// reading in the same select block where messages are sent as the errors can occur at any time.

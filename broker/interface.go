@@ -27,7 +27,5 @@ import "github.com/jeffail/benthos/types"
 // Type - The standard interface of a broker type.
 type Type interface {
 	types.Closable
-
-	// ResponseChan - Returns a response for every input message received.
-	ResponseChan() <-chan types.Response
+	types.Responder
 }

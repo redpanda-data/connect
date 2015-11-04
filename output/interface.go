@@ -27,11 +27,8 @@ import "github.com/jeffail/benthos/types"
 // Type - The standard interface of an output type.
 type Type interface {
 	types.Closable
+	types.Responder
 
 	// SetReadChan - Sets the channel for the output to read. This action is thread safe.
 	SetReadChan(<-chan types.Message)
-
-	// ResponseChan - Returns the channel used for returning the result of a message dispatch, a nil
-	// error means the message was succesfully dispatched to the output.
-	ResponseChan() <-chan types.Response
 }

@@ -22,7 +22,9 @@ THE SOFTWARE.
 
 package types
 
-import "time"
+import (
+	"time"
+)
 
 // Closable - Defines a type that can be safely closed down and cleaned up.
 type Closable interface {
@@ -32,4 +34,10 @@ type Closable interface {
 	// WaitForClose - A blocking call to wait until the object has finished closing down and
 	// cleaning up resources.
 	WaitForClose(timeout time.Duration) error
+}
+
+// Responder - Defines a type that will send a response every time a message is received.
+type Responder interface {
+	// ResponseChan - Returns a response for every input message received.
+	ResponseChan() <-chan Response
 }
