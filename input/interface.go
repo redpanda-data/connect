@@ -27,6 +27,5 @@ import "github.com/jeffail/benthos/types"
 // Type - The standard interface of an input type.
 type Type interface {
 	types.Closable
-	types.MessageSender
-	types.ResponderListener
+	types.Input
 }

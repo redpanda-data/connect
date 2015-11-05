@@ -31,27 +31,28 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// OneToMany - A one-to-many broker type.
-type OneToMany struct {
+// FanOut - A broker that implements types.Output and broadcasts each message out to an array of
+// outputs.
+type FanOut struct {
 	newMessagesChan chan (<-chan types.Message)
 	messages        <-chan types.Message
 	responseChan    chan types.Response
 
-	agentsChan chan []agent.Type
-	agents     []agent.Type
+	outputsChan chan []types.Output
+	outputs     []types.Output
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
 
-// NewOneToMany - Create a new OneToMany type by providing agents and a messages channel.
-func NewOneToMany(agents []agent.Type) *OneToMany {
-	o := &OneToMany{
+// NewFanOut - Create a new FanOut type by providing outputs and a messages channel.
+func NewFanOut(outputs []types.Output) *FanOut {
+	o := &FanOut{
 		newMessagesChan: make(chan (<-chan types.Message)),
 		messages:        nil,
 		responseChan:    make(chan types.Response),
-		agentsChan:      make(chan []agent.Type),
-		agents:          agents,
+		outputsChan:     make(chan []types.Output),
+		outputs:         outputs,
 		closedChan:      make(chan struct{}),
 		closeChan:       make(chan struct{}),
 	}
@@ -64,19 +65,19 @@ func NewOneToMany(agents []agent.Type) *OneToMany {
 //--------------------------------------------------------------------------------------------------
 
 // SetMessageChan - Assigns a new messages channel for the broker to read.
-func (o *OneToMany) SetMessageChan(msgs <-chan types.Message) {
+func (o *FanOut) SetMessageChan(msgs <-chan types.Message) {
 	o.newMessagesChan <- msgs
 }
 
 // SetAgents - Set the broker agents.
-func (o *OneToMany) SetAgents(agents []agent.Type) {
-	o.agentsChan <- agents
+func (o *FanOut) SetOutputs(outputs []types.Output) {
+	o.outputsChan <- ouputs
 }
 
 //--------------------------------------------------------------------------------------------------
 
 // loop - Internal loop brokers incoming messages to many outputs.
-func (o *OneToMany) loop() {
+func (o *FanOut) loop() {
 	running := true
 	for running {
 		select {
@@ -86,11 +87,11 @@ func (o *OneToMany) loop() {
 				o.messages = nil
 			} else {
 				responses := types.NewMappedResponse()
-				for i := range o.agents {
-					o.agents[i].MessageChan() <- msg
+				for i := range o.outputs {
+					o.outputs[i].MessageChan() <- msg
 				}
-				for i := range o.agents {
-					if r := <-o.agents[i].ResponseChan(); r.Error() != nil {
+				for i := range o.outputs {
+					if r := <-o.outputs[i].ResponseChan(); r.Error() != nil {
 						responses.Errors[i] = r.Error()
 					}
 				}
@@ -100,9 +101,9 @@ func (o *OneToMany) loop() {
 			if running = open; running {
 				o.messages = newChan
 			}
-		case agents, open := <-o.agentsChan:
+		case outputs, open := <-o.outputsChan:
 			if running = open; running {
-				o.agents = agents
+				o.outputs = outputs
 			}
 		case _, running = <-o.closeChan:
 		}
@@ -113,19 +114,19 @@ func (o *OneToMany) loop() {
 }
 
 // ResponseChan - Returns the response channel.
-func (o *OneToMany) ResponseChan() <-chan types.Response {
+func (o *FanOut) ResponseChan() <-chan types.Response {
 	return o.responseChan
 }
 
-// CloseAsync - Shuts down the OneToMany broker and stops processing requests.
-func (o *OneToMany) CloseAsync() {
+// CloseAsync - Shuts down the FanOut broker and stops processing requests.
+func (o *FanOut) CloseAsync() {
 	close(o.newMessagesChan)
 	close(o.closeChan)
-	close(o.agentsChan)
+	close(o.outputsChan)
 }
 
-// WaitForClose - Blocks until the OneToMany broker has closed down.
-func (o *OneToMany) WaitForClose(timeout time.Duration) error {
+// WaitForClose - Blocks until the FanOut broker has closed down.
+func (o *FanOut) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-o.closedChan:
 	case <-time.After(timeout):

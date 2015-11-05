@@ -32,9 +32,9 @@ func TestMockInterface(t *testing.T) {
 		t.Errorf("mock: nil Type")
 	}
 
-	o := &OneToMany{}
+	o := &FanOut{}
 	if Type(o) == nil {
-		t.Errorf("OneToMany: nil Type")
+		t.Errorf("FanOut: nil Type")
 	}
 }
 

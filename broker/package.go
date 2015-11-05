@@ -21,51 +21,7 @@ THE SOFTWARE.
 */
 
 /*
-Package broker - Implements types used for routing an input to outputs in one to many fashion, with
-the potential for either lock-stepped and unbuffered queuing or with buffers for each output.
-
-The broker expects an array of outputs, which can be changed at runtime, these outputs must be
-wrapped in an Agent type, which determines whether the output should be lock-stepped or buffered.
-
-The broker loop is like this:
-
-for each input
-	Input -> Broker: send_message()
-	for each agent
-		Broker -> Agent: dispatch_message()
-	end
-	for each agent
-		Broker -> Agent: confirm_dispatched()
-	end
-end
-
-A lock-stepped (unbuffered) agent would look like this:
-
-for each message dispatch
-	Broker -> Agent: dispatch_message()
-	Agent -> Output: send_message()
-	Agent -> Output: confirm_send()
-	Broker -> Agent: confirm_dispatched()
-end
-
-An asynchronous (buffered) agent would look like this:
-
-(async) for each message dispatch
-	Broker -> Agent: dispatch_message()
-	Agent -> Agent: push_to_queue()
-
-	while buffered > threshold
-		Agent -> Agent: wait_until_below_threshold()
-	end
-	Broker -> Agent: confirm_dispatched()
-end
-(async) for each queued message
-	Agent -> Output: send_message()
-	Agent -> Output: confirmed_message_sent()
-	Agent -> Agent: update_num_buffered()
-end
-
-Note that the buffer is not unlimited, as we must set a threshold and it is up to the agent to track
-how much memory is consumed by the buffer.
+Package broker - Implements types used for routing inputs to outputs in non-trivial arrangments,
+such as fan-out or fan-in models.
 */
 package broker

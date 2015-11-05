@@ -22,25 +22,12 @@ THE SOFTWARE.
 
 package broker
 
-import (
-	"time"
-
-	"github.com/jeffail/benthos/agent"
-	"github.com/jeffail/benthos/types"
-)
+import "time"
 
 //--------------------------------------------------------------------------------------------------
 
 // MockType - Implements the broker.Type interface.
 type MockType struct {
-	responseChan chan types.Response
-
-	agents []agent.Type
-}
-
-// ResponseChan - Returns the errors channel.
-func (m *MockType) ResponseChan() <-chan types.Response {
-	return m.responseChan
 }
 
 // CloseAsync - Does nothing.

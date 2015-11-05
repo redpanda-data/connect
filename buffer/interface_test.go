@@ -20,47 +20,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package agent
+package buffer
 
-import (
-	"time"
-
-	"github.com/jeffail/benthos/types"
-)
+import "testing"
 
 //--------------------------------------------------------------------------------------------------
 
-// MockType - Implements the output.Type interface.
-type MockType struct {
-	ResChan  chan types.Response
-	Messages chan types.Message
-	ErrsChan chan []error
-}
-
-// MessageChan - Returns the messages channel.
-func (m *MockType) MessageChan() chan<- types.Message {
-	return m.Messages
-}
-
-// ResponseChan - Returns the response channel.
-func (m *MockType) ResponseChan() <-chan types.Response {
-	return m.ResChan
-}
-
-// ErrorsChan - Returns the errors channel.
-func (m *MockType) ErrorsChan() <-chan []error {
-	return m.ErrsChan
-}
-
-// CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
-	// Do nothing
-}
-
-// WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
-	// Do nothing
-	return nil
+func TestInterfaces(t *testing.T) {
+	mem := &Memory{}
+	if Type(mem) == nil {
+		t.Errorf("Memory: nil Type")
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

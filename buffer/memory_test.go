@@ -20,26 +20,26 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package agent
+package buffer
 
 import (
 	"testing"
 	"time"
 
-	"github.com/jeffail/benthos/output"
 	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
 
-func TestBasicBufferedAgent(t *testing.T) {
+func TestBasicBufferedbuffer(t *testing.T) {
 	var incr, total uint8 = 100, 50
 
-	out := output.MockType{
-		ResChan: make(chan types.Response),
-	}
+	msgChan := make(chan types.Message)
+	resChan := make(chan types.Response)
 
-	b := NewBuffered(&out, int(incr)*int(total))
+	b := NewMemory(int(incr) * int(total))
+	b.SetMessageChan(msgChan)
+	b.SetResponseChan(resChan)
 
 	var i uint8
 
@@ -50,14 +50,14 @@ func TestBasicBufferedAgent(t *testing.T) {
 		msgBytes[0][0] = byte(i)
 
 		select {
-		// Send to agent
-		case b.MessageChan() <- types.Message{Parts: msgBytes}:
+		// Send to buffer
+		case msgChan <- types.Message{Parts: msgBytes}:
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered message %v send", i)
 			return
 		}
 
-		// Instant response from agent
+		// Instant response from buffer
 		select {
 		case res := <-b.ResponseChan():
 			if res.Error() != nil {
@@ -70,7 +70,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 
 		// Receive on output
 		select {
-		case outMsg := <-out.Messages:
+		case outMsg := <-b.MessageChan():
 			if actual := uint8(outMsg.Parts[0][0]); actual != i {
 				t.Errorf("Wrong order receipt of unbuffered message receive: %v != %v", actual, i)
 			}
@@ -81,7 +81,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 
 		// Response from output
 		select {
-		case out.ResChan <- types.NewSimpleResponse(nil):
+		case resChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered response send back %v", i)
 			return
@@ -94,7 +94,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 		msgBytes[0][0] = byte(i)
 
 		select {
-		case b.MessageChan() <- types.Message{Parts: msgBytes}:
+		case msgChan <- types.Message{Parts: msgBytes}:
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered message %v send", i)
 			return
@@ -115,7 +115,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 	msgBytes[0] = make([]byte, int(incr))
 
 	select {
-	case b.MessageChan() <- types.Message{Parts: msgBytes}:
+	case msgChan <- types.Message{Parts: msgBytes}:
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for final buffered message send")
 		return
@@ -135,8 +135,8 @@ func TestBasicBufferedAgent(t *testing.T) {
 
 	// Extract last message
 	select {
-	case <-out.Messages:
-		out.ResChan <- types.NewSimpleResponse(nil)
+	case <-b.MessageChan():
+		resChan <- types.NewSimpleResponse(nil)
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for final buffered message read")
 		return
@@ -155,7 +155,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 	// Extract all other messages
 	for i = 1; i < total; i++ {
 		select {
-		case outMsg := <-out.Messages:
+		case outMsg := <-b.MessageChan():
 			if actual := uint8(outMsg.Parts[0][0]); actual != i {
 				t.Errorf("Wrong order receipt of buffered message: %v != %v", actual, i)
 			}
@@ -165,7 +165,7 @@ func TestBasicBufferedAgent(t *testing.T) {
 		}
 
 		select {
-		case out.ResChan <- types.NewSimpleResponse(nil):
+		case resChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered response send back %v", i)
 			return
@@ -174,18 +174,24 @@ func TestBasicBufferedAgent(t *testing.T) {
 
 	// Get final message
 	select {
-	case <-out.Messages:
+	case <-b.MessageChan():
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for buffered message %v read", i)
 		return
 	}
 
 	select {
-	case out.ResChan <- types.NewSimpleResponse(nil):
+	case resChan <- types.NewSimpleResponse(nil):
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for buffered response send back %v", i)
 		return
 	}
+
+	b.CloseAsync()
+	b.WaitForClose(time.Second)
+
+	close(resChan)
+	close(msgChan)
 }
 
 //--------------------------------------------------------------------------------------------------

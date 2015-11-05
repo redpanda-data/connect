@@ -27,29 +27,41 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeffail/benthos/agent"
+	"github.com/jeffail/benthos/output"
 	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
 
-func TestBasicOneToMany(t *testing.T) {
-	nAgents, nMsgs := 10, 1000
+func TestFanOutInterfaces(t *testing.T) {
+	f := &FanOut{}
+	if types.Output(f) == nil {
+		t.Errorf("FanOut: nil types.Output")
+	}
+	if types.Closable(f) == nil {
+		t.Errorf("FanOut: nil types.Closable")
+	}
+}
 
-	agents := []agent.Type{}
-	mockAgents := []*agent.MockType{}
+//--------------------------------------------------------------------------------------------------
 
-	for i := 0; i < nAgents; i++ {
-		mockAgents = append(mockAgents, &agent.MockType{
+func TestBasicFanOut(t *testing.T) {
+	nOutputs, nMsgs := 10, 1000
+
+	outputs := []types.Output{}
+	mockOutputs := []*output.MockType{}
+
+	for i := 0; i < nOutputs; i++ {
+		mockOutputs = append(mockOutputs, &output.MockType{
 			ResChan:  make(chan types.Response),
 			Messages: make(chan types.Message),
 		})
-		agents = append(agents, mockAgents[i])
+		outputs = append(outputs, mockOutputs[i])
 	}
 
 	readChan := make(chan types.Message)
 
-	oTM := NewOneToMany(agents)
+	oTM := NewFanOut(outputs)
 	oTM.SetMessageChan(readChan)
 
 	for i := 0; i < nMsgs; i++ {
@@ -60,9 +72,9 @@ func TestBasicOneToMany(t *testing.T) {
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
-		for j := 0; j < nAgents; j++ {
+		for j := 0; j < nOutputs; j++ {
 			select {
-			case msg := <-mockAgents[j].Messages:
+			case msg := <-mockOutputs[j].Messages:
 				if string(msg.Parts[0]) != string(content[0]) {
 					t.Errorf("Wrong content returned %s != %s", msg.Parts[0], content[0])
 				}
@@ -71,9 +83,9 @@ func TestBasicOneToMany(t *testing.T) {
 				return
 			}
 		}
-		for j := 0; j < nAgents; j++ {
+		for j := 0; j < nOutputs; j++ {
 			select {
-			case mockAgents[j].ResChan <- types.NewSimpleResponse(nil):
+			case mockOutputs[j].ResChan <- types.NewSimpleResponse(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -93,23 +105,23 @@ func TestBasicOneToMany(t *testing.T) {
 
 //--------------------------------------------------------------------------------------------------
 
-func BenchmarkBasicOneToMany(b *testing.B) {
-	nAgents, nMsgs := 3, 100000
+func BenchmarkBasicFanOut(b *testing.B) {
+	nOutputs, nMsgs := 3, 100000
 
-	agents := []agent.Type{}
-	mockAgents := []*agent.MockType{}
+	outputs := []types.Output{}
+	mockOutputs := []*output.MockType{}
 
-	for i := 0; i < nAgents; i++ {
-		mockAgents = append(mockAgents, &agent.MockType{
+	for i := 0; i < nOutputs; i++ {
+		mockOutputs = append(mockOutputs, &output.MockType{
 			ResChan:  make(chan types.Response),
 			Messages: make(chan types.Message),
 		})
-		agents = append(agents, mockAgents[i])
+		outputs = append(outputs, mockOutputs[i])
 	}
 
 	readChan := make(chan types.Message)
 
-	oTM := NewOneToMany(agents)
+	oTM := NewFanOut(outputs)
 	oTM.SetMessageChan(readChan)
 
 	content := [][]byte{[]byte("hello world")}
@@ -118,11 +130,11 @@ func BenchmarkBasicOneToMany(b *testing.B) {
 
 	for i := 0; i < nMsgs; i++ {
 		readChan <- types.Message{Parts: content}
-		for j := 0; j < nAgents; j++ {
-			<-mockAgents[j].Messages
+		for j := 0; j < nOutputs; j++ {
+			<-mockOutputs[j].Messages
 		}
-		for j := 0; j < nAgents; j++ {
-			mockAgents[j].ResChan <- types.NewSimpleResponse(nil)
+		for j := 0; j < nOutputs; j++ {
+			mockOutputs[j].ResChan <- types.NewSimpleResponse(nil)
 		}
 		res := <-oTM.ResponseChan()
 		if res.Error() != nil {
@@ -133,23 +145,23 @@ func BenchmarkBasicOneToMany(b *testing.B) {
 	b.StopTimer()
 }
 
-func BenchmarkBasicOneToManyNoSelect(b *testing.B) {
-	nAgents, nMsgs := 3, 100000
+func BenchmarkBasicFanOutNoSelect(b *testing.B) {
+	nOutputs, nMsgs := 3, 100000
 
-	agents := []agent.Type{}
-	mockAgents := []*agent.MockType{}
+	outputs := []types.Output{}
+	mockOutputs := []*output.MockType{}
 
-	for i := 0; i < nAgents; i++ {
-		mockAgents = append(mockAgents, &agent.MockType{
+	for i := 0; i < nOutputs; i++ {
+		mockOutputs = append(mockOutputs, &output.MockType{
 			ResChan:  make(chan types.Response),
 			Messages: make(chan types.Message),
 		})
-		agents = append(agents, mockAgents[i])
+		outputs = append(outputs, mockOutputs[i])
 	}
 
 	readChan := make(chan types.Message)
 
-	oTM := newOneToManyNoSelect(agents)
+	oTM := newFanOutNoSelect(outputs)
 	oTM.SetMessageChan(readChan)
 
 	content := [][]byte{[]byte("hello world")}
@@ -158,11 +170,11 @@ func BenchmarkBasicOneToManyNoSelect(b *testing.B) {
 
 	for i := 0; i < nMsgs; i++ {
 		readChan <- types.Message{Parts: content}
-		for j := 0; j < nAgents; j++ {
-			<-mockAgents[j].Messages
+		for j := 0; j < nOutputs; j++ {
+			<-mockOutputs[j].Messages
 		}
-		for j := 0; j < nAgents; j++ {
-			mockAgents[j].ResChan <- types.NewSimpleResponse(nil)
+		for j := 0; j < nOutputs; j++ {
+			mockOutputs[j].ResChan <- types.NewSimpleResponse(nil)
 		}
 		res := <-oTM.ResponseChan()
 		if res.Error() != nil {

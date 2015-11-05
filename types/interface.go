@@ -67,3 +67,17 @@ type MessageReceiver interface {
 }
 
 //--------------------------------------------------------------------------------------------------
+
+// Input - The higher level input type.
+type Input interface {
+	MessageSender
+	ResponderListener
+}
+
+// Output - The higher level output type.
+type Output interface {
+	MessageReceiver
+	Responder
+}
+
+//--------------------------------------------------------------------------------------------------

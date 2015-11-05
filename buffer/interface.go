@@ -20,8 +20,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-/*
-Package agent - Wraps an output and takes ownership of the message channel. This type is used for
-grouping buffered and unbuffered outputs together.
-*/
-package agent
+package buffer
+
+import "github.com/jeffail/benthos/types"
+
+// Type - The standard interface of an agent type.
+type Type interface {
+	types.Input
+	types.Output
+
+	// ErrorsChan - Returns the channel used for returning any accumulated errors. This needs
+	// reading in the same select block where messages are sent as the errors can occur at any time.
+	ErrorsChan() <-chan []error
+}
