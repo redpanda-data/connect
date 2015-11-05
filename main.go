@@ -30,10 +30,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jeffail/benthos/agent"
 	"github.com/jeffail/benthos/broker"
 	"github.com/jeffail/benthos/input"
 	"github.com/jeffail/benthos/output"
+	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
@@ -117,13 +117,13 @@ func main() {
 	}
 	defer stats.Close()
 
-	// Create output agents.
-	agents := []agent.Type{}
+	// Create outputs.
+	outputs := []types.Output{}
 
 	// For each configured output
 	for _, outConf := range config.Outputs {
 		if out, err := output.Construct(outConf); err == nil {
-			agents = append(agents, agent.NewUnbuffered(out))
+			outputs = append(outputs, out)
 		} else {
 			logger.Errorf("Output error: %v\n", err)
 			return
@@ -137,21 +137,11 @@ func main() {
 		return
 	}
 
-	// Error propagator
-	errProp := broker.NewErrPropagator(agents)
-
 	// Create broker
-	msgBroker := broker.NewOneToMany(agents)
+	msgBroker := broker.NewFanOut(outputs)
 	msgBroker.SetMessageChan(in.MessageChan())
 
 	in.SetResponseChan(msgBroker.ResponseChan())
-
-	// Error reader
-	go func() {
-		for errs := range errProp.OutputChan() {
-			logger.Errorf("Agent errors: %v\n", errs)
-		}
-	}()
 
 	// Defer clean broker, input and output closure
 	defer func() {
@@ -163,18 +153,6 @@ func main() {
 		msgBroker.CloseAsync()
 		if err := msgBroker.WaitForClose(time.Second * 5); err != nil {
 			panic(err)
-		}
-
-		errProp.CloseAsync()
-		errProp.WaitForClose(time.Second)
-
-		for _, a := range agents {
-			a.CloseAsync()
-		}
-		for _, a := range agents {
-			if err := a.WaitForClose(time.Second * 5); err != nil {
-				panic(err)
-			}
 		}
 	}()
 

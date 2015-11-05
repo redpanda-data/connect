@@ -28,20 +28,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeffail/benthos/agent"
+	"github.com/jeffail/benthos/buffer"
 )
 
 //--------------------------------------------------------------------------------------------------
 
 func TestBasicPropagatorInterface(t *testing.T) {
-	mock1 := &agent.MockType{
-		ErrsChan: make(chan []error),
+	mock1 := &buffer.MockType{
+		Errors: make(chan []error),
 	}
-	agents := []agent.Type{mock1}
-	errProp := NewErrPropagator(agents)
+	buffers := []buffer.Type{mock1}
+	errProp := NewErrPropagator(buffers)
 
 	expected := errors.New("test")
-	mock1.ErrsChan <- []error{expected}
+	mock1.Errors <- []error{expected}
 
 	select {
 	case errMap := <-errProp.OutputChan():
@@ -61,17 +61,17 @@ func TestBasicPropagatorInterface(t *testing.T) {
 
 //--------------------------------------------------------------------------------------------------
 
-func TestPropagatorSwappedAgents(t *testing.T) {
-	mock1 := &agent.MockType{
-		ErrsChan: make(chan []error),
+func TestPropagatorSwappedBuffers(t *testing.T) {
+	mock1 := &buffer.MockType{
+		Errors: make(chan []error),
 	}
-	agents := []agent.Type{mock1}
-	errProp := NewErrPropagator([]agent.Type{})
+	buffers := []buffer.Type{mock1}
+	errProp := NewErrPropagator([]buffer.Type{})
 
-	errProp.SetAgents(agents)
+	errProp.SetBuffers(buffers)
 
 	expected := errors.New("test")
-	mock1.ErrsChan <- []error{expected}
+	mock1.Errors <- []error{expected}
 
 	select {
 	case errMap := <-errProp.OutputChan():
@@ -91,7 +91,7 @@ func TestPropagatorSwappedAgents(t *testing.T) {
 
 //--------------------------------------------------------------------------------------------------
 
-func TestPropagatorMultiAgents(t *testing.T) {
+func TestPropagatorMultiBuffers(t *testing.T) {
 	chans := []chan []error{
 		make(chan []error),
 		make(chan []error),
@@ -100,12 +100,12 @@ func TestPropagatorMultiAgents(t *testing.T) {
 		make(chan []error),
 	}
 
-	agents := []agent.Type{}
+	buffers := []buffer.Type{}
 	for _, c := range chans {
-		agents = append(agents, &agent.MockType{ErrsChan: c})
+		buffers = append(buffers, &buffer.MockType{Errors: c})
 	}
 
-	errProp := NewErrPropagator(agents)
+	errProp := NewErrPropagator(buffers)
 
 	for i, c := range chans {
 		errs := make([]error, i)

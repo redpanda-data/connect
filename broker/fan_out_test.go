@@ -145,44 +145,4 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	b.StopTimer()
 }
 
-func BenchmarkBasicFanOutNoSelect(b *testing.B) {
-	nOutputs, nMsgs := 3, 100000
-
-	outputs := []types.Output{}
-	mockOutputs := []*output.MockType{}
-
-	for i := 0; i < nOutputs; i++ {
-		mockOutputs = append(mockOutputs, &output.MockType{
-			ResChan:  make(chan types.Response),
-			Messages: make(chan types.Message),
-		})
-		outputs = append(outputs, mockOutputs[i])
-	}
-
-	readChan := make(chan types.Message)
-
-	oTM := newFanOutNoSelect(outputs)
-	oTM.SetMessageChan(readChan)
-
-	content := [][]byte{[]byte("hello world")}
-
-	b.StartTimer()
-
-	for i := 0; i < nMsgs; i++ {
-		readChan <- types.Message{Parts: content}
-		for j := 0; j < nOutputs; j++ {
-			<-mockOutputs[j].Messages
-		}
-		for j := 0; j < nOutputs; j++ {
-			mockOutputs[j].ResChan <- types.NewSimpleResponse(nil)
-		}
-		res := <-oTM.ResponseChan()
-		if res.Error() != nil {
-			b.Errorf("Received unexpected errors from broker: %v", res.Error())
-		}
-	}
-
-	b.StopTimer()
-}
-
 //--------------------------------------------------------------------------------------------------

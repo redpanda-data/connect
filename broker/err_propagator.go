@@ -26,7 +26,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/jeffail/benthos/agent"
+	"github.com/jeffail/benthos/buffer"
 	"github.com/jeffail/benthos/types"
 )
 
@@ -35,10 +35,10 @@ import (
 // PropagatedErrs - The collected errors sent out by the ErrPropagator.
 type PropagatedErrs map[int][]error
 
-// ErrPropagator - Takes an array of error channels from agents and outputs into a single channel.
+// ErrPropagator - Takes an array of error channels from buffers and outputs into a single channel.
 type ErrPropagator struct {
-	agentsChan chan []agent.Type
-	agents     []agent.Type
+	buffersChan chan []buffer.Type
+	buffers     []buffer.Type
 
 	outputChan chan PropagatedErrs
 
@@ -47,13 +47,13 @@ type ErrPropagator struct {
 }
 
 // NewErrPropagator - Create a new ErrPropagator type.
-func NewErrPropagator(agents []agent.Type) *ErrPropagator {
+func NewErrPropagator(buffers []buffer.Type) *ErrPropagator {
 	e := ErrPropagator{
-		agentsChan: make(chan []agent.Type),
-		agents:     agents,
-		outputChan: make(chan PropagatedErrs),
-		closedChan: make(chan struct{}),
-		closeChan:  make(chan struct{}),
+		buffersChan: make(chan []buffer.Type),
+		buffers:     buffers,
+		outputChan:  make(chan PropagatedErrs),
+		closedChan:  make(chan struct{}),
+		closeChan:   make(chan struct{}),
 	}
 
 	go e.loop()
@@ -63,9 +63,9 @@ func NewErrPropagator(agents []agent.Type) *ErrPropagator {
 
 //--------------------------------------------------------------------------------------------------
 
-// SetAgents - Set the err readers agents.
-func (e *ErrPropagator) SetAgents(agents []agent.Type) {
-	e.agentsChan <- agents
+// SetBuffers - Set the err readers buffers.
+func (e *ErrPropagator) SetBuffers(buffers []buffer.Type) {
+	e.buffersChan <- buffers
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -76,24 +76,24 @@ func (e *ErrPropagator) loop() {
 
 	var selectCases []reflect.SelectCase
 	setSelectCases := func() {
-		selectCases = make([]reflect.SelectCase, len(e.agents)+3)
+		selectCases = make([]reflect.SelectCase, len(e.buffers)+3)
 
-		for i, agent := range e.agents {
+		for i, buffer := range e.buffers {
 			selectCases[i] = reflect.SelectCase{
 				Dir:  reflect.SelectRecv,
-				Chan: reflect.ValueOf(agent.ErrorsChan()),
+				Chan: reflect.ValueOf(buffer.ErrorsChan()),
 			}
 		}
 
-		selectCases[len(e.agents)] = reflect.SelectCase{
+		selectCases[len(e.buffers)] = reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(e.agentsChan),
+			Chan: reflect.ValueOf(e.buffersChan),
 		}
-		selectCases[len(e.agents)+1] = reflect.SelectCase{
+		selectCases[len(e.buffers)+1] = reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
 			Chan: reflect.ValueOf(e.closeChan),
 		}
-		selectCases[len(e.agents)+2] = reflect.SelectCase{
+		selectCases[len(e.buffers)+2] = reflect.SelectCase{
 			Dir:  reflect.SelectSend,
 			Send: reflect.ValueOf(propErrors),
 			Chan: reflect.ValueOf(nil),
@@ -104,13 +104,13 @@ func (e *ErrPropagator) loop() {
 	running := true
 	for running {
 		if len(propErrors) == 0 {
-			selectCases[len(e.agents)+2] = reflect.SelectCase{
+			selectCases[len(e.buffers)+2] = reflect.SelectCase{
 				Dir:  reflect.SelectSend,
 				Send: reflect.ValueOf(propErrors),
 				Chan: reflect.ValueOf(nil),
 			}
 		} else {
-			selectCases[len(e.agents)+2] = reflect.SelectCase{
+			selectCases[len(e.buffers)+2] = reflect.SelectCase{
 				Dir:  reflect.SelectSend,
 				Send: reflect.ValueOf(propErrors),
 				Chan: reflect.ValueOf(e.outputChan),
@@ -118,21 +118,21 @@ func (e *ErrPropagator) loop() {
 		}
 
 		chosen, val, open := reflect.Select(selectCases)
-		if chosen < len(e.agents) {
+		if chosen < len(e.buffers) {
 			if !open {
 				propErrors[chosen] = append(propErrors[chosen], types.ErrChanClosed)
 			} else if errs, ok := val.Interface().([]error); ok {
 				propErrors[chosen] = append(propErrors[chosen], errs...)
 			}
-		} else if chosen == len(e.agents) {
+		} else if chosen == len(e.buffers) {
 			if running = open; open {
-				if agents, ok := val.Interface().([]agent.Type); ok {
-					e.agents = agents
+				if buffers, ok := val.Interface().([]buffer.Type); ok {
+					e.buffers = buffers
 					setSelectCases()
 				}
 			}
-		} else if chosen == len(e.agents)+1 {
-		} else if chosen == len(e.agents)+2 {
+		} else if chosen == len(e.buffers)+1 {
+		} else if chosen == len(e.buffers)+2 {
 			propErrors = PropagatedErrs{}
 		}
 	}
@@ -150,7 +150,7 @@ func (e *ErrPropagator) OutputChan() <-chan PropagatedErrs {
 
 // CloseAsync - Shuts down the ErrPropagator output and stops processing messages.
 func (e *ErrPropagator) CloseAsync() {
-	close(e.agentsChan)
+	close(e.buffersChan)
 	close(e.closeChan)
 }
 

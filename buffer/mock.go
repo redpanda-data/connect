@@ -22,20 +22,53 @@ THE SOFTWARE.
 
 package buffer
 
-import "testing"
+import (
+	"time"
+
+	"github.com/jeffail/benthos/types"
+)
 
 //--------------------------------------------------------------------------------------------------
 
-func TestInterfaces(t *testing.T) {
-	m := &MockType{}
-	if Type(m) == nil {
-		t.Errorf("Mock: nil Type")
-	}
+// MockType - Implements the buffer.Type interface.
+type MockType struct {
+	Messages  chan types.Message
+	Responses chan types.Response
+	Errors    chan []error
+}
 
-	mem := &Memory{}
-	if Type(mem) == nil {
-		t.Errorf("Memory: nil Type")
-	}
+// SetResponseChan - Sets the channel used for reading responses.
+func (m *MockType) SetResponseChan(res <-chan types.Response) {
+}
+
+// SetMessageChan - Sets the read channel. This implementation is NOT thread safe.
+func (m *MockType) SetMessageChan(msgs <-chan types.Message) {
+}
+
+// ResponseChan - Returns the errors channel.
+func (m *MockType) ResponseChan() <-chan types.Response {
+	return m.Responses
+}
+
+// MessageChan - Returns the messages channel.
+func (m *MockType) MessageChan() <-chan types.Message {
+	return m.Messages
+}
+
+// ErrorsChan - Returns the errors channel
+func (m *MockType) ErrorsChan() <-chan []error {
+	return m.Errors
+}
+
+// CloseAsync - Does nothing.
+func (m MockType) CloseAsync() {
+	// Do nothing
+}
+
+// WaitForClose - Does nothing.
+func (m MockType) WaitForClose(time.Duration) error {
+	// Do nothing
+	return nil
 }
 
 //--------------------------------------------------------------------------------------------------

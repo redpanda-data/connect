@@ -25,7 +25,6 @@ package broker
 import (
 	"time"
 
-	"github.com/jeffail/benthos/agent"
 	"github.com/jeffail/benthos/types"
 )
 
@@ -38,8 +37,9 @@ type FanOut struct {
 	messages        <-chan types.Message
 	responseChan    chan types.Response
 
-	outputsChan chan []types.Output
-	outputs     []types.Output
+	outputMsgChans []chan types.Message
+	outputsChan    chan []types.Output
+	outputs        []types.Output
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -57,9 +57,25 @@ func NewFanOut(outputs []types.Output) *FanOut {
 		closeChan:       make(chan struct{}),
 	}
 
+	o.createMessageChans()
 	go o.loop()
 
 	return o
+}
+
+//--------------------------------------------------------------------------------------------------
+
+func (o *FanOut) createMessageChans() {
+	if len(o.outputMsgChans) > 0 {
+		for i := range o.outputMsgChans {
+			close(o.outputMsgChans[i])
+		}
+	}
+	o.outputMsgChans = make([]chan types.Message, len(o.outputs))
+	for i := range o.outputMsgChans {
+		o.outputMsgChans[i] = make(chan types.Message)
+		o.outputs[i].SetMessageChan(o.outputMsgChans[i])
+	}
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -69,9 +85,9 @@ func (o *FanOut) SetMessageChan(msgs <-chan types.Message) {
 	o.newMessagesChan <- msgs
 }
 
-// SetAgents - Set the broker agents.
+// SetOutputs - Set the broker agents.
 func (o *FanOut) SetOutputs(outputs []types.Output) {
-	o.outputsChan <- ouputs
+	o.outputsChan <- outputs
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -87,8 +103,8 @@ func (o *FanOut) loop() {
 				o.messages = nil
 			} else {
 				responses := types.NewMappedResponse()
-				for i := range o.outputs {
-					o.outputs[i].MessageChan() <- msg
+				for i := range o.outputMsgChans {
+					o.outputMsgChans[i] <- msg
 				}
 				for i := range o.outputs {
 					if r := <-o.outputs[i].ResponseChan(); r.Error() != nil {
@@ -104,6 +120,7 @@ func (o *FanOut) loop() {
 		case outputs, open := <-o.outputsChan:
 			if running = open; running {
 				o.outputs = outputs
+				o.createMessageChans()
 			}
 		case _, running = <-o.closeChan:
 		}
