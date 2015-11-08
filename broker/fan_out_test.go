@@ -53,8 +53,8 @@ func TestBasicFanOut(t *testing.T) {
 
 	for i := 0; i < nOutputs; i++ {
 		mockOutputs = append(mockOutputs, &output.MockType{
-			ResChan:  make(chan types.Response),
-			Messages: make(chan types.Message),
+			ResChan: make(chan types.Response),
+			MsgChan: make(chan types.Message),
 		})
 		outputs = append(outputs, mockOutputs[i])
 	}
@@ -74,7 +74,7 @@ func TestBasicFanOut(t *testing.T) {
 		}
 		for j := 0; j < nOutputs; j++ {
 			select {
-			case msg := <-mockOutputs[j].Messages:
+			case msg := <-mockOutputs[j].MsgChan:
 				if string(msg.Parts[0]) != string(content[0]) {
 					t.Errorf("Wrong content returned %s != %s", msg.Parts[0], content[0])
 				}
@@ -113,8 +113,8 @@ func BenchmarkBasicFanOut(b *testing.B) {
 
 	for i := 0; i < nOutputs; i++ {
 		mockOutputs = append(mockOutputs, &output.MockType{
-			ResChan:  make(chan types.Response),
-			Messages: make(chan types.Message),
+			ResChan: make(chan types.Response),
+			MsgChan: make(chan types.Message),
 		})
 		outputs = append(outputs, mockOutputs[i])
 	}
@@ -131,7 +131,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	for i := 0; i < nMsgs; i++ {
 		readChan <- types.Message{Parts: content}
 		for j := 0; j < nOutputs; j++ {
-			<-mockOutputs[j].Messages
+			<-mockOutputs[j].MsgChan
 		}
 		for j := 0; j < nOutputs; j++ {
 			mockOutputs[j].ResChan <- types.NewSimpleResponse(nil)

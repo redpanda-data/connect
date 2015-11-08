@@ -32,13 +32,13 @@ import (
 
 // MockType - Implements the output.Type interface.
 type MockType struct {
-	ResChan  chan types.Response
-	Messages <-chan types.Message
+	ResChan chan types.Response
+	MsgChan <-chan types.Message
 }
 
 // SetMessageChan - Sets the read channel. This implementation is NOT thread safe.
 func (m *MockType) SetMessageChan(msgs <-chan types.Message) {
-	m.Messages = msgs
+	m.MsgChan = msgs
 }
 
 // ResponseChan - Returns the errors channel.

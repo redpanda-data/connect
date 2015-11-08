@@ -20,41 +20,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package input
+package util
 
 import (
-	"time"
-
 	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
 
-// MockType - Implements the input.Type interface.
-type MockType struct {
-	MsgChan chan types.Message
-	ResChan <-chan types.Response
-}
-
-// SetResponseChan - Sets the channel used for reading responses.
-func (m *MockType) SetResponseChan(resChan <-chan types.Response) {
-	m.ResChan = resChan
-}
-
-// MessageChan - Returns the messages channel.
-func (m *MockType) MessageChan() <-chan types.Message {
-	return m.MsgChan
-}
-
-// CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
-	// Do nothing
-}
-
-// WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
-	// Do nothing
-	return nil
+// Couple - Connect an input to an output.
+func Couple(in types.Input, out types.Output) {
+	in.SetResponseChan(out.ResponseChan())
+	out.SetMessageChan(in.MessageChan())
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -20,41 +20,36 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package input
+package util
 
 import (
-	"time"
+	"testing"
 
+	"github.com/jeffail/benthos/input"
+	"github.com/jeffail/benthos/output"
 	"github.com/jeffail/benthos/types"
 )
 
 //--------------------------------------------------------------------------------------------------
 
-// MockType - Implements the input.Type interface.
-type MockType struct {
-	MsgChan chan types.Message
-	ResChan <-chan types.Response
-}
+func TestCouple(t *testing.T) {
+	inMock := input.MockType{MsgChan: make(chan types.Message)}
+	outMock := output.MockType{ResChan: make(chan types.Response)}
 
-// SetResponseChan - Sets the channel used for reading responses.
-func (m *MockType) SetResponseChan(resChan <-chan types.Response) {
-	m.ResChan = resChan
-}
+	if inMock.MsgChan == outMock.MsgChan {
+		t.Errorf("Message channels should not yet match: %v == %v", inMock.MsgChan, outMock.MsgChan)
+	}
+	if inMock.ResChan == outMock.ResChan {
+		t.Errorf("Response channels should not yet match: %v == %v", inMock.ResChan, outMock.ResChan)
+	}
 
-// MessageChan - Returns the messages channel.
-func (m *MockType) MessageChan() <-chan types.Message {
-	return m.MsgChan
-}
-
-// CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
-	// Do nothing
-}
-
-// WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
-	// Do nothing
-	return nil
+	Couple(&inMock, &outMock)
+	if inMock.MsgChan != outMock.MsgChan {
+		t.Errorf("Non-matching message channels: %v != %v", inMock.MsgChan, outMock.MsgChan)
+	}
+	if inMock.ResChan != outMock.ResChan {
+		t.Errorf("Non-matching response channels: %v != %v", inMock.ResChan, outMock.ResChan)
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

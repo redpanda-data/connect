@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/broker"
+	"github.com/jeffail/benthos/buffer"
 	"github.com/jeffail/benthos/input"
 	"github.com/jeffail/benthos/output"
 	"github.com/jeffail/benthos/types"
@@ -49,6 +50,7 @@ type Config struct {
 	Outputs []output.Config  `json:"outputs" yaml:"outputs"`
 	Logger  log.LoggerConfig `json:"logger" yaml:"logger"`
 	Metrics metrics.Config   `json:"metrics" yaml:"metrics"`
+	Buffer  int              `json:"buffer" yaml:"buffer"`
 }
 
 // NewConfig - Returns a new configuration with default values.
@@ -58,6 +60,7 @@ func NewConfig() Config {
 		Outputs: []output.Config{output.NewConfig()},
 		Logger:  log.DefaultLoggerConfig(),
 		Metrics: metrics.NewConfig(),
+		Buffer:  1024,
 	}
 }
 
@@ -142,12 +145,14 @@ func main() {
 	}
 	pool.Add(1, in)
 
+	// Create a memory buffer
+	buffer := buffer.NewMemory(config.Buffer)
+	butil.Couple(in, buffer)
+	pool.Add(2, buffer)
+
 	// Create broker
 	msgBroker := broker.NewFanOut(outputs)
-	msgBroker.SetMessageChan(in.MessageChan())
-
-	in.SetResponseChan(msgBroker.ResponseChan())
-
+	butil.Couple(buffer, msgBroker)
 	pool.Add(5, msgBroker)
 
 	// Defer clean broker, input and output closure

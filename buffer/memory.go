@@ -130,8 +130,8 @@ func (m *Memory) loop() {
 	responseInPending, responseOutPending := false, false
 
 	for running {
-		// If we are waiting for our output to respond, or do not have buffered messages then set the output
-		// chan to nil.
+		// If we are waiting for our output to respond, or do not have buffered messages then set
+		// the output chan to nil.
 		if !responseInPending && len(m.buffer) > 0 {
 			outMsgChan = m.messagesOut
 			nextMsg = m.buffer[0]
