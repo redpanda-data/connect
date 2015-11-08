@@ -141,9 +141,12 @@ func (m *Memory) loop() {
 		}
 
 		if !m.limitReached() {
-			inMsgChan = m.messagesIn
 			if responseOutPending {
 				outResChan = m.responsesOut
+				inMsgChan = nil
+			} else {
+				inMsgChan = m.messagesIn
+				outResChan = nil
 			}
 		} else {
 			inMsgChan = nil

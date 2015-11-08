@@ -60,7 +60,7 @@ func NewConfig() Config {
 		Outputs: []output.Config{output.NewConfig()},
 		Logger:  log.DefaultLoggerConfig(),
 		Metrics: metrics.NewConfig(),
-		Buffer:  1024,
+		Buffer:  1024, // 1KB
 	}
 }
 
