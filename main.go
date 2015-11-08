@@ -34,6 +34,7 @@ import (
 	"github.com/jeffail/benthos/input"
 	"github.com/jeffail/benthos/output"
 	"github.com/jeffail/benthos/types"
+	butil "github.com/jeffail/benthos/util"
 	"github.com/jeffail/util"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
@@ -117,6 +118,8 @@ func main() {
 	}
 	defer stats.Close()
 
+	pool := butil.NewClosablePool()
+
 	// Create outputs.
 	outputs := []types.Output{}
 
@@ -124,6 +127,7 @@ func main() {
 	for _, outConf := range config.Outputs {
 		if out, err := output.Construct(outConf); err == nil {
 			outputs = append(outputs, out)
+			pool.Add(10, out)
 		} else {
 			logger.Errorf("Output error: %v\n", err)
 			return
@@ -136,6 +140,7 @@ func main() {
 		logger.Errorf("Input error: %v\n", err)
 		return
 	}
+	pool.Add(1, in)
 
 	// Create broker
 	msgBroker := broker.NewFanOut(outputs)
@@ -143,15 +148,11 @@ func main() {
 
 	in.SetResponseChan(msgBroker.ResponseChan())
 
+	pool.Add(5, msgBroker)
+
 	// Defer clean broker, input and output closure
 	defer func() {
-		in.CloseAsync()
-		if err := in.WaitForClose(time.Second * 5); err != nil {
-			panic(err)
-		}
-
-		msgBroker.CloseAsync()
-		if err := msgBroker.WaitForClose(time.Second * 5); err != nil {
+		if err := pool.Close(time.Second * 5); err != nil {
 			panic(err)
 		}
 	}()

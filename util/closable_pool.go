@@ -68,7 +68,7 @@ func (c *ClosablePool) Close(timeout time.Duration) error {
 	timeLeft := timeout
 
 	tiers := []int{}
-	for i, _ := range c.closables {
+	for i := range c.closables {
 		tiers = append(tiers, i)
 	}
 	sort.Ints(tiers)
