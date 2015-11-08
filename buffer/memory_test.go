@@ -226,7 +226,7 @@ func TestSyncBuffer(t *testing.T) {
 
 	// Send a message
 	select {
-	case msgChan <- types.Message{Parts: [][]byte{}}:
+	case msgChan <- types.Message{Parts: [][]byte{[]byte("test")}}:
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for first message send")
 		return
@@ -266,15 +266,6 @@ func TestSyncBuffer(t *testing.T) {
 		return
 	}
 
-	// Ensure no response back
-	if err := checkNoRead(); err != nil {
-		t.Error(err)
-	}
-	// Check that we cant send another
-	if err := checkNoWrite(); err != nil {
-		t.Error(err)
-	}
-
 	// Response from buffer
 	select {
 	case <-b.ResponseChan():
@@ -285,7 +276,7 @@ func TestSyncBuffer(t *testing.T) {
 
 	// We should now be able to send a new message
 	select {
-	case msgChan <- types.Message{Parts: [][]byte{}}:
+	case msgChan <- types.Message{Parts: [][]byte{[]byte("test")}}:
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for second message send")
 		return

@@ -161,7 +161,7 @@ func (m *Memory) loop() {
 		}
 
 		select {
-		// INPUT CHANNELS
+		// OUTPUT CHANNELS
 		case msg, open := <-inMsgChan:
 			// If the messages chan is closed we do not close ourselves as it can replaced.
 			if !open {
@@ -173,7 +173,7 @@ func (m *Memory) loop() {
 		case outResChan <- types.NewSimpleResponse(nil):
 			responseOutPending = false
 
-		// OUTPUT CHANNELS
+		// INPUT CHANNELS
 		case outMsgChan <- nextMsg:
 			responseInPending = true
 		case res, open := <-m.responsesIn:
