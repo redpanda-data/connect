@@ -50,8 +50,6 @@ type STDIN struct {
 	messages  chan types.Message
 	responses <-chan types.Response
 
-	newResponsesChan chan (<-chan types.Response)
-
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
@@ -59,15 +57,12 @@ type STDIN struct {
 // NewSTDIN - Create a new STDIN input type.
 func NewSTDIN(conf Config) *STDIN {
 	s := STDIN{
-		conf:             conf,
-		messages:         make(chan types.Message),
-		responses:        nil,
-		newResponsesChan: make(chan (<-chan types.Response)),
-		closedChan:       make(chan struct{}),
-		closeChan:        make(chan struct{}),
+		conf:       conf,
+		messages:   make(chan types.Message),
+		responses:  nil,
+		closedChan: make(chan struct{}),
+		closeChan:  make(chan struct{}),
 	}
-
-	go s.loop()
 
 	return &s
 }
@@ -115,23 +110,23 @@ func (s *STDIN) loop() {
 					responsePending = false
 					bytes = nil
 				}
-			case newResChan, open := <-s.newResponsesChan:
-				if running = open; open {
-					s.responses = newResChan
-				}
 			case _, running = <-s.closeChan:
 			}
 		}
 	}
 
 	close(s.messages)
-	close(s.newResponsesChan)
 	close(s.closedChan)
 }
 
-// SetResponseChan - Sets the channel used by the input to validate message receipt.
-func (s *STDIN) SetResponseChan(responses <-chan types.Response) {
-	s.newResponsesChan <- responses
+// StartListening - Sets the channel used by the input to validate message receipt.
+func (s *STDIN) StartListening(responses <-chan types.Response) error {
+	if s.responses != nil {
+		return types.ErrAlreadyStarted
+	}
+	s.responses = responses
+	go s.loop()
+	return nil
 }
 
 // MessageChan - Returns the messages channel.

@@ -39,8 +39,14 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	b := NewMemory(int(incr) * int(total))
-	b.SetMessageChan(msgChan)
-	b.SetResponseChan(resChan)
+	if err := b.StartListening(resChan); err != nil {
+		t.Error(err)
+		return
+	}
+	if err := b.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+		return
+	}
 
 	var i uint8
 
@@ -203,8 +209,14 @@ func TestSyncBuffer(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	b := NewMemory(1)
-	b.SetMessageChan(msgChan)
-	b.SetResponseChan(resChan)
+	if err := b.StartListening(resChan); err != nil {
+		t.Error(err)
+		return
+	}
+	if err := b.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+		return
+	}
 
 	checkNoWrite := func() error {
 		select {
@@ -295,8 +307,14 @@ func TestEmptyMemoryBuffer(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	b := NewMemory(1)
-	b.SetMessageChan(msgChan)
-	b.SetResponseChan(resChan)
+	if err := b.StartListening(resChan); err != nil {
+		t.Error(err)
+		return
+	}
+	if err := b.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+		return
+	}
 
 	var i uint8
 

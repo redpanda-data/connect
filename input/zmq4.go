@@ -64,8 +64,6 @@ type ZMQ4 struct {
 	messages  chan types.Message
 	responses <-chan types.Response
 
-	newResponsesChan chan (<-chan types.Response)
-
 	closedChan chan struct{}
 }
 
@@ -77,7 +75,6 @@ func NewZMQ4(conf Config) (*ZMQ4, error) {
 		internalMessages: make(chan [][]byte),
 		messages:         make(chan types.Message),
 		responses:        nil,
-		newResponsesChan: make(chan (<-chan types.Response)),
 		closedChan:       make(chan struct{}),
 	}
 
@@ -105,9 +102,6 @@ func NewZMQ4(conf Config) (*ZMQ4, error) {
 			return nil, err
 		}
 	}
-
-	go z.readerLoop()
-	go z.loop()
 
 	return &z, nil
 }
@@ -186,21 +180,22 @@ func (z *ZMQ4) loop() {
 			} else if res.Error() == nil {
 				bytes = nil
 			}
-		case newResChan, open := <-z.newResponsesChan:
-			if running = open; open {
-				z.responses = newResChan
-			}
 		}
 	}
 
 	close(z.messages)
-	close(z.newResponsesChan)
 	close(z.closedChan)
 }
 
-// SetResponseChan - Sets the channel used by the input to validate message receipt.
-func (z *ZMQ4) SetResponseChan(responses <-chan types.Response) {
-	z.newResponsesChan <- responses
+// StartListening - Sets the channel used by the input to validate message receipt.
+func (z *ZMQ4) StartListening(responses <-chan types.Response) error {
+	if z.responses != nil {
+		return types.ErrAlreadyStarted
+	}
+	z.responses = responses
+	go z.readerLoop()
+	go z.loop()
+	return nil
 }
 
 // MessageChan - Returns the messages channel.

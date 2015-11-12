@@ -48,8 +48,6 @@ func NewSTDOUTConfig() STDOUTConfig {
 type STDOUT struct {
 	conf Config
 
-	newMessagesChan chan (<-chan types.Message)
-
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
@@ -60,15 +58,12 @@ type STDOUT struct {
 // NewSTDOUT - Create a new STDOUT output type.
 func NewSTDOUT(conf Config) *STDOUT {
 	s := STDOUT{
-		conf:            conf,
-		newMessagesChan: make(chan (<-chan types.Message)),
-		messages:        nil,
-		responseChan:    make(chan types.Response),
-		closedChan:      make(chan struct{}),
-		closeChan:       make(chan struct{}),
+		conf:         conf,
+		messages:     nil,
+		responseChan: make(chan types.Response),
+		closedChan:   make(chan struct{}),
+		closeChan:    make(chan struct{}),
 	}
-
-	go s.loop()
 
 	return &s
 }
@@ -88,23 +83,23 @@ func (s *STDOUT) loop() {
 				_, err := fmt.Fprintf(os.Stdout, "%s\n\n", bytes.Join(msg.Parts, []byte("\n")))
 				s.responseChan <- types.NewSimpleResponse(err)
 			}
-		case newChan, open := <-s.newMessagesChan:
-			if running = open; running {
-				s.messages = newChan
-			}
 		case _, running = <-s.closeChan:
 			running = false
 		}
 	}
 
 	close(s.responseChan)
-	close(s.newMessagesChan)
 	close(s.closedChan)
 }
 
-// SetMessageChan - Assigns a new messages channel for the output to read.
-func (s *STDOUT) SetMessageChan(msgs <-chan types.Message) {
-	s.newMessagesChan <- msgs
+// StartReceiving - Assigns a messages channel for the output to read.
+func (s *STDOUT) StartReceiving(msgs <-chan types.Message) error {
+	if s.messages != nil {
+		return types.ErrAlreadyStarted
+	}
+	s.messages = msgs
+	go s.loop()
+	return nil
 }
 
 // ResponseChan - Returns the errors channel.

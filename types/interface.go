@@ -48,8 +48,8 @@ type Responder interface {
 
 // ResponderListener - A type that listens to a Responder type.
 type ResponderListener interface {
-	// SetResponseChan - Sets the channel for reading responses.
-	SetResponseChan(<-chan Response)
+	// StartListening - Starts the type listening to a channel.
+	StartListening(<-chan Response) error
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -62,8 +62,8 @@ type MessageSender interface {
 
 // MessageReceiver - A type that receives messages from an input.
 type MessageReceiver interface {
-	// SetMessageChan - Sets the channel for reading messages.
-	SetMessageChan(<-chan Message)
+	// StartReceiving - Starts the type receiving messages from a channel.
+	StartReceiving(<-chan Message) error
 }
 
 //--------------------------------------------------------------------------------------------------

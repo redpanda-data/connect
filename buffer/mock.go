@@ -37,12 +37,14 @@ type MockType struct {
 	Errors    chan []error
 }
 
-// SetResponseChan - Sets the channel used for reading responses.
-func (m *MockType) SetResponseChan(res <-chan types.Response) {
+// StartListening - Sets the channel used for reading responses.
+func (m *MockType) StartListening(res <-chan types.Response) error {
+	return nil
 }
 
-// SetMessageChan - Sets the read channel. This implementation is NOT thread safe.
-func (m *MockType) SetMessageChan(msgs <-chan types.Message) {
+// StartReceiving - Sets the read channel. This implementation is NOT thread safe.
+func (m *MockType) StartReceiving(msgs <-chan types.Message) error {
+	return nil
 }
 
 // ResponseChan - Returns the errors channel.

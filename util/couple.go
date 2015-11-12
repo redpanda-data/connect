@@ -29,9 +29,12 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 // Couple - Connect an input to an output.
-func Couple(in types.Input, out types.Output) {
-	in.SetResponseChan(out.ResponseChan())
-	out.SetMessageChan(in.MessageChan())
+func Couple(in types.Input, out types.Output) error {
+	err := in.StartListening(out.ResponseChan())
+	if err == nil {
+		err = out.StartReceiving(in.MessageChan())
+	}
+	return err
 }
 
 //--------------------------------------------------------------------------------------------------

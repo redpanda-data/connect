@@ -62,7 +62,10 @@ func TestBasicFanOut(t *testing.T) {
 	readChan := make(chan types.Message)
 
 	oTM := NewFanOut(outputs)
-	oTM.SetMessageChan(readChan)
+	if err := oTM.StartReceiving(readChan); err != nil {
+		t.Error(err)
+		return
+	}
 
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
@@ -122,7 +125,10 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	readChan := make(chan types.Message)
 
 	oTM := NewFanOut(outputs)
-	oTM.SetMessageChan(readChan)
+	if err := oTM.StartReceiving(readChan); err != nil {
+		b.Error(err)
+		return
+	}
 
 	content := [][]byte{[]byte("hello world")}
 

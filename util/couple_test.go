@@ -43,7 +43,9 @@ func TestCouple(t *testing.T) {
 		t.Errorf("Response channels should not yet match: %v == %v", inMock.ResChan, outMock.ResChan)
 	}
 
-	Couple(&inMock, &outMock)
+	if err := Couple(&inMock, &outMock); err != nil {
+		t.Error(err)
+	}
 	if inMock.MsgChan != outMock.MsgChan {
 		t.Errorf("Non-matching message channels: %v != %v", inMock.MsgChan, outMock.MsgChan)
 	}

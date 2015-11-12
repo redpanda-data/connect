@@ -51,9 +51,6 @@ type Memory struct {
 	responsesOut chan types.Response
 	errorsChan   chan []error
 
-	newMessagesChan  chan (<-chan types.Message)
-	newResponsesChan chan (<-chan types.Response)
-
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
@@ -61,19 +58,15 @@ type Memory struct {
 // NewMemory - Create a new buffered agent type.
 func NewMemory(limit int) *Memory {
 	m := Memory{
-		buffer:           []types.Message{},
-		limit:            limit,
-		used:             0,
-		messagesOut:      make(chan types.Message),
-		responsesOut:     make(chan types.Response),
-		errorsChan:       make(chan []error),
-		newMessagesChan:  make(chan (<-chan types.Message)),
-		newResponsesChan: make(chan (<-chan types.Response)),
-		closedChan:       make(chan struct{}),
-		closeChan:        make(chan struct{}),
+		buffer:       []types.Message{},
+		limit:        limit,
+		used:         0,
+		messagesOut:  make(chan types.Message),
+		responsesOut: make(chan types.Response),
+		errorsChan:   make(chan []error),
+		closedChan:   make(chan struct{}),
+		closeChan:    make(chan struct{}),
 	}
-
-	go m.loop()
 
 	return &m
 }
@@ -93,7 +86,7 @@ func (m *Memory) shiftMessage() (types.Message, error) {
 	}
 
 	m.used = m.used - size
-	m.buffer[0].Parts = nil
+	m.buffer[0] = types.Message{}
 	m.buffer = m.buffer[1:]
 
 	return msg, nil
@@ -190,29 +183,27 @@ func (m *Memory) loop() {
 		// OTHER CHANNELS
 		case errChan <- errors:
 			errors = []error{}
-		case newChan, open := <-m.newMessagesChan:
-			if running = open; running {
-				m.messagesIn = newChan
-			}
-		case newChan, open := <-m.newResponsesChan:
-			if running = open; running {
-				m.responsesIn = newChan
-			}
 		case _, running = <-m.closeChan:
 		}
 	}
 
 	close(m.messagesOut)
-	close(m.newMessagesChan)
-	close(m.newResponsesChan)
 	close(m.errorsChan)
 	close(m.responsesOut)
 	close(m.closedChan)
 }
 
-// SetMessageChan - Assigns a new messages channel for the output to read.
-func (m *Memory) SetMessageChan(msgs <-chan types.Message) {
-	m.newMessagesChan <- msgs
+// StartReceiving - Assigns a messages channel for the output to read.
+func (m *Memory) StartReceiving(msgs <-chan types.Message) error {
+	if m.messagesIn != nil {
+		return types.ErrAlreadyStarted
+	}
+	m.messagesIn = msgs
+
+	if m.responsesIn != nil {
+		go m.loop()
+	}
+	return nil
 }
 
 // MessageChan - Returns the channel used for consuming messages from this input.
@@ -220,9 +211,17 @@ func (m *Memory) MessageChan() <-chan types.Message {
 	return m.messagesOut
 }
 
-// SetResponseChan - Sets the channel for reading responses.
-func (m *Memory) SetResponseChan(responses <-chan types.Response) {
-	m.newResponsesChan <- responses
+// StartListening - Sets the channel for reading responses.
+func (m *Memory) StartListening(responses <-chan types.Response) error {
+	if m.responsesIn != nil {
+		return types.ErrAlreadyStarted
+	}
+	m.responsesIn = responses
+
+	if m.messagesIn != nil {
+		go m.loop()
+	}
+	return nil
 }
 
 // ResponseChan - Returns the response channel.

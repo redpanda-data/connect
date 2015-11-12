@@ -33,9 +33,8 @@ import (
 // FanOut - A broker that implements types.Output and broadcasts each message out to an array of
 // outputs.
 type FanOut struct {
-	newMessagesChan chan (<-chan types.Message)
-	messages        <-chan types.Message
-	responseChan    chan types.Response
+	messages     <-chan types.Message
+	responseChan chan types.Response
 
 	outputMsgChans []chan types.Message
 	outputsChan    chan []types.Output
@@ -48,24 +47,21 @@ type FanOut struct {
 // NewFanOut - Create a new FanOut type by providing outputs and a messages channel.
 func NewFanOut(outputs []types.Output) *FanOut {
 	o := &FanOut{
-		newMessagesChan: make(chan (<-chan types.Message)),
-		messages:        nil,
-		responseChan:    make(chan types.Response),
-		outputsChan:     make(chan []types.Output),
-		outputs:         outputs,
-		closedChan:      make(chan struct{}),
-		closeChan:       make(chan struct{}),
+		messages:     nil,
+		responseChan: make(chan types.Response),
+		outputsChan:  make(chan []types.Output),
+		outputs:      outputs,
+		closedChan:   make(chan struct{}),
+		closeChan:    make(chan struct{}),
 	}
 
 	o.createMessageChans()
-	go o.loop()
-
 	return o
 }
 
 //--------------------------------------------------------------------------------------------------
 
-func (o *FanOut) createMessageChans() {
+func (o *FanOut) createMessageChans() error {
 	if len(o.outputMsgChans) > 0 {
 		for i := range o.outputMsgChans {
 			close(o.outputMsgChans[i])
@@ -74,15 +70,24 @@ func (o *FanOut) createMessageChans() {
 	o.outputMsgChans = make([]chan types.Message, len(o.outputs))
 	for i := range o.outputMsgChans {
 		o.outputMsgChans[i] = make(chan types.Message)
-		o.outputs[i].SetMessageChan(o.outputMsgChans[i])
+		if err := o.outputs[i].StartReceiving(o.outputMsgChans[i]); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// SetMessageChan - Assigns a new messages channel for the broker to read.
-func (o *FanOut) SetMessageChan(msgs <-chan types.Message) {
-	o.newMessagesChan <- msgs
+// StartReceiving - Assigns a new messages channel for the broker to read.
+func (o *FanOut) StartReceiving(msgs <-chan types.Message) error {
+	if o.messages != nil {
+		return types.ErrAlreadyStarted
+	}
+	o.messages = msgs
+
+	go o.loop()
+	return nil
 }
 
 // SetOutputs - Set the broker agents.
@@ -113,10 +118,6 @@ func (o *FanOut) loop() {
 				}
 				o.responseChan <- responses
 			}
-		case newChan, open := <-o.newMessagesChan:
-			if running = open; running {
-				o.messages = newChan
-			}
 		case outputs, open := <-o.outputsChan:
 			if running = open; running {
 				o.outputs = outputs
@@ -137,7 +138,6 @@ func (o *FanOut) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the FanOut broker and stops processing requests.
 func (o *FanOut) CloseAsync() {
-	close(o.newMessagesChan)
 	close(o.closeChan)
 	close(o.outputsChan)
 }

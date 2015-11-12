@@ -67,11 +67,6 @@ func NewConfig() Config {
 //--------------------------------------------------------------------------------------------------
 
 func main() {
-	var (
-		err       error
-		closeChan = make(chan struct{})
-	)
-
 	config := NewConfig()
 
 	// A list of default config paths to check for if not explicitly defined
@@ -113,7 +108,7 @@ func main() {
 		}
 	}
 
-	// Create our metrics type.
+	// Create our metrics type
 	stats, err := metrics.New(config.Metrics)
 	if err != nil {
 		logger.Errorf("Metrics error: %v\n", err)
@@ -123,7 +118,7 @@ func main() {
 
 	pool := butil.NewClosablePool()
 
-	// Create outputs.
+	// Create outputs
 	outputs := []types.Output{}
 
 	// For each configured output
@@ -170,7 +165,6 @@ func main() {
 	// Wait for termination signal
 	select {
 	case <-sigChan:
-	case <-closeChan:
 	}
 }
 

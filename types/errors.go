@@ -30,4 +30,7 @@ var (
 	ErrChanClosed = errors.New("channel was closed unexpectedly")
 
 	ErrInvalidZMQType = errors.New("invalid ZMQ socket type")
+
+	// ErrAlreadyStarted - When an input or output type gets started a second time.
+	ErrAlreadyStarted = errors.New("type has already been started")
 )

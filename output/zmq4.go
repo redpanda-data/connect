@@ -54,8 +54,6 @@ type ZMQ4 struct {
 
 	socket *zmq4.Socket
 
-	newMessagesChan chan (<-chan types.Message)
-
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
@@ -66,12 +64,11 @@ type ZMQ4 struct {
 // NewZMQ4 - Create a new ZMQ4 input type.
 func NewZMQ4(conf Config) (*ZMQ4, error) {
 	z := ZMQ4{
-		conf:            conf,
-		messages:        nil,
-		responseChan:    make(chan types.Response),
-		newMessagesChan: make(chan (<-chan types.Message)),
-		closedChan:      make(chan struct{}),
-		closeChan:       make(chan struct{}),
+		conf:         conf,
+		messages:     nil,
+		responseChan: make(chan types.Response),
+		closedChan:   make(chan struct{}),
+		closeChan:    make(chan struct{}),
 	}
 
 	t, err := getZMQType(conf.ZMQ4.SocketType)
@@ -98,8 +95,6 @@ func NewZMQ4(conf Config) (*ZMQ4, error) {
 			return nil, err
 		}
 	}
-
-	go z.loop()
 
 	return &z, nil
 }
@@ -133,23 +128,23 @@ func (z *ZMQ4) loop() {
 				_, err := z.socket.SendMessage(msg.Parts)
 				z.responseChan <- types.NewSimpleResponse(err)
 			}
-		case newChan, open := <-z.newMessagesChan:
-			if running = open; running {
-				z.messages = newChan
-			}
 		case _, running = <-z.closeChan:
 			running = false
 		}
 	}
 
 	close(z.responseChan)
-	close(z.newMessagesChan)
 	close(z.closedChan)
 }
 
-// SetMessageChan - Assigns a new messages channel for the output to read.
-func (z *ZMQ4) SetMessageChan(msgs <-chan types.Message) {
-	z.newMessagesChan <- msgs
+// StartReceiving - Assigns a messages channel for the output to read.
+func (z *ZMQ4) StartReceiving(msgs <-chan types.Message) error {
+	if z.messages != nil {
+		return types.ErrAlreadyStarted
+	}
+	z.messages = msgs
+	go z.loop()
+	return nil
 }
 
 // ResponseChan - Returns the errors channel.

@@ -36,9 +36,10 @@ type MockType struct {
 	ResChan <-chan types.Response
 }
 
-// SetResponseChan - Sets the channel used for reading responses.
-func (m *MockType) SetResponseChan(resChan <-chan types.Response) {
+// StartListening - Sets the channel used for reading responses.
+func (m *MockType) StartListening(resChan <-chan types.Response) error {
 	m.ResChan = resChan
+	return nil
 }
 
 // MessageChan - Returns the messages channel.
