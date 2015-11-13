@@ -24,6 +24,7 @@ package output
 
 import (
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/jeffail/benthos/types"
@@ -50,6 +51,8 @@ func NewZMQ4Config() ZMQ4Config {
 
 // ZMQ4 - An input type that serves ZMQ4 POST requests.
 type ZMQ4 struct {
+	running int32
+
 	conf Config
 
 	socket *zmq4.Socket
@@ -64,6 +67,7 @@ type ZMQ4 struct {
 // NewZMQ4 - Create a new ZMQ4 input type.
 func NewZMQ4(conf Config) (*ZMQ4, error) {
 	z := ZMQ4{
+		running:      1,
 		conf:         conf,
 		messages:     nil,
 		responseChan: make(chan types.Response),
@@ -115,21 +119,15 @@ func getZMQType(t string) (zmq4.Type, error) {
 
 //--------------------------------------------------------------------------------------------------
 
-// loop - Internal loop brokers incoming messages to output pipe.
+// loop - Internal loop brokers incoming messages to output pipe, does not use select.
 func (z *ZMQ4) loop() {
-	running := true
-	for running {
-		select {
-		case msg, open := <-z.messages:
-			// If the messages chan is closed we do not close ourselves as it can replaced.
-			if !open {
-				z.messages = nil
-			} else {
-				_, err := z.socket.SendMessage(msg.Parts)
-				z.responseChan <- types.NewSimpleResponse(err)
-			}
-		case _, running = <-z.closeChan:
-			running = false
+	for atomic.LoadInt32(&z.running) == 1 {
+		msg, open := <-z.messages
+		if !open {
+			atomic.StoreInt32(&z.running, 0)
+		} else {
+			_, err := z.socket.SendMessage(msg.Parts)
+			z.responseChan <- types.NewSimpleResponse(err)
 		}
 	}
 
@@ -154,6 +152,7 @@ func (z *ZMQ4) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the ZMQ4 output and stops processing messages.
 func (z *ZMQ4) CloseAsync() {
+	atomic.StoreInt32(&z.running, 0)
 	close(z.closeChan)
 }
 

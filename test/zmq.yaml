@@ -2,9 +2,9 @@ input:
   type: zmq4
   zmq4:
     addresses:
-      - tcp://localhost:1234
+      - tcp://*:1234
     socket_type: PULL
-    poll_timeout_ms: 5000
+    poll_timeout_ms: 2000
 outputs:
 - type: zmq4
   zmq4:

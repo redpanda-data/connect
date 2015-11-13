@@ -127,6 +127,10 @@ func (o *FanOut) loop() {
 		}
 	}
 
+	for _, c := range o.outputMsgChans {
+		close(c)
+	}
+
 	close(o.responseChan)
 	close(o.closedChan)
 }

@@ -122,67 +122,41 @@ func getZMQType(t string) (zmq4.Type, error) {
 
 //--------------------------------------------------------------------------------------------------
 
-// readerLoop - Internal loop for polling new messages.
-func (z *ZMQ4) readerLoop() {
+func (z *ZMQ4) loop() {
 	pollTimeout := time.Millisecond * time.Duration(z.conf.ZMQ4.PollTimeoutMS)
 	poller := zmq4.NewPoller()
 	poller.Add(z.socket, zmq4.POLLIN)
 
+	var data [][]byte
+
 	for atomic.LoadInt32(&z.running) == 1 {
 		// If no bytes then read a message
-		polled, err := poller.Poll(pollTimeout)
-		if err == nil && len(polled) == 1 {
-			if bytes, err := z.socket.RecvMessageBytes(0); err == nil {
-				z.internalMessages <- bytes
-			} else {
+		if data == nil {
+			polled, err := poller.Poll(pollTimeout)
+			if err == nil && len(polled) == 1 {
+				if data, err = z.socket.RecvMessageBytes(0); err != nil {
+					_ = err
+					// TODO: propagate errors, input type should have error channel.
+				}
+			} else if err != nil {
 				_ = err
-				// TODO: propagate errors, input type should have error channel.
+				data = nil
 			}
-		} else if err != nil {
-			_ = err
+		}
+
+		// If bytes are read then try and propagate.
+		if data != nil {
+			z.messages <- types.Message{Parts: data}
+			res, open := <-z.responses
+			if !open {
+				atomic.StoreInt32(&z.running, 0)
+			} else if res.Error() == nil {
+				data = nil
+			}
 		}
 	}
 
 	close(z.internalMessages)
-}
-
-// loop - Internal loop brokers incoming messages to output pipe.
-func (z *ZMQ4) loop() {
-	var bytes [][]byte
-
-	var msgChan chan<- types.Message
-	var internalChan <-chan [][]byte
-
-	running, responsePending := true, false
-	for running {
-		// If we have a line to push out
-		if responsePending {
-			msgChan = nil
-			internalChan = nil
-		} else {
-			if bytes == nil {
-				msgChan = nil
-				internalChan = z.internalMessages
-			} else {
-				msgChan = z.messages
-				internalChan = nil
-			}
-		}
-
-		select {
-		case bytes, running = <-internalChan:
-		case msgChan <- types.Message{Parts: bytes}:
-			responsePending = true
-		case res, open := <-z.responses:
-			responsePending = false
-			if !open {
-				z.responses = nil
-			} else if res.Error() == nil {
-				bytes = nil
-			}
-		}
-	}
-
 	close(z.messages)
 	close(z.closedChan)
 }
@@ -193,7 +167,6 @@ func (z *ZMQ4) StartListening(responses <-chan types.Response) error {
 		return types.ErrAlreadyStarted
 	}
 	z.responses = responses
-	go z.readerLoop()
 	go z.loop()
 	return nil
 }
