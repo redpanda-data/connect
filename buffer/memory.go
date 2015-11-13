@@ -43,9 +43,11 @@ var (
 
 // Memory - An agent that wraps an output with a message buffer.
 type Memory struct {
-	buffer []types.Message
+	buffer []*types.Message
 	limit  int
 	used   int
+
+	running int32
 
 	messagesIn   <-chan types.Message
 	messagesOut  chan types.Message
@@ -53,8 +55,8 @@ type Memory struct {
 	responsesOut chan types.Response
 	errorsChan   chan []error
 
-	closedChan chan struct{}
-	closeChan  chan struct{}
+	closedWG  sync.WaitGroup
+	closeChan chan struct{}
 
 	// For locking around buffer
 	sync.Mutex
@@ -63,13 +65,13 @@ type Memory struct {
 // NewMemory - Create a new buffered agent type.
 func NewMemory(limit int) *Memory {
 	m := Memory{
-		buffer:       []types.Message{},
+		buffer:       []*types.Message{},
 		limit:        limit,
 		used:         0,
+		running:      1,
 		messagesOut:  make(chan types.Message),
 		responsesOut: make(chan types.Response),
 		errorsChan:   make(chan []error),
-		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
 	}
 
@@ -78,12 +80,12 @@ func NewMemory(limit int) *Memory {
 
 //--------------------------------------------------------------------------------------------------
 
-func (m *Memory) shiftMessage() (types.Message, error) {
+func (m *Memory) shiftMessage() {
 	m.Lock()
 	defer m.Unlock()
 
 	if len(m.buffer) == 0 {
-		return types.Message{}, ErrOutOfBounds
+		return
 	}
 
 	msg := m.buffer[0]
@@ -94,13 +96,23 @@ func (m *Memory) shiftMessage() (types.Message, error) {
 	}
 
 	m.used = m.used - size
-	m.buffer[0] = types.Message{}
+	m.buffer[0] = nil
 	m.buffer = m.buffer[1:]
+}
 
+func (m *Memory) nextMessage() (*types.Message, error) {
+	m.Lock()
+	defer m.Unlock()
+
+	if len(m.buffer) == 0 {
+		return nil, ErrOutOfBounds
+	}
+
+	msg := m.buffer[0]
 	return msg, nil
 }
 
-func (m *Memory) pushMessage(msg types.Message) bool {
+func (m *Memory) pushMessage(msg *types.Message) bool {
 	m.Lock()
 	defer m.Unlock()
 
@@ -122,6 +134,88 @@ func (m *Memory) limitReached() bool {
 	return m.used > m.limit
 }
 
+// inputLoop - Internal loop brokers incoming messages to output pipe.
+func (m *Memory) inputLoop() {
+	var responsePending bool
+
+	for atomic.LoadInt32(&m.running) == 1 {
+		if !m.limitReached() {
+			if responsePending {
+				m.responsesOut <- types.NewSimpleResponse(nil)
+				responsePending = false
+			}
+
+			msg, open := <-m.messagesIn
+			if !open {
+				atomic.StoreInt32(&m.running, 0)
+			} else {
+				if !m.pushMessage(&msg) {
+					m.responsesOut <- types.NewSimpleResponse(nil)
+				} else {
+					// Defer responding until we know the buffer has more space.
+					responsePending = true
+				}
+			}
+		} else {
+			<-time.After(time.Microsecond * 10)
+			// WAIT FOR OUTPUT
+		}
+	}
+
+	close(m.responsesOut)
+	m.closedWG.Done()
+}
+
+// outputLoop - Internal loop brokers incoming messages to output pipe.
+func (m *Memory) outputLoop() {
+	var errMap map[error]struct{}
+	var errs []error
+
+	var msg *types.Message
+	for atomic.LoadInt32(&m.running) == 1 {
+		var err error
+		if msg == nil {
+			msg, err = m.nextMessage()
+		}
+
+		if err == nil && msg != nil {
+			m.messagesOut <- *msg
+			res, open := <-m.responsesIn
+			if !open {
+				atomic.StoreInt32(&m.running, 0)
+			} else {
+				if res.Error() == nil {
+					msg = nil
+					m.shiftMessage()
+				} else {
+					if _, exists := errMap[res.Error()]; !exists {
+						errMap[res.Error()] = struct{}{}
+						errs = append(errs, res.Error())
+					}
+				}
+			}
+		} else {
+			<-time.After(time.Microsecond * 10)
+			// WAIT FOR INPUT
+		}
+
+		// If we have errors built up.
+		if len(errs) > 0 {
+			select {
+			case m.errorsChan <- errs:
+				errMap = map[error]struct{}{}
+				errs = []error{}
+			default:
+				// Reader not ready, do not block here.
+			}
+		}
+	}
+
+	close(m.errorsChan)
+	close(m.messagesOut)
+	m.closedWG.Done()
+}
+
 // loop - Internal loop brokers incoming messages to output pipe.
 func (m *Memory) loop() {
 	running := true
@@ -141,7 +235,7 @@ func (m *Memory) loop() {
 		// the output chan to nil.
 		if !responseInPending && len(m.buffer) > 0 {
 			outMsgChan = m.messagesOut
-			nextMsg = m.buffer[0]
+			nextMsg = *m.buffer[0]
 		} else {
 			outMsgChan = nil
 			nextMsg = types.Message{Parts: nil}
@@ -174,7 +268,7 @@ func (m *Memory) loop() {
 			if !open {
 				m.messagesIn = nil
 			} else {
-				m.pushMessage(msg)
+				m.pushMessage(&msg)
 				responseOutPending = true
 			}
 		case outResChan <- types.NewSimpleResponse(nil):
@@ -189,8 +283,8 @@ func (m *Memory) loop() {
 				m.responsesIn = nil
 			} else if res.Error() != nil {
 				errors = append(errors, res.Error())
-			} else if _, err := m.shiftMessage(); err != nil {
-				errors = append(errors, err)
+			} else {
+				m.shiftMessage()
 			}
 			responseInPending = false
 
@@ -204,57 +298,8 @@ func (m *Memory) loop() {
 	close(m.messagesOut)
 	close(m.errorsChan)
 	close(m.responsesOut)
-	close(m.closedChan)
-}
 
-// inputLoop - Internal loop brokers incoming messages to output pipe.
-func (m *Memory) inputLoop() {
-	for atomic.LoadInt32(&m.running) == 1 {
-		if !m.limitReached() {
-			msg, open := <-m.messagesIn
-			if !open {
-				atomic.StoreInt32(&m.running, 0)
-			} else {
-				if !m.pushMessage(msg) {
-					m.responsesOut <- types.NewSimpleResponse(nil)
-				}
-				// TRIGGER CONDITION
-			}
-		} else {
-			// WAIT FOR CONDITION
-		}
-	}
-
-	close(m.responsesOut)
-}
-
-// outputLoop - Internal loop brokers incoming messages to output pipe.
-func (m *Memory) outputLoop() {
-	var msg types.Message
-	for atomic.LoadInt32(&m.running) == 1 {
-		if msg.Parts == nil {
-			var err error
-			msg, err = m.shiftMessage()
-			if err != nil {
-			}
-		}
-
-		if !m.limitReached() {
-			msg, open := <-m.messagesIn
-			if !open {
-				atomic.StoreInt32(&m.running, 0)
-			} else {
-				if !m.pushMessage(msg) {
-					m.responsesOut <- types.NewSimpleResponse(nil)
-				}
-				// TRIGGER CONDITION
-			}
-		} else {
-			// WAIT FOR CONDITION
-		}
-	}
-
-	close(m.responsesOut)
+	m.closedWG.Done()
 }
 
 // StartReceiving - Assigns a messages channel for the output to read.
@@ -265,7 +310,11 @@ func (m *Memory) StartReceiving(msgs <-chan types.Message) error {
 	m.messagesIn = msgs
 
 	if m.responsesIn != nil {
-		go m.loop()
+		/*
+			m.closedWG.Add(2)
+			go m.inputLoop()
+			go m.outputLoop()
+		*/
 	}
 	return nil
 }
@@ -283,7 +332,9 @@ func (m *Memory) StartListening(responses <-chan types.Response) error {
 	m.responsesIn = responses
 
 	if m.messagesIn != nil {
-		go m.loop()
+		m.closedWG.Add(2)
+		go m.inputLoop()
+		go m.outputLoop()
 	}
 	return nil
 }
@@ -300,13 +351,20 @@ func (m *Memory) ErrorsChan() <-chan []error {
 
 // CloseAsync - Shuts down the Memory output and stops processing messages.
 func (m *Memory) CloseAsync() {
+	atomic.StoreInt32(&m.running, 0)
 	close(m.closeChan)
 }
 
 // WaitForClose - Blocks until the Memory output has closed down.
 func (m *Memory) WaitForClose(timeout time.Duration) error {
+	closed := make(chan struct{})
+	go func() {
+		m.closedWG.Wait()
+		close(closed)
+	}()
+
 	select {
-	case <-m.closedChan:
+	case <-closed:
 	case <-time.After(timeout):
 		return types.ErrTimeout
 	}
