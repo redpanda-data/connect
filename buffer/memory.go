@@ -24,6 +24,8 @@ package buffer
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jeffail/benthos/types"
@@ -53,6 +55,9 @@ type Memory struct {
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
+
+	// For locking around buffer
+	sync.Mutex
 }
 
 // NewMemory - Create a new buffered agent type.
@@ -74,6 +79,9 @@ func NewMemory(limit int) *Memory {
 //--------------------------------------------------------------------------------------------------
 
 func (m *Memory) shiftMessage() (types.Message, error) {
+	m.Lock()
+	defer m.Unlock()
+
 	if len(m.buffer) == 0 {
 		return types.Message{}, ErrOutOfBounds
 	}
@@ -93,6 +101,9 @@ func (m *Memory) shiftMessage() (types.Message, error) {
 }
 
 func (m *Memory) pushMessage(msg types.Message) bool {
+	m.Lock()
+	defer m.Unlock()
+
 	size := 0
 	for i := range msg.Parts {
 		size += cap(msg.Parts[i])
@@ -101,10 +112,13 @@ func (m *Memory) pushMessage(msg types.Message) bool {
 	m.used = m.used + size
 	m.buffer = append(m.buffer, msg)
 
-	return m.limitReached()
+	return m.used > m.limit
 }
 
 func (m *Memory) limitReached() bool {
+	m.Lock()
+	defer m.Unlock()
+
 	return m.used > m.limit
 }
 
@@ -191,6 +205,56 @@ func (m *Memory) loop() {
 	close(m.errorsChan)
 	close(m.responsesOut)
 	close(m.closedChan)
+}
+
+// inputLoop - Internal loop brokers incoming messages to output pipe.
+func (m *Memory) inputLoop() {
+	for atomic.LoadInt32(&m.running) == 1 {
+		if !m.limitReached() {
+			msg, open := <-m.messagesIn
+			if !open {
+				atomic.StoreInt32(&m.running, 0)
+			} else {
+				if !m.pushMessage(msg) {
+					m.responsesOut <- types.NewSimpleResponse(nil)
+				}
+				// TRIGGER CONDITION
+			}
+		} else {
+			// WAIT FOR CONDITION
+		}
+	}
+
+	close(m.responsesOut)
+}
+
+// outputLoop - Internal loop brokers incoming messages to output pipe.
+func (m *Memory) outputLoop() {
+	var msg types.Message
+	for atomic.LoadInt32(&m.running) == 1 {
+		if msg.Parts == nil {
+			var err error
+			msg, err = m.shiftMessage()
+			if err != nil {
+			}
+		}
+
+		if !m.limitReached() {
+			msg, open := <-m.messagesIn
+			if !open {
+				atomic.StoreInt32(&m.running, 0)
+			} else {
+				if !m.pushMessage(msg) {
+					m.responsesOut <- types.NewSimpleResponse(nil)
+				}
+				// TRIGGER CONDITION
+			}
+		} else {
+			// WAIT FOR CONDITION
+		}
+	}
+
+	close(m.responsesOut)
 }
 
 // StartReceiving - Assigns a messages channel for the output to read.
