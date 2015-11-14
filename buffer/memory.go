@@ -55,6 +55,9 @@ type Memory struct {
 	responsesOut chan types.Response
 	errorsChan   chan []error
 
+	inputCond  *sync.Cond
+	outputCond *sync.Cond
+
 	closedWG  sync.WaitGroup
 	closeChan chan struct{}
 
@@ -72,6 +75,8 @@ func NewMemory(limit int) *Memory {
 		messagesOut:  make(chan types.Message),
 		responsesOut: make(chan types.Response),
 		errorsChan:   make(chan []error),
+		inputCond:    sync.NewCond(&sync.Mutex{}),
+		outputCond:   sync.NewCond(&sync.Mutex{}),
 		closeChan:    make(chan struct{}),
 	}
 
@@ -98,6 +103,9 @@ func (m *Memory) shiftMessage() {
 	m.used = m.used - size
 	m.buffer[0] = nil
 	m.buffer = m.buffer[1:]
+
+	// Broadcast to threads that an item has left our buffer
+	m.outputCond.Broadcast()
 }
 
 func (m *Memory) nextMessage() (*types.Message, error) {
@@ -124,6 +132,9 @@ func (m *Memory) pushMessage(msg *types.Message) bool {
 	m.used = m.used + size
 	m.buffer = append(m.buffer, msg)
 
+	// Broadcast to threads that a new item has entered our buffer
+	m.inputCond.Broadcast()
+
 	return m.used > m.limit
 }
 
@@ -136,6 +147,9 @@ func (m *Memory) limitReached() bool {
 
 // inputLoop - Internal loop brokers incoming messages to output pipe.
 func (m *Memory) inputLoop() {
+	m.outputCond.L.Lock()
+	defer m.outputCond.L.Unlock()
+
 	var responsePending bool
 
 	for atomic.LoadInt32(&m.running) == 1 {
@@ -157,8 +171,8 @@ func (m *Memory) inputLoop() {
 				}
 			}
 		} else {
-			<-time.After(time.Microsecond * 10)
-			// WAIT FOR OUTPUT
+			// Wait until a message has been removed from the buffer.
+			m.outputCond.Wait()
 		}
 	}
 
@@ -168,6 +182,9 @@ func (m *Memory) inputLoop() {
 
 // outputLoop - Internal loop brokers incoming messages to output pipe.
 func (m *Memory) outputLoop() {
+	m.inputCond.L.Lock()
+	defer m.inputCond.L.Unlock()
+
 	var errMap map[error]struct{}
 	var errs []error
 
@@ -195,8 +212,8 @@ func (m *Memory) outputLoop() {
 				}
 			}
 		} else {
-			<-time.After(time.Microsecond * 10)
-			// WAIT FOR INPUT
+			// Wait until a new message is added.
+			m.inputCond.Wait()
 		}
 
 		// If we have errors built up.
@@ -216,92 +233,6 @@ func (m *Memory) outputLoop() {
 	m.closedWG.Done()
 }
 
-// loop - Internal loop brokers incoming messages to output pipe.
-func (m *Memory) loop() {
-	running := true
-
-	var inMsgChan <-chan types.Message
-	var outMsgChan chan types.Message
-	var outResChan chan types.Response
-	var nextMsg types.Message
-
-	var errChan chan []error
-	errors := []error{}
-
-	responseInPending, responseOutPending := false, false
-
-	for running {
-		// If we are waiting for our output to respond, or do not have buffered messages then set
-		// the output chan to nil.
-		if !responseInPending && len(m.buffer) > 0 {
-			outMsgChan = m.messagesOut
-			nextMsg = *m.buffer[0]
-		} else {
-			outMsgChan = nil
-			nextMsg = types.Message{Parts: nil}
-		}
-
-		if !m.limitReached() {
-			if responseOutPending {
-				outResChan = m.responsesOut
-				inMsgChan = nil
-			} else {
-				inMsgChan = m.messagesIn
-				outResChan = nil
-			}
-		} else {
-			inMsgChan = nil
-			outResChan = nil
-		}
-
-		// If we do not have errors to propagate then set the error chan to nil
-		if len(errors) == 0 {
-			errChan = nil
-		} else {
-			errChan = m.errorsChan
-		}
-
-		select {
-		// OUTPUT CHANNELS
-		case msg, open := <-inMsgChan:
-			// If the messages chan is closed we do not close ourselves as it can replaced.
-			if !open {
-				m.messagesIn = nil
-			} else {
-				m.pushMessage(&msg)
-				responseOutPending = true
-			}
-		case outResChan <- types.NewSimpleResponse(nil):
-			responseOutPending = false
-
-		// INPUT CHANNELS
-		case outMsgChan <- nextMsg:
-			responseInPending = true
-		case res, open := <-m.responsesIn:
-			// If the responses chan is closed we do not close ourselves as it can replaced.
-			if !open {
-				m.responsesIn = nil
-			} else if res.Error() != nil {
-				errors = append(errors, res.Error())
-			} else {
-				m.shiftMessage()
-			}
-			responseInPending = false
-
-		// OTHER CHANNELS
-		case errChan <- errors:
-			errors = []error{}
-		case _, running = <-m.closeChan:
-		}
-	}
-
-	close(m.messagesOut)
-	close(m.errorsChan)
-	close(m.responsesOut)
-
-	m.closedWG.Done()
-}
-
 // StartReceiving - Assigns a messages channel for the output to read.
 func (m *Memory) StartReceiving(msgs <-chan types.Message) error {
 	if m.messagesIn != nil {
@@ -310,11 +241,9 @@ func (m *Memory) StartReceiving(msgs <-chan types.Message) error {
 	m.messagesIn = msgs
 
 	if m.responsesIn != nil {
-		/*
-			m.closedWG.Add(2)
-			go m.inputLoop()
-			go m.outputLoop()
-		*/
+		m.closedWG.Add(2)
+		go m.inputLoop()
+		go m.outputLoop()
 	}
 	return nil
 }

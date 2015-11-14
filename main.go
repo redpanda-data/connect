@@ -152,7 +152,7 @@ func main() {
 
 	// Defer clean broker, input and output closure
 	defer func() {
-		if err := pool.Close(time.Second * 5); err != nil {
+		if err := pool.Close(time.Second * 20); err != nil {
 			panic(err)
 		}
 	}()
