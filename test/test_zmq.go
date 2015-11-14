@@ -23,6 +23,7 @@ THE SOFTWARE.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -131,6 +132,10 @@ func main() {
 	}
 
 	atomic.StoreInt32(&running, 0)
+	go func() {
+		<-time.After(time.Second * 10)
+		panic(errors.New("Timed out waiting for processes to end"))
+	}()
 	wg.Wait()
 }
 

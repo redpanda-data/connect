@@ -23,6 +23,7 @@ THE SOFTWARE.
 package broker
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/jeffail/benthos/types"
@@ -33,11 +34,12 @@ import (
 // FanOut - A broker that implements types.Output and broadcasts each message out to an array of
 // outputs.
 type FanOut struct {
+	running int32
+
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
 	outputMsgChans []chan types.Message
-	outputsChan    chan []types.Output
 	outputs        []types.Output
 
 	closedChan chan struct{}
@@ -45,36 +47,23 @@ type FanOut struct {
 }
 
 // NewFanOut - Create a new FanOut type by providing outputs and a messages channel.
-func NewFanOut(outputs []types.Output) *FanOut {
+func NewFanOut(outputs []types.Output) (*FanOut, error) {
 	o := &FanOut{
+		running:      1,
 		messages:     nil,
 		responseChan: make(chan types.Response),
-		outputsChan:  make(chan []types.Output),
 		outputs:      outputs,
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
-	}
-
-	o.createMessageChans()
-	return o
-}
-
-//--------------------------------------------------------------------------------------------------
-
-func (o *FanOut) createMessageChans() error {
-	if len(o.outputMsgChans) > 0 {
-		for i := range o.outputMsgChans {
-			close(o.outputMsgChans[i])
-		}
 	}
 	o.outputMsgChans = make([]chan types.Message, len(o.outputs))
 	for i := range o.outputMsgChans {
 		o.outputMsgChans[i] = make(chan types.Message)
 		if err := o.outputs[i].StartReceiving(o.outputMsgChans[i]); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return o, nil
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -90,49 +79,34 @@ func (o *FanOut) StartReceiving(msgs <-chan types.Message) error {
 	return nil
 }
 
-// SetOutputs - Set the broker agents.
-func (o *FanOut) SetOutputs(outputs []types.Output) {
-	o.outputsChan <- outputs
-}
-
 //--------------------------------------------------------------------------------------------------
 
 // loop - Internal loop brokers incoming messages to many outputs.
 func (o *FanOut) loop() {
-	running := true
-	for running {
-		select {
-		case msg, open := <-o.messages:
-			// If the read channel is closed we can continue and wait for a replacement.
-			if !open {
-				o.messages = nil
-			} else {
-				responses := types.NewMappedResponse()
-				for i := range o.outputMsgChans {
-					o.outputMsgChans[i] <- msg
-				}
-				for i := range o.outputs {
-					if r := <-o.outputs[i].ResponseChan(); r.Error() != nil {
-						responses.Errors[i] = r.Error()
-					}
-				}
-				o.responseChan <- responses
-			}
-		case outputs, open := <-o.outputsChan:
-			if running = open; running {
-				o.outputs = outputs
-				o.createMessageChans()
-			}
-		case _, running = <-o.closeChan:
+	defer func() {
+		for _, c := range o.outputMsgChans {
+			close(c)
 		}
-	}
+		close(o.responseChan)
+		close(o.closedChan)
+	}()
 
-	for _, c := range o.outputMsgChans {
-		close(c)
+	for atomic.LoadInt32(&o.running) == 1 {
+		msg, open := <-o.messages
+		if !open {
+			return
+		}
+		responses := types.NewMappedResponse()
+		for i := range o.outputMsgChans {
+			o.outputMsgChans[i] <- msg
+		}
+		for i := range o.outputs {
+			if r := <-o.outputs[i].ResponseChan(); r.Error() != nil {
+				responses.Errors[i] = r.Error()
+			}
+		}
+		o.responseChan <- responses
 	}
-
-	close(o.responseChan)
-	close(o.closedChan)
 }
 
 // ResponseChan - Returns the response channel.
@@ -142,8 +116,7 @@ func (o *FanOut) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the FanOut broker and stops processing requests.
 func (o *FanOut) CloseAsync() {
-	close(o.closeChan)
-	close(o.outputsChan)
+	atomic.StoreInt32(&o.running, 0)
 }
 
 // WaitForClose - Blocks until the FanOut broker has closed down.

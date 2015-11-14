@@ -146,7 +146,11 @@ func main() {
 	pool.Add(2, buffer)
 
 	// Create broker
-	msgBroker := broker.NewFanOut(outputs)
+	msgBroker, err := broker.NewFanOut(outputs)
+	if err != nil {
+		logger.Errorf("Output error: %v\n", err)
+		return
+	}
 	butil.Couple(buffer, msgBroker)
 	pool.Add(5, msgBroker)
 
