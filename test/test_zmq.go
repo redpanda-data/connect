@@ -37,6 +37,8 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func main() {
+	interval := time.Millisecond * 1
+
 	ctx, err := zmq4.NewContext()
 	if nil != err {
 		panic(err)
@@ -67,7 +69,7 @@ func main() {
 
 	go func() {
 		for atomic.LoadInt32(&running) == 1 {
-			<-time.After(time.Millisecond * 100)
+			<-time.After(interval)
 			nowBytes, err := time.Now().MarshalBinary()
 			if err != nil {
 				panic(err)

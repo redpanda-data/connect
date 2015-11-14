@@ -149,6 +149,8 @@ func (m *Memory) limitReached() bool {
 func (m *Memory) inputLoop() {
 	m.outputCond.L.Lock()
 	defer m.outputCond.L.Unlock()
+	defer close(m.responsesOut)
+	defer m.closedWG.Done()
 
 	var responsePending bool
 
@@ -160,30 +162,30 @@ func (m *Memory) inputLoop() {
 			}
 
 			msg, open := <-m.messagesIn
-			if !open {
-				atomic.StoreInt32(&m.running, 0)
-			} else {
+			if open {
 				if !m.pushMessage(&msg) {
 					m.responsesOut <- types.NewSimpleResponse(nil)
 				} else {
 					// Defer responding until we know the buffer has more space.
 					responsePending = true
 				}
+			} else {
+				return
 			}
 		} else {
 			// Wait until a message has been removed from the buffer.
 			m.outputCond.Wait()
 		}
 	}
-
-	close(m.responsesOut)
-	m.closedWG.Done()
 }
 
 // outputLoop - Internal loop brokers incoming messages to output pipe.
 func (m *Memory) outputLoop() {
 	m.inputCond.L.Lock()
 	defer m.inputCond.L.Unlock()
+	defer close(m.errorsChan)
+	defer close(m.messagesOut)
+	defer m.closedWG.Done()
 
 	var errMap map[error]struct{}
 	var errs []error
@@ -227,10 +229,6 @@ func (m *Memory) outputLoop() {
 			}
 		}
 	}
-
-	close(m.errorsChan)
-	close(m.messagesOut)
-	m.closedWG.Done()
 }
 
 // StartReceiving - Assigns a messages channel for the output to read.
@@ -281,6 +279,9 @@ func (m *Memory) ErrorsChan() <-chan []error {
 // CloseAsync - Shuts down the Memory output and stops processing messages.
 func (m *Memory) CloseAsync() {
 	atomic.StoreInt32(&m.running, 0)
+	m.outputCond.Broadcast()
+	m.inputCond.Broadcast()
+
 	close(m.closeChan)
 }
 
