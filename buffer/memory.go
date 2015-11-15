@@ -58,8 +58,7 @@ type Memory struct {
 	inputCond  *sync.Cond
 	outputCond *sync.Cond
 
-	closedWG  sync.WaitGroup
-	closeChan chan struct{}
+	closedWG sync.WaitGroup
 
 	// For locking around buffer
 	sync.Mutex
@@ -77,7 +76,6 @@ func NewMemory(limit int) *Memory {
 		errorsChan:   make(chan []error),
 		inputCond:    sync.NewCond(&sync.Mutex{}),
 		outputCond:   sync.NewCond(&sync.Mutex{}),
-		closeChan:    make(chan struct{}),
 	}
 
 	return &m
@@ -162,15 +160,14 @@ func (m *Memory) inputLoop() {
 			}
 
 			msg, open := <-m.messagesIn
-			if open {
-				if !m.pushMessage(&msg) {
-					m.responsesOut <- types.NewSimpleResponse(nil)
-				} else {
-					// Defer responding until we know the buffer has more space.
-					responsePending = true
-				}
-			} else {
+			if !open {
 				return
+			}
+			if !m.pushMessage(&msg) {
+				m.responsesOut <- types.NewSimpleResponse(nil)
+			} else {
+				// Defer responding until we know the buffer has more space.
+				responsePending = true
 			}
 		} else {
 			// Wait until a message has been removed from the buffer.
@@ -201,16 +198,15 @@ func (m *Memory) outputLoop() {
 			m.messagesOut <- *msg
 			res, open := <-m.responsesIn
 			if !open {
-				atomic.StoreInt32(&m.running, 0)
+				return
+			}
+			if res.Error() == nil {
+				msg = nil
+				m.shiftMessage()
 			} else {
-				if res.Error() == nil {
-					msg = nil
-					m.shiftMessage()
-				} else {
-					if _, exists := errMap[res.Error()]; !exists {
-						errMap[res.Error()] = struct{}{}
-						errs = append(errs, res.Error())
-					}
+				if _, exists := errMap[res.Error()]; !exists {
+					errMap[res.Error()] = struct{}{}
+					errs = append(errs, res.Error())
 				}
 			}
 		} else {
@@ -281,8 +277,6 @@ func (m *Memory) CloseAsync() {
 	atomic.StoreInt32(&m.running, 0)
 	m.outputCond.Broadcast()
 	m.inputCond.Broadcast()
-
-	close(m.closeChan)
 }
 
 // WaitForClose - Blocks until the Memory output has closed down.
