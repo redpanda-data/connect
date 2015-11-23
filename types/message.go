@@ -24,5 +24,5 @@ package types
 
 // Message - A struct containing any relevant fields of a benthos message and helper functions.
 type Message struct {
-	Parts [][]byte
+	Parts [][]byte `json:"parts"`
 }

@@ -33,6 +33,12 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
+func init() {
+	constructors["stdout"] = NewSTDOUT
+}
+
+//--------------------------------------------------------------------------------------------------
+
 // STDOUTConfig - Configuration for the STDOUT input type.
 type STDOUTConfig struct {
 }
@@ -56,7 +62,7 @@ type STDOUT struct {
 }
 
 // NewSTDOUT - Create a new STDOUT output type.
-func NewSTDOUT(conf Config) *STDOUT {
+func NewSTDOUT(conf Config) (Type, error) {
 	s := STDOUT{
 		conf:         conf,
 		messages:     nil,
@@ -65,7 +71,7 @@ func NewSTDOUT(conf Config) *STDOUT {
 		closeChan:    make(chan struct{}),
 	}
 
-	return &s
+	return &s, nil
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -22,19 +22,25 @@ THE SOFTWARE.
 
 package output
 
+import "github.com/jeffail/benthos/types"
+
+//--------------------------------------------------------------------------------------------------
+
+var constructors = map[string]func(conf Config) (Type, error){}
+
 //--------------------------------------------------------------------------------------------------
 
 // Config - The all encompassing configuration struct for all output types.
 type Config struct {
 	Type   string       `json:"type" yaml:"type"`
 	STDOUT STDOUTConfig `json:"stdout" yaml:"stdout"`
-	ZMQ4   ZMQ4Config   `json:"zmq4" yaml:"zmq4"`
+	ZMQ4   *ZMQ4Config  `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:   "none",
+		Type:   "stdout",
 		STDOUT: NewSTDOUTConfig(),
 		ZMQ4:   NewZMQ4Config(),
 	}
@@ -42,16 +48,12 @@ func NewConfig() Config {
 
 //--------------------------------------------------------------------------------------------------
 
-// Construct - Create an output type based on an output configuration.
+// Construct - Create an input type based on an input configuration.
 func Construct(conf Config) (Type, error) {
-	switch conf.Type {
-	case "stdout":
-		return NewSTDOUT(conf), nil
-	case "zmq4":
-		return NewZMQ4(conf)
-	default:
+	if c, ok := constructors[conf.Type]; ok {
+		return c(conf)
 	}
-	return &MockType{}, nil
+	return nil, types.ErrInvalidOutputType
 }
 
 //--------------------------------------------------------------------------------------------------

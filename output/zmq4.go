@@ -1,3 +1,5 @@
+// +build ZMQ4
+
 /*
 Copyright (c) 2014 Ashley Jeffs
 
@@ -33,6 +35,12 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
+func init() {
+	constructors["zmq4"] = NewZMQ4
+}
+
+//--------------------------------------------------------------------------------------------------
+
 // ZMQ4Config - Configuration for the ZMQ4 input type.
 type ZMQ4Config struct {
 	Addresses  []string `json:"addresses" yaml:"addresses"`
@@ -40,8 +48,8 @@ type ZMQ4Config struct {
 }
 
 // NewZMQ4Config - Creates a new ZMQ4Config with default values.
-func NewZMQ4Config() ZMQ4Config {
-	return ZMQ4Config{
+func NewZMQ4Config() *ZMQ4Config {
+	return &ZMQ4Config{
 		Addresses:  []string{"tcp://*:1234"},
 		SocketType: "PUSH",
 	}
@@ -65,7 +73,7 @@ type ZMQ4 struct {
 }
 
 // NewZMQ4 - Create a new ZMQ4 input type.
-func NewZMQ4(conf Config) (*ZMQ4, error) {
+func NewZMQ4(conf Config) (Type, error) {
 	z := ZMQ4{
 		running:      1,
 		conf:         conf,

@@ -32,6 +32,12 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
+func init() {
+	constructors["stdin"] = NewSTDIN
+}
+
+//--------------------------------------------------------------------------------------------------
+
 // STDINConfig - Configuration for the STDIN input type.
 type STDINConfig struct {
 }
@@ -55,7 +61,7 @@ type STDIN struct {
 }
 
 // NewSTDIN - Create a new STDIN input type.
-func NewSTDIN(conf Config) *STDIN {
+func NewSTDIN(conf Config) (Type, error) {
 	s := STDIN{
 		conf:       conf,
 		messages:   make(chan types.Message),
@@ -64,7 +70,7 @@ func NewSTDIN(conf Config) *STDIN {
 		closeChan:  make(chan struct{}),
 	}
 
-	return &s
+	return &s, nil
 }
 
 //--------------------------------------------------------------------------------------------------

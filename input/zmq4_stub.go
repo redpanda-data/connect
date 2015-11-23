@@ -1,3 +1,5 @@
+// +build !ZMQ4
+
 /*
 Copyright (c) 2014 Ashley Jeffs
 
@@ -22,40 +24,14 @@ THE SOFTWARE.
 
 package input
 
-import "github.com/jeffail/benthos/types"
-
 //--------------------------------------------------------------------------------------------------
 
-var constructors = map[string]func(conf Config) (Type, error){}
+// ZMQ4Config - Empty stub for when ZMQ4 is not compiled.
+type ZMQ4Config struct{}
 
-//--------------------------------------------------------------------------------------------------
-
-// Config - The all encompassing configuration struct for all input types.
-type Config struct {
-	Type  string      `json:"type" yaml:"type"`
-	STDIN STDINConfig `json:"stdin" yaml:"stdin"`
-	HTTP  HTTPConfig  `json:"http" yaml:"http"`
-	ZMQ4  *ZMQ4Config `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-}
-
-// NewConfig - Returns a configuration struct fully populated with default values.
-func NewConfig() Config {
-	return Config{
-		Type:  "stdin",
-		STDIN: NewSTDINConfig(),
-		HTTP:  NewHTTPConfig(),
-		ZMQ4:  NewZMQ4Config(),
-	}
-}
-
-//--------------------------------------------------------------------------------------------------
-
-// Construct - Create an input type based on an input configuration.
-func Construct(conf Config) (Type, error) {
-	if c, ok := constructors[conf.Type]; ok {
-		return c(conf)
-	}
-	return nil, types.ErrInvalidInputType
+// NewZMQ4Config - Returns nil.
+func NewZMQ4Config() *ZMQ4Config {
+	return nil
 }
 
 //--------------------------------------------------------------------------------------------------

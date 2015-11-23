@@ -9,12 +9,18 @@ This is currently an experimental project and should not be used for production 
 
 The design foundation of benthos is memory mapped files, these allow us to ensure all incoming traffic is commited to file storage without blocking the stream with disk IO for each individual message. All other design complexity is around supporting multiple writers, readers and topics, and potentially offsets also.
 
-In the event of a service restart benthos will potentially replay previously sent messages.
-
 ## Install
 
 ```shell
 go get github.com/jeffail/benthos
+```
+
+## ZMQ4
+
+Benthos supports ZMQ4 for both data input and output. To add this you need to install libzmq 4 and use the compile time flag when building benthos:
+
+```shell
+go install -tags "ZMQ4"
 ```
 
 ## Config

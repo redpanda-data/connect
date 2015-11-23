@@ -1,3 +1,5 @@
+// +build ZMQ4
+
 /*
 Copyright (c) 2014 Ashley Jeffs
 
@@ -33,6 +35,12 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
+func init() {
+	constructors["zmq4"] = NewZMQ4
+}
+
+//--------------------------------------------------------------------------------------------------
+
 // ZMQ4Config - Configuration for the ZMQ4 input type.
 type ZMQ4Config struct {
 	Addresses     []string `json:"addresses" yaml:"addresses"`
@@ -41,8 +49,8 @@ type ZMQ4Config struct {
 }
 
 // NewZMQ4Config - Creates a new ZMQ4Config with default values.
-func NewZMQ4Config() ZMQ4Config {
-	return ZMQ4Config{
+func NewZMQ4Config() *ZMQ4Config {
+	return &ZMQ4Config{
 		Addresses:     []string{"tcp://localhost:1234"},
 		SocketType:    "PULL",
 		PollTimeoutMS: 5000,
@@ -59,8 +67,6 @@ type ZMQ4 struct {
 
 	socket *zmq4.Socket
 
-	internalMessages chan [][]byte
-
 	messages  chan types.Message
 	responses <-chan types.Response
 
@@ -68,14 +74,13 @@ type ZMQ4 struct {
 }
 
 // NewZMQ4 - Create a new ZMQ4 input type.
-func NewZMQ4(conf Config) (*ZMQ4, error) {
+func NewZMQ4(conf Config) (Type, error) {
 	z := ZMQ4{
-		running:          1,
-		conf:             conf,
-		internalMessages: make(chan [][]byte),
-		messages:         make(chan types.Message),
-		responses:        nil,
-		closedChan:       make(chan struct{}),
+		running:    1,
+		conf:       conf,
+		messages:   make(chan types.Message),
+		responses:  nil,
+		closedChan: make(chan struct{}),
 	}
 
 	t, err := getZMQType(conf.ZMQ4.SocketType)
@@ -156,7 +161,6 @@ func (z *ZMQ4) loop() {
 		}
 	}
 
-	close(z.internalMessages)
 	close(z.messages)
 	close(z.closedChan)
 }

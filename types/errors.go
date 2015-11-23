@@ -29,6 +29,9 @@ var (
 	ErrTimeout    = errors.New("action timed out")
 	ErrChanClosed = errors.New("channel was closed unexpectedly")
 
+	ErrInvalidInputType  = errors.New("input type was not recognised")
+	ErrInvalidOutputType = errors.New("output type was not recognised")
+
 	ErrInvalidZMQType = errors.New("invalid ZMQ socket type")
 
 	// ErrAlreadyStarted - When an input or output type gets started a second time.
