@@ -22,22 +22,30 @@ THE SOFTWARE.
 
 package types
 
-import "errors"
-
-// Errors used throughout the codebase
-var (
-	ErrTimeout    = errors.New("action timed out")
-	ErrChanClosed = errors.New("channel was closed unexpectedly")
-	ErrTypeClosed = errors.New("type was closed")
-
-	ErrInvalidInputType  = errors.New("input type was not recognised")
-	ErrInvalidOutputType = errors.New("output type was not recognised")
-
-	ErrInvalidZMQType = errors.New("invalid ZMQ socket type")
-
-	// ErrAlreadyStarted - When an input or output type gets started a second time.
-	ErrAlreadyStarted = errors.New("type has already been started")
-
-	ErrBadMessageBytes = errors.New("serialised message bytes were in unexpected format")
-	ErrBlockCorrupted  = errors.New("serialised messages block was in unexpected format")
+import (
+	"reflect"
+	"testing"
 )
+
+func TestMessageSerialization(t *testing.T) {
+	m := Message{
+		Parts: [][]byte{
+			[]byte("hello"),
+			[]byte("world"),
+			[]byte("12345"),
+		},
+	}
+
+	b := m.Bytes()
+
+	m2, err := FromBytes(b)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if !reflect.DeepEqual(m, m2) {
+		t.Errorf("Messages not equal: %v != %v", m, m2)
+	}
+}
