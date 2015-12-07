@@ -49,7 +49,7 @@ type FanOut struct {
 	closeChan  chan struct{}
 }
 
-// NewFanOut - Create a new FanOut type by providing outputs and a messages channel.
+// NewFanOut - Create a new FanOut type by providing outputs.
 func NewFanOut(outputs []types.Output, stats metrics.Aggregator) (*FanOut, error) {
 	o := &FanOut{
 		running:      1,
