@@ -29,6 +29,7 @@ import (
 
 	"github.com/jeffail/benthos/output"
 	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/util/metrics"
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -61,7 +62,7 @@ func TestBasicFanOut(t *testing.T) {
 
 	readChan := make(chan types.Message)
 
-	oTM, err := NewFanOut(outputs)
+	oTM, err := NewFanOut(outputs, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -128,7 +129,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 
 	readChan := make(chan types.Message)
 
-	oTM, err := NewFanOut(outputs)
+	oTM, err := NewFanOut(outputs, metrics.DudType{})
 	if err != nil {
 		b.Error(err)
 		return

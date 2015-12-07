@@ -30,6 +30,7 @@ var (
 	ErrChanClosed = errors.New("channel was closed unexpectedly")
 	ErrTypeClosed = errors.New("type was closed")
 
+	ErrInvalidBufferType = errors.New("buffer type was not recognised")
 	ErrInvalidInputType  = errors.New("input type was not recognised")
 	ErrInvalidOutputType = errors.New("output type was not recognised")
 

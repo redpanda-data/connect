@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -55,7 +56,7 @@ type HTTPConfig struct {
 // NewHTTPConfig - Creates a new HTTPConfig with default values.
 func NewHTTPConfig() HTTPConfig {
 	return HTTPConfig{
-		Address:   "",
+		Address:   "localhost:8080",
 		RootPath:  "/",
 		POSTPath:  "/post",
 		WSPath:    "/ws",
@@ -79,6 +80,8 @@ type HTTP struct {
 	responses <-chan types.Response
 
 	closedChan chan struct{}
+
+	sync.Mutex
 }
 
 // NewHTTP - Create a new HTTP input type.
@@ -110,6 +113,10 @@ type response struct {
 	Error string `json:"error"`
 }
 
+type request struct {
+	Parts []string `json:"parts"`
+}
+
 func (h *HTTP) postHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
@@ -120,38 +127,53 @@ func (h *HTTP) postHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	var msg types.Message
-	err = json.Unmarshal(bytes, &msg)
+	var req request
+	err = json.Unmarshal(bytes, &req)
 	if err != nil {
 		http.Error(w, "Failed to parse JSON", http.StatusBadRequest)
 		return
 	}
+	var msg types.Message
+	msg.Parts = make([][]byte, len(req.Parts))
+	for i := range req.Parts {
+		msg.Parts[i] = []byte(req.Parts[i])
+	}
+
+	h.Lock()
+	defer h.Unlock()
 	select {
 	case h.internalMessages <- msg.Parts:
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTP.TimeoutMS)):
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
-		return
 	}
 	return
 }
 
 func (h *HTTP) wsHandler(ws *websocket.Conn) {
 	for atomic.LoadInt32(&h.running) == 1 {
-		var msg types.Message
-		if err := websocket.JSON.Receive(ws, &msg); err == nil {
+		var req request
+		if err := websocket.JSON.Receive(ws, &req); err == nil {
+			var msg types.Message
+			msg.Parts = make([][]byte, len(req.Parts))
+			for i := range req.Parts {
+				msg.Parts[i] = []byte(req.Parts[i])
+			}
+
+			h.Lock()
 			select {
 			case h.internalMessages <- msg.Parts:
-				if err = websocket.JSON.Send(ws, &response{
+				err = websocket.JSON.Send(ws, &response{
 					Error: "",
-				}); err != nil {
-					return
-				}
+				})
 			case <-time.After(time.Millisecond * time.Duration(h.conf.HTTP.TimeoutMS)):
-				if err = websocket.JSON.Send(ws, &response{
+				err = websocket.JSON.Send(ws, &response{
 					Error: "request timed out",
-				}); err != nil {
-					return
-				}
+				})
+			}
+			h.Unlock()
+
+			if err != nil {
+				return
 			}
 		} else {
 			// Websocket is closed, exit handler.
@@ -210,6 +232,12 @@ func (h *HTTP) MessageChan() <-chan types.Message {
 
 // CloseAsync - Shuts down the HTTP input and stops processing requests.
 func (h *HTTP) CloseAsync() {
+	iMsgs := h.internalMessages
+	h.Lock()
+	h.internalMessages = nil
+	close(iMsgs)
+	h.Unlock()
+
 	atomic.StoreInt32(&h.running, 0)
 }
 

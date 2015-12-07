@@ -39,17 +39,6 @@ func init() {
 
 //--------------------------------------------------------------------------------------------------
 
-// STDOUTConfig - Configuration for the STDOUT input type.
-type STDOUTConfig struct {
-}
-
-// NewSTDOUTConfig - Creates a new STDOUTConfig with default values.
-func NewSTDOUTConfig() STDOUTConfig {
-	return STDOUTConfig{}
-}
-
-//--------------------------------------------------------------------------------------------------
-
 // STDOUT - An output type that pushes messages to STDOUT.
 type STDOUT struct {
 	conf Config

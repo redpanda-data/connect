@@ -24,6 +24,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -38,30 +39,30 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func main() {
-	interval := time.Millisecond * 1
+	var address string
+	flag.StringVar(&address, "addr", "tcp://localhost:1235", "Address of the benthos server")
+
+	flag.Parse()
+
+	fmt.Println("This is a benchmarking utility for benthos.")
+	fmt.Println("Make sure you are running benthos with the ./test/zmq.yaml config.")
 
 	ctx, err := zmq4.NewContext()
 	if nil != err {
 		panic(err)
 	}
 
-	pushSocket, err := ctx.NewSocket(zmq4.PUSH)
-	if nil != err {
-		panic(err)
-	}
-	pushSocket.Connect("tcp://localhost:1234")
-
 	pullSocket, err := ctx.NewSocket(zmq4.PULL)
 	if nil != err {
 		panic(err)
 	}
-	pullSocket.Connect("tcp://localhost:1235")
+	pullSocket.Connect(address)
 
 	poller := zmq4.NewPoller()
 	poller.Add(pullSocket, zmq4.POLLIN)
 
 	wg := sync.WaitGroup{}
-	wg.Add(3)
+	wg.Add(2)
 
 	var avg, total, tally int64
 	readChan := make(chan int64)
@@ -69,36 +70,25 @@ func main() {
 	var running int32 = 1
 
 	go func() {
-		for atomic.LoadInt32(&running) == 1 {
-			<-time.After(interval)
-			nowBytes, err := time.Now().MarshalBinary()
-			if err != nil {
-				panic(err)
-			}
-
-			_, err = pushSocket.SendBytes(nowBytes, 0)
-			if err != nil {
-				panic(err)
-			}
-		}
-		wg.Done()
-	}()
-
-	go func() {
-		timer := time.NewTicker(time.Second * 5)
+		timer := time.NewTicker(time.Second)
 		defer timer.Stop()
+
+		secTally := 0
 
 		for atomic.LoadInt32(&running) == 1 {
 			select {
 			case t := <-readChan:
 				total = total + t
 				tally = tally + 1
+				secTally = secTally + 1
 				avg = total / tally
 			case <-timer.C:
 				fmt.Printf("+\n")
-				fmt.Printf("| Average : %v\n", time.Duration(avg))
-				fmt.Printf("| Tally   : %v\n", tally)
+				fmt.Printf("| Average    : %v\n", time.Duration(avg))
+				fmt.Printf("| Tally      : %v\n", tally)
+				fmt.Printf("| Per second : %v\n", secTally)
 				fmt.Printf("+\n\n")
+				secTally = 0
 			}
 		}
 		wg.Done()
@@ -106,7 +96,7 @@ func main() {
 
 	go func() {
 		for atomic.LoadInt32(&running) == 1 {
-			polled, err := poller.Poll(time.Second * 5)
+			polled, err := poller.Poll(time.Second)
 			if err == nil && len(polled) == 1 {
 				if bytes, err := pullSocket.RecvMessageBytes(0); err == nil {
 					t := time.Now()
@@ -120,6 +110,7 @@ func main() {
 				}
 			}
 		}
+		close(readChan)
 		wg.Done()
 	}()
 

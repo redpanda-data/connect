@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/util/metrics"
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -35,6 +36,8 @@ import (
 // outputs.
 type FanOut struct {
 	running int32
+
+	stats metrics.Aggregator
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
@@ -47,9 +50,10 @@ type FanOut struct {
 }
 
 // NewFanOut - Create a new FanOut type by providing outputs and a messages channel.
-func NewFanOut(outputs []types.Output) (*FanOut, error) {
+func NewFanOut(outputs []types.Output, stats metrics.Aggregator) (*FanOut, error) {
 	o := &FanOut{
 		running:      1,
+		stats:        stats,
 		messages:     nil,
 		responseChan: make(chan types.Response),
 		outputs:      outputs,
@@ -96,6 +100,7 @@ func (o *FanOut) loop() {
 		if !open {
 			return
 		}
+		o.stats.Incr("broker.fan_out.messages.received", 1)
 		responses := types.NewMappedResponse()
 		for i := range o.outputMsgChans {
 			o.outputMsgChans[i] <- msg
@@ -103,6 +108,9 @@ func (o *FanOut) loop() {
 		for i := range o.outputs {
 			if r := <-o.outputs[i].ResponseChan(); r.Error() != nil {
 				responses.Errors[i] = r.Error()
+				o.stats.Incr("broker.fan_out.output.error", 1)
+			} else {
+				o.stats.Incr("broker.fan_out.messages.sent", 1)
 			}
 		}
 		o.responseChan <- responses

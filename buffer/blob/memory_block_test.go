@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package types
+package blob
 
 import (
 	"fmt"
@@ -28,15 +28,24 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jeffail/benthos/types"
 )
 
-func TestMessageBlockBasic(t *testing.T) {
+func TestMemoryBlockInterface(t *testing.T) {
+	b := &MemoryBlock{}
+	if c := MessageStack(b); c == nil {
+		t.Error("MemoryBlock does not satisfy the MessageStack interface")
+	}
+}
+
+func TestMemoryBlockBasic(t *testing.T) {
 	n := 100
 
-	block := NewMessageBlock(100000)
+	block := NewMemoryBlock(MemoryBlockConfig{Limit: 100000})
 
 	for i := 0; i < n; i++ {
-		block.PushMessage(Message{
+		block.PushMessage(types.Message{
 			Parts: [][]byte{
 				[]byte("hello"),
 				[]byte("world"),
@@ -61,14 +70,49 @@ func TestMessageBlockBasic(t *testing.T) {
 	}
 }
 
-func TestMessageBlockNearLimit(t *testing.T) {
+func TestMemoryBlockBacklogCounter(t *testing.T) {
+	block := NewMemoryBlock(MemoryBlockConfig{Limit: 100000})
+
+	block.PushMessage(types.Message{
+		Parts: [][]byte{[]byte("1234")},
+	}) // 4 bytes + 4 bytes
+
+	if expected, actual := 16, block.backlog(); expected != actual {
+		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
+	}
+
+	block.PushMessage(types.Message{
+		Parts: [][]byte{
+			[]byte("1234"),
+			[]byte("1234"),
+		},
+	}) // ( 4 bytes + 4 bytes ) * 2
+
+	if expected, actual := 40, block.backlog(); expected != actual {
+		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
+	}
+
+	block.ShiftMessage()
+
+	if expected, actual := 24, block.backlog(); expected != actual {
+		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
+	}
+
+	block.ShiftMessage()
+
+	if expected, actual := 0, block.backlog(); expected != actual {
+		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
+	}
+}
+
+func TestMemoryBlockNearLimit(t *testing.T) {
 	n, iter := 50, 5
 
-	block := NewMessageBlock(2285)
+	block := NewMemoryBlock(MemoryBlockConfig{Limit: 2285})
 
 	for j := 0; j < iter; j++ {
 		for i := 0; i < n; i++ {
-			block.PushMessage(Message{
+			block.PushMessage(types.Message{
 				Parts: [][]byte{
 					[]byte("hello"),
 					[]byte("world"),
@@ -94,10 +138,10 @@ func TestMessageBlockNearLimit(t *testing.T) {
 	}
 }
 
-func TestMessageBlockLoopingRandom(t *testing.T) {
+func TestMemoryBlockLoopingRandom(t *testing.T) {
 	n, iter := 50, 5
 
-	block := NewMessageBlock(8000)
+	block := NewMemoryBlock(MemoryBlockConfig{Limit: 8000})
 
 	for j := 0; j < iter; j++ {
 		for i := 0; i < n; i++ {
@@ -105,7 +149,7 @@ func TestMessageBlockLoopingRandom(t *testing.T) {
 			for k := range b {
 				b[k] = '0'
 			}
-			block.PushMessage(Message{
+			block.PushMessage(types.Message{
 				Parts: [][]byte{
 					b,
 					[]byte(fmt.Sprintf("test%v", i)),
@@ -121,23 +165,26 @@ func TestMessageBlockLoopingRandom(t *testing.T) {
 			}
 			if len(m.Parts) != 2 {
 				t.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
+				return
 			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[1]); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
+				return
 			}
 			block.ShiftMessage()
 		}
 	}
 }
 
-func TestMessageBlockLockStep(t *testing.T) {
+func TestMemoryBlockLockStep(t *testing.T) {
 	n := 10000
 
-	block := NewMessageBlock(1000)
+	block := NewMemoryBlock(MemoryBlockConfig{Limit: 1000})
 
 	wg := sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(1)
 
 	go func() {
+		defer wg.Done()
 		for i := 0; i < n; i++ {
 			m, err := block.NextMessage()
 			if err != nil {
@@ -145,17 +192,18 @@ func TestMessageBlockLockStep(t *testing.T) {
 			}
 			if len(m.Parts) != 4 {
 				t.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
+				return
 			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
+				return
 			}
 			block.ShiftMessage()
 		}
-		wg.Done()
 	}()
 
 	go func() {
 		for i := 0; i < n; i++ {
-			block.PushMessage(Message{
+			block.PushMessage(types.Message{
 				Parts: [][]byte{
 					[]byte("hello"),
 					[]byte("world"),
@@ -164,22 +212,21 @@ func TestMessageBlockLockStep(t *testing.T) {
 				},
 			})
 		}
-		wg.Done()
 	}()
 
 	wg.Wait()
 }
 
-func TestMessageBlockClose(t *testing.T) {
+func TestMemoryBlockClose(t *testing.T) {
 	// Test reader block
 
-	block := NewMessageBlock(20)
+	block := NewMemoryBlock(MemoryBlockConfig{Limit: 20})
 	doneChan := make(chan struct{})
 
 	go func() {
 		_, err := block.NextMessage()
-		if err != ErrTypeClosed {
-			t.Errorf("Wrong error returned: %v != %v", err, ErrTypeClosed)
+		if err != types.ErrTypeClosed {
+			t.Errorf("Wrong error returned: %v != %v", err, types.ErrTypeClosed)
 		}
 		close(doneChan)
 	}()
@@ -195,12 +242,12 @@ func TestMessageBlockClose(t *testing.T) {
 
 	// Test writer block
 
-	block = NewMessageBlock(100)
+	block = NewMemoryBlock(MemoryBlockConfig{Limit: 100})
 	doneChan = make(chan struct{})
 
 	go func() {
 		for i := 0; i < 100; i++ {
-			block.PushMessage(Message{
+			block.PushMessage(types.Message{
 				Parts: [][]byte{
 					[]byte("hello"),
 					[]byte("world"),
@@ -215,7 +262,7 @@ func TestMessageBlockClose(t *testing.T) {
 	go func() {
 		for {
 			_, err := block.NextMessage()
-			if err == ErrTypeClosed {
+			if err == types.ErrTypeClosed {
 				return
 			} else if err != nil {
 				t.Error(err)

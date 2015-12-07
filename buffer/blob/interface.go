@@ -20,29 +20,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package buffer
+package blob
 
-import (
-	"github.com/jeffail/benthos/buffer/blob"
-	"github.com/jeffail/util/log"
-	"github.com/jeffail/util/metrics"
-)
+import "github.com/jeffail/benthos/types"
 
 //--------------------------------------------------------------------------------------------------
 
-func init() {
-	constructors["file"] = NewFile
-}
+// MessageStack - Represents a method of stacking messages for persistence or fast buffering.
+type MessageStack interface {
+	// ShiftMessage - Remove the oldest message from the stack. Returns the backlog in bytes.
+	ShiftMessage() int
 
-//--------------------------------------------------------------------------------------------------
+	// NextMessage - Read the oldest message, the message is preserved until ShiftMessage is called.
+	NextMessage() (types.Message, error)
 
-// NewFile - Create a buffer held in memory and persisted to file.
-func NewFile(config Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
-	b, err := blob.NewFileBlock(config.File, log.NewModule("buffer.file"), stats)
-	if err != nil {
-		return nil, err
-	}
-	return NewStackBuffer(b, stats), nil
+	// PushMessage - Add a new message to the stack. Returns the backlog in bytes.
+	PushMessage(types.Message) int
+
+	// Close - Close the MessageStack so that blocked readers become unblocked.
+	Close()
 }
 
 //--------------------------------------------------------------------------------------------------

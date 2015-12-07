@@ -23,7 +23,6 @@ THE SOFTWARE.
 /*
 Package types - Defines any general structs and interfaces used throughout the benthos code base.
 
-//--------------------------------------------------------------------------------------------------
 Benthos uses abstract types to represent arbitrary inputs and outputs to its core components. This
 allows us to construct types for piping data in various arrangements without regard for the specific
 destinations and sources of our data.

@@ -15,3 +15,10 @@ logger:
   prefix: benthos
   log_level: INFO
   add_timestamp: true
+buffer:
+  type: file
+  file:
+    directory: "./tmp"
+    file_size: 262144000
+    retry_period_ms: 1000
+    clean_up: true

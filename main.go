@@ -23,10 +23,13 @@ THE SOFTWARE.
 package main
 
 import (
+	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/pprof"
 	"syscall"
 	"time"
 
@@ -44,13 +47,26 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
+// HTTPMetConf - HTTP endpoint config values for metrics exposure.
+type HTTPMetConf struct {
+	Enabled bool   `json:"enabled" yaml:"enabled"`
+	Address string `json:"address" yaml:"address"`
+	Path    string `json:"path" yaml:"path"`
+}
+
+// MetConf - Adds some custom fields to our metrics config.
+type MetConf struct {
+	Config metrics.Config `json:"config" yaml:"config"`
+	HTTP   HTTPMetConf    `json:"http" yaml:"http"`
+}
+
 // Config - The benthos configuration struct.
 type Config struct {
 	Input   input.Config     `json:"input" yaml:"input"`
 	Outputs []output.Config  `json:"outputs" yaml:"outputs"`
 	Logger  log.LoggerConfig `json:"logger" yaml:"logger"`
-	Metrics metrics.Config   `json:"metrics" yaml:"metrics"`
-	Buffer  int              `json:"buffer" yaml:"buffer"`
+	Metrics MetConf          `json:"metrics" yaml:"metrics"`
+	Buffer  buffer.Config    `json:"buffer" yaml:"buffer"`
 }
 
 // NewConfig - Returns a new configuration with default values.
@@ -59,10 +75,22 @@ func NewConfig() Config {
 		Input:   input.NewConfig(),
 		Outputs: []output.Config{output.NewConfig()},
 		Logger:  log.DefaultLoggerConfig(),
-		Metrics: metrics.NewConfig(),
-		Buffer:  1024, // 1KB
+		Metrics: MetConf{
+			Config: metrics.NewConfig(),
+			HTTP: HTTPMetConf{
+				Enabled: true,
+				Address: "localhost:8040",
+				Path:    "/stats",
+			},
+		},
+		Buffer: buffer.NewConfig(),
 	}
 }
+
+//--------------------------------------------------------------------------------------------------
+
+var cpuProfile = flag.String("cpuprofile", "", "Write cpu profile to file")
+var memProfile = flag.String("memprofile", "", "Write memory profile to file")
 
 //--------------------------------------------------------------------------------------------------
 
@@ -108,8 +136,31 @@ func main() {
 		}
 	}
 
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
+		if err != nil {
+			logger.Errorf("Failed to create CPU profile file: %v\n", err)
+			return
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
+	if *memProfile != "" {
+		f, err := os.Create(*memProfile)
+		if err != nil {
+			logger.Errorf("Failed to create MEM profile file: %v\n", err)
+			return
+		}
+		go func() {
+			<-time.After(60 * time.Second)
+			pprof.WriteHeapProfile(f)
+			f.Close()
+		}()
+	}
+
 	// Create our metrics type
-	stats, err := metrics.New(config.Metrics)
+	stats, err := metrics.New(config.Metrics.Config)
 	if err != nil {
 		logger.Errorf("Metrics error: %v\n", err)
 		return
@@ -141,25 +192,45 @@ func main() {
 	pool.Add(1, in)
 
 	// Create a memory buffer
-	buffer := buffer.NewMemory(config.Buffer)
+	buffer, err := buffer.Construct(config.Buffer, logger, stats)
+	if err != nil {
+		logger.Errorf("Buffer error: %v\n", err)
+		return
+	}
 	butil.Couple(in, buffer)
 	pool.Add(2, buffer)
 
-	// Create broker
-	msgBroker, err := broker.NewFanOut(outputs)
-	if err != nil {
-		logger.Errorf("Output error: %v\n", err)
-		return
+	// Create broker - no need if there is only one output.
+	if len(outputs) != 1 {
+		msgBroker, err := broker.NewFanOut(outputs, stats)
+		if err != nil {
+			logger.Errorf("Output error: %v\n", err)
+			return
+		}
+		butil.Couple(buffer, msgBroker)
+		pool.Add(5, msgBroker)
+	} else {
+		butil.Couple(buffer, outputs[0])
 	}
-	butil.Couple(buffer, msgBroker)
-	pool.Add(5, msgBroker)
 
-	// Defer clean broker, input and output closure
+	// Defer ordered pool clean up.
 	defer func() {
 		if err := pool.Close(time.Second * 20); err != nil {
 			panic(err)
 		}
 	}()
+
+	if config.Metrics.HTTP.Enabled {
+		go func() {
+			mux := http.NewServeMux()
+			mux.HandleFunc(config.Metrics.HTTP.Path, stats.JSONHandler())
+
+			logger.Infof("Serving HTTP metrics at: %s\n", config.Metrics.HTTP.Address+config.Metrics.HTTP.Path)
+			if err := http.ListenAndServe(config.Metrics.HTTP.Address, mux); err != nil {
+				logger.Errorf("Metrics HTTP server failed: %v\n", err)
+			}
+		}()
+	}
 
 	fmt.Fprintf(os.Stderr, "Launching a benthos instance, use CTRL+C to close.\n\n")
 

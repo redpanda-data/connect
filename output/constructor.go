@@ -32,17 +32,15 @@ var constructors = map[string]func(conf Config) (Type, error){}
 
 // Config - The all encompassing configuration struct for all output types.
 type Config struct {
-	Type   string       `json:"type" yaml:"type"`
-	STDOUT STDOUTConfig `json:"stdout" yaml:"stdout"`
-	ZMQ4   *ZMQ4Config  `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Type string      `json:"type" yaml:"type"`
+	ZMQ4 *ZMQ4Config `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:   "stdout",
-		STDOUT: NewSTDOUTConfig(),
-		ZMQ4:   NewZMQ4Config(),
+		Type: "stdout",
+		ZMQ4: NewZMQ4Config(),
 	}
 }
 

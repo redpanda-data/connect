@@ -24,25 +24,41 @@ package buffer
 
 import (
 	"github.com/jeffail/benthos/buffer/blob"
+	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
 )
 
 //--------------------------------------------------------------------------------------------------
 
-func init() {
-	constructors["file"] = NewFile
+var constructors = map[string]func(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error){}
+
+//--------------------------------------------------------------------------------------------------
+
+// Config - The all encompassing configuration struct for all input types.
+type Config struct {
+	Type   string                 `json:"type" yaml:"type"`
+	File   blob.FileBlockConfig   `json:"file" yaml:"file"`
+	Memory blob.MemoryBlockConfig `json:"memory" yaml:"memory"`
+}
+
+// NewConfig - Returns a configuration struct fully populated with default values.
+func NewConfig() Config {
+	return Config{
+		Type:   "memory",
+		File:   blob.NewFileBlockConfig(),
+		Memory: blob.NewMemoryBlockConfig(),
+	}
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// NewFile - Create a buffer held in memory and persisted to file.
-func NewFile(config Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
-	b, err := blob.NewFileBlock(config.File, log.NewModule("buffer.file"), stats)
-	if err != nil {
-		return nil, err
+// Construct - Create an input type based on an input configuration.
+func Construct(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+	if c, ok := constructors[conf.Type]; ok {
+		return c(conf, log, stats)
 	}
-	return NewStackBuffer(b, stats), nil
+	return nil, types.ErrInvalidBufferType
 }
 
 //--------------------------------------------------------------------------------------------------

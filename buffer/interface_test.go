@@ -32,7 +32,7 @@ func TestInterfaces(t *testing.T) {
 		t.Errorf("Mock: nil Type")
 	}
 
-	mem := &Memory{}
+	mem := &StackBuffer{}
 	if Type(mem) == nil {
 		t.Errorf("Memory: nil Type")
 	}

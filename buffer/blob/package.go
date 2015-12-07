@@ -20,29 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package buffer
-
-import (
-	"github.com/jeffail/benthos/buffer/blob"
-	"github.com/jeffail/util/log"
-	"github.com/jeffail/util/metrics"
-)
-
-//--------------------------------------------------------------------------------------------------
-
-func init() {
-	constructors["file"] = NewFile
-}
-
-//--------------------------------------------------------------------------------------------------
-
-// NewFile - Create a buffer held in memory and persisted to file.
-func NewFile(config Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
-	b, err := blob.NewFileBlock(config.File, log.NewModule("buffer.file"), stats)
-	if err != nil {
-		return nil, err
-	}
-	return NewStackBuffer(b, stats), nil
-}
-
-//--------------------------------------------------------------------------------------------------
+/*
+Package blob - Defines methods of serializing and storing message types into binary format.
+*/
+package blob

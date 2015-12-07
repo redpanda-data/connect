@@ -7,7 +7,7 @@ This is currently an experimental project and should not be used for production 
 
 ## Design
 
-The design foundation of benthos is memory mapped files, these allow us to ensure all incoming traffic is commited to file storage without blocking the stream with disk IO for each individual message. All other design complexity is around supporting multiple writers, readers and topics, and potentially offsets also.
+Benthos uses memory mapped files for storing messages in transit with a low latency impact. If benthos crashes with a buffered queue of messages pending then those messages should be preserved and the buffer is resumed where it left off.
 
 ## Install
 

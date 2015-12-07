@@ -38,17 +38,6 @@ func init() {
 
 //--------------------------------------------------------------------------------------------------
 
-// STDINConfig - Configuration for the STDIN input type.
-type STDINConfig struct {
-}
-
-// NewSTDINConfig - Creates a new STDINConfig with default values.
-func NewSTDINConfig() STDINConfig {
-	return STDINConfig{}
-}
-
-//--------------------------------------------------------------------------------------------------
-
 // STDIN - An input type that serves STDIN POST requests.
 type STDIN struct {
 	conf Config

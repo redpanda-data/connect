@@ -28,6 +28,7 @@ import "github.com/jeffail/benthos/types"
 type Type interface {
 	types.Input
 	types.Output
+	types.Closable
 
 	// ErrorsChan - Returns the channel used for returning any accumulated errors. This needs
 	// reading in the same select block where messages are sent as the errors can occur at any time.

@@ -26,7 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jeffail/benthos/buffer/blob"
 	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/util/metrics"
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -37,7 +39,9 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	msgChan := make(chan types.Message)
 	resChan := make(chan types.Response)
 
-	b := NewMemory(int(incr+15) * int(total))
+	b := NewStackBuffer(blob.NewMemoryBlock(blob.MemoryBlockConfig{
+		Limit: int(incr+15) * int(total),
+	}), metrics.DudType{})
 	if err := b.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
@@ -208,7 +212,7 @@ func TestSyncBuffer(t *testing.T) {
 	msgChan := make(chan types.Message)
 	resChan := make(chan types.Response)
 
-	b := NewMemory(1)
+	b := NewStackBuffer(1)
 	if err := b.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
@@ -308,7 +312,7 @@ func TestEmptyMemoryBuffer(t *testing.T) {
 	msgChan := make(chan types.Message)
 	resChan := make(chan types.Response)
 
-	b := NewMemory(1)
+	b := NewStackBuffer(1)
 	if err := b.StartListening(resChan); err != nil {
 		t.Error(err)
 		return

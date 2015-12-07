@@ -51,7 +51,7 @@ type ZMQ4Config struct {
 // NewZMQ4Config - Creates a new ZMQ4Config with default values.
 func NewZMQ4Config() *ZMQ4Config {
 	return &ZMQ4Config{
-		Addresses:     []string{"tcp://localhost:1234"},
+		Addresses:     []string{"tcp://localhost:1235"},
 		SocketType:    "PULL",
 		PollTimeoutMS: 5000,
 	}
