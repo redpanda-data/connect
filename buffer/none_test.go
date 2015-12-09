@@ -23,42 +23,73 @@ THE SOFTWARE.
 package buffer
 
 import (
-	"github.com/jeffail/benthos/buffer/blob"
+	"errors"
+	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/jeffail/benthos/types"
-	"github.com/jeffail/util/log"
-	"github.com/jeffail/util/metrics"
 )
 
 //--------------------------------------------------------------------------------------------------
 
-var constructors = map[string]func(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error){}
+func TestNoneBufferBasic(t *testing.T) {
+	nThreads, nMessages := 5, 100
 
-//--------------------------------------------------------------------------------------------------
-
-// Config - The all encompassing configuration struct for all input types.
-type Config struct {
-	Type   string                 `json:"type" yaml:"type"`
-	File   blob.FileBlockConfig   `json:"file" yaml:"file"`
-	Memory blob.MemoryBlockConfig `json:"memory" yaml:"memory"`
-}
-
-// NewConfig - Returns a configuration struct fully populated with default values.
-func NewConfig() Config {
-	return Config{
-		Type:   "none",
-		File:   blob.NewFileBlockConfig(),
-		Memory: blob.NewMemoryBlockConfig(),
+	empty, err := NewEmpty(NewConfig(), nil, nil)
+	if err != nil {
+		t.Error(err)
+		return
 	}
-}
 
-//--------------------------------------------------------------------------------------------------
+	msgChan := make(chan types.Message)
+	resChan := make(chan types.Response)
 
-// Construct - Create an input type based on an input configuration.
-func Construct(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
-	if c, ok := constructors[conf.Type]; ok {
-		return c(conf, log, stats)
+	if err = empty.StartListening(resChan); err != nil {
+		t.Error(err)
+		return
 	}
-	return nil, types.ErrInvalidBufferType
+	if err = empty.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	go func() {
+		for msg := range empty.MessageChan() {
+			resChan <- types.NewSimpleResponse(errors.New(string(msg.Parts[0])))
+		}
+	}()
+
+	wg := sync.WaitGroup{}
+	wg.Add(nThreads)
+
+	for i := 0; i < nThreads; i++ {
+		go func(nThread int) {
+			for j := 0; j < nMessages; j++ {
+				msg := fmt.Sprintf("Hello World %v %v", nThread, j)
+				msgChan <- types.Message{
+					Parts: [][]byte{[]byte(msg)},
+				}
+				select {
+				case res := <-empty.ResponseChan():
+					if actual := res.Error().Error(); msg != actual {
+						t.Errorf("Wrong result: %v != %v", msg, actual)
+					}
+				case <-time.After(time.Second):
+					t.Error("Timed out waiting for response")
+				}
+			}
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+
+	close(msgChan)
+	if err = empty.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

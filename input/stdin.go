@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -50,7 +52,7 @@ type STDIN struct {
 }
 
 // NewSTDIN - Create a new STDIN input type.
-func NewSTDIN(conf Config) (Type, error) {
+func NewSTDIN(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	s := STDIN{
 		conf:       conf,
 		messages:   make(chan types.Message),

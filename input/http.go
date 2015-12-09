@@ -34,6 +34,8 @@ import (
 	"golang.org/x/net/websocket"
 
 	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -70,7 +72,9 @@ func NewHTTPConfig() HTTPConfig {
 type HTTP struct {
 	running int32
 
-	conf Config
+	conf  Config
+	stats metrics.Aggregator
+	log   *log.Logger
 
 	mux *http.ServeMux
 
@@ -85,10 +89,12 @@ type HTTP struct {
 }
 
 // NewHTTP - Create a new HTTP input type.
-func NewHTTP(conf Config) (Type, error) {
+func NewHTTP(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	h := HTTP{
 		running:          1,
 		conf:             conf,
+		stats:            stats,
+		log:              log.NewModule(".input.http"),
 		mux:              http.NewServeMux(),
 		internalMessages: make(chan [][]byte),
 		messages:         make(chan types.Message),

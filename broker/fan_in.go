@@ -53,13 +53,17 @@ type inputWrapper struct {
 
 // loop - Internal loop of the inputWrapper.
 func (i *inputWrapper) loop() {
-	for in := range i.input.MessageChan() {
+	defer close(i.closed)
+	for {
+		in, open := <-i.input.MessageChan()
+		if !open {
+			return
+		}
 		i.out <- inputWrapperMsg{
 			msg:     in,
 			resChan: i.res,
 		}
 	}
-	close(i.closed)
 }
 
 // waitForClose - Close the inputWrapper, blocks until complete.
@@ -109,6 +113,11 @@ func NewFanIn(inputs []types.Input, stats metrics.Aggregator) (*FanIn, error) {
 			out:    i.inputWrappersChan,
 			closed: make(chan struct{}),
 		}
+		if err := inputs[n].StartListening(i.inputWrappers[n].res); err != nil {
+			return nil, err
+		}
+	}
+	for n := range inputs {
 		go i.inputWrappers[n].loop()
 	}
 

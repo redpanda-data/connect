@@ -1,5 +1,5 @@
-input:
-  type: zmq4
+inputs:
+- type: zmq4
   zmq4:
     addresses:
       - tcp://*:1234
@@ -11,10 +11,7 @@ outputs:
     addresses:
       - tcp://*:1235
     socket_type: PUSH
-logger:
-  prefix: benthos
-  log_level: INFO
-  add_timestamp: true
+- type: stdout
 buffer:
   type: file
   file:
@@ -22,3 +19,7 @@ buffer:
     file_size: 262144000
     retry_period_ms: 1000
     clean_up: true
+logger:
+  prefix: benthos
+  log_level: INFO
+  add_timestamp: true

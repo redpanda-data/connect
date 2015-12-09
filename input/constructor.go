@@ -22,11 +22,15 @@ THE SOFTWARE.
 
 package input
 
-import "github.com/jeffail/benthos/types"
+import (
+	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
+)
 
 //--------------------------------------------------------------------------------------------------
 
-var constructors = map[string]func(conf Config) (Type, error){}
+var constructors = map[string]func(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error){}
 
 //--------------------------------------------------------------------------------------------------
 
@@ -49,9 +53,9 @@ func NewConfig() Config {
 //--------------------------------------------------------------------------------------------------
 
 // Construct - Create an input type based on an input configuration.
-func Construct(conf Config) (Type, error) {
+func Construct(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	if c, ok := constructors[conf.Type]; ok {
-		return c(conf)
+		return c(conf, log, stats)
 	}
 	return nil, types.ErrInvalidInputType
 }

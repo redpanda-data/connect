@@ -30,6 +30,8 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
 	"github.com/pebbe/zmq4"
 )
 
@@ -63,7 +65,9 @@ func NewZMQ4Config() *ZMQ4Config {
 type ZMQ4 struct {
 	running int32
 
-	conf Config
+	conf  Config
+	stats metrics.Aggregator
+	log   *log.Logger
 
 	socket *zmq4.Socket
 
@@ -74,10 +78,12 @@ type ZMQ4 struct {
 }
 
 // NewZMQ4 - Create a new ZMQ4 input type.
-func NewZMQ4(conf Config) (Type, error) {
+func NewZMQ4(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	z := ZMQ4{
 		running:    1,
 		conf:       conf,
+		stats:      stats,
+		log:        log.NewModule(".input.zmq4"),
 		messages:   make(chan types.Message),
 		responses:  nil,
 		closedChan: make(chan struct{}),
@@ -140,23 +146,27 @@ func (z *ZMQ4) loop() {
 			polled, err := poller.Poll(pollTimeout)
 			if err == nil && len(polled) == 1 {
 				if data, err = z.socket.RecvMessageBytes(0); err != nil {
-					_ = err
-					// TODO: propagate errors, input type should have error channel.
+					z.stats.Incr("input.zmq4.receive.error", 1)
+					z.log.Errorf("Failed to receive message bytes: %v\n", err)
 				}
 			} else if err != nil {
-				_ = err
+				z.stats.Incr("input.zmq4.poll.error", 1)
+				z.log.Errorf("Failed to poll zmq sockets: %v\n", err)
 				data = nil
 			}
 		}
 
 		// If bytes are read then try and propagate.
 		if data != nil {
+			start := time.Now()
 			z.messages <- types.Message{Parts: data}
 			res, open := <-z.responses
 			if !open {
 				atomic.StoreInt32(&z.running, 0)
 			} else if res.Error() == nil {
 				data = nil
+				z.stats.Timing("input.zmq4.timing", int(time.Since(start)))
+				z.stats.Incr("input.zmq4.count", 1)
 			}
 		}
 	}

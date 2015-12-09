@@ -28,7 +28,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime/pprof"
 	"syscall"
 	"time"
@@ -42,48 +41,47 @@ import (
 	"github.com/jeffail/util"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
-	"github.com/jeffail/util/path"
 )
 
 //--------------------------------------------------------------------------------------------------
 
-// HTTPMetConf - HTTP endpoint config values for metrics exposure.
-type HTTPMetConf struct {
+// HTTPMetConfig - HTTP endpoint config values for metrics exposure.
+type HTTPMetConfig struct {
 	Enabled bool   `json:"enabled" yaml:"enabled"`
 	Address string `json:"address" yaml:"address"`
 	Path    string `json:"path" yaml:"path"`
 }
 
-// MetConf - Adds some custom fields to our metrics config.
-type MetConf struct {
+// MetConfig - Adds some custom fields to our metrics config.
+type MetConfig struct {
 	Config metrics.Config `json:"config" yaml:"config"`
-	HTTP   HTTPMetConf    `json:"http" yaml:"http"`
+	HTTP   HTTPMetConfig  `json:"http" yaml:"http"`
 }
 
 // Config - The benthos configuration struct.
 type Config struct {
-	Input   input.Config     `json:"input" yaml:"input"`
+	Inputs  []input.Config   `json:"inputs" yaml:"inputs"`
 	Outputs []output.Config  `json:"outputs" yaml:"outputs"`
-	Logger  log.LoggerConfig `json:"logger" yaml:"logger"`
-	Metrics MetConf          `json:"metrics" yaml:"metrics"`
 	Buffer  buffer.Config    `json:"buffer" yaml:"buffer"`
+	Logger  log.LoggerConfig `json:"logger" yaml:"logger"`
+	Metrics MetConfig        `json:"metrics" yaml:"metrics"`
 }
 
 // NewConfig - Returns a new configuration with default values.
 func NewConfig() Config {
 	return Config{
-		Input:   input.NewConfig(),
+		Inputs:  []input.Config{input.NewConfig()},
 		Outputs: []output.Config{output.NewConfig()},
+		Buffer:  buffer.NewConfig(),
 		Logger:  log.DefaultLoggerConfig(),
-		Metrics: MetConf{
+		Metrics: MetConfig{
 			Config: metrics.NewConfig(),
-			HTTP: HTTPMetConf{
+			HTTP: HTTPMetConfig{
 				Enabled: true,
 				Address: "localhost:8040",
 				Path:    "/stats",
 			},
 		},
-		Buffer: buffer.NewConfig(),
 	}
 }
 
@@ -100,42 +98,28 @@ func main() {
 	// A list of default config paths to check for if not explicitly defined
 	defaultPaths := []string{}
 
-	/* If we manage to get the path of our executable then we want to try and find config files
-	 * relative to that path, we always check from the parent folder since we assume benthos is
-	 * stored within the bin folder.
-	 */
-	if executablePath, err := path.BinaryPath(); err == nil {
-		defaultPaths = append(defaultPaths, filepath.Join(executablePath, "..", "config.yaml"))
-		defaultPaths = append(defaultPaths, filepath.Join(executablePath, "..", "config", "benthos.yaml"))
-		defaultPaths = append(defaultPaths, filepath.Join(executablePath, "..", "config.json"))
-		defaultPaths = append(defaultPaths, filepath.Join(executablePath, "..", "config", "benthos.json"))
-	}
-
-	defaultPaths = append(defaultPaths, []string{
-		filepath.Join(".", "benthos.yaml"),
-		filepath.Join(".", "benthos.json"),
-		"/etc/benthos.yaml",
-		"/etc/benthos.json",
-		"/etc/benthos/config.yaml",
-		"/etc/benthos/config.json",
-	}...)
-
 	// Load configuration etc
 	if !util.Bootstrap(&config, defaultPaths...) {
 		return
 	}
 
 	// Logging and stats aggregation
-	// Note: Only log to Stderr if one of our outputs is stdout
 	var logger *log.Logger
+
+	// Note: Only log to Stderr if one of our outputs is stdout
+	haveStdout := false
 	for _, outConf := range config.Outputs {
 		if outConf.Type == "stdout" {
-			logger = log.NewLogger(os.Stderr, config.Logger)
-		} else {
-			logger = log.NewLogger(os.Stdout, config.Logger)
+			haveStdout = true
 		}
 	}
+	if haveStdout {
+		logger = log.NewLogger(os.Stderr, config.Logger)
+	} else {
+		logger = log.NewLogger(os.Stdout, config.Logger)
+	}
 
+	// If cpu profiling is enabled.
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)
 		if err != nil {
@@ -146,6 +130,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	// If mem profiling is enabled.
 	if *memProfile != "" {
 		f, err := os.Create(*memProfile)
 		if err != nil {
@@ -167,10 +152,20 @@ func main() {
 	}
 	defer stats.Close()
 
+	// Create a pool, this helps manage ordered closure of all pipeline components.
 	pool := butil.NewClosablePool()
 
-	// Create outputs
+	// Create pipeline
+	inputs := []types.Input{}
 	outputs := []types.Output{}
+
+	// Create a buffer
+	buf, err := buffer.Construct(config.Buffer, logger, stats)
+	if err != nil {
+		logger.Errorf("Buffer error: %v\n", err)
+		return
+	}
+	pool.Add(3, buf)
 
 	// For each configured output
 	for _, outConf := range config.Outputs {
@@ -183,34 +178,41 @@ func main() {
 		}
 	}
 
-	// Create input and input channel
-	in, err := input.Construct(config.Input)
-	if err != nil {
-		logger.Errorf("Input error: %v\n", err)
-		return
+	// For each configured input
+	for _, inConf := range config.Inputs {
+		if in, err := input.Construct(inConf, logger, stats); err == nil {
+			inputs = append(inputs, in)
+			pool.Add(1, in)
+		} else {
+			logger.Errorf("Input error: %v\n", err)
+			return
+		}
 	}
-	pool.Add(1, in)
 
-	// Create a memory buffer
-	buffer, err := buffer.Construct(config.Buffer, logger, stats)
-	if err != nil {
-		logger.Errorf("Buffer error: %v\n", err)
-		return
-	}
-	butil.Couple(in, buffer)
-	pool.Add(2, buffer)
-
-	// Create broker - no need if there is only one output.
+	// Create fan-out broker for outputs if there is more than one.
 	if len(outputs) != 1 {
 		msgBroker, err := broker.NewFanOut(outputs, stats)
 		if err != nil {
 			logger.Errorf("Output error: %v\n", err)
 			return
 		}
-		butil.Couple(buffer, msgBroker)
+		butil.Couple(buf, msgBroker)
 		pool.Add(5, msgBroker)
 	} else {
-		butil.Couple(buffer, outputs[0])
+		butil.Couple(buf, outputs[0])
+	}
+
+	// Create fan-in broker for inputs if there is more than one.
+	if len(inputs) != 1 {
+		msgBroker, err := broker.NewFanIn(inputs, stats)
+		if err != nil {
+			logger.Errorf("Input error: %v\n", err)
+			return
+		}
+		butil.Couple(msgBroker, buf)
+		pool.Add(2, msgBroker)
+	} else {
+		butil.Couple(inputs[0], buf)
 	}
 
 	// Defer ordered pool clean up.
