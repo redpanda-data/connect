@@ -22,7 +22,12 @@ THE SOFTWARE.
 
 package types
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
+
+//--------------------------------------------------------------------------------------------------
 
 // Errors used throughout the codebase
 var (
@@ -42,3 +47,18 @@ var (
 	ErrBadMessageBytes = errors.New("serialised message bytes were in unexpected format")
 	ErrBlockCorrupted  = errors.New("serialised messages block was in unexpected format")
 )
+
+//--------------------------------------------------------------------------------------------------
+
+// ErrUnexpectedHTTPRes - Error returned when an HTTP request returned an unexpected response.
+type ErrUnexpectedHTTPRes struct {
+	Code int
+	S    string
+}
+
+// Error - Returns the Error string.
+func (e ErrUnexpectedHTTPRes) Error() string {
+	return fmt.Sprintf("HTTP request returned unexpected response code (%v): %v", e.Code, e.S)
+}
+
+//--------------------------------------------------------------------------------------------------

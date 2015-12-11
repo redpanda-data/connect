@@ -35,7 +35,7 @@ import (
 )
 
 var logConfig = log.LoggerConfig{
-	LogLevel: "ALL",
+	LogLevel: "NONE",
 }
 
 func cleanUpFileBlockDir(dir string) {

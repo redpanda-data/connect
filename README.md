@@ -1,5 +1,4 @@
-Benthos
-=======
+![Benthos](icon.png "Benthos")
 
 Benthos is a service for piping large volumes of data from one source to another with low latency and file based persistence in case of service outages or back pressure further on the pipeline.
 

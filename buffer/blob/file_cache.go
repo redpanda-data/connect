@@ -209,11 +209,13 @@ func (f *FileCache) IsCached(index int) bool {
 // RemoveAll - Removes all indexes from the cache as well as the tracker.
 func (f *FileCache) RemoveAll() error {
 	for _, c := range f.cache {
+		c.m.Flush()
 		c.m.Unmap()
 		c.f.Close()
 	}
-
 	f.cache = map[int]CachedMMap{}
+
+	f.tracker.m.Flush()
 	f.tracker.m.Unmap()
 	f.tracker.f.Close()
 
@@ -224,6 +226,7 @@ func (f *FileCache) RemoveAll() error {
 // Remove - Removes the index from our cache, the file is NOT deleted.
 func (f *FileCache) Remove(index int) error {
 	if c, ok := f.cache[index]; ok {
+		c.m.Flush()
 		c.m.Unmap()
 		c.f.Close()
 

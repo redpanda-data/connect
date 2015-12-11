@@ -30,6 +30,8 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
 	"github.com/pebbe/zmq4"
 )
 
@@ -61,6 +63,9 @@ func NewZMQ4Config() *ZMQ4Config {
 type ZMQ4 struct {
 	running int32
 
+	log   *log.Logger
+	stats metrics.Aggregator
+
 	conf Config
 
 	socket *zmq4.Socket
@@ -73,9 +78,11 @@ type ZMQ4 struct {
 }
 
 // NewZMQ4 - Create a new ZMQ4 input type.
-func NewZMQ4(conf Config) (Type, error) {
+func NewZMQ4(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	z := ZMQ4{
 		running:      1,
+		log:          log.NewModule(".output.zmq4"),
+		stats:        stats,
 		conf:         conf,
 		messages:     nil,
 		responseChan: make(chan types.Response),

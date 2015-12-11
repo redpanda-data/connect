@@ -64,7 +64,6 @@ func main() {
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
-	var avg, total, tally int64
 	readChan := make(chan int64)
 
 	var running int32 = 1
@@ -73,22 +72,30 @@ func main() {
 		timer := time.NewTicker(time.Second)
 		defer timer.Stop()
 
-		secTally := 0
+		var total, tally, avg, secTotal, secTally, secAvg int64
 
 		for atomic.LoadInt32(&running) == 1 {
 			select {
 			case t := <-readChan:
 				total = total + t
 				tally = tally + 1
-				secTally = secTally + 1
 				avg = total / tally
+				secTotal = secTotal + t
+				secTally = secTally + 1
+				secAvg = secTotal / secTally
 			case <-timer.C:
 				fmt.Printf("+\n")
-				fmt.Printf("| Average    : %v\n", time.Duration(avg))
-				fmt.Printf("| Tally      : %v\n", tally)
-				fmt.Printf("| Per second : %v\n", secTally)
+				fmt.Printf("| TICK\n")
+				fmt.Printf("| Average : %v\n", time.Duration(secAvg))
+				fmt.Printf("| Count   : %v\n", secTally)
+				fmt.Printf("|\n")
+				fmt.Printf("| TOTAL\n")
+				fmt.Printf("| Average : %v\n", time.Duration(avg))
+				fmt.Printf("| Count   : %v\n", tally)
 				fmt.Printf("+\n\n")
+				secTotal = 0
 				secTally = 0
+				secAvg = 0
 			}
 		}
 		wg.Done()

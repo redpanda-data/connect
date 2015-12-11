@@ -169,7 +169,7 @@ func main() {
 
 	// For each configured output
 	for _, outConf := range config.Outputs {
-		if out, err := output.Construct(outConf); err == nil {
+		if out, err := output.Construct(outConf, logger, stats); err == nil {
 			outputs = append(outputs, out)
 			pool.Add(10, out)
 		} else {

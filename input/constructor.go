@@ -36,17 +36,17 @@ var constructors = map[string]func(conf Config, log *log.Logger, stats metrics.A
 
 // Config - The all encompassing configuration struct for all input types.
 type Config struct {
-	Type string      `json:"type" yaml:"type"`
-	HTTP HTTPConfig  `json:"http" yaml:"http"`
-	ZMQ4 *ZMQ4Config `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Type       string           `json:"type" yaml:"type"`
+	HTTPServer HTTPServerConfig `json:"http_server" yaml:"http_server"`
+	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type: "http",
-		HTTP: NewHTTPConfig(),
-		ZMQ4: NewZMQ4Config(),
+		Type:       "http",
+		HTTPServer: NewHTTPServerConfig(),
+		ZMQ4:       NewZMQ4Config(),
 	}
 }
 

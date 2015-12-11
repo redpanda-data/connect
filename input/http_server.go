@@ -41,13 +41,13 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["http"] = NewHTTP
+	constructors["http_server"] = NewHTTPServer
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// HTTPConfig - Configuration for the HTTP input type.
-type HTTPConfig struct {
+// HTTPServerConfig - Configuration for the HTTPServer input type.
+type HTTPServerConfig struct {
 	Address   string `json:"address" yaml:"address"`
 	RootPath  string `json:"root_path" yaml:"root_path"`
 	POSTPath  string `json:"POST_path" yaml:"POST_path"`
@@ -55,9 +55,9 @@ type HTTPConfig struct {
 	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
 }
 
-// NewHTTPConfig - Creates a new HTTPConfig with default values.
-func NewHTTPConfig() HTTPConfig {
-	return HTTPConfig{
+// NewHTTPServerConfig - Creates a new HTTPServerConfig with default values.
+func NewHTTPServerConfig() HTTPServerConfig {
+	return HTTPServerConfig{
 		Address:   "localhost:8080",
 		RootPath:  "/",
 		POSTPath:  "/post",
@@ -68,8 +68,8 @@ func NewHTTPConfig() HTTPConfig {
 
 //--------------------------------------------------------------------------------------------------
 
-// HTTP - An input type that serves HTTP POST requests.
-type HTTP struct {
+// HTTPServer - An input type that serves HTTPServer POST requests.
+type HTTPServer struct {
 	running int32
 
 	conf  Config
@@ -88,9 +88,9 @@ type HTTP struct {
 	sync.Mutex
 }
 
-// NewHTTP - Create a new HTTP input type.
-func NewHTTP(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
-	h := HTTP{
+// NewHTTPServer - Create a new HTTPServer input type.
+func NewHTTPServer(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+	h := HTTPServer{
 		running:          1,
 		conf:             conf,
 		stats:            stats,
@@ -102,11 +102,11 @@ func NewHTTP(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, erro
 		closedChan:       make(chan struct{}),
 	}
 
-	h.mux.HandleFunc(path.Join(h.conf.HTTP.RootPath, h.conf.HTTP.POSTPath), h.postHandler)
-	h.mux.Handle(path.Join(h.conf.HTTP.RootPath, h.conf.HTTP.WSPath), websocket.Handler(h.wsHandler))
+	h.mux.HandleFunc(path.Join(h.conf.HTTPServer.RootPath, h.conf.HTTPServer.POSTPath), h.postHandler)
+	h.mux.Handle(path.Join(h.conf.HTTPServer.RootPath, h.conf.HTTPServer.WSPath), websocket.Handler(h.wsHandler))
 
 	go func() {
-		err := http.ListenAndServe(h.conf.HTTP.Address, h.mux)
+		err := http.ListenAndServe(h.conf.HTTPServer.Address, h.mux)
 		panic(err)
 	}()
 
@@ -115,15 +115,7 @@ func NewHTTP(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, erro
 
 //--------------------------------------------------------------------------------------------------
 
-type response struct {
-	Error string `json:"error"`
-}
-
-type request struct {
-	Parts []string `json:"parts"`
-}
-
-func (h *HTTP) postHandler(w http.ResponseWriter, r *http.Request) {
+func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
 		return
@@ -133,7 +125,7 @@ func (h *HTTP) postHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	var req request
+	var req types.HTTPMessage
 	err = json.Unmarshal(bytes, &req)
 	if err != nil {
 		http.Error(w, "Failed to parse JSON", http.StatusBadRequest)
@@ -149,15 +141,19 @@ func (h *HTTP) postHandler(w http.ResponseWriter, r *http.Request) {
 	defer h.Unlock()
 	select {
 	case h.internalMessages <- msg.Parts:
-	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTP.TimeoutMS)):
+		enc := json.NewEncoder(w)
+		if err = enc.Encode(types.HTTPResponse{}); err != nil {
+			h.log.Errorf("Failed to write out HTTPServer response: %v\n", err)
+		}
+	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 	}
 	return
 }
 
-func (h *HTTP) wsHandler(ws *websocket.Conn) {
+func (h *HTTPServer) wsHandler(ws *websocket.Conn) {
 	for atomic.LoadInt32(&h.running) == 1 {
-		var req request
+		var req types.HTTPMessage
 		if err := websocket.JSON.Receive(ws, &req); err == nil {
 			var msg types.Message
 			msg.Parts = make([][]byte, len(req.Parts))
@@ -168,11 +164,11 @@ func (h *HTTP) wsHandler(ws *websocket.Conn) {
 			h.Lock()
 			select {
 			case h.internalMessages <- msg.Parts:
-				err = websocket.JSON.Send(ws, &response{
+				err = websocket.JSON.Send(ws, &types.HTTPResponse{
 					Error: "",
 				})
-			case <-time.After(time.Millisecond * time.Duration(h.conf.HTTP.TimeoutMS)):
-				err = websocket.JSON.Send(ws, &response{
+			case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
+				err = websocket.JSON.Send(ws, &types.HTTPResponse{
 					Error: "request timed out",
 				})
 			}
@@ -191,7 +187,7 @@ func (h *HTTP) wsHandler(ws *websocket.Conn) {
 
 //--------------------------------------------------------------------------------------------------
 
-func (h *HTTP) loop() {
+func (h *HTTPServer) loop() {
 	defer func() {
 		close(h.messages)
 		close(h.closedChan)
@@ -222,7 +218,7 @@ func (h *HTTP) loop() {
 }
 
 // StartListening - Sets the channel used by the input to validate message receipt.
-func (h *HTTP) StartListening(responses <-chan types.Response) error {
+func (h *HTTPServer) StartListening(responses <-chan types.Response) error {
 	if h.responses != nil {
 		return types.ErrAlreadyStarted
 	}
@@ -232,12 +228,12 @@ func (h *HTTP) StartListening(responses <-chan types.Response) error {
 }
 
 // MessageChan - Returns the messages channel.
-func (h *HTTP) MessageChan() <-chan types.Message {
+func (h *HTTPServer) MessageChan() <-chan types.Message {
 	return h.messages
 }
 
-// CloseAsync - Shuts down the HTTP input and stops processing requests.
-func (h *HTTP) CloseAsync() {
+// CloseAsync - Shuts down the HTTPServer input and stops processing requests.
+func (h *HTTPServer) CloseAsync() {
 	iMsgs := h.internalMessages
 	h.Lock()
 	h.internalMessages = nil
@@ -247,8 +243,8 @@ func (h *HTTP) CloseAsync() {
 	atomic.StoreInt32(&h.running, 0)
 }
 
-// WaitForClose - Blocks until the HTTP input has closed down.
-func (h *HTTP) WaitForClose(timeout time.Duration) error {
+// WaitForClose - Blocks until the HTTPServer input has closed down.
+func (h *HTTPServer) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-h.closedChan:
 	case <-time.After(timeout):

@@ -29,6 +29,8 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -51,7 +53,7 @@ type STDOUT struct {
 }
 
 // NewSTDOUT - Create a new STDOUT output type.
-func NewSTDOUT(conf Config) (Type, error) {
+func NewSTDOUT(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	s := STDOUT{
 		conf:         conf,
 		messages:     nil,
