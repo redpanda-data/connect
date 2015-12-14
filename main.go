@@ -23,12 +23,13 @@ THE SOFTWARE.
 package main
 
 import (
+	_ "net/http/pprof"
+
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime/pprof"
 	"syscall"
 	"time"
 
@@ -87,8 +88,7 @@ func NewConfig() Config {
 
 //--------------------------------------------------------------------------------------------------
 
-var cpuProfile = flag.String("cpuprofile", "", "Write cpu profile to file")
-var memProfile = flag.String("memprofile", "", "Write memory profile to file")
+var profileAddr = flag.String("profile", "", "Provide an HTTP address to host CPU and MEM profiling.")
 
 //--------------------------------------------------------------------------------------------------
 
@@ -119,28 +119,19 @@ func main() {
 		logger = log.NewLogger(os.Stdout, config.Logger)
 	}
 
-	// If cpu profiling is enabled.
-	if *cpuProfile != "" {
-		f, err := os.Create(*cpuProfile)
-		if err != nil {
-			logger.Errorf("Failed to create CPU profile file: %v\n", err)
-			return
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
-	// If mem profiling is enabled.
-	if *memProfile != "" {
-		f, err := os.Create(*memProfile)
-		if err != nil {
-			logger.Errorf("Failed to create MEM profile file: %v\n", err)
-			return
-		}
+	// If profiling is enabled.
+	if *profileAddr != "" {
 		go func() {
-			<-time.After(60 * time.Second)
-			pprof.WriteHeapProfile(f)
-			f.Close()
+			exampleAddr := *profileAddr
+			if (*profileAddr)[0] == ':' {
+				exampleAddr = "localhost" + exampleAddr
+			}
+
+			logger.Infof("Serving profiling at: %s\n", *profileAddr)
+			logger.Infof("To use the profiling tool: `go tool pprof http://%s/debug/pprof/(heap|profile|block|etc)`\n", exampleAddr)
+			if err := http.ListenAndServe(*profileAddr, http.DefaultServeMux); err != nil {
+				logger.Errorf("Failed to spawn HTTP server for profiling: %v\n", err)
+			}
 		}()
 	}
 
@@ -173,7 +164,7 @@ func main() {
 			outputs = append(outputs, out)
 			pool.Add(10, out)
 		} else {
-			logger.Errorf("Output error: %v\n", err)
+			logger.Errorf("Output error (%s): %v\n", outConf.Type, err)
 			return
 		}
 	}
@@ -184,7 +175,7 @@ func main() {
 			inputs = append(inputs, in)
 			pool.Add(1, in)
 		} else {
-			logger.Errorf("Input error: %v\n", err)
+			logger.Errorf("Input error (%s): %v\n", inConf.Type, err)
 			return
 		}
 	}
@@ -206,7 +197,7 @@ func main() {
 	if len(inputs) != 1 {
 		msgBroker, err := broker.NewFanIn(inputs, stats)
 		if err != nil {
-			logger.Errorf("Input error: %v\n", err)
+			logger.Errorf("Broker error: %v\n", err)
 			return
 		}
 		butil.Couple(msgBroker, buf)

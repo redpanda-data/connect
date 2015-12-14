@@ -226,11 +226,16 @@ func (f *FileCache) RemoveAll() error {
 // Remove - Removes the index from our cache, the file is NOT deleted.
 func (f *FileCache) Remove(index int) error {
 	if c, ok := f.cache[index]; ok {
+		delete(f.cache, index)
+
+		// Now we are flushing the cache, this could block so we unlock temporarily.
+		f.L.Unlock()
+		defer f.L.Lock()
+
+		// TODO: What happens if we subsequently opened the same map file during this operation?
 		c.m.Flush()
 		c.m.Unmap()
 		c.f.Close()
-
-		delete(f.cache, index)
 	}
 	return nil
 }
@@ -238,6 +243,11 @@ func (f *FileCache) Remove(index int) error {
 // Delete - Deletes the file for an index.
 func (f *FileCache) Delete(index int) error {
 	p := path.Join(f.config.Path, fmt.Sprintf("mmap_%v", index))
+
+	// This could be a blocking call, and there's no reason to keep the cache locked.
+	f.L.Unlock()
+	defer f.L.Lock()
+
 	return os.Remove(p)
 }
 

@@ -222,13 +222,17 @@ func (f *FileBlock) NextMessage() (types.Message, error) {
 			return types.Message{}, types.ErrTypeClosed
 		}
 
-		// Remove the previous index
-		f.cache.Remove(f.readIndex)
-
 		// If we are meant to delete files as we are done with them
 		if f.config.CleanUp {
 			// The delete is done asynchronously as it has no impact on the reader
-			go f.cache.Delete(f.readIndex)
+			go func(prevIndex int) {
+				f.cache.L.Lock()
+				defer f.cache.L.Unlock()
+
+				// Remove and delete the previous index
+				f.cache.Remove(prevIndex)
+				f.cache.Delete(prevIndex)
+			}(f.readIndex)
 		}
 
 		f.readIndex = f.readIndex + 1
@@ -298,7 +302,13 @@ func (f *FileBlock) PushMessage(msg types.Message) int {
 		// If the read index is behind then don't keep our writer block in cache.
 		if f.readIndex < f.writeIndex-1 {
 			// But do not block while doing so.
-			f.cache.Remove(f.writeIndex)
+			go func(prevIndex int) {
+				f.cache.L.Lock()
+				defer f.cache.L.Unlock()
+
+				// Remove the previous index from cache.
+				f.cache.Remove(prevIndex)
+			}(f.writeIndex)
 		}
 
 		// Set counters

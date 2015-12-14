@@ -44,7 +44,7 @@ type Config struct {
 // NewConfig - Returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:       "http",
+		Type:       "http_server",
 		HTTPServer: NewHTTPServerConfig(),
 		ZMQ4:       NewZMQ4Config(),
 	}
