@@ -40,6 +40,15 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
+func indexToBytes(index int32) (b [4]byte) {
+	b[0] = byte(index >> 24)
+	b[1] = byte(index >> 16)
+	b[2] = byte(index >> 8)
+	b[3] = byte(index)
+
+	return b
+}
+
 func main() {
 	var address string
 	flag.StringVar(&address, "addr", "tcp://localhost:1234", "Address of the benthos server")
@@ -84,7 +93,7 @@ func main() {
 		dataBlob[i] = byte(rand.Int())
 	}
 
-	var running int32 = 1
+	var running, index int32 = 1, 1
 
 	go func() {
 		for atomic.LoadInt32(&running) == 1 {
@@ -94,10 +103,14 @@ func main() {
 				panic(err)
 			}
 
-			_, err = pushSocket.SendMessage(nowBytes, dataBlob)
+			indexBytes := indexToBytes(index)
+
+			_, err = pushSocket.SendMessage(nowBytes, indexBytes[0:4], dataBlob)
 			if err != nil {
 				panic(err)
 			}
+
+			index++
 		}
 		wg.Done()
 	}()

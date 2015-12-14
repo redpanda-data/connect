@@ -38,6 +38,17 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
+func bytesToIndex(b []byte) (index int32) {
+	if len(b) <= 3 {
+		return index
+	}
+	index = int32(b[0])<<24 |
+		int32(b[1])<<16 |
+		int32(b[2])<<8 |
+		int32(b[3])
+	return index
+}
+
 func main() {
 	var address string
 	flag.StringVar(&address, "addr", "tcp://localhost:1235", "Address of the benthos server")
@@ -66,7 +77,7 @@ func main() {
 
 	readChan := make(chan int64)
 
-	var running int32 = 1
+	var running, index, dataLost int32 = 1, 0, 0
 
 	go func() {
 		timer := time.NewTicker(time.Second)
@@ -92,6 +103,10 @@ func main() {
 				fmt.Printf("| TOTAL\n")
 				fmt.Printf("| Average : %v\n", time.Duration(avg))
 				fmt.Printf("| Count   : %v\n", tally)
+				if lost := atomic.LoadInt32(&dataLost); lost != 0 {
+					fmt.Printf("|\n")
+					fmt.Printf("| DATA LOST: %v\n", lost)
+				}
 				fmt.Printf("+\n\n")
 				secTotal = 0
 				secTally = 0
@@ -105,9 +120,18 @@ func main() {
 		for atomic.LoadInt32(&running) == 1 {
 			polled, err := poller.Poll(time.Second)
 			if err == nil && len(polled) == 1 {
-				if bytes, err := pullSocket.RecvMessageBytes(0); err == nil {
+				if msgParts, err := pullSocket.RecvMessageBytes(0); err == nil {
+					if len(msgParts) < 2 {
+						panic(fmt.Errorf("Expected message of at least two parts: %v", len(msgParts)))
+					}
+					i := bytesToIndex(msgParts[1])
+					if i != 1 && index != 0 && i != index+1 {
+						// fmt.Printf("DATALOSS: rcvd: %v, exp: %v, act: %v\n", i, index, msgParts[1])
+						atomic.AddInt32(&dataLost, 1)
+					}
+					index = i
 					t := time.Now()
-					if err = t.UnmarshalBinary(bytes[0]); err == nil {
+					if err = t.UnmarshalBinary(msgParts[0]); err == nil {
 						readChan <- int64(time.Since(t))
 					} else {
 						panic(err)

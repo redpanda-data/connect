@@ -151,7 +151,7 @@ func (z *ZMQ4) loop() {
 				}
 			} else if err != nil {
 				z.stats.Incr("input.zmq4.poll.error", 1)
-				z.log.Errorf("Failed to poll zmq sockets: %v\n", err)
+				z.log.Warnf("ZMQ socket poll error: %v\n", err)
 				data = nil
 			}
 		}
