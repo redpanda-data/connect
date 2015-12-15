@@ -25,8 +25,10 @@ THE SOFTWARE.
 package input
 
 import (
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util/log"
@@ -39,6 +41,8 @@ var logConfig = log.LoggerConfig{
 }
 
 func TestZMQ4Basic(t *testing.T) {
+	nTestLoops := 1000
+
 	conf := NewConfig()
 	conf.ZMQ4.Addresses = []string{"tcp://*:1234"}
 	conf.ZMQ4.SocketType = "PULL"
@@ -72,5 +76,26 @@ func TestZMQ4Basic(t *testing.T) {
 	if err = socket.Connect("tcp://localhost:1234"); err != nil {
 		t.Error(err)
 		return
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+		if _, err = socket.Send(testStr, 0); err != nil {
+			t.Error(err)
+			return
+		}
+		select {
+		case resMsg := <-z.MessageChan():
+			if res := string(resMsg.Parts[0]); res != testStr {
+				t.Errorf("Wrong result, %v != %v", resMsg, res)
+			}
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for message")
+		}
+		select {
+		case resChan <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for response")
+		}
 	}
 }
