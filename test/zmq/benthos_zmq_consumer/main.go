@@ -115,7 +115,7 @@ func main() {
 				fmt.Printf("| Msg Count   : %v\n", tally)
 				if lost := atomic.LoadInt32(&dataLost); lost != 0 {
 					fmt.Printf("|\n")
-					fmt.Printf("| DATA LOST: %v\n", lost)
+					fmt.Printf("| DATA LOST   : %v\n", lost)
 				}
 				fmt.Printf("+\n\n")
 				secTotal = 0
@@ -137,7 +137,7 @@ func main() {
 					}
 					i := bytesToIndex(msgParts[1])
 					if i != 1 && index != 0 && i != index+1 {
-						// fmt.Printf("DATALOSS: rcvd: %v, exp: %v, act: %v\n", i, index, msgParts[1])
+						fmt.Printf("| DATA LOSS   : rcvd %v, exp %v, actual %v\n", i, index, msgParts[1])
 						atomic.AddInt32(&dataLost, 1)
 					}
 					index = i
