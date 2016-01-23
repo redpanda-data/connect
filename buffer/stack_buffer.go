@@ -78,9 +78,11 @@ func (m *StackBuffer) inputLoop() {
 		if !open {
 			return
 		}
-		backlog := m.buffer.PushMessage(msg)
-		m.stats.Gauge("buffer.backlog", backlog)
-		m.responsesOut <- types.NewSimpleResponse(nil)
+		backlog, err := m.buffer.PushMessage(msg)
+		if err == nil {
+			m.stats.Gauge("buffer.backlog", backlog)
+		}
+		m.responsesOut <- types.NewSimpleResponse(err)
 	}
 }
 
@@ -118,7 +120,7 @@ func (m *StackBuffer) outputLoop() {
 			}
 			if res.Error() == nil {
 				msg = types.Message{}
-				backlog := m.buffer.ShiftMessage()
+				backlog, _ := m.buffer.ShiftMessage()
 				m.stats.Gauge("buffer.backlog", backlog)
 			} else {
 				if _, exists := errMap[res.Error()]; !exists {

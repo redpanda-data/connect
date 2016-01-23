@@ -29,13 +29,13 @@ import "github.com/jeffail/benthos/types"
 // MessageStack - Represents a method of stacking messages for persistence or fast buffering.
 type MessageStack interface {
 	// ShiftMessage - Remove the oldest message from the stack. Returns the backlog in bytes.
-	ShiftMessage() int
+	ShiftMessage() (int, error)
 
 	// NextMessage - Read the oldest message, the message is preserved until ShiftMessage is called.
 	NextMessage() (types.Message, error)
 
 	// PushMessage - Add a new message to the stack. Returns the backlog in bytes.
-	PushMessage(types.Message) int
+	PushMessage(types.Message) (int, error)
 
 	// Close - Close the MessageStack so that blocked readers become unblocked.
 	Close()

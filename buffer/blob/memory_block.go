@@ -113,7 +113,7 @@ func (m *MemoryBlock) Close() {
 }
 
 // ShiftMessage - Removes the last message from the block. Returns the backlog count.
-func (m *MemoryBlock) ShiftMessage() int {
+func (m *MemoryBlock) ShiftMessage() (int, error) {
 	m.cond.L.Lock()
 	defer m.cond.L.Unlock()
 	defer m.cond.Broadcast()
@@ -131,7 +131,7 @@ func (m *MemoryBlock) ShiftMessage() int {
 	// Set new read from position to next message start.
 	m.readFrom = m.readFrom + int(msgSize) + 4
 
-	return m.backlog()
+	return m.backlog(), nil
 }
 
 // NextMessage - Reads the next message, this call blocks until there's something to read.
@@ -174,7 +174,7 @@ func (m *MemoryBlock) NextMessage() (types.Message, error) {
 }
 
 // PushMessage - Pushes a new message onto the block, returns the backlog count.
-func (m *MemoryBlock) PushMessage(msg types.Message) int {
+func (m *MemoryBlock) PushMessage(msg types.Message) (int, error) {
 	m.cond.L.Lock()
 	defer m.cond.L.Unlock()
 	defer m.cond.Broadcast()
@@ -182,9 +182,16 @@ func (m *MemoryBlock) PushMessage(msg types.Message) int {
 	block := msg.Bytes()
 	index := m.writtenTo
 
+	if len(block)+4 > m.config.Limit {
+		return 0, types.ErrMessageTooLarge
+	}
+
 	// Block while the reader is catching up.
 	for m.readFrom > index && m.readFrom <= index+len(block)+4 {
 		m.cond.Wait()
+	}
+	if m.closed {
+		return 0, types.ErrTypeClosed
 	}
 
 	// If we can't fit our next message in the remainder of the buffer we will loop back to index 0.
@@ -193,8 +200,11 @@ func (m *MemoryBlock) PushMessage(msg types.Message) int {
 	if len(block)+4+index > m.config.Limit {
 
 		// If the reader is currently at 0 then we need to avoid looping over it.
-		for m.readFrom <= len(block)+4 {
+		for m.readFrom <= len(block)+4 && !m.closed {
 			m.cond.Wait()
+		}
+		if m.closed {
+			return 0, types.ErrTypeClosed
 		}
 		for i := index; i < m.config.Limit && i < index+4; i++ {
 			m.block[i] = byte(0)
@@ -203,8 +213,11 @@ func (m *MemoryBlock) PushMessage(msg types.Message) int {
 	}
 
 	// Block again if the reader is catching up.
-	for m.readFrom > index && m.readFrom <= index+len(block)+4 {
+	for m.readFrom > index && m.readFrom <= index+len(block)+4 && !m.closed {
 		m.cond.Wait()
+	}
+	if m.closed {
+		return 0, types.ErrTypeClosed
 	}
 
 	writeMessageSize(m.block, index, len(block))
@@ -213,7 +226,7 @@ func (m *MemoryBlock) PushMessage(msg types.Message) int {
 	// Move writtenTo index ahead. If writtenTo becomes m.config.Limit we want it to wrap back to 0
 	m.writtenTo = (index + len(block) + 4) % m.config.Limit
 
-	return m.backlog()
+	return m.backlog(), nil
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -163,10 +163,16 @@ func (z *ZMQ4) loop() {
 			res, open := <-z.responses
 			if !open {
 				atomic.StoreInt32(&z.running, 0)
-			} else if res.Error() == nil {
-				data = nil
+			} else if resErr := res.Error(); resErr == nil {
 				z.stats.Timing("input.zmq4.timing", int(time.Since(start)))
 				z.stats.Incr("input.zmq4.count", 1)
+				data = nil
+			} else if resErr == types.ErrMessageTooLarge {
+				z.stats.Incr("input.zmq4.send.rejected", 1)
+				z.log.Errorf("ZMQ4 message was rejected: %v\nMessage content: %v\n", resErr, data)
+				data = nil
+			} else {
+				z.stats.Incr("input.zmq4.send.error", 1)
 			}
 		}
 	}

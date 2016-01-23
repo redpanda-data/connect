@@ -176,7 +176,7 @@ func (f *FileBlock) Close() {
 }
 
 // ShiftMessage - Removes the last message from the block. Returns the backlog count.
-func (f *FileBlock) ShiftMessage() int {
+func (f *FileBlock) ShiftMessage() (int, error) {
 	f.cache.L.Lock()
 	defer f.cache.L.Unlock()
 	defer f.cache.Broadcast()
@@ -186,7 +186,7 @@ func (f *FileBlock) ShiftMessage() int {
 		msgSize := readMessageSize(f.cache.Get(f.readIndex), f.readFrom)
 		f.readFrom = f.readFrom + int(msgSize) + 4
 	}
-	return f.backlog()
+	return f.backlog(), nil
 }
 
 // NextMessage - Reads the next message, this call blocks until there's something to read.
@@ -264,7 +264,7 @@ func (f *FileBlock) NextMessage() (types.Message, error) {
 }
 
 // PushMessage - Pushes a new message onto the block, returns the backlog count.
-func (f *FileBlock) PushMessage(msg types.Message) int {
+func (f *FileBlock) PushMessage(msg types.Message) (int, error) {
 	f.cache.L.Lock()
 	defer f.cache.L.Unlock()
 	defer f.cache.Broadcast()
@@ -273,11 +273,15 @@ func (f *FileBlock) PushMessage(msg types.Message) int {
 	blob := msg.Bytes()
 	index := f.writtenTo
 
+	if len(blob)+4 > f.config.FileSize {
+		return 0, types.ErrMessageTooLarge
+	}
+
 	for !f.cache.IsCached(f.writeIndex) && !f.closed {
 		f.cache.Wait()
 	}
 	if f.closed {
-		return 0
+		return 0, types.ErrTypeClosed
 	}
 
 	block := f.cache.Get(f.writeIndex)
@@ -296,7 +300,7 @@ func (f *FileBlock) PushMessage(msg types.Message) int {
 			f.cache.Wait()
 		}
 		if f.closed {
-			return 0
+			return 0, types.ErrTypeClosed
 		}
 
 		// If the read index is behind then don't keep our writer block in cache.
@@ -327,7 +331,7 @@ func (f *FileBlock) PushMessage(msg types.Message) int {
 	// Move writtenTo ahead.
 	f.writtenTo = (index + len(blob) + 4)
 
-	return f.backlog()
+	return f.backlog(), nil
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -72,14 +72,17 @@ func TestFileBlockBasic(t *testing.T) {
 	defer block.Close()
 
 	for i := 0; i < n; i++ {
-		block.PushMessage(types.Message{
+		if _, err := block.PushMessage(types.Message{
 			Parts: [][]byte{
 				[]byte("hello"),
 				[]byte("world"),
 				[]byte("12345"),
 				[]byte(fmt.Sprintf("test%v", i)),
 			},
-		})
+		}); err != nil {
+			t.Error(err)
+			return
+		}
 	}
 
 	for i := 0; i < n; i++ {
@@ -93,7 +96,10 @@ func TestFileBlockBasic(t *testing.T) {
 		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
-		block.ShiftMessage()
+		if _, err := block.ShiftMessage(); err != nil {
+			t.Error(err)
+			return
+		}
 	}
 }
 
@@ -117,32 +123,44 @@ func TestFileBlockBacklogCounter(t *testing.T) {
 	}
 	defer block.Close()
 
-	block.PushMessage(types.Message{
-		Parts: [][]byte{[]byte("1234")},
-	}) // 4 bytes + 4 bytes
+	if _, err := block.PushMessage(types.Message{
+		Parts: [][]byte{[]byte("1234")}, // 4 bytes + 4 bytes
+	}); err != nil {
+		t.Error(err)
+		return
+	}
 
 	if expected, actual := 16, block.backlog(); expected != actual {
 		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
 	}
 
-	block.PushMessage(types.Message{
+	if _, err := block.PushMessage(types.Message{
 		Parts: [][]byte{
 			[]byte("1234"),
 			[]byte("1234"),
-		},
-	}) // ( 4 bytes + 4 bytes ) * 2
+		}, // ( 4 bytes + 4 bytes ) * 2
+	}); err != nil {
+		t.Error(err)
+		return
+	}
 
 	if expected, actual := 40, block.backlog(); expected != actual {
 		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
 	}
 
-	block.ShiftMessage()
+	if _, err := block.ShiftMessage(); err != nil {
+		t.Error(err)
+		return
+	}
 
 	if expected, actual := 24, block.backlog(); expected != actual {
 		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
 	}
 
-	block.ShiftMessage()
+	if _, err := block.ShiftMessage(); err != nil {
+		t.Error(err)
+		return
+	}
 
 	if expected, actual := 0, block.backlog(); expected != actual {
 		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
@@ -177,12 +195,15 @@ func TestFileBlockLoopingRandom(t *testing.T) {
 			for k := range b {
 				b[k] = '0'
 			}
-			block.PushMessage(types.Message{
+			if _, err := block.PushMessage(types.Message{
 				Parts: [][]byte{
 					b,
 					[]byte(fmt.Sprintf("test%v", i)),
 				},
-			})
+			}); err != nil {
+				t.Error(err)
+				return
+			}
 		}
 
 		for i := 0; i < n; i++ {
@@ -196,7 +217,10 @@ func TestFileBlockLoopingRandom(t *testing.T) {
 			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[1]); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 			}
-			block.ShiftMessage()
+			if _, err := block.ShiftMessage(); err != nil {
+				t.Error(err)
+				return
+			}
 		}
 	}
 }
@@ -224,14 +248,17 @@ func TestFileBlockMultiFiles(t *testing.T) {
 	defer block.Close()
 
 	for i := 0; i < n; i++ {
-		block.PushMessage(types.Message{
+		if _, err := block.PushMessage(types.Message{
 			Parts: [][]byte{
 				[]byte("hello"),
 				[]byte("world"),
 				[]byte("12345"),
 				[]byte(fmt.Sprintf("test%v", i)),
 			},
-		})
+		}); err != nil {
+			t.Error(err)
+			return
+		}
 	}
 
 	for i := 0; i < n; i++ {
@@ -245,7 +272,10 @@ func TestFileBlockMultiFiles(t *testing.T) {
 		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
-		block.ShiftMessage()
+		if _, err := block.ShiftMessage(); err != nil {
+			t.Error(err)
+			return
+		}
 	}
 }
 
@@ -272,14 +302,17 @@ func TestFileBlockRecoverFiles(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		block.PushMessage(types.Message{
+		if _, err := block.PushMessage(types.Message{
 			Parts: [][]byte{
 				[]byte("hello"),
 				[]byte("world"),
 				[]byte("12345"),
 				[]byte(fmt.Sprintf("test%v", i)),
 			},
-		})
+		}); err != nil {
+			t.Error(err)
+			return
+		}
 	}
 
 	// Close down any handlers we have.
@@ -303,8 +336,39 @@ func TestFileBlockRecoverFiles(t *testing.T) {
 		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
-		block.ShiftMessage()
+		if _, err := block.ShiftMessage(); err != nil {
+			t.Error(err)
+			return
+		}
 	}
 
 	block.Close()
+}
+
+func TestFileBlockRejectLargeMessage(t *testing.T) {
+	dir, err := ioutil.TempDir("", "benthos_test_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer cleanUpFileBlockDir(dir)
+
+	tMsg := types.Message{Parts: make([][]byte, 1)}
+	tMsg.Parts[0] = []byte("hello world this message is too long!")
+
+	conf := NewFileBlockConfig()
+	conf.FileSize = 10
+	conf.Path = dir
+
+	// Write a load of data
+	block, err := NewFileBlock(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = block.PushMessage(tMsg)
+	if exp, actual := types.ErrMessageTooLarge, err; exp != actual {
+		t.Errorf("Unexpected error: %v != %v", exp, actual)
+	}
 }

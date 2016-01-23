@@ -50,6 +50,13 @@ var (
 
 //--------------------------------------------------------------------------------------------------
 
+// Buffer errors
+var (
+	ErrMessageTooLarge = errors.New("message body larger than buffer space")
+)
+
+//--------------------------------------------------------------------------------------------------
+
 // ErrUnexpectedHTTPRes - Error returned when an HTTP request returned an unexpected response.
 type ErrUnexpectedHTTPRes struct {
 	Code int
