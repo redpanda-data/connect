@@ -28,31 +28,18 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/jeffail/benthos/test/util"
+	"github.com/jeffail/benthos/types"
 	"github.com/pebbe/zmq4"
 )
 
 //--------------------------------------------------------------------------------------------------
-
-func bytesToIndex(b []byte) (index int32) {
-	if len(b) <= 3 {
-		return index
-	}
-	index = int32(b[0])<<24 |
-		int32(b[1])<<16 |
-		int32(b[2])<<8 |
-		int32(b[3])
-	return index
-}
-
-type msgStat struct {
-	latency int64 // Time taken for a message to leave the producer and be received by the consumer.
-	nBytes  int64 // Number of bytes carried in the message.
-}
 
 func main() {
 	var address string
@@ -72,94 +59,43 @@ func main() {
 	if nil != err {
 		panic(err)
 	}
-	pullSocket.Connect(address)
+
+	if strings.Contains(address, "*") {
+		err = pullSocket.Bind(address)
+	} else {
+		err = pullSocket.Connect(address)
+	}
+	if nil != err {
+		panic(err)
+	}
 
 	poller := zmq4.NewPoller()
 	poller.Add(pullSocket, zmq4.POLLIN)
 
 	wg := sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(1)
 
-	readChan := make(chan msgStat)
+	benchChan := util.StartPrintingBenchmarks(time.Second, 0)
+	<-time.After(time.Second)
 
-	var running, index, dataLost int32 = 1, 0, 0
-
-	go func() {
-		timer := time.NewTicker(time.Second)
-		defer timer.Stop()
-
-		var total, tally, avg, secTotal, secTally, secNBytes, secAvg int64
-
-		for atomic.LoadInt32(&running) == 1 {
-			select {
-			case stat := <-readChan:
-				// Total stats
-				total = total + stat.latency
-				tally = tally + 1
-				avg = total / tally
-
-				// Per second stats
-				secTotal = secTotal + stat.latency
-				secTally = secTally + 1
-				secNBytes = secNBytes + stat.nBytes
-				secAvg = secTotal / secTally
-			case <-timer.C:
-				fmt.Printf("+\n")
-				fmt.Printf("| THIS SECOND\n")
-				fmt.Printf("| Avg Latency : %v\n", time.Duration(secAvg))
-				fmt.Printf("| Byte Rate   : %.6f MB/s\n", float64(secNBytes)/1048576)
-				fmt.Printf("| Msg Count   : %v\n", secTally)
-				fmt.Printf("|\n")
-				fmt.Printf("| TOTAL\n")
-				fmt.Printf("| Avg Latency : %v\n", time.Duration(avg))
-				fmt.Printf("| Msg Count   : %v\n", tally)
-				if lost := atomic.LoadInt32(&dataLost); lost != 0 {
-					fmt.Printf("|\n")
-					fmt.Printf("| DATA LOST   : %v\n", lost)
-				}
-				fmt.Printf("+\n\n")
-				secTotal = 0
-				secTally = 0
-				secNBytes = 0
-				secAvg = 0
-			}
-		}
-		wg.Done()
-	}()
-
+	var running int32 = 1
 	go func() {
 		for atomic.LoadInt32(&running) == 1 {
 			polled, err := poller.Poll(time.Second)
 			if err == nil && len(polled) == 1 {
 				if msgParts, err := pullSocket.RecvMessageBytes(0); err == nil {
-					if len(msgParts) < 2 {
-						panic(fmt.Errorf("Expected message of at least two parts: %v", len(msgParts)))
-					}
-					i := bytesToIndex(msgParts[1])
-					if i != 1 && index != 0 && i != index+1 {
-						fmt.Printf("| DATA LOSS   : rcvd %v, exp %v, actual %v\n", i, index, msgParts[1])
-						atomic.AddInt32(&dataLost, 1)
-					}
-					index = i
-					t := time.Now()
-					if err = t.UnmarshalBinary(msgParts[0]); err == nil {
-						var totalBytes int64
-						for _, part := range msgParts {
-							totalBytes = totalBytes + int64(len(part))
-						}
-						readChan <- msgStat{
-							latency: int64(time.Since(t)),
-							nBytes:  totalBytes,
-						}
+					if bench, err := util.BenchFromMessage(types.Message{Parts: msgParts}); err == nil {
+						benchChan <- bench
 					} else {
-						panic(err)
+						fmt.Printf("| Error: Wrong message format: %v\n", err)
 					}
 				} else {
 					panic(err)
 				}
 			}
 		}
-		close(readChan)
+		close(benchChan)
+		<-time.After(time.Second) // Wait for one final tick.
 		wg.Done()
 	}()
 

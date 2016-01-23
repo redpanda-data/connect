@@ -30,24 +30,17 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/jeffail/benthos/test/util"
 	"github.com/pebbe/zmq4"
 )
 
 //--------------------------------------------------------------------------------------------------
-
-func indexToBytes(index int32) (b [4]byte) {
-	b[0] = byte(index >> 24)
-	b[1] = byte(index >> 16)
-	b[2] = byte(index >> 8)
-	b[3] = byte(index)
-
-	return b
-}
 
 func main() {
 	var address string
@@ -83,7 +76,14 @@ func main() {
 	if nil != err {
 		panic(err)
 	}
-	pushSocket.Connect(address)
+	if strings.Contains(address, "*") {
+		err = pushSocket.Bind(address)
+	} else {
+		err = pushSocket.Connect(address)
+	}
+	if nil != err {
+		panic(err)
+	}
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -93,23 +93,21 @@ func main() {
 		dataBlob[i] = byte(rand.Int())
 	}
 
-	var running, index int32 = 1, 1
+	var running, index int32 = 1, 0
 
 	go func() {
 		for atomic.LoadInt32(&running) == 1 {
 			<-time.After(interval)
-			nowBytes, err := time.Now().MarshalBinary()
+			msg := util.NewBenchMessage(index, dataBlob)
+			parts := []interface{}{
+				msg.Parts[0],
+				msg.Parts[1],
+				msg.Parts[2],
+			}
+			_, err = pushSocket.SendMessage(parts...)
 			if err != nil {
 				panic(err)
 			}
-
-			indexBytes := indexToBytes(index)
-
-			_, err = pushSocket.SendMessage(nowBytes, indexBytes[0:4], dataBlob)
-			if err != nil {
-				panic(err)
-			}
-
 			index++
 		}
 		wg.Done()

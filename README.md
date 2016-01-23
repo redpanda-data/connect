@@ -27,11 +27,15 @@ Obviously the main goal of Benthos is to be stable, low-latency and high through
 
 Using these tools on my laptop shows promising results, but it would be useful to get some more meaningful third party benchmarks to publish.
 
-A snippet of the results thus far from my laptop using the ZMQ4 input, file persisted buffer and ZMQ4 output configuration:
+A snippet of the results thus far from my laptop using the ZMQ4 input, file persisted buffer, ZMQ4 output configuration and with messages of size 5000 bytes:
 
-| Message size | Stream interval | Avg. Latency |
-|-------------:|----------------:|-------------:|
-|         5000 |            10ms |        800us |
+| Stream Interval | Avg. Latency (us) | Msg. Rate (msgs/s) | Byte Rate (MB/s) |
+|----------------:|------------------:|-------------------:|-----------------:|
+|           100ms |              1196 |               8.31 |             0.04 |
+|            10ms |              1529 |              76.87 |             0.37 |
+|             1ms |              1148 |             491.62 |             2.35 |
+|           100us |              1778 |            1754.60 |             8.40 |
+|            10us |             26223 |            2807.33 |            13.44 |
 
 ## Install
 
