@@ -27,6 +27,13 @@ type Message struct {
 	Parts [][]byte `json:"parts"`
 }
 
+// NewMessage - Initializes an empty message.
+func NewMessage() Message {
+	return Message{
+		Parts: [][]byte{},
+	}
+}
+
 // Reserve  bytes for our length counter (4 * 8 = 32 bit)
 var intLen uint32 = 4
 

@@ -23,15 +23,11 @@ THE SOFTWARE.
 package input
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"net/http"
-	"path"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"golang.org/x/net/websocket"
 
 	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util/log"
@@ -49,9 +45,7 @@ func init() {
 // HTTPServerConfig - Configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
 	Address   string `json:"address" yaml:"address"`
-	RootPath  string `json:"root_path" yaml:"root_path"`
-	POSTPath  string `json:"POST_path" yaml:"POST_path"`
-	WSPath    string `json:"websocket_path" yaml:"websocket_path"`
+	Path      string `json:"path" yaml:"path"`
 	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
 }
 
@@ -59,9 +53,7 @@ type HTTPServerConfig struct {
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
 		Address:   "localhost:8080",
-		RootPath:  "/",
-		POSTPath:  "/post",
-		WSPath:    "/ws",
+		Path:      "/post",
 		TimeoutMS: 5000,
 	}
 }
@@ -102,8 +94,7 @@ func NewHTTPServer(conf Config, log *log.Logger, stats metrics.Aggregator) (Type
 		closedChan:       make(chan struct{}),
 	}
 
-	h.mux.HandleFunc(path.Join(h.conf.HTTPServer.RootPath, h.conf.HTTPServer.POSTPath), h.postHandler)
-	h.mux.Handle(path.Join(h.conf.HTTPServer.RootPath, h.conf.HTTPServer.WSPath), websocket.Handler(h.wsHandler))
+	h.mux.HandleFunc(h.conf.HTTPServer.Path, h.postHandler)
 
 	go func() {
 		err := http.ListenAndServe(h.conf.HTTPServer.Address, h.mux)
@@ -125,64 +116,27 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	var req types.HTTPMessage
-	err = json.Unmarshal(bytes, &req)
-	if err != nil {
-		http.Error(w, "Failed to parse JSON", http.StatusBadRequest)
-		return
-	}
+
 	var msg types.Message
-	msg.Parts = make([][]byte, len(req.Parts))
-	for i := range req.Parts {
-		msg.Parts[i] = []byte(req.Parts[i])
+
+	if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
+		msg, err = types.FromBytes(bytes)
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+	} else {
+		msg.Parts = [][]byte{bytes}
 	}
 
 	h.Lock()
 	defer h.Unlock()
 	select {
 	case h.internalMessages <- msg.Parts:
-		enc := json.NewEncoder(w)
-		if err = enc.Encode(types.HTTPResponse{}); err != nil {
-			h.log.Errorf("Failed to write out HTTPServer response: %v\n", err)
-		}
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 	}
 	return
-}
-
-func (h *HTTPServer) wsHandler(ws *websocket.Conn) {
-	for atomic.LoadInt32(&h.running) == 1 {
-		var req types.HTTPMessage
-		if err := websocket.JSON.Receive(ws, &req); err == nil {
-			var msg types.Message
-			msg.Parts = make([][]byte, len(req.Parts))
-			for i := range req.Parts {
-				msg.Parts[i] = []byte(req.Parts[i])
-			}
-
-			h.Lock()
-			select {
-			case h.internalMessages <- msg.Parts:
-				err = websocket.JSON.Send(ws, &types.HTTPResponse{
-					Error: "",
-				})
-			case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
-				err = websocket.JSON.Send(ws, &types.HTTPResponse{
-					Error: "request timed out",
-				})
-			}
-			h.Unlock()
-
-			if err != nil {
-				return
-			}
-		} else {
-			// Websocket is closed, exit handler.
-			return
-		}
-	}
-	ws.Close()
 }
 
 //--------------------------------------------------------------------------------------------------

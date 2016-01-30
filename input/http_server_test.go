@@ -1,5 +1,3 @@
-// +build ZMQ4
-
 /*
 Copyright (c) 2014 Ashley Jeffs
 
@@ -25,7 +23,9 @@ THE SOFTWARE.
 package input
 
 import (
+	"bytes"
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -33,18 +33,16 @@ import (
 	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
-	"github.com/pebbe/zmq4"
 )
 
-func TestZMQ4Basic(t *testing.T) {
+func TestHTTPBasic(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
-	conf.ZMQ4.Addresses = []string{"tcp://*:1234"}
-	conf.ZMQ4.SocketType = "PULL"
-	conf.ZMQ4.PollTimeoutMS = 1000
+	conf.HTTPServer.Address = "localhost:1234"
+	conf.HTTPServer.Path = "/testpost"
 
-	z, err := NewZMQ4(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPServer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -52,36 +50,61 @@ func TestZMQ4Basic(t *testing.T) {
 
 	resChan := make(chan types.Response)
 
-	if err = z.StartListening(resChan); err != nil {
+	if err = h.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
 	}
 
-	ctx, err := zmq4.NewContext()
-	if nil != err {
-		t.Error(err)
-		return
-	}
+	<-time.After(time.Second)
 
-	socket, err := ctx.NewSocket(zmq4.PUSH)
-	if nil != err {
-		t.Error(err)
-		return
-	}
-
-	if err = socket.Connect("tcp://localhost:1234"); err != nil {
-		t.Error(err)
-		return
+	// Test both single and multipart messages.
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+		// Send it as single part
+		if res, err := http.Post(
+			"http://localhost:1234/testpost",
+			"application/octet-stream",
+			bytes.NewBuffer([]byte(testStr)),
+		); err != nil {
+			t.Error(err)
+			return
+		} else if res.StatusCode != 200 {
+			t.Errorf("Wrong error code returned: %v", res.StatusCode)
+			return
+		}
+		select {
+		case resMsg := <-h.MessageChan():
+			if res := string(resMsg.Parts[0]); res != testStr {
+				t.Errorf("Wrong result, %v != %v", resMsg, res)
+			}
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for message")
+		}
+		select {
+		case resChan <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for response")
+		}
 	}
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		if _, err = socket.Send(testStr, 0); err != nil {
+		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
+
+		// Send it as multi part
+		if res, err := http.Post(
+			"http://localhost:1234/testpost",
+			"application/x-benthos-multipart",
+			bytes.NewBuffer(testMsg.Bytes()),
+		); err != nil {
 			t.Error(err)
+			return
+		} else if res.StatusCode != 200 {
+			t.Errorf("Wrong error code returned: %v", res.StatusCode)
 			return
 		}
 		select {
-		case resMsg := <-z.MessageChan():
+		case resMsg := <-h.MessageChan():
 			if res := string(resMsg.Parts[0]); res != testStr {
 				t.Errorf("Wrong result, %v != %v", resMsg, res)
 			}

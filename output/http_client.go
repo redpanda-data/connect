@@ -24,14 +24,9 @@ package output
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
-	"io/ioutil"
 	"net/http"
 	"sync/atomic"
 	"time"
-
-	"golang.org/x/net/websocket"
 
 	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util/log"
@@ -48,19 +43,17 @@ func init() {
 
 // HTTPClientConfig - Configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	URL        string `json:"url" yaml:"url"`
-	Websockets bool   `json:"websockets" yaml:"websockets"`
-	TimeoutMS  int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS    int64  `json:"retry_period" yaml:"retry_period"`
+	URL       string `json:"url" yaml:"url"`
+	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	RetryMS   int64  `json:"retry_period" yaml:"retry_period"`
 }
 
 // NewHTTPClientConfig - Creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		URL:        "localhost:8081/post",
-		Websockets: false,
-		TimeoutMS:  5000,
-		RetryMS:    1000,
+		URL:       "localhost:8081/post",
+		TimeoutMS: 5000,
+		RetryMS:   1000,
 	}
 }
 
@@ -98,138 +91,48 @@ func NewHTTPClient(conf Config, log *log.Logger, stats metrics.Aggregator) (Type
 
 //--------------------------------------------------------------------------------------------------
 
-// wsLoop - Internal loop brokers incoming messages to output pipe through websockets.
-func (h *HTTPClient) wsLoop() {
-	var client *websocket.Conn
-
-	for atomic.LoadInt32(&h.running) == 1 {
-		func() {
-			var err error
-
-			if client == nil {
-				client, err = websocket.Dial(h.conf.HTTPClient.URL, "", "")
-				if err != nil {
-					client = nil
-
-					h.log.Errorf("Websocket dial failed: %v\n", err)
-					h.stats.Incr("output.http_client.ws.dial.error", 1)
-
-					// If we failed then wait the configured retry period.
-					if h.conf.HTTPClient.RetryMS > 0 {
-						<-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond)
-					}
-
-					return
-				}
-			}
-
-			msg, open := <-h.messages
-			// If the messages chan is closed we do not close ourselves as it can replaced.
-			if !open {
-				atomic.StoreInt32(&h.running, 0)
-				h.messages = nil
-				return
-			}
-
-			defer func() {
-				h.responseChan <- types.NewSimpleResponse(err)
-				if err != nil {
-					h.log.Errorf("Websocket send failed: %v\n", err)
-					h.stats.Incr("output.http_client.post.error", 1)
-				}
-			}()
-
-			// Create HTTP message
-			httpMsg := types.HTTPMessage{
-				Parts: make([]string, len(msg.Parts)),
-			}
-			for i := range msg.Parts {
-				httpMsg.Parts[i] = string(msg.Parts[i])
-			}
-
-			// Send message
-			if err = websocket.JSON.Send(client, httpMsg); err != nil {
-				return
-			}
-
-			// Read response
-			var resMsg types.HTTPResponse
-			if err = websocket.JSON.Receive(client, &resMsg); err != nil {
-				return
-			}
-			if len(resMsg.Error) != 0 {
-				err = errors.New(resMsg.Error)
-			}
-		}()
-	}
-
-	close(h.responseChan)
-	close(h.closedChan)
-}
-
 // postLoop - Internal loop brokers incoming messages to output pipe through POST requests.
 func (h *HTTPClient) postLoop() {
 	for atomic.LoadInt32(&h.running) == 1 {
-		func() {
-			msg, open := <-h.messages
-			// If the messages chan is closed we do not close ourselves as it can replaced.
-			if !open {
-				atomic.StoreInt32(&h.running, 0)
-				h.messages = nil
-				return
-			}
+		msg, open := <-h.messages
+		if !open {
+			atomic.StoreInt32(&h.running, 0)
+			h.messages = nil
+			break
+		}
 
-			var err error
-			defer func() {
-				h.responseChan <- types.NewSimpleResponse(err)
-				if err != nil {
-					h.log.Errorf("POST request failed: %v\n", err)
-					h.stats.Incr("output.http_client.post.error", 1)
+		// POST message
+		var res *http.Response
+		var err error
+		if len(msg.Parts) == 1 {
+			res, err = http.Post(
+				h.conf.HTTPClient.URL,
+				"application/octet-stream",
+				bytes.NewBuffer(msg.Parts[0]),
+			)
+		} else {
+			res, err = http.Post(
+				h.conf.HTTPClient.URL,
+				"application/x-benthos-multipart",
+				bytes.NewBuffer(msg.Bytes()),
+			)
+		}
 
-					// If we failed then wait the configured retry period.
-					if h.conf.HTTPClient.RetryMS > 0 {
-						<-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond)
-					}
-				}
-			}()
+		// Check status code
+		if err == nil && res.StatusCode != 200 {
+			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+		}
 
-			// Create HTTP message
-			httpMsg := types.HTTPMessage{
-				Parts: make([]string, len(msg.Parts)),
-			}
-			for i := range msg.Parts {
-				httpMsg.Parts[i] = string(msg.Parts[i])
-			}
+		h.responseChan <- types.NewSimpleResponse(err)
+		if err != nil {
+			h.log.Errorf("POST request failed: %v\n", err)
+			h.stats.Incr("output.http_client.post.error", 1)
 
-			// Create body
-			var body []byte
-			if body, err = json.Marshal(httpMsg); err != nil {
-				return
+			// If we failed then wait the configured retry period.
+			if h.conf.HTTPClient.RetryMS > 0 {
+				<-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond)
 			}
-
-			// POST message
-			var res *http.Response
-			if res, err = http.Post(h.conf.HTTPClient.URL, "application/json", bytes.NewReader(body)); err != nil {
-				return
-			}
-
-			// Check status code
-			if res.StatusCode != 200 {
-				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
-			}
-
-			// Read response body
-			if body, err = ioutil.ReadAll(res.Body); err != nil {
-				return
-			}
-			var resMsg types.HTTPResponse
-			if err = json.Unmarshal(body, &resMsg); err != nil {
-				return
-			}
-			if len(resMsg.Error) != 0 {
-				err = errors.New(resMsg.Error)
-			}
-		}()
+		}
 	}
 
 	close(h.responseChan)
@@ -242,11 +145,7 @@ func (h *HTTPClient) StartReceiving(msgs <-chan types.Message) error {
 		return types.ErrAlreadyStarted
 	}
 	h.messages = msgs
-	if h.conf.HTTPClient.Websockets {
-		go h.wsLoop()
-	} else {
-		go h.postLoop()
-	}
+	go h.postLoop()
 	return nil
 }
 

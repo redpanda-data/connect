@@ -1,0 +1,23 @@
+inputs:
+- type: http_server
+  http_server:
+    address: "localhost:1234"
+    path: "/post"
+    timeout_ms: 1000
+outputs:
+- type: http_client
+  http_client:
+    url: "http://localhost:1235/post"
+    timeout_ms: 1000
+    retry_period: 1000
+buffer:
+  type: file
+  file:
+    directory: "./tmp"
+    file_size: 200000000
+    retry_period_ms: 1000
+    clean_up: true
+logger:
+  prefix: benthos
+  log_level: INFO
+  add_timestamp: true
