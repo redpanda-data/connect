@@ -30,7 +30,11 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-var constructors = map[string]func(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error){}
+var constructors = map[string]func(
+	conf Config,
+	log *log.Logger,
+	stats metrics.Aggregator,
+) (Type, error){}
 
 //--------------------------------------------------------------------------------------------------
 

@@ -11,7 +11,7 @@ outputs:
     timeout_ms: 1000
     retry_period: 1000
 buffer:
-  type: file
+  type: mmap_file
   file:
     directory: "./tmp"
     file_size: 200000000

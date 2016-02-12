@@ -44,6 +44,8 @@ func init() {
 type STDIN struct {
 	conf Config
 
+	log *log.Logger
+
 	messages  chan types.Message
 	responses <-chan types.Response
 
@@ -55,6 +57,7 @@ type STDIN struct {
 func NewSTDIN(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	s := STDIN{
 		conf:       conf,
+		log:        log,
 		messages:   make(chan types.Message),
 		responses:  nil,
 		closedChan: make(chan struct{}),
@@ -72,6 +75,8 @@ func (s *STDIN) loop() {
 
 	var bytes [][]byte
 	var msgChan chan<- types.Message
+
+	s.log.Infoln("Receiving messages through STDIN")
 
 	running, responsePending := true, false
 	for running {

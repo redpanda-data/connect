@@ -88,7 +88,10 @@ func NewConfig() Config {
 
 //--------------------------------------------------------------------------------------------------
 
-var profileAddr = flag.String("profile", "", "Provide an HTTP address to host CPU and MEM profiling.")
+var profileAddr = flag.String(
+	"profile", "",
+	"Provide an HTTP address to host CPU and MEM profiling.",
+)
 
 //--------------------------------------------------------------------------------------------------
 
@@ -128,7 +131,8 @@ func main() {
 			}
 
 			logger.Infof("Serving profiling at: %s\n", *profileAddr)
-			logger.Infof("To use the profiling tool: `go tool pprof http://%s/debug/pprof/(heap|profile|block|etc)`\n", exampleAddr)
+			logger.Infof("To use the profiling tool: "+
+				"`go tool pprof http://%s/debug/pprof/(heap|profile|block|etc)`\n", exampleAddr)
 			if err := http.ListenAndServe(*profileAddr, http.DefaultServeMux); err != nil {
 				logger.Errorf("Failed to spawn HTTP server for profiling: %v\n", err)
 			}

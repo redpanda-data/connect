@@ -140,6 +140,14 @@ func (z *ZMQ4) loop() {
 
 	var data [][]byte
 
+	for _, address := range z.conf.ZMQ4.Addresses {
+		if strings.Contains(address, "*") {
+			z.log.Infof("Receiving ZMQ4 messages from bound address: %s\n", address)
+		} else {
+			z.log.Infof("Receiving ZMQ4 messages from connected address: %s\n", address)
+		}
+	}
+
 	for atomic.LoadInt32(&z.running) == 1 {
 		// If no bytes then read a message
 		if data == nil {

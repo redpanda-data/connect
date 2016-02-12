@@ -63,6 +63,7 @@ Create a default configuration file:
 
 ```shell
 benthos --print-yaml > config.yaml
+benthos --print-json > config.json
 ```
 
 The configuration file should contain a section for inputs, outputs and a buffer. The inputs and outputs sections may contain one or more entries, where each entry will define a unique input or output.

@@ -43,17 +43,19 @@ func init() {
 
 // HTTPClientConfig - Configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	URL       string `json:"url" yaml:"url"`
-	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS   int64  `json:"retry_period" yaml:"retry_period"`
+	URL            string `json:"url" yaml:"url"`
+	TimeoutMS      int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	RetryMS        int64  `json:"retry_period" yaml:"retry_period"`
+	FullForwarding bool   `json:"full_contents_forwarding" yaml:"full_contents_forwarding"`
 }
 
 // NewHTTPClientConfig - Creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		URL:       "localhost:8081/post",
-		TimeoutMS: 5000,
-		RetryMS:   1000,
+		URL:            "localhost:8081/post",
+		TimeoutMS:      5000,
+		RetryMS:        1000,
+		FullForwarding: true,
 	}
 }
 
@@ -91,8 +93,10 @@ func NewHTTPClient(conf Config, log *log.Logger, stats metrics.Aggregator) (Type
 
 //--------------------------------------------------------------------------------------------------
 
-// postLoop - Internal loop brokers incoming messages to output pipe through POST requests.
-func (h *HTTPClient) postLoop() {
+// loop - Internal loop brokers incoming messages to output pipe through POST requests.
+func (h *HTTPClient) loop() {
+	h.log.Infof("Sending HTTP Post messages to: %s\n", h.conf.HTTPClient.URL)
+
 	for atomic.LoadInt32(&h.running) == 1 {
 		msg, open := <-h.messages
 		if !open {
@@ -104,6 +108,7 @@ func (h *HTTPClient) postLoop() {
 		// POST message
 		var res *http.Response
 		var err error
+
 		if len(msg.Parts) == 1 {
 			res, err = http.Post(
 				h.conf.HTTPClient.URL,
@@ -145,7 +150,7 @@ func (h *HTTPClient) StartReceiving(msgs <-chan types.Message) error {
 		return types.ErrAlreadyStarted
 	}
 	h.messages = msgs
-	go h.postLoop()
+	go h.loop()
 	return nil
 }
 

@@ -136,6 +136,14 @@ func getZMQType(t string) (zmq4.Type, error) {
 
 // loop - Internal loop brokers incoming messages to output pipe, does not use select.
 func (z *ZMQ4) loop() {
+	for _, address := range z.conf.ZMQ4.Addresses {
+		if strings.Contains(address, "*") {
+			z.log.Infof("Sending ZMQ4 messages to bound address: %v\n", address)
+		} else {
+			z.log.Infof("Sending ZMQ4 messages to connected address: %v\n", address)
+		}
+	}
+
 	for atomic.LoadInt32(&z.running) == 1 {
 		msg, open := <-z.messages
 		if !open {

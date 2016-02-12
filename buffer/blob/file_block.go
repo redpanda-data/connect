@@ -94,6 +94,8 @@ func NewFileBlock(config FileBlockConfig, log *log.Logger, stats metrics.Aggrega
 		return nil, err
 	}
 
+	f.logger.Infof("Storing messages to file in: %s\n", f.config.Path)
+
 	go f.cacheManagerLoop(&f.readIndex)
 	go f.cacheManagerLoop(&f.writeIndex)
 

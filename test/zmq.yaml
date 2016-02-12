@@ -12,7 +12,7 @@ outputs:
       - tcp://*:1235
     socket_type: PUSH
 buffer:
-  type: file
+  type: mmap_file
   file:
     directory: "./tmp"
     file_size: 200000000

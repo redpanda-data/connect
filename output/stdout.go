@@ -45,6 +45,8 @@ func init() {
 type STDOUT struct {
 	conf Config
 
+	log *log.Logger
+
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
@@ -56,6 +58,7 @@ type STDOUT struct {
 func NewSTDOUT(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	s := STDOUT{
 		conf:         conf,
+		log:          log,
 		messages:     nil,
 		responseChan: make(chan types.Response),
 		closedChan:   make(chan struct{}),
@@ -69,6 +72,8 @@ func NewSTDOUT(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, er
 
 // loop - Internal loop brokers incoming messages to output pipe.
 func (s *STDOUT) loop() {
+	s.log.Infoln("Sending messages through STDOUT")
+
 	running := true
 	for running {
 		select {

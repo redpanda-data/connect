@@ -44,17 +44,19 @@ func init() {
 
 // HTTPServerConfig - Configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
-	Address   string `json:"address" yaml:"address"`
-	Path      string `json:"path" yaml:"path"`
-	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	Address        string `json:"address" yaml:"address"`
+	Path           string `json:"path" yaml:"path"`
+	TimeoutMS      int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	FullForwarding bool   `json:"full_contents_forwarding" yaml:"full_contents_forwarding"`
 }
 
 // NewHTTPServerConfig - Creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
-		Address:   "localhost:8080",
-		Path:      "/post",
-		TimeoutMS: 5000,
+		Address:        "localhost:8080",
+		Path:           "/post",
+		TimeoutMS:      5000,
+		FullForwarding: false,
 	}
 }
 
@@ -149,6 +151,11 @@ func (h *HTTPServer) loop() {
 
 	var data [][]byte
 	var open bool
+
+	h.log.Infof(
+		"Receiving HTTP Post messages at: %s\n",
+		h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
+	)
 
 	for atomic.LoadInt32(&h.running) == 1 {
 		if data == nil {

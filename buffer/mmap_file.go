@@ -31,14 +31,14 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["file"] = NewFile
+	constructors["mmap_file"] = NewMmapFile
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// NewFile - Create a buffer held in memory and persisted to file.
-func NewFile(config Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
-	b, err := blob.NewFileBlock(config.File, log.NewModule("buffer.file"), stats)
+// NewMmapFile - Create a buffer held in memory and persisted to file through memory map.
+func NewMmapFile(config Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+	b, err := blob.NewFileBlock(config.File, log.NewModule("buffer.mmap_file"), stats)
 	if err != nil {
 		return nil, err
 	}
