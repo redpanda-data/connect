@@ -23,8 +23,10 @@ THE SOFTWARE.
 package output
 
 import (
+	"bufio"
 	"bytes"
 	"net/http"
+	"net/url"
 	"sync/atomic"
 	"time"
 
@@ -55,7 +57,7 @@ func NewHTTPClientConfig() HTTPClientConfig {
 		URL:            "localhost:8081/post",
 		TimeoutMS:      5000,
 		RetryMS:        1000,
-		FullForwarding: true,
+		FullForwarding: false,
 	}
 }
 
@@ -110,12 +112,27 @@ func (h *HTTPClient) loop() {
 		var err error
 
 		if len(msg.Parts) == 1 {
-			res, err = http.Post(
-				h.conf.HTTPClient.URL,
-				"application/octet-stream",
-				bytes.NewBuffer(msg.Parts[0]),
-			)
+			if h.conf.HTTPClient.FullForwarding {
+				var req *http.Request
+				req, err = http.ReadRequest(bufio.NewReader(bytes.NewBuffer(msg.Parts[0])))
+				if err == nil {
+					req.URL, err = url.Parse(h.conf.HTTPClient.URL)
+				}
+				if err == nil {
+					var client http.Client
+					res, err = client.Do(req)
+				}
+			} else {
+				res, err = http.Post(
+					h.conf.HTTPClient.URL,
+					"application/octet-stream",
+					bytes.NewBuffer(msg.Parts[0]),
+				)
+			}
 		} else {
+			if h.conf.HTTPClient.FullForwarding {
+				h.log.Warnln("Dispatching multipart message, cannot send with full forwarding")
+			}
 			res, err = http.Post(
 				h.conf.HTTPClient.URL,
 				"application/x-benthos-multipart",
@@ -128,15 +145,15 @@ func (h *HTTPClient) loop() {
 			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
 		}
 
-		h.responseChan <- types.NewSimpleResponse(err)
 		if err != nil {
 			h.log.Errorf("POST request failed: %v\n", err)
 			h.stats.Incr("output.http_client.post.error", 1)
+		}
+		h.responseChan <- types.NewSimpleResponse(err)
 
+		if err != nil && h.conf.HTTPClient.RetryMS > 0 {
 			// If we failed then wait the configured retry period.
-			if h.conf.HTTPClient.RetryMS > 0 {
-				<-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond)
-			}
+			<-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond)
 		}
 	}
 

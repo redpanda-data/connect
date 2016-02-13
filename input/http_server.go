@@ -23,6 +23,7 @@ THE SOFTWARE.
 package input
 
 import (
+	"bytes"
 	"io/ioutil"
 	"net/http"
 	"sync"
@@ -113,22 +114,35 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
 		return
 	}
-	bytes, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
 
 	var msg types.Message
 
-	if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
-		msg, err = types.FromBytes(bytes)
-		if err != nil {
+	if h.conf.HTTPServer.FullForwarding {
+		var buf bytes.Buffer
+		if err := r.WriteProxy(&buf); err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
+			h.log.Warnf("Request read failed: %v\n", err)
 			return
 		}
+		msg.Parts = [][]byte{buf.Bytes()}
 	} else {
-		msg.Parts = [][]byte{bytes}
+		msgBytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			h.log.Warnf("Request read failed: %v\n", err)
+			return
+		}
+
+		if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
+			msg, err = types.FromBytes(msgBytes)
+			if err != nil {
+				http.Error(w, "Bad request", http.StatusBadRequest)
+				h.log.Warnf("Request read failed: %v\n", err)
+				return
+			}
+		} else {
+			msg.Parts = [][]byte{msgBytes}
+		}
 	}
 
 	h.Lock()
