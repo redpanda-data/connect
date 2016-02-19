@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package blob
+package ring
 
 import (
 	"sync"
@@ -30,27 +30,21 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// MemoryBlockConfig - Config values for a MemoryBlock type.
-type MemoryBlockConfig struct {
+// MemoryConfig - Config values for a purely memory based ring buffer type.
+type MemoryConfig struct {
 	Limit int `json:"limit" yaml:"limit"`
 }
 
-// NewMemoryBlockConfig - Create a new MemoryBlockConfig with default values.
-func NewMemoryBlockConfig() MemoryBlockConfig {
-	return MemoryBlockConfig{
+// NewMemoryConfig - Create a new MemoryConfig with default values.
+func NewMemoryConfig() MemoryConfig {
+	return MemoryConfig{
 		Limit: 1024 * 1024 * 500, // 500MB
 	}
 }
 
-/*
-MemoryBlock - A memory block of serialized messages. All messages are written contiguously, when
-the writer is unable to write a full message to the end of the block it will loop back to index 0.
-
-Both writing and reading operations will block until the operation is possible. When Close is called
-all blocked operations are escaped.
-*/
-type MemoryBlock struct {
-	config MemoryBlockConfig
+// Memory - A purely memory based ring buffer. This buffer blocks when the buffer is full.
+type Memory struct {
+	config MemoryConfig
 
 	block     []byte
 	readFrom  int
@@ -61,9 +55,9 @@ type MemoryBlock struct {
 	cond *sync.Cond
 }
 
-// NewMemoryBlock - Creates a block for buffering serialized messages.
-func NewMemoryBlock(config MemoryBlockConfig) *MemoryBlock {
-	return &MemoryBlock{
+// NewMemory - Creates a new memory based ring buffer.
+func NewMemory(config MemoryConfig) *Memory {
+	return &Memory{
 		config:    config,
 		block:     make([]byte, config.Limit),
 		readFrom:  0,
@@ -76,7 +70,7 @@ func NewMemoryBlock(config MemoryBlockConfig) *MemoryBlock {
 //--------------------------------------------------------------------------------------------------
 
 // backlog - Reads the current backlog of messages stored.
-func (m *MemoryBlock) backlog() int {
+func (m *Memory) backlog() int {
 	if m.writtenTo >= m.readFrom {
 		return m.writtenTo - m.readFrom
 	}
@@ -105,7 +99,7 @@ func writeMessageSize(block []byte, index int, size int) {
 //--------------------------------------------------------------------------------------------------
 
 // Close - Unblocks any blocked calls and prevents further writing to the block.
-func (m *MemoryBlock) Close() {
+func (m *Memory) Close() {
 	m.cond.L.Lock()
 	m.closed = true
 	m.cond.Broadcast()
@@ -113,7 +107,7 @@ func (m *MemoryBlock) Close() {
 }
 
 // ShiftMessage - Removes the last message from the block. Returns the backlog count.
-func (m *MemoryBlock) ShiftMessage() (int, error) {
+func (m *Memory) ShiftMessage() (int, error) {
 	m.cond.L.Lock()
 	defer m.cond.L.Unlock()
 	defer m.cond.Broadcast()
@@ -135,7 +129,7 @@ func (m *MemoryBlock) ShiftMessage() (int, error) {
 }
 
 // NextMessage - Reads the next message, this call blocks until there's something to read.
-func (m *MemoryBlock) NextMessage() (types.Message, error) {
+func (m *Memory) NextMessage() (types.Message, error) {
 	m.cond.L.Lock()
 	defer m.cond.L.Unlock()
 
@@ -174,7 +168,7 @@ func (m *MemoryBlock) NextMessage() (types.Message, error) {
 }
 
 // PushMessage - Pushes a new message onto the block, returns the backlog count.
-func (m *MemoryBlock) PushMessage(msg types.Message) (int, error) {
+func (m *Memory) PushMessage(msg types.Message) (int, error) {
 	m.cond.L.Lock()
 	defer m.cond.L.Unlock()
 	defer m.cond.Broadcast()

@@ -1,13 +1,11 @@
 Thread Safe Byte Array
 ======================
 
-Since Benthos uses memory-mapped files its core performance bottleneck outside of IO is storing messages into an array of bytes, and simultaneously reading messages from that array. Since inputs and outputs are asynchronous, we must have a structure that can efficiently wrap the byte array with locking mechanisms for protecting the data from dangerous parallel writes/reads.
-
-This document details the process taken to finding our solution.
+Benthos uses memory-mapped files, therefore its core performance bottleneck outside of IO is storing messages into an array of bytes acting as a ring buffer, and simultaneously reading messages from that array. Since inputs and outputs are asynchronous we must have a structure that can efficiently wrap the byte array with locking mechanisms for protecting the data from dangerous parallel writes/reads.
 
 ## Idiomatic Conditional Goroutine Blocking
 
-As data is written and read from the structure there will be moments where either a writer or a reader will be blocked, either due to all messages being exhausted from the stack or by the cache running out of space. It is important in these moments that the reader/writer is blocked only for the exact duration that the blocking condition is true.
+Our ring buffer will block when there is insufficient space, rather than overwriting data. Therefore, as data is written and read from the structure there will be moments where either a writer or a reader will be blocked, either due to all messages being exhausted from the stack or by the cache running out of space. It is important in these moments that the reader/writer is blocked only for the exact duration that the blocking condition is true, which means avoiding `if ( !ready ) { sleep(x); }` loops.
 
 The true idiomatic way of satisfying these two conditions could be to have the structure spawn a single goroutine that both reads from an input channel when there is remaining space for messages, and writes out the next messages to an output channel when there is one. A simplified example might look like this:
 

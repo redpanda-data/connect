@@ -1,0 +1,13 @@
+inputs:
+- type: http_server
+  http_server:
+    address: "localhost:1234"
+    path: "/post"
+    timeout_ms: 1000
+    full_contents_forwarding: true
+outputs:
+- type: stdout
+logger:
+  prefix: benthos
+  log_level: INFO
+  add_timestamp: true

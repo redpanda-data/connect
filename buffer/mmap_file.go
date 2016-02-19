@@ -23,7 +23,7 @@ THE SOFTWARE.
 package buffer
 
 import (
-	"github.com/jeffail/benthos/buffer/blob"
+	"github.com/jeffail/benthos/buffer/ring"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
 )
@@ -38,7 +38,7 @@ func init() {
 
 // NewMmapFile - Create a buffer held in memory and persisted to file through memory map.
 func NewMmapFile(config Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
-	b, err := blob.NewFileBlock(config.File, log.NewModule("buffer.mmap_file"), stats)
+	b, err := ring.NewMmap(config.Mmap, log.NewModule("buffer.mmap_file"), stats)
 	if err != nil {
 		return nil, err
 	}

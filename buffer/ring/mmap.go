@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package blob
+package ring
 
 import (
 	"time"
@@ -32,24 +32,18 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// FileBlockConfig - Config options for the FileBlock type.
-type FileBlockConfig FileCacheConfig
+// MmapConfig - Config options for a memory-map based ring buffer.
+type MmapConfig MmapCacheConfig
 
-// NewFileBlockConfig - Creates a new FileBlockConfig oject with default values.
-func NewFileBlockConfig() FileBlockConfig {
-	return FileBlockConfig(NewFileCacheConfig())
+// NewMmapConfig - Creates a new MmapConfig oject with default values.
+func NewMmapConfig() MmapConfig {
+	return MmapConfig(NewMmapCacheConfig())
 }
 
-/*
-FileBlock - Stores blocks of serialized messages in memory mapped files. All messages are written
-contiguously.
-
-Both writing and reading operations will block until the operation is possible. When Close is called
-all blocked operations are escaped.
-*/
-type FileBlock struct {
-	config FileBlockConfig
-	cache  *FileCache
+// Mmap - A ring buffer implemented around memory mapped files.
+type Mmap struct {
+	config MmapConfig
+	cache  *MmapCache
 
 	logger *log.Logger
 	stats  metrics.Aggregator
@@ -63,16 +57,16 @@ type FileBlock struct {
 	closed bool
 }
 
-// NewFileBlock - Creates a block for buffering serialized messages.
-func NewFileBlock(config FileBlockConfig, log *log.Logger, stats metrics.Aggregator) (*FileBlock, error) {
-	cache, err := NewFileCache(FileCacheConfig(config))
+// NewMmap - Creates a block for buffering serialized messages.
+func NewMmap(config MmapConfig, log *log.Logger, stats metrics.Aggregator) (*Mmap, error) {
+	cache, err := NewMmapCache(MmapCacheConfig(config))
 	if err != nil {
 		return nil, err
 	}
 	cache.L.Lock()
 	defer cache.L.Unlock()
 
-	f := &FileBlock{
+	f := &Mmap{
 		config:     config,
 		cache:      cache,
 		logger:     log,
@@ -105,7 +99,7 @@ func NewFileBlock(config FileBlockConfig, log *log.Logger, stats metrics.Aggrega
 //--------------------------------------------------------------------------------------------------
 
 // readTracker - reads our cached values from the tracker file for recording reader/writer indexes.
-func (f *FileBlock) readTracker() {
+func (f *Mmap) readTracker() {
 	if !f.closed {
 		trackerBlock := f.cache.GetTracker()
 
@@ -117,7 +111,7 @@ func (f *FileBlock) readTracker() {
 }
 
 // writeTracker - writes our current state to the tracker.
-func (f *FileBlock) writeTracker() {
+func (f *Mmap) writeTracker() {
 	if !f.closed {
 		trackerBlock := f.cache.GetTracker()
 
@@ -131,7 +125,7 @@ func (f *FileBlock) writeTracker() {
 //--------------------------------------------------------------------------------------------------
 
 // cacheManagerLoop - Continuously checks whether the cache contains maps of our next indexes.
-func (f *FileBlock) cacheManagerLoop(indexPtr *int) {
+func (f *Mmap) cacheManagerLoop(indexPtr *int) {
 	loop := func() bool {
 		f.cache.L.Lock()
 		defer f.cache.L.Unlock()
@@ -158,7 +152,7 @@ func (f *FileBlock) cacheManagerLoop(indexPtr *int) {
 //--------------------------------------------------------------------------------------------------
 
 // backlog - Reads the current backlog of messages stored.
-func (f *FileBlock) backlog() int {
+func (f *Mmap) backlog() int {
 	// NOTE: For speed, the following calculation assumes that all mmap files are the size of limit.
 	return ((f.writeIndex - f.readIndex) * f.config.FileSize) + f.writtenTo - f.readFrom
 }
@@ -166,7 +160,7 @@ func (f *FileBlock) backlog() int {
 //--------------------------------------------------------------------------------------------------
 
 // Close - Unblocks any blocked calls and prevents further writing to the block.
-func (f *FileBlock) Close() {
+func (f *Mmap) Close() {
 	f.cache.L.Lock()
 	f.closed = true
 	f.cache.Broadcast()
@@ -178,7 +172,7 @@ func (f *FileBlock) Close() {
 }
 
 // ShiftMessage - Removes the last message from the block. Returns the backlog count.
-func (f *FileBlock) ShiftMessage() (int, error) {
+func (f *Mmap) ShiftMessage() (int, error) {
 	f.cache.L.Lock()
 	defer f.cache.L.Unlock()
 	defer f.cache.Broadcast()
@@ -192,7 +186,7 @@ func (f *FileBlock) ShiftMessage() (int, error) {
 }
 
 // NextMessage - Reads the next message, this call blocks until there's something to read.
-func (f *FileBlock) NextMessage() (types.Message, error) {
+func (f *Mmap) NextMessage() (types.Message, error) {
 	f.cache.L.Lock()
 	defer f.cache.L.Unlock()
 	defer f.cache.Broadcast()
@@ -266,7 +260,7 @@ func (f *FileBlock) NextMessage() (types.Message, error) {
 }
 
 // PushMessage - Pushes a new message onto the block, returns the backlog count.
-func (f *FileBlock) PushMessage(msg types.Message) (int, error) {
+func (f *Mmap) PushMessage(msg types.Message) (int, error) {
 	f.cache.L.Lock()
 	defer f.cache.L.Unlock()
 	defer f.cache.Broadcast()

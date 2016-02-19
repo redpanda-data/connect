@@ -108,6 +108,9 @@ func (h *HTTPClient) loop() {
 		}
 
 		// POST message
+		var client http.Client
+		client.Timeout = time.Duration(h.conf.HTTPClient.TimeoutMS) * time.Millisecond
+
 		var res *http.Response
 		var err error
 
@@ -117,13 +120,13 @@ func (h *HTTPClient) loop() {
 				req, err = http.ReadRequest(bufio.NewReader(bytes.NewBuffer(msg.Parts[0])))
 				if err == nil {
 					req.URL, err = url.Parse(h.conf.HTTPClient.URL)
+					req.RequestURI = ""
 				}
 				if err == nil {
-					var client http.Client
 					res, err = client.Do(req)
 				}
 			} else {
-				res, err = http.Post(
+				res, err = client.Post(
 					h.conf.HTTPClient.URL,
 					"application/octet-stream",
 					bytes.NewBuffer(msg.Parts[0]),
@@ -133,7 +136,7 @@ func (h *HTTPClient) loop() {
 			if h.conf.HTTPClient.FullForwarding {
 				h.log.Warnln("Dispatching multipart message, cannot send with full forwarding")
 			}
-			res, err = http.Post(
+			res, err = client.Post(
 				h.conf.HTTPClient.URL,
 				"application/x-benthos-multipart",
 				bytes.NewBuffer(msg.Bytes()),

@@ -21,6 +21,6 @@ THE SOFTWARE.
 */
 
 /*
-Package blob - Defines methods of serializing and storing message types into binary format.
+Package ring - Defines strategies for generating and managing ring buffers.
 */
-package blob
+package ring

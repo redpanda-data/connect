@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package blob
+package ring
 
 import (
 	"fmt"
@@ -32,17 +32,17 @@ import (
 	"github.com/jeffail/benthos/types"
 )
 
-func TestMemoryBlockInterface(t *testing.T) {
-	b := &MemoryBlock{}
+func TestMemoryInterface(t *testing.T) {
+	b := &Memory{}
 	if c := MessageStack(b); c == nil {
-		t.Error("MemoryBlock does not satisfy the MessageStack interface")
+		t.Error("Memory does not satisfy the MessageStack interface")
 	}
 }
 
-func TestMemoryBlockBasic(t *testing.T) {
+func TestMemoryBasic(t *testing.T) {
 	n := 100
 
-	block := NewMemoryBlock(MemoryBlockConfig{Limit: 100000})
+	block := NewMemory(MemoryConfig{Limit: 100000})
 
 	for i := 0; i < n; i++ {
 		if _, err := block.PushMessage(types.Message{
@@ -74,8 +74,8 @@ func TestMemoryBlockBasic(t *testing.T) {
 	}
 }
 
-func TestMemoryBlockBacklogCounter(t *testing.T) {
-	block := NewMemoryBlock(MemoryBlockConfig{Limit: 100000})
+func TestMemoryBacklogCounter(t *testing.T) {
+	block := NewMemory(MemoryConfig{Limit: 100000})
 
 	if _, err := block.PushMessage(types.Message{
 		Parts: [][]byte{[]byte("1234")}, // 4 bytes + 4 bytes
@@ -119,10 +119,10 @@ func TestMemoryBlockBacklogCounter(t *testing.T) {
 	}
 }
 
-func TestMemoryBlockNearLimit(t *testing.T) {
+func TestMemoryNearLimit(t *testing.T) {
 	n, iter := 50, 5
 
-	block := NewMemoryBlock(MemoryBlockConfig{Limit: 2285})
+	block := NewMemory(MemoryConfig{Limit: 2285})
 
 	for j := 0; j < iter; j++ {
 		for i := 0; i < n; i++ {
@@ -157,10 +157,10 @@ func TestMemoryBlockNearLimit(t *testing.T) {
 	}
 }
 
-func TestMemoryBlockLoopingRandom(t *testing.T) {
+func TestMemoryLoopingRandom(t *testing.T) {
 	n, iter := 50, 5
 
-	block := NewMemoryBlock(MemoryBlockConfig{Limit: 8000})
+	block := NewMemory(MemoryConfig{Limit: 8000})
 
 	for j := 0; j < iter; j++ {
 		for i := 0; i < n; i++ {
@@ -198,10 +198,10 @@ func TestMemoryBlockLoopingRandom(t *testing.T) {
 	}
 }
 
-func TestMemoryBlockLockStep(t *testing.T) {
+func TestMemoryLockStep(t *testing.T) {
 	n := 10000
 
-	block := NewMemoryBlock(MemoryBlockConfig{Limit: 1000})
+	block := NewMemory(MemoryConfig{Limit: 1000})
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -244,10 +244,10 @@ func TestMemoryBlockLockStep(t *testing.T) {
 	wg.Wait()
 }
 
-func TestMemoryBlockClose(t *testing.T) {
+func TestMemoryClose(t *testing.T) {
 	// Test reader block
 
-	block := NewMemoryBlock(MemoryBlockConfig{Limit: 20})
+	block := NewMemory(MemoryConfig{Limit: 20})
 	doneChan := make(chan struct{})
 
 	go func() {
@@ -269,7 +269,7 @@ func TestMemoryBlockClose(t *testing.T) {
 
 	// Test writer block
 
-	block = NewMemoryBlock(MemoryBlockConfig{Limit: 100})
+	block = NewMemory(MemoryConfig{Limit: 100})
 	doneChan = make(chan struct{})
 
 	go func() {
@@ -312,11 +312,11 @@ func TestMemoryBlockClose(t *testing.T) {
 	}
 }
 
-func TestMemoryBlockRejectLargeMessage(t *testing.T) {
+func TestMemoryRejectLargeMessage(t *testing.T) {
 	tMsg := types.Message{Parts: make([][]byte, 1)}
 	tMsg.Parts[0] = []byte("hello world this message is too long!")
 
-	block := NewMemoryBlock(MemoryBlockConfig{Limit: 10})
+	block := NewMemory(MemoryConfig{Limit: 10})
 
 	_, err := block.PushMessage(tMsg)
 	if exp, actual := types.ErrMessageTooLarge, err; exp != actual {

@@ -23,7 +23,7 @@ THE SOFTWARE.
 package buffer
 
 import (
-	"github.com/jeffail/benthos/buffer/blob"
+	"github.com/jeffail/benthos/buffer/ring"
 	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
@@ -37,17 +37,17 @@ var constructors = map[string]func(conf Config, log *log.Logger, stats metrics.A
 
 // Config - The all encompassing configuration struct for all input types.
 type Config struct {
-	Type   string                 `json:"type" yaml:"type"`
-	File   blob.FileBlockConfig   `json:"file" yaml:"file"`
-	Memory blob.MemoryBlockConfig `json:"memory" yaml:"memory"`
+	Type   string            `json:"type" yaml:"type"`
+	Mmap   ring.MmapConfig   `json:"mmap_file" yaml:"mmap_file"`
+	Memory ring.MemoryConfig `json:"memory" yaml:"memory"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
 		Type:   "none",
-		File:   blob.NewFileBlockConfig(),
-		Memory: blob.NewMemoryBlockConfig(),
+		Mmap:   ring.NewMmapConfig(),
+		Memory: ring.NewMemoryConfig(),
 	}
 }
 

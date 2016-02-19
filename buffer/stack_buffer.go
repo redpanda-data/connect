@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jeffail/benthos/buffer/blob"
+	"github.com/jeffail/benthos/buffer/ring"
 	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util/metrics"
 )
@@ -38,7 +38,7 @@ import (
 type StackBuffer struct {
 	stats metrics.Aggregator
 
-	buffer blob.MessageStack
+	buffer ring.MessageStack
 
 	running int32
 
@@ -52,7 +52,7 @@ type StackBuffer struct {
 }
 
 // NewStackBuffer - Create a new buffered agent type.
-func NewStackBuffer(buffer blob.MessageStack, stats metrics.Aggregator) Type {
+func NewStackBuffer(buffer ring.MessageStack, stats metrics.Aggregator) Type {
 	m := StackBuffer{
 		stats:        stats,
 		buffer:       buffer,

@@ -83,8 +83,10 @@ func main() {
 			<-time.After(interval)
 			msg := util.NewBenchMessage(index, dataBlob)
 
+			client := http.Client{Timeout: time.Second}
+
 			// Send message
-			res, err := http.Post(
+			res, err := client.Post(
 				address,
 				"application/x-benthos-multipart",
 				bytes.NewBuffer(msg.Bytes()),

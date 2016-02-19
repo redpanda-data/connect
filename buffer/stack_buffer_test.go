@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeffail/benthos/buffer/blob"
+	"github.com/jeffail/benthos/buffer/ring"
 	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util/metrics"
 )
@@ -39,7 +39,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	msgChan := make(chan types.Message)
 	resChan := make(chan types.Response)
 
-	b := NewStackBuffer(blob.NewMemoryBlock(blob.MemoryBlockConfig{
+	b := NewStackBuffer(ring.NewMemory(ring.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), metrics.DudType{})
 	if err := b.StartListening(resChan); err != nil {

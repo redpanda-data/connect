@@ -23,7 +23,7 @@ THE SOFTWARE.
 package buffer
 
 import (
-	"github.com/jeffail/benthos/buffer/blob"
+	"github.com/jeffail/benthos/buffer/ring"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
 )
@@ -38,7 +38,7 @@ func init() {
 
 // NewMemory - Create a buffer held in memory.
 func NewMemory(config Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
-	return NewStackBuffer(blob.NewMemoryBlock(config.Memory), stats), nil
+	return NewStackBuffer(ring.NewMemory(config.Memory), stats), nil
 }
 
 //--------------------------------------------------------------------------------------------------
