@@ -1,3 +1,4 @@
+// +build ZMQ4
 /*
 Copyright (c) 2014 Ashley Jeffs
 
@@ -23,34 +24,33 @@ THE SOFTWARE.
 package main
 
 import (
-	"bytes"
 	"errors"
 	"flag"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
-	"github.com/jeffail/benthos/test/util"
-	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/benthos/util/test"
+	"github.com/pebbe/zmq4"
 )
 
 //--------------------------------------------------------------------------------------------------
 
 func main() {
 	var address string
-	flag.StringVar(&address, "addr", "http://localhost:1234/post", "Address of the benthos server.")
+	flag.StringVar(&address, "addr", "tcp://localhost:1234", "Address of the benthos server")
 
 	flag.Parse()
 
 	fmt.Println("This is a benchmarking utility for benthos.")
-	fmt.Println("Make sure you are running benthos with the ./test/http.yaml config.")
+	fmt.Println("Make sure you are running benthos with the ./test/zmq.yaml config.")
 
 	if len(flag.Args()) != 2 {
 		fmt.Printf("\nUsage: %v <interval> <blob_size>\n", os.Args[0])
@@ -68,6 +68,24 @@ func main() {
 		panic(err)
 	}
 
+	ctx, err := zmq4.NewContext()
+	if nil != err {
+		panic(err)
+	}
+
+	pushSocket, err := ctx.NewSocket(zmq4.PUSH)
+	if nil != err {
+		panic(err)
+	}
+	if strings.Contains(address, "*") {
+		err = pushSocket.Bind(address)
+	} else {
+		err = pushSocket.Connect(address)
+	}
+	if nil != err {
+		panic(err)
+	}
+
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
@@ -81,27 +99,17 @@ func main() {
 	go func() {
 		for atomic.LoadInt32(&running) == 1 {
 			<-time.After(interval)
-			msg := util.NewBenchMessage(index, dataBlob)
-
-			client := http.Client{Timeout: time.Second}
-
-			// Send message
-			res, err := client.Post(
-				address,
-				"application/x-benthos-multipart",
-				bytes.NewBuffer(msg.Bytes()),
-			)
-
-			// Check status code
-			if err == nil && res.StatusCode != 200 {
-				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+			msg := test.NewBenchMessage(index, dataBlob)
+			parts := []interface{}{
+				msg.Parts[0],
+				msg.Parts[1],
+				msg.Parts[2],
 			}
-
+			_, err = pushSocket.SendMessage(parts...)
 			if err != nil {
-				fmt.Printf("Failed to send message: %v\n", err)
-			} else {
-				index++
+				panic(err)
 			}
+			index++
 		}
 		wg.Done()
 	}()

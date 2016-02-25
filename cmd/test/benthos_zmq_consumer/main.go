@@ -1,3 +1,4 @@
+// +build ZMQ4
 /*
 Copyright (c) 2014 Ashley Jeffs
 
@@ -34,8 +35,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jeffail/benthos/test/util"
 	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/benthos/util/test"
 	"github.com/pebbe/zmq4"
 )
 
@@ -75,7 +76,7 @@ func main() {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	benchChan := util.StartPrintingBenchmarks(time.Second, 0)
+	benchChan := test.StartPrintingBenchmarks(time.Second, 0)
 	<-time.After(time.Second)
 
 	var running int32 = 1
@@ -84,7 +85,7 @@ func main() {
 			polled, err := poller.Poll(time.Second)
 			if err == nil && len(polled) == 1 {
 				if msgParts, err := pullSocket.RecvMessageBytes(0); err == nil {
-					if bench, err := util.BenchFromMessage(types.Message{Parts: msgParts}); err == nil {
+					if bench, err := test.BenchFromMessage(types.Message{Parts: msgParts}); err == nil {
 						benchChan <- bench
 					} else {
 						fmt.Printf("| Error: Wrong message format: %v\n", err)

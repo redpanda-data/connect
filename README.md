@@ -11,7 +11,7 @@ Benthos uses memory mapped files for storing messages in transit with a low late
 ```
 +---------------------------------+    +--------+    +---------------------------------+
 |         Input Streams           |--->| Buffer |--->|         Output Streams          |
-| ( ZMQ, stdin, websockets, etc ) |    +--------+    | ( ZMQ, stdin, websockets, etc ) |
+|    ( ZMQ, HTTP Post, etc )      |    +--------+    |     ( ZMQ, HTTP Post, etc )     |
 +---------------------------------+        |         +---------------------------------+
                                            v
                                      +------------+

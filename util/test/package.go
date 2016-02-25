@@ -20,5 +20,5 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-// Package util - Helpers for setting up test utilties.
-package util
+// Package test - Helpers for setting up test utilties.
+package test

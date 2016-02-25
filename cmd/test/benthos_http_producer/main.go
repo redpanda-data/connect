@@ -23,70 +23,87 @@ THE SOFTWARE.
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
-	"github.com/jeffail/benthos/test/util"
 	"github.com/jeffail/benthos/types"
+	"github.com/jeffail/benthos/util/test"
 )
 
 //--------------------------------------------------------------------------------------------------
 
 func main() {
-	var address, path string
-	flag.StringVar(&address, "addr", "localhost:1235", "Address to host message receiver at")
-	flag.StringVar(&path, "path", "/post", "Path to the POST resource")
+	var address string
+	flag.StringVar(&address, "addr", "http://localhost:1234/post", "Address of the benthos server.")
 
 	flag.Parse()
 
 	fmt.Println("This is a benchmarking utility for benthos.")
 	fmt.Println("Make sure you are running benthos with the ./test/http.yaml config.")
 
-	// Make server
-	mux := http.NewServeMux()
+	if len(flag.Args()) != 2 {
+		fmt.Printf("\nUsage: %v <interval> <blob_size>\n", os.Args[0])
+		fmt.Printf("e.g.: %v 10us 1024\n", os.Args[0])
+		return
+	}
 
-	benchChan := util.StartPrintingBenchmarks(time.Second, 0)
-	<-time.After(time.Second)
+	interval, err := time.ParseDuration(flag.Args()[0])
+	if err != nil {
+		panic(err)
+	}
 
-	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			fmt.Printf("| Error: Wrong method, POST != %v\n", r.Method)
-			http.Error(w, "Wrong method", 400)
-			return
-		}
+	blobSize, err := strconv.Atoi(flag.Args()[1])
+	if err != nil {
+		panic(err)
+	}
 
-		bytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			fmt.Printf("| Error reading message: %v\n", err)
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			return
-		}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 
-		msg, err := types.FromBytes(bytes)
-		if err != nil {
-			fmt.Printf("| Error reading message: %v\n", err)
-			http.Error(w, "Error", 400)
-			return
-		}
+	dataBlob := make([]byte, blobSize)
+	for i := range dataBlob {
+		dataBlob[i] = byte(rand.Int())
+	}
 
-		if bench, err := util.BenchFromMessage(msg); err == nil {
-			benchChan <- bench
-		} else {
-			fmt.Printf("| Error: Wrong message format: %v\n", err)
-			http.Error(w, "Error", 400)
-		}
-	})
+	var running, index int32 = 1, 0
 
 	go func() {
-		err := http.ListenAndServe(address, mux)
-		panic(err)
+		for atomic.LoadInt32(&running) == 1 {
+			<-time.After(interval)
+			msg := test.NewBenchMessage(index, dataBlob)
+
+			client := http.Client{Timeout: time.Second}
+
+			// Send message
+			res, err := client.Post(
+				address,
+				"application/x-benthos-multipart",
+				bytes.NewBuffer(msg.Bytes()),
+			)
+
+			// Check status code
+			if err == nil && res.StatusCode != 200 {
+				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+			}
+
+			if err != nil {
+				fmt.Printf("Failed to send message: %v\n", err)
+			} else {
+				index++
+			}
+		}
+		wg.Done()
 	}()
 
 	sigChan := make(chan os.Signal, 1)
@@ -97,13 +114,12 @@ func main() {
 	case <-sigChan:
 	}
 
+	atomic.StoreInt32(&running, 0)
 	go func() {
 		<-time.After(time.Second * 10)
 		panic(errors.New("Timed out waiting for processes to end"))
 	}()
-
-	close(benchChan)
-	<-time.After(time.Second) // Wait for one final tick.
+	wg.Wait()
 }
 
 //--------------------------------------------------------------------------------------------------

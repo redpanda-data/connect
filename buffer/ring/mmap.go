@@ -40,7 +40,11 @@ func NewMmapConfig() MmapConfig {
 	return MmapConfig(NewMmapCacheConfig())
 }
 
-// Mmap - A ring buffer implemented around memory mapped files.
+/*
+Mmap - A ring buffer implemented around memory mapped files. NOTE: Currently the 'ring' is non
+existant since files are created as memory is needed. However, we may in future want to limit the
+space used on disk and therefore looping will need to be implemented.
+*/
 type Mmap struct {
 	config MmapConfig
 	cache  *MmapCache
@@ -84,7 +88,7 @@ func NewMmap(config MmapConfig, log *log.Logger, stats metrics.Aggregator) (*Mma
 	if err = cache.EnsureCached(f.writeIndex); err != nil {
 		return nil, err
 	}
-	if err := cache.EnsureCached(f.readIndex); err != nil {
+	if err = cache.EnsureCached(f.readIndex); err != nil {
 		return nil, err
 	}
 
