@@ -41,7 +41,7 @@ func TestHTTPBasic(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
-	conf.HTTPServer.Address = "localhost:1234"
+	conf.HTTPServer.Address = "localhost:1237"
 	conf.HTTPServer.Path = "/testpost"
 
 	h, err := NewHTTPServer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
@@ -64,7 +64,7 @@ func TestHTTPBasic(t *testing.T) {
 		testStr := fmt.Sprintf("test%v", i)
 		// Send it as single part
 		if res, err := http.Post(
-			"http://localhost:1234/testpost",
+			"http://localhost:1237/testpost",
 			"application/octet-stream",
 			bytes.NewBuffer([]byte(testStr)),
 		); err != nil {
@@ -95,7 +95,7 @@ func TestHTTPBasic(t *testing.T) {
 
 		// Send it as multi part
 		if res, err := http.Post(
-			"http://localhost:1234/testpost",
+			"http://localhost:1237/testpost",
 			"application/x-benthos-multipart",
 			bytes.NewBuffer(testMsg.Bytes()),
 		); err != nil {

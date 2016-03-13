@@ -38,7 +38,7 @@ func init() {
 
 // NewMmapFile - Create a buffer held in memory and persisted to file through memory map.
 func NewMmapFile(config Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
-	b, err := ring.NewMmap(config.Mmap, log.NewModule("buffer.mmap_file"), stats)
+	b, err := ring.NewMmap(config.Mmap, log.NewModule(".buffer.mmap_file"), stats)
 	if err != nil {
 		return nil, err
 	}

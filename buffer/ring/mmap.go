@@ -23,6 +23,7 @@ THE SOFTWARE.
 package ring
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/jeffail/benthos/types"
@@ -65,7 +66,7 @@ type Mmap struct {
 func NewMmap(config MmapConfig, log *log.Logger, stats metrics.Aggregator) (*Mmap, error) {
 	cache, err := NewMmapCache(MmapCacheConfig(config))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("MMAP Cache: %v", err)
 	}
 	cache.L.Lock()
 	defer cache.L.Unlock()
@@ -86,10 +87,10 @@ func NewMmap(config MmapConfig, log *log.Logger, stats metrics.Aggregator) (*Mma
 
 	// Ensure both the starting write and read indexes are cached
 	if err = cache.EnsureCached(f.writeIndex); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("MMAP index write: %v", err)
 	}
 	if err = cache.EnsureCached(f.readIndex); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("MMAP index read: %v", err)
 	}
 
 	f.logger.Infof("Storing messages to file in: %s\n", f.config.Path)

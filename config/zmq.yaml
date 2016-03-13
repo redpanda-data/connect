@@ -13,8 +13,8 @@ outputs:
     socket_type: PUSH
 buffer:
   type: mmap_file
-  file:
-    directory: "./tmp"
+  mmap_file:
+    directory: "/tmp/benthos"
     file_size: 200000000
     retry_period_ms: 1000
     clean_up: true

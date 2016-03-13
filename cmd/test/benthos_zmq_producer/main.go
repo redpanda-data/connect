@@ -1,4 +1,5 @@
 // +build ZMQ4
+
 /*
 Copyright (c) 2014 Ashley Jeffs
 

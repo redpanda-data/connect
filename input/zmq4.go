@@ -140,27 +140,23 @@ func (z *ZMQ4) loop() {
 
 	var data [][]byte
 
-	for _, address := range z.conf.ZMQ4.Addresses {
-		if strings.Contains(address, "*") {
-			z.log.Infof("Receiving ZMQ4 messages from bound address: %s\n", address)
-		} else {
-			z.log.Infof("Receiving ZMQ4 messages from connected address: %s\n", address)
-		}
-	}
-
 	for atomic.LoadInt32(&z.running) == 1 {
 		// If no bytes then read a message
 		if data == nil {
-			polled, err := poller.Poll(pollTimeout)
-			if err == nil && len(polled) == 1 {
-				if data, err = z.socket.RecvMessageBytes(0); err != nil {
-					z.stats.Incr("input.zmq4.receive.error", 1)
-					z.log.Errorf("Failed to receive message bytes: %v\n", err)
+			var err error
+			data, err = z.socket.RecvMessageBytes(zmq4.DONTWAIT)
+			if err != nil {
+				polled, err := poller.Poll(pollTimeout)
+				if err == nil && len(polled) == 1 {
+					if data, err = z.socket.RecvMessageBytes(0); err != nil {
+						z.stats.Incr("input.zmq4.receive.error", 1)
+						z.log.Errorf("Failed to receive message bytes: %v\n", err)
+					}
+				} else if err != nil {
+					z.stats.Incr("input.zmq4.poll.error", 1)
+					// z.log.Warnf("ZMQ socket poll error: %v\n", err)
+					data = nil
 				}
-			} else if err != nil {
-				z.stats.Incr("input.zmq4.poll.error", 1)
-				// z.log.Warnf("ZMQ socket poll error: %v\n", err)
-				data = nil
 			}
 		}
 
