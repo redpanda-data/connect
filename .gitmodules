@@ -1,0 +1,21 @@
+[submodule "vendor/github.com/jeffail/util"]
+	path = vendor/github.com/jeffail/util
+	url = https://github.com/jeffail/util
+[submodule "vendor/gopkg.in/yaml.v2"]
+	path = vendor/gopkg.in/yaml.v2
+	url = https://gopkg.in/yaml.v2
+[submodule "vendor/github.com/amir/raidman"]
+	path = vendor/github.com/amir/raidman
+	url = https://github.com/amir/raidman
+[submodule "vendor/github.com/edsrzf/mmap-go"]
+	path = vendor/github.com/edsrzf/mmap-go
+	url = https://github.com/edsrzf/mmap-go
+[submodule "vendor/github.com/golang/protobuf"]
+	path = vendor/github.com/golang/protobuf
+	url = https://github.com/golang/protobuf
+[submodule "vendor/github.com/jeffail/gabs"]
+	path = vendor/github.com/jeffail/gabs
+	url = https://github.com/jeffail/gabs
+[submodule "vendor/github.com/pebbe/zmq4"]
+	path = vendor/github.com/pebbe/zmq4
+	url = https://github.com/pebbe/zmq4

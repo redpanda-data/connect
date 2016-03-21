@@ -98,3 +98,29 @@ Or, in a JSON config file it might look like this:
 	}
 ]
 ```
+
+## Vendoring
+
+Versions of go above 1.6 should automatically pull all vendored libraries.
+Otherwise while cloning use:
+
+`git clone https://github.com/jeffail/benthos --recursive`
+
+Or to pull the vendored libs into a shallow copy:
+
+`git submodule update --init`
+
+To add new libraries simply run:
+
+```
+PACKAGE=github.com/jeffail/util
+git submodule add https://$PACKAGE vendor/$PACKAGE"
+```
+
+It might be handy to set yourself a function for this in your `.bashrc`:
+
+```
+function go-add-vendor {
+	git submodule add https://$1 vendor/$1
+}
+```
