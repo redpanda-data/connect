@@ -52,21 +52,21 @@ func NewMmapCacheConfig() MmapCacheConfig {
 	}
 }
 
-// CachedMMap - A struct containing a cached MMap file and the file handler.
-type CachedMMap struct {
+// CachedMmap - A struct containing a cached Mmap file and the file handler.
+type CachedMmap struct {
 	f *os.File
 	m mmap.MMap
 }
 
 /*
-MmapCache - Keeps track of any MMap files cached in memory and cleans up resources as they are
+MmapCache - Keeps track of any Mmap files cached in memory and cleans up resources as they are
 unclaimed. This type works similarly to sync.Cond, where if you wish to use it you need to lock it.
 */
 type MmapCache struct {
 	config MmapCacheConfig
 
-	tracker    CachedMMap
-	cache      map[int]CachedMMap
+	tracker    CachedMmap
+	cache      map[int]CachedMmap
 	inProgress map[int]struct{}
 
 	*sync.Cond
@@ -76,7 +76,7 @@ type MmapCache struct {
 func NewMmapCache(config MmapCacheConfig) (*MmapCache, error) {
 	f := &MmapCache{
 		config:     config,
-		cache:      make(map[int]CachedMMap),
+		cache:      make(map[int]CachedMmap),
 		inProgress: make(map[int]struct{}),
 		Cond:       sync.NewCond(&sync.Mutex{}),
 	}
@@ -145,7 +145,7 @@ EnsureCached - Check that a particular index is cached, and if not then read the
 blocks until either the index is successfully cached or an error occurs.
 */
 func (f *MmapCache) EnsureCached(index int) error {
-	var cache CachedMMap
+	var cache CachedMmap
 	var err error
 
 	// If we are already in the process of caching this index wait until that attempt is finished.
@@ -213,13 +213,13 @@ func (f *MmapCache) RemoveAll() error {
 		c.m.Unmap()
 		c.f.Close()
 	}
-	f.cache = map[int]CachedMMap{}
+	f.cache = map[int]CachedMmap{}
 
 	f.tracker.m.Flush()
 	f.tracker.m.Unmap()
 	f.tracker.f.Close()
 
-	f.tracker = CachedMMap{}
+	f.tracker = CachedMmap{}
 	return nil
 }
 

@@ -1,8 +1,8 @@
 ![Benthos](icon.png "Benthos")
 
-Benthos is a service for piping large volumes of data from one source to another
-using file based persistence. It is a protection against service outages or back
-pressure further on the pipeline.
+Benthos is a stream buffer service for piping large volumes of data from one
+source to another using file based persistence. It is a protection against
+service outages or back pressure further on in the pipeline caused by surges.
 
 This is currently an experimental project and is not recommended for production
 systems.
@@ -56,6 +56,17 @@ bytes:
 |             1ms |              1148 |             491.62 |             2.35 |
 |           100us |              1778 |            1754.60 |             8.40 |
 |            10us |             26223 |            2807.33 |            13.44 |
+
+Using a more beefy desktop machine (8 x 2.4ghz cores):
+
+| Stream Interval | Avg. Latency (us) | Msg. Rate (msgs/s) | Byte Rate (MB/s) |
+|----------------:|------------------:|-------------------:|-----------------:|
+|           100ms |               247 |               9.66 |             0.05 |
+|            10ms |               518 |              75.71 |             0.36 |
+|             1ms |               561 |             606.35 |             2.90 |
+|           100us |               734 |            4454.05 |            21.32 |
+|            10us |              2665 |            7178.02 |            34.36 |
+|             1us |            174099 |           20098.26 |            96.20 |
 
 ## Install
 
@@ -122,6 +133,10 @@ Or, in a JSON config file it might look like this:
 	}
 ]
 ```
+
+## More docs
+
+For further information check out the `./docs` directory.
 
 ## Vendoring
 

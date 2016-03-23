@@ -22,6 +22,8 @@ THE SOFTWARE.
 
 package types
 
+//--------------------------------------------------------------------------------------------------
+
 // Message - A struct containing any relevant fields of a benthos message and helper functions.
 type Message struct {
 	Parts [][]byte `json:"parts"`
@@ -33,6 +35,30 @@ func NewMessage() Message {
 		Parts: [][]byte{},
 	}
 }
+
+//--------------------------------------------------------------------------------------------------
+
+/*
+Internal message blob format:
+
+- Four bytes containing number of message parts in big endian
+- For each message part:
+    + Four bytes containing length of message part in big endian
+    + Content of message part
+
+                                         # Of bytes in message 2
+                                         |
+# Of message parts (big endian)          |           Content of message 2
+|                                        |           |
+v                                        v           v
+| 2| 0| 0| 0| 5| 0| 0| 0| h| e| l| l| o| 5| 0| 0| 0| w| o| r| l| d|
+  0  1  2  3  4  5  6  7  8  9 10 11 13 14 15 16 17 18 19 20 21 22
+              ^           ^
+              |           |
+              |           Content of message 1
+              |
+              # Of bytes in message 1 (big endian)
+*/
 
 // Reserve  bytes for our length counter (4 * 8 = 32 bit)
 var intLen uint32 = 4
@@ -101,3 +127,5 @@ func FromBytes(b []byte) (Message, error) {
 	}
 	return m, nil
 }
+
+//--------------------------------------------------------------------------------------------------

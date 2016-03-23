@@ -47,7 +47,7 @@ func init() {
 type HTTPClientConfig struct {
 	URL            string `json:"url" yaml:"url"`
 	TimeoutMS      int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS        int64  `json:"retry_period" yaml:"retry_period"`
+	RetryMS        int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
 	FullForwarding bool   `json:"full_contents_forwarding" yaml:"full_contents_forwarding"`
 }
 
@@ -124,8 +124,12 @@ func (h *HTTPClient) loop() {
 				}
 				if err == nil {
 					res, err = client.Do(req)
+				} else {
+					h.log.Warnln("Dispatching singlepart message without full forwarding")
+					h.log.Debugf("Message contents: %v\n", msg.Parts[0])
 				}
-			} else {
+			}
+			if !h.conf.HTTPClient.FullForwarding || err != nil {
 				res, err = client.Post(
 					h.conf.HTTPClient.URL,
 					"application/octet-stream",
@@ -134,7 +138,8 @@ func (h *HTTPClient) loop() {
 			}
 		} else {
 			if h.conf.HTTPClient.FullForwarding {
-				h.log.Warnln("Dispatching multipart message, cannot send with full forwarding")
+				h.log.Warnln("Dispatching multipart message without full forwarding")
+				h.log.Debugf("Message contents: %v\n", msg.Parts)
 			}
 			res, err = client.Post(
 				h.conf.HTTPClient.URL,

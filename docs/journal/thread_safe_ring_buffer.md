@@ -1,7 +1,11 @@
-Thread Safe Byte Array
-======================
+Thread Safe Ring Buffer
+=======================
 
 Benthos uses memory-mapped files, therefore its core performance bottleneck outside of IO is storing messages into an array of bytes acting as a ring buffer, and simultaneously reading messages from that array. Since inputs and outputs are asynchronous we must have a structure that can efficiently wrap the byte array with locking mechanisms for protecting the data from dangerous parallel writes/reads.
+
+Obviously, the ultimate goal here is to have a lock-free ring buffer. However, these are notoriously complex and heavy handed, and quite frankly I don't trust myself to implement one in the time I intended to spend on this project.
+
+My goal right now is to make something simple to read and easy to replace, and fast enough.
 
 ## Idiomatic Conditional Goroutine Blocking
 
@@ -46,7 +50,7 @@ If we want to fix this limitation we need to deviate from the simpler and more i
 
 ## Less Idiomatic Blocking
 
-Using the `sync` package we will depart from channels and instead divide our structure into three methods `PushMessage(msg Message)`, `NextMessage() (Message, error)` and `ShiftMessage()`. Splitting the reading operations into Next and Shift means we can read without committing, this helps in case the message fails to get propagated.
+Using the `sync` package we will depart from channels and instead divide our structure into three methods `PushMessage(msg Message)`, `NextMessage() (Message, error)` and `ShiftMessage()`. Splitting the reading operations into Next and Shift means we can read without committing, this helps in case the message fails to get propagated, but also means it is not safe to have multiple asynchronous readers.
 
 The `PushMessage` method takes a message and puts it on the end of our buffer stack. This call will block until the operation has been completed. Blocking will last until there is enough space to write our message in the buffer and it is safe to do so.
 

@@ -9,7 +9,7 @@ outputs:
   http_client:
     url: "http://localhost:1235/post"
     timeout_ms: 1000
-    retry_period: 1000
+    retry_period_ms: 1000
 buffer:
   type: mmap_file
   mmap_file:
