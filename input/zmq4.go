@@ -47,6 +47,7 @@ func init() {
 type ZMQ4Config struct {
 	Addresses     []string `json:"addresses" yaml:"addresses"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
+	SubFilters    []string `json:"sub_filters" yaml:"sub_filters"`
 	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 }
 
@@ -55,6 +56,7 @@ func NewZMQ4Config() *ZMQ4Config {
 	return &ZMQ4Config{
 		Addresses:     []string{"tcp://localhost:1235"},
 		SocketType:    "PULL",
+		SubFilters:    []string{},
 		PollTimeoutMS: 5000,
 	}
 }
@@ -114,6 +116,12 @@ func NewZMQ4(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, erro
 		}
 	}
 
+	for _, filter := range conf.ZMQ4.SubFilters {
+		if err = z.socket.SetSubscribe(filter); err != nil {
+			return nil, err
+		}
+	}
+
 	return &z, nil
 }
 
@@ -151,12 +159,17 @@ func (z *ZMQ4) loop() {
 					if data, err = z.socket.RecvMessageBytes(0); err != nil {
 						z.stats.Incr("input.zmq4.receive.error", 1)
 						z.log.Errorf("Failed to receive message bytes: %v\n", err)
+						data = nil
 					}
 				} else if err != nil {
 					z.stats.Incr("input.zmq4.poll.error", 1)
 					// z.log.Warnf("ZMQ socket poll error: %v\n", err)
 					data = nil
 				}
+			}
+
+			if data != nil && len(data) == 0 {
+				data = nil
 			}
 		}
 

@@ -19,3 +19,9 @@
 [submodule "vendor/github.com/pebbe/zmq4"]
 	path = vendor/github.com/pebbe/zmq4
 	url = https://github.com/pebbe/zmq4
+[submodule "vendor/github.com/gdamore/mangos"]
+	path = vendor/github.com/gdamore/mangos
+	url = https://github.com/gdamore/mangos
+[submodule "vendor/github.com/go-mangos/mangos"]
+	path = vendor/github.com/go-mangos/mangos
+	url = https://github.com/go-mangos/mangos

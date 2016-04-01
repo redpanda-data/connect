@@ -23,8 +23,6 @@ THE SOFTWARE.
 package output
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -150,94 +148,6 @@ func TestHTTPClientBasic(t *testing.T) {
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
-			return
-		}
-
-		select {
-		case res := <-h.ResponseChan():
-			if res.Error() != nil {
-				t.Error(res.Error())
-				return
-			}
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
-	}
-}
-
-func TestHTTPForwarding(t *testing.T) {
-	nTestLoops := 1000
-
-	sendChan, resultChan := make(chan types.Message), make(chan *http.Request, 1)
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bodyBytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("Failed to read body: %v", err)
-		}
-		if exp, actual := string(bodyBytes), "TestHTTPForwarding"; exp != actual {
-			t.Errorf("Wrong body result: %s != %s", exp, actual)
-		}
-		resultChan <- r
-	}))
-	defer ts.Close()
-
-	conf := NewConfig()
-	conf.HTTPClient.URL = ts.URL + "/testpost"
-	conf.HTTPClient.FullForwarding = true
-
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err = h.StartReceiving(sendChan); err != nil {
-		t.Error(err)
-		return
-	}
-
-	for i := 0; i < nTestLoops; i++ {
-		body := []byte("TestHTTPForwarding")
-		r, err := http.NewRequest(
-			"POST", "http://localhost:8080/test", bufio.NewReader(bytes.NewBuffer(body)),
-		)
-		r.Header.Add("TestLoop", fmt.Sprintf("%v", i))
-		r.Header.Add("hello", "world")
-		if err != nil {
-			t.Errorf("Request read failed: %v\n", err)
-			return
-		}
-		var buf bytes.Buffer
-		if err := r.WriteProxy(&buf); err != nil {
-			t.Errorf("Request read failed: %v\n", err)
-			return
-		}
-
-		testMsg := types.Message{Parts: [][]byte{buf.Bytes()}}
-
-		select {
-		case sendChan <- testMsg:
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out at loop: %v", i)
-			return
-		}
-
-		select {
-		case res := <-resultChan:
-			if res == nil {
-				t.Errorf("Res returned was nil")
-				return
-			}
-			if exp, actual := r.Header.Get("TestLoop"), fmt.Sprintf("%v", i); exp != actual {
-				t.Errorf("Wrong header result: %v != %v", exp, actual)
-			}
-			if exp, actual := r.Header.Get("hello"), "world"; exp != actual {
-				t.Errorf("Wrong header result: %v != %v", exp, actual)
-			}
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out at loop: %v", i)
 			return
 		}
 

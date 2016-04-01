@@ -23,10 +23,8 @@ THE SOFTWARE.
 package input
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"testing"
@@ -109,90 +107,6 @@ func TestHTTPBasic(t *testing.T) {
 		case resMsg := <-h.MessageChan():
 			if res := string(resMsg.Parts[0]); res != testStr {
 				t.Errorf("Wrong result, %v != %v", resMsg, res)
-			}
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for message")
-		}
-		select {
-		case resChan <- types.NewSimpleResponse(nil):
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
-	}
-}
-
-func TestHTTPForwarding(t *testing.T) {
-	nTestLoops := 1000
-
-	conf := NewConfig()
-	conf.HTTPServer.Address = "localhost:1235"
-	conf.HTTPServer.Path = "/testpost"
-	conf.HTTPServer.FullForwarding = true
-
-	h, err := NewHTTPServer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	resChan := make(chan types.Response)
-
-	if err = h.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
-	<-time.After(time.Second)
-
-	for i := 0; i < nTestLoops; i++ {
-		testStr := fmt.Sprintf("test%v", i)
-
-		req, err := http.NewRequest(
-			"POST", "http://localhost:1235/testpost",
-			bufio.NewReader(bytes.NewBuffer([]byte(testStr))),
-		)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-
-		req.Header.Add("test1", "1")
-		req.Header.Add("test2", "2")
-		req.Header.Add("test3", "3")
-
-		var client http.Client
-		res, err := client.Do(req)
-		if err != nil {
-			t.Error(err)
-			return
-		} else if res.StatusCode != 200 {
-			t.Errorf("Wrong error code returned: %v", res.StatusCode)
-			return
-		}
-
-		select {
-		case resMsg := <-h.MessageChan():
-			req, err := http.ReadRequest(bufio.NewReader(bytes.NewBuffer(resMsg.Parts[0])))
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			if exp, actual := req.Header.Get("test1"), "1"; exp != actual {
-				t.Errorf("Wrong header result: %v != %v", exp, actual)
-			}
-			if exp, actual := req.Header.Get("test2"), "2"; exp != actual {
-				t.Errorf("Wrong header result: %v != %v", exp, actual)
-			}
-			if exp, actual := req.Header.Get("test3"), "3"; exp != actual {
-				t.Errorf("Wrong header result: %v != %v", exp, actual)
-			}
-			bodyBytes, err := ioutil.ReadAll(req.Body)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			if exp, actual := string(bodyBytes), testStr; exp != actual {
-				t.Errorf("Wrong body result: %s != %s", exp, actual)
 			}
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")

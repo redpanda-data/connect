@@ -39,7 +39,8 @@ var (
 	ErrInvalidInputType  = errors.New("input type was not recognised")
 	ErrInvalidOutputType = errors.New("output type was not recognised")
 
-	ErrInvalidZMQType = errors.New("invalid ZMQ socket type")
+	ErrInvalidZMQType        = errors.New("invalid ZMQ socket type")
+	ErrInvalidScaleProtoType = errors.New("invalid Scalability Protocols socket type")
 
 	// ErrAlreadyStarted - When an input or output type gets started a second time.
 	ErrAlreadyStarted = errors.New("type has already been started")

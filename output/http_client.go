@@ -23,10 +23,8 @@ THE SOFTWARE.
 package output
 
 import (
-	"bufio"
 	"bytes"
 	"net/http"
-	"net/url"
 	"sync/atomic"
 	"time"
 
@@ -45,19 +43,17 @@ func init() {
 
 // HTTPClientConfig - Configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	URL            string `json:"url" yaml:"url"`
-	TimeoutMS      int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS        int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
-	FullForwarding bool   `json:"full_contents_forwarding" yaml:"full_contents_forwarding"`
+	URL       string `json:"url" yaml:"url"`
+	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	RetryMS   int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
 }
 
 // NewHTTPClientConfig - Creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		URL:            "localhost:8081/post",
-		TimeoutMS:      5000,
-		RetryMS:        1000,
-		FullForwarding: false,
+		URL:       "localhost:8081/post",
+		TimeoutMS: 5000,
+		RetryMS:   1000,
 	}
 }
 
@@ -115,32 +111,12 @@ func (h *HTTPClient) loop() {
 		var err error
 
 		if len(msg.Parts) == 1 {
-			if h.conf.HTTPClient.FullForwarding {
-				var req *http.Request
-				req, err = http.ReadRequest(bufio.NewReader(bytes.NewBuffer(msg.Parts[0])))
-				if err == nil {
-					req.URL, err = url.Parse(h.conf.HTTPClient.URL)
-					req.RequestURI = ""
-				}
-				if err == nil {
-					res, err = client.Do(req)
-				} else {
-					h.log.Warnln("Dispatching singlepart message without full forwarding")
-					h.log.Debugf("Message contents: %v\n", msg.Parts[0])
-				}
-			}
-			if !h.conf.HTTPClient.FullForwarding || err != nil {
-				res, err = client.Post(
-					h.conf.HTTPClient.URL,
-					"application/octet-stream",
-					bytes.NewBuffer(msg.Parts[0]),
-				)
-			}
+			res, err = client.Post(
+				h.conf.HTTPClient.URL,
+				"application/octet-stream",
+				bytes.NewBuffer(msg.Parts[0]),
+			)
 		} else {
-			if h.conf.HTTPClient.FullForwarding {
-				h.log.Warnln("Dispatching multipart message without full forwarding")
-				h.log.Debugf("Message contents: %v\n", msg.Parts)
-			}
 			res, err = client.Post(
 				h.conf.HTTPClient.URL,
 				"application/x-benthos-multipart",

@@ -10,10 +10,7 @@ using simple curl requests.
 ### HTTP Server
 
 Currently the only supported HTTP input type, also only supports POST requests
-at this time.
-
-By default this input type will only preserve the posted BODY of the request,
-refer to the `full_contents_forwarding` option below for preserving headers.
+at this time. This input type will only preserve the BODY of the request.
 
 #### Config
 
@@ -22,7 +19,6 @@ http_server:
 	address: localhost:8080
 	path: /post
 	timeout_ms: 5000
-	full_contents_forwarding: false
 ```
 
 You need to specify the address to bind to as well as the specific path to serve
@@ -57,15 +53,6 @@ v                                        v           v
 
 To see an example of how to use this encoding look at `./types/message.go`.
 
-##### Preserving HTTP Headers
-
-The option `full_contents_forwarding` can be used to preserve HTTP request
-headers that are sent with the request. This mode enforces single-part messages
-and internally stores the entire request as a binary blob.
-
-This option can be subsequently set on an HTTP output and sets up Benthos to
-function as an HTTP proxy.
-
 ## Output
 
 ### HTTP Client
@@ -80,7 +67,6 @@ http_client:
 	url: localhost:8081/post
 	timeout_ms: 5000
 	retry_period_ms: 1000
-	full_contents_forwarding: false
 ```
 
 You need to specify the URL to send to. You may also specify a timeout as well
@@ -91,10 +77,3 @@ as a retry period to wait between failed attempt retries.
 Singlepart messages will be sent as a single blob with the `Content-Type` header
 `application/octet-stream`. Multipart messages will be sent encoded (refer to
 above) with the `Content-Type` header `application/x-benthos-multipart`.
-
-##### Preserving HTTP Headers
-
-When the option `full_contents_forwarding` is set to true Benthos will attempt
-to parse and send all single part messages into an HTTP request with headers
-preserved. Multipart messages, or singlepart messages that fail to be parsed,
-will be sent according to the default rules (as above).

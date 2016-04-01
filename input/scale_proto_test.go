@@ -1,5 +1,3 @@
-// +build ZMQ4
-
 /*
 Copyright (c) 2014 Ashley Jeffs
 
@@ -30,21 +28,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-mangos/mangos/protocol/pub"
+	"github.com/go-mangos/mangos/protocol/push"
+	"github.com/go-mangos/mangos/transport/tcp"
+
 	"github.com/jeffail/benthos/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
-	"github.com/pebbe/zmq4"
 )
 
-func TestZMQ4Basic(t *testing.T) {
+func TestScaleProtoBasic(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
-	conf.ZMQ4.Addresses = []string{"tcp://*:1234"}
-	conf.ZMQ4.SocketType = "PULL"
-	conf.ZMQ4.PollTimeoutMS = 1000
+	conf.ScaleProto.Address = "tcp://localhost:1238"
+	conf.ScaleProto.Bind = true
+	conf.ScaleProto.SocketType = "PULL"
+	conf.ScaleProto.PollTimeoutMS = 1000
 
-	z, err := NewZMQ4(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -52,39 +54,35 @@ func TestZMQ4Basic(t *testing.T) {
 
 	resChan := make(chan types.Response)
 
-	if err = z.StartListening(resChan); err != nil {
+	if err = s.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
 	}
 
-	defer z.CloseAsync()
-	defer z.WaitForClose(time.Second)
+	defer s.CloseAsync()
+	defer s.WaitForClose(time.Second)
 
-	ctx, err := zmq4.NewContext()
-	if nil != err {
+	socket, err := push.NewSocket()
+	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	socket, err := ctx.NewSocket(zmq4.PUSH)
-	if nil != err {
-		t.Error(err)
-		return
-	}
+	socket.AddTransport(tcp.NewTransport())
 
-	if err = socket.Connect("tcp://localhost:1234"); err != nil {
+	if err = socket.Dial("tcp://localhost:1238"); err != nil {
 		t.Error(err)
 		return
 	}
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		if _, err = socket.Send(testStr, 0); err != nil {
+		if err = socket.Send([]byte(testStr)); err != nil {
 			t.Error(err)
 			return
 		}
 		select {
-		case resMsg := <-z.MessageChan():
+		case resMsg := <-s.MessageChan():
 			if res := string(resMsg.Parts[0]); res != testStr {
 				t.Errorf("Wrong result, %v != %v", res, testStr)
 			}
@@ -99,16 +97,17 @@ func TestZMQ4Basic(t *testing.T) {
 	}
 }
 
-func TestZMQ4PubSub(t *testing.T) {
+func TestScaleProtoPubSub(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
-	conf.ZMQ4.Addresses = []string{"tcp://*:1236"}
-	conf.ZMQ4.SocketType = "SUB"
-	conf.ZMQ4.SubFilters = []string{"testTopic"}
-	conf.ZMQ4.PollTimeoutMS = 1000
+	conf.ScaleProto.Address = "tcp://localhost:1239"
+	conf.ScaleProto.Bind = true
+	conf.ScaleProto.SocketType = "SUB"
+	conf.ScaleProto.SubFilters = []string{"testTopic"}
+	conf.ScaleProto.PollTimeoutMS = 1000
 
-	z, err := NewZMQ4(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -116,27 +115,23 @@ func TestZMQ4PubSub(t *testing.T) {
 
 	resChan := make(chan types.Response)
 
-	if err = z.StartListening(resChan); err != nil {
+	if err = s.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
 	}
 
-	defer z.CloseAsync()
-	defer z.WaitForClose(time.Second)
+	defer s.CloseAsync()
+	defer s.WaitForClose(time.Second)
 
-	ctx, err := zmq4.NewContext()
-	if nil != err {
+	socket, err := pub.NewSocket()
+	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	socket, err := ctx.NewSocket(zmq4.PUB)
-	if nil != err {
-		t.Error(err)
-		return
-	}
+	socket.AddTransport(tcp.NewTransport())
 
-	if err = socket.Connect("tcp://localhost:1236"); err != nil {
+	if err = socket.Dial("tcp://localhost:1239"); err != nil {
 		t.Error(err)
 		return
 	}
@@ -145,33 +140,17 @@ func TestZMQ4PubSub(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		if _, err = socket.Send("testTopic", zmq4.SNDMORE); err != nil {
+		if err = socket.Send([]byte("testTopic" + testStr)); err != nil {
 			t.Error(err)
 			return
 		}
-		if _, err = socket.Send(testStr, 0); err != nil {
-			t.Error(err)
-			return
-		}
-		if _, err = socket.Send("DO_NOT_WANT", zmq4.SNDMORE); err != nil {
-			t.Error(err)
-			return
-		}
-		if _, err = socket.Send("DONT WANT THIS", 0); err != nil {
+		if err = socket.Send([]byte("DO_NOT_WANT")); err != nil {
 			t.Error(err)
 			return
 		}
 		select {
-		case resMsg := <-z.MessageChan():
-			if len(resMsg.Parts) != 2 {
-				t.Errorf("Wrong # parts: %v != 2", len(resMsg.Parts))
-				return
-			}
-			if string(resMsg.Parts[0]) != "testTopic" {
-				t.Errorf("Wrong topic: %s != testTopic", resMsg.Parts[0])
-				return
-			}
-			if res := string(resMsg.Parts[1]); res != testStr {
+		case resMsg := <-s.MessageChan():
+			if res := string(resMsg.Parts[0][9:]); res != testStr {
 				t.Errorf("Wrong result, %v != %v", res, testStr)
 			}
 		case <-time.After(time.Second):

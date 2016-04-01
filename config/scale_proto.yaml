@@ -1,0 +1,25 @@
+inputs:
+- type: scalability_protocols
+  scalability_protocols:
+    address: tcp://localhost:1234
+    bind_address: true
+    socket_type: PULL
+    poll_timeout_ms: 2000
+outputs:
+- type: scalability_protocols
+  scalability_protocols:
+    address: tcp://localhost:1235
+    bind_address: true
+    socket_type: PUSH
+    poll_timeout_ms: 2000
+buffer:
+  type: mmap_file
+  mmap_file:
+    directory: "/tmp/benthos"
+    file_size: 200000000
+    retry_period_ms: 1000
+    clean_up: true
+logger:
+  prefix: benthos
+  log_level: INFO
+  add_timestamp: true

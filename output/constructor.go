@@ -38,6 +38,7 @@ var constructors = map[string]func(conf Config, log *log.Logger, stats metrics.A
 type Config struct {
 	Type       string           `json:"type" yaml:"type"`
 	HTTPClient HTTPClientConfig `json:"http_client" yaml:"http_client"`
+	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 }
 
@@ -46,6 +47,7 @@ func NewConfig() Config {
 	return Config{
 		Type:       "http_client",
 		HTTPClient: NewHTTPClientConfig(),
+		ScaleProto: NewScaleProtoConfig(),
 		ZMQ4:       NewZMQ4Config(),
 	}
 }

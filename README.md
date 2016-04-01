@@ -71,7 +71,7 @@ Using a more beefy desktop machine (8 x 2.4ghz cores):
 ## Install
 
 ```shell
-go get github.com/jeffail/benthos
+go get github.com/jeffail/benthos/cmd/...
 ```
 
 ## ZMQ4 Support
@@ -80,7 +80,7 @@ Benthos supports ZMQ4 for both data input and output. To add this you need to
 install libzmq4 and use the compile time flag when building benthos:
 
 ```shell
-go install -tags "ZMQ4"
+go install -tags "ZMQ4" ./cmd/...
 ```
 
 ## Run

@@ -42,6 +42,7 @@ var constructors = map[string]func(
 type Config struct {
 	Type       string           `json:"type" yaml:"type"`
 	HTTPServer HTTPServerConfig `json:"http_server" yaml:"http_server"`
+	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 }
 
@@ -50,6 +51,7 @@ func NewConfig() Config {
 	return Config{
 		Type:       "http_server",
 		HTTPServer: NewHTTPServerConfig(),
+		ScaleProto: NewScaleProtoConfig(),
 		ZMQ4:       NewZMQ4Config(),
 	}
 }

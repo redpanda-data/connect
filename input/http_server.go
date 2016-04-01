@@ -23,7 +23,6 @@ THE SOFTWARE.
 package input
 
 import (
-	"bytes"
 	"io/ioutil"
 	"net/http"
 	"sync"
@@ -45,19 +44,17 @@ func init() {
 
 // HTTPServerConfig - Configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
-	Address        string `json:"address" yaml:"address"`
-	Path           string `json:"path" yaml:"path"`
-	TimeoutMS      int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	FullForwarding bool   `json:"full_contents_forwarding" yaml:"full_contents_forwarding"`
+	Address   string `json:"address" yaml:"address"`
+	Path      string `json:"path" yaml:"path"`
+	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
 }
 
 // NewHTTPServerConfig - Creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
-		Address:        "localhost:8080",
-		Path:           "/post",
-		TimeoutMS:      5000,
-		FullForwarding: false,
+		Address:   "localhost:8080",
+		Path:      "/post",
+		TimeoutMS: 5000,
 	}
 }
 
@@ -117,32 +114,22 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 
 	var msg types.Message
 
-	if h.conf.HTTPServer.FullForwarding {
-		var buf bytes.Buffer
-		if err := r.WriteProxy(&buf); err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			h.log.Warnf("Request read failed: %v\n", err)
-			return
-		}
-		msg.Parts = [][]byte{buf.Bytes()}
-	} else {
-		msgBytes, err := ioutil.ReadAll(r.Body)
+	msgBytes, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		h.log.Warnf("Request read failed: %v\n", err)
+		return
+	}
+
+	if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
+		msg, err = types.FromBytes(msgBytes)
 		if err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 			h.log.Warnf("Request read failed: %v\n", err)
 			return
 		}
-
-		if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
-			msg, err = types.FromBytes(msgBytes)
-			if err != nil {
-				http.Error(w, "Bad request", http.StatusBadRequest)
-				h.log.Warnf("Request read failed: %v\n", err)
-				return
-			}
-		} else {
-			msg.Parts = [][]byte{msgBytes}
-		}
+	} else {
+		msg.Parts = [][]byte{msgBytes}
 	}
 
 	h.Lock()
