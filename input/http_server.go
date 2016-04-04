@@ -23,8 +23,12 @@ THE SOFTWARE.
 package input
 
 import (
+	"io"
 	"io/ioutil"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -114,22 +118,52 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 
 	var msg types.Message
 
-	msgBytes, err := ioutil.ReadAll(r.Body)
+	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		h.log.Warnf("Request read failed: %v\n", err)
 		return
 	}
 
-	if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
-		msg, err = types.FromBytes(msgBytes)
+	if strings.HasPrefix(mediaType, "multipart/") {
+		msg.Parts = [][]byte{}
+		mr := multipart.NewReader(r.Body, params["boundary"])
+		for {
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				http.Error(w, "Bad request", http.StatusBadRequest)
+				h.log.Warnf("Request read failed: %v\n", err)
+				return
+			}
+			msgBytes, err := ioutil.ReadAll(p)
+			if err != nil {
+				http.Error(w, "Bad request", http.StatusBadRequest)
+				h.log.Warnf("Request read failed: %v\n", err)
+				return
+			}
+			msg.Parts = append(msg.Parts, msgBytes)
+		}
+	} else {
+		msgBytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 			h.log.Warnf("Request read failed: %v\n", err)
 			return
 		}
-	} else {
-		msg.Parts = [][]byte{msgBytes}
+
+		if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
+			msg, err = types.FromBytes(msgBytes)
+			if err != nil {
+				http.Error(w, "Bad request", http.StatusBadRequest)
+				h.log.Warnf("Request read failed: %v\n", err)
+				return
+			}
+		} else {
+			msg.Parts = [][]byte{msgBytes}
+		}
 	}
 
 	h.Lock()

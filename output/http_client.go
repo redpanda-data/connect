@@ -24,7 +24,10 @@ package output
 
 import (
 	"bytes"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"sync/atomic"
 	"time"
 
@@ -43,17 +46,19 @@ func init() {
 
 // HTTPClientConfig - Configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	URL       string `json:"url" yaml:"url"`
-	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS   int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
+	URL             string `json:"url" yaml:"url"`
+	TimeoutMS       int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	RetryMS         int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
+	UseBenthosMulti *bool  `json:"use_benthos_multi,omitempty" yaml:"use_benthos_multi,omitempty"`
 }
 
 // NewHTTPClientConfig - Creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		URL:       "localhost:8081/post",
-		TimeoutMS: 5000,
-		RetryMS:   1000,
+		URL:             "localhost:8081/post",
+		TimeoutMS:       5000,
+		RetryMS:         1000,
+		UseBenthosMulti: nil,
 	}
 }
 
@@ -116,12 +121,36 @@ func (h *HTTPClient) loop() {
 				"application/octet-stream",
 				bytes.NewBuffer(msg.Parts[0]),
 			)
-		} else {
+		} else if h.conf.HTTPClient.UseBenthosMulti != nil && *h.conf.HTTPClient.UseBenthosMulti {
 			res, err = client.Post(
 				h.conf.HTTPClient.URL,
 				"application/x-benthos-multipart",
 				bytes.NewBuffer(msg.Bytes()),
 			)
+		} else {
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+
+			for i := 0; i < len(msg.Parts) && err == nil; i++ {
+				var part io.Writer
+				part, err = writer.CreatePart(textproto.MIMEHeader{
+					"Content-Type": []string{"application/octet-stream"},
+				})
+				if err == nil {
+					_, err = io.Copy(part, bytes.NewReader(msg.Parts[i]))
+				}
+			}
+
+			writer.Close()
+
+			var req *http.Request
+			if err == nil {
+				req, err = http.NewRequest("POST", h.conf.HTTPClient.URL, body)
+				req.Header.Add("Content-Type", writer.FormDataContentType())
+			}
+			if err == nil {
+				res, err = client.Do(req)
+			}
 		}
 
 		// Check status code

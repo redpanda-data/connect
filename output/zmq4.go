@@ -124,8 +124,6 @@ func getZMQType(t string) (zmq4.Type, error) {
 	switch t {
 	case "PUB":
 		return zmq4.PUB, nil
-	case "XPUB":
-		return zmq4.XPUB, nil
 	case "PUSH":
 		return zmq4.PUSH, nil
 	}

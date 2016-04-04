@@ -131,8 +131,6 @@ func getZMQType(t string) (zmq4.Type, error) {
 	switch t {
 	case "SUB":
 		return zmq4.SUB, nil
-	case "XSUB":
-		return zmq4.XSUB, nil
 	case "PULL":
 		return zmq4.PULL, nil
 	}

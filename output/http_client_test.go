@@ -24,10 +24,14 @@ package output
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,18 +53,44 @@ func TestHTTPClientBasic(t *testing.T) {
 			resultChan <- msg
 		}()
 
-		b, err := ioutil.ReadAll(r.Body)
+		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
-			t.Error(err)
+			t.Errorf("Bad media type: %v -> %v", r.Header.Get("Content-Type"), err)
 			return
 		}
-		if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
-			msg, err = types.FromBytes(b)
+
+		if strings.HasPrefix(mediaType, "multipart/") {
+			msg.Parts = [][]byte{}
+			mr := multipart.NewReader(r.Body, params["boundary"])
+			for {
+				p, err := mr.NextPart()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				msgBytes, err := ioutil.ReadAll(p)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				msg.Parts = append(msg.Parts, msgBytes)
+			}
+		} else if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
+			b, err := ioutil.ReadAll(r.Body)
 			if err != nil {
 				t.Error(err)
 				return
 			}
+			msg, err = types.FromBytes(b)
 		} else {
+			b, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				t.Error(err)
+				return
+			}
 			msg.Parts = [][]byte{b}
 		}
 	}))

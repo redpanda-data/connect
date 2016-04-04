@@ -10,6 +10,7 @@ outputs:
     url: "http://localhost:1235/post"
     timeout_ms: 1000
     retry_period_ms: 1000
+    use_benthos_multi: true
 buffer:
   type: mmap_file
   mmap_file:

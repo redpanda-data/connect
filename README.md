@@ -4,15 +4,16 @@ Benthos is a stream buffer service for piping large volumes of data from one
 source to another using file based persistence. It is a protection against
 service outages or back pressure further on in the pipeline caused by surges.
 
+Benthos works well as a bridge between different messaging/stream services as it
+is quick to implement and configure new inputs and outputs.
+
 This is currently an experimental project and is not recommended for production
 systems.
 
 ## Design
 
-Benthos uses memory mapped files for storing messages in transit with a low
-latency overhead. If benthos is closed with a buffered queue of messages
-pending then those messages should be preserved and the buffer is resumed where
-it left off.
+Benthos has an input, an optional buffer, and an output, which are set in the
+config file.
 
 ```
 +-------------------------+    +--------+    +-------------------------+
@@ -20,17 +21,21 @@ it left off.
 | ( ZMQ, HTTP Post, etc ) |    +--------+    | ( ZMQ, HTTP Post, etc ) |
 +-------------------------+        |         +-------------------------+
                                    v
-                             +------------+
-                             | Filesystem |
-                             +------------+
+               +----------------------------------------+
+               | Memory-Mapped Files, Memory, None, etc |
+               +----------------------------------------+
 ```
-
 
 Benthos supports various input and output strategies. It is possible to combine
 multiple inputs and multiple outputs in one service instance. Currently combined
 outputs will each receive every message, where any blocked output will block all
 outputs. If there is demand then other output paradigms such as publish,
 round-robin etc could be supported.
+
+The buffer is where messages can be temporarily stored or persisted across
+service restarts depending on your requirements. Memory mapped files are the
+recommended approach as this provides low-latency persistence with enough
+guarantee for most cases.
 
 ## Speed and Benchmarks
 

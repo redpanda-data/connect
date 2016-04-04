@@ -26,10 +26,14 @@ from. You may also specify a timeout.
 
 ##### Singlepart and Multipart
 
-By default all POST requests are received and treated as single part. If you
-wish to send data as mulipart messages then you first need to set the
-`Content-Type` header to `application/x-benthos-multipart`. Secondly you need
-to POST your parts as a single data blob of the following format:
+By default all POST requests are received and treated as single part unless the
+`Content-Type` header is set to one of the following multipart formats:
+
+`multipart/mixed; boundary=<boundary>`. Benthos recognises this header and
+parses the body according to RFC 2046 (http://www.ietf.org/rfc/rfc2046.txt).
+
+`application/x-benthos-multipart`. This is a special case where the body is
+parsed as the following format:
 
 ```
 - Four bytes containing number of message parts in big endian
@@ -75,5 +79,5 @@ as a retry period to wait between failed attempt retries.
 ##### Singlepart and Multipart
 
 Singlepart messages will be sent as a single blob with the `Content-Type` header
-`application/octet-stream`. Multipart messages will be sent encoded (refer to
-above) with the `Content-Type` header `application/x-benthos-multipart`.
+`application/octet-stream`. Multipart messages will be sent using RFC 2046
+(http://www.ietf.org/rfc/rfc2046.txt).

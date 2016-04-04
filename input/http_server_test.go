@@ -87,6 +87,53 @@ func TestHTTPBasic(t *testing.T) {
 		}
 	}
 
+	// Test MIME multipart parsing, as defined in RFC 2046
+	for i := 0; i < nTestLoops; i++ {
+		partOne := fmt.Sprintf("test%v part one", i)
+		partTwo := fmt.Sprintf("test%v part two", i)
+
+		testStr := fmt.Sprintf(
+			"--foo\r\n"+
+				"Content-Type: application/octet-stream\r\n\r\n"+
+				"%v\r\n"+
+				"--foo\r\n"+
+				"Content-Type: application/octet-stream\r\n\r\n"+
+				"%v\r\n"+
+				"--foo--\r\n",
+			partOne, partTwo)
+
+		// Send it as multi part
+		if res, err := http.Post(
+			"http://localhost:1237/testpost",
+			"multipart/mixed; boundary=foo",
+			bytes.NewBuffer([]byte(testStr)),
+		); err != nil {
+			t.Error(err)
+			return
+		} else if res.StatusCode != 200 {
+			t.Errorf("Wrong error code returned: %v", res.StatusCode)
+			return
+		}
+		select {
+		case resMsg := <-h.MessageChan():
+			if exp, actual := 2, len(resMsg.Parts); exp != actual {
+				t.Errorf("Wrong number of parts: %v != %v", actual, exp)
+			} else if exp, actual := partOne, string(resMsg.Parts[0]); exp != actual {
+				t.Errorf("Wrong result, %v != %v", actual, exp)
+			} else if exp, actual := partTwo, string(resMsg.Parts[1]); exp != actual {
+				t.Errorf("Wrong result, %v != %v", actual, exp)
+			}
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for message")
+		}
+		select {
+		case resChan <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for response")
+		}
+	}
+
+	// Test benthos multipart format
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
 		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
