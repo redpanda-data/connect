@@ -173,7 +173,6 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 	}
-	return
 }
 
 //--------------------------------------------------------------------------------------------------

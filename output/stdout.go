@@ -58,7 +58,7 @@ type STDOUT struct {
 func NewSTDOUT(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	s := STDOUT{
 		conf:         conf,
-		log:          log,
+		log:          log.NewModule(".output.stdout"),
 		messages:     nil,
 		responseChan: make(chan types.Response),
 		closedChan:   make(chan struct{}),

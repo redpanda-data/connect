@@ -37,6 +37,15 @@ service restarts depending on your requirements. Memory mapped files are the
 recommended approach as this provides low-latency persistence with enough
 guarantee for most cases.
 
+## Support
+
+Currently supported input/output targets:
+
+- ZMQ4 (PUSH, PULL, SUB, PUB)
+- Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)
+- HTTP 1.1
+- STDIN/STDOUT
+
 ## Speed and Benchmarks
 
 Obviously the main goal of Benthos is to be stable, low-latency and high

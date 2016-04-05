@@ -34,6 +34,8 @@ import (
 
 // inputWrapperMsg - Used to forward an inputs message and res channel to the FanIn broker.
 type inputWrapperMsg struct {
+	ptr     *inputWrapper
+	closed  bool
 	msg     types.Message
 	resChan chan<- types.Response
 }
@@ -53,7 +55,15 @@ type inputWrapper struct {
 
 // loop - Internal loop of the inputWrapper.
 func (i *inputWrapper) loop() {
-	defer close(i.closed)
+	defer func() {
+		close(i.closed)
+		i.out <- inputWrapperMsg{
+			ptr:     i,
+			closed:  true,
+			msg:     types.Message{},
+			resChan: nil,
+		}
+	}()
 	for {
 		in, open := <-i.input.MessageChan()
 		if !open {
@@ -87,7 +97,7 @@ type FanIn struct {
 	responseChan <-chan types.Response
 
 	inputWrappersChan chan inputWrapperMsg
-	inputWrappers     []*inputWrapper
+	inputWrappers     map[*inputWrapper]struct{}
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -101,24 +111,25 @@ func NewFanIn(inputs []types.Input, stats metrics.Aggregator) (*FanIn, error) {
 		messageChan:       make(chan types.Message),
 		responseChan:      nil,
 		inputWrappersChan: make(chan inputWrapperMsg),
-		inputWrappers:     make([]*inputWrapper, len(inputs)),
+		inputWrappers:     make(map[*inputWrapper]struct{}),
 		closedChan:        make(chan struct{}),
 		closeChan:         make(chan struct{}),
 	}
 
 	for n := range inputs {
-		i.inputWrappers[n] = &inputWrapper{
+		wrapper := &inputWrapper{
 			input:  inputs[n],
 			res:    make(chan types.Response),
 			out:    i.inputWrappersChan,
 			closed: make(chan struct{}),
 		}
-		if err := inputs[n].StartListening(i.inputWrappers[n].res); err != nil {
+		i.inputWrappers[wrapper] = struct{}{}
+		if err := inputs[n].StartListening(wrapper.res); err != nil {
 			return nil, err
 		}
 	}
-	for n := range inputs {
-		go i.inputWrappers[n].loop()
+	for in := range i.inputWrappers {
+		go in.loop()
 	}
 
 	return i, nil
@@ -147,21 +158,25 @@ func (i *FanIn) MessageChan() <-chan types.Message {
 // loop - Internal loop brokers incoming messages to many outputs.
 func (i *FanIn) loop() {
 	defer func() {
-		for n := range i.inputWrappers {
-			i.inputWrappers[n].waitForClose()
+		for wrapper := range i.inputWrappers {
+			wrapper.waitForClose()
 		}
 		close(i.messageChan)
 		close(i.closedChan)
 	}()
 
-	for atomic.LoadInt32(&i.running) == 1 {
+	for atomic.LoadInt32(&i.running) == 1 && len(i.inputWrappers) > 0 {
 		wrap, open := <-i.inputWrappersChan
 		if !open {
 			return
 		}
-		i.stats.Incr("broker.fan_in.messages.received", 1)
-		i.messageChan <- wrap.msg
-		wrap.resChan <- <-i.responseChan
+		if wrap.closed && wrap.ptr != nil {
+			delete(i.inputWrappers, wrap.ptr)
+		} else {
+			i.stats.Incr("broker.fan_in.messages.received", 1)
+			i.messageChan <- wrap.msg
+			wrap.resChan <- <-i.responseChan
+		}
 	}
 }
 

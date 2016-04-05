@@ -39,3 +39,25 @@ The STDIN input simply reads any piped data flowing into the service as line
 delimited single part messages. This is a historical input source originally
 used for testing. If there is demand then the input could be improved to suit
 more cases.
+
+## Setting Multiple Inputs
+
+If you take a look at a default configuration with `benthos --print-yaml`
+you'll see that the input section is an array that allows for multiple inputs.
+
+Adding more input types allows you to merge streams from multiple sources into
+one. For example, having both a ZMQ4 PULL socket and a Nanomsg PULL socket:
+
+```yaml
+inputs:
+- type: scalability_protocols
+  scalability_protocols:
+    address: tcp://nanoserver:3003
+    bind_address: false
+    socket_type: PULL
+- type: zmq4
+  zmq4:
+    addresses:
+    - tcp://zmqserver:3004
+	socket_type: PULL
+```

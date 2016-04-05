@@ -25,6 +25,8 @@ package input
 import (
 	"bufio"
 	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jeffail/benthos/types"
@@ -42,52 +44,55 @@ func init() {
 
 // STDIN - An input type that serves STDIN POST requests.
 type STDIN struct {
-	conf Config
+	running int32
 
-	log *log.Logger
+	conf Config
+	log  *log.Logger
+
+	internalMessages chan []byte
 
 	messages  chan types.Message
 	responses <-chan types.Response
 
 	closedChan chan struct{}
-	closeChan  chan struct{}
+
+	sync.Mutex
 }
 
 // NewSTDIN - Create a new STDIN input type.
 func NewSTDIN(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	s := STDIN{
-		conf:       conf,
-		log:        log,
-		messages:   make(chan types.Message),
-		responses:  nil,
-		closedChan: make(chan struct{}),
-		closeChan:  make(chan struct{}),
+		running:          1,
+		conf:             conf,
+		log:              log.NewModule(".input.stdin"),
+		internalMessages: make(chan []byte),
+		messages:         make(chan types.Message),
+		responses:        nil,
+		closedChan:       make(chan struct{}),
 	}
+
+	go s.readLoop()
 
 	return &s, nil
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// loop - Internal loop brokers incoming messages to output pipe.
-func (s *STDIN) loop() {
+// readLoop - Reads from stdin pipe and sends to internal messages chan.
+func (s *STDIN) readLoop() {
 	stdin := bufio.NewScanner(os.Stdin)
 
-	var bytes [][]byte
-	var msgChan chan<- types.Message
+	var bytes []byte
 
-	s.log.Infoln("Receiving messages through STDIN")
-
-	running, responsePending := true, false
-	for running {
+	for atomic.LoadInt32(&s.running) == 1 {
 		// If no bytes then read a line
 		if bytes == nil {
-			bytes = make([][]byte, 0)
+			bytes = []byte{}
 			for stdin.Scan() {
 				if len(stdin.Bytes()) == 0 {
 					break
 				}
-				bytes = append(bytes, stdin.Bytes())
+				bytes = append(bytes, stdin.Bytes()...)
 			}
 			if len(bytes) == 0 {
 				bytes = nil
@@ -95,30 +100,49 @@ func (s *STDIN) loop() {
 		}
 
 		// If we have a line to push out
-		if bytes != nil && !responsePending {
-			msgChan = s.messages
-		} else {
-			msgChan = nil
-		}
-
-		if running {
+		if bytes != nil {
+			s.Lock()
 			select {
-			case msgChan <- types.Message{Parts: bytes}:
-				responsePending = true
-			case res, open := <-s.responses:
-				if !open {
-					s.responses = nil
-				} else if res.Error() == nil {
-					responsePending = false
-					bytes = nil
-				}
-			case _, running = <-s.closeChan:
+			case s.internalMessages <- bytes:
+				bytes = nil
+			case <-time.After(time.Second):
+			}
+			s.Unlock()
+		}
+	}
+}
+
+// loop - Internal loop brokers incoming messages to output pipe.
+func (s *STDIN) loop() {
+	defer func() {
+		close(s.messages)
+		close(s.closedChan)
+	}()
+
+	var data []byte
+	var open bool
+
+	s.log.Infoln("Receiving messages through STDIN")
+
+	for atomic.LoadInt32(&s.running) == 1 {
+		if data == nil {
+			data, open = <-s.internalMessages
+			if !open {
+				return
+			}
+		}
+		if data != nil {
+			s.messages <- types.Message{Parts: [][]byte{data}}
+
+			var res types.Response
+			res, open = <-s.responses
+			if !open {
+				atomic.StoreInt32(&s.running, 0)
+			} else if res.Error() == nil {
+				data = nil
 			}
 		}
 	}
-
-	close(s.messages)
-	close(s.closedChan)
 }
 
 // StartListening - Sets the channel used by the input to validate message receipt.
@@ -138,7 +162,13 @@ func (s *STDIN) MessageChan() <-chan types.Message {
 
 // CloseAsync - Shuts down the STDIN input and stops processing requests.
 func (s *STDIN) CloseAsync() {
-	close(s.closeChan)
+	iMsgs := s.internalMessages
+	s.Lock()
+	s.internalMessages = nil
+	close(iMsgs)
+	s.Unlock()
+
+	atomic.StoreInt32(&s.running, 0)
 }
 
 // WaitForClose - Blocks until the STDIN input has closed down.

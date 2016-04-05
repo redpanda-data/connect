@@ -51,7 +51,7 @@ Internal message blob format:
 # Of message parts (big endian)          |           Content of message 2
 |                                        |           |
 v                                        v           v
-| 2| 0| 0| 0| 5| 0| 0| 0| h| e| l| l| o| 5| 0| 0| 0| w| o| r| l| d|
+| 0| 0| 0| 2| 0| 0| 0| 5| h| e| l| l| o| 0| 0| 0| 5| w| o| r| l| d|
   0  1  2  3  4  5  6  7  8  9 10 11 13 14 15 16 17 18 19 20 21 22
               ^           ^
               |           |
