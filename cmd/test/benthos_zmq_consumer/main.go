@@ -62,6 +62,8 @@ func main() {
 		panic(err)
 	}
 
+	pullSocket.SetRcvhwm(1)
+
 	if strings.Contains(address, "*") {
 		err = pullSocket.Bind(address)
 	} else {

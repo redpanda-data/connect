@@ -150,6 +150,18 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 
 // loop - Internal loop brokers incoming messages to output pipe, does not use select.
 func (s *ScaleProto) loop() {
+	if s.conf.ScaleProto.Bind {
+		s.log.Infof(
+			"Sending Scalability Protocols messages to bound address: %s\n",
+			s.conf.ScaleProto.Address,
+		)
+	} else {
+		s.log.Infof(
+			"Sending Scalability Protocols messages to connected address: %s\n",
+			s.conf.ScaleProto.Address,
+		)
+	}
+
 	for atomic.LoadInt32(&s.running) == 1 {
 		msg, open := <-s.messages
 		if !open {

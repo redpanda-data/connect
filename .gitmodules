@@ -25,3 +25,6 @@
 [submodule "vendor/github.com/go-mangos/mangos"]
 	path = vendor/github.com/go-mangos/mangos
 	url = https://github.com/go-mangos/mangos
+[submodule "vendor/github.com/Shopify/sarama"]
+	path = vendor/github.com/Shopify/sarama
+	url = https://github.com/Shopify/sarama

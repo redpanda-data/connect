@@ -24,9 +24,9 @@ package main
 
 import (
 	_ "net/http/pprof"
+	"runtime/pprof"
 
 	"flag"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -61,11 +61,12 @@ type MetConfig struct {
 
 // Config - The benthos configuration struct.
 type Config struct {
-	Inputs  []input.Config   `json:"inputs" yaml:"inputs"`
-	Outputs []output.Config  `json:"outputs" yaml:"outputs"`
-	Buffer  buffer.Config    `json:"buffer" yaml:"buffer"`
-	Logger  log.LoggerConfig `json:"logger" yaml:"logger"`
-	Metrics MetConfig        `json:"metrics" yaml:"metrics"`
+	Inputs               []input.Config   `json:"inputs" yaml:"inputs"`
+	Outputs              []output.Config  `json:"outputs" yaml:"outputs"`
+	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
+	Logger               log.LoggerConfig `json:"logger" yaml:"logger"`
+	Metrics              MetConfig        `json:"metrics" yaml:"metrics"`
+	SystemCloseTimeoutMS int              `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
 }
 
 // NewConfig - Returns a new configuration with default values.
@@ -83,6 +84,7 @@ func NewConfig() Config {
 				Path:    "/stats",
 			},
 		},
+		SystemCloseTimeoutMS: 20000,
 	}
 }
 
@@ -121,6 +123,8 @@ func main() {
 	} else {
 		logger = log.NewLogger(os.Stdout, config.Logger)
 	}
+
+	logger.Infoln("Launching a benthos instance, use CTRL+C to close.")
 
 	// If profiling is enabled.
 	if *profileAddr != "" {
@@ -212,8 +216,10 @@ func main() {
 
 	// Defer ordered pool clean up.
 	defer func() {
-		if err := pool.Close(time.Second * 20); err != nil {
-			panic(err)
+		tout := time.Millisecond * time.Duration(config.SystemCloseTimeoutMS)
+		if err := pool.Close(tout); err != nil {
+			pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			os.Exit(1)
 		}
 	}()
 
@@ -228,8 +234,6 @@ func main() {
 			}
 		}()
 	}
-
-	fmt.Fprintf(os.Stderr, "Launching a benthos instance, use CTRL+C to close.\n\n")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)

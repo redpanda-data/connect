@@ -48,6 +48,7 @@ type ZMQ4Config struct {
 	Addresses     []string `json:"addresses" yaml:"addresses"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
 	SubFilters    []string `json:"sub_filters" yaml:"sub_filters"`
+	HighWaterMark int      `json:"high_water_mark" yaml:"high_water_mark"`
 	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 }
 
@@ -57,6 +58,7 @@ func NewZMQ4Config() *ZMQ4Config {
 		Addresses:     []string{"tcp://localhost:1235"},
 		SocketType:    "PULL",
 		SubFilters:    []string{},
+		HighWaterMark: 0,
 		PollTimeoutMS: 5000,
 	}
 }
@@ -105,6 +107,8 @@ func NewZMQ4(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, erro
 		return nil, err
 	}
 
+	z.socket.SetRcvhwm(conf.ZMQ4.HighWaterMark)
+
 	for _, address := range conf.ZMQ4.Addresses {
 		if strings.Contains(address, "*") {
 			err = z.socket.Bind(address)
@@ -143,6 +147,14 @@ func (z *ZMQ4) loop() {
 	pollTimeout := time.Millisecond * time.Duration(z.conf.ZMQ4.PollTimeoutMS)
 	poller := zmq4.NewPoller()
 	poller.Add(z.socket, zmq4.POLLIN)
+
+	for _, address := range z.conf.ZMQ4.Addresses {
+		if strings.Contains(address, "*") {
+			z.log.Infof("Receiving ZMQ4 messages on bound address: %v\n", address)
+		} else {
+			z.log.Infof("Receiving ZMQ4 messages on connected address: %v\n", address)
+		}
+	}
 
 	var data [][]byte
 

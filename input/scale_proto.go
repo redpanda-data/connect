@@ -156,6 +156,18 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 func (s *ScaleProto) loop() {
 	defer s.socket.Close()
 
+	if s.conf.ScaleProto.Bind {
+		s.log.Infof(
+			"Receiving Scalability Protocols messages at bound address: %s\n",
+			s.conf.ScaleProto.Address,
+		)
+	} else {
+		s.log.Infof(
+			"Receiving Scalability Protocols messages at connected address: %s\n",
+			s.conf.ScaleProto.Address,
+		)
+	}
+
 	var data []byte
 
 	for atomic.LoadInt32(&s.running) == 1 {

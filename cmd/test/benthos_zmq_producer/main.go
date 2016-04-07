@@ -78,6 +78,9 @@ func main() {
 	if nil != err {
 		panic(err)
 	}
+
+	pushSocket.SetSndhwm(1)
+
 	if strings.Contains(address, "*") {
 		err = pushSocket.Bind(address)
 	} else {

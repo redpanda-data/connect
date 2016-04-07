@@ -129,25 +129,6 @@ outputs:
 - type: stdout
 ```
 
-Or, in a JSON config file it might look like this:
-
-```json
-"outputs": [
-	{
-		"type": "zmq4",
-		"zmq4": {
-			"addresses": [
-				"tcp://*:1235"
-			],
-			"socket_type": "PUSH"
-		}
-	},
-	{
-		"type": "stdout"
-	}
-]
-```
-
 ## More docs
 
 For further information check out the `./docs` directory.
