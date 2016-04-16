@@ -44,6 +44,7 @@ type Config struct {
 	HTTPServer HTTPServerConfig `json:"http_server" yaml:"http_server"`
 	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
@@ -53,6 +54,7 @@ func NewConfig() Config {
 		HTTPServer: NewHTTPServerConfig(),
 		ScaleProto: NewScaleProtoConfig(),
 		ZMQ4:       NewZMQ4Config(),
+		Kafka:      NewKafkaConfig(),
 	}
 }
 

@@ -43,7 +43,7 @@ func init() {
 
 //--------------------------------------------------------------------------------------------------
 
-// ZMQ4Config - Configuration for the ZMQ4 input type.
+// ZMQ4Config - Configuration for the ZMQ4 output type.
 type ZMQ4Config struct {
 	Addresses     []string `json:"addresses" yaml:"addresses"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
@@ -61,7 +61,7 @@ func NewZMQ4Config() *ZMQ4Config {
 
 //--------------------------------------------------------------------------------------------------
 
-// ZMQ4 - An input type that serves ZMQ4 POST requests.
+// ZMQ4 - An output type that writes ZMQ4 messages.
 type ZMQ4 struct {
 	running int32
 
@@ -76,10 +76,9 @@ type ZMQ4 struct {
 	responseChan chan types.Response
 
 	closedChan chan struct{}
-	closeChan  chan struct{}
 }
 
-// NewZMQ4 - Create a new ZMQ4 input type.
+// NewZMQ4 - Create a new ZMQ4 output type.
 func NewZMQ4(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
 	z := ZMQ4{
 		running:      1,
@@ -89,7 +88,6 @@ func NewZMQ4(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, erro
 		messages:     nil,
 		responseChan: make(chan types.Response),
 		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
 	}
 
 	t, err := getZMQType(conf.ZMQ4.SocketType)
@@ -178,7 +176,6 @@ func (z *ZMQ4) ResponseChan() <-chan types.Response {
 // CloseAsync - Shuts down the ZMQ4 output and stops processing messages.
 func (z *ZMQ4) CloseAsync() {
 	atomic.StoreInt32(&z.running, 0)
-	close(z.closeChan)
 }
 
 // WaitForClose - Blocks until the ZMQ4 output has closed down.

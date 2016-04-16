@@ -1,0 +1,24 @@
+inputs:
+- type: kafka
+  kafka:
+    addresses:
+      - localhost:9092
+    client_id: benthos_kafka_input
+    consumer_group: benthos_consumer_group
+    topic: benthos_stream
+    partition: 0
+    poll_timeout_ms: 1000
+    start_from_oldest: true
+outputs:
+- type: stdout
+buffer:
+  type: mmap_file
+  mmap_file:
+    directory: "/tmp/benthos"
+    file_size: 200000000
+    retry_period_ms: 1000
+    clean_up: true
+logger:
+  prefix: benthos
+  log_level: ALL
+  add_timestamp: true

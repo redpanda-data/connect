@@ -45,6 +45,7 @@ Currently supported input/output targets:
 - Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)
 - HTTP 1.1
 - STDIN/STDOUT
+- Kafka
 
 ## Speed and Benchmarks
 
