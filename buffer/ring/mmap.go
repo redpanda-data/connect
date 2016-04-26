@@ -43,14 +43,14 @@ func NewMmapConfig() MmapConfig {
 
 /*
 Mmap - A ring buffer implemented around memory mapped files. NOTE: Currently the 'ring' is non
-existant since files are created as memory is needed. However, we may in future want to limit the
+existent since files are created as memory is needed. However, we may in future want to limit the
 space used on disk and therefore looping will need to be implemented.
 */
 type Mmap struct {
 	config MmapConfig
 	cache  *MmapCache
 
-	logger *log.Logger
+	logger log.Modular
 	stats  metrics.Aggregator
 
 	readFrom  int
@@ -63,7 +63,7 @@ type Mmap struct {
 }
 
 // NewMmap - Creates a block for buffering serialized messages.
-func NewMmap(config MmapConfig, log *log.Logger, stats metrics.Aggregator) (*Mmap, error) {
+func NewMmap(config MmapConfig, log log.Modular, stats metrics.Aggregator) (*Mmap, error) {
 	cache, err := NewMmapCache(MmapCacheConfig(config))
 	if err != nil {
 		return nil, fmt.Errorf("MMAP Cache: %v", err)

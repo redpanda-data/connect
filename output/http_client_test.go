@@ -85,6 +85,10 @@ func TestHTTPClientBasic(t *testing.T) {
 				return
 			}
 			msg, err = types.FromBytes(b)
+			if err != nil {
+				t.Error(err)
+				return
+			}
 		} else {
 			b, err := ioutil.ReadAll(r.Body)
 			if err != nil {

@@ -69,7 +69,7 @@ type HTTPClient struct {
 	running int32
 
 	stats metrics.Aggregator
-	log   *log.Logger
+	log   log.Modular
 
 	conf Config
 
@@ -80,7 +80,7 @@ type HTTPClient struct {
 }
 
 // NewHTTPClient - Create a new HTTPClient output type.
-func NewHTTPClient(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewHTTPClient(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	h := HTTPClient{
 		running:      1,
 		stats:        stats,

@@ -52,7 +52,7 @@ type Empty struct {
 /*
 NewEmpty - Supports buffer interface but doesn't buffer messages.
 */
-func NewEmpty(config Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewEmpty(config Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	return &Empty{
 		messagesOut:  make(chan types.Message),
 		responsesOut: make(chan types.Response),

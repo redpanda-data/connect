@@ -75,7 +75,7 @@ type ScaleProto struct {
 
 	conf  Config
 	stats metrics.Aggregator
-	log   *log.Logger
+	log   log.Modular
 
 	messages  chan types.Message
 	responses <-chan types.Response
@@ -84,7 +84,7 @@ type ScaleProto struct {
 }
 
 // NewScaleProto - Create a new ScaleProto input type.
-func NewScaleProto(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewScaleProto(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	s := ScaleProto{
 		running:    1,
 		conf:       conf,

@@ -65,7 +65,7 @@ func NewZMQ4Config() *ZMQ4Config {
 type ZMQ4 struct {
 	running int32
 
-	log   *log.Logger
+	log   log.Modular
 	stats metrics.Aggregator
 
 	conf Config
@@ -79,7 +79,7 @@ type ZMQ4 struct {
 }
 
 // NewZMQ4 - Create a new ZMQ4 output type.
-func NewZMQ4(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewZMQ4(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	z := ZMQ4{
 		running:      1,
 		log:          log.NewModule(".output.zmq4"),

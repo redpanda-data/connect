@@ -77,7 +77,7 @@ type Kafka struct {
 
 	conf  Config
 	stats metrics.Aggregator
-	log   *log.Logger
+	log   log.Modular
 
 	messages  chan types.Message
 	responses <-chan types.Response
@@ -86,7 +86,7 @@ type Kafka struct {
 }
 
 // NewKafka - Create a new Kafka input type.
-func NewKafka(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewKafka(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	k := Kafka{
 		running:    1,
 		offset:     0,
@@ -189,9 +189,9 @@ func (k *Kafka) commitOffset() error {
 func (k *Kafka) drainConsumer() {
 	if k.topicConsumer != nil {
 		// Drain both channels
-		for _ = range k.topicConsumer.Messages() {
+		for range k.topicConsumer.Messages() {
 		}
-		for _ = range k.topicConsumer.Errors() {
+		for range k.topicConsumer.Errors() {
 		}
 
 		k.topicConsumer = nil

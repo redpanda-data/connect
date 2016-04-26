@@ -37,7 +37,7 @@ func init() {
 //--------------------------------------------------------------------------------------------------
 
 // NewMemory - Create a buffer held in memory.
-func NewMemory(config Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewMemory(config Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	return NewStackBuffer(ring.NewMemory(config.Memory), stats), nil
 }
 

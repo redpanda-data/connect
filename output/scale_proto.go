@@ -69,7 +69,7 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 type ScaleProto struct {
 	running int32
 
-	log   *log.Logger
+	log   log.Modular
 	stats metrics.Aggregator
 
 	conf Config
@@ -84,7 +84,7 @@ type ScaleProto struct {
 }
 
 // NewScaleProto - Create a new ScaleProto input type.
-func NewScaleProto(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewScaleProto(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	s := ScaleProto{
 		running:      1,
 		log:          log.NewModule(".output.scale_proto"),

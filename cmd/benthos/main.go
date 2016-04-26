@@ -75,7 +75,7 @@ func NewConfig() Config {
 		Inputs:  []input.Config{input.NewConfig()},
 		Outputs: []output.Config{output.NewConfig()},
 		Buffer:  buffer.NewConfig(),
-		Logger:  log.DefaultLoggerConfig(),
+		Logger:  log.NewLoggerConfig(),
 		Metrics: MetConfig{
 			Config: metrics.NewConfig(),
 			HTTP: HTTPMetConfig{
@@ -109,7 +109,7 @@ func main() {
 	}
 
 	// Logging and stats aggregation
-	var logger *log.Logger
+	var logger log.Modular
 
 	// Note: Only log to Stderr if one of our outputs is stdout
 	haveStdout := false

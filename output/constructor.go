@@ -30,7 +30,7 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-var constructors = map[string]func(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error){}
+var constructors = map[string]func(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error){}
 
 //--------------------------------------------------------------------------------------------------
 
@@ -57,7 +57,7 @@ func NewConfig() Config {
 //--------------------------------------------------------------------------------------------------
 
 // Construct - Create an input type based on an input configuration.
-func Construct(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func Construct(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	if c, ok := constructors[conf.Type]; ok {
 		return c(conf, log, stats)
 	}

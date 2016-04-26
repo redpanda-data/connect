@@ -45,7 +45,7 @@ func init() {
 type STDOUT struct {
 	conf Config
 
-	log *log.Logger
+	log log.Modular
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
@@ -55,7 +55,7 @@ type STDOUT struct {
 }
 
 // NewSTDOUT - Create a new STDOUT output type.
-func NewSTDOUT(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewSTDOUT(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	s := STDOUT{
 		conf:         conf,
 		log:          log.NewModule(".output.stdout"),

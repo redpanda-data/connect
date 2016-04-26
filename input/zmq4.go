@@ -71,7 +71,7 @@ type ZMQ4 struct {
 
 	conf  Config
 	stats metrics.Aggregator
-	log   *log.Logger
+	log   log.Modular
 
 	socket *zmq4.Socket
 
@@ -82,7 +82,7 @@ type ZMQ4 struct {
 }
 
 // NewZMQ4 - Create a new ZMQ4 input type.
-func NewZMQ4(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewZMQ4(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	z := ZMQ4{
 		running:    1,
 		conf:       conf,

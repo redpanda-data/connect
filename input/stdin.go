@@ -47,7 +47,7 @@ type STDIN struct {
 	running int32
 
 	conf Config
-	log  *log.Logger
+	log  log.Modular
 
 	internalMessages chan []byte
 
@@ -60,7 +60,7 @@ type STDIN struct {
 }
 
 // NewSTDIN - Create a new STDIN input type.
-func NewSTDIN(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewSTDIN(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	s := STDIN{
 		running:          1,
 		conf:             conf,

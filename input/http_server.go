@@ -70,7 +70,7 @@ type HTTPServer struct {
 
 	conf  Config
 	stats metrics.Aggregator
-	log   *log.Logger
+	log   log.Modular
 
 	mux *http.ServeMux
 
@@ -85,7 +85,7 @@ type HTTPServer struct {
 }
 
 // NewHTTPServer - Create a new HTTPServer input type.
-func NewHTTPServer(conf Config, log *log.Logger, stats metrics.Aggregator) (Type, error) {
+func NewHTTPServer(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	h := HTTPServer{
 		running:          1,
 		conf:             conf,
