@@ -17,7 +17,7 @@ config file.
 
 ```
 +-------------------------+    +--------+    +-------------------------+
-|      Input Streams      |--->| Buffer |--->|     Output Streams      |
+|      Input Stream       |--->| Buffer |--->|     Output Stream       |
 | ( ZMQ, HTTP Post, etc ) |    +--------+    | ( ZMQ, HTTP Post, etc ) |
 +-------------------------+        |         +-------------------------+
                                    v
@@ -26,16 +26,10 @@ config file.
                +----------------------------------------+
 ```
 
-Benthos supports various input and output strategies. It is possible to combine
-multiple inputs and multiple outputs in one service instance. Currently combined
-outputs will each receive every message, where any blocked output will block all
-outputs. If there is demand then other output paradigms such as publish,
-round-robin etc could be supported.
-
-The buffer is where messages can be temporarily stored or persisted across
-service restarts depending on your requirements. Memory mapped files are the
-recommended approach as this provides low-latency persistence with enough
-guarantee for most cases.
+Benthos supports various input and output strategies. The buffer is where
+messages can be temporarily stored or persisted across service restarts
+depending on your requirements. Memory mapped files are the recommended approach
+as this provides low-latency persistence with enough guarantee for most cases.
 
 ## Support
 
@@ -113,21 +107,17 @@ benthos --print-yaml > config.yaml
 benthos --print-json > config.json
 ```
 
-The configuration file should contain a section for inputs, outputs and a
-buffer. The inputs and outputs sections may contain one or more entries, where
-each entry will define a unique input or output.
-
-For example, if we wanted to output to both a ZMQ4 push socket as well as
-stdout our outputs section in a YAML config might look like this:
+The configuration file should contain a section for an input, output, and a
+buffer. For example, if we wanted to output to a ZMQ4 push socket our output
+section in a YAML config might look like this:
 
 ```yaml
-outputs:
-- type: zmq4
+output:
+  type: zmq4
   zmq4:
     addresses:
       - tcp://*:1234
     socket_type: PUSH
-- type: stdout
 ```
 
 ## More docs

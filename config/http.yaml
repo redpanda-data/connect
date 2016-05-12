@@ -1,11 +1,11 @@
-inputs:
-- type: http_server
+input:
+  type: http_server
   http_server:
     address: "localhost:1234"
     path: "/post"
     timeout_ms: 1000
-outputs:
-- type: http_client
+output:
+  type: http_client
   http_client:
     url: "http://localhost:1235/post"
     timeout_ms: 1000
