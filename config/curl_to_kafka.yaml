@@ -1,13 +1,13 @@
 # Use this to pipe 'hello world' etc in through curl and see it in stdout.
 # command: curl http://localhost:1234/post -d "hello world"
-inputs:
-- type: http_server
+input:
+  type: http_server
   http_server:
     address: "localhost:1234"
     path: "/post"
     timeout_ms: 1000
-outputs:
-- type: kafka
+output:
+  type: kafka
   kafka:
     addresses:
       - localhost:9092

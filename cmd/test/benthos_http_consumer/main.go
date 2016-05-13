@@ -34,8 +34,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jeffail/benthos/types"
-	"github.com/jeffail/benthos/util/test"
+	"github.com/jeffail/benthos/lib/types"
+	"github.com/jeffail/benthos/lib/util/test"
 )
 
 //--------------------------------------------------------------------------------------------------

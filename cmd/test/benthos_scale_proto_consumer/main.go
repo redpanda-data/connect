@@ -39,8 +39,8 @@ import (
 	"github.com/go-mangos/mangos/transport/ipc"
 	"github.com/go-mangos/mangos/transport/tcp"
 
-	"github.com/jeffail/benthos/types"
-	"github.com/jeffail/benthos/util/test"
+	"github.com/jeffail/benthos/lib/types"
+	"github.com/jeffail/benthos/lib/util/test"
 )
 
 //--------------------------------------------------------------------------------------------------

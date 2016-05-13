@@ -39,7 +39,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jeffail/benthos/util/test"
+	"github.com/jeffail/benthos/lib/util/test"
 	"github.com/pebbe/zmq4"
 )
 

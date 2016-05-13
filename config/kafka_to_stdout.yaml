@@ -1,5 +1,5 @@
-inputs:
-- type: kafka
+input:
+  type: kafka
   kafka:
     addresses:
       - localhost:9092
@@ -9,8 +9,8 @@ inputs:
     partition: 0
     poll_timeout_ms: 1000
     start_from_oldest: true
-outputs:
-- type: stdout
+output:
+  type: stdout
 buffer:
   type: mmap_file
   mmap_file:
