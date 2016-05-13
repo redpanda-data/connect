@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -40,6 +41,8 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func main() {
+	runtime.GOMAXPROCS(1)
+
 	var address, path string
 	flag.StringVar(&address, "addr", "localhost:1235", "Address to host message receiver at")
 	flag.StringVar(&path, "path", "/post", "Path to the POST resource")

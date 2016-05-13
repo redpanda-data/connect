@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,6 +45,8 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func main() {
+	runtime.GOMAXPROCS(1)
+
 	var address string
 	flag.StringVar(&address, "addr", "tcp://localhost:1235", "Address of the benthos server")
 

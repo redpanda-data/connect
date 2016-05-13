@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -44,6 +45,8 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func main() {
+	runtime.GOMAXPROCS(1)
+
 	var address string
 	flag.StringVar(&address, "addr", "http://localhost:1234/post", "Address of the benthos server.")
 

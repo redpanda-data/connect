@@ -31,6 +31,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,6 +46,8 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func main() {
+	runtime.GOMAXPROCS(1)
+
 	var address string
 	flag.StringVar(&address, "addr", "tcp://localhost:1234", "Address of the benthos server")
 
