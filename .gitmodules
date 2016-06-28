@@ -43,3 +43,6 @@
 [submodule "vendor/github.com/klauspost/crc32"]
 	path = vendor/github.com/klauspost/crc32
 	url = https://github.com/klauspost/crc32
+[submodule "vendor/golang.org/x/net"]
+	path = vendor/golang.org/x/net
+	url = https://github.com/golang/net
