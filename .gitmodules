@@ -28,3 +28,18 @@
 [submodule "vendor/github.com/Shopify/sarama"]
 	path = vendor/github.com/Shopify/sarama
 	url = https://github.com/Shopify/sarama
+[submodule "vendor/github.com/davecgh/go-spew"]
+	path = vendor/github.com/davecgh/go-spew
+	url = https://github.com/davecgh/go-spew
+[submodule "vendor/github.com/eapache/go-resiliency"]
+	path = vendor/github.com/eapache/go-resiliency
+	url = https://github.com/eapache/go-resiliency
+[submodule "vendor/github.com/eapache/queue"]
+	path = vendor/github.com/eapache/queue
+	url = https://github.com/eapache/queue
+[submodule "vendor/github.com/golang/snappy"]
+	path = vendor/github.com/golang/snappy
+	url = https://github.com/golang/snappy
+[submodule "vendor/github.com/klauspost/crc32"]
+	path = vendor/github.com/klauspost/crc32
+	url = https://github.com/klauspost/crc32
