@@ -27,5 +27,5 @@ import "github.com/jeffail/benthos/lib/types"
 // Type - The standard interface of an output type.
 type Type interface {
 	types.Closable
-	types.Output
+	types.Consumer
 }

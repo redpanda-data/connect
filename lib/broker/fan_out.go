@@ -32,7 +32,7 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// FanOut - A broker that implements types.Output and broadcasts each message out to an array of
+// FanOut - A broker that implements types.Consumer and broadcasts each message out to an array of
 // outputs.
 type FanOut struct {
 	running int32
@@ -43,14 +43,14 @@ type FanOut struct {
 	responseChan chan types.Response
 
 	outputMsgChans []chan types.Message
-	outputs        []types.Output
+	outputs        []types.Consumer
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
 
 // NewFanOut - Create a new FanOut type by providing outputs.
-func NewFanOut(outputs []types.Output, stats metrics.Aggregator) (*FanOut, error) {
+func NewFanOut(outputs []types.Consumer, stats metrics.Aggregator) (*FanOut, error) {
 	o := &FanOut{
 		running:      1,
 		stats:        stats,

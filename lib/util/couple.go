@@ -28,8 +28,8 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// Couple - Connect an input to an output.
-func Couple(in types.Input, out types.Output) error {
+// Couple - Connect a producer to a consumer.
+func Couple(in types.Producer, out types.Consumer) error {
 	err := in.StartListening(out.ResponseChan())
 	if err == nil {
 		err = out.StartReceiving(in.MessageChan())

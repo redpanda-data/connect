@@ -36,8 +36,8 @@ import (
 
 func TestFanOutInterfaces(t *testing.T) {
 	f := &FanOut{}
-	if types.Output(f) == nil {
-		t.Errorf("FanOut: nil types.Output")
+	if types.Consumer(f) == nil {
+		t.Errorf("FanOut: nil types.Consumer")
 	}
 	if types.Closable(f) == nil {
 		t.Errorf("FanOut: nil types.Closable")
@@ -49,7 +49,7 @@ func TestFanOutInterfaces(t *testing.T) {
 func TestBasicFanOut(t *testing.T) {
 	nOutputs, nMsgs := 10, 1000
 
-	outputs := []types.Output{}
+	outputs := []types.Consumer{}
 	mockOutputs := []*output.MockType{}
 
 	for i := 0; i < nOutputs; i++ {
@@ -116,7 +116,7 @@ func TestBasicFanOut(t *testing.T) {
 func BenchmarkBasicFanOut(b *testing.B) {
 	nOutputs, nMsgs := 3, 100000
 
-	outputs := []types.Output{}
+	outputs := []types.Consumer{}
 	mockOutputs := []*output.MockType{}
 
 	for i := 0; i < nOutputs; i++ {

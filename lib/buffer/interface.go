@@ -26,8 +26,8 @@ import "github.com/jeffail/benthos/lib/types"
 
 // Type - The standard interface of an agent type.
 type Type interface {
-	types.Input
-	types.Output
+	types.Producer
+	types.Consumer
 	types.Closable
 
 	// ErrorsChan - Returns the channel used for returning any accumulated errors. This needs

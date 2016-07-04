@@ -46,7 +46,7 @@ responses have to be returned to the correct input, therefore the inputWrapper h
 state.
 */
 type inputWrapper struct {
-	input types.Input
+	input types.Producer
 	res   chan types.Response
 	out   chan<- inputWrapperMsg
 
@@ -85,7 +85,7 @@ func (i *inputWrapper) waitForClose() {
 //--------------------------------------------------------------------------------------------------
 
 /*
-FanIn - A broker that implements types.Input, takes an array of inputs and routes them through a
+FanIn - A broker that implements types.Producer, takes an array of inputs and routes them through a
 single message channel.
 */
 type FanIn struct {
@@ -104,7 +104,7 @@ type FanIn struct {
 }
 
 // NewFanIn - Create a new FanIn type by providing inputs.
-func NewFanIn(inputs []types.Input, stats metrics.Aggregator) (*FanIn, error) {
+func NewFanIn(inputs []types.Producer, stats metrics.Aggregator) (*FanIn, error) {
 	i := &FanIn{
 		running:           1,
 		stats:             stats,

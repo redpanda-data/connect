@@ -68,14 +68,14 @@ type MessageReceiver interface {
 
 //--------------------------------------------------------------------------------------------------
 
-// Input - The higher level input type.
-type Input interface {
+// Producer - The higher level producer type.
+type Producer interface {
 	MessageSender
 	ResponderListener
 }
 
-// Output - The higher level output type.
-type Output interface {
+// Consumer - The higher level consumer type.
+type Consumer interface {
 	MessageReceiver
 	Responder
 }

@@ -38,8 +38,8 @@ import (
 
 func TestFanInInterfaces(t *testing.T) {
 	f := &FanIn{}
-	if types.Input(f) == nil {
-		t.Errorf("FanIn: nil types.Input")
+	if types.Producer(f) == nil {
+		t.Errorf("FanIn: nil types.Producer")
 	}
 	if types.Closable(f) == nil {
 		t.Errorf("FanIn: nil types.Closable")
@@ -51,7 +51,7 @@ func TestFanInInterfaces(t *testing.T) {
 func TestBasicFanIn(t *testing.T) {
 	nInputs, nMsgs := 10, 1000
 
-	Inputs := []types.Input{}
+	Inputs := []types.Producer{}
 	mockInputs := []*input.MockType{}
 	resChan := make(chan types.Response)
 
@@ -110,7 +110,7 @@ func TestBasicFanIn(t *testing.T) {
 func TestFanInAsync(t *testing.T) {
 	nInputs, nMsgs := 10, 1000
 
-	Inputs := []types.Input{}
+	Inputs := []types.Producer{}
 	mockInputs := []*input.MockType{}
 	resChan := make(chan types.Response)
 
