@@ -106,35 +106,54 @@ func TestScaleProtoBasic(t *testing.T) {
 		}
 	}
 
-	/*
-		for i := 0; i < nTestLoops; i++ {
-			testStr := fmt.Sprintf("test%v", i)
-			testMsg := types.Message{Parts: [][]byte{
-				[]byte(testStr + "PART-A"),
-				[]byte(testStr + "PART-B"),
-			}}
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+		testMsg := types.Message{Parts: [][]byte{
+			[]byte(testStr + "PART-A"),
+			[]byte(testStr + "PART-B"),
+		}}
 
-			select {
-			case sendChan <- testMsg:
-			case <-time.After(time.Second):
-				t.Errorf("Action timed out")
-				return
-			}
-
-			// TODO: Read output from socket
-
-			select {
-			case res := <-s.ResponseChan():
-				if res.Error() != nil {
-					t.Error(res.Error())
-					return
-				}
-			case <-time.After(time.Second):
-				t.Errorf("Action timed out")
-				return
-			}
+		select {
+		case sendChan <- testMsg:
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
 		}
-	*/
+
+		data, err := socket.Recv()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		msg, err := types.FromBytes(data)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if exp, actual := 2, len(msg.Parts); exp != actual {
+			t.Errorf("Unexpected message parts received: %v != %v", exp, actual)
+			return
+		}
+		if exp, actual := testStr+"PART-A", string(msg.Parts[0]); exp != actual {
+			t.Errorf("Unexpected message received: %v != %v", exp, actual)
+			return
+		}
+		if exp, actual := testStr+"PART-B", string(msg.Parts[1]); exp != actual {
+			t.Errorf("Unexpected message received: %v != %v", exp, actual)
+			return
+		}
+
+		select {
+		case res := <-s.ResponseChan():
+			if res.Error() != nil {
+				t.Error(res.Error())
+				return
+			}
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

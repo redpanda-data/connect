@@ -45,6 +45,7 @@ type Config struct {
 	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
+	FanIn      FanInConfig      `json:"fan_in" yaml:"fan_in"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
@@ -55,6 +56,7 @@ func NewConfig() Config {
 		ScaleProto: NewScaleProtoConfig(),
 		ZMQ4:       NewZMQ4Config(),
 		Kafka:      NewKafkaConfig(),
+		FanIn:      NewFanInConfig(),
 	}
 }
 

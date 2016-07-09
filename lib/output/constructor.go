@@ -30,7 +30,9 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-var constructors = map[string]func(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error){}
+var constructors = map[string]func(
+	conf Config, log log.Modular, stats metrics.Aggregator,
+) (Type, error){}
 
 //--------------------------------------------------------------------------------------------------
 
@@ -41,6 +43,7 @@ type Config struct {
 	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
 	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	FanOut     FanOutConfig     `json:"fan_out" yaml:"fan_out"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
@@ -51,6 +54,7 @@ func NewConfig() Config {
 		ScaleProto: NewScaleProtoConfig(),
 		Kafka:      NewKafkaConfig(),
 		ZMQ4:       NewZMQ4Config(),
+		FanOut:     NewFanOutConfig(),
 	}
 }
 
