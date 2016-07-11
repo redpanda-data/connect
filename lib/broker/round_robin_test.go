@@ -33,35 +33,44 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-func TestFanOutInterfaces(t *testing.T) {
-	f := &FanOut{}
+func TestRoundRobinInterfaces(t *testing.T) {
+	f := &RoundRobin{}
 	if types.Consumer(f) == nil {
-		t.Errorf("FanOut: nil types.Consumer")
+		t.Errorf("RoundRobin: nil types.Consumer")
 	}
 	if types.Closable(f) == nil {
-		t.Errorf("FanOut: nil types.Closable")
+		t.Errorf("RoundRobin: nil types.Closable")
 	}
 }
 
 //--------------------------------------------------------------------------------------------------
 
-func TestBasicFanOut(t *testing.T) {
-	nOutputs, nMsgs := 10, 1000
+func TestBasicRoundRobin(t *testing.T) {
+	nMsgs := 1000
 
 	outputs := []types.Consumer{}
-	mockOutputs := []*MockOutputType{}
-
-	for i := 0; i < nOutputs; i++ {
-		mockOutputs = append(mockOutputs, &MockOutputType{
+	mockOutputs := []*MockOutputType{
+		&MockOutputType{
 			ResChan: make(chan types.Response),
 			MsgChan: make(chan types.Message),
-		})
-		outputs = append(outputs, mockOutputs[i])
+		},
+		&MockOutputType{
+			ResChan: make(chan types.Response),
+			MsgChan: make(chan types.Message),
+		},
+		&MockOutputType{
+			ResChan: make(chan types.Response),
+			MsgChan: make(chan types.Message),
+		},
+	}
+
+	for _, o := range mockOutputs {
+		outputs = append(outputs, o)
 	}
 
 	readChan := make(chan types.Message)
 
-	oTM, err := NewFanOut(outputs, metrics.DudType{})
+	oTM, err := NewRoundRobin(outputs, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -79,25 +88,30 @@ func TestBasicFanOut(t *testing.T) {
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
-		for j := 0; j < nOutputs; j++ {
-			select {
-			case msg := <-mockOutputs[j].MsgChan:
-				if string(msg.Parts[0]) != string(content[0]) {
-					t.Errorf("Wrong content returned %s != %s", msg.Parts[0], content[0])
-				}
-			case <-time.After(time.Second):
-				t.Errorf("Timed out waiting for broker propagate")
-				return
+
+		select {
+		case msg := <-mockOutputs[i%3].MsgChan:
+			if string(msg.Parts[0]) != string(content[0]) {
+				t.Errorf("Wrong content returned %s != %s", msg.Parts[0], content[0])
 			}
+		case <-mockOutputs[(i+1)%3].MsgChan:
+			t.Errorf("Received message in wrong order: %v != %v", i%3, (i+1)%3)
+			return
+		case <-mockOutputs[(i+2)%3].MsgChan:
+			t.Errorf("Received message in wrong order: %v != %v", i%3, (i+2)%3)
+			return
+		case <-time.After(time.Second):
+			t.Errorf("Timed out waiting for broker propagate")
+			return
 		}
-		for j := 0; j < nOutputs; j++ {
-			select {
-			case mockOutputs[j].ResChan <- types.NewSimpleResponse(nil):
-			case <-time.After(time.Second):
-				t.Errorf("Timed out responding to broker")
-				return
-			}
+
+		select {
+		case mockOutputs[i%3].ResChan <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second):
+			t.Errorf("Timed out responding to broker")
+			return
 		}
+
 		select {
 		case res := <-oTM.ResponseChan():
 			if res.Error() != nil {
@@ -112,7 +126,7 @@ func TestBasicFanOut(t *testing.T) {
 
 //--------------------------------------------------------------------------------------------------
 
-func BenchmarkBasicFanOut(b *testing.B) {
+func BenchmarkBasicRoundRobin(b *testing.B) {
 	nOutputs, nMsgs := 3, b.N
 
 	outputs := []types.Consumer{}
@@ -128,7 +142,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 
 	readChan := make(chan types.Message)
 
-	oTM, err := NewFanOut(outputs, metrics.DudType{})
+	oTM, err := NewRoundRobin(outputs, metrics.DudType{})
 	if err != nil {
 		b.Error(err)
 		return
@@ -144,12 +158,8 @@ func BenchmarkBasicFanOut(b *testing.B) {
 
 	for i := 0; i < nMsgs; i++ {
 		readChan <- types.Message{Parts: content}
-		for j := 0; j < nOutputs; j++ {
-			<-mockOutputs[j].MsgChan
-		}
-		for j := 0; j < nOutputs; j++ {
-			mockOutputs[j].ResChan <- types.NewSimpleResponse(nil)
-		}
+		<-mockOutputs[i%3].MsgChan
+		mockOutputs[i%3].ResChan <- types.NewSimpleResponse(nil)
 		res := <-oTM.ResponseChan()
 		if res.Error() != nil {
 			b.Errorf("Received unexpected errors from broker: %v", res.Error())

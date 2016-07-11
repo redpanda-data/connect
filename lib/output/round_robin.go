@@ -34,42 +34,40 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 var (
-	// ErrFanOutNoOutputs - Returned when creating a FanOut type with zero outputs.
-	ErrFanOutNoOutputs = errors.New("attempting to create fan_out output type with no outputs")
+	// ErrRoundRobinNoOutputs - Returned when creating a RoundRobin type with zero outputs.
+	ErrRoundRobinNoOutputs = errors.New("attempting to create round_robin output with no outputs")
 )
 
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["fan_out"] = NewFanOut
+	constructors["round_robin"] = NewRoundRobin
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// FanOutConfig - Configuration for the FanOut output type.
-type FanOutConfig struct {
+// RoundRobinConfig - Configuration for the RoundRobin output type.
+type RoundRobinConfig struct {
 	Outputs []interface{} `json:"outputs" yaml:"outputs"`
 }
 
-// NewFanOutConfig - Creates a new FanOutConfig with default values.
-func NewFanOutConfig() FanOutConfig {
-	return FanOutConfig{
+// NewRoundRobinConfig - Creates a new RoundRobinConfig with default values.
+func NewRoundRobinConfig() RoundRobinConfig {
+	return RoundRobinConfig{
 		Outputs: []interface{}{},
 	}
 }
 
 //--------------------------------------------------------------------------------------------------
 
-/*
-NewFanOut - Create a new FanOut output type. Messages will be sent out to ALL outputs, outputs which
-block will apply backpressure upstream, meaning other outputs will also stop receiving messages.
-*/
-func NewFanOut(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
-	if len(conf.FanOut.Outputs) == 0 {
-		return nil, ErrFanOutNoOutputs
+// NewRoundRobin - Create a new RoundRobin output type. Messages will be sent out to an output
+// chosen by following their original order. If an output blocks this will block all throughput.
+func NewRoundRobin(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+	if len(conf.RoundRobin.Outputs) == 0 {
+		return nil, ErrRoundRobinNoOutputs
 	}
 
-	outputConfs, err := parseOutputConfsWithDefaults(conf.FanOut.Outputs)
+	outputConfs, err := parseOutputConfsWithDefaults(conf.RoundRobin.Outputs)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +81,7 @@ func NewFanOut(conf Config, log log.Modular, stats metrics.Aggregator) (Type, er
 		}
 	}
 
-	return broker.NewFanOut(outputs, stats)
+	return broker.NewRoundRobin(outputs, stats)
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -44,6 +44,7 @@ type Config struct {
 	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	FanOut     FanOutConfig     `json:"fan_out" yaml:"fan_out"`
+	RoundRobin RoundRobinConfig `json:"round_robin" yaml:"round_robin"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
@@ -55,6 +56,7 @@ func NewConfig() Config {
 		Kafka:      NewKafkaConfig(),
 		ZMQ4:       NewZMQ4Config(),
 		FanOut:     NewFanOutConfig(),
+		RoundRobin: NewRoundRobinConfig(),
 	}
 }
 

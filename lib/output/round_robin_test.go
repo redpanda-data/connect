@@ -35,7 +35,7 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-func TestFanOutWithScaleProto(t *testing.T) {
+func TestRoundRobinWithScaleProto(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
@@ -43,14 +43,14 @@ func TestFanOutWithScaleProto(t *testing.T) {
 	scaleOne, scaleTwo := NewConfig(), NewConfig()
 	scaleOne.Type, scaleTwo.Type = "scalability_protocols", "scalability_protocols"
 	scaleOne.ScaleProto.Bind, scaleTwo.ScaleProto.Bind = true, true
-	scaleOne.ScaleProto.Address = "tcp://localhost:1241"
-	scaleTwo.ScaleProto.Address = "tcp://localhost:1242"
+	scaleOne.ScaleProto.Address = "tcp://localhost:1245"
+	scaleTwo.ScaleProto.Address = "tcp://localhost:1246"
 	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PUSH", "PUSH"
 
-	conf.FanOut.Outputs = append(conf.FanOut.Outputs, scaleOne)
-	conf.FanOut.Outputs = append(conf.FanOut.Outputs, scaleTwo)
+	conf.RoundRobin.Outputs = append(conf.RoundRobin.Outputs, scaleOne)
+	conf.RoundRobin.Outputs = append(conf.RoundRobin.Outputs, scaleTwo)
 
-	s, err := NewFanOut(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewRoundRobin(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -80,11 +80,11 @@ func TestFanOutWithScaleProto(t *testing.T) {
 	socketOne.AddTransport(tcp.NewTransport())
 	socketTwo.AddTransport(tcp.NewTransport())
 
-	if err = socketOne.Dial("tcp://localhost:1241"); err != nil {
+	if err = socketOne.Dial("tcp://localhost:1245"); err != nil {
 		t.Error(err)
 		return
 	}
-	if err = socketTwo.Dial("tcp://localhost:1242"); err != nil {
+	if err = socketTwo.Dial("tcp://localhost:1246"); err != nil {
 		t.Error(err)
 		return
 	}
@@ -100,94 +100,24 @@ func TestFanOutWithScaleProto(t *testing.T) {
 			return
 		}
 
-		data, err := socketOne.Recv()
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		if res := string(data); res != testStr {
-			t.Errorf("Wrong value on output: %v != %v", res, testStr)
-		}
-
-		data, err = socketTwo.Recv()
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		if res := string(data); res != testStr {
-			t.Errorf("Wrong value on output: %v != %v", res, testStr)
-		}
-
-		select {
-		case res := <-s.ResponseChan():
-			if res.Error() != nil {
-				t.Error(res.Error())
+		if i%2 == 0 {
+			data, err := socketOne.Recv()
+			if err != nil {
+				t.Error(err)
 				return
 			}
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
-	}
-
-	for i := 0; i < nTestLoops; i++ {
-		testStr := fmt.Sprintf("test%v", i)
-		testMsg := types.Message{Parts: [][]byte{
-			[]byte(testStr + "PART-A"),
-			[]byte(testStr + "PART-B"),
-		}}
-
-		select {
-		case sendChan <- testMsg:
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
-
-		data, err := socketOne.Recv()
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		msg, err := types.FromBytes(data)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		if exp, actual := 2, len(msg.Parts); exp != actual {
-			t.Errorf("Unexpected message parts received: %v != %v", exp, actual)
-			return
-		}
-		if exp, actual := testStr+"PART-A", string(msg.Parts[0]); exp != actual {
-			t.Errorf("Unexpected message received: %v != %v", exp, actual)
-			return
-		}
-		if exp, actual := testStr+"PART-B", string(msg.Parts[1]); exp != actual {
-			t.Errorf("Unexpected message received: %v != %v", exp, actual)
-			return
-		}
-
-		data, err = socketTwo.Recv()
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		msg, err = types.FromBytes(data)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		if exp, actual := 2, len(msg.Parts); exp != actual {
-			t.Errorf("Unexpected message parts received: %v != %v", exp, actual)
-			return
-		}
-		if exp, actual := testStr+"PART-A", string(msg.Parts[0]); exp != actual {
-			t.Errorf("Unexpected message received: %v != %v", exp, actual)
-			return
-		}
-		if exp, actual := testStr+"PART-B", string(msg.Parts[1]); exp != actual {
-			t.Errorf("Unexpected message received: %v != %v", exp, actual)
-			return
+			if res := string(data); res != testStr {
+				t.Errorf("Wrong value on output: %v != %v", res, testStr)
+			}
+		} else {
+			data, err := socketTwo.Recv()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if res := string(data); res != testStr {
+				t.Errorf("Wrong value on output: %v != %v", res, testStr)
+			}
 		}
 
 		select {
