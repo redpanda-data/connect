@@ -41,6 +41,9 @@ Currently supported input/output targets:
 - STDIN/STDOUT
 - Kafka
 
+You can also have multiple outputs or inputs by configuring a routing strategy
+(fan in, fan out, round robin, random, etc).
+
 ## Speed and Benchmarks
 
 Obviously the main goal of Benthos is to be stable, low-latency and high

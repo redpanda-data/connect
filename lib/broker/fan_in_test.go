@@ -29,7 +29,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeffail/benthos/lib/input"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/metrics"
 )
@@ -52,11 +51,11 @@ func TestBasicFanIn(t *testing.T) {
 	nInputs, nMsgs := 10, 1000
 
 	Inputs := []types.Producer{}
-	mockInputs := []*input.MockType{}
+	mockInputs := []*MockInputType{}
 	resChan := make(chan types.Response)
 
 	for i := 0; i < nInputs; i++ {
-		mockInputs = append(mockInputs, &input.MockType{
+		mockInputs = append(mockInputs, &MockInputType{
 			MsgChan: make(chan types.Message),
 		})
 		Inputs = append(Inputs, mockInputs[i])
@@ -111,11 +110,11 @@ func TestFanInAsync(t *testing.T) {
 	nInputs, nMsgs := 10, 1000
 
 	Inputs := []types.Producer{}
-	mockInputs := []*input.MockType{}
+	mockInputs := []*MockInputType{}
 	resChan := make(chan types.Response)
 
 	for i := 0; i < nInputs; i++ {
-		mockInputs = append(mockInputs, &input.MockType{
+		mockInputs = append(mockInputs, &MockInputType{
 			MsgChan: make(chan types.Message),
 		})
 		Inputs = append(Inputs, mockInputs[i])

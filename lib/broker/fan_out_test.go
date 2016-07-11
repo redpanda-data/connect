@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeffail/benthos/lib/output"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/metrics"
 )
@@ -50,10 +49,10 @@ func TestBasicFanOut(t *testing.T) {
 	nOutputs, nMsgs := 10, 1000
 
 	outputs := []types.Consumer{}
-	mockOutputs := []*output.MockType{}
+	mockOutputs := []*MockOutputType{}
 
 	for i := 0; i < nOutputs; i++ {
-		mockOutputs = append(mockOutputs, &output.MockType{
+		mockOutputs = append(mockOutputs, &MockOutputType{
 			ResChan: make(chan types.Response),
 			MsgChan: make(chan types.Message),
 		})
@@ -117,10 +116,10 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	nOutputs, nMsgs := 3, 100000
 
 	outputs := []types.Consumer{}
-	mockOutputs := []*output.MockType{}
+	mockOutputs := []*MockOutputType{}
 
 	for i := 0; i < nOutputs; i++ {
-		mockOutputs = append(mockOutputs, &output.MockType{
+		mockOutputs = append(mockOutputs, &MockOutputType{
 			ResChan: make(chan types.Response),
 			MsgChan: make(chan types.Message),
 		})
