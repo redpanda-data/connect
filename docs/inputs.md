@@ -9,6 +9,9 @@ explains any caveats that should be known.
 ZMQ4 is supported but currently depends on C bindings. Since this is an
 annoyance when building or using Benthos it is not compiled by default.
 
+Build it into your project by getting CZMQ installed on your machine, then build
+with the tag: `go install -tags "ZMQ4" github.com/jeffail/benthos/cmd/...`
+
 ZMQ4 input supports PULL and SUB sockets only. If there is demand for other
 socket types then they can be added easily.
 
@@ -42,22 +45,29 @@ more cases.
 
 ## Setting Multiple Inputs
 
-If you take a look at a default configuration with `benthos --print-yaml`
-you'll see that the input section is an array that allows for multiple inputs.
+There are input and output types designed to enable strategies for combining one
+or more other input/output options. For inputs your only option here is `fan_in`
+where all inputs will be consumed in parallel and combined into a single stream.
+
+In order to configure a `fan_in` type you simply add an array of input
+configuration objects into the `inputs` fields, for each of the inputs you wish
+to have.
 
 Adding more input types allows you to merge streams from multiple sources into
 one. For example, having both a ZMQ4 PULL socket and a Nanomsg PULL socket:
 
 ```yaml
-inputs:
-- type: scalability_protocols
-  scalability_protocols:
-    address: tcp://nanoserver:3003
-    bind_address: false
-    socket_type: PULL
-- type: zmq4
-  zmq4:
-    addresses:
-    - tcp://zmqserver:3004
-	socket_type: PULL
+type: fan_in
+fan_in:
+  inputs:
+  - type: scalability_protocols
+    scalability_protocols:
+      address: tcp://nanoserver:3003
+      bind_address: false
+      socket_type: PULL
+  - type: zmq4
+    zmq4:
+      addresses:
+      - tcp://zmqserver:3004
+	  socket_type: PULL
 ```
