@@ -1,0 +1,4 @@
+input:
+  type: stdin
+output:
+  type: stdout

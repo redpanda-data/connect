@@ -80,6 +80,14 @@ func NewSTDIN(conf Config, log log.Modular, stats metrics.Aggregator) (Type, err
 
 // readLoop - Reads from stdin pipe and sends to internal messages chan.
 func (s *STDIN) readLoop() {
+	defer func() {
+		s.Lock()
+		if s.internalMessages != nil {
+			close(s.internalMessages)
+			s.internalMessages = nil
+		}
+		s.Unlock()
+	}()
 	stdin := bufio.NewScanner(os.Stdin)
 
 	var bytes []byte
@@ -87,15 +95,10 @@ func (s *STDIN) readLoop() {
 	for atomic.LoadInt32(&s.running) == 1 {
 		// If no bytes then read a line
 		if bytes == nil {
-			bytes = []byte{}
-			for stdin.Scan() {
-				if len(stdin.Bytes()) == 0 {
-					break
-				}
-				bytes = append(bytes, stdin.Bytes()...)
-			}
-			if len(bytes) == 0 {
-				bytes = nil
+			if stdin.Scan() && len(stdin.Bytes()) > 0 {
+				bytes = stdin.Bytes()
+			} else {
+				return
 			}
 		}
 
@@ -122,11 +125,13 @@ func (s *STDIN) loop() {
 	var data []byte
 	var open bool
 
+	readChan := s.internalMessages
+
 	s.log.Infoln("Receiving messages through STDIN")
 
 	for atomic.LoadInt32(&s.running) == 1 {
 		if data == nil {
-			data, open = <-s.internalMessages
+			data, open = <-readChan
 			if !open {
 				return
 			}
@@ -164,8 +169,10 @@ func (s *STDIN) MessageChan() <-chan types.Message {
 func (s *STDIN) CloseAsync() {
 	iMsgs := s.internalMessages
 	s.Lock()
-	s.internalMessages = nil
-	close(iMsgs)
+	if iMsgs != nil {
+		s.internalMessages = nil
+		close(iMsgs)
+	}
 	s.Unlock()
 
 	atomic.StoreInt32(&s.running, 0)

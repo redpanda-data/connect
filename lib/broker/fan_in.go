@@ -170,8 +170,13 @@ func (i *FanIn) loop() {
 		if !open {
 			return
 		}
-		if wrap.closed && wrap.ptr != nil {
-			delete(i.inputWrappers, wrap.ptr)
+		if wrap.closed {
+			if wrap.ptr != nil {
+				delete(i.inputWrappers, wrap.ptr)
+			}
+			if len(i.inputWrappers) == 0 {
+				return
+			}
 		} else {
 			i.stats.Incr("broker.fan_in.messages.received", 1)
 			i.messageChan <- wrap.msg

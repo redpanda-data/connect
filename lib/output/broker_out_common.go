@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 package output
 
-import "encoding/json"
+import "gopkg.in/yaml.v2"
 
 //--------------------------------------------------------------------------------------------------
 
@@ -42,12 +42,12 @@ func parseOutputConfsWithDefaults(outConfs []interface{}) ([]Config, error) {
 	outputConfs := make([]Config, len(outConfs))
 
 	for i, boxedConfig := range outConfs {
-		rawBytes, err := json.Marshal(boxedConfig)
+		rawBytes, err := yaml.Marshal(boxedConfig)
 		if err != nil {
 			return nil, err
 		}
 		outputConfs[i] = NewConfig()
-		if err = json.Unmarshal(rawBytes, &outputConfs[i]); err != nil {
+		if err = yaml.Unmarshal(rawBytes, &outputConfs[i]); err != nil {
 			return nil, err
 		}
 	}

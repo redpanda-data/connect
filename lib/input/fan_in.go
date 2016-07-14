@@ -23,8 +23,9 @@ THE SOFTWARE.
 package input
 
 import (
-	"encoding/json"
 	"errors"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/jeffail/benthos/lib/broker"
 	"github.com/jeffail/benthos/lib/types"
@@ -76,13 +77,14 @@ performance is not an issue at this stage.
 func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
 	inputConfs := make([]Config, len(conf.Inputs))
 
+	// NOTE: Use yaml here as it supports more types than JSON (map[interface{}]interface{}).
 	for i, boxedConfig := range conf.Inputs {
-		rawBytes, err := json.Marshal(boxedConfig)
+		rawBytes, err := yaml.Marshal(boxedConfig)
 		if err != nil {
 			return nil, err
 		}
 		inputConfs[i] = NewConfig()
-		if err = json.Unmarshal(rawBytes, &inputConfs[i]); err != nil {
+		if err = yaml.Unmarshal(rawBytes, &inputConfs[i]); err != nil {
 			return nil, err
 		}
 	}

@@ -153,23 +153,23 @@ func main() {
 	}
 	pool.Add(3, buf)
 
-	// For each configured output
-	output, err := output.Construct(config.Output, logger, stats)
+	// Create our output pipe
+	outputPipe, err := output.Construct(config.Output, logger, stats)
 	if err != nil {
 		logger.Errorf("Output error (%s): %v\n", config.Output.Type, err)
 		return
 	}
-	butil.Couple(buf, output)
-	pool.Add(10, output)
+	butil.Couple(buf, outputPipe)
+	pool.Add(10, outputPipe)
 
-	// For each configured input
-	input, err := input.Construct(config.Input, logger, stats)
+	// Create our input pipe
+	inputPipe, err := input.Construct(config.Input, logger, stats)
 	if err != nil {
 		logger.Errorf("Input error (%s): %v\n", config.Input.Type, err)
 		return
 	}
-	butil.Couple(input, buf)
-	pool.Add(1, input)
+	butil.Couple(inputPipe, buf)
+	pool.Add(1, inputPipe)
 
 	// Defer ordered pool clean up.
 	defer func() {
@@ -195,12 +195,24 @@ func main() {
 		}()
 	}
 
-	sigChan := make(chan os.Signal, 1)
+	sigChan, closeChan := make(chan os.Signal, 1), make(chan struct{})
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// If our input closes down then we should shut down the service
+	go func() {
+		for {
+			if err := inputPipe.WaitForClose(time.Second * 60); err == nil {
+				closeChan <- struct{}{}
+				return
+			}
+		}
+	}()
 
 	// Wait for termination signal
 	select {
 	case <-sigChan:
+	case <-closeChan:
+		logger.Infoln("All inputs have shut down, the service is closing.")
 	}
 }
 
