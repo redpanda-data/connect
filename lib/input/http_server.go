@@ -41,7 +41,18 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["http_server"] = NewHTTPServer
+	constructors["http_server"] = typeSpec{
+		constructor: NewHTTPServer,
+		description: `
+In order to receive messages over HTTP Benthos hosts a server. Messages should
+be sent as a POST request. HTTP 1.1 is currently supported and HTTP 2.0 is
+planned for the future.
+
+For more information about sending HTTP messages, including details on sending
+multipart, please read the 'docs/using_http.md' document.
+
+Websockets are currently not implemented but are simple to add.`,
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

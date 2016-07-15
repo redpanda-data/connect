@@ -40,7 +40,17 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["scalability_protocols"] = NewScaleProto
+	constructors["scalability_protocols"] = typeSpec{
+		constructor: NewScaleProto,
+		description: `
+The scalability protocols are common communication patterns which will be
+familiar to anyone accustomed to service messaging protocols.
+
+This input type should be compatible with any implementation of these protocols,
+but nanomsg (http://nanomsg.org/index.html) is the specific target of this type.
+
+Currently only PULL and SUB sockets are supported.`,
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

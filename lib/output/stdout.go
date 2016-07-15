@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/jeffail/benthos/lib/types"
@@ -36,33 +37,36 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["stdout"] = NewSTDOUT
+	constructors["stdout"] = typeSpec{
+		constructor: NewSTDOUT,
+		description: "TODO",
+	}
 }
 
 //--------------------------------------------------------------------------------------------------
 
 // STDOUT - An output type that pushes messages to STDOUT.
 type STDOUT struct {
-	conf Config
+	running int32
 
-	log log.Modular
+	conf Config
+	log  log.Modular
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
 	closedChan chan struct{}
-	closeChan  chan struct{}
 }
 
 // NewSTDOUT - Create a new STDOUT output type.
 func NewSTDOUT(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	s := STDOUT{
+		running:      1,
 		conf:         conf,
 		log:          log.NewModule(".output.stdout"),
 		messages:     nil,
 		responseChan: make(chan types.Response),
 		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
 	}
 
 	return &s, nil
@@ -72,26 +76,27 @@ func NewSTDOUT(conf Config, log log.Modular, stats metrics.Aggregator) (Type, er
 
 // loop - Internal loop brokers incoming messages to output pipe.
 func (s *STDOUT) loop() {
+	defer func() {
+		close(s.responseChan)
+		close(s.closedChan)
+	}()
+
 	s.log.Infoln("Sending messages through STDOUT")
 
-	running := true
-	for running {
-		select {
-		case msg, open := <-s.messages:
-			// If the messages chan is closed we do not close ourselves as it can replaced.
-			if !open {
-				s.messages = nil
-			} else {
-				_, err := fmt.Fprintf(os.Stdout, "%s\n\n", bytes.Join(msg.Parts, []byte("\n")))
-				s.responseChan <- types.NewSimpleResponse(err)
-			}
-		case _, running = <-s.closeChan:
-			running = false
+	for atomic.LoadInt32(&s.running) == 1 {
+		msg, open := <-s.messages
+		// If the messages chan is closed we do not close ourselves as it can replaced.
+		if !open {
+			return
 		}
+		var err error
+		if len(msg.Parts) == 1 {
+			_, err = fmt.Fprintf(os.Stdout, "%s\n", msg.Parts[0])
+		} else {
+			_, err = fmt.Fprintf(os.Stdout, "%s\n\n", bytes.Join(msg.Parts, []byte("\n")))
+		}
+		s.responseChan <- types.NewSimpleResponse(err)
 	}
-
-	close(s.responseChan)
-	close(s.closedChan)
 }
 
 // StartReceiving - Assigns a messages channel for the output to read.
@@ -111,7 +116,7 @@ func (s *STDOUT) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the STDOUT output and stops processing messages.
 func (s *STDOUT) CloseAsync() {
-	close(s.closeChan)
+	atomic.StoreInt32(&s.running, 0)
 }
 
 // WaitForClose - Blocks until the STDOUT output has closed down.

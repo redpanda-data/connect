@@ -38,7 +38,18 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["zmq4"] = NewZMQ4
+	constructors["zmq4"] = typeSpec{
+		constructor: NewZMQ4,
+		description: `
+ZMQ4 is supported but currently depends on C bindings. Since this is an
+annoyance when building or using Benthos it is not compiled by default.
+
+Build it into your project by getting CZMQ installed on your machine, then build
+with the tag: 'go install -tags "ZMQ4" github.com/jeffail/benthos/cmd/...'
+
+ZMQ4 input supports PULL and SUB sockets only. If there is demand for other
+socket types then they can be added easily.`,
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

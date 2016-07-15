@@ -40,7 +40,10 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["scalability_protocols"] = NewScaleProto
+	constructors["scalability_protocols"] = typeSpec{
+		constructor: NewScaleProto,
+		description: "TODO",
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

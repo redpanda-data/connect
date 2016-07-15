@@ -43,7 +43,32 @@ var (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["fan_in"] = NewFanIn
+	constructors["fan_in"] = typeSpec{
+		constructor: NewFanIn,
+		description: `
+The 'fan_in' type allows you to combine multiple inputs. Each input will be read
+in parallel. In order to configure a 'fan_in' type you simply add an array of
+input configuration objects into the 'inputs' field.
+
+Adding more input types allows you to merge streams from multiple sources into
+one. For example, having both a ZMQ4 PULL socket and a Nanomsg PULL socket:
+
+type: fan_in
+fan_in:
+  inputs:
+  -
+    type: scalability_protocols
+    scalability_protocols:
+      address: tcp://nanoserver:3003
+      bind_address: false
+      socket_type: PULL
+  -
+    type: zmq4
+    zmq4:
+      addresses:
+      - tcp://zmqserver:3004
+      socket_type: PULL`,
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

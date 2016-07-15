@@ -39,7 +39,10 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["http_client"] = NewHTTPClient
+	constructors["http_client"] = typeSpec{
+		constructor: NewHTTPClient,
+		description: "TODO",
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

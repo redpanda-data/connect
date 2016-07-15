@@ -41,7 +41,10 @@ var (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["round_robin"] = NewRoundRobin
+	constructors["round_robin"] = typeSpec{
+		constructor: NewRoundRobin,
+		description: "TODO",
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

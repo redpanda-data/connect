@@ -23,6 +23,10 @@ THE SOFTWARE.
 package input
 
 import (
+	"bytes"
+	"sort"
+	"strings"
+
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
@@ -30,21 +34,26 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-var constructors = map[string]func(
-	conf Config,
-	log log.Modular,
-	stats metrics.Aggregator,
-) (Type, error){}
+// typeSpec - Constructor and a usage description for each input type.
+type typeSpec struct {
+	constructor func(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error)
+	description string
+}
+
+var constructors = map[string]typeSpec{}
 
 //--------------------------------------------------------------------------------------------------
 
-// Config - The all encompassing configuration struct for all input types.
+// Config - The all encompassing configuration struct for all input types. Note that some configs
+// are empty structs, as the type has no optional values but we want to list it as an option.
 type Config struct {
 	Type       string           `json:"type" yaml:"type"`
 	HTTPServer HTTPServerConfig `json:"http_server" yaml:"http_server"`
 	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
+	File       FileConfig       `json:"file" yaml:"file"`
+	STDIN      struct{}         `json:"stdin" yaml:"stdin"`
 	FanIn      FanInConfig      `json:"fan_in" yaml:"fan_in"`
 }
 
@@ -56,16 +65,47 @@ func NewConfig() Config {
 		ScaleProto: NewScaleProtoConfig(),
 		ZMQ4:       NewZMQ4Config(),
 		Kafka:      NewKafkaConfig(),
+		File:       NewFileConfig(),
+		STDIN:      struct{}{},
 		FanIn:      NewFanInConfig(),
 	}
 }
 
 //--------------------------------------------------------------------------------------------------
 
+// Descriptions - Returns a formatted string of collated descriptions of each type.
+func Descriptions() string {
+	// Order our input types alphabetically
+	names := []string{}
+	for name := range constructors {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	buf := bytes.Buffer{}
+	buf.WriteString("INPUTS\n")
+	buf.WriteString(strings.Repeat("=", 80))
+	buf.WriteString("\n\n")
+
+	// Append each description
+	for i, name := range names {
+		buf.WriteString(name)
+		buf.WriteString("\n")
+		buf.WriteString(strings.Repeat("-", 80))
+		buf.WriteString("\n")
+		buf.WriteString(constructors[name].description)
+		buf.WriteString("\n")
+		if i != (len(names) - 1) {
+			buf.WriteString("\n")
+		}
+	}
+	return buf.String()
+}
+
 // Construct - Create an input type based on an input configuration.
 func Construct(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	if c, ok := constructors[conf.Type]; ok {
-		return c(conf, log, stats)
+		return c.constructor(conf, log, stats)
 	}
 	return nil, types.ErrInvalidInputType
 }

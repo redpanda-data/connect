@@ -23,6 +23,7 @@ THE SOFTWARE.
 package main
 
 import (
+	"fmt"
 	_ "net/http/pprof"
 	"runtime/pprof"
 
@@ -88,9 +89,20 @@ func NewConfig() Config {
 
 //--------------------------------------------------------------------------------------------------
 
-var profileAddr = flag.String(
-	"profile", "",
-	"Provide an HTTP address to host CPU and MEM profiling.",
+// Extra flags
+var (
+	profileAddr = flag.String(
+		"profile", "",
+		"Provide an HTTP address to host CPU and MEM profiling.",
+	)
+	printInputs = flag.Bool(
+		"list-inputs", false,
+		"Print a list of available input options, then exit",
+	)
+	printOutputs = flag.Bool(
+		"list-outputs", false,
+		"Print a list of available output options, then exit",
+	)
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -101,9 +113,30 @@ func main() {
 	// A list of default config paths to check for if not explicitly defined
 	defaultPaths := []string{}
 
+	// Override default help printing
+	flag.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage: benthos [flags...]")
+		fmt.Fprintln(os.Stderr, "Flags:")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr,
+			"\nFor example configs use --print-yaml or --print-json\n"+
+				"For a list of available inputs or outputs use --list-inputs or --list-outputs\n")
+	}
+
 	// Load configuration etc
 	if !util.Bootstrap(&config, defaultPaths...) {
 		return
+	}
+
+	// If we only want to print our inputs or outputs we should exit afterwards
+	if *printInputs || *printOutputs {
+		if *printInputs {
+			fmt.Println(input.Descriptions())
+		}
+		if *printOutputs {
+			fmt.Println(output.Descriptions())
+		}
+		os.Exit(1)
 	}
 
 	// Logging and stats aggregation

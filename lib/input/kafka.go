@@ -35,7 +35,12 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["kafka"] = NewKafka
+	constructors["kafka"] = typeSpec{
+		constructor: NewKafka,
+		description: `
+The 'kafka' input type connects to a kafka server. Offsets are managed within
+kafka as per the consumer group (set via config).`,
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

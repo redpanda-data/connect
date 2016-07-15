@@ -23,10 +23,12 @@ THE SOFTWARE.
 package output
 
 import (
+	"bytes"
+	"fmt"
+	"os"
 	"sync/atomic"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
@@ -35,126 +37,114 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["kafka"] = typeSpec{
-		constructor: NewKafka,
+	constructors["file"] = typeSpec{
+		constructor: NewFile,
 		description: "TODO",
 	}
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// KafkaConfig - Configuration for the Kafka output type.
-type KafkaConfig struct {
-	Addresses []string `json:"addresses" yaml:"addresses"`
-	ClientID  string   `json:"client_id" yaml:"client_id"`
-	Topic     string   `json:"topic" yaml:"topic"`
+// FileConfig - Configuration values for the file based output type.
+type FileConfig struct {
+	Path string `json:"path" yaml:"path"`
 }
 
-// NewKafkaConfig - Creates a new KafkaConfig with default values.
-func NewKafkaConfig() KafkaConfig {
-	return KafkaConfig{
-		Addresses: []string{"localhost:9092"},
-		ClientID:  "benthos_kafka_output",
-		Topic:     "benthos_stream",
+// NewFileConfig - Create a new FileConfig with default values.
+func NewFileConfig() FileConfig {
+	return FileConfig{
+		Path: "",
 	}
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// Kafka - An output type that writes messages into kafka.
-type Kafka struct {
+// File - An output type that pushes messages to a single file.
+type File struct {
 	running int32
 
-	log   log.Modular
-	stats metrics.Aggregator
-
 	conf Config
-
-	producer sarama.AsyncProducer
+	log  log.Modular
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
+	file *os.File
+
 	closedChan chan struct{}
 }
 
-// NewKafka - Create a new Kafka output type.
-func NewKafka(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
-	k := Kafka{
+// NewFile - Create a new File output type.
+func NewFile(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+	f := File{
 		running:      1,
-		log:          log.NewModule(".output.kafka"),
-		stats:        stats,
 		conf:         conf,
+		log:          log.NewModule(".output.file"),
 		messages:     nil,
 		responseChan: make(chan types.Response),
 		closedChan:   make(chan struct{}),
 	}
 
-	config := sarama.NewConfig()
-	config.ClientID = k.conf.Kafka.ClientID
+	file, err := os.OpenFile(f.conf.File.Path, os.O_RDWR|os.O_APPEND, os.FileMode(0666))
+	if err != nil {
+		return nil, err
+	}
 
-	var err error
-	k.producer, err = sarama.NewAsyncProducer(k.conf.Kafka.Addresses, config)
-
-	return &k, err
+	f.file = file
+	return &f, nil
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// loop - Internal loop brokers incoming messages to output pipe, does not use select.
-func (k *Kafka) loop() {
-	k.log.Infof("Sending Kafka messages to addresses: %s\n", k.conf.Kafka.Addresses)
+// loop - Internal loop brokers incoming messages to output pipe.
+func (f *File) loop() {
+	defer func() {
+		close(f.responseChan)
+		close(f.closedChan)
+		f.file.Close()
+	}()
 
-	for atomic.LoadInt32(&k.running) == 1 {
-		msg, open := <-k.messages
+	f.log.Infof("Writing messages to: %v\n", f.conf.File.Path)
+
+	for atomic.LoadInt32(&f.running) == 1 {
+		msg, open := <-f.messages
 		if !open {
-			atomic.StoreInt32(&k.running, 0)
-		} else {
-			var val []byte
-			if len(msg.Parts) == 1 {
-				val = msg.Parts[0]
-			} else {
-				val = msg.Bytes()
-			}
-			k.producer.Input() <- &sarama.ProducerMessage{
-				Topic: k.conf.Kafka.Topic,
-				Value: sarama.ByteEncoder(val),
-			}
-			k.responseChan <- types.NewSimpleResponse(nil)
+			return
 		}
+		var err error
+		if len(msg.Parts) == 1 {
+			_, err = fmt.Fprintf(f.file, "%s\n", msg.Parts[0])
+		} else {
+			_, err = fmt.Fprintf(f.file, "%s\n\n", bytes.Join(msg.Parts, []byte("\n")))
+		}
+		f.responseChan <- types.NewSimpleResponse(err)
 	}
-
-	if nil != k.producer {
-		k.producer.AsyncClose()
-	}
-	close(k.responseChan)
-	close(k.closedChan)
 }
 
 // StartReceiving - Assigns a messages channel for the output to read.
-func (k *Kafka) StartReceiving(msgs <-chan types.Message) error {
-	if k.messages != nil {
+func (f *File) StartReceiving(msgs <-chan types.Message) error {
+	if f.messages != nil {
 		return types.ErrAlreadyStarted
 	}
-	k.messages = msgs
-	go k.loop()
+	f.messages = msgs
+	go f.loop()
 	return nil
 }
 
 // ResponseChan - Returns the errors channel.
-func (k *Kafka) ResponseChan() <-chan types.Response {
-	return k.responseChan
+func (f *File) ResponseChan() <-chan types.Response {
+	return f.responseChan
 }
 
-// CloseAsync - Shuts down the Kafka output and stops processing messages.
-func (k *Kafka) CloseAsync() {
-	atomic.StoreInt32(&k.running, 0)
+// CloseAsync - Shuts down the File output and stops processing messages.
+func (f *File) CloseAsync() {
+	atomic.StoreInt32(&f.running, 0)
 }
 
-// WaitForClose - Blocks until the Kafka output has closed down.
-func (k *Kafka) WaitForClose(timeout time.Duration) error {
+// WaitForClose - Blocks until the File output has closed down.
+func (f *File) WaitForClose(timeout time.Duration) error {
 	select {
-	case <-k.closedChan:
+	case <-f.closedChan:
 	case <-time.After(timeout):
 		return types.ErrTimeout
 	}

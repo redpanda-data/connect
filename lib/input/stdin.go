@@ -37,12 +37,19 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["stdin"] = NewSTDIN
+	constructors["stdin"] = typeSpec{
+		constructor: NewSTDIN,
+		description: `
+The stdin input simply reads any piped data flowing into the service as line
+delimited single part messages. This is a historical input source originally
+used for testing. If there is demand then the input could be improved to suit
+more cases.`,
+	}
 }
 
 //--------------------------------------------------------------------------------------------------
 
-// STDIN - An input type that serves STDIN POST requests.
+// STDIN - An input type that reads lines from STDIN.
 type STDIN struct {
 	running int32
 
