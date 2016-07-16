@@ -40,7 +40,9 @@ import (
 func init() {
 	constructors["zmq4"] = typeSpec{
 		constructor: NewZMQ4,
-		description: "TODO",
+		description: `
+The 'zmq4' output type attempts to send messages to a ZMQ4 port, currently only
+PUSH and PUB sockets are supported.`,
 	}
 }
 

@@ -41,7 +41,13 @@ import (
 func init() {
 	constructors["http_client"] = typeSpec{
 		constructor: NewHTTPClient,
-		description: "TODO",
+		description: `
+The HTTP client output type connects to a server and sends POST requests for
+each message. The body of the request is the raw message contents. The output
+will apply back pressure until a 2XX response has been returned from the server.
+
+For more information about sending HTTP messages, including details on sending
+multipart, please read the 'docs/using_http.md' document.`,
 	}
 }
 

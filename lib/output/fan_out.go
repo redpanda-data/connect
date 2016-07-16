@@ -43,7 +43,11 @@ var (
 func init() {
 	constructors["fan_out"] = typeSpec{
 		constructor: NewFanOut,
-		description: "TODO",
+		description: `
+The 'fan_out' output type allows you to group multiple outputs together. With
+the fan out model all outputs will receive every message that passes through
+benthos. This process is blocking, meaning if any output applies backpressure
+then it will block all outputs from receiving messages.`,
 	}
 }
 

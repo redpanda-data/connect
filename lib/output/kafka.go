@@ -37,7 +37,8 @@ import (
 func init() {
 	constructors["kafka"] = typeSpec{
 		constructor: NewKafka,
-		description: "TODO",
+		description: `
+The 'kafka' output type writes messages to a kafka broker.`,
 	}
 }
 

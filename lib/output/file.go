@@ -39,7 +39,16 @@ import (
 func init() {
 	constructors["file"] = typeSpec{
 		constructor: NewFile,
-		description: "TODO",
+		description: `
+The 'file' output type simply appends all messages to an output file. Single
+part messages are printed with a line separator '\n'. Multipart messages are
+written with each part line separated, with the final part followed by two line
+separators, e.g. a multipart message [ "foo", "bar", "baz" ] would be written
+as:
+
+foo\n
+bar\n
+baz\n\n`,
 	}
 }
 

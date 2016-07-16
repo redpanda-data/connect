@@ -43,7 +43,13 @@ var (
 func init() {
 	constructors["round_robin"] = typeSpec{
 		constructor: NewRoundRobin,
-		description: "TODO",
+		description: `
+The 'round_robin' output type allows you to send messages across multiple
+outputs, where each message is sent to exactly one output following a strict
+order.
+
+If an output applies back pressure this will also block other outputs from
+receiving content.`,
 	}
 }
 
