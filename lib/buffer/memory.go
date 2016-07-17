@@ -31,7 +31,13 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["memory"] = NewMemory
+	constructors["memory"] = typeSpec{
+		constructor: NewMemory,
+		description: `
+The 'memory' buffer type simply allocates a set amount of RAM for buffering
+messages. This protects the pipeline against backpressure until this buffer is
+full. The messages are lost if the service is stopped.`,
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

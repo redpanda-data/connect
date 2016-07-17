@@ -31,7 +31,14 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["mmap_file"] = NewMmapFile
+	constructors["mmap_file"] = typeSpec{
+		constructor: NewMmapFile,
+		description: `
+The 'mmap_file' buffer type uses memory mapped files to perform low-latency,
+file-persisted buffering of messages. This protects the pipeline against
+backpressure until the target disk space is full. Since the buffers are flushed
+to disk the buffer is persisted across service restarts.`,
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

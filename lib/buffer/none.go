@@ -33,7 +33,13 @@ import (
 //--------------------------------------------------------------------------------------------------
 
 func init() {
-	constructors["none"] = NewEmpty
+	constructors["none"] = typeSpec{
+		constructor: NewEmpty,
+		description: `
+Selecting no buffer (default) is the lowest latency option since no extra work
+is done to messages that pass through. With this option back pressure from the
+output will be directly applied down the pipeline.`,
+	}
 }
 
 //--------------------------------------------------------------------------------------------------

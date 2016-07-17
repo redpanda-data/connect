@@ -23,6 +23,10 @@ THE SOFTWARE.
 package buffer
 
 import (
+	"bytes"
+	"sort"
+	"strings"
+
 	"github.com/jeffail/benthos/lib/buffer/ring"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/log"
@@ -31,7 +35,13 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-var constructors = map[string]func(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error){}
+// typeSpec - Constructor and a usage description for each buffer type.
+type typeSpec struct {
+	constructor func(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error)
+	description string
+}
+
+var constructors = map[string]typeSpec{}
 
 //--------------------------------------------------------------------------------------------------
 
@@ -53,10 +63,39 @@ func NewConfig() Config {
 
 //--------------------------------------------------------------------------------------------------
 
+// Descriptions - Returns a formatted string of collated descriptions of each type.
+func Descriptions() string {
+	// Order our buffer types alphabetically
+	names := []string{}
+	for name := range constructors {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	buf := bytes.Buffer{}
+	buf.WriteString("BUFFERS\n")
+	buf.WriteString(strings.Repeat("=", 80))
+	buf.WriteString("\n\n")
+
+	// Append each description
+	for i, name := range names {
+		buf.WriteString(name)
+		buf.WriteString("\n")
+		buf.WriteString(strings.Repeat("-", 80))
+		buf.WriteString("\n")
+		buf.WriteString(constructors[name].description)
+		buf.WriteString("\n")
+		if i != (len(names) - 1) {
+			buf.WriteString("\n")
+		}
+	}
+	return buf.String()
+}
+
 // Construct - Create an input type based on an input configuration.
 func Construct(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	if c, ok := constructors[conf.Type]; ok {
-		return c(conf, log, stats)
+		return c.constructor(conf, log, stats)
 	}
 	return nil, types.ErrInvalidBufferType
 }

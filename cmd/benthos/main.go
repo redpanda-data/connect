@@ -103,6 +103,10 @@ var (
 		"list-outputs", false,
 		"Print a list of available output options, then exit",
 	)
+	printBuffers = flag.Bool(
+		"list-buffers", false,
+		"Print a list of available buffer options, then exit",
+	)
 )
 
 //--------------------------------------------------------------------------------------------------
@@ -120,7 +124,8 @@ func main() {
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr,
 			"\nFor example configs use --print-yaml or --print-json\n"+
-				"For a list of available inputs or outputs use --list-inputs or --list-outputs\n")
+				"For a list of available inputs or outputs use --list-inputs or --list-outputs\n"+
+				"For a list of available buffer options use --list-buffers\n")
 	}
 
 	// Load configuration etc
@@ -129,9 +134,12 @@ func main() {
 	}
 
 	// If we only want to print our inputs or outputs we should exit afterwards
-	if *printInputs || *printOutputs {
+	if *printInputs || *printOutputs || *printBuffers {
 		if *printInputs {
 			fmt.Println(input.Descriptions())
+		}
+		if *printBuffers {
+			fmt.Println(buffer.Descriptions())
 		}
 		if *printOutputs {
 			fmt.Println(output.Descriptions())
