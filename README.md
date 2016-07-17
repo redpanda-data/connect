@@ -1,35 +1,46 @@
 ![Benthos](icon.png "Benthos")
 
-Benthos is a stream buffer service for piping large volumes of data from one
-source to another using file based persistence. It is a protection against
-service outages or back pressure further on in the pipeline caused by surges.
+Benthos is a low latency stream buffer service for piping large volumes of data
+from one source to another, able to protect against back pressure caused by
+data surges or service outages further down the pipeline.
 
-Benthos works well as a bridge between different messaging/stream services as it
-is quick to implement and configure new inputs and outputs.
+Benthos supports a range of input and output protocols out of the box, allowing
+you to drop benthos in between many existing pipeline services with minimal
+changes to your architecture.
 
-This is currently an experimental project and is not recommended for production
-systems.
+A range of internal buffer strategies are available, allowing you to choose a
+balance between latency, protection against back pressure and file based
+persistence.
 
 ## Design
 
-Benthos has an input, an optional buffer, and an output, which are set in the
-config file.
+Benthos has inputs, an optional buffer, and outputs, which are all set in a
+single config file.
 
 ```
-+-------------------------+    +--------+    +-------------------------+
-|      Input Stream       |--->| Buffer |--->|     Output Stream       |
-| ( ZMQ, HTTP Post, etc ) |    +--------+    | ( ZMQ, HTTP Post, etc ) |
-+-------------------------+        |         +-------------------------+
-                                   v
-               +----------------------------------------+
-               | Memory-Mapped Files, Memory, None, etc |
-               +----------------------------------------+
++-------------------------+                  +-------------------------+
+|      Input Stream       |                  |     Output Stream       |
+| ( ZMQ, HTTP Post, etc ) |--+            +->| ( ZMQ, HTTP Post, etc ) |
++-------------------------+  |            |  +-------------------------+
+                             v            |
+             +--------------------------------------------+
+             |                   Buffer                   |
+             | ( Memory-Mapped Files, Memory, None, etc ) |
+             +--------------------------------------------+
 ```
 
-Benthos supports various input and output strategies. The buffer is where
-messages can be temporarily stored or persisted across service restarts
-depending on your requirements. Memory mapped files are the recommended approach
-as this provides low-latency persistence with enough guarantee for most cases.
+For a full list of available inputs, outputs or buffers you can run:
+
+```
+# Print inputs
+benthos --print-inputs | less
+
+# Print buffers
+benthos --print-buffers | less
+
+# Print outputs
+benthos --print-outputs | less
+```
 
 ## Support
 
@@ -37,39 +48,29 @@ Currently supported input/output targets:
 
 - ZMQ4 (PUSH, PULL, SUB, PUB)
 - Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)
-- HTTP 1.1
+- HTTP 1.1 POST
 - STDIN/STDOUT
+- File
 - Kafka
 
 You can also have multiple outputs or inputs by configuring a routing strategy
-(fan in, fan out, round robin, random, etc).
+(fan in, fan out, round robin, etc).
 
 ## Speed and Benchmarks
 
-Obviously the main goal of Benthos is to be stable, low-latency and high
-throughput. Benthos comes with two benchmarking tools using ZMQ4
-`benthos_zmq_producer` and `benthos_zmq_consumer`. The producer pushes an
-endless stream of fixed size byte messages with a configured time interval
-between each message. The consumer will read an endless stream of messages and
-print a running average of latency, throughput (per second) and total messages
-received.
+The main goal of Benthos is to be stable, low-latency and high throughput.
+Benthos comes with two benchmarking tools using ZMQ4 `benthos_zmq_producer` and
+`benthos_zmq_consumer`. The producer pushes an endless stream of fixed size byte
+messages with a configured time interval between each message. The consumer will
+read an endless stream of messages and print a running average of latency,
+throughput (per second) and total messages received.
 
-Using these tools on my laptop shows promising results, but it would be useful
-to get some more meaningful third party benchmarks to publish.
+These tools are useful for getting ballpark figures, but it would be good to get
+some more meaningful third party benchmarks to publish.
 
-A snippet of the results thus far from my laptop using the ZMQ4 input, file
-persisted buffer, ZMQ4 output configuration and with messages of size 5000
-bytes:
-
-| Stream Interval | Avg. Latency (us) | Msg. Rate (msgs/s) | Byte Rate (MB/s) |
-|----------------:|------------------:|-------------------:|-----------------:|
-|           100ms |              1196 |               8.31 |             0.04 |
-|            10ms |              1529 |              76.87 |             0.37 |
-|             1ms |              1148 |             491.62 |             2.35 |
-|           100us |              1778 |            1754.60 |             8.40 |
-|            10us |             26223 |            2807.33 |            13.44 |
-
-Using a more beefy desktop machine (8 x 2.4ghz cores):
+Heres a table of results from an 8-core (2.4ghz) machine using the ZMQ4 input,
+mmap_file persisted buffer, ZMQ4 output configuration, and with messages of size
+5000 bytes:
 
 | Stream Interval | Avg. Latency (us) | Msg. Rate (msgs/s) | Byte Rate (MB/s) |
 |----------------:|------------------:|-------------------:|-----------------:|
@@ -103,7 +104,7 @@ benthos -c ./config.yaml
 
 ## Config
 
-Create a default configuration file:
+Create a fully populated default configuration file:
 
 ```shell
 benthos --print-yaml > config.yaml
