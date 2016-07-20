@@ -80,6 +80,7 @@ type ZMQ4 struct {
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 }
 
@@ -92,6 +93,7 @@ func NewZMQ4(conf Config, log log.Modular, stats metrics.Aggregator) (Type, erro
 		conf:         conf,
 		messages:     nil,
 		responseChan: make(chan types.Response),
+		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
 
@@ -141,6 +143,15 @@ func getZMQType(t string) (zmq4.Type, error) {
 
 // loop - Internal loop brokers incoming messages to output pipe, does not use select.
 func (z *ZMQ4) loop() {
+	defer func() {
+		z.socket.Close()
+
+		atomic.StoreInt32(&z.running, 0)
+
+		close(z.responseChan)
+		close(z.closedChan)
+	}()
+
 	for _, address := range z.conf.ZMQ4.Addresses {
 		if strings.Contains(address, "*") {
 			z.log.Infof("Sending ZMQ4 messages to bound address: %v\n", address)
@@ -152,15 +163,15 @@ func (z *ZMQ4) loop() {
 	for atomic.LoadInt32(&z.running) == 1 {
 		msg, open := <-z.messages
 		if !open {
-			atomic.StoreInt32(&z.running, 0)
-		} else {
-			_, err := z.socket.SendMessage(msg.Parts)
-			z.responseChan <- types.NewSimpleResponse(err)
+			return
+		}
+		_, err := z.socket.SendMessage(msg.Parts) // Could lock entire service
+		select {
+		case z.responseChan <- types.NewSimpleResponse(err):
+		case <-z.closeChan:
+			return
 		}
 	}
-
-	close(z.responseChan)
-	close(z.closedChan)
 }
 
 // StartReceiving - Assigns a messages channel for the output to read.
@@ -180,7 +191,9 @@ func (z *ZMQ4) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the ZMQ4 output and stops processing messages.
 func (z *ZMQ4) CloseAsync() {
-	atomic.StoreInt32(&z.running, 0)
+	if atomic.CompareAndSwapInt32(&z.running, 1, 0) {
+		close(z.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the ZMQ4 output has closed down.

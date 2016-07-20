@@ -80,6 +80,7 @@ type File struct {
 
 	file *os.File
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 }
 
@@ -91,6 +92,7 @@ func NewFile(conf Config, log log.Modular, stats metrics.Aggregator) (Type, erro
 		log:          log.NewModule(".output.file"),
 		messages:     nil,
 		responseChan: make(chan types.Response),
+		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
 
@@ -126,7 +128,11 @@ func (f *File) loop() {
 		} else {
 			_, err = fmt.Fprintf(f.file, "%s\n\n", bytes.Join(msg.Parts, []byte("\n")))
 		}
-		f.responseChan <- types.NewSimpleResponse(err)
+		select {
+		case f.responseChan <- types.NewSimpleResponse(err):
+		case <-f.closeChan:
+			return
+		}
 	}
 }
 
@@ -147,7 +153,9 @@ func (f *File) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the File output and stops processing messages.
 func (f *File) CloseAsync() {
-	atomic.StoreInt32(&f.running, 0)
+	if atomic.CompareAndSwapInt32(&f.running, 1, 0) {
+		close(f.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the File output has closed down.

@@ -161,6 +161,12 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 
 // loop - Internal loop brokers incoming messages to output pipe, does not use select.
 func (s *ScaleProto) loop() {
+	defer func() {
+		atomic.StoreInt32(&s.running, 0)
+		close(s.responseChan)
+		close(s.closedChan)
+	}()
+
 	if s.conf.ScaleProto.Bind {
 		s.log.Infof(
 			"Sending Scalability Protocols messages to bound address: %s\n",
@@ -173,23 +179,24 @@ func (s *ScaleProto) loop() {
 		)
 	}
 
+	var open bool
 	for atomic.LoadInt32(&s.running) == 1 {
-		msg, open := <-s.messages
-		if !open {
-			atomic.StoreInt32(&s.running, 0)
+		var msg types.Message
+		if msg, open = <-s.messages; !open {
+			return
+		}
+		var err error
+		if len(msg.Parts) > 1 {
+			err = s.socket.Send(msg.Bytes())
 		} else {
-			var err error
-			if len(msg.Parts) > 1 {
-				err = s.socket.Send(msg.Bytes())
-			} else {
-				err = s.socket.Send(msg.Parts[0])
-			}
-			s.responseChan <- types.NewSimpleResponse(err)
+			err = s.socket.Send(msg.Parts[0])
+		}
+		select {
+		case s.responseChan <- types.NewSimpleResponse(err):
+		case <-s.closeChan:
+			return
 		}
 	}
-
-	close(s.responseChan)
-	close(s.closedChan)
 }
 
 // StartReceiving - Assigns a messages channel for the output to read.
@@ -209,8 +216,9 @@ func (s *ScaleProto) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the ScaleProto output and stops processing messages.
 func (s *ScaleProto) CloseAsync() {
-	atomic.StoreInt32(&s.running, 0)
-	close(s.closeChan)
+	if atomic.CompareAndSwapInt32(&s.running, 1, 0) {
+		close(s.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the ScaleProto output has closed down.

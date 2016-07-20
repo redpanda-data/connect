@@ -76,6 +76,7 @@ type Kafka struct {
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 }
 
@@ -88,6 +89,7 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Aggregator) (Type, err
 		conf:         conf,
 		messages:     nil,
 		responseChan: make(chan types.Response),
+		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
 
@@ -104,32 +106,43 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Aggregator) (Type, err
 
 // loop - Internal loop brokers incoming messages to output pipe, does not use select.
 func (k *Kafka) loop() {
+	defer func() {
+		atomic.StoreInt32(&k.running, 0)
+		if nil != k.producer {
+			k.producer.AsyncClose()
+		}
+		close(k.responseChan)
+		close(k.closedChan)
+	}()
+
 	k.log.Infof("Sending Kafka messages to addresses: %s\n", k.conf.Kafka.Addresses)
 
+	var open bool
 	for atomic.LoadInt32(&k.running) == 1 {
-		msg, open := <-k.messages
-		if !open {
-			atomic.StoreInt32(&k.running, 0)
+		var msg types.Message
+		if msg, open = <-k.messages; !open {
+			return
+		}
+		var val []byte
+		if len(msg.Parts) == 1 {
+			val = msg.Parts[0]
 		} else {
-			var val []byte
-			if len(msg.Parts) == 1 {
-				val = msg.Parts[0]
-			} else {
-				val = msg.Bytes()
-			}
-			k.producer.Input() <- &sarama.ProducerMessage{
-				Topic: k.conf.Kafka.Topic,
-				Value: sarama.ByteEncoder(val),
-			}
-			k.responseChan <- types.NewSimpleResponse(nil)
+			val = msg.Bytes()
+		}
+		select {
+		case k.producer.Input() <- &sarama.ProducerMessage{
+			Topic: k.conf.Kafka.Topic,
+			Value: sarama.ByteEncoder(val),
+		}:
+		case <-k.closeChan:
+			return
+		}
+		select {
+		case k.responseChan <- types.NewSimpleResponse(nil):
+		case <-k.closeChan:
+			return
 		}
 	}
-
-	if nil != k.producer {
-		k.producer.AsyncClose()
-	}
-	close(k.responseChan)
-	close(k.closedChan)
 }
 
 // StartReceiving - Assigns a messages channel for the output to read.
@@ -149,7 +162,9 @@ func (k *Kafka) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the Kafka output and stops processing messages.
 func (k *Kafka) CloseAsync() {
-	atomic.StoreInt32(&k.running, 0)
+	if atomic.CompareAndSwapInt32(&k.running, 1, 0) {
+		close(k.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the Kafka output has closed down.

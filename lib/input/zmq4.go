@@ -192,6 +192,9 @@ func (z *ZMQ4) loop() {
 				z.log.Errorf("Failed to receive message bytes: %v\n", err)
 				data = nil
 			}
+			if len(data) == 0 {
+				data = nil
+			}
 		}
 
 		// If bytes are read then try and propagate.

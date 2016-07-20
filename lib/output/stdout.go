@@ -63,6 +63,7 @@ type STDOUT struct {
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 }
 
@@ -74,6 +75,7 @@ func NewSTDOUT(conf Config, log log.Modular, stats metrics.Aggregator) (Type, er
 		log:          log.NewModule(".output.stdout"),
 		messages:     nil,
 		responseChan: make(chan types.Response),
+		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
 
@@ -103,7 +105,11 @@ func (s *STDOUT) loop() {
 		} else {
 			_, err = fmt.Fprintf(os.Stdout, "%s\n\n", bytes.Join(msg.Parts, []byte("\n")))
 		}
-		s.responseChan <- types.NewSimpleResponse(err)
+		select {
+		case s.responseChan <- types.NewSimpleResponse(err):
+		case <-s.closeChan:
+			return
+		}
 	}
 }
 
@@ -124,7 +130,9 @@ func (s *STDOUT) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the STDOUT output and stops processing messages.
 func (s *STDOUT) CloseAsync() {
-	atomic.StoreInt32(&s.running, 0)
+	if atomic.CompareAndSwapInt32(&s.running, 1, 0) {
+		close(s.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the STDOUT output has closed down.

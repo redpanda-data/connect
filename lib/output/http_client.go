@@ -83,6 +83,7 @@ type HTTPClient struct {
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 }
 
@@ -95,6 +96,7 @@ func NewHTTPClient(conf Config, log log.Modular, stats metrics.Aggregator) (Type
 		conf:         conf,
 		messages:     nil,
 		responseChan: make(chan types.Response),
+		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
 
@@ -127,14 +129,20 @@ func createMultiPartRequest(url string, msg *types.Message) (req *http.Request, 
 
 // loop - Internal loop brokers incoming messages to output pipe through POST requests.
 func (h *HTTPClient) loop() {
+	defer func() {
+		atomic.StoreInt32(&h.running, 0)
+
+		close(h.responseChan)
+		close(h.closedChan)
+	}()
+
 	h.log.Infof("Sending HTTP Post messages to: %s\n", h.conf.HTTPClient.URL)
 
+	var open bool
 	for atomic.LoadInt32(&h.running) == 1 {
-		msg, open := <-h.messages
-		if !open {
-			atomic.StoreInt32(&h.running, 0)
-			h.messages = nil
-			break
+		var msg types.Message
+		if msg, open = <-h.messages; !open {
+			return
 		}
 
 		// POST message
@@ -166,16 +174,21 @@ func (h *HTTPClient) loop() {
 			h.log.Errorf("POST request failed: %v\n", err)
 			h.stats.Incr("output.http_client.post.error", 1)
 		}
-		h.responseChan <- types.NewSimpleResponse(err)
+		select {
+		case h.responseChan <- types.NewSimpleResponse(err):
+		case <-h.closeChan:
+			return
+		}
 
 		if err != nil && h.conf.HTTPClient.RetryMS > 0 {
 			// If we failed then wait the configured retry period.
-			<-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond)
+			select {
+			case <-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond):
+			case <-h.closeChan:
+				return
+			}
 		}
 	}
-
-	close(h.responseChan)
-	close(h.closedChan)
 }
 
 // StartReceiving - Assigns a messages channel for the output to read.
@@ -195,7 +208,9 @@ func (h *HTTPClient) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the HTTPClient output and stops processing messages.
 func (h *HTTPClient) CloseAsync() {
-	atomic.StoreInt32(&h.running, 0)
+	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {
+		close(h.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the HTTPClient output has closed down.
