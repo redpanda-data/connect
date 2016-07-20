@@ -29,7 +29,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -90,9 +89,8 @@ type HTTPServer struct {
 	messages  chan types.Message
 	responses <-chan types.Response
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
-
-	sync.Mutex
 }
 
 // NewHTTPServer - Create a new HTTPServer input type.
@@ -106,6 +104,7 @@ func NewHTTPServer(conf Config, log log.Modular, stats metrics.Aggregator) (Type
 		internalMessages: make(chan [][]byte),
 		messages:         make(chan types.Message),
 		responses:        nil,
+		closeChan:        make(chan struct{}),
 		closedChan:       make(chan struct{}),
 	}
 
@@ -122,17 +121,30 @@ func NewHTTPServer(conf Config, log log.Modular, stats metrics.Aggregator) (Type
 //--------------------------------------------------------------------------------------------------
 
 func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
+	if atomic.LoadInt32(&h.running) != 1 {
+		http.Error(w, "Server closing", http.StatusServiceUnavailable)
+		return
+	}
+
 	if r.Method != "POST" {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var msg types.Message
+	var err error
 
-	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		h.log.Warnf("Request read failed: %v\n", err)
+	defer func() {
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			h.log.Warnf("Request read failed: %v\n", err)
+			return
+		}
+	}()
+
+	var mediaType string
+	var params map[string]string
+	if mediaType, params, err = mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil {
 		return
 	}
 
@@ -140,36 +152,27 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		msg.Parts = [][]byte{}
 		mr := multipart.NewReader(r.Body, params["boundary"])
 		for {
-			p, err := mr.NextPart()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				http.Error(w, "Bad request", http.StatusBadRequest)
-				h.log.Warnf("Request read failed: %v\n", err)
+			var p *multipart.Part
+			if p, err = mr.NextPart(); err != nil {
+				if err == io.EOF {
+					err = nil
+					break
+				}
 				return
 			}
-			msgBytes, err := ioutil.ReadAll(p)
-			if err != nil {
-				http.Error(w, "Bad request", http.StatusBadRequest)
-				h.log.Warnf("Request read failed: %v\n", err)
+			var msgBytes []byte
+			if msgBytes, err = ioutil.ReadAll(p); err != nil {
 				return
 			}
 			msg.Parts = append(msg.Parts, msgBytes)
 		}
 	} else {
-		msgBytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			h.log.Warnf("Request read failed: %v\n", err)
+		var msgBytes []byte
+		if msgBytes, err = ioutil.ReadAll(r.Body); err != nil {
 			return
 		}
-
 		if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
-			msg, err = types.FromBytes(msgBytes)
-			if err != nil {
-				http.Error(w, "Bad request", http.StatusBadRequest)
-				h.log.Warnf("Request read failed: %v\n", err)
+			if msg, err = types.FromBytes(msgBytes); err != nil {
 				return
 			}
 		} else {
@@ -177,8 +180,6 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.Lock()
-	defer h.Unlock()
 	select {
 	case h.internalMessages <- msg.Parts:
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
@@ -190,6 +191,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPServer) loop() {
 	defer func() {
+		atomic.StoreInt32(&h.running, 0)
 		close(h.messages)
 		close(h.closedChan)
 	}()
@@ -204,8 +206,12 @@ func (h *HTTPServer) loop() {
 
 	for atomic.LoadInt32(&h.running) == 1 {
 		if data == nil {
-			data, open = <-h.internalMessages
-			if !open {
+			select {
+			case data, open = <-h.internalMessages:
+				if !open {
+					return
+				}
+			case <-h.closeChan:
 				return
 			}
 		}
@@ -213,9 +219,8 @@ func (h *HTTPServer) loop() {
 			h.messages <- types.Message{Parts: data}
 
 			var res types.Response
-			res, open = <-h.responses
-			if !open {
-				atomic.StoreInt32(&h.running, 0)
+			if res, open = <-h.responses; !open {
+				return
 			} else if res.Error() == nil {
 				data = nil
 			}
@@ -240,13 +245,8 @@ func (h *HTTPServer) MessageChan() <-chan types.Message {
 
 // CloseAsync - Shuts down the HTTPServer input and stops processing requests.
 func (h *HTTPServer) CloseAsync() {
-	iMsgs := h.internalMessages
-	h.Lock()
-	h.internalMessages = nil
-	close(iMsgs)
-	h.Unlock()
-
 	atomic.StoreInt32(&h.running, 0)
+	close(h.closeChan)
 }
 
 // WaitForClose - Blocks until the HTTPServer input has closed down.

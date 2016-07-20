@@ -25,7 +25,6 @@ package input
 import (
 	"bufio"
 	"os"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -62,8 +61,6 @@ type STDIN struct {
 	responses <-chan types.Response
 
 	closedChan chan struct{}
-
-	sync.Mutex
 }
 
 // NewSTDIN - Create a new STDIN input type.
@@ -88,12 +85,7 @@ func NewSTDIN(conf Config, log log.Modular, stats metrics.Aggregator) (Type, err
 // readLoop - Reads from stdin pipe and sends to internal messages chan.
 func (s *STDIN) readLoop() {
 	defer func() {
-		s.Lock()
-		if s.internalMessages != nil {
-			close(s.internalMessages)
-			s.internalMessages = nil
-		}
-		s.Unlock()
+		close(s.internalMessages)
 	}()
 	stdin := bufio.NewScanner(os.Stdin)
 
@@ -102,8 +94,10 @@ func (s *STDIN) readLoop() {
 	for atomic.LoadInt32(&s.running) == 1 {
 		// If no bytes then read a line
 		if bytes == nil {
-			if stdin.Scan() && len(stdin.Bytes()) > 0 {
-				bytes = stdin.Bytes()
+			if stdin.Scan() {
+				if len(stdin.Bytes()) > 0 {
+					bytes = stdin.Bytes()
+				}
 			} else {
 				return
 			}
@@ -111,13 +105,11 @@ func (s *STDIN) readLoop() {
 
 		// If we have a line to push out
 		if bytes != nil {
-			s.Lock()
 			select {
 			case s.internalMessages <- bytes:
 				bytes = nil
 			case <-time.After(time.Second):
 			}
-			s.Unlock()
 		}
 	}
 }
@@ -125,6 +117,7 @@ func (s *STDIN) readLoop() {
 // loop - Internal loop brokers incoming messages to output pipe.
 func (s *STDIN) loop() {
 	defer func() {
+		atomic.StoreInt32(&s.running, 0)
 		close(s.messages)
 		close(s.closedChan)
 	}()
@@ -138,8 +131,7 @@ func (s *STDIN) loop() {
 
 	for atomic.LoadInt32(&s.running) == 1 {
 		if data == nil {
-			data, open = <-readChan
-			if !open {
+			if data, open = <-readChan; !open {
 				return
 			}
 		}
@@ -147,9 +139,8 @@ func (s *STDIN) loop() {
 			s.messages <- types.Message{Parts: [][]byte{data}}
 
 			var res types.Response
-			res, open = <-s.responses
-			if !open {
-				atomic.StoreInt32(&s.running, 0)
+			if res, open = <-s.responses; !open {
+				return
 			} else if res.Error() == nil {
 				data = nil
 			}
@@ -174,14 +165,6 @@ func (s *STDIN) MessageChan() <-chan types.Message {
 
 // CloseAsync - Shuts down the STDIN input and stops processing requests.
 func (s *STDIN) CloseAsync() {
-	iMsgs := s.internalMessages
-	s.Lock()
-	if iMsgs != nil {
-		s.internalMessages = nil
-		close(iMsgs)
-	}
-	s.Unlock()
-
 	atomic.StoreInt32(&s.running, 0)
 }
 

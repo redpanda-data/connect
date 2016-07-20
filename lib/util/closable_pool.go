@@ -65,7 +65,6 @@ progressed, thus this timeout should only be used for preventing severe blocking
 */
 func (c *ClosablePool) Close(timeout time.Duration) error {
 	started := time.Now()
-	timeLeft := timeout
 
 	tiers := []int{}
 	for i := range c.closables {
@@ -79,10 +78,9 @@ func (c *ClosablePool) Close(timeout time.Duration) error {
 			tier[j].CloseAsync()
 		}
 		for j := range tier {
-			if err := tier[j].WaitForClose(timeLeft); err != nil {
+			if err := tier[j].WaitForClose(timeout - time.Since(started)); err != nil {
 				return err
 			}
-			timeLeft = timeout - time.Since(started)
 		}
 		delete(c.closables, i)
 	}

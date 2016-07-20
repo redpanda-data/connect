@@ -252,6 +252,7 @@ func main() {
 	// Wait for termination signal
 	select {
 	case <-sigChan:
+		logger.Infoln("Received SIGTERM, the service is closing.")
 	case <-closeChan:
 		logger.Infoln("All inputs have shut down, the service is closing.")
 	}
