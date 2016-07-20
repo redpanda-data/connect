@@ -70,6 +70,7 @@ type File struct {
 	messages  chan types.Message
 	responses <-chan types.Response
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 }
 
@@ -81,6 +82,7 @@ func NewFile(conf Config, log log.Modular, stats metrics.Aggregator) (Type, erro
 		log:        log.NewModule(".input.file"),
 		messages:   make(chan types.Message),
 		responses:  nil,
+		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
 	return &f, nil
@@ -91,6 +93,8 @@ func NewFile(conf Config, log log.Modular, stats metrics.Aggregator) (Type, erro
 // loop - Internal loop brokers incoming messages to output pipe.
 func (f *File) loop() {
 	defer func() {
+		atomic.StoreInt32(&f.running, 0)
+
 		close(f.messages)
 		close(f.closedChan)
 	}()
@@ -119,11 +123,16 @@ func (f *File) loop() {
 			data = scanner.Bytes()
 		}
 		if data != nil {
-			f.messages <- types.Message{Parts: [][]byte{data}}
+			select {
+			case f.messages <- types.Message{Parts: [][]byte{data}}:
+			case <-f.closeChan:
+				return
+			}
 			res, open := <-f.responses
 			if !open {
-				atomic.StoreInt32(&f.running, 0)
-			} else if res.Error() == nil {
+				return
+			}
+			if res.Error() == nil {
 				data = nil
 			}
 		}
@@ -147,7 +156,9 @@ func (f *File) MessageChan() <-chan types.Message {
 
 // CloseAsync - Shuts down the File input and stops processing requests.
 func (f *File) CloseAsync() {
-	atomic.StoreInt32(&f.running, 0)
+	if atomic.CompareAndSwapInt32(&f.running, 1, 0) {
+		close(f.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the File input has closed down.

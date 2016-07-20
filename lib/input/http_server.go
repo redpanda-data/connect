@@ -171,13 +171,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		if msgBytes, err = ioutil.ReadAll(r.Body); err != nil {
 			return
 		}
-		if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
-			if msg, err = types.FromBytes(msgBytes); err != nil {
-				return
-			}
-		} else {
-			msg.Parts = [][]byte{msgBytes}
-		}
+		msg.Parts = [][]byte{msgBytes}
 	}
 
 	select {
@@ -192,6 +186,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPServer) loop() {
 	defer func() {
 		atomic.StoreInt32(&h.running, 0)
+
 		close(h.messages)
 		close(h.closedChan)
 	}()
@@ -221,7 +216,8 @@ func (h *HTTPServer) loop() {
 			var res types.Response
 			if res, open = <-h.responses; !open {
 				return
-			} else if res.Error() == nil {
+			}
+			if res.Error() == nil {
 				data = nil
 			}
 		}
@@ -245,8 +241,9 @@ func (h *HTTPServer) MessageChan() <-chan types.Message {
 
 // CloseAsync - Shuts down the HTTPServer input and stops processing requests.
 func (h *HTTPServer) CloseAsync() {
-	atomic.StoreInt32(&h.running, 0)
-	close(h.closeChan)
+	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {
+		close(h.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the HTTPServer input has closed down.

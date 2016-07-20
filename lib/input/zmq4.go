@@ -89,6 +89,7 @@ type ZMQ4 struct {
 	messages  chan types.Message
 	responses <-chan types.Response
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 }
 
@@ -101,6 +102,7 @@ func NewZMQ4(conf Config, log log.Modular, stats metrics.Aggregator) (Type, erro
 		log:        log.NewModule(".input.zmq4"),
 		messages:   make(chan types.Message),
 		responses:  nil,
+		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
 
@@ -155,6 +157,12 @@ func getZMQType(t string) (zmq4.Type, error) {
 //--------------------------------------------------------------------------------------------------
 
 func (z *ZMQ4) loop() {
+	defer func() {
+		atomic.StoreInt32(&z.running, 0)
+		close(z.messages)
+		close(z.closedChan)
+	}()
+
 	pollTimeout := time.Millisecond * time.Duration(z.conf.ZMQ4.PollTimeoutMS)
 	poller := zmq4.NewPoller()
 	poller.Add(z.socket, zmq4.POLLIN)
@@ -173,36 +181,31 @@ func (z *ZMQ4) loop() {
 		// If no bytes then read a message
 		if data == nil {
 			var err error
-			data, err = z.socket.RecvMessageBytes(zmq4.DONTWAIT)
-			if err != nil {
-				polled, err := poller.Poll(pollTimeout)
-				if err == nil && len(polled) == 1 {
-					if data, err = z.socket.RecvMessageBytes(0); err != nil {
-						z.stats.Incr("input.zmq4.receive.error", 1)
-						z.log.Errorf("Failed to receive message bytes: %v\n", err)
-						data = nil
-					}
-				} else if err != nil {
-					z.stats.Incr("input.zmq4.poll.error", 1)
-					// z.log.Warnf("ZMQ socket poll error: %v\n", err)
-					data = nil
+			if data, err = z.socket.RecvMessageBytes(zmq4.DONTWAIT); err != nil {
+				var polled []zmq4.Polled
+				if polled, err = poller.Poll(pollTimeout); len(polled) == 1 {
+					data, err = z.socket.RecvMessageBytes(0)
 				}
 			}
-
-			if data != nil && len(data) == 0 {
+			if err != nil {
+				z.stats.Incr("input.zmq4.receive.error", 1)
+				z.log.Errorf("Failed to receive message bytes: %v\n", err)
 				data = nil
 			}
 		}
 
 		// If bytes are read then try and propagate.
 		if data != nil {
-			start := time.Now()
-			z.messages <- types.Message{Parts: data}
+			select {
+			case z.messages <- types.Message{Parts: data}:
+			case <-z.closeChan:
+				return
+			}
 			res, open := <-z.responses
 			if !open {
-				atomic.StoreInt32(&z.running, 0)
-			} else if resErr := res.Error(); resErr == nil {
-				z.stats.Timing("input.zmq4.timing", int(time.Since(start)))
+				return
+			}
+			if resErr := res.Error(); resErr == nil {
 				z.stats.Incr("input.zmq4.count", 1)
 				data = nil
 			} else if resErr == types.ErrMessageTooLarge {
@@ -214,9 +217,6 @@ func (z *ZMQ4) loop() {
 			}
 		}
 	}
-
-	close(z.messages)
-	close(z.closedChan)
 }
 
 // StartListening - Sets the channel used by the input to validate message receipt.
@@ -236,7 +236,9 @@ func (z *ZMQ4) MessageChan() <-chan types.Message {
 
 // CloseAsync - Shuts down the ZMQ4 input and stops processing requests.
 func (z *ZMQ4) CloseAsync() {
-	atomic.StoreInt32(&z.running, 0)
+	if atomic.CompareAndSwapInt32(&z.running, 1, 0) {
+		close(z.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the ZMQ4 input has closed down.

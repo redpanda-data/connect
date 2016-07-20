@@ -90,6 +90,7 @@ type ScaleProto struct {
 	messages  chan types.Message
 	responses <-chan types.Response
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 }
 
@@ -102,6 +103,7 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Aggregator) (Type
 		log:        log.NewModule(".input.scale_proto"),
 		messages:   make(chan types.Message),
 		responses:  nil,
+		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
 
@@ -164,7 +166,13 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 //--------------------------------------------------------------------------------------------------
 
 func (s *ScaleProto) loop() {
-	defer s.socket.Close()
+	defer func() {
+		atomic.StoreInt32(&s.running, 0)
+
+		s.socket.Close()
+		close(s.messages)
+		close(s.closedChan)
+	}()
 
 	if s.conf.ScaleProto.Bind {
 		s.log.Infof(
@@ -194,11 +202,16 @@ func (s *ScaleProto) loop() {
 		// If bytes are read then try and propagate.
 		if data != nil {
 			start := time.Now()
-			s.messages <- types.Message{Parts: [][]byte{data}}
+			select {
+			case s.messages <- types.Message{Parts: [][]byte{data}}:
+			case <-s.closeChan:
+				return
+			}
 			res, open := <-s.responses
 			if !open {
-				atomic.StoreInt32(&s.running, 0)
-			} else if resErr := res.Error(); resErr == nil {
+				return
+			}
+			if resErr := res.Error(); resErr == nil {
 				s.stats.Timing("input.scale_proto.timing", int(time.Since(start)))
 				s.stats.Incr("input.scale_proto.count", 1)
 				data = nil
@@ -213,8 +226,6 @@ func (s *ScaleProto) loop() {
 		}
 	}
 
-	close(s.messages)
-	close(s.closedChan)
 }
 
 // StartListening - Sets the channel used by the input to validate message receipt.
@@ -234,7 +245,9 @@ func (s *ScaleProto) MessageChan() <-chan types.Message {
 
 // CloseAsync - Shuts down the ScaleProto input and stops processing requests.
 func (s *ScaleProto) CloseAsync() {
-	atomic.StoreInt32(&s.running, 0)
+	if atomic.CompareAndSwapInt32(&s.running, 1, 0) {
+		close(s.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the ScaleProto input has closed down.

@@ -87,6 +87,7 @@ type Kafka struct {
 	messages  chan types.Message
 	responses <-chan types.Response
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 }
 
@@ -100,6 +101,7 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Aggregator) (Type, err
 		log:        log.NewModule(".input.kafka"),
 		messages:   make(chan types.Message),
 		responses:  nil,
+		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
 
@@ -234,6 +236,10 @@ func (k *Kafka) loop() {
 	k.log.Infof("Receiving Kafka messages from addresses: %s\n", k.conf.Kafka.Addresses)
 
 	defer func() {
+		if atomic.CompareAndSwapInt32(&k.running, 1, 0) {
+			k.closeClients()
+		}
+
 		k.drainConsumer()
 		close(k.messages)
 		close(k.closedChan)
@@ -246,18 +252,23 @@ func (k *Kafka) loop() {
 		if data == nil {
 			var open bool
 			if data, open = <-k.topicConsumer.Messages(); !open {
-				atomic.StoreInt32(&k.running, 0)
+				return
 			}
 		}
 
 		// If bytes are read then try and propagate.
 		if data != nil {
 			start := time.Now()
-			k.messages <- types.Message{Parts: [][]byte{data.Value}}
+			select {
+			case k.messages <- types.Message{Parts: [][]byte{data.Value}}:
+			case <-k.closeChan:
+				return
+			}
 			res, open := <-k.responses
 			if !open {
-				atomic.StoreInt32(&k.running, 0)
-			} else if resErr := res.Error(); resErr == nil {
+				return
+			}
+			if resErr := res.Error(); resErr == nil {
 				k.stats.Timing("input.kafka.timing", int(time.Since(start)))
 				k.stats.Incr("input.kafka.count", 1)
 				k.offset = data.Offset + 1
@@ -296,8 +307,10 @@ func (k *Kafka) MessageChan() <-chan types.Message {
 
 // CloseAsync - Shuts down the Kafka input and stops processing requests.
 func (k *Kafka) CloseAsync() {
-	atomic.StoreInt32(&k.running, 0)
-	k.closeClients()
+	if atomic.CompareAndSwapInt32(&k.running, 1, 0) {
+		close(k.closeChan)
+		k.closeClients()
+	}
 }
 
 // WaitForClose - Blocks until the Kafka input has closed down.

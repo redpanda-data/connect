@@ -78,17 +78,6 @@ func TestHTTPClientBasic(t *testing.T) {
 				}
 				msg.Parts = append(msg.Parts, msgBytes)
 			}
-		} else if r.Header.Get("Content-Type") == "application/x-benthos-multipart" {
-			b, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			msg, err = types.FromBytes(b)
-			if err != nil {
-				t.Error(err)
-				return
-			}
 		} else {
 			b, err := ioutil.ReadAll(r.Body)
 			if err != nil {

@@ -132,36 +132,4 @@ func TestHTTPBasic(t *testing.T) {
 			t.Error("Timed out waiting for response")
 		}
 	}
-
-	// Test benthos multipart format
-	for i := 0; i < nTestLoops; i++ {
-		testStr := fmt.Sprintf("test%v", i)
-		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
-
-		// Send it as multi part
-		if res, err := http.Post(
-			"http://localhost:1237/testpost",
-			"application/x-benthos-multipart",
-			bytes.NewBuffer(testMsg.Bytes()),
-		); err != nil {
-			t.Error(err)
-			return
-		} else if res.StatusCode != 200 {
-			t.Errorf("Wrong error code returned: %v", res.StatusCode)
-			return
-		}
-		select {
-		case resMsg := <-h.MessageChan():
-			if res := string(resMsg.Parts[0]); res != testStr {
-				t.Errorf("Wrong result, %v != %v", resMsg, res)
-			}
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for message")
-		}
-		select {
-		case resChan <- types.NewSimpleResponse(nil):
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
-	}
 }

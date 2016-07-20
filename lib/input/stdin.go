@@ -60,6 +60,7 @@ type STDIN struct {
 	messages  chan types.Message
 	responses <-chan types.Response
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 }
 
@@ -72,6 +73,7 @@ func NewSTDIN(conf Config, log log.Modular, stats metrics.Aggregator) (Type, err
 		internalMessages: make(chan []byte),
 		messages:         make(chan types.Message),
 		responses:        nil,
+		closeChan:        make(chan struct{}),
 		closedChan:       make(chan struct{}),
 	}
 
@@ -131,17 +133,27 @@ func (s *STDIN) loop() {
 
 	for atomic.LoadInt32(&s.running) == 1 {
 		if data == nil {
-			if data, open = <-readChan; !open {
+			select {
+			case data, open = <-readChan:
+				if !open {
+					return
+				}
+			case <-s.closeChan:
 				return
 			}
 		}
 		if data != nil {
-			s.messages <- types.Message{Parts: [][]byte{data}}
+			select {
+			case s.messages <- types.Message{Parts: [][]byte{data}}:
+			case <-s.closeChan:
+				return
+			}
 
 			var res types.Response
 			if res, open = <-s.responses; !open {
 				return
-			} else if res.Error() == nil {
+			}
+			if res.Error() == nil {
 				data = nil
 			}
 		}
@@ -165,7 +177,9 @@ func (s *STDIN) MessageChan() <-chan types.Message {
 
 // CloseAsync - Shuts down the STDIN input and stops processing requests.
 func (s *STDIN) CloseAsync() {
-	atomic.StoreInt32(&s.running, 0)
+	if atomic.CompareAndSwapInt32(&s.running, 1, 0) {
+		close(s.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the STDIN input has closed down.

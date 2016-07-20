@@ -97,20 +97,34 @@ func (o *RoundRobin) loop() {
 	}()
 
 	i := 0
+	open := false
 	for atomic.LoadInt32(&o.running) == 1 {
-		msg, open := <-o.messages
-		if !open {
+		var msg types.Message
+		if msg, open = <-o.messages; !open {
 			return
 		}
 		o.stats.Incr("broker.round_robin.messages.received", 1)
-		o.outputMsgChans[i] <- msg
-		r := <-o.outputs[i].ResponseChan()
-		if r.Error() != nil {
+		select {
+		case o.outputMsgChans[i] <- msg:
+		case <-o.closeChan:
+			return
+		}
+
+		var res types.Response
+		select {
+		case res, open = <-o.outputs[i].ResponseChan():
+			if !open {
+				return
+			}
+		case <-o.closeChan:
+			return
+		}
+		if res.Error() != nil {
 			o.stats.Incr("broker.round_robin.output.error", 1)
 		} else {
 			o.stats.Incr("broker.round_robin.messages.sent", 1)
 		}
-		o.responseChan <- r
+		o.responseChan <- res
 
 		i++
 		if i >= len(o.outputMsgChans) {
@@ -126,7 +140,9 @@ func (o *RoundRobin) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the RoundRobin broker and stops processing requests.
 func (o *RoundRobin) CloseAsync() {
-	atomic.StoreInt32(&o.running, 0)
+	if atomic.CompareAndSwapInt32(&o.running, 1, 0) {
+		close(o.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the RoundRobin broker has closed down.

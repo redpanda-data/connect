@@ -158,6 +158,8 @@ func (i *FanIn) MessageChan() <-chan types.Message {
 // loop - Internal loop brokers incoming messages to many outputs.
 func (i *FanIn) loop() {
 	defer func() {
+		atomic.StoreInt32(&i.running, 0)
+
 		for wrapper := range i.inputWrappers {
 			wrapper.waitForClose()
 		}
@@ -179,7 +181,11 @@ func (i *FanIn) loop() {
 			}
 		} else {
 			i.stats.Incr("broker.fan_in.messages.received", 1)
-			i.messageChan <- wrap.msg
+			select {
+			case i.messageChan <- wrap.msg:
+			case <-i.closeChan:
+				return
+			}
 			wrap.resChan <- <-i.responseChan
 		}
 	}
@@ -187,7 +193,9 @@ func (i *FanIn) loop() {
 
 // CloseAsync - Shuts down the FanIn broker and stops processing requests.
 func (i *FanIn) CloseAsync() {
-	atomic.StoreInt32(&i.running, 0)
+	if atomic.CompareAndSwapInt32(&i.running, 1, 0) {
+		close(i.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the FanIn broker has closed down.

@@ -95,25 +95,46 @@ func (o *FanOut) loop() {
 		close(o.closedChan)
 	}()
 
+	var open bool
 	for atomic.LoadInt32(&o.running) == 1 {
-		msg, open := <-o.messages
-		if !open {
+		var msg types.Message
+		if msg, open = <-o.messages; !open {
 			return
 		}
 		o.stats.Incr("broker.fan_out.messages.received", 1)
 		responses := types.NewMappedResponse()
 		for i := range o.outputMsgChans {
-			o.outputMsgChans[i] <- msg
+			select {
+			case o.outputMsgChans[i] <- msg:
+			case <-o.closeChan:
+				return
+			}
 		}
 		for i := range o.outputs {
-			if r := <-o.outputs[i].ResponseChan(); r.Error() != nil {
-				responses.Errors[i] = r.Error()
+			var res types.Response
+			var open bool
+			select {
+			case res, open = <-o.outputs[i].ResponseChan():
+				if !open {
+					// If any of our outputs is closed then we exit completely. We want to avoid
+					// silently starving a particular output.
+					return
+				}
+			case <-o.closeChan:
+				return
+			}
+			if res.Error() != nil {
+				responses.Errors[i] = res.Error()
 				o.stats.Incr("broker.fan_out.output.error", 1)
 			} else {
 				o.stats.Incr("broker.fan_out.messages.sent", 1)
 			}
 		}
-		o.responseChan <- responses
+		select {
+		case o.responseChan <- responses:
+		case <-o.closeChan:
+			return
+		}
 	}
 }
 
@@ -124,7 +145,9 @@ func (o *FanOut) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Shuts down the FanOut broker and stops processing requests.
 func (o *FanOut) CloseAsync() {
-	atomic.StoreInt32(&o.running, 0)
+	if atomic.CompareAndSwapInt32(&o.running, 1, 0) {
+		close(o.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the FanOut broker has closed down.

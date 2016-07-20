@@ -43,6 +43,18 @@ func TestRoundRobinInterfaces(t *testing.T) {
 	}
 }
 
+func TestRoundRobinDoubleClose(t *testing.T) {
+	oTM, err := NewRoundRobin([]types.Consumer{}, metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// This shouldn't cause a panic
+	oTM.CloseAsync()
+	oTM.CloseAsync()
+}
+
 //--------------------------------------------------------------------------------------------------
 
 func TestBasicRoundRobin(t *testing.T) {
@@ -50,15 +62,15 @@ func TestBasicRoundRobin(t *testing.T) {
 
 	outputs := []types.Consumer{}
 	mockOutputs := []*MockOutputType{
-		&MockOutputType{
+		{
 			ResChan: make(chan types.Response),
 			MsgChan: make(chan types.Message),
 		},
-		&MockOutputType{
+		{
 			ResChan: make(chan types.Response),
 			MsgChan: make(chan types.Message),
 		},
-		&MockOutputType{
+		{
 			ResChan: make(chan types.Response),
 			MsgChan: make(chan types.Message),
 		},
