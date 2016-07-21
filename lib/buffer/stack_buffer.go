@@ -49,6 +49,9 @@ type StackBuffer struct {
 	errorsChan   chan []error
 
 	closedWG sync.WaitGroup
+
+	closeChan  chan struct{}
+	closedChan chan struct{}
 }
 
 // NewStackBuffer - Create a new buffered agent type.
@@ -60,6 +63,8 @@ func NewStackBuffer(buffer ring.MessageStack, stats metrics.Aggregator) Type {
 		messagesOut:  make(chan types.Message),
 		responsesOut: make(chan types.Response),
 		errorsChan:   make(chan []error),
+		closeChan:    make(chan struct{}),
+		closedChan:   make(chan struct{}),
 	}
 
 	return &m
@@ -69,9 +74,11 @@ func NewStackBuffer(buffer ring.MessageStack, stats metrics.Aggregator) Type {
 
 // inputLoop - Internal loop brokers incoming messages to output pipe.
 func (m *StackBuffer) inputLoop() {
-	defer close(m.responsesOut)
-	defer m.closedWG.Done()
-	defer m.buffer.Close()
+	defer func() {
+		m.buffer.Close()
+		close(m.responsesOut)
+		m.closedWG.Done()
+	}()
 
 	for atomic.LoadInt32(&m.running) == 1 {
 		msg, open := <-m.messagesIn
@@ -82,15 +89,22 @@ func (m *StackBuffer) inputLoop() {
 		if err == nil {
 			m.stats.Gauge("buffer.backlog", backlog)
 		}
-		m.responsesOut <- types.NewSimpleResponse(err)
+		select {
+		case m.responsesOut <- types.NewSimpleResponse(err):
+		case <-m.closeChan:
+			return
+		}
 	}
 }
 
 // outputLoop - Internal loop brokers incoming messages to output pipe.
 func (m *StackBuffer) outputLoop() {
-	defer close(m.errorsChan)
-	defer close(m.messagesOut)
-	defer m.closedWG.Done()
+	defer func() {
+		m.buffer.Close()
+		close(m.messagesOut)
+		close(m.errorsChan)
+		m.closedWG.Done()
+	}()
 
 	errs := []error{}
 	errMap := map[error]struct{}{}
@@ -113,7 +127,11 @@ func (m *StackBuffer) outputLoop() {
 		}
 
 		if msg.Parts != nil {
-			m.messagesOut <- msg
+			select {
+			case m.messagesOut <- msg:
+			case <-m.closeChan:
+				return
+			}
 			res, open := <-m.responsesIn
 			if !open {
 				return
@@ -154,6 +172,10 @@ func (m *StackBuffer) StartReceiving(msgs <-chan types.Message) error {
 		m.closedWG.Add(2)
 		go m.inputLoop()
 		go m.outputLoop()
+		go func() {
+			m.closedWG.Wait()
+			close(m.closedChan)
+		}()
 	}
 	return nil
 }
@@ -174,6 +196,10 @@ func (m *StackBuffer) StartListening(responses <-chan types.Response) error {
 		m.closedWG.Add(2)
 		go m.inputLoop()
 		go m.outputLoop()
+		go func() {
+			m.closedWG.Wait()
+			close(m.closedChan)
+		}()
 	}
 	return nil
 }
@@ -190,19 +216,15 @@ func (m *StackBuffer) ErrorsChan() <-chan []error {
 
 // CloseAsync - Shuts down the StackBuffer output and stops processing messages.
 func (m *StackBuffer) CloseAsync() {
-	atomic.StoreInt32(&m.running, 0)
+	if atomic.CompareAndSwapInt32(&m.running, 1, 0) {
+		close(m.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the StackBuffer output has closed down.
 func (m *StackBuffer) WaitForClose(timeout time.Duration) error {
-	closed := make(chan struct{})
-	go func() {
-		m.closedWG.Wait()
-		close(closed)
-	}()
-
 	select {
-	case <-closed:
+	case <-m.closedChan:
 	case <-time.After(timeout):
 		return types.ErrTimeout
 	}

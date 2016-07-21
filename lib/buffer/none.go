@@ -23,6 +23,7 @@ THE SOFTWARE.
 package buffer
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/jeffail/benthos/lib/types"
@@ -46,13 +47,16 @@ output will be directly applied down the pipeline.`,
 
 // Empty - Empty buffer, simply forwards messages on directly.
 type Empty struct {
+	running int32
+
 	messagesOut  chan types.Message
 	responsesOut chan types.Response
 
 	messagesIn  <-chan types.Message
 	responsesIn <-chan types.Response
 
-	closed chan struct{}
+	closeChan chan struct{}
+	closed    chan struct{}
 }
 
 /*
@@ -60,8 +64,10 @@ NewEmpty - Supports buffer interface but doesn't buffer messages.
 */
 func NewEmpty(config Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
 	return &Empty{
+		running:      1,
 		messagesOut:  make(chan types.Message),
 		responsesOut: make(chan types.Response),
+		closeChan:    make(chan struct{}),
 		closed:       make(chan struct{}),
 	}, nil
 }
@@ -70,18 +76,34 @@ func NewEmpty(config Config, log log.Modular, stats metrics.Aggregator) (Type, e
 
 // loop - Internal loop of the empty buffer.
 func (e *Empty) loop() {
-	defer close(e.closed)
-	defer close(e.messagesOut)
-	defer close(e.responsesOut)
+	defer func() {
+		atomic.StoreInt32(&e.running, 0)
 
-	for {
-		msg, open := <-e.messagesIn
-		if !open {
+		close(e.responsesOut)
+		close(e.messagesOut)
+		close(e.closed)
+	}()
+
+	var open bool
+	for atomic.LoadInt32(&e.running) == 1 {
+		var msg types.Message
+		if msg, open = <-e.messagesIn; !open {
 			return
 		}
-		e.messagesOut <- msg
-		res := <-e.responsesIn
-		e.responsesOut <- res
+		select {
+		case e.messagesOut <- msg:
+		case <-e.closeChan:
+			return
+		}
+		var res types.Response
+		if res, open = <-e.responsesIn; !open {
+			return
+		}
+		select {
+		case e.responsesOut <- res:
+		case <-e.closeChan:
+			return
+		}
 	}
 }
 
@@ -128,6 +150,9 @@ func (e *Empty) ErrorsChan() <-chan []error {
 
 // CloseAsync - Shuts down the StackBuffer output and stops processing messages.
 func (e *Empty) CloseAsync() {
+	if atomic.CompareAndSwapInt32(&e.running, 1, 0) {
+		close(e.closeChan)
+	}
 }
 
 // WaitForClose - Blocks until the StackBuffer output has closed down.
