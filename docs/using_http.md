@@ -32,31 +32,6 @@ By default all POST requests are received and treated as single part unless the
 `multipart/mixed; boundary=<boundary>`. Benthos recognises this header and
 parses the body according to RFC 2046 (http://www.ietf.org/rfc/rfc2046.txt).
 
-`application/x-benthos-multipart`. This is a special case where the body is
-parsed as the following format:
-
-```
-- Four bytes containing number of message parts in big endian
-- For each message part:
-	+ Four bytes containing length of message part in big endian
-	+ Content of message part
-
-                                         # Of bytes in message 2
-                                         |
-# Of message parts (big endian)          |           Content of message 2
-|                                        |           |
-v                                        v           v
-| 0| 0| 0| 2| 0| 0| 0| 5| h| e| l| l| o| 0| 0| 0| 5| w| o| r| l| d|
-  0  1  2  3  4  5  6  7  8  9 10 11 13 14 15 16 17 18 19 20 21 22
-              ^           ^
-              |           |
-              |           Content of message 1
-              |
-              # Of bytes in message 1 (big endian)
-```
-
-To see an example of how to use this encoding look at `./types/message.go`.
-
 ## Output
 
 ### HTTP Client

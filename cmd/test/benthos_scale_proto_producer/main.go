@@ -81,7 +81,9 @@ func main() {
 
 	socket.AddTransport(tcp.NewTransport())
 	socket.AddTransport(ipc.NewTransport())
-	socket.SetOption(mangos.OptionSendDeadline, time.Second)
+	if err = socket.SetOption(mangos.OptionSendDeadline, time.Second); err != nil {
+		panic(err)
+	}
 
 	if err = socket.Dial(address); err != nil {
 		panic(err)

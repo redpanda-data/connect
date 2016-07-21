@@ -111,7 +111,8 @@ var (
 
 //--------------------------------------------------------------------------------------------------
 
-func main() {
+// bootstrap - Reads cmd args and either parses and config file or prints helper text and exits.
+func bootstrap() Config {
 	config := NewConfig()
 
 	// A list of default config paths to check for if not explicitly defined
@@ -130,7 +131,7 @@ func main() {
 
 	// Load configuration etc
 	if !util.Bootstrap(&config, defaultPaths...) {
-		return
+		os.Exit(0)
 	}
 
 	// If we only want to print our inputs or outputs we should exit afterwards
@@ -146,6 +147,65 @@ func main() {
 		}
 		os.Exit(1)
 	}
+
+	return config
+}
+
+/*
+createPipeline - Based on the supplied configuration file, create a pipeline (input, buffer, output)
+and return a closable pool of pipeline objects, a channel indicating that all inputs have seized, or
+an error.
+*/
+func createPipeline(
+	config Config, logger log.Modular, stats metrics.Aggregator,
+) (*butil.ClosablePool, chan struct{}, error) {
+	// Create a pool, this helps manage ordered closure of all pipeline components.
+	pool := butil.NewClosablePool()
+
+	// Create a buffer
+	buf, err := buffer.Construct(config.Buffer, logger, stats)
+	if err != nil {
+		logger.Errorf("Buffer error (%s): %v\n", config.Buffer.Type, err)
+		return nil, nil, err
+	}
+	pool.Add(3, buf)
+
+	// Create our output pipe
+	outputPipe, err := output.Construct(config.Output, logger, stats)
+	if err != nil {
+		logger.Errorf("Output error (%s): %v\n", config.Output.Type, err)
+		return nil, nil, err
+	}
+	butil.Couple(buf, outputPipe)
+	pool.Add(10, outputPipe)
+
+	// Create our input pipe
+	inputPipe, err := input.Construct(config.Input, logger, stats)
+	if err != nil {
+		logger.Errorf("Input error (%s): %v\n", config.Input.Type, err)
+		return nil, nil, err
+	}
+	butil.Couple(inputPipe, buf)
+	pool.Add(1, inputPipe)
+
+	closeChan := make(chan struct{})
+
+	// If our input closes down then we should shut down the service
+	go func() {
+		for {
+			if err := inputPipe.WaitForClose(time.Second * 60); err == nil {
+				closeChan <- struct{}{}
+				return
+			}
+		}
+	}()
+
+	return pool, closeChan, nil
+}
+
+func main() {
+	// Bootstrap by reading cmd flags and configuration file
+	config := bootstrap()
 
 	// Logging and stats aggregation
 	var logger log.Modular
@@ -183,34 +243,11 @@ func main() {
 	}
 	defer stats.Close()
 
-	// Create a pool, this helps manage ordered closure of all pipeline components.
-	pool := butil.NewClosablePool()
-
-	// Create a buffer
-	buf, err := buffer.Construct(config.Buffer, logger, stats)
+	pool, inputCloseChan, err := createPipeline(config, logger, stats)
 	if err != nil {
-		logger.Errorf("Buffer error: %v\n", err)
+		logger.Errorf("Service closing due to: %v\n", err)
 		return
 	}
-	pool.Add(3, buf)
-
-	// Create our output pipe
-	outputPipe, err := output.Construct(config.Output, logger, stats)
-	if err != nil {
-		logger.Errorf("Output error (%s): %v\n", config.Output.Type, err)
-		return
-	}
-	butil.Couple(buf, outputPipe)
-	pool.Add(10, outputPipe)
-
-	// Create our input pipe
-	inputPipe, err := input.Construct(config.Input, logger, stats)
-	if err != nil {
-		logger.Errorf("Input error (%s): %v\n", config.Input.Type, err)
-		return
-	}
-	butil.Couple(inputPipe, buf)
-	pool.Add(1, inputPipe)
 
 	// Defer ordered pool clean up.
 	defer func() {
@@ -236,24 +273,14 @@ func main() {
 		}()
 	}
 
-	sigChan, closeChan := make(chan os.Signal, 1), make(chan struct{})
+	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	// If our input closes down then we should shut down the service
-	go func() {
-		for {
-			if err := inputPipe.WaitForClose(time.Second * 60); err == nil {
-				closeChan <- struct{}{}
-				return
-			}
-		}
-	}()
 
 	// Wait for termination signal
 	select {
 	case <-sigChan:
 		logger.Infoln("Received SIGTERM, the service is closing.")
-	case <-closeChan:
+	case <-inputCloseChan:
 		logger.Infoln("All inputs have shut down, the service is closing.")
 	}
 }
