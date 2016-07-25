@@ -1,0 +1,30 @@
+input:
+  type: stdin
+output:
+  type: fan_out
+  fan_out:
+    outputs:
+      -
+        type: http_client
+        http_client:
+          url: http://localhost:8080/post
+      -
+        type: scalability_protocols
+        scalability_protocols:
+          address: tcp://localhost:5555
+          socket_type: PUSH
+      -
+        type: kafka
+        kafka:
+          addresses:
+          - localhost:9092
+          client_id: benthos_kafka_output
+          topic: benthos_stream
+      -
+        type: zmq4
+        zmq4:
+          addresses:
+          - tcp://localhost:5556
+          socket_type: PUSH
+logger:
+  log_level: DEBUG

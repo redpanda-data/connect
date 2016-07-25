@@ -243,7 +243,7 @@ func main() {
 	}
 	defer stats.Close()
 
-	pool, inputCloseChan, err := createPipeline(config, logger, stats)
+	pool, _, err := createPipeline(config, logger, stats)
 	if err != nil {
 		logger.Errorf("Service closing due to: %v\n", err)
 		return
@@ -253,11 +253,17 @@ func main() {
 	defer func() {
 		tout := time.Millisecond * time.Duration(config.SystemCloseTimeoutMS)
 		if err := pool.Close(tout); err != nil {
-			pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			logger.Warnln(
+				"Service failed to shut down cleanly within allocated time. Exiting forcefully.",
+			)
+			if config.Logger.LogLevel == "DEBUG" {
+				pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			}
 			os.Exit(1)
 		}
 	}()
 
+	// We can host our own metrics HTTP endpoint, returns a json blob of latest metrics snapshot.
 	if config.Metrics.HTTP.Enabled {
 		go func() {
 			mux := http.NewServeMux()
@@ -280,8 +286,6 @@ func main() {
 	select {
 	case <-sigChan:
 		logger.Infoln("Received SIGTERM, the service is closing.")
-	case <-inputCloseChan:
-		logger.Infoln("All inputs have shut down, the service is closing.")
 	}
 }
 

@@ -63,7 +63,7 @@ type HTTPClientConfig struct {
 // NewHTTPClientConfig - Creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		URL:       "localhost:8081/post",
+		URL:       "http://localhost:8081/post",
 		TimeoutMS: 5000,
 		RetryMS:   1000,
 	}

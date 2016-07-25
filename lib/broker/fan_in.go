@@ -96,6 +96,7 @@ type FanIn struct {
 	messageChan  chan types.Message
 	responseChan <-chan types.Response
 
+	closables         []types.Closable
 	inputWrappersChan chan inputWrapperMsg
 	inputWrappers     map[*inputWrapper]struct{}
 
@@ -110,6 +111,7 @@ func NewFanIn(inputs []types.Producer, stats metrics.Aggregator) (*FanIn, error)
 		stats:             stats,
 		messageChan:       make(chan types.Message),
 		responseChan:      nil,
+		closables:         []types.Closable{},
 		inputWrappersChan: make(chan inputWrapperMsg),
 		inputWrappers:     make(map[*inputWrapper]struct{}),
 		closedChan:        make(chan struct{}),
@@ -117,6 +119,9 @@ func NewFanIn(inputs []types.Producer, stats metrics.Aggregator) (*FanIn, error)
 	}
 
 	for n := range inputs {
+		if closable, ok := inputs[n].(types.Closable); ok {
+			i.closables = append(i.closables, closable)
+		}
 		wrapper := &inputWrapper{
 			input:  inputs[n],
 			res:    make(chan types.Response),
@@ -193,6 +198,9 @@ func (i *FanIn) loop() {
 
 // CloseAsync - Shuts down the FanIn broker and stops processing requests.
 func (i *FanIn) CloseAsync() {
+	for _, closable := range i.closables {
+		closable.CloseAsync()
+	}
 	if atomic.CompareAndSwapInt32(&i.running, 1, 0) {
 		close(i.closeChan)
 	}
