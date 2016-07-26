@@ -90,7 +90,7 @@ func NewFanOut(conf Config, log log.Modular, stats metrics.Aggregator) (Type, er
 		}
 	}
 
-	return broker.NewFanOut(outputs, stats)
+	return broker.NewFanOut(outputs, log, stats)
 }
 
 //--------------------------------------------------------------------------------------------------

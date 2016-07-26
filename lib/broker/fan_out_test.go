@@ -24,10 +24,12 @@ package broker
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/jeffail/benthos/lib/types"
+	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
 )
 
@@ -61,7 +63,7 @@ func TestBasicFanOut(t *testing.T) {
 
 	readChan := make(chan types.Message)
 
-	oTM, err := NewFanOut(outputs, metrics.DudType{})
+	oTM, err := NewFanOut(outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -128,7 +130,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 
 	readChan := make(chan types.Message)
 
-	oTM, err := NewFanOut(outputs, metrics.DudType{})
+	oTM, err := NewFanOut(outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		b.Error(err)
 		return

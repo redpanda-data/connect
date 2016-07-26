@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/lib/types"
+	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
 )
 
@@ -37,7 +38,8 @@ import (
 type FanOut struct {
 	running int32
 
-	stats metrics.Aggregator
+	logger log.Modular
+	stats  metrics.Aggregator
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
@@ -50,10 +52,13 @@ type FanOut struct {
 }
 
 // NewFanOut - Create a new FanOut type by providing outputs.
-func NewFanOut(outputs []types.Consumer, stats metrics.Aggregator) (*FanOut, error) {
+func NewFanOut(
+	outputs []types.Consumer, logger log.Modular, stats metrics.Aggregator,
+) (*FanOut, error) {
 	o := &FanOut{
 		running:      1,
 		stats:        stats,
+		logger:       logger.NewModule(".broker.fan_out"),
 		messages:     nil,
 		responseChan: make(chan types.Response),
 		outputs:      outputs,
@@ -110,14 +115,16 @@ func (o *FanOut) loop() {
 				return
 			}
 		}
+		var res types.Response
+		var nSent int
 		for i := range o.outputs {
-			var res types.Response
 			var open bool
 			select {
 			case res, open = <-o.outputs[i].ResponseChan():
 				if !open {
 					// If any of our outputs is closed then we exit completely. We want to avoid
 					// silently starving a particular output.
+					o.logger.Warnln("Closing fan_out broker due to closed output")
 					return
 				}
 			case <-o.closeChan:
@@ -125,13 +132,20 @@ func (o *FanOut) loop() {
 			}
 			if res.Error() != nil {
 				responses.Errors[i] = res.Error()
+				o.logger.Errorf("Failed to dispatch fan out message: %v\n", res.Error())
 				o.stats.Incr("broker.fan_out.output.error", 1)
 			} else {
+				nSent++
 				o.stats.Incr("broker.fan_out.messages.sent", 1)
 			}
 		}
+		if nSent == 0 {
+			res = responses
+		} else {
+			res = types.NewSimpleResponse(nil)
+		}
 		select {
-		case o.responseChan <- responses:
+		case o.responseChan <- res:
 		case <-o.closeChan:
 			return
 		}
