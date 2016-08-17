@@ -23,7 +23,10 @@ THE SOFTWARE.
 package test
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
+	"sort"
 	"time"
 
 	"github.com/jeffail/benthos/lib/types"
@@ -55,8 +58,8 @@ func indexToBytes(index int32) (b [4]byte) {
 
 // Bench - A struct carrying message specific benchmarking statistics.
 type Bench struct {
-	Latency int64 // Time taken (ns) for a message to be received by the consumer.
-	NBytes  int64 // Number of bytes carried in the message.
+	Latency int   // Time taken (ns) for a message to be received by the consumer.
+	NBytes  int   // Number of bytes carried in the message.
 	Index   int32 // The index carried by the message, can be used to detect loss.
 }
 
@@ -95,10 +98,10 @@ func BenchFromMessage(msg types.Message) (Bench, error) {
 		return b, err
 	}
 
-	b.Latency = int64(time.Since(t))
+	b.Latency = int(time.Since(t))
 	b.Index = bytesToIndex(msg.Parts[1])
 	for _, part := range msg.Parts {
-		b.NBytes = b.NBytes + int64(len(part))
+		b.NBytes = b.NBytes + int(len(part))
 	}
 
 	return b, nil
@@ -119,46 +122,47 @@ func StartPrintingBenchmarks(period time.Duration, startIndex int32) chan<- Benc
 	dataLoss := []int32{}
 
 	type statTally struct {
-		Tally        int64
-		StartedAt    time.Time
-		TotalLatency int64   // Nanoseconds
-		TotalBytes   int64   // Bytes
-		AvgLatency   int64   // Nanoseconds per message
-		ByteRate     float64 // Bytes per second
-		MessageRate  float64 // Messages per second
+		startedAt    time.Time
+		latencies    []int
+		totalLatency int
+		totalBytes   int
+
+		Tally                int     `json:"total"`
+		MeanLatency          int     `json:"mean_latency_ns"`
+		MeanLatencyStr       string  `json:"mean_latency"`
+		PercentileLatency    int     `json:"99%_latency_ns"`
+		PercentileLatencyStr string  `json:"99%_latency"`
+		ByteRate             float64 `json:"byte_rate"`
+		MessageRate          float64 `json:"msg_rate"`
 	}
 
-	tStats := statTally{StartedAt: time.Now()}
-	pStats := statTally{StartedAt: time.Now()}
+	pStats := statTally{startedAt: time.Now()}
 
 	updateStats := func(bench Bench) {
 		pStats.Tally++
-		pStats.TotalLatency = pStats.TotalLatency + bench.Latency
-		pStats.TotalBytes = pStats.TotalBytes + bench.NBytes
-
-		tStats.Tally++
-		tStats.TotalLatency = tStats.TotalLatency + bench.Latency
-		tStats.TotalBytes = tStats.TotalBytes + bench.NBytes
+		pStats.latencies = append(pStats.latencies, bench.Latency)
+		pStats.totalLatency = pStats.totalLatency + bench.Latency
+		pStats.totalBytes = pStats.totalBytes + bench.NBytes
 	}
 
 	refreshPStats := func() {
-		pStats = statTally{StartedAt: time.Now()}
+		pStats = statTally{startedAt: time.Now()}
 	}
 
 	calcStats := func() {
-		if tStats.Tally > 0 {
-			if tStats.Tally == 1 {
-				tStats.StartedAt = time.Now()
-			}
-			tStats.AvgLatency = tStats.TotalLatency / tStats.Tally
-			tStats.ByteRate = float64(tStats.TotalBytes) / time.Since(tStats.StartedAt).Seconds()
-			tStats.MessageRate = float64(tStats.Tally) / time.Since(tStats.StartedAt).Seconds()
-		}
-
 		if pStats.Tally > 0 {
-			pStats.AvgLatency = pStats.TotalLatency / pStats.Tally
-			pStats.ByteRate = float64(pStats.TotalBytes) / time.Since(pStats.StartedAt).Seconds()
-			pStats.MessageRate = float64(pStats.Tally) / time.Since(pStats.StartedAt).Seconds()
+			pStats.MeanLatency = pStats.totalLatency / pStats.Tally
+			pStats.MeanLatencyStr = time.Duration(pStats.MeanLatency).String()
+			pStats.ByteRate = float64(pStats.totalBytes) / time.Since(pStats.startedAt).Seconds()
+			pStats.MessageRate = float64(pStats.Tally) / time.Since(pStats.startedAt).Seconds()
+
+			// Calc 99th percentile
+			index := int(math.Ceil(0.99 * float64(pStats.Tally)))
+			sort.Ints(pStats.latencies)
+			if index < len(pStats.latencies) {
+				pStats.PercentileLatency = pStats.latencies[index]
+				pStats.PercentileLatencyStr = time.Duration(pStats.PercentileLatency).String()
+			}
 		}
 	}
 
@@ -183,30 +187,20 @@ func StartPrintingBenchmarks(period time.Duration, startIndex int32) chan<- Benc
 					currentIndex++
 				}
 				updateStats(bench)
-				calcStats()
 			case <-timer.C:
-				fmt.Printf("+\n")
-				fmt.Printf("| THIS TICK\n")
-				fmt.Printf("| Avg Latency : %v\n", time.Duration(pStats.AvgLatency))
-				fmt.Printf("| Byte Rate   : %.6f MB/s\n", pStats.ByteRate/1048576)
-				fmt.Printf("| Msg Rate    : %.6f msg/s\n", pStats.MessageRate)
-				fmt.Printf("| Msg Count   : %v\n", pStats.Tally)
-				fmt.Printf("|\n")
-				fmt.Printf("| TOTAL\n")
-				fmt.Printf("| Avg Latency : %v\n", time.Duration(tStats.AvgLatency))
-				fmt.Printf("| Byte Rate   : %.6f MB/s\n", tStats.ByteRate/1048576)
-				fmt.Printf("| Msg Rate    : %.6f msg/s\n", tStats.MessageRate)
-				fmt.Printf("| Msg Count   : %v\n", tStats.Tally)
+				calcStats()
+				blob, err := json.Marshal(pStats)
+				if err != nil {
+					fmt.Println(err)
+				}
+				fmt.Println(string(blob))
 				if len(dataLoss) > 0 {
 					if len(dataLoss) > 100 {
-						fmt.Printf("|\n")
-						fmt.Printf("| DATA LOST   : %v msgs\n", len(dataLoss))
+						fmt.Printf("{\"data_lost\":%v}\n", len(dataLoss))
 					} else {
-						fmt.Printf("|\n")
-						fmt.Printf("| DATA LOST   : %v\n", dataLoss)
+						fmt.Printf("{\"data_lost\":%v}\n", dataLoss)
 					}
 				}
-				fmt.Printf("+\n\n")
 				refreshPStats()
 			}
 		}

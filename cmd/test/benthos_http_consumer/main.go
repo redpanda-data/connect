@@ -43,19 +43,25 @@ import (
 func main() {
 	runtime.GOMAXPROCS(1)
 
-	var address, path string
+	var address, path, period string
 	flag.StringVar(&address, "addr", "localhost:1235", "Address to host message receiver at")
 	flag.StringVar(&path, "path", "/post", "Path to the POST resource")
+	flag.StringVar(&period, "period", "10s", "Time period between benchmark measurements")
 
 	flag.Parse()
 
-	fmt.Println("This is a benchmarking utility for benthos.")
-	fmt.Println("Make sure you are running benthos with the ./test/http.yaml config.")
+	fmt.Fprintln(os.Stderr, "This is a benchmarking utility for benthos.")
+	fmt.Fprintln(os.Stderr, "Make sure you are running benthos with the ./test/http.yaml config.")
 
 	// Make server
 	mux := http.NewServeMux()
 
-	benchChan := test.StartPrintingBenchmarks(time.Second, 0)
+	duration, err := time.ParseDuration(period)
+	if err != nil {
+		panic(err)
+	}
+
+	benchChan := test.StartPrintingBenchmarks(duration, 0)
 	<-time.After(time.Second)
 
 	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {

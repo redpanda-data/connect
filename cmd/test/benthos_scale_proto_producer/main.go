@@ -55,8 +55,8 @@ func main() {
 
 	flag.Parse()
 
-	fmt.Println("This is a benchmarking utility for benthos.")
-	fmt.Println("Make sure you are running benthos with the ./test/scale_proto.yaml config.")
+	fmt.Fprintln(os.Stdout, "This is a benchmarking utility for benthos.")
+	fmt.Fprintln(os.Stdout, "Make sure you are running benthos with the ./test/scale_proto.yaml config.")
 
 	if len(flag.Args()) != 2 {
 		fmt.Printf("\nUsage: %v <interval> <blob_size>\n", os.Args[0])

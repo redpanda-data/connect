@@ -47,13 +47,19 @@ import (
 func main() {
 	runtime.GOMAXPROCS(1)
 
-	var address string
+	var address, period string
 	flag.StringVar(&address, "addr", "tcp://localhost:1235", "Address of the benthos server")
+	flag.StringVar(&period, "period", "10s", "Time period between benchmark measurements")
 
 	flag.Parse()
 
-	fmt.Println("This is a benchmarking utility for benthos.")
-	fmt.Println("Make sure you are running benthos with the ./test/zmq.yaml config.")
+	fmt.Fprintln(os.Stderr, "This is a benchmarking utility for benthos.")
+	fmt.Fprintln(os.Stderr, "Make sure you are running benthos with the ./test/zmq.yaml config.")
+
+	duration, err := time.ParseDuration(period)
+	if err != nil {
+		panic(err)
+	}
 
 	ctx, err := zmq4.NewContext()
 	if nil != err {
@@ -82,7 +88,7 @@ func main() {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	benchChan := test.StartPrintingBenchmarks(time.Second, 0)
+	benchChan := test.StartPrintingBenchmarks(duration, 0)
 	<-time.After(time.Second)
 
 	var running int32 = 1

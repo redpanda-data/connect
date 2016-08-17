@@ -37,7 +37,7 @@ type MessageStack interface {
 	// PushMessage - Add a new message to the stack. Returns the backlog in bytes.
 	PushMessage(types.Message) (int, error)
 
-	// Close - Close the MessageStack so that blocked readers become unblocked.
+	// Close - Close the MessageStack so that blocked readers or writers become unblocked.
 	Close()
 }
 
