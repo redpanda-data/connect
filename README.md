@@ -51,7 +51,7 @@ Currently supported input/output targets:
 - HTTP 1.1 POST
 - STDIN/STDOUT
 - File
-- Kafka
+- Kafka 0.9
 
 You can also have multiple outputs or inputs by configuring a routing strategy
 (fan in, fan out, round robin, etc).

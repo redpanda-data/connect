@@ -132,8 +132,8 @@ func StartPrintingBenchmarks(period time.Duration, startIndex int32) chan<- Benc
 		MeanLatencyStr       string  `json:"mean_latency"`
 		PercentileLatency    int     `json:"99%_latency_ns"`
 		PercentileLatencyStr string  `json:"99%_latency"`
-		ByteRate             float64 `json:"byte_rate"`
-		MessageRate          float64 `json:"msg_rate"`
+		ByteRate             float64 `json:"bytes_per_s"`
+		MessageRate          float64 `json:"msgs_per_s"`
 	}
 
 	pStats := statTally{startedAt: time.Now()}

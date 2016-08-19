@@ -67,7 +67,7 @@ type ScaleProtoConfig struct {
 // NewScaleProtoConfig - Creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		Address:       "tcp://localhost:1235",
+		Address:       "tcp://*:5555",
 		Bind:          true,
 		SocketType:    "PULL",
 		SubFilters:    []string{},

@@ -98,6 +98,21 @@ func writeMessageSize(block []byte, index int, size int) {
 
 //--------------------------------------------------------------------------------------------------
 
+// CloseOnceEmpty - Closes the memory buffer once the backlog reaches 0.
+func (m *Memory) CloseOnceEmpty() {
+	defer func() {
+		m.cond.L.Unlock()
+		m.Close()
+	}()
+	m.cond.L.Lock()
+
+	// Until the backlog is cleared.
+	for m.backlog() > 0 {
+		// Wait for a broadcast from our reader.
+		m.cond.Wait()
+	}
+}
+
 // Close - Unblocks any blocked calls and prevents further writing to the block.
 func (m *Memory) Close() {
 	m.cond.L.Lock()
@@ -109,8 +124,10 @@ func (m *Memory) Close() {
 // ShiftMessage - Removes the last message from the block. Returns the backlog count.
 func (m *Memory) ShiftMessage() (int, error) {
 	m.cond.L.Lock()
-	defer m.cond.L.Unlock()
-	defer m.cond.Broadcast()
+	defer func() {
+		m.cond.Broadcast()
+		m.cond.L.Unlock()
+	}()
 
 	msgSize := readMessageSize(m.block, m.readFrom)
 
@@ -170,8 +187,10 @@ func (m *Memory) NextMessage() (types.Message, error) {
 // PushMessage - Pushes a new message onto the block, returns the backlog count.
 func (m *Memory) PushMessage(msg types.Message) (int, error) {
 	m.cond.L.Lock()
-	defer m.cond.L.Unlock()
-	defer m.cond.Broadcast()
+	defer func() {
+		m.cond.Broadcast()
+		m.cond.L.Unlock()
+	}()
 
 	block := msg.Bytes()
 	index := m.writtenTo

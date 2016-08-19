@@ -164,6 +164,21 @@ func (f *Mmap) backlog() int {
 
 //--------------------------------------------------------------------------------------------------
 
+// CloseOnceEmpty - Closes the mmap buffer once the backlog reaches 0.
+func (f *Mmap) CloseOnceEmpty() {
+	defer func() {
+		f.cache.L.Unlock()
+		f.Close()
+	}()
+	f.cache.L.Lock()
+
+	// Until the backlog is cleared.
+	for f.backlog() > 0 {
+		// Wait for a broadcast from our reader.
+		f.cache.Wait()
+	}
+}
+
 // Close - Unblocks any blocked calls and prevents further writing to the block.
 func (f *Mmap) Close() {
 	f.cache.L.Lock()
@@ -179,9 +194,11 @@ func (f *Mmap) Close() {
 // ShiftMessage - Removes the last message from the block. Returns the backlog count.
 func (f *Mmap) ShiftMessage() (int, error) {
 	f.cache.L.Lock()
-	defer f.cache.L.Unlock()
-	defer f.cache.Broadcast()
-	defer f.writeTracker()
+	defer func() {
+		f.writeTracker()
+		f.cache.Broadcast()
+		f.cache.L.Unlock()
+	}()
 
 	if !f.closed && f.cache.IsCached(f.readIndex) {
 		msgSize := readMessageSize(f.cache.Get(f.readIndex), f.readFrom)
@@ -193,9 +210,11 @@ func (f *Mmap) ShiftMessage() (int, error) {
 // NextMessage - Reads the next message, this call blocks until there's something to read.
 func (f *Mmap) NextMessage() (types.Message, error) {
 	f.cache.L.Lock()
-	defer f.cache.L.Unlock()
-	defer f.cache.Broadcast()
-	defer f.writeTracker()
+	defer func() {
+		f.writeTracker()
+		f.cache.Broadcast()
+		f.cache.L.Unlock()
+	}()
 
 	// If reader is the same position as the writer then we wait.
 	for f.writeIndex == f.readIndex && f.readFrom == f.writtenTo && !f.closed {
@@ -267,9 +286,11 @@ func (f *Mmap) NextMessage() (types.Message, error) {
 // PushMessage - Pushes a new message onto the block, returns the backlog count.
 func (f *Mmap) PushMessage(msg types.Message) (int, error) {
 	f.cache.L.Lock()
-	defer f.cache.L.Unlock()
-	defer f.cache.Broadcast()
-	defer f.writeTracker()
+	defer func() {
+		f.writeTracker()
+		f.cache.Broadcast()
+		f.cache.L.Unlock()
+	}()
 
 	blob := msg.Bytes()
 	index := f.writtenTo

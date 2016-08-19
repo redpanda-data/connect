@@ -10,5 +10,6 @@ output:
   type: zmq4
   zmq4:
     addresses:
-      - tcp://*:1235
+      - tcp://*:5556
+    bind: true
     socket_type: PUSH

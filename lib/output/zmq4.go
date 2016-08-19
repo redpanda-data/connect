@@ -25,7 +25,6 @@ THE SOFTWARE.
 package output
 
 import (
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -51,6 +50,7 @@ PUSH and PUB sockets are supported.`,
 // ZMQ4Config - Configuration for the ZMQ4 output type.
 type ZMQ4Config struct {
 	Addresses     []string `json:"addresses" yaml:"addresses"`
+	Bind          bool     `json:"bind" yaml:"bind"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
 	HighWaterMark int      `json:"high_water_mark" yaml:"high_water_mark"`
 }
@@ -58,7 +58,8 @@ type ZMQ4Config struct {
 // NewZMQ4Config - Creates a new ZMQ4Config with default values.
 func NewZMQ4Config() *ZMQ4Config {
 	return &ZMQ4Config{
-		Addresses:     []string{"tcp://*:1234"},
+		Addresses:     []string{"tcp://*:5556"},
+		Bind:          true,
 		SocketType:    "PUSH",
 		HighWaterMark: 0,
 	}
@@ -114,7 +115,7 @@ func NewZMQ4(conf Config, log log.Modular, stats metrics.Aggregator) (Type, erro
 	z.socket.SetSndhwm(conf.ZMQ4.HighWaterMark)
 
 	for _, address := range conf.ZMQ4.Addresses {
-		if strings.Contains(address, "*") {
+		if conf.ZMQ4.Bind {
 			err = z.socket.Bind(address)
 		} else {
 			err = z.socket.Connect(address)
@@ -153,7 +154,7 @@ func (z *ZMQ4) loop() {
 	}()
 
 	for _, address := range z.conf.ZMQ4.Addresses {
-		if strings.Contains(address, "*") {
+		if z.conf.ZMQ4.Bind {
 			z.log.Infof("Sending ZMQ4 messages to bound address: %v\n", address)
 		} else {
 			z.log.Infof("Sending ZMQ4 messages to connected address: %v\n", address)

@@ -48,7 +48,7 @@ func main() {
 	runtime.GOMAXPROCS(1)
 
 	var address, period string
-	flag.StringVar(&address, "addr", "tcp://localhost:1235", "Address of the benthos server")
+	flag.StringVar(&address, "addr", "tcp://localhost:5556", "Address of the benthos server")
 	flag.StringVar(&period, "period", "10s", "Time period between benchmark measurements")
 
 	flag.Parse()

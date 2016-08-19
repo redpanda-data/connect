@@ -37,6 +37,11 @@ type MessageStack interface {
 	// PushMessage - Add a new message to the stack. Returns the backlog in bytes.
 	PushMessage(types.Message) (int, error)
 
+	// CloseOnceEmpty - Close the MessageStack once the buffer has been emptied, this is a way for a
+	// writer to signal to a reader that it is finished writing messages, and therefore the reader
+	// can close once it is caught up. This call blocks until the close is completed.
+	CloseOnceEmpty()
+
 	// Close - Close the MessageStack so that blocked readers or writers become unblocked.
 	Close()
 }

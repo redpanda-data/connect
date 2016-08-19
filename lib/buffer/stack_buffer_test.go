@@ -207,6 +207,83 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	close(msgChan)
 }
 
+func TestBufferClosing(t *testing.T) {
+	var incr, total uint8 = 100, 5
+
+	msgChan := make(chan types.Message)
+	resChan := make(chan types.Response)
+
+	b := NewStackBuffer(ring.NewMemory(ring.MemoryConfig{
+		Limit: int(incr+15) * int(total),
+	}), metrics.DudType{})
+	if err := b.StartListening(resChan); err != nil {
+		t.Error(err)
+		return
+	}
+	if err := b.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	var i uint8
+
+	// Populate buffer with some messages
+	for i = 0; i < total; i++ {
+		msgBytes := make([][]byte, 1)
+		msgBytes[0] = make([]byte, int(incr))
+		msgBytes[0][0] = byte(i)
+
+		select {
+		case msgChan <- types.Message{Parts: msgBytes}:
+		case <-time.After(time.Second):
+			t.Errorf("Timed out waiting for buffered message %v send", i)
+			return
+		}
+		select {
+		case res := <-b.ResponseChan():
+			if res.Error() != nil {
+				t.Error(res.Error())
+			}
+		case <-time.After(time.Second):
+			t.Errorf("Timed out waiting for buffered message %v response", i)
+			return
+		}
+	}
+
+	// Close input, this should prompt the stack buffer to CloseOnceEmpty().
+	close(msgChan)
+
+	// Receive all of those messages from the buffer
+	for i = 0; i < total; i++ {
+		select {
+		case val := <-b.MessageChan():
+			if actual := uint8(val.Parts[0][0]); actual != i {
+				t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, i)
+			}
+			resChan <- types.NewSimpleResponse(nil)
+		case <-time.After(time.Second):
+			t.Errorf("Timed out waiting for final buffered message read")
+			return
+		}
+	}
+
+	// The buffer should now be closed, therefore so should our read channel.
+	select {
+	case _, open := <-b.MessageChan():
+		if open {
+			t.Error("Reader channel still open after clearing buffer")
+		}
+	case <-time.After(time.Second):
+		t.Errorf("Timed out waiting for final buffered message read")
+		return
+	}
+
+	// Should already be shut down.
+	b.WaitForClose(time.Second)
+
+	close(resChan)
+}
+
 /*
 func TestSyncBuffer(t *testing.T) {
 	msgChan := make(chan types.Message)

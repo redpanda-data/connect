@@ -75,8 +75,8 @@ func NewStackBuffer(buffer ring.MessageStack, stats metrics.Aggregator) Type {
 // inputLoop - Internal loop brokers incoming messages to output pipe.
 func (m *StackBuffer) inputLoop() {
 	defer func() {
-		m.buffer.Close()
 		close(m.responsesOut)
+		m.buffer.CloseOnceEmpty()
 		m.closedWG.Done()
 	}()
 
@@ -113,15 +113,19 @@ func (m *StackBuffer) outputLoop() {
 	for atomic.LoadInt32(&m.running) == 1 {
 		if msg.Parts == nil {
 			var err error
-			msg, err = m.buffer.NextMessage()
-			if err != nil && err != types.ErrTypeClosed {
-				// Unconventional errors here should always indicate some sort of corruption.
-				// Hopefully the corruption was message specific and not the whole buffer, so we can
-				// try shifting and reading again.
-				m.buffer.ShiftMessage()
-				if _, exists := errMap[err]; !exists {
-					errMap[err] = struct{}{}
-					errs = append(errs, err)
+			if msg, err = m.buffer.NextMessage(); err != nil {
+				if err != types.ErrTypeClosed {
+					// Unconventional errors here should always indicate some sort of corruption.
+					// Hopefully the corruption was message specific and not the whole buffer, so we
+					// can try shifting and reading again.
+					m.buffer.ShiftMessage()
+					if _, exists := errMap[err]; !exists {
+						errMap[err] = struct{}{}
+						errs = append(errs, err)
+					}
+				} else {
+					// If our buffer is closed then we exit.
+					return
 				}
 			}
 		}

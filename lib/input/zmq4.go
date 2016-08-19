@@ -25,7 +25,6 @@ THE SOFTWARE.
 package input
 
 import (
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -57,6 +56,7 @@ socket types then they can be added easily.`,
 // ZMQ4Config - Configuration for the ZMQ4 input type.
 type ZMQ4Config struct {
 	Addresses     []string `json:"addresses" yaml:"addresses"`
+	Bind          bool     `json:"bind" yaml:"bind"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
 	SubFilters    []string `json:"sub_filters" yaml:"sub_filters"`
 	HighWaterMark int      `json:"high_water_mark" yaml:"high_water_mark"`
@@ -66,7 +66,8 @@ type ZMQ4Config struct {
 // NewZMQ4Config - Creates a new ZMQ4Config with default values.
 func NewZMQ4Config() *ZMQ4Config {
 	return &ZMQ4Config{
-		Addresses:     []string{"tcp://localhost:1235"},
+		Addresses:     []string{"tcp://localhost:5555"},
+		Bind:          false,
 		SocketType:    "PULL",
 		SubFilters:    []string{},
 		HighWaterMark: 0,
@@ -123,7 +124,7 @@ func NewZMQ4(conf Config, log log.Modular, stats metrics.Aggregator) (Type, erro
 	z.socket.SetRcvhwm(conf.ZMQ4.HighWaterMark)
 
 	for _, address := range conf.ZMQ4.Addresses {
-		if strings.Contains(address, "*") {
+		if conf.ZMQ4.Bind {
 			err = z.socket.Bind(address)
 		} else {
 			err = z.socket.Connect(address)
@@ -168,7 +169,7 @@ func (z *ZMQ4) loop() {
 	poller.Add(z.socket, zmq4.POLLIN)
 
 	for _, address := range z.conf.ZMQ4.Addresses {
-		if strings.Contains(address, "*") {
+		if z.conf.ZMQ4.Bind {
 			z.log.Infof("Receiving ZMQ4 messages on bound address: %v\n", address)
 		} else {
 			z.log.Infof("Receiving ZMQ4 messages on connected address: %v\n", address)

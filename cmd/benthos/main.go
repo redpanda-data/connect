@@ -153,8 +153,8 @@ func bootstrap() Config {
 
 /*
 createPipeline - Based on the supplied configuration file, create a pipeline (input, buffer, output)
-and return a closable pool of pipeline objects, a channel indicating that all inputs have seized, or
-an error.
+and return a closable pool of pipeline objects, a channel indicating that all inputs and outputs
+have seized, or an error.
 */
 func createPipeline(
 	config Config, logger log.Modular, stats metrics.Aggregator,
@@ -190,10 +190,10 @@ func createPipeline(
 
 	closeChan := make(chan struct{})
 
-	// If our input closes down then we should shut down the service
+	// If our outputs close down then we should shut down the service
 	go func() {
 		for {
-			if err := inputPipe.WaitForClose(time.Second * 60); err == nil {
+			if err := outputPipe.WaitForClose(time.Second * 60); err == nil {
 				closeChan <- struct{}{}
 				return
 			}
@@ -243,7 +243,7 @@ func main() {
 	}
 	defer stats.Close()
 
-	pool, _, err := createPipeline(config, logger, stats)
+	pool, outputsClosedChan, err := createPipeline(config, logger, stats)
 	if err != nil {
 		logger.Errorf("Service closing due to: %v\n", err)
 		return
@@ -286,6 +286,8 @@ func main() {
 	select {
 	case <-sigChan:
 		logger.Infoln("Received SIGTERM, the service is closing.")
+	case <-outputsClosedChan:
+		logger.Infoln("Pipeline has terminated. Shutting down the service.")
 	}
 }
 

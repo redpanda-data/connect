@@ -41,6 +41,7 @@ func TestZMQ4Basic(t *testing.T) {
 
 	conf := NewConfig()
 	conf.ZMQ4.Addresses = []string{"tcp://*:1234"}
+	conf.ZMQ4.Bind = true
 	conf.ZMQ4.SocketType = "PULL"
 	conf.ZMQ4.PollTimeoutMS = 1000
 
@@ -104,6 +105,7 @@ func TestZMQ4PubSub(t *testing.T) {
 
 	conf := NewConfig()
 	conf.ZMQ4.Addresses = []string{"tcp://*:1236"}
+	conf.ZMQ4.Bind = true
 	conf.ZMQ4.SocketType = "SUB"
 	conf.ZMQ4.SubFilters = []string{"testTopic"}
 	conf.ZMQ4.PollTimeoutMS = 1000
