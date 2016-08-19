@@ -1,9 +1,0 @@
-input:
-  type: stdin
-output:
-  type: http_server
-  http_server:
-    address: "localhost:8081"
-    path: "/get"
-buffer:
-  type: memory
