@@ -1,0 +1,24 @@
+input:
+  type: fan_in
+  fan_in:
+    inputs:
+      - type: kafka
+        kafka:
+          addresses:
+            - localhost:9092
+          client_id: benthos_kafka_input
+          consumer_group: benthos_consumer_group
+          topic: benthos_stream
+          partition: 0
+      - type: ditto
+        kafka:
+          partition: 1
+      - type: ditto
+        kafka:
+          partition: 2
+output:
+  type: zmq4
+logger:
+  prefix: benthos
+  log_level: ALL
+  add_timestamp: true

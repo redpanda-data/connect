@@ -105,6 +105,82 @@ func TestFanInConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestFanInConfigDitto(t *testing.T) {
+	testConf := []byte(`{
+		"type": "fan_in",
+		"fan_in": {
+			"inputs": [
+				{
+					"type": "http_server",
+					"http_server": {
+						"address": "address:1",
+						"path": "/1"
+					}
+				},
+				{
+					"type": "ditto",
+					"http_server": {
+						"path": "/2"
+					}
+				},
+				{
+					"type": "ditto",
+					"http_server": {
+						"path": "/3"
+					}
+				}
+			]
+		}
+	}`)
+
+	conf := NewConfig()
+	if err := json.Unmarshal(testConf, &conf); err != nil {
+		t.Error(err)
+		return
+	}
+
+	inputConfs, err := parseInputConfsWithDefaults(conf.FanIn)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if exp, actual := 3, len(inputConfs); exp != actual {
+		t.Errorf("unexpected number of input configs: %v != %v", exp, actual)
+		return
+	}
+
+	if exp, actual := "http_server", inputConfs[0].Type; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "http_server", inputConfs[1].Type; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "http_server", inputConfs[2].Type; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+
+	if exp, actual := "address:1", inputConfs[0].HTTPServer.Address; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "address:1", inputConfs[1].HTTPServer.Address; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "address:1", inputConfs[2].HTTPServer.Address; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+
+	if exp, actual := "/1", inputConfs[0].HTTPServer.Path; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "/2", inputConfs[1].HTTPServer.Path; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "/3", inputConfs[2].HTTPServer.Path; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+}
+
 func TestFanInWithScaleProto(t *testing.T) {
 	nTestLoops := 1000
 

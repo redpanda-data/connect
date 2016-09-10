@@ -22,7 +22,10 @@ THE SOFTWARE.
 
 package output
 
-import "gopkg.in/yaml.v2"
+import (
+	"github.com/jeffail/gabs"
+	"gopkg.in/yaml.v2"
+)
 
 //--------------------------------------------------------------------------------------------------
 
@@ -42,11 +45,22 @@ func parseOutputConfsWithDefaults(outConfs []interface{}) ([]Config, error) {
 	outputConfs := make([]Config, len(outConfs))
 
 	for i, boxedConfig := range outConfs {
+		newConf := NewConfig()
+		if i > 0 {
+			// If the type of this output is 'ditto' we want to start with a duplicate of the
+			// previous config.
+			typeTest, _ := gabs.Consume(boxedConfig)
+			if t, ok := typeTest.S("type").Data().(string); ok && t == "ditto" {
+				newConf = outputConfs[i-1]
+				typeTest.Set(newConf.Type, "type")
+			}
+		}
+
 		rawBytes, err := yaml.Marshal(boxedConfig)
 		if err != nil {
 			return nil, err
 		}
-		outputConfs[i] = NewConfig()
+		outputConfs[i] = newConf
 		if err = yaml.Unmarshal(rawBytes, &outputConfs[i]); err != nil {
 			return nil, err
 		}
