@@ -1,0 +1,49 @@
+{
+	"input": {
+		"type": "fan_in",
+		"fan_in": {
+			"inputs": [
+				{
+					"type": "kafka",
+					"kafka": {
+						"addresses": [
+							"localhost:9092"
+						],
+						"topic": "benthos_stream",
+						"consumer_group": "benthos_consumer_group",
+						"client_id": "benthos_kafka_input",
+						"partition": 0
+					}
+				},
+				{
+					"type": "ditto",
+					"kafka": {
+						"partition": 1
+					}
+				},
+				{
+					"type": "ditto",
+					"kafka": {
+						"partition": 2
+					}
+				},
+				{
+					"type": "ditto",
+					"kafka": {
+						"partition": 3
+					}
+				}
+			]
+		}
+	},
+	"output": {
+		"type": "zmq4",
+		"zmq4": {
+			"socket_type": "PUSH",
+			"bind": true,
+			"addresses": [
+				"tcp://*:5556"
+			]
+		}
+	}
+}
