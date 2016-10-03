@@ -23,6 +23,7 @@ THE SOFTWARE.
 package input
 
 import (
+	"errors"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -50,25 +51,33 @@ planned for the future.
 For more information about sending HTTP messages, including details on sending
 multipart, please read the 'docs/using_http.md' document.
 
-Websockets are currently not implemented but are simple to add.`,
+You can set a high water mark of 1 or more. Websockets are currently not
+implemented but are simple to add if a request is made.`,
 	}
 }
 
 //--------------------------------------------------------------------------------------------------
 
+// Errors for the HTTPServer type.
+var (
+	ErrHWMInvalid = errors.New("high water mark is invalid (must be integer greater than 1)")
+)
+
 // HTTPServerConfig - Configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
-	Address   string `json:"address" yaml:"address"`
-	Path      string `json:"path" yaml:"path"`
-	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	Address       string `json:"address" yaml:"address"`
+	Path          string `json:"path" yaml:"path"`
+	TimeoutMS     int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	HighWaterMark int    `json:"high_water_mark" yaml:"high_water_mark"`
 }
 
 // NewHTTPServerConfig - Creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
-		Address:   "localhost:8080",
-		Path:      "/post",
-		TimeoutMS: 5000,
+		Address:       "localhost:8080",
+		Path:          "/post",
+		TimeoutMS:     5000,
+		HighWaterMark: 1,
 	}
 }
 
@@ -95,13 +104,19 @@ type HTTPServer struct {
 
 // NewHTTPServer - Create a new HTTPServer input type.
 func NewHTTPServer(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+	// We naturally buffer one message due to the loop mechanism, so remove 1.
+	hwm := conf.HTTPServer.HighWaterMark - 1
+	if hwm < 0 {
+		return nil, ErrHWMInvalid
+	}
+
 	h := HTTPServer{
 		running:          1,
 		conf:             conf,
 		stats:            stats,
 		log:              log.NewModule(".input.http"),
 		mux:              http.NewServeMux(),
-		internalMessages: make(chan [][]byte),
+		internalMessages: make(chan [][]byte, hwm),
 		messages:         make(chan types.Message),
 		responses:        nil,
 		closeChan:        make(chan struct{}),
