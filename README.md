@@ -141,15 +141,28 @@ Or, if the repo is already cloned, get the latest libraries with:
 
 To add new libraries simply run:
 
-```
+```shell
 PACKAGE=github.com/jeffail/util
 git submodule add https://$PACKAGE vendor/$PACKAGE"
 ```
 
 It might be handy to set yourself a function for this in your `.bashrc`:
 
-```
+```bash
 function go-add-vendor {
 	git submodule add https://$1 vendor/$1
 }
+```
+
+## Docker
+
+I've added a `Dockerfile` for easily building benthos with ZMQ4 support. If you
+are new to docker and want to spin up a container:
+
+```shell
+docker build -t benthos .
+docker run \
+	-v /path/to/your/config.yaml:/config/benthos.yaml \
+	-p 5555:5555 -p 5556:5556 \ # Map to expose any ports used in your config
+	benthos
 ```

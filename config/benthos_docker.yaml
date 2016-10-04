@@ -1,0 +1,25 @@
+input:
+  type: zmq4
+  zmq4:
+    addresses:
+    - tcp://*:5555
+    bind: true
+    socket_type: PULL
+    high_water_mark: 250
+output:
+  type: zmq4
+  zmq4:
+    addresses:
+    - tcp://*:5556
+    bind: true
+    socket_type: PUSH
+    high_water_mark: 250
+buffer:
+  type: memory
+  memory:
+    limit: 524288000
+logger:
+  prefix: benthos
+  log_level: INFO
+  add_timestamp: true
+  json_format: false
