@@ -36,7 +36,7 @@ import (
 
 // StackBuffer - An agent that wraps an output with a message buffer.
 type StackBuffer struct {
-	stats metrics.Aggregator
+	stats metrics.Type
 
 	buffer ring.MessageStack
 
@@ -55,7 +55,7 @@ type StackBuffer struct {
 }
 
 // NewStackBuffer - Create a new buffered agent type.
-func NewStackBuffer(buffer ring.MessageStack, stats metrics.Aggregator) Type {
+func NewStackBuffer(buffer ring.MessageStack, stats metrics.Type) Type {
 	m := StackBuffer{
 		stats:        stats,
 		buffer:       buffer,

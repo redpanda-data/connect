@@ -91,7 +91,7 @@ single message channel.
 type FanIn struct {
 	running int32
 
-	stats metrics.Aggregator
+	stats metrics.Type
 
 	messageChan  chan types.Message
 	responseChan <-chan types.Response
@@ -105,7 +105,7 @@ type FanIn struct {
 }
 
 // NewFanIn - Create a new FanIn type by providing inputs.
-func NewFanIn(inputs []types.Producer, stats metrics.Aggregator) (*FanIn, error) {
+func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
 	i := &FanIn{
 		running:           1,
 		stats:             stats,

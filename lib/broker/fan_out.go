@@ -39,7 +39,7 @@ type FanOut struct {
 	running int32
 
 	logger log.Modular
-	stats  metrics.Aggregator
+	stats  metrics.Type
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
@@ -53,7 +53,7 @@ type FanOut struct {
 
 // NewFanOut - Create a new FanOut type by providing outputs.
 func NewFanOut(
-	outputs []types.Consumer, logger log.Modular, stats metrics.Aggregator,
+	outputs []types.Consumer, logger log.Modular, stats metrics.Type,
 ) (*FanOut, error) {
 	o := &FanOut{
 		running:      1,

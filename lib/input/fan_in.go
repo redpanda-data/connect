@@ -156,7 +156,7 @@ func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
 //--------------------------------------------------------------------------------------------------
 
 // NewFanIn - Create a new FanIn input type.
-func NewFanIn(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+func NewFanIn(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if len(conf.FanIn.Inputs) == 0 {
 		return nil, ErrFanInNoInputs
 	}

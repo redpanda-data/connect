@@ -36,7 +36,7 @@ import (
 
 // typeSpec - Constructor and a usage description for each input type.
 type typeSpec struct {
-	constructor func(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error)
+	constructor func(conf Config, log log.Modular, stats metrics.Type) (Type, error)
 	description string
 }
 
@@ -103,7 +103,7 @@ func Descriptions() string {
 }
 
 // Construct - Create an input type based on an input configuration.
-func Construct(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+func Construct(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if c, ok := constructors[conf.Type]; ok {
 		return c.constructor(conf, log, stats)
 	}

@@ -75,7 +75,7 @@ type File struct {
 }
 
 // NewFile - Create a new File input type.
-func NewFile(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	f := File{
 		running:    1,
 		conf:       conf,

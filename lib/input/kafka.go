@@ -81,7 +81,7 @@ type Kafka struct {
 	offset int64
 
 	conf  Config
-	stats metrics.Aggregator
+	stats metrics.Type
 	log   log.Modular
 
 	messages  chan types.Message
@@ -92,7 +92,7 @@ type Kafka struct {
 }
 
 // NewKafka - Create a new Kafka input type.
-func NewKafka(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	k := Kafka{
 		running:    1,
 		offset:     0,

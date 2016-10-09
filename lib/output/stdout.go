@@ -68,7 +68,7 @@ type STDOUT struct {
 }
 
 // NewSTDOUT - Create a new STDOUT output type.
-func NewSTDOUT(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+func NewSTDOUT(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	s := STDOUT{
 		running:      1,
 		conf:         conf,

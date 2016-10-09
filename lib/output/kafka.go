@@ -67,7 +67,7 @@ type Kafka struct {
 	running int32
 
 	log   log.Modular
-	stats metrics.Aggregator
+	stats metrics.Type
 
 	conf Config
 
@@ -81,7 +81,7 @@ type Kafka struct {
 }
 
 // NewKafka - Create a new Kafka output type.
-func NewKafka(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	k := Kafka{
 		running:      1,
 		log:          log.NewModule(".output.kafka"),

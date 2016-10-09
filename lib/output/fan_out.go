@@ -71,7 +71,7 @@ func NewFanOutConfig() FanOutConfig {
 NewFanOut - Create a new FanOut output type. Messages will be sent out to ALL outputs, outputs which
 block will apply backpressure upstream, meaning other outputs will also stop receiving messages.
 */
-func NewFanOut(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+func NewFanOut(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if len(conf.FanOut.Outputs) == 0 {
 		return nil, ErrFanOutNoOutputs
 	}

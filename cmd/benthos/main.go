@@ -45,44 +45,24 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// HTTPMetConfig - HTTP endpoint config values for metrics exposure.
-type HTTPMetConfig struct {
-	Enabled bool   `json:"enabled" yaml:"enabled"`
-	Address string `json:"address" yaml:"address"`
-	Path    string `json:"path" yaml:"path"`
-}
-
-// MetConfig - Adds some custom fields to our metrics config.
-type MetConfig struct {
-	Config metrics.Config `json:"config" yaml:"config"`
-	HTTP   HTTPMetConfig  `json:"http" yaml:"http"`
-}
-
 // Config - The benthos configuration struct.
 type Config struct {
 	Input                input.Config     `json:"input" yaml:"input"`
 	Output               output.Config    `json:"output" yaml:"output"`
 	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
 	Logger               log.LoggerConfig `json:"logger" yaml:"logger"`
-	Metrics              MetConfig        `json:"metrics" yaml:"metrics"`
+	Metrics              metrics.Config   `json:"metrics" yaml:"metrics"`
 	SystemCloseTimeoutMS int              `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
 }
 
 // NewConfig - Returns a new configuration with default values.
 func NewConfig() Config {
 	return Config{
-		Input:  input.NewConfig(),
-		Output: output.NewConfig(),
-		Buffer: buffer.NewConfig(),
-		Logger: log.NewLoggerConfig(),
-		Metrics: MetConfig{
-			Config: metrics.NewConfig(),
-			HTTP: HTTPMetConfig{
-				Enabled: true,
-				Address: "localhost:8040",
-				Path:    "/stats",
-			},
-		},
+		Input:                input.NewConfig(),
+		Output:               output.NewConfig(),
+		Buffer:               buffer.NewConfig(),
+		Logger:               log.NewLoggerConfig(),
+		Metrics:              metrics.NewConfig(),
 		SystemCloseTimeoutMS: 20000,
 	}
 }
@@ -157,7 +137,7 @@ and return a closable pool of pipeline objects, a channel indicating that all in
 have seized, or an error.
 */
 func createPipeline(
-	config Config, logger log.Modular, stats metrics.Aggregator,
+	config Config, logger log.Modular, stats metrics.Type,
 ) (*butil.ClosablePool, chan struct{}, error) {
 	// Create a pool, this helps manage ordered closure of all pipeline components.
 	pool := butil.NewClosablePool()
@@ -236,10 +216,16 @@ func main() {
 	}
 
 	// Create our metrics type
-	stats, err := metrics.New(config.Metrics.Config)
+	stats, err := metrics.New(config.Metrics)
 	if err != nil {
 		logger.Errorf("Metrics error: %v\n", err)
 		return
+	}
+	if config.Metrics.Type == "http_server" {
+		logger.Infof(
+			"Serving metrics at http://%v%v\n",
+			config.Metrics.HTTP.Address, config.Metrics.HTTP.Path,
+		)
 	}
 	defer stats.Close()
 
@@ -262,22 +248,6 @@ func main() {
 			os.Exit(1)
 		}
 	}()
-
-	// We can host our own metrics HTTP endpoint, returns a json blob of latest metrics snapshot.
-	if config.Metrics.HTTP.Enabled {
-		go func() {
-			mux := http.NewServeMux()
-			mux.HandleFunc(config.Metrics.HTTP.Path, stats.JSONHandler())
-
-			logger.Infof(
-				"Serving HTTP metrics at: %s\n",
-				config.Metrics.HTTP.Address+config.Metrics.HTTP.Path,
-			)
-			if err := http.ListenAndServe(config.Metrics.HTTP.Address, mux); err != nil {
-				logger.Errorf("Metrics HTTP server failed: %v\n", err)
-			}
-		}()
-	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)

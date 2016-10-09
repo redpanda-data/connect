@@ -51,7 +51,7 @@ type Mmap struct {
 	cache  *MmapCache
 
 	logger log.Modular
-	stats  metrics.Aggregator
+	stats  metrics.Type
 
 	readFrom  int
 	readIndex int
@@ -63,7 +63,7 @@ type Mmap struct {
 }
 
 // NewMmap - Creates a block for buffering serialized messages.
-func NewMmap(config MmapConfig, log log.Modular, stats metrics.Aggregator) (*Mmap, error) {
+func NewMmap(config MmapConfig, log log.Modular, stats metrics.Type) (*Mmap, error) {
 	cache, err := NewMmapCache(MmapCacheConfig(config))
 	if err != nil {
 		return nil, fmt.Errorf("MMAP Cache: %v", err)

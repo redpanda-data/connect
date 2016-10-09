@@ -44,7 +44,7 @@ to disk the buffer is persisted across service restarts.`,
 //--------------------------------------------------------------------------------------------------
 
 // NewMmapFile - Create a buffer held in memory and persisted to file through memory map.
-func NewMmapFile(config Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+func NewMmapFile(config Config, log log.Modular, stats metrics.Type) (Type, error) {
 	b, err := ring.NewMmap(config.Mmap, log.NewModule(".buffer.mmap_file"), stats)
 	if err != nil {
 		return nil, err

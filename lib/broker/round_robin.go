@@ -38,7 +38,7 @@ import (
 type RoundRobin struct {
 	running int32
 
-	stats metrics.Aggregator
+	stats metrics.Type
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
@@ -51,7 +51,7 @@ type RoundRobin struct {
 }
 
 // NewRoundRobin - Create a new RoundRobin type by providing consumers.
-func NewRoundRobin(outputs []types.Consumer, stats metrics.Aggregator) (*RoundRobin, error) {
+func NewRoundRobin(outputs []types.Consumer, stats metrics.Type) (*RoundRobin, error) {
 	o := &RoundRobin{
 		running:      1,
 		stats:        stats,

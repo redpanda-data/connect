@@ -71,7 +71,7 @@ func NewRoundRobinConfig() RoundRobinConfig {
 
 // NewRoundRobin - Create a new RoundRobin output type. Messages will be sent out to an output
 // chosen by following their original order. If an output blocks this will block all throughput.
-func NewRoundRobin(conf Config, log log.Modular, stats metrics.Aggregator) (Type, error) {
+func NewRoundRobin(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if len(conf.RoundRobin.Outputs) == 0 {
 		return nil, ErrRoundRobinNoOutputs
 	}
