@@ -143,7 +143,7 @@ func createPipeline(
 	pool := butil.NewClosablePool()
 
 	// Create a buffer
-	buf, err := buffer.Construct(config.Buffer, logger, stats)
+	buf, err := buffer.New(config.Buffer, logger, stats)
 	if err != nil {
 		logger.Errorf("Buffer error (%s): %v\n", config.Buffer.Type, err)
 		return nil, nil, err
@@ -151,7 +151,7 @@ func createPipeline(
 	pool.Add(3, buf)
 
 	// Create our output pipe
-	outputPipe, err := output.Construct(config.Output, logger, stats)
+	outputPipe, err := output.New(config.Output, logger, stats)
 	if err != nil {
 		logger.Errorf("Output error (%s): %v\n", config.Output.Type, err)
 		return nil, nil, err
@@ -160,7 +160,7 @@ func createPipeline(
 	pool.Add(10, outputPipe)
 
 	// Create our input pipe
-	inputPipe, err := input.Construct(config.Input, logger, stats)
+	inputPipe, err := input.New(config.Input, logger, stats)
 	if err != nil {
 		logger.Errorf("Input error (%s): %v\n", config.Input.Type, err)
 		return nil, nil, err

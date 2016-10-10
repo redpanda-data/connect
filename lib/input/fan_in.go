@@ -169,7 +169,7 @@ func NewFanIn(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	inputs := make([]types.Producer, len(inputConfs))
 
 	for i, iConf := range inputConfs {
-		inputs[i], err = Construct(iConf, log, stats)
+		inputs[i], err = New(iConf, log, stats)
 		if err != nil {
 			return nil, err
 		}

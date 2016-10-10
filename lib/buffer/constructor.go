@@ -92,8 +92,8 @@ func Descriptions() string {
 	return buf.String()
 }
 
-// Construct - Create an input type based on an input configuration.
-func Construct(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+// New - Create an input type based on an input configuration.
+func New(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if c, ok := constructors[conf.Type]; ok {
 		return c.constructor(conf, log, stats)
 	}

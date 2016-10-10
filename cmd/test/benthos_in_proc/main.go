@@ -77,7 +77,7 @@ func main() {
 
 	msgChan, resChan := make(chan types.Message), make(chan types.Response)
 
-	buf, err := buffer.Construct(bufferConf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	buf, err := buffer.New(bufferConf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		panic(err)
 	}

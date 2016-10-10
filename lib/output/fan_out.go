@@ -84,7 +84,7 @@ func NewFanOut(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	outputs := make([]types.Consumer, len(outputConfs))
 
 	for i, oConf := range outputConfs {
-		outputs[i], err = Construct(oConf, log, stats)
+		outputs[i], err = New(oConf, log, stats)
 		if err != nil {
 			return nil, err
 		}
