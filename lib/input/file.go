@@ -39,8 +39,9 @@ func init() {
 	constructors["file"] = typeSpec{
 		constructor: NewFile,
 		description: `
-The 'file' type reads input from a file, where each line is treated as a
-separate message.`,
+The 'file' type reads input from a file. If multipart is set to false each line
+is read as a separate message. If multipart is set to true each line is read as
+a message part, and an empty line indicates the end of a message.`,
 	}
 }
 
@@ -48,13 +49,15 @@ separate message.`,
 
 // FileConfig - Configuration values for the File input type.
 type FileConfig struct {
-	Path string `json:"path" yaml:"path"`
+	Path      string `json:"path" yaml:"path"`
+	Multipart bool   `json:"multipart" yaml:"multipart"`
 }
 
 // NewFileConfig - Creates a new FileConfig with default values.
 func NewFileConfig() FileConfig {
 	return FileConfig{
-		Path: "",
+		Path:      "",
+		Multipart: false,
 	}
 }
 
@@ -99,8 +102,6 @@ func (f *File) loop() {
 		close(f.closedChan)
 	}()
 
-	var data []byte
-
 	file, err := os.Open(f.conf.File.Path)
 	if err != nil {
 		f.log.Errorf("Read %v error: %v\n", f.conf.File.Path, err)
@@ -112,19 +113,31 @@ func (f *File) loop() {
 
 	f.log.Infof("Reading messages from: %v\n", f.conf.File.Path)
 
+	var partsToSend, parts [][]byte
+
 	for atomic.LoadInt32(&f.running) == 1 {
-		if data == nil {
+		if len(partsToSend) == 0 {
 			if !scanner.Scan() {
 				if err = scanner.Err(); err != nil {
 					f.log.Errorf("File read error: %v\n", err)
 				}
 				return
 			}
-			data = scanner.Bytes()
+			data := scanner.Bytes()
+			if len(data) > 0 {
+				if f.conf.File.Multipart {
+					parts = append(parts, data)
+				} else {
+					partsToSend = append(partsToSend, data)
+				}
+			} else if f.conf.File.Multipart {
+				partsToSend = parts
+				parts = nil
+			}
 		}
-		if data != nil {
+		if len(partsToSend) > 0 {
 			select {
-			case f.messages <- types.Message{Parts: [][]byte{data}}:
+			case f.messages <- types.Message{Parts: partsToSend}:
 			case <-f.closeChan:
 				return
 			}
@@ -133,7 +146,7 @@ func (f *File) loop() {
 				return
 			}
 			if res.Error() == nil {
-				data = nil
+				partsToSend = nil
 			}
 		}
 	}

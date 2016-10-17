@@ -12,7 +12,7 @@ A range of internal buffer strategies are available, allowing you to choose a
 balance between latency, protection against back pressure and file based
 persistence.
 
-## Design
+## Design
 
 Benthos has inputs, an optional buffer, and outputs, which are all set in a
 single config file.
@@ -42,7 +42,7 @@ benthos --print-buffers | less
 benthos --print-outputs | less
 ```
 
-## Support
+## Support
 
 Currently supported input/output targets:
 
@@ -102,7 +102,7 @@ go install -tags "ZMQ4" ./cmd/...
 benthos -c ./config.yaml
 ```
 
-## Config
+## Config
 
 Create a fully populated default configuration file:
 
@@ -128,7 +128,7 @@ output:
 
 For further information check out the `./docs` directory.
 
-## Vendoring
+## Vendoring
 
 Versions of go above 1.6 should automatically `go get` all vendored libraries.
 Otherwise, while cloning use `--recursive`:
@@ -154,7 +154,7 @@ function go-add-vendor {
 }
 ```
 
-## Docker
+## Docker
 
 I've added a `Dockerfile` for easily building benthos with ZMQ4 support. If you
 are new to docker and want to spin up a container:

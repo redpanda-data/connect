@@ -39,10 +39,24 @@ func init() {
 	constructors["stdin"] = typeSpec{
 		constructor: NewSTDIN,
 		description: `
-The stdin input simply reads any piped data flowing into the service as line
-delimited single part messages. This is a historical input source originally
-used for testing. If there is demand then the input could be improved to suit
-more cases.`,
+The stdin input simply reads any data piped to stdin as messages. By default the
+messages are assumed single part and are line delimited. If the multipart option
+is set to true then lines are interpretted as message parts, and an empty line
+indicates the end of the message.`,
+	}
+}
+
+//--------------------------------------------------------------------------------------------------
+
+// STDINConfig - contains config fields for the STDIN input type.
+type STDINConfig struct {
+	Multipart bool `json:"multipart" yaml:"multipart"`
+}
+
+// NewSTDINConfig - creates a STDINConfig populated with default values.
+func NewSTDINConfig() STDINConfig {
+	return STDINConfig{
+		Multipart: false,
 	}
 }
 
@@ -55,7 +69,7 @@ type STDIN struct {
 	conf Config
 	log  log.Modular
 
-	internalMessages chan []byte
+	internalMessages chan [][]byte
 
 	messages  chan types.Message
 	responses <-chan types.Response
@@ -70,7 +84,7 @@ func NewSTDIN(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		running:          1,
 		conf:             conf,
 		log:              log.NewModule(".input.stdin"),
-		internalMessages: make(chan []byte),
+		internalMessages: make(chan [][]byte),
 		messages:         make(chan types.Message),
 		responses:        nil,
 		closeChan:        make(chan struct{}),
@@ -91,14 +105,22 @@ func (s *STDIN) readLoop() {
 	}()
 	stdin := bufio.NewScanner(os.Stdin)
 
-	var bytes []byte
+	var partsToSend, parts [][]byte
 
 	for atomic.LoadInt32(&s.running) == 1 {
 		// If no bytes then read a line
-		if bytes == nil {
+		if len(partsToSend) == 0 {
 			if stdin.Scan() {
 				if len(stdin.Bytes()) > 0 {
-					bytes = stdin.Bytes()
+					if s.conf.STDIN.Multipart {
+						parts = append(parts, stdin.Bytes())
+					} else {
+						partsToSend = append(partsToSend, stdin.Bytes())
+					}
+				} else if s.conf.STDIN.Multipart {
+					// Empty line means we're finished reading parts for this message.
+					partsToSend = parts
+					parts = nil
 				}
 			} else {
 				return
@@ -106,10 +128,10 @@ func (s *STDIN) readLoop() {
 		}
 
 		// If we have a line to push out
-		if bytes != nil {
+		if len(partsToSend) != 0 {
 			select {
-			case s.internalMessages <- bytes:
-				bytes = nil
+			case s.internalMessages <- partsToSend:
+				partsToSend = nil
 			case <-time.After(time.Second):
 			}
 		}
@@ -124,7 +146,7 @@ func (s *STDIN) loop() {
 		close(s.closedChan)
 	}()
 
-	var data []byte
+	var data [][]byte
 	var open bool
 
 	readChan := s.internalMessages
@@ -144,7 +166,7 @@ func (s *STDIN) loop() {
 		}
 		if data != nil {
 			select {
-			case s.messages <- types.Message{Parts: [][]byte{data}}:
+			case s.messages <- types.Message{Parts: data}:
 			case <-s.closeChan:
 				return
 			}
