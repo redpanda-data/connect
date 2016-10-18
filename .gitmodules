@@ -46,3 +46,6 @@
 [submodule "vendor/golang.org/x/net"]
 	path = vendor/golang.org/x/net
 	url = https://github.com/golang/net
+[submodule "vendor/github.com/streadway/amqp"]
+	path = vendor/github.com/streadway/amqp
+	url = https://github.com/streadway/amqp

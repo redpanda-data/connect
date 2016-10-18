@@ -74,14 +74,13 @@ func Descriptions() string {
 
 	buf := bytes.Buffer{}
 	buf.WriteString("BUFFERS\n")
-	buf.WriteString(strings.Repeat("=", 80))
+	buf.WriteString(strings.Repeat("=", 7))
 	buf.WriteString("\n\n")
 
 	// Append each description
 	for i, name := range names {
+		buf.WriteString("## ")
 		buf.WriteString(name)
-		buf.WriteString("\n")
-		buf.WriteString(strings.Repeat("-", 80))
 		buf.WriteString("\n")
 		buf.WriteString(constructors[name].description)
 		buf.WriteString("\n")

@@ -1,0 +1,11 @@
+# You can easily test this with docker:
+# docker run -d --hostname my-rabbit --name some-rabbit -p 5672:5672 rabbitmq:3
+input:
+  type: stdin
+output:
+  type: amqp
+  amqp:
+    uri: amqp://guest:guest@localhost:5672/
+    exchange: benthos-exchange
+    exchange_type: direct
+    key: benthos-key

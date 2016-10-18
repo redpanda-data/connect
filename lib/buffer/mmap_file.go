@@ -35,9 +35,15 @@ func init() {
 		constructor: NewMmapFile,
 		description: `
 The 'mmap_file' buffer type uses memory mapped files to perform low-latency,
-file-persisted buffering of messages. This protects the pipeline against
-backpressure until the target disk space is full. Since the buffers are flushed
-to disk the buffer is persisted across service restarts.`,
+file-persisted buffering of messages.
+
+To configure the mmap_file buffer you need to designate a writeable directory
+for storing the mapped files. Benthos will create multiple files in this
+directory as it fills them.
+
+When files are fully read from they will be deleted. You can disable this
+feature if you wish to preserve the data indefinitely, but the directory will
+fill up as fast as data passes through.`,
 	}
 }
 

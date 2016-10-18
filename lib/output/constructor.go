@@ -52,6 +52,7 @@ type Config struct {
 	HTTPServer HTTPServerConfig `json:"http_server" yaml:"http_server"`
 	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
 	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
+	AMQP       AMQPConfig       `json:"amqp" yaml:"amqp"`
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	File       FileConfig       `json:"file" yaml:"file"`
 	STDOUT     struct{}         `json:"stdout" yaml:"stdout"`
@@ -67,6 +68,7 @@ func NewConfig() Config {
 		HTTPServer: NewHTTPServerConfig(),
 		ScaleProto: NewScaleProtoConfig(),
 		Kafka:      NewKafkaConfig(),
+		AMQP:       NewAMQPConfig(),
 		ZMQ4:       NewZMQ4Config(),
 		File:       NewFileConfig(),
 		STDOUT:     struct{}{},
@@ -88,14 +90,13 @@ func Descriptions() string {
 
 	buf := bytes.Buffer{}
 	buf.WriteString("OUTPUTS\n")
-	buf.WriteString(strings.Repeat("=", 80))
+	buf.WriteString(strings.Repeat("=", 7))
 	buf.WriteString("\n\n")
 
 	// Append each description
 	for i, name := range names {
+		buf.WriteString("## ")
 		buf.WriteString(name)
-		buf.WriteString("\n")
-		buf.WriteString(strings.Repeat("-", 80))
 		buf.WriteString("\n")
 		buf.WriteString(constructors[name].description)
 		buf.WriteString("\n")

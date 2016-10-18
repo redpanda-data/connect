@@ -52,6 +52,7 @@ type Config struct {
 	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
+	AMQP       AMQPConfig       `json:"amqp" yaml:"amqp"`
 	File       FileConfig       `json:"file" yaml:"file"`
 	STDIN      STDINConfig      `json:"stdin" yaml:"stdin"`
 	FanIn      FanInConfig      `json:"fan_in" yaml:"fan_in"`
@@ -65,6 +66,7 @@ func NewConfig() Config {
 		ScaleProto: NewScaleProtoConfig(),
 		ZMQ4:       NewZMQ4Config(),
 		Kafka:      NewKafkaConfig(),
+		AMQP:       NewAMQPConfig(),
 		File:       NewFileConfig(),
 		STDIN:      NewSTDINConfig(),
 		FanIn:      NewFanInConfig(),
@@ -84,14 +86,13 @@ func Descriptions() string {
 
 	buf := bytes.Buffer{}
 	buf.WriteString("INPUTS\n")
-	buf.WriteString(strings.Repeat("=", 80))
+	buf.WriteString(strings.Repeat("=", 6))
 	buf.WriteString("\n\n")
 
 	// Append each description
 	for i, name := range names {
+		buf.WriteString("## ")
 		buf.WriteString(name)
-		buf.WriteString("\n")
-		buf.WriteString(strings.Repeat("-", 80))
 		buf.WriteString("\n")
 		buf.WriteString(constructors[name].description)
 		buf.WriteString("\n")

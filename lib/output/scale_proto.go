@@ -56,7 +56,7 @@ Currently only PUSH and PUB sockets are supported.`,
 
 //--------------------------------------------------------------------------------------------------
 
-// ScaleProtoConfig - Configuration for the ScaleProto input type.
+// ScaleProtoConfig - Configuration for the ScaleProto output type.
 type ScaleProtoConfig struct {
 	Address       string `json:"address" yaml:"address"`
 	Bind          bool   `json:"bind_address" yaml:"bind_address"`
@@ -76,7 +76,7 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 
 //--------------------------------------------------------------------------------------------------
 
-// ScaleProto - An input type that serves ScaleProto POST requests.
+// ScaleProto - An output type that serves ScaleProto messages.
 type ScaleProto struct {
 	running int32
 
@@ -94,7 +94,7 @@ type ScaleProto struct {
 	closeChan  chan struct{}
 }
 
-// NewScaleProto - Create a new ScaleProto input type.
+// NewScaleProto - Create a new ScaleProto output type.
 func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	s := ScaleProto{
 		running:      1,

@@ -48,6 +48,7 @@ Currently supported input/output targets:
 
 - ZMQ4 (PUSH, PULL, SUB, PUB)
 - Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)
+- RabbitMQ (AMQP)
 - HTTP 1.1 POST
 - STDIN/STDOUT
 - File
