@@ -49,3 +49,6 @@
 [submodule "vendor/github.com/streadway/amqp"]
 	path = vendor/github.com/streadway/amqp
 	url = https://github.com/streadway/amqp
+[submodule "vendor/gopkg.in/alexcesaro/statsd.v2"]
+	path = vendor/gopkg.in/alexcesaro/statsd.v2
+	url = https://gopkg.in/alexcesaro/statsd.v2
