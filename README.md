@@ -32,7 +32,7 @@ Currently supported input/output targets:
 - ZMQ4 (PUSH, PULL, SUB, PUB)
 - Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)
 - RabbitMQ (AMQP)
-- Kafka 0.9
+- Kafka
 - HTTP 1.1 POST/GET
 - STDIN/STDOUT
 - File
