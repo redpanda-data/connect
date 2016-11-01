@@ -22,55 +22,16 @@ THE SOFTWARE.
 
 package types
 
-import (
-	"reflect"
-	"testing"
-)
+import "testing"
 
-func TestMessageSerialization(t *testing.T) {
-	m := Message{
-		Parts: [][]byte{
-			[]byte("hello"),
-			[]byte("world"),
-			[]byte("12345"),
-		},
+func TestHTTPError(t *testing.T) {
+	err := ErrUnexpectedHTTPRes{
+		Code: 0,
+		S:    "test str",
 	}
 
-	b := m.Bytes()
-
-	m2, err := FromBytes(b)
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if !reflect.DeepEqual(m, m2) {
-		t.Errorf("Messages not equal: %v != %v", m, m2)
-	}
-}
-
-func TestNewMessage(t *testing.T) {
-	m := NewMessage()
-	if act := len(m.Parts); act > 0 {
-		t.Error("NewMessage returned more than zero message parts: %v", act)
-	}
-}
-
-func TestMessageInvalidBytesFormat(t *testing.T) {
-	cases := [][]byte{
-		[]byte(``),
-		[]byte(`this is invalid`),
-		[]byte{0x00, 0x00},
-		[]byte{0x00, 0x00, 0x00, 0x05},
-		[]byte{0x00, 0x00, 0x00, 0x01, 0x00, 0x00},
-		[]byte{0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02},
-		[]byte{0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00},
-	}
-
-	for _, c := range cases {
-		if _, err := FromBytes(c); err == nil {
-			t.Errorf("Received nil error from invalid byte sequence: %s", c)
-		}
+	exp, act := `HTTP request returned unexpected response code (0): test str`, err.Error()
+	if exp != act {
+		t.Errorf("Wrong Error() from ErrUnexpectedHTTPRes: %v != %v", exp, act)
 	}
 }
