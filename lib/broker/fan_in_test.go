@@ -104,6 +104,57 @@ func TestBasicFanIn(t *testing.T) {
 			}
 		}
 	}
+
+	fanIn.CloseAsync()
+
+	if err := fanIn.WaitForClose(time.Second * 10); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFanInShutdown(t *testing.T) {
+	nInputs := 10
+
+	Inputs := []types.Producer{}
+	mockInputs := []*MockInputType{}
+	resChan := make(chan types.Response)
+
+	for i := 0; i < nInputs; i++ {
+		mockInputs = append(mockInputs, &MockInputType{
+			MsgChan: make(chan types.Message),
+		})
+		Inputs = append(Inputs, mockInputs[i])
+	}
+
+	fanIn, err := NewFanIn(Inputs, metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err = fanIn.StartListening(resChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	for _, mockIn := range mockInputs {
+		select {
+		case _, closed := <-fanIn.MessageChan():
+			if closed {
+				t.Error("fan in closed early")
+			} else {
+				t.Error("fan in sent unexpected message")
+			}
+		default:
+		}
+		close(mockIn.MsgChan)
+	}
+
+	select {
+	case <-fanIn.MessageChan():
+	case <-time.After(time.Second):
+		t.Error("fan in failed to close")
+	}
 }
 
 func TestFanInAsync(t *testing.T) {
@@ -245,6 +296,7 @@ func BenchmarkBasicFanIn(b *testing.B) {
 	b.StopTimer()
 }
 
+/*
 func BenchmarkBasicFanInReflection(b *testing.B) {
 	nInputs := 10
 
@@ -312,5 +364,6 @@ func BenchmarkBasicFanInReflection(b *testing.B) {
 
 	b.StopTimer()
 }
+*/
 
 //--------------------------------------------------------------------------------------------------

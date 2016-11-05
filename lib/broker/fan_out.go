@@ -103,7 +103,12 @@ func (o *FanOut) loop() {
 	var open bool
 	for atomic.LoadInt32(&o.running) == 1 {
 		var msg types.Message
-		if msg, open = <-o.messages; !open {
+		select {
+		case msg, open = <-o.messages:
+			if !open {
+				return
+			}
+		case <-o.closeChan:
 			return
 		}
 		o.stats.Incr("broker.fan_out.messages.received", 1)

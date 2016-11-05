@@ -23,6 +23,7 @@ THE SOFTWARE.
 package broker
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -109,6 +110,164 @@ func TestBasicFanOut(t *testing.T) {
 			t.Errorf("Timed out responding to broker")
 			return
 		}
+	}
+
+	oTM.CloseAsync()
+
+	if err := oTM.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestFanOutShutDown(t *testing.T) {
+	nOutputs := 10
+
+	outputs := []types.Consumer{}
+	mockOutputs := []*MockOutputType{}
+
+	for i := 0; i < nOutputs; i++ {
+		mockOutputs = append(mockOutputs, &MockOutputType{
+			ResChan: make(chan types.Response),
+			MsgChan: make(chan types.Message),
+		})
+		outputs = append(outputs, mockOutputs[i])
+	}
+
+	readChan := make(chan types.Message)
+
+	oTM, err := NewFanOut(outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if err = oTM.StartReceiving(readChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	select {
+	case readChan <- types.Message{}:
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for msg send")
+	}
+
+	for _, mockOut := range mockOutputs {
+		close(mockOut.ResChan)
+		select {
+		case <-mockOut.MsgChan:
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for msg rcv")
+		}
+	}
+
+	select {
+	case <-oTM.ResponseChan():
+	case <-time.After(time.Second * 5):
+		t.Error("fan out failed to close")
+	}
+}
+
+func TestFanOutShutDownFromSend(t *testing.T) {
+	outputs := []types.Consumer{}
+	mockOutput := &MockOutputType{
+		ResChan: make(chan types.Response),
+		MsgChan: make(chan types.Message),
+	}
+	outputs = append(outputs, mockOutput)
+	readChan := make(chan types.Message)
+
+	oTM, err := NewFanOut(outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if err = oTM.StartReceiving(readChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	select {
+	case readChan <- types.Message{}:
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for msg send")
+	}
+
+	oTM.CloseAsync()
+	if err := oTM.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case _, open := <-mockOutput.MsgChan:
+		if open {
+			t.Error("fan out output still open after closure")
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for msg rcv")
+	}
+}
+
+func TestFanOutErrorProp(t *testing.T) {
+	outputs := []types.Consumer{}
+	mockOutput := &MockOutputType{
+		ResChan: make(chan types.Response),
+		MsgChan: make(chan types.Message),
+	}
+	outputs = append(outputs, mockOutput)
+	readChan := make(chan types.Message)
+
+	oTM, err := NewFanOut(outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if err = oTM.StartReceiving(readChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	select {
+	case readChan <- types.Message{}:
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for msg send")
+	}
+
+	select {
+	case _, open := <-mockOutput.MsgChan:
+		if !open {
+			t.Error("fan out output not open after send")
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for msg rcv")
+	}
+
+	select {
+	case mockOutput.ResChan <- types.NewSimpleResponse(errors.New("this is an error")):
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for response send")
+	}
+
+	select {
+	case res := <-oTM.ResponseChan():
+		if exp, act := "map[0:this is an error]", res.Error().Error(); exp != act {
+			t.Errorf("wrong error returned: %v != %v", exp, act)
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for response rcv")
+	}
+
+	oTM.CloseAsync()
+	if err := oTM.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case _, open := <-mockOutput.MsgChan:
+		if open {
+			t.Error("fan out output still open after closure")
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for msg rcv")
 	}
 }
 

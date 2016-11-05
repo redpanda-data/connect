@@ -53,7 +53,7 @@ func TestMessageSerialization(t *testing.T) {
 func TestNewMessage(t *testing.T) {
 	m := NewMessage()
 	if act := len(m.Parts); act > 0 {
-		t.Error("NewMessage returned more than zero message parts: %v", act)
+		t.Errorf("NewMessage returned more than zero message parts: %v", act)
 	}
 }
 

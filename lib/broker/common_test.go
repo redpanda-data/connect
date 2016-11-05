@@ -23,6 +23,7 @@ THE SOFTWARE.
 package broker
 
 import (
+	"errors"
 	"time"
 
 	"github.com/jeffail/benthos/lib/types"
@@ -56,12 +57,19 @@ func (m *MockInputType) MessageChan() <-chan types.Message {
 
 // CloseAsync - Does nothing.
 func (m MockInputType) CloseAsync() {
-	// Do nothing
+	close(m.MsgChan)
 }
 
 // WaitForClose - Does nothing.
-func (m MockInputType) WaitForClose(time.Duration) error {
-	// Do nothing
+func (m MockInputType) WaitForClose(t time.Duration) error {
+	select {
+	case _, open := <-m.MsgChan:
+		if open {
+			return errors.New("received unexpected message")
+		}
+	case <-time.After(t):
+		return types.ErrTimeout
+	}
 	return nil
 }
 
@@ -86,12 +94,19 @@ func (m *MockOutputType) ResponseChan() <-chan types.Response {
 
 // CloseAsync - Does nothing.
 func (m MockOutputType) CloseAsync() {
-	// Do nothing
+	close(m.ResChan)
 }
 
 // WaitForClose - Does nothing.
-func (m MockOutputType) WaitForClose(time.Duration) error {
-	// Do nothing
+func (m MockOutputType) WaitForClose(t time.Duration) error {
+	select {
+	case _, open := <-m.ResChan:
+		if open {
+			return errors.New("received unexpected message")
+		}
+	case <-time.After(t):
+		return types.ErrTimeout
+	}
 	return nil
 }
 
