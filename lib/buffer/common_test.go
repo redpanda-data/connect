@@ -22,15 +22,8 @@ THE SOFTWARE.
 
 package buffer
 
-import "testing"
+import "github.com/jeffail/util/log"
 
-//--------------------------------------------------------------------------------------------------
-
-func TestInterfaces(t *testing.T) {
-	mem := &StackBuffer{}
-	if Type(mem) == nil {
-		t.Errorf("Memory: nil Type")
-	}
+var logConfig = log.LoggerConfig{
+	LogLevel: "NONE",
 }
-
-//--------------------------------------------------------------------------------------------------

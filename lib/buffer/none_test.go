@@ -34,6 +34,39 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
+func TestNoneBufferClose(t *testing.T) {
+	empty, err := NewEmpty(NewConfig(), nil, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgChan := make(chan types.Message)
+	resChan := make(chan types.Response)
+
+	if err = empty.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+		return
+	}
+	if err = empty.StartReceiving(msgChan); err == nil {
+		t.Error("received nil, expected error from double msg assignment")
+		return
+	}
+	if err = empty.StartListening(resChan); err != nil {
+		t.Error(err)
+		return
+	}
+	if err = empty.StartListening(resChan); err == nil {
+		t.Error("received nil, expected error from double res assignment")
+		return
+	}
+
+	empty.CloseAsync()
+	if err = empty.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestNoneBufferBasic(t *testing.T) {
 	nThreads, nMessages := 5, 100
 

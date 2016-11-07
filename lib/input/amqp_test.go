@@ -20,17 +20,47 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package buffer
+package input
 
-import "testing"
+import (
+	"os"
+	"testing"
 
-//--------------------------------------------------------------------------------------------------
+	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
+)
 
-func TestInterfaces(t *testing.T) {
-	mem := &StackBuffer{}
-	if Type(mem) == nil {
-		t.Errorf("Memory: nil Type")
+func TestAMQPError(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "amqp"
+
+	_, err := NewAMQP(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err == nil {
+		t.Error("Expected error")
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+/*
+func TestAMQPBasic(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "amqp"
+
+	a, err := NewAMQP(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	resChan := make(chan types.Response)
+
+	if err = a.StartListening(resChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	a.CloseAsync()
+	if err := a.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+*/

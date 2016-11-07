@@ -22,15 +22,25 @@ THE SOFTWARE.
 
 package buffer
 
-import "testing"
+import (
+	"os"
+	"testing"
 
-//--------------------------------------------------------------------------------------------------
+	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
+)
 
-func TestInterfaces(t *testing.T) {
-	mem := &StackBuffer{}
-	if Type(mem) == nil {
-		t.Errorf("Memory: nil Type")
+func TestConstructorDescription(t *testing.T) {
+	if len(Descriptions()) == 0 {
+		t.Error("package descriptions were empty")
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+func TestConstructorBadType(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "not_exist"
+
+	if _, err := New(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{}); err == nil {
+		t.Error("Expected error, received nil for invalid type")
+	}
+}

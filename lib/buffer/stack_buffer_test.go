@@ -23,6 +23,7 @@ THE SOFTWARE.
 package buffer
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -282,6 +283,100 @@ func TestBufferClosing(t *testing.T) {
 	b.WaitForClose(time.Second)
 
 	close(resChan)
+}
+
+func TestStackBufferErrProp(t *testing.T) {
+	msgChan := make(chan types.Message)
+	resChan := make(chan types.Response)
+
+	b := NewStackBuffer(ring.NewMemory(ring.NewMemoryConfig()), metrics.DudType{})
+	if err := b.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+		return
+	}
+	if err := b.StartListening(resChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	msg := types.NewMessage()
+	msg.Parts = append(msg.Parts, []byte(`hello world`))
+
+	select {
+	case msgChan <- msg:
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for msg send")
+	}
+	select {
+	case res, open := <-b.ResponseChan():
+		if !open {
+			t.Error("buffer closed early")
+			return
+		}
+		if res.Error() != nil {
+			t.Error(res.Error())
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for result")
+	}
+
+	select {
+	case _, open := <-b.MessageChan():
+		if !open {
+			t.Error("buffer closed early")
+			return
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for message")
+	}
+
+	errTest := errors.New("test error")
+	go func() {
+		select {
+		case resChan <- types.NewSimpleResponse(errTest):
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for error response")
+		}
+	}()
+
+	select {
+	case errs, open := <-b.ErrorsChan():
+		if !open {
+			t.Error("buffer closed early")
+			return
+		}
+		if exp, act := 1, len(errs); exp != act {
+			t.Errorf("Wrong # of errors returned: %v != %v", exp, act)
+		}
+		if exp, act := errTest, errs[0]; exp != act {
+			t.Errorf("Wrong error returned: %v != %v", exp, act)
+		}
+	case <-time.After(time.Second * 5):
+		t.Error("Timed out waiting for errors returned")
+	}
+
+	select {
+	case _, open := <-b.MessageChan():
+		if !open {
+			t.Error("buffer closed early")
+			return
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for message")
+	}
+	select {
+	case resChan <- types.NewSimpleResponse(nil):
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for error response")
+	}
+
+	close(resChan)
+	close(msgChan)
+
+	b.CloseAsync()
+	if err := b.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
 }
 
 /*

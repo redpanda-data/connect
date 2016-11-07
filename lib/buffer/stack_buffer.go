@@ -81,8 +81,14 @@ func (m *StackBuffer) inputLoop() {
 	}()
 
 	for atomic.LoadInt32(&m.running) == 1 {
-		msg, open := <-m.messagesIn
-		if !open {
+		var msg types.Message
+		var open bool
+		select {
+		case msg, open = <-m.messagesIn:
+			if !open {
+				return
+			}
+		case <-m.closeChan:
 			return
 		}
 		backlog, err := m.buffer.PushMessage(msg)
