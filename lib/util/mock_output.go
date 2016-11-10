@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package input
+package util
 
 import (
 	"time"
@@ -30,30 +30,30 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// MockType - Implements the input.Type interface.
-type MockType struct {
-	MsgChan chan types.Message
-	ResChan <-chan types.Response
+// MockOutputType - Implements the output.Type interface.
+type MockOutputType struct {
+	ResChan chan types.Response
+	MsgChan <-chan types.Message
 }
 
-// StartListening - Sets the channel used for reading responses.
-func (m *MockType) StartListening(resChan <-chan types.Response) error {
-	m.ResChan = resChan
+// StartReceiving - Sets the read channel. This implementation is NOT thread safe.
+func (m *MockOutputType) StartReceiving(msgs <-chan types.Message) error {
+	m.MsgChan = msgs
 	return nil
 }
 
-// MessageChan - Returns the messages channel.
-func (m *MockType) MessageChan() <-chan types.Message {
-	return m.MsgChan
+// ResponseChan - Returns the errors channel.
+func (m *MockOutputType) ResponseChan() <-chan types.Response {
+	return m.ResChan
 }
 
 // CloseAsync - Does nothing.
-func (m MockType) CloseAsync() {
+func (m MockOutputType) CloseAsync() {
 	// Do nothing
 }
 
 // WaitForClose - Does nothing.
-func (m MockType) WaitForClose(time.Duration) error {
+func (m MockOutputType) WaitForClose(time.Duration) error {
 	// Do nothing
 	return nil
 }

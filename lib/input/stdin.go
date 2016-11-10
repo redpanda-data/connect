@@ -24,6 +24,7 @@ package input
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"sync/atomic"
 	"time"
@@ -66,6 +67,8 @@ func NewSTDINConfig() STDINConfig {
 type STDIN struct {
 	running int32
 
+	handle io.Reader
+
 	conf Config
 	log  log.Modular
 
@@ -82,6 +85,7 @@ type STDIN struct {
 func NewSTDIN(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	s := STDIN{
 		running:          1,
+		handle:           os.Stdin,
 		conf:             conf,
 		log:              log.NewModule(".input.stdin"),
 		internalMessages: make(chan [][]byte),
@@ -103,7 +107,7 @@ func (s *STDIN) readLoop() {
 	defer func() {
 		close(s.internalMessages)
 	}()
-	stdin := bufio.NewScanner(os.Stdin)
+	stdin := bufio.NewScanner(s.handle)
 
 	var partsToSend, parts [][]byte
 

@@ -27,11 +27,6 @@ import "testing"
 //--------------------------------------------------------------------------------------------------
 
 func TestInterfaces(t *testing.T) {
-	m := &MockType{}
-	if Type(m) == nil {
-		t.Errorf("mock: nil Type")
-	}
-
 	s := &STDIN{}
 	if Type(s) == nil {
 		t.Errorf("stdin: nil Type")

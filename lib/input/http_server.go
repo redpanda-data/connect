@@ -226,10 +226,19 @@ func (h *HTTPServer) loop() {
 			}
 		}
 		if data != nil {
-			h.messages <- types.Message{Parts: data}
+			select {
+			case h.messages <- types.Message{Parts: data}:
+			case <-h.closeChan:
+				return
+			}
 
 			var res types.Response
-			if res, open = <-h.responses; !open {
+			select {
+			case res, open = <-h.responses:
+				if !open {
+					return
+				}
+			case <-h.closeChan:
 				return
 			}
 			if res.Error() == nil {

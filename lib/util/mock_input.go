@@ -20,22 +20,42 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package output
+package util
 
-import "testing"
+import (
+	"time"
+
+	"github.com/jeffail/benthos/lib/types"
+)
 
 //--------------------------------------------------------------------------------------------------
 
-func TestInterfaces(t *testing.T) {
-	m := &MockType{}
-	if Type(m) == nil {
-		t.Errorf("mock: nil Type")
-	}
+// MockInputType - Implements the input.Type interface.
+type MockInputType struct {
+	MsgChan chan types.Message
+	ResChan <-chan types.Response
+}
 
-	s := &STDOUT{}
-	if Type(s) == nil {
-		t.Errorf("stdout: nil Type")
-	}
+// StartListening - Sets the channel used for reading responses.
+func (m *MockInputType) StartListening(resChan <-chan types.Response) error {
+	m.ResChan = resChan
+	return nil
+}
+
+// MessageChan - Returns the messages channel.
+func (m *MockInputType) MessageChan() <-chan types.Message {
+	return m.MsgChan
+}
+
+// CloseAsync - Does nothing.
+func (m MockInputType) CloseAsync() {
+	// Do nothing
+}
+
+// WaitForClose - Does nothing.
+func (m MockInputType) WaitForClose(time.Duration) error {
+	// Do nothing
+	return nil
 }
 
 //--------------------------------------------------------------------------------------------------

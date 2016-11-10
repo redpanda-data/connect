@@ -25,16 +25,14 @@ package util
 import (
 	"testing"
 
-	"github.com/jeffail/benthos/lib/input"
-	"github.com/jeffail/benthos/lib/output"
 	"github.com/jeffail/benthos/lib/types"
 )
 
 //--------------------------------------------------------------------------------------------------
 
 func TestCouple(t *testing.T) {
-	inMock := input.MockType{MsgChan: make(chan types.Message)}
-	outMock := output.MockType{ResChan: make(chan types.Response)}
+	inMock := MockInputType{MsgChan: make(chan types.Message)}
+	outMock := MockOutputType{ResChan: make(chan types.Response)}
 
 	if inMock.MsgChan == outMock.MsgChan {
 		t.Errorf("Message channels should not yet match: %v == %v", inMock.MsgChan, outMock.MsgChan)

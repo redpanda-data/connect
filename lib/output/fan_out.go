@@ -45,9 +45,16 @@ func init() {
 		constructor: NewFanOut,
 		description: `
 The 'fan_out' output type allows you to group multiple outputs together. With
-the fan out model all outputs will receive every message that passes through
+the fan out model all outputs will be sent every message that passes through
 benthos. This process is blocking, meaning if any output applies backpressure
-then it will block all outputs from receiving messages.`,
+then it will block all outputs from receiving messages.
+
+Some outputs might fail during a message send. For example, an HTTP client
+output might receive a 503 response. Under these circumstances the fan_out
+output will block until the error is returned, but as long as at least one
+output has successfully sent the message it will move onto the next.
+
+Likewise, if zero outputs have successfully sent the message it will be retried.`,
 	}
 }
 
