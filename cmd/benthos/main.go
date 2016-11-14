@@ -138,36 +138,42 @@ have seized, or an error.
 */
 func createPipeline(
 	config Config, logger log.Modular, stats metrics.Type,
-) (*butil.ClosablePool, chan struct{}, error) {
-	// Create a pool, this helps manage ordered closure of all pipeline components.
-	pool := butil.NewClosablePool()
-
-	// Create a buffer
-	buf, err := buffer.New(config.Buffer, logger, stats)
-	if err != nil {
-		logger.Errorf("Buffer error (%s): %v\n", config.Buffer.Type, err)
-		return nil, nil, err
-	}
-	pool.Add(3, buf)
-
-	// Create our output pipe
-	outputPipe, err := output.New(config.Output, logger, stats)
-	if err != nil {
-		logger.Errorf("Output error (%s): %v\n", config.Output.Type, err)
-		return nil, nil, err
-	}
-	butil.Couple(buf, outputPipe)
-	pool.Add(10, outputPipe)
+) (*butil.ClosablePool, *butil.ClosablePool, chan struct{}, error) {
+	// Create two pools, this helps manage ordered closure of all pipeline components. We have a
+	// tiered (t1) and an non-tiered (t2) pool. If the tiered pool cannot close within our allotted
+	// time period then we try closing the second non-tiered pool. If the second pool also fails
+	// then we exit the service ungracefully.
+	poolt1, poolt2 := butil.NewClosablePool(), butil.NewClosablePool()
 
 	// Create our input pipe
 	inputPipe, err := input.New(config.Input, logger, stats)
 	if err != nil {
 		logger.Errorf("Input error (%s): %v\n", config.Input.Type, err)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	butil.Couple(inputPipe, buf)
-	pool.Add(1, inputPipe)
+	poolt1.Add(1, inputPipe)
+	poolt2.Add(0, inputPipe)
 
+	// Create a buffer
+	buf, err := buffer.New(config.Buffer, logger, stats)
+	if err != nil {
+		logger.Errorf("Buffer error (%s): %v\n", config.Buffer.Type, err)
+		return nil, nil, nil, err
+	}
+	poolt1.Add(3, buf)
+	poolt2.Add(0, buf)
+
+	// Create our output pipe
+	outputPipe, err := output.New(config.Output, logger, stats)
+	if err != nil {
+		logger.Errorf("Output error (%s): %v\n", config.Output.Type, err)
+		return nil, nil, nil, err
+	}
+	poolt1.Add(10, outputPipe)
+	poolt2.Add(0, outputPipe)
+
+	butil.Couple(buf, outputPipe)
+	butil.Couple(inputPipe, buf)
 	closeChan := make(chan struct{})
 
 	// If our outputs close down then we should shut down the service
@@ -180,7 +186,7 @@ func createPipeline(
 		}
 	}()
 
-	return pool, closeChan, nil
+	return poolt1, poolt2, closeChan, nil
 }
 
 func main() {
@@ -229,7 +235,7 @@ func main() {
 	}
 	defer stats.Close()
 
-	pool, outputsClosedChan, err := createPipeline(config, logger, stats)
+	poolTiered, poolNonTiered, outputsClosedChan, err := createPipeline(config, logger, stats)
 	if err != nil {
 		logger.Errorf("Service closing due to: %v\n", err)
 		return
@@ -238,14 +244,20 @@ func main() {
 	// Defer ordered pool clean up.
 	defer func() {
 		tout := time.Millisecond * time.Duration(config.SystemCloseTimeoutMS)
-		if err := pool.Close(tout); err != nil {
+		if err := poolTiered.Close(tout / 2); err != nil {
 			logger.Warnln(
-				"Service failed to shut down cleanly within allocated time. Exiting forcefully.",
+				"Service failed to close using ordered tiers, you may receive a duplicate " +
+					"message on the next service start.",
 			)
-			if config.Logger.LogLevel == "DEBUG" {
-				pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			if err = poolNonTiered.Close(tout / 2); err != nil {
+				logger.Warnln(
+					"Service failed to close cleanly within allocated time. Exiting forcefully.",
+				)
+				if config.Logger.LogLevel == "DEBUG" {
+					pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+				}
+				os.Exit(1)
 			}
-			os.Exit(1)
 		}
 	}()
 

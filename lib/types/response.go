@@ -41,7 +41,7 @@ type MappedResponse struct {
 }
 
 // Error - Returns nil if no errors are present, otherwise a concatenated blob of errors.
-func (b *MappedResponse) Error() error {
+func (b MappedResponse) Error() error {
 	if len(b.Errors) > 0 {
 		return fmt.Errorf("%v", b.Errors)
 	}
@@ -49,7 +49,7 @@ func (b *MappedResponse) Error() error {
 }
 
 // ErrorMap - Returns a map of errors returned by agents, represented by index.
-func (b *MappedResponse) ErrorMap() map[int]error {
+func (b MappedResponse) ErrorMap() map[int]error {
 	if len(b.Errors) > 0 {
 		return b.Errors
 	}
@@ -57,8 +57,8 @@ func (b *MappedResponse) ErrorMap() map[int]error {
 }
 
 // NewMappedResponse - Returns a response tailored for a broker (with n agents).
-func NewMappedResponse() *MappedResponse {
-	return &MappedResponse{
+func NewMappedResponse() MappedResponse {
+	return MappedResponse{
 		Errors: make(map[int]error),
 	}
 }
@@ -71,18 +71,18 @@ type SimpleResponse struct {
 }
 
 // Error - Returns the underlying error.
-func (o *SimpleResponse) Error() error {
+func (o SimpleResponse) Error() error {
 	return o.err
 }
 
 // ErrorMap - Returns nil.
-func (o *SimpleResponse) ErrorMap() map[int]error {
+func (o SimpleResponse) ErrorMap() map[int]error {
 	return nil
 }
 
 // NewSimpleResponse - Returns a response with an error (nil error signals successful receipt).
-func NewSimpleResponse(err error) *SimpleResponse {
-	return &SimpleResponse{
+func NewSimpleResponse(err error) SimpleResponse {
+	return SimpleResponse{
 		err: err,
 	}
 }

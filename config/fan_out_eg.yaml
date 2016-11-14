@@ -1,0 +1,10 @@
+input:
+  type: stdin
+output:
+  type: fan_out
+  fan_out:
+    outputs:
+      - type: stdout
+      - type: http_client
+logger:
+  log_level: DEBUG

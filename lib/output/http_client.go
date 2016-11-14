@@ -55,17 +55,19 @@ multipart, please read the 'docs/using_http.md' document.`,
 
 // HTTPClientConfig - Configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	URL       string `json:"url" yaml:"url"`
-	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS   int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
+	URL        string `json:"url" yaml:"url"`
+	TimeoutMS  int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	RetryMS    int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
+	NumRetries int    `json:"retries" yaml:"retries"`
 }
 
 // NewHTTPClientConfig - Creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		URL:       "http://localhost:8081/post",
-		TimeoutMS: 5000,
-		RetryMS:   1000,
+		URL:        "http://localhost:8081/post",
+		TimeoutMS:  5000,
+		RetryMS:    1000,
+		NumRetries: 3,
 	}
 }
 
@@ -105,25 +107,31 @@ func NewHTTPClient(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 
 //--------------------------------------------------------------------------------------------------
 
-// createMultiPartRequest - Creates an HTTP multipart request out of a multipart message.
-func createMultiPartRequest(url string, msg *types.Message) (req *http.Request, err error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
+// createRequest - Creates an HTTP request out of a single message.
+func createRequest(url string, msg *types.Message) (req *http.Request, err error) {
+	if len(msg.Parts) == 1 {
+		body := bytes.NewBuffer(msg.Parts[0])
+		if req, err = http.NewRequest("POST", url, body); err == nil {
+			req.Header.Add("Content-Type", "application/octet-stream")
+		}
+	} else {
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
 
-	for i := 0; i < len(msg.Parts) && err == nil; i++ {
-		var part io.Writer
-		if part, err = writer.CreatePart(textproto.MIMEHeader{
-			"Content-Type": []string{"application/octet-stream"},
-		}); err == nil {
-			_, err = io.Copy(part, bytes.NewReader(msg.Parts[i]))
+		for i := 0; i < len(msg.Parts) && err == nil; i++ {
+			var part io.Writer
+			if part, err = writer.CreatePart(textproto.MIMEHeader{
+				"Content-Type": []string{"application/octet-stream"},
+			}); err == nil {
+				_, err = io.Copy(part, bytes.NewReader(msg.Parts[i]))
+			}
+		}
+
+		writer.Close()
+		if req, err = http.NewRequest("POST", url, body); err == nil {
+			req.Header.Add("Content-Type", writer.FormDataContentType())
 		}
 	}
-
-	writer.Close()
-	if req, err = http.NewRequest("POST", url, body); err == nil {
-		req.Header.Add("Content-Type", writer.FormDataContentType())
-	}
-
 	return
 }
 
@@ -149,25 +157,30 @@ func (h *HTTPClient) loop() {
 		var client http.Client
 		client.Timeout = time.Duration(h.conf.HTTPClient.TimeoutMS) * time.Millisecond
 
+		var req *http.Request
 		var res *http.Response
 		var err error
 
-		if len(msg.Parts) == 1 {
-			res, err = client.Post(
-				h.conf.HTTPClient.URL,
-				"application/octet-stream",
-				bytes.NewBuffer(msg.Parts[0]),
-			)
-		} else {
-			var req *http.Request
-			if req, err = createMultiPartRequest(h.conf.HTTPClient.URL, &msg); err == nil {
-				res, err = client.Do(req)
+		if req, err = createRequest(h.conf.HTTPClient.URL, &msg); err == nil {
+			if res, err = client.Do(req); err == nil &&
+				(res.StatusCode < 200 || res.StatusCode > 299) {
+				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
 			}
-		}
 
-		// Check status code
-		if err == nil && res.StatusCode != 200 {
-			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+			i, j := 0, h.conf.HTTPClient.NumRetries
+			for i < j && err != nil {
+				req, _ = createRequest(h.conf.HTTPClient.URL, &msg)
+				select {
+				case <-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond):
+				case <-h.closeChan:
+					return
+				}
+				if res, err = client.Do(req); err == nil &&
+					(res.StatusCode < 200 || res.StatusCode > 299) {
+					err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+				}
+				i++
+			}
 		}
 
 		if err != nil {
@@ -178,15 +191,6 @@ func (h *HTTPClient) loop() {
 		case h.responseChan <- types.NewSimpleResponse(err):
 		case <-h.closeChan:
 			return
-		}
-
-		if err != nil && h.conf.HTTPClient.RetryMS > 0 {
-			// If we failed then wait the configured retry period.
-			select {
-			case <-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond):
-			case <-h.closeChan:
-				return
-			}
 		}
 	}
 }

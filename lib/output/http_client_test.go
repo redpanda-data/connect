@@ -32,6 +32,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,7 +43,159 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
+func TestHTTPClientRetries(t *testing.T) {
+	sendChan, resultChan := make(chan types.Message), make(chan types.Message, 1)
+
+	var allowReq, reqCount uint32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddUint32(&reqCount, 1)
+		if atomic.LoadUint32(&allowReq) != 1 {
+			http.Error(w, "test error", http.StatusForbidden)
+			return
+		}
+
+		var msg types.Message
+		defer func() {
+			resultChan <- msg
+		}()
+
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		msg.Parts = [][]byte{b}
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf.HTTPClient.RetryMS = 1
+	conf.HTTPClient.NumRetries = 3
+
+	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err = h.StartReceiving(sendChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	select {
+	case sendChan <- types.Message{Parts: [][]byte{[]byte("test")}}:
+	case <-time.After(time.Second):
+		t.Errorf("Action timed out")
+		return
+	}
+
+	select {
+	case res := <-h.ResponseChan():
+		if res.Error() == nil {
+			t.Error("Expected error from end of retries")
+		}
+	case <-time.After(time.Second):
+		t.Errorf("Action timed out")
+	}
+
+	if exp, act := uint32(4), atomic.LoadUint32(&reqCount); exp != act {
+		t.Errorf("Wrong count of HTTP attempts: %v != %v", exp, act)
+	}
+
+	h.CloseAsync()
+	close(sendChan)
+
+	if err := h.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestHTTPClientBasic(t *testing.T) {
+	nTestLoops := 1000
+
+	sendChan, resultChan := make(chan types.Message), make(chan types.Message, 1)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var msg types.Message
+		defer func() {
+			resultChan <- msg
+		}()
+
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		msg.Parts = [][]byte{b}
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.HTTPClient.URL = ts.URL + "/testpost"
+
+	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err = h.StartReceiving(sendChan); err != nil {
+		t.Error(err)
+		return
+	}
+	if err = h.StartReceiving(sendChan); err == nil {
+		t.Error("Expected error on duplicate receive call")
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
+
+		select {
+		case sendChan <- testMsg:
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+
+		select {
+		case resMsg := <-resultChan:
+			if len(resMsg.Parts) != 1 {
+				t.Errorf("Wrong # parts: %v != %v", len(resMsg.Parts), 1)
+				return
+			}
+			if exp, actual := testStr, string(resMsg.Parts[0]); exp != actual {
+				t.Errorf("Wrong result, %v != %v", exp, actual)
+				return
+			}
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+
+		select {
+		case res := <-h.ResponseChan():
+			if res.Error() != nil {
+				t.Error(res.Error())
+				return
+			}
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+	}
+
+	h.CloseAsync()
+	close(sendChan)
+
+	if err := h.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHTTPClientMultipart(t *testing.T) {
 	nTestLoops := 1000
 
 	sendChan, resultChan := make(chan types.Message), make(chan types.Message, 1)
@@ -105,44 +258,6 @@ func TestHTTPClientBasic(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
-
-		select {
-		case sendChan <- testMsg:
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
-
-		select {
-		case resMsg := <-resultChan:
-			if len(resMsg.Parts) != 1 {
-				t.Errorf("Wrong # parts: %v != %v", len(resMsg.Parts), 1)
-				return
-			}
-			if exp, actual := testStr, string(resMsg.Parts[0]); exp != actual {
-				t.Errorf("Wrong result, %v != %v", exp, actual)
-				return
-			}
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
-
-		select {
-		case res := <-h.ResponseChan():
-			if res.Error() != nil {
-				t.Error(res.Error())
-				return
-			}
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
-	}
-
-	for i := 0; i < nTestLoops; i++ {
-		testStr := fmt.Sprintf("test%v", i)
 		testMsg := types.Message{Parts: [][]byte{
 			[]byte(testStr + "PART-A"),
 			[]byte(testStr + "PART-B"),
@@ -184,6 +299,13 @@ func TestHTTPClientBasic(t *testing.T) {
 			t.Errorf("Action timed out")
 			return
 		}
+	}
+
+	h.CloseAsync()
+	close(sendChan)
+
+	if err := h.WaitForClose(time.Second); err != nil {
+		t.Error(err)
 	}
 }
 

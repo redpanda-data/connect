@@ -33,6 +33,17 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
+// FanOutConfig - Config values for the fan out type.
+type FanOutConfig struct {
+}
+
+// NewFanOutConfig - Creates a FanOutConfig fully populated with default values.
+func NewFanOutConfig() FanOutConfig {
+	return FanOutConfig{}
+}
+
+//--------------------------------------------------------------------------------------------------
+
 // FanOut - A broker that implements types.Consumer and broadcasts each message out to an array of
 // outputs.
 type FanOut struct {
@@ -41,11 +52,14 @@ type FanOut struct {
 	logger log.Modular
 	stats  metrics.Type
 
+	conf FanOutConfig
+
 	messages     <-chan types.Message
 	responseChan chan types.Response
 
 	outputMsgChans []chan types.Message
 	outputs        []types.Consumer
+	outputNs       []int
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -53,20 +67,23 @@ type FanOut struct {
 
 // NewFanOut - Create a new FanOut type by providing outputs.
 func NewFanOut(
-	outputs []types.Consumer, logger log.Modular, stats metrics.Type,
+	conf FanOutConfig, outputs []types.Consumer, logger log.Modular, stats metrics.Type,
 ) (*FanOut, error) {
 	o := &FanOut{
 		running:      1,
 		stats:        stats,
 		logger:       logger.NewModule(".broker.fan_out"),
+		conf:         conf,
 		messages:     nil,
 		responseChan: make(chan types.Response),
 		outputs:      outputs,
+		outputNs:     []int{},
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
 	}
 	o.outputMsgChans = make([]chan types.Message, len(o.outputs))
 	for i := range o.outputMsgChans {
+		o.outputNs = append(o.outputNs, i)
 		o.outputMsgChans[i] = make(chan types.Message)
 		if err := o.outputs[i].StartReceiving(o.outputMsgChans[i]); err != nil {
 			return nil, err
@@ -100,9 +117,10 @@ func (o *FanOut) loop() {
 		close(o.closedChan)
 	}()
 
-	var open bool
 	for atomic.LoadInt32(&o.running) == 1 {
 		var msg types.Message
+		var open bool
+
 		select {
 		case msg, open = <-o.messages:
 			if !open {
@@ -112,45 +130,41 @@ func (o *FanOut) loop() {
 			return
 		}
 		o.stats.Incr("broker.fan_out.messages.received", 1)
-		responses := types.NewMappedResponse()
-		for i := range o.outputMsgChans {
-			select {
-			case o.outputMsgChans[i] <- msg:
-			case <-o.closeChan:
-				return
-			}
-		}
-		var res types.Response
-		var nSent int
-		for i := range o.outputs {
-			var open bool
-			select {
-			case res, open = <-o.outputs[i].ResponseChan():
-				if !open {
-					// If any of our outputs is closed then we exit completely. We want to avoid
-					// silently starving a particular output.
-					o.logger.Warnln("Closing fan_out broker due to closed output")
+
+		outputTargets := o.outputNs
+		for len(outputTargets) > 0 {
+			for _, i := range outputTargets {
+				select {
+				case o.outputMsgChans[i] <- msg:
+				case <-o.closeChan:
 					return
 				}
-			case <-o.closeChan:
-				return
 			}
-			if res.Error() != nil {
-				responses.Errors[i] = res.Error()
-				o.logger.Errorf("Failed to dispatch fan out message: %v\n", res.Error())
-				o.stats.Incr("broker.fan_out.output.error", 1)
-			} else {
-				nSent++
-				o.stats.Incr("broker.fan_out.messages.sent", 1)
+			newTargets := []int{}
+			for _, i := range outputTargets {
+				var res types.Response
+				select {
+				case res, open = <-o.outputs[i].ResponseChan():
+					if !open {
+						// If any of our outputs is closed then we exit completely. We want to avoid
+						// silently starving a particular output.
+						o.logger.Warnln("Closing fan_out broker due to closed output")
+						return
+					} else if res.Error() != nil {
+						newTargets = append(newTargets, i)
+						o.logger.Errorf("Failed to dispatch fan out message: %v\n", res.Error())
+						o.stats.Incr("broker.fan_out.output.error", 1)
+					} else {
+						o.stats.Incr("broker.fan_out.messages.sent", 1)
+					}
+				case <-o.closeChan:
+					return
+				}
 			}
-		}
-		if nSent == 0 {
-			res = responses
-		} else {
-			res = types.NewSimpleResponse(nil)
+			outputTargets = newTargets
 		}
 		select {
-		case o.responseChan <- res:
+		case o.responseChan <- types.NewSimpleResponse(nil):
 		case <-o.closeChan:
 			return
 		}

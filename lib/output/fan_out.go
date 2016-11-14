@@ -44,17 +44,16 @@ func init() {
 	constructors["fan_out"] = typeSpec{
 		constructor: NewFanOut,
 		description: `
-The 'fan_out' output type allows you to group multiple outputs together. With
+The 'fan_out' output type allows you to configure multiple output targets. With
 the fan out model all outputs will be sent every message that passes through
-benthos. This process is blocking, meaning if any output applies backpressure
-then it will block all outputs from receiving messages.
+benthos.
 
-Some outputs might fail during a message send. For example, an HTTP client
-output might receive a 503 response. Under these circumstances the fan_out
-output will block until the error is returned, but as long as at least one
-output has successfully sent the message it will move onto the next.
+This process is blocking, meaning if any output applies backpressure then it
+will block all outputs from receiving messages. If an output fails to guarantee
+receipt of a message it will be tried again until success.
 
-Likewise, if zero outputs have successfully sent the message it will be retried.`,
+If Benthos is stopped during a fan_out send it is possible that when started
+again it will send a duplicate message to some outputs.`,
 	}
 }
 
@@ -97,7 +96,7 @@ func NewFanOut(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		}
 	}
 
-	return broker.NewFanOut(outputs, log, stats)
+	return broker.NewFanOut(broker.NewFanOutConfig(), outputs, log, stats)
 }
 
 //--------------------------------------------------------------------------------------------------
