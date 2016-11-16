@@ -23,7 +23,6 @@ THE SOFTWARE.
 package broker
 
 import (
-	"sync/atomic"
 	"time"
 
 	"github.com/jeffail/benthos/lib/types"
@@ -34,8 +33,6 @@ import (
 
 // inputWrapperMsg - Used to forward an inputs message and res channel to the FanIn broker.
 type inputWrapperMsg struct {
-	ptr     *inputWrapper
-	closed  bool
 	msg     types.Message
 	resChan chan<- types.Response
 }
@@ -46,40 +43,27 @@ responses have to be returned to the correct input, therefore the inputWrapper h
 state.
 */
 type inputWrapper struct {
-	input types.Producer
-	res   chan types.Response
-	out   chan<- inputWrapperMsg
-
-	closed chan struct{}
+	input       types.Producer
+	res         chan types.Response
+	msgOut      chan<- inputWrapperMsg
+	closeSigOut chan<- *inputWrapper
 }
 
 // loop - Internal loop of the inputWrapper.
 func (i *inputWrapper) loop() {
 	defer func() {
-		close(i.closed)
-		i.out <- inputWrapperMsg{
-			ptr:     i,
-			closed:  true,
-			msg:     types.Message{},
-			resChan: nil,
-		}
+		i.closeSigOut <- i
 	}()
 	for {
 		in, open := <-i.input.MessageChan()
 		if !open {
 			return
 		}
-		i.out <- inputWrapperMsg{
+		i.msgOut <- inputWrapperMsg{
 			msg:     in,
 			resChan: i.res,
 		}
 	}
-}
-
-// waitForClose - Close the inputWrapper, blocks until complete.
-func (i *inputWrapper) waitForClose() {
-	close(i.res)
-	<-i.closed
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -89,8 +73,6 @@ FanIn - A broker that implements types.Producer, takes an array of inputs and ro
 single message channel.
 */
 type FanIn struct {
-	running int32
-
 	stats metrics.Type
 
 	messageChan  chan types.Message
@@ -98,24 +80,23 @@ type FanIn struct {
 
 	closables         []types.Closable
 	inputWrappersChan chan inputWrapperMsg
+	inputClosedChan   chan *inputWrapper
 	inputWrappers     map[*inputWrapper]struct{}
 
 	closedChan chan struct{}
-	closeChan  chan struct{}
 }
 
 // NewFanIn - Create a new FanIn type by providing inputs.
 func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
 	i := &FanIn{
-		running:           1,
 		stats:             stats,
 		messageChan:       make(chan types.Message),
 		responseChan:      nil,
 		closables:         []types.Closable{},
 		inputWrappersChan: make(chan inputWrapperMsg),
+		inputClosedChan:   make(chan *inputWrapper),
 		inputWrappers:     make(map[*inputWrapper]struct{}),
 		closedChan:        make(chan struct{}),
-		closeChan:         make(chan struct{}),
 	}
 
 	for n := range inputs {
@@ -123,10 +104,10 @@ func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
 			i.closables = append(i.closables, closable)
 		}
 		wrapper := &inputWrapper{
-			input:  inputs[n],
-			res:    make(chan types.Response),
-			out:    i.inputWrappersChan,
-			closed: make(chan struct{}),
+			input:       inputs[n],
+			res:         make(chan types.Response),
+			msgOut:      i.inputWrappersChan,
+			closeSigOut: i.inputClosedChan,
 		}
 		i.inputWrappers[wrapper] = struct{}{}
 		if err := inputs[n].StartListening(wrapper.res); err != nil {
@@ -163,35 +144,20 @@ func (i *FanIn) MessageChan() <-chan types.Message {
 // loop - Internal loop brokers incoming messages to many outputs.
 func (i *FanIn) loop() {
 	defer func() {
-		atomic.StoreInt32(&i.running, 0)
-
-		for wrapper := range i.inputWrappers {
-			wrapper.waitForClose()
-		}
+		close(i.inputWrappersChan)
+		close(i.inputClosedChan)
 		close(i.messageChan)
 		close(i.closedChan)
 	}()
 
-	for atomic.LoadInt32(&i.running) == 1 && len(i.inputWrappers) > 0 {
-		wrap, open := <-i.inputWrappersChan
-		if !open {
-			return
-		}
-		if wrap.closed {
-			if wrap.ptr != nil {
-				delete(i.inputWrappers, wrap.ptr)
-			}
-			if len(i.inputWrappers) == 0 {
-				return
-			}
-		} else {
+	for len(i.inputWrappers) > 0 {
+		select {
+		case wrap := <-i.inputWrappersChan:
 			i.stats.Incr("broker.fan_in.messages.received", 1)
-			select {
-			case i.messageChan <- wrap.msg:
-			case <-i.closeChan:
-				return
-			}
+			i.messageChan <- wrap.msg
 			wrap.resChan <- <-i.responseChan
+		case ptr := <-i.inputClosedChan:
+			delete(i.inputWrappers, ptr)
 		}
 	}
 }
@@ -200,9 +166,6 @@ func (i *FanIn) loop() {
 func (i *FanIn) CloseAsync() {
 	for _, closable := range i.closables {
 		closable.CloseAsync()
-	}
-	if atomic.CompareAndSwapInt32(&i.running, 1, 0) {
-		close(i.closeChan)
 	}
 }
 
