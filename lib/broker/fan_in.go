@@ -31,39 +31,10 @@ import (
 
 //--------------------------------------------------------------------------------------------------
 
-// inputWrapperMsg - Used to forward an inputs message and res channel to the FanIn broker.
-type inputWrapperMsg struct {
+// wrappedMsg - Used to forward an inputs message and res channel to the FanIn broker.
+type wrappedMsg struct {
 	msg     types.Message
 	resChan chan<- types.Response
-}
-
-/*
-inputWrapper - Used by the FanIn broker to forward messages from arbitrary inputs into one channel,
-responses have to be returned to the correct input, therefore the inputWrapper has to manage its own
-state.
-*/
-type inputWrapper struct {
-	input       types.Producer
-	res         chan types.Response
-	msgOut      chan<- inputWrapperMsg
-	closeSigOut chan<- *inputWrapper
-}
-
-// loop - Internal loop of the inputWrapper.
-func (i *inputWrapper) loop() {
-	defer func() {
-		i.closeSigOut <- i
-	}()
-	for {
-		in, open := <-i.input.MessageChan()
-		if !open {
-			return
-		}
-		i.msgOut <- inputWrapperMsg{
-			msg:     in,
-			resChan: i.res,
-		}
-	}
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -78,10 +49,10 @@ type FanIn struct {
 	messageChan  chan types.Message
 	responseChan <-chan types.Response
 
-	closables         []types.Closable
-	inputWrappersChan chan inputWrapperMsg
-	inputClosedChan   chan *inputWrapper
-	inputWrappers     map[*inputWrapper]struct{}
+	closables       []types.Closable
+	wrappedMsgsChan chan wrappedMsg
+	inputClosedChan chan int
+	inputMap        map[int]struct{}
 
 	closedChan chan struct{}
 }
@@ -89,35 +60,51 @@ type FanIn struct {
 // NewFanIn - Create a new FanIn type by providing inputs.
 func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
 	i := &FanIn{
-		stats:             stats,
-		messageChan:       make(chan types.Message),
-		responseChan:      nil,
-		closables:         []types.Closable{},
-		inputWrappersChan: make(chan inputWrapperMsg),
-		inputClosedChan:   make(chan *inputWrapper),
-		inputWrappers:     make(map[*inputWrapper]struct{}),
-		closedChan:        make(chan struct{}),
+		stats: stats,
+
+		messageChan:  make(chan types.Message),
+		responseChan: nil,
+
+		wrappedMsgsChan: make(chan wrappedMsg),
+		inputClosedChan: make(chan int),
+		inputMap:        make(map[int]struct{}),
+
+		closables:  []types.Closable{},
+		closedChan: make(chan struct{}),
 	}
 
-	for n := range inputs {
-		if closable, ok := inputs[n].(types.Closable); ok {
+	for n, input := range inputs {
+		if closable, ok := input.(types.Closable); ok {
 			i.closables = append(i.closables, closable)
 		}
-		wrapper := &inputWrapper{
-			input:       inputs[n],
-			res:         make(chan types.Response),
-			msgOut:      i.inputWrappersChan,
-			closeSigOut: i.inputClosedChan,
-		}
-		i.inputWrappers[wrapper] = struct{}{}
-		if err := inputs[n].StartListening(wrapper.res); err != nil {
+
+		// Keep track of # open inputs
+		i.inputMap[n] = struct{}{}
+
+		// Create unique response channel for each input
+		resChan := make(chan types.Response)
+		if err := inputs[n].StartListening(resChan); err != nil {
 			return nil, err
 		}
-	}
-	for in := range i.inputWrappers {
-		go in.loop()
-	}
 
+		// Launch goroutine that async writes input into single channel
+		go func(index int) {
+			defer func() {
+				// If the input closes we need to signal to the broker
+				i.inputClosedChan <- index
+			}()
+			for {
+				in, open := <-inputs[index].MessageChan()
+				if !open {
+					return
+				}
+				i.wrappedMsgsChan <- wrappedMsg{
+					msg:     in,
+					resChan: resChan,
+				}
+			}
+		}(n)
+	}
 	return i, nil
 }
 
@@ -144,20 +131,20 @@ func (i *FanIn) MessageChan() <-chan types.Message {
 // loop - Internal loop brokers incoming messages to many outputs.
 func (i *FanIn) loop() {
 	defer func() {
-		close(i.inputWrappersChan)
+		close(i.wrappedMsgsChan)
 		close(i.inputClosedChan)
 		close(i.messageChan)
 		close(i.closedChan)
 	}()
 
-	for len(i.inputWrappers) > 0 {
+	for len(i.inputMap) > 0 {
 		select {
-		case wrap := <-i.inputWrappersChan:
+		case wrap := <-i.wrappedMsgsChan:
 			i.stats.Incr("broker.fan_in.messages.received", 1)
 			i.messageChan <- wrap.msg
 			wrap.resChan <- <-i.responseChan
-		case ptr := <-i.inputClosedChan:
-			delete(i.inputWrappers, ptr)
+		case index := <-i.inputClosedChan:
+			delete(i.inputMap, index)
 		}
 	}
 }
