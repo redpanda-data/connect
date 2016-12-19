@@ -53,6 +53,7 @@ type Config struct {
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
 	AMQP       AMQPConfig       `json:"amqp" yaml:"amqp"`
+	NSQ        NSQConfig        `json:"nsq" yaml:"nsq"`
 	File       FileConfig       `json:"file" yaml:"file"`
 	STDIN      STDINConfig      `json:"stdin" yaml:"stdin"`
 	FanIn      FanInConfig      `json:"fan_in" yaml:"fan_in"`
@@ -67,6 +68,7 @@ func NewConfig() Config {
 		ZMQ4:       NewZMQ4Config(),
 		Kafka:      NewKafkaConfig(),
 		AMQP:       NewAMQPConfig(),
+		NSQ:        NewNSQConfig(),
 		File:       NewFileConfig(),
 		STDIN:      NewSTDINConfig(),
 		FanIn:      NewFanInConfig(),

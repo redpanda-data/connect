@@ -52,3 +52,9 @@
 [submodule "vendor/gopkg.in/alexcesaro/statsd.v2"]
 	path = vendor/gopkg.in/alexcesaro/statsd.v2
 	url = https://gopkg.in/alexcesaro/statsd.v2
+[submodule "vendor/github.com/nsqio/go-nsq"]
+	path = vendor/github.com/nsqio/go-nsq
+	url = https://github.com/nsqio/go-nsq
+[submodule "vendor/github.com/mreiferson/go-snappystream"]
+	path = vendor/github.com/mreiferson/go-snappystream
+	url = https://github.com/mreiferson/go-snappystream

@@ -53,6 +53,7 @@ type Config struct {
 	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
 	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
 	AMQP       AMQPConfig       `json:"amqp" yaml:"amqp"`
+	NSQ        NSQConfig        `json:"nsq" yaml:"nsq"`
 	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	File       FileConfig       `json:"file" yaml:"file"`
 	STDOUT     struct{}         `json:"stdout" yaml:"stdout"`
@@ -69,6 +70,7 @@ func NewConfig() Config {
 		ScaleProto: NewScaleProtoConfig(),
 		Kafka:      NewKafkaConfig(),
 		AMQP:       NewAMQPConfig(),
+		NSQ:        NewNSQConfig(),
 		ZMQ4:       NewZMQ4Config(),
 		File:       NewFileConfig(),
 		STDOUT:     struct{}{},

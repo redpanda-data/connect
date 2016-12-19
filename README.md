@@ -32,6 +32,7 @@ Currently supported input/output targets:
 - ZMQ4 (PUSH, PULL, SUB, PUB)
 - Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)
 - RabbitMQ (AMQP)
+- NSQ
 - Kafka
 - HTTP 1.1 POST/GET
 - STDIN/STDOUT
@@ -150,13 +151,18 @@ function go-add-vendor {
 
 ## Docker
 
-I've added a `Dockerfile` for easily building benthos with ZMQ4 support. If you
-are new to docker and want to spin up a container:
+There's a `Dockerfile` for creating a benthos docker image. This is built from
+scratch and so you'll need to build without CGO (`CGO_ENABLED=0`) for your
+benthos build to run within it. Create it like this:
 
 ``` shell
-docker build -t benthos .
-docker run \
-	-v /path/to/your/config.yaml:/config/benthos.yaml \
-	-p 5555:5555 -p 5556:5556 \ # Map to expose any ports used in your config
-	benthos
+CGO_ENABLED=0 make docker
+docker run --rm benthos
+```
+
+Then use the image:
+
+``` shell
+docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
+	benthos -c /config.yaml
 ```

@@ -92,7 +92,7 @@ type AMQP struct {
 func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	a := AMQP{
 		running:      1,
-		log:          log.NewModule(".output.scale_proto"),
+		log:          log.NewModule(".output.amqp"),
 		stats:        stats,
 		conf:         conf,
 		messages:     nil,
