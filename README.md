@@ -1,8 +1,7 @@
 ![Benthos](icon.png "Benthos")
 
-Benthos is a low latency persistent buffer service for bridging messages, able
-to protect against back pressure. A range of messaging protocols are supported,
-allowing you to easily drop benthos in between many existing services.
+Benthos is a messaging bridge service that supports a wide and growing list of
+input and output protocols.
 
 A range of internal buffer strategies are available, allowing you to select a
 balance between latency, protection against back pressure and file based
@@ -14,26 +13,31 @@ Benthos has inputs, an optional buffer, and outputs, which are all set in a
 single config file.
 
 ```
-+-------------------------+                  +-------------------------+
-|      Input Stream       |                  |     Output Stream       |
-| ( ZMQ, HTTP Post, etc ) |--+            +->| ( ZMQ, HTTP Post, etc ) |
-+-------------------------+  |            |  +-------------------------+
-                             v            |
++--------------------------------------+
+|            Input Stream              |
+| ( ZMQ, NSQ, AMQP, Kafka, HTTP, ... ) |--+
++--------------------------------------+  |
+                                          v
              +--------------------------------------------+
              |                   Buffer                   |
              | ( Memory-Mapped Files, Memory, None, etc ) |
              +--------------------------------------------+
+                             |
+                             |  +--------------------------------------+
+                             +->|             Output Stream            |
+                                | ( ZMQ, NSQ, AMQP, Kafka, HTTP, ... ) |
+                                +--------------------------------------+
 ```
 
 ## Supported Protocols
 
 Currently supported input/output targets:
 
-- ZMQ4 (PUSH, PULL, SUB, PUB)
-- Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)
-- RabbitMQ (AMQP)
-- NSQ
-- Kafka
+- [ZMQ4 (PUSH, PULL, SUB, PUB)][zmq]
+- [Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)][nanomsg]
+- [RabbitMQ (AMQP)][rabbitmq]
+- [NSQ][nsq]
+- [Kafka][kafka]
 - HTTP 1.1 POST/GET
 - STDIN/STDOUT
 - File
@@ -44,14 +48,8 @@ You can also have multiple outputs or inputs by choosing a routing strategy
 For a full and up to date list you can print them from the binary:
 
 ```
-# Print inputs
-benthos --print-inputs | less
-
-# Print buffers
-benthos --print-buffers | less
-
-# Print outputs
-benthos --print-outputs | less
+# Print inputs, buffers and output options
+benthos --print-inputs --print-buffers --print-outputs | less
 ```
 
 ## Install
@@ -72,7 +70,8 @@ benthos -c ./config.yaml
 
 ## Config
 
-Create a fully populated default configuration file:
+Check out the samples in [./config](config), or create a fully populated default
+configuration file:
 
 ``` shell
 benthos --print-yaml > config.yaml
@@ -98,21 +97,19 @@ example config you will see the available options.
 ## Speed and Benchmarks
 
 Benthos isn't doing much, so it's reasonable to expect low latencies and high
-throughput. Here's a table of results from an 8-core (2.4ghz) machine using the
-ZMQ4 input, mmap_file persisted buffer, ZMQ4 output configuration, and with
-messages of size 5000 bytes:
+throughput. Here's a table of benchmarks from an 4-core (2.4ghz) machine,
+bridging messages of 5000 bytes through a 500MB memory buffer via various
+protocols:
 
-| Stream Interval | Avg. Latency (us) | Msg. Rate (msgs/s) | Byte Rate (MB/s) |
-|----------------:|------------------:|-------------------:|-----------------:|
-|           100ms |               247 |               9.66 |             0.05 |
-|            10ms |               518 |              75.71 |             0.36 |
-|             1ms |               561 |             606.35 |             2.90 |
-|           100us |               734 |            4454.05 |            21.32 |
-|            10us |              2665 |            7178.02 |            34.36 |
-|             1us |            174099 |           20098.26 |            96.20 |
+|       | Avg. Latency (ms) | 99th P. Latency (ms) |    Msg/s |    Mb/s |
+|------:|------------------:|---------------------:|---------:|--------:|
+| ZMQ   |             5.940 |               67.268 |    31357 | 157.383 |
+| Nano  |             3.312 |               20.020 |    22894 | 114.907 |
+| HTTP  |             0.549 |                8.751 |     4280 |  21.479 |
 
-I've added some benchmarking utilities in `./cmd/test`, hopefully a third party
-can cook us up some more meaningful figures.
+Take these results with a pinch of salt. I've added some benchmarking utilities
+in `./cmd/test`, hopefully a third party can cook us up some more meaningful
+figures from a better set up than I have.
 
 ## ZMQ4 Support
 
@@ -166,3 +163,9 @@ Then use the image:
 docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
 	benthos -c /config.yaml
 ```
+
+[zmq]: http://zeromq.org/
+[nanomsg]: http://nanomsg.org/
+[rabbitmq]: https://www.rabbitmq.com/
+[nsq]: http://nsq.io/
+[kafka]: https://kafka.apache.org/

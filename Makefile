@@ -1,11 +1,12 @@
-.PHONY: all rpm docker
+.PHONY: all deps rpm docker clean-docker clean
 
 BENTHOS_PATH = github.com/jeffail/benthos
 
 TAGS =
 
-DEST_DIR    = ./target
-PATHINSTBIN = $(DEST_DIR)/bin
+DEST_DIR       = ./target
+PATHINSTBIN    = $(DEST_DIR)/bin
+PATHINSTDOCKER = $(DEST_DIR)/docker
 
 VERSION := $(shell git describe --tags || echo "v0.0.0")
 DATE    := $(shell date +"%c" | tr ' :' '__')
@@ -24,12 +25,24 @@ $(PATHINSTBIN)/%:
 
 $(APPS): %: $(PATHINSTBIN)/%
 
-docker: benthos
+$(PATHINSTDOCKER)/benthos.tar: $(PATHINSTBIN)/benthos
+	@mkdir -p $(dir $@)
 	@docker build -f ./resources/docker/Dockerfile . -t benthos:$(VERSION)
 	@docker tag benthos:$(VERSION) benthos:latest
+	@docker save benthos:$(VERSION) > $@
+
+docker: $(PATHINSTDOCKER)/benthos.tar
+
+deps:
+	@go get -d ./cmd/...
 
 rpm:
 	@rpmbuild --define "_version $(VERSION)" -bb ./resources/rpm/benthos.spec
 
 clean:
 	rm -rf $(PATHINSTBIN)
+
+clean-docker:
+	rm -rf $(PATHINSTDOCKER)
+	docker rmi benthos:$(VERSION)
+	docker rmi benthos
