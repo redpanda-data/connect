@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package ring
+package impl
 
 import (
 	"fmt"
@@ -34,7 +34,7 @@ import (
 
 func TestMemoryInterface(t *testing.T) {
 	b := &Memory{}
-	if c := MessageStack(b); c == nil {
+	if c := Buffer(b); c == nil {
 		t.Error("Memory does not satisfy the MessageStack interface")
 	}
 }

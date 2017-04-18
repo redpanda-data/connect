@@ -27,18 +27,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jeffail/benthos/lib/buffer/ring"
+	"github.com/jeffail/benthos/lib/buffer/impl"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// StackBuffer - An agent that wraps an output with a message buffer.
-type StackBuffer struct {
+// OutputWrapper - Wraps a buffer with a Producer/Consumer interface.
+type OutputWrapper struct {
 	stats metrics.Type
 
-	buffer ring.MessageStack
+	buffer impl.Buffer
 
 	running int32
 
@@ -54,9 +54,9 @@ type StackBuffer struct {
 	closedChan chan struct{}
 }
 
-// NewStackBuffer - Create a new buffered agent type.
-func NewStackBuffer(buffer ring.MessageStack, stats metrics.Type) Type {
-	m := StackBuffer{
+// NewOutputWrapper - Create a new Producer/Consumer around a buffer.
+func NewOutputWrapper(buffer impl.Buffer, stats metrics.Type) Type {
+	m := OutputWrapper{
 		stats:        stats,
 		buffer:       buffer,
 		running:      1,
@@ -70,10 +70,10 @@ func NewStackBuffer(buffer ring.MessageStack, stats metrics.Type) Type {
 	return &m
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// inputLoop - Internal loop brokers incoming messages to output pipe.
-func (m *StackBuffer) inputLoop() {
+// inputLoop - Internal loop brokers incoming messages to the buffer.
+func (m *OutputWrapper) inputLoop() {
 	defer func() {
 		close(m.responsesOut)
 		m.buffer.CloseOnceEmpty()
@@ -103,8 +103,8 @@ func (m *StackBuffer) inputLoop() {
 	}
 }
 
-// outputLoop - Internal loop brokers incoming messages to output pipe.
-func (m *StackBuffer) outputLoop() {
+// outputLoop - Internal loop brokers buffer messages to output pipe.
+func (m *OutputWrapper) outputLoop() {
 	defer func() {
 		m.buffer.Close()
 		close(m.messagesOut)
@@ -172,7 +172,7 @@ func (m *StackBuffer) outputLoop() {
 }
 
 // StartReceiving - Assigns a messages channel for the output to read.
-func (m *StackBuffer) StartReceiving(msgs <-chan types.Message) error {
+func (m *OutputWrapper) StartReceiving(msgs <-chan types.Message) error {
 	if m.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}
@@ -191,12 +191,12 @@ func (m *StackBuffer) StartReceiving(msgs <-chan types.Message) error {
 }
 
 // MessageChan - Returns the channel used for consuming messages from this input.
-func (m *StackBuffer) MessageChan() <-chan types.Message {
+func (m *OutputWrapper) MessageChan() <-chan types.Message {
 	return m.messagesOut
 }
 
 // StartListening - Sets the channel for reading responses.
-func (m *StackBuffer) StartListening(responses <-chan types.Response) error {
+func (m *OutputWrapper) StartListening(responses <-chan types.Response) error {
 	if m.responsesIn != nil {
 		return types.ErrAlreadyStarted
 	}
@@ -215,24 +215,24 @@ func (m *StackBuffer) StartListening(responses <-chan types.Response) error {
 }
 
 // ResponseChan - Returns the response channel.
-func (m *StackBuffer) ResponseChan() <-chan types.Response {
+func (m *OutputWrapper) ResponseChan() <-chan types.Response {
 	return m.responsesOut
 }
 
 // ErrorsChan - Returns the errors channel.
-func (m *StackBuffer) ErrorsChan() <-chan []error {
+func (m *OutputWrapper) ErrorsChan() <-chan []error {
 	return m.errorsChan
 }
 
-// CloseAsync - Shuts down the StackBuffer output and stops processing messages.
-func (m *StackBuffer) CloseAsync() {
+// CloseAsync - Shuts down the OutputWrapper and stops processing messages.
+func (m *OutputWrapper) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&m.running, 1, 0) {
 		close(m.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the StackBuffer output has closed down.
-func (m *StackBuffer) WaitForClose(timeout time.Duration) error {
+// WaitForClose - Blocks until the OutputWrapper output has closed down.
+func (m *OutputWrapper) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-m.closedChan:
 	case <-time.After(timeout):
@@ -241,4 +241,4 @@ func (m *StackBuffer) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

@@ -27,12 +27,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeffail/benthos/lib/buffer/ring"
+	"github.com/jeffail/benthos/lib/buffer/impl"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func TestBasicMemoryBuffer(t *testing.T) {
 	var incr, total uint8 = 100, 50
@@ -40,7 +40,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	msgChan := make(chan types.Message)
 	resChan := make(chan types.Response)
 
-	b := NewStackBuffer(ring.NewMemory(ring.MemoryConfig{
+	b := NewOutputWrapper(impl.NewMemory(impl.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), metrics.DudType{})
 	if err := b.StartListening(resChan); err != nil {
@@ -214,7 +214,7 @@ func TestBufferClosing(t *testing.T) {
 	msgChan := make(chan types.Message)
 	resChan := make(chan types.Response)
 
-	b := NewStackBuffer(ring.NewMemory(ring.MemoryConfig{
+	b := NewOutputWrapper(impl.NewMemory(impl.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), metrics.DudType{})
 	if err := b.StartListening(resChan); err != nil {
@@ -285,11 +285,11 @@ func TestBufferClosing(t *testing.T) {
 	close(resChan)
 }
 
-func TestStackBufferErrProp(t *testing.T) {
+func TestOutputWrapperErrProp(t *testing.T) {
 	msgChan := make(chan types.Message)
 	resChan := make(chan types.Response)
 
-	b := NewStackBuffer(ring.NewMemory(ring.NewMemoryConfig()), metrics.DudType{})
+	b := NewOutputWrapper(impl.NewMemory(impl.NewMemoryConfig()), metrics.DudType{})
 	if err := b.StartReceiving(msgChan); err != nil {
 		t.Error(err)
 		return
@@ -384,7 +384,7 @@ func TestSyncBuffer(t *testing.T) {
 	msgChan := make(chan types.Message)
 	resChan := make(chan types.Response)
 
-	b := NewStackBuffer(1)
+	b := NewOutputWrapper(1)
 	if err := b.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
@@ -484,7 +484,7 @@ func TestEmptyMemoryBuffer(t *testing.T) {
 	msgChan := make(chan types.Message)
 	resChan := make(chan types.Response)
 
-	b := NewStackBuffer(1)
+	b := NewOutputWrapper(1)
 	if err := b.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
@@ -549,4 +549,4 @@ func TestEmptyMemoryBuffer(t *testing.T) {
 }
 */
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

@@ -27,7 +27,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jeffail/benthos/lib/buffer/ring"
+	"github.com/jeffail/benthos/lib/buffer/impl"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
@@ -47,17 +47,17 @@ var constructors = map[string]typeSpec{}
 
 // Config - The all encompassing configuration struct for all input types.
 type Config struct {
-	Type   string            `json:"type" yaml:"type"`
-	Mmap   ring.MmapConfig   `json:"mmap_file" yaml:"mmap_file"`
-	Memory ring.MemoryConfig `json:"memory" yaml:"memory"`
+	Type   string                `json:"type" yaml:"type"`
+	Mmap   impl.MmapBufferConfig `json:"mmap_file" yaml:"mmap_file"`
+	Memory impl.MemoryConfig     `json:"memory" yaml:"memory"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
 		Type:   "none",
-		Mmap:   ring.NewMmapConfig(),
-		Memory: ring.NewMemoryConfig(),
+		Mmap:   impl.NewMmapBufferConfig(),
+		Memory: impl.NewMemoryConfig(),
 	}
 }
 

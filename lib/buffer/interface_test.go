@@ -27,7 +27,7 @@ import "testing"
 //--------------------------------------------------------------------------------------------------
 
 func TestInterfaces(t *testing.T) {
-	mem := &StackBuffer{}
+	mem := &OutputWrapper{}
 	if Type(mem) == nil {
 		t.Errorf("Memory: nil Type")
 	}

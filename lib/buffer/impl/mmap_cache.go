@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package ring
+package impl
 
 import (
 	"errors"
@@ -32,7 +32,7 @@ import (
 	mmap "github.com/edsrzf/mmap-go"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // MmapCacheConfig - Config options for the MmapCache type.
 type MmapCacheConfig struct {
@@ -58,10 +58,9 @@ type CachedMmap struct {
 	m mmap.MMap
 }
 
-/*
-MmapCache - Keeps track of any Mmap files cached in memory and cleans up resources as they are
-unclaimed. This type works similarly to sync.Cond, where if you wish to use it you need to lock it.
-*/
+// MmapCache - Keeps track of any Mmap files cached in memory and cleans up
+// resources as they are unclaimed. This type works similarly to sync.Cond,
+// where if you wish to use it you need to lock it.
 type MmapCache struct {
 	config MmapCacheConfig
 
@@ -87,7 +86,7 @@ func NewMmapCache(config MmapCacheConfig) (*MmapCache, error) {
 	return f, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // ErrWrongTrackerLength - The length of a read tracker was not correct.
 var ErrWrongTrackerLength = errors.New("tracker was unexpected length")
@@ -125,7 +124,7 @@ func (f *MmapCache) openTracker() error {
 	return err
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // GetTracker - Returns the []byte from the tracker file memory mapping.
 func (f *MmapCache) GetTracker() []byte {
@@ -140,10 +139,9 @@ func (f *MmapCache) Get(index int) []byte {
 	return []byte{}
 }
 
-/*
-EnsureCached - Check that a particular index is cached, and if not then read the index, this call
-blocks until either the index is successfully cached or an error occurs.
-*/
+// EnsureCached - Check that a particular index is cached, and if not then read
+// the index, this call blocks until either the index is successfully cached or
+// an error occurs.
 func (f *MmapCache) EnsureCached(index int) error {
 	var cache CachedMmap
 	var err error
@@ -200,7 +198,8 @@ func (f *MmapCache) EnsureCached(index int) error {
 	return err
 }
 
-// IsCached - Returns a bool indicating whether the current memory mapped file index is cached.
+// IsCached - Returns a bool indicating whether the current memory mapped file
+// index is cached.
 func (f *MmapCache) IsCached(index int) bool {
 	_, exists := f.cache[index]
 	return exists
@@ -251,4 +250,4 @@ func (f *MmapCache) Delete(index int) error {
 	return os.Remove(p)
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

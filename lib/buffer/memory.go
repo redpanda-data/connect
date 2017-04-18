@@ -23,7 +23,7 @@ THE SOFTWARE.
 package buffer
 
 import (
-	"github.com/jeffail/benthos/lib/buffer/ring"
+	"github.com/jeffail/benthos/lib/buffer/impl"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
 )
@@ -44,7 +44,7 @@ full. The messages are lost if the service is stopped.`,
 
 // NewMemory - Create a buffer held in memory.
 func NewMemory(config Config, log log.Modular, stats metrics.Type) (Type, error) {
-	return NewStackBuffer(ring.NewMemory(config.Memory), stats), nil
+	return NewOutputWrapper(impl.NewMemory(config.Memory), stats), nil
 }
 
 //--------------------------------------------------------------------------------------------------

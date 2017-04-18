@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package ring
+package impl
 
 import (
 	"fmt"
@@ -31,23 +31,19 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// MmapConfig - Config options for a memory-map based ring buffer.
-type MmapConfig MmapCacheConfig
+// MmapBufferConfig - Config options for a memory-map based buffer reader.
+type MmapBufferConfig MmapCacheConfig
 
-// NewMmapConfig - Creates a new MmapConfig oject with default values.
-func NewMmapConfig() MmapConfig {
-	return MmapConfig(NewMmapCacheConfig())
+// NewMmapBufferConfig - Create a MmapBufferConfig oject with default values.
+func NewMmapBufferConfig() MmapBufferConfig {
+	return MmapBufferConfig(NewMmapCacheConfig())
 }
 
-/*
-Mmap - A ring buffer implemented around memory mapped files. NOTE: Currently the 'ring' is non
-existent since files are created as memory is needed. However, we may in future want to limit the
-space used on disk and therefore looping will need to be implemented.
-*/
-type Mmap struct {
-	config MmapConfig
+// MmapBuffer - A buffer implemented around rotated memory mapped files.
+type MmapBuffer struct {
+	config MmapBufferConfig
 	cache  *MmapCache
 
 	logger log.Modular
@@ -62,8 +58,8 @@ type Mmap struct {
 	closed bool
 }
 
-// NewMmap - Creates a block for buffering serialized messages.
-func NewMmap(config MmapConfig, log log.Modular, stats metrics.Type) (*Mmap, error) {
+// NewMmapBuffer - Creates a memory-map based buffer.
+func NewMmapBuffer(config MmapBufferConfig, log log.Modular, stats metrics.Type) (*MmapBuffer, error) {
 	cache, err := NewMmapCache(MmapCacheConfig(config))
 	if err != nil {
 		return nil, fmt.Errorf("MMAP Cache: %v", err)
@@ -71,7 +67,7 @@ func NewMmap(config MmapConfig, log log.Modular, stats metrics.Type) (*Mmap, err
 	cache.L.Lock()
 	defer cache.L.Unlock()
 
-	f := &Mmap{
+	f := &MmapBuffer{
 		config:     config,
 		cache:      cache,
 		logger:     log,
@@ -101,10 +97,11 @@ func NewMmap(config MmapConfig, log log.Modular, stats metrics.Type) (*Mmap, err
 	return f, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// readTracker - reads our cached values from the tracker file for recording reader/writer indexes.
-func (f *Mmap) readTracker() {
+// readTracker - reads our cached values from the tracker file for recording
+// reader/writer indexes.
+func (f *MmapBuffer) readTracker() {
 	if !f.closed {
 		trackerBlock := f.cache.GetTracker()
 
@@ -116,7 +113,7 @@ func (f *Mmap) readTracker() {
 }
 
 // writeTracker - writes our current state to the tracker.
-func (f *Mmap) writeTracker() {
+func (f *MmapBuffer) writeTracker() {
 	if !f.closed {
 		trackerBlock := f.cache.GetTracker()
 
@@ -127,10 +124,11 @@ func (f *Mmap) writeTracker() {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// cacheManagerLoop - Continuously checks whether the cache contains maps of our next indexes.
-func (f *Mmap) cacheManagerLoop(indexPtr *int) {
+// cacheManagerLoop - Continuously checks whether the cache contains maps of our
+// next indexes.
+func (f *MmapBuffer) cacheManagerLoop(indexPtr *int) {
 	loop := func() bool {
 		f.cache.L.Lock()
 		defer f.cache.L.Unlock()
@@ -142,7 +140,7 @@ func (f *Mmap) cacheManagerLoop(indexPtr *int) {
 		if err := f.cache.EnsureCached(*indexPtr + 1); err != nil {
 			// Failed to read, log the error and wait before trying again.
 			f.logger.Errorf("Failed to cache mmap file for index %v: %v\n", *indexPtr+1, err)
-			f.stats.Incr("file_block.cache.open.error", 1)
+			f.stats.Incr("cache.open.error", 1)
 			<-time.After(time.Duration(f.config.RetryPeriodMS) * time.Millisecond)
 		} else {
 			// Next read block is still ready, therefore wait for signal before checking again.
@@ -154,18 +152,18 @@ func (f *Mmap) cacheManagerLoop(indexPtr *int) {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // backlog - Reads the current backlog of messages stored.
-func (f *Mmap) backlog() int {
+func (f *MmapBuffer) backlog() int {
 	// NOTE: For speed, the following calculation assumes that all mmap files are the size of limit.
 	return ((f.writeIndex - f.readIndex) * f.config.FileSize) + f.writtenTo - f.readFrom
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // CloseOnceEmpty - Closes the mmap buffer once the backlog reaches 0.
-func (f *Mmap) CloseOnceEmpty() {
+func (f *MmapBuffer) CloseOnceEmpty() {
 	defer func() {
 		f.cache.L.Unlock()
 		f.Close()
@@ -180,7 +178,7 @@ func (f *Mmap) CloseOnceEmpty() {
 }
 
 // Close - Unblocks any blocked calls and prevents further writing to the block.
-func (f *Mmap) Close() {
+func (f *MmapBuffer) Close() {
 	f.cache.L.Lock()
 	f.closed = true
 	f.cache.Broadcast()
@@ -191,8 +189,8 @@ func (f *Mmap) Close() {
 	f.cache.L.Unlock()
 }
 
-// ShiftMessage - Removes the last message from the block. Returns the backlog count.
-func (f *Mmap) ShiftMessage() (int, error) {
+// ShiftMessage - Removes the last message. Returns the backlog count.
+func (f *MmapBuffer) ShiftMessage() (int, error) {
 	f.cache.L.Lock()
 	defer func() {
 		f.writeTracker()
@@ -207,8 +205,8 @@ func (f *Mmap) ShiftMessage() (int, error) {
 	return f.backlog(), nil
 }
 
-// NextMessage - Reads the next message, this call blocks until there's something to read.
-func (f *Mmap) NextMessage() (types.Message, error) {
+// NextMessage - Reads the next message, blocks until there's something to read.
+func (f *MmapBuffer) NextMessage() (types.Message, error) {
 	f.cache.L.Lock()
 	defer func() {
 		f.writeTracker()
@@ -283,8 +281,8 @@ func (f *Mmap) NextMessage() (types.Message, error) {
 	return types.FromBytes(block[index : index+int(msgSize)])
 }
 
-// PushMessage - Pushes a new message onto the block, returns the backlog count.
-func (f *Mmap) PushMessage(msg types.Message) (int, error) {
+// PushMessage - Pushes a new message, returns the backlog count.
+func (f *MmapBuffer) PushMessage(msg types.Message) (int, error) {
 	f.cache.L.Lock()
 	defer func() {
 		f.writeTracker()
@@ -356,4 +354,4 @@ func (f *Mmap) PushMessage(msg types.Message) (int, error) {
 	return f.backlog(), nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

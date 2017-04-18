@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package ring
+package impl
 
 import (
 	"fmt"
@@ -42,14 +42,14 @@ func cleanUpMmapDir(dir string) {
 	os.RemoveAll(dir)
 }
 
-func TestMmapInterface(t *testing.T) {
-	b := &Mmap{}
-	if c := MessageStack(b); c == nil {
-		t.Error("Mmap does not satisfy the MessageStack interface")
+func TestMmapBufferInterface(t *testing.T) {
+	b := &MmapBuffer{}
+	if c := Buffer(b); c == nil {
+		t.Error("MmapBuffer does not satisfy the Buffer interface")
 	}
 }
 
-func TestMmapBasic(t *testing.T) {
+func TestMmapBufferBasic(t *testing.T) {
 	dir, err := ioutil.TempDir("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
@@ -60,11 +60,11 @@ func TestMmapBasic(t *testing.T) {
 
 	n := 100
 
-	conf := NewMmapConfig()
+	conf := NewMmapBufferConfig()
 	conf.FileSize = 100000
 	conf.Path = dir
 
-	block, err := NewMmap(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -103,7 +103,7 @@ func TestMmapBasic(t *testing.T) {
 	}
 }
 
-func TestMmapBacklogCounter(t *testing.T) {
+func TestMmapBufferBacklogCounter(t *testing.T) {
 	dir, err := ioutil.TempDir("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
@@ -112,11 +112,11 @@ func TestMmapBacklogCounter(t *testing.T) {
 
 	defer cleanUpMmapDir(dir)
 
-	conf := NewMmapConfig()
+	conf := NewMmapBufferConfig()
 	conf.FileSize = 100000
 	conf.Path = dir
 
-	block, err := NewMmap(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -167,7 +167,7 @@ func TestMmapBacklogCounter(t *testing.T) {
 	}
 }
 
-func TestMmapLoopingRandom(t *testing.T) {
+func TestMmapBufferLoopingRandom(t *testing.T) {
 	dir, err := ioutil.TempDir("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
@@ -176,11 +176,11 @@ func TestMmapLoopingRandom(t *testing.T) {
 
 	defer cleanUpMmapDir(dir)
 
-	conf := NewMmapConfig()
+	conf := NewMmapBufferConfig()
 	conf.FileSize = 8000
 	conf.Path = dir
 
-	block, err := NewMmap(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -225,7 +225,7 @@ func TestMmapLoopingRandom(t *testing.T) {
 	}
 }
 
-func TestMmapMultiFiles(t *testing.T) {
+func TestMmapBufferMultiFiles(t *testing.T) {
 	dir, err := ioutil.TempDir("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
@@ -236,11 +236,11 @@ func TestMmapMultiFiles(t *testing.T) {
 
 	n := 10000
 
-	conf := NewMmapConfig()
+	conf := NewMmapBufferConfig()
 	conf.FileSize = 1000
 	conf.Path = dir
 
-	block, err := NewMmap(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -279,7 +279,7 @@ func TestMmapMultiFiles(t *testing.T) {
 	}
 }
 
-func TestMmapRecoverFiles(t *testing.T) {
+func TestMmapBufferRecoverFiles(t *testing.T) {
 	dir, err := ioutil.TempDir("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
@@ -290,12 +290,12 @@ func TestMmapRecoverFiles(t *testing.T) {
 
 	n := 10000
 
-	conf := NewMmapConfig()
+	conf := NewMmapBufferConfig()
 	conf.FileSize = 1000
 	conf.Path = dir
 
 	// Write a load of data
-	block, err := NewMmap(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -319,7 +319,7 @@ func TestMmapRecoverFiles(t *testing.T) {
 	block.Close()
 
 	// Read the data back
-	block, err = NewMmap(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err = NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -345,7 +345,7 @@ func TestMmapRecoverFiles(t *testing.T) {
 	block.Close()
 }
 
-func TestMmapRejectLargeMessage(t *testing.T) {
+func TestMmapBufferRejectLargeMessage(t *testing.T) {
 	dir, err := ioutil.TempDir("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
@@ -357,12 +357,12 @@ func TestMmapRejectLargeMessage(t *testing.T) {
 	tMsg := types.Message{Parts: make([][]byte, 1)}
 	tMsg.Parts[0] = []byte("hello world this message is too long!")
 
-	conf := NewMmapConfig()
+	conf := NewMmapBufferConfig()
 	conf.FileSize = 10
 	conf.Path = dir
 
 	// Write a load of data
-	block, err := NewMmap(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

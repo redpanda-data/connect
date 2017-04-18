@@ -20,7 +20,5 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-/*
-Package ring - Defines strategies for generating and managing ring buffers.
-*/
-package ring
+// Package impl - Contains implementations of various buffer types.
+package impl

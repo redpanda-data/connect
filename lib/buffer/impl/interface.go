@@ -20,30 +20,35 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package ring
+package impl
 
 import "github.com/jeffail/benthos/lib/types"
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// MessageStack - Represents a method of stacking messages for persistence or fast buffering.
-type MessageStack interface {
-	// ShiftMessage - Remove the oldest message from the stack. Returns the backlog in bytes.
+// Buffer - Represents a method of storing messages.
+type Buffer interface {
+	// ShiftMessage - Remove the oldest message from the stack. Returns the
+	// backlog in bytes.
 	ShiftMessage() (int, error)
 
-	// NextMessage - Read the oldest message, the message is preserved until ShiftMessage is called.
+	// NextMessage - Read the oldest message, the message is preserved until
+	// ShiftMessage is called.
 	NextMessage() (types.Message, error)
 
-	// PushMessage - Add a new message to the stack. Returns the backlog in bytes.
+	// PushMessage - Add a new message to the stack. Returns the backlog in
+	// bytes.
 	PushMessage(types.Message) (int, error)
 
-	// CloseOnceEmpty - Close the MessageStack once the buffer has been emptied, this is a way for a
-	// writer to signal to a reader that it is finished writing messages, and therefore the reader
-	// can close once it is caught up. This call blocks until the close is completed.
+	// CloseOnceEmpty - Close the Buffer once the buffer has been emptied, this
+	// is a way for a writer to signal to a reader that it is finished writing
+	// messages, and therefore the reader can close once it is caught up. This
+	// call blocks until the close is completed.
 	CloseOnceEmpty()
 
-	// Close - Close the MessageStack so that blocked readers or writers become unblocked.
+	// Close - Close the Buffer so that blocked readers or writers become
+	// unblocked.
 	Close()
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
