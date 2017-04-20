@@ -30,6 +30,8 @@ import (
 	"sync"
 
 	mmap "github.com/edsrzf/mmap-go"
+	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -64,6 +66,9 @@ type CachedMmap struct {
 type MmapCache struct {
 	config MmapCacheConfig
 
+	logger log.Modular
+	stats  metrics.Type
+
 	tracker    CachedMmap
 	cache      map[int]CachedMmap
 	inProgress map[int]struct{}
@@ -72,9 +77,11 @@ type MmapCache struct {
 }
 
 // NewMmapCache - Creates a cache for managing open mmap files.
-func NewMmapCache(config MmapCacheConfig) (*MmapCache, error) {
+func NewMmapCache(config MmapCacheConfig, log log.Modular, stats metrics.Type) (*MmapCache, error) {
 	f := &MmapCache{
 		config:     config,
+		logger:     log,
+		stats:      stats,
 		cache:      make(map[int]CachedMmap),
 		inProgress: make(map[int]struct{}),
 		Cond:       sync.NewCond(&sync.Mutex{}),
@@ -172,9 +179,10 @@ func (f *MmapCache) EnsureCached(index int) error {
 	_, err = os.Stat(fPath)
 	if os.IsNotExist(err) {
 		// If not then we create it with our configured file size
-		cache.f, err = os.Create(fPath)
-		block := make([]byte, f.config.FileSize)
-		_, err = cache.f.Write(block)
+		if cache.f, err = os.Create(fPath); err == nil {
+			block := make([]byte, f.config.FileSize)
+			_, err = cache.f.Write(block)
+		}
 	} else {
 		cache.f, err = os.OpenFile(fPath, os.O_RDWR, 0644)
 	}

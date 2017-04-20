@@ -24,7 +24,11 @@ package impl
 
 import (
 	"io/ioutil"
+	"os"
 	"testing"
+
+	"github.com/jeffail/util/log"
+	"github.com/jeffail/util/metrics"
 )
 
 func TestMmapCacheTracker(t *testing.T) {
@@ -40,7 +44,7 @@ func TestMmapCacheTracker(t *testing.T) {
 	conf.FileSize = 1000
 	conf.Path = dir
 
-	cache, err := NewMmapCache(conf)
+	cache, err := NewMmapCache(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -82,7 +86,7 @@ func TestMmapCacheTracker(t *testing.T) {
 	}
 
 	cache.L.Unlock()
-	cache, err = NewMmapCache(conf)
+	cache, err = NewMmapCache(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -128,7 +132,7 @@ func TestMmapCacheIndexes(t *testing.T) {
 	conf.FileSize = 1000
 	conf.Path = dir
 
-	cache, err := NewMmapCache(conf)
+	cache, err := NewMmapCache(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -175,7 +179,7 @@ func TestMmapCacheIndexes(t *testing.T) {
 	}
 
 	cache.L.Unlock()
-	cache, err = NewMmapCache(conf)
+	cache, err = NewMmapCache(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -226,7 +230,7 @@ func TestMmapCacheRaces(t *testing.T) {
 	conf.FileSize = 10
 	conf.Path = dir
 
-	cache, err := NewMmapCache(conf)
+	cache, err := NewMmapCache(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

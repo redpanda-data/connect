@@ -60,7 +60,7 @@ type MmapBuffer struct {
 
 // NewMmapBuffer - Creates a memory-map based buffer.
 func NewMmapBuffer(config MmapBufferConfig, log log.Modular, stats metrics.Type) (*MmapBuffer, error) {
-	cache, err := NewMmapCache(MmapCacheConfig(config))
+	cache, err := NewMmapCache(MmapCacheConfig(config), log, stats)
 	if err != nil {
 		return nil, fmt.Errorf("MMAP Cache: %v", err)
 	}
