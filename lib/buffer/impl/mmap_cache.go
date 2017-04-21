@@ -181,9 +181,11 @@ func (f *MmapCache) EnsureCached(index int) error {
 		// If not then we create it with our configured file size
 		if cache.f, err = os.Create(fPath); err == nil {
 			block := make([]byte, f.config.FileSize)
-			_, err = cache.f.Write(block)
+			if _, err = cache.f.Write(block); err != nil {
+				os.Remove(fPath)
+			}
 		}
-	} else {
+	} else if err == nil {
 		cache.f, err = os.OpenFile(fPath, os.O_RDWR, 0644)
 	}
 
@@ -199,6 +201,7 @@ func (f *MmapCache) EnsureCached(index int) error {
 		cache.m, err = mmap.Map(cache.f, mmap.RDWR, 0)
 		if err != nil {
 			cache.f.Close()
+			os.Remove(fPath)
 		} else {
 			f.cache[index] = cache
 		}
