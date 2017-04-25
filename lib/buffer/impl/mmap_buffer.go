@@ -81,18 +81,17 @@ func NewMmapBuffer(config MmapBufferConfig, log log.Modular, stats metrics.Type)
 
 	f.readTracker()
 
-	// Ensure both the starting write and read indexes are cached
-	if err = cache.EnsureCached(f.writeIndex); err != nil {
-		return nil, fmt.Errorf("MMAP index write: %v", err)
-	}
+	f.logger.Infof("Storing messages to file in: %s\n", f.config.Path)
+
+	// Try to ensure both the starting write and read indexes are cached
 	if err = cache.EnsureCached(f.readIndex); err != nil {
 		return nil, fmt.Errorf("MMAP index read: %v", err)
 	}
-
-	f.logger.Infof("Storing messages to file in: %s\n", f.config.Path)
-
-	go f.cacheManagerLoop(&f.readIndex)
+	if err = cache.EnsureCached(f.writeIndex); err != nil {
+		log.Errorf("MMAP index write: %v, benthos will block writes until this is resolved.\n", err)
+	}
 	go f.cacheManagerLoop(&f.writeIndex)
+	go f.cacheManagerLoop(&f.readIndex)
 
 	return f, nil
 }
@@ -129,6 +128,8 @@ func (f *MmapBuffer) writeTracker() {
 // cacheManagerLoop - Continuously checks whether the cache contains maps of our
 // next indexes.
 func (f *MmapBuffer) cacheManagerLoop(indexPtr *int) {
+	bootstrapped := false
+
 	loop := func() bool {
 		f.cache.L.Lock()
 		defer f.cache.L.Unlock()
@@ -137,11 +138,21 @@ func (f *MmapBuffer) cacheManagerLoop(indexPtr *int) {
 			return false
 		}
 
-		if err := f.cache.EnsureCached(*indexPtr + 1); err != nil {
+		targetIndex := *indexPtr
+		if bootstrapped {
+			targetIndex += 1
+		}
+
+		if err := f.cache.EnsureCached(targetIndex); err != nil {
 			// Failed to read, log the error and wait before trying again.
-			f.logger.Errorf("Failed to cache mmap file for index %v: %v\n", *indexPtr+1, err)
+			f.logger.Errorf("Failed to cache mmap file for index %v: %v\n", targetIndex, err)
 			f.stats.Incr("cache.open.error", 1)
+
+			f.cache.L.Unlock()
 			<-time.After(time.Duration(f.config.RetryPeriodMS) * time.Millisecond)
+			f.cache.L.Lock()
+		} else if !bootstrapped {
+			bootstrapped = true
 		} else {
 			// Next read block is still ready, therefore wait for signal before checking again.
 			f.cache.Wait()

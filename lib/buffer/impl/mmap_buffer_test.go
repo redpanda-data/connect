@@ -372,3 +372,57 @@ func TestMmapBufferRejectLargeMessage(t *testing.T) {
 		t.Errorf("Unexpected error: %v != %v", exp, actual)
 	}
 }
+
+func BenchmarkMmapBufferBasic(b *testing.B) {
+	dir, err := ioutil.TempDir("", "benthos_test_")
+	if err != nil {
+		b.Error(err)
+		return
+	}
+
+	defer cleanUpMmapDir(dir)
+
+	conf := NewMmapBufferConfig()
+	conf.FileSize = 1000
+	conf.Path = dir
+
+	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		b.Error(err)
+		return
+	}
+	defer block.Close()
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if _, err := block.PushMessage(types.Message{
+			Parts: [][]byte{
+				[]byte("hello"),
+				[]byte("world"),
+				[]byte("12345"),
+				[]byte(fmt.Sprintf("test%v", i)),
+			},
+		}); err != nil {
+			b.Error(err)
+			return
+		}
+	}
+
+	for i := 0; i < b.N; i++ {
+		m, err := block.NextMessage()
+		if err != nil {
+			b.Error(err)
+			return
+		}
+		if len(m.Parts) != 4 {
+			b.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
+			b.Errorf("Wrong order of messages, %v != %v", expected, actual)
+		}
+		if _, err := block.ShiftMessage(); err != nil {
+			b.Error(err)
+			return
+		}
+	}
+}

@@ -30,6 +30,7 @@ import (
 	"sync"
 
 	mmap "github.com/edsrzf/mmap-go"
+	"github.com/jeffail/benthos/lib/util/disk"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
 )
@@ -38,19 +39,21 @@ import (
 
 // MmapCacheConfig - Config options for the MmapCache type.
 type MmapCacheConfig struct {
-	Path          string `json:"directory" yaml:"directory"`
-	FileSize      int    `json:"file_size" yaml:"file_size"`
-	RetryPeriodMS int    `json:"retry_period_ms" yaml:"retry_period_ms"`
-	CleanUp       bool   `json:"clean_up" yaml:"clean_up"`
+	Path              string `json:"directory" yaml:"directory"`
+	FileSize          int    `json:"file_size" yaml:"file_size"`
+	RetryPeriodMS     int    `json:"retry_period_ms" yaml:"retry_period_ms"`
+	CleanUp           bool   `json:"clean_up" yaml:"clean_up"`
+	ReservedDiskSpace uint64 `json:"reserved_disk_space" yaml:"reserved_disk_space"`
 }
 
 // NewMmapCacheConfig - Creates a new MmapCacheConfig oject with default values.
 func NewMmapCacheConfig() MmapCacheConfig {
 	return MmapCacheConfig{
-		Path:          "",
-		FileSize:      250 * 1024 * 1024, // ~ 250MB
-		RetryPeriodMS: 1000,              // 1 second
-		CleanUp:       true,
+		Path:              "",
+		FileSize:          250 * 1024 * 1024, // 250MiB
+		RetryPeriodMS:     1000,              // 1 second
+		CleanUp:           true,
+		ReservedDiskSpace: 100 * 1024 * 1024, // 50MiB
 	}
 }
 
@@ -95,8 +98,13 @@ func NewMmapCache(config MmapCacheConfig, log log.Modular, stats metrics.Type) (
 
 //------------------------------------------------------------------------------
 
-// ErrWrongTrackerLength - The length of a read tracker was not correct.
-var ErrWrongTrackerLength = errors.New("tracker was unexpected length")
+var (
+	// ErrWrongTrackerLength - The length of a read tracker was not correct.
+	ErrWrongTrackerLength = errors.New("tracker was unexpected length")
+
+	// ErrNotEnoughSpace - The target disk lacked the space needed for a new file.
+	ErrNotEnoughSpace = errors.New("target disk is at capacity")
+)
 
 // openTracker - opens a tracker file for recording reader and writer indexes.
 func (f *MmapCache) openTracker() error {
@@ -178,11 +186,17 @@ func (f *MmapCache) EnsureCached(index int) error {
 	// Check if file already exists
 	_, err = os.Stat(fPath)
 	if os.IsNotExist(err) {
-		// If not then we create it with our configured file size
-		if cache.f, err = os.Create(fPath); err == nil {
-			block := make([]byte, f.config.FileSize)
-			if _, err = cache.f.Write(block); err != nil {
-				os.Remove(fPath)
+		// If we lack the space needed (reserved space + file size) then return error
+		if uint64(f.config.FileSize)+f.config.ReservedDiskSpace >
+			disk.TotalRemaining(f.config.Path) {
+			err = ErrNotEnoughSpace
+		} else {
+			// If not then we create it with our configured file size
+			if cache.f, err = os.Create(fPath); err == nil {
+				block := make([]byte, f.config.FileSize)
+				if _, err = cache.f.Write(block); err != nil {
+					os.Remove(fPath)
+				}
 			}
 		}
 	} else if err == nil {
