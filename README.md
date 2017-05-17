@@ -37,6 +37,7 @@ Currently supported input/output targets:
 - [Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)][nanomsg]
 - [RabbitMQ (AMQP)][rabbitmq]
 - [NSQ][nsq]
+- [NATS][nats]
 - [Kafka][kafka]
 - HTTP 1.1 POST/GET
 - STDIN/STDOUT
@@ -168,4 +169,5 @@ docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
 [nanomsg]: http://nanomsg.org/
 [rabbitmq]: https://www.rabbitmq.com/
 [nsq]: http://nsq.io/
+[nats]: http://nats.io/
 [kafka]: https://kafka.apache.org/
