@@ -37,10 +37,10 @@ func TotalRemaining(path string) uint64 {
 	c := h.MustFindProc("GetDiskFreeSpaceExW")
 
 	c.Call(
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(volumePath))),
+		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(path))),
 		uintptr(unsafe.Pointer(&freeBytes)),
 		uintptr(unsafe.Pointer(&totalBytes)),
 		uintptr(unsafe.Pointer(&availableBytes)))
 
-	return freeBytes
+	return uint64(freeBytes)
 }
