@@ -68,7 +68,7 @@ func NewNSQConfig() NSQConfig {
 
 //--------------------------------------------------------------------------------------------------
 
-// NSQ - An input type that serves Scalability Protocols messages.
+// NSQ - An input type that receives NSQ messages.
 type NSQ struct {
 	running int32
 

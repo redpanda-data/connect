@@ -54,6 +54,7 @@ type Config struct {
 	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
 	AMQP       AMQPConfig       `json:"amqp" yaml:"amqp"`
 	NSQ        NSQConfig        `json:"nsq" yaml:"nsq"`
+	NATS       NATSConfig       `json:"nats" yaml:"nats"`
 	File       FileConfig       `json:"file" yaml:"file"`
 	STDIN      STDINConfig      `json:"stdin" yaml:"stdin"`
 	FanIn      FanInConfig      `json:"fan_in" yaml:"fan_in"`
@@ -69,6 +70,7 @@ func NewConfig() Config {
 		Kafka:      NewKafkaConfig(),
 		AMQP:       NewAMQPConfig(),
 		NSQ:        NewNSQConfig(),
+		NATS:       NewNATSConfig(),
 		File:       NewFileConfig(),
 		STDIN:      NewSTDINConfig(),
 		FanIn:      NewFanInConfig(),

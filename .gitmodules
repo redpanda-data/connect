@@ -58,3 +58,9 @@
 [submodule "vendor/github.com/mreiferson/go-snappystream"]
 	path = vendor/github.com/mreiferson/go-snappystream
 	url = https://github.com/mreiferson/go-snappystream
+[submodule "vendor/github.com/nats-io/go-nats"]
+	path = vendor/github.com/nats-io/go-nats
+	url = https://github.com/nats-io/go-nats
+[submodule "vendor/github.com/nats-io/nuid"]
+	path = vendor/github.com/nats-io/nuid
+	url = https://github.com/nats-io/nuid

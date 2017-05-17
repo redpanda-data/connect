@@ -29,7 +29,6 @@ import (
 
 	"github.com/jeffail/benthos/lib/broker"
 	"github.com/jeffail/benthos/lib/types"
-	"github.com/jeffail/gabs"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
 )
@@ -132,12 +131,19 @@ func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
 	for i, boxedConfig := range conf.Inputs {
 		newConf := NewConfig()
 		if i > 0 {
-			// If the type of this input is 'ditto' we want to start with a duplicate of the
+			// If the type of this output is 'ditto' we want to start with a duplicate of the
 			// previous config.
-			typeTest, _ := gabs.Consume(boxedConfig)
-			if t, ok := typeTest.S("type").Data().(string); ok && t == "ditto" {
-				newConf = inputConfs[i-1]
-				typeTest.Set(newConf.Type, "type")
+			switch unboxed := boxedConfig.(type) {
+			case map[string]interface{}:
+				if t, ok := unboxed["type"]; ok && t == "ditto" {
+					newConf = inputConfs[i-1]
+					unboxed["type"] = newConf.Type
+				}
+			case map[interface{}]interface{}:
+				if t, ok := unboxed["type"]; ok && t == "ditto" {
+					newConf = inputConfs[i-1]
+					unboxed["type"] = newConf.Type
+				}
 			}
 		}
 		rawBytes, err := yaml.Marshal(boxedConfig)
