@@ -1,5 +1,8 @@
 ![Benthos](icon.png "Benthos")
 
+[![godoc for jeffail/benthos][1]][2]
+[![goreportcard for jeffail/benthos][3]][4]
+
 Benthos is a messaging bridge service that supports a wide and growing list of
 input and output protocols.
 
@@ -165,6 +168,10 @@ docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
 	benthos -c /config.yaml
 ```
 
+[1]: https://godoc.org/github.com/jeffail/benthos?status.svg
+[2]: http://godoc.org/github.com/jeffail/benthos
+[3]: https://goreportcard.com/badge/github.com/jeffail/benthos
+[4]: https://goreportcard.com/report/jeffail/benthos
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/
 [rabbitmq]: https://www.rabbitmq.com/
