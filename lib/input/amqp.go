@@ -50,23 +50,27 @@ Exchange type options are: direct|fanout|topic|x-custom`,
 
 // AMQPConfig - Configuration for the AMQP input type.
 type AMQPConfig struct {
-	URI          string `json:"uri" yaml:"uri"`
-	Exchange     string `json:"exchange" yaml:"exchange"`
-	ExchangeType string `json:"exchange_type" yaml:"exchange_type"`
-	Queue        string `json:"queue" yaml:"queue"`
-	BindingKey   string `json:"key" yaml:"key"`
-	ConsumerTag  string `json:"consumer_tag" yaml:"consumer_tag"`
+	URI           string `json:"uri" yaml:"uri"`
+	Exchange      string `json:"exchange" yaml:"exchange"`
+	ExchangeType  string `json:"exchange_type" yaml:"exchange_type"`
+	Queue         string `json:"queue" yaml:"queue"`
+	BindingKey    string `json:"key" yaml:"key"`
+	ConsumerTag   string `json:"consumer_tag" yaml:"consumer_tag"`
+	PrefetchCount int    `json:"prefetch_count"`
+	PrefetchSize  int    `json:"prefetch_size"`
 }
 
 // NewAMQPConfig - Creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
-		URI:          "amqp://guest:guest@localhost:5672/",
-		Exchange:     "benthos-exchange",
-		ExchangeType: "direct",
-		Queue:        "benthos-queue",
-		BindingKey:   "benthos-key",
-		ConsumerTag:  "benthos-consumer",
+		URI:           "amqp://guest:guest@localhost:5672/",
+		Exchange:      "benthos-exchange",
+		ExchangeType:  "direct",
+		Queue:         "benthos-queue",
+		BindingKey:    "benthos-key",
+		ConsumerTag:   "benthos-consumer",
+		PrefetchCount: 1,
+		PrefetchSize:  0,
 	}
 }
 
@@ -158,6 +162,12 @@ func (a *AMQP) connect() (err error) {
 		return fmt.Errorf("Queue Bind: %s", err)
 	}
 
+	if err = a.amqpChan.Qos(
+		a.conf.AMQP.PrefetchCount, a.conf.AMQP.PrefetchSize, false,
+	); err != nil {
+		return fmt.Errorf("Qos: %s", err)
+	}
+
 	if a.consumerChan, err = a.amqpChan.Consume(
 		a.conf.AMQP.Queue,       // name
 		a.conf.AMQP.ConsumerTag, // consumerTag,
@@ -201,14 +211,14 @@ func (a *AMQP) loop() {
 		close(a.closedChan)
 	}()
 
-	var data []byte
+	var data *amqp.Delivery
 
 	for atomic.LoadInt32(&a.running) == 1 {
 		// If no bytes then read a message
 		if data == nil {
 			select {
 			case msg := <-a.consumerChan:
-				data = msg.Body
+				data = &msg
 			case <-a.closeChan:
 				return
 			}
@@ -217,7 +227,7 @@ func (a *AMQP) loop() {
 		// If bytes are read then try and propagate.
 		if data != nil {
 			select {
-			case a.messages <- types.Message{Parts: [][]byte{data}}:
+			case a.messages <- types.Message{Parts: [][]byte{data.Body}}:
 			case <-a.closeChan:
 				return
 			}
@@ -227,6 +237,7 @@ func (a *AMQP) loop() {
 			}
 			if resErr := res.Error(); resErr == nil {
 				a.stats.Incr("input.amqp.count", 1)
+				data.Ack(false)
 				data = nil
 			} else if resErr == types.ErrMessageTooLarge {
 				a.stats.Incr("input.amqp.send.rejected", 1)
