@@ -212,7 +212,7 @@ func (s *ScaleProto) loop() {
 				return
 			}
 			if resErr := res.Error(); resErr == nil {
-				s.stats.Timing("input.scale_proto.timing", int(time.Since(start)))
+				s.stats.Timing("input.scale_proto.timing", int64(time.Since(start)))
 				s.stats.Incr("input.scale_proto.count", 1)
 				data = nil
 			} else if resErr == types.ErrMessageTooLarge {

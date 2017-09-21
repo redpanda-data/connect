@@ -93,7 +93,7 @@ func (m *OutputWrapper) inputLoop() {
 		}
 		backlog, err := m.buffer.PushMessage(msg)
 		if err == nil {
-			m.stats.Gauge("buffer.backlog", backlog)
+			m.stats.Gauge("buffer.backlog", int64(backlog))
 		}
 		select {
 		case m.responsesOut <- types.NewSimpleResponse(err):
@@ -149,7 +149,7 @@ func (m *OutputWrapper) outputLoop() {
 			if res.Error() == nil {
 				msg = types.Message{}
 				backlog, _ := m.buffer.ShiftMessage()
-				m.stats.Gauge("buffer.backlog", backlog)
+				m.stats.Gauge("buffer.backlog", int64(backlog))
 			} else {
 				if _, exists := errMap[res.Error()]; !exists {
 					errMap[res.Error()] = struct{}{}

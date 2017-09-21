@@ -40,8 +40,9 @@ import (
 type writer struct {
 	running int32
 
-	conf Config
-	log  log.Modular
+	conf  Config
+	log   log.Modular
+	stats metrics.Type
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
@@ -57,6 +58,7 @@ func newWriter(handle io.WriteCloser, log log.Modular, stats metrics.Type) (Type
 	return &writer{
 		running:      1,
 		log:          log.NewModule(".output.file"),
+		stats:        stats,
 		messages:     nil,
 		responseChan: make(chan types.Response),
 		handle:       handle,
@@ -84,6 +86,7 @@ func (w *writer) loop() {
 			if !open {
 				return
 			}
+			w.stats.Incr("writer.message.received", 1)
 		case <-w.closeChan:
 			return
 		}
@@ -95,6 +98,7 @@ func (w *writer) loop() {
 		}
 		select {
 		case w.responseChan <- types.NewSimpleResponse(err):
+			w.stats.Incr("writer.message.sent", 1)
 		case <-w.closeChan:
 			return
 		}

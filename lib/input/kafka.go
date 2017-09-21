@@ -269,7 +269,7 @@ func (k *Kafka) loop() {
 				return
 			}
 			if resErr := res.Error(); resErr == nil {
-				k.stats.Timing("input.kafka.timing", int(time.Since(start)))
+				k.stats.Timing("input.kafka.timing", int64(time.Since(start)))
 				k.stats.Incr("input.kafka.count", 1)
 				k.offset = data.Offset + 1
 				if err := k.commitOffset(); err != nil {

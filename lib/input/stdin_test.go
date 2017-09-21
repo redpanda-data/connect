@@ -40,6 +40,7 @@ func getTestSTDIN(handle io.ReadWriter, conf Config) *STDIN {
 		handle:           handle,
 		conf:             conf,
 		log:              log.NewLogger(os.Stdout, logConfig),
+		stats:            metrics.DudType{},
 		internalMessages: make(chan [][]byte),
 		messages:         make(chan types.Message),
 		responses:        nil,

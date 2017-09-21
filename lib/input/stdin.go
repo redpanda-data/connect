@@ -69,8 +69,9 @@ type STDIN struct {
 
 	handle io.Reader
 
-	conf Config
-	log  log.Modular
+	conf  Config
+	log   log.Modular
+	stats metrics.Type
 
 	internalMessages chan [][]byte
 
@@ -88,6 +89,7 @@ func NewSTDIN(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		handle:           os.Stdin,
 		conf:             conf,
 		log:              log.NewModule(".input.stdin"),
+		stats:            stats,
 		internalMessages: make(chan [][]byte),
 		messages:         make(chan types.Message),
 		responses:        nil,
@@ -135,6 +137,7 @@ func (s *STDIN) readLoop() {
 		if len(partsToSend) != 0 {
 			select {
 			case s.internalMessages <- partsToSend:
+				s.stats.Incr("stdin.message.sent", 1)
 				partsToSend = nil
 			case <-time.After(time.Second):
 			}

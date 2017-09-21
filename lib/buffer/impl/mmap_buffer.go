@@ -140,7 +140,7 @@ func (f *MmapBuffer) cacheManagerLoop(indexPtr *int) {
 
 		targetIndex := *indexPtr
 		if bootstrapped {
-			targetIndex += 1
+			targetIndex++
 		}
 
 		if err := f.cache.EnsureCached(targetIndex); err != nil {
