@@ -50,6 +50,11 @@ This outnput type should be compatible with any implementation of these
 protocols, but nanomsg (http://nanomsg.org/index.html) is the specific target of
 this type.
 
+Since scale proto messages are only single part we would need a binary format
+for sending multi part messages. We can use the benthos binary format for this
+purpose. However, this format may appear to be gibberish to other services. If
+you want to use the binary format you can set 'benthos_multi' to true.
+
 Currently only PUSH and PUB sockets are supported.`,
 	}
 }
@@ -58,19 +63,21 @@ Currently only PUSH and PUB sockets are supported.`,
 
 // ScaleProtoConfig - Configuration for the ScaleProto output type.
 type ScaleProtoConfig struct {
-	Address       string `json:"address" yaml:"address"`
-	Bind          bool   `json:"bind_address" yaml:"bind_address"`
-	SocketType    string `json:"socket_type" yaml:"socket_type"`
-	PollTimeoutMS int    `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
+	Address         string `json:"address" yaml:"address"`
+	Bind            bool   `json:"bind_address" yaml:"bind_address"`
+	SocketType      string `json:"socket_type" yaml:"socket_type"`
+	UseBenthosMulti bool   `json:"benthos_multi" yaml:"benthos_multi"`
+	PollTimeoutMS   int    `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 }
 
 // NewScaleProtoConfig - Creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		Address:       "tcp://localhost:5556",
-		Bind:          false,
-		SocketType:    "PUSH",
-		PollTimeoutMS: 5000,
+		Address:         "tcp://localhost:5556",
+		Bind:            false,
+		SocketType:      "PUSH",
+		UseBenthosMulti: false,
+		PollTimeoutMS:   5000,
 	}
 }
 
@@ -186,7 +193,8 @@ func (s *ScaleProto) loop() {
 			return
 		}
 		var err error
-		if len(msg.Parts) > 1 {
+		if s.conf.ScaleProto.UseBenthosMulti {
+			// Either encode all messages with the binary protocol or none.
 			err = s.socket.Send(msg.Bytes())
 		} else {
 			err = s.socket.Send(msg.Parts[0])

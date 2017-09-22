@@ -49,6 +49,13 @@ familiar to anyone accustomed to service messaging protocols.
 This input type should be compatible with any implementation of these protocols,
 but nanomsg (http://nanomsg.org/index.html) is the specific target of this type.
 
+Since scale proto messages are only single part we would need a binary format
+for interpretting multi part messages. If the input is receiving messages from a
+benthos output you can set both to use the benthos binary multipart format with
+the 'benthos_multi' flag. Note, however, that this format may appear to be
+gibberish to other services, and the input will be unable to read normal
+messages with this setting.
+
 Currently only PULL and SUB sockets are supported.`,
 	}
 }
@@ -57,21 +64,23 @@ Currently only PULL and SUB sockets are supported.`,
 
 // ScaleProtoConfig - Configuration for the ScaleProto input type.
 type ScaleProtoConfig struct {
-	Address       string   `json:"address" yaml:"address"`
-	Bind          bool     `json:"bind_address" yaml:"bind_address"`
-	SocketType    string   `json:"socket_type" yaml:"socket_type"`
-	SubFilters    []string `json:"sub_filters" yaml:"sub_filters"`
-	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
+	Address         string   `json:"address" yaml:"address"`
+	Bind            bool     `json:"bind_address" yaml:"bind_address"`
+	SocketType      string   `json:"socket_type" yaml:"socket_type"`
+	SubFilters      []string `json:"sub_filters" yaml:"sub_filters"`
+	UseBenthosMulti bool     `json:"benthos_multi" yaml:"benthos_multi"`
+	PollTimeoutMS   int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 }
 
 // NewScaleProtoConfig - Creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		Address:       "tcp://*:5555",
-		Bind:          true,
-		SocketType:    "PULL",
-		SubFilters:    []string{},
-		PollTimeoutMS: 5000,
+		Address:         "tcp://*:5555",
+		Bind:            true,
+		SocketType:      "PULL",
+		SubFilters:      []string{},
+		UseBenthosMulti: false,
+		PollTimeoutMS:   5000,
 	}
 }
 

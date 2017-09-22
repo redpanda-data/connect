@@ -97,6 +97,69 @@ func TestScaleProtoBasic(t *testing.T) {
 	}
 }
 
+func TestScaleProtoMulti(t *testing.T) {
+	nTestLoops := 1000
+
+	conf := NewConfig()
+	conf.ScaleProto.Address = "tcp://localhost:1240"
+	conf.ScaleProto.Bind = true
+	conf.ScaleProto.SocketType = "PULL"
+	conf.ScaleProto.UseBenthosMulti = true
+	conf.ScaleProto.PollTimeoutMS = 1000
+
+	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	resChan := make(chan types.Response)
+
+	if err = s.StartListening(resChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer s.CloseAsync()
+	defer s.WaitForClose(time.Second)
+
+	socket, err := push.NewSocket()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	socket.AddTransport(tcp.NewTransport())
+
+	if err = socket.Dial("tcp://localhost:1240"); err != nil {
+		t.Error(err)
+		return
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+		msg := types.NewMessage()
+		msg.Parts = [][]byte{[]byte(testStr)}
+		if err = socket.Send(msg.Bytes()); err != nil {
+			t.Error(err)
+			return
+		}
+		select {
+		case resMsg := <-s.MessageChan():
+			if res := string(resMsg.Parts[0]); res != testStr {
+				t.Errorf("Wrong result, %v != %v", res, testStr)
+			}
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for message")
+		}
+		select {
+		case resChan <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for response")
+		}
+	}
+}
+
 func TestScaleProtoPubSub(t *testing.T) {
 	nTestLoops := 1000
 

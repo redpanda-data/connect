@@ -105,6 +105,84 @@ func TestScaleProtoBasic(t *testing.T) {
 			return
 		}
 	}
+}
+
+func TestScaleProtoMultiPart(t *testing.T) {
+	nTestLoops := 1000
+
+	sendChan := make(chan types.Message)
+
+	conf := NewConfig()
+	conf.ScaleProto.Address = "tcp://localhost:1325"
+	conf.ScaleProto.Bind = true
+	conf.ScaleProto.SocketType = "PUSH"
+	conf.ScaleProto.UseBenthosMulti = true
+
+	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err = s.StartReceiving(sendChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	socket, err := pull.NewSocket()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	socket.AddTransport(tcp.NewTransport())
+	socket.SetOption(mangos.OptionRecvDeadline, time.Second)
+
+	if err = socket.Dial("tcp://localhost:1325"); err != nil {
+		t.Error(err)
+		return
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
+
+		select {
+		case sendChan <- testMsg:
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+
+		data, err := socket.Recv()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		msg, err := types.FromBytes(data)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if exp, actual := 1, len(msg.Parts); exp != actual {
+			t.Errorf("Unexpected message parts received: %v != %v", exp, actual)
+			return
+		}
+		if res := string(msg.Parts[0]); res != testStr {
+			t.Errorf("Wrong value on output: %v != %v", res, testStr)
+		}
+
+		select {
+		case res := <-s.ResponseChan():
+			if res.Error() != nil {
+				t.Error(res.Error())
+				return
+			}
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+	}
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)

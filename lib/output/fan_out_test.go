@@ -129,6 +129,63 @@ func TestFanOutWithScaleProto(t *testing.T) {
 			return
 		}
 	}
+}
+
+func TestFanOutWithScaleProtoMulti(t *testing.T) {
+	nTestLoops := 1000
+
+	conf := NewConfig()
+
+	scaleOne, scaleTwo := NewConfig(), NewConfig()
+	scaleOne.Type, scaleTwo.Type = "scalability_protocols", "scalability_protocols"
+	scaleOne.ScaleProto.Bind, scaleTwo.ScaleProto.Bind = true, true
+	scaleOne.ScaleProto.Address = "tcp://localhost:1243"
+	scaleTwo.ScaleProto.Address = "tcp://localhost:1244"
+	scaleOne.ScaleProto.UseBenthosMulti = true
+	scaleTwo.ScaleProto.UseBenthosMulti = true
+	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PUSH", "PUSH"
+
+	conf.FanOut.Outputs = append(conf.FanOut.Outputs, scaleOne)
+	conf.FanOut.Outputs = append(conf.FanOut.Outputs, scaleTwo)
+
+	s, err := NewFanOut(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	sendChan := make(chan types.Message)
+
+	if err = s.StartReceiving(sendChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer s.CloseAsync()
+	defer s.WaitForClose(time.Second)
+
+	socketOne, err := pull.NewSocket()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	socketTwo, err := pull.NewSocket()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	socketOne.AddTransport(tcp.NewTransport())
+	socketTwo.AddTransport(tcp.NewTransport())
+
+	if err = socketOne.Dial("tcp://localhost:1243"); err != nil {
+		t.Error(err)
+		return
+	}
+	if err = socketTwo.Dial("tcp://localhost:1244"); err != nil {
+		t.Error(err)
+		return
+	}
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)

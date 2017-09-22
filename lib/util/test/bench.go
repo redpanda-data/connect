@@ -89,8 +89,8 @@ func NewBenchMessage(index int32, dataBlob []byte) types.Message {
 // BenchFromMessage - Returns the benchmarking stats from a message received.
 func BenchFromMessage(msg types.Message) (Bench, error) {
 	var b Bench
-	if len(msg.Parts) != 3 {
-		return b, fmt.Errorf("incorrect # of message parts: %v != %v", len(msg.Parts), 3)
+	if len(msg.Parts) < 2 {
+		return b, fmt.Errorf("Benchmark requires at least 2 message parts, received: %v", len(msg.Parts))
 	}
 
 	t := time.Time{}
