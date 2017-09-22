@@ -137,9 +137,9 @@ func TestScaleProtoMulti(t *testing.T) {
 	}
 
 	for i := 0; i < nTestLoops; i++ {
-		testStr := fmt.Sprintf("test%v", i)
+		testStr, testStr2 := fmt.Sprintf("test:%v", i), fmt.Sprintf("test2:%v", i)
 		msg := types.NewMessage()
-		msg.Parts = [][]byte{[]byte(testStr)}
+		msg.Parts = [][]byte{[]byte(testStr), []byte(testStr2)}
 		if err = socket.Send(msg.Bytes()); err != nil {
 			t.Error(err)
 			return
@@ -148,6 +148,9 @@ func TestScaleProtoMulti(t *testing.T) {
 		case resMsg := <-s.MessageChan():
 			if res := string(resMsg.Parts[0]); res != testStr {
 				t.Errorf("Wrong result, %v != %v", res, testStr)
+			}
+			if res := string(resMsg.Parts[1]); res != testStr2 {
+				t.Errorf("Wrong result, %v != %v", res, testStr2)
 			}
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")

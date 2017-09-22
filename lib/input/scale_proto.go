@@ -210,27 +210,42 @@ func (s *ScaleProto) loop() {
 
 		// If bytes are read then try and propagate.
 		if data != nil {
-			start := time.Now()
-			select {
-			case s.messages <- types.Message{Parts: [][]byte{data}}:
-			case <-s.closeChan:
-				return
-			}
-			res, open := <-s.responses
-			if !open {
-				return
-			}
-			if resErr := res.Error(); resErr == nil {
-				s.stats.Timing("input.scale_proto.timing", int64(time.Since(start)))
-				s.stats.Incr("input.scale_proto.count", 1)
-				data = nil
-			} else if resErr == types.ErrMessageTooLarge {
-				s.stats.Incr("input.scale_proto.send.rejected", 1)
-				s.log.Errorf("ScaleProto message was rejected: %v\n", resErr)
-				s.log.Errorf("Message content: %s\n", data)
-				data = nil
+			var err error
+			var msg types.Message
+
+			if s.conf.ScaleProto.UseBenthosMulti {
+				if msg, err = types.FromBytes(data); err != nil {
+					s.stats.Incr("input.scale_proto.send.error", 1)
+					s.log.Errorf("ScaleProto message could not be parsed as multipart: %v\n", err)
+					data = nil
+				}
 			} else {
-				s.stats.Incr("input.scale_proto.send.error", 1)
+				msg = types.Message{Parts: [][]byte{data}}
+			}
+
+			if err == nil {
+				start := time.Now()
+				select {
+				case s.messages <- msg:
+				case <-s.closeChan:
+					return
+				}
+				res, open := <-s.responses
+				if !open {
+					return
+				}
+				if resErr := res.Error(); resErr == nil {
+					s.stats.Timing("input.scale_proto.timing", int64(time.Since(start)))
+					s.stats.Incr("input.scale_proto.count", 1)
+					data = nil
+				} else if resErr == types.ErrMessageTooLarge {
+					s.stats.Incr("input.scale_proto.send.rejected", 1)
+					s.log.Errorf("ScaleProto message was rejected: %v\n", resErr)
+					s.log.Errorf("Message content: %s\n", data)
+					data = nil
+				} else {
+					s.stats.Incr("input.scale_proto.send.error", 1)
+				}
 			}
 		}
 	}
