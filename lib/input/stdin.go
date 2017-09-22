@@ -52,12 +52,14 @@ indicates the end of the message.`,
 // STDINConfig - contains config fields for the STDIN input type.
 type STDINConfig struct {
 	Multipart bool `json:"multipart" yaml:"multipart"`
+	MaxBuffer int  `json:"max_buffer" yaml:"max_buffer"`
 }
 
 // NewSTDINConfig - creates a STDINConfig populated with default values.
 func NewSTDINConfig() STDINConfig {
 	return STDINConfig{
 		Multipart: false,
+		MaxBuffer: bufio.MaxScanTokenSize,
 	}
 }
 
@@ -110,6 +112,9 @@ func (s *STDIN) readLoop() {
 		close(s.internalMessages)
 	}()
 	stdin := bufio.NewScanner(s.handle)
+	if s.conf.STDIN.MaxBuffer != bufio.MaxScanTokenSize {
+		stdin.Buffer([]byte{}, s.conf.STDIN.MaxBuffer)
+	}
 
 	var partsToSend, parts [][]byte
 
@@ -117,11 +122,13 @@ func (s *STDIN) readLoop() {
 		// If no bytes then read a line
 		if len(partsToSend) == 0 {
 			if stdin.Scan() {
-				if len(stdin.Bytes()) > 0 {
+				newPart := make([]byte, len(stdin.Bytes()))
+				copy(newPart, stdin.Bytes())
+				if len(newPart) > 0 {
 					if s.conf.STDIN.Multipart {
-						parts = append(parts, stdin.Bytes())
+						parts = append(parts, newPart)
 					} else {
-						partsToSend = append(partsToSend, stdin.Bytes())
+						partsToSend = append(partsToSend, newPart)
 					}
 				} else if s.conf.STDIN.Multipart {
 					// Empty line means we're finished reading parts for this message.

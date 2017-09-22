@@ -51,6 +51,7 @@ a message part, and an empty line indicates the end of a message.`,
 type FileConfig struct {
 	Path      string `json:"path" yaml:"path"`
 	Multipart bool   `json:"multipart" yaml:"multipart"`
+	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
 }
 
 // NewFileConfig - Creates a new FileConfig with default values.
@@ -58,6 +59,7 @@ func NewFileConfig() FileConfig {
 	return FileConfig{
 		Path:      "",
 		Multipart: false,
+		MaxBuffer: bufio.MaxScanTokenSize,
 	}
 }
 
@@ -110,6 +112,9 @@ func (f *File) loop() {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
+	if f.conf.File.MaxBuffer != bufio.MaxScanTokenSize {
+		scanner.Buffer([]byte{}, f.conf.File.MaxBuffer)
+	}
 
 	f.log.Infof("Reading messages from: %v\n", f.conf.File.Path)
 
@@ -123,7 +128,8 @@ func (f *File) loop() {
 				}
 				return
 			}
-			data := scanner.Bytes()
+			data := make([]byte, len(scanner.Bytes()))
+			copy(data, scanner.Bytes())
 			if len(data) > 0 {
 				if f.conf.File.Multipart {
 					parts = append(parts, data)
