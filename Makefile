@@ -34,7 +34,8 @@ $(PATHINSTDOCKER)/benthos.tar: $(PATHINSTBIN)/benthos
 docker: $(PATHINSTDOCKER)/benthos.tar
 
 deps:
-	@go get -d ./cmd/...
+	@go get -u github.com/golang/dep/cmd/dep
+	@dep ensure
 
 rpm:
 	@rpmbuild --define "_version $(VERSION)" -bb ./resources/rpm/benthos.spec
