@@ -126,29 +126,13 @@ go install -tags "ZMQ4" ./cmd/...
 
 ## Vendoring
 
-Versions of go above 1.6 should automatically `go get` all vendored libraries.
-Otherwise, while cloning use `--recursive`:
+Benthos uses [dep][dep] for managing dependencies. To get started make sure you
+have dep installed:
 
-`git clone https://github.com/jeffail/benthos --recursive`
+`go get -u github.com/golang/dep/cmd/dep`
 
-Or, if the repo is already cloned, get the latest libraries with:
-
-`git submodule update --init`
-
-To add new libraries simply run:
-
-``` shell
-PACKAGE=github.com/jeffail/util
-git submodule add https://$PACKAGE vendor/$PACKAGE"
-```
-
-It might be handy to set yourself a function for this in your `.bashrc`:
-
-``` bash
-function go-add-vendor {
-	git submodule add https://$1 vendor/$1
-}
-```
+And then run `dep ensure`. You can decrease the size of vendor by only storing
+needed files with `dep prune`.
 
 ## Docker
 
@@ -172,6 +156,7 @@ docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
 [2]: http://godoc.org/github.com/jeffail/benthos
 [3]: https://goreportcard.com/badge/github.com/jeffail/benthos
 [4]: https://goreportcard.com/report/jeffail/benthos
+[dep]: https://github.com/golang/dep
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/
 [rabbitmq]: https://www.rabbitmq.com/
