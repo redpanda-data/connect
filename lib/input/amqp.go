@@ -33,7 +33,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["amqp"] = typeSpec{
@@ -46,7 +46,7 @@ Exchange type options are: direct|fanout|topic|x-custom`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // AMQPConfig - Configuration for the AMQP input type.
 type AMQPConfig struct {
@@ -56,8 +56,8 @@ type AMQPConfig struct {
 	Queue         string `json:"queue" yaml:"queue"`
 	BindingKey    string `json:"key" yaml:"key"`
 	ConsumerTag   string `json:"consumer_tag" yaml:"consumer_tag"`
-	PrefetchCount int    `json:"prefetch_count"`
-	PrefetchSize  int    `json:"prefetch_size"`
+	PrefetchCount int    `json:"prefetch_count" yaml:"prefetch_count"`
+	PrefetchSize  int    `json:"prefetch_size" yaml:"prefetch_size"`
 }
 
 // NewAMQPConfig - Creates a new AMQPConfig with default values.
@@ -74,7 +74,7 @@ func NewAMQPConfig() AMQPConfig {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // AMQP - An input type that serves Scalability Protocols messages.
 type AMQP struct {
@@ -115,7 +115,7 @@ func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &a, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // connect - Establish a connection to an AMQP server.
 func (a *AMQP) connect() (err error) {
@@ -200,7 +200,7 @@ func (a *AMQP) disconnect() error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func (a *AMQP) loop() {
 	defer func() {
@@ -250,7 +250,8 @@ func (a *AMQP) loop() {
 
 }
 
-// StartListening - Sets the channel used by the input to validate message receipt.
+// StartListening - Sets the channel used by the input to validate message
+// receipt.
 func (a *AMQP) StartListening(responses <-chan types.Response) error {
 	if a.responses != nil {
 		return types.ErrAlreadyStarted
@@ -282,4 +283,4 @@ func (a *AMQP) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
