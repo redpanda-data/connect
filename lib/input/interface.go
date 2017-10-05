@@ -22,7 +22,9 @@ THE SOFTWARE.
 
 package input
 
-import "github.com/jeffail/benthos/lib/types"
+import (
+	"github.com/jeffail/benthos/lib/types"
+)
 
 // Type - The standard interface of an input type.
 type Type interface {

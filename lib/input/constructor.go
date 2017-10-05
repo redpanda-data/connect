@@ -32,20 +32,27 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// typeSpec - Constructor and a usage description for each input type.
+// typeSpec is a constructor and a usage description for each input type.
 type typeSpec struct {
+	brokerConstructor func(
+		conf Config,
+		log log.Modular,
+		stats metrics.Type,
+		pipelineConstructors ...PipelineConstructor,
+	) (Type, error)
 	constructor func(conf Config, log log.Modular, stats metrics.Type) (Type, error)
 	description string
 }
 
 var constructors = map[string]typeSpec{}
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// Config - The all encompassing configuration struct for all input types. Note that some configs
-// are empty structs, as the type has no optional values but we want to list it as an option.
+// Config is the all encompassing configuration struct for all input types. Note
+// that some configs are empty structs, as the type has no optional values but
+// we want to list it as an option.
 type Config struct {
 	Type       string           `json:"type" yaml:"type"`
 	HTTPServer HTTPServerConfig `json:"http_server" yaml:"http_server"`
@@ -60,7 +67,7 @@ type Config struct {
 	FanIn      FanInConfig      `json:"fan_in" yaml:"fan_in"`
 }
 
-// NewConfig - Returns a configuration struct fully populated with default values.
+// NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
 		Type:       "stdin",
@@ -77,9 +84,9 @@ func NewConfig() Config {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// Descriptions - Returns a formatted string of collated descriptions of each type.
+// Descriptions returns a formatted string of descriptions for each type.
 func Descriptions() string {
 	// Order our input types alphabetically
 	names := []string{}
@@ -107,12 +114,24 @@ func Descriptions() string {
 	return buf.String()
 }
 
-// New - Create an input type based on an input configuration.
-func New(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+// New creates an input type based on an input configuration.
+func New(
+	conf Config,
+	log log.Modular,
+	stats metrics.Type,
+	pipelines ...PipelineConstructor,
+) (Type, error) {
 	if c, ok := constructors[conf.Type]; ok {
-		return c.constructor(conf, log, stats)
+		if c.brokerConstructor != nil {
+			return c.brokerConstructor(conf, log, stats, pipelines...)
+		}
+		input, err := c.constructor(conf, log, stats)
+		if err != nil {
+			return nil, err
+		}
+		return WrapWithPipelines(input, pipelines...)
 	}
 	return nil, types.ErrInvalidInputType
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

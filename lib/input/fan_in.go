@@ -44,7 +44,7 @@ var (
 
 func init() {
 	constructors["fan_in"] = typeSpec{
-		constructor: NewFanIn,
+		brokerConstructor: NewFanIn,
 		description: `
 The 'fan_in' type allows you to combine multiple inputs. Each input will be read
 in parallel. In order to configure a 'fan_in' type you simply add an array of
@@ -162,7 +162,12 @@ func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
 //--------------------------------------------------------------------------------------------------
 
 // NewFanIn - Create a new FanIn input type.
-func NewFanIn(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewFanIn(
+	conf Config,
+	log log.Modular,
+	stats metrics.Type,
+	pipelines ...PipelineConstructor,
+) (Type, error) {
 	if len(conf.FanIn.Inputs) == 0 {
 		return nil, ErrFanInNoInputs
 	}
@@ -175,7 +180,7 @@ func NewFanIn(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	inputs := make([]types.Producer, len(inputConfs))
 
 	for i, iConf := range inputConfs {
-		inputs[i], err = New(iConf, log, stats)
+		inputs[i], err = New(iConf, log, stats, pipelines...)
 		if err != nil {
 			return nil, err
 		}

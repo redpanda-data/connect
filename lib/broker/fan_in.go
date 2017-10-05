@@ -142,6 +142,7 @@ func (i *FanIn) loop() {
 		case wrap := <-i.wrappedMsgsChan:
 			i.stats.Incr("broker.fan_in.messages.received", 1)
 			i.messageChan <- wrap.msg
+			// TODO: If our output closes it won't be propagated.
 			wrap.resChan <- <-i.responseChan
 		case index := <-i.inputClosedChan:
 			delete(i.inputMap, index)
