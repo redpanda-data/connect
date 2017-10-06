@@ -170,6 +170,8 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 func (s *ScaleProto) loop() {
 	defer func() {
 		atomic.StoreInt32(&s.running, 0)
+
+		s.socket.Close()
 		close(s.responseChan)
 		close(s.closedChan)
 	}()

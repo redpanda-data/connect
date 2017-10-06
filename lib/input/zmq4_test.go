@@ -58,8 +58,12 @@ func TestZMQ4Basic(t *testing.T) {
 		return
 	}
 
-	defer z.CloseAsync()
-	defer z.WaitForClose(time.Second)
+	defer func() {
+		z.CloseAsync()
+		if err := z.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	ctx, err := zmq4.NewContext()
 	if nil != err {
@@ -123,8 +127,12 @@ func TestZMQ4PubSub(t *testing.T) {
 		return
 	}
 
-	defer z.CloseAsync()
-	defer z.WaitForClose(time.Second)
+	defer func() {
+		z.CloseAsync()
+		if err := z.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	ctx, err := zmq4.NewContext()
 	if nil != err {
@@ -143,7 +151,7 @@ func TestZMQ4PubSub(t *testing.T) {
 		return
 	}
 
-	<-time.After(time.Second)
+	<-time.After(time.Millisecond * 100)
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)

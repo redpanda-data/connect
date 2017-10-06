@@ -63,8 +63,12 @@ func TestRoundRobinWithScaleProto(t *testing.T) {
 		return
 	}
 
-	defer s.CloseAsync()
-	defer s.WaitForClose(time.Second)
+	defer func() {
+		s.CloseAsync()
+		if err := s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	socketOne, err := pull.NewSocket()
 	if err != nil {

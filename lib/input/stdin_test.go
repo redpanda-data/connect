@@ -91,8 +91,12 @@ func TestSTDINSinglePart(t *testing.T) {
 
 	f := getTestSTDIN(&handle, NewConfig())
 
-	defer f.CloseAsync()
-	defer f.WaitForClose(time.Second)
+	defer func() {
+		f.CloseAsync()
+		if err := f.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	resChan := make(chan types.Response)
 
@@ -163,8 +167,12 @@ func TestSTDINMultiPart(t *testing.T) {
 
 	f := getTestSTDIN(&handle, conf)
 
-	defer f.CloseAsync()
-	defer f.WaitForClose(time.Second)
+	defer func() {
+		f.CloseAsync()
+		if err := f.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	resChan := make(chan types.Response)
 

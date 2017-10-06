@@ -44,7 +44,7 @@ func TestScaleProtoBasic(t *testing.T) {
 	conf.ScaleProto.Address = "tcp://localhost:1238"
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.SocketType = "PULL"
-	conf.ScaleProto.PollTimeoutMS = 1000
+	conf.ScaleProto.PollTimeoutMS = 100
 
 	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
@@ -59,8 +59,12 @@ func TestScaleProtoBasic(t *testing.T) {
 		return
 	}
 
-	defer s.CloseAsync()
-	defer s.WaitForClose(time.Second)
+	defer func() {
+		s.CloseAsync()
+		if err := s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	socket, err := push.NewSocket()
 	if err != nil {
@@ -105,7 +109,7 @@ func TestScaleProtoMulti(t *testing.T) {
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.SocketType = "PULL"
 	conf.ScaleProto.UseBenthosMulti = true
-	conf.ScaleProto.PollTimeoutMS = 1000
+	conf.ScaleProto.PollTimeoutMS = 100
 
 	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
@@ -120,8 +124,12 @@ func TestScaleProtoMulti(t *testing.T) {
 		return
 	}
 
-	defer s.CloseAsync()
-	defer s.WaitForClose(time.Second)
+	defer func() {
+		s.CloseAsync()
+		if err := s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	socket, err := push.NewSocket()
 	if err != nil {
@@ -171,7 +179,7 @@ func TestScaleProtoPubSub(t *testing.T) {
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.SocketType = "SUB"
 	conf.ScaleProto.SubFilters = []string{"testTopic"}
-	conf.ScaleProto.PollTimeoutMS = 1000
+	conf.ScaleProto.PollTimeoutMS = 100
 
 	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
@@ -186,8 +194,12 @@ func TestScaleProtoPubSub(t *testing.T) {
 		return
 	}
 
-	defer s.CloseAsync()
-	defer s.WaitForClose(time.Second)
+	defer func() {
+		s.CloseAsync()
+		if err := s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	socket, err := pub.NewSocket()
 	if err != nil {
@@ -202,7 +214,7 @@ func TestScaleProtoPubSub(t *testing.T) {
 		return
 	}
 
-	<-time.After(time.Second)
+	<-time.After(time.Millisecond * 100)
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)

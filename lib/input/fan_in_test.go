@@ -189,9 +189,10 @@ func TestFanInWithScaleProto(t *testing.T) {
 	scaleOne, scaleTwo := NewConfig(), NewConfig()
 	scaleOne.Type, scaleTwo.Type = "scalability_protocols", "scalability_protocols"
 	scaleOne.ScaleProto.Bind, scaleTwo.ScaleProto.Bind = true, true
-	scaleOne.ScaleProto.Address = "tcp://localhost:1243"
-	scaleTwo.ScaleProto.Address = "tcp://localhost:1244"
+	scaleOne.ScaleProto.Address = "tcp://localhost:1247"
+	scaleTwo.ScaleProto.Address = "tcp://localhost:1248"
 	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PULL", "PULL"
+	scaleOne.ScaleProto.PollTimeoutMS, scaleTwo.ScaleProto.PollTimeoutMS = 100, 100
 
 	conf.FanIn.Inputs = append(conf.FanIn.Inputs, scaleOne)
 	conf.FanIn.Inputs = append(conf.FanIn.Inputs, scaleTwo)
@@ -209,8 +210,12 @@ func TestFanInWithScaleProto(t *testing.T) {
 		return
 	}
 
-	defer s.CloseAsync()
-	defer s.WaitForClose(time.Second)
+	defer func() {
+		s.CloseAsync()
+		if err := s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	socketOne, err := push.NewSocket()
 	if err != nil {
@@ -226,11 +231,11 @@ func TestFanInWithScaleProto(t *testing.T) {
 	socketOne.AddTransport(tcp.NewTransport())
 	socketTwo.AddTransport(tcp.NewTransport())
 
-	if err = socketOne.Dial("tcp://localhost:1243"); err != nil {
+	if err = socketOne.Dial("tcp://localhost:1247"); err != nil {
 		t.Error(err)
 		return
 	}
-	if err = socketTwo.Dial("tcp://localhost:1244"); err != nil {
+	if err = socketTwo.Dial("tcp://localhost:1248"); err != nil {
 		t.Error(err)
 		return
 	}

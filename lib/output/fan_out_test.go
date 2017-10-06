@@ -56,15 +56,19 @@ func TestFanOutWithScaleProto(t *testing.T) {
 		return
 	}
 
+	defer func() {
+		s.CloseAsync()
+		if err := s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
+
 	sendChan := make(chan types.Message)
 
 	if err = s.StartReceiving(sendChan); err != nil {
 		t.Error(err)
 		return
 	}
-
-	defer s.CloseAsync()
-	defer s.WaitForClose(time.Second)
 
 	socketOne, err := pull.NewSocket()
 	if err != nil {
@@ -161,8 +165,12 @@ func TestFanOutWithScaleProtoMulti(t *testing.T) {
 		return
 	}
 
-	defer s.CloseAsync()
-	defer s.WaitForClose(time.Second)
+	defer func() {
+		s.CloseAsync()
+		if err := s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	socketOne, err := pull.NewSocket()
 	if err != nil {

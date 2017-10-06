@@ -68,8 +68,12 @@ func TestFileSinglePart(t *testing.T) {
 		return
 	}
 
-	defer f.CloseAsync()
-	defer f.WaitForClose(time.Second)
+	defer func() {
+		f.CloseAsync()
+		if err := f.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	for _, msg := range messages {
 		select {
@@ -149,8 +153,12 @@ func TestFileMultiPart(t *testing.T) {
 		return
 	}
 
-	defer f.CloseAsync()
-	defer f.WaitForClose(time.Second)
+	defer func() {
+		f.CloseAsync()
+		if err := f.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	for _, msg := range messages {
 		select {

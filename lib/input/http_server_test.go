@@ -58,7 +58,7 @@ func TestHTTPBasic(t *testing.T) {
 		t.Error("Expected error from double listen")
 	}
 
-	<-time.After(time.Second)
+	<-time.After(time.Millisecond * 100)
 
 	// Test both single and multipart messages.
 	for i := 0; i < nTestLoops; i++ {
@@ -160,7 +160,7 @@ func TestHTTPBadRequests(t *testing.T) {
 		return
 	}
 
-	<-time.After(time.Second)
+	<-time.After(time.Millisecond * 100)
 
 	res, err := http.Get("http://localhost:1236/testpost")
 	if err != nil {
@@ -205,7 +205,7 @@ func TestHTTPTimeout(t *testing.T) {
 		return
 	}
 
-	<-time.After(time.Second)
+	<-time.After(time.Millisecond * 100)
 
 	res, err := http.Post(
 		"http://localhost:1235/testpost",
