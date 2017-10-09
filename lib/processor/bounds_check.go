@@ -77,7 +77,12 @@ func NewBoundsCheck(conf Config, log log.Modular, stats metrics.Type) (Type, err
 
 // ProcessMessage checks each message against a set of bounds.
 func (m *BoundsCheck) ProcessMessage(msg *types.Message) (*types.Message, bool) {
-	if lParts := len(msg.Parts); lParts > m.conf.BoundsCheck.MaxParts {
+	lParts := len(msg.Parts)
+	if lParts == 0 {
+		m.log.Warnln("Rejecting empty\n")
+		m.stats.Incr("processor.bounds_check.dropped.empty", 1)
+		return nil, false
+	} else if lParts > m.conf.BoundsCheck.MaxParts {
 		m.log.Warnf(
 			"Rejecting message due to message parts exceeding limit (%v): %v\n",
 			m.conf.BoundsCheck.MaxParts, lParts,

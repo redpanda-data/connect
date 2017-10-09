@@ -59,6 +59,7 @@ func TestBoundsCheck(t *testing.T) {
 	}
 
 	badParts := [][][]byte{
+		[][]byte{},
 		[][]byte{
 			[]byte("hello world this exceeds max part size"),
 		},
