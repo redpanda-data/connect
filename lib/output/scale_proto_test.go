@@ -55,6 +55,13 @@ func TestScaleProtoBasic(t *testing.T) {
 		return
 	}
 
+	defer func() {
+		s.CloseAsync()
+		if err = s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
+
 	if err = s.StartReceiving(sendChan); err != nil {
 		t.Error(err)
 		return
@@ -123,6 +130,13 @@ func TestScaleProtoMultiPart(t *testing.T) {
 		t.Error(err)
 		return
 	}
+
+	defer func() {
+		s.CloseAsync()
+		if err = s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	if err = s.StartReceiving(sendChan); err != nil {
 		t.Error(err)

@@ -24,21 +24,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/jeffail/benthos/lib/processor"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
 )
-
-//------------------------------------------------------------------------------
-
-// MessageProcessor is a type that reads a message, performs a processing
-// operation, and returns a message and a flag indicating whether that message
-// should be propagated or not.
-type MessageProcessor interface {
-	// ProcessMessage returns a message to be sent onwards, if the bool flag is
-	// false then the message should be dropped.
-	ProcessMessage(msg *types.Message) (*types.Message, bool)
-}
 
 //------------------------------------------------------------------------------
 
@@ -51,7 +41,7 @@ type Processor struct {
 	log   log.Modular
 	stats metrics.Type
 
-	msgProcessor MessageProcessor
+	msgProcessors []processor.Type
 
 	messagesOut  chan types.Message
 	responsesOut chan types.Response
@@ -65,19 +55,19 @@ type Processor struct {
 
 // NewProcessor returns a new message processing pipeline.
 func NewProcessor(
-	msgProcessor MessageProcessor,
 	log log.Modular,
 	stats metrics.Type,
+	msgProcessors ...processor.Type,
 ) *Processor {
 	return &Processor{
-		running:      1,
-		msgProcessor: msgProcessor,
-		log:          log.NewModule(".pipeline.processor"),
-		stats:        stats,
-		messagesOut:  make(chan types.Message),
-		responsesOut: make(chan types.Response),
-		closeChan:    make(chan struct{}),
-		closed:       make(chan struct{}),
+		running:       1,
+		msgProcessors: msgProcessors,
+		log:           log.NewModule(".pipeline.processor"),
+		stats:         stats,
+		messagesOut:   make(chan types.Message),
+		responsesOut:  make(chan types.Response),
+		closeChan:     make(chan struct{}),
+		closed:        make(chan struct{}),
 	}
 }
 
@@ -101,7 +91,11 @@ func (p *Processor) loop() {
 		}
 		p.stats.Incr("pipeline.processor.message.received", 1)
 
-		result, sending := p.msgProcessor.ProcessMessage(&msg)
+		result := &msg
+		sending := true
+		for i := 0; sending && i < len(p.msgProcessors); i++ {
+			result, sending = p.msgProcessors[i].ProcessMessage(result)
+		}
 		if !sending {
 			p.stats.Incr("pipeline.processor.message.dropped", 1)
 			select {

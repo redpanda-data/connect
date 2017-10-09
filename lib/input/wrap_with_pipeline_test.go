@@ -254,13 +254,128 @@ func TestBasicWrapProcessors(t *testing.T) {
 	l := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	s := metrics.DudType{}
 
-	pipe1 := pipeline.NewProcessor(mockProc{value: "foo"}, l, s)
-	pipe2 := pipeline.NewProcessor(mockProc{value: "bar"}, l, s)
+	pipe1 := pipeline.NewProcessor(l, s, mockProc{value: "foo"})
+	pipe2 := pipeline.NewProcessor(l, s, mockProc{value: "bar"})
 
 	newInput, err := WrapWithPipelines(mockIn, func() (pipeline.Type, error) {
 		return pipe1, nil
 	}, func() (pipeline.Type, error) {
 		return pipe2, nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	resChan := make(chan types.Response)
+	if err = newInput.StartListening(resChan); err != nil {
+		t.Error(err)
+	}
+
+	msg := types.NewMessage()
+	msg.Parts = [][]byte{[]byte("foo")}
+
+	select {
+	case mockIn.msgs <- msg:
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	// Message should be discarded
+	select {
+	case res, open := <-mockIn.res:
+		if !open {
+			t.Error("Channel was closed")
+		}
+		if res.Error() != nil {
+			t.Error(res.Error())
+		}
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	msg = types.NewMessage()
+	msg.Parts = [][]byte{[]byte("bar")}
+
+	select {
+	case mockIn.msgs <- msg:
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	// Message should also be discarded
+	select {
+	case res, open := <-mockIn.res:
+		if !open {
+			t.Error("Channel was closed")
+		}
+		if res.Error() != nil {
+			t.Error(res.Error())
+		}
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	msg = types.NewMessage()
+	msg.Parts = [][]byte{[]byte("baz")}
+
+	select {
+	case mockIn.msgs <- msg:
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	// Message should not be discarded
+	select {
+	case res, open := <-mockIn.res:
+		if !open {
+			t.Error("Channel was closed")
+		}
+		t.Errorf("Unexpected response: %v", res.Error())
+	case newMsg, open := <-newInput.MessageChan():
+		if !open {
+			t.Error("channel was closed")
+		} else if exp, act := "baz", string(newMsg.Parts[0]); exp != act {
+			t.Errorf("Wrong message received: %v != %v", act, exp)
+		}
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	errFailed := errors.New("derp, failed")
+	select {
+	case resChan <- types.NewSimpleResponse(errFailed):
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	select {
+	case res, open := <-mockIn.res:
+		if !open {
+			t.Error("Channel was closed")
+		}
+		if exp, act := errFailed, res.Error(); exp != act {
+			t.Errorf("Unexpected response: %v != %v", act, exp)
+		}
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	newInput.CloseAsync()
+	if err = newInput.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestBasicWrapDoubleProcessors(t *testing.T) {
+	mockIn := &mockInput{msgs: make(chan types.Message)}
+
+	l := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	s := metrics.DudType{}
+
+	pipe1 := pipeline.NewProcessor(l, s, mockProc{value: "foo"}, mockProc{value: "bar"})
+
+	newInput, err := WrapWithPipelines(mockIn, func() (pipeline.Type, error) {
+		return pipe1, nil
 	})
 	if err != nil {
 		t.Error(err)

@@ -52,9 +52,9 @@ func TestMemoryBuffer(t *testing.T) {
 	mockProc := &mockMsgProcessor{drop: true}
 
 	proc := NewProcessor(
-		mockProc,
 		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
 		metrics.DudType{},
+		mockProc,
 	)
 
 	msgChan, resChan := make(chan types.Message), make(chan types.Response)

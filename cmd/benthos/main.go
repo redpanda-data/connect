@@ -37,6 +37,8 @@ import (
 	"github.com/jeffail/benthos/lib/buffer"
 	"github.com/jeffail/benthos/lib/input"
 	"github.com/jeffail/benthos/lib/output"
+	"github.com/jeffail/benthos/lib/pipeline"
+	"github.com/jeffail/benthos/lib/processor"
 	butil "github.com/jeffail/benthos/lib/util"
 	"github.com/jeffail/util"
 	"github.com/jeffail/util/log"
@@ -47,12 +49,13 @@ import (
 
 // Config - The benthos configuration struct.
 type Config struct {
-	Input                input.Config     `json:"input" yaml:"input"`
-	Output               output.Config    `json:"output" yaml:"output"`
-	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
-	Logger               log.LoggerConfig `json:"logger" yaml:"logger"`
-	Metrics              metrics.Config   `json:"metrics" yaml:"metrics"`
-	SystemCloseTimeoutMS int              `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
+	Input                input.Config       `json:"input" yaml:"input"`
+	Output               output.Config      `json:"output" yaml:"output"`
+	Processors           []processor.Config `json:"processors" yaml:"processors"`
+	Buffer               buffer.Config      `json:"buffer" yaml:"buffer"`
+	Logger               log.LoggerConfig   `json:"logger" yaml:"logger"`
+	Metrics              metrics.Config     `json:"metrics" yaml:"metrics"`
+	SystemCloseTimeoutMS int                `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
 }
 
 // NewConfig - Returns a new configuration with default values.
@@ -60,6 +63,7 @@ func NewConfig() Config {
 	return Config{
 		Input:                input.NewConfig(),
 		Output:               output.NewConfig(),
+		Processors:           []processor.Config{processor.NewConfig()},
 		Buffer:               buffer.NewConfig(),
 		Logger:               log.NewLoggerConfig(),
 		Metrics:              metrics.NewConfig(),
@@ -86,6 +90,10 @@ var (
 	printBuffers = flag.Bool(
 		"list-buffers", false,
 		"Print a list of available buffer options, then exit",
+	)
+	printProcessors = flag.Bool(
+		"list-processors", false,
+		"Print a list of available processor options, then exit",
 	)
 )
 
@@ -115,9 +123,12 @@ func bootstrap() Config {
 	}
 
 	// If we only want to print our inputs or outputs we should exit afterwards
-	if *printInputs || *printOutputs || *printBuffers {
+	if *printInputs || *printOutputs || *printBuffers || *printProcessors {
 		if *printInputs {
 			fmt.Println(input.Descriptions())
+		}
+		if *printProcessors {
+			fmt.Println(processor.Descriptions())
 		}
 		if *printBuffers {
 			fmt.Println(buffer.Descriptions())
@@ -145,8 +156,26 @@ func createPipeline(
 	// then we exit the service ungracefully.
 	poolt1, poolt2 := butil.NewClosablePool(), butil.NewClosablePool()
 
+	// Create processors, if any
+	processors := []processor.Type{}
+	for _, procConf := range config.Processors {
+		proc, err := processor.New(procConf, logger, stats)
+		if err != nil {
+			logger.Errorf("Processor error (%s): %v\n", procConf.Type, err)
+			return nil, nil, nil, err
+		}
+		processors = append(processors, proc)
+	}
+
+	procConstructors := []input.PipelineConstructor{}
+	if len(config.Processors) > 0 {
+		procConstructors = append(procConstructors, func() (pipeline.Type, error) {
+			return pipeline.NewProcessor(logger, stats, processors...), nil
+		})
+	}
+
 	// Create our input pipe
-	inputPipe, err := input.New(config.Input, logger, stats)
+	inputPipe, err := input.New(config.Input, logger, stats, procConstructors...)
 	if err != nil {
 		logger.Errorf("Input error (%s): %v\n", config.Input.Type, err)
 		return nil, nil, nil, err
