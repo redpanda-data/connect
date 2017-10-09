@@ -123,19 +123,15 @@ func (k *Kafka) loop() {
 		if msg, open = <-k.messages; !open {
 			return
 		}
-		var val []byte
-		if len(msg.Parts) == 1 {
-			val = msg.Parts[0]
-		} else {
-			val = msg.Bytes()
-		}
-		select {
-		case k.producer.Input() <- &sarama.ProducerMessage{
-			Topic: k.conf.Kafka.Topic,
-			Value: sarama.ByteEncoder(val),
-		}:
-		case <-k.closeChan:
-			return
+		for _, part := range msg.Parts {
+			select {
+			case k.producer.Input() <- &sarama.ProducerMessage{
+				Topic: k.conf.Kafka.Topic,
+				Value: sarama.ByteEncoder(part),
+			}:
+			case <-k.closeChan:
+				return
+			}
 		}
 		select {
 		case k.responseChan <- types.NewSimpleResponse(nil):

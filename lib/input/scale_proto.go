@@ -64,23 +64,21 @@ Currently only PULL and SUB sockets are supported.`,
 
 // ScaleProtoConfig - Configuration for the ScaleProto input type.
 type ScaleProtoConfig struct {
-	Address         string   `json:"address" yaml:"address"`
-	Bind            bool     `json:"bind_address" yaml:"bind_address"`
-	SocketType      string   `json:"socket_type" yaml:"socket_type"`
-	SubFilters      []string `json:"sub_filters" yaml:"sub_filters"`
-	UseBenthosMulti bool     `json:"benthos_multi" yaml:"benthos_multi"`
-	PollTimeoutMS   int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
+	Address       string   `json:"address" yaml:"address"`
+	Bind          bool     `json:"bind_address" yaml:"bind_address"`
+	SocketType    string   `json:"socket_type" yaml:"socket_type"`
+	SubFilters    []string `json:"sub_filters" yaml:"sub_filters"`
+	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 }
 
 // NewScaleProtoConfig - Creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		Address:         "tcp://*:5555",
-		Bind:            true,
-		SocketType:      "PULL",
-		SubFilters:      []string{},
-		UseBenthosMulti: false,
-		PollTimeoutMS:   5000,
+		Address:       "tcp://*:5555",
+		Bind:          true,
+		SocketType:    "PULL",
+		SubFilters:    []string{},
+		PollTimeoutMS: 5000,
 	}
 }
 
@@ -210,42 +208,28 @@ func (s *ScaleProto) loop() {
 
 		// If bytes are read then try and propagate.
 		if data != nil {
-			var err error
-			var msg types.Message
-
-			if s.conf.ScaleProto.UseBenthosMulti {
-				if msg, err = types.FromBytes(data); err != nil {
-					s.stats.Incr("input.scale_proto.send.error", 1)
-					s.log.Errorf("ScaleProto message could not be parsed as multipart: %v\n", err)
-					data = nil
-				}
-			} else {
-				msg = types.Message{Parts: [][]byte{data}}
+			msg := types.Message{Parts: [][]byte{data}}
+			start := time.Now()
+			select {
+			case s.messages <- msg:
+			case <-s.closeChan:
+				return
 			}
-
-			if err == nil {
-				start := time.Now()
-				select {
-				case s.messages <- msg:
-				case <-s.closeChan:
-					return
-				}
-				res, open := <-s.responses
-				if !open {
-					return
-				}
-				if resErr := res.Error(); resErr == nil {
-					s.stats.Timing("input.scale_proto.timing", int64(time.Since(start)))
-					s.stats.Incr("input.scale_proto.count", 1)
-					data = nil
-				} else if resErr == types.ErrMessageTooLarge {
-					s.stats.Incr("input.scale_proto.send.rejected", 1)
-					s.log.Errorf("ScaleProto message was rejected: %v\n", resErr)
-					s.log.Errorf("Message content: %s\n", data)
-					data = nil
-				} else {
-					s.stats.Incr("input.scale_proto.send.error", 1)
-				}
+			res, open := <-s.responses
+			if !open {
+				return
+			}
+			if resErr := res.Error(); resErr == nil {
+				s.stats.Timing("input.scale_proto.timing", int64(time.Since(start)))
+				s.stats.Incr("input.scale_proto.count", 1)
+				data = nil
+			} else if resErr == types.ErrMessageTooLarge {
+				s.stats.Incr("input.scale_proto.send.rejected", 1)
+				s.log.Errorf("ScaleProto message was rejected: %v\n", resErr)
+				s.log.Errorf("Message content: %s\n", data)
+				data = nil
+			} else {
+				s.stats.Incr("input.scale_proto.send.error", 1)
 			}
 		}
 	}

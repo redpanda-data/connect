@@ -148,7 +148,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(body.Bytes())
 	} else {
 		w.Header().Add("Content-Type", "application/octet-stream")
-		w.Write(msg.Bytes())
+		w.Write(msg.Parts[0])
 	}
 
 	h.responseChan <- types.NewSimpleResponse(nil)

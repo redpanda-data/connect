@@ -63,21 +63,19 @@ Currently only PUSH and PUB sockets are supported.`,
 
 // ScaleProtoConfig - Configuration for the ScaleProto output type.
 type ScaleProtoConfig struct {
-	Address         string `json:"address" yaml:"address"`
-	Bind            bool   `json:"bind_address" yaml:"bind_address"`
-	SocketType      string `json:"socket_type" yaml:"socket_type"`
-	UseBenthosMulti bool   `json:"benthos_multi" yaml:"benthos_multi"`
-	PollTimeoutMS   int    `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
+	Address       string `json:"address" yaml:"address"`
+	Bind          bool   `json:"bind_address" yaml:"bind_address"`
+	SocketType    string `json:"socket_type" yaml:"socket_type"`
+	PollTimeoutMS int    `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 }
 
 // NewScaleProtoConfig - Creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		Address:         "tcp://localhost:5556",
-		Bind:            false,
-		SocketType:      "PUSH",
-		UseBenthosMulti: false,
-		PollTimeoutMS:   5000,
+		Address:       "tcp://localhost:5556",
+		Bind:          false,
+		SocketType:    "PUSH",
+		PollTimeoutMS: 5000,
 	}
 }
 
@@ -195,11 +193,10 @@ func (s *ScaleProto) loop() {
 			return
 		}
 		var err error
-		if s.conf.ScaleProto.UseBenthosMulti {
-			// Either encode all messages with the binary protocol or none.
-			err = s.socket.Send(msg.Bytes())
-		} else {
-			err = s.socket.Send(msg.Parts[0])
+		for _, part := range msg.Parts {
+			if err == nil {
+				err = s.socket.Send(part)
+			}
 		}
 		select {
 		case s.responseChan <- types.NewSimpleResponse(err):
