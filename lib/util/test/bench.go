@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package test
 
@@ -32,7 +30,7 @@ import (
 	"github.com/jeffail/benthos/lib/types"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func bytesToIndex(b []byte) (index int32) {
 	if len(b) <= 3 {
@@ -54,19 +52,17 @@ func indexToBytes(index int32) (b [4]byte) {
 	return b
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// Bench - A struct carrying message specific benchmarking statistics.
+// Bench is a struct carrying message specific benchmarking statistics.
 type Bench struct {
-	Latency int   // Time taken (ns) for a message to be received by the consumer.
+	Latency int   // Time taken (ns) for a message to be received by a consumer.
 	NBytes  int   // Number of bytes carried in the message.
-	Index   int32 // The index carried by the message, can be used to detect loss.
+	Index   int32 // The index carried by a message, can be used to detect loss.
 }
 
-/*
-NewBenchMessage - Create a message carrying information used to calc benchmarks on the other end of
-a transport.
-*/
+// NewBenchMessage creates a message carrying information used to calc
+// benchmarks on the other end of a transport.
 func NewBenchMessage(index int32, dataBlob []byte) types.Message {
 	msg := types.Message{
 		Parts: make([][]byte, 3),
@@ -86,7 +82,7 @@ func NewBenchMessage(index int32, dataBlob []byte) types.Message {
 	return msg
 }
 
-// BenchFromMessage - Returns the benchmarking stats from a message received.
+// BenchFromMessage returns the benchmarking stats from a message received.
 func BenchFromMessage(msg types.Message) (Bench, error) {
 	var b Bench
 	if len(msg.Parts) < 2 {
@@ -107,14 +103,13 @@ func BenchFromMessage(msg types.Message) (Bench, error) {
 	return b, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-/*
-StartPrintingBenchmarks - Starts a goroutine that will periodically print any statistics/benchmarks
-that are accumulated through messages, and also any lost interactions as per the startIndex. If you
-want to disable data loss detection then set the startIndex to -1. You must provide the messages via
-the write channel returned by the function.
-*/
+// StartPrintingBenchmarks starts a goroutine that will periodically print any
+// statistics/benchmarks that are accumulated through messages, and also any
+// lost interactions as per the startIndex. If you want to disable data loss
+// detection then set the startIndex to -1. You must provide the messages via
+// the write channel returned by the function.
 func StartPrintingBenchmarks(period time.Duration, startIndex int32) chan<- Bench {
 	c := make(chan Bench, 100)
 
@@ -211,4 +206,4 @@ func StartPrintingBenchmarks(period time.Duration, startIndex int32) chan<- Benc
 	return c
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

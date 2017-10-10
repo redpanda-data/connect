@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package buffer
 
@@ -34,7 +32,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// OutputWrapper - Wraps a buffer with a Producer/Consumer interface.
+// OutputWrapper wraps a buffer with a Producer/Consumer interface.
 type OutputWrapper struct {
 	stats metrics.Type
 
@@ -54,7 +52,7 @@ type OutputWrapper struct {
 	closedChan chan struct{}
 }
 
-// NewOutputWrapper - Create a new Producer/Consumer around a buffer.
+// NewOutputWrapper creates a new Producer/Consumer around a buffer.
 func NewOutputWrapper(buffer impl.Buffer, stats metrics.Type) Type {
 	m := OutputWrapper{
 		stats:        stats,
@@ -72,7 +70,7 @@ func NewOutputWrapper(buffer impl.Buffer, stats metrics.Type) Type {
 
 //------------------------------------------------------------------------------
 
-// inputLoop - Internal loop brokers incoming messages to the buffer.
+// inputLoop is an internal loop that brokers incoming messages to the buffer.
 func (m *OutputWrapper) inputLoop() {
 	defer func() {
 		close(m.responsesOut)
@@ -103,7 +101,7 @@ func (m *OutputWrapper) inputLoop() {
 	}
 }
 
-// outputLoop - Internal loop brokers buffer messages to output pipe.
+// outputLoop is an internal loop brokers buffer messages to output pipe.
 func (m *OutputWrapper) outputLoop() {
 	defer func() {
 		m.buffer.Close()
@@ -121,9 +119,10 @@ func (m *OutputWrapper) outputLoop() {
 			var err error
 			if msg, err = m.buffer.NextMessage(); err != nil {
 				if err != types.ErrTypeClosed {
-					// Unconventional errors here should always indicate some sort of corruption.
-					// Hopefully the corruption was message specific and not the whole buffer, so we
-					// can try shifting and reading again.
+					// Unconventional errors here should always indicate some
+					// sort of corruption. Hopefully the corruption was message
+					// specific and not the whole buffer, so we can try shifting
+					// and reading again.
 					m.buffer.ShiftMessage()
 					if _, exists := errMap[err]; !exists {
 						errMap[err] = struct{}{}
@@ -171,7 +170,7 @@ func (m *OutputWrapper) outputLoop() {
 	}
 }
 
-// StartReceiving - Assigns a messages channel for the output to read.
+// StartReceiving assigns a messages channel for the output to read.
 func (m *OutputWrapper) StartReceiving(msgs <-chan types.Message) error {
 	if m.messagesIn != nil {
 		return types.ErrAlreadyStarted
@@ -190,12 +189,12 @@ func (m *OutputWrapper) StartReceiving(msgs <-chan types.Message) error {
 	return nil
 }
 
-// MessageChan - Returns the channel used for consuming messages from this input.
+// MessageChan returns the channel used for consuming messages from this input.
 func (m *OutputWrapper) MessageChan() <-chan types.Message {
 	return m.messagesOut
 }
 
-// StartListening - Sets the channel for reading responses.
+// StartListening sets the channel for reading responses.
 func (m *OutputWrapper) StartListening(responses <-chan types.Response) error {
 	if m.responsesIn != nil {
 		return types.ErrAlreadyStarted
@@ -214,24 +213,24 @@ func (m *OutputWrapper) StartListening(responses <-chan types.Response) error {
 	return nil
 }
 
-// ResponseChan - Returns the response channel.
+// ResponseChan returns the response channel.
 func (m *OutputWrapper) ResponseChan() <-chan types.Response {
 	return m.responsesOut
 }
 
-// ErrorsChan - Returns the errors channel.
+// ErrorsChan returns the errors channel.
 func (m *OutputWrapper) ErrorsChan() <-chan []error {
 	return m.errorsChan
 }
 
-// CloseAsync - Shuts down the OutputWrapper and stops processing messages.
+// CloseAsync shuts down the OutputWrapper and stops processing messages.
 func (m *OutputWrapper) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&m.running, 1, 0) {
 		close(m.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the OutputWrapper output has closed down.
+// WaitForClose blocks until the OutputWrapper output has closed down.
 func (m *OutputWrapper) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-m.closedChan:

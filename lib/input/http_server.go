@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package input
 
@@ -38,7 +36,7 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["http_server"] = typeSpec{
@@ -56,14 +54,14 @@ implemented but are simple to add if a request is made.`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // Errors for the HTTPServer type.
 var (
 	ErrHWMInvalid = errors.New("high water mark is invalid (must be integer greater than 1)")
 )
 
-// HTTPServerConfig - Configuration for the HTTPServer input type.
+// HTTPServerConfig is configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
 	Address       string `json:"address" yaml:"address"`
 	Path          string `json:"path" yaml:"path"`
@@ -71,7 +69,7 @@ type HTTPServerConfig struct {
 	HighWaterMark int    `json:"high_water_mark" yaml:"high_water_mark"`
 }
 
-// NewHTTPServerConfig - Creates a new HTTPServerConfig with default values.
+// NewHTTPServerConfig creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
 		Address:       "localhost:8080",
@@ -81,9 +79,9 @@ func NewHTTPServerConfig() HTTPServerConfig {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// HTTPServer - An input type that serves HTTPServer POST requests.
+// HTTPServer is an input type that serves HTTPServer POST requests.
 type HTTPServer struct {
 	running int32
 
@@ -102,7 +100,7 @@ type HTTPServer struct {
 	closedChan chan struct{}
 }
 
-// NewHTTPServer - Create a new HTTPServer input type.
+// NewHTTPServer creates a new HTTPServer input type.
 func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	// We naturally buffer one message due to the loop mechanism, so remove 1.
 	hwm := conf.HTTPServer.HighWaterMark - 1
@@ -133,7 +131,7 @@ func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	return &h, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	if atomic.LoadInt32(&h.running) != 1 {
@@ -196,7 +194,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func (h *HTTPServer) loop() {
 	defer func() {
@@ -248,7 +246,8 @@ func (h *HTTPServer) loop() {
 	}
 }
 
-// StartListening - Sets the channel used by the input to validate message receipt.
+// StartListening sets the channel used by the input to validate message
+// receipt.
 func (h *HTTPServer) StartListening(responses <-chan types.Response) error {
 	if h.responses != nil {
 		return types.ErrAlreadyStarted
@@ -258,19 +257,19 @@ func (h *HTTPServer) StartListening(responses <-chan types.Response) error {
 	return nil
 }
 
-// MessageChan - Returns the messages channel.
+// MessageChan returns the messages channel.
 func (h *HTTPServer) MessageChan() <-chan types.Message {
 	return h.messages
 }
 
-// CloseAsync - Shuts down the HTTPServer input and stops processing requests.
+// CloseAsync shuts down the HTTPServer input and stops processing requests.
 func (h *HTTPServer) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {
 		close(h.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the HTTPServer input has closed down.
+// WaitForClose blocks until the HTTPServer input has closed down.
 func (h *HTTPServer) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-h.closedChan:
@@ -280,4 +279,4 @@ func (h *HTTPServer) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package impl
 
@@ -37,7 +35,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// MmapCacheConfig - Config options for the MmapCache type.
+// MmapCacheConfig is config options for the MmapCache type.
 type MmapCacheConfig struct {
 	Path              string `json:"directory" yaml:"directory"`
 	FileSize          int    `json:"file_size" yaml:"file_size"`
@@ -46,7 +44,7 @@ type MmapCacheConfig struct {
 	ReservedDiskSpace uint64 `json:"reserved_disk_space" yaml:"reserved_disk_space"`
 }
 
-// NewMmapCacheConfig - Creates a new MmapCacheConfig oject with default values.
+// NewMmapCacheConfig creates a new MmapCacheConfig oject with default values.
 func NewMmapCacheConfig() MmapCacheConfig {
 	return MmapCacheConfig{
 		Path:              "",
@@ -57,13 +55,13 @@ func NewMmapCacheConfig() MmapCacheConfig {
 	}
 }
 
-// CachedMmap - A struct containing a cached Mmap file and the file handler.
+// CachedMmap is a struct containing a cached Mmap file and the file handler.
 type CachedMmap struct {
 	f *os.File
 	m mmap.MMap
 }
 
-// MmapCache - Keeps track of any Mmap files cached in memory and cleans up
+// MmapCache keeps track of any Mmap files cached in memory and cleans up
 // resources as they are unclaimed. This type works similarly to sync.Cond,
 // where if you wish to use it you need to lock it.
 type MmapCache struct {
@@ -79,7 +77,7 @@ type MmapCache struct {
 	*sync.Cond
 }
 
-// NewMmapCache - Creates a cache for managing open mmap files.
+// NewMmapCache creates a cache for managing open mmap files.
 func NewMmapCache(config MmapCacheConfig, log log.Modular, stats metrics.Type) (*MmapCache, error) {
 	f := &MmapCache{
 		config:     config,
@@ -99,14 +97,15 @@ func NewMmapCache(config MmapCacheConfig, log log.Modular, stats metrics.Type) (
 //------------------------------------------------------------------------------
 
 var (
-	// ErrWrongTrackerLength - The length of a read tracker was not correct.
+	// ErrWrongTrackerLength means the length of a read tracker was not correct.
 	ErrWrongTrackerLength = errors.New("tracker was unexpected length")
 
-	// ErrNotEnoughSpace - The target disk lacked the space needed for a new file.
+	// ErrNotEnoughSpace means the target disk lacked the space needed for a new
+	// file.
 	ErrNotEnoughSpace = errors.New("target disk is at capacity")
 )
 
-// openTracker - opens a tracker file for recording reader and writer indexes.
+// openTracker opens a tracker file for recording reader and writer indexes.
 func (f *MmapCache) openTracker() error {
 	defer f.Broadcast()
 
@@ -141,12 +140,12 @@ func (f *MmapCache) openTracker() error {
 
 //------------------------------------------------------------------------------
 
-// GetTracker - Returns the []byte from the tracker file memory mapping.
+// GetTracker returns the []byte from the tracker file memory mapping.
 func (f *MmapCache) GetTracker() []byte {
 	return f.tracker.m
 }
 
-// Get - Returns the []byte from a memory mapped file index.
+// Get returns the []byte from a memory mapped file index.
 func (f *MmapCache) Get(index int) []byte {
 	if c, exists := f.cache[index]; exists {
 		return c.m
@@ -154,14 +153,15 @@ func (f *MmapCache) Get(index int) []byte {
 	return []byte{}
 }
 
-// EnsureCached - Check that a particular index is cached, and if not then read
+// EnsureCached checks that a particular index is cached, and if not then read
 // the index, this call blocks until either the index is successfully cached or
 // an error occurs.
 func (f *MmapCache) EnsureCached(index int) error {
 	var cache CachedMmap
 	var err error
 
-	// If we are already in the process of caching this index wait until that attempt is finished.
+	// If we are already in the process of caching this index wait until that
+	// attempt is finished.
 	if _, inProgress := f.inProgress[index]; inProgress {
 		for inProgress {
 			f.Wait()
@@ -174,10 +174,12 @@ func (f *MmapCache) EnsureCached(index int) error {
 		return nil
 	}
 
-	// Place the index in our inProgress map to indicate we are caching it on this goroutine.
+	// Place the index in our inProgress map to indicate we are caching it on
+	// this goroutine.
 	f.inProgress[index] = struct{}{}
 
-	// Unlock our mutex as we are about to perform blocking, thread safe operations.
+	// Unlock our mutex as we are about to perform blocking, thread safe
+	// operations.
 	f.L.Unlock()
 
 	// Prefix index files with "mmap_"
@@ -186,7 +188,8 @@ func (f *MmapCache) EnsureCached(index int) error {
 	// Check if file already exists
 	_, err = os.Stat(fPath)
 	if os.IsNotExist(err) {
-		// If we lack the space needed (reserved space + file size) then return error
+		// If we lack the space needed (reserved space + file size) then return
+		// error
 		if uint64(f.config.FileSize)+f.config.ReservedDiskSpace >
 			disk.TotalRemaining(f.config.Path) {
 			err = ErrNotEnoughSpace
@@ -223,14 +226,14 @@ func (f *MmapCache) EnsureCached(index int) error {
 	return err
 }
 
-// IsCached - Returns a bool indicating whether the current memory mapped file
+// IsCached returns a bool indicating whether the current memory mapped file
 // index is cached.
 func (f *MmapCache) IsCached(index int) bool {
 	_, exists := f.cache[index]
 	return exists
 }
 
-// RemoveAll - Removes all indexes from the cache as well as the tracker.
+// RemoveAll removes all indexes from the cache as well as the tracker.
 func (f *MmapCache) RemoveAll() error {
 	for _, c := range f.cache {
 		c.m.Flush()
@@ -247,16 +250,18 @@ func (f *MmapCache) RemoveAll() error {
 	return nil
 }
 
-// Remove - Removes the index from our cache, the file is NOT deleted.
+// Remove removes the index from our cache, the file is NOT deleted.
 func (f *MmapCache) Remove(index int) error {
 	if c, ok := f.cache[index]; ok {
 		delete(f.cache, index)
 
-		// Now we are flushing the cache, this could block so we unlock temporarily.
+		// Now we are flushing the cache, this could block so we unlock
+		// temporarily.
 		f.L.Unlock()
 		defer f.L.Lock()
 
-		// TODO: What happens if we subsequently opened the same map file during this operation?
+		// TODO: What happens if we subsequently opened the same map file during
+		// this operation?
 		c.m.Flush()
 		c.m.Unmap()
 		c.f.Close()
@@ -264,11 +269,12 @@ func (f *MmapCache) Remove(index int) error {
 	return nil
 }
 
-// Delete - Deletes the file for an index.
+// Delete deletes the file for an index.
 func (f *MmapCache) Delete(index int) error {
 	p := path.Join(f.config.Path, fmt.Sprintf("mmap_%v", index))
 
-	// This could be a blocking call, and there's no reason to keep the cache locked.
+	// This could be a blocking call, and there's no reason to keep the cache
+	// locked.
 	f.L.Unlock()
 	defer f.L.Lock()
 

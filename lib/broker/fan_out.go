@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package broker
 
@@ -31,21 +29,21 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// FanOutConfig - Config values for the fan out type.
+// FanOutConfig is config values for the fan out type.
 type FanOutConfig struct {
 }
 
-// NewFanOutConfig - Creates a FanOutConfig fully populated with default values.
+// NewFanOutConfig creates a FanOutConfig fully populated with default values.
 func NewFanOutConfig() FanOutConfig {
 	return FanOutConfig{}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// FanOut - A broker that implements types.Consumer and broadcasts each message out to an array of
-// outputs.
+// FanOut is a broker that implements types.Consumer and broadcasts each message
+// out to an array of outputs.
 type FanOut struct {
 	running int32
 
@@ -65,7 +63,7 @@ type FanOut struct {
 	closeChan  chan struct{}
 }
 
-// NewFanOut - Create a new FanOut type by providing outputs.
+// NewFanOut creates a new FanOut type by providing outputs.
 func NewFanOut(
 	conf FanOutConfig, outputs []types.Consumer, logger log.Modular, stats metrics.Type,
 ) (*FanOut, error) {
@@ -92,9 +90,9 @@ func NewFanOut(
 	return o, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// StartReceiving - Assigns a new messages channel for the broker to read.
+// StartReceiving assigns a new messages channel for the broker to read.
 func (o *FanOut) StartReceiving(msgs <-chan types.Message) error {
 	if o.messages != nil {
 		return types.ErrAlreadyStarted
@@ -105,9 +103,9 @@ func (o *FanOut) StartReceiving(msgs <-chan types.Message) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// loop - Internal loop brokers incoming messages to many outputs.
+// loop is an internal loop that brokers incoming messages to many outputs.
 func (o *FanOut) loop() {
 	defer func() {
 		for _, c := range o.outputMsgChans {
@@ -146,8 +144,9 @@ func (o *FanOut) loop() {
 				select {
 				case res, open = <-o.outputs[i].ResponseChan():
 					if !open {
-						// If any of our outputs is closed then we exit completely. We want to avoid
-						// silently starving a particular output.
+						// If any of our outputs is closed then we exit
+						// completely. We want to avoid silently starving a
+						// particular output.
 						o.logger.Warnln("Closing fan_out broker due to closed output")
 						return
 					} else if res.Error() != nil {
@@ -171,19 +170,19 @@ func (o *FanOut) loop() {
 	}
 }
 
-// ResponseChan - Returns the response channel.
+// ResponseChan returns the response channel.
 func (o *FanOut) ResponseChan() <-chan types.Response {
 	return o.responseChan
 }
 
-// CloseAsync - Shuts down the FanOut broker and stops processing requests.
+// CloseAsync shuts down the FanOut broker and stops processing requests.
 func (o *FanOut) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&o.running, 1, 0) {
 		close(o.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the FanOut broker has closed down.
+// WaitForClose blocks until the FanOut broker has closed down.
 func (o *FanOut) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-o.closedChan:
@@ -193,4 +192,4 @@ func (o *FanOut) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

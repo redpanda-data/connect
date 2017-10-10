@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package input
 
@@ -48,7 +46,7 @@ Exchange type options are: direct|fanout|topic|x-custom`,
 
 //------------------------------------------------------------------------------
 
-// AMQPConfig - Configuration for the AMQP input type.
+// AMQPConfig is configuration for the AMQP input type.
 type AMQPConfig struct {
 	URI           string `json:"uri" yaml:"uri"`
 	Exchange      string `json:"exchange" yaml:"exchange"`
@@ -60,7 +58,7 @@ type AMQPConfig struct {
 	PrefetchSize  int    `json:"prefetch_size" yaml:"prefetch_size"`
 }
 
-// NewAMQPConfig - Creates a new AMQPConfig with default values.
+// NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
 		URI:           "amqp://guest:guest@localhost:5672/",
@@ -76,7 +74,7 @@ func NewAMQPConfig() AMQPConfig {
 
 //------------------------------------------------------------------------------
 
-// AMQP - An input type that serves Scalability Protocols messages.
+// AMQP is an input type that serves Scalability Protocols messages.
 type AMQP struct {
 	running int32
 
@@ -95,7 +93,7 @@ type AMQP struct {
 	closedChan chan struct{}
 }
 
-// NewAMQP - Create a new AMQP input type.
+// NewAMQP creates a new AMQP input type.
 func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	a := AMQP{
 		running:    1,
@@ -117,7 +115,7 @@ func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 
 //------------------------------------------------------------------------------
 
-// connect - Establish a connection to an AMQP server.
+// connect establishes a connection to an AMQP server.
 func (a *AMQP) connect() (err error) {
 	a.conn, err = amqp.Dial(a.conf.AMQP.URI)
 	if err != nil {
@@ -183,7 +181,7 @@ func (a *AMQP) connect() (err error) {
 	return
 }
 
-// disconnect - Safely close a connection to an AMQP server.
+// disconnect safely closes a connection to an AMQP server.
 func (a *AMQP) disconnect() error {
 	if a.amqpChan != nil {
 		if err := a.amqpChan.Cancel(a.conf.AMQP.ConsumerTag, true); err != nil {
@@ -250,7 +248,7 @@ func (a *AMQP) loop() {
 
 }
 
-// StartListening - Sets the channel used by the input to validate message
+// StartListening sets the channel used by the input to validate message
 // receipt.
 func (a *AMQP) StartListening(responses <-chan types.Response) error {
 	if a.responses != nil {
@@ -261,19 +259,19 @@ func (a *AMQP) StartListening(responses <-chan types.Response) error {
 	return nil
 }
 
-// MessageChan - Returns the messages channel.
+// MessageChan returns the messages channel.
 func (a *AMQP) MessageChan() <-chan types.Message {
 	return a.messages
 }
 
-// CloseAsync - Shuts down the AMQP input and stops processing requests.
+// CloseAsync shuts down the AMQP input and stops processing requests.
 func (a *AMQP) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&a.running, 1, 0) {
 		close(a.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the AMQP input has closed down.
+// WaitForClose blocks until the AMQP input has closed down.
 func (a *AMQP) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-a.closedChan:

@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package broker
 
@@ -29,20 +27,19 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// wrappedMsg - Used to forward an inputs message and res channel to the FanIn broker.
+// wrappedMsg used to forward an inputs message and res channel to the FanIn
+// broker.
 type wrappedMsg struct {
 	msg     types.Message
 	resChan chan<- types.Response
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-/*
-FanIn - A broker that implements types.Producer, takes an array of inputs and routes them through a
-single message channel.
-*/
+// FanIn is a broker that implements types.Producer, takes an array of inputs
+// and routes them through a single message channel.
 type FanIn struct {
 	stats metrics.Type
 
@@ -57,7 +54,7 @@ type FanIn struct {
 	closedChan chan struct{}
 }
 
-// NewFanIn - Create a new FanIn type by providing inputs.
+// NewFanIn creates a new FanIn type by providing inputs.
 func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
 	i := &FanIn{
 		stats: stats,
@@ -108,9 +105,9 @@ func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
 	return i, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// StartListening - Assigns a new responses channel for the broker to read.
+// StartListening assigns a new responses channel for the broker to read.
 func (i *FanIn) StartListening(responseChan <-chan types.Response) error {
 	if i.responseChan != nil {
 		return types.ErrAlreadyStarted
@@ -121,14 +118,14 @@ func (i *FanIn) StartListening(responseChan <-chan types.Response) error {
 	return nil
 }
 
-// MessageChan - Returns the channel used for consuming messages from this broker.
+// MessageChan returns the channel used for consuming messages from this broker.
 func (i *FanIn) MessageChan() <-chan types.Message {
 	return i.messageChan
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// loop - Internal loop brokers incoming messages to many outputs.
+// loop is an internal loop that brokers incoming messages to many outputs.
 func (i *FanIn) loop() {
 	defer func() {
 		close(i.wrappedMsgsChan)
@@ -150,14 +147,14 @@ func (i *FanIn) loop() {
 	}
 }
 
-// CloseAsync - Shuts down the FanIn broker and stops processing requests.
+// CloseAsync shuts down the FanIn broker and stops processing requests.
 func (i *FanIn) CloseAsync() {
 	for _, closable := range i.closables {
 		closable.CloseAsync()
 	}
 }
 
-// WaitForClose - Blocks until the FanIn broker has closed down.
+// WaitForClose blocks until the FanIn broker has closed down.
 func (i *FanIn) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-i.closedChan:
@@ -167,4 +164,4 @@ func (i *FanIn) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

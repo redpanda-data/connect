@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package output
 
@@ -32,7 +30,7 @@ import (
 	nats "github.com/nats-io/go-nats"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["nats"] = typeSpec{
@@ -42,15 +40,15 @@ Publish to an NATS subject.`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// NATSConfig - Configuration for the NATS output type.
+// NATSConfig is configuration for the NATS output type.
 type NATSConfig struct {
 	URL     string `json:"url" yaml:"url"`
 	Subject string `json:"subject" yaml:"subject"`
 }
 
-// NewNATSConfig - Creates a new NATSConfig with default values.
+// NewNATSConfig creates a new NATSConfig with default values.
 func NewNATSConfig() NATSConfig {
 	return NATSConfig{
 		URL:     nats.DefaultURL,
@@ -58,9 +56,9 @@ func NewNATSConfig() NATSConfig {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// NATS - An output type that serves NATS messages.
+// NATS is an output type that serves NATS messages.
 type NATS struct {
 	running int32
 
@@ -78,7 +76,7 @@ type NATS struct {
 	closeChan  chan struct{}
 }
 
-// NewNATS - Create a new NATS output type.
+// NewNATS creates a new NATS output type.
 func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	n := NATS{
 		running:      1,
@@ -98,9 +96,10 @@ func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &n, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// loop - Internal loop brokers incoming messages to output pipe, does not use select.
+// loop is an internal loop that brokers incoming messages to output pipe, does
+// not use select.
 func (n *NATS) loop() {
 	defer func() {
 		atomic.StoreInt32(&n.running, 0)
@@ -133,7 +132,7 @@ func (n *NATS) loop() {
 	}
 }
 
-// StartReceiving - Assigns a messages channel for the output to read.
+// StartReceiving assigns a messages channel for the output to read.
 func (n *NATS) StartReceiving(msgs <-chan types.Message) error {
 	if n.messages != nil {
 		return types.ErrAlreadyStarted
@@ -143,19 +142,19 @@ func (n *NATS) StartReceiving(msgs <-chan types.Message) error {
 	return nil
 }
 
-// ResponseChan - Returns the errors channel.
+// ResponseChan returns the errors channel.
 func (n *NATS) ResponseChan() <-chan types.Response {
 	return n.responseChan
 }
 
-// CloseAsync - Shuts down the NATS output and stops processing messages.
+// CloseAsync shuts down the NATS output and stops processing messages.
 func (n *NATS) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&n.running, 1, 0) {
 		close(n.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the NATS output has closed down.
+// WaitForClose blocks until the NATS output has closed down.
 func (n *NATS) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-n.closedChan:
@@ -165,4 +164,4 @@ func (n *NATS) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

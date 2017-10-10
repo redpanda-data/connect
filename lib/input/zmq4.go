@@ -1,26 +1,24 @@
 // +build ZMQ4
 
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package input
 
@@ -34,7 +32,7 @@ import (
 	"github.com/pebbe/zmq4"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["zmq4"] = typeSpec{
@@ -51,9 +49,9 @@ socket types then they can be added easily.`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// ZMQ4Config - Configuration for the ZMQ4 input type.
+// ZMQ4Config is configuration for the ZMQ4 input type.
 type ZMQ4Config struct {
 	Addresses     []string `json:"addresses" yaml:"addresses"`
 	Bind          bool     `json:"bind" yaml:"bind"`
@@ -63,7 +61,7 @@ type ZMQ4Config struct {
 	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 }
 
-// NewZMQ4Config - Creates a new ZMQ4Config with default values.
+// NewZMQ4Config creates a new ZMQ4Config with default values.
 func NewZMQ4Config() *ZMQ4Config {
 	return &ZMQ4Config{
 		Addresses:     []string{"tcp://localhost:5555"},
@@ -75,9 +73,9 @@ func NewZMQ4Config() *ZMQ4Config {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// ZMQ4 - An input type that serves ZMQ4 POST requests.
+// ZMQ4 is an input type that serves ZMQ4 POST requests.
 type ZMQ4 struct {
 	running int32
 
@@ -94,7 +92,7 @@ type ZMQ4 struct {
 	closedChan chan struct{}
 }
 
-// NewZMQ4 - Create a new ZMQ4 input type.
+// NewZMQ4 creates a new ZMQ4 input type.
 func NewZMQ4(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	z := ZMQ4{
 		running:    1,
@@ -143,7 +141,7 @@ func NewZMQ4(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &z, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func getZMQType(t string) (zmq4.Type, error) {
 	switch t {
@@ -155,7 +153,7 @@ func getZMQType(t string) (zmq4.Type, error) {
 	return zmq4.PULL, types.ErrInvalidZMQType
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func (z *ZMQ4) loop() {
 	defer func() {
@@ -223,7 +221,8 @@ func (z *ZMQ4) loop() {
 	}
 }
 
-// StartListening - Sets the channel used by the input to validate message receipt.
+// StartListening sets the channel used by the input to validate message
+// receipt.
 func (z *ZMQ4) StartListening(responses <-chan types.Response) error {
 	if z.responses != nil {
 		return types.ErrAlreadyStarted
@@ -233,19 +232,19 @@ func (z *ZMQ4) StartListening(responses <-chan types.Response) error {
 	return nil
 }
 
-// MessageChan - Returns the messages channel.
+// MessageChan returns the messages channel.
 func (z *ZMQ4) MessageChan() <-chan types.Message {
 	return z.messages
 }
 
-// CloseAsync - Shuts down the ZMQ4 input and stops processing requests.
+// CloseAsync shuts down the ZMQ4 input and stops processing requests.
 func (z *ZMQ4) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&z.running, 1, 0) {
 		close(z.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the ZMQ4 input has closed down.
+// WaitForClose blocks until the ZMQ4 input has closed down.
 func (z *ZMQ4) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-z.closedChan:
@@ -255,4 +254,4 @@ func (z *ZMQ4) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

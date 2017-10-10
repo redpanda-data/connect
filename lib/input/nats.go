@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package input
 
@@ -49,13 +47,13 @@ Comma separated arrays are also supported, e.g. urlA, urlB.`,
 
 //------------------------------------------------------------------------------
 
-// NATSConfig - Configuration for the NATS input type.
+// NATSConfig is configuration for the NATS input type.
 type NATSConfig struct {
 	URL     string `json:"url" yaml:"url"`
 	Subject string `json:"subject" yaml:"subject"`
 }
 
-// NewNATSConfig - Creates a new NATSConfig with default values.
+// NewNATSConfig creates a new NATSConfig with default values.
 func NewNATSConfig() NATSConfig {
 	return NATSConfig{
 		URL:     nats.DefaultURL,
@@ -65,7 +63,7 @@ func NewNATSConfig() NATSConfig {
 
 //------------------------------------------------------------------------------
 
-// NATS - An input type that receives NATS messages.
+// NATS is an input type that receives NATS messages.
 type NATS struct {
 	running int32
 
@@ -84,7 +82,7 @@ type NATS struct {
 	closedChan chan struct{}
 }
 
-// NewNATS - Create a new NATS input type.
+// NewNATS creates a new NATS input type.
 func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	n := NATS{
 		running:    1,
@@ -158,7 +156,8 @@ func (n *NATS) loop() {
 	}
 }
 
-// StartListening - Sets the channel used by the input to validate message receipt.
+// StartListening sets the channel used by the input to validate message
+// receipt.
 func (n *NATS) StartListening(responses <-chan types.Response) error {
 	if n.responses != nil {
 		return types.ErrAlreadyStarted
@@ -168,19 +167,19 @@ func (n *NATS) StartListening(responses <-chan types.Response) error {
 	return nil
 }
 
-// MessageChan - Returns the messages channel.
+// MessageChan returns the messages channel.
 func (n *NATS) MessageChan() <-chan types.Message {
 	return n.messages
 }
 
-// CloseAsync - Shuts down the NATS input and stops processing requests.
+// CloseAsync shuts down the NATS input and stops processing requests.
 func (n *NATS) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&n.running, 1, 0) {
 		close(n.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the NATS input has closed down.
+// WaitForClose blocks until the NATS input has closed down.
 func (n *NATS) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-n.closedChan:
@@ -190,4 +189,4 @@ func (n *NATS) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

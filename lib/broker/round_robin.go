@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package broker
 
@@ -30,11 +28,11 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// RoundRobin - A broker that implements types.Consumer and sends each message out to a single
-// consumer chosen from an array in round-robin fashion. Consumers that apply backpressure will
-// block all consumers.
+// RoundRobin is a broker that implements types.Consumer and sends each message
+// out to a single consumer chosen from an array in round-robin fashion.
+// Consumers that apply backpressure will block all consumers.
 type RoundRobin struct {
 	running int32
 
@@ -50,7 +48,7 @@ type RoundRobin struct {
 	closeChan  chan struct{}
 }
 
-// NewRoundRobin - Create a new RoundRobin type by providing consumers.
+// NewRoundRobin creates a new RoundRobin type by providing consumers.
 func NewRoundRobin(outputs []types.Consumer, stats metrics.Type) (*RoundRobin, error) {
 	o := &RoundRobin{
 		running:      1,
@@ -71,9 +69,9 @@ func NewRoundRobin(outputs []types.Consumer, stats metrics.Type) (*RoundRobin, e
 	return o, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// StartReceiving - Assigns a new messages channel for the broker to read.
+// StartReceiving assigns a new messages channel for the broker to read.
 func (o *RoundRobin) StartReceiving(msgs <-chan types.Message) error {
 	if o.messages != nil {
 		return types.ErrAlreadyStarted
@@ -84,9 +82,9 @@ func (o *RoundRobin) StartReceiving(msgs <-chan types.Message) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// loop - Internal loop brokers incoming messages to many outputs.
+// loop is an internal loop that brokers incoming messages to many outputs.
 func (o *RoundRobin) loop() {
 	defer func() {
 		for _, c := range o.outputMsgChans {
@@ -133,19 +131,19 @@ func (o *RoundRobin) loop() {
 	}
 }
 
-// ResponseChan - Returns the response channel.
+// ResponseChan returns the response channel.
 func (o *RoundRobin) ResponseChan() <-chan types.Response {
 	return o.responseChan
 }
 
-// CloseAsync - Shuts down the RoundRobin broker and stops processing requests.
+// CloseAsync shuts down the RoundRobin broker and stops processing requests.
 func (o *RoundRobin) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&o.running, 1, 0) {
 		close(o.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the RoundRobin broker has closed down.
+// WaitForClose blocks until the RoundRobin broker has closed down.
 func (o *RoundRobin) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-o.closedChan:
@@ -155,4 +153,4 @@ func (o *RoundRobin) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

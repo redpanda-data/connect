@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package input
 
@@ -37,7 +35,7 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["scalability_protocols"] = typeSpec{
@@ -60,9 +58,9 @@ Currently only PULL and SUB sockets are supported.`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// ScaleProtoConfig - Configuration for the ScaleProto input type.
+// ScaleProtoConfig is configuration for the ScaleProto input type.
 type ScaleProtoConfig struct {
 	Address       string   `json:"address" yaml:"address"`
 	Bind          bool     `json:"bind_address" yaml:"bind_address"`
@@ -71,7 +69,7 @@ type ScaleProtoConfig struct {
 	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 }
 
-// NewScaleProtoConfig - Creates a new ScaleProtoConfig with default values.
+// NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
 		Address:       "tcp://*:5555",
@@ -82,9 +80,9 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// ScaleProto - An input type that serves Scalability Protocols messages.
+// ScaleProto is an input type that serves Scalability Protocols messages.
 type ScaleProto struct {
 	running int32
 
@@ -101,7 +99,7 @@ type ScaleProto struct {
 	closedChan chan struct{}
 }
 
-// NewScaleProto - Create a new ScaleProto input type.
+// NewScaleProto creates a new ScaleProto input type.
 func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	s := ScaleProto{
 		running:    1,
@@ -157,9 +155,9 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	return &s, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// getSocketFromType - Returns a socket based on a socket type string.
+// getSocketFromType returns a socket based on a socket type string.
 func getSocketFromType(t string) (mangos.Socket, error) {
 	switch t {
 	case "PULL":
@@ -170,7 +168,7 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 	return nil, types.ErrInvalidScaleProtoType
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func (s *ScaleProto) loop() {
 	defer func() {
@@ -236,7 +234,8 @@ func (s *ScaleProto) loop() {
 
 }
 
-// StartListening - Sets the channel used by the input to validate message receipt.
+// StartListening sets the channel used by the input to validate message
+// receipt.
 func (s *ScaleProto) StartListening(responses <-chan types.Response) error {
 	if s.responses != nil {
 		return types.ErrAlreadyStarted
@@ -246,19 +245,19 @@ func (s *ScaleProto) StartListening(responses <-chan types.Response) error {
 	return nil
 }
 
-// MessageChan - Returns the messages channel.
+// MessageChan returns the messages channel.
 func (s *ScaleProto) MessageChan() <-chan types.Message {
 	return s.messages
 }
 
-// CloseAsync - Shuts down the ScaleProto input and stops processing requests.
+// CloseAsync shuts down the ScaleProto input and stops processing requests.
 func (s *ScaleProto) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&s.running, 1, 0) {
 		close(s.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the ScaleProto input has closed down.
+// WaitForClose blocks until the ScaleProto input has closed down.
 func (s *ScaleProto) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-s.closedChan:
@@ -268,4 +267,4 @@ func (s *ScaleProto) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

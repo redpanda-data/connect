@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package input
 
@@ -34,7 +32,7 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["stdin"] = typeSpec{
@@ -47,15 +45,15 @@ indicates the end of the message.`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// STDINConfig - contains config fields for the STDIN input type.
+// STDINConfig contains config fields for the STDIN input type.
 type STDINConfig struct {
 	Multipart bool `json:"multipart" yaml:"multipart"`
 	MaxBuffer int  `json:"max_buffer" yaml:"max_buffer"`
 }
 
-// NewSTDINConfig - creates a STDINConfig populated with default values.
+// NewSTDINConfig creates a STDINConfig populated with default values.
 func NewSTDINConfig() STDINConfig {
 	return STDINConfig{
 		Multipart: false,
@@ -63,9 +61,9 @@ func NewSTDINConfig() STDINConfig {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// STDIN - An input type that reads lines from STDIN.
+// STDIN is an input type that reads lines from STDIN.
 type STDIN struct {
 	running int32
 
@@ -84,7 +82,7 @@ type STDIN struct {
 	closedChan chan struct{}
 }
 
-// NewSTDIN - Create a new STDIN input type.
+// NewSTDIN creates a new STDIN input type.
 func NewSTDIN(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	s := STDIN{
 		running:          1,
@@ -104,9 +102,9 @@ func NewSTDIN(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &s, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// readLoop - Reads from stdin pipe and sends to internal messages chan.
+// readLoop reads from stdin pipe and sends to internal messages chan.
 func (s *STDIN) readLoop() {
 	defer func() {
 		close(s.internalMessages)
@@ -131,7 +129,8 @@ func (s *STDIN) readLoop() {
 						partsToSend = append(partsToSend, newPart)
 					}
 				} else if s.conf.STDIN.Multipart {
-					// Empty line means we're finished reading parts for this message.
+					// Empty line means we're finished reading parts for this
+					// message.
 					partsToSend = parts
 					parts = nil
 				}
@@ -152,7 +151,7 @@ func (s *STDIN) readLoop() {
 	}
 }
 
-// loop - Internal loop brokers incoming messages to output pipe.
+// loop is the internal loop that brokers incoming messages to output pipe.
 func (s *STDIN) loop() {
 	defer func() {
 		atomic.StoreInt32(&s.running, 0)
@@ -196,7 +195,8 @@ func (s *STDIN) loop() {
 	}
 }
 
-// StartListening - Sets the channel used by the input to validate message receipt.
+// StartListening sets the channel used by the input to validate message
+// receipt.
 func (s *STDIN) StartListening(responses <-chan types.Response) error {
 	if s.responses != nil {
 		return types.ErrAlreadyStarted
@@ -206,19 +206,19 @@ func (s *STDIN) StartListening(responses <-chan types.Response) error {
 	return nil
 }
 
-// MessageChan - Returns the messages channel.
+// MessageChan returns the messages channel.
 func (s *STDIN) MessageChan() <-chan types.Message {
 	return s.messages
 }
 
-// CloseAsync - Shuts down the STDIN input and stops processing requests.
+// CloseAsync shuts down the STDIN input and stops processing requests.
 func (s *STDIN) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&s.running, 1, 0) {
 		close(s.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the STDIN input has closed down.
+// WaitForClose blocks until the STDIN input has closed down.
 func (s *STDIN) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-s.closedChan:
@@ -228,4 +228,4 @@ func (s *STDIN) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

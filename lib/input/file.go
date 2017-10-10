@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package input
 
@@ -33,7 +31,7 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["file"] = typeSpec{
@@ -45,16 +43,16 @@ a message part, and an empty line indicates the end of a message.`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// FileConfig - Configuration values for the File input type.
+// FileConfig is configuration values for the File input type.
 type FileConfig struct {
 	Path      string `json:"path" yaml:"path"`
 	Multipart bool   `json:"multipart" yaml:"multipart"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
 }
 
-// NewFileConfig - Creates a new FileConfig with default values.
+// NewFileConfig creates a new FileConfig with default values.
 func NewFileConfig() FileConfig {
 	return FileConfig{
 		Path:      "",
@@ -63,9 +61,10 @@ func NewFileConfig() FileConfig {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// File - An input type that reads lines from a file, creating a message per line.
+// File is an input type that reads lines from a file, creating a message per
+// line.
 type File struct {
 	running int32
 
@@ -79,7 +78,7 @@ type File struct {
 	closedChan chan struct{}
 }
 
-// NewFile - Create a new File input type.
+// NewFile creates a new File input type.
 func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	f := File{
 		running:    1,
@@ -93,9 +92,9 @@ func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &f, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// loop - Internal loop brokers incoming messages to output pipe.
+// loop is an internal loop that brokers incoming messages to output pipe.
 func (f *File) loop() {
 	defer func() {
 		atomic.StoreInt32(&f.running, 0)
@@ -158,7 +157,8 @@ func (f *File) loop() {
 	}
 }
 
-// StartListening - Sets the channel used by the input to validate message receipt.
+// StartListening sets the channel used by the input to validate message
+// receipt.
 func (f *File) StartListening(responses <-chan types.Response) error {
 	if f.responses != nil {
 		return types.ErrAlreadyStarted
@@ -168,19 +168,19 @@ func (f *File) StartListening(responses <-chan types.Response) error {
 	return nil
 }
 
-// MessageChan - Returns the messages channel.
+// MessageChan returns the messages channel.
 func (f *File) MessageChan() <-chan types.Message {
 	return f.messages
 }
 
-// CloseAsync - Shuts down the File input and stops processing requests.
+// CloseAsync shuts down the File input and stops processing requests.
 func (f *File) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&f.running, 1, 0) {
 		close(f.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the File input has closed down.
+// WaitForClose blocks until the File input has closed down.
 func (f *File) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-f.closedChan:
@@ -190,4 +190,4 @@ func (f *File) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

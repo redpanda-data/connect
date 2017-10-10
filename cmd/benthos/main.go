@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package main
 
@@ -45,7 +43,7 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // Config - The benthos configuration struct.
 type Config struct {
@@ -71,7 +69,7 @@ func NewConfig() Config {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // Extra flags
 var (
@@ -97,9 +95,10 @@ var (
 	)
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// bootstrap - Reads cmd args and either parses and config file or prints helper text and exits.
+// bootstrap reads cmd args and either parses and config file or prints helper
+// text and exits.
 func bootstrap() Config {
 	config := NewConfig()
 
@@ -142,18 +141,17 @@ func bootstrap() Config {
 	return config
 }
 
-/*
-createPipeline - Based on the supplied configuration file, create a pipeline (input, buffer, output)
-and return a closable pool of pipeline objects, a channel indicating that all inputs and outputs
-have seized, or an error.
-*/
+// createPipeline creates a pipeline based on the supplied configuration file,
+// and return a closable pool of pipeline objects, a channel indicating that all
+// inputs and outputs have seized, or an error.
 func createPipeline(
 	config Config, logger log.Modular, stats metrics.Type,
 ) (*butil.ClosablePool, *butil.ClosablePool, chan struct{}, error) {
-	// Create two pools, this helps manage ordered closure of all pipeline components. We have a
-	// tiered (t1) and an non-tiered (t2) pool. If the tiered pool cannot close within our allotted
-	// time period then we try closing the second non-tiered pool. If the second pool also fails
-	// then we exit the service ungracefully.
+	// Create two pools, this helps manage ordered closure of all pipeline
+	// components. We have a tiered (t1) and an non-tiered (t2) pool. If the
+	// tiered pool cannot close within our allotted time period then we try
+	// closing the second non-tiered pool. If the second pool also fails then we
+	// exit the service ungracefully.
 	poolt1, poolt2 := butil.NewClosablePool(), butil.NewClosablePool()
 
 	// Create processors, if any
@@ -302,4 +300,4 @@ func main() {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

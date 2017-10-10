@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package output
 
@@ -36,7 +34,7 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["http_server"] = typeSpec{
@@ -46,9 +44,9 @@ Sets up an HTTP server that will return messages over HTTP GET requests.`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// HTTPServerConfig - Configuration for the HTTPServer input type.
+// HTTPServerConfig is configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
 	Address         string `json:"address" yaml:"address"`
 	Path            string `json:"path" yaml:"path"`
@@ -56,7 +54,7 @@ type HTTPServerConfig struct {
 	ClientTimeoutMS int64  `json:"client_timeout_ms" yaml:"client_timeout_ms"`
 }
 
-// NewHTTPServerConfig - Creates a new HTTPServerConfig with default values.
+// NewHTTPServerConfig creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
 		Address:         "localhost:8081",
@@ -66,9 +64,9 @@ func NewHTTPServerConfig() HTTPServerConfig {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// HTTPServer - An input type that serves HTTPServer POST requests.
+// HTTPServer is an input type that serves HTTPServer POST requests.
 type HTTPServer struct {
 	running int32
 
@@ -82,7 +80,7 @@ type HTTPServer struct {
 	responseChan chan types.Response
 }
 
-// NewHTTPServer - Create a new HTTPServer input type.
+// NewHTTPServer creates a new HTTPServer input type.
 func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	h := HTTPServer{
 		running:      1,
@@ -98,7 +96,7 @@ func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	return &h, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	if atomic.LoadInt32(&h.running) != 1 {
@@ -154,9 +152,9 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	h.responseChan <- types.NewSimpleResponse(nil)
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// StartReceiving - Assigns a messages channel for the output to read.
+// StartReceiving assigns a messages channel for the output to read.
 func (h *HTTPServer) StartReceiving(msgs <-chan types.Message) error {
 	if h.messages != nil {
 		return types.ErrAlreadyStarted
@@ -174,20 +172,20 @@ func (h *HTTPServer) StartReceiving(msgs <-chan types.Message) error {
 	return nil
 }
 
-// ResponseChan - Returns the errors channel.
+// ResponseChan returns the errors channel.
 func (h *HTTPServer) ResponseChan() <-chan types.Response {
 	return h.responseChan
 }
 
-// CloseAsync - Shuts down the HTTPServer input and stops processing requests.
+// CloseAsync shuts down the HTTPServer input and stops processing requests.
 func (h *HTTPServer) CloseAsync() {
 	atomic.StoreInt32(&h.running, 0)
 }
 
-// WaitForClose - Blocks until the HTTPServer output has closed down.
+// WaitForClose blocks until the HTTPServer output has closed down.
 func (h *HTTPServer) WaitForClose(timeout time.Duration) error {
-	// NOTE: Using the default HTTP server means we haven't got an explicit method for shutting the
-	// server down and waiting for completion.
+	// NOTE: Using the default HTTP server means we haven't got an explicit
+	// method for shutting the server down and waiting for completion.
 	tStart := time.Now()
 	for atomic.LoadInt32(&h.running) == 1 {
 		if time.Since(tStart) >= timeout {
@@ -198,4 +196,4 @@ func (h *HTTPServer) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

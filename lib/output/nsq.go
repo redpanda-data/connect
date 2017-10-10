@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package output
 
@@ -32,7 +30,7 @@ import (
 	nsq "github.com/nsqio/go-nsq"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["nsq"] = typeSpec{
@@ -42,9 +40,9 @@ Publish to an NSQ topic.`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// NSQConfig - Configuration for the NSQ output type.
+// NSQConfig is configuration for the NSQ output type.
 type NSQConfig struct {
 	Address     string `json:"nsqd_tcp_address" yaml:"nsqd_tcp_address"`
 	Topic       string `json:"topic" yaml:"topic"`
@@ -52,7 +50,7 @@ type NSQConfig struct {
 	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
-// NewNSQConfig - Creates a new NSQConfig with default values.
+// NewNSQConfig creates a new NSQConfig with default values.
 func NewNSQConfig() NSQConfig {
 	return NSQConfig{
 		Address:     "127.0.0.1:4150",
@@ -62,9 +60,9 @@ func NewNSQConfig() NSQConfig {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// NSQ - An output type that serves NSQ messages.
+// NSQ is an output type that serves NSQ messages.
 type NSQ struct {
 	running int32
 
@@ -82,7 +80,7 @@ type NSQ struct {
 	closeChan  chan struct{}
 }
 
-// NewNSQ - Create a new NSQ output type.
+// NewNSQ creates a new NSQ output type.
 func NewNSQ(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	n := NSQ{
 		running:      1,
@@ -102,9 +100,9 @@ func NewNSQ(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &n, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// connect - Establish a connection to an NSQ server.
+// connect establishes a connection to an NSQ server.
 func (n *NSQ) connect() (err error) {
 	cfg := nsq.NewConfig()
 	cfg.UserAgent = n.conf.NSQ.UserAgent
@@ -120,16 +118,17 @@ func (n *NSQ) connect() (err error) {
 	return
 }
 
-// disconnect - Safely close a connection to an NSQ server.
+// disconnect safely closes a connection to an NSQ server.
 func (n *NSQ) disconnect() error {
 	n.producer.Stop()
 	n.producer = nil
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// loop - Internal loop brokers incoming messages to output pipe, does not use select.
+// loop is an internal loop that brokers incoming messages to output pipe, does
+// not use select.
 func (n *NSQ) loop() {
 	defer func() {
 		atomic.StoreInt32(&n.running, 0)
@@ -162,7 +161,7 @@ func (n *NSQ) loop() {
 	}
 }
 
-// StartReceiving - Assigns a messages channel for the output to read.
+// StartReceiving assigns a messages channel for the output to read.
 func (n *NSQ) StartReceiving(msgs <-chan types.Message) error {
 	if n.messages != nil {
 		return types.ErrAlreadyStarted
@@ -172,19 +171,19 @@ func (n *NSQ) StartReceiving(msgs <-chan types.Message) error {
 	return nil
 }
 
-// ResponseChan - Returns the errors channel.
+// ResponseChan returns the errors channel.
 func (n *NSQ) ResponseChan() <-chan types.Response {
 	return n.responseChan
 }
 
-// CloseAsync - Shuts down the NSQ output and stops processing messages.
+// CloseAsync shuts down the NSQ output and stops processing messages.
 func (n *NSQ) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&n.running, 1, 0) {
 		close(n.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the NSQ output has closed down.
+// WaitForClose blocks until the NSQ output has closed down.
 func (n *NSQ) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-n.closedChan:
@@ -194,4 +193,4 @@ func (n *NSQ) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

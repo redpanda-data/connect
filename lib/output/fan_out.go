@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package output
 
@@ -31,14 +29,15 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 var (
-	// ErrFanOutNoOutputs - Returned when creating a FanOut type with zero outputs.
+	// ErrFanOutNoOutputs is returned when creating a FanOut type with zero
+	// outputs.
 	ErrFanOutNoOutputs = errors.New("attempting to create fan_out output type with no outputs")
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["fan_out"] = typeSpec{
@@ -57,26 +56,25 @@ again it will send a duplicate message to some outputs.`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// FanOutConfig - Configuration for the FanOut output type.
+// FanOutConfig is configuration for the FanOut output type.
 type FanOutConfig struct {
 	Outputs []interface{} `json:"outputs" yaml:"outputs"`
 }
 
-// NewFanOutConfig - Creates a new FanOutConfig with default values.
+// NewFanOutConfig creates a new FanOutConfig with default values.
 func NewFanOutConfig() FanOutConfig {
 	return FanOutConfig{
 		Outputs: []interface{}{},
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-/*
-NewFanOut - Create a new FanOut output type. Messages will be sent out to ALL outputs, outputs which
-block will apply backpressure upstream, meaning other outputs will also stop receiving messages.
-*/
+// NewFanOut creates a new FanOut output type. Messages will be sent out to ALL
+// outputs, outputs which block will apply backpressure upstream, meaning other
+// outputs will also stop receiving messages.
 func NewFanOut(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if len(conf.FanOut.Outputs) == 0 {
 		return nil, ErrFanOutNoOutputs
@@ -99,4 +97,4 @@ func NewFanOut(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return broker.NewFanOut(broker.NewFanOutConfig(), outputs, log, stats)
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

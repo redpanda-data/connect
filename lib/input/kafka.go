@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package input
 
@@ -32,7 +30,7 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["kafka"] = typeSpec{
@@ -43,9 +41,9 @@ kafka as per the consumer group (set via config).`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// KafkaConfig - Configuration for the Kafka input type.
+// KafkaConfig is configuration for the Kafka input type.
 type KafkaConfig struct {
 	Addresses       []string `json:"addresses" yaml:"addresses"`
 	ClientID        string   `json:"client_id" yaml:"client_id"`
@@ -55,7 +53,7 @@ type KafkaConfig struct {
 	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
 }
 
-// NewKafkaConfig - Creates a new KafkaConfig with default values.
+// NewKafkaConfig creates a new KafkaConfig with default values.
 func NewKafkaConfig() KafkaConfig {
 	return KafkaConfig{
 		Addresses:       []string{"localhost:9092"},
@@ -67,9 +65,9 @@ func NewKafkaConfig() KafkaConfig {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// Kafka - An input type that reads from a Kafka instance.
+// Kafka is an input type that reads from a Kafka instance.
 type Kafka struct {
 	running int32
 
@@ -91,7 +89,7 @@ type Kafka struct {
 	closedChan chan struct{}
 }
 
-// NewKafka - Create a new Kafka input type.
+// NewKafka creates a new Kafka input type.
 func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	k := Kafka{
 		running:    1,
@@ -172,7 +170,7 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &k, err
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func (k *Kafka) commitOffset() error {
 	commitReq := sarama.OffsetCommitRequest{}
@@ -190,9 +188,9 @@ func (k *Kafka) commitOffset() error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// drainConsumer - This should be called after closeClients.
+// drainConsumer should be called after closeClients.
 func (k *Kafka) drainConsumer() {
 	if k.topicConsumer != nil {
 		// Drain both channels
@@ -205,7 +203,8 @@ func (k *Kafka) drainConsumer() {
 	}
 }
 
-// closeClients - Closes the kafka clients, this interrupts loop() out of the read block.
+// closeClients closes the kafka clients, this interrupts loop() out of the read
+// block.
 func (k *Kafka) closeClients() {
 	if k.topicConsumer != nil {
 		// NOTE: Needs draining before destroying.
@@ -221,7 +220,7 @@ func (k *Kafka) closeClients() {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func (k *Kafka) errorLoop() {
 	for atomic.LoadInt32(&k.running) == 1 {
@@ -289,7 +288,8 @@ func (k *Kafka) loop() {
 
 }
 
-// StartListening - Sets the channel used by the input to validate message receipt.
+// StartListening sets the channel used by the input to validate message
+// receipt.
 func (k *Kafka) StartListening(responses <-chan types.Response) error {
 	if k.responses != nil {
 		return types.ErrAlreadyStarted
@@ -300,12 +300,12 @@ func (k *Kafka) StartListening(responses <-chan types.Response) error {
 	return nil
 }
 
-// MessageChan - Returns the messages channel.
+// MessageChan returns the messages channel.
 func (k *Kafka) MessageChan() <-chan types.Message {
 	return k.messages
 }
 
-// CloseAsync - Shuts down the Kafka input and stops processing requests.
+// CloseAsync shuts down the Kafka input and stops processing requests.
 func (k *Kafka) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&k.running, 1, 0) {
 		close(k.closeChan)
@@ -313,7 +313,7 @@ func (k *Kafka) CloseAsync() {
 	}
 }
 
-// WaitForClose - Blocks until the Kafka input has closed down.
+// WaitForClose blocks until the Kafka input has closed down.
 func (k *Kafka) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-k.closedChan:
@@ -323,4 +323,4 @@ func (k *Kafka) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------

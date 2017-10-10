@@ -1,24 +1,22 @@
-/*
-Copyright (c) 2014 Ashley Jeffs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+// Copyright (c) 2014 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package output
 
@@ -33,7 +31,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 func init() {
 	constructors["amqp"] = typeSpec{
@@ -44,9 +42,9 @@ currently rather limited, but more configuration options are on the way.`,
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// AMQPConfig - Configuration for the AMQP output type.
+// AMQPConfig is configuration for the AMQP output type.
 type AMQPConfig struct {
 	URI          string `json:"uri" yaml:"uri"`
 	Exchange     string `json:"exchange" yaml:"exchange"`
@@ -55,7 +53,7 @@ type AMQPConfig struct {
 	// Reliable     bool   `json:"reliable" yaml:"reliable"`
 }
 
-// NewAMQPConfig - Creates a new AMQPConfig with default values.
+// NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
 		URI:          "amqp://guest:guest@localhost:5672/",
@@ -66,9 +64,9 @@ func NewAMQPConfig() AMQPConfig {
 	}
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// AMQP - An output type that serves AMQP messages.
+// AMQP is an output type that serves AMQP messages.
 type AMQP struct {
 	running int32
 
@@ -88,7 +86,7 @@ type AMQP struct {
 	closeChan  chan struct{}
 }
 
-// NewAMQP - Create a new AMQP output type.
+// NewAMQP creates a new AMQP output type.
 func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	a := AMQP{
 		running:      1,
@@ -108,9 +106,9 @@ func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &a, nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// connect - Establish a connection to an AMQP server.
+// connect establishes a connection to an AMQP server.
 func (a *AMQP) connect() (err error) {
 	a.conn, err = amqp.Dial(a.conf.AMQP.URI)
 	if err != nil {
@@ -145,7 +143,7 @@ func (a *AMQP) connect() (err error) {
 	return
 }
 
-// disconnect - Safely close a connection to an AMQP server.
+// disconnect safely closes a connection to an AMQP server.
 func (a *AMQP) disconnect() error {
 	if a.amqpChan != nil {
 		a.amqpChan = nil
@@ -159,9 +157,9 @@ func (a *AMQP) disconnect() error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-// loop - Internal loop brokers incoming messages to output pipe, does not use select.
+// loop is an internal loop that brokers incoming messages to output pipe.
 func (a *AMQP) loop() {
 	defer func() {
 		atomic.StoreInt32(&a.running, 0)
@@ -211,7 +209,7 @@ func (a *AMQP) loop() {
 	}
 }
 
-// StartReceiving - Assigns a messages channel for the output to read.
+// StartReceiving assigns a messages channel for the output to read.
 func (a *AMQP) StartReceiving(msgs <-chan types.Message) error {
 	if a.messages != nil {
 		return types.ErrAlreadyStarted
@@ -221,19 +219,19 @@ func (a *AMQP) StartReceiving(msgs <-chan types.Message) error {
 	return nil
 }
 
-// ResponseChan - Returns the errors channel.
+// ResponseChan returns the errors channel.
 func (a *AMQP) ResponseChan() <-chan types.Response {
 	return a.responseChan
 }
 
-// CloseAsync - Shuts down the AMQP output and stops processing messages.
+// CloseAsync shuts down the AMQP output and stops processing messages.
 func (a *AMQP) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&a.running, 1, 0) {
 		close(a.closeChan)
 	}
 }
 
-// WaitForClose - Blocks until the AMQP output has closed down.
+// WaitForClose blocks until the AMQP output has closed down.
 func (a *AMQP) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-a.closedChan:
@@ -243,4 +241,4 @@ func (a *AMQP) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
