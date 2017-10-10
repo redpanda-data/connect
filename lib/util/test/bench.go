@@ -119,7 +119,7 @@ func StartPrintingBenchmarks(period time.Duration, startIndex int32) chan<- Benc
 	c := make(chan Bench, 100)
 
 	currentIndex := startIndex
-	dataMissing := map[int32]struct{}{}
+	dataMissing := 0
 
 	type statTally struct {
 		startedAt    time.Time
@@ -178,14 +178,19 @@ func StartPrintingBenchmarks(period time.Duration, startIndex int32) chan<- Benc
 				if startIndex != -1 {
 					if startIndex == bench.Index {
 						// Indicates that the producer index has been restarted.
-						dataMissing = map[int32]struct{}{}
+						dataMissing = 0
 						currentIndex = bench.Index
 					}
-					delete(dataMissing, bench.Index)
-					for i := currentIndex; i < bench.Index; i++ {
-						dataMissing[i] = struct{}{}
+					if bench.Index == currentIndex {
+						currentIndex = bench.Index + 1
+					} else if bench.Index < currentIndex {
+						dataMissing--
+					} else {
+						for i := currentIndex; i < bench.Index; i++ {
+							dataMissing++
+						}
+						currentIndex = bench.Index + 1
 					}
-					currentIndex = bench.Index + 1
 				}
 				updateStats(bench)
 			case <-timer.C:
@@ -195,8 +200,8 @@ func StartPrintingBenchmarks(period time.Duration, startIndex int32) chan<- Benc
 					fmt.Println(err)
 				}
 				fmt.Println(string(blob))
-				if nLost := len(dataMissing); nLost > 0 {
-					fmt.Printf("{\"data_lost\":%v}\n", nLost)
+				if dataMissing > 0 {
+					fmt.Printf("{\"data_missing\":%v}\n", dataMissing)
 				}
 				refreshPStats()
 			}
