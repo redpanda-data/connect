@@ -22,6 +22,7 @@ package processor
 
 import (
 	"bytes"
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -58,6 +59,34 @@ func NewConfig() Config {
 		BlobToMulti: struct{}{},
 		MultiToBlob: struct{}{},
 	}
+}
+
+// UnmarshalJSON ensures that when parsing configs that are in a slice the
+// default values are still applied.
+func (m *Config) UnmarshalJSON(bytes []byte) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	if err := json.Unmarshal(bytes, &aliased); err != nil {
+		return err
+	}
+
+	*m = Config(aliased)
+	return nil
+}
+
+// UnmarshalYAML ensures that when parsing configs that are in a slice the
+// default values are still applied.
+func (m *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	if err := unmarshal(&aliased); err != nil {
+		return err
+	}
+
+	*m = Config(aliased)
+	return nil
 }
 
 //------------------------------------------------------------------------------

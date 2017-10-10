@@ -27,6 +27,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jeffail/benthos/lib/pipeline"
+	"github.com/jeffail/benthos/lib/processor"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
@@ -47,19 +49,20 @@ var constructors = map[string]typeSpec{}
 // Config - The all encompassing configuration struct for all output types. Note that some configs
 // are empty structs, as the type has no optional values but we want to list it as an option.
 type Config struct {
-	Type       string           `json:"type" yaml:"type"`
-	HTTPClient HTTPClientConfig `json:"http_client" yaml:"http_client"`
-	HTTPServer HTTPServerConfig `json:"http_server" yaml:"http_server"`
-	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
-	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
-	AMQP       AMQPConfig       `json:"amqp" yaml:"amqp"`
-	NSQ        NSQConfig        `json:"nsq" yaml:"nsq"`
-	NATS       NATSConfig       `json:"nats" yaml:"nats"`
-	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	File       FileConfig       `json:"file" yaml:"file"`
-	STDOUT     struct{}         `json:"stdout" yaml:"stdout"`
-	FanOut     FanOutConfig     `json:"fan_out" yaml:"fan_out"`
-	RoundRobin RoundRobinConfig `json:"round_robin" yaml:"round_robin"`
+	Type       string             `json:"type" yaml:"type"`
+	HTTPClient HTTPClientConfig   `json:"http_client" yaml:"http_client"`
+	HTTPServer HTTPServerConfig   `json:"http_server" yaml:"http_server"`
+	ScaleProto ScaleProtoConfig   `json:"scalability_protocols" yaml:"scalability_protocols"`
+	Kafka      KafkaConfig        `json:"kafka" yaml:"kafka"`
+	AMQP       AMQPConfig         `json:"amqp" yaml:"amqp"`
+	NSQ        NSQConfig          `json:"nsq" yaml:"nsq"`
+	NATS       NATSConfig         `json:"nats" yaml:"nats"`
+	ZMQ4       *ZMQ4Config        `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	File       FileConfig         `json:"file" yaml:"file"`
+	STDOUT     struct{}           `json:"stdout" yaml:"stdout"`
+	FanOut     FanOutConfig       `json:"fan_out" yaml:"fan_out"`
+	RoundRobin RoundRobinConfig   `json:"round_robin" yaml:"round_robin"`
+	Processors []processor.Config `json:"processors" yaml:"processors"`
 }
 
 // NewConfig - Returns a configuration struct fully populated with default values.
@@ -78,6 +81,7 @@ func NewConfig() Config {
 		STDOUT:     struct{}{},
 		FanOut:     NewFanOutConfig(),
 		RoundRobin: NewRoundRobinConfig(),
+		Processors: []processor.Config{},
 	}
 }
 
@@ -112,9 +116,31 @@ func Descriptions() string {
 }
 
 // New - Create an input type based on an input configuration.
-func New(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func New(
+	conf Config,
+	log log.Modular,
+	stats metrics.Type,
+	pipelines ...PipelineConstructor,
+) (Type, error) {
+	if len(conf.Processors) > 0 {
+		pipelines = append([]PipelineConstructor{func() (pipeline.Type, error) {
+			processors := make([]processor.Type, len(conf.Processors))
+			for i, procConf := range conf.Processors {
+				var err error
+				processors[i], err = processor.New(procConf, log.NewModule("."+conf.Type), stats)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return pipeline.NewProcessor(log, stats, processors...), nil
+		}}, pipelines...)
+	}
 	if c, ok := constructors[conf.Type]; ok {
-		return c.constructor(conf, log, stats)
+		output, err := c.constructor(conf, log, stats)
+		if err != nil {
+			return nil, err
+		}
+		return WrapWithPipelines(output, pipelines...)
 	}
 	return nil, types.ErrInvalidOutputType
 }

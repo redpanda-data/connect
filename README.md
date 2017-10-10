@@ -56,6 +56,9 @@ For a full and up to date list you can print them from the binary:
 benthos --print-inputs --print-buffers --print-outputs | less
 ```
 
+Mixing multiple part message protocols with single part can be done in different
+ways, for more guidance [check out this doc.][5]
+
 ## Install
 
 Build with Go:
@@ -156,6 +159,7 @@ docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
 [2]: http://godoc.org/github.com/jeffail/benthos
 [3]: https://goreportcard.com/badge/github.com/jeffail/benthos
 [4]: https://goreportcard.com/report/jeffail/benthos
+[5]: resources/docs/multipart.md
 [dep]: https://github.com/golang/dep
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/

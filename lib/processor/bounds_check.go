@@ -43,6 +43,7 @@ that do not (log warning message and a metric).`,
 // processor.
 type BoundsCheckConfig struct {
 	MaxParts    int `json:"max_parts" yaml:"max_parts"`
+	MinParts    int `json:"min_parts" yaml:"min_parts"`
 	MaxPartSize int `json:"max_part_size" yaml:"max_part_size"`
 }
 
@@ -50,6 +51,7 @@ type BoundsCheckConfig struct {
 func NewBoundsCheckConfig() BoundsCheckConfig {
 	return BoundsCheckConfig{
 		MaxParts:    100,
+		MinParts:    1,
 		MaxPartSize: 4 * 1024 * 1024 * 1024, // 4GB
 	}
 }
@@ -78,8 +80,11 @@ func NewBoundsCheck(conf Config, log log.Modular, stats metrics.Type) (Type, err
 // ProcessMessage checks each message against a set of bounds.
 func (m *BoundsCheck) ProcessMessage(msg *types.Message) (*types.Message, bool) {
 	lParts := len(msg.Parts)
-	if lParts == 0 {
-		m.log.Warnln("Rejecting empty\n")
+	if lParts < m.conf.BoundsCheck.MinParts {
+		m.log.Warnf(
+			"Rejecting message due to message parts below minimum (%v): %v\n",
+			m.conf.BoundsCheck.MinParts, lParts,
+		)
 		m.stats.Incr("processor.bounds_check.dropped.empty", 1)
 		return nil, false
 	} else if lParts > m.conf.BoundsCheck.MaxParts {

@@ -27,6 +27,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jeffail/benthos/lib/pipeline"
+	"github.com/jeffail/benthos/lib/processor"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
@@ -54,17 +56,18 @@ var constructors = map[string]typeSpec{}
 // that some configs are empty structs, as the type has no optional values but
 // we want to list it as an option.
 type Config struct {
-	Type       string           `json:"type" yaml:"type"`
-	HTTPServer HTTPServerConfig `json:"http_server" yaml:"http_server"`
-	ScaleProto ScaleProtoConfig `json:"scalability_protocols" yaml:"scalability_protocols"`
-	ZMQ4       *ZMQ4Config      `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	Kafka      KafkaConfig      `json:"kafka" yaml:"kafka"`
-	AMQP       AMQPConfig       `json:"amqp" yaml:"amqp"`
-	NSQ        NSQConfig        `json:"nsq" yaml:"nsq"`
-	NATS       NATSConfig       `json:"nats" yaml:"nats"`
-	File       FileConfig       `json:"file" yaml:"file"`
-	STDIN      STDINConfig      `json:"stdin" yaml:"stdin"`
-	FanIn      FanInConfig      `json:"fan_in" yaml:"fan_in"`
+	Type       string             `json:"type" yaml:"type"`
+	HTTPServer HTTPServerConfig   `json:"http_server" yaml:"http_server"`
+	ScaleProto ScaleProtoConfig   `json:"scalability_protocols" yaml:"scalability_protocols"`
+	ZMQ4       *ZMQ4Config        `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Kafka      KafkaConfig        `json:"kafka" yaml:"kafka"`
+	AMQP       AMQPConfig         `json:"amqp" yaml:"amqp"`
+	NSQ        NSQConfig          `json:"nsq" yaml:"nsq"`
+	NATS       NATSConfig         `json:"nats" yaml:"nats"`
+	File       FileConfig         `json:"file" yaml:"file"`
+	STDIN      STDINConfig        `json:"stdin" yaml:"stdin"`
+	FanIn      FanInConfig        `json:"fan_in" yaml:"fan_in"`
+	Processors []processor.Config `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -81,6 +84,7 @@ func NewConfig() Config {
 		File:       NewFileConfig(),
 		STDIN:      NewSTDINConfig(),
 		FanIn:      NewFanInConfig(),
+		Processors: []processor.Config{},
 	}
 }
 
@@ -121,6 +125,19 @@ func New(
 	stats metrics.Type,
 	pipelines ...PipelineConstructor,
 ) (Type, error) {
+	if len(conf.Processors) > 0 {
+		pipelines = append([]PipelineConstructor{func() (pipeline.Type, error) {
+			processors := make([]processor.Type, len(conf.Processors))
+			for i, procConf := range conf.Processors {
+				var err error
+				processors[i], err = processor.New(procConf, log.NewModule("."+conf.Type), stats)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return pipeline.NewProcessor(log, stats, processors...), nil
+		}}, pipelines...)
+	}
 	if c, ok := constructors[conf.Type]; ok {
 		if c.brokerConstructor != nil {
 			return c.brokerConstructor(conf, log, stats, pipelines...)

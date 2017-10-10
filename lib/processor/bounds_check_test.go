@@ -31,7 +31,8 @@ import (
 
 func TestBoundsCheck(t *testing.T) {
 	conf := NewConfig()
-	conf.BoundsCheck.MaxParts = 2
+	conf.BoundsCheck.MinParts = 2
+	conf.BoundsCheck.MaxParts = 3
 	conf.BoundsCheck.MaxPartSize = 10
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
@@ -44,23 +45,30 @@ func TestBoundsCheck(t *testing.T) {
 	goodParts := [][][]byte{
 		[][]byte{
 			[]byte("hello"),
-		},
-		[][]byte{
-			[]byte("helloworld"),
-		},
-		[][]byte{
-			[]byte("hello"),
 			[]byte("world"),
 		},
 		[][]byte{
 			[]byte("helloworld"),
 			[]byte("helloworld"),
 		},
+		[][]byte{
+			[]byte("hello"),
+			[]byte("world"),
+			[]byte("!"),
+		},
+		[][]byte{
+			[]byte("helloworld"),
+			[]byte("helloworld"),
+			[]byte("helloworld"),
+		},
 	}
 
 	badParts := [][][]byte{
-		[][]byte{},
 		[][]byte{
+			[]byte("hello world"),
+		},
+		[][]byte{
+			[]byte("hello world"),
 			[]byte("hello world this exceeds max part size"),
 		},
 		[][]byte{

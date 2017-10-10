@@ -21,11 +21,13 @@
 package processor
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func TestConstructorDescription(t *testing.T) {
@@ -43,5 +45,57 @@ func TestConstructorBadType(t *testing.T) {
 
 	if _, err := New(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{}); err == nil {
 		t.Error("Expected error, received nil for invalid type")
+	}
+}
+
+func TestConstructorConfigDefaults(t *testing.T) {
+	conf := []Config{}
+
+	if err := json.Unmarshal([]byte(`[
+		{
+			"type": "bounds_check",
+			"bounds_check": {
+				"max_part_size": 50
+			}
+		}
+	]`), &conf); err != nil {
+		t.Error(err)
+	}
+
+	if exp, act := 1, len(conf); exp != act {
+		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
+		return
+	}
+	if exp, act := 100, conf[0].BoundsCheck.MaxParts; exp != act {
+		t.Errorf("Wrong default parts: %v != %v", act, exp)
+	}
+	if exp, act := 50, conf[0].BoundsCheck.MaxPartSize; exp != act {
+		t.Errorf("Wrong overridden part size: %v != %v", act, exp)
+	}
+}
+
+func TestConstructorConfigDefaultsYAML(t *testing.T) {
+	conf := []Config{}
+
+	if err := yaml.Unmarshal([]byte(`[
+		{
+			"type": "bounds_check",
+			"bounds_check": {
+				"max_part_size": 50
+			}
+		}
+	]`), &conf); err != nil {
+		t.Error(err)
+	}
+
+	if exp, act := 1, len(conf); exp != act {
+		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
+		return
+	}
+	if exp, act := 100, conf[0].BoundsCheck.MaxParts; exp != act {
+		t.Errorf("Wrong default parts: %v != %v", act, exp)
+	}
+	if exp, act := 50, conf[0].BoundsCheck.MaxPartSize; exp != act {
+		t.Errorf("Wrong overridden part size: %v != %v", act, exp)
 	}
 }
