@@ -34,10 +34,10 @@ import (
 )
 
 func TestHTTPBasic(t *testing.T) {
-	nTestLoops := 1000
+	nTestLoops := 100
 
 	conf := NewConfig()
-	conf.HTTPServer.Address = "localhost:1237"
+	conf.HTTPServer.Address = "localhost:1243"
 	conf.HTTPServer.Path = "/testpost"
 
 	h, err := NewHTTPServer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
@@ -56,23 +56,25 @@ func TestHTTPBasic(t *testing.T) {
 		t.Error("Expected error from double listen")
 	}
 
-	<-time.After(time.Millisecond * 100)
+	<-time.After(time.Millisecond * 200)
 
 	// Test both single and multipart messages.
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
 		// Send it as single part
-		if res, err := http.Post(
-			"http://localhost:1237/testpost",
-			"application/octet-stream",
-			bytes.NewBuffer([]byte(testStr)),
-		); err != nil {
-			t.Error(err)
-			return
-		} else if res.StatusCode != 200 {
-			t.Errorf("Wrong error code returned: %v", res.StatusCode)
-			return
-		}
+		go func() {
+			if res, err := http.Post(
+				"http://localhost:1243/testpost",
+				"application/octet-stream",
+				bytes.NewBuffer([]byte(testStr)),
+			); err != nil {
+				t.Error(err)
+				return
+			} else if res.StatusCode != 200 {
+				t.Errorf("Wrong error code returned: %v", res.StatusCode)
+				return
+			}
+		}()
 		select {
 		case resMsg := <-h.MessageChan():
 			if res := string(resMsg.Parts[0]); res != testStr {
@@ -104,17 +106,19 @@ func TestHTTPBasic(t *testing.T) {
 			partOne, partTwo)
 
 		// Send it as multi part
-		if res, err := http.Post(
-			"http://localhost:1237/testpost",
-			"multipart/mixed; boundary=foo",
-			bytes.NewBuffer([]byte(testStr)),
-		); err != nil {
-			t.Error(err)
-			return
-		} else if res.StatusCode != 200 {
-			t.Errorf("Wrong error code returned: %v", res.StatusCode)
-			return
-		}
+		go func() {
+			if res, err := http.Post(
+				"http://localhost:1243/testpost",
+				"multipart/mixed; boundary=foo",
+				bytes.NewBuffer([]byte(testStr)),
+			); err != nil {
+				t.Error(err)
+				return
+			} else if res.StatusCode != 200 {
+				t.Errorf("Wrong error code returned: %v", res.StatusCode)
+				return
+			}
+		}()
 		select {
 		case resMsg := <-h.MessageChan():
 			if exp, actual := 2, len(resMsg.Parts); exp != actual {
@@ -135,7 +139,7 @@ func TestHTTPBasic(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	if err := h.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 }
@@ -170,17 +174,13 @@ func TestHTTPBadRequests(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	if err := h.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 
 	res, err = http.Get("http://localhost:1236/testpost")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if exp, act := http.StatusServiceUnavailable, res.StatusCode; exp != act {
-		t.Errorf("unexpected HTTP response code: %v != %v", exp, act)
+	if err == nil {
+		t.Error("request success when service should be closed")
 	}
 }
 
@@ -205,19 +205,7 @@ func TestHTTPTimeout(t *testing.T) {
 
 	<-time.After(time.Millisecond * 100)
 
-	res, err := http.Post(
-		"http://localhost:1235/testpost",
-		"application/octet-stream",
-		bytes.NewBuffer([]byte("hello world")),
-	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if res.StatusCode != 200 {
-		t.Errorf("Bad status code: %v", res.StatusCode)
-	}
-
+	var res *http.Response
 	res, err = http.Post(
 		"http://localhost:1235/testpost",
 		"application/octet-stream",
@@ -232,7 +220,7 @@ func TestHTTPTimeout(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	if err := h.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 }

@@ -47,6 +47,8 @@ input:
     addresses:
     - tcp://localhost:5555
     socket_type: PULL
+  processors:
+  - type: bounds_check
 output:
   type: kafka
   kafka:
@@ -54,8 +56,6 @@ output:
     - localhost:9092
     client_id: benthos_kafka_output
     topic: benthos_stream
-processors:
-- type: bounds_check
 ```
 
 And this config for the second benthos:
@@ -69,6 +69,8 @@ input:
     consumer_group: benthos_consumer_group
     topic: benthos_stream
     partition: 0
+  processors:
+  - type: bounds_check
 output:
   type: zmq4
   zmq4:
@@ -76,8 +78,6 @@ output:
     - tcp://*:5556
     bind: true
     socket_type: PUSH
-processors:
-- type: bounds_check
 ```
 
 However, our multipart messages will be written as multiple messages into kafka,
@@ -93,6 +93,9 @@ input:
     addresses:
     - tcp://localhost:5555
     socket_type: PULL
+  processors:
+  - type: bounds_check
+  - type: multi_to_blob
 output:
   type: kafka
   kafka:
@@ -100,9 +103,6 @@ output:
     - localhost:9092
     client_id: benthos_kafka_output
     topic: benthos_stream
-processors:
-- type: bounds_check
-- type: multi_to_blob
 ```
 
 And we also add a `blob_to_multi` processor to the second instance, which reads
@@ -118,6 +118,9 @@ input:
     consumer_group: benthos_consumer_group
     topic: benthos_stream
     partition: 0
+  processors:
+  - type: blob_to_multi
+  - type: bounds_check
 output:
   type: zmq4
   zmq4:
@@ -125,9 +128,6 @@ output:
     - tcp://*:5556
     bind: true
     socket_type: PUSH
-processors:
-- type: blob_to_multi
-- type: bounds_check
 ```
 
 Which results in multipart messages at both ends.
@@ -154,6 +154,9 @@ input:
         addresses:
         - tcp://localhost:5555
         socket_type: PULL
+  processors:
+  - type: blob_to_multi
+  - type: bounds_check
 output:
   type: zmq4
   zmq4:
@@ -161,9 +164,6 @@ output:
     - tcp://*:5556
     bind: true
     socket_type: PUSH
-processors:
-- type: blob_to_multi
-- type: bounds_check
 ```
 
 But it would fail, because our `blob_to_multi` processor would try and decode
@@ -189,6 +189,8 @@ input:
         addresses:
         - tcp://localhost:5555
         socket_type: PULL
+  processors:
+  - type: bounds_check
 output:
   type: zmq4
   zmq4:
@@ -196,11 +198,9 @@ output:
     - tcp://*:5556
     bind: true
     socket_type: PUSH
-processors:
-- type: bounds_check
 ```
 
-So now we read and decode messages from kafka into multipart messages, but
-messages from ZMQ which are already multipart are passed straight through.
+This config means the `blob_to_multi` processor is applied only to the kafka
+input, but the `bounds_check` processor is still applied to both.
 
 Solved.

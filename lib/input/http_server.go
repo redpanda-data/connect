@@ -21,6 +21,7 @@
 package input
 
 import (
+	"context"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -44,13 +45,7 @@ func init() {
 		description: `
 In order to receive messages over HTTP Benthos hosts a server. Messages should
 be sent as a POST request. HTTP 1.1 is currently supported and HTTP 2.0 is
-planned for the future.
-
-For more information about sending HTTP messages, including details on sending
-multipart, please read the 'docs/using_http.md' document.
-
-You can set a high water mark of 1 or more. Websockets are currently not
-implemented but are simple to add if a request is made.`,
+planned for the future.`,
 	}
 }
 
@@ -63,19 +58,17 @@ var (
 
 // HTTPServerConfig is configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
-	Address       string `json:"address" yaml:"address"`
-	Path          string `json:"path" yaml:"path"`
-	TimeoutMS     int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	HighWaterMark int    `json:"high_water_mark" yaml:"high_water_mark"`
+	Address   string `json:"address" yaml:"address"`
+	Path      string `json:"path" yaml:"path"`
+	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
 }
 
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
-		Address:       "localhost:8080",
-		Path:          "/post",
-		TimeoutMS:     5000,
-		HighWaterMark: 1,
+		Address:   "localhost:8080",
+		Path:      "/post",
+		TimeoutMS: 5000,
 	}
 }
 
@@ -89,9 +82,8 @@ type HTTPServer struct {
 	stats metrics.Type
 	log   log.Modular
 
-	mux *http.ServeMux
-
-	internalMessages chan [][]byte
+	mux    *http.ServeMux
+	server *http.Server
 
 	messages  chan types.Message
 	responses <-chan types.Response
@@ -102,31 +94,23 @@ type HTTPServer struct {
 
 // NewHTTPServer creates a new HTTPServer input type.
 func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	// We naturally buffer one message due to the loop mechanism, so remove 1.
-	hwm := conf.HTTPServer.HighWaterMark - 1
-	if hwm < 0 {
-		return nil, ErrHWMInvalid
-	}
+	mux := http.NewServeMux()
+	server := &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
 
 	h := HTTPServer{
-		running:          1,
-		conf:             conf,
-		stats:            stats,
-		log:              log.NewModule(".input.http"),
-		mux:              http.NewServeMux(),
-		internalMessages: make(chan [][]byte, hwm),
-		messages:         make(chan types.Message),
-		responses:        nil,
-		closeChan:        make(chan struct{}),
-		closedChan:       make(chan struct{}),
+		running:    1,
+		conf:       conf,
+		stats:      stats,
+		log:        log.NewModule(".input.http"),
+		mux:        mux,
+		server:     server,
+		messages:   make(chan types.Message),
+		responses:  nil,
+		closeChan:  make(chan struct{}),
+		closedChan: make(chan struct{}),
 	}
 
-	h.mux.HandleFunc(h.conf.HTTPServer.Path, h.postHandler)
-
-	go func() {
-		err := http.ListenAndServe(h.conf.HTTPServer.Address, h.mux)
-		panic(err)
-	}()
+	mux.HandleFunc(h.conf.HTTPServer.Path, h.postHandler)
 
 	return &h, nil
 }
@@ -188,9 +172,31 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	select {
-	case h.internalMessages <- msg.Parts:
+	case h.messages <- msg:
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
+		return
+	case <-h.closeChan:
+		http.Error(w, "Server closing", http.StatusServiceUnavailable)
+		return
+	}
+
+	select {
+	case res, open := <-h.responses:
+		if !open {
+			http.Error(w, "Server closing", http.StatusServiceUnavailable)
+			return
+		} else if res.Error() != nil {
+			http.Error(w, res.Error().Error(), http.StatusBadGateway)
+			return
+		}
+	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
+		http.Error(w, "Request timed out", http.StatusRequestTimeout)
+		go func() {
+			// Even if the request times out, we still need to drain a response.
+			<-h.responses
+		}()
+		return
 	}
 }
 
@@ -200,50 +206,24 @@ func (h *HTTPServer) loop() {
 	defer func() {
 		atomic.StoreInt32(&h.running, 0)
 
+		h.server.Shutdown(context.Background())
+
 		close(h.messages)
 		close(h.closedChan)
 	}()
-
-	var data [][]byte
-	var open bool
 
 	h.log.Infof(
 		"Receiving HTTP Post messages at: %s\n",
 		h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
 	)
 
-	for atomic.LoadInt32(&h.running) == 1 {
-		if data == nil {
-			select {
-			case data, open = <-h.internalMessages:
-				if !open {
-					return
-				}
-			case <-h.closeChan:
-				return
-			}
+	go func() {
+		if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
+			h.log.Errorf("Server error: %v\n", err)
 		}
-		if data != nil {
-			select {
-			case h.messages <- types.Message{Parts: data}:
-			case <-h.closeChan:
-				return
-			}
+	}()
 
-			var res types.Response
-			select {
-			case res, open = <-h.responses:
-				if !open {
-					return
-				}
-			case <-h.closeChan:
-				return
-			}
-			if res.Error() == nil {
-				data = nil
-			}
-		}
-	}
+	<-h.closeChan
 }
 
 // StartListening sets the channel used by the input to validate message

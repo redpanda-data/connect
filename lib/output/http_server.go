@@ -22,6 +22,7 @@ package output
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -48,19 +49,17 @@ Sets up an HTTP server that will return messages over HTTP GET requests.`,
 
 // HTTPServerConfig is configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
-	Address         string `json:"address" yaml:"address"`
-	Path            string `json:"path" yaml:"path"`
-	ServerTimeoutMS int64  `json:"server_timeout_ms" yaml:"server_timeout_ms"`
-	ClientTimeoutMS int64  `json:"client_timeout_ms" yaml:"client_timeout_ms"`
+	Address   string `json:"address" yaml:"address"`
+	Path      string `json:"path" yaml:"path"`
+	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
 }
 
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
-		Address:         "localhost:8081",
-		Path:            "/get",
-		ServerTimeoutMS: 5000,
-		ClientTimeoutMS: 5000,
+		Address:   "localhost:8081",
+		Path:      "/get",
+		TimeoutMS: 5000,
 	}
 }
 
@@ -74,22 +73,30 @@ type HTTPServer struct {
 	stats metrics.Type
 	log   log.Modular
 
-	mux *http.ServeMux
+	mux    *http.ServeMux
+	server *http.Server
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
+
+	closedChan chan struct{}
 }
 
 // NewHTTPServer creates a new HTTPServer input type.
 func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+	mux := http.NewServeMux()
+	server := &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
+
 	h := HTTPServer{
 		running:      1,
 		conf:         conf,
 		stats:        stats,
 		log:          log.NewModule(".output.http_server"),
-		mux:          http.NewServeMux(),
+		mux:          mux,
+		server:       server,
 		messages:     nil,
 		responseChan: make(chan types.Response),
+		closedChan:   make(chan struct{}),
 	}
 
 	h.mux.HandleFunc(h.conf.HTTPServer.Path, h.getHandler)
@@ -110,7 +117,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tStart := time.Now()
-	tOutDuration := time.Millisecond * time.Duration(h.conf.HTTPServer.ClientTimeoutMS)
+	tOutDuration := time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)
 
 	var msg types.Message
 	var open bool
@@ -120,7 +127,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	case msg, open = <-h.messages:
 		if !open {
 			http.Error(w, "Server closed", http.StatusServiceUnavailable)
-			atomic.StoreInt32(&h.running, 0)
+			go h.CloseAsync()
 			return
 		}
 	case <-time.After(tOutDuration - time.Since(tStart)):
@@ -166,8 +173,14 @@ func (h *HTTPServer) StartReceiving(msgs <-chan types.Message) error {
 			"Serving messages through HTTP GET request at: %s\n",
 			h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
 		)
-		err := http.ListenAndServe(h.conf.HTTPServer.Address, h.mux)
-		panic(err)
+
+		if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
+			h.log.Errorf("Server error: %v\n", err)
+		}
+
+		atomic.StoreInt32(&h.running, 0)
+		close(h.responseChan)
+		close(h.closedChan)
 	}()
 	return nil
 }
@@ -179,19 +192,17 @@ func (h *HTTPServer) ResponseChan() <-chan types.Response {
 
 // CloseAsync shuts down the HTTPServer input and stops processing requests.
 func (h *HTTPServer) CloseAsync() {
-	atomic.StoreInt32(&h.running, 0)
+	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {
+		h.server.Shutdown(context.Background())
+	}
 }
 
 // WaitForClose blocks until the HTTPServer output has closed down.
 func (h *HTTPServer) WaitForClose(timeout time.Duration) error {
-	// NOTE: Using the default HTTP server means we haven't got an explicit
-	// method for shutting the server down and waiting for completion.
-	tStart := time.Now()
-	for atomic.LoadInt32(&h.running) == 1 {
-		if time.Since(tStart) >= timeout {
-			return types.ErrTimeout
-		}
-		<-time.After(time.Millisecond * 100)
+	select {
+	case <-h.closedChan:
+	case <-time.After(timeout):
+		return types.ErrTimeout
 	}
 	return nil
 }

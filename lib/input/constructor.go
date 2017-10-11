@@ -82,7 +82,7 @@ func NewConfig() Config {
 		File:       NewFileConfig(),
 		STDIN:      NewSTDINConfig(),
 		FanIn:      NewFanInConfig(),
-		Processors: []processor.Config{},
+		Processors: []processor.Config{processor.NewConfig()},
 	}
 }
 
