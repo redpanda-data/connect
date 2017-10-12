@@ -210,8 +210,10 @@ func (f *MmapCache) EnsureCached(index int) error {
 	f.L.Lock()
 
 	// Defer broadcast and deletion of inProgress flag.
-	defer f.Broadcast()
-	defer delete(f.inProgress, index)
+	defer func() {
+		delete(f.inProgress, index)
+		f.Broadcast()
+	}()
 
 	// Create the memory mapping.
 	if err == nil {

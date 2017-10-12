@@ -88,6 +88,7 @@ func NewMmapBuffer(config MmapBufferConfig, log log.Modular, stats metrics.Type)
 	if err = cache.EnsureCached(f.writeIndex); err != nil {
 		log.Errorf("MMAP index write: %v, benthos will block writes until this is resolved.\n", err)
 	}
+
 	go f.cacheManagerLoop(&f.writeIndex)
 	go f.cacheManagerLoop(&f.readIndex)
 
@@ -151,9 +152,11 @@ func (f *MmapBuffer) cacheManagerLoop(indexPtr *int) {
 			f.cache.L.Lock()
 		} else if !bootstrapped {
 			bootstrapped = true
-		} else {
-			// Next read block is still ready, therefore wait for signal before
-			// checking again.
+		} else if *indexPtr < targetIndex {
+			// NOTE: It's possible that while we were waiting for ensure target
+			// was indexed the actual index caught up with us, in which case we
+			// should loop straight back into ensuring the new index rather than
+			// waiting.
 			f.cache.Wait()
 		}
 		return true
