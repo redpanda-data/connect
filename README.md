@@ -10,27 +10,7 @@ A range of internal buffer strategies are available, allowing you to select a
 balance between latency, protection against back pressure and file based
 persistence, or nothing at all (direct bridge).
 
-## Design
-
-Benthos has inputs, an optional buffer, and outputs, which are all set in a
-single config file.
-
-```
-+--------------------------------------+
-|            Input Stream              |
-| ( ZMQ, NSQ, AMQP, Kafka, HTTP, ... ) |--+
-+--------------------------------------+  |
-                                          v
-             +--------------------------------------------+
-             |                   Buffer                   |
-             | ( Memory-Mapped Files, Memory, None, etc ) |
-             +--------------------------------------------+
-                             |
-                             |  +--------------------------------------+
-                             +->|             Output Stream            |
-                                | ( ZMQ, NSQ, AMQP, Kafka, HTTP, ... ) |
-                                +--------------------------------------+
-```
+[Arch Diagram](resources/img/pipeline.png)
 
 ## Supported Protocols
 
@@ -76,6 +56,9 @@ benthos -c ./config.yaml
 ```
 
 ## Config
+
+Benthos has inputs, optional processors, an optional buffer, and outputs, which
+are all set in a single config file.
 
 Check out the samples in [./config](config), or create a fully populated default
 configuration file:
