@@ -10,7 +10,7 @@ A range of internal buffer strategies are available, allowing you to select a
 balance between latency, protection against back pressure and file based
 persistence, or nothing at all (direct bridge).
 
-[Arch Diagram](resources/img/pipeline.png)
+![Arch Diagram](resources/img/pipeline.png "Benthos Pipeline")
 
 ## Supported Protocols
 
