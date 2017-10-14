@@ -43,20 +43,20 @@ func TestBoundsCheck(t *testing.T) {
 	}
 
 	goodParts := [][][]byte{
-		[][]byte{
+		{
 			[]byte("hello"),
 			[]byte("world"),
 		},
-		[][]byte{
+		{
 			[]byte("helloworld"),
 			[]byte("helloworld"),
 		},
-		[][]byte{
+		{
 			[]byte("hello"),
 			[]byte("world"),
 			[]byte("!"),
 		},
-		[][]byte{
+		{
 			[]byte("helloworld"),
 			[]byte("helloworld"),
 			[]byte("helloworld"),
@@ -64,14 +64,14 @@ func TestBoundsCheck(t *testing.T) {
 	}
 
 	badParts := [][][]byte{
-		[][]byte{
+		{
 			[]byte("hello world"),
 		},
-		[][]byte{
+		{
 			[]byte("hello world"),
 			[]byte("hello world this exceeds max part size"),
 		},
-		[][]byte{
+		{
 			[]byte("hello"),
 			[]byte("world"),
 			[]byte("this"),
