@@ -4,7 +4,8 @@
 [![goreportcard for jeffail/benthos][3]][4]
 
 Benthos is a messaging bridge service that supports a wide and growing list of
-input and output protocols.
+input and output protocols, helping you to connect pipeline components across
+diverse platforms with ease.
 
 A range of internal buffer strategies are available, allowing you to select a
 balance between latency, protection against back pressure and file based
