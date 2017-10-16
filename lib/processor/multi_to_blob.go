@@ -62,10 +62,10 @@ func NewMultiToBlob(conf Config, log log.Modular, stats metrics.Type) (Type, err
 
 // ProcessMessage takes a message of > 0 parts and returns a single part message
 // that can be later converted back to the original parts.
-func (m MultiToBlob) ProcessMessage(msg *types.Message) (*types.Message, bool) {
+func (m MultiToBlob) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
 	newMsg := types.NewMessage()
 	newMsg.Parts = append(newMsg.Parts, msg.Bytes())
-	return &newMsg, true
+	return &newMsg, nil, true
 }
 
 //------------------------------------------------------------------------------

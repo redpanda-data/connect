@@ -43,7 +43,7 @@ func TestMultiToBlob(t *testing.T) {
 	testMsg := types.Message{Parts: [][]byte{[]byte("hello"), []byte("world")}}
 	testMsgBlob := testMsg.Bytes()
 
-	if res, ok := proc.ProcessMessage(&testMsg); ok {
+	if res, _, ok := proc.ProcessMessage(&testMsg); ok {
 		if lParts := len(res.Parts); lParts != 1 {
 			t.Errorf("Wrong number of parts returned: %v != %v", lParts, 1)
 		}

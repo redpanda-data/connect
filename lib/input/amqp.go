@@ -235,7 +235,9 @@ func (a *AMQP) loop() {
 			}
 			if resErr := res.Error(); resErr == nil {
 				a.stats.Incr("input.amqp.count", 1)
-				data.Ack(false)
+				if !res.SkipAck() {
+					data.Ack(true)
+				}
 				data = nil
 			} else if resErr == types.ErrMessageTooLarge {
 				a.stats.Incr("input.amqp.send.rejected", 1)

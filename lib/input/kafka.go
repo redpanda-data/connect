@@ -271,8 +271,10 @@ func (k *Kafka) loop() {
 				k.stats.Timing("input.kafka.timing", int64(time.Since(start)))
 				k.stats.Incr("input.kafka.count", 1)
 				k.offset = data.Offset + 1
-				if err := k.commitOffset(); err != nil {
-					k.log.Errorf("Failed to commit offset: %v\n", err)
+				if !res.SkipAck() {
+					if err := k.commitOffset(); err != nil {
+						k.log.Errorf("Failed to commit offset: %v\n", err)
+					}
 				}
 				data = nil
 			} else if resErr == types.ErrMessageTooLarge {

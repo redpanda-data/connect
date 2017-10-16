@@ -29,9 +29,11 @@ import (
 // Type reads a message, performs a processing operation, and returns a message
 // and a flag indicating whether that message should be propagated or not.
 type Type interface {
-	// ProcessMessage returns a message to be sent onwards, if the bool flag is
-	// false then the message should be dropped.
-	ProcessMessage(msg *types.Message) (*types.Message, bool)
+	// ProcessMessage attempts to process a message. Since processing can fail
+	// this call returns both a message in case of success, a response in case
+	// of failure, and a bool flag indicating (true == success) which of the two
+	// should be used.
+	ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool)
 }
 
 //------------------------------------------------------------------------------

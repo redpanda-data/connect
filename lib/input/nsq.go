@@ -179,6 +179,8 @@ func (n *NSQ) loop() {
 			}
 		}
 
+		unAck := []*nsq.Message{}
+
 		// If bytes are read then try and propagate.
 		if msg != nil {
 			select {
@@ -192,7 +194,17 @@ func (n *NSQ) loop() {
 			}
 			if resErr := res.Error(); resErr == nil {
 				n.stats.Incr("input.nsq.count", 1)
-				msg.Finish()
+				if !res.SkipAck() {
+					msg.Finish()
+					if len(unAck) > 0 {
+						for _, unAckMsg := range unAck {
+							unAckMsg.Finish()
+						}
+						unAck = []*nsq.Message{}
+					}
+				} else {
+					unAck = append(unAck, msg)
+				}
 				msg = nil
 			} else if resErr == types.ErrMessageTooLarge {
 				n.stats.Incr("input.nsq.send.rejected", 1)

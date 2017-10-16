@@ -20,47 +20,20 @@
 
 package types
 
-import "fmt"
-
 //------------------------------------------------------------------------------
 
 // Response is a response from an output, agent or broker that confirms the
 // input of successful message receipt.
 type Response interface {
+	// Error returns a non-nil error if the message failed to reach its
+	// destination.
 	Error() error
-	ErrorMap() map[int]error
-}
 
-//------------------------------------------------------------------------------
-
-// MappedResponse is returned by a broker to provide a map of errors
-// representing agent errors.
-type MappedResponse struct {
-	Errors map[int]error
-}
-
-// Error returns nil if no errors are present, otherwise a concatenated blob of
-// errors.
-func (b MappedResponse) Error() error {
-	if len(b.Errors) > 0 {
-		return fmt.Errorf("%v", b.Errors)
-	}
-	return nil
-}
-
-// ErrorMap returns a map of errors returned by agents, represented by index.
-func (b MappedResponse) ErrorMap() map[int]error {
-	if len(b.Errors) > 0 {
-		return b.Errors
-	}
-	return nil
-}
-
-// NewMappedResponse returns a response tailored for a broker (with n agents).
-func NewMappedResponse() MappedResponse {
-	return MappedResponse{
-		Errors: make(map[int]error),
-	}
+	// SkipAck indicates that even though there may not have been an error in
+	// processing a message, it should not be acknowledged. If SkipAck is false
+	// and Error is nil then all unacknowledged messages should be acknowledged
+	// also.
+	SkipAck() bool
 }
 
 //------------------------------------------------------------------------------
@@ -76,9 +49,9 @@ func (o SimpleResponse) Error() error {
 	return o.err
 }
 
-// ErrorMap returns nil.
-func (o SimpleResponse) ErrorMap() map[int]error {
-	return nil
+// SkipAck indicates whether a successful message should be acknowledged.
+func (o SimpleResponse) SkipAck() bool {
+	return false
 }
 
 // NewSimpleResponse returns a response with an error (nil error signals
@@ -87,6 +60,25 @@ func NewSimpleResponse(err error) SimpleResponse {
 	return SimpleResponse{
 		err: err,
 	}
+}
+
+//------------------------------------------------------------------------------
+
+// UnacknowledgedResponse is a response type that indicates the message has
+// reached its destination but should not be acknowledged.
+type UnacknowledgedResponse struct{}
+
+// Error returns the underlying error.
+func (u UnacknowledgedResponse) Error() error { return nil }
+
+// SkipAck indicates whether a successful message should be acknowledged.
+func (u UnacknowledgedResponse) SkipAck() bool {
+	return true
+}
+
+// NewUnacknowledgedResponse returns an UnacknowledgedResponse.
+func NewUnacknowledgedResponse() UnacknowledgedResponse {
+	return UnacknowledgedResponse{}
 }
 
 //------------------------------------------------------------------------------

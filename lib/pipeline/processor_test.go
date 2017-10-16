@@ -32,20 +32,22 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
+var errMockProc = errors.New("this is an error from mock processor")
+
 type mockMsgProcessor struct {
 	drop bool
 }
 
-func (m *mockMsgProcessor) ProcessMessage(msg *types.Message) (*types.Message, bool) {
+func (m *mockMsgProcessor) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
 	if m.drop {
-		return nil, false
+		return nil, types.NewSimpleResponse(errMockProc), false
 	}
 	newMsg := types.NewMessage()
 	newMsg.Parts = [][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 	}
-	return &newMsg, true
+	return &newMsg, nil, true
 }
 
 func TestMemoryBuffer(t *testing.T) {
@@ -95,7 +97,7 @@ func TestMemoryBuffer(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if res.Error() != nil {
+		if res.Error() != errMockProc {
 			t.Error(res.Error())
 		}
 	case <-time.After(time.Second):
