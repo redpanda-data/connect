@@ -32,44 +32,18 @@ func TestSimpleResponse(t *testing.T) {
 	if exp, act := err, res.Error(); exp != act {
 		t.Errorf("Wrong error: %v != %v", exp, act)
 	}
-	if act := res.ErrorMap(); act != nil {
-		t.Errorf("Wrong error: %v != %v", nil, act)
+	if res.SkipAck() {
+		t.Error("Should not received skip ack on simple response")
 	}
 }
 
-func TestMappedResponse(t *testing.T) {
-	m := NewMappedResponse()
-	if exp, act := 0, len(m.Errors); exp != act {
-		t.Errorf("Invalid new count of error map: %v != %v", exp, act)
-	}
-	if act := m.Error(); act != nil {
-		t.Errorf("Non nil returned from new Error(): %v", act)
-	}
-	if act := m.ErrorMap(); act != nil {
-		t.Errorf("Non nil returned from new ErrorMap(): %v", act)
-	}
+func TestUnackResponse(t *testing.T) {
+	res := NewUnacknowledgedResponse()
 
-	m.Errors[0] = errors.New("0")
-	m.Errors[1] = errors.New("1")
-	m.Errors[2] = errors.New("2")
-
-	if exp, act := 3, len(m.Errors); exp != act {
-		t.Errorf("Invalid edit count of error map: %v != %v", exp, act)
+	if res.Error() != nil {
+		t.Error(res.Error())
 	}
-	if exp, act := 3, len(m.ErrorMap()); exp != act {
-		t.Errorf("Invalid edit count of error map: %v != %v", exp, act)
-	}
-	if exp, act := "0", m.ErrorMap()[0].Error(); exp != act {
-		t.Errorf("Invalid element from error map: %v != %v", exp, act)
-	}
-	if exp, act := "1", m.ErrorMap()[1].Error(); exp != act {
-		t.Errorf("Invalid element from error map: %v != %v", exp, act)
-	}
-	if exp, act := "2", m.ErrorMap()[2].Error(); exp != act {
-		t.Errorf("Invalid element from error map: %v != %v", exp, act)
-	}
-
-	if exp, act := len("map[0:0 1:1 2:2]"), len(m.Error().Error()); exp != act {
-		t.Errorf("Invalid string of error map: %v != %v", exp, act)
+	if !res.SkipAck() {
+		t.Error("Should have received skip ack on unack response")
 	}
 }

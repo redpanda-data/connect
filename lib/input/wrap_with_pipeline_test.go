@@ -235,15 +235,17 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
+var errMockProc = errors.New("mock proc error")
+
 type mockProc struct {
 	value string
 }
 
-func (m mockProc) ProcessMessage(msg *types.Message) (*types.Message, bool) {
+func (m mockProc) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
 	if string(msg.Parts[0]) == m.value {
-		return nil, false
+		return nil, types.NewSimpleResponse(errMockProc), false
 	}
-	return msg, true
+	return msg, nil, true
 }
 
 //------------------------------------------------------------------------------
@@ -286,7 +288,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if res.Error() != nil {
+		if res.Error() != errMockProc {
 			t.Error(res.Error())
 		}
 	case <-time.After(time.Second):
@@ -308,7 +310,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if res.Error() != nil {
+		if res.Error() != errMockProc {
 			t.Error(res.Error())
 		}
 	case <-time.After(time.Second):
@@ -401,7 +403,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if res.Error() != nil {
+		if res.Error() != errMockProc {
 			t.Error(res.Error())
 		}
 	case <-time.After(time.Second):
@@ -423,7 +425,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if res.Error() != nil {
+		if res.Error() != errMockProc {
 			t.Error(res.Error())
 		}
 	case <-time.After(time.Second):

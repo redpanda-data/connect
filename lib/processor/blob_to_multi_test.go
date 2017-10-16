@@ -40,19 +40,21 @@ func TestBlobToMulti(t *testing.T) {
 		return
 	}
 
-	if _, res := proc.ProcessMessage(&types.Message{}); res {
-		t.Errorf("Expected fail on bad message")
+	if _, res, succeeded := proc.ProcessMessage(&types.Message{}); succeeded {
+		t.Error("Expected fail on bad message")
+	} else if _, ok := res.(types.SimpleResponse); !ok {
+		t.Error("Expected simple response from bad message")
 	}
-	if _, res := proc.ProcessMessage(
+	if _, _, res := proc.ProcessMessage(
 		&types.Message{Parts: [][]byte{[]byte("wat this isnt good")}},
 	); res {
-		t.Errorf("Expected fail on bad message")
+		t.Error("Expected fail on bad message")
 	}
 
 	testMsg := types.Message{Parts: [][]byte{[]byte("hello"), []byte("world")}}
 	testMsgBlob := testMsg.Bytes()
 
-	if res, ok := proc.ProcessMessage(&types.Message{Parts: [][]byte{testMsgBlob}}); ok {
+	if res, _, ok := proc.ProcessMessage(&types.Message{Parts: [][]byte{testMsgBlob}}); ok {
 		if !reflect.DeepEqual(testMsg, *res) {
 			t.Errorf("Returned message did not match: %s != %s", *res, testMsg)
 		}

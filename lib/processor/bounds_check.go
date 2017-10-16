@@ -78,7 +78,7 @@ func NewBoundsCheck(conf Config, log log.Modular, stats metrics.Type) (Type, err
 //------------------------------------------------------------------------------
 
 // ProcessMessage checks each message against a set of bounds.
-func (m *BoundsCheck) ProcessMessage(msg *types.Message) (*types.Message, bool) {
+func (m *BoundsCheck) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
 	lParts := len(msg.Parts)
 	if lParts < m.conf.BoundsCheck.MinParts {
 		m.log.Warnf(
@@ -86,14 +86,14 @@ func (m *BoundsCheck) ProcessMessage(msg *types.Message) (*types.Message, bool) 
 			m.conf.BoundsCheck.MinParts, lParts,
 		)
 		m.stats.Incr("processor.bounds_check.dropped.empty", 1)
-		return nil, false
+		return nil, types.NewSimpleResponse(nil), false
 	} else if lParts > m.conf.BoundsCheck.MaxParts {
 		m.log.Warnf(
 			"Rejecting message due to message parts exceeding limit (%v): %v\n",
 			m.conf.BoundsCheck.MaxParts, lParts,
 		)
 		m.stats.Incr("processor.bounds_check.dropped.num_parts", 1)
-		return nil, false
+		return nil, types.NewSimpleResponse(nil), false
 	}
 	for _, part := range msg.Parts {
 		if size := len(part); size > m.conf.BoundsCheck.MaxPartSize {
@@ -102,10 +102,10 @@ func (m *BoundsCheck) ProcessMessage(msg *types.Message) (*types.Message, bool) 
 				m.conf.BoundsCheck.MaxPartSize, size,
 			)
 			m.stats.Incr("processor.bounds_check.dropped.part_size", 1)
-			return nil, false
+			return nil, types.NewSimpleResponse(nil), false
 		}
 	}
-	return msg, true
+	return msg, nil, true
 }
 
 //------------------------------------------------------------------------------
