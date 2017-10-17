@@ -171,9 +171,12 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		msg.Parts = [][]byte{msgBytes}
 	}
 
+	h.stats.Incr("input.http_server.count", 1)
+
 	select {
 	case h.messages <- msg:
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
+		h.stats.Incr("input.http_server.send.timeout", 1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		return
 	case <-h.closeChan:
@@ -187,14 +190,22 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Server closing", http.StatusServiceUnavailable)
 			return
 		} else if res.Error() != nil {
+			h.stats.Incr("input.http_server.send.error", 1)
 			http.Error(w, res.Error().Error(), http.StatusBadGateway)
 			return
 		}
+		h.stats.Incr("input.http_server.send.success", 1)
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
+		h.stats.Incr("input.http_server.send.timeout", 1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		go func() {
 			// Even if the request times out, we still need to drain a response.
-			<-h.responses
+			resAsync := <-h.responses
+			if resAsync.Error() != nil {
+				h.stats.Incr("input.http_server.send.async_error", 1)
+			} else {
+				h.stats.Incr("input.http_server.send.async_success", 1)
+			}
 		}()
 		return
 	}

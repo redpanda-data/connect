@@ -253,6 +253,7 @@ func (k *Kafka) loop() {
 			if data, open = <-k.topicConsumer.Messages(); !open {
 				return
 			}
+			k.stats.Incr("input.kafka.count", 1)
 		}
 
 		// If bytes are read then try and propagate.
@@ -269,18 +270,13 @@ func (k *Kafka) loop() {
 			}
 			if resErr := res.Error(); resErr == nil {
 				k.stats.Timing("input.kafka.timing", int64(time.Since(start)))
-				k.stats.Incr("input.kafka.count", 1)
 				k.offset = data.Offset + 1
 				if !res.SkipAck() {
 					if err := k.commitOffset(); err != nil {
 						k.log.Errorf("Failed to commit offset: %v\n", err)
 					}
 				}
-				data = nil
-			} else if resErr == types.ErrMessageTooLarge {
-				k.stats.Incr("input.kafka.send.rejected", 1)
-				k.log.Errorf("Kafka message was rejected: %v\n", resErr)
-				k.log.Errorf("Message content: %s\n", data.Value)
+				k.stats.Incr("input.kafka.send.success", 1)
 				data = nil
 			} else {
 				k.stats.Incr("input.kafka.send.error", 1)

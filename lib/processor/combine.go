@@ -64,6 +64,7 @@ func NewCombineConfig() CombineConfig {
 // messages.
 type Combine struct {
 	log   log.Modular
+	stats metrics.Type
 	n     int
 	parts [][]byte
 }
@@ -71,8 +72,9 @@ type Combine struct {
 // NewCombine returns a Combine processor.
 func NewCombine(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &Combine{
-		log: log.NewModule(".processor.combine"),
-		n:   conf.Combine.Parts,
+		log:   log.NewModule(".processor.combine"),
+		stats: stats,
+		n:     conf.Combine.Parts,
 	}, nil
 }
 
@@ -82,6 +84,8 @@ func NewCombine(conf Config, log log.Modular, stats metrics.Type) (Type, error) 
 // NoAck response, until eventually it has N buffered messages, at which point
 // it combines those messages into one multiple part message which is sent on.
 func (c *Combine) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
+	c.stats.Incr("processor.combine.count", 1)
+
 	c.parts = append(c.parts, msg.Parts...)
 
 	if len(c.parts) >= c.n {
@@ -93,6 +97,7 @@ func (c *Combine) ProcessMessage(msg *types.Message) (*types.Message, types.Resp
 		return msg, nil, true
 	}
 
+	c.stats.Incr("processor.combine.dropped", 1)
 	return nil, types.NewUnacknowledgedResponse(), false
 }
 

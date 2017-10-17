@@ -116,6 +116,7 @@ func (n *NATS) loop() {
 		if msg, open = <-n.messages; !open {
 			return
 		}
+		n.stats.Incr("output.nats.count", 1)
 		var err error
 		switch len(msg.Parts) {
 		case 0:
@@ -123,6 +124,11 @@ func (n *NATS) loop() {
 			err = n.natsConn.Publish(n.conf.NATS.Subject, msg.Parts[0])
 		default:
 			err = n.natsConn.Publish(n.conf.NATS.Subject, msg.Bytes())
+		}
+		if err != nil {
+			n.stats.Incr("output.nats.send.error", 1)
+		} else {
+			n.stats.Incr("output.nats.send.success", 1)
 		}
 		select {
 		case n.responseChan <- types.NewSimpleResponse(err):

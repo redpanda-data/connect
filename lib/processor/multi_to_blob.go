@@ -51,11 +51,14 @@ E.g. ZMQ => Benthos(multi_to_blob) => Kafka => Benthos(blob_to_multi)`,
 // format. This message can be converted back to multiple parts using the
 // BlobToMulti processor.
 type MultiToBlob struct {
+	stats metrics.Type
 }
 
 // NewMultiToBlob returns a MultiToBlob processor.
 func NewMultiToBlob(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	return MultiToBlob{}, nil
+	return MultiToBlob{
+		stats: stats,
+	}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -65,6 +68,7 @@ func NewMultiToBlob(conf Config, log log.Modular, stats metrics.Type) (Type, err
 func (m MultiToBlob) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
 	newMsg := types.NewMessage()
 	newMsg.Parts = append(newMsg.Parts, msg.Bytes())
+	m.stats.Incr("processor.multi_to_blob.count", 1)
 	return &newMsg, nil, true
 }
 

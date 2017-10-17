@@ -174,6 +174,7 @@ func (n *NSQ) loop() {
 		if msg == nil {
 			select {
 			case msg = <-n.internalMessages:
+				n.stats.Incr("input.nsq.count", 1)
 			case <-n.closeChan:
 				return
 			}
@@ -193,7 +194,7 @@ func (n *NSQ) loop() {
 				return
 			}
 			if resErr := res.Error(); resErr == nil {
-				n.stats.Incr("input.nsq.count", 1)
+				n.stats.Incr("input.nsq.send.success", 1)
 				if !res.SkipAck() {
 					msg.Finish()
 					if len(unAck) > 0 {
@@ -205,10 +206,6 @@ func (n *NSQ) loop() {
 				} else {
 					unAck = append(unAck, msg)
 				}
-				msg = nil
-			} else if resErr == types.ErrMessageTooLarge {
-				n.stats.Incr("input.nsq.send.rejected", 1)
-				msg.Finish()
 				msg = nil
 			} else {
 				n.stats.Incr("input.nsq.send.error", 1)

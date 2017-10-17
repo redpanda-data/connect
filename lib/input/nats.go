@@ -134,10 +134,7 @@ func (n *NATS) loop() {
 				return
 			}
 			if resErr := res.Error(); resErr == nil {
-				n.stats.Incr("input.nats.count", 1)
-				msg = nil
-			} else if resErr == types.ErrMessageTooLarge {
-				n.stats.Incr("input.nats.send.rejected", 1)
+				n.stats.Incr("input.nats.send.success", 1)
 				msg = nil
 			} else {
 				n.stats.Incr("input.nats.send.error", 1)
@@ -149,6 +146,7 @@ func (n *NATS) loop() {
 				if !open {
 					return
 				}
+				n.stats.Incr("input.nats.count", 1)
 			case <-n.closeChan:
 				return
 			}

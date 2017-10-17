@@ -122,12 +122,14 @@ func (k *Kafka) loop() {
 		if msg, open = <-k.messages; !open {
 			return
 		}
+		k.stats.Incr("output.kafka.count", 1)
 		for _, part := range msg.Parts {
 			select {
 			case k.producer.Input() <- &sarama.ProducerMessage{
 				Topic: k.conf.Kafka.Topic,
 				Value: sarama.ByteEncoder(part),
 			}:
+				k.stats.Incr("output.kafka.send.success", 1)
 			case <-k.closeChan:
 				return
 			}

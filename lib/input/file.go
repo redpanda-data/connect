@@ -68,8 +68,9 @@ func NewFileConfig() FileConfig {
 type File struct {
 	running int32
 
-	conf Config
-	log  log.Modular
+	conf  Config
+	log   log.Modular
+	stats metrics.Type
 
 	messages  chan types.Message
 	responses <-chan types.Response
@@ -84,6 +85,7 @@ func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		running:    1,
 		conf:       conf,
 		log:        log.NewModule(".input.file"),
+		stats:      stats,
 		messages:   make(chan types.Message),
 		responses:  nil,
 		closeChan:  make(chan struct{}),
@@ -139,6 +141,7 @@ func (f *File) loop() {
 				partsToSend = parts
 				parts = nil
 			}
+			f.stats.Incr("input.file.count", 1)
 		}
 		if len(partsToSend) > 0 {
 			select {
@@ -151,7 +154,10 @@ func (f *File) loop() {
 				return
 			}
 			if res.Error() == nil {
+				f.stats.Incr("input.file.send.success", 1)
 				partsToSend = nil
+			} else {
+				f.stats.Incr("input.file.send.error", 1)
 			}
 		}
 	}

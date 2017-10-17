@@ -125,7 +125,7 @@
   branch = "master"
   name = "golang.org/x/net"
   packages = ["proxy"]
-  revision = "a04bdaca5b32abe1c069418fb7088ae607de5bd0"
+  revision = "1087133bc4af3073e18add999345c6ae75918503"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"

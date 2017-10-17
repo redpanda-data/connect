@@ -190,6 +190,8 @@ func (z *ZMQ4) loop() {
 				z.stats.Incr("input.zmq4.receive.error", 1)
 				z.log.Errorf("Failed to receive message bytes: %v\n", err)
 				data = nil
+			} else {
+				z.stats.Incr("input.zmq4.count", 1)
 			}
 			if len(data) == 0 {
 				data = nil
@@ -208,11 +210,6 @@ func (z *ZMQ4) loop() {
 				return
 			}
 			if resErr := res.Error(); resErr == nil {
-				z.stats.Incr("input.zmq4.count", 1)
-				data = nil
-			} else if resErr == types.ErrMessageTooLarge {
-				z.stats.Incr("input.zmq4.send.rejected", 1)
-				z.log.Errorf("ZMQ4 message was rejected: %v\nMessage content: %v\n", resErr, data)
 				data = nil
 			} else {
 				z.stats.Incr("input.zmq4.send.error", 1)

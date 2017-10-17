@@ -217,6 +217,7 @@ func (a *AMQP) loop() {
 			select {
 			case msg := <-a.consumerChan:
 				data = &msg
+				a.stats.Incr("input.amqp.count", 1)
 			case <-a.closeChan:
 				return
 			}
@@ -234,13 +235,10 @@ func (a *AMQP) loop() {
 				return
 			}
 			if resErr := res.Error(); resErr == nil {
-				a.stats.Incr("input.amqp.count", 1)
 				if !res.SkipAck() {
 					data.Ack(true)
 				}
-				data = nil
-			} else if resErr == types.ErrMessageTooLarge {
-				a.stats.Incr("input.amqp.send.rejected", 1)
+				a.stats.Incr("input.amqp.send.success", 1)
 				data = nil
 			} else {
 				a.stats.Incr("input.amqp.send.error", 1)
