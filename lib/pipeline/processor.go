@@ -89,7 +89,7 @@ func (p *Processor) loop() {
 		if msg, open = <-p.messagesIn; !open {
 			return
 		}
-		p.stats.Incr("pipeline.processor.message.received", 1)
+		p.stats.Incr("pipeline.processor.count", 1)
 
 		resultMsg := &msg
 		var resultRes types.Response
@@ -98,7 +98,7 @@ func (p *Processor) loop() {
 			resultMsg, resultRes, sending = p.msgProcessors[i].ProcessMessage(resultMsg)
 		}
 		if !sending {
-			p.stats.Incr("pipeline.processor.message.dropped", 1)
+			p.stats.Incr("pipeline.processor.dropped", 1)
 			select {
 			case p.responsesOut <- resultRes:
 			case <-p.closeChan:
@@ -117,7 +117,9 @@ func (p *Processor) loop() {
 			return
 		}
 		if res.Error() == nil {
-			p.stats.Incr("pipeline.processor.message.sent", 1)
+			p.stats.Incr("pipeline.processor.send.success", 1)
+		} else {
+			p.stats.Incr("pipeline.processor.send.error", 1)
 		}
 		select {
 		case p.responsesOut <- res:

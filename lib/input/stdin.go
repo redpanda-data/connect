@@ -143,7 +143,6 @@ func (s *STDIN) readLoop() {
 		if len(partsToSend) != 0 {
 			select {
 			case s.internalMessages <- partsToSend:
-				s.stats.Incr("stdin.message.sent", 1)
 				partsToSend = nil
 			case <-time.After(time.Second):
 			}
@@ -173,6 +172,7 @@ func (s *STDIN) loop() {
 				if !open {
 					return
 				}
+				s.stats.Incr("input.stdin.count", 1)
 			case <-s.closeChan:
 				return
 			}
@@ -189,7 +189,10 @@ func (s *STDIN) loop() {
 				return
 			}
 			if res.Error() == nil {
+				s.stats.Incr("input.stdin.send.success", 1)
 				data = nil
+			} else {
+				s.stats.Incr("input.stdin.send.error", 1)
 			}
 		}
 	}

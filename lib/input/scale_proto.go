@@ -201,6 +201,8 @@ func (s *ScaleProto) loop() {
 			if err != nil && err != mangos.ErrRecvTimeout {
 				s.log.Errorf("ScaleProto Socket recv error: %v\n", err)
 				s.stats.Incr("input.scale_proto.socket.recv.error", 1)
+			} else {
+				s.stats.Incr("input.scale_proto.count", 1)
 			}
 		}
 
@@ -219,12 +221,7 @@ func (s *ScaleProto) loop() {
 			}
 			if resErr := res.Error(); resErr == nil {
 				s.stats.Timing("input.scale_proto.timing", int64(time.Since(start)))
-				s.stats.Incr("input.scale_proto.count", 1)
-				data = nil
-			} else if resErr == types.ErrMessageTooLarge {
-				s.stats.Incr("input.scale_proto.send.rejected", 1)
-				s.log.Errorf("ScaleProto message was rejected: %v\n", resErr)
-				s.log.Errorf("Message content: %s\n", data)
+				s.stats.Incr("input.scale_proto.send.success", 1)
 				data = nil
 			} else {
 				s.stats.Incr("input.scale_proto.send.error", 1)

@@ -151,6 +151,7 @@ func (h *HTTPClient) loop() {
 		if msg, open = <-h.messages; !open {
 			return
 		}
+		h.stats.Incr("output.http_client.count", 1)
 
 		// POST message
 		var client http.Client
@@ -184,7 +185,9 @@ func (h *HTTPClient) loop() {
 
 		if err != nil {
 			h.log.Errorf("POST request failed: %v\n", err)
-			h.stats.Incr("output.http_client.post.error", 1)
+			h.stats.Incr("output.http_client.send.error", 1)
+		} else {
+			h.stats.Incr("output.http_client.send.success", 1)
 		}
 		select {
 		case h.responseChan <- types.NewSimpleResponse(err):

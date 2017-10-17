@@ -191,11 +191,17 @@ func (s *ScaleProto) loop() {
 		if msg, open = <-s.messages; !open {
 			return
 		}
+		s.stats.Incr("output.scale_proto.count", 1)
 		var err error
 		for _, part := range msg.Parts {
 			if err == nil {
 				err = s.socket.Send(part)
 			}
+		}
+		if err != nil {
+			s.stats.Incr("output.scale_proto.send.error", 1)
+		} else {
+			s.stats.Incr("output.scale_proto.send.success", 1)
 		}
 		select {
 		case s.responseChan <- types.NewSimpleResponse(err):

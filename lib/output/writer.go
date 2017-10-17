@@ -84,7 +84,7 @@ func (w *writer) loop() {
 			if !open {
 				return
 			}
-			w.stats.Incr("writer.message.received", 1)
+			w.stats.Incr("output.writer.count", 1)
 		case <-w.closeChan:
 			return
 		}
@@ -94,9 +94,13 @@ func (w *writer) loop() {
 		} else {
 			_, err = fmt.Fprintf(w.handle, "%s\n\n", bytes.Join(msg.Parts, []byte("\n")))
 		}
+		if err != nil {
+			w.stats.Incr("output.writer.send.error", 1)
+		} else {
+			w.stats.Incr("output.writer.send.success", 1)
+		}
 		select {
 		case w.responseChan <- types.NewSimpleResponse(err):
-			w.stats.Incr("writer.message.sent", 1)
 		case <-w.closeChan:
 			return
 		}

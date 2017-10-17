@@ -49,13 +49,15 @@ E.g. ZMQ => Benthos(multi_to_blob) => Kafka => Benthos(blob_to_multi)`,
 // benthos multiple part blob format and decodes them into multiple part
 // messages.
 type BlobToMulti struct {
-	log log.Modular
+	log   log.Modular
+	stats metrics.Type
 }
 
 // NewBlobToMulti returns a BlobToMulti processor.
 func NewBlobToMulti(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &BlobToMulti{
-		log: log.NewModule(".processor.blob_to_multi"),
+		log:   log.NewModule(".processor.blob_to_multi"),
+		stats: stats,
 	}, nil
 }
 
@@ -64,12 +66,15 @@ func NewBlobToMulti(conf Config, log log.Modular, stats metrics.Type) (Type, err
 // ProcessMessage takes a message with 1 part in multiple part blob format and
 // returns a multiple part message by decoding it.
 func (m *BlobToMulti) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
+	m.stats.Incr("processor.blob_to_multi.count", 1)
 	if len(msg.Parts) != 1 {
+		m.stats.Incr("processor.blob_to_multi.dropped", 1)
 		m.log.Errorf("Cannot decode message into mutiple parts due to parts count: %v != 1\n", len(msg.Parts))
 		return nil, types.NewSimpleResponse(nil), false
 	}
 	newMsg, err := types.FromBytes(msg.Parts[0])
 	if err != nil {
+		m.stats.Incr("processor.blob_to_multi.dropped", 1)
 		m.log.Errorf("Failed to decode message into multiple parts: %v\n", err)
 		return nil, types.NewSimpleResponse(nil), false
 	}

@@ -130,6 +130,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 			go h.CloseAsync()
 			return
 		}
+		h.stats.Incr("output.http_server.count", 1)
 	case <-time.After(tOutDuration - time.Since(tStart)):
 		http.Error(w, "Timed out waiting for message", http.StatusRequestTimeout)
 		return
@@ -157,6 +158,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.responseChan <- types.NewSimpleResponse(nil)
+	h.stats.Incr("output.http_server.send.success", 1)
 }
 
 //------------------------------------------------------------------------------

@@ -85,6 +85,8 @@ output:
 There are also configuration sections for logging and metrics, if you print an
 example config you will see the available options.
 
+For a list of metrics within Benthos [check out this spec][6].
+
 ## Speed and Benchmarks
 
 Benthos isn't doing much, so it's reasonable to expect low latencies and high
@@ -144,6 +146,7 @@ docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
 [3]: https://goreportcard.com/badge/github.com/jeffail/benthos
 [4]: https://goreportcard.com/report/jeffail/benthos
 [5]: resources/docs/multipart.md
+[6]: resources/docs/metrics.md
 [dep]: https://github.com/golang/dep
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/

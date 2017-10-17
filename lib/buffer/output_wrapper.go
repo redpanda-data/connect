@@ -91,7 +91,10 @@ func (m *OutputWrapper) inputLoop() {
 		}
 		backlog, err := m.buffer.PushMessage(msg)
 		if err == nil {
+			m.stats.Incr("buffer.write.count", 1)
 			m.stats.Gauge("buffer.backlog", int64(backlog))
+		} else {
+			m.stats.Incr("buffer.write.error", 1)
 		}
 		select {
 		case m.responsesOut <- types.NewSimpleResponse(err):
@@ -119,6 +122,8 @@ func (m *OutputWrapper) outputLoop() {
 			var err error
 			if msg, err = m.buffer.NextMessage(); err != nil {
 				if err != types.ErrTypeClosed {
+					m.stats.Incr("buffer.read.error", 1)
+
 					// Unconventional errors here should always indicate some
 					// sort of corruption. Hopefully the corruption was message
 					// specific and not the whole buffer, so we can try shifting
@@ -132,6 +137,8 @@ func (m *OutputWrapper) outputLoop() {
 					// If our buffer is closed then we exit.
 					return
 				}
+			} else {
+				m.stats.Incr("buffer.read.count", 1)
 			}
 		}
 
@@ -148,8 +155,10 @@ func (m *OutputWrapper) outputLoop() {
 			if res.Error() == nil {
 				msg = types.Message{}
 				backlog, _ := m.buffer.ShiftMessage()
+				m.stats.Incr("buffer.send.success", 1)
 				m.stats.Gauge("buffer.backlog", int64(backlog))
 			} else {
+				m.stats.Incr("buffer.send.error", 1)
 				if _, exists := errMap[res.Error()]; !exists {
 					errMap[res.Error()] = struct{}{}
 					errs = append(errs, res.Error())

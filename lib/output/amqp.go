@@ -176,6 +176,7 @@ func (a *AMQP) loop() {
 		if msg, open = <-a.messages; !open {
 			return
 		}
+		a.stats.Incr("output.amqp.count", 1)
 		var err error
 		var sending []byte
 		var contentType string
@@ -201,6 +202,11 @@ func (a *AMQP) loop() {
 				// a bunch of application/implementation-specific fields
 			},
 		)
+		if err != nil {
+			a.stats.Incr("output.amqp.send.error", 1)
+		} else {
+			a.stats.Incr("output.amqp.send.success", 1)
+		}
 		select {
 		case a.responseChan <- types.NewSimpleResponse(err):
 		case <-a.closeChan:

@@ -145,6 +145,7 @@ func (n *NSQ) loop() {
 		if msg, open = <-n.messages; !open {
 			return
 		}
+		n.stats.Incr("output.nsq.count", 1)
 		var err error
 		switch len(msg.Parts) {
 		case 0:
@@ -152,6 +153,11 @@ func (n *NSQ) loop() {
 			err = n.producer.Publish(n.conf.NSQ.Topic, msg.Parts[0])
 		default:
 			err = n.producer.Publish(n.conf.NSQ.Topic, msg.Bytes())
+		}
+		if err != nil {
+			n.stats.Incr("output.nsq.send.error", 1)
+		} else {
+			n.stats.Incr("output.nsq.send.success", 1)
 		}
 		select {
 		case n.responseChan <- types.NewSimpleResponse(err):
