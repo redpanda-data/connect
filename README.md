@@ -3,11 +3,11 @@
 [![godoc for jeffail/benthos][1]][2]
 [![goreportcard for jeffail/benthos][3]][4]
 
-Benthos is a messaging bridge service that supports a wide and growing list of
-input and output protocols, helping you to connect pipeline components across
-diverse platforms with ease.
+Benthos is a service that reads messages from any sources and writes them to any
+sinks. It bridges services and tools together in ways that can simplify your
+platform or reduce development time.
 
-A range of internal buffer strategies are available, allowing you to select a
+A range of optional buffer strategies are available, allowing you to select a
 balance between latency, protection against back pressure and file based
 persistence, or nothing at all (direct bridge).
 
@@ -27,10 +27,11 @@ Currently supported input/output targets:
 - STDIN/STDOUT
 - File
 
-You can also have multiple outputs or inputs by choosing a routing strategy
+Setting up multiple outputs or inputs is done by choosing a routing strategy
 (fan in, fan out, round robin, etc.)
 
-For a full and up to date list you can print them from the binary:
+For a full and up to date list of all inputs, buffer options, and outputs you
+can print them from the binary:
 
 ```
 # Print inputs, buffers and output options
@@ -86,23 +87,6 @@ There are also configuration sections for logging and metrics, if you print an
 example config you will see the available options.
 
 For a list of metrics within Benthos [check out this spec][6].
-
-## Speed and Benchmarks
-
-Benthos isn't doing much, so it's reasonable to expect low latencies and high
-throughput. Here's a table of benchmarks from an 4-core (2.4ghz) machine,
-bridging messages of 5000 bytes through a 500MB memory buffer via various
-protocols:
-
-|       | Avg. Latency (ms) | 99th P. Latency (ms) |    Msg/s |    Mb/s |
-|------:|------------------:|---------------------:|---------:|--------:|
-| ZMQ   |             5.940 |               67.268 |    31357 | 157.383 |
-| Nano  |             3.312 |               20.020 |    22894 | 114.907 |
-| HTTP  |             0.549 |                8.751 |     4280 |  21.479 |
-
-Take these results with a pinch of salt. I've added some benchmarking utilities
-in `./cmd/test`, hopefully a third party can cook us up some more meaningful
-figures from a better set up than I have.
 
 ## ZMQ4 Support
 
