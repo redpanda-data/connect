@@ -52,7 +52,7 @@ func NewBoundsCheckConfig() BoundsCheckConfig {
 	return BoundsCheckConfig{
 		MaxParts:    100,
 		MinParts:    1,
-		MaxPartSize: 4 * 1024 * 1024 * 1024, // 4GB
+		MaxPartSize: 1 * 1024 * 1024 * 1024, // 1GB
 	}
 }
 
