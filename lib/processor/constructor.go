@@ -49,6 +49,7 @@ type Config struct {
 	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
 	BlobToMulti struct{}          `json:"blob_to_multi" yaml:"blob_to_multi"`
 	MultiToBlob struct{}          `json:"multi_to_blob" yaml:"multi_to_blob"`
+	Sample      SampleConfig      `json:"sample" yaml:"sample"`
 	Combine     CombineConfig     `json:"combine" yaml:"combine"`
 }
 
@@ -59,6 +60,7 @@ func NewConfig() Config {
 		BoundsCheck: NewBoundsCheckConfig(),
 		BlobToMulti: struct{}{},
 		MultiToBlob: struct{}{},
+		Sample:      NewSampleConfig(),
 		Combine:     NewCombineConfig(),
 	}
 }
