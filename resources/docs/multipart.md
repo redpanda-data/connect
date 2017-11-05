@@ -14,8 +14,8 @@ guaranteed for the whole batch of message parts.
 
 These defaults are not always ideal, sometimes we might want to take a multipart
 message, encode it into a binary blob, and output that blob as a single part.
-The message could then decoded further in the pipeline and seemlessly decoded
-back into its original multiple part format.
+The message could then be seemlessly decoded back into its original multiple
+part format further down the pipeline.
 
 You can do this with the `multi_to_blob` and `blob_to_multi` processors.
 
