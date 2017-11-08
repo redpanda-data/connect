@@ -6,61 +6,43 @@ processed, buffered, and written seemlessly. However, some inputs and outputs do
 not support multipart and can therefore cause confusion.
 
 Inputs that do not support multipart are easy, as they are simply read as
-multipart messages with one part. Outputs, however, are more tricky. By default,
-an output that only supports single part messages (such as kafka), which
+multipart messages with one part. Outputs, however, are more tricky.
+
+An output that only supports single part messages (such as Kafka), which
 receives a multipart message (perhaps from ZMQ), will output a unique message
 per part. These parts are 'at-least once', as message delivery can only be
-guaranteed for the whole batch of message parts.
+guaranteed for the whole batch of message parts. We could potentially read those
+individual parts and use the `combine` processor to 'squash' them back into a
+multipart message, but such a system can be brittle.
 
-These defaults are not always ideal, sometimes we might want to take a multipart
-message, encode it into a binary blob, and output that blob as a single part.
-The message could then be seemlessly decoded back into its original multiple
-part format further down the pipeline.
+Alternatively we can use the `multi_to_blob` and `blob_to_multi` processors so
+that we can output any message as a single part and then seemlessly decode it
+back into its original multiple part format further down the pipeline.
 
-You can do this with the `multi_to_blob` and `blob_to_multi` processors.
+## Example
 
-## Why
+Let's consider a platform where our services `foo` and `bar` communicate through
+ZMQ, but we want to introduce Kafka in the middle in order to occasionally
+replay the stream. We start off our prototype platform by bridging the services
+with Benthos.
 
-As a quick example, let's consider a platform that has a service `foo`, which
-creates and streams messages to a service `bar`. Up until now these services
-would connect directly and send multipart messages over ZMQ, looking like this:
+If `foo` and `bar` expect to use multipart messages then by default our new
+pipeline is wrong:
 
-```
-Foo (ZMQ) => Bar (ZMQ)
-```
+![multipart demo 1][multipart_demo_1]
 
-After some time we decided that we would like to introduce a kafka cluster so
-that messages from `foo` can be replayed independently. In order to save on
-development time we decided to use benthos initially to test the idea before
-committing. The pipeline now looks like this:
+As you can see above, the `bar` service on the right will see each message part
+as an individual message.
 
-```
-Foo (ZMQ) => Benthos => Kafka => Benthos => Bar (ZMQ)
-```
+Our first solution could be to leave the first Benthos unchanged, but set the
+second Benthos to combine N messages from Kafka into N part messages, where N is
+the static number of parts we expect from each message (three in this example).
 
-With this config for the first benthos:
+![multipart demo 2][multipart_demo_2]
 
-```yaml
-input:
-  type: zmq4
-  zmq4:
-    addresses:
-    - tcp://localhost:5555
-    socket_type: PULL
-  processors:
-  - type: bounds_check
-output:
-  type: kafka
-  kafka:
-    addresses:
-    - localhost:9092
-    client_id: benthos_kafka_output
-    topic: benthos_stream
-```
+The config file of the second Benthos might look something like this:
 
-And this config for the second benthos:
-
-```yaml
+``` yaml
 input:
   type: kafka
   kafka:
@@ -70,6 +52,9 @@ input:
     topic: benthos_stream
     partition: 0
   processors:
+  - type: combine
+    combine:
+      parts: 3
   - type: bounds_check
 output:
   type: zmq4
@@ -80,13 +65,23 @@ output:
     socket_type: PUSH
 ```
 
-However, our multipart messages will be written as multiple messages into kafka,
-and `bar` incorrectly receives those parts as individual single part messages.
-To fix this we introduce a `multi_to_blob` processor to the first benthos
-instance, which encodes all messages into single part before passing it to the
-output:
+The above is brittle, as any communication errors or crashes could result in
+duplicated message parts that will break the ordering of message parts. This
+solution would also not be feasible if the number of parts per message is
+dynamic.
 
-```yaml
+Another option would be to configure both Benthos instances to use blobs.
+
+![multipart demo 3][multipart_demo_3]
+
+In this example we can fluidly propagate messages with dynamic numbers of parts.
+We are also safe from communication errors and crashes, since in the worst case
+this would only introduce a duplicate message and would not otherwise break the
+stream.
+
+For the above example our first Benthos config might look like this:
+
+``` yaml
 input:
   type: zmq4
   zmq4:
@@ -105,11 +100,9 @@ output:
     topic: benthos_stream
 ```
 
-And we also add a `blob_to_multi` processor to the second instance, which reads
-single part messages as encoded blobs and decodes them into multipart messages
-before passing it to the output:
+And the second config might look like this:
 
-```yaml
+``` yaml
 input:
   type: kafka
   kafka:
@@ -130,47 +123,12 @@ output:
     socket_type: PUSH
 ```
 
-Which results in multipart messages at both ends.
+We could even combine single and multiple part communication protocols by
+specifying these processors per input or output type. For example, if we wished
+to allow the second Benthos to also read directly from a `foo` type and combine
+the streams we could change the config to this:
 
-The only remaining issue would be if we decided to mix inputs or outputs. For
-example, we might decide that we'd like the second instance of benthos to read
-from both a kafka and a second `foo`. We could change the previous config to
-this:
-
-```yaml
-input:
-  type: fan_in
-  fan_in:
-    inputs:
-    - type: kafka
-      kafka:
-        addresses:
-        - localhost:9092
-        consumer_group: benthos_consumer_group
-        topic: benthos_stream
-        partition: 0
-    - type: zmq4
-      zmq4:
-        addresses:
-        - tcp://localhost:5555
-        socket_type: PULL
-  processors:
-  - type: blob_to_multi
-  - type: bounds_check
-output:
-  type: zmq4
-  zmq4:
-    addresses:
-    - tcp://*:5556
-    bind: true
-    socket_type: PUSH
-```
-
-But it would fail, because our `blob_to_multi` processor would try and decode
-the multipart messages from ZMQ which would return an error. We can solve this
-by specifying processors per input:
-
-```yaml
+``` yaml
 input:
   type: fan_in
   fan_in:
@@ -200,7 +158,11 @@ output:
     socket_type: PUSH
 ```
 
-This config means the `blob_to_multi` processor is applied only to the kafka
-input, but the `bounds_check` processor is still applied to both.
+Where the `blob_to_multi` processor is only applied to Kafka, but the
+`bounds_check` is correctly applied to all inputs.
 
 Solved.
+
+[multipart_demo_1]: ../img/docs/multipart_demo_1.png
+[multipart_demo_2]: ../img/docs/multipart_demo_2.png
+[multipart_demo_3]: ../img/docs/multipart_demo_3.png
