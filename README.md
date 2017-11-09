@@ -13,7 +13,7 @@ persistence, or nothing at all (direct bridge).
 
 ## Supported Protocols
 
-![Arch Diagram](resources/img/pipelines_doodle.gif "Benthos Pipeline")
+![Arch Diagram](resources/img/inputs_doodle.png "Benthos Inputs")
 
 Currently supported input/output targets:
 
