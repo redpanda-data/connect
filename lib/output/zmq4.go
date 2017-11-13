@@ -161,16 +161,21 @@ func (z *ZMQ4) loop() {
 	}
 
 	for atomic.LoadInt32(&z.running) == 1 {
-		msg, open := <-z.messages
-		if !open {
+		var err error
+		select {
+		case msg, open := <-z.messages:
+			if !open {
+				return
+			}
+			z.stats.Incr("output.zmq4.count", 1)
+			_, err = z.socket.SendMessage(msg.Parts) // Could lock entire service
+			if err != nil {
+				z.stats.Incr("output.zmq4.send.success", 1)
+			} else {
+				z.stats.Incr("output.zmq4.send.error", 1)
+			}
+		case <-z.closeChan:
 			return
-		}
-		z.stats.Incr("output.zmq4.count", 1)
-		_, err := z.socket.SendMessage(msg.Parts) // Could lock entire service
-		if err != nil {
-			z.stats.Incr("output.zmq4.send.success", 1)
-		} else {
-			z.stats.Incr("output.zmq4.send.error", 1)
 		}
 		select {
 		case z.responseChan <- types.NewSimpleResponse(err):

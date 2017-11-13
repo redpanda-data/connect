@@ -26,6 +26,7 @@ import (
 
 	"github.com/go-mangos/mangos"
 	"github.com/go-mangos/mangos/protocol/pull"
+	"github.com/go-mangos/mangos/protocol/rep"
 	"github.com/go-mangos/mangos/protocol/sub"
 	"github.com/go-mangos/mangos/transport/ipc"
 	"github.com/go-mangos/mangos/transport/tcp"
@@ -54,7 +55,13 @@ the 'benthos_multi' flag. Note, however, that this format may appear to be
 gibberish to other services, and the input will be unable to read normal
 messages with this setting.
 
-Currently only PULL and SUB sockets are supported.`,
+Currently only PULL, SUB, and REP sockets are supported.
+
+When using REP sockets Benthos will respond to each request with a success or
+error message. The content of these messages are set with the 'reply_success'
+and 'reply_error' config options respectively. The 'reply_timeout_ms' option
+decides how long Benthos will wait before giving up on the reply, which can
+result in duplicate messages when triggered.`,
 	}
 }
 
@@ -65,8 +72,11 @@ type ScaleProtoConfig struct {
 	Address       string   `json:"address" yaml:"address"`
 	Bind          bool     `json:"bind_address" yaml:"bind_address"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
+	SuccessStr    string   `json:"reply_success" yaml:"reply_success"`
+	ErrorStr      string   `json:"reply_error" yaml:"reply_error"`
 	SubFilters    []string `json:"sub_filters" yaml:"sub_filters"`
 	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
+	RepTimeoutMS  int      `json:"reply_timeout_ms" yaml:"reply_timeout_ms"`
 }
 
 // NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
@@ -75,8 +85,11 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 		Address:       "tcp://*:5555",
 		Bind:          true,
 		SocketType:    "PULL",
+		SuccessStr:    "SUCCESS",
+		ErrorStr:      "ERROR",
 		SubFilters:    []string{},
 		PollTimeoutMS: 5000,
+		RepTimeoutMS:  5000,
 	}
 }
 
@@ -128,7 +141,7 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	}
 	err = s.socket.SetOption(
 		mangos.OptionSendDeadline,
-		time.Millisecond*time.Duration(s.conf.ScaleProto.PollTimeoutMS),
+		time.Millisecond*time.Duration(s.conf.ScaleProto.RepTimeoutMS),
 	)
 	if nil != err {
 		return nil, err
@@ -164,6 +177,8 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 		return pull.NewSocket()
 	case "SUB":
 		return sub.NewSocket()
+	case "REP":
+		return rep.NewSocket()
 	}
 	return nil, types.ErrInvalidScaleProtoType
 }
@@ -193,6 +208,10 @@ func (s *ScaleProto) loop() {
 
 	var data []byte
 
+	isReq := (s.conf.ScaleProto.SocketType == "REP")
+	reqSuccess := []byte(s.conf.ScaleProto.SuccessStr)
+	reqError := []byte(s.conf.ScaleProto.ErrorStr)
+
 	for atomic.LoadInt32(&s.running) == 1 {
 		// If no bytes then read a message
 		if data == nil {
@@ -209,7 +228,6 @@ func (s *ScaleProto) loop() {
 		// If bytes are read then try and propagate.
 		if data != nil {
 			msg := types.Message{Parts: [][]byte{data}}
-			start := time.Now()
 			select {
 			case s.messages <- msg:
 			case <-s.closeChan:
@@ -220,11 +238,24 @@ func (s *ScaleProto) loop() {
 				return
 			}
 			if resErr := res.Error(); resErr == nil {
-				s.stats.Timing("input.scale_proto.timing", int64(time.Since(start)))
 				s.stats.Incr("input.scale_proto.send.success", 1)
 				data = nil
+				if isReq {
+					if err := s.socket.Send(reqSuccess); err != nil {
+						s.stats.Incr("input.scale_proto.send.rep.error", 1)
+					} else {
+						s.stats.Incr("input.scale_proto.send.rep.success", 1)
+					}
+				}
 			} else {
 				s.stats.Incr("input.scale_proto.send.error", 1)
+				if isReq {
+					if err := s.socket.Send(reqError); err != nil {
+						s.stats.Incr("input.scale_proto.send.rep.error", 1)
+					} else {
+						s.stats.Incr("input.scale_proto.send.rep.success", 1)
+					}
+				}
 			}
 		}
 	}

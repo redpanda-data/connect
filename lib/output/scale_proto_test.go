@@ -28,6 +28,7 @@ import (
 
 	"github.com/go-mangos/mangos"
 	"github.com/go-mangos/mangos/protocol/pull"
+	"github.com/go-mangos/mangos/protocol/rep"
 	"github.com/go-mangos/mangos/transport/tcp"
 
 	"github.com/jeffail/benthos/lib/types"
@@ -45,6 +46,8 @@ func TestScaleProtoBasic(t *testing.T) {
 	conf := NewConfig()
 	conf.ScaleProto.Address = "tcp://localhost:1324"
 	conf.ScaleProto.Bind = true
+	conf.ScaleProto.PollTimeoutMS = 100
+	conf.ScaleProto.RepTimeoutMS = 100
 	conf.ScaleProto.SocketType = "PUSH"
 
 	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
@@ -70,6 +73,7 @@ func TestScaleProtoBasic(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	defer socket.Close()
 
 	socket.AddTransport(tcp.NewTransport())
 	socket.SetOption(mangos.OptionRecvDeadline, time.Second)
@@ -109,6 +113,138 @@ func TestScaleProtoBasic(t *testing.T) {
 			t.Errorf("Action timed out")
 			return
 		}
+	}
+}
+
+func TestScaleProtoReqRep(t *testing.T) {
+	nTestLoops := 1000
+
+	sendChan := make(chan types.Message)
+
+	conf := NewConfig()
+	conf.ScaleProto.Address = "tcp://localhost:1324"
+	conf.ScaleProto.SuccessStr = "FOO_SUCCESS"
+	conf.ScaleProto.RepTimeoutMS = 100
+	conf.ScaleProto.PollTimeoutMS = 100
+	conf.ScaleProto.Bind = true
+	conf.ScaleProto.SocketType = "REQ"
+
+	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer func() {
+		s.CloseAsync()
+		if err = s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	if err = s.StartReceiving(sendChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	socket, err := rep.NewSocket()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer socket.Close()
+
+	socket.AddTransport(tcp.NewTransport())
+	socket.SetOption(mangos.OptionRecvDeadline, time.Second)
+
+	if err = socket.Dial("tcp://localhost:1324"); err != nil {
+		t.Error(err)
+		return
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
+
+		select {
+		case sendChan <- testMsg:
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+
+		data, err := socket.Recv()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if res := string(data); res != testStr {
+			t.Errorf("Wrong value on output: %v != %v", res, testStr)
+		}
+
+		if err = socket.Send([]byte("FOO_SUCCESS")); err != nil {
+			t.Error(err)
+		}
+
+		select {
+		case res := <-s.ResponseChan():
+			if res.Error() != nil {
+				t.Error(res.Error())
+				return
+			}
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+	}
+
+	select {
+	case sendChan <- types.Message{Parts: [][]byte{[]byte("foo")}}:
+	case <-time.After(time.Second):
+		t.Errorf("Action timed out")
+		return
+	}
+
+	data, err := socket.Recv()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if res := string(data); res != "foo" {
+		t.Errorf("Wrong value on output: %v != %v", res, "foo")
+	}
+
+	if err = socket.Send([]byte("FOO_ERROR")); err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case res := <-s.ResponseChan():
+		if res.Error() != ErrBadReply {
+			t.Error(res.Error())
+			return
+		}
+	case <-time.After(time.Second):
+		t.Errorf("Action timed out")
+		return
+	}
+
+	// Send message again but do not response, we want to ensure the output can
+	// still close down gracefully.
+	select {
+	case sendChan <- types.Message{Parts: [][]byte{[]byte("foo")}}:
+	case <-time.After(time.Second):
+		t.Errorf("Action timed out")
+		return
+	}
+
+	data, err = socket.Recv()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if res := string(data); res != "foo" {
+		t.Errorf("Wrong value on output: %v != %v", res, "foo")
 	}
 }
 
