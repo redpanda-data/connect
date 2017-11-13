@@ -1,0 +1,18 @@
+input:
+  type: scalability_protocols
+  scalability_protocols:
+    address: tcp://localhost:1234
+    bind_address: true
+    socket_type: REP
+    poll_timeout_ms: 2000
+output:
+  type: scalability_protocols
+  scalability_protocols:
+    address: tcp://localhost:1235
+    bind_address: true
+    socket_type: REQ
+    poll_timeout_ms: 2000
+logger:
+  prefix: benthos
+  log_level: INFO
+  add_timestamp: true

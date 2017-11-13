@@ -36,6 +36,7 @@ import (
 
 	"github.com/go-mangos/mangos"
 	"github.com/go-mangos/mangos/protocol/pull"
+	"github.com/go-mangos/mangos/protocol/rep"
 	"github.com/go-mangos/mangos/transport/ipc"
 	"github.com/go-mangos/mangos/transport/tcp"
 
@@ -49,20 +50,30 @@ func main() {
 	runtime.GOMAXPROCS(1)
 
 	var address, period string
+	var reqRep bool
 	flag.StringVar(&address, "addr", "tcp://localhost:1235", "Address of the benthos server")
 	flag.StringVar(&period, "period", "10s", "Time period between benchmark measurements")
+	flag.BoolVar(&reqRep, "reqrep", false, "Use request/reply sockets instead of push/pull")
 
 	flag.Parse()
 
 	fmt.Fprintln(os.Stderr, "This is a benchmarking utility for benthos.")
-	fmt.Fprintln(os.Stderr, "Make sure you are running benthos with the ./test/scale_proto.yaml config.")
+	fmt.Fprintln(
+		os.Stderr, "Make sure you are running benthos with the ./test/scale_proto.yaml"+
+			" or ./test/scale_proto_reqrep.yaml config.",
+	)
 
 	duration, err := time.ParseDuration(period)
 	if err != nil {
 		panic(err)
 	}
 
-	socket, err := pull.NewSocket()
+	var socket mangos.Socket
+	if reqRep {
+		socket, err = rep.NewSocket()
+	} else {
+		socket, err = pull.NewSocket()
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -96,6 +107,17 @@ func main() {
 						benchChan <- bench
 					} else {
 						fmt.Printf("| Error: Wrong message format: %v\n", err)
+					}
+				}
+			}
+			if reqRep {
+				if err == nil {
+					if err = socket.Send([]byte("SUCCESS")); err != nil {
+						fmt.Printf("| Error: Failed to send response: %v\n", err)
+					}
+				} else if err != mangos.ErrRecvTimeout {
+					if err = socket.Send([]byte("ERROR")); err != nil {
+						fmt.Printf("| Error: Failed to send response: %v\n", err)
 					}
 				}
 			}

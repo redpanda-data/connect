@@ -38,6 +38,7 @@ import (
 
 	"github.com/go-mangos/mangos"
 	"github.com/go-mangos/mangos/protocol/push"
+	"github.com/go-mangos/mangos/protocol/req"
 	"github.com/go-mangos/mangos/transport/ipc"
 	"github.com/go-mangos/mangos/transport/tcp"
 
@@ -51,12 +52,17 @@ func main() {
 	runtime.GOMAXPROCS(1)
 
 	var address string
+	var reqRep bool
 	flag.StringVar(&address, "addr", "tcp://localhost:1234", "Address of the benthos server")
+	flag.BoolVar(&reqRep, "reqrep", false, "Use request/reply sockets instead of push/pull")
 
 	flag.Parse()
 
 	fmt.Fprintln(os.Stdout, "This is a benchmarking utility for benthos.")
-	fmt.Fprintln(os.Stdout, "Make sure you are running benthos with the ./test/scale_proto.yaml config.")
+	fmt.Fprintln(
+		os.Stderr, "Make sure you are running benthos with the ./test/scale_proto.yaml"+
+			" or ./test/scale_proto_reqrep.yaml config.",
+	)
 
 	if len(flag.Args()) != 2 {
 		fmt.Printf("\nUsage: %v <interval> <blob_size>\n", os.Args[0])
@@ -74,7 +80,12 @@ func main() {
 		panic(err)
 	}
 
-	socket, err := push.NewSocket()
+	var socket mangos.Socket
+	if reqRep {
+		socket, err = req.NewSocket()
+	} else {
+		socket, err = push.NewSocket()
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -111,7 +122,16 @@ func main() {
 			if err != nil && err != mangos.ErrSendTimeout {
 				panic(err)
 			} else {
-				msg = nil
+				if reqRep {
+					var reply []byte
+					if reply, err = socket.Recv(); err != nil {
+						panic(err)
+					} else if string(reply) == "SUCCESS" {
+						msg = nil
+					}
+				} else {
+					msg = nil
+				}
 			}
 			index++
 		}
