@@ -41,7 +41,7 @@ func TestScaleProtoBasic(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
-	conf.ScaleProto.Address = "tcp://localhost:1238"
+	conf.ScaleProto.Addresses = []string{"tcp://localhost:1238", "tcp://localhost:1239"}
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.SocketType = "PULL"
 	conf.ScaleProto.PollTimeoutMS = 100
@@ -100,13 +100,45 @@ func TestScaleProtoBasic(t *testing.T) {
 			t.Error("Timed out waiting for response")
 		}
 	}
+
+	socket2, err := push.NewSocket()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer socket2.Close()
+
+	socket2.AddTransport(tcp.NewTransport())
+
+	if err = socket2.Dial("tcp://localhost:1239"); err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err = socket2.Send([]byte("second sock")); err != nil {
+		t.Error(err)
+		return
+	}
+	select {
+	case resMsg := <-s.MessageChan():
+		if res := string(resMsg.Parts[0]); res != "second sock" {
+			t.Errorf("Wrong result, %v != %v", res, "second sock")
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for message")
+	}
+	select {
+	case resChan <- types.NewSimpleResponse(nil):
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for response")
+	}
 }
 
 func TestScaleProtoReqRep(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
-	conf.ScaleProto.Address = "tcp://localhost:1238"
+	conf.ScaleProto.Addresses = []string{"tcp://localhost:1238"}
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.SocketType = "REP"
 	conf.ScaleProto.PollTimeoutMS = 100
@@ -227,7 +259,7 @@ func TestScaleProtoPubSub(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
-	conf.ScaleProto.Address = "tcp://localhost:1239"
+	conf.ScaleProto.Addresses = []string{"tcp://localhost:1239"}
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.SocketType = "SUB"
 	conf.ScaleProto.SubFilters = []string{"testTopic"}

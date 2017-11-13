@@ -80,18 +80,18 @@ var (
 
 // ScaleProtoConfig is configuration for the ScaleProto output type.
 type ScaleProtoConfig struct {
-	Address       string `json:"address" yaml:"address"`
-	Bind          bool   `json:"bind_address" yaml:"bind_address"`
-	SocketType    string `json:"socket_type" yaml:"socket_type"`
-	SuccessStr    string `json:"reply_success" yaml:"reply_success"`
-	PollTimeoutMS int    `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
-	RepTimeoutMS  int    `json:"reply_timeout_ms" yaml:"reply_timeout_ms"`
+	Addresses     []string `json:"addresses" yaml:"addresses"`
+	Bind          bool     `json:"bind_address" yaml:"bind_address"`
+	SocketType    string   `json:"socket_type" yaml:"socket_type"`
+	SuccessStr    string   `json:"reply_success" yaml:"reply_success"`
+	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
+	RepTimeoutMS  int      `json:"reply_timeout_ms" yaml:"reply_timeout_ms"`
 }
 
 // NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		Address:       "tcp://localhost:5556",
+		Addresses:     []string{"tcp://localhost:5556"},
 		Bind:          false,
 		SocketType:    "PUSH",
 		SuccessStr:    "SUCCESS",
@@ -159,9 +159,17 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	s.socket.AddTransport(tcp.NewTransport())
 
 	if s.conf.ScaleProto.Bind {
-		err = s.socket.Listen(s.conf.ScaleProto.Address)
+		for _, addr := range s.conf.ScaleProto.Addresses {
+			if err = s.socket.Listen(addr); err != nil {
+				break
+			}
+		}
 	} else {
-		err = s.socket.Dial(s.conf.ScaleProto.Address)
+		for _, addr := range s.conf.ScaleProto.Addresses {
+			if err = s.socket.Dial(addr); err != nil {
+				break
+			}
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -200,13 +208,13 @@ func (s *ScaleProto) loop() {
 
 	if s.conf.ScaleProto.Bind {
 		s.log.Infof(
-			"Sending Scalability Protocols messages to bound address: %s\n",
-			s.conf.ScaleProto.Address,
+			"Sending Scalability Protocols messages to bound addresses: %s\n",
+			s.conf.ScaleProto.Addresses,
 		)
 	} else {
 		s.log.Infof(
-			"Sending Scalability Protocols messages to connected address: %s\n",
-			s.conf.ScaleProto.Address,
+			"Sending Scalability Protocols messages to connected addresses: %s\n",
+			s.conf.ScaleProto.Addresses,
 		)
 	}
 

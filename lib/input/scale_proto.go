@@ -69,7 +69,7 @@ result in duplicate messages when triggered.`,
 
 // ScaleProtoConfig is configuration for the ScaleProto input type.
 type ScaleProtoConfig struct {
-	Address       string   `json:"address" yaml:"address"`
+	Addresses     []string `json:"addresses" yaml:"addresses"`
 	Bind          bool     `json:"bind_address" yaml:"bind_address"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
 	SuccessStr    string   `json:"reply_success" yaml:"reply_success"`
@@ -82,7 +82,7 @@ type ScaleProtoConfig struct {
 // NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		Address:       "tcp://*:5555",
+		Addresses:     []string{"tcp://*:5555"},
 		Bind:          true,
 		SocketType:    "PULL",
 		SuccessStr:    "SUCCESS",
@@ -151,9 +151,17 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	s.socket.AddTransport(tcp.NewTransport())
 
 	if s.conf.ScaleProto.Bind {
-		err = s.socket.Listen(s.conf.ScaleProto.Address)
+		for _, addr := range s.conf.ScaleProto.Addresses {
+			if err = s.socket.Listen(addr); err != nil {
+				break
+			}
+		}
 	} else {
-		err = s.socket.Dial(s.conf.ScaleProto.Address)
+		for _, addr := range s.conf.ScaleProto.Addresses {
+			if err = s.socket.Dial(addr); err != nil {
+				break
+			}
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -196,13 +204,13 @@ func (s *ScaleProto) loop() {
 
 	if s.conf.ScaleProto.Bind {
 		s.log.Infof(
-			"Receiving Scalability Protocols messages at bound address: %s\n",
-			s.conf.ScaleProto.Address,
+			"Receiving Scalability Protocols messages at bound addresses: %s\n",
+			s.conf.ScaleProto.Addresses,
 		)
 	} else {
 		s.log.Infof(
-			"Receiving Scalability Protocols messages at connected address: %s\n",
-			s.conf.ScaleProto.Address,
+			"Receiving Scalability Protocols messages at connected addresses: %s\n",
+			s.conf.ScaleProto.Addresses,
 		)
 	}
 

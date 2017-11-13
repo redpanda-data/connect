@@ -41,8 +41,8 @@ func TestFanOutWithScaleProto(t *testing.T) {
 	scaleOne, scaleTwo := NewConfig(), NewConfig()
 	scaleOne.Type, scaleTwo.Type = "scalability_protocols", "scalability_protocols"
 	scaleOne.ScaleProto.Bind, scaleTwo.ScaleProto.Bind = true, true
-	scaleOne.ScaleProto.Address = "tcp://localhost:1241"
-	scaleTwo.ScaleProto.Address = "tcp://localhost:1242"
+	scaleOne.ScaleProto.Addresses = []string{"tcp://localhost:1241"}
+	scaleTwo.ScaleProto.Addresses = []string{"tcp://localhost:1242"}
 	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PUSH", "PUSH"
 
 	conf.FanOut.Outputs = append(conf.FanOut.Outputs, scaleOne)
