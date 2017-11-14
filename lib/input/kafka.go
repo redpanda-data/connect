@@ -108,6 +108,7 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	config := sarama.NewConfig()
 	config.ClientID = conf.Kafka.ClientID
 	config.Net.DialTimeout = time.Second
+	config.Consumer.Return.Errors = true
 
 	var err error
 	defer func() {

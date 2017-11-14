@@ -103,6 +103,8 @@ func NewKafkaBalanced(conf Config, log log.Modular, stats metrics.Type) (Type, e
 	config := cluster.NewConfig()
 	config.ClientID = conf.KafkaBalanced.ClientID
 	config.Net.DialTimeout = time.Second
+	config.Consumer.Return.Errors = true
+	config.Group.Return.Notifications = true
 
 	if conf.KafkaBalanced.StartFromOldest {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
