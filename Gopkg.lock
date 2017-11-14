@@ -4,14 +4,20 @@
 [[projects]]
   name = "github.com/Shopify/sarama"
   packages = ["."]
-  revision = "bbdbe644099b7fdc8327d5cc69c030945188b2e9"
-  version = "v1.13.0"
+  revision = "240fd146ce68bcafb034cc5dc977229ffbafa8ea"
+  version = "v1.14.0"
 
 [[projects]]
   branch = "master"
   name = "github.com/amir/raidman"
   packages = [".","proto"]
   revision = "1ccc43bfb9c93cb401a4025e49c64ba71e5e668b"
+
+[[projects]]
+  name = "github.com/bsm/sarama-cluster"
+  packages = ["."]
+  revision = "ccdc0803695fbce22f1706d04ded46cd518fd832"
+  version = "v2.1.8"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
@@ -45,7 +51,7 @@
 
 [[projects]]
   name = "github.com/go-mangos/mangos"
-  packages = [".","protocol/pub","protocol/pull","protocol/push","protocol/sub","transport/ipc","transport/tcp"]
+  packages = [".","protocol/pub","protocol/pull","protocol/push","protocol/rep","protocol/req","protocol/sub","transport/ipc","transport/tcp"]
   revision = "7e2b8010de3b57f5880ae5b8201067fd943e3202"
   version = "v1.2.0"
 
@@ -53,7 +59,7 @@
   branch = "master"
   name = "github.com/golang/protobuf"
   packages = ["proto"]
-  revision = "1643683e1b54a9e88ad26d98f81400c8c9d9f4f9"
+  revision = "1e59b77b52bf8e4b449a57e6f79f21226d571845"
 
 [[projects]]
   branch = "master"
@@ -125,7 +131,7 @@
   branch = "master"
   name = "golang.org/x/net"
   packages = ["proxy"]
-  revision = "01c190206fbdffa42f334f4b2bf2220f50e64920"
+  revision = "a337091b0525af65de94df2eb7e98bd9962dcbe2"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"
@@ -142,6 +148,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e077c773f1b3668cd9cece17a126a50d717c383bfc3f2f7e7ed1c26318563494"
+  inputs-digest = "656d8ebaf500d928583e044ff5a7f9540b7e22d821226522e230361a4cd4de11"
   solver-name = "gps-cdcl"
   solver-version = 1

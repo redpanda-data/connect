@@ -54,35 +54,37 @@ var constructors = map[string]typeSpec{}
 // that some configs are empty structs, as the type has no optional values but
 // we want to list it as an option.
 type Config struct {
-	Type       string             `json:"type" yaml:"type"`
-	HTTPServer HTTPServerConfig   `json:"http_server" yaml:"http_server"`
-	ScaleProto ScaleProtoConfig   `json:"scalability_protocols" yaml:"scalability_protocols"`
-	ZMQ4       *ZMQ4Config        `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	Kafka      KafkaConfig        `json:"kafka" yaml:"kafka"`
-	AMQP       AMQPConfig         `json:"amqp" yaml:"amqp"`
-	NSQ        NSQConfig          `json:"nsq" yaml:"nsq"`
-	NATS       NATSConfig         `json:"nats" yaml:"nats"`
-	File       FileConfig         `json:"file" yaml:"file"`
-	STDIN      STDINConfig        `json:"stdin" yaml:"stdin"`
-	FanIn      FanInConfig        `json:"fan_in" yaml:"fan_in"`
-	Processors []processor.Config `json:"processors" yaml:"processors"`
+	Type          string              `json:"type" yaml:"type"`
+	HTTPServer    HTTPServerConfig    `json:"http_server" yaml:"http_server"`
+	ScaleProto    ScaleProtoConfig    `json:"scalability_protocols" yaml:"scalability_protocols"`
+	ZMQ4          *ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Kafka         KafkaConfig         `json:"kafka" yaml:"kafka"`
+	KafkaBalanced KafkaBalancedConfig `json:"kafka_balanced" yaml:"kafka_balanced"`
+	AMQP          AMQPConfig          `json:"amqp" yaml:"amqp"`
+	NSQ           NSQConfig           `json:"nsq" yaml:"nsq"`
+	NATS          NATSConfig          `json:"nats" yaml:"nats"`
+	File          FileConfig          `json:"file" yaml:"file"`
+	STDIN         STDINConfig         `json:"stdin" yaml:"stdin"`
+	FanIn         FanInConfig         `json:"fan_in" yaml:"fan_in"`
+	Processors    []processor.Config  `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:       "stdin",
-		HTTPServer: NewHTTPServerConfig(),
-		ScaleProto: NewScaleProtoConfig(),
-		ZMQ4:       NewZMQ4Config(),
-		Kafka:      NewKafkaConfig(),
-		AMQP:       NewAMQPConfig(),
-		NSQ:        NewNSQConfig(),
-		NATS:       NewNATSConfig(),
-		File:       NewFileConfig(),
-		STDIN:      NewSTDINConfig(),
-		FanIn:      NewFanInConfig(),
-		Processors: []processor.Config{processor.NewConfig()},
+		Type:          "stdin",
+		HTTPServer:    NewHTTPServerConfig(),
+		ScaleProto:    NewScaleProtoConfig(),
+		ZMQ4:          NewZMQ4Config(),
+		Kafka:         NewKafkaConfig(),
+		KafkaBalanced: NewKafkaBalancedConfig(),
+		AMQP:          NewAMQPConfig(),
+		NSQ:           NewNSQConfig(),
+		NATS:          NewNATSConfig(),
+		File:          NewFileConfig(),
+		STDIN:         NewSTDINConfig(),
+		FanIn:         NewFanInConfig(),
+		Processors:    []processor.Config{processor.NewConfig()},
 	}
 }
 

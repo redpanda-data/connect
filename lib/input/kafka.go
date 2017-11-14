@@ -36,8 +36,10 @@ func init() {
 	constructors["kafka"] = typeSpec{
 		constructor: NewKafka,
 		description: `
-The 'kafka' input type connects to a kafka server. Offsets are managed within
-kafka as per the consumer group (set via config).`,
+Connects to a kafka (0.8+) server. Offsets are managed within kafka as per the
+consumer group (set via config). Only one partition per input is supported, if
+you wish to balance partitions across a consumer group look at the
+'kafka_balanced' input type instead.`,
 	}
 }
 
