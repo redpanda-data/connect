@@ -47,6 +47,7 @@ var constructors = map[string]typeSpec{}
 type Config struct {
 	Type        string            `json:"type" yaml:"type"`
 	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
+	SelectParts SelectPartsConfig `json:"select_parts" yaml:"select_parts"`
 	BlobToMulti struct{}          `json:"blob_to_multi" yaml:"blob_to_multi"`
 	MultiToBlob struct{}          `json:"multi_to_blob" yaml:"multi_to_blob"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
@@ -58,6 +59,7 @@ func NewConfig() Config {
 	return Config{
 		Type:        "bounds_check",
 		BoundsCheck: NewBoundsCheckConfig(),
+		SelectParts: NewSelectPartsConfig(),
 		BlobToMulti: struct{}{},
 		MultiToBlob: struct{}{},
 		Sample:      NewSampleConfig(),
