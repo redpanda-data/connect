@@ -97,3 +97,20 @@ func TestSelectParts(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectPartsEmpty(t *testing.T) {
+	conf := NewConfig()
+	conf.SelectParts.Parts = []int{3}
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	proc, err := NewSelectParts(conf, testLog, metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	_, _, check := proc.ProcessMessage(&types.Message{Parts: [][]byte{[]byte("foo")}})
+	if check {
+		t.Error("Expected failure with zero parts selected")
+	}
+}

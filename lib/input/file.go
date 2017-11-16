@@ -37,7 +37,7 @@ func init() {
 	constructors["file"] = typeSpec{
 		constructor: NewFile,
 		description: `
-The 'file' type reads input from a file. If multipart is set to false each line
+The file type reads input from a file. If multipart is set to false each line
 is read as a separate message. If multipart is set to true each line is read as
 a message part, and an empty line indicates the end of a message.`,
 	}

@@ -43,7 +43,7 @@ func init() {
 	constructors["fan_out"] = typeSpec{
 		constructor: NewFanOut,
 		description: `
-The 'fan_out' output type allows you to configure multiple output targets. With
+The fan out output type allows you to configure multiple output targets. With
 the fan out model all outputs will be sent every message that passes through
 benthos.
 
@@ -51,7 +51,7 @@ This process is blocking, meaning if any output applies backpressure then it
 will block all outputs from receiving messages. If an output fails to guarantee
 receipt of a message it will be tried again until success.
 
-If Benthos is stopped during a fan_out send it is possible that when started
+If Benthos is stopped during a fan out send it is possible that when started
 again it will send a duplicate message to some outputs.`,
 	}
 }

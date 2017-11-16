@@ -103,11 +103,13 @@ func Descriptions() string {
 	buf.WriteString("INPUTS\n")
 	buf.WriteString(strings.Repeat("=", 6))
 	buf.WriteString("\n\n")
+	buf.WriteString("This document has been generated with `benthos --list-inputs`.")
+	buf.WriteString("\n\n")
 
 	// Append each description
 	for i, name := range names {
 		buf.WriteString("## ")
-		buf.WriteString(name)
+		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
 		buf.WriteString(constructors[name].description)
 		buf.WriteString("\n")

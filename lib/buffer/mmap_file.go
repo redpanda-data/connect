@@ -32,10 +32,10 @@ func init() {
 	constructors["mmap_file"] = typeSpec{
 		constructor: NewMmapFile,
 		description: `
-The 'mmap_file' buffer type uses memory mapped files to perform low-latency,
+The mmap file buffer type uses memory mapped files to perform low-latency,
 file-persisted buffering of messages.
 
-To configure the mmap_file buffer you need to designate a writeable directory
+To configure the mmap file buffer you need to designate a writeable directory
 for storing the mapped files. Benthos will create multiple files in this
 directory as it fills them.
 

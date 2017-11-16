@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker clean-docker clean
+.PHONY: all deps rpm docker clean-docker clean docs
 
 BENTHOS_PATH = github.com/jeffail/benthos
 
@@ -47,3 +47,9 @@ clean-docker:
 	rm -rf $(PATHINSTDOCKER)
 	docker rmi benthos:$(VERSION)
 	docker rmi benthos
+
+docs: $(APPS)
+	@$(PATHINSTBIN)/benthos --list-inputs > ./resources/docs/inputs/list.md; true
+	@$(PATHINSTBIN)/benthos --list-processors > ./resources/docs/processors/list.md; true
+	@$(PATHINSTBIN)/benthos --list-buffers > ./resources/docs/buffers/list.md; true
+	@$(PATHINSTBIN)/benthos --list-outputs > ./resources/docs/outputs/list.md; true

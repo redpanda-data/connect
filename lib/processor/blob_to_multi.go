@@ -33,13 +33,13 @@ func init() {
 		constructor: NewBlobToMulti,
 		description: `
 If a multiple part message has been encoded into a single part message using the
-multi_to_blob processor then this processor is able to convert it back into a
+multi to blob processor then this processor is able to convert it back into a
 multiple part message.
 
 You can therefore use this processor when multiple Benthos instances are
 bridging between message queues that don't support multiple parts.
 
-E.g. ZMQ => Benthos(multi_to_blob) => Kafka => Benthos(blob_to_multi)`,
+E.g. ZMQ => Benthos(multi to blob) => Kafka => Benthos(blob to multi)`,
 	}
 }
 

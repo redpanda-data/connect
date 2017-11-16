@@ -33,7 +33,7 @@ func init() {
 	constructors["stdout"] = typeSpec{
 		constructor: NewSTDOUT,
 		description: `
-The 'stdout' output type prints messages to stdout. Single part messages are
+The stdout output type prints messages to stdout. Single part messages are
 printed with a line separator '\n'. Multipart messages are written with each
 part line separated, with the final part followed by two line separators, e.g.
 a multipart message [ "foo", "bar", "baz" ] would be written as:

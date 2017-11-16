@@ -44,13 +44,14 @@ func init() {
 	constructors["fan_in"] = typeSpec{
 		brokerConstructor: NewFanIn,
 		description: `
-The 'fan_in' type allows you to combine multiple inputs. Each input will be read
-in parallel. In order to configure a 'fan_in' type you simply add an array of
-input configuration objects into the 'inputs' field.
+The fan in type allows you to combine multiple inputs. Each input will be read
+in parallel. In order to configure a fan in type you simply add an array of
+input configuration objects into the inputs field.
 
 Adding more input types allows you to merge streams from multiple sources into
 one. For example, having both a ZMQ4 PULL socket and a Nanomsg PULL socket:
 
+` + "``` yaml" + `
 type: fan_in
 fan_in:
   inputs:
@@ -66,14 +67,16 @@ fan_in:
       addresses:
       - tcp://zmqserver:3004
       socket_type: PULL
+` + "```" + `
 
 Sometimes you will want several inputs of very similar configuration. You can
-use the special type 'ditto' in this case to duplicate the previous config and
+use the special type ditto in this case to duplicate the previous config and
 apply selective changes.
 
 For example, if combining two kafka inputs with the same set up, reading
 different partitions you can use this shortcut:
 
+` + "``` yaml" + `
 inputs:
 -
   type: kafka
@@ -88,6 +91,7 @@ inputs:
   type: ditto
   kafka:
     partition: 1
+` + "```" + `
 
 Which will result in two inputs targeting the same kafka brokers, on the same
 consumer group etc, but consuming their own partitions.`,

@@ -111,11 +111,13 @@ func Descriptions() string {
 	buf.WriteString("PROCESSORS\n")
 	buf.WriteString(strings.Repeat("=", 10))
 	buf.WriteString("\n\n")
+	buf.WriteString("This document has been generated with `benthos --list-processors`.")
+	buf.WriteString("\n\n")
 
 	// Append each description
 	for i, name := range names {
 		buf.WriteString("## ")
-		buf.WriteString(name)
+		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
 		buf.WriteString(constructors[name].description)
 		buf.WriteString("\n")

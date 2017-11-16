@@ -30,12 +30,12 @@ Currently supported input/output targets:
 Setting up multiple outputs or inputs is done by choosing a routing strategy
 (fan in, fan out, round robin, etc.)
 
-For a full and up to date list of all inputs, buffer options, and outputs you
-can print them from the binary:
+For a full and up to date list of all inputs, buffer options, processors, and
+outputs [you can find them in the docs][7], or print them from the binary:
 
 ```
 # Print inputs, buffers and output options
-benthos --print-inputs --print-buffers --print-outputs | less
+benthos --list-inputs --list-buffers --list-outputs --list-processors | less
 ```
 
 Mixing multiple part message protocols with single part can be done in different
@@ -131,6 +131,7 @@ docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
 [4]: https://goreportcard.com/report/jeffail/benthos
 [5]: resources/docs/multipart.md
 [6]: resources/docs/metrics.md
+[7]: resources/docs
 [dep]: https://github.com/golang/dep
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/

@@ -37,7 +37,10 @@ number of parts are simply ignored.
 
 The selected parts are added to the new message in the same order as the
 selection array. E.g. with 'parts' set to [ 2, 0, 1 ] and the message parts
-[ '0', '1', '2', '3' ], the output will be [ '2', '0', '1' ].`,
+[ '0', '1', '2', '3' ], the output will be [ '2', '0', '1' ].
+
+If none of the selected parts exist in the input message (resulting in an empty
+output message) the message is dropped entirely.`,
 	}
 }
 
@@ -76,7 +79,7 @@ func NewSelectParts(conf Config, log log.Modular, stats metrics.Type) (Type, err
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage checks each message against a set of bounds.
+// ProcessMessage extracts a set of parts from each message.
 func (m *SelectParts) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
 	m.stats.Incr("processor.select_parts.count", 1)
 
@@ -89,6 +92,10 @@ func (m *SelectParts) ProcessMessage(msg *types.Message) (*types.Message, types.
 		} else {
 			m.stats.Incr("processor.select_parts.skipped", 1)
 		}
+	}
+
+	if len(newMsg.Parts) == 0 {
+		return nil, nil, false
 	}
 
 	return &newMsg, nil, true

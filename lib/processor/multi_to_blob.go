@@ -38,9 +38,9 @@ and complexity regarding delivery guarantees.
 
 You can instead use this processor to encode multiple part messages into a
 binary single part message, which can be converted back further down the
-platform pipeline using the blob_to_multi processor.
+platform pipeline using the blob to multi processor.
 
-E.g. ZMQ => Benthos(multi_to_blob) => Kafka => Benthos(blob_to_multi)`,
+E.g. ZMQ => Benthos(multi to blob) => Kafka => Benthos(blob to multi)`,
 	}
 }
 
