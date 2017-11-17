@@ -37,8 +37,7 @@ func init() {
 	constructors["amqp"] = typeSpec{
 		constructor: NewAMQP,
 		description: `
-AMQP is the underlying messaging protocol that is used my RabbitMQ. Support is
-currently rather limited, but more configuration options are on the way.`,
+AMQP (0.9.1) is the underlying messaging protocol that is used my RabbitMQ.`,
 	}
 }
 
@@ -50,7 +49,6 @@ type AMQPConfig struct {
 	Exchange     string `json:"exchange" yaml:"exchange"`
 	ExchangeType string `json:"exchange_type" yaml:"exchange_type"`
 	BindingKey   string `json:"key" yaml:"key"`
-	// Reliable     bool   `json:"reliable" yaml:"reliable"`
 }
 
 // NewAMQPConfig creates a new AMQPConfig with default values.
@@ -60,7 +58,6 @@ func NewAMQPConfig() AMQPConfig {
 		Exchange:     "benthos-exchange",
 		ExchangeType: "direct",
 		BindingKey:   "benthos-key",
-		// Reliable:     true,
 	}
 }
 
@@ -132,14 +129,11 @@ func (a *AMQP) connect() (err error) {
 		return fmt.Errorf("Exchange Declare: %s", err)
 	}
 
-	/*
-		if a.conf.AMQP.Reliable {
-			if err := a.amqpChan.Confirm(false); err != nil {
-				return fmt.Errorf("Channel could not be put into confirm mode: %s", err)
-			}
-			a.amqpConfirms = a.amqpChan.NotifyPublish(make(chan amqp.Confirmation, 1))
-		}
-	*/
+	if err := a.amqpChan.Confirm(false); err != nil {
+		return fmt.Errorf("Channel could not be put into confirm mode: %s", err)
+	}
+	a.amqpConfirmChan = a.amqpChan.NotifyPublish(make(chan amqp.Confirmation, 1))
+
 	return
 }
 
@@ -173,40 +167,49 @@ func (a *AMQP) loop() {
 	var open bool
 	for atomic.LoadInt32(&a.running) == 1 {
 		var msg types.Message
-		if msg, open = <-a.messages; !open {
+		select {
+		case msg, open = <-a.messages:
+			if !open {
+				return
+			}
+		case <-a.closeChan:
 			return
 		}
+
 		a.stats.Incr("output.amqp.count", 1)
 		var err error
-		var sending []byte
-		var contentType string
-		if len(msg.Parts) == 1 {
-			sending = msg.Parts[0]
-			contentType = "application/octet-stream"
-		} else {
-			sending = msg.Bytes()
-			contentType = "application/x-benthos-multipart"
+		for _, part := range msg.Parts {
+			err = a.amqpChan.Publish(
+				a.conf.AMQP.Exchange,   // publish to an exchange
+				a.conf.AMQP.BindingKey, // routing to 0 or more queues
+				false, // mandatory
+				false, // immediate
+				amqp.Publishing{
+					Headers:         amqp.Table{},
+					ContentType:     "application/octet-stream",
+					ContentEncoding: "",
+					Body:            part,
+					DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
+					Priority:        0,              // 0-9
+					// a bunch of application/implementation-specific fields
+				},
+			)
+			select {
+			case confirm := <-a.amqpConfirmChan:
+				if !confirm.Ack {
+					err = types.ErrNoAck
+				}
+			case <-a.closeChan:
+				return
+			}
+			if err == nil {
+				a.stats.Incr("output.amqp.send.success", 1)
+			} else {
+				a.stats.Incr("output.amqp.send.error", 1)
+				break
+			}
 		}
-		err = a.amqpChan.Publish(
-			a.conf.AMQP.Exchange,   // publish to an exchange
-			a.conf.AMQP.BindingKey, // routing to 0 or more queues
-			false, // mandatory
-			false, // immediate
-			amqp.Publishing{
-				Headers:         amqp.Table{},
-				ContentType:     contentType,
-				ContentEncoding: "",
-				Body:            sending,
-				DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
-				Priority:        0,              // 0-9
-				// a bunch of application/implementation-specific fields
-			},
-		)
-		if err != nil {
-			a.stats.Incr("output.amqp.send.error", 1)
-		} else {
-			a.stats.Incr("output.amqp.send.success", 1)
-		}
+
 		select {
 		case a.responseChan <- types.NewSimpleResponse(err):
 		case <-a.closeChan:

@@ -44,17 +44,21 @@ The kafka output type writes messages to a kafka broker.`,
 
 // KafkaConfig is configuration for the Kafka output type.
 type KafkaConfig struct {
-	Addresses []string `json:"addresses" yaml:"addresses"`
-	ClientID  string   `json:"client_id" yaml:"client_id"`
-	Topic     string   `json:"topic" yaml:"topic"`
+	Addresses   []string `json:"addresses" yaml:"addresses"`
+	ClientID    string   `json:"client_id" yaml:"client_id"`
+	Topic       string   `json:"topic" yaml:"topic"`
+	TimeoutMS   int      `json:"timeout_ms" yaml:"timeout_ms"`
+	AckReplicas bool     `json:"ack_replicas" yaml:"ack_replicas"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
 func NewKafkaConfig() KafkaConfig {
 	return KafkaConfig{
-		Addresses: []string{"localhost:9092"},
-		ClientID:  "benthos_kafka_output",
-		Topic:     "benthos_stream",
+		Addresses:   []string{"localhost:9092"},
+		ClientID:    "benthos_kafka_output",
+		Topic:       "benthos_stream",
+		TimeoutMS:   5000,
+		AckReplicas: true,
 	}
 }
 
@@ -69,7 +73,7 @@ type Kafka struct {
 
 	conf Config
 
-	producer sarama.AsyncProducer
+	producer sarama.SyncProducer
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
@@ -94,8 +98,18 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	config := sarama.NewConfig()
 	config.ClientID = k.conf.Kafka.ClientID
 
+	config.Producer.Timeout = time.Duration(conf.Kafka.TimeoutMS) * time.Millisecond
+	config.Producer.Return.Errors = true
+	config.Producer.Return.Successes = true
+
+	if conf.Kafka.AckReplicas {
+		config.Producer.RequiredAcks = sarama.WaitForAll
+	} else {
+		config.Producer.RequiredAcks = sarama.WaitForLocal
+	}
+
 	var err error
-	k.producer, err = sarama.NewAsyncProducer(k.conf.Kafka.Addresses, config)
+	k.producer, err = sarama.NewSyncProducer(k.conf.Kafka.Addresses, config)
 
 	return &k, err
 }
@@ -108,7 +122,7 @@ func (k *Kafka) loop() {
 	defer func() {
 		atomic.StoreInt32(&k.running, 0)
 		if nil != k.producer {
-			k.producer.AsyncClose()
+			k.producer.Close()
 		}
 		close(k.responseChan)
 		close(k.closedChan)
@@ -123,19 +137,20 @@ func (k *Kafka) loop() {
 			return
 		}
 		k.stats.Incr("output.kafka.count", 1)
+		var err error
 		for _, part := range msg.Parts {
-			select {
-			case k.producer.Input() <- &sarama.ProducerMessage{
+			if _, _, err = k.producer.SendMessage(&sarama.ProducerMessage{
 				Topic: k.conf.Kafka.Topic,
 				Value: sarama.ByteEncoder(part),
-			}:
+			}); err != nil {
+				k.stats.Incr("output.kafka.send.error", 1)
+				break
+			} else {
 				k.stats.Incr("output.kafka.send.success", 1)
-			case <-k.closeChan:
-				return
 			}
 		}
 		select {
-		case k.responseChan <- types.NewSimpleResponse(nil):
+		case k.responseChan <- types.NewSimpleResponse(err):
 		case <-k.closeChan:
 			return
 		}
