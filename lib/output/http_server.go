@@ -41,7 +41,9 @@ func init() {
 	constructors["http_server"] = typeSpec{
 		constructor: NewHTTPServer,
 		description: `
-Sets up an HTTP server that will return messages over HTTP GET requests.`,
+Sets up an HTTP server that will return messages over HTTP GET requests. HTTP
+2.0 is supported when using TLS, which is enabled when key and cert files are
+specified.`,
 	}
 }
 
@@ -52,6 +54,8 @@ type HTTPServerConfig struct {
 	Address   string `json:"address" yaml:"address"`
 	Path      string `json:"path" yaml:"path"`
 	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	CertFile  string `json:"cert_file" yaml:"cert_file"`
+	KeyFile   string `json:"key_file" yaml:"key_file"`
 }
 
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
@@ -60,6 +64,8 @@ func NewHTTPServerConfig() HTTPServerConfig {
 		Address:   "localhost:8081",
 		Path:      "/get",
 		TimeoutMS: 5000,
+		CertFile:  "",
+		KeyFile:   "",
 	}
 }
 
@@ -176,8 +182,16 @@ func (h *HTTPServer) StartReceiving(msgs <-chan types.Message) error {
 			h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
 		)
 
-		if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
-			h.log.Errorf("Server error: %v\n", err)
+		if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
+			if err := h.server.ListenAndServeTLS(
+				h.conf.HTTPServer.CertFile, h.conf.HTTPServer.KeyFile,
+			); err != http.ErrServerClosed {
+				h.log.Errorf("Server error: %v\n", err)
+			}
+		} else {
+			if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
+				h.log.Errorf("Server error: %v\n", err)
+			}
 		}
 
 		atomic.StoreInt32(&h.running, 0)

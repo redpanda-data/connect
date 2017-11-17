@@ -22,7 +22,6 @@ package input
 
 import (
 	"context"
-	"errors"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -44,23 +43,20 @@ func init() {
 		constructor: NewHTTPServer,
 		description: `
 In order to receive messages over HTTP Benthos hosts a server. Messages should
-be sent as a POST request. HTTP 1.1 is currently supported and HTTP 2.0 is
-planned for the future.`,
+be sent as a POST request. HTTP 2.0 is supported when using TLS, which is
+enabled when key and cert files are specified.`,
 	}
 }
 
 //------------------------------------------------------------------------------
-
-// Errors for the HTTPServer type.
-var (
-	ErrHWMInvalid = errors.New("high water mark is invalid (must be integer greater than 1)")
-)
 
 // HTTPServerConfig is configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
 	Address   string `json:"address" yaml:"address"`
 	Path      string `json:"path" yaml:"path"`
 	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	CertFile  string `json:"cert_file" yaml:"cert_file"`
+	KeyFile   string `json:"key_file" yaml:"key_file"`
 }
 
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
@@ -69,6 +65,8 @@ func NewHTTPServerConfig() HTTPServerConfig {
 		Address:   "localhost:8080",
 		Path:      "/post",
 		TimeoutMS: 5000,
+		CertFile:  "",
+		KeyFile:   "",
 	}
 }
 
@@ -229,8 +227,16 @@ func (h *HTTPServer) loop() {
 	)
 
 	go func() {
-		if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
-			h.log.Errorf("Server error: %v\n", err)
+		if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
+			if err := h.server.ListenAndServeTLS(
+				h.conf.HTTPServer.CertFile, h.conf.HTTPServer.KeyFile,
+			); err != http.ErrServerClosed {
+				h.log.Errorf("Server error: %v\n", err)
+			}
+		} else {
+			if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
+				h.log.Errorf("Server error: %v\n", err)
+			}
 		}
 	}()
 
