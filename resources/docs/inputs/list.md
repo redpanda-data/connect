@@ -73,8 +73,8 @@ a message part, and an empty line indicates the end of a message.
 ## `http_server`
 
 In order to receive messages over HTTP Benthos hosts a server. Messages should
-be sent as a POST request. HTTP 1.1 is currently supported and HTTP 2.0 is
-planned for the future.
+be sent as a POST request. HTTP 2.0 is supported when using TLS, which is
+enabled when key and cert files are specified.
 
 ## `kafka`
 

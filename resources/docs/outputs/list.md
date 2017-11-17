@@ -5,8 +5,7 @@ This document has been generated with `benthos --list-outputs`.
 
 ## `amqp`
 
-AMQP is the underlying messaging protocol that is used my RabbitMQ. Support is
-currently rather limited, but more configuration options are on the way.
+AMQP (0.9.1) is the underlying messaging protocol that is used my RabbitMQ.
 
 ## `fan_out`
 
@@ -44,11 +43,16 @@ multipart, please read the 'docs/using_http.md' document.
 
 ## `http_server`
 
-Sets up an HTTP server that will return messages over HTTP GET requests.
+Sets up an HTTP server that will return messages over HTTP GET requests. HTTP
+2.0 is supported when using TLS, which is enabled when key and cert files are
+specified.
 
 ## `kafka`
 
-The kafka output type writes messages to a kafka broker.
+The kafka output type writes messages to a kafka broker, these messages are
+acknowledged, which is propagated back to the input. The config field
+'ack_replicas' determines whether we wait for acknowledgement from all replicas
+or just a single broker.
 
 ## `nats`
 

@@ -36,7 +36,10 @@ func init() {
 	constructors["kafka"] = typeSpec{
 		constructor: NewKafka,
 		description: `
-The kafka output type writes messages to a kafka broker.`,
+The kafka output type writes messages to a kafka broker, these messages are
+acknowledged, which is propagated back to the input. The config field
+'ack_replicas' determines whether we wait for acknowledgement from all replicas
+or just a single broker.`,
 	}
 }
 
