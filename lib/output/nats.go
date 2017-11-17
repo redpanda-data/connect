@@ -98,8 +98,7 @@ func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 
 //------------------------------------------------------------------------------
 
-// loop is an internal loop that brokers incoming messages to output pipe, does
-// not use select.
+// loop is an internal loop that brokers incoming messages to output pipe.
 func (n *NATS) loop() {
 	defer func() {
 		atomic.StoreInt32(&n.running, 0)
@@ -113,22 +112,24 @@ func (n *NATS) loop() {
 	var open bool
 	for atomic.LoadInt32(&n.running) == 1 {
 		var msg types.Message
-		if msg, open = <-n.messages; !open {
+		select {
+		case msg, open = <-n.messages:
+			if !open {
+				return
+			}
+		case <-n.closeChan:
 			return
 		}
 		n.stats.Incr("output.nats.count", 1)
 		var err error
-		switch len(msg.Parts) {
-		case 0:
-		case 1:
-			err = n.natsConn.Publish(n.conf.NATS.Subject, msg.Parts[0])
-		default:
-			err = n.natsConn.Publish(n.conf.NATS.Subject, msg.Bytes())
-		}
-		if err != nil {
-			n.stats.Incr("output.nats.send.error", 1)
-		} else {
-			n.stats.Incr("output.nats.send.success", 1)
+		for _, part := range msg.Parts {
+			err = n.natsConn.Publish(n.conf.NATS.Subject, part)
+			if err != nil {
+				n.stats.Incr("output.nats.send.error", 1)
+				break
+			} else {
+				n.stats.Incr("output.nats.send.success", 1)
+			}
 		}
 		select {
 		case n.responseChan <- types.NewSimpleResponse(err):

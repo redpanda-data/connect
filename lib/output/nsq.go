@@ -127,8 +127,7 @@ func (n *NSQ) disconnect() error {
 
 //------------------------------------------------------------------------------
 
-// loop is an internal loop that brokers incoming messages to output pipe, does
-// not use select.
+// loop is an internal loop that brokers incoming messages to output pipe.
 func (n *NSQ) loop() {
 	defer func() {
 		atomic.StoreInt32(&n.running, 0)
@@ -142,22 +141,24 @@ func (n *NSQ) loop() {
 	var open bool
 	for atomic.LoadInt32(&n.running) == 1 {
 		var msg types.Message
-		if msg, open = <-n.messages; !open {
+		select {
+		case msg, open = <-n.messages:
+			if !open {
+				return
+			}
+		case <-n.closeChan:
 			return
 		}
 		n.stats.Incr("output.nsq.count", 1)
 		var err error
-		switch len(msg.Parts) {
-		case 0:
-		case 1:
-			err = n.producer.Publish(n.conf.NSQ.Topic, msg.Parts[0])
-		default:
-			err = n.producer.Publish(n.conf.NSQ.Topic, msg.Bytes())
-		}
-		if err != nil {
-			n.stats.Incr("output.nsq.send.error", 1)
-		} else {
-			n.stats.Incr("output.nsq.send.success", 1)
+		for _, part := range msg.Parts {
+			err = n.producer.Publish(n.conf.NSQ.Topic, part)
+			if err != nil {
+				n.stats.Incr("output.nsq.send.error", 1)
+				break
+			} else {
+				n.stats.Incr("output.nsq.send.success", 1)
+			}
 		}
 		select {
 		case n.responseChan <- types.NewSimpleResponse(err):
