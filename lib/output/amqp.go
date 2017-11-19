@@ -166,6 +166,21 @@ func (a *AMQP) loop() {
 
 	var open bool
 	for atomic.LoadInt32(&a.running) == 1 {
+		for a.amqpChan == nil {
+			a.log.Warnln("Lost AMQP connection, attempting to reconnect.")
+			if err := a.connect(); err != nil {
+				a.stats.Incr("output.amqp.reconnect.error", 1)
+				select {
+				case <-time.After(time.Second):
+				case <-a.closeChan:
+					return
+				}
+			} else {
+				a.log.Warnln("Successfully reconnected to AMQP.")
+				a.stats.Incr("output.amqp.reconnect.success", 1)
+			}
+		}
+
 		var msg types.Message
 		select {
 		case msg, open = <-a.messages:
@@ -194,13 +209,17 @@ func (a *AMQP) loop() {
 					// a bunch of application/implementation-specific fields
 				},
 			)
-			select {
-			case confirm := <-a.amqpConfirmChan:
-				if !confirm.Ack {
-					err = types.ErrNoAck
+			if err == nil {
+				select {
+				case confirm := <-a.amqpConfirmChan:
+					if !confirm.Ack {
+						err = types.ErrNoAck
+					}
+				case <-a.closeChan:
+					return
 				}
-			case <-a.closeChan:
-				return
+			} else {
+				a.disconnect()
 			}
 			if err == nil {
 				a.stats.Incr("output.amqp.send.success", 1)

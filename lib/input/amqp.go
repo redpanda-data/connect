@@ -215,7 +215,22 @@ func (a *AMQP) loop() {
 		// If no bytes then read a message
 		if data == nil {
 			select {
-			case msg := <-a.consumerChan:
+			case msg, open := <-a.consumerChan:
+				if !open {
+					a.log.Warnln("Lost AMQP connection, attempting to reconnect.")
+					a.disconnect()
+					if err := a.connect(); err != nil {
+						a.stats.Incr("input.amqp.reconnect.error", 1)
+						select {
+						case <-time.After(time.Second):
+						case <-a.closeChan:
+							return
+						}
+					} else {
+						a.log.Warnln("Successfully reconnected to AMQP.")
+						a.stats.Incr("input.amqp.reconnect.success", 1)
+					}
+				}
 				data = &msg
 				a.stats.Incr("input.amqp.count", 1)
 			case <-a.closeChan:
