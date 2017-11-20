@@ -34,13 +34,14 @@ import (
 
 //------------------------------------------------------------------------------
 
-// writer is an output type that pushes messages to a Writer type.
+// writer is an output type that pushes messages to a io.WriterCloser type.
 type writer struct {
 	running int32
 
-	conf  Config
 	log   log.Modular
 	stats metrics.Type
+
+	customDelim []byte
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
@@ -52,11 +53,17 @@ type writer struct {
 }
 
 // newWriter creates a new writer output type.
-func newWriter(handle io.WriteCloser, log log.Modular, stats metrics.Type) (Type, error) {
+func newWriter(
+	handle io.WriteCloser,
+	customDelimiter []byte,
+	log log.Modular,
+	stats metrics.Type,
+) (Type, error) {
 	return &writer{
 		running:      1,
-		log:          log.NewModule(".output.file"),
+		log:          log.NewModule(".output.writer"),
 		stats:        stats,
+		customDelim:  customDelimiter,
 		messages:     nil,
 		responseChan: make(chan types.Response),
 		handle:       handle,
@@ -76,6 +83,11 @@ func (w *writer) loop() {
 		close(w.closedChan)
 	}()
 
+	delim := []byte("\n")
+	if len(w.customDelim) > 0 {
+		delim = w.customDelim
+	}
+
 	for atomic.LoadInt32(&w.running) == 1 {
 		var msg types.Message
 		var open bool
@@ -90,9 +102,9 @@ func (w *writer) loop() {
 		}
 		var err error
 		if len(msg.Parts) == 1 {
-			_, err = fmt.Fprintf(w.handle, "%s\n", msg.Parts[0])
+			_, err = fmt.Fprintf(w.handle, "%s%s", msg.Parts[0], delim)
 		} else {
-			_, err = fmt.Fprintf(w.handle, "%s\n\n", bytes.Join(msg.Parts, []byte("\n")))
+			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(msg.Parts, delim), delim, delim)
 		}
 		if err != nil {
 			w.stats.Incr("output.writer.send.error", 1)

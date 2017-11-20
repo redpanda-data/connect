@@ -58,7 +58,7 @@ type Config struct {
 	NATS       NATSConfig         `json:"nats" yaml:"nats"`
 	ZMQ4       *ZMQ4Config        `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	File       FileConfig         `json:"file" yaml:"file"`
-	STDOUT     struct{}           `json:"stdout" yaml:"stdout"`
+	STDOUT     STDOUTConfig       `json:"stdout" yaml:"stdout"`
 	FanOut     FanOutConfig       `json:"fan_out" yaml:"fan_out"`
 	RoundRobin RoundRobinConfig   `json:"round_robin" yaml:"round_robin"`
 	Processors []processor.Config `json:"processors" yaml:"processors"`
@@ -77,7 +77,7 @@ func NewConfig() Config {
 		NATS:       NewNATSConfig(),
 		ZMQ4:       NewZMQ4Config(),
 		File:       NewFileConfig(),
-		STDOUT:     struct{}{},
+		STDOUT:     NewSTDOUTConfig(),
 		FanOut:     NewFanOutConfig(),
 		RoundRobin: NewRoundRobinConfig(),
 		Processors: []processor.Config{},

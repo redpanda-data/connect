@@ -22,6 +22,7 @@ package output
 
 import (
 	"bytes"
+	"crypto/tls"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -30,6 +31,7 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/lib/types"
+	"github.com/jeffail/benthos/lib/util/oauth"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
 )
@@ -53,19 +55,23 @@ multipart, please read the 'docs/using_http.md' document.`,
 
 // HTTPClientConfig is configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	URL        string `json:"url" yaml:"url"`
-	TimeoutMS  int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS    int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
-	NumRetries int    `json:"retries" yaml:"retries"`
+	URL            string             `json:"url" yaml:"url"`
+	OAuth          oauth.ClientConfig `json:"oauth" yaml:"oauth"`
+	TimeoutMS      int64              `json:"timeout_ms" yaml:"timeout_ms"`
+	RetryMS        int64              `json:"retry_period_ms" yaml:"retry_period_ms"`
+	NumRetries     int                `json:"retries" yaml:"retries"`
+	SkipCertVerify bool               `json:"skip_cert_verify" yaml:"skip_cert_verify"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		URL:        "http://localhost:8081/post",
-		TimeoutMS:  5000,
-		RetryMS:    1000,
-		NumRetries: 3,
+		URL:            "http://localhost:8081/post",
+		OAuth:          oauth.NewClientConfig(),
+		TimeoutMS:      5000,
+		RetryMS:        1000,
+		NumRetries:     3,
+		SkipCertVerify: false,
 	}
 }
 
@@ -106,7 +112,9 @@ func NewHTTPClient(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 //------------------------------------------------------------------------------
 
 // createRequest creates an HTTP request out of a single message.
-func createRequest(url string, msg *types.Message) (req *http.Request, err error) {
+func createRequest(
+	url string, msg *types.Message, oauthConfig oauth.ClientConfig,
+) (req *http.Request, err error) {
 	if len(msg.Parts) == 1 {
 		body := bytes.NewBuffer(msg.Parts[0])
 		if req, err = http.NewRequest("POST", url, body); err == nil {
@@ -130,6 +138,9 @@ func createRequest(url string, msg *types.Message) (req *http.Request, err error
 			req.Header.Add("Content-Type", writer.FormDataContentType())
 		}
 	}
+	if oauthConfig.Enabled {
+		err = oauthConfig.Sign(req)
+	}
 	return
 }
 
@@ -145,6 +156,15 @@ func (h *HTTPClient) loop() {
 
 	h.log.Infof("Sending HTTP Post messages to: %s\n", h.conf.HTTPClient.URL)
 
+	var client http.Client
+	client.Timeout = time.Duration(h.conf.HTTPClient.TimeoutMS) * time.Millisecond
+
+	if h.conf.HTTPClient.SkipCertVerify {
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
 	var open bool
 	for atomic.LoadInt32(&h.running) == 1 {
 		var msg types.Message
@@ -154,30 +174,33 @@ func (h *HTTPClient) loop() {
 		h.stats.Incr("output.http_client.count", 1)
 
 		// POST message
-		var client http.Client
-		client.Timeout = time.Duration(h.conf.HTTPClient.TimeoutMS) * time.Millisecond
-
 		var req *http.Request
 		var res *http.Response
 		var err error
 
-		if req, err = createRequest(h.conf.HTTPClient.URL, &msg); err == nil {
-			if res, err = client.Do(req); err == nil &&
-				(res.StatusCode < 200 || res.StatusCode > 299) {
-				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+		if req, err = createRequest(
+			h.conf.HTTPClient.URL, &msg, h.conf.HTTPClient.OAuth,
+		); err == nil {
+			if res, err = client.Do(req); err == nil {
+				if res.StatusCode < 200 || res.StatusCode > 299 {
+					err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+				}
+				res.Body.Close()
 			}
 
 			i, j := 0, h.conf.HTTPClient.NumRetries
 			for i < j && err != nil {
-				req, _ = createRequest(h.conf.HTTPClient.URL, &msg)
+				req, _ = createRequest(h.conf.HTTPClient.URL, &msg, h.conf.HTTPClient.OAuth)
 				select {
 				case <-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond):
 				case <-h.closeChan:
 					return
 				}
-				if res, err = client.Do(req); err == nil &&
-					(res.StatusCode < 200 || res.StatusCode > 299) {
-					err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+				if res, err = client.Do(req); err == nil {
+					if res.StatusCode < 200 || res.StatusCode > 299 {
+						err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+					}
+					res.Body.Close()
 				}
 				i++
 			}

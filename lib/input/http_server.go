@@ -116,10 +116,14 @@ func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 //------------------------------------------------------------------------------
 
 func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
 	if atomic.LoadInt32(&h.running) != 1 {
 		http.Error(w, "Server closing", http.StatusServiceUnavailable)
 		return
 	}
+
+	h.stats.Incr("input.http_server.count", 1)
 
 	if r.Method != "POST" {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
@@ -168,8 +172,6 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		msg.Parts = [][]byte{msgBytes}
 	}
-
-	h.stats.Incr("input.http_server.count", 1)
 
 	select {
 	case h.messages <- msg:

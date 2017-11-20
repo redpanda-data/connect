@@ -32,6 +32,9 @@ foo\n
 bar\n
 baz\n\n
 
+You can alternatively specify a custom delimiter that will follow the same rules
+as '\n' above.
+
 ## `http_client`
 
 The HTTP client output type connects to a server and sends POST requests for
@@ -105,3 +108,6 @@ a multipart message [ "foo", "bar", "baz" ] would be written as:
 foo\n
 bar\n
 baz\n\n
+
+You can alternatively specify a custom delimiter that will follow the same rules
+as '\n' above.

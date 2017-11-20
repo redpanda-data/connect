@@ -41,7 +41,10 @@ as:
 
 foo\n
 bar\n
-baz\n\n`,
+baz\n\n
+
+You can alternatively specify a custom delimiter that will follow the same rules
+as '\n' above.`,
 	}
 }
 
@@ -49,13 +52,15 @@ baz\n\n`,
 
 // FileConfig is configuration values for the file based output type.
 type FileConfig struct {
-	Path string `json:"path" yaml:"path"`
+	Path        string `json:"path" yaml:"path"`
+	CustomDelim string `json:"custom_delimiter" yaml:"custom_delimiter"`
 }
 
 // NewFileConfig creates a new FileConfig with default values.
 func NewFileConfig() FileConfig {
 	return FileConfig{
-		Path: "",
+		Path:        "",
+		CustomDelim: "",
 	}
 }
 
@@ -67,7 +72,7 @@ func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newWriter(file, log, stats)
+	return newWriter(file, []byte(conf.File.CustomDelim), log, stats)
 }
 
 //------------------------------------------------------------------------------

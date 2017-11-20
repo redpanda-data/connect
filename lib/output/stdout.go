@@ -40,7 +40,24 @@ a multipart message [ "foo", "bar", "baz" ] would be written as:
 
 foo\n
 bar\n
-baz\n\n`,
+baz\n\n
+
+You can alternatively specify a custom delimiter that will follow the same rules
+as '\n' above.`,
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// STDOUTConfig is configuration values for the stdout based output type.
+type STDOUTConfig struct {
+	CustomDelim string `json:"custom_delimiter" yaml:"custom_delimiter"`
+}
+
+// NewSTDOUTConfig creates a new STDOUTConfig with default values.
+func NewSTDOUTConfig() STDOUTConfig {
+	return STDOUTConfig{
+		CustomDelim: "",
 	}
 }
 
@@ -48,7 +65,7 @@ baz\n\n`,
 
 // NewSTDOUT creates a new STDOUT output type.
 func NewSTDOUT(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	return newWriter(os.Stdout, log, stats)
+	return newWriter(os.Stdout, []byte(conf.STDOUT.CustomDelim), log, stats)
 }
 
 //------------------------------------------------------------------------------

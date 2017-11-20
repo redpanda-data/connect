@@ -3,3 +3,5 @@ tracker
 TODO
 target
 vendor
+key.pem
+cert.pem

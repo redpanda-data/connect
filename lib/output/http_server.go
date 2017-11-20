@@ -112,6 +112,8 @@ func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 //------------------------------------------------------------------------------
 
 func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
 	if atomic.LoadInt32(&h.running) != 1 {
 		http.Error(w, "Server closed", http.StatusServiceUnavailable)
 		return
