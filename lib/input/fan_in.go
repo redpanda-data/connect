@@ -22,6 +22,9 @@ package input
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 
@@ -94,7 +97,25 @@ inputs:
 ` + "```" + `
 
 Which will result in two inputs targeting the same kafka brokers, on the same
-consumer group etc, but consuming their own partitions.`,
+consumer group etc, but consuming their own partitions. Ditto can also be
+specified with a multiplier, which is useful if you want multiple inputs that do
+not differ in config, like this:
+
+` + "``` yaml" + `
+inputs:
+-
+  type: kafka_balanced
+  kafka:
+    addresses:
+      - localhost:9092
+    client_id: benthos_kafka_input
+    consumer_group: benthos_consumer_group
+    topic: benthos_stream
+-
+  type: ditto_3
+` + "```" + `
+
+Which results in a total of four kafka_balanced inputs.`,
 	}
 }
 
@@ -127,35 +148,54 @@ func NewFanInConfig() FanInConfig {
 // formats that we do not know at this stage, therefore we use the more hacky
 // method as performance is not an issue at this stage.
 func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
-	inputConfs := make([]Config, len(conf.Inputs))
+	inputConfs := []Config{}
 
 	// NOTE: Use yaml here as it supports more types than JSON
 	// (map[interface{}]interface{}).
 	for i, boxedConfig := range conf.Inputs {
-		newConf := NewConfig()
+		newConfs := []Config{NewConfig()}
 		if i > 0 {
 			// If the type of this output is 'ditto' we want to start with a
 			// duplicate of the previous config.
+			newConfsFromDitto := func(label string) error {
+				newConfs[0] = inputConfs[i-1]
+				if len(label) > 5 && label[5] == '_' {
+					n, err := strconv.Atoi(label[6:])
+					if err != nil {
+						return fmt.Errorf("failed to parse ditto multiplier: %v", err)
+					}
+					for j := 1; j < n; j++ {
+						newConfs = append(newConfs, inputConfs[i-1])
+					}
+				}
+				return nil
+			}
 			switch unboxed := boxedConfig.(type) {
 			case map[string]interface{}:
-				if t, ok := unboxed["type"]; ok && t == "ditto" {
-					newConf = inputConfs[i-1]
-					unboxed["type"] = newConf.Type
+				if t, ok := unboxed["type"].(string); ok && strings.Index(t, "ditto") == 0 {
+					if err := newConfsFromDitto(t); err != nil {
+						return nil, err
+					}
+					unboxed["type"] = newConfs[0].Type
 				}
 			case map[interface{}]interface{}:
-				if t, ok := unboxed["type"]; ok && t == "ditto" {
-					newConf = inputConfs[i-1]
-					unboxed["type"] = newConf.Type
+				if t, ok := unboxed["type"].(string); ok && strings.Index(t, "ditto") == 0 {
+					if err := newConfsFromDitto(t); err != nil {
+						return nil, err
+					}
+					unboxed["type"] = newConfs[0].Type
 				}
 			}
 		}
-		rawBytes, err := yaml.Marshal(boxedConfig)
-		if err != nil {
-			return nil, err
-		}
-		inputConfs[i] = newConf
-		if err = yaml.Unmarshal(rawBytes, &inputConfs[i]); err != nil {
-			return nil, err
+		for _, conf := range newConfs {
+			rawBytes, err := yaml.Marshal(boxedConfig)
+			if err != nil {
+				return nil, err
+			}
+			if err = yaml.Unmarshal(rawBytes, &conf); err != nil {
+				return nil, err
+			}
+			inputConfs = append(inputConfs, conf)
 		}
 	}
 

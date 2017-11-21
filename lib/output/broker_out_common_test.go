@@ -169,3 +169,73 @@ func TestOutBrokerConfigDitto(t *testing.T) {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 }
+
+func TestOutBrokerConfigDittoMulti(t *testing.T) {
+	testConf := []byte(`{
+		"type": "fan_out",
+		"fan_out": {
+			"outputs": [
+				{
+					"type": "http_client",
+					"http_client": {
+						"url": "address:1",
+						"timeout_ms": 1
+					}
+				},
+				{
+					"type": "ditto_2",
+					"http_client": {
+						"timeout_ms": 2
+					}
+				}
+			]
+		}
+	}`)
+
+	conf := NewConfig()
+	if err := json.Unmarshal(testConf, &conf); err != nil {
+		t.Error(err)
+		return
+	}
+
+	outputConfs, err := parseOutputConfsWithDefaults(conf.FanOut.Outputs)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if exp, actual := 3, len(outputConfs); exp != actual {
+		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)
+		return
+	}
+
+	if exp, actual := "http_client", outputConfs[0].Type; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "http_client", outputConfs[1].Type; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "http_client", outputConfs[2].Type; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+
+	if exp, actual := "address:1", outputConfs[0].HTTPClient.URL; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "address:1", outputConfs[1].HTTPClient.URL; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "address:1", outputConfs[2].HTTPClient.URL; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+
+	if exp, actual := int64(1), outputConfs[0].HTTPClient.TimeoutMS; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := int64(2), outputConfs[1].HTTPClient.TimeoutMS; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := int64(2), outputConfs[2].HTTPClient.TimeoutMS; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+}

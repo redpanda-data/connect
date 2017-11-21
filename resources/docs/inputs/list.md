@@ -62,7 +62,25 @@ inputs:
 ```
 
 Which will result in two inputs targeting the same kafka brokers, on the same
-consumer group etc, but consuming their own partitions.
+consumer group etc, but consuming their own partitions. Ditto can also be
+specified with a multiplier, which is useful if you want multiple inputs that do
+not differ in config, like this:
+
+``` yaml
+inputs:
+-
+  type: kafka_balanced
+  kafka:
+    addresses:
+      - localhost:9092
+    client_id: benthos_kafka_input
+    consumer_group: benthos_consumer_group
+    topic: benthos_stream
+-
+  type: ditto_3
+```
+
+Which results in a total of four kafka_balanced inputs.
 
 ## `file`
 
