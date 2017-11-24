@@ -29,6 +29,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/jeffail/benthos/lib/broker"
+	"github.com/jeffail/benthos/lib/pipeline"
 	"github.com/jeffail/benthos/lib/types"
 	"github.com/jeffail/util/log"
 	"github.com/jeffail/util/metrics"
@@ -209,7 +210,7 @@ func NewFanIn(
 	conf Config,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...PipelineConstructor,
+	pipelines ...pipeline.ConstructorFunc,
 ) (Type, error) {
 	if len(conf.FanIn.Inputs) == 0 {
 		return nil, ErrFanInNoInputs

@@ -32,43 +32,36 @@ import (
 	"github.com/jeffail/util/metrics"
 )
 
-var errMockProc = errors.New("this is an error from mock processor")
-
-type mockMsgProcessor struct {
-	drop bool
-}
-
-func (m *mockMsgProcessor) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
-	if m.drop {
-		return nil, types.NewSimpleResponse(errMockProc), false
-	}
-	newMsg := types.NewMessage()
-	newMsg.Parts = [][]byte{
-		[]byte("foo"),
-		[]byte("bar"),
-	}
-	return &newMsg, nil, true
-}
-
-func TestProcessorPipeline(t *testing.T) {
+func TestPoolBasic(t *testing.T) {
 	mockProc := &mockMsgProcessor{drop: true}
 
-	proc := NewProcessor(
+	constr := func() (Type, error) {
+		return NewProcessor(
+			log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+			metrics.DudType{},
+			mockProc,
+		), nil
+	}
+
+	proc, err := NewPool(
+		constr, 1,
 		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
 		metrics.DudType{},
-		mockProc,
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	msgChan, resChan := make(chan types.Message), make(chan types.Response)
 
 	if err := proc.StartListening(resChan); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	if err := proc.StartListening(resChan); err == nil {
 		t.Error("Expected error from dupe listening")
 	}
 	if err := proc.StartReceiving(msgChan); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	if err := proc.StartReceiving(msgChan); err == nil {
 		t.Error("Expected error from dupe receiving")
@@ -84,25 +77,29 @@ func TestProcessorPipeline(t *testing.T) {
 	select {
 	case msgChan <- msg:
 	case <-time.After(time.Second):
-		t.Error("Timed out")
+		t.Fatal("Timed out")
 	}
 	select {
 	case _, open := <-proc.MessageChan():
 		if !open {
-			t.Error("Closed early")
+			t.Fatal("Closed early")
 		} else {
-			t.Error("Message was not dropped")
+			t.Fatal("Message was not dropped")
 		}
 	case res, open := <-proc.ResponseChan():
 		if !open {
-			t.Error("Closed early")
+			t.Fatal("Closed early")
 		}
-		if res.Error() != errMockProc {
+		if res.Error() != nil {
+			// We don't expect our own error back since the workers are
+			// decoupled
 			t.Error(res.Error())
 		}
 	case <-time.After(time.Second):
-		t.Error("Timed out")
+		t.Fatal("Timed out")
 	}
+
+	<-time.After(time.Millisecond * 100)
 
 	// Do not drop next message
 	mockProc.drop = false
@@ -111,61 +108,10 @@ func TestProcessorPipeline(t *testing.T) {
 	select {
 	case msgChan <- msg:
 	case <-time.After(time.Second):
-		t.Error("Timed out")
-	}
-	select {
-	case procMsg, open := <-proc.MessageChan():
-		if !open {
-			t.Error("Closed early")
-		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procMsg.Parts; !reflect.DeepEqual(exp, act) {
-			t.Errorf("Wrong message received: %s != %s", act, exp)
-		}
-	case res, open := <-proc.ResponseChan():
-		if !open {
-			t.Error("Closed early")
-		}
-		if res.Error() != nil {
-			t.Error(res.Error())
-		} else {
-			t.Error("Message was dropped")
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out")
+		t.Fatal("Timed out")
 	}
 
-	// Respond with error
-	errTest := errors.New("This is a test")
-	select {
-	case resChan <- types.NewSimpleResponse(errTest):
-	case _, open := <-proc.ResponseChan():
-		if !open {
-			t.Error("Closed early")
-		} else {
-			t.Error("Premature response prop")
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out")
-	}
-
-	// Receive error
-	select {
-	case res, open := <-proc.ResponseChan():
-		if !open {
-			t.Error("Closed early")
-		} else if exp, act := errTest, res.Error(); exp != act {
-			t.Errorf("Wrong response returned: %v != %v", act, exp)
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out")
-	}
-
-	// Send message
-	select {
-	case msgChan <- msg:
-	case <-time.After(time.Second):
-		t.Error("Timed out")
-	}
+	// Receive message
 	select {
 	case procMsg, open := <-proc.MessageChan():
 		if !open {
@@ -175,17 +121,10 @@ func TestProcessorPipeline(t *testing.T) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
 	case <-time.After(time.Second):
-		t.Error("Timed out")
+		t.Fatal("Timed out")
 	}
 
-	// Respond without error
-	select {
-	case resChan <- types.NewSimpleResponse(nil):
-	case <-time.After(time.Second):
-		t.Error("Timed out")
-	}
-
-	// Receive error
+	// Receive decoupled response
 	select {
 	case res, open := <-proc.ResponseChan():
 		if !open {
@@ -193,8 +132,78 @@ func TestProcessorPipeline(t *testing.T) {
 		} else if res.Error() != nil {
 			t.Error(res.Error())
 		}
+		// Expect decoupled response
 	case <-time.After(time.Second):
-		t.Error("Timed out")
+		t.Fatal("Timed out")
+	}
+
+	// Respond with error
+	errTest := errors.New("This is a test")
+	select {
+	case resChan <- types.NewSimpleResponse(errTest):
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	// Receive message second attempt
+	select {
+	case procMsg, open := <-proc.MessageChan():
+		if !open {
+			t.Error("Closed early")
+		}
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procMsg.Parts; !reflect.DeepEqual(exp, act) {
+			t.Errorf("Wrong message received: %s != %s", act, exp)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	// Respond with no error this time
+	select {
+	case resChan <- types.NewSimpleResponse(nil):
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	// Send message
+	select {
+	case msgChan <- msg:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	// Receive new message
+	select {
+	case procMsg, open := <-proc.MessageChan():
+		if !open {
+			t.Error("Closed early")
+		}
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procMsg.Parts; !reflect.DeepEqual(exp, act) {
+			t.Errorf("Wrong message received: %s != %s", act, exp)
+		}
+	case <-time.After(time.Second * 10):
+		t.Fatal("Timed out")
+	}
+
+	// Receive decoupled response
+	select {
+	case res, open := <-proc.ResponseChan():
+		if !open {
+			t.Error("Closed early")
+		}
+		if res.Error() != nil {
+			t.Error(res.Error())
+		}
+		// Expect decoupled response
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	// Respond without error
+	select {
+	case resChan <- types.NewSimpleResponse(nil):
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
 	}
 
 	proc.CloseAsync()

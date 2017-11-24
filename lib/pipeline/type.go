@@ -22,6 +22,9 @@ package pipeline
 
 import "github.com/jeffail/benthos/lib/types"
 
+// ConstructorFunc is a common type for constructing a pipeline type.
+type ConstructorFunc func() (Type, error)
+
 // Type is an interface that all pipeline types should implement.
 type Type interface {
 	types.Producer

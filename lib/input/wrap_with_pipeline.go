@@ -30,11 +30,6 @@ import (
 
 //------------------------------------------------------------------------------
 
-// PipelineConstructor is a func that constructs a unique pipeline.
-type PipelineConstructor func() (pipeline.Type, error)
-
-//------------------------------------------------------------------------------
-
 // WithPipeline is a type that wraps both an input type and a pipeline type
 // by routing the input through the pipeline, and implements the input.Type
 // interface in order to act like an ordinary input.
@@ -45,7 +40,7 @@ type WithPipeline struct {
 
 // WrapWithPipeline routes an input directly into a processing pipeline and
 // returns a type that manages both and acts like an ordinary input.
-func WrapWithPipeline(in Type, pipeConstructor PipelineConstructor) (*WithPipeline, error) {
+func WrapWithPipeline(in Type, pipeConstructor pipeline.ConstructorFunc) (*WithPipeline, error) {
 	pipe, err := pipeConstructor()
 	if err != nil {
 		return nil, err
@@ -60,7 +55,7 @@ func WrapWithPipeline(in Type, pipeConstructor PipelineConstructor) (*WithPipeli
 }
 
 // WrapWithPipelines wraps an input with a variadic number of pipelines.
-func WrapWithPipelines(in Type, pipeConstructors ...PipelineConstructor) (Type, error) {
+func WrapWithPipelines(in Type, pipeConstructors ...pipeline.ConstructorFunc) (Type, error) {
 	var err error
 	for _, ctor := range pipeConstructors {
 		if in, err = WrapWithPipeline(in, ctor); err != nil {

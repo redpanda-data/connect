@@ -121,10 +121,10 @@ func New(
 	conf Config,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...PipelineConstructor,
+	pipelines ...pipeline.ConstructorFunc,
 ) (Type, error) {
 	if len(conf.Processors) > 0 {
-		pipelines = append([]PipelineConstructor{func() (pipeline.Type, error) {
+		pipelines = append([]pipeline.ConstructorFunc{func() (pipeline.Type, error) {
 			processors := make([]processor.Type, len(conf.Processors))
 			for i, procConf := range conf.Processors {
 				var err error
