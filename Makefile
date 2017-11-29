@@ -11,8 +11,8 @@ PATHINSTDOCKER = $(DEST_DIR)/docker
 VERSION := $(shell git describe --tags || echo "v0.0.0")
 DATE    := $(shell date +"%c" | tr ' :' '__')
 
-LDFLAGS = -X $(BENTHOS_PATH)/vendor/github.com/jeffail/util.version=$(VERSION) \
-	-X $(BENTHOS_PATH)/vendor/github.com/jeffail/util.dateBuilt=$(DATE)
+LDFLAGS = -X $(BENTHOS_PATH)/lib/util/service.version=$(VERSION) \
+	-X $(BENTHOS_PATH)/lib/util/service.dateBuilt=$(DATE)
 
 APPS = benthos
 all: $(APPS)

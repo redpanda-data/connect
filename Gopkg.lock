@@ -74,12 +74,6 @@
   version = "1.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/jeffail/util"
-  packages = [".","log","metrics"]
-  revision = "0acc0fcfaa68e9a1691359d90184d3fdec53e910"
-
-[[projects]]
   name = "github.com/nats-io/go-nats"
   packages = [".","encoders/builtin","util"]
   revision = "29f9728a183bf3fa7e809e14edac00b33be72088"
@@ -148,6 +142,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "656d8ebaf500d928583e044ff5a7f9540b7e22d821226522e230361a4cd4de11"
+  inputs-digest = "a02762ebb8c0f358015201088f31fbb62c214e0f95a46f701066e55d12f4def8"
   solver-name = "gps-cdcl"
   solver-version = 1

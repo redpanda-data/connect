@@ -20,7 +20,7 @@
 
 package buffer
 
-import "github.com/jeffail/util/log"
+import "github.com/jeffail/benthos/lib/util/service/log"
 
 var logConfig = log.LoggerConfig{
 	LogLevel: "NONE",

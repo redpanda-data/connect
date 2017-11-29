@@ -36,10 +36,10 @@ import (
 	"github.com/jeffail/benthos/lib/input"
 	"github.com/jeffail/benthos/lib/output"
 	"github.com/jeffail/benthos/lib/processor"
-	butil "github.com/jeffail/benthos/lib/util"
-	"github.com/jeffail/util"
-	"github.com/jeffail/util/log"
-	"github.com/jeffail/util/metrics"
+	"github.com/jeffail/benthos/lib/util"
+	"github.com/jeffail/benthos/lib/util/service"
+	"github.com/jeffail/benthos/lib/util/service/log"
+	"github.com/jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -114,7 +114,7 @@ func bootstrap() Config {
 	}
 
 	// Load configuration etc
-	if !util.Bootstrap(&config, defaultPaths...) {
+	if !service.Bootstrap(&config, defaultPaths...) {
 		os.Exit(0)
 	}
 
@@ -143,13 +143,13 @@ func bootstrap() Config {
 // inputs and outputs have seized, or an error.
 func createPipeline(
 	config Config, logger log.Modular, stats metrics.Type,
-) (*butil.ClosablePool, *butil.ClosablePool, chan struct{}, error) {
+) (*util.ClosablePool, *util.ClosablePool, chan struct{}, error) {
 	// Create two pools, this helps manage ordered closure of all pipeline
 	// components. We have a tiered (t1) and an non-tiered (t2) pool. If the
 	// tiered pool cannot close within our allotted time period then we try
 	// closing the second non-tiered pool. If the second pool also fails then we
 	// exit the service ungracefully.
-	poolt1, poolt2 := butil.NewClosablePool(), butil.NewClosablePool()
+	poolt1, poolt2 := util.NewClosablePool(), util.NewClosablePool()
 
 	// Create our input pipe
 	inputPipe, err := input.New(config.Input, logger, stats)
@@ -178,8 +178,8 @@ func createPipeline(
 	poolt1.Add(10, outputPipe)
 	poolt2.Add(0, outputPipe)
 
-	butil.Couple(buf, outputPipe)
-	butil.Couple(inputPipe, buf)
+	util.Couple(buf, outputPipe)
+	util.Couple(inputPipe, buf)
 	closeChan := make(chan struct{})
 
 	// If our outputs close down then we should shut down the service

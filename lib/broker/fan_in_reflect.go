@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/jeffail/benthos/lib/types"
-	"github.com/jeffail/util/metrics"
+	"github.com/jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------

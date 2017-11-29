@@ -24,8 +24,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jeffail/util/log"
-	"github.com/jeffail/util/metrics"
+	"github.com/jeffail/benthos/lib/util/service/log"
+	"github.com/jeffail/benthos/lib/util/service/metrics"
 )
 
 func TestConstructorDescription(t *testing.T) {
