@@ -19,7 +19,7 @@ Currently supported input/output targets:
 
 - [ZMQ4 (PUSH, PULL, SUB, PUB)][zmq]
 - [Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)][nanomsg]
-- [RabbitMQ (AMQP)][rabbitmq]
+- [RabbitMQ (AMQP 0.91)][rabbitmq]
 - [NSQ][nsq]
 - [NATS][nats]
 - [Kafka][kafka]

@@ -5,8 +5,8 @@ This document has been generated with `benthos --list-inputs`.
 
 ## `amqp`
 
-AMQP is the underlying messaging protocol that is used my RabbitMQ. Support is
-currently rather limited, but more configuration options are on the way.
+AMQP (0.91) is the underlying messaging protocol that is used by various message
+brokers, including RabbitMQ.
 
 Exchange type options are: direct|fanout|topic|x-custom
 

@@ -5,7 +5,8 @@ This document has been generated with `benthos --list-outputs`.
 
 ## `amqp`
 
-AMQP (0.9.1) is the underlying messaging protocol that is used my RabbitMQ.
+AMQP (0.91) is the underlying messaging protocol that is used by various message
+brokers, including RabbitMQ.
 
 ## `fan_out`
 
