@@ -137,6 +137,9 @@ func (s *reader) readLoop() {
 					parts = nil
 				}
 			} else {
+				if err := scanner.Err(); err != nil {
+					s.log.Errorf("Failed to read input: %v\n", err)
+				}
 				return
 			}
 		}
