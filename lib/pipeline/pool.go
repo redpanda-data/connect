@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -76,7 +77,7 @@ func NewPool(
 //------------------------------------------------------------------------------
 
 // workerLoop is the processing loop of a pool worker.
-func (p *Pool) workerLoop(worker Type) {
+func (p *Pool) workerLoop(worker Type, wg *sync.WaitGroup) {
 	sendChan := make(chan types.Message)
 	resChan := make(chan types.Response)
 
@@ -84,6 +85,7 @@ func (p *Pool) workerLoop(worker Type) {
 		close(sendChan)
 		close(resChan)
 		atomic.AddInt32(&p.remainingWorkers, -1)
+		wg.Done()
 	}()
 
 	if err := worker.StartReceiving(sendChan); err != nil {
@@ -157,6 +159,8 @@ func (p *Pool) workerLoop(worker Type) {
 
 // loop is the processing loop of this pipeline.
 func (p *Pool) loop() {
+	workerGroup := sync.WaitGroup{}
+
 	defer func() {
 		atomic.StoreUint32(&p.running, 0)
 
@@ -175,15 +179,18 @@ func (p *Pool) loop() {
 			}
 		}
 
+		workerGroup.Wait()
+
 		close(p.responsesOut)
 		close(p.messagesOut)
 
 		close(p.closed)
 	}()
 
+	workerGroup.Add(len(p.workers))
 	for _, worker := range p.workers {
 		atomic.AddInt32(&p.remainingWorkers, 1)
-		go p.workerLoop(worker)
+		go p.workerLoop(worker, &workerGroup)
 	}
 
 	var open bool
