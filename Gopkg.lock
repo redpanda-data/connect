@@ -4,8 +4,8 @@
 [[projects]]
   name = "github.com/Shopify/sarama"
   packages = ["."]
-  revision = "240fd146ce68bcafb034cc5dc977229ffbafa8ea"
-  version = "v1.14.0"
+  revision = "3b1b38866a79f06deddf0487d5c27ba0697ccd65"
+  version = "v1.15.0"
 
 [[projects]]
   branch = "master"
@@ -40,8 +40,8 @@
 [[projects]]
   name = "github.com/eapache/queue"
   packages = ["."]
-  revision = "ded5959c0d4e360646dc9e9908cff48666781367"
-  version = "v1.0.2"
+  revision = "44cc805cf13205b55f69e14bcb69867d1ae92f98"
+  version = "v1.1.0"
 
 [[projects]]
   branch = "master"
@@ -54,6 +54,12 @@
   packages = [".","protocol/pub","protocol/pull","protocol/push","protocol/rep","protocol/req","protocol/sub","transport/ipc","transport/tcp"]
   revision = "7e2b8010de3b57f5880ae5b8201067fd943e3202"
   version = "v1.2.0"
+
+[[projects]]
+  name = "github.com/gogo/protobuf"
+  packages = ["gogoproto","proto","protoc-gen-gogo/descriptor"]
+  revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
+  version = "v0.5"
 
 [[projects]]
   branch = "master"
@@ -78,6 +84,12 @@
   packages = [".","encoders/builtin","util"]
   revision = "29f9728a183bf3fa7e809e14edac00b33be72088"
   version = "v1.3.0"
+
+[[projects]]
+  name = "github.com/nats-io/go-nats-streaming"
+  packages = [".","pb"]
+  revision = "6e620057a207bd61e992c1c5b6a2de7b6a4cb010"
+  version = "v0.3.4"
 
 [[projects]]
   name = "github.com/nats-io/nuid"
@@ -113,7 +125,7 @@
   branch = "master"
   name = "github.com/rcrowley/go-metrics"
   packages = ["."]
-  revision = "1f30fe9094a513ce4c700b9a54458bbb0c96996c"
+  revision = "e181e095bae94582363434144c61a9653aff6e50"
 
 [[projects]]
   branch = "master"
@@ -125,7 +137,7 @@
   branch = "master"
   name = "golang.org/x/net"
   packages = ["proxy"]
-  revision = "9dfe39835686865bff950a07b394c12a98ddc811"
+  revision = "dc871a5d77e227f5bbf6545176ef3eeebf87e76e"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"
@@ -142,6 +154,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a02762ebb8c0f358015201088f31fbb62c214e0f95a46f701066e55d12f4def8"
+  inputs-digest = "357c24ad72b1076abe0d0873447f4388cf3150e63cd7988208cd7022fa8118d4"
   solver-name = "gps-cdcl"
   solver-version = 1

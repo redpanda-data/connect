@@ -144,8 +144,8 @@ func (l *Logger) NewModule(prefix string) Modular {
 
 //------------------------------------------------------------------------------
 
-// printf prints a log message with any configured extras prepended.
-func (l *Logger) printf(message, level string, other ...interface{}) {
+// writeFormatted prints a log message with any configured extras prepended.
+func (l *Logger) writeFormatted(message, level string, other ...interface{}) {
 	if l.config.JSONFormat {
 		if l.config.AddTimeStamp {
 			fmt.Fprintf(l.stream, fmt.Sprintf(
@@ -174,8 +174,8 @@ func (l *Logger) printf(message, level string, other ...interface{}) {
 	}
 }
 
-// printLine prints a log message with any configured extras prepended.
-func (l *Logger) printLine(message, level string) {
+// writeLine prints a log message with any configured extras prepended.
+func (l *Logger) writeLine(message, level string) {
 	if l.config.JSONFormat {
 		if l.config.AddTimeStamp {
 			fmt.Fprintf(l.stream,
@@ -207,42 +207,42 @@ func (l *Logger) printLine(message, level string) {
 // Fatalf prints a fatal message to the console. Does NOT cause panic.
 func (l *Logger) Fatalf(message string, other ...interface{}) {
 	if LogFatal <= l.level {
-		l.printf(message, "FATAL", other...)
+		l.writeFormatted(message, "FATAL", other...)
 	}
 }
 
 // Errorf prints an error message to the console.
 func (l *Logger) Errorf(message string, other ...interface{}) {
 	if LogError <= l.level {
-		l.printf(message, "ERROR", other...)
+		l.writeFormatted(message, "ERROR", other...)
 	}
 }
 
 // Warnf prints a warning message to the console.
 func (l *Logger) Warnf(message string, other ...interface{}) {
 	if LogWarn <= l.level {
-		l.printf(message, "WARN", other...)
+		l.writeFormatted(message, "WARN", other...)
 	}
 }
 
 // Infof prints an information message to the console.
 func (l *Logger) Infof(message string, other ...interface{}) {
 	if LogInfo <= l.level {
-		l.printf(message, "INFO", other...)
+		l.writeFormatted(message, "INFO", other...)
 	}
 }
 
 // Debugf prints a debug message to the console.
 func (l *Logger) Debugf(message string, other ...interface{}) {
 	if LogDebug <= l.level {
-		l.printf(message, "DEBUG", other...)
+		l.writeFormatted(message, "DEBUG", other...)
 	}
 }
 
 // Tracef prints a trace message to the console.
 func (l *Logger) Tracef(message string, other ...interface{}) {
 	if LogTrace <= l.level {
-		l.printf(message, "TRACE", other...)
+		l.writeFormatted(message, "TRACE", other...)
 	}
 }
 
@@ -251,42 +251,42 @@ func (l *Logger) Tracef(message string, other ...interface{}) {
 // Fatalln prints a fatal message to the console. Does NOT cause panic.
 func (l *Logger) Fatalln(message string) {
 	if LogFatal <= l.level {
-		l.printLine(message, "FATAL")
+		l.writeLine(message, "FATAL")
 	}
 }
 
 // Errorln prints an error message to the console.
 func (l *Logger) Errorln(message string) {
 	if LogError <= l.level {
-		l.printLine(message, "ERROR")
+		l.writeLine(message, "ERROR")
 	}
 }
 
 // Warnln prints a warning message to the console.
 func (l *Logger) Warnln(message string) {
 	if LogWarn <= l.level {
-		l.printLine(message, "WARN")
+		l.writeLine(message, "WARN")
 	}
 }
 
 // Infoln prints an information message to the console.
 func (l *Logger) Infoln(message string) {
 	if LogInfo <= l.level {
-		l.printLine(message, "INFO")
+		l.writeLine(message, "INFO")
 	}
 }
 
 // Debugln prints a debug message to the console.
 func (l *Logger) Debugln(message string) {
 	if LogDebug <= l.level {
-		l.printLine(message, "DEBUG")
+		l.writeLine(message, "DEBUG")
 	}
 }
 
 // Traceln prints a trace message to the console.
 func (l *Logger) Traceln(message string) {
 	if LogTrace <= l.level {
-		l.printLine(message, "TRACE")
+		l.writeLine(message, "TRACE")
 	}
 }
 
