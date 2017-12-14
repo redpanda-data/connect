@@ -36,7 +36,8 @@ func init() {
 	constructors["nats"] = typeSpec{
 		constructor: NewNATS,
 		description: `
-Subscribe to a NATS subject.
+Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
+behaviour then look at NATS Stream.
 
 The url can contain username/password semantics. e.g.
 nats://derek:pass@localhost:4222

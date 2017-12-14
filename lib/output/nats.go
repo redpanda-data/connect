@@ -37,7 +37,7 @@ func init() {
 		constructor: NewNATS,
 		description: `
 Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.
-For at-most-once behaviour with NATS look at NATS Stream.`,
+For at-least-once behaviour with NATS look at NATS Stream.`,
 	}
 }
 

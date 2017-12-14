@@ -37,7 +37,7 @@ func init() {
 		constructor: NewNATSStream,
 		description: `
 Publish to a NATS Stream subject. NATS Streaming is at-least-once and therefore
-this output is able to guarantee delivery.`,
+this output is able to guarantee delivery on success.`,
 	}
 }
 

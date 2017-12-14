@@ -63,6 +63,7 @@ type Config struct {
 	AMQP          AMQPConfig          `json:"amqp" yaml:"amqp"`
 	NSQ           NSQConfig           `json:"nsq" yaml:"nsq"`
 	NATS          NATSConfig          `json:"nats" yaml:"nats"`
+	NATSStream    NATSStreamConfig    `json:"nats_stream" yaml:"nats_stream"`
 	File          FileConfig          `json:"file" yaml:"file"`
 	STDIN         STDINConfig         `json:"stdin" yaml:"stdin"`
 	FanIn         FanInConfig         `json:"fan_in" yaml:"fan_in"`
@@ -81,6 +82,7 @@ func NewConfig() Config {
 		AMQP:          NewAMQPConfig(),
 		NSQ:           NewNSQConfig(),
 		NATS:          NewNATSConfig(),
+		NATSStream:    NewNATSStreamConfig(),
 		File:          NewFileConfig(),
 		STDIN:         NewSTDINConfig(),
 		FanIn:         NewFanInConfig(),

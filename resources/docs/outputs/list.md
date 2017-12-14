@@ -60,7 +60,13 @@ or just a single broker.
 
 ## `nats`
 
-Publish to an NATS subject.
+Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.
+For at-least-once behaviour with NATS look at NATS Stream.
+
+## `nats_stream`
+
+Publish to a NATS Stream subject. NATS Streaming is at-least-once and therefore
+this output is able to guarantee delivery on success.
 
 ## `nsq`
 
