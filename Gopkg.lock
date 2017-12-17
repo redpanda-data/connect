@@ -131,13 +131,13 @@
   branch = "master"
   name = "github.com/streadway/amqp"
   packages = ["."]
-  revision = "ff791c2d22d3f1588b4e2cc71a9fba5e1da90654"
+  revision = "ff34ec9cc65c2a23db5126d962c431018f65af59"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = ["proxy"]
-  revision = "dc871a5d77e227f5bbf6545176ef3eeebf87e76e"
+  revision = "d866cfc389cec985d6fda2859936a575a55a3ab6"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"

@@ -35,11 +35,11 @@ import (
 var errMockProc = errors.New("this is an error from mock processor")
 
 type mockMsgProcessor struct {
-	drop bool
+	dropChan chan bool
 }
 
 func (m *mockMsgProcessor) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
-	if m.drop {
+	if drop := <-m.dropChan; drop {
 		return nil, types.NewSimpleResponse(errMockProc), false
 	}
 	newMsg := types.NewMessage()
@@ -51,7 +51,12 @@ func (m *mockMsgProcessor) ProcessMessage(msg *types.Message) (*types.Message, t
 }
 
 func TestProcessorPipeline(t *testing.T) {
-	mockProc := &mockMsgProcessor{drop: true}
+	mockProc := &mockMsgProcessor{dropChan: make(chan bool)}
+
+	// Drop first message
+	go func() {
+		mockProc.dropChan <- true
+	}()
 
 	proc := NewProcessor(
 		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
@@ -105,7 +110,9 @@ func TestProcessorPipeline(t *testing.T) {
 	}
 
 	// Do not drop next message
-	mockProc.drop = false
+	go func() {
+		mockProc.dropChan <- false
+	}()
 
 	// Send message
 	select {
@@ -159,6 +166,11 @@ func TestProcessorPipeline(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
+
+	// Do not drop next message
+	go func() {
+		mockProc.dropChan <- false
+	}()
 
 	// Send message
 	select {

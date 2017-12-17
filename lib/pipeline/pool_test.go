@@ -33,7 +33,11 @@ import (
 )
 
 func TestPoolBasic(t *testing.T) {
-	mockProc := &mockMsgProcessor{drop: true}
+	mockProc := &mockMsgProcessor{dropChan: make(chan bool)}
+
+	go func() {
+		mockProc.dropChan <- true
+	}()
 
 	constr := func() (Type, error) {
 		return NewProcessor(
@@ -86,6 +90,7 @@ func TestPoolBasic(t *testing.T) {
 		} else {
 			t.Fatal("Message was not dropped")
 		}
+
 	case res, open := <-proc.ResponseChan():
 		if !open {
 			t.Fatal("Closed early")
@@ -99,10 +104,10 @@ func TestPoolBasic(t *testing.T) {
 		t.Fatal("Timed out")
 	}
 
-	<-time.After(time.Millisecond * 100)
-
 	// Do not drop next message
-	mockProc.drop = false
+	go func() {
+		mockProc.dropChan <- false
+	}()
 
 	// Send message
 	select {
@@ -164,6 +169,11 @@ func TestPoolBasic(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
+
+	// Do not drop next message again
+	go func() {
+		mockProc.dropChan <- false
+	}()
 
 	// Send message
 	select {

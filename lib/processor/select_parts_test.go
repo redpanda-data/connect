@@ -47,7 +47,7 @@ func TestSelectParts(t *testing.T) {
 	}
 
 	tests := []test{
-		test{
+		{
 			in: [][]byte{
 				[]byte("0"),
 				[]byte("1"),
@@ -59,7 +59,7 @@ func TestSelectParts(t *testing.T) {
 				[]byte("3"),
 			},
 		},
-		test{
+		{
 			in: [][]byte{
 				[]byte("0"),
 				[]byte("1"),
@@ -68,7 +68,7 @@ func TestSelectParts(t *testing.T) {
 				[]byte("1"),
 			},
 		},
-		test{
+		{
 			in: [][]byte{
 				[]byte("0"),
 				[]byte("1"),

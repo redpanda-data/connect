@@ -86,7 +86,12 @@ func (p *Processor) loop() {
 	var open bool
 	for atomic.LoadInt32(&p.running) == 1 {
 		var msg types.Message
-		if msg, open = <-p.messagesIn; !open {
+		select {
+		case msg, open = <-p.messagesIn:
+			if !open {
+				return
+			}
+		case <-p.closeChan:
 			return
 		}
 		p.stats.Incr("pipeline.processor.count", 1)
