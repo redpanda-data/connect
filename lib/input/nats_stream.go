@@ -42,7 +42,7 @@ semantics. Tracking and persisting offsets through a durable name is also
 optional and works with or without a queue. If a durable name is not provided
 then subjects are consumed from the most recently published message.
 
-The cluster url can contain username/password semantics. e.g.
+The url can contain username/password semantics. e.g.
 nats://derek:pass@localhost:4222
 
 Comma separated arrays are also supported, e.g. urlA, urlB.`,
@@ -53,7 +53,8 @@ Comma separated arrays are also supported, e.g. urlA, urlB.`,
 
 // NATSStreamConfig is configuration for the NATSStream input type.
 type NATSStreamConfig struct {
-	ClusterID   string `json:"cluster" yaml:"cluster"`
+	URL         string `json:"url" yaml:"url"`
+	ClusterID   string `json:"cluster_id" yaml:"cluster_id"`
 	ClientID    string `json:"client_id" yaml:"client_id"`
 	QueueID     string `json:"queue" yaml:"queue"`
 	DurableName string `json:"durable_name" yaml:"durable_name"`
@@ -63,7 +64,8 @@ type NATSStreamConfig struct {
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
 func NewNATSStreamConfig() NATSStreamConfig {
 	return NATSStreamConfig{
-		ClusterID:   stan.DefaultNatsURL,
+		URL:         stan.DefaultNatsURL,
+		ClusterID:   "benthos_cluster",
 		ClientID:    "benthos_client",
 		QueueID:     "benthos_queue",
 		DurableName: "benthos_offset",
@@ -105,7 +107,11 @@ func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	}
 
 	var err error
-	if n.natsConn, err = stan.Connect(conf.NATSStream.ClusterID, conf.NATSStream.ClientID); err != nil {
+	if n.natsConn, err = stan.Connect(
+		conf.NATSStream.ClusterID,
+		conf.NATSStream.ClientID,
+		stan.NatsURL(conf.NATSStream.URL),
+	); err != nil {
 		return nil, err
 	}
 	return &n, nil

@@ -1,0 +1,36 @@
+input:
+  type: stdin
+output:
+  type: round_robin
+  round_robin:
+    outputs:
+    - type: kafka
+      kafka:
+        addresses:
+        - localhost:9092
+        client_id: benthos_kafka_output
+        topic: benthos_topic
+        timeout_ms: 5000
+        ack_replicas: true
+    - type: amqp
+      amqp:
+        uri: amqp://guest:guest@localhost:5672/
+        exchange: benthos-exchange
+        exchange_type: direct
+        key: benthos-key
+    - type: nsq
+      nsq:
+        nsqd_tcp_address: 127.0.0.1:4150
+        topic: benthos_messages
+        user_agent: benthos_producer
+        max_in_flight: 100
+    - type: nats
+      nats:
+        url: nats://localhost:4222
+        subject: benthos_messages
+    - type: nats_stream
+      nats_stream:
+        url: nats://localhost:4223
+        cluster_id: test-cluster
+        client_id: benthos_client_1
+        subject: benthos_messages

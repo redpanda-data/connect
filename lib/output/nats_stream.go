@@ -45,7 +45,8 @@ this output is able to guarantee delivery on success.`,
 
 // NATSStreamConfig is configuration for the NATSStream output type.
 type NATSStreamConfig struct {
-	ClusterID string `json:"cluster" yaml:"cluster"`
+	URL       string `json:"url" yaml:"url"`
+	ClusterID string `json:"cluster_id" yaml:"cluster_id"`
 	ClientID  string `json:"client_id" yaml:"client_id"`
 	Subject   string `json:"subject" yaml:"subject"`
 }
@@ -53,7 +54,8 @@ type NATSStreamConfig struct {
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
 func NewNATSStreamConfig() NATSStreamConfig {
 	return NATSStreamConfig{
-		ClusterID: stan.DefaultNatsURL,
+		URL:       stan.DefaultNatsURL,
+		ClusterID: "benthos_cluster",
 		ClientID:  "benthos_client",
 		Subject:   "benthos_messages",
 	}
@@ -94,7 +96,9 @@ func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 
 	var err error
 	if n.natsConn, err = stan.Connect(
-		conf.NATSStream.ClusterID, conf.NATSStream.ClientID,
+		conf.NATSStream.ClusterID,
+		conf.NATSStream.ClientID,
+		stan.NatsURL(conf.NATSStream.URL),
 	); err != nil {
 		return nil, err
 	}

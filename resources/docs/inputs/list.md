@@ -128,7 +128,7 @@ semantics. Tracking and persisting offsets through a durable name is also
 optional and works with or without a queue. If a durable name is not provided
 then subjects are consumed from the most recently published message.
 
-The cluster url can contain username/password semantics. e.g.
+The url can contain username/password semantics. e.g.
 nats://derek:pass@localhost:4222
 
 Comma separated arrays are also supported, e.g. urlA, urlB.
