@@ -1,0 +1,8 @@
+input:
+  type: stdin
+output:
+  type: stdout
+buffer:
+  type: memory
+  memory:
+    limit: 524288000

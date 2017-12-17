@@ -1,24 +1,32 @@
 input:
   type: http_server
   http_server:
-    address: "localhost:1234"
-    path: "/post"
-    timeout_ms: 1000
+    address: localhost:8080
+    path: /post
+    timeout_ms: 5000
+    cert_file: ""
+    key_file: ""
 output:
   type: http_client
   http_client:
-    url: "http://localhost:1235/post"
-    timeout_ms: 1000
+    url: http://localhost:8081/post
+    oauth:
+      consumer_key: ""
+      consumer_secret: ""
+      access_token: ""
+      access_token_secret: ""
+      request_url: ""
+      enabled: false
+    timeout_ms: 5000
     retry_period_ms: 1000
-    use_benthos_multi: true
-buffer:
-  type: mmap_file
-  mmap_file:
-    directory: "/tmp/benthos"
-    file_size: 200000000
-    retry_period_ms: 1000
-    clean_up: true
-logger:
-  prefix: benthos
-  log_level: INFO
-  add_timestamp: true
+    retries: 3
+    skip_cert_verify: false
+
+  # Alternatively, you can choose to output by hosting a server that consumers
+  # connect to:
+  http_server:
+    address: localhost:8081
+    path: /get
+    timeout_ms: 5000
+    cert_file: ""
+    key_file: ""

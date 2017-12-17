@@ -1,6 +1,0 @@
-input:
-  type: stdin
-output:
-  type: stdout
-metrics:
-  type: http_server

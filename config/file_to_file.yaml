@@ -1,8 +1,0 @@
-input:
-  type: file
-  file:
-    path: "./foo.in"
-output:
-  type: file
-  file:
-    path: "./foo.out"

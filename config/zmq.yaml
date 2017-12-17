@@ -2,25 +2,17 @@ input:
   type: zmq4
   zmq4:
     addresses:
-      - tcp://*:5555
-    bind: true
+    - tcp://localhost:5555
+    bind: false
     socket_type: PULL
-    poll_timeout_ms: 2000
+    sub_filters: []
+    high_water_mark: 0
+    poll_timeout_ms: 5000
 output:
   type: zmq4
   zmq4:
     addresses:
-      - tcp://*:5556
+    - tcp://*:5556
     bind: true
     socket_type: PUSH
-buffer:
-  type: mmap_file
-  mmap_file:
-    directory: "/tmp/benthos"
-    file_size: 200000000
-    retry_period_ms: 1000
-    clean_up: true
-logger:
-  prefix: benthos
-  log_level: INFO
-  add_timestamp: true
+    high_water_mark: 0

@@ -1,0 +1,30 @@
+input:
+  type: kafka
+  kafka:
+    addresses:
+    - localhost:9092
+    client_id: benthos_kafka_input
+    consumer_group: benthos_consumer_group
+    topic: benthos_stream
+    partition: 0
+    start_from_oldest: true
+
+  # Alternatively, you can automatically balance partitions across consumer
+  # groups:
+  kafka_balanced:
+    addresses:
+    - localhost:9092
+    client_id: benthos_kafka_input
+    consumer_group: benthos_consumer_group
+    topics:
+    - benthos_stream
+    start_from_oldest: true
+output:
+  type: kafka
+  kafka:
+    addresses:
+    - localhost:9092
+    client_id: benthos_kafka_output
+    topic: benthos_stream
+    timeout_ms: 5000
+    ack_replicas: true

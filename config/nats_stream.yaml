@@ -1,0 +1,14 @@
+input:
+  type: nats_stream
+  nats_stream:
+    cluster: nats://localhost:4222
+    client_id: benthos_client
+    queue: benthos_queue
+    durable_name: benthos_offset
+    subject: benthos_messages
+output:
+  type: nats_stream
+  nats_stream:
+    cluster: nats://localhost:4222
+    client_id: benthos_client
+    subject: benthos_messages
