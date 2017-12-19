@@ -21,6 +21,8 @@
 package output
 
 import (
+	"io/ioutil"
+	llog "log"
 	"sync/atomic"
 	"time"
 
@@ -112,7 +114,7 @@ func (n *NSQ) connect() (err error) {
 		return
 	}
 
-	n.producer.SetLogger(n.log, nsq.LogLevelWarning)
+	n.producer.SetLogger(llog.New(ioutil.Discard, "", llog.Flags()), nsq.LogLevelError)
 
 	err = n.producer.Ping()
 	return

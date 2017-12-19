@@ -90,18 +90,13 @@ func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		conf:       conf,
 		stats:      stats,
 		log:        log.NewModule(".input.nats"),
-		natsChan:   make(chan *nats.Msg),
 		messages:   make(chan types.Message),
 		responses:  nil,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
 
-	var err error
-	if n.natsConn, err = nats.Connect(conf.NATS.URL); err != nil {
-		return nil, err
-	}
-	if n.natsSub, err = n.natsConn.ChanSubscribe(conf.NATS.Subject, n.natsChan); err != nil {
+	if err := n.connect(); err != nil {
 		return nil, err
 	}
 	return &n, nil
@@ -109,12 +104,38 @@ func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 
 //------------------------------------------------------------------------------
 
+func (n *NATS) connect() error {
+	var err error
+	if n.natsConn == nil {
+		if n.natsConn, err = nats.Connect(n.conf.NATS.URL); err != nil {
+			return err
+		}
+	}
+	if n.natsSub == nil {
+		n.natsChan = make(chan *nats.Msg)
+		if n.natsSub, err = n.natsConn.ChanSubscribe(n.conf.NATS.Subject, n.natsChan); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n *NATS) disconnect() {
+	if n.natsSub != nil {
+		n.natsSub.Unsubscribe()
+		n.natsSub = nil
+	}
+	if n.natsConn != nil {
+		n.natsConn.Close()
+		n.natsConn = nil
+	}
+}
+
 func (n *NATS) loop() {
 	defer func() {
 		atomic.StoreInt32(&n.running, 0)
 
-		n.natsSub.Unsubscribe()
-		n.natsConn.Close()
+		n.disconnect()
 
 		close(n.messages)
 		close(n.closedChan)
@@ -145,9 +166,23 @@ func (n *NATS) loop() {
 			select {
 			case msg, open = <-n.natsChan:
 				if !open {
-					return
+					n.disconnect()
+					n.stats.Incr("input.nats.reconnect.count", 1)
+					if err := n.connect(); err != nil {
+						n.log.Errorf("Lost connection to NATS and failed to reconnect: %v\n", err)
+						n.stats.Incr("input.nats.reconnect.error", 1)
+						select {
+						case <-time.After(time.Second):
+						case <-n.closeChan:
+							return
+						}
+					} else {
+
+						n.stats.Incr("input.nats.reconnect.success", 1)
+					}
+				} else {
+					n.stats.Incr("input.nats.count", 1)
 				}
-				n.stats.Incr("input.nats.count", 1)
 			case <-n.closeChan:
 				return
 			}

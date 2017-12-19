@@ -277,6 +277,15 @@ func (k *Kafka) loop() {
 				if !res.SkipAck() {
 					if err := k.commitOffset(); err != nil {
 						k.log.Errorf("Failed to commit offset: %v\n", err)
+						if err == sarama.ErrNotConnected {
+							// Attempt to reconnect
+							if newCoord, err := k.client.Coordinator(k.conf.Kafka.ConsumerGroup); err != nil {
+								k.log.Errorf("Failed to create new coordinator: %v\n", err)
+							} else {
+								k.coordinator.Close()
+								k.coordinator = newCoord
+							}
+						}
 					}
 				}
 				k.stats.Incr("input.kafka.send.success", 1)

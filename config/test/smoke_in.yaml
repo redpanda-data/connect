@@ -34,3 +34,9 @@ output:
         cluster_id: test-cluster
         client_id: benthos_client_1
         subject: benthos_messages
+logger:
+  log_level: WARN
+metrics:
+  type: http_server
+  http_server:
+    address: localhost:4040

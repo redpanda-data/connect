@@ -21,6 +21,8 @@
 package input
 
 import (
+	"io/ioutil"
+	llog "log"
 	"sync/atomic"
 	"time"
 
@@ -131,7 +133,7 @@ func (n *NSQ) connect() (err error) {
 		return
 	}
 
-	n.consumer.SetLogger(n.log, nsq.LogLevelWarning)
+	n.consumer.SetLogger(llog.New(ioutil.Discard, "", llog.Flags()), nsq.LogLevelError)
 	n.consumer.AddHandler(n)
 
 	if err = n.consumer.ConnectToNSQDs(n.conf.NSQ.Addresses); err != nil {
@@ -145,8 +147,10 @@ func (n *NSQ) connect() (err error) {
 
 // disconnect safely closes a connection to an NSQ server.
 func (n *NSQ) disconnect() error {
-	n.consumer.Stop()
-	n.consumer = nil
+	if n.consumer != nil {
+		n.consumer.Stop()
+		n.consumer = nil
+	}
 	return nil
 }
 
@@ -169,18 +173,35 @@ func (n *NSQ) loop() {
 		close(n.closedChan)
 	}()
 
+	unAck := []*nsq.Message{}
+
 	for atomic.LoadInt32(&n.running) == 1 {
 		// If no bytes then read a message
 		if msg == nil {
 			select {
 			case msg = <-n.internalMessages:
 				n.stats.Incr("input.nsq.count", 1)
+			case <-time.After(time.Second):
+				if n.consumer == nil {
+					if err := n.connect(); err != nil {
+						n.log.Warnf("Failed to reconnect: %v\n.", err)
+						n.stats.Incr("input.nsq.reconnect.error", 1)
+					}
+				} else if n.consumer.Stats().Connections == 0 {
+					n.log.Warnln("Lost connection, attempting to reconnect.")
+					n.disconnect()
+					if err := n.connect(); err != nil {
+						n.log.Warnf("Failed to reconnect: %v\n.", err)
+						n.stats.Incr("input.nsq.reconnect.error", 1)
+					} else {
+						n.log.Warnln("Successfully reconnected to NSQ.")
+						n.stats.Incr("input.nsq.reconnect.success", 1)
+					}
+				}
 			case <-n.closeChan:
 				return
 			}
 		}
-
-		unAck := []*nsq.Message{}
 
 		// If bytes are read then try and propagate.
 		if msg != nil {
