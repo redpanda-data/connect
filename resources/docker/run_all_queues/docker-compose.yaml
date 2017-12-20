@@ -9,7 +9,7 @@ services:
     ports:
       - "9092:9092"
     environment:
-      KAFKA_ADVERTISED_HOST_NAME: 127.0.0.1
+      KAFKA_ADVERTISED_HOST_NAME: kafka
       KAFKA_CREATE_TOPICS: "benthos_topic:1:1"
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
     volumes:
@@ -62,4 +62,10 @@ services:
     image: ncarlier/mqtt
     ports:
       - "1883:1883"
-
+  benthos-in:
+    image: benthos
+    volumes:
+      - $GOPATH/src/github.com/Jeffail/benthos/config/test/smoke_in.yaml:/benthos.yaml
+    command: -c /benthos.yaml
+    ports:
+      - "8080:8080"
