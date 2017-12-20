@@ -146,7 +146,7 @@ func New(
 			return c.brokerConstructor(conf, log, stats, pipelines...)
 		}
 		input, err := c.constructor(conf, log, stats)
-		if err != nil {
+		for err != nil {
 			return nil, err
 		}
 		return WrapWithPipelines(input, pipelines...)

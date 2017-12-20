@@ -97,10 +97,6 @@ func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closeChan:    make(chan struct{}),
 	}
 
-	if err := a.connect(); err != nil {
-		return nil, err
-	}
-
 	return &a, nil
 }
 
@@ -164,6 +160,20 @@ func (a *AMQP) loop() {
 		close(a.responseChan)
 		close(a.closedChan)
 	}()
+
+	for {
+		if err := a.connect(); err != nil {
+			a.log.Errorf("Failed to connect to AMQP: %v\n", err)
+			select {
+			case <-time.After(time.Second):
+			case <-a.closeChan:
+				return
+			}
+		} else {
+			break
+		}
+	}
+	a.log.Infof("Sending AMQP messages to address: %s\n", a.conf.AMQP.URI)
 
 	var open bool
 	for atomic.LoadInt32(&a.running) == 1 {

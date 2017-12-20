@@ -94,18 +94,20 @@ func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		closeChan:    make(chan struct{}),
 	}
 
-	var err error
-	if n.natsConn, err = stan.Connect(
-		conf.NATSStream.ClusterID,
-		conf.NATSStream.ClientID,
-		stan.NatsURL(conf.NATSStream.URL),
-	); err != nil {
-		return nil, err
-	}
 	return &n, nil
 }
 
 //------------------------------------------------------------------------------
+
+func (n *NATSStream) connect() error {
+	var err error
+	n.natsConn, err = stan.Connect(
+		n.conf.NATSStream.ClusterID,
+		n.conf.NATSStream.ClientID,
+		stan.NatsURL(n.conf.NATSStream.URL),
+	)
+	return err
+}
 
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (n *NATSStream) loop() {
@@ -117,6 +119,20 @@ func (n *NATSStream) loop() {
 		close(n.responseChan)
 		close(n.closedChan)
 	}()
+
+	for {
+		if err := n.connect(); err != nil {
+			n.log.Errorf("Failed to connect to NATS Streaming: %v\n", err)
+			select {
+			case <-time.After(time.Second):
+			case <-n.closeChan:
+				return
+			}
+		} else {
+			break
+		}
+	}
+	n.log.Infof("Sending NATS Streaming messages to address: %s\n", n.conf.NATSStream.URL)
 
 	var open bool
 	for atomic.LoadInt32(&n.running) == 1 {

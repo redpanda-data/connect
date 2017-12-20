@@ -24,10 +24,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Shopify/sarama"
 )
 
 //------------------------------------------------------------------------------
@@ -105,8 +105,32 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closedChan: make(chan struct{}),
 	}
 
+	return &k, nil
+}
+
+//------------------------------------------------------------------------------
+
+func (k *Kafka) commitOffset() error {
+	commitReq := sarama.OffsetCommitRequest{}
+	commitReq.ConsumerGroup = k.conf.Kafka.ConsumerGroup
+	commitReq.AddBlock(k.conf.Kafka.Topic, k.conf.Kafka.Partition, k.offset, 0, "")
+
+	commitRes, err := k.coordinator.CommitOffset(&commitReq)
+	if err != nil {
+		return err
+	}
+	err = commitRes.Errors[k.conf.Kafka.Topic][k.conf.Kafka.Partition]
+	if err != sarama.ErrNoError {
+		return err
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+func (k *Kafka) connect() error {
 	config := sarama.NewConfig()
-	config.ClientID = conf.Kafka.ClientID
+	config.ClientID = k.conf.Kafka.ClientID
 	config.Net.DialTimeout = time.Second
 	config.Consumer.Return.Errors = true
 
@@ -117,19 +141,19 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		}
 	}()
 
-	k.client, err = sarama.NewClient(conf.Kafka.Addresses, config)
+	k.client, err = sarama.NewClient(k.conf.Kafka.Addresses, config)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	k.coordinator, err = k.client.Coordinator(conf.Kafka.ConsumerGroup)
+	k.coordinator, err = k.client.Coordinator(k.conf.Kafka.ConsumerGroup)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	k.consumer, err = sarama.NewConsumerFromClient(k.client)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	offsetReq := sarama.OffsetFetchRequest{}
@@ -170,28 +194,8 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		}
 	}
 
-	return &k, err
+	return err
 }
-
-//------------------------------------------------------------------------------
-
-func (k *Kafka) commitOffset() error {
-	commitReq := sarama.OffsetCommitRequest{}
-	commitReq.ConsumerGroup = k.conf.Kafka.ConsumerGroup
-	commitReq.AddBlock(k.conf.Kafka.Topic, k.conf.Kafka.Partition, k.offset, 0, "")
-
-	commitRes, err := k.coordinator.CommitOffset(&commitReq)
-	if err != nil {
-		return err
-	}
-	err = commitRes.Errors[k.conf.Kafka.Topic][k.conf.Kafka.Partition]
-	if err != sarama.ErrNoError {
-		return err
-	}
-	return nil
-}
-
-//------------------------------------------------------------------------------
 
 // drainConsumer should be called after closeClients.
 func (k *Kafka) drainConsumer() {
@@ -235,8 +239,6 @@ func (k *Kafka) errorLoop() {
 }
 
 func (k *Kafka) loop() {
-	k.log.Infof("Receiving Kafka messages from addresses: %s\n", k.conf.Kafka.Addresses)
-
 	defer func() {
 		if atomic.CompareAndSwapInt32(&k.running, 1, 0) {
 			k.closeClients()
@@ -246,6 +248,22 @@ func (k *Kafka) loop() {
 		close(k.messages)
 		close(k.closedChan)
 	}()
+
+	for {
+		if err := k.connect(); err != nil {
+			k.log.Errorf("Failed to connect to Kafka: %v\n", err)
+			select {
+			case <-time.After(time.Second):
+			case <-k.closeChan:
+				return
+			}
+		} else {
+			break
+		}
+	}
+	k.log.Infof("Receiving Kafka messages from addresses: %s\n", k.conf.Kafka.Addresses)
+
+	go k.errorLoop()
 
 	var data *sarama.ConsumerMessage
 
@@ -306,7 +324,6 @@ func (k *Kafka) StartListening(responses <-chan types.Response) error {
 	}
 	k.responses = responses
 	go k.loop()
-	go k.errorLoop()
 	return nil
 }
 

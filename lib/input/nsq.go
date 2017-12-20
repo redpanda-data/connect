@@ -100,10 +100,6 @@ func NewNSQ(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closedChan:       make(chan struct{}),
 	}
 
-	if err := n.connect(); err != nil {
-		return nil, err
-	}
-
 	return &n, nil
 }
 
@@ -172,6 +168,20 @@ func (n *NSQ) loop() {
 		close(n.messages)
 		close(n.closedChan)
 	}()
+
+	for {
+		if err := n.connect(); err != nil {
+			n.log.Errorf("Failed to connect to NSQ: %v\n", err)
+			select {
+			case <-time.After(time.Second):
+			case <-n.closeChan:
+				return
+			}
+		} else {
+			break
+		}
+	}
+	n.log.Infof("Receiving NSQ messages from addresses: %s\n", n.conf.NSQ.Addresses)
 
 	unAck := []*nsq.Message{}
 

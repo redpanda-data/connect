@@ -106,10 +106,6 @@ func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closedChan: make(chan struct{}),
 	}
 
-	if err := a.connect(); err != nil {
-		return nil, err
-	}
-
 	return &a, nil
 }
 
@@ -208,6 +204,20 @@ func (a *AMQP) loop() {
 		close(a.messages)
 		close(a.closedChan)
 	}()
+
+	for {
+		if err := a.connect(); err != nil {
+			a.log.Errorf("Failed to connect to AMQP: %v\n", err)
+			select {
+			case <-time.After(time.Second):
+			case <-a.closeChan:
+				return
+			}
+		} else {
+			break
+		}
+	}
+	a.log.Infof("Receiving AMQP messages from address: %s\n", a.conf.AMQP.URI)
 
 	var data *amqp.Delivery
 

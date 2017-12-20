@@ -106,14 +106,6 @@ func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		closedChan: make(chan struct{}),
 	}
 
-	var err error
-	if n.natsConn, err = stan.Connect(
-		conf.NATSStream.ClusterID,
-		conf.NATSStream.ClientID,
-		stan.NatsURL(conf.NATSStream.URL),
-	); err != nil {
-		return nil, err
-	}
 	return &n, nil
 }
 
@@ -131,6 +123,25 @@ func (n *NATSStream) loop() {
 		close(n.messages)
 		close(n.closedChan)
 	}()
+
+	for {
+		var err error
+		if n.natsConn, err = stan.Connect(
+			n.conf.NATSStream.ClusterID,
+			n.conf.NATSStream.ClientID,
+			stan.NatsURL(n.conf.NATSStream.URL),
+		); err != nil {
+			n.log.Errorf("Failed to connect to NATS Streaming: %v\n", err)
+			select {
+			case <-time.After(time.Second):
+			case <-n.closeChan:
+				return
+			}
+		} else {
+			break
+		}
+	}
+	n.log.Infof("Receiving NATS Streaming messages from address: %s\n", n.conf.NATSStream.URL)
 
 	handler := func(m *stan.Msg) {
 		n.stats.Incr("input.nats_stream.count", 1)

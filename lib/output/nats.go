@@ -90,14 +90,16 @@ func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closeChan:    make(chan struct{}),
 	}
 
-	var err error
-	if n.natsConn, err = nats.Connect(conf.NATS.URL); err != nil {
-		return nil, err
-	}
 	return &n, nil
 }
 
 //------------------------------------------------------------------------------
+
+func (n *NATS) connect() error {
+	var err error
+	n.natsConn, err = nats.Connect(n.conf.NATS.URL)
+	return err
+}
 
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (n *NATS) loop() {
@@ -109,6 +111,20 @@ func (n *NATS) loop() {
 		close(n.responseChan)
 		close(n.closedChan)
 	}()
+
+	for {
+		if err := n.connect(); err != nil {
+			n.log.Errorf("Failed to connect to NATS: %v\n", err)
+			select {
+			case <-time.After(time.Second):
+			case <-n.closeChan:
+				return
+			}
+		} else {
+			break
+		}
+	}
+	n.log.Infof("Sending NATS messages to address: %s\n", n.conf.NATS.URL)
 
 	var open bool
 	for atomic.LoadInt32(&n.running) == 1 {

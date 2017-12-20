@@ -24,10 +24,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Shopify/sarama"
 )
 
 //------------------------------------------------------------------------------
@@ -98,14 +98,20 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closedChan:   make(chan struct{}),
 	}
 
+	return &k, nil
+}
+
+//------------------------------------------------------------------------------
+
+func (k *Kafka) connect() error {
 	config := sarama.NewConfig()
 	config.ClientID = k.conf.Kafka.ClientID
 
-	config.Producer.Timeout = time.Duration(conf.Kafka.TimeoutMS) * time.Millisecond
+	config.Producer.Timeout = time.Duration(k.conf.Kafka.TimeoutMS) * time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 
-	if conf.Kafka.AckReplicas {
+	if k.conf.Kafka.AckReplicas {
 		config.Producer.RequiredAcks = sarama.WaitForAll
 	} else {
 		config.Producer.RequiredAcks = sarama.WaitForLocal
@@ -114,10 +120,8 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	var err error
 	k.producer, err = sarama.NewSyncProducer(k.conf.Kafka.Addresses, config)
 
-	return &k, err
+	return err
 }
-
-//------------------------------------------------------------------------------
 
 // loop is an internal loop that brokers incoming messages to output pipe, does
 // not use select.
@@ -131,6 +135,18 @@ func (k *Kafka) loop() {
 		close(k.closedChan)
 	}()
 
+	for {
+		if err := k.connect(); err != nil {
+			k.log.Errorf("Failed to connect to Kafka: %v\n", err)
+			select {
+			case <-time.After(time.Second):
+			case <-k.closeChan:
+				return
+			}
+		} else {
+			break
+		}
+	}
 	k.log.Infof("Sending Kafka messages to addresses: %s\n", k.conf.Kafka.Addresses)
 
 	var open bool

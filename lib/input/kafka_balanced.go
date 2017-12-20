@@ -24,11 +24,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Shopify/sarama"
-	cluster "github.com/bsm/sarama-cluster"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Shopify/sarama"
+	cluster "github.com/bsm/sarama-cluster"
 )
 
 //------------------------------------------------------------------------------
@@ -99,14 +99,19 @@ func NewKafkaBalanced(conf Config, log log.Modular, stats metrics.Type) (Type, e
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
+	return &k, nil
+}
 
+//------------------------------------------------------------------------------
+
+func (k *KafkaBalanced) connect() error {
 	config := cluster.NewConfig()
-	config.ClientID = conf.KafkaBalanced.ClientID
+	config.ClientID = k.conf.KafkaBalanced.ClientID
 	config.Net.DialTimeout = time.Second
 	config.Consumer.Return.Errors = true
 	config.Group.Return.Notifications = true
 
-	if conf.KafkaBalanced.StartFromOldest {
+	if k.conf.KafkaBalanced.StartFromOldest {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
@@ -118,19 +123,14 @@ func NewKafkaBalanced(conf Config, log log.Modular, stats metrics.Type) (Type, e
 	}()
 
 	k.consumer, err = cluster.NewConsumer(
-		conf.KafkaBalanced.Addresses,
-		conf.KafkaBalanced.ConsumerGroup,
-		conf.KafkaBalanced.Topics,
+		k.conf.KafkaBalanced.Addresses,
+		k.conf.KafkaBalanced.ConsumerGroup,
+		k.conf.KafkaBalanced.Topics,
 		config,
 	)
-	if err != nil {
-		return nil, err
-	}
 
-	return &k, err
+	return err
 }
-
-//------------------------------------------------------------------------------
 
 // drainConsumer should be called after closeClients.
 func (k *KafkaBalanced) drainConsumer() {
@@ -174,8 +174,6 @@ func (k *KafkaBalanced) errorLoop() {
 }
 
 func (k *KafkaBalanced) loop() {
-	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.conf.KafkaBalanced.Addresses)
-
 	defer func() {
 		if atomic.CompareAndSwapInt32(&k.running, 1, 0) {
 			k.closeClients()
@@ -185,6 +183,22 @@ func (k *KafkaBalanced) loop() {
 		close(k.messages)
 		close(k.closedChan)
 	}()
+
+	for {
+		if err := k.connect(); err != nil {
+			k.log.Errorf("Failed to connect to Kafka: %v\n", err)
+			select {
+			case <-time.After(time.Second):
+			case <-k.closeChan:
+				return
+			}
+		} else {
+			break
+		}
+	}
+	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.conf.KafkaBalanced.Addresses)
+
+	go k.errorLoop()
 
 	var data *sarama.ConsumerMessage
 
@@ -235,7 +249,6 @@ func (k *KafkaBalanced) StartListening(responses <-chan types.Response) error {
 	}
 	k.responses = responses
 	go k.loop()
-	go k.errorLoop()
 	return nil
 }
 

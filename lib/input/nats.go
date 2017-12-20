@@ -96,9 +96,6 @@ func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closedChan: make(chan struct{}),
 	}
 
-	if err := n.connect(); err != nil {
-		return nil, err
-	}
 	return &n, nil
 }
 
@@ -140,6 +137,20 @@ func (n *NATS) loop() {
 		close(n.messages)
 		close(n.closedChan)
 	}()
+
+	for {
+		if err := n.connect(); err != nil {
+			n.log.Errorf("Failed to connect to NATS: %v\n", err)
+			select {
+			case <-time.After(time.Second):
+			case <-n.closeChan:
+				return
+			}
+		} else {
+			break
+		}
+	}
+	n.log.Infof("Receiving NATS messages from address: %s\n", n.conf.NATS.URL)
 
 	var msg *nats.Msg
 
