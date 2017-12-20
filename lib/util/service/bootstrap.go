@@ -92,8 +92,8 @@ func readConfig(path string, config interface{}) error {
 // Bootstrap will print the values of util.Version and util.DateBuilt. To
 // populate those values you must run go build with the following:
 //
-// -ldflags "-X github.com/jeffail/benthos/lib/util/service.version $(VERSION) \
-//   -X github.com/jeffail/benthos/lib/util/service.dateBuilt $(DATE)"
+// -ldflags "-X github.com/Jeffail/benthos/lib/util/service.version $(VERSION) \
+//   -X github.com/Jeffail/benthos/lib/util/service.dateBuilt $(DATE)"
 //
 // Returns a flag indicating whether the service should continue or not.
 func Bootstrap(configPtr interface{}, defaultConfigPaths ...string) bool {

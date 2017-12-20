@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jeffail/gabs"
+	"github.com/Jeffail/gabs"
 )
 
 //------------------------------------------------------------------------------

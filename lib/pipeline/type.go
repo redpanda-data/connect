@@ -20,7 +20,7 @@
 
 package pipeline
 
-import "github.com/jeffail/benthos/lib/types"
+import "github.com/Jeffail/benthos/lib/types"
 
 // ConstructorFunc is a common type for constructing a pipeline type.
 type ConstructorFunc func() (Type, error)

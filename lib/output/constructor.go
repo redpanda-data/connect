@@ -25,11 +25,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jeffail/benthos/lib/pipeline"
-	"github.com/jeffail/benthos/lib/processor"
-	"github.com/jeffail/benthos/lib/types"
-	"github.com/jeffail/benthos/lib/util/service/log"
-	"github.com/jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/pipeline"
+	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------

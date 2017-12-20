@@ -20,7 +20,7 @@
 
 package impl
 
-import "github.com/jeffail/benthos/lib/types"
+import "github.com/Jeffail/benthos/lib/types"
 
 //------------------------------------------------------------------------------
 

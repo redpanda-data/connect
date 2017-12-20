@@ -20,7 +20,7 @@
 
 package output
 
-import "github.com/jeffail/benthos/lib/types"
+import "github.com/Jeffail/benthos/lib/types"
 
 // Type is the standard interface of an output type.
 type Type interface {

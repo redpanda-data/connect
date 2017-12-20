@@ -23,7 +23,7 @@ package util
 import (
 	"testing"
 
-	"github.com/jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------

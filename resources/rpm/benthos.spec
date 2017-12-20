@@ -5,7 +5,7 @@ Summary:   Persistent stream buffer service.
 
 Group:     Applications/Services
 License:   MIT
-URL:       https://github.com/jeffail/benthos
+URL:       https://github.com/Jeffail/benthos
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 

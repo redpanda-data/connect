@@ -23,9 +23,9 @@ package input
 import (
 	"time"
 
-	"github.com/jeffail/benthos/lib/pipeline"
-	"github.com/jeffail/benthos/lib/types"
-	"github.com/jeffail/benthos/lib/util"
+	"github.com/Jeffail/benthos/lib/pipeline"
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util"
 )
 
 //------------------------------------------------------------------------------

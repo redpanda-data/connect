@@ -20,7 +20,7 @@
 
 package buffer
 
-import "github.com/jeffail/benthos/lib/types"
+import "github.com/Jeffail/benthos/lib/types"
 
 // Type is the standard interface of an agent type.
 type Type interface {

@@ -20,7 +20,7 @@
 
 package output
 
-import "github.com/jeffail/benthos/lib/util/service/log"
+import "github.com/Jeffail/benthos/lib/util/service/log"
 
 var logConfig = log.LoggerConfig{
 	LogLevel: "NONE",

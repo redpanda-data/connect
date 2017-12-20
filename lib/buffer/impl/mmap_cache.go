@@ -28,9 +28,9 @@ import (
 	"sync"
 
 	mmap "github.com/edsrzf/mmap-go"
-	"github.com/jeffail/benthos/lib/util/disk"
-	"github.com/jeffail/benthos/lib/util/service/log"
-	"github.com/jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/util/disk"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------

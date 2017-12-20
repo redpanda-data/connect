@@ -32,14 +32,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jeffail/benthos/lib/buffer"
-	"github.com/jeffail/benthos/lib/input"
-	"github.com/jeffail/benthos/lib/output"
-	"github.com/jeffail/benthos/lib/processor"
-	"github.com/jeffail/benthos/lib/util"
-	"github.com/jeffail/benthos/lib/util/service"
-	"github.com/jeffail/benthos/lib/util/service/log"
-	"github.com/jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/buffer"
+	"github.com/Jeffail/benthos/lib/input"
+	"github.com/Jeffail/benthos/lib/output"
+	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/util"
+	"github.com/Jeffail/benthos/lib/util/service"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------

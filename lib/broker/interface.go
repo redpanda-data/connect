@@ -20,7 +20,7 @@
 
 package broker
 
-import "github.com/jeffail/benthos/lib/types"
+import "github.com/Jeffail/benthos/lib/types"
 
 // Type is the standard interface of a broker type.
 type Type interface {

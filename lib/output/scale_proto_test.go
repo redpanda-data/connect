@@ -33,9 +33,9 @@ import (
 	"github.com/go-mangos/mangos/protocol/rep"
 	"github.com/go-mangos/mangos/transport/tcp"
 
-	"github.com/jeffail/benthos/lib/types"
-	"github.com/jeffail/benthos/lib/util/service/log"
-	"github.com/jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 .PHONY: all deps rpm docker clean-docker clean docs
 
-BENTHOS_PATH = github.com/jeffail/benthos
+BENTHOS_PATH = github.com/Jeffail/benthos
 
 TAGS =
 

@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  name = "github.com/Jeffail/gabs"
+  packages = ["."]
+  revision = "2a3aa15961d5fee6047b8151b67ac2f08ba2c48c"
+  version = "1.0"
+
+[[projects]]
   name = "github.com/Shopify/sarama"
   packages = ["."]
   revision = "3b1b38866a79f06deddf0487d5c27ba0697ccd65"
@@ -10,7 +16,10 @@
 [[projects]]
   branch = "master"
   name = "github.com/amir/raidman"
-  packages = [".","proto"]
+  packages = [
+    ".",
+    "proto"
+  ]
   revision = "1ccc43bfb9c93cb401a4025e49c64ba71e5e668b"
 
 [[projects]]
@@ -51,13 +60,27 @@
 
 [[projects]]
   name = "github.com/go-mangos/mangos"
-  packages = [".","protocol/pub","protocol/pull","protocol/push","protocol/rep","protocol/req","protocol/sub","transport/ipc","transport/tcp"]
+  packages = [
+    ".",
+    "protocol/pub",
+    "protocol/pull",
+    "protocol/push",
+    "protocol/rep",
+    "protocol/req",
+    "protocol/sub",
+    "transport/ipc",
+    "transport/tcp"
+  ]
   revision = "7e2b8010de3b57f5880ae5b8201067fd943e3202"
   version = "v1.2.0"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
-  packages = ["gogoproto","proto","protoc-gen-gogo/descriptor"]
+  packages = [
+    "gogoproto",
+    "proto",
+    "protoc-gen-gogo/descriptor"
+  ]
   revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
   version = "v0.5"
 
@@ -74,20 +97,21 @@
   revision = "553a641470496b2327abcac10b36396bd98e45c9"
 
 [[projects]]
-  name = "github.com/jeffail/gabs"
-  packages = ["."]
-  revision = "2a3aa15961d5fee6047b8151b67ac2f08ba2c48c"
-  version = "1.0"
-
-[[projects]]
   name = "github.com/nats-io/go-nats"
-  packages = [".","encoders/builtin","util"]
+  packages = [
+    ".",
+    "encoders/builtin",
+    "util"
+  ]
   revision = "29f9728a183bf3fa7e809e14edac00b33be72088"
   version = "v1.3.0"
 
 [[projects]]
   name = "github.com/nats-io/go-nats-streaming"
-  packages = [".","pb"]
+  packages = [
+    ".",
+    "pb"
+  ]
   revision = "6e620057a207bd61e992c1c5b6a2de7b6a4cb010"
   version = "v0.3.4"
 
@@ -154,6 +178,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "357c24ad72b1076abe0d0873447f4388cf3150e63cd7988208cd7022fa8118d4"
+  inputs-digest = "8d9fb3e986c28946f4e1eb0ac4afc38605880091e6f64f361c24b7235c7f7a0b"
   solver-name = "gps-cdcl"
   solver-version = 1

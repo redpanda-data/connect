@@ -1,7 +1,7 @@
 ![Benthos](icon.png "Benthos")
 
-[![godoc for jeffail/benthos][1]][2]
-[![goreportcard for jeffail/benthos][3]][4]
+[![godoc for Jeffail/benthos][1]][2]
+[![goreportcard for Jeffail/benthos][3]][4]
 
 Benthos is a service that reads messages from any sources and writes them to any
 sinks. It bridges services and tools together in ways that can simplify your
@@ -46,7 +46,7 @@ ways, for more guidance [check out this doc.][5]
 Build with Go:
 
 ``` shell
-go get github.com/jeffail/benthos/cmd/...
+go get github.com/Jeffail/benthos/cmd/...
 ```
 
 Or, [download from here.](https://github.com/Jeffail/benthos/releases)
@@ -125,10 +125,10 @@ docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
 	benthos -c /config.yaml
 ```
 
-[1]: https://godoc.org/github.com/jeffail/benthos?status.svg
-[2]: http://godoc.org/github.com/jeffail/benthos
-[3]: https://goreportcard.com/badge/github.com/jeffail/benthos
-[4]: https://goreportcard.com/report/jeffail/benthos
+[1]: https://godoc.org/github.com/Jeffail/benthos?status.svg
+[2]: http://godoc.org/github.com/Jeffail/benthos
+[3]: https://goreportcard.com/badge/github.com/Jeffail/benthos
+[4]: https://goreportcard.com/report/Jeffail/benthos
 [5]: resources/docs/multipart.md
 [6]: resources/docs/metrics.md
 [7]: resources/docs

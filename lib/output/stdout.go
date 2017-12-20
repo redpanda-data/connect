@@ -23,8 +23,8 @@ package output
 import (
 	"os"
 
-	"github.com/jeffail/benthos/lib/util/service/log"
-	"github.com/jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------

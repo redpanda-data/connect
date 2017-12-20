@@ -21,7 +21,7 @@
 package util
 
 import (
-	"github.com/jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------

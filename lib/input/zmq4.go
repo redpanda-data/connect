@@ -26,9 +26,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jeffail/benthos/lib/types"
-	"github.com/jeffail/benthos/lib/util/service/log"
-	"github.com/jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/pebbe/zmq4"
 )
 
@@ -42,7 +42,7 @@ ZMQ4 is supported but currently depends on C bindings. Since this is an
 annoyance when building or using Benthos it is not compiled by default.
 
 Build it into your project by getting CZMQ installed on your machine, then build
-with the tag: 'go install -tags "ZMQ4" github.com/jeffail/benthos/cmd/...'
+with the tag: 'go install -tags "ZMQ4" github.com/Jeffail/benthos/cmd/...'
 
 ZMQ4 input supports PULL and SUB sockets only. If there is demand for other
 socket types then they can be added easily.`,
