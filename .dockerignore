@@ -2,3 +2,4 @@ docs
 icon.png
 LICENSE
 README.md
+target/bin/benthos

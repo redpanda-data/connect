@@ -25,7 +25,7 @@ $(PATHINSTBIN)/%:
 
 $(APPS): %: $(PATHINSTBIN)/%
 
-$(PATHINSTDOCKER)/benthos.tar: $(PATHINSTBIN)/benthos
+$(PATHINSTDOCKER)/benthos.tar:
 	@mkdir -p $(dir $@)
 	@docker build -f ./resources/docker/Dockerfile . -t benthos:$(VERSION)
 	@docker tag benthos:$(VERSION) benthos:latest

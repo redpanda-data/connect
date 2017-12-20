@@ -1,7 +1,14 @@
+FROM golang:latest
+
+WORKDIR /go/src/github.com/Jeffail/benthos/
+COPY . /go/src/github.com/Jeffail/benthos/
+RUN CGO_ENABLED=0 GOOS=linux make
+
 FROM scratch
 
-MAINTAINER Ashley Jeffs <ash.jeffs@gmail.com>
+LABEL maintainer="Ashley Jeffs <ash.jeffs@gmail.com>"
 
-COPY target/bin/benthos /
+WORKDIR /root/
+COPY --from=0 /go/src/github.com/Jeffail/benthos/target/bin/benthos .
 
-ENTRYPOINT ["/benthos"]
+ENTRYPOINT ["./benthos"]
