@@ -5,7 +5,7 @@ input:
     - type: kafka
       kafka:
         addresses:
-        - localhost:9092
+        - kafka:9092
         client_id: benthos_kafka_input
         consumer_group: benthos_consumer_group
         topic: benthos_topic
@@ -13,7 +13,7 @@ input:
         start_from_oldest: true
     - type: amqp
       amqp:
-        uri: amqp://guest:guest@localhost:5672/
+        uri: amqp://guest:guest@rabbitmq:5672/
         exchange: benthos-exchange
         exchange_type: direct
         queue: benthos-queue
@@ -24,25 +24,29 @@ input:
     - type: nsq
       nsq:
         nsqd_tcp_addresses:
-        - localhost:4150
+        - nsqd:4150
         lookupd_http_addresses:
-        - localhost:4161
+        - nsqlookupd:4161
         topic: benthos_messages
         channel: benthos_stream
         user_agent: benthos_consumer
         max_in_flight: 100
     - type: nats
       nats:
-        url: nats://localhost:4222
+        url: nats://nats:4222
         subject: benthos_messages
     - type: nats_stream
       nats_stream:
-        url: nats://localhost:4223
+        url: nats://nats-streaming:4223
         cluster_id: test-cluster
         client_id: benthos_client_2
         subject: benthos_messages
+output:
+  type: file
+  file:
+    path: /output/smoke-output.txt
 logger:
-  log_level: WARN
+  log_level: INFO
 metrics:
   type: http_server
   http_server:

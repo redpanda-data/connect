@@ -5,3 +5,4 @@ target
 vendor
 key.pem
 cert.pem
+smoke-output.txt

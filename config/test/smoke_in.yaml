@@ -38,7 +38,7 @@ output:
         client_id: benthos_client_1
         subject: benthos_messages
 logger:
-  log_level: WARN
+  log_level: INFO
 metrics:
   type: http_server
   http_server:
