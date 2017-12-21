@@ -9,7 +9,7 @@ services:
     ports:
       - "9092:9092"
     environment:
-      KAFKA_ADVERTISED_HOST_NAME: localhost
+      HOSTNAME_COMMAND: "route -n | awk '/UG[ \t]/{print $$2}'"
       KAFKA_CREATE_TOPICS: "benthos_topic:1:1"
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
     volumes:

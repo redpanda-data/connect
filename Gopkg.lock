@@ -16,10 +16,7 @@
 [[projects]]
   branch = "master"
   name = "github.com/amir/raidman"
-  packages = [
-    ".",
-    "proto"
-  ]
+  packages = [".","proto"]
   revision = "1ccc43bfb9c93cb401a4025e49c64ba71e5e668b"
 
 [[projects]]
@@ -60,27 +57,19 @@
 
 [[projects]]
   name = "github.com/go-mangos/mangos"
-  packages = [
-    ".",
-    "protocol/pub",
-    "protocol/pull",
-    "protocol/push",
-    "protocol/rep",
-    "protocol/req",
-    "protocol/sub",
-    "transport/ipc",
-    "transport/tcp"
-  ]
+  packages = [".","protocol/pub","protocol/pull","protocol/push","protocol/rep","protocol/req","protocol/sub","transport/ipc","transport/tcp"]
   revision = "7e2b8010de3b57f5880ae5b8201067fd943e3202"
   version = "v1.2.0"
 
 [[projects]]
+  name = "github.com/go-redis/redis"
+  packages = [".","internal","internal/consistenthash","internal/hashtag","internal/pool","internal/proto"]
+  revision = "9c885d5ba8a22f260badcffde1649915fbeebfc0"
+  version = "v6.7.5"
+
+[[projects]]
   name = "github.com/gogo/protobuf"
-  packages = [
-    "gogoproto",
-    "proto",
-    "protoc-gen-gogo/descriptor"
-  ]
+  packages = ["gogoproto","proto","protoc-gen-gogo/descriptor"]
   revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
   version = "v0.5"
 
@@ -98,20 +87,13 @@
 
 [[projects]]
   name = "github.com/nats-io/go-nats"
-  packages = [
-    ".",
-    "encoders/builtin",
-    "util"
-  ]
+  packages = [".","encoders/builtin","util"]
   revision = "29f9728a183bf3fa7e809e14edac00b33be72088"
   version = "v1.3.0"
 
 [[projects]]
   name = "github.com/nats-io/go-nats-streaming"
-  packages = [
-    ".",
-    "pb"
-  ]
+  packages = [".","pb"]
   revision = "6e620057a207bd61e992c1c5b6a2de7b6a4cb010"
   version = "v0.3.4"
 
@@ -178,6 +160,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8d9fb3e986c28946f4e1eb0ac4afc38605880091e6f64f361c24b7235c7f7a0b"
+  inputs-digest = "e5868642c62558d605dcfa400226c93cb37030d1f3944872bbde0c22b10003ae"
   solver-name = "gps-cdcl"
   solver-version = 1

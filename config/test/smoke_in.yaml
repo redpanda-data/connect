@@ -7,6 +7,10 @@ output:
   type: round_robin
   round_robin:
     outputs:
+    - type: redis_pubsub
+      redis_pubsub:
+        address: redis:6379
+        channel: benthos_chan
     - type: kafka
       kafka:
         addresses:

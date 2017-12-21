@@ -2,6 +2,11 @@ input:
   type: fan_in
   fan_in:
     inputs:
+    - type: redis_pubsub
+      redis_pubsub:
+        address: redis:6379
+        channels:
+        - benthos_chan
     - type: kafka
       kafka:
         addresses:

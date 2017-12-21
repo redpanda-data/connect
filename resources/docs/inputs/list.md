@@ -137,6 +137,11 @@ Comma separated arrays are also supported, e.g. urlA, urlB.
 
 Subscribe to an NSQ instance topic and channel.
 
+## `redis_pubsub`
+
+Redis supports a publish/subscribe model, it's possible to subscribe to multiple
+channels using this input.
+
 ## `scalability_protocols`
 
 The scalability protocols are common communication patterns which will be

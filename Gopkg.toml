@@ -52,3 +52,7 @@
 [[constraint]]
   branch = "v2"
   name = "gopkg.in/yaml.v2"
+
+[[constraint]]
+  name = "github.com/go-redis/redis"
+  version = "6.7.5"

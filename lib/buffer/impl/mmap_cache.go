@@ -27,10 +27,10 @@ import (
 	"path"
 	"sync"
 
-	mmap "github.com/edsrzf/mmap-go"
 	"github.com/Jeffail/benthos/lib/util/disk"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	mmap "github.com/edsrzf/mmap-go"
 )
 
 //------------------------------------------------------------------------------

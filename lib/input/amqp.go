@@ -74,7 +74,7 @@ func NewAMQPConfig() AMQPConfig {
 
 //------------------------------------------------------------------------------
 
-// AMQP is an input type that serves Scalability Protocols messages.
+// AMQP is an input type that reads messages via the AMQP 0.91 protocol.
 type AMQP struct {
 	running int32
 
@@ -240,9 +240,10 @@ func (a *AMQP) loop() {
 						a.log.Warnln("Successfully reconnected to AMQP.")
 						a.stats.Incr("input.amqp.reconnect.success", 1)
 					}
+				} else {
+					data = &msg
+					a.stats.Incr("input.amqp.count", 1)
 				}
-				data = &msg
-				a.stats.Incr("input.amqp.count", 1)
 			case <-a.closeChan:
 				return
 			}

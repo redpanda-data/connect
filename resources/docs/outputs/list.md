@@ -72,6 +72,11 @@ this output is able to guarantee delivery on success.
 
 Publish to an NSQ topic.
 
+## `redis_pubsub`
+
+Publishes messages through the Redis PubSub model. It is not possible to
+guarantee that messages have been received.
+
 ## `round_robin`
 
 The round robin output type allows you to send messages across multiple outputs,

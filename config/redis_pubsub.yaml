@@ -1,0 +1,11 @@
+input:
+  type: redis_pubsub
+  redis_pubsub:
+    address: localhost:6379
+    channels:
+    - benthos_chan
+output:
+  type: redis_pubsub
+  redis_pubsub:
+    address: localhost:6379
+    channel: benthos_chan

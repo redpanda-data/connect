@@ -3,8 +3,7 @@
 [![godoc for Jeffail/benthos][1]][2]
 [![goreportcard for Jeffail/benthos][3]][4]
 
-Benthos is a service that reads messages from any sources and writes them to any
-sinks. It bridges services and tools together in ways that can simplify your
+Benthos is a service that bridges message queues in ways that can simplify your
 platform or reduce development time.
 
 A range of optional buffer strategies are available, allowing you to select a
@@ -22,13 +21,15 @@ Currently supported input/output targets:
 - [RabbitMQ (AMQP 0.91)][rabbitmq]
 - [NSQ][nsq]
 - [NATS][nats]
+- [NATS Streaming][natsstreaming]
+- [Redis Pub/Sub][redispubsub]
 - [Kafka][kafka]
 - HTTP 1.1 POST/GET
 - STDIN/STDOUT
 - File
 
 Setting up multiple outputs or inputs is done by choosing a routing strategy
-(fan in, fan out, round robin, etc.)
+(fan-in, fan-out, round-robin, etc.)
 
 For a full and up to date list of all inputs, buffer options, processors, and
 outputs [you can find them in the docs][7], or print them from the binary:
@@ -109,19 +110,20 @@ needed files with `dep prune`.
 
 ## Docker
 
-There's a `Dockerfile` for creating a benthos docker image. This is built from
-scratch and so you'll need to build without CGO (`CGO_ENABLED=0`) for your
-benthos build to run within it. Create it like this:
+There's a `Dockerfile` for creating a benthos docker image which is multi-stage 
+and results in a minimal image from scratch. You can build it with:
 
 ``` shell
-CGO_ENABLED=0 make docker
-docker run --rm benthos
+make docker
 ```
 
 Then use the image:
 
 ``` shell
-docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
+docker run --rm \
+	-v /path/to/your/benthos.yaml:/config.yaml \
+	-v /tmp/data:/data \
+	-p 8080:8080 \
 	benthos -c /config.yaml
 ```
 
@@ -138,4 +140,6 @@ docker run --rm -v ~/benthos.yaml:/config.yaml -v /tmp/data:/data -p 8080:8080 \
 [rabbitmq]: https://www.rabbitmq.com/
 [nsq]: http://nsq.io/
 [nats]: http://nats.io/
+[natsstreaming]: https://nats.io/documentation/streaming/nats-streaming-intro/
+[redispubsub]: https://redis.io/topics/pubsub
 [kafka]: https://kafka.apache.org/

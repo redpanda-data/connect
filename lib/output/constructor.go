@@ -48,41 +48,43 @@ var constructors = map[string]typeSpec{}
 // Note that some configs are empty structs, as the type has no optional values
 // but we want to list it as an option.
 type Config struct {
-	Type       string             `json:"type" yaml:"type"`
-	HTTPClient HTTPClientConfig   `json:"http_client" yaml:"http_client"`
-	HTTPServer HTTPServerConfig   `json:"http_server" yaml:"http_server"`
-	ScaleProto ScaleProtoConfig   `json:"scalability_protocols" yaml:"scalability_protocols"`
-	Kafka      KafkaConfig        `json:"kafka" yaml:"kafka"`
-	AMQP       AMQPConfig         `json:"amqp" yaml:"amqp"`
-	NSQ        NSQConfig          `json:"nsq" yaml:"nsq"`
-	NATS       NATSConfig         `json:"nats" yaml:"nats"`
-	NATSStream NATSStreamConfig   `json:"nats_stream" yaml:"nats_stream"`
-	ZMQ4       *ZMQ4Config        `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	File       FileConfig         `json:"file" yaml:"file"`
-	STDOUT     STDOUTConfig       `json:"stdout" yaml:"stdout"`
-	FanOut     FanOutConfig       `json:"fan_out" yaml:"fan_out"`
-	RoundRobin RoundRobinConfig   `json:"round_robin" yaml:"round_robin"`
-	Processors []processor.Config `json:"processors" yaml:"processors"`
+	Type        string             `json:"type" yaml:"type"`
+	HTTPClient  HTTPClientConfig   `json:"http_client" yaml:"http_client"`
+	HTTPServer  HTTPServerConfig   `json:"http_server" yaml:"http_server"`
+	ScaleProto  ScaleProtoConfig   `json:"scalability_protocols" yaml:"scalability_protocols"`
+	Kafka       KafkaConfig        `json:"kafka" yaml:"kafka"`
+	AMQP        AMQPConfig         `json:"amqp" yaml:"amqp"`
+	NSQ         NSQConfig          `json:"nsq" yaml:"nsq"`
+	NATS        NATSConfig         `json:"nats" yaml:"nats"`
+	NATSStream  NATSStreamConfig   `json:"nats_stream" yaml:"nats_stream"`
+	RedisPubSub RedisPubSubConfig  `json:"redis_pubsub" yaml:"redis_pubsub"`
+	ZMQ4        *ZMQ4Config        `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	File        FileConfig         `json:"file" yaml:"file"`
+	STDOUT      STDOUTConfig       `json:"stdout" yaml:"stdout"`
+	FanOut      FanOutConfig       `json:"fan_out" yaml:"fan_out"`
+	RoundRobin  RoundRobinConfig   `json:"round_robin" yaml:"round_robin"`
+	Processors  []processor.Config `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:       "stdout",
-		HTTPClient: NewHTTPClientConfig(),
-		HTTPServer: NewHTTPServerConfig(),
-		ScaleProto: NewScaleProtoConfig(),
-		Kafka:      NewKafkaConfig(),
-		AMQP:       NewAMQPConfig(),
-		NSQ:        NewNSQConfig(),
-		NATS:       NewNATSConfig(),
-		NATSStream: NewNATSStreamConfig(),
-		ZMQ4:       NewZMQ4Config(),
-		File:       NewFileConfig(),
-		STDOUT:     NewSTDOUTConfig(),
-		FanOut:     NewFanOutConfig(),
-		RoundRobin: NewRoundRobinConfig(),
-		Processors: []processor.Config{},
+		Type:        "stdout",
+		HTTPClient:  NewHTTPClientConfig(),
+		HTTPServer:  NewHTTPServerConfig(),
+		ScaleProto:  NewScaleProtoConfig(),
+		Kafka:       NewKafkaConfig(),
+		AMQP:        NewAMQPConfig(),
+		NSQ:         NewNSQConfig(),
+		NATS:        NewNATSConfig(),
+		NATSStream:  NewNATSStreamConfig(),
+		RedisPubSub: NewRedisPubSubConfig(),
+		ZMQ4:        NewZMQ4Config(),
+		File:        NewFileConfig(),
+		STDOUT:      NewSTDOUTConfig(),
+		FanOut:      NewFanOutConfig(),
+		RoundRobin:  NewRoundRobinConfig(),
+		Processors:  []processor.Config{},
 	}
 }
 
