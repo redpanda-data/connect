@@ -48,7 +48,7 @@ Exchange type options are: direct|fanout|topic|x-custom`,
 
 // AMQPConfig is configuration for the AMQP input type.
 type AMQPConfig struct {
-	URI           string `json:"uri" yaml:"uri"`
+	URL           string `json:"url" yaml:"url"`
 	Exchange      string `json:"exchange" yaml:"exchange"`
 	ExchangeType  string `json:"exchange_type" yaml:"exchange_type"`
 	Queue         string `json:"queue" yaml:"queue"`
@@ -61,7 +61,7 @@ type AMQPConfig struct {
 // NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
-		URI:           "amqp://guest:guest@localhost:5672/",
+		URL:           "amqp://guest:guest@localhost:5672/",
 		Exchange:      "benthos-exchange",
 		ExchangeType:  "direct",
 		Queue:         "benthos-queue",
@@ -113,7 +113,7 @@ func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 
 // connect establishes a connection to an AMQP server.
 func (a *AMQP) connect() (err error) {
-	a.conn, err = amqp.Dial(a.conf.AMQP.URI)
+	a.conn, err = amqp.Dial(a.conf.AMQP.URL)
 	if err != nil {
 		return fmt.Errorf("AMQP Connect: %s", err)
 	}
@@ -217,7 +217,7 @@ func (a *AMQP) loop() {
 			break
 		}
 	}
-	a.log.Infof("Receiving AMQP messages from address: %s\n", a.conf.AMQP.URI)
+	a.log.Infof("Receiving AMQP messages from URL: %s\n", a.conf.AMQP.URL)
 
 	var data *amqp.Delivery
 

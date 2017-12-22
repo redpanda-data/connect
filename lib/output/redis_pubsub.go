@@ -21,6 +21,7 @@
 package output
 
 import (
+	"net/url"
 	"sync/atomic"
 	"time"
 
@@ -45,14 +46,14 @@ guarantee that messages have been received.`,
 
 // RedisPubSubConfig is configuration for the RedisPubSub output type.
 type RedisPubSubConfig struct {
-	Address string `json:"address" yaml:"address"`
+	URL     string `json:"url" yaml:"url"`
 	Channel string `json:"channel" yaml:"channel"`
 }
 
 // NewRedisPubSubConfig creates a new RedisPubSubConfig with default values.
 func NewRedisPubSubConfig() RedisPubSubConfig {
 	return RedisPubSubConfig{
-		Address: "localhost:6379",
+		URL:     "tcp://localhost:6379",
 		Channel: "benthos_chan",
 	}
 }
@@ -66,6 +67,7 @@ type RedisPubSub struct {
 	log   log.Modular
 	stats metrics.Type
 
+	url  *url.URL
 	conf Config
 
 	client *redis.Client
@@ -79,7 +81,7 @@ type RedisPubSub struct {
 
 // NewRedisPubSub creates a new RedisPubSub output type.
 func NewRedisPubSub(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	return &RedisPubSub{
+	r := &RedisPubSub{
 		running:      1,
 		log:          log.NewModule(".output.redis_pubsub"),
 		stats:        stats,
@@ -88,15 +90,29 @@ func NewRedisPubSub(conf Config, log log.Modular, stats metrics.Type) (Type, err
 		responseChan: make(chan types.Response),
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
-	}, nil
+	}
+
+	var err error
+	r.url, err = url.Parse(conf.RedisPubSub.URL)
+	if err != nil {
+		return nil, err
+	}
+
+	return r, nil
 }
 
 //------------------------------------------------------------------------------
 
 // connect establishes a connection to an RedisPubSub server.
 func (r *RedisPubSub) connect() error {
+	var pass string
+	if r.url.User != nil {
+		pass, _ = r.url.User.Password()
+	}
 	client := redis.NewClient(&redis.Options{
-		Addr: r.conf.RedisPubSub.Address,
+		Addr:     r.url.Host,
+		Network:  r.url.Scheme,
+		Password: pass,
 	})
 
 	if _, err := client.Ping().Result(); err != nil {
@@ -144,7 +160,7 @@ func (r *RedisPubSub) loop() {
 			break
 		}
 	}
-	r.log.Infof("Sending RedisPubSub messages to address: %s\n", r.conf.RedisPubSub.Address)
+	r.log.Infof("Sending RedisPubSub messages to URL: %s\n", r.conf.RedisPubSub.URL)
 
 	var open bool
 	for atomic.LoadInt32(&r.running) == 1 {

@@ -41,7 +41,7 @@ func TestScaleProtoBasic(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
-	conf.ScaleProto.Addresses = []string{"tcp://localhost:1238", "tcp://localhost:1239"}
+	conf.ScaleProto.URLs = []string{"tcp://localhost:1238", "tcp://localhost:1239"}
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.SocketType = "PULL"
 	conf.ScaleProto.PollTimeoutMS = 100
@@ -138,7 +138,7 @@ func TestScaleProtoReqRep(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
-	conf.ScaleProto.Addresses = []string{"tcp://localhost:1238"}
+	conf.ScaleProto.URLs = []string{"tcp://localhost:1238"}
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.SocketType = "REP"
 	conf.ScaleProto.PollTimeoutMS = 100
@@ -259,7 +259,7 @@ func TestScaleProtoPubSub(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
-	conf.ScaleProto.Addresses = []string{"tcp://localhost:1239"}
+	conf.ScaleProto.URLs = []string{"tcp://localhost:1239"}
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.SocketType = "SUB"
 	conf.ScaleProto.SubFilters = []string{"testTopic"}

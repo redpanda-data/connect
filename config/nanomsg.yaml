@@ -1,9 +1,9 @@
 input:
   type: scalability_protocols
   scalability_protocols:
-    addresses:
+    urls:
     - tcp://*:5555
-    bind_address: true
+    bind: true
     socket_type: PULL
     reply_success: SUCCESS
     reply_error: ERROR
@@ -13,9 +13,9 @@ input:
 output:
   type: scalability_protocols
   scalability_protocols:
-    addresses:
+    urls:
     - tcp://localhost:5556
-    bind_address: false
+    bind: false
     socket_type: PUSH
     reply_success: SUCCESS
     poll_timeout_ms: 5000

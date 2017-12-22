@@ -21,6 +21,7 @@
 package input
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -75,9 +76,10 @@ type KafkaBalanced struct {
 
 	offset int64
 
-	conf  Config
-	stats metrics.Type
-	log   log.Modular
+	addresses []string
+	conf      Config
+	stats     metrics.Type
+	log       log.Modular
 
 	messages  chan types.Message
 	responses <-chan types.Response
@@ -98,6 +100,13 @@ func NewKafkaBalanced(conf Config, log log.Modular, stats metrics.Type) (Type, e
 		responses:  nil,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
+	}
+	for _, addr := range conf.KafkaBalanced.Addresses {
+		for _, splitAddr := range strings.Split(addr, ",") {
+			if len(splitAddr) > 0 {
+				k.addresses = append(k.addresses, splitAddr)
+			}
+		}
 	}
 	return &k, nil
 }
@@ -123,7 +132,7 @@ func (k *KafkaBalanced) connect() error {
 	}()
 
 	k.consumer, err = cluster.NewConsumer(
-		k.conf.KafkaBalanced.Addresses,
+		k.addresses,
 		k.conf.KafkaBalanced.ConsumerGroup,
 		k.conf.KafkaBalanced.Topics,
 		config,
@@ -196,7 +205,7 @@ func (k *KafkaBalanced) loop() {
 			break
 		}
 	}
-	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.conf.KafkaBalanced.Addresses)
+	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.addresses)
 
 	go k.errorLoop()
 

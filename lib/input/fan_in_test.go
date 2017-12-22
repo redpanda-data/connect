@@ -257,8 +257,8 @@ func TestFanInWithScaleProto(t *testing.T) {
 	scaleOne, scaleTwo := NewConfig(), NewConfig()
 	scaleOne.Type, scaleTwo.Type = "scalability_protocols", "scalability_protocols"
 	scaleOne.ScaleProto.Bind, scaleTwo.ScaleProto.Bind = true, true
-	scaleOne.ScaleProto.Addresses = []string{"tcp://localhost:1247"}
-	scaleTwo.ScaleProto.Addresses = []string{"tcp://localhost:1248"}
+	scaleOne.ScaleProto.URLs = []string{"tcp://localhost:1247"}
+	scaleTwo.ScaleProto.URLs = []string{"tcp://localhost:1248"}
 	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PULL", "PULL"
 	scaleOne.ScaleProto.PollTimeoutMS, scaleTwo.ScaleProto.PollTimeoutMS = 100, 100
 

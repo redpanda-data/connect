@@ -46,7 +46,7 @@ func TestScaleProtoBasic(t *testing.T) {
 	sendChan := make(chan types.Message)
 
 	conf := NewConfig()
-	conf.ScaleProto.Addresses = []string{"tcp://localhost:1324"}
+	conf.ScaleProto.URLs = []string{"tcp://localhost:1324"}
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.PollTimeoutMS = 100
 	conf.ScaleProto.RepTimeoutMS = 100
@@ -124,7 +124,7 @@ func TestScaleProtoMultiServer(t *testing.T) {
 	sendChan := make(chan types.Message)
 
 	conf := NewConfig()
-	conf.ScaleProto.Addresses = []string{"tcp://localhost:1324", "tcp://localhost:1325"}
+	conf.ScaleProto.URLs = []string{"tcp://localhost:1324", "tcp://localhost:1325"}
 	conf.ScaleProto.Bind = true
 	conf.ScaleProto.PollTimeoutMS = 100
 	conf.ScaleProto.RepTimeoutMS = 100
@@ -256,7 +256,7 @@ func TestScaleProtoReqRep(t *testing.T) {
 	sendChan := make(chan types.Message)
 
 	conf := NewConfig()
-	conf.ScaleProto.Addresses = []string{"tcp://localhost:1324"}
+	conf.ScaleProto.URLs = []string{"tcp://localhost:1324"}
 	conf.ScaleProto.SuccessStr = "FOO_SUCCESS"
 	conf.ScaleProto.RepTimeoutMS = 100
 	conf.ScaleProto.PollTimeoutMS = 100

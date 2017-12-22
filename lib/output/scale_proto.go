@@ -22,6 +22,7 @@ package output
 
 import (
 	"errors"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -80,8 +81,8 @@ var (
 
 // ScaleProtoConfig is configuration for the ScaleProto output type.
 type ScaleProtoConfig struct {
-	Addresses     []string `json:"addresses" yaml:"addresses"`
-	Bind          bool     `json:"bind_address" yaml:"bind_address"`
+	URLs          []string `json:"urls" yaml:"urls"`
+	Bind          bool     `json:"bind" yaml:"bind"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
 	SuccessStr    string   `json:"reply_success" yaml:"reply_success"`
 	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
@@ -91,7 +92,7 @@ type ScaleProtoConfig struct {
 // NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		Addresses:     []string{"tcp://localhost:5556"},
+		URLs:          []string{"tcp://localhost:5556"},
 		Bind:          false,
 		SocketType:    "PUSH",
 		SuccessStr:    "SUCCESS",
@@ -109,6 +110,7 @@ type ScaleProto struct {
 	log   log.Modular
 	stats metrics.Type
 
+	urls []string
 	conf Config
 
 	socket mangos.Socket
@@ -131,6 +133,13 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		responseChan: make(chan types.Response),
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
+	}
+	for _, u := range conf.ScaleProto.URLs {
+		for _, splitU := range strings.Split(u, ",") {
+			if len(splitU) > 0 {
+				s.urls = append(s.urls, splitU)
+			}
+		}
 	}
 
 	var err error
@@ -159,13 +168,13 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	s.socket.AddTransport(tcp.NewTransport())
 
 	if s.conf.ScaleProto.Bind {
-		for _, addr := range s.conf.ScaleProto.Addresses {
+		for _, addr := range s.urls {
 			if err = s.socket.Listen(addr); err != nil {
 				break
 			}
 		}
 	} else {
-		for _, addr := range s.conf.ScaleProto.Addresses {
+		for _, addr := range s.urls {
 			if err = s.socket.Dial(addr); err != nil {
 				break
 			}
@@ -208,13 +217,13 @@ func (s *ScaleProto) loop() {
 
 	if s.conf.ScaleProto.Bind {
 		s.log.Infof(
-			"Sending Scalability Protocols messages to bound addresses: %s\n",
-			s.conf.ScaleProto.Addresses,
+			"Sending Scalability Protocols messages to bound URLs: %s\n",
+			s.urls,
 		)
 	} else {
 		s.log.Infof(
-			"Sending Scalability Protocols messages to connected addresses: %s\n",
-			s.conf.ScaleProto.Addresses,
+			"Sending Scalability Protocols messages to connected URLs: %s\n",
+			s.urls,
 		)
 	}
 

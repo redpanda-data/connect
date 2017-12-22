@@ -4,7 +4,7 @@ input:
     inputs:
     - type: redis_pubsub
       redis_pubsub:
-        address: redis:6379
+        url: tcp://redis:6379
         channels:
         - benthos_chan
     - type: kafka
@@ -18,7 +18,7 @@ input:
         start_from_oldest: true
     - type: amqp
       amqp:
-        uri: amqp://guest:guest@rabbitmq:5672/
+        url: amqp://guest:guest@rabbitmq:5672/
         exchange: benthos-exchange
         exchange_type: direct
         queue: benthos-queue
@@ -38,11 +38,13 @@ input:
         max_in_flight: 100
     - type: nats
       nats:
-        url: nats://nats:4222
+        urls:
+        - nats://nats:4222
         subject: benthos_messages
     - type: nats_stream
       nats_stream:
-        url: nats://nats-streaming:4223
+        urls:
+        - nats://nats-streaming:4223
         cluster_id: test-cluster
         client_id: benthos_client_2
         subject: benthos_messages

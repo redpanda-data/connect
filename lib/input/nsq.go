@@ -23,6 +23,7 @@ package input
 import (
 	"io/ioutil"
 	llog "log"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -57,8 +58,8 @@ type NSQConfig struct {
 // NewNSQConfig creates a new NSQConfig with default values.
 func NewNSQConfig() NSQConfig {
 	return NSQConfig{
-		Addresses:       []string{"127.0.0.1:4150"},
-		LookupAddresses: []string{"127.0.0.1:4161"},
+		Addresses:       []string{"localhost:4150"},
+		LookupAddresses: []string{"localhost:4161"},
 		Topic:           "benthos_messages",
 		Channel:         "benthos_stream",
 		UserAgent:       "benthos_consumer",
@@ -74,9 +75,11 @@ type NSQ struct {
 
 	consumer *nsq.Consumer
 
-	conf  Config
-	stats metrics.Type
-	log   log.Modular
+	addresses       []string
+	lookupAddresses []string
+	conf            Config
+	stats           metrics.Type
+	log             log.Modular
 
 	messages         chan types.Message
 	responses        <-chan types.Response
@@ -98,6 +101,20 @@ func NewNSQ(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		internalMessages: make(chan *nsq.Message),
 		closeChan:        make(chan struct{}),
 		closedChan:       make(chan struct{}),
+	}
+	for _, addr := range conf.NSQ.Addresses {
+		for _, splitAddr := range strings.Split(addr, ",") {
+			if len(splitAddr) > 0 {
+				n.addresses = append(n.addresses, splitAddr)
+			}
+		}
+	}
+	for _, addr := range conf.NSQ.LookupAddresses {
+		for _, splitAddr := range strings.Split(addr, ",") {
+			if len(splitAddr) > 0 {
+				n.lookupAddresses = append(n.lookupAddresses, splitAddr)
+			}
+		}
 	}
 
 	return &n, nil
@@ -132,10 +149,10 @@ func (n *NSQ) connect() (err error) {
 	n.consumer.SetLogger(llog.New(ioutil.Discard, "", llog.Flags()), nsq.LogLevelError)
 	n.consumer.AddHandler(n)
 
-	if err = n.consumer.ConnectToNSQDs(n.conf.NSQ.Addresses); err != nil {
+	if err = n.consumer.ConnectToNSQDs(n.addresses); err != nil {
 		return
 	}
-	if err = n.consumer.ConnectToNSQLookupds(n.conf.NSQ.LookupAddresses); err != nil {
+	if err = n.consumer.ConnectToNSQLookupds(n.lookupAddresses); err != nil {
 		return
 	}
 	return
@@ -181,7 +198,7 @@ func (n *NSQ) loop() {
 			break
 		}
 	}
-	n.log.Infof("Receiving NSQ messages from addresses: %s\n", n.conf.NSQ.Addresses)
+	n.log.Infof("Receiving NSQ messages from addresses: %s\n", n.addresses)
 
 	unAck := []*nsq.Message{}
 

@@ -23,6 +23,7 @@
 package input
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -53,7 +54,7 @@ socket types then they can be added easily.`,
 
 // ZMQ4Config is configuration for the ZMQ4 input type.
 type ZMQ4Config struct {
-	Addresses     []string `json:"addresses" yaml:"addresses"`
+	URLs          []string `json:"urls" yaml:"urls"`
 	Bind          bool     `json:"bind" yaml:"bind"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
 	SubFilters    []string `json:"sub_filters" yaml:"sub_filters"`
@@ -64,7 +65,7 @@ type ZMQ4Config struct {
 // NewZMQ4Config creates a new ZMQ4Config with default values.
 func NewZMQ4Config() *ZMQ4Config {
 	return &ZMQ4Config{
-		Addresses:     []string{"tcp://localhost:5555"},
+		URLs:          []string{"tcp://localhost:5555"},
 		Bind:          false,
 		SocketType:    "PULL",
 		SubFilters:    []string{},
@@ -79,6 +80,7 @@ func NewZMQ4Config() *ZMQ4Config {
 type ZMQ4 struct {
 	running int32
 
+	urls  []string
 	conf  Config
 	stats metrics.Type
 	log   log.Modular
@@ -105,6 +107,14 @@ func NewZMQ4(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closedChan: make(chan struct{}),
 	}
 
+	for _, u := range conf.ZMQ4.URLs {
+		for _, splitU := range strings.Split(u, ",") {
+			if len(splitU) > 0 {
+				z.urls = append(z.urls, splitU)
+			}
+		}
+	}
+
 	t, err := getZMQType(conf.ZMQ4.SocketType)
 	if nil != err {
 		return nil, err
@@ -121,7 +131,7 @@ func NewZMQ4(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 
 	z.socket.SetRcvhwm(conf.ZMQ4.HighWaterMark)
 
-	for _, address := range conf.ZMQ4.Addresses {
+	for _, address := range z.urls {
 		if conf.ZMQ4.Bind {
 			err = z.socket.Bind(address)
 		} else {
@@ -166,12 +176,10 @@ func (z *ZMQ4) loop() {
 	poller := zmq4.NewPoller()
 	poller.Add(z.socket, zmq4.POLLIN)
 
-	for _, address := range z.conf.ZMQ4.Addresses {
-		if z.conf.ZMQ4.Bind {
-			z.log.Infof("Receiving ZMQ4 messages on bound address: %v\n", address)
-		} else {
-			z.log.Infof("Receiving ZMQ4 messages on connected address: %v\n", address)
-		}
+	if z.conf.ZMQ4.Bind {
+		z.log.Infof("Receiving ZMQ4 messages on bound URLs: %s\n", z.urls)
+	} else {
+		z.log.Infof("Receiving ZMQ4 messages on connected URLs: %s\n", z.urls)
 	}
 
 	var data [][]byte

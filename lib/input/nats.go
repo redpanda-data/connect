@@ -21,6 +21,7 @@
 package input
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -39,10 +40,8 @@ func init() {
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
 behaviour then look at NATS Stream.
 
-The url can contain username/password semantics. e.g.
-nats://derek:pass@localhost:4222
-
-Comma separated arrays are also supported, e.g. urlA, urlB.`,
+The urls can contain username/password semantics. e.g.
+nats://derek:pass@localhost:4222`,
 	}
 }
 
@@ -50,14 +49,14 @@ Comma separated arrays are also supported, e.g. urlA, urlB.`,
 
 // NATSConfig is configuration for the NATS input type.
 type NATSConfig struct {
-	URL     string `json:"url" yaml:"url"`
-	Subject string `json:"subject" yaml:"subject"`
+	URLs    []string `json:"urls" yaml:"urls"`
+	Subject string   `json:"subject" yaml:"subject"`
 }
 
 // NewNATSConfig creates a new NATSConfig with default values.
 func NewNATSConfig() NATSConfig {
 	return NATSConfig{
-		URL:     nats.DefaultURL,
+		URLs:    []string{nats.DefaultURL},
 		Subject: "benthos_messages",
 	}
 }
@@ -68,6 +67,7 @@ func NewNATSConfig() NATSConfig {
 type NATS struct {
 	running int32
 
+	urls  string
 	conf  Config
 	stats metrics.Type
 	log   log.Modular
@@ -95,6 +95,7 @@ func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
+	n.urls = strings.Join(conf.NATS.URLs, ",")
 
 	return &n, nil
 }
@@ -104,7 +105,7 @@ func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 func (n *NATS) connect() error {
 	var err error
 	if n.natsConn == nil {
-		if n.natsConn, err = nats.Connect(n.conf.NATS.URL); err != nil {
+		if n.natsConn, err = nats.Connect(n.urls); err != nil {
 			return err
 		}
 	}
@@ -150,7 +151,7 @@ func (n *NATS) loop() {
 			break
 		}
 	}
-	n.log.Infof("Receiving NATS messages from address: %s\n", n.conf.NATS.URL)
+	n.log.Infof("Receiving NATS messages from URLs: %s\n", n.urls)
 
 	var msg *nats.Msg
 

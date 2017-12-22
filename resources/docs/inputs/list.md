@@ -115,23 +115,18 @@ across any members of the consumer group.
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
 behaviour then look at NATS Stream.
 
-The url can contain username/password semantics. e.g.
+The urls can contain username/password semantics. e.g.
 nats://derek:pass@localhost:4222
-
-Comma separated arrays are also supported, e.g. urlA, urlB.
 
 ## `nats_stream`
 
 Subscribe to a NATS Stream subject, which is at-least-once. Joining a queue is
 optional and allows multiple clients of a subject to consume using queue
-semantics. Tracking and persisting offsets through a durable name is also
-optional and works with or without a queue. If a durable name is not provided
-then subjects are consumed from the most recently published message.
+semantics.
 
-The url can contain username/password semantics. e.g.
-nats://derek:pass@localhost:4222
-
-Comma separated arrays are also supported, e.g. urlA, urlB.
+Tracking and persisting offsets through a durable name is also optional and
+works with or without a queue. If a durable name is not provided then subjects
+are consumed from the most recently published message.
 
 ## `nsq`
 
@@ -174,3 +169,14 @@ indicates the end of the message.
 
 Alternatively, a custom delimiter can be set that is used instead of line
 breaks.
+
+## `zmq4`
+
+ZMQ4 is supported but currently depends on C bindings. Since this is an
+annoyance when building or using Benthos it is not compiled by default.
+
+Build it into your project by getting CZMQ installed on your machine, then build
+with the tag: 'go install -tags "ZMQ4" github.com/Jeffail/benthos/cmd/...'
+
+ZMQ4 input supports PULL and SUB sockets only. If there is demand for other
+socket types then they can be added easily.

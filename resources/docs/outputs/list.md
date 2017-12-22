@@ -123,3 +123,8 @@ baz\n\n
 
 You can alternatively specify a custom delimiter that will follow the same rules
 as '\n' above.
+
+## `zmq4`
+
+The zmq4 output type attempts to send messages to a ZMQ4 port, currently only
+PUSH and PUB sockets are supported.

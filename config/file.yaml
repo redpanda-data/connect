@@ -1,12 +1,12 @@
 input:
   type: file
   file:
-    path: "./input.txt"
+    path: "/path/to/file_in.txt"
     multipart: false
     max_buffer: 65536
     custom_delimiter: ""
 output:
   type: file
   file:
-    path: "./output.txt"
+    path: "/path/to/file_out.txt"
     custom_delimiter: ""

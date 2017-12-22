@@ -23,6 +23,7 @@
 package output
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -47,7 +48,7 @@ PUSH and PUB sockets are supported.`,
 
 // ZMQ4Config is configuration for the ZMQ4 output type.
 type ZMQ4Config struct {
-	Addresses     []string `json:"addresses" yaml:"addresses"`
+	URLs          []string `json:"urls" yaml:"urls"`
 	Bind          bool     `json:"bind" yaml:"bind"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
 	HighWaterMark int      `json:"high_water_mark" yaml:"high_water_mark"`
@@ -56,7 +57,7 @@ type ZMQ4Config struct {
 // NewZMQ4Config creates a new ZMQ4Config with default values.
 func NewZMQ4Config() *ZMQ4Config {
 	return &ZMQ4Config{
-		Addresses:     []string{"tcp://*:5556"},
+		URLs:          []string{"tcp://*:5556"},
 		Bind:          true,
 		SocketType:    "PUSH",
 		HighWaterMark: 0,
@@ -72,6 +73,7 @@ type ZMQ4 struct {
 	log   log.Modular
 	stats metrics.Type
 
+	urls []string
 	conf Config
 
 	socket *zmq4.Socket
@@ -95,6 +97,13 @@ func NewZMQ4(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
+	for _, u := range conf.ZMQ4.URLs {
+		for _, splitU := range strings.Split(u, ",") {
+			if len(splitU) > 0 {
+				z.urls = append(z.urls, splitU)
+			}
+		}
+	}
 
 	t, err := getZMQType(conf.ZMQ4.SocketType)
 	if nil != err {
@@ -112,7 +121,7 @@ func NewZMQ4(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 
 	z.socket.SetSndhwm(conf.ZMQ4.HighWaterMark)
 
-	for _, address := range conf.ZMQ4.Addresses {
+	for _, address := range z.urls {
 		if conf.ZMQ4.Bind {
 			err = z.socket.Bind(address)
 		} else {
@@ -152,12 +161,10 @@ func (z *ZMQ4) loop() {
 		close(z.closedChan)
 	}()
 
-	for _, address := range z.conf.ZMQ4.Addresses {
-		if z.conf.ZMQ4.Bind {
-			z.log.Infof("Sending ZMQ4 messages to bound address: %v\n", address)
-		} else {
-			z.log.Infof("Sending ZMQ4 messages to connected address: %v\n", address)
-		}
+	if z.conf.ZMQ4.Bind {
+		z.log.Infof("Sending ZMQ4 messages to bound URLs: %s\n", z.urls)
+	} else {
+		z.log.Infof("Sending ZMQ4 messages to connected URLs: %s\n", z.urls)
 	}
 
 	for atomic.LoadInt32(&z.running) == 1 {

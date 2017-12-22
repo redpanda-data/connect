@@ -21,6 +21,7 @@
 package output
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -74,7 +75,8 @@ type Kafka struct {
 	log   log.Modular
 	stats metrics.Type
 
-	conf Config
+	addresses []string
+	conf      Config
 
 	producer sarama.SyncProducer
 
@@ -97,6 +99,13 @@ func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
+	for _, addr := range conf.Kafka.Addresses {
+		for _, splitAddr := range strings.Split(addr, ",") {
+			if len(splitAddr) > 0 {
+				k.addresses = append(k.addresses, splitAddr)
+			}
+		}
+	}
 
 	return &k, nil
 }
@@ -118,7 +127,7 @@ func (k *Kafka) connect() error {
 	}
 
 	var err error
-	k.producer, err = sarama.NewSyncProducer(k.conf.Kafka.Addresses, config)
+	k.producer, err = sarama.NewSyncProducer(k.addresses, config)
 
 	return err
 }
@@ -147,7 +156,7 @@ func (k *Kafka) loop() {
 			break
 		}
 	}
-	k.log.Infof("Sending Kafka messages to addresses: %s\n", k.conf.Kafka.Addresses)
+	k.log.Infof("Sending Kafka messages to addresses: %s\n", k.addresses)
 
 	var open bool
 	for atomic.LoadInt32(&k.running) == 1 {

@@ -1,10 +1,12 @@
 input:
   type: nats
   nats:
-    url: nats://localhost:4222
+    urls:
+    - nats://localhost:4222
     subject: benthos_messages
 output:
   type: nats
   nats:
-    url: nats://localhost:4222
+    urls:
+    - nats://localhost:4222
     subject: benthos_messages

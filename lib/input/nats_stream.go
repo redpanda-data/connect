@@ -21,6 +21,7 @@
 package input
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -38,14 +39,11 @@ func init() {
 		description: `
 Subscribe to a NATS Stream subject, which is at-least-once. Joining a queue is
 optional and allows multiple clients of a subject to consume using queue
-semantics. Tracking and persisting offsets through a durable name is also
-optional and works with or without a queue. If a durable name is not provided
-then subjects are consumed from the most recently published message.
+semantics.
 
-The url can contain username/password semantics. e.g.
-nats://derek:pass@localhost:4222
-
-Comma separated arrays are also supported, e.g. urlA, urlB.`,
+Tracking and persisting offsets through a durable name is also optional and
+works with or without a queue. If a durable name is not provided then subjects
+are consumed from the most recently published message.`,
 	}
 }
 
@@ -53,18 +51,18 @@ Comma separated arrays are also supported, e.g. urlA, urlB.`,
 
 // NATSStreamConfig is configuration for the NATSStream input type.
 type NATSStreamConfig struct {
-	URL         string `json:"url" yaml:"url"`
-	ClusterID   string `json:"cluster_id" yaml:"cluster_id"`
-	ClientID    string `json:"client_id" yaml:"client_id"`
-	QueueID     string `json:"queue" yaml:"queue"`
-	DurableName string `json:"durable_name" yaml:"durable_name"`
-	Subject     string `json:"subject" yaml:"subject"`
+	URLs        []string `json:"urls" yaml:"urls"`
+	ClusterID   string   `json:"cluster_id" yaml:"cluster_id"`
+	ClientID    string   `json:"client_id" yaml:"client_id"`
+	QueueID     string   `json:"queue" yaml:"queue"`
+	DurableName string   `json:"durable_name" yaml:"durable_name"`
+	Subject     string   `json:"subject" yaml:"subject"`
 }
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
 func NewNATSStreamConfig() NATSStreamConfig {
 	return NATSStreamConfig{
-		URL:         stan.DefaultNatsURL,
+		URLs:        []string{stan.DefaultNatsURL},
 		ClusterID:   "benthos_cluster",
 		ClientID:    "benthos_client",
 		QueueID:     "benthos_queue",
@@ -79,6 +77,7 @@ func NewNATSStreamConfig() NATSStreamConfig {
 type NATSStream struct {
 	running int32
 
+	urls  string
 	conf  Config
 	stats metrics.Type
 	log   log.Modular
@@ -105,6 +104,7 @@ func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
+	n.urls = strings.Join(conf.NATSStream.URLs, ",")
 
 	return &n, nil
 }
@@ -129,7 +129,7 @@ func (n *NATSStream) loop() {
 		if n.natsConn, err = stan.Connect(
 			n.conf.NATSStream.ClusterID,
 			n.conf.NATSStream.ClientID,
-			stan.NatsURL(n.conf.NATSStream.URL),
+			stan.NatsURL(n.urls),
 		); err != nil {
 			n.log.Errorf("Failed to connect to NATS Streaming: %v\n", err)
 			select {
@@ -141,7 +141,7 @@ func (n *NATSStream) loop() {
 			break
 		}
 	}
-	n.log.Infof("Receiving NATS Streaming messages from address: %s\n", n.conf.NATSStream.URL)
+	n.log.Infof("Receiving NATS Streaming messages from URLs: %s\n", n.urls)
 
 	handler := func(m *stan.Msg) {
 		n.stats.Incr("input.nats_stream.count", 1)

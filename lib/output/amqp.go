@@ -46,7 +46,7 @@ brokers, including RabbitMQ.`,
 
 // AMQPConfig is configuration for the AMQP output type.
 type AMQPConfig struct {
-	URI          string `json:"uri" yaml:"uri"`
+	URL          string `json:"url" yaml:"url"`
 	Exchange     string `json:"exchange" yaml:"exchange"`
 	ExchangeType string `json:"exchange_type" yaml:"exchange_type"`
 	BindingKey   string `json:"key" yaml:"key"`
@@ -55,7 +55,7 @@ type AMQPConfig struct {
 // NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
-		URI:          "amqp://guest:guest@localhost:5672/",
+		URL:          "amqp://guest:guest@localhost:5672/",
 		Exchange:     "benthos-exchange",
 		ExchangeType: "direct",
 		BindingKey:   "benthos-key",
@@ -104,7 +104,7 @@ func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 
 // connect establishes a connection to an AMQP server.
 func (a *AMQP) connect() (err error) {
-	a.conn, err = amqp.Dial(a.conf.AMQP.URI)
+	a.conn, err = amqp.Dial(a.conf.AMQP.URL)
 	if err != nil {
 		return fmt.Errorf("AMQP Connect: %s", err)
 	}
@@ -173,7 +173,7 @@ func (a *AMQP) loop() {
 			break
 		}
 	}
-	a.log.Infof("Sending AMQP messages to address: %s\n", a.conf.AMQP.URI)
+	a.log.Infof("Sending AMQP messages to URL: %s\n", a.conf.AMQP.URL)
 
 	var open bool
 	for atomic.LoadInt32(&a.running) == 1 {

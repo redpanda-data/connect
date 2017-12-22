@@ -21,6 +21,7 @@
 package output
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -45,16 +46,16 @@ this output is able to guarantee delivery on success.`,
 
 // NATSStreamConfig is configuration for the NATSStream output type.
 type NATSStreamConfig struct {
-	URL       string `json:"url" yaml:"url"`
-	ClusterID string `json:"cluster_id" yaml:"cluster_id"`
-	ClientID  string `json:"client_id" yaml:"client_id"`
-	Subject   string `json:"subject" yaml:"subject"`
+	URLs      []string `json:"urls" yaml:"urls"`
+	ClusterID string   `json:"cluster_id" yaml:"cluster_id"`
+	ClientID  string   `json:"client_id" yaml:"client_id"`
+	Subject   string   `json:"subject" yaml:"subject"`
 }
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
 func NewNATSStreamConfig() NATSStreamConfig {
 	return NATSStreamConfig{
-		URL:       stan.DefaultNatsURL,
+		URLs:      []string{stan.DefaultNatsURL},
 		ClusterID: "benthos_cluster",
 		ClientID:  "benthos_client",
 		Subject:   "benthos_messages",
@@ -72,6 +73,7 @@ type NATSStream struct {
 
 	natsConn stan.Conn
 
+	urls string
 	conf Config
 
 	messages     <-chan types.Message
@@ -93,6 +95,7 @@ func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
 	}
+	n.urls = strings.Join(conf.NATSStream.URLs, ",")
 
 	return &n, nil
 }
@@ -104,7 +107,7 @@ func (n *NATSStream) connect() error {
 	n.natsConn, err = stan.Connect(
 		n.conf.NATSStream.ClusterID,
 		n.conf.NATSStream.ClientID,
-		stan.NatsURL(n.conf.NATSStream.URL),
+		stan.NatsURL(n.urls),
 	)
 	return err
 }
@@ -132,7 +135,7 @@ func (n *NATSStream) loop() {
 			break
 		}
 	}
-	n.log.Infof("Sending NATS Streaming messages to address: %s\n", n.conf.NATSStream.URL)
+	n.log.Infof("Sending NATS Streaming messages to URLs: %s\n", n.urls)
 
 	var open bool
 	for atomic.LoadInt32(&n.running) == 1 {

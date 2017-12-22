@@ -1,7 +1,7 @@
 input:
   type: amqp
   amqp:
-    uri: amqp://guest:guest@localhost:5672/
+    url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
     exchange_type: direct
     queue: benthos-queue
@@ -12,7 +12,7 @@ input:
 output:
   type: amqp
   amqp:
-    uri: amqp://guest:guest@localhost:5672/
+    url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
     exchange_type: direct
     key: benthos-key

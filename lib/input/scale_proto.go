@@ -21,6 +21,7 @@
 package input
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -69,8 +70,8 @@ result in duplicate messages when triggered.`,
 
 // ScaleProtoConfig is configuration for the ScaleProto input type.
 type ScaleProtoConfig struct {
-	Addresses     []string `json:"addresses" yaml:"addresses"`
-	Bind          bool     `json:"bind_address" yaml:"bind_address"`
+	URLs          []string `json:"urls" yaml:"urls"`
+	Bind          bool     `json:"bind" yaml:"bind"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
 	SuccessStr    string   `json:"reply_success" yaml:"reply_success"`
 	ErrorStr      string   `json:"reply_error" yaml:"reply_error"`
@@ -82,7 +83,7 @@ type ScaleProtoConfig struct {
 // NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		Addresses:     []string{"tcp://*:5555"},
+		URLs:          []string{"tcp://*:5555"},
 		Bind:          true,
 		SocketType:    "PULL",
 		SuccessStr:    "SUCCESS",
@@ -101,6 +102,7 @@ type ScaleProto struct {
 
 	socket mangos.Socket
 
+	urls  []string
 	conf  Config
 	stats metrics.Type
 	log   log.Modular
@@ -123,6 +125,14 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		responses:  nil,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
+	}
+
+	for _, u := range conf.ScaleProto.URLs {
+		for _, splitU := range strings.Split(u, ",") {
+			if len(splitU) > 0 {
+				s.urls = append(s.urls, splitU)
+			}
+		}
 	}
 
 	var err error
@@ -151,13 +161,13 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	s.socket.AddTransport(tcp.NewTransport())
 
 	if s.conf.ScaleProto.Bind {
-		for _, addr := range s.conf.ScaleProto.Addresses {
+		for _, addr := range s.urls {
 			if err = s.socket.Listen(addr); err != nil {
 				break
 			}
 		}
 	} else {
-		for _, addr := range s.conf.ScaleProto.Addresses {
+		for _, addr := range s.urls {
 			if err = s.socket.Dial(addr); err != nil {
 				break
 			}
@@ -204,13 +214,13 @@ func (s *ScaleProto) loop() {
 
 	if s.conf.ScaleProto.Bind {
 		s.log.Infof(
-			"Receiving Scalability Protocols messages at bound addresses: %s\n",
-			s.conf.ScaleProto.Addresses,
+			"Receiving Scalability Protocols messages at bound URLs: %s\n",
+			s.urls,
 		)
 	} else {
 		s.log.Infof(
-			"Receiving Scalability Protocols messages at connected addresses: %s\n",
-			s.conf.ScaleProto.Addresses,
+			"Receiving Scalability Protocols messages at connected URLs: %s\n",
+			s.urls,
 		)
 	}
 

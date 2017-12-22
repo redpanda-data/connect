@@ -41,8 +41,8 @@ func TestRoundRobinWithScaleProto(t *testing.T) {
 	scaleOne, scaleTwo := NewConfig(), NewConfig()
 	scaleOne.Type, scaleTwo.Type = "scalability_protocols", "scalability_protocols"
 	scaleOne.ScaleProto.Bind, scaleTwo.ScaleProto.Bind = true, true
-	scaleOne.ScaleProto.Addresses = []string{"tcp://localhost:1245"}
-	scaleTwo.ScaleProto.Addresses = []string{"tcp://localhost:1246"}
+	scaleOne.ScaleProto.URLs = []string{"tcp://localhost:1245"}
+	scaleTwo.ScaleProto.URLs = []string{"tcp://localhost:1246"}
 	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PUSH", "PUSH"
 
 	conf.RoundRobin.Outputs = append(conf.RoundRobin.Outputs, scaleOne)

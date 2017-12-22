@@ -1,7 +1,7 @@
 input:
   type: zmq4
   zmq4:
-    addresses:
+    urls:
     - tcp://localhost:5555
     bind: false
     socket_type: PULL
@@ -11,7 +11,7 @@ input:
 output:
   type: zmq4
   zmq4:
-    addresses:
+    urls:
     - tcp://*:5556
     bind: true
     socket_type: PUSH

@@ -21,6 +21,7 @@
 package input
 
 import (
+	"net/url"
 	"sync/atomic"
 	"time"
 
@@ -45,14 +46,14 @@ channels using this input.`,
 
 // RedisPubSubConfig is configuration for the RedisPubSub input type.
 type RedisPubSubConfig struct {
-	Address  string   `json:"address" yaml:"address"`
+	URL      string   `json:"url" yaml:"url"`
 	Channels []string `json:"channels" yaml:"channels"`
 }
 
 // NewRedisPubSubConfig creates a new RedisPubSubConfig with default values.
 func NewRedisPubSubConfig() RedisPubSubConfig {
 	return RedisPubSubConfig{
-		Address:  "localhost:6379",
+		URL:      "tcp://localhost:6379",
 		Channels: []string{"benthos_chan"},
 	}
 }
@@ -66,6 +67,7 @@ type RedisPubSub struct {
 	client *redis.Client
 	pubsub *redis.PubSub
 
+	url   *url.URL
 	conf  Config
 	stats metrics.Type
 	log   log.Modular
@@ -79,7 +81,7 @@ type RedisPubSub struct {
 
 // NewRedisPubSub creates a new RedisPubSub input type.
 func NewRedisPubSub(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	return &RedisPubSub{
+	r := &RedisPubSub{
 		running:    1,
 		conf:       conf,
 		stats:      stats,
@@ -88,15 +90,29 @@ func NewRedisPubSub(conf Config, log log.Modular, stats metrics.Type) (Type, err
 		responses:  nil,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
-	}, nil
+	}
+
+	var err error
+	r.url, err = url.Parse(r.conf.RedisPubSub.URL)
+	if err != nil {
+		return nil, err
+	}
+
+	return r, nil
 }
 
 //------------------------------------------------------------------------------
 
 // connect establishes a connection to an RedisPubSub server.
 func (r *RedisPubSub) connect() error {
+	var pass string
+	if r.url.User != nil {
+		pass, _ = r.url.User.Password()
+	}
 	client := redis.NewClient(&redis.Options{
-		Addr: r.conf.RedisPubSub.Address,
+		Addr:     r.url.Host,
+		Network:  r.url.Scheme,
+		Password: pass,
 	})
 
 	if _, err := client.Ping().Result(); err != nil {
@@ -148,7 +164,7 @@ func (r *RedisPubSub) loop() {
 			break
 		}
 	}
-	r.log.Infof("Receiving RedisPubSub messages from address: %s\n", r.conf.RedisPubSub.Address)
+	r.log.Infof("Receiving RedisPubSub messages from URL: %s\n", r.conf.RedisPubSub.URL)
 
 	rcvChan := r.pubsub.Channel()
 

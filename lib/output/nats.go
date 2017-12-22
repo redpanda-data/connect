@@ -21,6 +21,7 @@
 package output
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -45,14 +46,14 @@ For at-least-once behaviour with NATS look at NATS Stream.`,
 
 // NATSConfig is configuration for the NATS output type.
 type NATSConfig struct {
-	URL     string `json:"url" yaml:"url"`
-	Subject string `json:"subject" yaml:"subject"`
+	URLs    []string `json:"urls" yaml:"urls"`
+	Subject string   `json:"subject" yaml:"subject"`
 }
 
 // NewNATSConfig creates a new NATSConfig with default values.
 func NewNATSConfig() NATSConfig {
 	return NATSConfig{
-		URL:     nats.DefaultURL,
+		URLs:    []string{nats.DefaultURL},
 		Subject: "benthos_messages",
 	}
 }
@@ -68,6 +69,7 @@ type NATS struct {
 
 	natsConn *nats.Conn
 
+	urls string
 	conf Config
 
 	messages     <-chan types.Message
@@ -89,6 +91,7 @@ func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
 	}
+	n.urls = strings.Join(conf.NATS.URLs, ",")
 
 	return &n, nil
 }
@@ -97,7 +100,7 @@ func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 
 func (n *NATS) connect() error {
 	var err error
-	n.natsConn, err = nats.Connect(n.conf.NATS.URL)
+	n.natsConn, err = nats.Connect(n.urls)
 	return err
 }
 
@@ -124,7 +127,7 @@ func (n *NATS) loop() {
 			break
 		}
 	}
-	n.log.Infof("Sending NATS messages to address: %s\n", n.conf.NATS.URL)
+	n.log.Infof("Sending NATS messages to URLs: %s\n", n.urls)
 
 	var open bool
 	for atomic.LoadInt32(&n.running) == 1 {
