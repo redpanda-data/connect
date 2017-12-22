@@ -22,8 +22,8 @@
 [[projects]]
   name = "github.com/bsm/sarama-cluster"
   packages = ["."]
-  revision = "abf039439f66c1ce78017f560b490612552f6472"
-  version = "v2.1.10"
+  revision = "24016d206c730276dfb58f802999066f2f4bfeaa"
+  version = "v2.1.11"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
@@ -88,8 +88,8 @@
 [[projects]]
   name = "github.com/nats-io/go-nats"
   packages = [".","encoders/builtin","util"]
-  revision = "29f9728a183bf3fa7e809e14edac00b33be72088"
-  version = "v1.3.0"
+  revision = "d66cb54e6b7bdd93f0b28afc8450d84c780dfb68"
+  version = "v1.4.0"
 
 [[projects]]
   name = "github.com/nats-io/go-nats-streaming"
@@ -113,13 +113,13 @@
   branch = "master"
   name = "github.com/pebbe/zmq4"
   packages = ["."]
-  revision = "90d69e412a09549f2e90bac70fbb449081f1e5c1"
+  revision = "230ecd8dddd0f31ec76da33d8ff4277887ca773e"
 
 [[projects]]
   name = "github.com/pierrec/lz4"
   packages = ["."]
-  revision = "08c27939df1bd95e881e2c2367a749964ad1fceb"
-  version = "v1.0.1"
+  revision = "2fcda4cb7018ce05a25959d2fe08c83e3329f169"
+  version = "v1.1"
 
 [[projects]]
   name = "github.com/pierrec/xxHash"
@@ -160,6 +160,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e5868642c62558d605dcfa400226c93cb37030d1f3944872bbde0c22b10003ae"
+  inputs-digest = "be8cd25633633978a65dbd5caee256a45b835654148a96dfb2af43d35d6198ef"
   solver-name = "gps-cdcl"
   solver-version = 1
