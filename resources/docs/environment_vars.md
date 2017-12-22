@@ -3,7 +3,7 @@ Using Environment Variables
 
 You can use environment variables to replace Benthos config values using
 `${variable-name:default-value}` syntax. A good example of this is the
-[default environment variable config][../../config/env/default.yaml], which
+[default environment variable config](../../config/env/default.yaml), which
 creates environment variables for each default field value in a standard
 single-in-single-out bridge config.
 
