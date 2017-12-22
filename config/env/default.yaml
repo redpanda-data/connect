@@ -1,0 +1,116 @@
+# Default env config is a Benthos config file containing most of the default
+# values set to environment variables. Non-URL variables have default values.
+#
+# In order to use this config simply define the `BENTHOS_INPUT` and
+# `BENTHOS_OUTPUT` variables to your desired targets, along with the appropriate
+# variables for those chosen targets. E.g. for piping Kafka to RabbitMQ:
+#
+# BENTHOS_INPUT=kafka_balanced \
+# KAFKA_BROKER_ADDRESSES=localhost:9092 \
+# KAFKA_TOPIC=foo-topic \
+# KAFKA_CONSUMER_GROUP=foo-consumer \
+# BENTHOS_OUTPUT=amqp \
+# AMQP_URL=amqp://guest:guest@localhost:5672/ \
+# AMQP_EXCHANGE=foo-exchange \
+# AMQP_EXCHANGE_TYPE=direct \
+# benthos -c ./default_env.yaml
+#
+input:
+  type: ${BENTHOS_INPUT}
+  zmq4:
+    urls:
+    - ${ZMQ_URLS}
+    bind: ${ZMQ_BIND:true}
+    socket_type: ${ZMQ_SOCKET:PULL}
+  scalability_protocols:
+    urls:
+    - ${NANOMSG_URLS}
+    bind: ${NANOMSG_BIND:true}
+    socket_type: ${NANOMSG_SOCKET:PULL}
+  kafka:
+    addresses:
+    - ${KAFKA_BROKER_ADDRESSES}
+    client_id: ${KAFKA_CLIENT_ID:benthos-client}
+    consumer_group: ${KAFKA_CONSUMER_GROUP:benthos-group}
+    topic: ${KAFKA_TOPIC:benthos-stream}
+    partition: ${KAFKA_PARTITION:0}
+    start_from_oldest: ${KAFKA_START_OLDEST:true}
+  kafka_balanced:
+    addresses:
+    - ${KAFKA_BROKER_ADDRESSES}
+    client_id: ${KAFKA_CLIENT_ID:benthos-client}
+    consumer_group: ${KAFKA_CONSUMER_GROUP:benthos-group}
+    topics:
+    - ${KAFKA_TOPIC:benthos-stream}
+    start_from_oldest: ${KAFKA_START_OLDEST:true}
+  amqp:
+    url: ${AMQP_URL}
+    exchange: ${AMQP_EXCHANGE:benthos-exchange}
+    exchange_type: ${AMQP_EXCHANGE_TYPE:direct}
+    queue: ${AMQP_QUEUE:benthos-stream}
+    key: ${AMQP_KEY:benthos-key}
+    consumer_tag: ${AMQP_CONSUMER_TAG:benthos-consumer}
+  nsq:
+    nsqd_tcp_addresses:
+    - ${NSQD_TCP_ADDRESSES}
+    lookupd_http_addresses:
+    - ${NSQD_LOOKUP_ADDRESSES}
+    topic: ${NSQ_TOPIC:benthos-messages}
+    channel: ${NSQ_CHANNEL:benthos-stream}
+    user_agent: ${NSQ_USER_AGENT:benthos-consumer}
+  nats:
+    urls:
+    - ${NATS_URLS}
+    subject: ${NATS_SUBJECT:benthos-stream}
+  nats_stream:
+    urls:
+    - ${NATS_URLS}
+    cluster_id: ${NATS_CLUSTER_ID:benthos-cluster}
+    client_id: ${NATS_CLIENT_ID:benthos-consumer}
+    queue: ${NATS_QUEUE:benthos-queue}
+    durable_name: ${NATS_DURABLE_NAME:benthos-offset}
+    subject: ${NATS_SUBJECT:benthos-stream}
+  redis_pubsub:
+    url: ${REDIS_URL}
+    channels:
+    - ${REDIS_CHANNEL:benthos-stream}
+output:
+  type: ${BENTHOS_OUTPUT}
+  zmq4:
+    urls:
+    - ${ZMQ_URLS}
+    bind: ${ZMQ_BIND:true}
+    socket_type: ${ZMQ_SOCKET:PULL}
+  scalability_protocols:
+    urls:
+    - ${NANOMSG_URLS}
+    bind: ${NANOMSG_BIND:false}
+    socket_type: ${NANOMSG_SOCKET:PUSH}
+  kafka:
+    addresses:
+    - ${KAFKA_BROKER_ADDRESSES}
+    client_id: ${KAFKA_CLIENT_ID:benthos-client}
+    topic: ${KAFKA_TOPIC:benthos-stream}
+    ack_replicas: ${KAFKA_ACK_REP:true}
+  amqp:
+    url: ${AMQP_URL}
+    exchange: ${AMQP_EXCHANGE:benthos-exchange}
+    exchange_type: ${AMQP_EXCHANGE_TYPE:direct}
+    key: ${AMQP_KEY:benthos-key}
+  nsq:
+    nsqd_tcp_address: ${NSQ_TCP_ADDRESS}
+    topic: ${NSQ_TOPIC:benthos-messages}
+    user_agent: ${NSQ_USER_AGENT:benthos-consumer}
+  nats:
+    urls:
+    - ${NATS_URLS}
+    subject: ${NATS_SUBJECT:benthos-stream}
+  nats_stream:
+    urls:
+    - ${NATS_URLS}
+    cluster_id: ${NATS_CLUSTER_ID:benthos-cluster}
+    client_id: ${NATS_CLIENT_ID:benthos-consumer}
+    subject: ${NATS_SUBJECT:benthos-stream}
+  redis_pubsub:
+    url: ${REDIS_URL}
+    channel: ${REDIS_CHANNEL:benthos-stream}

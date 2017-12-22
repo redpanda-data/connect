@@ -89,6 +89,10 @@ example config you will see the available options.
 
 For a list of metrics within Benthos [check out this spec][6].
 
+### Environment Variables
+
+[You can use environment variables][8] to replace fields in your config files.
+
 ## ZMQ4 Support
 
 Benthos supports ZMQ4 for both data input and output. To add this you need to
@@ -134,6 +138,7 @@ docker run --rm \
 [5]: resources/docs/multipart.md
 [6]: resources/docs/metrics.md
 [7]: resources/docs
+[8]: resources/docs/environment_vars.md
 [dep]: https://github.com/golang/dep
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/

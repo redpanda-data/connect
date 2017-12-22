@@ -100,7 +100,11 @@ func bootstrap() Config {
 	config := NewConfig()
 
 	// A list of default config paths to check for if not explicitly defined
-	defaultPaths := []string{}
+	defaultPaths := []string{
+		"/benthos.yaml",
+		"/etc/benthos/config.yaml",
+		"/etc/benthos.yaml",
+	}
 
 	// Override default help printing
 	flag.Usage = func() {

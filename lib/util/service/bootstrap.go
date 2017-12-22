@@ -21,12 +21,14 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"gopkg.in/yaml.v2"
 )
@@ -51,11 +53,37 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-func readConfig(path string, config interface{}) error {
+func readConfig(path string, replaceEnvVariables bool, config interface{}) error {
 	configBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
 	}
+
+	if replaceEnvVariables {
+		envRegex, err := regexp.Compile("\\${[0-9A-Za-z_\\-:]+}")
+		if err != nil {
+			return err
+		}
+
+		configBytes = envRegex.ReplaceAllFunc(configBytes, func(content []byte) []byte {
+			var value string
+			if len(content) > 3 {
+				if colonIndex := bytes.LastIndexByte(content, ':'); colonIndex == -1 {
+					value = os.Getenv(string(content[2 : len(content)-1]))
+				} else {
+					targetVar := content[2:colonIndex]
+					defaultVal := content[colonIndex+1 : len(content)-1]
+
+					value = os.Getenv(string(targetVar))
+					if len(value) == 0 {
+						value = string(defaultVal)
+					}
+				}
+			}
+			return []byte(value)
+		})
+	}
+
 	ext := filepath.Ext(path)
 	if ".js" == ext || ".json" == ext {
 		if err = json.Unmarshal(configBytes, config); err != nil {
@@ -88,6 +116,10 @@ func readConfig(path string, config interface{}) error {
 // - Load an optional configuration file (supports JSON, YAML)
 // - Print the config file (supports JSON, YAML) and exit
 //
+// Configuration files will be parsed according to their extention (.js, .json,
+// .yaml, etc) and will have environment variables substituted in before
+// performing the parse.
+//
 // NOTE: The user may request a version and build time stamp, in which case
 // Bootstrap will print the values of util.Version and util.DateBuilt. To
 // populate those values you must run go build with the following:
@@ -109,7 +141,7 @@ func Bootstrap(configPtr interface{}, defaultConfigPaths ...string) bool {
 	}
 
 	if len(*configPath) > 0 {
-		if err := readConfig(*configPath, configPtr); err != nil {
+		if err := readConfig(*configPath, true, configPtr); err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			return false
 		}
@@ -119,7 +151,7 @@ func Bootstrap(configPtr interface{}, defaultConfigPaths ...string) bool {
 			if _, err := os.Stat(path); err == nil {
 				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
 
-				if err = readConfig(path, configPtr); err != nil {
+				if err = readConfig(path, true, configPtr); err != nil {
 					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 					return false
 				}
