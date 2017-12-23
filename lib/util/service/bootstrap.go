@@ -21,14 +21,10 @@
 package service
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
-	"regexp"
 
 	"gopkg.in/yaml.v2"
 )
@@ -42,6 +38,7 @@ var (
 	showConfigJSON *bool
 	showConfigYAML *bool
 	configPath     *string
+	swapEnvs       *bool
 )
 
 func init() {
@@ -49,55 +46,10 @@ func init() {
 	showConfigJSON = flag.Bool("print-json", false, "Print loaded configuration as JSON, then exit")
 	showConfigYAML = flag.Bool("print-yaml", false, "Print loaded configuration as YAML, then exit")
 	configPath = flag.String("c", "", "Path to a configuration file")
+	swapEnvs = flag.Bool("swap-envs", true, "Swap ${FOO} patterns in config file with environment variables")
 }
 
 //------------------------------------------------------------------------------
-
-func readConfig(path string, replaceEnvVariables bool, config interface{}) error {
-	configBytes, err := ioutil.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	if replaceEnvVariables {
-		envRegex, err := regexp.Compile("\\${[0-9A-Za-z_\\-:]+}")
-		if err != nil {
-			return err
-		}
-
-		configBytes = envRegex.ReplaceAllFunc(configBytes, func(content []byte) []byte {
-			var value string
-			if len(content) > 3 {
-				if colonIndex := bytes.LastIndexByte(content, ':'); colonIndex == -1 {
-					value = os.Getenv(string(content[2 : len(content)-1]))
-				} else {
-					targetVar := content[2:colonIndex]
-					defaultVal := content[colonIndex+1 : len(content)-1]
-
-					value = os.Getenv(string(targetVar))
-					if len(value) == 0 {
-						value = string(defaultVal)
-					}
-				}
-			}
-			return []byte(value)
-		})
-	}
-
-	ext := filepath.Ext(path)
-	if ".js" == ext || ".json" == ext {
-		if err = json.Unmarshal(configBytes, config); err != nil {
-			return err
-		}
-	} else if ".yml" == ext || ".yaml" == ext {
-		if err = yaml.Unmarshal(configBytes, config); err != nil {
-			return err
-		}
-	} else {
-		return fmt.Errorf("config file extension not recognised: %v", path)
-	}
-	return nil
-}
 
 // Bootstrap bootstraps the configuration loading, parsing and reporting for a
 // service through cmd flags. The argument configPtr should be a pointer to a
@@ -141,7 +93,7 @@ func Bootstrap(configPtr interface{}, defaultConfigPaths ...string) bool {
 	}
 
 	if len(*configPath) > 0 {
-		if err := readConfig(*configPath, true, configPtr); err != nil {
+		if err := readConfig(*configPath, *swapEnvs, configPtr); err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			return false
 		}
@@ -151,7 +103,7 @@ func Bootstrap(configPtr interface{}, defaultConfigPaths ...string) bool {
 			if _, err := os.Stat(path); err == nil {
 				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
 
-				if err = readConfig(path, true, configPtr); err != nil {
+				if err = readConfig(path, *swapEnvs, configPtr); err != nil {
 					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 					return false
 				}

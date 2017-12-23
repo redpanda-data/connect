@@ -17,6 +17,9 @@
 #
 input:
   type: ${BENTHOS_INPUT}
+  http_server:
+    address: ${HTTP_SERVER_ADDRESS}
+    path: ${HTTP_SERVER_PATH:/post}
   zmq4:
     urls:
     - ${ZMQ_URLS}
@@ -74,8 +77,17 @@ input:
     url: ${REDIS_URL}
     channels:
     - ${REDIS_CHANNEL:benthos-stream}
+  file:
+    path: ${FILE_PATH}
+    multipart: ${FILE_MULTIPART:false}
+    max_buffer: ${FILE_MAX_BUFFER:65536}
 output:
   type: ${BENTHOS_OUTPUT}
+  http_client:
+    url: ${HTTP_CLIENT_URL}
+  http_server:
+    address: ${HTTP_SERVER_ADDRESS}
+    path: ${HTTP_SERVER_PATH:/post}
   zmq4:
     urls:
     - ${ZMQ_URLS}
@@ -114,3 +126,5 @@ output:
   redis_pubsub:
     url: ${REDIS_URL}
     channel: ${REDIS_CHANNEL:benthos-stream}
+  file:
+    path: ${FILE_PATH}

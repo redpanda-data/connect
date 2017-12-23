@@ -48,4 +48,12 @@ NATS_DURABLE_NAME      = benthos-offset
 
 REDIS_URL              =
 REDIS_CHANNEL          = benthos-stream
+
+HTTP_SERVER_ADDRESS    =
+HTTP_SERVER_PATH       = /post
+HTTP_CLIENT_URL        =
+
+FILE_PATH              =
+FILE_MULTIPART         = false
+FILE_MAX_BUFFER        = 65536
 ```
