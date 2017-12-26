@@ -2,8 +2,12 @@ Environment Vars Config
 =======================
 
 The default environment variables based config is a simple bridge config with
-env variables for all important fields. The full list of variables and their
-default values:
+env variables for all important fields.
+
+Values for `BENTHOS_INPUT` and `BENTHOS_OUTPUT` should be chosen from [here][0]
+and [here][1] respectively.
+
+The full list of variables and their default values:
 
 ``` sh
 BENTHOS_INPUT          =
@@ -58,3 +62,6 @@ FILE_PATH              =
 FILE_MULTIPART         = false
 FILE_MAX_BUFFER        = 65536
 ```
+
+[0]: ../../resources/docs/inputs/list.md
+[1]: ../../resources/docs/outputs/list.md
