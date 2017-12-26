@@ -63,14 +63,14 @@ services:
     ports:
       - "1883:1883"
   benthos-in:
-    image: benthos
+    image: jeffail/benthos
     volumes:
       - $GOPATH/src/github.com/Jeffail/benthos/config/test/smoke_in.yaml:/benthos.yaml
     command: -c /benthos.yaml
     ports:
       - "8080:8080"
   benthos-out:
-    image: benthos
+    image: jeffail/benthos
     volumes:
       - $GOPATH/src/github.com/Jeffail/benthos/config/test/smoke_out.yaml:/benthos.yaml
       - $GOPATH/src/github.com/Jeffail/benthos/resources/docker/run_all_queues:/output

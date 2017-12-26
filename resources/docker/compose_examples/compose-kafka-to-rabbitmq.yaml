@@ -22,7 +22,7 @@ services:
       - "5672:5672"
       - "25672:25672"
   benthos-bridge:
-    image: benthos
+    image: jeffail/benthos
     environment:
       BENTHOS_INPUT: "kafka_balanced"
       KAFKA_BROKER_ADDRESSES: "kafka:9092"

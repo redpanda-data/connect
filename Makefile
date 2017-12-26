@@ -29,6 +29,7 @@ $(PATHINSTDOCKER)/benthos.tar:
 	@mkdir -p $(dir $@)
 	@docker build -f ./resources/docker/Dockerfile . -t benthos:$(VERSION)
 	@docker tag benthos:$(VERSION) benthos:latest
+	@docker tag benthos:latest jeffail/benthos:latest
 	@docker save benthos:$(VERSION) > $@
 
 docker: $(PATHINSTDOCKER)/benthos.tar
@@ -45,6 +46,8 @@ clean:
 
 clean-docker:
 	rm -rf $(PATHINSTDOCKER)
+	docker rmi jeffail/benthos
+	docker rmi benthos:latest
 	docker rmi benthos:$(VERSION)
 	docker rmi benthos
 

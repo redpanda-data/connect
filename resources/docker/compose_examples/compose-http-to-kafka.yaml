@@ -1,7 +1,7 @@
 version: '2'
 services:
   benthos-in:
-    image: benthos
+    image: jeffail/benthos
     environment:
       BENTHOS_INPUT: "http_server"
       HTTP_SERVER_ADDRESS: "0.0.0.0:8080"
