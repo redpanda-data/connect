@@ -16,13 +16,13 @@ messages through curl:
 curl http://<docker_host>:8080/post -d "example message"
 ```
 
-## HTTP To Rabbit MQ
+## HTTP To Rabbit MQ
 
 [This config][2] is the same as the previous except messages are sent to a
 Rabbit MQ instance instead. You can send messages on port 8080 using curl the
 same way.
 
-## Kafka To Rabbit MQ
+## Kafka To Rabbit MQ
 
 [This config][3] sets up a Kafka broker, a Rabbit MQ node, and a Benthos that
 reads messages from the former and sends them through the latter.
