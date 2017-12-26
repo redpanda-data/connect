@@ -96,7 +96,7 @@ For a list of metrics within Benthos [check out this spec][6].
 ## ZMQ4 Support
 
 Benthos supports ZMQ4 for both data input and output. To add this you need to
-install libzmq4 and use the compile time flag when building benthos:
+install libzmq4 and use the compile time flag when building Benthos:
 
 ``` shell
 go install -tags "ZMQ4" ./cmd/...
@@ -114,8 +114,8 @@ needed files with `dep prune`.
 
 ## Docker
 
-There's a `Dockerfile` for creating a benthos docker image which is multi-stage 
-and results in a minimal image from scratch. You can build it with:
+There's a multi-stage `Dockerfile` for creating a Benthos docker image which
+results in a minimal image from scratch. You can build it with:
 
 ``` shell
 make docker
@@ -131,6 +131,9 @@ docker run --rm \
 	benthos -c /config.yaml
 ```
 
+There are a [few examples here][9] that show you some ways of setting up Benthos
+containers using `docker-compose`.
+
 [1]: https://godoc.org/github.com/Jeffail/benthos?status.svg
 [2]: http://godoc.org/github.com/Jeffail/benthos
 [3]: https://goreportcard.com/badge/github.com/Jeffail/benthos
@@ -139,6 +142,7 @@ docker run --rm \
 [6]: resources/docs/metrics.md
 [7]: resources/docs
 [8]: resources/docs/environment_vars.md
+[9]: resources/docker/compose_examples
 [dep]: https://github.com/golang/dep
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/

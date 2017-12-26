@@ -1,0 +1,26 @@
+version: '2'
+services:
+  benthos-in:
+    image: benthos
+    environment:
+      BENTHOS_INPUT: "http_server"
+      HTTP_SERVER_ADDRESS: "0.0.0.0:8080"
+      BENTHOS_OUTPUT: "kafka"
+      KAFKA_BROKER_ADDRESSES: "kafka:9092"
+      KAFKA_TOPIC: "benthos_topic"
+    ports:
+      - "8080:8080"
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+  kafka:
+    image: wurstmeister/kafka
+    ports:
+      - "9092:9092"
+    environment:
+      HOSTNAME_COMMAND: "route -n | awk '/UG[ \t]/{print $$2}'"
+      KAFKA_CREATE_TOPICS: "benthos_topic:1:1"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+        - /var/run/docker.sock:/var/run/docker.sock

@@ -8,3 +8,5 @@ order to send test messages use curl:
 ``` sh
 curl http://localhost:8080/post -d "hello world"
 ```
+
+And the output messages can be found in `./smoke-output.txt`.

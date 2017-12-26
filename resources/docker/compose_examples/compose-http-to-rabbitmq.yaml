@@ -1,0 +1,23 @@
+version: '2'
+services:
+  benthos-in:
+    image: benthos
+    environment:
+      BENTHOS_INPUT: "http_server"
+      HTTP_SERVER_ADDRESS: "0.0.0.0:8080"
+      BENTHOS_OUTPUT: "amqp"
+      AMQP_URL: "amqp://guest:guest@rabbitmq:5672/"
+      AMQP_EXCHANGE: "benthos-exchange"
+      AMQP_EXCHANGE_TYPE: "direct"
+      AMQP_QUEUE: "benthos-stream"
+      AMQP_KEY: "benthos-key"
+      AMQP_CONSUMER_TAG: "benthos-consumer"
+    ports:
+      - "8080:8080"
+  rabbitmq:
+    image: rabbitmq
+    ports:
+      - "4369:4369"
+      - "5671:5671"
+      - "5672:5672"
+      - "25672:25672"

@@ -128,3 +128,6 @@ output:
     channel: ${REDIS_CHANNEL:benthos-stream}
   file:
     path: ${FILE_PATH}
+logger:
+  prefix: benthos
+  log_level: ${BENTHOS_LOG_LEVEL:INFO}

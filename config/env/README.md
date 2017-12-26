@@ -8,6 +8,7 @@ default values:
 ``` sh
 BENTHOS_INPUT          =
 BENTHOS_OUTPUT         =
+BENTHOS_LOG_LEVEL      = INFO
 
 ZMQ_URLS               =
 ZMQ_BIND               = true
