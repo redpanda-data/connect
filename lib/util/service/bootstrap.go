@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Jeffail/benthos/lib/util/service/config"
 	"gopkg.in/yaml.v2"
 )
 
@@ -93,7 +94,7 @@ func Bootstrap(configPtr interface{}, defaultConfigPaths ...string) bool {
 	}
 
 	if len(*configPath) > 0 {
-		if err := readConfig(*configPath, *swapEnvs, configPtr); err != nil {
+		if err := config.Read(*configPath, *swapEnvs, configPtr); err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			return false
 		}
@@ -103,7 +104,7 @@ func Bootstrap(configPtr interface{}, defaultConfigPaths ...string) bool {
 			if _, err := os.Stat(path); err == nil {
 				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
 
-				if err = readConfig(path, *swapEnvs, configPtr); err != nil {
+				if err = config.Read(path, *swapEnvs, configPtr); err != nil {
 					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 					return false
 				}

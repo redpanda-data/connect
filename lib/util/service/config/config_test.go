@@ -1,4 +1,4 @@
-package service
+package config
 
 import (
 	"os"

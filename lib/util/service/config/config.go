@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package service
+package config
 
 import (
 	"bytes"
@@ -44,6 +44,15 @@ func init() {
 	}
 }
 
+// ReplaceEnvVariables will search a blob of data (assumed to be a config) for
+// the pattern `${FOO:bar}`, where `FOO` is an environment variable name and
+// `bar` is a default value. The `bar` section (including the colon) can be left
+// out if there is no appropriate default value for the field.
+//
+// For each aforementioned pattern found in the blob the contents of the
+// respective environment variable will be read and will replace the pattern in
+// the config. If the environment variable is empty or does not exist then
+// either the default value is used or the field will be empty.
 func ReplaceEnvVariables(configBytes []byte) []byte {
 	return envRegex.ReplaceAllFunc(configBytes, func(content []byte) []byte {
 		var value string
@@ -64,7 +73,8 @@ func ReplaceEnvVariables(configBytes []byte) []byte {
 	})
 }
 
-func readConfig(path string, replaceEnvs bool, config interface{}) error {
+// Read will attempt to read a configuration file path into a structure.
+func Read(path string, replaceEnvs bool, config interface{}) error {
 	configBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
