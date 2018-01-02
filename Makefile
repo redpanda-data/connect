@@ -49,7 +49,6 @@ clean-docker:
 	docker rmi jeffail/benthos
 	docker rmi benthos:latest
 	docker rmi benthos:$(VERSION)
-	docker rmi benthos
 
 docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --list-inputs > ./resources/docs/inputs/list.md; true

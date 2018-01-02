@@ -3,7 +3,7 @@ Benthos Docker
 
 This is a multi stage Dockerfile that builds Benthos and then copies it to a
 scratch image. The image comes with a config that allows you to configure simple
-bridges using [environment variables][../../config/env/README.md] like this:
+bridges using [environment variables](../../config/env/README.md) like this:
 
 ``` sh
 docker run \

@@ -44,7 +44,7 @@ func init() {
 	}
 }
 
-func replaceEnvVariables(configBytes []byte) []byte {
+func ReplaceEnvVariables(configBytes []byte) []byte {
 	return envRegex.ReplaceAllFunc(configBytes, func(content []byte) []byte {
 		var value string
 		if len(content) > 3 {
@@ -71,7 +71,7 @@ func readConfig(path string, replaceEnvs bool, config interface{}) error {
 	}
 
 	if replaceEnvs {
-		configBytes = replaceEnvVariables(configBytes)
+		configBytes = ReplaceEnvVariables(configBytes)
 	}
 
 	ext := filepath.Ext(path)

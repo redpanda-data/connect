@@ -25,7 +25,7 @@ func TestEnvSwapping(t *testing.T) {
 	}
 
 	for in, exp := range tests {
-		out := replaceEnvVariables([]byte(in))
+		out := ReplaceEnvVariables([]byte(in))
 		if act := string(out); act != exp {
 			t.Errorf("Wrong result: %v != %v", act, exp)
 		}
