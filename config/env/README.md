@@ -10,57 +10,93 @@ and [here][1] respectively.
 The full list of variables and their default values:
 
 ``` sh
-BENTHOS_INPUT          =
-BENTHOS_OUTPUT         =
-BENTHOS_LOG_LEVEL      = INFO
+BENTHOS_INPUT                 =
+BENTHOS_OUTPUT                =
+BENTHOS_LOG_LEVEL             = INFO
 
-ZMQ_URLS               =
-ZMQ_BIND               = true
-ZMQ_SOCKET             = PULL
+ZMQ_INPUT_URLS                =
+ZMQ_INPUT_BIND                = true
+ZMQ_INPUT_SOCKET              = PULL
+ZMQ_OUTPUT_URLS               =
+ZMQ_OUTPUT_BIND               = true
+ZMQ_OUTPUT_SOCKET             = PULL
 
-NANOMSG_URLS           =
-NANOMSG_BIND           = true
-NANOMSG_SOCKET         = PULL
+NANOMSG_INPUT_URLS            =
+NANOMSG_INPUT_BIND            = true
+NANOMSG_INPUT_SOCKET          = PULL
+NANOMSG_OUTPUT_URLS           =
+NANOMSG_OUTPUT_BIND           = true
+NANOMSG_OUTPUT_SOCKET         = PULL
 
-KAFKA_BROKER_ADDRESSES =
-KAFKA_CLIENT_ID        = benthos-client
-KAFKA_CONSUMER_GROUP   = benthos-group
-KAFKA_TOPIC            = benthos-stream
-KAFKA_PARTITION        = 0
-KAFKA_START_OLDEST     = true
-KAFKA_ACK_REP          = true             # Used for output only
+KAFKA_INPUT_BROKER_ADDRESSES  =
+KAFKA_INPUT_CLIENT_ID         = benthos-client
+KAFKA_INPUT_CONSUMER_GROUP    = benthos-group
+KAFKA_INPUT_TOPIC             = benthos-stream
+KAFKA_INPUT_PARTITION         = 0
+KAFKA_INPUT_START_OLDEST      = true
+KAFKA_OUTPUT_BROKER_ADDRESSES =
+KAFKA_OUTPUT_CLIENT_ID        = benthos-client
+KAFKA_OUTPUT_CONSUMER_GROUP   = benthos-group
+KAFKA_OUTPUT_TOPIC            = benthos-stream
+KAFKA_OUTPUT_PARTITION        = 0
+KAFKA_OUTPUT_START_OLDEST     = true
+KAFKA_OUTPUT_ACK_REP          = true             # Used for output only
 
-AMQP_URL               =
-AMQP_EXCHANGE          = benthos-exchange
-AMQP_EXCHANGE_TYPE     = direct
-AMQP_QUEUE             = benthos-stream
-AMQP_KEY               = benthos-key
-AMQP_CONSUMER_TAG      = benthos-consumer
+AMQP_INPUT_URL                =
+AMQP_INPUT_EXCHANGE           = benthos-exchange
+AMQP_INPUT_EXCHANGE_TYPE      = direct
+AMQP_INPUT_QUEUE              = benthos-stream
+AMQP_INPUT_KEY                = benthos-key
+AMQP_INPUT_CONSUMER_TAG       = benthos-consumer
+AMQP_OUTPUT_URL               =
+AMQP_OUTPUT_EXCHANGE          = benthos-exchange
+AMQP_OUTPUT_EXCHANGE_TYPE     = direct
+AMQP_OUTPUT_QUEUE             = benthos-stream
+AMQP_OUTPUT_KEY               = benthos-key
+AMQP_OUTPUT_CONSUMER_TAG      = benthos-consumer
 
-NSQD_TCP_ADDRESSES     =                  # Used for input only
-NSQD_LOOKUP_ADDRESSES  =                  # Used for input only
-NSQ_TCP_ADDRESS        =                  # Used for output only
-NSQ_TOPIC              = benthos-messages
-NSQ_CHANNEL            = benthos-stream
-NSQ_USER_AGENT         = benthos-consumer
+NSQD_INPUT_TCP_ADDRESSES      =                  # Used for input only
+NSQD_INPUT_LOOKUP_ADDRESSES   =                  # Used for input only
+NSQ_INPUT_TOPIC               = benthos-messages
+NSQ_INPUT_CHANNEL             = benthos-stream
+NSQ_INPUT_USER_AGENT          = benthos-consumer
+NSQ_OUTPUT_TCP_ADDRESS        =                  # Used for output only
+NSQ_OUTPUT_TOPIC              = benthos-messages
+NSQ_OUTPUT_CHANNEL            = benthos-stream
+NSQ_OUTPUT_USER_AGENT         = benthos-consumer
 
-NATS_URLS              =
-NATS_SUBJECT           = benthos-stream
-NATS_CLUSTER_ID        = benthos-cluster
-NATS_CLIENT_ID         = benthos-consumer
-NATS_QUEUE             = benthos-queue
-NATS_DURABLE_NAME      = benthos-offset
+NATS_INPUT_URLS               =
+NATS_INPUT_SUBJECT            = benthos-stream
+NATS_INPUT_CLUSTER_ID         = benthos-cluster
+NATS_INPUT_CLIENT_ID          = benthos-consumer
+NATS_INPUT_QUEUE              = benthos-queue
+NATS_INPUT_DURABLE_NAME       = benthos-offset
+NATS_OUTPUT_URLS              =
+NATS_OUTPUT_SUBJECT           = benthos-stream
+NATS_OUTPUT_CLUSTER_ID        = benthos-cluster
+NATS_OUTPUT_CLIENT_ID         = benthos-consumer
+NATS_OUTPUT_QUEUE             = benthos-queue
+NATS_OUTPUT_DURABLE_NAME      = benthos-offset
 
-REDIS_URL              =
-REDIS_CHANNEL          = benthos-stream
+REDIS_INPUT_URL               =
+REDIS_INPUT_CHANNEL           = benthos-stream
+REDIS_OUTPUT_URL              =
+REDIS_OUTPUT_CHANNEL          = benthos-stream
 
-HTTP_SERVER_ADDRESS    =
-HTTP_SERVER_PATH       = /post
-HTTP_CLIENT_URL        =
+HTTP_SERVER_INPUT_ADDRESS     =
+HTTP_SERVER_INPUT_PATH        = /post
+HTTP_SERVER_OUTPUT_ADDRESS    =
+HTTP_SERVER_OUTPUT_PATH       = /post
 
-FILE_PATH              =
-FILE_MULTIPART         = false
-FILE_MAX_BUFFER        = 65536
+HTTP_CLIENT_INPUT_URL         =
+HTTP_CLIENT_OUTPUT_URL        =
+
+FILE_INPUT_PATH               =
+FILE_INPUT_MULTIPART          = false
+FILE_INPUT_MAX_BUFFER         = 65536
+FILE_OUTPUT_PATH              =
+FILE_OUTPUT_MULTIPART         = false
+FILE_OUTPUT_MAX_BUFFER        = 65536
 ```
 
 [0]: ../../resources/docs/inputs/list.md

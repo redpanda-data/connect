@@ -8,9 +8,9 @@ bridges using [environment variables](../../config/env/README.md) like this:
 ``` sh
 docker run \
 	-e "BENTHOS_INPUT=kafka_balanced" \
-	-e "KAFKA_BROKER_ADDRESSES=foo:6379" \
+	-e "KAFKA_INPUT_BROKER_ADDRESSES=foo:6379" \
 	-e "BENTHOS_OUTPUT=nats" \
-	-e "NATS_URLS=nats://bar:4222,nats://baz:4222" \
+	-e "NATS_OUTPUT_URLS=nats://bar:4222,nats://baz:4222" \
 	benthos
 ```
 
