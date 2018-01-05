@@ -1,0 +1,215 @@
+input:
+  type: stdin
+  http_server:
+    address: localhost:8080
+    path: /post
+    timeout_ms: 5000
+    cert_file: ""
+    key_file: ""
+  scalability_protocols:
+    urls:
+    - tcp://*:5555
+    bind: true
+    socket_type: PULL
+    reply_success: SUCCESS
+    reply_error: ERROR
+    sub_filters: []
+    poll_timeout_ms: 5000
+    reply_timeout_ms: 5000
+  zmq4:
+    urls:
+    - tcp://localhost:5555
+    bind: false
+    socket_type: PULL
+    sub_filters: []
+    high_water_mark: 0
+    poll_timeout_ms: 5000
+  kafka:
+    addresses:
+    - localhost:9092
+    client_id: benthos_kafka_input
+    consumer_group: benthos_consumer_group
+    topic: benthos_stream
+    partition: 0
+    start_from_oldest: true
+  kafka_balanced:
+    addresses:
+    - localhost:9092
+    client_id: benthos_kafka_input
+    consumer_group: benthos_consumer_group
+    topics:
+    - benthos_stream
+    start_from_oldest: true
+  amqp:
+    url: amqp://guest:guest@localhost:5672/
+    exchange: benthos-exchange
+    exchange_type: direct
+    queue: benthos-queue
+    key: benthos-key
+    consumer_tag: benthos-consumer
+    prefetch_count: 1
+    prefetch_size: 0
+  nsq:
+    nsqd_tcp_addresses:
+    - localhost:4150
+    lookupd_http_addresses:
+    - localhost:4161
+    topic: benthos_messages
+    channel: benthos_stream
+    user_agent: benthos_consumer
+    max_in_flight: 100
+  nats:
+    urls:
+    - nats://localhost:4222
+    subject: benthos_messages
+  nats_stream:
+    urls:
+    - nats://localhost:4222
+    cluster_id: benthos_cluster
+    client_id: benthos_client
+    queue: benthos_queue
+    durable_name: benthos_offset
+    subject: benthos_messages
+  redis_pubsub:
+    url: tcp://localhost:6379
+    channels:
+    - benthos_chan
+  file:
+    path: ""
+    multipart: false
+    max_buffer: 65536
+    custom_delimiter: ""
+  stdin:
+    multipart: false
+    max_buffer: 65536
+    custom_delimiter: ""
+  fan_in:
+    inputs: []
+  processors:
+  - type: bounds_check
+    bounds_check:
+      max_parts: 100
+      min_parts: 1
+      max_part_size: 1073741824
+    select_parts:
+      parts:
+      - 0
+    blob_to_multi: {}
+    multi_to_blob: {}
+    sample:
+      retain: 0.1
+      randomseed: 0
+    combine:
+      parts: 2
+output:
+  type: stdout
+  http_client:
+    url: http://localhost:8081/post
+    oauth:
+      consumer_key: ""
+      consumer_secret: ""
+      access_token: ""
+      access_token_secret: ""
+      request_url: ""
+      enabled: false
+    timeout_ms: 5000
+    retry_period_ms: 1000
+    retries: 3
+    skip_cert_verify: false
+  http_server:
+    address: localhost:8081
+    path: /get
+    timeout_ms: 5000
+    cert_file: ""
+    key_file: ""
+  scalability_protocols:
+    urls:
+    - tcp://localhost:5556
+    bind: false
+    socket_type: PUSH
+    reply_success: SUCCESS
+    poll_timeout_ms: 5000
+    reply_timeout_ms: 5000
+  kafka:
+    addresses:
+    - localhost:9092
+    client_id: benthos_kafka_output
+    topic: benthos_stream
+    timeout_ms: 5000
+    ack_replicas: true
+  amqp:
+    url: amqp://guest:guest@localhost:5672/
+    exchange: benthos-exchange
+    exchange_type: direct
+    key: benthos-key
+  nsq:
+    nsqd_tcp_address: localhost:4150
+    topic: benthos_messages
+    user_agent: benthos_producer
+    max_in_flight: 100
+  nats:
+    urls:
+    - nats://localhost:4222
+    subject: benthos_messages
+  nats_stream:
+    urls:
+    - nats://localhost:4222
+    cluster_id: benthos_cluster
+    client_id: benthos_client
+    subject: benthos_messages
+  redis_pubsub:
+    url: tcp://localhost:6379
+    channel: benthos_chan
+  zmq4:
+    urls:
+    - tcp://*:5556
+    bind: true
+    socket_type: PUSH
+    high_water_mark: 0
+  file:
+    path: ""
+    custom_delimiter: ""
+  stdout:
+    custom_delimiter: ""
+  fan_out:
+    outputs: []
+  round_robin:
+    outputs: []
+  processors: []
+buffer:
+  type: none
+  mmap_file:
+    directory: ""
+    file_size: 262144000
+    retry_period_ms: 1000
+    clean_up: true
+    reserved_disk_space: 104857600
+  memory:
+    limit: 524288000
+logger:
+  prefix: service
+  log_level: INFO
+  add_timestamp: true
+  json_format: false
+metrics:
+  type: none
+  http_server:
+    stats_prefix: service
+    address: localhost:4040
+    path: /stats
+  riemann:
+    server: ""
+    ttl: 5
+    tags:
+    - service
+    - meter
+    flush_interval: 2s
+    prefix: ""
+  statsd:
+    address: localhost:4040
+    flush_period: 100ms
+    max_packet_size: 1440
+    network: udp
+    prefix: ""
+sys_exit_timeout_ms: 20000
+

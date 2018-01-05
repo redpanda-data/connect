@@ -27,9 +27,9 @@ input:
     socket_type: ${ZMQ_INPUT_SOCKET:PULL}
   scalability_protocols:
     urls:
-    - ${NANOMSG_INPUT_URLS}
-    bind: ${NANOMSG_INPUT_BIND:true}
-    socket_type: ${NANOMSG_INPUT_SOCKET:PULL}
+    - ${SCALE_PROTO_INPUT_URLS}
+    bind: ${SCALE_PROTO_INPUT_BIND:true}
+    socket_type: ${SCALE_PROTO_INPUT_SOCKET:PULL}
   kafka:
     addresses:
     - ${KAFKA_INPUT_BROKER_ADDRESSES}
@@ -81,6 +81,13 @@ input:
     path: ${FILE_INPUT_PATH}
     multipart: ${FILE_INPUT_MULTIPART:false}
     max_buffer: ${FILE_INPUT_MAX_BUFFER:65536}
+  processors:
+  - type: bounds_check
+    bounds_check:
+      max_parts: ${BENTHOS_MAX_PARTS:100}
+      min_parts: ${BENTHOS_MIN_PARTS:1}
+      max_part_size: ${BENTHOS_MAX_PART_SIZE:1073741824}
+  - type: ${BENTHOS_INPUT_PROCESSOR:noop}
 output:
   type: ${BENTHOS_OUTPUT}
   http_client:
@@ -95,9 +102,9 @@ output:
     socket_type: ${ZMQ_OUTPUT_SOCKET:PULL}
   scalability_protocols:
     urls:
-    - ${NANOMSG_OUTPUT_URLS}
-    bind: ${NANOMSG_OUTPUT_BIND:false}
-    socket_type: ${NANOMSG_OUTPUT_SOCKET:PUSH}
+    - ${SCALE_PROTO_OUTPUT_URLS}
+    bind: ${SCALE_PROTO_OUTPUT_BIND:false}
+    socket_type: ${SCALE_PROTO_OUTPUT_SOCKET:PUSH}
   kafka:
     addresses:
     - ${KAFKA_OUTPUT_BROKER_ADDRESSES}
@@ -128,6 +135,8 @@ output:
     channel: ${REDIS_OUTPUT_CHANNEL:benthos-stream}
   file:
     path: ${FILE_OUTPUT_PATH}
+  processors:
+  - type: ${BENTHOS_OUTPUT_PROCESSOR:noop}
 logger:
   prefix: benthos
   log_level: ${BENTHOS_LOG_LEVEL:INFO}

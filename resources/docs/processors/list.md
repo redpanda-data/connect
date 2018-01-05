@@ -42,6 +42,11 @@ platform pipeline using the blob to multi processor.
 
 E.g. ZMQ => Benthos(multi to blob) => Kafka => Benthos(blob to multi)
 
+## `noop`
+
+Noop is a no-op processor that does nothing, the message passes through
+unchanged.
+
 ## `sample`
 
 Passes on a percentage of messages, either randomly or sequentially, and drops

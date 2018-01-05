@@ -14,6 +14,12 @@ BENTHOS_INPUT                 =
 BENTHOS_OUTPUT                =
 BENTHOS_LOG_LEVEL             = INFO
 
+BENTHOS_MAX_PARTS             = 100
+BENTHOS_MIN_PARTS             = 1
+BENTHOS_MAX_PART_SIZE         = 1073741824
+BENTHOS_INPUT_PROCESSOR       = noop
+BENTHOS_OUTPUT_PROCESSOR      = noop
+
 ZMQ_INPUT_URLS                =
 ZMQ_INPUT_BIND                = true
 ZMQ_INPUT_SOCKET              = PULL
@@ -21,12 +27,12 @@ ZMQ_OUTPUT_URLS               =
 ZMQ_OUTPUT_BIND               = true
 ZMQ_OUTPUT_SOCKET             = PULL
 
-NANOMSG_INPUT_URLS            =
-NANOMSG_INPUT_BIND            = true
-NANOMSG_INPUT_SOCKET          = PULL
-NANOMSG_OUTPUT_URLS           =
-NANOMSG_OUTPUT_BIND           = true
-NANOMSG_OUTPUT_SOCKET         = PULL
+SCALE_PROTO_INPUT_URLS        =
+SCALE_PROTO_INPUT_BIND        = true
+SCALE_PROTO_INPUT_SOCKET      = PULL
+SCALE_PROTO_OUTPUT_URLS       =
+SCALE_PROTO_OUTPUT_BIND       = true
+SCALE_PROTO_OUTPUT_SOCKET     = PULL
 
 KAFKA_INPUT_BROKER_ADDRESSES  =
 KAFKA_INPUT_CLIENT_ID         = benthos-client

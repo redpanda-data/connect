@@ -51,6 +51,7 @@ clean-docker:
 	docker rmi benthos:$(VERSION)
 
 docs: $(APPS)
+	@$(PATHINSTBIN)/benthos --print-yaml > ./config/everything.yaml; true
 	@$(PATHINSTBIN)/benthos --list-inputs > ./resources/docs/inputs/list.md; true
 	@$(PATHINSTBIN)/benthos --list-processors > ./resources/docs/processors/list.md; true
 	@$(PATHINSTBIN)/benthos --list-buffers > ./resources/docs/buffers/list.md; true
