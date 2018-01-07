@@ -46,9 +46,9 @@ clean:
 
 clean-docker:
 	rm -rf $(PATHINSTDOCKER)
-	docker rmi jeffail/benthos
-	docker rmi benthos:latest
-	docker rmi benthos:$(VERSION)
+	docker rmi jeffail/benthos; true
+	docker rmi benthos:latest; true
+	docker rmi benthos:$(VERSION); true
 
 docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --print-yaml > ./config/everything.yaml; true
