@@ -44,7 +44,6 @@ type StatsdConfig struct {
 	FlushPeriod   string `json:"flush_period" yaml:"flush_period"`
 	MaxPacketSize int    `json:"max_packet_size" yaml:"max_packet_size"`
 	Network       string `json:"network" yaml:"network"`
-	Prefix        string `json:"prefix" yaml:"prefix"`
 }
 
 // NewStatsdConfig creates an StatsdConfig struct with default values.
@@ -54,7 +53,6 @@ func NewStatsdConfig() StatsdConfig {
 		FlushPeriod:   "100ms",
 		MaxPacketSize: 1440,
 		Network:       "udp",
-		Prefix:        "",
 	}
 }
 
@@ -78,7 +76,7 @@ func NewStatsd(config Config) (Type, error) {
 		statsd.FlushPeriod(flushPeriod),
 		statsd.MaxPacketSize(config.Statsd.MaxPacketSize),
 		statsd.Network(config.Statsd.Network),
-		statsd.Prefix(config.Statsd.Prefix),
+		statsd.Prefix(config.Prefix),
 	)
 	if err != nil {
 		return nil, err

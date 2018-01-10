@@ -47,9 +47,16 @@ multipart, please read the 'docs/using_http.md' document.
 
 ## `http_server`
 
-Sets up an HTTP server that will return messages over HTTP GET requests. HTTP
+Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
 2.0 is supported when using TLS, which is enabled when key and cert files are
 specified.
+
+You can leave the 'address' config field blank in order to use the default
+service, but this will ignore TLS options.
+
+You can receive a single, discrete message on the configured 'path' endpoint, or
+receive a constant stream of line delimited messages on the configured
+'stream_path' endpoint.
 
 ## `kafka`
 

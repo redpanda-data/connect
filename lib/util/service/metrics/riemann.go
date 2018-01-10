@@ -48,7 +48,6 @@ type RiemannConfig struct {
 	TTL           float32  `json:"ttl" yaml:"ttl"`
 	Tags          []string `json:"tags" yaml:"tags"`
 	FlushInterval string   `json:"flush_interval" yaml:"flush_interval"`
-	Prefix        string   `json:"prefix" yaml:"prefix"`
 }
 
 // NewRiemannConfig creates a new riemann config with default values.
@@ -58,7 +57,6 @@ func NewRiemannConfig() RiemannConfig {
 		TTL:           5,
 		Tags:          []string{"service", "meter"},
 		FlushInterval: "2s",
-		Prefix:        "",
 	}
 }
 
@@ -68,7 +66,7 @@ func NewRiemannConfig() RiemannConfig {
 type Riemann struct {
 	sync.Mutex
 
-	config RiemannConfig
+	config Config
 
 	flatMetrics map[string]int64
 
@@ -92,7 +90,7 @@ func NewRiemann(config Config) (Type, error) {
 	}
 
 	r := &Riemann{
-		config:        config.Riemann,
+		config:        config,
 		Client:        client,
 		flushInterval: interval,
 		eventsCache:   make(map[string]*raidman.Event),
@@ -118,8 +116,8 @@ func (r *Riemann) Incr(stat string, value int64) error {
 
 	service := r.config.Prefix + stat
 	r.eventsCache[service] = &raidman.Event{
-		Ttl:     r.config.TTL,
-		Tags:    r.config.Tags,
+		Ttl:     r.config.Riemann.TTL,
+		Tags:    r.config.Riemann.Tags,
 		Metric:  total,
 		Service: service,
 	}
@@ -138,8 +136,8 @@ func (r *Riemann) Decr(stat string, value int64) error {
 
 	service := r.config.Prefix + stat
 	r.eventsCache[service] = &raidman.Event{
-		Ttl:     r.config.TTL,
-		Tags:    r.config.Tags,
+		Ttl:     r.config.Riemann.TTL,
+		Tags:    r.config.Riemann.Tags,
 		Metric:  total,
 		Service: service,
 	}
@@ -153,8 +151,8 @@ func (r *Riemann) Timing(stat string, delta int64) error {
 
 	service := r.config.Prefix + stat
 	r.eventsCache[service] = &raidman.Event{
-		Ttl:     r.config.TTL,
-		Tags:    r.config.Tags,
+		Ttl:     r.config.Riemann.TTL,
+		Tags:    r.config.Riemann.Tags,
 		Metric:  delta,
 		Service: service,
 	}
@@ -168,8 +166,8 @@ func (r *Riemann) Gauge(stat string, value int64) error {
 
 	service := r.config.Prefix + stat
 	r.eventsCache[service] = &raidman.Event{
-		Ttl:     r.config.TTL,
-		Tags:    r.config.Tags,
+		Ttl:     r.config.Riemann.TTL,
+		Tags:    r.config.Riemann.Tags,
 		Metric:  value,
 		Service: service,
 	}
@@ -212,7 +210,7 @@ func (r *Riemann) flushMetrics() {
 		r.eventsCache = make(map[string]*raidman.Event)
 	} else {
 		var newClient *raidman.Client
-		newClient, err = raidman.DialWithTimeout("tcp", r.config.Server, r.flushInterval)
+		newClient, err = raidman.DialWithTimeout("tcp", r.config.Riemann.Server, r.flushInterval)
 		if err == nil {
 			r.Client.Close()
 			r.Client = newClient

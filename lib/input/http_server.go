@@ -42,9 +42,11 @@ func init() {
 	constructors["http_server"] = typeSpec{
 		constructor: NewHTTPServer,
 		description: `
-In order to receive messages over HTTP Benthos hosts a server. Messages should
-be sent as a POST request. HTTP 2.0 is supported when using TLS, which is
-enabled when key and cert files are specified.`,
+Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
+which is enabled when key and cert files are specified.
+
+You can leave the 'address' config field blank in order to use the default
+service, but this will ignore TLS options.`,
 	}
 }
 
@@ -62,7 +64,7 @@ type HTTPServerConfig struct {
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
-		Address:   "localhost:8080",
+		Address:   "",
 		Path:      "/post",
 		TimeoutMS: 5000,
 		CertFile:  "",
@@ -92,8 +94,15 @@ type HTTPServer struct {
 
 // NewHTTPServer creates a new HTTPServer input type.
 func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	mux := http.NewServeMux()
-	server := &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
+	var mux *http.ServeMux
+	var server *http.Server
+
+	if len(conf.HTTPServer.Address) > 0 {
+		mux = http.NewServeMux()
+		server = &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
+	} else {
+		mux = http.DefaultServeMux
+	}
 
 	h := HTTPServer{
 		running:    1,
@@ -217,30 +226,34 @@ func (h *HTTPServer) loop() {
 	defer func() {
 		atomic.StoreInt32(&h.running, 0)
 
-		h.server.Shutdown(context.Background())
+		if h.server != nil {
+			h.server.Shutdown(context.Background())
+		}
 
 		close(h.messages)
 		close(h.closedChan)
 	}()
 
-	h.log.Infof(
-		"Receiving HTTP Post messages at: %s\n",
-		h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
-	)
+	if h.server != nil {
+		h.log.Infof(
+			"Receiving HTTP Post messages at: %s\n",
+			h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
+		)
 
-	go func() {
-		if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
-			if err := h.server.ListenAndServeTLS(
-				h.conf.HTTPServer.CertFile, h.conf.HTTPServer.KeyFile,
-			); err != http.ErrServerClosed {
-				h.log.Errorf("Server error: %v\n", err)
+		go func() {
+			if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
+				if err := h.server.ListenAndServeTLS(
+					h.conf.HTTPServer.CertFile, h.conf.HTTPServer.KeyFile,
+				); err != http.ErrServerClosed {
+					h.log.Errorf("Server error: %v\n", err)
+				}
+			} else {
+				if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
+					h.log.Errorf("Server error: %v\n", err)
+				}
 			}
-		} else {
-			if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
-				h.log.Errorf("Server error: %v\n", err)
-			}
-		}
-	}()
+		}()
+	}
 
 	<-h.closeChan
 }

@@ -54,7 +54,3 @@ output:
     path: /output/smoke-output.txt
 logger:
   log_level: INFO
-metrics:
-  type: http_server
-  http_server:
-    address: localhost:4041

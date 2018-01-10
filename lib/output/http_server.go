@@ -41,9 +41,16 @@ func init() {
 	constructors["http_server"] = typeSpec{
 		constructor: NewHTTPServer,
 		description: `
-Sets up an HTTP server that will return messages over HTTP GET requests. HTTP
+Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
 2.0 is supported when using TLS, which is enabled when key and cert files are
-specified.`,
+specified.
+
+You can leave the 'address' config field blank in order to use the default
+service, but this will ignore TLS options.
+
+You can receive a single, discrete message on the configured 'path' endpoint, or
+receive a constant stream of line delimited messages on the configured
+'stream_path' endpoint.`,
 	}
 }
 
@@ -51,21 +58,23 @@ specified.`,
 
 // HTTPServerConfig is configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
-	Address   string `json:"address" yaml:"address"`
-	Path      string `json:"path" yaml:"path"`
-	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	CertFile  string `json:"cert_file" yaml:"cert_file"`
-	KeyFile   string `json:"key_file" yaml:"key_file"`
+	Address    string `json:"address" yaml:"address"`
+	Path       string `json:"path" yaml:"path"`
+	StreamPath string `json:"stream_path" yaml:"stream_path"`
+	TimeoutMS  int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	CertFile   string `json:"cert_file" yaml:"cert_file"`
+	KeyFile    string `json:"key_file" yaml:"key_file"`
 }
 
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
-		Address:   "localhost:8081",
-		Path:      "/get",
-		TimeoutMS: 5000,
-		CertFile:  "",
-		KeyFile:   "",
+		Address:    "",
+		Path:       "/get",
+		StreamPath: "/stream",
+		TimeoutMS:  5000,
+		CertFile:   "",
+		KeyFile:    "",
 	}
 }
 
@@ -90,8 +99,15 @@ type HTTPServer struct {
 
 // NewHTTPServer creates a new HTTPServer input type.
 func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	mux := http.NewServeMux()
-	server := &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
+	var mux *http.ServeMux
+	var server *http.Server
+
+	if len(conf.HTTPServer.Address) > 0 {
+		mux = http.NewServeMux()
+		server = &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
+	} else {
+		mux = http.DefaultServeMux
+	}
 
 	h := HTTPServer{
 		running:      1,
@@ -105,7 +121,12 @@ func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		closedChan:   make(chan struct{}),
 	}
 
-	h.mux.HandleFunc(h.conf.HTTPServer.Path, h.getHandler)
+	if len(h.conf.HTTPServer.Path) > 0 {
+		h.mux.HandleFunc(h.conf.HTTPServer.Path, h.getHandler)
+	}
+	if len(h.conf.HTTPServer.StreamPath) > 0 {
+		h.mux.HandleFunc(h.conf.HTTPServer.StreamPath, h.streamHandler)
+	}
 	return &h, nil
 }
 
@@ -113,6 +134,8 @@ func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 
 func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+
+	h.stats.Incr("output.http_server.get.request.received", 1)
 
 	if atomic.LoadInt32(&h.running) != 1 {
 		http.Error(w, "Server closed", http.StatusServiceUnavailable)
@@ -138,6 +161,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 			go h.CloseAsync()
 			return
 		}
+		h.stats.Incr("output.http_server.get.count", 1)
 		h.stats.Incr("output.http_server.count", 1)
 	case <-time.After(tOutDuration - time.Since(tStart)):
 		http.Error(w, "Timed out waiting for message", http.StatusRequestTimeout)
@@ -167,6 +191,65 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 
 	h.responseChan <- types.NewSimpleResponse(nil)
 	h.stats.Incr("output.http_server.send.success", 1)
+	h.stats.Incr("output.http_server.get.send.success", 1)
+}
+
+func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	h.stats.Incr("output.http_server.stream.request.received", 1)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		h.stats.Incr("output.http_server.stream.error.cast_flusher", 1)
+		h.log.Errorln("Failed to cast response writer to flusher")
+		return
+	}
+
+	if r.Method != "GET" {
+		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
+		h.stats.Incr("output.http_server.stream.error.wrong_method", 1)
+		return
+	}
+
+	for atomic.LoadInt32(&h.running) == 1 {
+		var msg types.Message
+		var open bool
+
+		select {
+		case msg, open = <-h.messages:
+			if !open {
+				go h.CloseAsync()
+				return
+			}
+		case <-r.Context().Done():
+			h.stats.Incr("output.http_server.stream.client_closed", 1)
+			return
+		}
+		h.stats.Incr("output.http_server.count", 1)
+		h.stats.Incr("output.http_server.stream.count", 1)
+
+		var data []byte
+		if len(msg.Parts) == 1 {
+			data = msg.Parts[0]
+		} else {
+			data = append(bytes.Join(msg.Parts, []byte("\n")), byte('\n'))
+		}
+
+		_, err := w.Write(data)
+		h.responseChan <- types.NewSimpleResponse(err)
+
+		if err != nil {
+			h.stats.Incr("output.http_server.stream.error.write", 1)
+			return
+		}
+
+		w.Write([]byte("\n"))
+		flusher.Flush()
+		h.stats.Incr("output.http_server.send.success", 1)
+		h.stats.Incr("output.http_server.stream.send.success", 1)
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -178,28 +261,30 @@ func (h *HTTPServer) StartReceiving(msgs <-chan types.Message) error {
 	}
 	h.messages = msgs
 
-	go func() {
-		h.log.Infof(
-			"Serving messages through HTTP GET request at: %s\n",
-			h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
-		)
+	if h.server != nil {
+		go func() {
+			h.log.Infof(
+				"Serving messages through HTTP GET request at: %s\n",
+				h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
+			)
 
-		if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
-			if err := h.server.ListenAndServeTLS(
-				h.conf.HTTPServer.CertFile, h.conf.HTTPServer.KeyFile,
-			); err != http.ErrServerClosed {
-				h.log.Errorf("Server error: %v\n", err)
+			if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
+				if err := h.server.ListenAndServeTLS(
+					h.conf.HTTPServer.CertFile, h.conf.HTTPServer.KeyFile,
+				); err != http.ErrServerClosed {
+					h.log.Errorf("Server error: %v\n", err)
+				}
+			} else {
+				if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
+					h.log.Errorf("Server error: %v\n", err)
+				}
 			}
-		} else {
-			if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
-				h.log.Errorf("Server error: %v\n", err)
-			}
-		}
 
-		atomic.StoreInt32(&h.running, 0)
-		close(h.responseChan)
-		close(h.closedChan)
-	}()
+			atomic.StoreInt32(&h.running, 0)
+			close(h.responseChan)
+			close(h.closedChan)
+		}()
+	}
 	return nil
 }
 
@@ -211,7 +296,11 @@ func (h *HTTPServer) ResponseChan() <-chan types.Response {
 // CloseAsync shuts down the HTTPServer input and stops processing requests.
 func (h *HTTPServer) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {
-		h.server.Shutdown(context.Background())
+		if h.server != nil {
+			h.server.Shutdown(context.Background())
+		} else {
+			close(h.closedChan)
+		}
 	}
 }
 

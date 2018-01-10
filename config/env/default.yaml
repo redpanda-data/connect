@@ -15,8 +15,11 @@
 # AMQP_OUTPUT_EXCHANGE_TYPE=direct \
 # benthos -c ./default_env.yaml
 #
+http:
+  host: ${BENTHOS_HOST:0.0.0.0}
+  port: ${BENTHOS_PORT:4195}
 input:
-  type: ${BENTHOS_INPUT}
+  type: ${BENTHOS_INPUT:http_server}
   http_server:
     address: ${HTTP_SERVER_INPUT_ADDRESS}
     path: ${HTTP_SERVER_INPUT_PATH:/post}
@@ -89,12 +92,13 @@ input:
       max_part_size: ${BENTHOS_MAX_PART_SIZE:1073741824}
   - type: ${BENTHOS_INPUT_PROCESSOR:noop}
 output:
-  type: ${BENTHOS_OUTPUT}
+  type: ${BENTHOS_OUTPUT:http_server}
   http_client:
     url: ${HTTP_CLIENT_OUTPUT_URL}
   http_server:
     address: ${HTTP_SERVER_OUTPUT_ADDRESS}
-    path: ${HTTP_SERVER_OUTPUT_PATH:/post}
+    path: ${HTTP_SERVER_OUTPUT_PATH:/get}
+    stream_path: ${HTTP_SERVER_OUTPUT_STREAM_PATH:/get/stream}
   zmq4:
     urls:
     - ${ZMQ_OUTPUT_URLS}

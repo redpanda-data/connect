@@ -2,7 +2,7 @@ FROM golang:latest
 
 WORKDIR /go/src/github.com/Jeffail/benthos/
 COPY . /go/src/github.com/Jeffail/benthos/
-RUN make deps
+
 RUN CGO_ENABLED=0 GOOS=linux make
 
 FROM scratch
@@ -13,4 +13,6 @@ WORKDIR /root/
 COPY --from=0 /go/src/github.com/Jeffail/benthos/target/bin/benthos .
 COPY ./config/env/default.yaml /benthos.yaml
 
-ENTRYPOINT ["./benthos"]
+EXPOSE 4195
+
+ENTRYPOINT ["./benthos", "-c", "/benthos.yaml"]

@@ -51,7 +51,8 @@ var constructors = map[string]typeSpec{}
 // types.
 type Config struct {
 	Type    string        `json:"type" yaml:"type"`
-	HTTP    HTTPConfig    `json:"http_server" yaml:"http_server"`
+	Prefix  string        `json:"prefix" yaml:"prefix"`
+	HTTP    struct{}      `json:"http_server" yaml:"http_server"`
 	Riemann RiemannConfig `json:"riemann" yaml:"riemann"`
 	Statsd  StatsdConfig  `json:"statsd" yaml:"statsd"`
 }
@@ -59,8 +60,9 @@ type Config struct {
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:    "none",
-		HTTP:    NewHTTPConfig(),
+		Type:    "http_server",
+		Prefix:  "service",
+		HTTP:    struct{}{},
 		Riemann: NewRiemannConfig(),
 		Statsd:  NewStatsdConfig(),
 	}

@@ -51,27 +51,8 @@ var (
 
 //------------------------------------------------------------------------------
 
-// HTTPConfig contains config for the HTTP metrics type.
-type HTTPConfig struct {
-	Prefix  string `json:"stats_prefix" yaml:"stats_prefix"`
-	Address string `json:"address" yaml:"address"`
-	Path    string `json:"path" yaml:"path"`
-}
-
-// NewHTTPConfig creates an HTTPConfig struct with default values.
-func NewHTTPConfig() HTTPConfig {
-	return HTTPConfig{
-		Prefix:  "service",
-		Address: "localhost:4040",
-		Path:    "/stats",
-	}
-}
-
-//------------------------------------------------------------------------------
-
 // HTTP is an object with capability to hold internal stats as a JSON endpoint.
 type HTTP struct {
-	config      HTTPConfig
 	jsonRoot    *gabs.Container
 	json        *gabs.Container
 	flatMetrics map[string]int64
@@ -87,28 +68,20 @@ func NewHTTP(config Config) (Type, error) {
 	var pathPrefix string
 
 	jsonRoot = gabs.New()
-	if len(config.HTTP.Prefix) > 0 {
-		pathPrefix = config.HTTP.Prefix + "."
-		json, _ = jsonRoot.ObjectP(config.HTTP.Prefix)
+	if len(config.Prefix) > 0 {
+		pathPrefix = config.Prefix + "."
+		json, _ = jsonRoot.ObjectP(config.Prefix)
 	} else {
 		json = jsonRoot
 	}
 
 	t := &HTTP{
-		config:      config.HTTP,
 		jsonRoot:    jsonRoot,
 		json:        json,
 		flatMetrics: map[string]int64{},
 		pathPrefix:  pathPrefix,
 		timestamp:   time.Now(),
 	}
-
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc(config.HTTP.Path, t.JSONHandler())
-
-		http.ListenAndServe(config.HTTP.Address, mux)
-	}()
 
 	return t, nil
 }

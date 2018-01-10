@@ -33,8 +33,8 @@ import (
 //------------------------------------------------------------------------------
 
 var (
-	version        string
-	dateBuilt      string
+	Version        string
+	DateBuilt      string
 	showVersion    *bool
 	showConfigJSON *bool
 	showConfigYAML *bool
@@ -77,8 +77,8 @@ func init() {
 // Bootstrap will print the values of util.Version and util.DateBuilt. To
 // populate those values you must run go build with the following:
 //
-// -ldflags "-X github.com/Jeffail/benthos/lib/util/service.version $(VERSION) \
-//   -X github.com/Jeffail/benthos/lib/util/service.dateBuilt $(DATE)"
+// -ldflags "-X github.com/Jeffail/benthos/lib/util/service.Version $(VERSION) \
+//   -X github.com/Jeffail/benthos/lib/util/service.DateBuilt $(DATE)"
 //
 // Returns a flag indicating whether the service should continue or not.
 func Bootstrap(configPtr interface{}, defaultConfigPaths ...string) bool {
@@ -89,7 +89,7 @@ func Bootstrap(configPtr interface{}, defaultConfigPaths ...string) bool {
 
 	// If the user wants the version we print it.
 	if *showVersion {
-		fmt.Printf("Version: %v\nDate: %v\n", version, dateBuilt)
+		fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
 		return false
 	}
 

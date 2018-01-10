@@ -84,6 +84,10 @@ func (i *WithPipeline) StartReceiving(msgChan <-chan types.Message) error {
 // CloseAsync triggers a closure of this object but does not block.
 func (i *WithPipeline) CloseAsync() {
 	i.pipe.CloseAsync()
+	go func() {
+		i.pipe.WaitForClose(time.Second)
+		i.out.CloseAsync()
+	}()
 }
 
 // WaitForClose is a blocking call to wait until the object has finished closing

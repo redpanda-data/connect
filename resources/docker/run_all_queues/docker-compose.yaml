@@ -68,7 +68,7 @@ services:
       - $GOPATH/src/github.com/Jeffail/benthos/config/test/smoke_in.yaml:/benthos.yaml
     command: -c /benthos.yaml
     ports:
-      - "8080:8080"
+      - "4195:4195"
   benthos-out:
     image: jeffail/benthos
     volumes:

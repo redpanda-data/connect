@@ -21,6 +21,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	_ "net/http/pprof"
 	"runtime/pprof"
@@ -44,8 +45,15 @@ import (
 
 //------------------------------------------------------------------------------
 
-// Config - The benthos configuration struct.
+type httpConfig struct {
+	Host          string `json:"host" yaml:"host"`
+	Port          string `json:"port" yaml:"port"`
+	ReadTimeoutMS int    `json:"read_timeout_ms" yaml:"read_timeout_ms"`
+}
+
+// Config is the benthos configuration struct.
 type Config struct {
+	HTTP                 httpConfig       `json:"http"`
 	Input                input.Config     `json:"input" yaml:"input"`
 	Output               output.Config    `json:"output" yaml:"output"`
 	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
@@ -54,14 +62,22 @@ type Config struct {
 	SystemCloseTimeoutMS int              `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
 }
 
-// NewConfig - Returns a new configuration with default values.
+// NewConfig returns a new configuration with default values.
 func NewConfig() Config {
+	metricsConf := metrics.NewConfig()
+	metricsConf.Prefix = "benthos"
+
 	return Config{
+		HTTP: httpConfig{
+			Host:          "0.0.0.0",
+			Port:          "4195",
+			ReadTimeoutMS: 5000,
+		},
 		Input:                input.NewConfig(),
 		Output:               output.NewConfig(),
 		Buffer:               buffer.NewConfig(),
 		Logger:               log.NewLoggerConfig(),
-		Metrics:              metrics.NewConfig(),
+		Metrics:              metricsConf,
 		SystemCloseTimeoutMS: 20000,
 	}
 }
@@ -70,10 +86,6 @@ func NewConfig() Config {
 
 // Extra flags
 var (
-	profileAddr = flag.String(
-		"profile", "",
-		"Provide an HTTP address to host CPU and MEM profiling.",
-	)
 	printInputs = flag.Bool(
 		"list-inputs", false,
 		"Print a list of available input options, then exit",
@@ -215,35 +227,15 @@ func main() {
 
 	logger.Infoln("Launching a benthos instance, use CTRL+C to close.")
 
-	// If profiling is enabled.
-	if *profileAddr != "" {
-		go func() {
-			exampleAddr := *profileAddr
-			if (*profileAddr)[0] == ':' {
-				exampleAddr = "localhost" + exampleAddr
-			}
-			logger.Infof("Serving profiling at: %s\n", *profileAddr)
-			logger.Infof("To use the profiling tool: "+
-				"`go tool pprof http://%s/debug/pprof/(heap|profile|block|etc)`\n", exampleAddr)
-			if err := http.ListenAndServe(*profileAddr, http.DefaultServeMux); err != nil {
-				logger.Errorf("Failed to spawn HTTP server for profiling: %v\n", err)
-			}
-		}()
-	}
-
 	// Create our metrics type
 	stats, err := metrics.New(config.Metrics)
 	if err != nil {
 		logger.Errorf("Metrics error: %v\n", err)
 		return
 	}
-	if config.Metrics.Type == "http_server" {
-		logger.Infof(
-			"Serving metrics at http://%v%v\n",
-			config.Metrics.HTTP.Address, config.Metrics.HTTP.Path,
-		)
-	}
 	defer stats.Close()
+
+	registerHTTPEndpoints(config, logger, stats)
 
 	poolTiered, poolNonTiered, outputsClosedChan, err := createPipeline(config, logger, stats)
 	if err != nil {
@@ -251,9 +243,37 @@ func main() {
 		return
 	}
 
+	httpServerClosedChan := make(chan struct{})
+	httpServer := &http.Server{
+		Addr:        config.HTTP.Host + ":" + config.HTTP.Port,
+		Handler:     http.DefaultServeMux,
+		ReadTimeout: time.Millisecond * time.Duration(config.HTTP.ReadTimeoutMS),
+	}
+	go func() {
+		logger.Infof(
+			"Listening for HTTP requests at: %v\n",
+			"http://"+config.HTTP.Host+":"+config.HTTP.Port,
+		)
+		httpErr := httpServer.ListenAndServe()
+		if httpErr != nil && httpErr != http.ErrServerClosed {
+			logger.Errorf("HTTP Server error: %v\n", err)
+		}
+		close(httpServerClosedChan)
+	}()
+
 	// Defer ordered pool clean up.
 	defer func() {
 		tout := time.Millisecond * time.Duration(config.SystemCloseTimeoutMS)
+
+		go func() {
+			httpServer.Shutdown(context.Background())
+			select {
+			case <-httpServerClosedChan:
+			case <-time.After(tout / 2):
+				logger.Warnln("Service failed to close HTTP server gracefully in time.")
+			}
+		}()
+
 		if err := poolTiered.Close(tout / 2); err != nil {
 			logger.Warnln(
 				"Service failed to close using ordered tiers, you may receive a duplicate " +

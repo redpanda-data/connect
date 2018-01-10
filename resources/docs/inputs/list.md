@@ -93,9 +93,11 @@ breaks.
 
 ## `http_server`
 
-In order to receive messages over HTTP Benthos hosts a server. Messages should
-be sent as a POST request. HTTP 2.0 is supported when using TLS, which is
-enabled when key and cert files are specified.
+Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
+which is enabled when key and cert files are specified.
+
+You can leave the 'address' config field blank in order to use the default
+service, but this will ignore TLS options.
 
 ## `kafka`
 

@@ -1,7 +1,9 @@
+http:
+  host: 0.0.0.0
+  port: 4195
 input:
   type: http_server
   http_server:
-    address: 0.0.0.0:8080
     path: /post
 output:
   type: round_robin
@@ -45,7 +47,3 @@ output:
         subject: benthos_messages
 logger:
   log_level: INFO
-metrics:
-  type: http_server
-  http_server:
-    address: localhost:4040

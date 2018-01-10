@@ -1,7 +1,11 @@
+http:
+  host: 0.0.0.0
+  port: "4195"
+  read_timeout_ms: 5000
 input:
   type: stdin
   http_server:
-    address: localhost:8080
+    address: ""
     path: /post
     timeout_ms: 5000
     cert_file: ""
@@ -117,8 +121,9 @@ output:
     retries: 3
     skip_cert_verify: false
   http_server:
-    address: localhost:8081
+    address: ""
     path: /get
+    stream_path: /stream
     timeout_ms: 5000
     cert_file: ""
     key_file: ""
@@ -192,11 +197,9 @@ logger:
   add_timestamp: true
   json_format: false
 metrics:
-  type: none
-  http_server:
-    stats_prefix: service
-    address: localhost:4040
-    path: /stats
+  type: http_server
+  prefix: benthos
+  http_server: {}
   riemann:
     server: ""
     ttl: 5
@@ -204,12 +207,10 @@ metrics:
     - service
     - meter
     flush_interval: 2s
-    prefix: ""
   statsd:
     address: localhost:4040
     flush_period: 100ms
     max_packet_size: 1440
     network: udp
-    prefix: ""
 sys_exit_timeout_ms: 20000
 
