@@ -10,9 +10,7 @@ and [here][1] respectively.
 The full list of variables and their default values:
 
 ``` sh
-BENTHOS_HOST                   = 0.0.0.0
-BENTHOS_PORT                   = 4195
-
+BENTHOS_HTTP_ADDRESS           = 0.0.0.0:4195
 BENTHOS_INPUT                  =
 BENTHOS_OUTPUT                 =
 BENTHOS_LOG_LEVEL              = INFO

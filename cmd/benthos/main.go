@@ -46,8 +46,7 @@ import (
 //------------------------------------------------------------------------------
 
 type httpConfig struct {
-	Host          string `json:"host" yaml:"host"`
-	Port          string `json:"port" yaml:"port"`
+	Address       string `json:"address" yaml:"address"`
 	ReadTimeoutMS int    `json:"read_timeout_ms" yaml:"read_timeout_ms"`
 }
 
@@ -69,8 +68,7 @@ func NewConfig() Config {
 
 	return Config{
 		HTTP: httpConfig{
-			Host:          "0.0.0.0",
-			Port:          "4195",
+			Address:       "0.0.0.0:4195",
 			ReadTimeoutMS: 5000,
 		},
 		Input:                input.NewConfig(),
@@ -245,14 +243,14 @@ func main() {
 
 	httpServerClosedChan := make(chan struct{})
 	httpServer := &http.Server{
-		Addr:        config.HTTP.Host + ":" + config.HTTP.Port,
+		Addr:        config.HTTP.Address,
 		Handler:     http.DefaultServeMux,
 		ReadTimeout: time.Millisecond * time.Duration(config.HTTP.ReadTimeoutMS),
 	}
 	go func() {
 		logger.Infof(
 			"Listening for HTTP requests at: %v\n",
-			"http://"+config.HTTP.Host+":"+config.HTTP.Port,
+			"http://"+config.HTTP.Address,
 		)
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil && httpErr != http.ErrServerClosed {

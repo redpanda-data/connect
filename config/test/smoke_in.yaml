@@ -1,6 +1,5 @@
 http:
-  host: 0.0.0.0
-  port: 4195
+  address: 0.0.0.0:4195
 input:
   type: http_server
   http_server:

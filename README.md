@@ -127,7 +127,7 @@ Then use the image:
 docker run --rm \
 	-v /path/to/your/benthos.yaml:/config.yaml \
 	-v /tmp/data:/data \
-	-p 8080:8080 \
+	-p 4195:4195 \
 	benthos -c /config.yaml
 ```
 
