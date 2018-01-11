@@ -47,7 +47,7 @@ KAFKA_OUTPUT_CONSUMER_GROUP    = benthos-group
 KAFKA_OUTPUT_TOPIC             = benthos-stream
 KAFKA_OUTPUT_PARTITION         = 0
 KAFKA_OUTPUT_START_OLDEST      = true
-KAFKA_OUTPUT_ACK_REP           = true             # Used for output only
+KAFKA_OUTPUT_ACK_REP           = true
 
 AMQP_INPUT_URL                 =
 AMQP_INPUT_EXCHANGE            = benthos-exchange
@@ -62,28 +62,26 @@ AMQP_OUTPUT_QUEUE              = benthos-stream
 AMQP_OUTPUT_KEY                = benthos-key
 AMQP_OUTPUT_CONSUMER_TAG       = benthos-consumer
 
-NSQD_INPUT_TCP_ADDRESSES       =                  # Used for input only
-NSQD_INPUT_LOOKUP_ADDRESSES    =                  # Used for input only
+NSQD_INPUT_TCP_ADDRESSES       =
+NSQD_INPUT_LOOKUP_ADDRESSES    =
 NSQ_INPUT_TOPIC                = benthos-messages
 NSQ_INPUT_CHANNEL              = benthos-stream
 NSQ_INPUT_USER_AGENT           = benthos-consumer
-NSQ_OUTPUT_TCP_ADDRESS         =                  # Used for output only
+NSQ_OUTPUT_TCP_ADDRESS         =
 NSQ_OUTPUT_TOPIC               = benthos-messages
 NSQ_OUTPUT_CHANNEL             = benthos-stream
 NSQ_OUTPUT_USER_AGENT          = benthos-consumer
 
 NATS_INPUT_URLS                =
 NATS_INPUT_SUBJECT             = benthos-stream
-NATS_INPUT_CLUSTER_ID          = benthos-cluster
-NATS_INPUT_CLIENT_ID           = benthos-consumer
-NATS_INPUT_QUEUE               = benthos-queue
-NATS_INPUT_DURABLE_NAME        = benthos-offset
+NATS_INPUT_CLUSTER_ID          = benthos-cluster  # Used only for nats_stream
+NATS_INPUT_CLIENT_ID           = benthos-consumer # ^
+NATS_INPUT_QUEUE               = benthos-queue    # ^
+NATS_INPUT_DURABLE_NAME        = benthos-offset   # ^
 NATS_OUTPUT_URLS               =
 NATS_OUTPUT_SUBJECT            = benthos-stream
-NATS_OUTPUT_CLUSTER_ID         = benthos-cluster
-NATS_OUTPUT_CLIENT_ID          = benthos-consumer
-NATS_OUTPUT_QUEUE              = benthos-queue
-NATS_OUTPUT_DURABLE_NAME       = benthos-offset
+NATS_OUTPUT_CLUSTER_ID         = benthos-cluster  # Used only for nats_stream
+NATS_OUTPUT_CLIENT_ID          = benthos-consumer # ^
 
 REDIS_INPUT_URL                =
 REDIS_INPUT_CHANNEL            = benthos-stream
