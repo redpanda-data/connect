@@ -96,6 +96,15 @@ type NATSStream struct {
 
 // NewNATSStream creates a new NATSStream input type.
 func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+	if len(conf.NATSStream.ClientID) == 0 {
+		rgen := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+		// Generate random client id if one wasn't supplied.
+		b := make([]byte, 16)
+		rgen.Read(b)
+		conf.NATSStream.ClientID = fmt.Sprintf("client-%x", b)
+	}
+
 	n := NATSStream{
 		running:    1,
 		conf:       conf,
@@ -107,14 +116,6 @@ func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		closedChan: make(chan struct{}),
 	}
 	n.urls = strings.Join(conf.NATSStream.URLs, ",")
-	if len(conf.NATSStream.ClientID) == 0 {
-		rgen := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-		// Generate random client id if one wasn't supplied.
-		b := make([]byte, 16)
-		rgen.Read(b)
-		conf.NATSStream.ClientID = fmt.Sprintf("client-%x", b)
-	}
 
 	return &n, nil
 }
