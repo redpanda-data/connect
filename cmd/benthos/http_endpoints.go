@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/lib/util/service"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	yaml "gopkg.in/yaml.v2"
 )
 
 //------------------------------------------------------------------------------
@@ -55,6 +56,26 @@ func registerHTTPEndpoints(
 		w.Write(stackSlice[:s])
 	}
 
+	handlePrintJSONConfig := func(w http.ResponseWriter, r *http.Request) {
+		resBytes, err := json.Marshal(conf)
+		if err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.Write(resBytes)
+	}
+
+	handlePrintYAMLConfig := func(w http.ResponseWriter, r *http.Request) {
+		resBytes, err := yaml.Marshal(conf)
+		if err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.Write(resBytes)
+	}
+
+	registerEndpoint("/config/json", handlePrintJSONConfig)
+	registerEndpoint("/config/yaml", handlePrintYAMLConfig)
 	registerEndpoint("/stack", handleStackTrace)
 	registerEndpoint("/ping", handlePing)
 	registerEndpoint("/version", handleVersion)
