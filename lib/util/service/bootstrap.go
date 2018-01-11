@@ -32,9 +32,13 @@ import (
 
 //------------------------------------------------------------------------------
 
+// Service wide build stamps.
 var (
-	Version        string
-	DateBuilt      string
+	Version   string
+	DateBuilt string
+)
+
+var (
 	showVersion    *bool
 	showConfigJSON *bool
 	showConfigYAML *bool
