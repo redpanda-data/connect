@@ -51,6 +51,7 @@ type Config struct {
 	BlobToMulti struct{}          `json:"blob_to_multi" yaml:"blob_to_multi"`
 	MultiToBlob struct{}          `json:"multi_to_blob" yaml:"multi_to_blob"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
+	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	Combine     CombineConfig     `json:"combine" yaml:"combine"`
 }
 
@@ -63,6 +64,7 @@ func NewConfig() Config {
 		BlobToMulti: struct{}{},
 		MultiToBlob: struct{}{},
 		Sample:      NewSampleConfig(),
+		HashSample:  NewHashSampleConfig(),
 		Combine:     NewCombineConfig(),
 	}
 }
