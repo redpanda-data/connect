@@ -38,8 +38,8 @@ func TestHashSample(t *testing.T) {
 	tt := []struct {
 		name     string
 		input    []byte
-		min float64
-		max float64
+		min      float64
+		max      float64
 		expected []byte
 	}{
 		{"100% sample", doc1, 0.0, 101.0, doc1},
@@ -82,7 +82,7 @@ func TestHashSample(t *testing.T) {
 			conf := NewConfig()
 			conf.HashSample.RetainMin = tc.min
 			conf.HashSample.RetainMax = tc.max
-			conf.HashSample.Parts     = []int{0}
+			conf.HashSample.Parts = []int{0}
 
 			testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 			proc, err := NewHashSample(conf, testLog, metrics.DudType{})
@@ -114,3 +114,27 @@ func TestHashSample(t *testing.T) {
 	}
 }
 
+func TestHashSampleBoundsCheck(t *testing.T) {
+	conf := NewConfig()
+	conf.HashSample.Parts = []int{5}
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	proc, err := NewHashSample(conf, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgIn := types.Message{Parts: [][]byte{}}
+	msgOut, res, propagate := proc.ProcessMessage(&msgIn)
+	if propagate {
+		t.Error("OOB message told to propagate")
+	}
+
+	if msgOut != nil {
+		t.Error("Non-nil message returned")
+	}
+
+	if exp, act := types.NewSimpleResponse(nil), res; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong response returned: %v != %v", act, exp)
+	}
+}

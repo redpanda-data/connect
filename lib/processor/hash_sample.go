@@ -22,6 +22,7 @@ package processor
 
 import (
 	"math"
+
 	"github.com/OneOfOne/xxhash"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -29,34 +30,41 @@ import (
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
-// hashSamplingNorm is the constant factor to  normalise a uint64 into the (0.0, 100.0) range
-const hashSamplingNorm = 100.0 / float64(math.MaxUint64)
-
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["hashsample"] = typeSpec{
+	constructors["hash_sample"] = typeSpec{
 		constructor: NewHashSample,
 		description: `
-Passes on a percentage of messages, deterministically by hashing the message and 
+Passes on a percentage of messages, deterministically by hashing the message and
 checking the hash against a valid range, and drops all others.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// SampleConfig contains any configuration for the Sample processor.
+// hashSamplingNorm is the constant factor to normalise a uint64 into the
+// (0.0, 100.0) range.
+const hashSamplingNorm = 100.0 / float64(math.MaxUint64)
+
+func scaleNum(n uint64) float64 {
+	return float64(n) * hashSamplingNorm
+}
+
+//------------------------------------------------------------------------------
+
+// HashSampleConfig contains any configuration for the HashSample processor.
 type HashSampleConfig struct {
-	RetainMin float64 `json:"retain_min"`
-	RetainMax float64 `json:"retain_max"`
-	Parts []int       `json:"parts" yaml:"parts"` // message parts to hash
+	RetainMin float64 `json:"retain_min" yaml:"retain_min"`
+	RetainMax float64 `json:"retain_max" yaml:"retain_max"`
+	Parts     []int   `json:"parts" yaml:"parts"` // message parts to hash
 }
 
 // NewHashSampleConfig returns a HashSampleConfig with default values.
 func NewHashSampleConfig() HashSampleConfig {
 	return HashSampleConfig{
 		RetainMin: 0.0,
-		RetainMax: 0.1, // retain the first [0, 10%) interval
+		RetainMax: 0.1,      // retain the first [0, 10%) interval
 		Parts:     []int{0}, // only consider the 1st part
 	}
 }
@@ -75,7 +83,7 @@ type HashSample struct {
 func NewHashSample(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &HashSample{
 		conf:  conf,
-		log:   log.NewModule(".processor.hashsample"),
+		log:   log.NewModule(".processor.hash_sample"),
 		stats: stats,
 	}, nil
 }
@@ -84,7 +92,7 @@ func NewHashSample(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 
 // ProcessMessage checks each message against a set of bounds.
 func (s *HashSample) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
-	s.stats.Incr("processor.hashsample.count", 1)
+	s.stats.Incr("processor.hash_sample.count", 1)
 
 	hash := xxhash.New64()
 
@@ -92,36 +100,26 @@ func (s *HashSample) ProcessMessage(msg *types.Message) (*types.Message, types.R
 	for _, index := range s.conf.HashSample.Parts {
 		// check boundary of parts first
 		if index >= lParts {
-			s.stats.Incr("processor.hashsample.dropped_part_out_of_bounds", 1)
-			s.stats.Incr("processor.hashsample.dropped", 1)
+			s.stats.Incr("processor.hash_sample.dropped_part_out_of_bounds", 1)
+			s.stats.Incr("processor.hash_sample.dropped", 1)
 			s.log.Errorf("Cannot sample message due to parts count: %v != 1\n", lParts)
 			return nil, types.NewSimpleResponse(nil), false
 		}
 		_, err := hash.Write(msg.Parts[index])
 		if nil != err {
-			s.stats.Incr("processor.hashsample.hashing_error", 1)
+			s.stats.Incr("processor.hash_sample.hashing_error", 1)
 			s.log.Errorf("Cannot hash message part for sampling: %v\n", err)
 			return nil, types.NewSimpleResponse(nil), false
 		}
 	}
 
-	rate := s.scaleNum(hash.Sum64())
+	rate := scaleNum(hash.Sum64())
 	if rate >= s.conf.HashSample.RetainMin && rate < s.conf.HashSample.RetainMax {
 		return msg, nil, true
 	}
 
-	s.stats.Incr("processor.hashsample.dropped", 1)
+	s.stats.Incr("processor.hash_sample.dropped", 1)
 	return nil, types.NewSimpleResponse(nil), false
 }
 
 //------------------------------------------------------------------------------
-
-func (s HashSample) scaleNum(n uint64) float64 {
-	//return s.scaleRange(n, 0.0, float64(math.MaxUint64), 0.0, 100.0)
-	return float64(n) * hashSamplingNorm
-}
-
-func (s HashSample) scaleRange(in, oldMin, oldMax, newMin, newMax float64) float64 {
-	return (in / ((oldMax - oldMin) / (newMax - newMin))) + newMin;
-	//      in / (math.MaxUint64 / 100.0)
-}

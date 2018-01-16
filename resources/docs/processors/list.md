@@ -30,6 +30,11 @@ messages into Kafka by splitting the parts. We could now consume our N*M
 messages from Kafka and squash them back into M part messages with the combine
 processor, and then subsequently push them into something like ZMQ.
 
+## `hash_sample`
+
+Passes on a percentage of messages, deterministically by hashing the message and
+checking the hash against a valid range, and drops all others.
+
 ## `multi_to_blob`
 
 If an input supports multiple part messages but your output does not you will
@@ -51,11 +56,6 @@ unchanged.
 
 Passes on a percentage of messages, either randomly or sequentially, and drops
 all others.
-
-## `hashsample`
-
-Passes on a percentage of messages, deterministically by hashing the message and
-checking the hash against a valid range, and drops all others.
 
 ## `select_parts`
 

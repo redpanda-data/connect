@@ -102,6 +102,11 @@ input:
     sample:
       retain: 0.1
       randomseed: 0
+    hash_sample:
+      retain_min: 0
+      retain_max: 0.1
+      parts:
+      - 0
     combine:
       parts: 2
 output:

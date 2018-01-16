@@ -8,6 +8,12 @@
   version = "1.0"
 
 [[projects]]
+  name = "github.com/OneOfOne/xxhash"
+  packages = ["."]
+  revision = "4e9e81466dc37c9fd94ce9ecf42020ef54112203"
+  version = "v1.2.1"
+
+[[projects]]
   name = "github.com/Shopify/sarama"
   packages = ["."]
   revision = "3b1b38866a79f06deddf0487d5c27ba0697ccd65"
@@ -160,6 +166,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "be8cd25633633978a65dbd5caee256a45b835654148a96dfb2af43d35d6198ef"
+  inputs-digest = "11571fed0df3a71c08ec70b38ef0884334e9fa0845116b1bef53d1b9470e988a"
   solver-name = "gps-cdcl"
   solver-version = 1
