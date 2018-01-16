@@ -52,6 +52,11 @@ unchanged.
 Passes on a percentage of messages, either randomly or sequentially, and drops
 all others.
 
+## `hashsample`
+
+Passes on a percentage of messages, deterministically by hashing the message and
+checking the hash against a valid range, and drops all others.
+
 ## `select_parts`
 
 Cherry pick a set of parts from messages by their index. Indexes larger than the
