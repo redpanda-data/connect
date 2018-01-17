@@ -239,3 +239,55 @@ func TestOutBrokerConfigDittoMulti(t *testing.T) {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 }
+
+func TestOutBrokerConfigDittoZeroed(t *testing.T) {
+	testConf := []byte(`{
+		"type": "fan_out",
+		"fan_out": {
+			"outputs": [
+				{
+					"type": "http_client",
+					"http_client": {
+						"url": "address:1",
+						"timeout_ms": 1
+					}
+				},
+				{
+					"type": "ditto_0",
+					"http_client": {
+						"timeout_ms": 2
+					}
+				}
+			]
+		}
+	}`)
+
+	conf := NewConfig()
+	if err := json.Unmarshal(testConf, &conf); err != nil {
+		t.Error(err)
+		return
+	}
+
+	outputConfs, err := parseOutputConfsWithDefaults(conf.FanOut.Outputs)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if exp, actual := 1, len(outputConfs); exp != actual {
+		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)
+		return
+	}
+
+	if exp, actual := "http_client", outputConfs[0].Type; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+
+	if exp, actual := "address:1", outputConfs[0].HTTPClient.URL; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+
+	if exp, actual := int64(1), outputConfs[0].HTTPClient.TimeoutMS; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+}

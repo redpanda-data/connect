@@ -51,15 +51,24 @@ func parseOutputConfsWithDefaults(outConfs []interface{}) ([]Config, error) {
 			// If the type of this output is 'ditto' we want to start with a
 			// duplicate of the previous config.
 			newConfsFromDitto := func(label string) error {
-				newConfs[0] = outputConfs[i-1]
+				// Remove the vanilla config.
+				newConfs = []Config{}
+
 				if len(label) > 5 && label[5] == '_' {
+					if label[6:] == "0" {
+						// This is a special case where we are expressing that
+						// we want to end up with zero duplicates.
+						return nil
+					}
 					n, err := strconv.Atoi(label[6:])
 					if err != nil {
 						return fmt.Errorf("failed to parse ditto multiplier: %v", err)
 					}
-					for j := 1; j < n; j++ {
+					for j := 0; j < n; j++ {
 						newConfs = append(newConfs, outputConfs[i-1])
 					}
+				} else {
+					newConfs = append(newConfs, outputConfs[i-1])
 				}
 				return nil
 			}
@@ -69,14 +78,18 @@ func parseOutputConfsWithDefaults(outConfs []interface{}) ([]Config, error) {
 					if err := newConfsFromDitto(t); err != nil {
 						return nil, err
 					}
-					unboxed["type"] = newConfs[0].Type
+					if len(newConfs) > 0 {
+						unboxed["type"] = newConfs[0].Type
+					}
 				}
 			case map[interface{}]interface{}:
 				if t, ok := unboxed["type"].(string); ok && strings.Index(t, "ditto") == 0 {
 					if err := newConfsFromDitto(t); err != nil {
 						return nil, err
 					}
-					unboxed["type"] = newConfs[0].Type
+					if len(newConfs) > 0 {
+						unboxed["type"] = newConfs[0].Type
+					}
 				}
 			}
 		}

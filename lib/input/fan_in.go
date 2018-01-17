@@ -116,7 +116,9 @@ inputs:
   type: ditto_3
 ` + "```" + `
 
-Which results in a total of four kafka_balanced inputs.`,
+Which results in a total of four kafka_balanced inputs. Note that ditto_0 will
+result in no duplicate configs, this might be useful if the config is generated
+and there's a chance you won't want any duplicates.`,
 	}
 }
 
@@ -159,15 +161,26 @@ func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
 			// If the type of this output is 'ditto' we want to start with a
 			// duplicate of the previous config.
 			newConfsFromDitto := func(label string) error {
-				newConfs[0] = inputConfs[i-1]
+				// Remove the vanilla config.
+				newConfs = []Config{}
+
+				// Check if there is a ditto multiplier.
 				if len(label) > 5 && label[5] == '_' {
+					if label[6:] == "0" {
+						// This is a special case where we are expressing that
+						// we want to end up with zero duplicates.
+						return nil
+					}
 					n, err := strconv.Atoi(label[6:])
 					if err != nil {
 						return fmt.Errorf("failed to parse ditto multiplier: %v", err)
 					}
-					for j := 1; j < n; j++ {
+					for j := 0; j < n; j++ {
 						newConfs = append(newConfs, inputConfs[i-1])
 					}
+				} else {
+					// Otherwise just add a single dupe of the previous config.
+					newConfs = append(newConfs, inputConfs[i-1])
 				}
 				return nil
 			}
@@ -177,14 +190,18 @@ func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
 					if err := newConfsFromDitto(t); err != nil {
 						return nil, err
 					}
-					unboxed["type"] = newConfs[0].Type
+					if len(newConfs) > 0 {
+						unboxed["type"] = newConfs[0].Type
+					}
 				}
 			case map[interface{}]interface{}:
 				if t, ok := unboxed["type"].(string); ok && strings.Index(t, "ditto") == 0 {
 					if err := newConfsFromDitto(t); err != nil {
 						return nil, err
 					}
-					unboxed["type"] = newConfs[0].Type
+					if len(newConfs) > 0 {
+						unboxed["type"] = newConfs[0].Type
+					}
 				}
 			}
 		}
