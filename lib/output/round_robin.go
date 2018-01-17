@@ -80,6 +80,12 @@ func NewRoundRobin(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		return nil, err
 	}
 
+	if len(outputConfs) == 0 {
+		return nil, ErrFanOutNoOutputs
+	} else if len(outputConfs) == 1 {
+		return New(outputConfs[0], log, stats)
+	}
+
 	outputs := make([]types.Consumer, len(outputConfs))
 
 	for i, oConf := range outputConfs {

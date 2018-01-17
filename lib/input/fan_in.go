@@ -238,6 +238,12 @@ func NewFanIn(
 		return nil, err
 	}
 
+	if len(inputConfs) == 0 {
+		return nil, ErrFanInNoInputs
+	} else if len(inputConfs) == 1 {
+		return New(inputConfs[0], log, stats, pipelines...)
+	}
+
 	inputs := make([]types.Producer, len(inputConfs))
 
 	for i, iConf := range inputConfs {
