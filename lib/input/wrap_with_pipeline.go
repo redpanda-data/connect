@@ -55,14 +55,19 @@ func WrapWithPipeline(in Type, pipeConstructor pipeline.ConstructorFunc) (*WithP
 }
 
 // WrapWithPipelines wraps an input with a variadic number of pipelines.
-func WrapWithPipelines(in Type, pipeConstructors ...pipeline.ConstructorFunc) (Type, error) {
+func WrapWithPipelines(in Type, pipeConstructors ...pipeline.ConstructorFunc) (*WithPipeline, error) {
 	var err error
-	for _, ctor := range pipeConstructors {
-		if in, err = WrapWithPipeline(in, ctor); err != nil {
+	var pipe *WithPipeline
+	for i, ctor := range pipeConstructors {
+		if i == 0 {
+			if pipe, err = WrapWithPipeline(in, ctor); err != nil {
+				return nil, err
+			}
+		} else if pipe, err = WrapWithPipeline(pipe, ctor); err != nil {
 			return nil, err
 		}
 	}
-	return in, nil
+	return pipe, nil
 }
 
 //------------------------------------------------------------------------------
