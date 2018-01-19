@@ -67,6 +67,7 @@ docker run --rm \
 	-e "BENTHOS_OUTPUT=kafka" \
 	-e "KAFKA_OUTPUT_BROKER_ADDRESSES=kafka-server:9092" \
 	-e "KAFKA_OUTPUT_TOPIC=benthos_topic" \
+	-p 4195:4195 \
 	jeffail/benthos
 
 # Or, using your own config file:
