@@ -58,6 +58,21 @@ Or, [download from here.](https://github.com/Jeffail/benthos/releases)
 benthos -c ./config.yaml
 ```
 
+Or, with docker:
+
+``` shell
+# Send HTTP /POST data to Kafka:
+docker run --rm \
+	-e "BENTHOS_INPUT=HTTP_SERVER"
+	-e "BENTHOS_OUTPUT=kafka"
+    -e "KAFKA_OUTPUT_BROKER_ADDRESSES=kafka-server:9092"
+	-e "KAFKA_OUTPUT_TOPIC=benthos_topic"
+	jeffail/benthos
+
+# Or, using your own config file:
+docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
+```
+
 ## Config
 
 Benthos has inputs, optional processors, an optional buffer, and outputs, which
