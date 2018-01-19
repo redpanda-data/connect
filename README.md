@@ -63,10 +63,10 @@ Or, with docker:
 ``` shell
 # Send HTTP /POST data to Kafka:
 docker run --rm \
-	-e "BENTHOS_INPUT=HTTP_SERVER"
-	-e "BENTHOS_OUTPUT=kafka"
-    -e "KAFKA_OUTPUT_BROKER_ADDRESSES=kafka-server:9092"
-	-e "KAFKA_OUTPUT_TOPIC=benthos_topic"
+	-e "BENTHOS_INPUT=HTTP_SERVER" \
+	-e "BENTHOS_OUTPUT=kafka" \
+	-e "KAFKA_OUTPUT_BROKER_ADDRESSES=kafka-server:9092" \
+	-e "KAFKA_OUTPUT_TOPIC=benthos_topic" \
 	jeffail/benthos
 
 # Or, using your own config file:
