@@ -23,4 +23,4 @@ services:
       KAFKA_CREATE_TOPICS: "benthos_topic:1:1"
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
     volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock

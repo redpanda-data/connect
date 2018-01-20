@@ -47,7 +47,13 @@ ways, for more guidance [check out this doc.][5]
 Build with Go:
 
 ``` shell
-go get github.com/Jeffail/benthos/cmd/...
+go get github.com/Jeffail/benthos/cmd/benthos
+```
+
+Or, pull the docker image:
+
+``` shell
+docker pull jeffail/benthos
 ```
 
 Or, [download from here.](https://github.com/Jeffail/benthos/releases)
@@ -70,7 +76,7 @@ docker run --rm \
 	-p 4195:4195 \
 	jeffail/benthos
 
-# Or, using your own config file:
+# Using your own config file:
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 ```
 

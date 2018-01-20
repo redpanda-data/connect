@@ -80,7 +80,9 @@ inputs:
   type: ditto_3
 ```
 
-Which results in a total of four kafka_balanced inputs.
+Which results in a total of four kafka_balanced inputs. Note that ditto_0 will
+result in no duplicate configs, this might be useful if the config is generated
+and there's a chance you won't want any duplicates.
 
 ## `file`
 
