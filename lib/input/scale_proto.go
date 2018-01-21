@@ -235,9 +235,11 @@ func (s *ScaleProto) loop() {
 		if data == nil {
 			var err error
 			data, err = s.socket.Recv()
-			if err != nil && err != mangos.ErrRecvTimeout {
-				s.log.Errorf("ScaleProto Socket recv error: %v\n", err)
-				s.stats.Incr("input.scale_proto.socket.recv.error", 1)
+			if err != nil {
+				if err != mangos.ErrRecvTimeout {
+					s.log.Errorf("ScaleProto Socket recv error: %v\n", err)
+					s.stats.Incr("input.scale_proto.socket.recv.error", 1)
+				}
 			} else {
 				s.stats.Incr("input.scale_proto.count", 1)
 			}

@@ -26,6 +26,12 @@
   revision = "1ccc43bfb9c93cb401a4025e49c64ba71e5e668b"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/beorn7/perks"
+  packages = ["quantile"]
+  revision = "4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9"
+
+[[projects]]
   name = "github.com/bsm/sarama-cluster"
   packages = ["."]
   revision = "24016d206c730276dfb58f802999066f2f4bfeaa"
@@ -92,6 +98,12 @@
   revision = "553a641470496b2327abcac10b36396bd98e45c9"
 
 [[projects]]
+  name = "github.com/matttproud/golang_protobuf_extensions"
+  packages = ["pbutil"]
+  revision = "3247c84500bff8d9fb6d579d800f20b3e091582c"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/nats-io/go-nats"
   packages = [".","encoders/builtin","util"]
   revision = "d66cb54e6b7bdd93f0b28afc8450d84c780dfb68"
@@ -134,6 +146,30 @@
   version = "v0.1.1"
 
 [[projects]]
+  name = "github.com/prometheus/client_golang"
+  packages = ["prometheus","prometheus/promhttp"]
+  revision = "c5b7fccd204277076155f10851dad72b76a49317"
+  version = "v0.8.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/prometheus/client_model"
+  packages = ["go"]
+  revision = "99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/prometheus/common"
+  packages = ["expfmt","internal/bitbucket.org/ww/goautoneg","model"]
+  revision = "89604d197083d4781071d3c65855d24ecfb0a563"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/prometheus/procfs"
+  packages = [".","xfs"]
+  revision = "b15cd069a83443be3154b719d0cc9fe8117f09fb"
+
+[[projects]]
   branch = "master"
   name = "github.com/rcrowley/go-metrics"
   packages = ["."]
@@ -166,6 +202,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "11571fed0df3a71c08ec70b38ef0884334e9fa0845116b1bef53d1b9470e988a"
+  inputs-digest = "e81a87cab160ed2dfd6bc298e8cccf6dd033cc0de09e71fda4ddc8d2abf2c6b1"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -204,6 +204,7 @@ metrics:
   type: http_server
   prefix: benthos
   http_server: {}
+  prometheus: {}
   riemann:
     server: ""
     ttl: 5

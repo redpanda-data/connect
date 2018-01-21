@@ -20,6 +20,8 @@
 
 package metrics
 
+import "net/http"
+
 // Type is an interface for metrics aggregation.
 type Type interface {
 	// Incr increments a metric by an amount.
@@ -36,4 +38,11 @@ type Type interface {
 
 	// Close stops aggregating stats and clean up resources.
 	Close() error
+}
+
+// WithHandlerFunc is an interface for metrics types that can expose their
+// metrics through an HTTP HandlerFunc endpoint. If a Type can be cast into
+// WithHandlerFunc then you should register its endpoint to the an HTTP server.
+type WithHandlerFunc interface {
+	HandlerFunc() http.HandlerFunc
 }

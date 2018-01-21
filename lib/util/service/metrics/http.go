@@ -88,8 +88,8 @@ func NewHTTP(config Config) (Type, error) {
 
 //------------------------------------------------------------------------------
 
-// JSONHandler returns a handler for accessing metrics as a JSON blob.
-func (h *HTTP) JSONHandler() http.HandlerFunc {
+// HandlerFunc returns an http.HandlerFunc for accessing metrics as a JSON blob.
+func (h *HTTP) HandlerFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		uptime := time.Since(h.timestamp).String()
 		goroutines := runtime.NumGoroutine()

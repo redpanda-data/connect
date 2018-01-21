@@ -143,3 +143,9 @@ output:
 logger:
   prefix: benthos
   log_level: ${BENTHOS_LOG_LEVEL:INFO}
+metrics:
+  type: ${METRICS_TYPE:http_server}
+  prefix: benthos
+  statsd:
+    address: ${STATSD_ADDRESS:localhost:9125}
+    network: ${STATSD_NETWORK:udp}

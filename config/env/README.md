@@ -15,6 +15,10 @@ BENTHOS_INPUT                  =
 BENTHOS_OUTPUT                 =
 BENTHOS_LOG_LEVEL              = INFO
 
+METRICS_TYPE                   = http_server
+STATSD_ADDRESS                 = localhost:9125
+STATSD_NETWORK                 = udp
+
 BENTHOS_MAX_PARTS              = 100
 BENTHOS_MIN_PARTS              = 1
 BENTHOS_MAX_PART_SIZE          = 1073741824
@@ -32,8 +36,8 @@ SCALE_PROTO_INPUT_URLS         =
 SCALE_PROTO_INPUT_BIND         = true
 SCALE_PROTO_INPUT_SOCKET       = PULL
 SCALE_PROTO_OUTPUT_URLS        =
-SCALE_PROTO_OUTPUT_BIND        = true
-SCALE_PROTO_OUTPUT_SOCKET      = PULL
+SCALE_PROTO_OUTPUT_BIND        = false
+SCALE_PROTO_OUTPUT_SOCKET      = PUSH
 
 KAFKA_INPUT_BROKER_ADDRESSES   =
 KAFKA_INPUT_CLIENT_ID          = benthos-client

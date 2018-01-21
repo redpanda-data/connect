@@ -50,21 +50,23 @@ var constructors = map[string]typeSpec{}
 // Config is the all encompassing configuration struct for all metric output
 // types.
 type Config struct {
-	Type    string        `json:"type" yaml:"type"`
-	Prefix  string        `json:"prefix" yaml:"prefix"`
-	HTTP    struct{}      `json:"http_server" yaml:"http_server"`
-	Riemann RiemannConfig `json:"riemann" yaml:"riemann"`
-	Statsd  StatsdConfig  `json:"statsd" yaml:"statsd"`
+	Type       string        `json:"type" yaml:"type"`
+	Prefix     string        `json:"prefix" yaml:"prefix"`
+	HTTP       struct{}      `json:"http_server" yaml:"http_server"`
+	Prometheus struct{}      `json:"prometheus" yaml:"prometheus"`
+	Riemann    RiemannConfig `json:"riemann" yaml:"riemann"`
+	Statsd     StatsdConfig  `json:"statsd" yaml:"statsd"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:    "http_server",
-		Prefix:  "service",
-		HTTP:    struct{}{},
-		Riemann: NewRiemannConfig(),
-		Statsd:  NewStatsdConfig(),
+		Type:       "http_server",
+		Prefix:     "service",
+		HTTP:       struct{}{},
+		Prometheus: struct{}{},
+		Riemann:    NewRiemannConfig(),
+		Statsd:     NewStatsdConfig(),
 	}
 }
 

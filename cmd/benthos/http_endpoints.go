@@ -82,10 +82,9 @@ func registerHTTPEndpoints(
 	registerEndpoint("/endpoints", handleEndpoints)
 
 	// If we want to expose a JSON stats endpoint we register the endpoints.
-	if conf.Metrics.Type == "http_server" {
-		if httpStats, ok := stats.(*metrics.HTTP); ok {
-			registerEndpoint("/stats", httpStats.JSONHandler())
-		}
+	if wHandlerFunc, ok := stats.(metrics.WithHandlerFunc); ok {
+		registerEndpoint("/stats", wHandlerFunc.HandlerFunc())
+		registerEndpoint("/metrics", wHandlerFunc.HandlerFunc())
 	}
 }
 
