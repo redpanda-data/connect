@@ -230,9 +230,12 @@ func (h *HTTPServer) loop() {
 			h.server.Shutdown(context.Background())
 		}
 
+		h.stats.Decr("input.http_server.running", 1)
+
 		close(h.messages)
 		close(h.closedChan)
 	}()
+	h.stats.Incr("input.http_server.running", 1)
 
 	if h.server != nil {
 		h.log.Infof(

@@ -149,10 +149,12 @@ func createRequest(
 func (h *HTTPClient) loop() {
 	defer func() {
 		atomic.StoreInt32(&h.running, 0)
+		h.stats.Decr("output.http_client.running", 1)
 
 		close(h.responseChan)
 		close(h.closedChan)
 	}()
+	h.stats.Incr("output.http_client.running", 1)
 
 	h.log.Infof("Sending HTTP Post messages to: %s\n", h.conf.HTTPClient.URL)
 

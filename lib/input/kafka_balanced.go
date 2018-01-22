@@ -187,11 +187,13 @@ func (k *KafkaBalanced) loop() {
 		if atomic.CompareAndSwapInt32(&k.running, 1, 0) {
 			k.closeClients()
 		}
+		k.stats.Decr("input.kafka_balanced.running", 1)
 
 		k.drainConsumer()
 		close(k.messages)
 		close(k.closedChan)
 	}()
+	k.stats.Incr("input.kafka_balanced.running", 1)
 
 	for {
 		if err := k.connect(); err != nil {

@@ -168,9 +168,11 @@ func getZMQType(t string) (zmq4.Type, error) {
 func (z *ZMQ4) loop() {
 	defer func() {
 		atomic.StoreInt32(&z.running, 0)
+		z.stats.Decr("input.zmq4.running", 1)
 		close(z.messages)
 		close(z.closedChan)
 	}()
+	z.stats.Incr("input.zmq4.running", 1)
 
 	pollTimeout := time.Millisecond * time.Duration(z.conf.ZMQ4.PollTimeoutMS)
 	poller := zmq4.NewPoller()

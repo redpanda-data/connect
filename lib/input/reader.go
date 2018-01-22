@@ -159,9 +159,11 @@ func (s *reader) readLoop() {
 func (s *reader) loop() {
 	defer func() {
 		atomic.StoreInt32(&s.running, 0)
+		s.stats.Decr("input.reader.running", 1)
 		close(s.messages)
 		close(s.closedChan)
 	}()
+	s.stats.Incr("input.reader.running", 1)
 
 	var data [][]byte
 	var open bool

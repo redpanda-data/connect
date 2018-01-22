@@ -147,10 +147,12 @@ func (r *RedisPubSub) loop() {
 		if err := r.disconnect(); err != nil {
 			r.log.Errorf("Failed to disconnect redis client: %v\n", err)
 		}
+		r.stats.Decr("input.redis_pubsub.running", 1)
 
 		close(r.messages)
 		close(r.closedChan)
 	}()
+	r.stats.Incr("input.redis_pubsub.running", 1)
 
 	for {
 		if err := r.connect(); err != nil {

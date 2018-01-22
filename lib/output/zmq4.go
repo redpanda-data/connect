@@ -156,10 +156,12 @@ func (z *ZMQ4) loop() {
 		z.socket.Close()
 
 		atomic.StoreInt32(&z.running, 0)
+		z.stats.Decr("output.zmq4.running", 1)
 
 		close(z.responseChan)
 		close(z.closedChan)
 	}()
+	z.stats.Incr("output.zmq4.running", 1)
 
 	if z.conf.ZMQ4.Bind {
 		z.log.Infof("Sending ZMQ4 messages to bound URLs: %s\n", z.urls)

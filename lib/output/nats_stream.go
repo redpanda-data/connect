@@ -129,10 +129,12 @@ func (n *NATSStream) loop() {
 		atomic.StoreInt32(&n.running, 0)
 
 		n.natsConn.Close()
+		n.stats.Decr("output.nats_stream.running", 1)
 
 		close(n.responseChan)
 		close(n.closedChan)
 	}()
+	n.stats.Incr("output.nats_stream.running", 1)
 
 	for {
 		if err := n.connect(); err != nil {

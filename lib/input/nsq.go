@@ -181,10 +181,13 @@ func (n *NSQ) loop() {
 
 		atomic.StoreInt32(&n.running, 0)
 		n.disconnect()
+		n.stats.Decr("input.nsq.running", 1)
 
 		close(n.messages)
 		close(n.closedChan)
 	}()
+
+	n.stats.Incr("input.nsq.running", 1)
 
 	for {
 		if err := n.connect(); err != nil {

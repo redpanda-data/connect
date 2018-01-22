@@ -156,10 +156,12 @@ func (a *AMQP) loop() {
 		atomic.StoreInt32(&a.running, 0)
 
 		a.disconnect()
+		a.stats.Decr("output.amqp.running", 1)
 
 		close(a.responseChan)
 		close(a.closedChan)
 	}()
+	a.stats.Incr("output.amqp.running", 1)
 
 	for {
 		if err := a.connect(); err != nil {

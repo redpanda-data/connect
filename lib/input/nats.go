@@ -134,10 +134,12 @@ func (n *NATS) loop() {
 		atomic.StoreInt32(&n.running, 0)
 
 		n.disconnect()
+		n.stats.Decr("input.nats.running", 1)
 
 		close(n.messages)
 		close(n.closedChan)
 	}()
+	n.stats.Incr("input.nats.running", 1)
 
 	for {
 		if err := n.connect(); err != nil {

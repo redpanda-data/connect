@@ -78,10 +78,12 @@ func newWriter(
 func (w *writer) loop() {
 	defer func() {
 		w.handle.Close()
+		w.stats.Decr("output.writer.running", 1)
 
 		close(w.responseChan)
 		close(w.closedChan)
 	}()
+	w.stats.Incr("output.writer.running", 1)
 
 	delim := []byte("\n")
 	if len(w.customDelim) > 0 {

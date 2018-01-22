@@ -140,9 +140,11 @@ func (k *Kafka) loop() {
 		if nil != k.producer {
 			k.producer.Close()
 		}
+		k.stats.Decr("output.kafka.running", 1)
 		close(k.responseChan)
 		close(k.closedChan)
 	}()
+	k.stats.Incr("output.kafka.running", 1)
 
 	for {
 		if err := k.connect(); err != nil {

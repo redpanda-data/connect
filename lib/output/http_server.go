@@ -263,6 +263,8 @@ func (h *HTTPServer) StartReceiving(msgs <-chan types.Message) error {
 
 	if h.server != nil {
 		go func() {
+			h.stats.Incr("output.http_server.running", 1)
+
 			h.log.Infof(
 				"Serving messages through HTTP GET request at: %s\n",
 				h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
@@ -279,6 +281,8 @@ func (h *HTTPServer) StartReceiving(msgs <-chan types.Message) error {
 					h.log.Errorf("Server error: %v\n", err)
 				}
 			}
+
+			h.stats.Decr("output.http_server.running", 1)
 
 			atomic.StoreInt32(&h.running, 0)
 			close(h.responseChan)

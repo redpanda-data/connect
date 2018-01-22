@@ -130,10 +130,12 @@ func (n *NATSStream) loop() {
 			n.natsSub.Unsubscribe()
 			n.natsConn.Close()
 		}
+		n.stats.Decr("input.nats_stream.running", 1)
 
 		close(n.messages)
 		close(n.closedChan)
 	}()
+	n.stats.Incr("input.nats_stream.running", 1)
 
 	for {
 		var err error

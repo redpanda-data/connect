@@ -208,9 +208,12 @@ func (s *ScaleProto) loop() {
 		atomic.StoreInt32(&s.running, 0)
 
 		s.socket.Close()
+		s.stats.Decr("input.scale_proto.running", 1)
+
 		close(s.messages)
 		close(s.closedChan)
 	}()
+	s.stats.Incr("input.scale_proto.running", 1)
 
 	if s.conf.ScaleProto.Bind {
 		s.log.Infof(
