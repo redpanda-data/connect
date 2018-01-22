@@ -2,7 +2,7 @@ Multipart Messaging In Benthos
 ==============================
 
 Benthos natively supports multipart messages, meaning they can be read,
-processed, buffered, and written seemlessly. However, some inputs and outputs do
+processed, buffered, and written seamlessly. However, some inputs and outputs do
 not support multipart and can therefore cause confusion.
 
 Inputs that do not support multipart are easy, as they are simply read as
@@ -16,7 +16,7 @@ individual parts and use the `combine` processor to 'squash' them back into a
 multipart message, but such a system can be brittle.
 
 Alternatively we can use the `multi_to_blob` and `blob_to_multi` processors so
-that we can output any message as a single part and then seemlessly decode it
+that we can output any message as a single part and then seamlessly decode it
 back into its original multiple part format further down the pipeline.
 
 ## Example
