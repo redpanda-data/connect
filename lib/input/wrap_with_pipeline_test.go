@@ -155,6 +155,18 @@ func TestBasicWrapPipeline(t *testing.T) {
 	}
 }
 
+func TestWrapZeroPipelines(t *testing.T) {
+	mockIn := &mockInput{msgs: make(chan types.Message)}
+	newInput, err := WrapWithPipelines(mockIn)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if newInput != mockIn {
+		t.Errorf("Wrong input obj returned: %v != %v", newInput, mockIn)
+	}
+}
+
 func TestBasicWrapMultiPipelines(t *testing.T) {
 	mockIn := &mockInput{msgs: make(chan types.Message)}
 	mockPi1 := &mockPipe{
