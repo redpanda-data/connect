@@ -54,7 +54,7 @@ func NewMmapFile(config Config, log log.Modular, stats metrics.Type) (Type, erro
 	if err != nil {
 		return nil, err
 	}
-	return NewOutputWrapper(b, stats), nil
+	return NewOutputWrapper(config, b, stats), nil
 }
 
 //------------------------------------------------------------------------------

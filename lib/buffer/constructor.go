@@ -45,17 +45,21 @@ var constructors = map[string]typeSpec{}
 
 // Config is the all encompassing configuration struct for all input types.
 type Config struct {
-	Type   string                `json:"type" yaml:"type"`
-	Mmap   impl.MmapBufferConfig `json:"mmap_file" yaml:"mmap_file"`
-	Memory impl.MemoryConfig     `json:"memory" yaml:"memory"`
+	Type            string                `json:"type" yaml:"type"`
+	RetryThrottleMS int                   `json:"retry_throttle_ms" yaml:"retry_throttle_ms"`
+	Mmap            impl.MmapBufferConfig `json:"mmap_file" yaml:"mmap_file"`
+	Memory          impl.MemoryConfig     `json:"memory" yaml:"memory"`
+	None            struct{}              `json:"none" yaml:"none"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:   "none",
-		Mmap:   impl.NewMmapBufferConfig(),
-		Memory: impl.NewMemoryConfig(),
+		Type:            "none",
+		RetryThrottleMS: 1000,
+		Mmap:            impl.NewMmapBufferConfig(),
+		Memory:          impl.NewMemoryConfig(),
+		None:            struct{}{},
 	}
 }
 

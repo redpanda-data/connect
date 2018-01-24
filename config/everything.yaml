@@ -187,6 +187,7 @@ output:
   processors: []
 buffer:
   type: none
+  retry_throttle_ms: 1000
   mmap_file:
     directory: ""
     file_size: 262144000
@@ -195,6 +196,7 @@ buffer:
     reserved_disk_space: 104857600
   memory:
     limit: 524288000
+  none: {}
 logger:
   prefix: service
   log_level: INFO

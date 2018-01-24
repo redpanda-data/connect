@@ -27,6 +27,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -47,6 +48,8 @@ output will be directly applied down the pipeline.`,
 type Empty struct {
 	running int32
 
+	throt *throttle.Type
+
 	messagesOut  chan types.Message
 	responsesOut chan types.Response
 
@@ -59,13 +62,20 @@ type Empty struct {
 
 // NewEmpty creates a new buffer interface but doesn't buffer messages.
 func NewEmpty(config Config, log log.Modular, stats metrics.Type) (Type, error) {
-	return &Empty{
+	e := &Empty{
 		running:      1,
 		messagesOut:  make(chan types.Message),
 		responsesOut: make(chan types.Response),
 		closeChan:    make(chan struct{}),
 		closed:       make(chan struct{}),
-	}, nil
+	}
+	e.throt = throttle.New(
+		throttle.OptCloseChan(e.closeChan),
+		throttle.OptThrottlePeriod(
+			time.Millisecond*time.Duration(config.RetryThrottleMS),
+		),
+	)
+	return e, nil
 }
 
 //------------------------------------------------------------------------------
@@ -94,6 +104,12 @@ func (e *Empty) loop() {
 		var res types.Response
 		if res, open = <-e.responsesIn; !open {
 			return
+		}
+		if res.Error() != nil {
+			// Back off on consectutive retries
+			e.throt.Retry()
+		} else {
+			e.throt.Reset()
 		}
 		select {
 		case e.responsesOut <- res:

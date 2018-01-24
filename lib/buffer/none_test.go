@@ -68,7 +68,9 @@ func TestNoneBufferClose(t *testing.T) {
 func TestNoneBufferBasic(t *testing.T) {
 	nThreads, nMessages := 5, 100
 
-	empty, err := NewEmpty(NewConfig(), nil, nil)
+	conf := NewConfig()
+	conf.RetryThrottleMS = 1
+	empty, err := NewEmpty(conf, nil, nil)
 	if err != nil {
 		t.Error(err)
 		return
