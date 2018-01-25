@@ -22,7 +22,10 @@
 [[projects]]
   branch = "master"
   name = "github.com/amir/raidman"
-  packages = [".","proto"]
+  packages = [
+    ".",
+    "proto"
+  ]
   revision = "1ccc43bfb9c93cb401a4025e49c64ba71e5e668b"
 
 [[projects]]
@@ -69,19 +72,40 @@
 
 [[projects]]
   name = "github.com/go-mangos/mangos"
-  packages = [".","protocol/pub","protocol/pull","protocol/push","protocol/rep","protocol/req","protocol/sub","transport/ipc","transport/tcp"]
+  packages = [
+    ".",
+    "protocol/pub",
+    "protocol/pull",
+    "protocol/push",
+    "protocol/rep",
+    "protocol/req",
+    "protocol/sub",
+    "transport/ipc",
+    "transport/tcp"
+  ]
   revision = "7e2b8010de3b57f5880ae5b8201067fd943e3202"
   version = "v1.2.0"
 
 [[projects]]
   name = "github.com/go-redis/redis"
-  packages = [".","internal","internal/consistenthash","internal/hashtag","internal/pool","internal/proto"]
-  revision = "73b70592cdaa9e6abdfcfbf97b4a90d80728c836"
-  version = "v6.8.0"
+  packages = [
+    ".",
+    "internal",
+    "internal/consistenthash",
+    "internal/hashtag",
+    "internal/pool",
+    "internal/proto"
+  ]
+  revision = "4021ace05686f632ff17fd824bbed229fc474cf8"
+  version = "v6.8.2"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
-  packages = ["gogoproto","proto","protoc-gen-gogo/descriptor"]
+  packages = [
+    "gogoproto",
+    "proto",
+    "protoc-gen-gogo/descriptor"
+  ]
   revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
   version = "v0.5"
 
@@ -89,7 +113,7 @@
   branch = "master"
   name = "github.com/golang/protobuf"
   packages = ["proto"]
-  revision = "1e59b77b52bf8e4b449a57e6f79f21226d571845"
+  revision = "c65a0412e71e8b9b3bfd22925720d23c0f054237"
 
 [[projects]]
   branch = "master"
@@ -105,13 +129,20 @@
 
 [[projects]]
   name = "github.com/nats-io/go-nats"
-  packages = [".","encoders/builtin","util"]
+  packages = [
+    ".",
+    "encoders/builtin",
+    "util"
+  ]
   revision = "d66cb54e6b7bdd93f0b28afc8450d84c780dfb68"
   version = "v1.4.0"
 
 [[projects]]
   name = "github.com/nats-io/go-nats-streaming"
-  packages = [".","pb"]
+  packages = [
+    ".",
+    "pb"
+  ]
   revision = "6e620057a207bd61e992c1c5b6a2de7b6a4cb010"
   version = "v0.3.4"
 
@@ -147,7 +178,10 @@
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
-  packages = ["prometheus","prometheus/promhttp"]
+  packages = [
+    "prometheus",
+    "prometheus/promhttp"
+  ]
   revision = "c5b7fccd204277076155f10851dad72b76a49317"
   version = "v0.8.0"
 
@@ -160,14 +194,23 @@
 [[projects]]
   branch = "master"
   name = "github.com/prometheus/common"
-  packages = ["expfmt","internal/bitbucket.org/ww/goautoneg","model"]
+  packages = [
+    "expfmt",
+    "internal/bitbucket.org/ww/goautoneg",
+    "model"
+  ]
   revision = "89604d197083d4781071d3c65855d24ecfb0a563"
 
 [[projects]]
   branch = "master"
   name = "github.com/prometheus/procfs"
-  packages = [".","xfs"]
-  revision = "b15cd069a83443be3154b719d0cc9fe8117f09fb"
+  packages = [
+    ".",
+    "internal/util",
+    "nfsd",
+    "xfs"
+  ]
+  revision = "85fadb6e89903ef7cca6f6a804474cd5ea85b6e1"
 
 [[projects]]
   branch = "master"
@@ -179,13 +222,13 @@
   branch = "master"
   name = "github.com/streadway/amqp"
   packages = ["."]
-  revision = "ff34ec9cc65c2a23db5126d962c431018f65af59"
+  revision = "54ded0531dfd699a7893861d39a7a949c5749bc9"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = ["proxy"]
-  revision = "434ec0c7fe3742c984919a691b2018a6e9694425"
+  revision = "0ed95abb35c445290478a5348a7b38bb154135fd"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"
@@ -202,6 +245,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e81a87cab160ed2dfd6bc298e8cccf6dd033cc0de09e71fda4ddc8d2abf2c6b1"
+  inputs-digest = "b36ccbc46cfe1ff95f6d971654bcaacdddf1dac8aae3f0031ad28e8ca60a19a8"
   solver-name = "gps-cdcl"
   solver-version = 1

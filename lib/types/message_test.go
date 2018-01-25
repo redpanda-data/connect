@@ -72,3 +72,223 @@ func TestMessageInvalidBytesFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestMessageJSONGet(t *testing.T) {
+	msg := Message{
+		Parts: [][]byte{[]byte(`{"foo":{"bar":"baz"}}`)},
+	}
+
+	if _, err := msg.GetJSON(1); err != ErrMessagePartNotExist {
+		t.Errorf("Wrong error returned on bad part: %v != %v", err, ErrMessagePartNotExist)
+	}
+
+	jObj, err := msg.GetJSON(0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	exp := map[string]interface{}{
+		"foo": map[string]interface{}{
+			"bar": "baz",
+		},
+	}
+	if act := jObj; !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong output from jsonGet: %v != %v", act, exp)
+	}
+
+	msg.Parts[0] = []byte(`{"foo":{"bar":"baz2"}}`)
+
+	jObj, err = msg.GetJSON(0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	exp = map[string]interface{}{
+		"foo": map[string]interface{}{
+			"bar": "baz2",
+		},
+	}
+	if act := jObj; !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong output from jsonGet: %v != %v", act, exp)
+	}
+}
+
+func TestMessageJSONSet(t *testing.T) {
+	msg := Message{
+		Parts: [][]byte{[]byte(`hello world`)},
+	}
+
+	if err := msg.SetJSON(1, nil); err != ErrMessagePartNotExist {
+		t.Errorf("Wrong error returned on bad part: %v != %v", err, ErrMessagePartNotExist)
+	}
+
+	p1Obj := map[string]interface{}{
+		"foo": map[string]interface{}{
+			"bar": "baz",
+		},
+	}
+	p1Str := `{"foo":{"bar":"baz"}}`
+
+	p2Obj := map[string]interface{}{
+		"baz": map[string]interface{}{
+			"bar": "foo",
+		},
+	}
+	p2Str := `{"baz":{"bar":"foo"}}`
+
+	if err := msg.SetJSON(0, p1Obj); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := p1Str, string(msg.Parts[0]); exp != act {
+		t.Errorf("Wrong json blob: %v != %v", act, exp)
+	}
+
+	if err := msg.SetJSON(0, p2Obj); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := p2Str, string(msg.Parts[0]); exp != act {
+		t.Errorf("Wrong json blob: %v != %v", act, exp)
+	}
+
+	if err := msg.SetJSON(0, p1Obj); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := p1Str, string(msg.Parts[0]); exp != act {
+		t.Errorf("Wrong json blob: %v != %v", act, exp)
+	}
+}
+
+func TestMessageJSONSetGet(t *testing.T) {
+	msg := Message{
+		Parts: [][]byte{[]byte(`hello world`)},
+	}
+
+	p1Obj := map[string]interface{}{
+		"foo": map[string]interface{}{
+			"bar": "baz",
+		},
+	}
+	p1Str := `{"foo":{"bar":"baz"}}`
+
+	p2Obj := map[string]interface{}{
+		"baz": map[string]interface{}{
+			"bar": "foo",
+		},
+	}
+	p2Str := `{"baz":{"bar":"foo"}}`
+
+	var err error
+	var jObj interface{}
+
+	if err = msg.SetJSON(0, p1Obj); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := p1Str, string(msg.Parts[0]); exp != act {
+		t.Errorf("Wrong json blob: %v != %v", act, exp)
+	}
+	if jObj, err = msg.GetJSON(0); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := p1Obj, jObj; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong json obj: %v != %v", act, exp)
+	}
+
+	if err := msg.SetJSON(0, p2Obj); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := p2Str, string(msg.Parts[0]); exp != act {
+		t.Errorf("Wrong json blob: %v != %v", act, exp)
+	}
+	if jObj, err = msg.GetJSON(0); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := p2Obj, jObj; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong json obj: %v != %v", act, exp)
+	}
+
+	if err := msg.SetJSON(0, p1Obj); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := p1Str, string(msg.Parts[0]); exp != act {
+		t.Errorf("Wrong json blob: %v != %v", act, exp)
+	}
+	if jObj, err = msg.GetJSON(0); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := p1Obj, jObj; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong json obj: %v != %v", act, exp)
+	}
+}
+
+func BenchmarkJSONGet(b *testing.B) {
+	sample1 := []byte(`{
+	"foo":{
+		"bar":"baz",
+		"this":{
+			"will":{
+				"be":{
+					"very":{
+						"nested":true
+					}
+				},
+				"dont_forget":"me"
+			},
+			"dont_forget":"me"
+		},
+		"dont_forget":"me"
+	},
+	"numbers": [0,1,2,3,4,5,6,7]
+}`)
+	sample2 := []byte(`{
+	"foo2":{
+		"bar":"baz2",
+		"this":{
+			"will":{
+				"be":{
+					"very":{
+						"nested":false
+					}
+				},
+				"dont_forget":"me too"
+			},
+			"dont_forget":"me too"
+		},
+		"dont_forget":"me too"
+	},
+	"numbers": [0,1,2,3,4,5,6,7]
+}`)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		msg := Message{
+			Parts: [][]byte{sample1},
+		}
+
+		jObj, err := msg.GetJSON(0)
+		if err != nil {
+			b.Error(err)
+		}
+		if _, ok := jObj.(map[string]interface{}); !ok {
+			b.Error("Couldn't cast to map")
+		}
+
+		jObj, err = msg.GetJSON(0)
+		if err != nil {
+			b.Error(err)
+		}
+		if _, ok := jObj.(map[string]interface{}); !ok {
+			b.Error("Couldn't cast to map")
+		}
+
+		msg.Parts[0] = sample2
+
+		jObj, err = msg.GetJSON(0)
+		if err != nil {
+			b.Error(err)
+		}
+		if _, ok := jObj.(map[string]interface{}); !ok {
+			b.Error("Couldn't cast to map")
+		}
+	}
+}

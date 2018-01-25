@@ -45,8 +45,9 @@ var (
 	// second time.
 	ErrAlreadyStarted = errors.New("type has already been started")
 
-	ErrBadMessageBytes = errors.New("serialised message bytes were in unexpected format")
-	ErrBlockCorrupted  = errors.New("serialised messages block was in unexpected format")
+	ErrMessagePartNotExist = errors.New("target message part does not exist")
+	ErrBadMessageBytes     = errors.New("serialised message bytes were in unexpected format")
+	ErrBlockCorrupted      = errors.New("serialised messages block was in unexpected format")
 
 	ErrNoAck = errors.New("failed to receive acknowledgement")
 )

@@ -157,7 +157,7 @@ There are a [few examples here][9] that show you some ways of setting up Benthos
 containers using `docker-compose`.
 
 [1]: https://godoc.org/github.com/Jeffail/benthos?status.svg
-[2]: http://godoc.org/github.com/Jeffail/benthos
+[2]: https://godoc.org/github.com/Jeffail/benthos/lib/input
 [3]: https://goreportcard.com/badge/github.com/Jeffail/benthos
 [4]: https://goreportcard.com/report/Jeffail/benthos
 [5]: resources/docs/multipart.md
