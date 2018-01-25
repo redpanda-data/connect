@@ -27,6 +27,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -51,6 +52,8 @@ type FanOut struct {
 	stats  metrics.Type
 
 	conf FanOutConfig
+
+	throt *throttle.Type
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
@@ -79,6 +82,8 @@ func NewFanOut(
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
 	}
+	o.throt = throttle.New(throttle.OptCloseChan(o.closeChan))
+
 	o.outputMsgChans = make([]chan types.Message, len(o.outputs))
 	for i := range o.outputMsgChans {
 		o.outputNs = append(o.outputNs, i)
@@ -153,7 +158,11 @@ func (o *FanOut) loop() {
 						newTargets = append(newTargets, i)
 						o.logger.Errorf("Failed to dispatch fan out message: %v\n", res.Error())
 						o.stats.Incr("broker.fan_out.output.error", 1)
+						if !o.throt.Retry() {
+							return
+						}
 					} else {
+						o.throt.Reset()
 						o.stats.Incr("broker.fan_out.messages.sent", 1)
 					}
 				case <-o.closeChan:

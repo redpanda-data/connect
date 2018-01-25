@@ -52,7 +52,7 @@ type httpConfig struct {
 
 // Config is the benthos configuration struct.
 type Config struct {
-	HTTP                 httpConfig       `json:"http"`
+	HTTP                 httpConfig       `json:"http" yaml:"http"`
 	Input                input.Config     `json:"input" yaml:"input"`
 	Output               output.Config    `json:"output" yaml:"output"`
 	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
