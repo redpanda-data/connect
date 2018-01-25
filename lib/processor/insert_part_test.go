@@ -31,63 +31,185 @@ import (
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
-func TestAppendPart(t *testing.T) {
+func TestInsertBoundaries(t *testing.T) {
 	conf := NewConfig()
-	conf.AppendPart.Content = "hello world"
+	conf.InsertPart.Content = "hello world"
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewAppendPart(conf, testLog, metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
 
-	type test struct {
-		in  [][]byte
-		out [][]byte
-	}
+	for i := 0; i < 10; i++ {
+		for j := -5; j <= 5; j++ {
+			conf.InsertPart.Index = j
+			proc, err := NewInsertPart(conf, testLog, metrics.DudType{})
+			if err != nil {
+				t.Error(err)
+				return
+			}
 
-	tests := []test{
-		{
-			in: [][]byte{
-				[]byte("0"),
-				[]byte("1"),
-			},
-			out: [][]byte{
-				[]byte("0"),
-				[]byte("1"),
-				[]byte("hello world"),
-			},
-		},
-		{
-			in: [][]byte{},
-			out: [][]byte{
-				[]byte("hello world"),
-			},
-		},
-	}
+			var parts [][]byte
+			for k := 0; k < i; k++ {
+				parts = append(parts, []byte("foo"))
+			}
 
-	for _, test := range tests {
-		msg, res, check := proc.ProcessMessage(&types.Message{Parts: test.in})
-		if !check {
-			t.Errorf("Append Part failed on: %s", test.in)
-		} else if res != nil {
-			t.Errorf("Expected nil response: %v", res)
-		}
-		if exp, act := test.out, msg.Parts; !reflect.DeepEqual(exp, act) {
-			t.Errorf("Unexpected output: %s != %s", act, exp)
+			msg, res, check := proc.ProcessMessage(&types.Message{Parts: parts})
+			if !check {
+				t.Error("Insert Part failed")
+			} else if res != nil {
+				t.Errorf("Expected nil response: %v", res)
+			}
+			if exp, act := i+1, len(msg.Parts); exp != act {
+				t.Errorf("Wrong count of result parts: %v != %v", act, exp)
+			}
 		}
 	}
 }
 
-func TestAppendPartInterpolation(t *testing.T) {
+func TestInsertPart(t *testing.T) {
 	conf := NewConfig()
-	conf.AppendPart.Content = "hello ${!hostname} world"
+	conf.InsertPart.Content = "hello world"
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+
+	type test struct {
+		index int
+		in    [][]byte
+		out   [][]byte
+	}
+
+	tests := []test{
+		{
+			index: 0,
+			in: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+			},
+			out: [][]byte{
+				[]byte("hello world"),
+				[]byte("0"),
+				[]byte("1"),
+			},
+		},
+		{
+			index: 0,
+			in:    [][]byte{},
+			out: [][]byte{
+				[]byte("hello world"),
+			},
+		},
+		{
+			index: 1,
+			in: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+			},
+			out: [][]byte{
+				[]byte("0"),
+				[]byte("hello world"),
+				[]byte("1"),
+			},
+		},
+		{
+			index: 2,
+			in: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+			},
+			out: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+				[]byte("hello world"),
+			},
+		},
+		{
+			index: 3,
+			in: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+			},
+			out: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+				[]byte("hello world"),
+			},
+		},
+		{
+			index: -1,
+			in: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+			},
+			out: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+				[]byte("hello world"),
+			},
+		},
+		{
+			index: -2,
+			in: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+			},
+			out: [][]byte{
+				[]byte("0"),
+				[]byte("hello world"),
+				[]byte("1"),
+			},
+		},
+		{
+			index: -3,
+			in: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+			},
+			out: [][]byte{
+				[]byte("hello world"),
+				[]byte("0"),
+				[]byte("1"),
+			},
+		},
+		{
+			index: -4,
+			in: [][]byte{
+				[]byte("0"),
+				[]byte("1"),
+			},
+			out: [][]byte{
+				[]byte("hello world"),
+				[]byte("0"),
+				[]byte("1"),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		conf.InsertPart.Index = test.index
+		proc, err := NewInsertPart(conf, testLog, metrics.DudType{})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		msg, res, check := proc.ProcessMessage(&types.Message{Parts: test.in})
+		if !check {
+			t.Errorf("Insert Part failed on: %s", test.in)
+		} else if res != nil {
+			t.Errorf("Expected nil response: %v", res)
+		}
+		if exp, act := test.out, msg.Parts; !reflect.DeepEqual(exp, act) {
+			t.Errorf("Unexpected output for %s at index %v: %s != %s", test.in, test.index, act, exp)
+		}
+	}
+}
+
+func TestInsertPartInterpolation(t *testing.T) {
+	conf := NewConfig()
+	conf.InsertPart.Content = "hello ${!hostname} world"
 
 	hostname, _ := os.Hostname()
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewAppendPart(conf, testLog, metrics.DudType{})
+	proc, err := NewInsertPart(conf, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -121,12 +243,12 @@ func TestAppendPartInterpolation(t *testing.T) {
 	for _, test := range tests {
 		msg, res, check := proc.ProcessMessage(&types.Message{Parts: test.in})
 		if !check {
-			t.Errorf("Prepend Part failed on: %s", test.in)
+			t.Errorf("Insert Part failed on: %s", test.in)
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
 		if exp, act := test.out, msg.Parts; !reflect.DeepEqual(exp, act) {
-			t.Errorf("Unexpected output: %s != %s", act, exp)
+			t.Errorf("Unexpected output for %s: %s != %s", test.in, act, exp)
 		}
 	}
 }

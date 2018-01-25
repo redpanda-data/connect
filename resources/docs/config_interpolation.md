@@ -9,7 +9,7 @@ start up.
 
 Functions are resolved each time they are used. However, only certain fields in
 a config will actually support and interpolate these expressions (
-`prepend_part.contents`, for example). If you aren't sure that a field in a
+`insert_part.contents`, for example). If you aren't sure that a field in a
 config section supports functions you should read its respective documentation.
 
 ## Environment Variables

@@ -30,11 +30,16 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["prepend_part"] = typeSpec{
-		constructor: NewPrependPart,
+	constructors["insert_part"] = typeSpec{
+		constructor: NewInsertPart,
 		description: `
-Insert a new message part at the beginning of the message. This will become the
-first part of the resultant message.
+Insert a new message part at an index. If the specified index is greater than
+the length of the existing parts it will be appended to the end.
+
+The index can be negative, and if so the part will be inserted from the end
+counting backwards starting from -1. E.g. if index = -1 then the new part will
+become the last part of the message, if index = -2 then the new part will be
+inserted before the last element, and so on.
 
 This processor will interpolate functions within the 'content' field.`,
 	}
@@ -42,23 +47,25 @@ This processor will interpolate functions within the 'content' field.`,
 
 //------------------------------------------------------------------------------
 
-// PrependPartConfig contains any configuration for the PrependPart processor.
-type PrependPartConfig struct {
+// InsertPartConfig contains any configuration for the InsertPart processor.
+type InsertPartConfig struct {
+	Index   int    `json:"index" yaml:"index"`
 	Content string `json:"content" yaml:"content"`
 }
 
-// NewPrependPartConfig returns a PrependPartConfig with default values.
-func NewPrependPartConfig() PrependPartConfig {
-	return PrependPartConfig{
+// NewInsertPartConfig returns a InsertPartConfig with default values.
+func NewInsertPartConfig() InsertPartConfig {
+	return InsertPartConfig{
+		Index:   -1,
 		Content: "",
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// PrependPart is a processor that checks each message against a set of bounds
-// and rejects messages if they aren't within them.
-type PrependPart struct {
+// InsertPart is a processor that inserts a new message part at a specific
+// index.
+type InsertPart struct {
 	interpolate bool
 	part        []byte
 
@@ -67,15 +74,15 @@ type PrependPart struct {
 	stats metrics.Type
 }
 
-// NewPrependPart returns a PrependPart processor.
-func NewPrependPart(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	part := []byte(conf.PrependPart.Content)
+// NewInsertPart returns a InsertPart processor.
+func NewInsertPart(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+	part := []byte(conf.InsertPart.Content)
 	interpolate := text.ContainsSpecialVariables(part)
-	return &PrependPart{
+	return &InsertPart{
 		part:        part,
 		interpolate: interpolate,
 		conf:        conf,
-		log:         log.NewModule(".processor.prepend_part"),
+		log:         log.NewModule(".processor.insert_part"),
 		stats:       stats,
 	}, nil
 }
@@ -83,8 +90,8 @@ func NewPrependPart(conf Config, log log.Modular, stats metrics.Type) (Type, err
 //------------------------------------------------------------------------------
 
 // ProcessMessage prepends a new message part to the message.
-func (p *PrependPart) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
-	p.stats.Incr("processor.prepend_part.count", 1)
+func (p *InsertPart) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
+	p.stats.Incr("processor.insert_part.count", 1)
 
 	var newPart []byte
 	if p.interpolate {
@@ -93,8 +100,31 @@ func (p *PrependPart) ProcessMessage(msg *types.Message) (*types.Message, types.
 		newPart = p.part
 	}
 
-	newParts := [][]byte{newPart}
-	msg.Parts = append(newParts, msg.Parts...)
+	index := p.conf.InsertPart.Index
+	if index < 0 {
+		index = len(msg.Parts) + index + 1
+		if index < 0 {
+			index = 0
+		}
+	} else if index > len(msg.Parts) {
+		index = len(msg.Parts)
+	}
+
+	var pre, post [][]byte
+	if index > 0 {
+		pre = msg.Parts[:index]
+	}
+	if index < len(msg.Parts) {
+		post = msg.Parts[index:]
+	}
+
+	newParts := make([][]byte, len(msg.Parts)+1)
+	newParts[index] = newPart
+
+	copy(newParts, pre)
+	copy(newParts[index+1:], post)
+
+	msg.Parts = newParts
 
 	return msg, nil, true
 }
