@@ -97,6 +97,10 @@ input:
     select_parts:
       parts:
       - 0
+    append_part:
+      content: ""
+    prepend_part:
+      content: ""
     blob_to_multi: {}
     multi_to_blob: {}
     sample:

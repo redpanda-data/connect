@@ -1,5 +1,18 @@
-Using Environment Variables
-===========================
+String Interpolation in Configs
+===============================
+
+Benthos is able to perform string interpolation on your config files. There are
+two types of expression for this; functions and environment variables.
+
+Environment variables are resolved and interpolated into the config only once at
+start up.
+
+Functions are resolved each time they are used. However, only certain fields in
+a config will actually support and interpolate these expressions (
+`prepend_part.contents`, for example). If you aren't sure that a field in a
+config section supports functions you should read its respective documentation.
+
+## Environment Variables
 
 You can use environment variables to replace Benthos config values using
 `${variable-name:default-value}` syntax. A good example of this is the
@@ -82,3 +95,20 @@ output:
     exchange_type: direct
     key: benthos-key
 ```
+
+## Functions
+
+The syntax for functions is `${!function_name}`, where `function_name` should
+be replaced with one of the following function names:
+
+### `timestamp_unix`
+
+The `timestamp_unix` function simply resolves to the current timestamp in
+seconds. E.g. `foo ${!timestamp_unix} bar` might resolve to
+`foo 1516899731 bar`.
+
+### `hostname`
+
+The `hostname` function resolves to the hostname of the machine running Benthos.
+E.g. `foo ${!hostname} bar` might resolve to `foo glados bar`.
+

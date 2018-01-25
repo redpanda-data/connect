@@ -163,7 +163,7 @@ containers using `docker-compose`.
 [5]: resources/docs/multipart.md
 [6]: resources/docs/metrics.md
 [7]: resources/docs
-[8]: resources/docs/environment_vars.md
+[8]: resources/docs/config_interpolation.md
 [9]: resources/docker/compose_examples
 [dep]: https://github.com/golang/dep
 [zmq]: http://zeromq.org/

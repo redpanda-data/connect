@@ -18,44 +18,57 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package config
+package text
 
 import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"path/filepath"
-
-	"github.com/Jeffail/benthos/lib/util/text"
-	"gopkg.in/yaml.v2"
+	"os"
+	"regexp"
+	"strconv"
+	"time"
 )
 
 //------------------------------------------------------------------------------
 
-// Read will attempt to read a configuration file path into a structure.
-func Read(path string, replaceEnvs bool, config interface{}) error {
-	configBytes, err := ioutil.ReadFile(path)
+var specialRegex *regexp.Regexp
+
+func init() {
+	var err error
+	specialRegex, err = regexp.Compile(`\${![a-z_]+}`)
 	if err != nil {
-		return err
+		panic(err)
 	}
+}
 
-	if replaceEnvs {
-		configBytes = text.ReplaceEnvVariables(configBytes)
-	}
+var specialVars = map[string]func() []byte{
+	"timestamp_unix": func() []byte {
+		return []byte(strconv.FormatInt(time.Now().Unix(), 10))
+	},
+	"hostname": func() []byte {
+		hn, _ := os.Hostname()
+		return []byte(hn)
+	},
+}
 
-	ext := filepath.Ext(path)
-	if ".js" == ext || ".json" == ext {
-		if err = json.Unmarshal(configBytes, config); err != nil {
-			return err
+// ContainsSpecialVariables returns true if inBytes contains special variable
+// replace patterns.
+func ContainsSpecialVariables(inBytes []byte) bool {
+	return specialRegex.Find(inBytes) != nil
+}
+
+// ReplaceSpecialVariables will search a blob of data for the pattern
+// `${!foo}`, where `foo` is a special variable name.
+//
+// For each aforementioned pattern found in the blob the contents of the
+// respective special variable will be calculated and will replace the pattern.
+func ReplaceSpecialVariables(inBytes []byte) []byte {
+	return specialRegex.ReplaceAllFunc(inBytes, func(content []byte) []byte {
+		if len(content) > 4 {
+			if ftor, exists := specialVars[string(content[3:len(content)-1])]; exists {
+				return ftor()
+			}
 		}
-	} else if ".yml" == ext || ".yaml" == ext {
-		if err = yaml.Unmarshal(configBytes, config); err != nil {
-			return err
-		}
-	} else {
-		return fmt.Errorf("config file extension not recognised: %v", path)
-	}
-	return nil
+		return content
+	})
 }
 
 //------------------------------------------------------------------------------

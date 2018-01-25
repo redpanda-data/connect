@@ -56,7 +56,7 @@ func TestBlobToMulti(t *testing.T) {
 
 	if res, _, ok := proc.ProcessMessage(&types.Message{Parts: [][]byte{testMsgBlob}}); ok {
 		if !reflect.DeepEqual(testMsg, *res) {
-			t.Errorf("Returned message did not match: %s != %s", *res, testMsg)
+			t.Errorf("Returned message did not match: %v != %v", *res, testMsg)
 		}
 	} else {
 		t.Error("Failed on good message")
