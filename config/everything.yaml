@@ -97,9 +97,8 @@ input:
     select_parts:
       parts:
       - 0
-    append_part:
-      content: ""
-    prepend_part:
+    insert_part:
+      index: -1
       content: ""
     blob_to_multi: {}
     multi_to_blob: {}
@@ -148,6 +147,7 @@ output:
     - localhost:9092
     client_id: benthos_kafka_output
     topic: benthos_stream
+    max_msg_bytes: 1000000
     timeout_ms: 5000
     ack_replicas: true
   amqp:

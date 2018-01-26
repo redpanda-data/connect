@@ -50,6 +50,7 @@ KAFKA_OUTPUT_CLIENT_ID         = benthos-client
 KAFKA_OUTPUT_CONSUMER_GROUP    = benthos-group
 KAFKA_OUTPUT_TOPIC             = benthos-stream
 KAFKA_OUTPUT_PARTITION         = 0
+KAFKA_OUTPUT_MAX_MSG_BYTES     = 1000000
 KAFKA_OUTPUT_START_OLDEST      = true
 KAFKA_OUTPUT_ACK_REP           = true
 

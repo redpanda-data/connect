@@ -51,6 +51,7 @@ type KafkaConfig struct {
 	Addresses   []string `json:"addresses" yaml:"addresses"`
 	ClientID    string   `json:"client_id" yaml:"client_id"`
 	Topic       string   `json:"topic" yaml:"topic"`
+	MaxMsgBytes int      `json:"max_msg_bytes" yaml:"max_msg_bytes"`
 	TimeoutMS   int      `json:"timeout_ms" yaml:"timeout_ms"`
 	AckReplicas bool     `json:"ack_replicas" yaml:"ack_replicas"`
 }
@@ -61,6 +62,7 @@ func NewKafkaConfig() KafkaConfig {
 		Addresses:   []string{"localhost:9092"},
 		ClientID:    "benthos_kafka_output",
 		Topic:       "benthos_stream",
+		MaxMsgBytes: 1000000,
 		TimeoutMS:   5000,
 		AckReplicas: true,
 	}
@@ -116,6 +118,7 @@ func (k *Kafka) connect() error {
 	config := sarama.NewConfig()
 	config.ClientID = k.conf.Kafka.ClientID
 
+	config.Producer.MaxMessageBytes = k.conf.Kafka.MaxMsgBytes
 	config.Producer.Timeout = time.Duration(k.conf.Kafka.TimeoutMS) * time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true

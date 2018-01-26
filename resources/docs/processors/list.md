@@ -3,13 +3,6 @@ PROCESSORS
 
 This document has been generated with `benthos --list-processors`.
 
-## `append_part`
-
-Insert a new message part at the end of the message. This will become the last
-part of the resultant message.
-
-This processor will interpolate functions within the 'content' field.
-
 ## `blob_to_multi`
 
 If a multiple part message has been encoded into a single part message using the
@@ -42,6 +35,18 @@ processor, and then subsequently push them into something like ZMQ.
 Passes on a percentage of messages, deterministically by hashing the message and
 checking the hash against a valid range, and drops all others.
 
+## `insert_part`
+
+Insert a new message part at an index. If the specified index is greater than
+the length of the existing parts it will be appended to the end.
+
+The index can be negative, and if so the part will be inserted from the end
+counting backwards starting from -1. E.g. if index = -1 then the new part will
+become the last part of the message, if index = -2 then the new part will be
+inserted before the last element, and so on.
+
+This processor will interpolate functions within the 'content' field.
+
 ## `multi_to_blob`
 
 If an input supports multiple part messages but your output does not you will
@@ -58,13 +63,6 @@ E.g. ZMQ => Benthos(multi to blob) => Kafka => Benthos(blob to multi)
 
 Noop is a no-op processor that does nothing, the message passes through
 unchanged.
-
-## `prepend_part`
-
-Insert a new message part at the beginning of the message. This will become the
-first part of the resultant message.
-
-This processor will interpolate functions within the 'content' field.
 
 ## `sample`
 
