@@ -56,6 +56,7 @@ var constructors = map[string]typeSpec{}
 type Config struct {
 	Type          string              `json:"type" yaml:"type"`
 	HTTPServer    HTTPServerConfig    `json:"http_server" yaml:"http_server"`
+	HTTPClient    HTTPClientConfig    `json:"http_client" yaml:"http_client"`
 	ScaleProto    ScaleProtoConfig    `json:"scalability_protocols" yaml:"scalability_protocols"`
 	ZMQ4          *ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Kafka         KafkaConfig         `json:"kafka" yaml:"kafka"`
@@ -76,6 +77,7 @@ func NewConfig() Config {
 	return Config{
 		Type:          "stdin",
 		HTTPServer:    NewHTTPServerConfig(),
+		HTTPClient:    NewHTTPClientConfig(),
 		ScaleProto:    NewScaleProtoConfig(),
 		ZMQ4:          NewZMQ4Config(),
 		Kafka:         NewKafkaConfig(),

@@ -47,7 +47,7 @@ func TestWriterBasic(t *testing.T) {
 
 	msgChan := make(chan types.Message)
 
-	writer, err := newWriter(&buf, []byte{}, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	writer, err := newWriter(&buf, []byte{}, "foo", log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -120,7 +120,7 @@ func TestWriterCustomDelim(t *testing.T) {
 
 	msgChan := make(chan types.Message)
 
-	writer, err := newWriter(&buf, []byte("<FOO>"), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	writer, err := newWriter(&buf, []byte("<FOO>"), "foo", log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

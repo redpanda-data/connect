@@ -93,6 +93,22 @@ a message part, and an empty line indicates the end of a message.
 Alternatively, a custom delimiter can be set that is used instead of line
 breaks.
 
+## `http_client`
+
+The HTTP client input type connects to a server and continuously performs
+requests for a single message.
+
+You should set a sensible number of max retries and retry delays so as to not
+stress your target server.
+
+## Streaming
+
+If you enable streaming with the 'stream' field then benthos will consume the
+body of the response using the same rules as the 'stdin' and 'file' input types.
+
+For more information about sending HTTP messages, including details on sending
+multipart, please read the 'docs/using_http.md' document.
+
 ## `http_server`
 
 Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,

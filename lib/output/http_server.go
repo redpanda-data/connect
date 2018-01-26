@@ -71,7 +71,7 @@ func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
 		Address:    "",
 		Path:       "/get",
-		StreamPath: "/stream",
+		StreamPath: "/get/stream",
 		TimeoutMS:  5000,
 		CertFile:   "",
 		KeyFile:    "",

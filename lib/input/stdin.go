@@ -22,6 +22,7 @@ package input
 
 import (
 	"bufio"
+	"io"
 	"os"
 
 	"github.com/Jeffail/benthos/lib/util/service/log"
@@ -66,16 +67,31 @@ func NewSTDINConfig() STDINConfig {
 
 // NewSTDIN creates a new STDIN input type.
 func NewSTDIN(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	delim := []byte("\n")
+	delim := "\n"
 	if len(conf.STDIN.CustomDelim) > 0 {
-		delim = []byte(conf.STDIN.CustomDelim)
+		delim = conf.STDIN.CustomDelim
 	}
-	return newReader(
-		os.Stdin,
-		conf.STDIN.MaxBuffer,
-		conf.STDIN.Multipart,
-		delim,
+
+	stdin := os.Stdin
+	return NewLineReader(
+		"stdin",
+		func() (io.Reader, error) {
+			// Swap so this only works once since we don't want to read stdin
+			// multiple times.
+			if stdin == nil {
+				return nil, io.EOF
+			}
+			sendStdin := stdin
+			stdin = nil
+			return sendStdin, nil
+		},
+		func() {
+			os.Stdin.Close()
+		},
 		log, stats,
+		OptLineReaderSetDelimiter(delim),
+		OptLineReaderSetMaxBuffer(conf.STDIN.MaxBuffer),
+		OptLineReaderSetMultipart(conf.STDIN.Multipart),
 	)
 }
 

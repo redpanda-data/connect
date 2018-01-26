@@ -22,6 +22,24 @@ input:
   http_server:
     address: ${HTTP_SERVER_INPUT_ADDRESS}
     path: ${HTTP_SERVER_INPUT_PATH:/post}
+  http_client:
+    url: ${HTTP_CLIENT_INPUT_URL}
+    verb: ${HTTP_CLIENT_INPUT_VERB:GET}
+    payload: ${HTTP_CLIENT_INPUT_PAYLOAD}
+    content_type: ${HTTP_CLIENT_INPUT_CONTENT_TYPE:application/octet-stream}
+    stream: ${HTTP_CLIENT_INPUT_STREAM:false}
+    stream_multipart: ${HTTP_CLIENT_INPUT_STREAM_MULTIPART:false}
+    stream_max_buffer: ${HTTP_CLIENT_INPUT_STREAM_MAX_BUFFER:65536}
+    stream_custom_delimiter: ${HTTP_CLIENT_INPUT_STREAM_DELIMITER}
+    oauth:
+      consumer_key: ${HTTP_CLIENT_INPUT_OAUTH_KEY}
+      consumer_secret: ${HTTP_CLIENT_INPUT_OAUTH_SECRET}
+      access_token: ${HTTP_CLIENT_INPUT_OAUTH_TOKEN}
+      access_token_secret: ${HTTP_CLIENT_INPUT_OAUTH_TOKEN_SECRET}
+      request_url: ${HTTP_CLIENT_INPUT_OAUTH_URL}
+      enabled: ${HTTP_CLIENT_INPUT_OAUTH_ENABLED:false}
+    timeout_ms: ${HTTP_CLIENT_INPUT_TIMEOUT_MS:5000}
+    skip_cert_verify: ${HTTP_CLIENT_INPUT_SKIP_CERT_VERIFY:false}
   zmq4:
     urls:
     - ${ZMQ_INPUT_URLS}
@@ -94,6 +112,17 @@ output:
   type: ${BENTHOS_OUTPUT:http_server}
   http_client:
     url: ${HTTP_CLIENT_OUTPUT_URL}
+    verb: ${HTTP_CLIENT_OUTPUT_VERB:POST}
+    content_type: ${HTTP_CLIENT_OUTPUT_CONTENT_TYPE:application/octet-stream}
+    oauth:
+      consumer_key: ${HTTP_CLIENT_OUTPUT_OAUTH_KEY}
+      consumer_secret: ${HTTP_CLIENT_OUTPUT_OAUTH_SECRET}
+      access_token: ${HTTP_CLIENT_OUTPUT_OAUTH_TOKEN}
+      access_token_secret: ${HTTP_CLIENT_OUTPUT_OAUTH_TOKEN_SECRET}
+      request_url: ${HTTP_CLIENT_OUTPUT_OAUTH_URL}
+      enabled: ${HTTP_CLIENT_OUTPUT_OAUTH_ENABLED:false}
+    timeout_ms: ${HTTP_CLIENT_OUTPUT_TIMEOUT_MS:5000}
+    skip_cert_verify: ${HTTP_CLIENT_OUTPUT_SKIP_CERT_VERIFY:false}
   http_server:
     address: ${HTTP_SERVER_OUTPUT_ADDRESS}
     path: ${HTTP_SERVER_OUTPUT_PATH:/get}

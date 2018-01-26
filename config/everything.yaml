@@ -9,6 +9,26 @@ input:
     timeout_ms: 5000
     cert_file: ""
     key_file: ""
+  http_client:
+    url: http://localhost:4195/get/stream
+    verb: GET
+    payload: ""
+    content_type: application/octet-stream
+    stream: false
+    stream_multipart: false
+    stream_max_buffer: 65536
+    stream_custom_delimiter: ""
+    oauth:
+      consumer_key: ""
+      consumer_secret: ""
+      access_token: ""
+      access_token_secret: ""
+      request_url: ""
+      enabled: false
+    timeout_ms: 5000
+    retry_period_ms: 1000
+    retries: 3
+    skip_cert_verify: false
   scalability_protocols:
     urls:
     - tcp://*:5555
@@ -116,6 +136,8 @@ output:
   type: stdout
   http_client:
     url: http://localhost:8081/post
+    verb: POST
+    content_type: application/octet-stream
     oauth:
       consumer_key: ""
       consumer_secret: ""
@@ -130,7 +152,7 @@ output:
   http_server:
     address: ""
     path: /get
-    stream_path: /stream
+    stream_path: /get/stream
     timeout_ms: 5000
     cert_file: ""
     key_file: ""

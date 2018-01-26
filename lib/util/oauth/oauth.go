@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+//------------------------------------------------------------------------------
+
 // ClientConfig holds the configuration parameters for an OAuth exchange.
 type ClientConfig struct {
 	ConsumerKey       string `json:"consumer_key" yaml:"consumer_key"`
@@ -33,6 +35,8 @@ func NewClientConfig() ClientConfig {
 		Enabled:           false,
 	}
 }
+
+//------------------------------------------------------------------------------
 
 // Sign method to sign an HTTP request for an OAuth exchange.
 func (oauth ClientConfig) Sign(req *http.Request) error {
@@ -94,3 +98,5 @@ func (oauth ClientConfig) computeHMAC(
 	}
 	return base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
 }
+
+//------------------------------------------------------------------------------

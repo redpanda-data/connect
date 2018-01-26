@@ -22,6 +22,7 @@ package input
 
 import (
 	"bufio"
+	"io"
 	"os"
 
 	"github.com/Jeffail/benthos/lib/util/service/log"
@@ -71,16 +72,27 @@ func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if err != nil {
 		return nil, err
 	}
-	delim := []byte("\n")
+	delim := "\n"
 	if len(conf.File.CustomDelim) > 0 {
-		delim = []byte(conf.File.CustomDelim)
+		delim = conf.File.CustomDelim
 	}
-	return newReader(
-		file,
-		conf.File.MaxBuffer,
-		conf.File.Multipart,
-		delim,
+	return NewLineReader(
+		"file",
+		func() (io.Reader, error) {
+			// Swap so this only works once since we don't want to read the file
+			// multiple times.
+			if file == nil {
+				return nil, io.EOF
+			}
+			sendFile := file
+			file = nil
+			return sendFile, nil
+		},
+		func() {},
 		log, stats,
+		OptLineReaderSetDelimiter(delim),
+		OptLineReaderSetMaxBuffer(conf.File.MaxBuffer),
+		OptLineReaderSetMultipart(conf.File.Multipart),
 	)
 }
 

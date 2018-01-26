@@ -38,8 +38,9 @@ import (
 type writer struct {
 	running int32
 
-	log   log.Modular
-	stats metrics.Type
+	typeStr string
+	log     log.Modular
+	stats   metrics.Type
 
 	customDelim []byte
 
@@ -56,12 +57,14 @@ type writer struct {
 func newWriter(
 	handle io.WriteCloser,
 	customDelimiter []byte,
+	typeStr string,
 	log log.Modular,
 	stats metrics.Type,
 ) (Type, error) {
 	return &writer{
 		running:      1,
-		log:          log.NewModule(".output.writer"),
+		typeStr:      typeStr,
+		log:          log.NewModule(".output." + typeStr),
 		stats:        stats,
 		customDelim:  customDelimiter,
 		messages:     nil,
@@ -76,14 +79,22 @@ func newWriter(
 
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (w *writer) loop() {
+	// Metrics paths
+	var (
+		runningPath = "output." + w.typeStr + ".running"
+		countPath   = "output." + w.typeStr + ".count"
+		successPath = "output." + w.typeStr + ".success"
+		errorPath   = "output." + w.typeStr + ".error"
+	)
+
 	defer func() {
 		w.handle.Close()
-		w.stats.Decr("output.writer.running", 1)
+		w.stats.Decr(runningPath, 1)
 
 		close(w.responseChan)
 		close(w.closedChan)
 	}()
-	w.stats.Incr("output.writer.running", 1)
+	w.stats.Incr(runningPath, 1)
 
 	delim := []byte("\n")
 	if len(w.customDelim) > 0 {
@@ -98,7 +109,7 @@ func (w *writer) loop() {
 			if !open {
 				return
 			}
-			w.stats.Incr("output.writer.count", 1)
+			w.stats.Incr(countPath, 1)
 		case <-w.closeChan:
 			return
 		}
@@ -109,9 +120,9 @@ func (w *writer) loop() {
 			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(msg.Parts, delim), delim, delim)
 		}
 		if err != nil {
-			w.stats.Incr("output.writer.send.error", 1)
+			w.stats.Incr(errorPath, 1)
 		} else {
-			w.stats.Incr("output.writer.send.success", 1)
+			w.stats.Incr(successPath, 1)
 		}
 		select {
 		case w.responseChan <- types.NewSimpleResponse(err):

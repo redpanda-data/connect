@@ -56,6 +56,8 @@ multipart, please read the 'docs/using_http.md' document.`,
 // HTTPClientConfig is configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
 	URL            string             `json:"url" yaml:"url"`
+	Verb           string             `json:"verb" yaml:"verb"`
+	ContentType    string             `json:"content_type" yaml:"content_type"`
 	OAuth          oauth.ClientConfig `json:"oauth" yaml:"oauth"`
 	TimeoutMS      int64              `json:"timeout_ms" yaml:"timeout_ms"`
 	RetryMS        int64              `json:"retry_period_ms" yaml:"retry_period_ms"`
@@ -67,6 +69,8 @@ type HTTPClientConfig struct {
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
 		URL:            "http://localhost:8081/post",
+		Verb:           "POST",
+		ContentType:    "application/octet-stream",
 		OAuth:          oauth.NewClientConfig(),
 		TimeoutMS:      5000,
 		RetryMS:        1000,
@@ -112,13 +116,15 @@ func NewHTTPClient(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 //------------------------------------------------------------------------------
 
 // createRequest creates an HTTP request out of a single message.
-func createRequest(
-	url string, msg *types.Message, oauthConfig oauth.ClientConfig,
-) (req *http.Request, err error) {
+func (h *HTTPClient) createRequest(msg *types.Message) (req *http.Request, err error) {
 	if len(msg.Parts) == 1 {
 		body := bytes.NewBuffer(msg.Parts[0])
-		if req, err = http.NewRequest("POST", url, body); err == nil {
-			req.Header.Add("Content-Type", "application/octet-stream")
+		if req, err = http.NewRequest(
+			h.conf.HTTPClient.Verb,
+			h.conf.HTTPClient.URL,
+			body,
+		); err == nil {
+			req.Header.Add("Content-Type", h.conf.HTTPClient.ContentType)
 		}
 	} else {
 		body := &bytes.Buffer{}
@@ -127,19 +133,23 @@ func createRequest(
 		for i := 0; i < len(msg.Parts) && err == nil; i++ {
 			var part io.Writer
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
-				"Content-Type": []string{"application/octet-stream"},
+				"Content-Type": []string{h.conf.HTTPClient.ContentType},
 			}); err == nil {
 				_, err = io.Copy(part, bytes.NewReader(msg.Parts[i]))
 			}
 		}
 
 		writer.Close()
-		if req, err = http.NewRequest("POST", url, body); err == nil {
+		if req, err = http.NewRequest(
+			h.conf.HTTPClient.Verb,
+			h.conf.HTTPClient.URL,
+			body,
+		); err == nil {
 			req.Header.Add("Content-Type", writer.FormDataContentType())
 		}
 	}
-	if oauthConfig.Enabled {
-		err = oauthConfig.Sign(req)
+	if h.conf.HTTPClient.OAuth.Enabled {
+		err = h.conf.HTTPClient.OAuth.Sign(req)
 	}
 	return
 }
@@ -180,9 +190,7 @@ func (h *HTTPClient) loop() {
 		var res *http.Response
 		var err error
 
-		if req, err = createRequest(
-			h.conf.HTTPClient.URL, &msg, h.conf.HTTPClient.OAuth,
-		); err == nil {
+		if req, err = h.createRequest(&msg); err == nil {
 			if res, err = client.Do(req); err == nil {
 				if res.StatusCode < 200 || res.StatusCode > 299 {
 					err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
@@ -192,7 +200,10 @@ func (h *HTTPClient) loop() {
 
 			i, j := 0, h.conf.HTTPClient.NumRetries
 			for i < j && err != nil {
-				req, _ = createRequest(h.conf.HTTPClient.URL, &msg, h.conf.HTTPClient.OAuth)
+				req, err = h.createRequest(&msg)
+				if err != nil {
+					continue
+				}
 				select {
 				case <-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond):
 				case <-h.closeChan:
