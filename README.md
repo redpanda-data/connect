@@ -2,6 +2,7 @@
 
 [![godoc for Jeffail/benthos][1]][2]
 [![goreportcard for Jeffail/benthos][3]][4]
+[![Build Status][travis-badge]][travis-url]
 
 Benthos is a service that bridges message queues in ways that can simplify your
 platform or reduce development time.
@@ -165,6 +166,8 @@ containers using `docker-compose`.
 [7]: resources/docs
 [8]: resources/docs/config_interpolation.md
 [9]: resources/docker/compose_examples
+[travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
+[travis-url]: https://travis-ci.org/Jeffail/benthos
 [dep]: https://github.com/golang/dep
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/
