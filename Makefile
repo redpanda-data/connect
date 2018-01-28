@@ -23,7 +23,7 @@ $(PATHINSTBIN)/%:
 	@mkdir -p $(dir $@)
 	@go build -tags "$(TAGS)" -ldflags "$(LDFLAGS)" -o $@ ./cmd/$*
 
-$(APPS): %: $(PATHINSTBIN)/%
+$(APPS): %: deps $(PATHINSTBIN)/%
 
 $(PATHINSTDOCKER)/benthos.tar:
 	@mkdir -p $(dir $@)
@@ -36,7 +36,7 @@ docker: $(PATHINSTDOCKER)/benthos.tar
 
 deps:
 	@go get -u github.com/golang/dep/cmd/dep
-	@dep ensure
+	@$$GOPATH/bin/dep ensure
 
 test:
 	@go test ./...
