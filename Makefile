@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker clean-docker clean docs
+.PHONY: all deps rpm docker clean-docker clean docs test
 
 BENTHOS_PATH = github.com/Jeffail/benthos
 
@@ -37,6 +37,9 @@ docker: $(PATHINSTDOCKER)/benthos.tar
 deps:
 	@go get -u github.com/golang/dep/cmd/dep
 	@dep ensure
+
+test:
+	@go test ./...
 
 rpm:
 	@rpmbuild --define "_version $(VERSION)" -bb ./resources/rpm/benthos.spec
