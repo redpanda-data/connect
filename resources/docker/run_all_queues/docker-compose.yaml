@@ -73,5 +73,6 @@ services:
     image: jeffail/benthos
     volumes:
       - $GOPATH/src/github.com/Jeffail/benthos/config/test/smoke_out.yaml:/benthos.yaml
-      - $GOPATH/src/github.com/Jeffail/benthos/resources/docker/run_all_queues:/output
     command: -c /benthos.yaml
+    ports:
+      - "4196:4196"

@@ -1,3 +1,5 @@
+http:
+  address: 0.0.0.0:4196
 input:
   type: fan_in
   fan_in:
@@ -49,8 +51,6 @@ input:
         client_id: benthos_client_2
         subject: benthos_messages
 output:
-  type: file
-  file:
-    path: /output/smoke-output.txt
+  type: http_server
 logger:
   log_level: INFO
