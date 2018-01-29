@@ -111,16 +111,16 @@ func OptLineReaderSetMaxBuffer(maxBuffer int) func(r *LineReader) {
 	}
 }
 
-// OptLineReaderSetMultipart is a option func that sets the boolean flag indicating
-// whether lines should be parsed as multipart or not.
+// OptLineReaderSetMultipart is a option func that sets the boolean flag
+// indicating whether lines should be parsed as multipart or not.
 func OptLineReaderSetMultipart(multipart bool) func(r *LineReader) {
 	return func(r *LineReader) {
 		r.multipart = multipart
 	}
 }
 
-// OptLineReaderSetDelimiter is a option func that sets the delimiter (default '\n')
-// used to divide lines (message parts) in the stream of data.
+// OptLineReaderSetDelimiter is a option func that sets the delimiter (default
+// '\n') used to divide lines (message parts) in the stream of data.
 func OptLineReaderSetDelimiter(delimiter string) func(r *LineReader) {
 	return func(r *LineReader) {
 		r.delimiter = []byte(delimiter)

@@ -86,7 +86,11 @@ func NewCombine(conf Config, log log.Modular, stats metrics.Type) (Type, error) 
 func (c *Combine) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
 	c.stats.Incr("processor.combine.count", 1)
 
-	c.parts = append(c.parts, msg.Parts...)
+	for _, part := range msg.Parts {
+		newPart := make([]byte, len(part))
+		copy(newPart, part)
+		c.parts = append(c.parts, newPart)
+	}
 
 	if len(c.parts) >= c.n {
 		msg.Parts = c.parts[:c.n]

@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"bytes"
 	"os"
 	"reflect"
 	"testing"
@@ -46,6 +47,42 @@ func TestCombineTwoParts(t *testing.T) {
 	msg, res, check := proc.ProcessMessage(&types.Message{Parts: exp})
 	if !check {
 		t.Error("Expected success")
+	}
+	if !reflect.DeepEqual(exp, msg.Parts) {
+		t.Errorf("Wrong result: %s != %s", msg.Parts, exp)
+	}
+	if res != nil {
+		t.Error("Expected nil res")
+	}
+}
+
+func TestCombineMessagesSharedBuffer(t *testing.T) {
+	conf := NewConfig()
+	conf.Combine.Parts = 2
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	proc, err := NewCombine(conf, testLog, metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	exp := [][]byte{[]byte("foo"), []byte("bar")}
+
+	buf := &bytes.Buffer{}
+	buf.Write([]byte("foo"))
+
+	msg, res, check := proc.ProcessMessage(&types.Message{Parts: [][]byte{buf.Bytes()}})
+	if check {
+		t.Error("Expected non success on first part")
+	}
+
+	buf.Reset()
+	buf.Write([]byte("bar"))
+
+	msg, res, check = proc.ProcessMessage(&types.Message{Parts: [][]byte{buf.Bytes()}})
+	if !check {
+		t.Error("Expected success on second part")
 	}
 	if !reflect.DeepEqual(exp, msg.Parts) {
 		t.Errorf("Wrong result: %s != %s", msg.Parts, exp)
