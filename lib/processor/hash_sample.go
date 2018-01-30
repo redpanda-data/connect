@@ -36,8 +36,17 @@ func init() {
 	constructors["hash_sample"] = typeSpec{
 		constructor: NewHashSample,
 		description: `
-Passes on a percentage of messages, deterministically by hashing the message and
-checking the hash against a valid range, and drops all others.`,
+Passes on a percentage of messages deterministically by hashing selected parts
+of the message and checking the hash against a valid range, dropping all others.
+
+For example, a 'hash_sample' with 'retain_min' of 0.0 and 'remain_max' of 50.0
+will receive half of the input stream, and a 'hash_sample' with 'retain_min' of
+50.0 and 'retain_max' of 100.1 will receive the other half.
+
+The part indexes can be negative, and if so the part will be selected from the
+end counting backwards starting from -1. E.g. if index = -1 then the selected
+part will be the last part of the message, if index = -2 then the part before
+the last element with be selected, and so on.`,
 	}
 }
 
@@ -64,7 +73,7 @@ type HashSampleConfig struct {
 func NewHashSampleConfig() HashSampleConfig {
 	return HashSampleConfig{
 		RetainMin: 0.0,
-		RetainMax: 0.1,      // retain the first [0, 10%) interval
+		RetainMax: 10.0,     // retain the first [0, 10%) interval
 		Parts:     []int{0}, // only consider the 1st part
 	}
 }
@@ -98,13 +107,20 @@ func (s *HashSample) ProcessMessage(msg *types.Message) (*types.Message, types.R
 
 	lParts := len(msg.Parts)
 	for _, index := range s.conf.HashSample.Parts {
-		// check boundary of parts first
-		if index >= lParts {
+		if index < 0 {
+			// Negative indexes count backwards from the end.
+			index = lParts + index
+		}
+
+		// Check boundary of part index.
+		if index < 0 || index >= lParts {
 			s.stats.Incr("processor.hash_sample.dropped_part_out_of_bounds", 1)
 			s.stats.Incr("processor.hash_sample.dropped", 1)
-			s.log.Errorf("Cannot sample message due to parts count: %v != 1\n", lParts)
+			s.log.Errorf("Cannot sample message part %v for parts count: %v\n", index, lParts)
 			return nil, types.NewSimpleResponse(nil), false
 		}
+
+		// Attempt to add part to hash.
 		_, err := hash.Write(msg.Parts[index])
 		if nil != err {
 			s.stats.Incr("processor.hash_sample.hashing_error", 1)

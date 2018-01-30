@@ -39,7 +39,8 @@ the length of the existing parts it will be appended to the end.
 The index can be negative, and if so the part will be inserted from the end
 counting backwards starting from -1. E.g. if index = -1 then the new part will
 become the last part of the message, if index = -2 then the new part will be
-inserted before the last element, and so on.
+inserted before the last element, and so on. If the negative index is greater
+than the length of the existing parts it will be inserted at the beginning.
 
 This processor will interpolate functions within the 'content' field.`,
 	}
