@@ -127,7 +127,7 @@ input:
       randomseed: 0
     hash_sample:
       retain_min: 0
-      retain_max: 0.1
+      retain_max: 10
       parts:
       - 0
     combine:

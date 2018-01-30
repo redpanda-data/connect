@@ -30,10 +30,24 @@ messages into Kafka by splitting the parts. We could now consume our N*M
 messages from Kafka and squash them back into M part messages with the combine
 processor, and then subsequently push them into something like ZMQ.
 
+NOTE: If a message received has more parts than the 'combine' amount it will be
+sent unchanged with its original parts. This occurs even if there are cached
+parts waiting to be combined, which will change the ordering of message parts
+through the platform.
+
 ## `hash_sample`
 
-Passes on a percentage of messages, deterministically by hashing the message and
-checking the hash against a valid range, and drops all others.
+Passes on a percentage of messages deterministically by hashing selected parts
+of the message and checking the hash against a valid range, dropping all others.
+
+For example, a 'hash_sample' with 'retain_min' of 0.0 and 'remain_max' of 50.0
+will receive half of the input stream, and a 'hash_sample' with 'retain_min' of
+50.0 and 'retain_max' of 100.1 will receive the other half.
+
+The part indexes can be negative, and if so the part will be selected from the
+end counting backwards starting from -1. E.g. if index = -1 then the selected
+part will be the last part of the message, if index = -2 then the part before
+the last element with be selected, and so on.
 
 ## `insert_part`
 
@@ -43,7 +57,8 @@ the length of the existing parts it will be appended to the end.
 The index can be negative, and if so the part will be inserted from the end
 counting backwards starting from -1. E.g. if index = -1 then the new part will
 become the last part of the message, if index = -2 then the new part will be
-inserted before the last element, and so on.
+inserted before the last element, and so on. If the negative index is greater
+than the length of the existing parts it will be inserted at the beginning.
 
 This processor will interpolate functions within the 'content' field.
 
