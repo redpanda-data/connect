@@ -45,6 +45,8 @@ func (j *jsonPart) Get(rawBytes []byte) (interface{}, error) {
 		}
 	}
 
+	// Release whatever we were holding.
+	j.content = nil
 	if err := json.Unmarshal(rawBytes, &j.content); err != nil {
 		return nil, err
 	}
@@ -177,6 +179,21 @@ func FromBytes(b []byte) (Message, error) {
 		b = b[partSize:]
 	}
 	return m, nil
+}
+
+//------------------------------------------------------------------------------
+
+// ShallowCopy creates a new shallow copy of the message. Parts can be
+// re-arranged in the new copy and JSON parts can be get/set without impacting
+// other message copies. However, it is still unsafe to edit the content of
+// parts.
+func (m *Message) ShallowCopy() Message {
+	// NOTE: JSON parts are not copied here, as even though we can safely copy
+	// the hash and len fields we cannot safely copy the content as it may
+	// contain pointers or ref types.
+	return Message{
+		Parts: append([][]byte(nil), m.Parts...),
+	}
 }
 
 //------------------------------------------------------------------------------

@@ -220,6 +220,134 @@ func TestMessageJSONSetGet(t *testing.T) {
 	}
 }
 
+func TestMessageSplitJSON(t *testing.T) {
+	msg1 := Message{
+		Parts: [][]byte{
+			[]byte("Foo plain text"),
+			[]byte(`nothing here`),
+		},
+	}
+
+	if err := msg1.SetJSON(1, map[string]interface{}{"foo": "bar"}); err != nil {
+		t.Fatal(err)
+	}
+
+	msg2 := msg1.ShallowCopy()
+
+	if exp, act := msg1.Parts, msg2.Parts; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Parts unmatched from shallow copy: %v != %v", act, exp)
+	}
+
+	msg2.Parts[0] = []byte("Bar different text")
+
+	if exp, act := "Foo plain text", string(msg1.Parts[0]); exp != act {
+		t.Errorf("Original content was changed from shallow copy: %v != %v", act, exp)
+	}
+
+	//------------------
+
+	if err := msg1.SetJSON(1, map[string]interface{}{"foo": "baz"}); err != nil {
+		t.Fatal(err)
+	}
+
+	jCont, err := msg1.GetJSON(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := map[string]interface{}{"foo": "baz"}, jCont; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected json content: %v != %v", exp, act)
+	}
+	if exp, act := `{"foo":"baz"}`, string(msg1.Parts[1]); exp != act {
+		t.Errorf("Unexpected original content: %v != %v", act, exp)
+	}
+
+	jCont, err = msg2.GetJSON(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := map[string]interface{}{"foo": "bar"}, jCont; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected json content: %v != %v", exp, act)
+	}
+	if exp, act := `{"foo":"bar"}`, string(msg2.Parts[1]); exp != act {
+		t.Errorf("Unexpected shallow content: %v != %v", act, exp)
+	}
+
+	//------------------
+
+	if err = msg2.SetJSON(1, map[string]interface{}{"foo": "baz2"}); err != nil {
+		t.Fatal(err)
+	}
+
+	jCont, err = msg2.GetJSON(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := map[string]interface{}{"foo": "baz2"}, jCont; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected json content: %v != %v", exp, act)
+	}
+	if exp, act := `{"foo":"baz2"}`, string(msg2.Parts[1]); exp != act {
+		t.Errorf("Unexpected shallow copy content: %v != %v", act, exp)
+	}
+
+	jCont, err = msg1.GetJSON(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := map[string]interface{}{"foo": "baz"}, jCont; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected original json content: %v != %v", exp, act)
+	}
+	if exp, act := `{"foo":"baz"}`, string(msg1.Parts[1]); exp != act {
+		t.Errorf("Unexpected original content: %v != %v", act, exp)
+	}
+}
+
+func TestMessageCrossContaminateJSON(t *testing.T) {
+	msg1 := Message{
+		Parts: [][]byte{
+			[]byte(`{"foo":"bar"}`),
+		},
+	}
+
+	var jCont1, jCont2 interface{}
+	var err error
+
+	if jCont1, err = msg1.GetJSON(0); err != nil {
+		t.Fatal(err)
+	}
+
+	msg2 := msg1.ShallowCopy()
+
+	jMap1, ok := jCont1.(map[string]interface{})
+	if !ok {
+		t.Fatal("Couldnt cast to map")
+	}
+	jMap1["foo"] = "baz"
+
+	if err = msg1.SetJSON(0, jMap1); err != nil {
+		t.Fatal(err)
+	}
+
+	if jCont1, err = msg1.GetJSON(0); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := map[string]interface{}{"foo": "baz"}, jCont1; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected json content: %v != %v", exp, act)
+	}
+	if exp, act := `{"foo":"baz"}`, string(msg1.Parts[0]); exp != act {
+		t.Errorf("Unexpected raw content: %v != %v", exp, act)
+	}
+
+	if jCont2, err = msg2.GetJSON(0); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := map[string]interface{}{"foo": "bar"}, jCont2; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected json content: %v != %v", exp, act)
+	}
+	if exp, act := `{"foo":"bar"}`, string(msg2.Parts[0]); exp != act {
+		t.Errorf("Unexpected raw content: %v != %v", exp, act)
+	}
+}
+
 func BenchmarkJSONGet(b *testing.B) {
 	sample1 := []byte(`{
 	"foo":{

@@ -137,8 +137,11 @@ func (o *FanOut) loop() {
 		outputTargets := o.outputNs
 		for len(outputTargets) > 0 {
 			for _, i := range outputTargets {
+				// Perform a copy here as it could be dangerous to release the
+				// same message to parallel processor pipelines.
+				msgCopy := msg.ShallowCopy()
 				select {
-				case o.outputMsgChans[i] <- msg:
+				case o.outputMsgChans[i] <- msgCopy:
 				case <-o.closeChan:
 					return
 				}
