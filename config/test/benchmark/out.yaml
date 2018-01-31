@@ -1,0 +1,6 @@
+# Run this config with the `benthos_bench` tool.
+report_period_ms: 60000
+http:
+  address: 0.0.0.0:4196
+input:
+  type: stdin # TODO: Change this to the protocol being benchmarked

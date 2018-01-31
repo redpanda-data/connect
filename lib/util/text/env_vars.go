@@ -32,7 +32,7 @@ var envRegex *regexp.Regexp
 
 func init() {
 	var err error
-	envRegex, err = regexp.Compile(`\${[0-9A-Za-z_]+(:[^}]*)?}`)
+	envRegex, err = regexp.Compile(`\${[0-9A-Za-z_]+(:[^}]+)?}`)
 	if err != nil {
 		panic(err)
 	}

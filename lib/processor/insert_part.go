@@ -78,7 +78,7 @@ type InsertPart struct {
 // NewInsertPart returns a InsertPart processor.
 func NewInsertPart(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	part := []byte(conf.InsertPart.Content)
-	interpolate := text.ContainsSpecialVariables(part)
+	interpolate := text.ContainsFunctionVariables(part)
 	return &InsertPart{
 		part:        part,
 		interpolate: interpolate,
@@ -96,7 +96,7 @@ func (p *InsertPart) ProcessMessage(msg *types.Message) (*types.Message, types.R
 
 	var newPart []byte
 	if p.interpolate {
-		newPart = text.ReplaceSpecialVariables(p.part)
+		newPart = text.ReplaceFunctionVariables(p.part)
 	} else {
 		newPart = p.part
 	}

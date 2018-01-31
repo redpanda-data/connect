@@ -15,8 +15,8 @@ config section supports functions you should read its respective documentation.
 ## Environment Variables
 
 You can use environment variables to replace Benthos config values using
-`${variable-name:default-value}` syntax. A good example of this is the
-[default environment variable config](../../config/env/default.yaml), which
+`${variable-name}` or `${variable-name:default-value}` syntax. A good example of
+this is the [environment variable config](../../config/env/default.yaml), which
 creates environment variables for each default field value in a standard
 single-in-single-out bridge config.
 
@@ -98,17 +98,29 @@ output:
 
 ## Functions
 
-The syntax for functions is `${!function_name}`, where `function_name` should
-be replaced with one of the following function names:
+The syntax for functions is `${!function-name}`, or `${!function-name:arg}` if
+the function takes an argument, where `function-name` should be replaced with
+one of the following function names:
+
+### `timestamp_unix_nano`
+
+The `timestamp_unix_nano` function simply resolves to the current unix timestamp
+in nanoseconds. E.g. `foo ${!timestamp_unix_nano} bar` might resolve to
+`foo 1517412152475689615 bar`.
 
 ### `timestamp_unix`
 
-The `timestamp_unix` function simply resolves to the current timestamp in
+The `timestamp_unix` function simply resolves to the current unix timestamp in
 seconds. E.g. `foo ${!timestamp_unix} bar` might resolve to
-`foo 1516899731 bar`.
+`foo 1517412152 bar`.
+
+### `count`
+
+The `count` function is a counter starting at 1 which increments after each time
+it is called. Count takes an argument which is an identifier for the counter,
+allowing you to specify multiple unique counters in your configuration.
 
 ### `hostname`
 
 The `hostname` function resolves to the hostname of the machine running Benthos.
 E.g. `foo ${!hostname} bar` might resolve to `foo glados bar`.
-

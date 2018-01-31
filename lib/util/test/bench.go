@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -32,72 +33,37 @@ import (
 
 //------------------------------------------------------------------------------
 
-func bytesToIndex(b []byte) (index int32) {
-	if len(b) <= 3 {
-		return index
-	}
-	index = int32(b[0])<<24 |
-		int32(b[1])<<16 |
-		int32(b[2])<<8 |
-		int32(b[3])
-	return index
-}
-
-func indexToBytes(index int32) (b [4]byte) {
-	b[0] = byte(index >> 24)
-	b[1] = byte(index >> 16)
-	b[2] = byte(index >> 8)
-	b[3] = byte(index)
-
-	return b
-}
-
-//------------------------------------------------------------------------------
-
 // Bench is a struct carrying message specific benchmarking statistics.
 type Bench struct {
-	Latency int   // Time taken (ns) for a message to be received by a consumer.
-	NBytes  int   // Number of bytes carried in the message.
-	Index   int32 // The index carried by a message, can be used to detect loss.
-}
-
-// NewBenchMessage creates a message carrying information used to calc
-// benchmarks on the other end of a transport.
-func NewBenchMessage(index int32, dataBlob []byte) types.Message {
-	msg := types.Message{
-		Parts: make([][]byte, 3),
-	}
-
-	indexBytes := indexToBytes(index)
-
-	msg.Parts[1] = indexBytes[0:4]
-	msg.Parts[2] = dataBlob
-
-	var err error
-	msg.Parts[0], err = time.Now().MarshalBinary()
-	if err != nil {
-		panic(err)
-	}
-
-	return msg
+	Latency int    // Time taken (ns) for a message to be received by a consumer
+	NBytes  int    // Number of bytes carried in the message
+	Index   uint64 // The index carried by a message, can be used to detect loss
 }
 
 // BenchFromMessage returns the benchmarking stats from a message received.
 func BenchFromMessage(msg types.Message) (Bench, error) {
 	var b Bench
-	if len(msg.Parts) < 2 {
-		return b, fmt.Errorf("Benchmark requires at least 2 message parts, received: %v", len(msg.Parts))
-	}
-
-	t := time.Time{}
-	if err := t.UnmarshalBinary(msg.Parts[0]); err != nil {
-		return b, err
-	}
-
-	b.Latency = int(time.Since(t))
-	b.Index = bytesToIndex(msg.Parts[1])
 	for _, part := range msg.Parts {
 		b.NBytes = b.NBytes + int(len(part))
+	}
+
+	var err error
+
+	// If more than one part we assume the first part is a timestamp.
+	if len(msg.Parts) > 1 {
+		var tsNano int64
+		if tsNano, err = strconv.ParseInt(string(msg.Parts[0]), 10, 64); err != nil {
+			return b, err
+		}
+		t := time.Unix(0, tsNano)
+		b.Latency = int(time.Since(t))
+	}
+
+	// If more than two parts we assume the second part is a message index.
+	if len(msg.Parts) > 2 {
+		if b.Index, err = strconv.ParseUint(string(msg.Parts[1]), 10, 64); err != nil {
+			return b, err
+		}
 	}
 
 	return b, nil
@@ -106,14 +72,12 @@ func BenchFromMessage(msg types.Message) (Bench, error) {
 //------------------------------------------------------------------------------
 
 // StartPrintingBenchmarks starts a goroutine that will periodically print any
-// statistics/benchmarks that are accumulated through messages, and also any
-// lost interactions as per the startIndex. If you want to disable data loss
-// detection then set the startIndex to -1. You must provide the messages via
-// the write channel returned by the function.
-func StartPrintingBenchmarks(period time.Duration, startIndex int32) chan<- Bench {
+// statistics/benchmarks that are accumulated through messages. You must provide
+// the messages via the write channel returned by the function.
+func StartPrintingBenchmarks(period time.Duration) chan<- Bench {
 	c := make(chan Bench, 100)
 
-	currentIndex := startIndex
+	var currentIndex uint64 = 1 // First message is expected to be 1.
 	dataMissing := 0
 
 	type statTally struct {
@@ -170,12 +134,7 @@ func StartPrintingBenchmarks(period time.Duration, startIndex int32) chan<- Benc
 				if !open {
 					return
 				}
-				if startIndex != -1 {
-					if startIndex == bench.Index {
-						// Indicates that the producer index has been restarted.
-						dataMissing = 0
-						currentIndex = bench.Index
-					}
+				if bench.Index > 0 {
 					if bench.Index == currentIndex {
 						currentIndex = bench.Index + 1
 					} else if bench.Index < currentIndex {

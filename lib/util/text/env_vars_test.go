@@ -28,6 +28,7 @@ import (
 func TestEnvVarDetection(t *testing.T) {
 	tests := map[string]bool{
 		"foo ${BENTHOS_TEST_FOO:bar} baz":           true,
+		"foo ${BENTHOS_TEST_FOO:} baz":              false,
 		"foo ${BENTHOS_TEST_FOO} baz":               true,
 		"foo ${BENTHOS_TEST_FOO} baz ${and_this}":   true,
 		"foo $BENTHOS_TEST_FOO} baz $but_not_this}": false,
@@ -59,7 +60,7 @@ func TestEnvSwapping(t *testing.T) {
 		"foo ${BENTHOS_TEST_FOO:wat@nuh.com} baz":            "foo wat@nuh.com baz",
 		"foo ${} baz":                                        "foo ${} baz",
 		"foo ${BENTHOS_TEST_FOO:foo,bar} baz":                "foo foo,bar baz",
-		"foo ${BENTHOS_TEST_FOO:} baz":                       "foo  baz",
+		"foo ${BENTHOS_TEST_FOO} baz":                        "foo  baz",
 	}
 
 	for in, exp := range tests {

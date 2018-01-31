@@ -1,0 +1,17 @@
+# Run this config with a regular `benthos` binary.
+http:
+  address: 0.0.0.0:4195
+input:
+  type: stdin
+  processors:
+  - type: bounds_check
+  - type: insert_part
+    insert_part:
+      index: 0
+      content: "${!count:messages}"
+  - type: insert_part
+    insert_part:
+      index: 0
+      content: "${!timestamp_unix_nano}"
+output:
+  type: stdout # TODO: Change this to the protocol being benchmarked
