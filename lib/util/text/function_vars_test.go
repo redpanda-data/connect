@@ -97,6 +97,32 @@ func TestFunctionSwapping(t *testing.T) {
 	if tThen.Sub(now).Seconds() > 5.0 {
 		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
 	}
+
+	now = time.Now()
+	tStamp = string(ReplaceFunctionVariables([]byte("${!timestamp_unix:10}")))
+
+	var secondsF float64
+	secondsF, err = strconv.ParseFloat(tStamp, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tThen = time.Unix(int64(secondsF), 0)
+
+	if tThen.Sub(now).Seconds() > 5.0 {
+		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
+	}
+
+	now = time.Now()
+	tStamp = string(ReplaceFunctionVariables([]byte("${!timestamp}")))
+
+	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if tThen.Sub(now).Seconds() > 5.0 {
+		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
+	}
 }
 
 func TestEchoFunction(t *testing.T) {

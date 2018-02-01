@@ -104,15 +104,27 @@ one of the following function names:
 
 ### `timestamp_unix_nano`
 
-The `timestamp_unix_nano` function simply resolves to the current unix timestamp
-in nanoseconds. E.g. `foo ${!timestamp_unix_nano} bar` might resolve to
+The `timestamp_unix_nano` function resolves to the current unix timestamp in
+nanoseconds. E.g. `foo ${!timestamp_unix_nano} bar` might resolve to
 `foo 1517412152475689615 bar`.
 
 ### `timestamp_unix`
 
-The `timestamp_unix` function simply resolves to the current unix timestamp in
-seconds. E.g. `foo ${!timestamp_unix} bar` might resolve to
-`foo 1517412152 bar`.
+The `timestamp_unix` function resolves to the current unix timestamp in seconds.
+E.g. `foo ${!timestamp_unix} bar` might resolve to `foo 1517412152 bar`. You can
+add fractional precision up to the nanosecond by specifying the precision as an
+argument, e.g. `${!timestamp_unix:3}` for millisecond precision.
+
+### `timestamp`
+
+The `timestamp` function will print the current time in a custom format
+specified by the argument. The format is defined by showing how the reference
+time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it
+were the value.
+
+A fractional second is represented by adding a period and zeros to the end of
+the seconds section of layout string, as in `15:04:05.000` to format a time
+stamp with millisecond precision.
 
 ### `count`
 

@@ -49,7 +49,23 @@ var functionVars = map[string]func(arg string) []byte{
 		return []byte(strconv.FormatInt(time.Now().UnixNano(), 10))
 	},
 	"timestamp_unix": func(arg string) []byte {
-		return []byte(strconv.FormatInt(time.Now().Unix(), 10))
+		tNow := time.Now()
+		precision, _ := strconv.ParseInt(arg, 10, 64)
+		tStr := strconv.FormatInt(tNow.Unix(), 10)
+		if precision > 0 {
+			nanoStr := strconv.FormatInt(int64(tNow.Nanosecond()), 10)
+			if lNano := int64(len(nanoStr)); precision >= lNano {
+				precision = lNano - 1
+			}
+			tStr = tStr + "." + nanoStr[:precision]
+		}
+		return []byte(tStr)
+	},
+	"timestamp": func(arg string) []byte {
+		if len(arg) == 0 {
+			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
+		}
+		return []byte(time.Now().Format(arg))
 	},
 	"hostname": func(arg string) []byte {
 		hn, _ := os.Hostname()
