@@ -40,7 +40,12 @@ selection array. E.g. with 'parts' set to [ 2, 0, 1 ] and the message parts
 [ '0', '1', '2', '3' ], the output will be [ '2', '0', '1' ].
 
 If none of the selected parts exist in the input message (resulting in an empty
-output message) the message is dropped entirely.`,
+output message) the message is dropped entirely.
+
+Part indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if index = -1 then the selected part
+will be the last part of the message, if index = -2 then the part before the
+last element with be selected, and so on.`,
 	}
 }
 
@@ -86,11 +91,17 @@ func (m *SelectParts) ProcessMessage(msg *types.Message) (*types.Message, types.
 	newMsg := types.NewMessage()
 	lParts := len(msg.Parts)
 	for _, index := range m.conf.SelectParts.Parts {
-		if index < lParts {
+		if index < 0 {
+			// Negative indexes count backwards from the end.
+			index = lParts + index
+		}
+
+		// Check boundary of part index.
+		if index < 0 || index >= lParts {
+			m.stats.Incr("processor.select_parts.skipped", 1)
+		} else {
 			m.stats.Incr("processor.select_parts.selected", 1)
 			newMsg.Parts = append(newMsg.Parts, msg.Parts[index])
-		} else {
-			m.stats.Incr("processor.select_parts.skipped", 1)
 		}
 	}
 

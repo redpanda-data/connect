@@ -95,3 +95,36 @@ selection array. E.g. with 'parts' set to [ 2, 0, 1 ] and the message parts
 
 If none of the selected parts exist in the input message (resulting in an empty
 output message) the message is dropped entirely.
+
+Part indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if index = -1 then the selected part
+will be the last part of the message, if index = -2 then the part before the
+last element with be selected, and so on.
+
+## `set_json`
+
+Parses a message part as a JSON blob, sets a path to a value, and writes the
+modified JSON back to the message part.
+
+Values can be any value type, including objects and arrays. When using YAML
+configuration files a YAML object will be converted into a JSON object, i.e.
+with the config:
+
+``` yaml
+set_json:
+  part: 0
+  path: some.path
+  value:
+    foo:
+      bar: 5
+```
+
+The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
+contains keys that aren't strings those fields will be ignored.
+
+The part index can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if part = -1 then the selected part
+will be the last part of the message, if part = -2 then the part before the
+last element with be selected, and so on.
+
+This processor will interpolate functions within the 'value' field.

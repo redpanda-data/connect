@@ -49,6 +49,7 @@ type Config struct {
 	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
 	SelectParts SelectPartsConfig `json:"select_parts" yaml:"select_parts"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
+	SetJSON     SetJSONConfig     `json:"set_json" yaml:"set_json"`
 	BlobToMulti struct{}          `json:"blob_to_multi" yaml:"blob_to_multi"`
 	MultiToBlob struct{}          `json:"multi_to_blob" yaml:"multi_to_blob"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
@@ -63,6 +64,7 @@ func NewConfig() Config {
 		BoundsCheck: NewBoundsCheckConfig(),
 		SelectParts: NewSelectPartsConfig(),
 		InsertPart:  NewInsertPartConfig(),
+		SetJSON:     NewSetJSONConfig(),
 		BlobToMulti: struct{}{},
 		MultiToBlob: struct{}{},
 		Sample:      NewSampleConfig(),

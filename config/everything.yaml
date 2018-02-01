@@ -120,6 +120,10 @@ input:
     insert_part:
       index: -1
       content: ""
+    set_json:
+      part: 0
+      path: ""
+      value: ""
     blob_to_multi: {}
     multi_to_blob: {}
     sample:
