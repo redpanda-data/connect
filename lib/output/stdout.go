@@ -65,7 +65,7 @@ func NewSTDOUTConfig() STDOUTConfig {
 
 // NewSTDOUT creates a new STDOUT output type.
 func NewSTDOUT(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	return newWriter(os.Stdout, []byte(conf.STDOUT.CustomDelim), "stdout", log, stats)
+	return NewLineWriter(os.Stdout, []byte(conf.STDOUT.CustomDelim), "stdout", log, stats)
 }
 
 //------------------------------------------------------------------------------

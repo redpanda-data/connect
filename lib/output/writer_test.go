@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,169 +21,289 @@
 package output
 
 import (
-	"bytes"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
-type testBuffer struct {
-	bytes.Buffer
+//------------------------------------------------------------------------------
 
-	closed bool
+type writerCantConnect struct{}
+
+func (w writerCantConnect) Connect() error { return writer.ErrNotConnected }
+func (w writerCantConnect) Write(msg types.Message) error {
+	return writer.ErrNotConnected
 }
-
-func (t *testBuffer) Close() error {
-	t.closed = true
+func (w writerCantConnect) CloseAsync() {}
+func (w writerCantConnect) WaitForClose(time.Duration) error {
 	return nil
 }
 
-func TestWriterBasic(t *testing.T) {
-	var buf testBuffer
-
-	msgChan := make(chan types.Message)
-
-	writer, err := newWriter(&buf, []byte{}, "foo", log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+func TestWriterCantConnect(t *testing.T) {
+	w, err := NewWriter(
+		"foo", writerCantConnect{},
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	if err = writer.StartReceiving(msgChan); err != nil {
+	if err = w.StartReceiving(make(chan types.Message)); err != nil {
 		t.Error(err)
 	}
-	if err = writer.StartReceiving(msgChan); err == nil {
+	if err = w.StartReceiving(nil); err == nil {
 		t.Error("Expected error from duplicate receiver call")
 	}
 
-	testCases := []struct {
-		message        []string
-		expectedOutput string
-	}{
-		{
-			[]string{`hello world`},
-			"hello world\n",
-		},
-		{
-			[]string{`hello world`, `part 2`},
-			"hello world\npart 2\n\n",
-		},
-	}
-
-	for _, c := range testCases {
-		msg := types.Message{}
-		for _, part := range c.message {
-			msg.Parts = append(msg.Parts, []byte(part))
-		}
-
-		select {
-		case msgChan <- msg:
-		case <-time.After(time.Second):
-			t.Error("Timed out sending message")
-		}
-
-		select {
-		case res, open := <-writer.ResponseChan():
-			if !open {
-				t.Error("writer closed early")
-				return
-			}
-			if res.Error() != nil {
-				t.Error(res.Error())
-			}
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
-
-		if exp, act := c.expectedOutput, buf.String(); exp != act {
-			t.Errorf("Unexpected output from writer: %v != %v", exp, act)
-		}
-		buf.Reset()
-	}
-
-	writer.CloseAsync()
-	if err = writer.WaitForClose(time.Second); err != nil {
+	// We will fail to connect but should still exit immediately.
+	w.CloseAsync()
+	if err = w.WaitForClose(time.Second); err != nil {
 		t.Error(err)
-	}
-
-	if !buf.closed {
-		t.Error("Buffer was not closed by writer")
 	}
 }
 
-func TestWriterCustomDelim(t *testing.T) {
-	var buf testBuffer
+//------------------------------------------------------------------------------
 
-	msgChan := make(chan types.Message)
+type writerCantSend struct {
+	connected int
+}
 
-	writer, err := newWriter(&buf, []byte("<FOO>"), "foo", log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+func (w *writerCantSend) Connect() error {
+	w.connected++
+	return nil
+}
+func (w *writerCantSend) Write(msg types.Message) error {
+	return writer.ErrNotConnected
+}
+func (w *writerCantSend) CloseAsync() {}
+func (w *writerCantSend) WaitForClose(time.Duration) error {
+	return nil
+}
+
+func TestWriterCantSend(t *testing.T) {
+	writerImpl := &writerCantSend{}
+
+	w, err := NewWriter(
+		"foo", writerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	if err = writer.StartReceiving(msgChan); err != nil {
+	msgChan := make(chan types.Message)
+
+	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
 	}
-	if err = writer.StartReceiving(msgChan); err == nil {
+	if err = w.StartReceiving(nil); err == nil {
 		t.Error("Expected error from duplicate receiver call")
 	}
 
-	testCases := []struct {
-		message        []string
-		expectedOutput string
-	}{
-		{
-			[]string{`hello world`},
-			"hello world<FOO>",
-		},
-		{
-			[]string{`hello world`, `part 2`},
-			"hello world<FOO>part 2<FOO><FOO>",
-		},
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		res, open := <-w.ResponseChan()
+		if open {
+			if act, exp := res.Error(), writer.ErrNotConnected; exp != act {
+				t.Errorf("Received unexpected response: %v != %v", act, exp)
+			}
+		}
+		wg.Done()
+	}()
+
+	select {
+	case msgChan <- types.Message{}:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
 	}
 
-	for _, c := range testCases {
-		msg := types.Message{}
-		for _, part := range c.message {
-			msg.Parts = append(msg.Parts, []byte(part))
-		}
-
-		select {
-		case msgChan <- msg:
-		case <-time.After(time.Second):
-			t.Error("Timed out sending message")
-		}
-
-		select {
-		case res, open := <-writer.ResponseChan():
-			if !open {
-				t.Error("writer closed early")
-				return
-			}
-			if res.Error() != nil {
-				t.Error(res.Error())
-			}
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
-
-		if exp, act := c.expectedOutput, buf.String(); exp != act {
-			t.Errorf("Unexpected output from writer: %v != %v", exp, act)
-		}
-		buf.Reset()
-	}
-
-	writer.CloseAsync()
-	if err = writer.WaitForClose(time.Second); err != nil {
+	// We will be failing to send but should still exit immediately.
+	w.CloseAsync()
+	if err = w.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
 
-	if !buf.closed {
-		t.Error("Buffer was not closed by writer")
+	wg.Wait()
+
+	if writerImpl.connected <= 1 {
+		t.Errorf("Connected wasn't called enough times: %v", writerImpl.connected)
 	}
 }
+
+func TestWriterCantSendClosed(t *testing.T) {
+	writerImpl := &writerCantSend{}
+
+	w, err := NewWriter(
+		"foo", writerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgChan := make(chan types.Message)
+
+	if err = w.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+	}
+
+	w.CloseAsync()
+	if err = w.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestWriterCantSendClosedChan(t *testing.T) {
+	writerImpl := &writerCantSend{}
+
+	w, err := NewWriter(
+		"foo", writerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgChan := make(chan types.Message)
+
+	if err = w.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+	}
+
+	close(msgChan)
+	if err = w.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+//------------------------------------------------------------------------------
+
+type writerCanReconnect struct {
+	failSendFirst bool
+	connSuccesses int
+
+	connected int
+}
+
+func (w *writerCanReconnect) Connect() error {
+	w.connected++
+	if w.connSuccesses <= 0 {
+		return writer.ErrNotConnected
+	}
+	w.connSuccesses--
+	return nil
+}
+func (w *writerCanReconnect) Write(msg types.Message) error {
+	if !w.failSendFirst {
+		w.failSendFirst = true
+		return writer.ErrNotConnected
+	}
+	return nil
+}
+func (w *writerCanReconnect) CloseAsync() {}
+func (w *writerCanReconnect) WaitForClose(time.Duration) error {
+	return nil
+}
+
+func TestWriterCanReconnect(t *testing.T) {
+	writerImpl := &writerCanReconnect{connSuccesses: 100}
+
+	w, err := NewWriter(
+		"foo", writerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgChan := make(chan types.Message)
+
+	if err = w.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+	}
+	if err = w.StartReceiving(nil); err == nil {
+		t.Error("Expected error from duplicate receiver call")
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		res, open := <-w.ResponseChan()
+		if open {
+			if act, exp := res.Error(), error(nil); exp != act {
+				t.Errorf("unexpected error: %v != %v", act, exp)
+			}
+		}
+		wg.Done()
+	}()
+
+	select {
+	case msgChan <- types.Message{}:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	// We will be failing to send but should still exit immediately.
+	w.CloseAsync()
+	if err = w.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	wg.Wait()
+
+	if writerImpl.connected <= 1 {
+		t.Errorf("Connected wasn't called enough times: %v", writerImpl.connected)
+	}
+}
+
+func TestWriterCantReconnect(t *testing.T) {
+	writerImpl := &writerCanReconnect{connSuccesses: 1}
+
+	w, err := NewWriter(
+		"foo", writerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgChan := make(chan types.Message)
+
+	if err = w.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+	}
+	if err = w.StartReceiving(nil); err == nil {
+		t.Error("Expected error from duplicate receiver call")
+	}
+
+	select {
+	case msgChan <- types.Message{}:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	// We will be failing to send but should still exit immediately.
+	w.CloseAsync()
+	if err = w.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	if writerImpl.connected <= 1 {
+		t.Errorf("Connected wasn't called enough times: %v", writerImpl.connected)
+	}
+}
+
+//------------------------------------------------------------------------------

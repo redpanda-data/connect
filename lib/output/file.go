@@ -72,7 +72,7 @@ func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newWriter(file, []byte(conf.File.CustomDelim), "file", log, stats)
+	return NewLineWriter(file, []byte(conf.File.CustomDelim), "file", log, stats)
 }
 
 //------------------------------------------------------------------------------
