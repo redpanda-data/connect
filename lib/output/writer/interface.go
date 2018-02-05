@@ -21,15 +21,7 @@
 package writer
 
 import (
-	"errors"
-
 	"github.com/Jeffail/benthos/lib/types"
-)
-
-// Errors for the writer.Type.
-var (
-	ErrClosed       = errors.New("writer was closed before acknowledgement received")
-	ErrNotConnected = errors.New("writer is not connected to target sink")
 )
 
 // Type is a type that writes Benthos messages to a third party sink.

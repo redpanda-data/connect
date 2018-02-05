@@ -126,7 +126,7 @@ func (w *Writer) loop() {
 		err := w.writer.Write(msg)
 
 		// If our writer says it is not connected.
-		if err == writer.ErrNotConnected {
+		if err == types.ErrNotConnected {
 			w.stats.Incr(lostConnPath, 1)
 
 			// Continue to try to reconnect while still active.
@@ -139,7 +139,7 @@ func (w *Writer) loop() {
 					case <-w.closeChan:
 						return
 					}
-				} else if err = w.writer.Write(msg); err != writer.ErrNotConnected {
+				} else if err = w.writer.Write(msg); err != types.ErrNotConnected {
 					w.stats.Incr(connPath, 1)
 					break
 				}

@@ -121,7 +121,7 @@ func (k *Kafka) Connect() error {
 // returns an error if applicable.
 func (k *Kafka) Write(msg types.Message) error {
 	if k.producer == nil {
-		return ErrNotConnected
+		return types.ErrNotConnected
 	}
 	var err error
 	for _, part := range msg.Parts {

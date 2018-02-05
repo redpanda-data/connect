@@ -18,6 +18,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// Package writer defines implementations of an interface for generic message
-// writing that outputs to various third party sinks.
-package writer
+package reader
+
+import (
+	"github.com/Jeffail/benthos/lib/types"
+)
+
+// Type is a type that writes Benthos messages to a third party sink.
+type Type interface {
+	// Connect attempts to establish a connection to the source, if unsuccessful
+	// returns an error. If the attempt is successful (or not necessary) returns
+	// nil.
+	Connect() error
+
+	// Acknowledge, if applicable to the source, should send acknowledgments for
+	// (or commit) all unacknowledged (or uncommitted) messages that have thus
+	// far been consumed. If the error is non-nil this means the message was
+	// unsuccessfully propagated down the pipeline, in which case it is up to
+	// the implementation to decide whether to simply retry uncommitted messages
+	// that are buffered locally, or to send the error upstream.
+	Acknowledge(err error) error
+
+	// Read attempts to read a new message from the source.
+	Read() (types.Message, error)
+
+	types.Closable
+}

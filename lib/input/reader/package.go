@@ -18,6 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// Package writer defines implementations of an interface for generic message
-// writing that outputs to various third party sinks.
-package writer
+// Package reader defines implementations of an interface for generic message
+// reading from various third party sources.
+package reader

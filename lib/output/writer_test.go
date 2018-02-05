@@ -21,12 +21,13 @@
 package output
 
 import (
+	"errors"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
@@ -34,11 +35,40 @@ import (
 
 //------------------------------------------------------------------------------
 
+type mockWriter struct {
+	resToSnd error
+	msgRcvd  types.Message
+
+	connChan  chan error
+	writeChan chan error
+}
+
+func newMockWriter() *mockWriter {
+	return &mockWriter{
+		connChan:  make(chan error),
+		writeChan: make(chan error),
+	}
+}
+
+func (w *mockWriter) Connect() error {
+	return <-w.connChan
+}
+func (w *mockWriter) Write(msg types.Message) error {
+	w.msgRcvd = msg
+	return <-w.writeChan
+}
+func (w *mockWriter) CloseAsync() {}
+func (w *mockWriter) WaitForClose(time.Duration) error {
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
 type writerCantConnect struct{}
 
-func (w writerCantConnect) Connect() error { return writer.ErrNotConnected }
+func (w writerCantConnect) Connect() error { return types.ErrNotConnected }
 func (w writerCantConnect) Write(msg types.Message) error {
-	return writer.ErrNotConnected
+	return types.ErrNotConnected
 }
 func (w writerCantConnect) CloseAsync() {}
 func (w writerCantConnect) WaitForClose(time.Duration) error {
@@ -46,6 +76,8 @@ func (w writerCantConnect) WaitForClose(time.Duration) error {
 }
 
 func TestWriterCantConnect(t *testing.T) {
+	t.Parallel()
+
 	w, err := NewWriter(
 		"foo", writerCantConnect{},
 		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
@@ -80,7 +112,7 @@ func (w *writerCantSend) Connect() error {
 	return nil
 }
 func (w *writerCantSend) Write(msg types.Message) error {
-	return writer.ErrNotConnected
+	return types.ErrNotConnected
 }
 func (w *writerCantSend) CloseAsync() {}
 func (w *writerCantSend) WaitForClose(time.Duration) error {
@@ -88,6 +120,8 @@ func (w *writerCantSend) WaitForClose(time.Duration) error {
 }
 
 func TestWriterCantSend(t *testing.T) {
+	t.Parallel()
+
 	writerImpl := &writerCantSend{}
 
 	w, err := NewWriter(
@@ -113,7 +147,7 @@ func TestWriterCantSend(t *testing.T) {
 	go func() {
 		res, open := <-w.ResponseChan()
 		if open {
-			if act, exp := res.Error(), writer.ErrNotConnected; exp != act {
+			if act, exp := res.Error(), types.ErrNotConnected; exp != act {
 				t.Errorf("Received unexpected response: %v != %v", act, exp)
 			}
 		}
@@ -134,12 +168,14 @@ func TestWriterCantSend(t *testing.T) {
 
 	wg.Wait()
 
-	if writerImpl.connected <= 1 {
+	if writerImpl.connected < 1 {
 		t.Errorf("Connected wasn't called enough times: %v", writerImpl.connected)
 	}
 }
 
 func TestWriterCantSendClosed(t *testing.T) {
+	t.Parallel()
+
 	writerImpl := &writerCantSend{}
 
 	w, err := NewWriter(
@@ -164,6 +200,8 @@ func TestWriterCantSendClosed(t *testing.T) {
 }
 
 func TestWriterCantSendClosedChan(t *testing.T) {
+	t.Parallel()
+
 	writerImpl := &writerCantSend{}
 
 	w, err := NewWriter(
@@ -189,35 +227,10 @@ func TestWriterCantSendClosedChan(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
-type writerCanReconnect struct {
-	failSendFirst bool
-	connSuccesses int
-
-	connected int
-}
-
-func (w *writerCanReconnect) Connect() error {
-	w.connected++
-	if w.connSuccesses <= 0 {
-		return writer.ErrNotConnected
-	}
-	w.connSuccesses--
-	return nil
-}
-func (w *writerCanReconnect) Write(msg types.Message) error {
-	if !w.failSendFirst {
-		w.failSendFirst = true
-		return writer.ErrNotConnected
-	}
-	return nil
-}
-func (w *writerCanReconnect) CloseAsync() {}
-func (w *writerCanReconnect) WaitForClose(time.Duration) error {
-	return nil
-}
-
 func TestWriterCanReconnect(t *testing.T) {
-	writerImpl := &writerCanReconnect{connSuccesses: 100}
+	t.Parallel()
+
+	writerImpl := newMockWriter()
 
 	w, err := NewWriter(
 		"foo", writerImpl,
@@ -233,20 +246,29 @@ func TestWriterCanReconnect(t *testing.T) {
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
 	}
-	if err = w.StartReceiving(nil); err == nil {
-		t.Error("Expected error from duplicate receiver call")
+
+	select {
+	case writerImpl.connChan <- nil:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	go func() {
-		res, open := <-w.ResponseChan()
-		if open {
-			if act, exp := res.Error(), error(nil); exp != act {
-				t.Errorf("unexpected error: %v != %v", act, exp)
-			}
+		select {
+		case writerImpl.writeChan <- types.ErrNotConnected:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
 		}
-		wg.Done()
+		select {
+		case writerImpl.connChan <- nil:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case writerImpl.writeChan <- nil:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
 	}()
 
 	select {
@@ -254,22 +276,29 @@ func TestWriterCanReconnect(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
+	select {
+	case res, open := <-w.ResponseChan():
+		if !open {
+			t.Error("Res chan closed")
+		}
+		if err := res.Error(); err != nil {
+			t.Error(err)
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
 
 	// We will be failing to send but should still exit immediately.
 	w.CloseAsync()
 	if err = w.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
-
-	wg.Wait()
-
-	if writerImpl.connected <= 1 {
-		t.Errorf("Connected wasn't called enough times: %v", writerImpl.connected)
-	}
 }
 
 func TestWriterCantReconnect(t *testing.T) {
-	writerImpl := &writerCanReconnect{connSuccesses: 1}
+	t.Parallel()
+
+	writerImpl := newMockWriter()
 
 	w, err := NewWriter(
 		"foo", writerImpl,
@@ -285,14 +314,94 @@ func TestWriterCantReconnect(t *testing.T) {
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
 	}
-	if err = w.StartReceiving(nil); err == nil {
-		t.Error("Expected error from duplicate receiver call")
+
+	go func() {
+		select {
+		case msgChan <- types.Message{}:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}()
+
+	select {
+	case writerImpl.connChan <- nil:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+	select {
+	case writerImpl.writeChan <- types.ErrNotConnected:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+	select {
+	case writerImpl.connChan <- types.ErrNotConnected:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	// We will be failing to send but should still exit immediately.
+	w.CloseAsync()
+	if err = w.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestWriterHappyPath(t *testing.T) {
+	t.Parallel()
+
+	writerImpl := newMockWriter()
+
+	exp := [][]byte{[]byte("foo"), []byte("bar")}
+	expErr := error(nil)
+
+	writerImpl.resToSnd = expErr
+
+	w, err := NewWriter(
+		"foo", writerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgChan := make(chan types.Message)
+
+	if err = w.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+	}
+
+	go func() {
+		select {
+		case msgChan <- types.Message{
+			Parts: exp,
+		}:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}()
+
+	select {
+	case writerImpl.connChan <- nil:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+	select {
+	case writerImpl.writeChan <- expErr:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
 	}
 
 	select {
-	case msgChan <- types.Message{}:
+	case res, open := <-w.ResponseChan():
+		if !open {
+			t.Fatal("Chan closed")
+		}
+		if actErr := res.Error(); expErr != actErr {
+			t.Errorf("Wrong response: %v != %v", actErr, expErr)
+		}
 	case <-time.After(time.Second):
-		t.Error("Timed out")
+		t.Fatal("Timed out")
 	}
 
 	// We will be failing to send but should still exit immediately.
@@ -301,8 +410,77 @@ func TestWriterCantReconnect(t *testing.T) {
 		t.Error(err)
 	}
 
-	if writerImpl.connected <= 1 {
-		t.Errorf("Connected wasn't called enough times: %v", writerImpl.connected)
+	if act := writerImpl.msgRcvd.Parts; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong message sent: %v != %v", act, exp)
+	}
+}
+
+func TestWriterSadPath(t *testing.T) {
+	t.Parallel()
+
+	writerImpl := newMockWriter()
+
+	exp := [][]byte{[]byte("foo"), []byte("bar")}
+	expErr := errors.New("message got lost or something")
+
+	writerImpl.resToSnd = expErr
+
+	w, err := NewWriter(
+		"foo", writerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgChan := make(chan types.Message)
+
+	if err = w.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+	}
+
+	go func() {
+		select {
+		case msgChan <- types.Message{
+			Parts: exp,
+		}:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}()
+
+	select {
+	case writerImpl.connChan <- nil:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+	select {
+	case writerImpl.writeChan <- expErr:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	select {
+	case res, open := <-w.ResponseChan():
+		if !open {
+			t.Fatal("Chan closed")
+		}
+		if actErr := res.Error(); expErr != actErr {
+			t.Errorf("Wrong response: %v != %v", actErr, expErr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	// We will be failing to send but should still exit immediately.
+	w.CloseAsync()
+	if err = w.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	if act := writerImpl.msgRcvd.Parts; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }
 

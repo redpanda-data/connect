@@ -33,6 +33,8 @@ var (
 	ErrChanClosed = errors.New("channel was closed unexpectedly")
 	ErrTypeClosed = errors.New("type was closed")
 
+	ErrNotConnected = errors.New("not connected to target source or sink")
+
 	ErrInvalidProcessorType = errors.New("processor type was not recognised")
 	ErrInvalidBufferType    = errors.New("buffer type was not recognised")
 	ErrInvalidInputType     = errors.New("input type was not recognised")
