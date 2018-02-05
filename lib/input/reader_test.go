@@ -165,6 +165,132 @@ func TestReaderCantRead(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
+func TestReaderTypeClosedOnConn(t *testing.T) {
+	t.Parallel()
+
+	readerImpl := newMockReader()
+
+	r, err := NewReader(
+		"foo", readerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	resChan := make(chan types.Response)
+
+	if err = r.StartListening(resChan); err != nil {
+		t.Error(err)
+	}
+
+	go func() {
+		select {
+		case readerImpl.connChan <- types.ErrTypeClosed:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+	}()
+
+	if err = r.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestReaderTypeClosedOnReconn(t *testing.T) {
+	t.Parallel()
+
+	readerImpl := newMockReader()
+
+	r, err := NewReader(
+		"foo", readerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	resChan := make(chan types.Response)
+
+	if err = r.StartListening(resChan); err != nil {
+		t.Error(err)
+	}
+
+	go func() {
+		select {
+		case readerImpl.connChan <- nil:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case readerImpl.readChan <- types.ErrNotConnected:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case readerImpl.connChan <- types.ErrTypeClosed:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+	}()
+
+	if err = r.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestReaderTypeClosedOnReread(t *testing.T) {
+	t.Parallel()
+
+	readerImpl := newMockReader()
+
+	r, err := NewReader(
+		"foo", readerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	resChan := make(chan types.Response)
+
+	if err = r.StartListening(resChan); err != nil {
+		t.Error(err)
+	}
+
+	go func() {
+		select {
+		case readerImpl.connChan <- nil:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case readerImpl.readChan <- types.ErrNotConnected:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case readerImpl.connChan <- nil:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case readerImpl.readChan <- types.ErrTypeClosed:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+	}()
+
+	if err = r.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+//------------------------------------------------------------------------------
+
 func TestReaderCanReconnect(t *testing.T) {
 	t.Parallel()
 

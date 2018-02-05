@@ -97,6 +97,11 @@ func (w *Writer) loop() {
 
 	for {
 		if err := w.writer.Connect(); err != nil {
+			// Close immediately if our writer is closed.
+			if err == types.ErrTypeClosed {
+				return
+			}
+
 			w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
 			w.stats.Incr(failedConnPath, 1)
 			select {
@@ -132,6 +137,11 @@ func (w *Writer) loop() {
 			// Continue to try to reconnect while still active.
 			for atomic.LoadInt32(&w.running) == 1 {
 				if err = w.writer.Connect(); err != nil {
+					// Close immediately if our writer is closed.
+					if err == types.ErrTypeClosed {
+						return
+					}
+
 					w.log.Errorf("Failed to reconnect to %v: %v\n", w.typeStr, err)
 					w.stats.Incr(failedConnPath, 1)
 					select {
@@ -144,6 +154,11 @@ func (w *Writer) loop() {
 					break
 				}
 			}
+		}
+
+		// Close immediately if our writer is closed.
+		if err == types.ErrTypeClosed {
+			return
 		}
 
 		if err != nil {

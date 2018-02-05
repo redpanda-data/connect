@@ -100,6 +100,9 @@ func (r *Reader) loop() {
 
 	for {
 		if err := r.reader.Connect(); err != nil {
+			if err == types.ErrTypeClosed {
+				return
+			}
 			r.log.Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
 			r.stats.Incr(failedConnPath, 1)
 			select {
@@ -123,6 +126,11 @@ func (r *Reader) loop() {
 			// Continue to try to reconnect while still active.
 			for atomic.LoadInt32(&r.running) == 1 {
 				if err = r.reader.Connect(); err != nil {
+					// Close immediately if our reader is closed.
+					if err == types.ErrTypeClosed {
+						return
+					}
+
 					r.log.Errorf("Failed to reconnect to %v: %v\n", r.typeStr, err)
 					r.stats.Incr(failedConnPath, 1)
 					select {
@@ -135,6 +143,11 @@ func (r *Reader) loop() {
 					break
 				}
 			}
+		}
+
+		// Close immediately if our reader is closed.
+		if err == types.ErrTypeClosed {
+			return
 		}
 
 		if err != nil {

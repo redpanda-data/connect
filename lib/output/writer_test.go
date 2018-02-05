@@ -227,6 +227,144 @@ func TestWriterCantSendClosedChan(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
+func TestWriterStartClosed(t *testing.T) {
+	t.Parallel()
+
+	writerImpl := newMockWriter()
+
+	w, err := NewWriter(
+		"foo", writerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgChan := make(chan types.Message)
+
+	if err = w.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case writerImpl.connChan <- types.ErrTypeClosed:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	if err = w.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestWriterClosesOnReconn(t *testing.T) {
+	t.Parallel()
+
+	writerImpl := newMockWriter()
+
+	w, err := NewWriter(
+		"foo", writerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgChan := make(chan types.Message)
+
+	if err = w.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case writerImpl.connChan <- nil:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	go func() {
+		select {
+		case writerImpl.writeChan <- types.ErrNotConnected:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case writerImpl.connChan <- types.ErrTypeClosed:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+	}()
+
+	select {
+	case msgChan <- types.Message{}:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	if err = w.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestWriterClosesOnResend(t *testing.T) {
+	t.Parallel()
+
+	writerImpl := newMockWriter()
+
+	w, err := NewWriter(
+		"foo", writerImpl,
+		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgChan := make(chan types.Message)
+
+	if err = w.StartReceiving(msgChan); err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case writerImpl.connChan <- nil:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	go func() {
+		select {
+		case writerImpl.writeChan <- types.ErrNotConnected:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case writerImpl.connChan <- nil:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case writerImpl.writeChan <- types.ErrTypeClosed:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+	}()
+
+	select {
+	case msgChan <- types.Message{}:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	if err = w.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
+//------------------------------------------------------------------------------
+
 func TestWriterCanReconnect(t *testing.T) {
 	t.Parallel()
 
