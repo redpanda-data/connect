@@ -106,7 +106,7 @@ func (e *Empty) loop() {
 			return
 		}
 		if res.Error() != nil {
-			// Back off on consectutive retries
+			// Back off on consecutive retries
 			e.throt.Retry()
 		} else {
 			e.throt.Reset()

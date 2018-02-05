@@ -280,19 +280,19 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 
 func TestHTTPClientGETMultipartLoop(t *testing.T) {
 	tests := [][]string{
-		[]string{
+		{
 			"Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
 			"Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.",
 			"Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
 		},
-		[]string{
+		{
 			"Tristique et egestas quis ipsum suspendisse ultrices. Quis enim lobortis scelerisque fermentum dui faucibus.",
 		},
-		[]string{
+		{
 			"Lorem donec massa sapien faucibus et molestie ac. Lectus proin nibh nisl condimentum id venenatis a.",
 			"Ultricies mi eget mauris pharetra et ultrices neque ornare aenean.",
 		},
-		[]string{
+		{
 			"Amet tellus cras adipiscing enim. Non pulvinar neque laoreet suspendisse interdum consectetur. Venenatis cras sed felis eget velit aliquet sagittis.",
 			"Ac feugiat sed lectus vestibulum mattis ullamcorper velit. Phasellus vestibulum lorem sed risus ultricies tristique nulla aliquet.",
 			"Odio ut sem nulla pharetra diam sit. Neque vitae tempus quam pellentesque nec nam aliquam sem.",
@@ -386,19 +386,19 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 
 func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 	tests := [][]string{
-		[]string{
+		{
 			"Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
 			"Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.",
 			"Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
 		},
-		[]string{
+		{
 			"Tristique et egestas quis ipsum suspendisse ultrices. Quis enim lobortis scelerisque fermentum dui faucibus.",
 		},
-		[]string{
+		{
 			"Lorem donec massa sapien faucibus et molestie ac. Lectus proin nibh nisl condimentum id venenatis a.",
 			"Ultricies mi eget mauris pharetra et ultrices neque ornare aenean.",
 		},
-		[]string{
+		{
 			"Amet tellus cras adipiscing enim. Non pulvinar neque laoreet suspendisse interdum consectetur. Venenatis cras sed felis eget velit aliquet sagittis.",
 			"Ac feugiat sed lectus vestibulum mattis ullamcorper velit. Phasellus vestibulum lorem sed risus ultricies tristique nulla aliquet.",
 			"Odio ut sem nulla pharetra diam sit. Neque vitae tempus quam pellentesque nec nam aliquam sem.",
@@ -479,8 +479,8 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 
 func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 	msgs := [][]string{
-		[]string{"foo", "bar"},
-		[]string{"foo", "baz"},
+		{"foo", "bar"},
+		{"foo", "baz"},
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

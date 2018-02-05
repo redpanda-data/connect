@@ -73,7 +73,7 @@ func init() {
 // - Load an optional configuration file (supports JSON, YAML)
 // - Print the config file (supports JSON, YAML) and exit
 //
-// Configuration files will be parsed according to their extention (.js, .json,
+// Configuration files will be parsed according to their extension (.js, .json,
 // .yaml, etc) and will have environment variables substituted in before
 // performing the parse.
 //
