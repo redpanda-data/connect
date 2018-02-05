@@ -254,7 +254,7 @@ func main() {
 		)
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil && httpErr != http.ErrServerClosed {
-			logger.Errorf("HTTP Server error: %v\n", err)
+			logger.Errorf("HTTP Server error: %v\n", httpErr)
 		}
 		close(httpServerClosedChan)
 	}()
@@ -298,6 +298,8 @@ func main() {
 		logger.Infoln("Received SIGTERM, the service is closing.")
 	case <-outputsClosedChan:
 		logger.Infoln("Pipeline has terminated. Shutting down the service.")
+	case <-httpServerClosedChan:
+		logger.Infoln("HTTP Server has terminated. Shutting down the service.")
 	}
 }
 

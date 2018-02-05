@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/types"
@@ -59,7 +60,7 @@ type Config struct {
 	HTTPClient    HTTPClientConfig    `json:"http_client" yaml:"http_client"`
 	ScaleProto    ScaleProtoConfig    `json:"scalability_protocols" yaml:"scalability_protocols"`
 	ZMQ4          *ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	Kafka         KafkaConfig         `json:"kafka" yaml:"kafka"`
+	Kafka         reader.KafkaConfig  `json:"kafka" yaml:"kafka"`
 	KafkaBalanced KafkaBalancedConfig `json:"kafka_balanced" yaml:"kafka_balanced"`
 	AMQP          AMQPConfig          `json:"amqp" yaml:"amqp"`
 	NSQ           NSQConfig           `json:"nsq" yaml:"nsq"`
@@ -80,7 +81,7 @@ func NewConfig() Config {
 		HTTPClient:    NewHTTPClientConfig(),
 		ScaleProto:    NewScaleProtoConfig(),
 		ZMQ4:          NewZMQ4Config(),
-		Kafka:         NewKafkaConfig(),
+		Kafka:         reader.NewKafkaConfig(),
 		KafkaBalanced: NewKafkaBalancedConfig(),
 		AMQP:          NewAMQPConfig(),
 		NSQ:           NewNSQConfig(),
