@@ -104,6 +104,10 @@ input:
     queue: ${NATS_INPUT_QUEUE:benthos-queue}
     durable_name: ${NATS_INPUT_DURABLE_NAME:benthos-offset}
     subject: ${NATS_INPUT_SUBJECT:benthos-stream}
+  redis_list:
+    url: ${REDIS_INPUT_URL}
+    key: ${REDIS_INPUT_LIST:benthos_list}
+    timeout_ms: ${REDIS_INPUT_TIMEOUT_MS:5000}
   redis_pubsub:
     url: ${REDIS_INPUT_URL}
     channels:
@@ -174,6 +178,9 @@ output:
     cluster_id: ${NATS_OUTPUT_CLUSTER_ID:benthos-cluster}
     client_id: ${NATS_OUTPUT_CLIENT_ID:benthos-consumer}
     subject: ${NATS_OUTPUT_SUBJECT:benthos-stream}
+  redis_list:
+    url: ${REDIS_OUTPUT_URL}
+    key: ${REDIS_OUTPUT_LIST:benthos_list}
   redis_pubsub:
     url: ${REDIS_OUTPUT_URL}
     channel: ${REDIS_OUTPUT_CHANNEL:benthos-stream}

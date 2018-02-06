@@ -26,7 +26,7 @@ Currently supported input/output targets:
 - [NATS Streaming][natsstreaming]
 - [NSQ][nsq]
 - [RabbitMQ (AMQP 0.91)][rabbitmq]
-- [Redis Pub/Sub][redispubsub]
+- [Redis][redis]
 - Stdin/Stdout
 - [ZMQ4][zmq]
 
@@ -177,5 +177,5 @@ containers using `docker-compose`.
 [nsq]: http://nsq.io/
 [nats]: http://nats.io/
 [natsstreaming]: https://nats.io/documentation/streaming/nats-streaming-intro/
-[redispubsub]: https://redis.io/topics/pubsub
+[redis]: https://redis.io/
 [kafka]: https://kafka.apache.org/

@@ -163,6 +163,10 @@ are consumed from the most recently published message.
 
 Subscribe to an NSQ instance topic and channel.
 
+## `redis_list`
+
+Pops messages from the beginning of a Redis list using the BLPop command.
+
 ## `redis_pubsub`
 
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple

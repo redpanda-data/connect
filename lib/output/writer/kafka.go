@@ -111,7 +111,7 @@ func (k *Kafka) Connect() error {
 	var err error
 	k.producer, err = sarama.NewSyncProducer(k.addresses, config)
 
-	if err != nil {
+	if err == nil {
 		k.log.Infof("Sending Kafka messages to addresses: %s\n", k.addresses)
 	}
 	return err

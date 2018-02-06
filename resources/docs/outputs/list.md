@@ -79,6 +79,11 @@ this output is able to guarantee delivery on success.
 
 Publish to an NSQ topic.
 
+## `redis_list`
+
+Pushes messages onto the end of a Redis list (which is created if it doesn't
+already exist) using the RPUSH command.
+
 ## `redis_pubsub`
 
 Publishes messages through the Redis PubSub model. It is not possible to

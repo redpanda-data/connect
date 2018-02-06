@@ -158,6 +158,8 @@ func (a *AmazonS3) Connect() error {
 		a.sqs = sqs.New(sess)
 	}
 
+	a.log.Infof("Receiving amazon s3 objects from bucket: %s\n", a.conf.Bucket)
+
 	a.session = sess
 	a.downloader = dler
 	a.s3 = sThree

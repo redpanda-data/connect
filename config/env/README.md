@@ -26,43 +26,14 @@ BENTHOS_INPUT_PROCESSOR  = noop
 BENTHOS_OUTPUT_PROCESSOR = noop
 
 AMAZON_S3_INPUT_REGION             = eu-west-1
-AMAZON_S3_INPUT_BUCKET
+AMAZON_S3_INPUT_BUCKET             =
 AMAZON_S3_INPUT_DELETE_OBJECTS     = false
-AMAZON_S3_INPUT_SQS_URL
+AMAZON_S3_INPUT_SQS_URL            =
 AMAZON_S3_INPUT_SQS_BODY_PATH      = Records.s3.object.key
-AMAZON_S3_INPUT_CREDENTIALS_ID
-AMAZON_S3_INPUT_CREDENTIALS_SECRET
-AMAZON_S3_INPUT_CREDENTIALS_TOKEN
+AMAZON_S3_INPUT_CREDENTIALS_ID     =
+AMAZON_S3_INPUT_CREDENTIALS_SECRET =
+AMAZON_S3_INPUT_CREDENTIALS_TOKEN  =
 AMAZON_S3_INPUT_TIMEOUT_S          = 5
-
-ZMQ_INPUT_URLS    =
-ZMQ_INPUT_BIND    = true
-ZMQ_INPUT_SOCKET  = PULL
-ZMQ_OUTPUT_URLS   =
-ZMQ_OUTPUT_BIND   = true
-ZMQ_OUTPUT_SOCKET = PULL
-
-SCALE_PROTO_INPUT_URLS    =
-SCALE_PROTO_INPUT_BIND    = true
-SCALE_PROTO_INPUT_SOCKET  = PULL
-SCALE_PROTO_OUTPUT_URLS   =
-SCALE_PROTO_OUTPUT_BIND   = false
-SCALE_PROTO_OUTPUT_SOCKET = PUSH
-
-KAFKA_INPUT_BROKER_ADDRESSES  =
-KAFKA_INPUT_CLIENT_ID         = benthos-client
-KAFKA_INPUT_CONSUMER_GROUP    = benthos-group
-KAFKA_INPUT_TOPIC             = benthos-stream
-KAFKA_INPUT_PARTITION         = 0
-KAFKA_INPUT_START_OLDEST      = true
-KAFKA_OUTPUT_BROKER_ADDRESSES =
-KAFKA_OUTPUT_CLIENT_ID        = benthos-client
-KAFKA_OUTPUT_CONSUMER_GROUP   = benthos-group
-KAFKA_OUTPUT_TOPIC            = benthos-stream
-KAFKA_OUTPUT_PARTITION        = 0
-KAFKA_OUTPUT_MAX_MSG_BYTES    = 1000000
-KAFKA_OUTPUT_START_OLDEST     = true
-KAFKA_OUTPUT_ACK_REP          = true
 
 AMQP_INPUT_URL            =
 AMQP_INPUT_EXCHANGE       = benthos-exchange
@@ -77,37 +48,12 @@ AMQP_OUTPUT_QUEUE         = benthos-stream
 AMQP_OUTPUT_KEY           = benthos-key
 AMQP_OUTPUT_CONSUMER_TAG  = benthos-consumer
 
-NSQD_INPUT_TCP_ADDRESSES    =
-NSQD_INPUT_LOOKUP_ADDRESSES =
-NSQ_INPUT_TOPIC             = benthos-messages
-NSQ_INPUT_CHANNEL           = benthos-stream
-NSQ_INPUT_USER_AGENT        = benthos-consumer
-NSQ_OUTPUT_TCP_ADDRESS      =
-NSQ_OUTPUT_TOPIC            = benthos-messages
-NSQ_OUTPUT_CHANNEL          = benthos-stream
-NSQ_OUTPUT_USER_AGENT       = benthos-consumer
-
-NATS_INPUT_URLS         =
-NATS_INPUT_SUBJECT      = benthos-stream
-NATS_INPUT_CLUSTER_ID   = benthos-cluster  # Used only for nats_stream
-NATS_INPUT_CLIENT_ID    = benthos-consumer # ^
-NATS_INPUT_QUEUE        = benthos-queue    # ^
-NATS_INPUT_DURABLE_NAME = benthos-offset   # ^
-NATS_OUTPUT_URLS        =
-NATS_OUTPUT_SUBJECT     = benthos-stream
-NATS_OUTPUT_CLUSTER_ID  = benthos-cluster  # Used only for nats_stream
-NATS_OUTPUT_CLIENT_ID   = benthos-consumer # ^
-
-REDIS_INPUT_URL      =
-REDIS_INPUT_CHANNEL  = benthos-stream
-REDIS_OUTPUT_URL     =
-REDIS_OUTPUT_CHANNEL = benthos-stream
-
-HTTP_SERVER_INPUT_ADDRESS      =
-HTTP_SERVER_INPUT_PATH         = /post
-HTTP_SERVER_OUTPUT_ADDRESS     =
-HTTP_SERVER_OUTPUT_PATH        = /get
-HTTP_SERVER_OUTPUT_STREAM_PATH = /get/stream
+FILE_INPUT_PATH        =
+FILE_INPUT_MULTIPART   = false
+FILE_INPUT_MAX_BUFFER  = 65536
+FILE_OUTPUT_PATH       =
+FILE_OUTPUT_MULTIPART  = false
+FILE_OUTPUT_MAX_BUFFER = 65536
 
 HTTP_CLIENT_INPUT_URL                 =
 HTTP_CLIENT_INPUT_VERB                = GET
@@ -137,12 +83,69 @@ HTTP_CLIENT_OUTPUT_OAUTH_ENABLED      = false
 HTTP_CLIENT_OUTPUT_TIMEOUT_MS         = 5000
 HTTP_CLIENT_OUTPUT_SKIP_CERT_VERIFY   = false
 
-FILE_INPUT_PATH        =
-FILE_INPUT_MULTIPART   = false
-FILE_INPUT_MAX_BUFFER  = 65536
-FILE_OUTPUT_PATH       =
-FILE_OUTPUT_MULTIPART  = false
-FILE_OUTPUT_MAX_BUFFER = 65536
+HTTP_SERVER_INPUT_ADDRESS      =
+HTTP_SERVER_INPUT_PATH         = /post
+HTTP_SERVER_OUTPUT_ADDRESS     =
+HTTP_SERVER_OUTPUT_PATH        = /get
+HTTP_SERVER_OUTPUT_STREAM_PATH = /get/stream
+
+KAFKA_INPUT_BROKER_ADDRESSES  =
+KAFKA_INPUT_CLIENT_ID         = benthos-client
+KAFKA_INPUT_CONSUMER_GROUP    = benthos-group
+KAFKA_INPUT_TOPIC             = benthos-stream
+KAFKA_INPUT_PARTITION         = 0
+KAFKA_INPUT_START_OLDEST      = true
+KAFKA_OUTPUT_BROKER_ADDRESSES =
+KAFKA_OUTPUT_CLIENT_ID        = benthos-client
+KAFKA_OUTPUT_CONSUMER_GROUP   = benthos-group
+KAFKA_OUTPUT_TOPIC            = benthos-stream
+KAFKA_OUTPUT_PARTITION        = 0
+KAFKA_OUTPUT_MAX_MSG_BYTES    = 1000000
+KAFKA_OUTPUT_START_OLDEST     = true
+KAFKA_OUTPUT_ACK_REP          = true
+
+NATS_INPUT_URLS         =
+NATS_INPUT_SUBJECT      = benthos-stream
+NATS_INPUT_CLUSTER_ID   = benthos-cluster  # Used only for nats_stream
+NATS_INPUT_CLIENT_ID    = benthos-consumer # ^
+NATS_INPUT_QUEUE        = benthos-queue    # ^
+NATS_INPUT_DURABLE_NAME = benthos-offset   # ^
+NATS_OUTPUT_URLS        =
+NATS_OUTPUT_SUBJECT     = benthos-stream
+NATS_OUTPUT_CLUSTER_ID  = benthos-cluster  # Used only for nats_stream
+NATS_OUTPUT_CLIENT_ID   = benthos-consumer # ^
+
+NSQD_INPUT_TCP_ADDRESSES    =
+NSQD_INPUT_LOOKUP_ADDRESSES =
+NSQ_INPUT_TOPIC             = benthos-messages
+NSQ_INPUT_CHANNEL           = benthos-stream
+NSQ_INPUT_USER_AGENT        = benthos-consumer
+NSQ_OUTPUT_TCP_ADDRESS      =
+NSQ_OUTPUT_TOPIC            = benthos-messages
+NSQ_OUTPUT_CHANNEL          = benthos-stream
+NSQ_OUTPUT_USER_AGENT       = benthos-consumer
+
+REDIS_INPUT_URL        =
+REDIS_INPUT_CHANNEL    = benthos-stream
+REDIS_INPUT_LIST       = benthos_list
+REDIS_INPUT_TIMEOUT_MS = 5000
+REDIS_OUTPUT_URL       =
+REDIS_OUTPUT_CHANNEL   = benthos-stream
+REDIS_OUTPUT_LIST      = benthos_list
+
+SCALE_PROTO_INPUT_URLS    =
+SCALE_PROTO_INPUT_BIND    = true
+SCALE_PROTO_INPUT_SOCKET  = PULL
+SCALE_PROTO_OUTPUT_URLS   =
+SCALE_PROTO_OUTPUT_BIND   = false
+SCALE_PROTO_OUTPUT_SOCKET = PUSH
+
+ZMQ_INPUT_URLS    =
+ZMQ_INPUT_BIND    = true
+ZMQ_INPUT_SOCKET  = PULL
+ZMQ_OUTPUT_URLS   =
+ZMQ_OUTPUT_BIND   = true
+ZMQ_OUTPUT_SOCKET = PULL
 ```
 
 [0]: ../../resources/docs/inputs/list.md

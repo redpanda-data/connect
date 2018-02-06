@@ -93,6 +93,10 @@ input:
     channel: benthos_stream
     user_agent: benthos_consumer
     max_in_flight: 100
+  redis_list:
+    url: tcp://localhost:6379
+    key: benthos_list
+    timeout_ms: 5000
   redis_pubsub:
     url: tcp://localhost:6379
     channels:
@@ -204,6 +208,9 @@ output:
     topic: benthos_messages
     user_agent: benthos_producer
     max_in_flight: 100
+  redis_list:
+    url: tcp://localhost:6379
+    key: benthos_list
   redis_pubsub:
     url: tcp://localhost:6379
     channel: benthos_chan
