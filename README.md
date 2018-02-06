@@ -17,17 +17,18 @@ persistence, or nothing at all (direct bridge).
 
 Currently supported input/output targets:
 
-- [ZMQ4 (PUSH, PULL, SUB, PUB)][zmq]
-- [Nanomsg/Scalability Protocols (PUSH, PULL, SUB, PUB)][nanomsg]
-- [RabbitMQ (AMQP 0.91)][rabbitmq]
-- [NSQ][nsq]
+- [Amazon S3][amazons3]
+- File
+- HTTP(S)
+- [Kafka][kafka]
+- [Nanomsg][nanomsg]
 - [NATS][nats]
 - [NATS Streaming][natsstreaming]
+- [NSQ][nsq]
+- [RabbitMQ (AMQP 0.91)][rabbitmq]
 - [Redis Pub/Sub][redispubsub]
-- [Kafka][kafka]
-- HTTP 1.1 POST/GET
-- STDIN/STDOUT
-- File
+- Stdin/Stdout
+- [ZMQ4][zmq]
 
 Setting up multiple outputs or inputs is done by choosing a routing strategy
 (fan-in, fan-out, round-robin, etc.)
@@ -169,6 +170,7 @@ containers using `docker-compose`.
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
 [travis-url]: https://travis-ci.org/Jeffail/benthos
 [dep]: https://github.com/golang/dep
+[amazons3]: https://aws.amazon.com/s3/
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/
 [rabbitmq]: https://www.rabbitmq.com/

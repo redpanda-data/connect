@@ -19,6 +19,17 @@ http:
   address: ${BENTHOS_HTTP_ADDRESS:0.0.0.0:4195}
 input:
   type: ${BENTHOS_INPUT:http_server}
+  amazon_s3:
+    region: ${AMAZON_S3_INPUT_REGION:eu-west-1}
+    bucket: ${AMAZON_S3_INPUT_BUCKET}
+    delete_objects: ${AMAZON_S3_INPUT_DELETE_OBJECTS:false}
+    sqs_url: ${AMAZON_S3_INPUT_SQS_URL}
+    sqs_body_path: ${AMAZON_S3_INPUT_SQS_BODY_PATH:Records.s3.object.key}
+    credentials:
+      id: ${AMAZON_S3_INPUT_CREDENTIALS_ID}
+      secret: ${AMAZON_S3_INPUT_CREDENTIALS_SECRET}
+      token: ${AMAZON_S3_INPUT_CREDENTIALS_TOKEN}
+    timeout_s: ${AMAZON_S3_INPUT_TIMEOUT_S:5}
   http_server:
     address: ${HTTP_SERVER_INPUT_ADDRESS}
     path: ${HTTP_SERVER_INPUT_PATH:/post}

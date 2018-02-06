@@ -3,12 +3,33 @@ http:
   read_timeout_ms: 5000
 input:
   type: stdin
-  http_server:
-    address: ""
-    path: /post
-    timeout_ms: 5000
-    cert_file: ""
-    key_file: ""
+  amazon_s3:
+    region: eu-west-1
+    bucket: ""
+    delete_objects: false
+    sqs_url: ""
+    sqs_body_path: Records.s3.object.key
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+    timeout_s: 5
+  amqp:
+    url: amqp://guest:guest@localhost:5672/
+    exchange: benthos-exchange
+    exchange_type: direct
+    queue: benthos-queue
+    key: benthos-key
+    consumer_tag: benthos-consumer
+    prefetch_count: 1
+    prefetch_size: 0
+  fan_in:
+    inputs: []
+  file:
+    path: ""
+    multipart: false
+    max_buffer: 65536
+    custom_delimiter: ""
   http_client:
     url: http://localhost:4195/get/stream
     verb: GET
@@ -29,24 +50,12 @@ input:
     retry_period_ms: 1000
     retries: 3
     skip_cert_verify: false
-  scalability_protocols:
-    urls:
-    - tcp://*:5555
-    bind: true
-    socket_type: PULL
-    reply_success: SUCCESS
-    reply_error: ERROR
-    sub_filters: []
-    poll_timeout_ms: 5000
-    reply_timeout_ms: 5000
-  zmq4:
-    urls:
-    - tcp://localhost:5555
-    bind: false
-    socket_type: PULL
-    sub_filters: []
-    high_water_mark: 0
-    poll_timeout_ms: 5000
+  http_server:
+    address: ""
+    path: /post
+    timeout_ms: 5000
+    cert_file: ""
+    key_file: ""
   kafka:
     addresses:
     - localhost:9092
@@ -63,24 +72,6 @@ input:
     topics:
     - benthos_stream
     start_from_oldest: true
-  amqp:
-    url: amqp://guest:guest@localhost:5672/
-    exchange: benthos-exchange
-    exchange_type: direct
-    queue: benthos-queue
-    key: benthos-key
-    consumer_tag: benthos-consumer
-    prefetch_count: 1
-    prefetch_size: 0
-  nsq:
-    nsqd_tcp_addresses:
-    - localhost:4150
-    lookupd_http_addresses:
-    - localhost:4161
-    topic: benthos_messages
-    channel: benthos_stream
-    user_agent: benthos_consumer
-    max_in_flight: 100
   nats:
     urls:
     - nats://localhost:4222
@@ -93,51 +84,81 @@ input:
     queue: benthos_queue
     durable_name: benthos_offset
     subject: benthos_messages
+  nsq:
+    nsqd_tcp_addresses:
+    - localhost:4150
+    lookupd_http_addresses:
+    - localhost:4161
+    topic: benthos_messages
+    channel: benthos_stream
+    user_agent: benthos_consumer
+    max_in_flight: 100
   redis_pubsub:
     url: tcp://localhost:6379
     channels:
     - benthos_chan
-  file:
-    path: ""
-    multipart: false
-    max_buffer: 65536
-    custom_delimiter: ""
+  scalability_protocols:
+    urls:
+    - tcp://*:5555
+    bind: true
+    socket_type: PULL
+    reply_success: SUCCESS
+    reply_error: ERROR
+    sub_filters: []
+    poll_timeout_ms: 5000
+    reply_timeout_ms: 5000
   stdin:
     multipart: false
     max_buffer: 65536
     custom_delimiter: ""
-  fan_in:
-    inputs: []
+  zmq4:
+    urls:
+    - tcp://localhost:5555
+    bind: false
+    socket_type: PULL
+    sub_filters: []
+    high_water_mark: 0
+    poll_timeout_ms: 5000
   processors:
   - type: bounds_check
+    blob_to_multi: {}
     bounds_check:
       max_parts: 100
       min_parts: 1
       max_part_size: 1073741824
-    select_parts:
-      parts:
-      - 0
-    insert_part:
-      index: -1
-      content: ""
-    set_json:
-      part: 0
-      path: ""
-      value: ""
-    blob_to_multi: {}
-    multi_to_blob: {}
-    sample:
-      retain: 0.1
-      randomseed: 0
+    combine:
+      parts: 2
     hash_sample:
       retain_min: 0
       retain_max: 10
       parts:
       - 0
-    combine:
-      parts: 2
+    insert_part:
+      index: -1
+      content: ""
+    multi_to_blob: {}
+    sample:
+      retain: 0.1
+      randomseed: 0
+    select_parts:
+      parts:
+      - 0
+    set_json:
+      part: 0
+      path: ""
+      value: ""
 output:
   type: stdout
+  amqp:
+    url: amqp://guest:guest@localhost:5672/
+    exchange: benthos-exchange
+    exchange_type: direct
+    key: benthos-key
+  fan_out:
+    outputs: []
+  file:
+    path: ""
+    custom_delimiter: ""
   http_client:
     url: http://localhost:8081/post
     verb: POST
@@ -160,14 +181,6 @@ output:
     timeout_ms: 5000
     cert_file: ""
     key_file: ""
-  scalability_protocols:
-    urls:
-    - tcp://localhost:5556
-    bind: false
-    socket_type: PUSH
-    reply_success: SUCCESS
-    poll_timeout_ms: 5000
-    reply_timeout_ms: 5000
   kafka:
     addresses:
     - localhost:9092
@@ -176,16 +189,6 @@ output:
     max_msg_bytes: 1000000
     timeout_ms: 5000
     ack_replicas: true
-  amqp:
-    url: amqp://guest:guest@localhost:5672/
-    exchange: benthos-exchange
-    exchange_type: direct
-    key: benthos-key
-  nsq:
-    nsqd_tcp_address: localhost:4150
-    topic: benthos_messages
-    user_agent: benthos_producer
-    max_in_flight: 100
   nats:
     urls:
     - nats://localhost:4222
@@ -196,36 +199,44 @@ output:
     cluster_id: benthos_cluster
     client_id: benthos_client
     subject: benthos_messages
+  nsq:
+    nsqd_tcp_address: localhost:4150
+    topic: benthos_messages
+    user_agent: benthos_producer
+    max_in_flight: 100
   redis_pubsub:
     url: tcp://localhost:6379
     channel: benthos_chan
+  round_robin:
+    outputs: []
+  scalability_protocols:
+    urls:
+    - tcp://localhost:5556
+    bind: false
+    socket_type: PUSH
+    reply_success: SUCCESS
+    poll_timeout_ms: 5000
+    reply_timeout_ms: 5000
+  stdout:
+    custom_delimiter: ""
   zmq4:
     urls:
     - tcp://*:5556
     bind: true
     socket_type: PUSH
     high_water_mark: 0
-  file:
-    path: ""
-    custom_delimiter: ""
-  stdout:
-    custom_delimiter: ""
-  fan_out:
-    outputs: []
-  round_robin:
-    outputs: []
   processors: []
 buffer:
   type: none
   retry_throttle_ms: 1000
+  memory:
+    limit: 524288000
   mmap_file:
     directory: ""
     file_size: 262144000
     retry_period_ms: 1000
     clean_up: true
     reserved_disk_space: 104857600
-  memory:
-    limit: 524288000
   none: {}
 logger:
   prefix: service

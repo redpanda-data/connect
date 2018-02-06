@@ -46,30 +46,30 @@ var constructors = map[string]typeSpec{}
 // Config is the all encompassing configuration struct for all processor types.
 type Config struct {
 	Type        string            `json:"type" yaml:"type"`
-	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
-	SelectParts SelectPartsConfig `json:"select_parts" yaml:"select_parts"`
-	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
-	SetJSON     SetJSONConfig     `json:"set_json" yaml:"set_json"`
 	BlobToMulti struct{}          `json:"blob_to_multi" yaml:"blob_to_multi"`
+	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
+	Combine     CombineConfig     `json:"combine" yaml:"combine"`
+	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
+	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
 	MultiToBlob struct{}          `json:"multi_to_blob" yaml:"multi_to_blob"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
-	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
-	Combine     CombineConfig     `json:"combine" yaml:"combine"`
+	SelectParts SelectPartsConfig `json:"select_parts" yaml:"select_parts"`
+	SetJSON     SetJSONConfig     `json:"set_json" yaml:"set_json"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
 		Type:        "bounds_check",
-		BoundsCheck: NewBoundsCheckConfig(),
-		SelectParts: NewSelectPartsConfig(),
-		InsertPart:  NewInsertPartConfig(),
-		SetJSON:     NewSetJSONConfig(),
 		BlobToMulti: struct{}{},
+		BoundsCheck: NewBoundsCheckConfig(),
+		Combine:     NewCombineConfig(),
+		HashSample:  NewHashSampleConfig(),
+		InsertPart:  NewInsertPartConfig(),
 		MultiToBlob: struct{}{},
 		Sample:      NewSampleConfig(),
-		HashSample:  NewHashSampleConfig(),
-		Combine:     NewCombineConfig(),
+		SelectParts: NewSelectPartsConfig(),
+		SetJSON:     NewSetJSONConfig(),
 	}
 }
 

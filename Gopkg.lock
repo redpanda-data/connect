@@ -29,6 +29,41 @@
   revision = "1ccc43bfb9c93cb401a4025e49c64ba71e5e668b"
 
 [[projects]]
+  name = "github.com/aws/aws-sdk-go"
+  packages = [
+    "aws",
+    "aws/awserr",
+    "aws/awsutil",
+    "aws/client",
+    "aws/client/metadata",
+    "aws/corehandlers",
+    "aws/credentials",
+    "aws/credentials/ec2rolecreds",
+    "aws/credentials/endpointcreds",
+    "aws/credentials/stscreds",
+    "aws/defaults",
+    "aws/ec2metadata",
+    "aws/endpoints",
+    "aws/request",
+    "aws/session",
+    "aws/signer/v4",
+    "internal/shareddefaults",
+    "private/protocol",
+    "private/protocol/query",
+    "private/protocol/query/queryutil",
+    "private/protocol/rest",
+    "private/protocol/restxml",
+    "private/protocol/xml/xmlutil",
+    "service/s3",
+    "service/s3/s3iface",
+    "service/s3/s3manager",
+    "service/sqs",
+    "service/sts"
+  ]
+  revision = "0cbaf57ea311890e62f0b01652529295079e9e95"
+  version = "v1.12.71"
+
+[[projects]]
   branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
@@ -37,8 +72,8 @@
 [[projects]]
   name = "github.com/bsm/sarama-cluster"
   packages = ["."]
-  revision = "24016d206c730276dfb58f802999066f2f4bfeaa"
-  version = "v2.1.11"
+  revision = "3001c2453136632aa3219a58ea3795bb584b83b5"
+  version = "v2.1.12"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
@@ -71,6 +106,12 @@
   revision = "0bce6a6887123b67a60366d2c9fe2dfb74289d2e"
 
 [[projects]]
+  name = "github.com/go-ini/ini"
+  packages = ["."]
+  revision = "32e4c1e6bc4e7d0d8451aa6b75200d19e37a536a"
+  version = "v1.32.0"
+
+[[projects]]
   name = "github.com/go-mangos/mangos"
   packages = [
     ".",
@@ -96,8 +137,8 @@
     "internal/pool",
     "internal/proto"
   ]
-  revision = "4021ace05686f632ff17fd824bbed229fc474cf8"
-  version = "v6.8.2"
+  revision = "8b4fa6d443e35ca8b1c37be877285252430b06a3"
+  version = "v6.8.3"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
@@ -106,20 +147,25 @@
     "proto",
     "protoc-gen-gogo/descriptor"
   ]
-  revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
-  version = "v0.5"
+  revision = "1adfc126b41513cc696b209667c8656ea7aac67c"
+  version = "v1.0.0"
 
 [[projects]]
-  branch = "master"
   name = "github.com/golang/protobuf"
   packages = ["proto"]
-  revision = "c65a0412e71e8b9b3bfd22925720d23c0f054237"
+  revision = "925541529c1fa6821df4e44ce2723319eb2be768"
+  version = "v1.0.0"
 
 [[projects]]
   branch = "master"
   name = "github.com/golang/snappy"
   packages = ["."]
   revision = "553a641470496b2327abcac10b36396bd98e45c9"
+
+[[projects]]
+  name = "github.com/jmespath/go-jmespath"
+  packages = ["."]
+  revision = "0b12d6b5"
 
 [[projects]]
   name = "github.com/matttproud/golang_protobuf_extensions"
@@ -207,28 +253,28 @@
   packages = [
     ".",
     "internal/util",
-    "nfsd",
+    "nfs",
     "xfs"
   ]
-  revision = "85fadb6e89903ef7cca6f6a804474cd5ea85b6e1"
+  revision = "cb4147076ac75738c9a7d279075a253c0cc5acbd"
 
 [[projects]]
   branch = "master"
   name = "github.com/rcrowley/go-metrics"
   packages = ["."]
-  revision = "e181e095bae94582363434144c61a9653aff6e50"
+  revision = "8732c616f52954686704c8645fe1a9d59e9df7c1"
 
 [[projects]]
   branch = "master"
   name = "github.com/streadway/amqp"
   packages = ["."]
-  revision = "54ded0531dfd699a7893861d39a7a949c5749bc9"
+  revision = "fc7fda2371f5327ad39211e09482845b8734cc72"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = ["proxy"]
-  revision = "0ed95abb35c445290478a5348a7b38bb154135fd"
+  revision = "2fb46b16b8dda405028c50f7c7f0f9dd1fa6bfb1"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"
@@ -245,6 +291,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b36ccbc46cfe1ff95f6d971654bcaacdddf1dac8aae3f0031ad28e8ca60a19a8"
+  inputs-digest = "ebdf2385fe62a6d86ef8419aa6e5f4e7ca76ff68ad050b9d4b5fbb996c1041a9"
   solver-name = "gps-cdcl"
   solver-version = 1

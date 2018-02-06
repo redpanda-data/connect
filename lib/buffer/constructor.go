@@ -47,8 +47,8 @@ var constructors = map[string]typeSpec{}
 type Config struct {
 	Type            string                `json:"type" yaml:"type"`
 	RetryThrottleMS int                   `json:"retry_throttle_ms" yaml:"retry_throttle_ms"`
-	Mmap            impl.MmapBufferConfig `json:"mmap_file" yaml:"mmap_file"`
 	Memory          impl.MemoryConfig     `json:"memory" yaml:"memory"`
+	Mmap            impl.MmapBufferConfig `json:"mmap_file" yaml:"mmap_file"`
 	None            struct{}              `json:"none" yaml:"none"`
 }
 
@@ -57,8 +57,8 @@ func NewConfig() Config {
 	return Config{
 		Type:            "none",
 		RetryThrottleMS: 1000,
-		Mmap:            impl.NewMmapBufferConfig(),
 		Memory:          impl.NewMemoryConfig(),
+		Mmap:            impl.NewMmapBufferConfig(),
 		None:            struct{}{},
 	}
 }

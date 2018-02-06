@@ -3,6 +3,17 @@ INPUTS
 
 This document has been generated with `benthos --list-inputs`.
 
+## `amazon_s3`
+
+Downloads objects in an Amazon S3 bucket. If an SQS queue has been configured
+then only object keys read from the queue will be downloaded. Otherwise, the
+entire list of objects found when this input is created will be downloaded.
+
+Here is a guide for setting up an SQS queue that receives events for new S3
+bucket objects:
+
+https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html
+
 ## `amqp`
 
 AMQP (0.91) is the underlying messaging protocol that is used by various message

@@ -49,20 +49,20 @@ var constructors = map[string]typeSpec{}
 // but we want to list it as an option.
 type Config struct {
 	Type        string             `json:"type" yaml:"type"`
+	AMQP        AMQPConfig         `json:"amqp" yaml:"amqp"`
+	FanOut      FanOutConfig       `json:"fan_out" yaml:"fan_out"`
+	File        FileConfig         `json:"file" yaml:"file"`
 	HTTPClient  HTTPClientConfig   `json:"http_client" yaml:"http_client"`
 	HTTPServer  HTTPServerConfig   `json:"http_server" yaml:"http_server"`
-	ScaleProto  ScaleProtoConfig   `json:"scalability_protocols" yaml:"scalability_protocols"`
 	Kafka       KafkaConfig        `json:"kafka" yaml:"kafka"`
-	AMQP        AMQPConfig         `json:"amqp" yaml:"amqp"`
-	NSQ         NSQConfig          `json:"nsq" yaml:"nsq"`
 	NATS        NATSConfig         `json:"nats" yaml:"nats"`
 	NATSStream  NATSStreamConfig   `json:"nats_stream" yaml:"nats_stream"`
+	NSQ         NSQConfig          `json:"nsq" yaml:"nsq"`
 	RedisPubSub RedisPubSubConfig  `json:"redis_pubsub" yaml:"redis_pubsub"`
-	ZMQ4        *ZMQ4Config        `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	File        FileConfig         `json:"file" yaml:"file"`
-	STDOUT      STDOUTConfig       `json:"stdout" yaml:"stdout"`
-	FanOut      FanOutConfig       `json:"fan_out" yaml:"fan_out"`
 	RoundRobin  RoundRobinConfig   `json:"round_robin" yaml:"round_robin"`
+	ScaleProto  ScaleProtoConfig   `json:"scalability_protocols" yaml:"scalability_protocols"`
+	STDOUT      STDOUTConfig       `json:"stdout" yaml:"stdout"`
+	ZMQ4        *ZMQ4Config        `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors  []processor.Config `json:"processors" yaml:"processors"`
 }
 
@@ -70,20 +70,20 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Type:        "stdout",
+		AMQP:        NewAMQPConfig(),
+		FanOut:      NewFanOutConfig(),
+		File:        NewFileConfig(),
 		HTTPClient:  NewHTTPClientConfig(),
 		HTTPServer:  NewHTTPServerConfig(),
-		ScaleProto:  NewScaleProtoConfig(),
 		Kafka:       NewKafkaConfig(),
-		AMQP:        NewAMQPConfig(),
-		NSQ:         NewNSQConfig(),
 		NATS:        NewNATSConfig(),
 		NATSStream:  NewNATSStreamConfig(),
+		NSQ:         NewNSQConfig(),
 		RedisPubSub: NewRedisPubSubConfig(),
-		ZMQ4:        NewZMQ4Config(),
-		File:        NewFileConfig(),
-		STDOUT:      NewSTDOUTConfig(),
-		FanOut:      NewFanOutConfig(),
 		RoundRobin:  NewRoundRobinConfig(),
+		ScaleProto:  NewScaleProtoConfig(),
+		STDOUT:      NewSTDOUTConfig(),
+		ZMQ4:        NewZMQ4Config(),
 		Processors:  []processor.Config{},
 	}
 }
