@@ -303,4 +303,68 @@ func TestPreserverBuffer(t *testing.T) {
 	}
 }
 
+func TestPreserverBufferBatchedAcks(t *testing.T) {
+	t.Parallel()
+
+	readerImpl := newMockReader()
+	pres := NewPreserver(readerImpl)
+
+	sendMsg := func(content string) {
+		readerImpl.msgToSnd = types.Message{
+			Parts: [][]byte{[]byte(content)},
+		}
+		select {
+		case readerImpl.readChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}
+	sendAck := func() {
+		select {
+		case readerImpl.ackChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}
+
+	messages := []string{
+		"msg 1",
+		"msg 2",
+		"msg 3",
+	}
+
+	for _, exp := range messages {
+		go sendMsg(exp)
+		msg, err := pres.Read()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if act := string(msg.Parts[0]); exp != act {
+			t.Errorf("Wrong message returned: %v != %v", act, exp)
+		}
+	}
+
+	// Fail all messages, expecting them to be resent.
+	pres.Acknowledge(errors.New("failed again"))
+
+	for _, exp := range messages {
+		// If we ack all messages now, this shouldnt be propagated to underlying
+		// until the resends are completed.
+		pres.Acknowledge(nil)
+
+		msg, err := pres.Read()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if act := string(msg.Parts[0]); exp != act {
+			t.Errorf("Wrong message returned: %v != %v", act, exp)
+		}
+	}
+
+	// Ack all messages.
+	go pres.Acknowledge(nil)
+
+	sendAck()
+}
+
 //------------------------------------------------------------------------------

@@ -62,7 +62,11 @@ func (p *Preserver) Connect() error {
 func (p *Preserver) Acknowledge(err error) error {
 	if err == nil {
 		p.unAckMessages = nil
-		return p.r.Acknowledge(err)
+		if len(p.resendMessages) == 0 {
+			// Only propagate ack if we are done resending buffered messages.
+			return p.r.Acknowledge(err)
+		}
+		return nil
 	}
 
 	// Do not propagate errors since we are handling them here by resending.
