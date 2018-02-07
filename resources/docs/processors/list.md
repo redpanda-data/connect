@@ -74,7 +74,8 @@ become the last part of the message, if index = -2 then the new part will be
 inserted before the last element, and so on. If the negative index is greater
 than the length of the existing parts it will be inserted at the beginning.
 
-This processor will interpolate functions within the 'content' field.
+This processor will interpolate functions within the 'content' field, you can
+find a list of functions [here](resources/docs/config_interpolation.md).
 
 ## `multi_to_blob`
 
@@ -141,7 +142,8 @@ counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the
 last element with be selected, and so on.
 
-This processor will interpolate functions within the 'value' field.
+This processor will interpolate functions within the 'value' field, you can find
+a list of functions [here](resources/docs/config_interpolation.md).
 
 ## `unarchive`
 
