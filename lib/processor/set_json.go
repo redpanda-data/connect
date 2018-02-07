@@ -62,7 +62,8 @@ counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the
 last element with be selected, and so on.
 
-This processor will interpolate functions within the 'value' field.`,
+This processor will interpolate functions within the 'value' field, you can find
+a list of functions [here](resources/docs/config_interpolation.md).`,
 	}
 }
 

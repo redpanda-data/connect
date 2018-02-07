@@ -42,7 +42,8 @@ become the last part of the message, if index = -2 then the new part will be
 inserted before the last element, and so on. If the negative index is greater
 than the length of the existing parts it will be inserted at the beginning.
 
-This processor will interpolate functions within the 'content' field.`,
+This processor will interpolate functions within the 'content' field, you can
+find a list of functions [here](resources/docs/config_interpolation.md).`,
 	}
 }
 
