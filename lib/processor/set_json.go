@@ -63,7 +63,7 @@ will be the last part of the message, if part = -2 then the part before the
 last element with be selected, and so on.
 
 This processor will interpolate functions within the 'value' field, you can find
-a list of functions [here](../config_interpolation.md).`,
+a list of functions [here](../config_interpolation.md#functions).`,
 	}
 }
 

@@ -50,6 +50,7 @@ var constructors = map[string]typeSpec{}
 // but we want to list it as an option.
 type Config struct {
 	Type        string                 `json:"type" yaml:"type"`
+	AmazonS3    writer.AmazonS3Config  `json:"amazon_s3" yaml:"amazon_s3"`
 	AMQP        AMQPConfig             `json:"amqp" yaml:"amqp"`
 	FanOut      FanOutConfig           `json:"fan_out" yaml:"fan_out"`
 	File        FileConfig             `json:"file" yaml:"file"`
@@ -72,6 +73,7 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Type:        "stdout",
+		AmazonS3:    writer.NewAmazonS3Config(),
 		AMQP:        NewAMQPConfig(),
 		FanOut:      NewFanOutConfig(),
 		File:        NewFileConfig(),

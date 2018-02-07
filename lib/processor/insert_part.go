@@ -43,7 +43,7 @@ inserted before the last element, and so on. If the negative index is greater
 than the length of the existing parts it will be inserted at the beginning.
 
 This processor will interpolate functions within the 'content' field, you can
-find a list of functions [here](../config_interpolation.md).`,
+find a list of functions [here](../config_interpolation.md#functions).`,
 	}
 }
 

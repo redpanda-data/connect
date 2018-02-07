@@ -17,7 +17,7 @@ persistence, or nothing at all (direct bridge).
 
 Currently supported input/output targets:
 
-- [Amazon S3][amazons3]
+- [Amazon (S3, SQS)][amazons3]
 - File
 - HTTP(S)
 - [Kafka][kafka]

@@ -57,6 +57,7 @@ var constructors = map[string]typeSpec{}
 type Config struct {
 	Type          string                 `json:"type" yaml:"type"`
 	AmazonS3      reader.AmazonS3Config  `json:"amazon_s3" yaml:"amazon_s3"`
+	AmazonSQS     reader.AmazonSQSConfig `json:"amazon_sqs" yaml:"amazon_sqs"`
 	AMQP          AMQPConfig             `json:"amqp" yaml:"amqp"`
 	FanIn         FanInConfig            `json:"fan_in" yaml:"fan_in"`
 	File          FileConfig             `json:"file" yaml:"file"`
@@ -80,6 +81,7 @@ func NewConfig() Config {
 	return Config{
 		Type:          "stdin",
 		AmazonS3:      reader.NewAmazonS3Config(),
+		AmazonSQS:     reader.NewAmazonSQSConfig(),
 		AMQP:          NewAMQPConfig(),
 		FanIn:         NewFanInConfig(),
 		File:          NewFileConfig(),

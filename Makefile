@@ -19,11 +19,11 @@ all: $(APPS)
 
 $(PATHINSTBIN)/benthos: $(wildcard lib/*/*.go lib/*/*/*.go cmd/benthos/*.go)
 
-$(PATHINSTBIN)/%:
+$(PATHINSTBIN)/%: deps
 	@mkdir -p $(dir $@)
 	@go build -tags "$(TAGS)" -ldflags "$(LDFLAGS)" -o $@ ./cmd/$*
 
-$(APPS): %: deps $(PATHINSTBIN)/%
+$(APPS): %: $(PATHINSTBIN)/%
 
 $(PATHINSTDOCKER)/benthos.tar:
 	@mkdir -p $(dir $@)
@@ -35,7 +35,7 @@ $(PATHINSTDOCKER)/benthos.tar:
 docker: $(PATHINSTDOCKER)/benthos.tar
 
 deps:
-	@go get -u github.com/golang/dep/cmd/dep
+	@go get github.com/golang/dep/cmd/dep
 	@$$GOPATH/bin/dep ensure
 
 test:
@@ -55,7 +55,7 @@ clean-docker:
 
 docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --print-yaml > ./config/everything.yaml; true
-	@$(PATHINSTBIN)/benthos --list-inputs > ./resources/docs/inputs/list.md; true
+	@$(PATHINSTBIN)/benthos --list-inputs > ./resources/docs/inputs/README.md; true
 	@$(PATHINSTBIN)/benthos --list-processors > ./resources/docs/processors/list.md; true
-	@$(PATHINSTBIN)/benthos --list-buffers > ./resources/docs/buffers/list.md; true
-	@$(PATHINSTBIN)/benthos --list-outputs > ./resources/docs/outputs/list.md; true
+	@$(PATHINSTBIN)/benthos --list-buffers > ./resources/docs/buffers/README.md; true
+	@$(PATHINSTBIN)/benthos --list-outputs > ./resources/docs/outputs/README.md; true

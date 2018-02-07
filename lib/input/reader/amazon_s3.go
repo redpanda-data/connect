@@ -39,8 +39,8 @@ import (
 
 //------------------------------------------------------------------------------
 
-// AmazonS3CredentialsConfig contains configuration params for AWS credentials.
-type AmazonS3CredentialsConfig struct {
+// AmazonAWSCredentialsConfig contains configuration params for AWS credentials.
+type AmazonAWSCredentialsConfig struct {
 	ID     string `json:"id"`
 	Secret string `json:"secret"`
 	Token  string `json:"token"`
@@ -48,13 +48,13 @@ type AmazonS3CredentialsConfig struct {
 
 // AmazonS3Config is configuration values for the input type.
 type AmazonS3Config struct {
-	Region        string                    `json:"region" yaml:"region"`
-	Bucket        string                    `json:"bucket" yaml:"bucket"`
-	DeleteObjects bool                      `json:"delete_objects" yaml:"delete_objects"`
-	SQSURL        string                    `json:"sqs_url" yaml:"sqs_url"`
-	SQSBodyPath   string                    `json:"sqs_body_path" yaml:"sqs_body_path"`
-	Credentials   AmazonS3CredentialsConfig `json:"credentials" yaml:"credentials"`
-	TimeoutS      int64                     `json:"timeout_s" yaml:"timeout_s"`
+	Region        string                     `json:"region" yaml:"region"`
+	Bucket        string                     `json:"bucket" yaml:"bucket"`
+	DeleteObjects bool                       `json:"delete_objects" yaml:"delete_objects"`
+	SQSURL        string                     `json:"sqs_url" yaml:"sqs_url"`
+	SQSBodyPath   string                     `json:"sqs_body_path" yaml:"sqs_body_path"`
+	Credentials   AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
+	TimeoutS      int64                      `json:"timeout_s" yaml:"timeout_s"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
@@ -65,7 +65,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		DeleteObjects: false,
 		SQSURL:        "",
 		SQSBodyPath:   "Records.s3.object.key",
-		Credentials: AmazonS3CredentialsConfig{
+		Credentials: AmazonAWSCredentialsConfig{
 			ID:     "",
 			Secret: "",
 			Token:  "",
@@ -82,9 +82,6 @@ type AmazonS3 struct {
 	conf AmazonS3Config
 
 	sqsBodyPath []string
-
-	pendingHandles []string
-	ackHandles     []string
 
 	readKeys   []string
 	targetKeys []string
@@ -158,7 +155,7 @@ func (a *AmazonS3) Connect() error {
 		a.sqs = sqs.New(sess)
 	}
 
-	a.log.Infof("Receiving amazon s3 objects from bucket: %s\n", a.conf.Bucket)
+	a.log.Infof("Receiving Amazon S3 objects from bucket: %s\n", a.conf.Bucket)
 
 	a.session = sess
 	a.downloader = dler

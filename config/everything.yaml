@@ -14,6 +14,14 @@ input:
       secret: ""
       token: ""
     timeout_s: 5
+  amazon_sqs:
+    region: eu-west-1
+    url: ""
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+    timeout_s: 5
   amqp:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
@@ -159,6 +167,15 @@ input:
       parts: []
 output:
   type: stdout
+  amazon_s3:
+    region: eu-west-1
+    bucket: ""
+    path: ${!count:files}-${!timestamp_unix_nano}.txt
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+    timeout_s: 5
   amqp:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
