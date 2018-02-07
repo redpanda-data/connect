@@ -49,12 +49,14 @@ type Config struct {
 	BlobToMulti struct{}          `json:"blob_to_multi" yaml:"blob_to_multi"`
 	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
 	Combine     CombineConfig     `json:"combine" yaml:"combine"`
+	Decompress  DecompressConfig  `json:"decompress" yaml:"decompress"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
 	MultiToBlob struct{}          `json:"multi_to_blob" yaml:"multi_to_blob"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
 	SelectParts SelectPartsConfig `json:"select_parts" yaml:"select_parts"`
 	SetJSON     SetJSONConfig     `json:"set_json" yaml:"set_json"`
+	Unarchive   UnarchiveConfig   `json:"unarchive" yaml:"unarchive"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -64,12 +66,14 @@ func NewConfig() Config {
 		BlobToMulti: struct{}{},
 		BoundsCheck: NewBoundsCheckConfig(),
 		Combine:     NewCombineConfig(),
+		Decompress:  NewDecompressConfig(),
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),
 		MultiToBlob: struct{}{},
 		Sample:      NewSampleConfig(),
 		SelectParts: NewSelectPartsConfig(),
 		SetJSON:     NewSetJSONConfig(),
+		Unarchive:   NewUnarchiveConfig(),
 	}
 }
 

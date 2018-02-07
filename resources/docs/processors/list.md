@@ -35,6 +35,20 @@ sent unchanged with its original parts. This occurs even if there are cached
 parts waiting to be combined, which will change the ordering of message parts
 through the platform.
 
+## `decompress`
+
+Decompresses the parts of a message according to the selected algorithm.
+Supported decompression types are: gzip (I'll add more later). If the list of
+target parts is empty the decompression will be applied to all message parts.
+
+Part indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if index = -1 then the selected part
+will be the last part of the message, if index = -2 then the part before the
+last element with be selected, and so on.
+
+Parts that fail to decompress (invalid format) will be removed from the message.
+If the message results in zero parts it is skipped entirely.
+
 ## `hash_sample`
 
 Passes on a percentage of messages deterministically by hashing selected parts
@@ -128,3 +142,20 @@ will be the last part of the message, if part = -2 then the part before the
 last element with be selected, and so on.
 
 This processor will interpolate functions within the 'value' field.
+
+## `unarchive`
+
+Unarchives parts of a message according to the selected archive type. Supported
+archive types are: tar (I'll add more later). If the list of target parts is
+empty the unarchive will be applied to all message parts.
+
+When a part is unarchived into multiple files they will become their own message
+parts, appended from the position of the source part.
+
+Part indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if index = -1 then the selected part
+will be the last part of the message, if index = -2 then the part before the
+last element with be selected, and so on.
+
+Parts that are selected but fail to unarchive (invalid format) will be removed
+from the message. If the message results in zero parts it is skipped entirely.

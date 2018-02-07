@@ -132,6 +132,9 @@ input:
       max_part_size: 1073741824
     combine:
       parts: 2
+    decompress:
+      algorithm: gzip
+      parts: []
     hash_sample:
       retain_min: 0
       retain_max: 10
@@ -151,6 +154,9 @@ input:
       part: 0
       path: ""
       value: ""
+    unarchive:
+      format: tar
+      parts: []
 output:
   type: stdout
   amqp:
