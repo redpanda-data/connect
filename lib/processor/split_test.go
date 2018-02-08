@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,35 +30,42 @@ import (
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
-func TestBlobToMulti(t *testing.T) {
+func TestSplitParts(t *testing.T) {
 	conf := NewConfig()
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewBlobToMulti(conf, testLog, metrics.DudType{})
+	proc, err := NewSplit(conf, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	if msgs, res := proc.ProcessMessage(&types.Message{}); len(msgs) > 0 {
-		t.Error("Expected fail on bad message")
-	} else if _, ok := res.(types.SimpleResponse); !ok {
-		t.Error("Expected simple response from bad message")
-	}
-	if msgs, _ := proc.ProcessMessage(
-		&types.Message{Parts: [][]byte{[]byte("wat this isnt good")}},
-	); len(msgs) > 0 {
-		t.Error("Expected fail on bad message")
+	tests := [][][]byte{
+		{},
+		{
+			[]byte("foo"),
+		},
+		{
+			[]byte("foo"),
+			[]byte("bar"),
+		},
+		{
+			[]byte("foo"),
+			[]byte("bar"),
+			[]byte("baz"),
+		},
 	}
 
-	testMsg := types.Message{Parts: [][]byte{[]byte("hello"), []byte("world")}}
-	testMsgBlob := testMsg.Bytes()
-
-	if msgs, _ := proc.ProcessMessage(&types.Message{Parts: [][]byte{testMsgBlob}}); len(msgs) > 0 {
-		if !reflect.DeepEqual([]*types.Message{&testMsg}, msgs) {
-			t.Errorf("Returned message did not match: %v != %v", msgs, testMsg)
+	for _, tIn := range tests {
+		msgs, _ := proc.ProcessMessage(&types.Message{Parts: tIn})
+		if exp, act := len(tIn), len(msgs); exp != act {
+			t.Errorf("Wrong count of messages: %v != %v", act, exp)
+			continue
 		}
-	} else {
-		t.Error("Failed on good message")
+		for i, exp := range tIn {
+			if act := msgs[i].Parts[0]; !reflect.DeepEqual(exp, act) {
+				t.Errorf("Wrong contents: %s != %s", act, exp)
+			}
+		}
 	}
 }

@@ -38,16 +38,17 @@ type mockMsgProcessor struct {
 	dropChan chan bool
 }
 
-func (m *mockMsgProcessor) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
+func (m *mockMsgProcessor) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
 	if drop := <-m.dropChan; drop {
-		return nil, types.NewSimpleResponse(errMockProc), false
+		return nil, types.NewSimpleResponse(errMockProc)
 	}
 	newMsg := types.NewMessage()
 	newMsg.Parts = [][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 	}
-	return &newMsg, nil, true
+	msgs := [1]*types.Message{&newMsg}
+	return msgs[:], nil
 }
 
 func TestProcessorPipeline(t *testing.T) {

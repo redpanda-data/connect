@@ -253,11 +253,12 @@ type mockProc struct {
 	value string
 }
 
-func (m mockProc) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
+func (m mockProc) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
 	if string(msg.Parts[0]) == m.value {
-		return nil, types.NewSimpleResponse(errMockProc), false
+		return nil, types.NewSimpleResponse(errMockProc)
 	}
-	return msg, nil, true
+	msgs := [1]*types.Message{msg}
+	return msgs[:], nil
 }
 
 //------------------------------------------------------------------------------

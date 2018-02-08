@@ -92,22 +92,17 @@ func TestHashSample(t *testing.T) {
 			}
 
 			msgIn := types.Message{Parts: [][]byte{tc.input}}
-			msgOut, _, propagate := proc.ProcessMessage(&msgIn)
-			if propagate {
-				if &msgIn != msgOut {
-					t.Error("Message told to propagate but not given")
-				}
-			}
+			msgs, _ := proc.ProcessMessage(&msgIn)
 
-			if nil != tc.expected && !propagate {
+			if nil != tc.expected && len(msgs) == 0 {
 				t.Error("Message told not to propagate even if it was expected to propagate")
 			}
-			if nil == tc.expected && propagate {
+			if nil == tc.expected && len(msgs) != 0 {
 				t.Error("Message told to propagate even if it was not expected to propagate")
 			}
-			if nil != tc.expected && propagate {
-				if !reflect.DeepEqual(msgOut.Parts[0], tc.expected) {
-					t.Errorf("Unexpected sampling: EXPECTED: %v, ACTUAL: %v", tc.expected, msgOut.Parts[0])
+			if nil != tc.expected && len(msgs) > 0 {
+				if !reflect.DeepEqual(msgs[0].Parts[0], tc.expected) {
+					t.Errorf("Unexpected sampling: EXPECTED: %v, ACTUAL: %v", tc.expected, msgs[0].Parts[0])
 				}
 			}
 		})
@@ -155,14 +150,12 @@ func TestHashSamplePartSelection(t *testing.T) {
 			parts[tc.insertPart] = doc1
 
 			msgIn := types.Message{Parts: parts}
-			msgOut, _, propagate := proc.ProcessMessage(&msgIn)
-			if propagate {
-				if &msgIn != msgOut {
+			msgs, _ := proc.ProcessMessage(&msgIn)
+			if len(msgs) > 0 {
+				if &msgIn != msgs[0] {
 					t.Error("Message told to propagate but not given")
 				}
-			}
-
-			if !propagate {
+			} else {
 				t.Error("Message told not to propagate")
 			}
 		})
@@ -180,13 +173,9 @@ func TestHashSampleBoundsCheck(t *testing.T) {
 	}
 
 	msgIn := types.Message{Parts: [][]byte{}}
-	msgOut, res, propagate := proc.ProcessMessage(&msgIn)
-	if propagate {
+	msgs, res := proc.ProcessMessage(&msgIn)
+	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")
-	}
-
-	if msgOut != nil {
-		t.Error("Non-nil message returned")
 	}
 
 	if exp, act := types.NewSimpleResponse(nil), res; !reflect.DeepEqual(exp, act) {
@@ -205,13 +194,9 @@ func TestHashSampleNegBoundsCheck(t *testing.T) {
 	}
 
 	msgIn := types.Message{Parts: [][]byte{}}
-	msgOut, res, propagate := proc.ProcessMessage(&msgIn)
-	if propagate {
+	msgs, res := proc.ProcessMessage(&msgIn)
+	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")
-	}
-
-	if msgOut != nil {
-		t.Error("Non-nil message returned")
 	}
 
 	if exp, act := types.NewSimpleResponse(nil), res; !reflect.DeepEqual(exp, act) {

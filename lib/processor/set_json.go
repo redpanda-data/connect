@@ -185,8 +185,10 @@ func NewSetJSON(conf Config, log log.Modular, stats metrics.Type) (Type, error) 
 //------------------------------------------------------------------------------
 
 // ProcessMessage prepends a new message part to the message.
-func (p *SetJSON) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
+func (p *SetJSON) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
 	p.stats.Incr("processor.set_json.count", 1)
+
+	msgs := [1]*types.Message{msg}
 
 	valueBytes := p.valueBytes
 	if p.interpolate {
@@ -200,21 +202,21 @@ func (p *SetJSON) ProcessMessage(msg *types.Message) (*types.Message, types.Resp
 
 	if index < 0 || index >= len(msg.Parts) {
 		p.stats.Incr("processor.set_json.skipped", 1)
-		return msg, nil, true
+		return msgs[:], nil
 	}
 
 	jsonPart, err := msg.GetJSON(index)
 	if err != nil {
 		p.stats.Incr("processor.set_json.error.json_parse", 1)
 		p.log.Errorf("Failed to parse part into json: %v\n", err)
-		return msg, nil, true
+		return msgs[:], nil
 	}
 
 	var gPart *gabs.Container
 	if gPart, err = gabs.Consume(jsonPart); err != nil {
 		p.stats.Incr("processor.set_json.error.json_parse", 1)
 		p.log.Errorf("Failed to parse part into json: %v\n", err)
-		return msg, nil, true
+		return msgs[:], nil
 	}
 
 	gPart.Set(valueBytes, p.target...)
@@ -224,7 +226,7 @@ func (p *SetJSON) ProcessMessage(msg *types.Message) (*types.Message, types.Resp
 		p.log.Errorf("Failed to convert json into part: %v\n", err)
 	}
 
-	return msg, nil, true
+	return msgs[:], nil
 }
 
 //------------------------------------------------------------------------------

@@ -65,20 +65,24 @@ func NewBlobToMulti(conf Config, log log.Modular, stats metrics.Type) (Type, err
 
 // ProcessMessage takes a message with 1 part in multiple part blob format and
 // returns a multiple part message by decoding it.
-func (m *BlobToMulti) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
+func (m *BlobToMulti) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
 	m.stats.Incr("processor.blob_to_multi.count", 1)
+
 	if len(msg.Parts) != 1 {
 		m.stats.Incr("processor.blob_to_multi.dropped", 1)
 		m.log.Errorf("Cannot decode message into mutiple parts due to parts count: %v != 1\n", len(msg.Parts))
-		return nil, types.NewSimpleResponse(nil), false
+		return nil, types.NewSimpleResponse(nil)
 	}
+
 	newMsg, err := types.FromBytes(msg.Parts[0])
 	if err != nil {
 		m.stats.Incr("processor.blob_to_multi.dropped", 1)
 		m.log.Errorf("Failed to decode message into multiple parts: %v\n", err)
-		return nil, types.NewSimpleResponse(nil), false
+		return nil, types.NewSimpleResponse(nil)
 	}
-	return &newMsg, nil, true
+
+	msgs := [1]*types.Message{&newMsg}
+	return msgs[:], nil
 }
 
 //------------------------------------------------------------------------------

@@ -26,14 +26,15 @@ import (
 
 //------------------------------------------------------------------------------
 
-// Type reads a message, performs a processing operation, and returns a message
-// and a flag indicating whether that message should be propagated or not.
+// Type reads a message, performs a processing operation, and returns either a
+// slice of messages resulting from the process to be propagated through the,
+// pipeline, or a response that should be sent back to the source instead.
 type Type interface {
 	// ProcessMessage attempts to process a message. Since processing can fail
-	// this call returns both a message in case of success, a response in case
-	// of failure, and a bool flag indicating (true == success) which of the two
-	// should be used.
-	ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool)
+	// this call returns both a slice of messages in case of success or a
+	// response in case of failure. If the slice of messages is empty the
+	// response should be returned to the source.
+	ProcessMessage(msg *types.Message) ([]*types.Message, types.Response)
 }
 
 //------------------------------------------------------------------------------

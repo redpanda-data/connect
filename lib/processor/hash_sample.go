@@ -100,7 +100,7 @@ func NewHashSample(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 //------------------------------------------------------------------------------
 
 // ProcessMessage checks each message against a set of bounds.
-func (s *HashSample) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
+func (s *HashSample) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
 	s.stats.Incr("processor.hash_sample.count", 1)
 
 	hash := xxhash.New64()
@@ -117,7 +117,7 @@ func (s *HashSample) ProcessMessage(msg *types.Message) (*types.Message, types.R
 			s.stats.Incr("processor.hash_sample.dropped_part_out_of_bounds", 1)
 			s.stats.Incr("processor.hash_sample.dropped", 1)
 			s.log.Errorf("Cannot sample message part %v for parts count: %v\n", index, lParts)
-			return nil, types.NewSimpleResponse(nil), false
+			return nil, types.NewSimpleResponse(nil)
 		}
 
 		// Attempt to add part to hash.
@@ -125,17 +125,18 @@ func (s *HashSample) ProcessMessage(msg *types.Message) (*types.Message, types.R
 		if nil != err {
 			s.stats.Incr("processor.hash_sample.hashing_error", 1)
 			s.log.Errorf("Cannot hash message part for sampling: %v\n", err)
-			return nil, types.NewSimpleResponse(nil), false
+			return nil, types.NewSimpleResponse(nil)
 		}
 	}
 
 	rate := scaleNum(hash.Sum64())
 	if rate >= s.conf.HashSample.RetainMin && rate < s.conf.HashSample.RetainMax {
-		return msg, nil, true
+		msgs := [1]*types.Message{msg}
+		return msgs[:], nil
 	}
 
 	s.stats.Incr("processor.hash_sample.dropped", 1)
-	return nil, types.NewSimpleResponse(nil), false
+	return nil, types.NewSimpleResponse(nil)
 }
 
 //------------------------------------------------------------------------------

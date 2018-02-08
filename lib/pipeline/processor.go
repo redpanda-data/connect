@@ -96,13 +96,19 @@ func (p *Processor) loop() {
 		}
 		p.stats.Incr("pipeline.processor.count", 1)
 
-		resultMsg := &msg
+		resultMsgs := []*types.Message{&msg}
 		var resultRes types.Response
-		sending := true
-		for i := 0; sending && i < len(p.msgProcessors); i++ {
-			resultMsg, resultRes, sending = p.msgProcessors[i].ProcessMessage(resultMsg)
+		for i := 0; len(resultMsgs) > 0 && i < len(p.msgProcessors); i++ {
+			var nextResultMsgs []*types.Message
+			for _, m := range resultMsgs {
+				var rMsgs []*types.Message
+				rMsgs, resultRes = p.msgProcessors[i].ProcessMessage(m)
+				nextResultMsgs = append(nextResultMsgs, rMsgs...)
+			}
+			resultMsgs = nextResultMsgs
 		}
-		if !sending {
+
+		if len(resultMsgs) == 0 {
 			p.stats.Incr("pipeline.processor.dropped", 1)
 			select {
 			case p.responsesOut <- resultRes:
@@ -112,19 +118,22 @@ func (p *Processor) loop() {
 			continue
 		}
 
-		select {
-		case p.messagesOut <- *resultMsg:
-		case <-p.closeChan:
-			return
-		}
 		var res types.Response
-		if res, open = <-p.responsesIn; !open {
-			return
-		}
-		if res.Error() == nil {
-			p.stats.Incr("pipeline.processor.send.success", 1)
-		} else {
-			p.stats.Incr("pipeline.processor.send.error", 1)
+		for _, m := range resultMsgs {
+			select {
+			case p.messagesOut <- *m:
+			case <-p.closeChan:
+				return
+			}
+			if res, open = <-p.responsesIn; !open {
+				return
+			}
+			if res.Error() == nil {
+				p.stats.Incr("pipeline.processor.send.success", 1)
+			} else {
+				p.stats.Incr("pipeline.processor.send.error", 1)
+				break
+			}
 		}
 		select {
 		case p.responsesOut <- res:

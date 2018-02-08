@@ -95,13 +95,13 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg, res, check := proc.ProcessMessage(&types.Message{Parts: input})
-	if !check {
+	msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+	if len(msgs) != 1 {
 		t.Error("Unarchive failed")
 	} else if res != nil {
 		t.Errorf("Expected nil response: %v", res)
 	}
-	if act := msg.Parts; !reflect.DeepEqual(exp, act) {
+	if act := msgs[0].Parts; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 }
@@ -197,13 +197,13 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msg, res, check := proc.ProcessMessage(&types.Message{Parts: input})
-		if !check {
+		msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+		if len(msgs) != 1 {
 			t.Errorf("Unarchive failed on index: %v", i)
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := result.value, string(msg.Parts[result.index]); exp != act {
+		if exp, act := result.value, string(msgs[0].Parts[result.index]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
 	}
@@ -220,15 +220,15 @@ func TestUnarchiveEmpty(t *testing.T) {
 		return
 	}
 
-	_, _, check := proc.ProcessMessage(&types.Message{Parts: [][]byte{}})
-	if check {
+	msgs, _ := proc.ProcessMessage(&types.Message{Parts: [][]byte{}})
+	if len(msgs) != 0 {
 		t.Error("Expected failure with zero part message")
 	}
 
-	_, _, check = proc.ProcessMessage(&types.Message{
+	msgs, _ = proc.ProcessMessage(&types.Message{
 		Parts: [][]byte{[]byte("first"), []byte("second")},
 	})
-	if check {
+	if len(msgs) != 0 {
 		t.Error("Expected failure with bad data")
 	}
 }

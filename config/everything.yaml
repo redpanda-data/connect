@@ -162,6 +162,7 @@ input:
       part: 0
       path: ""
       value: ""
+    split: {}
     unarchive:
       format: tar
       parts: []

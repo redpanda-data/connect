@@ -84,15 +84,15 @@ func TestBoundsCheck(t *testing.T) {
 
 	for _, parts := range goodParts {
 		msg := &types.Message{Parts: parts}
-		if res, _, check := proc.ProcessMessage(msg); !check {
+		if msgs, _ := proc.ProcessMessage(msg); len(msgs) == 0 {
 			t.Errorf("Bounds check failed on: %s", parts)
-		} else if res != msg {
+		} else if msgs[0] != msg {
 			t.Error("Wrong message returned (expected same)")
 		}
 	}
 
 	for _, parts := range badParts {
-		if _, res, check := proc.ProcessMessage(&types.Message{Parts: parts}); check {
+		if msgs, res := proc.ProcessMessage(&types.Message{Parts: parts}); len(msgs) > 0 {
 			t.Errorf("Bounds check didnt fail on: %s", parts)
 		} else if _, ok := res.(types.SimpleResponse); !ok {
 			t.Error("Expected simple response from bad message")

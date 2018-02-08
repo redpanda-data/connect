@@ -86,13 +86,13 @@ func TestSelectParts(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		msg, res, check := proc.ProcessMessage(&types.Message{Parts: test.in})
-		if !check {
+		msgs, res := proc.ProcessMessage(&types.Message{Parts: test.in})
+		if len(msgs) != 1 {
 			t.Errorf("Select Parts failed on: %s", test.in)
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := test.out, msg.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := test.out, msgs[0].Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Unexpected output: %s != %s", act, exp)
 		}
 	}
@@ -132,13 +132,13 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msg, res, check := proc.ProcessMessage(&types.Message{Parts: input})
-		if !check {
+		msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+		if len(msgs) != 1 {
 			t.Errorf("Select Parts failed on index: %v", i)
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := exp, string(msg.Parts[0]); exp != act {
+		if exp, act := exp, string(msgs[0].Parts[0]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
 	}
@@ -155,8 +155,8 @@ func TestSelectPartsEmpty(t *testing.T) {
 		return
 	}
 
-	_, _, check := proc.ProcessMessage(&types.Message{Parts: [][]byte{[]byte("foo")}})
-	if check {
+	msgs, _ := proc.ProcessMessage(&types.Message{Parts: [][]byte{[]byte("foo")}})
+	if len(msgs) != 0 {
 		t.Error("Expected failure with zero parts selected")
 	}
 }

@@ -42,7 +42,8 @@ archive types are: tar (I'll add more later). If the list of target parts is
 empty the unarchive will be applied to all message parts.
 
 When a part is unarchived into multiple files they will become their own message
-parts, appended from the position of the source part.
+parts, appended from the position of the source part. If you wish to split the
+archive into one message per file then follow this with the 'split' processor.
 
 Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if index = -1 then the selected part
@@ -140,7 +141,7 @@ func NewUnarchive(conf Config, log log.Modular, stats metrics.Type) (Type, error
 
 // ProcessMessage takes a message, attempts to unarchive parts of the message,
 // and returns the result.
-func (d *Unarchive) ProcessMessage(msg *types.Message) (*types.Message, types.Response, bool) {
+func (d *Unarchive) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
 	d.stats.Incr("processor.unarchive.count", 1)
 
 	newMsg := types.Message{}
@@ -173,10 +174,11 @@ func (d *Unarchive) ProcessMessage(msg *types.Message) (*types.Message, types.Re
 
 	if len(newMsg.Parts) == 0 {
 		d.stats.Incr("processor.unarchive.skipped", 1)
-		return nil, nil, false
+		return nil, types.NewSimpleResponse(nil)
 	}
 
-	return &newMsg, nil, true
+	msgs := [1]*types.Message{&newMsg}
+	return msgs[:], nil
 }
 
 //------------------------------------------------------------------------------

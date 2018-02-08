@@ -145,6 +145,25 @@ last element with be selected, and so on.
 This processor will interpolate functions within the 'value' field, you can find
 a list of functions [here](../config_interpolation.md#functions).
 
+## `split`
+
+Extracts the individual parts of a multipart message and turns them each into a
+unique message. It is NOT necessary to use the split processor when your output
+only supports single part messages, since those message parts will automatically
+be sent as individual messages.
+
+Please note that when you split a message you will lose the coupling between the
+acknowledgement from the output destination to the origin message at the input
+source. If all but one part of a split message is successfully propagated to the
+destination the source will still see an error and may attempt to resent the
+entire message again.
+
+The split operator is useful for breaking down messages containing a large
+number of parts into smaller batches by using the split processor followed by
+the combine processor. For example:
+
+1 Message of 1000 parts -> Split -> Combine 10 -> 100 Messages of 10 parts.
+
 ## `unarchive`
 
 Unarchives parts of a message according to the selected archive type. Supported
@@ -152,7 +171,8 @@ archive types are: tar (I'll add more later). If the list of target parts is
 empty the unarchive will be applied to all message parts.
 
 When a part is unarchived into multiple files they will become their own message
-parts, appended from the position of the source part.
+parts, appended from the position of the source part. If you wish to split the
+archive into one message per file then follow this with the 'split' processor.
 
 Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if index = -1 then the selected part
