@@ -98,11 +98,12 @@ benthos --print-yaml > config.yaml
 benthos --print-json > config.json
 ```
 
-The configuration file should contain a section for an input, output, and a
-buffer. For example, if we wanted to output to a ZMQ4 push socket our output
-section in a YAML config might look like this:
+If we wanted to pipe Stdin to a ZMQ push socket our YAML config might look like
+this:
 
 ``` yaml
+input:
+  type: stdin
 output:
   type: zmq4
   zmq4:
