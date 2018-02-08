@@ -54,6 +54,7 @@ type Config struct {
 	AMQP        AMQPConfig             `json:"amqp" yaml:"amqp"`
 	FanOut      FanOutConfig           `json:"fan_out" yaml:"fan_out"`
 	File        FileConfig             `json:"file" yaml:"file"`
+	Files       writer.FilesConfig     `json:"files" yaml:"files"`
 	HTTPClient  HTTPClientConfig       `json:"http_client" yaml:"http_client"`
 	HTTPServer  HTTPServerConfig       `json:"http_server" yaml:"http_server"`
 	Kafka       KafkaConfig            `json:"kafka" yaml:"kafka"`
@@ -77,6 +78,7 @@ func NewConfig() Config {
 		AMQP:        NewAMQPConfig(),
 		FanOut:      NewFanOutConfig(),
 		File:        NewFileConfig(),
+		Files:       writer.NewFilesConfig(),
 		HTTPClient:  NewHTTPClientConfig(),
 		HTTPServer:  NewHTTPServerConfig(),
 		Kafka:       NewKafkaConfig(),

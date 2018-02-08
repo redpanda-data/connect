@@ -46,9 +46,11 @@ var constructors = map[string]typeSpec{}
 // Config is the all encompassing configuration struct for all processor types.
 type Config struct {
 	Type        string            `json:"type" yaml:"type"`
+	Archive     ArchiveConfig     `json:"archive" yaml:"archive"`
 	BlobToMulti struct{}          `json:"blob_to_multi" yaml:"blob_to_multi"`
 	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
 	Combine     CombineConfig     `json:"combine" yaml:"combine"`
+	Compress    CompressConfig    `json:"compress" yaml:"compress"`
 	Decompress  DecompressConfig  `json:"decompress" yaml:"decompress"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
@@ -64,9 +66,11 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Type:        "bounds_check",
+		Archive:     NewArchiveConfig(),
 		BlobToMulti: struct{}{},
 		BoundsCheck: NewBoundsCheckConfig(),
 		Combine:     NewCombineConfig(),
+		Compress:    NewCompressConfig(),
 		Decompress:  NewDecompressConfig(),
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),

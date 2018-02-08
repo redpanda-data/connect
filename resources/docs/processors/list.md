@@ -3,6 +3,17 @@ PROCESSORS
 
 This document has been generated with `benthos --list-processors`.
 
+## `archive`
+
+Archives all the parts of a message into a single part according to the selected
+archive type, treating each part as if it were a file. Supported archive types
+are: tar (I'll add more later).
+
+Message parts only contain raw data, and therefore in order to create an archive
+consisting of files per part you need to generate unique file names for each
+part. This can be done by using function interpolations on the 'path' field as
+described [here](../config_interpolation.md#functions).
+
 ## `blob_to_multi`
 
 If a multiple part message has been encoded into a single part message using the
@@ -34,6 +45,19 @@ NOTE: If a message received has more parts than the 'combine' amount it will be
 sent unchanged with its original parts. This occurs even if there are cached
 parts waiting to be combined, which will change the ordering of message parts
 through the platform.
+
+## `compress`
+
+Compresses parts of a message according to the selected algorithm. Supported
+compression types are: gzip (I'll add more later). If the list of target parts
+is empty the compression will be applied to all message parts.
+
+The 'level' field might not apply to all algorithms.
+
+Part indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if index = -1 then the selected part
+will be the last part of the message, if index = -2 then the part before the
+last element with be selected, and so on.
 
 ## `decompress`
 

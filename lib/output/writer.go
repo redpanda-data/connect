@@ -162,6 +162,7 @@ func (w *Writer) loop() {
 		}
 
 		if err != nil {
+			w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
 			w.stats.Incr(errorPath, 1)
 		} else {
 			w.stats.Incr(successPath, 1)

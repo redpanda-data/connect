@@ -43,6 +43,15 @@ baz\n\n
 You can alternatively specify a custom delimiter that will follow the same rules
 as '\n' above.
 
+## `files`
+
+Writes each individual part of each message to a new file.
+
+Message parts only contain raw data, and therefore in order to create a unique
+file for each part you need to generate unique file names. This can be done by
+using function interpolations on the 'path' field as described
+[here](../config_interpolation.md#functions).
+
 ## `http_client`
 
 The HTTP client output type connects to a server and sends POST requests for

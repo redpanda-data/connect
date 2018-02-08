@@ -133,6 +133,9 @@ input:
     poll_timeout_ms: 5000
   processors:
   - type: bounds_check
+    archive:
+      format: tar
+      path: ${!count:files}-${!timestamp_unix_nano}.txt
     blob_to_multi: {}
     bounds_check:
       max_parts: 100
@@ -140,6 +143,10 @@ input:
       max_part_size: 1073741824
     combine:
       parts: 2
+    compress:
+      algorithm: gzip
+      level: -1
+      parts: []
     decompress:
       algorithm: gzip
       parts: []
@@ -187,6 +194,8 @@ output:
   file:
     path: ""
     custom_delimiter: ""
+  files:
+    path: ${!count:files}-${!timestamp_unix_nano}.txt
   http_client:
     url: http://localhost:8081/post
     verb: POST
