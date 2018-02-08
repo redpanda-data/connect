@@ -5,7 +5,10 @@
 [![Build Status][travis-badge]][travis-url]
 
 Benthos is a service that bridges message queues in ways that can simplify your
-platform or reduce development time.
+platform and reduce development time. It also offers a variety of
+[configurable message processors][10] that can be chained together for solving
+common streaming problems such as filtering, modifying, batching, splitting,
+(de)compressing, (un)archiving, etc.
 
 A range of optional buffer strategies are available, allowing you to select a
 balance between latency, protection against back pressure and file based
@@ -167,6 +170,7 @@ containers using `docker-compose`.
 [7]: resources/docs
 [8]: resources/docs/config_interpolation.md
 [9]: resources/docker/compose_examples
+[10]: resources/docs/processors/list.md
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
 [travis-url]: https://travis-ci.org/Jeffail/benthos
 [dep]: https://github.com/golang/dep
