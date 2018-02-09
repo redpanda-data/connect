@@ -34,9 +34,11 @@ func init() {
 	constructors["amazon_s3"] = typeSpec{
 		constructor: NewAmazonS3,
 		description: `
-Downloads objects in an Amazon S3 bucket. If an SQS queue has been configured
-then only object keys read from the queue will be downloaded. Otherwise, the
-entire list of objects found when this input is created will be downloaded.
+Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
+SQS queue has been configured then only object keys read from the queue will be
+downloaded. Otherwise, the entire list of objects found when this input is
+created will be downloaded. Note that the prefix configuration is only used when
+downloading objects without SQS configured.
 
 Here is a guide for setting up an SQS queue that receives events for new S3
 bucket objects:

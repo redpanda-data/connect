@@ -50,6 +50,7 @@ type AmazonAWSCredentialsConfig struct {
 type AmazonS3Config struct {
 	Region        string                     `json:"region" yaml:"region"`
 	Bucket        string                     `json:"bucket" yaml:"bucket"`
+	Prefix        string                     `json:"prefix" yaml:"prefix"`
 	DeleteObjects bool                       `json:"delete_objects" yaml:"delete_objects"`
 	SQSURL        string                     `json:"sqs_url" yaml:"sqs_url"`
 	SQSBodyPath   string                     `json:"sqs_body_path" yaml:"sqs_body_path"`
@@ -62,6 +63,7 @@ func NewAmazonS3Config() AmazonS3Config {
 	return AmazonS3Config{
 		Region:        "eu-west-1",
 		Bucket:        "",
+		Prefix:        "",
 		DeleteObjects: false,
 		SQSURL:        "",
 		SQSBodyPath:   "Records.s3.object.key",
@@ -144,6 +146,9 @@ func (a *AmazonS3) Connect() error {
 		listInput := &s3.ListObjectsInput{
 			Bucket: aws.String(a.conf.Bucket),
 		}
+		if len(a.conf.Prefix) > 0 {
+			listInput.Prefix = aws.String(a.conf.Prefix)
+		}
 		objList, err := sThree.ListObjects(listInput)
 		if err != nil {
 			return fmt.Errorf("failed to list objects: %v", err)
@@ -195,11 +200,15 @@ func (a *AmazonS3) readSQSEvents() error {
 
 		switch t := gObj.S(a.sqsBodyPath...).Data().(type) {
 		case string:
-			a.targetKeys = append(a.targetKeys, t)
+			if strings.HasPrefix(t, a.conf.Prefix) {
+				a.targetKeys = append(a.targetKeys, t)
+			}
 		case []interface{}:
 			for _, jStr := range t {
 				if p, ok := jStr.(string); ok {
-					a.targetKeys = append(a.targetKeys, p)
+					if strings.HasPrefix(p, a.conf.Prefix) {
+						a.targetKeys = append(a.targetKeys, p)
+					}
 				}
 			}
 		}

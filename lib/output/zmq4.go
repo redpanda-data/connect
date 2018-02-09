@@ -179,9 +179,9 @@ func (z *ZMQ4) loop() {
 			z.stats.Incr("output.zmq4.count", 1)
 			_, err = z.socket.SendMessage(msg.Parts) // Could lock entire service
 			if err != nil {
-				z.stats.Incr("output.zmq4.send.success", 1)
-			} else {
 				z.stats.Incr("output.zmq4.send.error", 1)
+			} else {
+				z.stats.Incr("output.zmq4.send.success", 1)
 			}
 		case <-z.closeChan:
 			return
