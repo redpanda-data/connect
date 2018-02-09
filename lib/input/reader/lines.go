@@ -27,8 +27,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -48,10 +46,6 @@ type Lines struct {
 	maxBuffer int
 	multipart bool
 	delimiter []byte
-
-	typeStr string
-	log     log.Modular
-	stats   metrics.Type
 }
 
 // NewLines creates a new reader input type.
@@ -65,23 +59,17 @@ type Lines struct {
 // Lines has been instructed to shut down. This function should unblock any
 // blocked Read calls.
 func NewLines(
-	typeStr string,
 	handleCtor func() (io.Reader, error),
 	onClose func(),
-	log log.Modular,
-	stats metrics.Type,
 	options ...func(r *Lines),
-) (Type, error) {
+) (*Lines, error) {
 	r := Lines{
-		typeStr:       typeStr,
 		handleCtor:    handleCtor,
 		onClose:       onClose,
 		messageBuffer: &bytes.Buffer{},
 		maxBuffer:     bufio.MaxScanTokenSize,
 		multipart:     false,
 		delimiter:     []byte("\n"),
-		log:           log.NewModule(".input." + typeStr),
-		stats:         stats,
 	}
 
 	for _, opt := range options {
@@ -174,24 +162,28 @@ func (r *Lines) Connect() error {
 
 // Read attempts to read a new line from the io.Reader.
 func (r *Lines) Read() (types.Message, error) {
+	if r.scanner == nil {
+		return types.Message{}, types.ErrNotConnected
+	}
+
 	msg := types.NewMessage()
 
 	for r.scanner.Scan() {
 		partSize, err := r.messageBuffer.Write(r.scanner.Bytes())
+		rIndex := r.messageBufferIndex
 		r.messageBufferIndex += partSize
 		if err != nil {
 			return types.Message{}, err
 		}
 
 		if partSize > 0 {
-			rIndex := r.messageBufferIndex
 			msg.Parts = append(
 				msg.Parts, r.messageBuffer.Bytes()[rIndex:rIndex+partSize],
 			)
 			if !r.multipart {
 				return msg, nil
 			}
-		} else if r.multipart {
+		} else if r.multipart && len(msg.Parts) > 0 {
 			// Empty line means we're finished reading parts for this
 			// message.
 			return msg, nil
@@ -203,9 +195,11 @@ func (r *Lines) Read() (types.Message, error) {
 		return types.Message{}, err
 	}
 
-	// If we got this far that means we reached the end of the io.Reader without
-	// reaching a full message.
 	r.closeHandle()
+
+	if len(msg.Parts) > 0 {
+		return msg, nil
+	}
 	return types.Message{}, types.ErrNotConnected
 }
 
@@ -214,6 +208,7 @@ func (r *Lines) Read() (types.Message, error) {
 func (r *Lines) Acknowledge(err error) error {
 	if err == nil && r.messageBuffer != nil {
 		r.messageBuffer.Reset()
+		r.messageBufferIndex = 0
 	}
 	return nil
 }

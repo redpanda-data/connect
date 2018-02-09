@@ -33,6 +33,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/oauth"
 	"github.com/Jeffail/benthos/lib/util/service/log"
@@ -154,8 +155,7 @@ func NewHTTPClient(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	var closed bool
 	var res *http.Response
 
-	return NewLineReader(
-		"http_client",
+	rdr, err := reader.NewLines(
 		func() (io.Reader, error) {
 			h.stats.Incr("input.http_client.stream.constructor", 1)
 
@@ -200,10 +200,18 @@ func NewHTTPClient(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 				res = nil
 			}
 		},
+		reader.OptLinesSetDelimiter(delim),
+		reader.OptLinesSetMaxBuffer(conf.HTTPClient.StreamMaxBuffer),
+		reader.OptLinesSetMultipart(conf.HTTPClient.StreamMultipart),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewReader(
+		"http_client",
+		reader.NewPreserver(rdr),
 		log, stats,
-		OptLineReaderSetDelimiter(delim),
-		OptLineReaderSetMaxBuffer(conf.HTTPClient.StreamMaxBuffer),
-		OptLineReaderSetMultipart(conf.HTTPClient.StreamMultipart),
 	)
 }
 

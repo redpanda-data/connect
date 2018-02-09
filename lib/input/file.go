@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -76,8 +77,8 @@ func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if len(conf.File.CustomDelim) > 0 {
 		delim = conf.File.CustomDelim
 	}
-	return NewLineReader(
-		"file",
+
+	rdr, err := reader.NewLines(
 		func() (io.Reader, error) {
 			// Swap so this only works once since we don't want to read the file
 			// multiple times.
@@ -89,10 +90,17 @@ func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 			return sendFile, nil
 		},
 		func() {},
+		reader.OptLinesSetDelimiter(delim),
+		reader.OptLinesSetMaxBuffer(conf.File.MaxBuffer),
+		reader.OptLinesSetMultipart(conf.File.Multipart),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return NewReader(
+		"file",
+		reader.NewPreserver(rdr),
 		log, stats,
-		OptLineReaderSetDelimiter(delim),
-		OptLineReaderSetMaxBuffer(conf.File.MaxBuffer),
-		OptLineReaderSetMultipart(conf.File.Multipart),
 	)
 }
 
