@@ -22,16 +22,7 @@ package input
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
 	"testing"
-	"time"
-
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
-	"github.com/go-mangos/mangos/protocol/push"
-	"github.com/go-mangos/mangos/transport/tcp"
 )
 
 func TestFanInConfigDefaults(t *testing.T) {
@@ -298,93 +289,5 @@ func TestFanInConfigDittoZeroed(t *testing.T) {
 
 	if exp, actual := "/1", inputConfs[0].HTTPServer.Path; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
-	}
-}
-
-func TestFanInWithScaleProto(t *testing.T) {
-	nTestLoops := 1000
-
-	conf := NewConfig()
-
-	scaleOne, scaleTwo := NewConfig(), NewConfig()
-	scaleOne.Type, scaleTwo.Type = "scalability_protocols", "scalability_protocols"
-	scaleOne.ScaleProto.Bind, scaleTwo.ScaleProto.Bind = true, true
-	scaleOne.ScaleProto.URLs = []string{"tcp://localhost:1247"}
-	scaleTwo.ScaleProto.URLs = []string{"tcp://localhost:1248"}
-	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PULL", "PULL"
-	scaleOne.ScaleProto.PollTimeoutMS, scaleTwo.ScaleProto.PollTimeoutMS = 100, 100
-
-	conf.FanIn.Inputs = append(conf.FanIn.Inputs, scaleOne)
-	conf.FanIn.Inputs = append(conf.FanIn.Inputs, scaleTwo)
-
-	s, err := NewFanIn(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	resChan := make(chan types.Response)
-
-	if err = s.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
-	defer func() {
-		s.CloseAsync()
-		if err := s.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
-	}()
-
-	socketOne, err := push.NewSocket()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	socketTwo, err := push.NewSocket()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	socketOne.AddTransport(tcp.NewTransport())
-	socketTwo.AddTransport(tcp.NewTransport())
-
-	if err = socketOne.Dial("tcp://localhost:1247"); err != nil {
-		t.Error(err)
-		return
-	}
-	if err = socketTwo.Dial("tcp://localhost:1248"); err != nil {
-		t.Error(err)
-		return
-	}
-
-	for i := 0; i < nTestLoops; i++ {
-		testStr := fmt.Sprintf("testOne%v", i)
-		if i%2 == 0 {
-			if err = socketOne.Send([]byte(testStr)); err != nil {
-				t.Error(err)
-				return
-			}
-		} else {
-			if err = socketOne.Send([]byte(testStr)); err != nil {
-				t.Error(err)
-				return
-			}
-		}
-		select {
-		case resMsg := <-s.MessageChan():
-			if res := string(resMsg.Parts[0]); res != testStr {
-				t.Errorf("Wrong result, %v != %v", res, testStr)
-			}
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for message")
-		}
-		select {
-		case resChan <- types.NewSimpleResponse(nil):
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
 	}
 }
