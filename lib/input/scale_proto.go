@@ -57,7 +57,7 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	if err != nil {
 		return nil, err
 	}
-	return NewReader("scalability_protocols", s, log, stats)
+	return NewReader("scalability_protocols", reader.NewPreserver(s), log, stats)
 }
 
 //------------------------------------------------------------------------------

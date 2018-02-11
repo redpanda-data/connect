@@ -128,7 +128,7 @@ func TestScaleProtoPubSub(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewScaleProtoConfig()
-	conf.URLs = []string{"tcp://localhost:1239"}
+	conf.URLs = []string{"tcp://localhost:1250"}
 	conf.Bind = true
 	conf.SocketType = "SUB"
 	conf.SubFilters = []string{"testTopic"}
@@ -160,7 +160,7 @@ func TestScaleProtoPubSub(t *testing.T) {
 
 	socket.AddTransport(tcp.NewTransport())
 
-	if err = socket.Dial("tcp://localhost:1239"); err != nil {
+	if err = socket.Dial("tcp://localhost:1250"); err != nil {
 		t.Error(err)
 		return
 	}

@@ -69,7 +69,7 @@ type Config struct {
 	NATSStream    NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
 	NSQ           NSQConfig                  `json:"nsq" yaml:"nsq"`
 	RedisList     reader.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub   RedisPubSubConfig          `json:"redis_pubsub" yaml:"redis_pubsub"`
+	RedisPubSub   reader.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
 	ScaleProto    reader.ScaleProtoConfig    `json:"scalability_protocols" yaml:"scalability_protocols"`
 	STDIN         STDINConfig                `json:"stdin" yaml:"stdin"`
 	ZMQ4          *ZMQ4Config                `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
@@ -93,7 +93,7 @@ func NewConfig() Config {
 		NATSStream:    NewNATSStreamConfig(),
 		NSQ:           NewNSQConfig(),
 		RedisList:     reader.NewRedisListConfig(),
-		RedisPubSub:   NewRedisPubSubConfig(),
+		RedisPubSub:   reader.NewRedisPubSubConfig(),
 		ScaleProto:    reader.NewScaleProtoConfig(),
 		STDIN:         NewSTDINConfig(),
 		ZMQ4:          NewZMQ4Config(),

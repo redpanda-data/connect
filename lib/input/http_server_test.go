@@ -154,7 +154,7 @@ func TestHTTPBadRequests(t *testing.T) {
 	t.Parallel()
 
 	conf := NewConfig()
-	conf.HTTPServer.Address = "localhost:1236"
+	conf.HTTPServer.Address = "localhost:1233"
 	conf.HTTPServer.Path = "/testpost"
 
 	h, err := NewHTTPServer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
@@ -172,7 +172,7 @@ func TestHTTPBadRequests(t *testing.T) {
 
 	<-time.After(time.Millisecond * 1000)
 
-	res, err := http.Get("http://localhost:1236/testpost")
+	res, err := http.Get("http://localhost:1233/testpost")
 	if err != nil {
 		t.Error(err)
 		return
@@ -186,7 +186,7 @@ func TestHTTPBadRequests(t *testing.T) {
 		t.Error(err)
 	}
 
-	res, err = http.Get("http://localhost:1236/testpost")
+	res, err = http.Get("http://localhost:1233/testpost")
 	if err == nil {
 		t.Error("request success when service should be closed")
 	}
@@ -196,7 +196,7 @@ func TestHTTPTimeout(t *testing.T) {
 	t.Parallel()
 
 	conf := NewConfig()
-	conf.HTTPServer.Address = "localhost:1235"
+	conf.HTTPServer.Address = "localhost:1232"
 	conf.HTTPServer.Path = "/testpost"
 	conf.HTTPServer.TimeoutMS = 1
 
@@ -217,7 +217,7 @@ func TestHTTPTimeout(t *testing.T) {
 
 	var res *http.Response
 	res, err = http.Post(
-		"http://localhost:1235/testpost",
+		"http://localhost:1232/testpost",
 		"application/octet-stream",
 		bytes.NewBuffer([]byte("hello world")),
 	)
