@@ -118,8 +118,6 @@
     "protocol/pub",
     "protocol/pull",
     "protocol/push",
-    "protocol/rep",
-    "protocol/req",
     "protocol/sub",
     "transport/ipc",
     "transport/tcp"
@@ -291,6 +289,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ebdf2385fe62a6d86ef8419aa6e5f4e7ca76ff68ad050b9d4b5fbb996c1041a9"
+  inputs-digest = "1f18f04697f9677f260a9f9ed8cf2a2212517d149c86fc7f47fd57a904b9efac"
   solver-name = "gps-cdcl"
   solver-version = 1

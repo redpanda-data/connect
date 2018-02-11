@@ -21,7 +21,6 @@
 package output
 
 import (
-	"errors"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -29,7 +28,6 @@ import (
 	"github.com/go-mangos/mangos"
 	"github.com/go-mangos/mangos/protocol/pub"
 	"github.com/go-mangos/mangos/protocol/push"
-	"github.com/go-mangos/mangos/protocol/req"
 	"github.com/go-mangos/mangos/transport/ipc"
 	"github.com/go-mangos/mangos/transport/tcp"
 
@@ -56,26 +54,9 @@ for sending multi part messages. We can use the benthos binary format for this
 purpose. However, this format may appear to be gibberish to other services. If
 you want to use the binary format you can set 'benthos_multi' to true.
 
-Currently only PUSH, PUB and REQ sockets are supported.
-
-When using REQ sockets Benthos will expect acknowledgement from the consumer
-that the message has been successfully propagated downstream. This comes in the
-form of an expected response which is set by the 'reply_success' configuration
-field.
-
-If the reply from a REQ message is either not returned within the
-'reply_timeout_ms' period, or if the reply does not match our 'reply_success'
-string, then the message is considered lost and will be sent again.`,
+Currently only PUSH and PUB sockets are supported.`,
 	}
 }
-
-//------------------------------------------------------------------------------
-
-var (
-	// ErrBadReply is returned when a client gives a reply that is not the
-	// expected success string.
-	ErrBadReply = errors.New("bad reply from client")
-)
 
 //------------------------------------------------------------------------------
 
@@ -84,9 +65,7 @@ type ScaleProtoConfig struct {
 	URLs          []string `json:"urls" yaml:"urls"`
 	Bind          bool     `json:"bind" yaml:"bind"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
-	SuccessStr    string   `json:"reply_success" yaml:"reply_success"`
 	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
-	RepTimeoutMS  int      `json:"reply_timeout_ms" yaml:"reply_timeout_ms"`
 }
 
 // NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
@@ -95,9 +74,7 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 		URLs:          []string{"tcp://localhost:5556"},
 		Bind:          false,
 		SocketType:    "PUSH",
-		SuccessStr:    "SUCCESS",
 		PollTimeoutMS: 5000,
-		RepTimeoutMS:  5000,
 	}
 }
 
@@ -156,13 +133,6 @@ func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	if nil != err {
 		return nil, err
 	}
-	err = s.socket.SetOption(
-		mangos.OptionSendDeadline,
-		time.Millisecond*time.Duration(s.conf.ScaleProto.RepTimeoutMS),
-	)
-	if nil != err {
-		return nil, err
-	}
 
 	s.socket.AddTransport(ipc.NewTransport())
 	s.socket.AddTransport(tcp.NewTransport())
@@ -196,8 +166,6 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 		return push.NewSocket()
 	case "PUB":
 		return pub.NewSocket()
-	case "REQ":
-		return req.NewSocket()
 	}
 	return nil, types.ErrInvalidScaleProtoType
 }
@@ -230,8 +198,6 @@ func (s *ScaleProto) loop() {
 		)
 	}
 
-	isReq := (s.conf.ScaleProto.SocketType == "REQ")
-
 	var open bool
 	for atomic.LoadInt32(&s.running) == 1 {
 		var msg types.Message
@@ -246,20 +212,7 @@ func (s *ScaleProto) loop() {
 		s.stats.Incr("output.scale_proto.count", 1)
 		var err error
 		for _, part := range msg.Parts {
-			if err = s.socket.Send(part); err == nil {
-				if isReq {
-					var reply []byte
-					if reply, err = s.socket.Recv(); err != nil {
-						s.stats.Incr("output.scale_proto.send.rep.error", 1)
-					} else if string(reply) != s.conf.ScaleProto.SuccessStr {
-						s.stats.Incr("output.scale_proto.send.rep.error", 1)
-						err = ErrBadReply
-					} else {
-						s.stats.Incr("output.scale_proto.send.rep.success", 1)
-					}
-				}
-			}
-			if err != nil {
+			if err = s.socket.Send(part); err != nil {
 				break
 			}
 		}

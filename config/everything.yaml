@@ -6,6 +6,7 @@ input:
   amazon_s3:
     region: eu-west-1
     bucket: ""
+    prefix: ""
     delete_objects: false
     sqs_url: ""
     sqs_body_path: Records.s3.object.key
@@ -114,8 +115,6 @@ input:
     - tcp://*:5555
     bind: true
     socket_type: PULL
-    reply_success: SUCCESS
-    reply_error: ERROR
     sub_filters: []
     poll_timeout_ms: 5000
     reply_timeout_ms: 5000
@@ -254,9 +253,7 @@ output:
     - tcp://localhost:5556
     bind: false
     socket_type: PUSH
-    reply_success: SUCCESS
     poll_timeout_ms: 5000
-    reply_timeout_ms: 5000
   stdout:
     custom_delimiter: ""
   zmq4:

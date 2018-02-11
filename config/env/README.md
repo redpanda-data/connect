@@ -27,6 +27,7 @@ BENTHOS_OUTPUT_PROCESSOR = noop
 
 AMAZON_INPUT_REGION              = eu-west-1
 AMAZON_INPUT_BUCKET              =
+AMAZON_INPUT_PREFIX              =
 AMAZON_INPUT_DELETE_OBJECTS      = false
 AMAZON_INPUT_SQS_URL             =
 AMAZON_INPUT_SQS_BODY_PATH       = Records.s3.object.key

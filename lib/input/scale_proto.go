@@ -45,13 +45,7 @@ the 'benthos_multi' flag. Note, however, that this format may appear to be
 gibberish to other services, and the input will be unable to read normal
 messages with this setting.
 
-Currently only PULL, SUB, and REP sockets are supported.
-
-When using REP sockets Benthos will respond to each request with a success or
-error message. The content of these messages are set with the 'reply_success'
-and 'reply_error' config options respectively. The 'reply_timeout_ms' option
-decides how long Benthos will wait before giving up on the reply, which can
-result in duplicate messages when triggered.`,
+Currently only PULL and SUB sockets are supported.`,
 	}
 }
 

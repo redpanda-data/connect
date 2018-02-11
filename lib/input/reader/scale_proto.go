@@ -26,7 +26,6 @@ import (
 
 	"github.com/go-mangos/mangos"
 	"github.com/go-mangos/mangos/protocol/pull"
-	"github.com/go-mangos/mangos/protocol/rep"
 	"github.com/go-mangos/mangos/protocol/sub"
 	"github.com/go-mangos/mangos/transport/ipc"
 	"github.com/go-mangos/mangos/transport/tcp"
@@ -43,8 +42,6 @@ type ScaleProtoConfig struct {
 	URLs          []string `json:"urls" yaml:"urls"`
 	Bind          bool     `json:"bind" yaml:"bind"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
-	SuccessStr    string   `json:"reply_success" yaml:"reply_success"`
-	ErrorStr      string   `json:"reply_error" yaml:"reply_error"`
 	SubFilters    []string `json:"sub_filters" yaml:"sub_filters"`
 	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 	RepTimeoutMS  int      `json:"reply_timeout_ms" yaml:"reply_timeout_ms"`
@@ -56,8 +53,6 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 		URLs:          []string{"tcp://*:5555"},
 		Bind:          true,
 		SocketType:    "PULL",
-		SuccessStr:    "SUCCESS",
-		ErrorStr:      "ERROR",
 		SubFilters:    []string{},
 		PollTimeoutMS: 5000,
 		RepTimeoutMS:  5000,
@@ -69,10 +64,6 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 // ScaleProto is an input type that serves Scalability Protocols messages.
 type ScaleProto struct {
 	socket mangos.Socket
-
-	isReq      bool
-	reqSuccess []byte
-	reqError   []byte
 
 	urls  []string
 	conf  ScaleProtoConfig
@@ -87,11 +78,6 @@ func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (
 		stats: stats,
 		log:   log.NewModule(".input.scale_proto"),
 	}
-
-	s.isReq = (conf.SocketType == "REP")
-
-	s.reqSuccess = []byte(conf.SuccessStr)
-	s.reqError = []byte(conf.ErrorStr)
 
 	for _, u := range conf.URLs {
 		for _, splitU := range strings.Split(u, ",") {
@@ -112,8 +98,6 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 		return pull.NewSocket()
 	case "SUB":
 		return sub.NewSocket()
-	case "REP":
-		return rep.NewSocket()
 	}
 	return nil, types.ErrInvalidScaleProtoType
 }
@@ -216,12 +200,6 @@ func (s *ScaleProto) Read() (types.Message, error) {
 // Acknowledge instructs whether the pending messages were propagated
 // successfully.
 func (s *ScaleProto) Acknowledge(err error) error {
-	if s.isReq {
-		if err != nil {
-			return s.socket.Send(s.reqError)
-		}
-		return s.socket.Send(s.reqSuccess)
-	}
 	return nil
 }
 

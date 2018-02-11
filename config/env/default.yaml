@@ -22,6 +22,7 @@ input:
   amazon_s3:
     region: ${AMAZON_INPUT_REGION:eu-west-1}
     bucket: ${AMAZON_INPUT_BUCKET}
+    prefix: ${AMAZON_INPUT_PREFIX}
     delete_objects: ${AMAZON_INPUT_DELETE_OBJECTS:false}
     sqs_url: ${AMAZON_INPUT_SQS_URL}
     sqs_body_path: ${AMAZON_INPUT_SQS_BODY_PATH:Records.s3.object.key}

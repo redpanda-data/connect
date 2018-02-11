@@ -5,9 +5,11 @@ This document has been generated with `benthos --list-inputs`.
 
 ## `amazon_s3`
 
-Downloads objects in an Amazon S3 bucket. If an SQS queue has been configured
-then only object keys read from the queue will be downloaded. Otherwise, the
-entire list of objects found when this input is created will be downloaded.
+Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
+SQS queue has been configured then only object keys read from the queue will be
+downloaded. Otherwise, the entire list of objects found when this input is
+created will be downloaded. Note that the prefix configuration is only used when
+downloading objects without SQS configured.
 
 Here is a guide for setting up an SQS queue that receives events for new S3
 bucket objects:
@@ -192,13 +194,7 @@ the 'benthos_multi' flag. Note, however, that this format may appear to be
 gibberish to other services, and the input will be unable to read normal
 messages with this setting.
 
-Currently only PULL, SUB, and REP sockets are supported.
-
-When using REP sockets Benthos will respond to each request with a success or
-error message. The content of these messages are set with the 'reply_success'
-and 'reply_error' config options respectively. The 'reply_timeout_ms' option
-decides how long Benthos will wait before giving up on the reply, which can
-result in duplicate messages when triggered.
+Currently only PULL and SUB sockets are supported.
 
 ## `stdin`
 

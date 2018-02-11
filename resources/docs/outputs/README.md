@@ -127,16 +127,7 @@ for sending multi part messages. We can use the benthos binary format for this
 purpose. However, this format may appear to be gibberish to other services. If
 you want to use the binary format you can set 'benthos_multi' to true.
 
-Currently only PUSH, PUB and REQ sockets are supported.
-
-When using REQ sockets Benthos will expect acknowledgement from the consumer
-that the message has been successfully propagated downstream. This comes in the
-form of an expected response which is set by the 'reply_success' configuration
-field.
-
-If the reply from a REQ message is either not returned within the
-'reply_timeout_ms' period, or if the reply does not match our 'reply_success'
-string, then the message is considered lost and will be sent again.
+Currently only PUSH and PUB sockets are supported.
 
 ## `stdout`
 
