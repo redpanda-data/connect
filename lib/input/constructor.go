@@ -65,7 +65,7 @@ type Config struct {
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
 	Kafka         reader.KafkaConfig         `json:"kafka" yaml:"kafka"`
 	KafkaBalanced reader.KafkaBalancedConfig `json:"kafka_balanced" yaml:"kafka_balanced"`
-	NATS          NATSConfig                 `json:"nats" yaml:"nats"`
+	NATS          reader.NATSConfig          `json:"nats" yaml:"nats"`
 	NATSStream    NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
 	NSQ           NSQConfig                  `json:"nsq" yaml:"nsq"`
 	RedisList     reader.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
@@ -89,7 +89,7 @@ func NewConfig() Config {
 		HTTPServer:    NewHTTPServerConfig(),
 		Kafka:         reader.NewKafkaConfig(),
 		KafkaBalanced: reader.NewKafkaBalancedConfig(),
-		NATS:          NewNATSConfig(),
+		NATS:          reader.NewNATSConfig(),
 		NATSStream:    NewNATSStreamConfig(),
 		NSQ:           NewNSQConfig(),
 		RedisList:     reader.NewRedisListConfig(),

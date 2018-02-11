@@ -37,3 +37,7 @@
 [[constraint]]
   name = "github.com/go-redis/redis"
   version = "6.7.5"
+
+[[constraint]]
+  name = "github.com/satori/go.uuid"
+  version = "1.2.0"

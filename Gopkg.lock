@@ -263,6 +263,12 @@
   revision = "8732c616f52954686704c8645fe1a9d59e9df7c1"
 
 [[projects]]
+  name = "github.com/satori/go.uuid"
+  packages = ["."]
+  revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
+  version = "v1.2.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/streadway/amqp"
   packages = ["."]
@@ -289,6 +295,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "1f18f04697f9677f260a9f9ed8cf2a2212517d149c86fc7f47fd57a904b9efac"
+  inputs-digest = "c6c0a6bad61e837caf84c72a0e5ff6edb255bad13f1dcf2bb62a6322ca5981b7"
   solver-name = "gps-cdcl"
   solver-version = 1

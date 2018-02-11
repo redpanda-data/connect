@@ -22,6 +22,7 @@ package reader
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -71,6 +72,8 @@ type AMQP struct {
 	conf  AMQPConfig
 	stats metrics.Type
 	log   log.Modular
+
+	m sync.RWMutex
 }
 
 // NewAMQP creates a new AMQP input type.
@@ -87,6 +90,9 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (Type, error)
 
 // Connect establishes a connection to an AMQP server.
 func (a *AMQP) Connect() (err error) {
+	a.m.Lock()
+	defer a.m.Unlock()
+
 	if a.conn != nil {
 		return nil
 	}
@@ -166,6 +172,9 @@ func (a *AMQP) Connect() (err error) {
 
 // disconnect safely closes a connection to an AMQP server.
 func (a *AMQP) disconnect() error {
+	a.m.Lock()
+	defer a.m.Unlock()
+
 	if a.amqpChan != nil {
 		err := a.amqpChan.Cancel(a.conf.ConsumerTag, true)
 		a.amqpChan = nil
@@ -180,6 +189,7 @@ func (a *AMQP) disconnect() error {
 			return fmt.Errorf("AMQP connection close error: %s", err)
 		}
 	}
+
 	return nil
 }
 
@@ -187,11 +197,19 @@ func (a *AMQP) disconnect() error {
 
 // Read a new AMQP message.
 func (a *AMQP) Read() (types.Message, error) {
-	if a.conn == nil {
+	var c <-chan amqp.Delivery
+
+	a.m.RLock()
+	if a.conn != nil {
+		c = a.consumerChan
+	}
+	a.m.RUnlock()
+
+	if c == nil {
 		return types.Message{}, types.ErrNotConnected
 	}
 
-	data, open := <-a.consumerChan
+	data, open := <-c
 	if !open {
 		a.disconnect()
 		return types.Message{}, types.ErrNotConnected
@@ -208,8 +226,10 @@ func (a *AMQP) Read() (types.Message, error) {
 // Acknowledge instructs whether unacknowledged messages have been successfully
 // propagated.
 func (a *AMQP) Acknowledge(err error) error {
+	a.m.RLock()
+	defer a.m.RUnlock()
 	if err != nil {
-		return a.amqpChan.Nack(a.ackTag, true, true)
+		return a.amqpChan.Reject(a.ackTag, true)
 	}
 	return a.amqpChan.Ack(a.ackTag, true)
 }

@@ -151,7 +151,7 @@ func (r *Reader) loop() {
 		}
 
 		if err != nil {
-			if err != types.ErrTimeout {
+			if err != types.ErrTimeout && err != types.ErrNotConnected {
 				r.stats.Incr(readErrorPath, 1)
 				r.log.Errorf("Failed to read message: %v\n", err)
 			}
