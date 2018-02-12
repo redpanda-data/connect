@@ -22,6 +22,7 @@ package reader
 
 import (
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -52,6 +53,7 @@ func NewRedisPubSubConfig() RedisPubSubConfig {
 type RedisPubSub struct {
 	client *redis.Client
 	pubsub *redis.PubSub
+	cMut   sync.Mutex
 
 	url  *url.URL
 	conf RedisPubSubConfig
@@ -83,6 +85,13 @@ func NewRedisPubSub(
 
 // Connect establishes a connection to an RedisPubSub server.
 func (r *RedisPubSub) Connect() error {
+	r.cMut.Lock()
+	defer r.cMut.Unlock()
+
+	if r.client != nil {
+		return nil
+	}
+
 	var pass string
 	if r.url.User != nil {
 		pass, _ = r.url.User.Password()
@@ -106,11 +115,17 @@ func (r *RedisPubSub) Connect() error {
 
 // Read attempts to pop a message from a redis list.
 func (r *RedisPubSub) Read() (types.Message, error) {
-	if r.client == nil {
+	var pubsub *redis.PubSub
+
+	r.cMut.Lock()
+	pubsub = r.pubsub
+	r.cMut.Unlock()
+
+	if pubsub == nil {
 		return types.Message{}, types.ErrNotConnected
 	}
 
-	rMsg, open := <-r.pubsub.Channel()
+	rMsg, open := <-pubsub.Channel()
 	if !open {
 		r.disconnect()
 		return types.Message{}, types.ErrTypeClosed
@@ -128,6 +143,9 @@ func (r *RedisPubSub) Acknowledge(err error) error {
 
 // disconnect safely closes a connection to an RedisPubSub server.
 func (r *RedisPubSub) disconnect() error {
+	r.cMut.Lock()
+	defer r.cMut.Unlock()
+
 	var err error
 	if r.pubsub != nil {
 		err = r.pubsub.Close()

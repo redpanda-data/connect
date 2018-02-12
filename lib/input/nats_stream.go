@@ -21,15 +21,9 @@
 package input
 
 import (
-	"strings"
-	"sync/atomic"
-	"time"
-
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
-	"github.com/nats-io/go-nats-streaming"
-	uuid "github.com/satori/go.uuid"
 )
 
 //------------------------------------------------------------------------------
@@ -50,194 +44,13 @@ are consumed from the most recently published message.`,
 
 //------------------------------------------------------------------------------
 
-// NATSStreamConfig is configuration for the NATSStream input type.
-type NATSStreamConfig struct {
-	URLs        []string `json:"urls" yaml:"urls"`
-	ClusterID   string   `json:"cluster_id" yaml:"cluster_id"`
-	ClientID    string   `json:"client_id" yaml:"client_id"`
-	QueueID     string   `json:"queue" yaml:"queue"`
-	DurableName string   `json:"durable_name" yaml:"durable_name"`
-	Subject     string   `json:"subject" yaml:"subject"`
-}
-
-// NewNATSStreamConfig creates a new NATSStreamConfig with default values.
-func NewNATSStreamConfig() NATSStreamConfig {
-	return NATSStreamConfig{
-		URLs:        []string{stan.DefaultNatsURL},
-		ClusterID:   "benthos_cluster",
-		ClientID:    "benthos_client",
-		QueueID:     "benthos_queue",
-		DurableName: "benthos_offset",
-		Subject:     "benthos_messages",
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// NATSStream is an input type that receives NATSStream messages.
-type NATSStream struct {
-	running int32
-
-	urls  string
-	conf  Config
-	stats metrics.Type
-	log   log.Modular
-
-	natsConn stan.Conn
-	natsSub  stan.Subscription
-
-	messages  chan types.Message
-	responses <-chan types.Response
-
-	closeChan  chan struct{}
-	closedChan chan struct{}
-}
-
 // NewNATSStream creates a new NATSStream input type.
 func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	if len(conf.NATSStream.ClientID) == 0 {
-		conf.NATSStream.ClientID = uuid.NewV4().String()
+	n, err := reader.NewNATSStream(conf.NATSStream, log, stats)
+	if err != nil {
+		return nil, err
 	}
-	n := NATSStream{
-		running:    1,
-		conf:       conf,
-		stats:      stats,
-		log:        log.NewModule(".input.nats_stream"),
-		messages:   make(chan types.Message),
-		responses:  nil,
-		closeChan:  make(chan struct{}),
-		closedChan: make(chan struct{}),
-	}
-	n.urls = strings.Join(conf.NATSStream.URLs, ",")
-
-	return &n, nil
-}
-
-//------------------------------------------------------------------------------
-
-func (n *NATSStream) loop() {
-	defer func() {
-		atomic.StoreInt32(&n.running, 0)
-
-		if n.natsSub != nil {
-			n.natsSub.Unsubscribe()
-			n.natsConn.Close()
-		}
-		n.stats.Decr("input.nats_stream.running", 1)
-
-		close(n.messages)
-		close(n.closedChan)
-	}()
-	n.stats.Incr("input.nats_stream.running", 1)
-
-	for {
-		var err error
-		if n.natsConn, err = stan.Connect(
-			n.conf.NATSStream.ClusterID,
-			n.conf.NATSStream.ClientID,
-			stan.NatsURL(n.urls),
-		); err != nil {
-			n.log.Errorf("Failed to connect to NATS Streaming: %v\n", err)
-			select {
-			case <-time.After(time.Second):
-			case <-n.closeChan:
-				return
-			}
-		} else {
-			break
-		}
-	}
-	n.log.Infof("Receiving NATS Streaming messages from URLs: %s\n", n.urls)
-
-	handler := func(m *stan.Msg) {
-		n.stats.Incr("input.nats_stream.count", 1)
-
-		select {
-		case n.messages <- types.Message{Parts: [][]byte{m.Data}}:
-		case <-n.closeChan:
-			return
-		}
-
-		var res types.Response
-		select {
-		case <-n.closeChan:
-			return
-		case res = <-n.responses:
-		}
-
-		if resErr := res.Error(); resErr == nil {
-			n.stats.Incr("input.nats_stream.send.success", 1)
-			m.Ack()
-			return
-		}
-		n.stats.Incr("input.nats_stream.send.error", 1)
-	}
-
-	options := []stan.SubscriptionOption{
-		stan.SetManualAckMode(),
-	}
-	if len(n.conf.NATSStream.DurableName) > 0 {
-		options = append(options, stan.DurableName(n.conf.NATSStream.DurableName))
-	} else {
-		options = append(options, stan.StartWithLastReceived())
-	}
-
-	var err error
-	if len(n.conf.NATSStream.QueueID) > 0 {
-		if n.natsSub, err = n.natsConn.QueueSubscribe(
-			n.conf.NATSStream.Subject,
-			n.conf.NATSStream.QueueID,
-			handler,
-			options...,
-		); err != nil {
-			n.log.Errorf("Failed to connect to NATS Streaming: %v\n", err)
-			return
-		}
-	} else {
-		if n.natsSub, err = n.natsConn.Subscribe(
-			n.conf.NATSStream.Subject,
-			handler,
-			options...,
-		); err != nil {
-			n.log.Errorf("Failed to connect to NATS Streaming: %v\n", err)
-			return
-		}
-	}
-
-	<-n.closeChan
-}
-
-// StartListening sets the channel used by the input to validate message
-// receipt.
-func (n *NATSStream) StartListening(responses <-chan types.Response) error {
-	if n.responses != nil {
-		return types.ErrAlreadyStarted
-	}
-	n.responses = responses
-	go n.loop()
-	return nil
-}
-
-// MessageChan returns the messages channel.
-func (n *NATSStream) MessageChan() <-chan types.Message {
-	return n.messages
-}
-
-// CloseAsync shuts down the NATSStream input and stops processing requests.
-func (n *NATSStream) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&n.running, 1, 0) {
-		close(n.closeChan)
-	}
-}
-
-// WaitForClose blocks until the NATSStream input has closed down.
-func (n *NATSStream) WaitForClose(timeout time.Duration) error {
-	select {
-	case <-n.closedChan:
-	case <-time.After(timeout):
-		return types.ErrTimeout
-	}
-	return nil
+	return NewReader("nats_stream", n, log, stats)
 }
 
 //------------------------------------------------------------------------------

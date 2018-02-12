@@ -58,7 +58,7 @@ type NATSStreamConfig struct {
 func NewNATSStreamConfig() NATSStreamConfig {
 	return NATSStreamConfig{
 		URLs:      []string{stan.DefaultNatsURL},
-		ClusterID: "benthos_cluster",
+		ClusterID: "test-cluster",
 		ClientID:  "benthos_client",
 		Subject:   "benthos_messages",
 	}
@@ -128,7 +128,10 @@ func (n *NATSStream) loop() {
 	defer func() {
 		atomic.StoreInt32(&n.running, 0)
 
-		n.natsConn.Close()
+		if n.natsConn != nil {
+			n.natsConn.Close()
+			n.natsConn = nil
+		}
 		n.stats.Decr("output.nats_stream.running", 1)
 
 		close(n.responseChan)

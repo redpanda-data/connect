@@ -66,8 +66,8 @@ type Config struct {
 	Kafka         reader.KafkaConfig         `json:"kafka" yaml:"kafka"`
 	KafkaBalanced reader.KafkaBalancedConfig `json:"kafka_balanced" yaml:"kafka_balanced"`
 	NATS          reader.NATSConfig          `json:"nats" yaml:"nats"`
-	NATSStream    NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
-	NSQ           NSQConfig                  `json:"nsq" yaml:"nsq"`
+	NATSStream    reader.NATSStreamConfig    `json:"nats_stream" yaml:"nats_stream"`
+	NSQ           reader.NSQConfig           `json:"nsq" yaml:"nsq"`
 	RedisList     reader.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub   reader.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
 	ScaleProto    reader.ScaleProtoConfig    `json:"scalability_protocols" yaml:"scalability_protocols"`
@@ -90,8 +90,8 @@ func NewConfig() Config {
 		Kafka:         reader.NewKafkaConfig(),
 		KafkaBalanced: reader.NewKafkaBalancedConfig(),
 		NATS:          reader.NewNATSConfig(),
-		NATSStream:    NewNATSStreamConfig(),
-		NSQ:           NewNSQConfig(),
+		NATSStream:    reader.NewNATSStreamConfig(),
+		NSQ:           reader.NewNSQConfig(),
 		RedisList:     reader.NewRedisListConfig(),
 		RedisPubSub:   reader.NewRedisPubSubConfig(),
 		ScaleProto:    reader.NewScaleProtoConfig(),

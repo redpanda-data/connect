@@ -88,7 +88,7 @@ input:
   nats_stream:
     urls:
     - nats://localhost:4222
-    cluster_id: benthos_cluster
+    cluster_id: test-cluster
     client_id: benthos_client
     queue: benthos_queue
     durable_name: benthos_offset
@@ -232,7 +232,7 @@ output:
   nats_stream:
     urls:
     - nats://localhost:4222
-    cluster_id: benthos_cluster
+    cluster_id: test-cluster
     client_id: benthos_client
     subject: benthos_messages
   nsq:

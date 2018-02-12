@@ -22,6 +22,7 @@ package reader
 
 import (
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -53,6 +54,7 @@ func NewRedisListConfig() RedisListConfig {
 // RedisList is an input type that reads Redis Pub/Sub messages.
 type RedisList struct {
 	client *redis.Client
+	cMut   sync.Mutex
 
 	url  *url.URL
 	conf RedisListConfig
@@ -84,6 +86,13 @@ func NewRedisList(
 
 // Connect establishes a connection to an RedisList server.
 func (r *RedisList) Connect() error {
+	r.cMut.Lock()
+	defer r.cMut.Unlock()
+
+	if r.client != nil {
+		return nil
+	}
+
 	var pass string
 	if r.url.User != nil {
 		pass, _ = r.url.User.Password()
@@ -106,11 +115,17 @@ func (r *RedisList) Connect() error {
 
 // Read attempts to pop a message from a redis list.
 func (r *RedisList) Read() (types.Message, error) {
-	if r.client == nil {
+	var client *redis.Client
+
+	r.cMut.Lock()
+	client = r.client
+	r.cMut.Unlock()
+
+	if client == nil {
 		return types.Message{}, types.ErrNotConnected
 	}
 
-	res, err := r.client.BLPop(
+	res, err := client.BLPop(
 		time.Millisecond*time.Duration(r.conf.TimeoutMS),
 		r.conf.Key,
 	).Result()
@@ -137,6 +152,9 @@ func (r *RedisList) Acknowledge(err error) error {
 
 // disconnect safely closes a connection to an RedisList server.
 func (r *RedisList) disconnect() error {
+	r.cMut.Lock()
+	defer r.cMut.Unlock()
+
 	var err error
 	if r.client != nil {
 		err = r.client.Close()

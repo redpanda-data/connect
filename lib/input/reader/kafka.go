@@ -22,6 +22,7 @@ package reader
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -58,10 +59,11 @@ func NewKafkaConfig() KafkaConfig {
 
 // Kafka is an input type that reads from a Kafka instance.
 type Kafka struct {
-	client        sarama.Client
-	coordinator   *sarama.Broker
-	consumer      sarama.Consumer
-	topicConsumer sarama.PartitionConsumer
+	client       sarama.Client
+	coordinator  *sarama.Broker
+	partConsumer sarama.PartitionConsumer
+
+	sMut sync.Mutex
 
 	offset int64
 
@@ -93,25 +95,24 @@ func NewKafka(
 
 //------------------------------------------------------------------------------
 
-// drainConsumer should be called after closeClients.
-func (k *Kafka) drainConsumer() {
-	if k.topicConsumer != nil {
-		// Drain both channels
-		for range k.topicConsumer.Messages() {
-		}
-		for range k.topicConsumer.Errors() {
-		}
-
-		k.topicConsumer = nil
-	}
-}
-
 // closeClients closes the kafka clients, this interrupts loop() out of the read
 // block.
 func (k *Kafka) closeClients() {
-	if k.topicConsumer != nil {
+	k.sMut.Lock()
+	defer k.sMut.Unlock()
+
+	if k.partConsumer != nil {
 		// NOTE: Needs draining before destroying.
-		k.topicConsumer.AsyncClose()
+		k.partConsumer.AsyncClose()
+		defer func() {
+			// Drain both channels
+			for range k.partConsumer.Messages() {
+			}
+			for range k.partConsumer.Errors() {
+			}
+
+			k.partConsumer = nil
+		}()
 	}
 	if k.coordinator != nil {
 		k.coordinator.Close()
@@ -127,6 +128,16 @@ func (k *Kafka) closeClients() {
 
 // Connect establishes a Kafka connection.
 func (k *Kafka) Connect() error {
+	var err error
+	defer func() {
+		if err != nil {
+			k.closeClients()
+		}
+	}()
+
+	k.sMut.Lock()
+	defer k.sMut.Unlock()
+
 	if k.client != nil {
 		return nil
 	}
@@ -135,13 +146,6 @@ func (k *Kafka) Connect() error {
 	config.ClientID = k.conf.ClientID
 	config.Net.DialTimeout = time.Second
 	config.Consumer.Return.Errors = true
-
-	var err error
-	defer func() {
-		if err != nil {
-			k.closeClients()
-		}
-	}()
 
 	k.client, err = sarama.NewClient(k.addresses, config)
 	if err != nil {
@@ -153,7 +157,8 @@ func (k *Kafka) Connect() error {
 		return err
 	}
 
-	k.consumer, err = sarama.NewConsumerFromClient(k.client)
+	var consumer sarama.Consumer
+	consumer, err = sarama.NewConsumerFromClient(k.client)
 	if err != nil {
 		return err
 	}
@@ -169,7 +174,8 @@ func (k *Kafka) Connect() error {
 		}
 	}
 
-	k.topicConsumer, err = k.consumer.ConsumePartition(
+	var partConsumer sarama.PartitionConsumer
+	partConsumer, err = consumer.ConsumePartition(
 		k.conf.Topic, k.conf.Partition, k.offset,
 	)
 	if err != nil {
@@ -190,16 +196,20 @@ func (k *Kafka) Connect() error {
 		if k.offset, err = k.client.GetOffset(
 			k.conf.Topic, k.conf.Partition, offsetTarget,
 		); err == nil {
-			k.topicConsumer, err = k.consumer.ConsumePartition(
+			partConsumer, err = consumer.ConsumePartition(
 				k.conf.Topic, k.conf.Partition, k.offset,
 			)
 		}
 	}
+	if err != nil {
+		return err
+	}
 
+	k.partConsumer = partConsumer
 	k.log.Infof("Receiving Kafka messages from addresses: %s\n", k.addresses)
 
 	go func() {
-		for err := range k.topicConsumer.Errors() {
+		for err := range partConsumer.Errors() {
 			if err != nil {
 				k.log.Errorf("Kafka message recv error: %v\n", err)
 				k.stats.Incr("input.kafka.recv.error", 1)
@@ -212,7 +222,17 @@ func (k *Kafka) Connect() error {
 
 // Read attempts to read a message from a Kafka topic.
 func (k *Kafka) Read() (types.Message, error) {
-	data, open := <-k.topicConsumer.Messages()
+	var partConsumer sarama.PartitionConsumer
+
+	k.sMut.Lock()
+	partConsumer = k.partConsumer
+	k.sMut.Unlock()
+
+	if partConsumer == nil {
+		return types.Message{}, types.ErrNotConnected
+	}
+
+	data, open := <-partConsumer.Messages()
 	if !open {
 		return types.Message{}, types.ErrTypeClosed
 	}
@@ -226,11 +246,21 @@ func (k *Kafka) Acknowledge(err error) error {
 		return nil
 	}
 
+	var coordinator *sarama.Broker
+
+	k.sMut.Lock()
+	coordinator = k.coordinator
+	k.sMut.Unlock()
+
+	if coordinator == nil {
+		return types.ErrNotConnected
+	}
+
 	commitReq := sarama.OffsetCommitRequest{}
 	commitReq.ConsumerGroup = k.conf.ConsumerGroup
 	commitReq.AddBlock(k.conf.Topic, k.conf.Partition, k.offset, 0, "")
 
-	commitRes, err := k.coordinator.CommitOffset(&commitReq)
+	commitRes, err := coordinator.CommitOffset(&commitReq)
 	if err == nil {
 		err = commitRes.Errors[k.conf.Topic][k.conf.Partition]
 		if err == sarama.ErrNoError {
@@ -240,14 +270,16 @@ func (k *Kafka) Acknowledge(err error) error {
 
 	if err != nil {
 		k.log.Errorf("Failed to commit offset: %v\n", err)
-		if err == sarama.ErrNotConnected {
-			// Attempt to reconnect
-			if newCoord, err := k.client.Coordinator(k.conf.ConsumerGroup); err != nil {
-				k.log.Errorf("Failed to create new coordinator: %v\n", err)
-			} else {
-				k.coordinator.Close()
-				k.coordinator = newCoord
-			}
+
+		k.sMut.Lock()
+		defer k.sMut.Unlock()
+
+		// Attempt to reconnect
+		if newCoord, err := k.client.Coordinator(k.conf.ConsumerGroup); err != nil {
+			k.log.Errorf("Failed to create new coordinator: %v\n", err)
+		} else {
+			k.coordinator.Close()
+			k.coordinator = newCoord
 		}
 	}
 
@@ -256,8 +288,7 @@ func (k *Kafka) Acknowledge(err error) error {
 
 // CloseAsync shuts down the Kafka input and stops processing requests.
 func (k *Kafka) CloseAsync() {
-	k.closeClients()
-	defer k.drainConsumer()
+	go k.closeClients()
 }
 
 // WaitForClose blocks until the Kafka input has closed down.

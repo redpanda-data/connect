@@ -22,6 +22,7 @@ package reader
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -58,6 +59,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 // KafkaBalanced is an input type that reads from a KafkaBalanced instance.
 type KafkaBalanced struct {
 	consumer *cluster.Consumer
+	cMut     sync.Mutex
 
 	addresses []string
 	conf      KafkaBalancedConfig
@@ -86,9 +88,13 @@ func NewKafkaBalanced(
 
 //------------------------------------------------------------------------------
 
-// drainConsumer should be called after closeClients.
-func (k *KafkaBalanced) drainConsumer() {
+// closeClients closes the kafka clients, this interrupts Read().
+func (k *KafkaBalanced) closeClients() {
+	k.cMut.Lock()
+	defer k.cMut.Unlock()
 	if k.consumer != nil {
+		k.consumer.Close()
+
 		// Drain all channels
 		for range k.consumer.Messages() {
 		}
@@ -96,15 +102,8 @@ func (k *KafkaBalanced) drainConsumer() {
 		}
 		for range k.consumer.Errors() {
 		}
-		k.consumer = nil
-	}
-}
 
-// closeClients closes the kafka clients, this interrupts Read().
-func (k *KafkaBalanced) closeClients() {
-	if k.consumer != nil {
-		// NOTE: Needs draining before destroying.
-		k.consumer.Close()
+		k.consumer = nil
 	}
 }
 
@@ -112,6 +111,9 @@ func (k *KafkaBalanced) closeClients() {
 
 // Connect establishes a KafkaBalanced connection.
 func (k *KafkaBalanced) Connect() error {
+	k.cMut.Lock()
+	defer k.cMut.Unlock()
+
 	if k.consumer != nil {
 		return nil
 	}
@@ -126,8 +128,10 @@ func (k *KafkaBalanced) Connect() error {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
+	var consumer *cluster.Consumer
 	var err error
-	if k.consumer, err = cluster.NewConsumer(
+
+	if consumer, err = cluster.NewConsumer(
 		k.addresses,
 		k.conf.ConsumerGroup,
 		k.conf.Topics,
@@ -139,7 +143,7 @@ func (k *KafkaBalanced) Connect() error {
 	go func() {
 		for {
 			select {
-			case err, open := <-k.consumer.Errors():
+			case err, open := <-consumer.Errors():
 				if !open {
 					return
 				}
@@ -147,7 +151,7 @@ func (k *KafkaBalanced) Connect() error {
 					k.log.Errorf("KafkaBalanced message recv error: %v\n", err)
 					k.stats.Incr("input.kafka_balanced.recv.error", 1)
 				}
-			case _, open := <-k.consumer.Notifications():
+			case _, open := <-consumer.Notifications():
 				if !open {
 					return
 				}
@@ -156,17 +160,31 @@ func (k *KafkaBalanced) Connect() error {
 		}
 	}()
 
+	k.consumer = consumer
 	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.addresses)
 	return nil
 }
 
 // Read attempts to read a message from a KafkaBalanced topic.
 func (k *KafkaBalanced) Read() (types.Message, error) {
-	data, open := <-k.consumer.Messages()
-	if !open {
-		return types.Message{}, types.ErrTypeClosed
+	var consumer *cluster.Consumer
+
+	k.cMut.Lock()
+	if k.consumer != nil {
+		consumer = k.consumer
 	}
-	k.consumer.MarkOffset(data, "")
+	k.cMut.Unlock()
+
+	if consumer == nil {
+		return types.Message{}, types.ErrNotConnected
+	}
+
+	data, open := <-consumer.Messages()
+	if !open {
+		k.closeClients()
+		return types.Message{}, types.ErrNotConnected
+	}
+	consumer.MarkOffset(data, "")
 	return types.Message{Parts: [][]byte{data.Value}}, nil
 }
 
@@ -175,13 +193,25 @@ func (k *KafkaBalanced) Acknowledge(err error) error {
 	if err != nil {
 		return nil
 	}
-	return k.consumer.CommitOffsets()
+
+	var consumer *cluster.Consumer
+
+	k.cMut.Lock()
+	if k.consumer != nil {
+		consumer = k.consumer
+	}
+	k.cMut.Unlock()
+
+	if consumer == nil {
+		return types.ErrNotConnected
+	}
+
+	return consumer.CommitOffsets()
 }
 
 // CloseAsync shuts down the KafkaBalanced input and stops processing requests.
 func (k *KafkaBalanced) CloseAsync() {
-	k.closeClients()
-	defer k.drainConsumer()
+	go k.closeClients()
 }
 
 // WaitForClose blocks until the KafkaBalanced input has closed down.
