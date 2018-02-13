@@ -90,7 +90,7 @@ type Kafka struct {
 }
 
 // NewKafka creates a new Kafka output type.
-func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	k := Kafka{
 		running:      1,
 		log:          log.NewModule(".output.kafka"),

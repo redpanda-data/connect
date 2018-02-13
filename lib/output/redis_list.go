@@ -22,6 +22,7 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/lib/output/writer"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -40,7 +41,7 @@ already exist) using the RPUSH command.`,
 //------------------------------------------------------------------------------
 
 // NewRedisList creates a new RedisList output type.
-func NewRedisList(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewRedisList(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	w, err := writer.NewRedisList(conf.RedisList, log, stats)
 	if err != nil {
 		return nil, err

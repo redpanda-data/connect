@@ -86,7 +86,7 @@ type NATSStream struct {
 }
 
 // NewNATSStream creates a new NATSStream output type.
-func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNATSStream(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	if len(conf.NATSStream.ClientID) == 0 {
 		rgen := rand.New(rand.NewSource(time.Now().UnixNano()))
 

@@ -48,7 +48,7 @@ func TestScaleProtoBasic(t *testing.T) {
 	conf.ScaleProto.PollTimeoutMS = 100
 	conf.ScaleProto.SocketType = "PUSH"
 
-	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewScaleProto(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

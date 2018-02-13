@@ -80,7 +80,7 @@ type RedisPubSub struct {
 }
 
 // NewRedisPubSub creates a new RedisPubSub output type.
-func NewRedisPubSub(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	r := &RedisPubSub{
 		running:      1,
 		log:          log.NewModule(".output.redis_pubsub"),

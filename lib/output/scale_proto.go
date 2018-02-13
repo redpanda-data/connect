@@ -100,7 +100,7 @@ type ScaleProto struct {
 }
 
 // NewScaleProto creates a new ScaleProto output type.
-func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	s := ScaleProto{
 		running:      1,
 		log:          log.NewModule(".output.scale_proto"),

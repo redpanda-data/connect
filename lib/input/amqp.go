@@ -22,6 +22,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -42,7 +43,7 @@ Exchange type options are: direct|fanout|topic|x-custom`,
 //------------------------------------------------------------------------------
 
 // NewAMQP creates a new AMQP input type.
-func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewAMQP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	a, err := reader.NewAMQP(conf.AMQP, log, stats)
 	if err != nil {
 		return nil, err

@@ -21,8 +21,19 @@
 package types
 
 import (
+	"net/http"
 	"time"
 )
+
+//------------------------------------------------------------------------------
+
+// Manager is an interface expected by Benthos components that allows them to
+// register their service wide behaviours such as HTTP endpoints and event
+// listeners.
+type Manager interface {
+	// RegisterEndpoint registers a server wide HTTP endpoint.
+	RegisterEndpoint(path, desc string, h http.HandlerFunc)
+}
 
 //------------------------------------------------------------------------------
 

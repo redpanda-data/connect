@@ -225,6 +225,7 @@ func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
 // NewFanIn creates a new FanIn input type.
 func NewFanIn(
 	conf Config,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...pipeline.ConstructorFunc,
@@ -241,13 +242,13 @@ func NewFanIn(
 	if len(inputConfs) == 0 {
 		return nil, ErrFanInNoInputs
 	} else if len(inputConfs) == 1 {
-		return New(inputConfs[0], log, stats, pipelines...)
+		return New(inputConfs[0], mgr, log, stats, pipelines...)
 	}
 
 	inputs := make([]types.Producer, len(inputConfs))
 
 	for i, iConf := range inputConfs {
-		inputs[i], err = New(iConf, log, stats, pipelines...)
+		inputs[i], err = New(iConf, mgr, log, stats, pipelines...)
 		if err != nil {
 			return nil, err
 		}

@@ -22,6 +22,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -39,7 +40,7 @@ Pops messages from the beginning of a Redis list using the BLPop command.`,
 //------------------------------------------------------------------------------
 
 // NewRedisList creates a new Redis List input type.
-func NewRedisList(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewRedisList(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	r, err := reader.NewRedisList(conf.RedisList, log, stats)
 	if err != nil {
 		return nil, err

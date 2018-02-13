@@ -48,7 +48,7 @@ func TestRoundRobinWithScaleProto(t *testing.T) {
 	conf.RoundRobin.Outputs = append(conf.RoundRobin.Outputs, scaleOne)
 	conf.RoundRobin.Outputs = append(conf.RoundRobin.Outputs, scaleTwo)
 
-	s, err := NewRoundRobin(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewRoundRobin(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

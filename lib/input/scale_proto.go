@@ -22,6 +22,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -52,7 +53,7 @@ Currently only PULL and SUB sockets are supported.`,
 //------------------------------------------------------------------------------
 
 // NewScaleProto creates a new ScaleProto input type.
-func NewScaleProto(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	s, err := reader.NewScaleProto(conf.ScaleProto, log, stats)
 	if err != nil {
 		return nil, err

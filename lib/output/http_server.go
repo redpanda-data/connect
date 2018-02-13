@@ -98,15 +98,13 @@ type HTTPServer struct {
 }
 
 // NewHTTPServer creates a new HTTPServer input type.
-func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	var mux *http.ServeMux
 	var server *http.Server
 
 	if len(conf.HTTPServer.Address) > 0 {
 		mux = http.NewServeMux()
 		server = &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
-	} else {
-		mux = http.DefaultServeMux
 	}
 
 	h := HTTPServer{
@@ -121,11 +119,27 @@ func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		closedChan:   make(chan struct{}),
 	}
 
-	if len(h.conf.HTTPServer.Path) > 0 {
-		h.mux.HandleFunc(h.conf.HTTPServer.Path, h.getHandler)
-	}
-	if len(h.conf.HTTPServer.StreamPath) > 0 {
-		h.mux.HandleFunc(h.conf.HTTPServer.StreamPath, h.streamHandler)
+	if mux != nil {
+		if len(h.conf.HTTPServer.Path) > 0 {
+			h.mux.HandleFunc(h.conf.HTTPServer.Path, h.getHandler)
+		}
+		if len(h.conf.HTTPServer.StreamPath) > 0 {
+			h.mux.HandleFunc(h.conf.HTTPServer.StreamPath, h.streamHandler)
+		}
+	} else {
+		if len(h.conf.HTTPServer.Path) > 0 {
+			mgr.RegisterEndpoint(
+				h.conf.HTTPServer.Path, "Read a single message from Benthos.",
+				h.getHandler,
+			)
+		}
+		if len(h.conf.HTTPServer.StreamPath) > 0 {
+			mgr.RegisterEndpoint(
+				h.conf.HTTPServer.StreamPath,
+				"Read a continuous stream of messages from Benthos.",
+				h.streamHandler,
+			)
+		}
 	}
 	return &h, nil
 }

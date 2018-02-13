@@ -22,6 +22,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -40,7 +41,7 @@ channels using this input.`,
 //------------------------------------------------------------------------------
 
 // NewRedisPubSub creates a new RedisPubSub input type.
-func NewRedisPubSub(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	r, err := reader.NewRedisPubSub(conf.RedisPubSub, log, stats)
 	if err != nil {
 		return nil, err

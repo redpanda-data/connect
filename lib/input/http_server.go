@@ -93,15 +93,13 @@ type HTTPServer struct {
 }
 
 // NewHTTPServer creates a new HTTPServer input type.
-func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	var mux *http.ServeMux
 	var server *http.Server
 
 	if len(conf.HTTPServer.Address) > 0 {
 		mux = http.NewServeMux()
 		server = &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
-	} else {
-		mux = http.DefaultServeMux
 	}
 
 	h := HTTPServer{
@@ -117,7 +115,13 @@ func NewHTTPServer(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 		closedChan: make(chan struct{}),
 	}
 
-	mux.HandleFunc(h.conf.HTTPServer.Path, h.postHandler)
+	if mux != nil {
+		mux.HandleFunc(h.conf.HTTPServer.Path, h.postHandler)
+	} else {
+		mgr.RegisterEndpoint(
+			h.conf.HTTPServer.Path, "Post a message into Benthos.", h.postHandler,
+		)
+	}
 
 	return &h, nil
 }

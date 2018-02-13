@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -66,7 +67,7 @@ func NewSTDINConfig() STDINConfig {
 //------------------------------------------------------------------------------
 
 // NewSTDIN creates a new STDIN input type.
-func NewSTDIN(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	delim := "\n"
 	if len(conf.STDIN.CustomDelim) > 0 {
 		delim = conf.STDIN.CustomDelim

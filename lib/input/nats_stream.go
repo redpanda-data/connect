@@ -22,6 +22,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -45,7 +46,7 @@ are consumed from the most recently published message.`,
 //------------------------------------------------------------------------------
 
 // NewNATSStream creates a new NATSStream input type.
-func NewNATSStream(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNATSStream(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	n, err := reader.NewNATSStream(conf.NATSStream, log, stats)
 	if err != nil {
 		return nil, err

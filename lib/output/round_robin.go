@@ -70,7 +70,7 @@ func NewRoundRobinConfig() RoundRobinConfig {
 // NewRoundRobin creates a new RoundRobin output type. Messages will be sent out
 // to an output chosen by following their original order. If an output blocks
 // this will block all throughput.
-func NewRoundRobin(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewRoundRobin(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	if len(conf.RoundRobin.Outputs) == 0 {
 		return nil, ErrRoundRobinNoOutputs
 	}
@@ -83,13 +83,13 @@ func NewRoundRobin(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 	if len(outputConfs) == 0 {
 		return nil, ErrFanOutNoOutputs
 	} else if len(outputConfs) == 1 {
-		return New(outputConfs[0], log, stats)
+		return New(outputConfs[0], mgr, log, stats)
 	}
 
 	outputs := make([]types.Consumer, len(outputConfs))
 
 	for i, oConf := range outputConfs {
-		outputs[i], err = New(oConf, log, stats)
+		outputs[i], err = New(oConf, mgr, log, stats)
 		if err != nil {
 			return nil, err
 		}

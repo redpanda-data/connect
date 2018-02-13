@@ -22,6 +22,7 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/lib/output/writer"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -42,7 +43,7 @@ for each object you should use function interpolations described
 //------------------------------------------------------------------------------
 
 // NewAmazonS3 creates a new AmazonS3 output type.
-func NewAmazonS3(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	return NewWriter(
 		"amazon_s3", writer.NewAmazonS3(conf.AmazonS3, log, stats), log, stats,
 	)

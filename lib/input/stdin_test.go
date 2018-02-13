@@ -31,7 +31,7 @@ import (
 )
 
 func TestSTDINClose(t *testing.T) {
-	s, err := NewSTDIN(NewConfig(), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewSTDIN(NewConfig(), nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

@@ -98,7 +98,7 @@ type HTTPClient struct {
 }
 
 // NewHTTPClient creates a new HTTPClient output type.
-func NewHTTPClient(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	h := HTTPClient{
 		running:      1,
 		stats:        stats,

@@ -26,6 +26,7 @@ import (
 	"os"
 
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -68,7 +69,7 @@ func NewFileConfig() FileConfig {
 //------------------------------------------------------------------------------
 
 // NewFile creates a new File input type.
-func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	file, err := os.Open(conf.File.Path)
 	if err != nil {
 		return nil, err

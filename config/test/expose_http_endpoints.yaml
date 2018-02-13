@@ -1,0 +1,8 @@
+http:
+  address: 0.0.0.0:4195
+input:
+  type: http_server
+output:
+  type: http_server
+metrics:
+  type: http_server

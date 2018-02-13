@@ -22,6 +22,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -40,7 +41,7 @@ messages.`,
 //------------------------------------------------------------------------------
 
 // NewAmazonSQS creates a new Amazon SQS input type.
-func NewAmazonSQS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	return NewReader(
 		"amazon_sqs",
 		reader.NewPreserver(

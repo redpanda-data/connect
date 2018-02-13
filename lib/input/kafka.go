@@ -22,6 +22,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -42,7 +43,7 @@ you wish to balance partitions across a consumer group look at the
 //------------------------------------------------------------------------------
 
 // NewKafka creates a new Kafka input type.
-func NewKafka(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	k, err := reader.NewKafka(conf.Kafka, log, stats)
 	if err != nil {
 		return nil, err

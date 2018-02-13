@@ -85,7 +85,7 @@ type AMQP struct {
 }
 
 // NewAMQP creates a new AMQP output type.
-func NewAMQP(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewAMQP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	a := AMQP{
 		running:      1,
 		log:          log.NewModule(".output.amqp"),

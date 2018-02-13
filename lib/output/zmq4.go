@@ -86,7 +86,7 @@ type ZMQ4 struct {
 }
 
 // NewZMQ4 creates a new ZMQ4 output type.
-func NewZMQ4(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewZMQ4(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	z := ZMQ4{
 		running:      1,
 		log:          log.NewModule(".output.zmq4"),

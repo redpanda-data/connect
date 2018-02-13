@@ -37,6 +37,7 @@ import (
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util"
 	"github.com/Jeffail/benthos/lib/util/service"
 	"github.com/Jeffail/benthos/lib/util/service/log"
@@ -156,7 +157,7 @@ func bootstrap() Config {
 // and return a closable pool of pipeline objects, a channel indicating that all
 // inputs and outputs have seized, or an error.
 func createPipeline(
-	config Config, logger log.Modular, stats metrics.Type,
+	config Config, mgr types.Manager, logger log.Modular, stats metrics.Type,
 ) (*util.ClosablePool, *util.ClosablePool, chan struct{}, error) {
 	// Create two pools, this helps manage ordered closure of all pipeline
 	// components. We have a tiered (t1) and an non-tiered (t2) pool. If the
@@ -166,7 +167,7 @@ func createPipeline(
 	poolt1, poolt2 := util.NewClosablePool(), util.NewClosablePool()
 
 	// Create our input pipe
-	inputPipe, err := input.New(config.Input, logger, stats)
+	inputPipe, err := input.New(config.Input, mgr, logger, stats)
 	if err != nil {
 		logger.Errorf("Input error (%s): %v\n", config.Input.Type, err)
 		return nil, nil, nil, err
@@ -184,7 +185,7 @@ func createPipeline(
 	poolt2.Add(0, buf)
 
 	// Create our output pipe
-	outputPipe, err := output.New(config.Output, logger, stats)
+	outputPipe, err := output.New(config.Output, mgr, logger, stats)
 	if err != nil {
 		logger.Errorf("Output error (%s): %v\n", config.Output.Type, err)
 		return nil, nil, nil, err
@@ -235,7 +236,7 @@ func main() {
 
 	registerHTTPEndpoints(config, logger, stats)
 
-	poolTiered, poolNonTiered, outputsClosedChan, err := createPipeline(config, logger, stats)
+	poolTiered, poolNonTiered, outputsClosedChan, err := createPipeline(config, httpManager{}, logger, stats)
 	if err != nil {
 		logger.Errorf("Service closing due to: %v\n", err)
 		return

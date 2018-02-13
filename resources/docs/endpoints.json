@@ -1,0 +1,13 @@
+{
+  "/config/json": "Returns the loaded config as JSON.",
+  "/config/yaml": "Returns the loaded config as YAML.",
+  "/endpoints": "Returns this map of endpoints.",
+  "/get": "Read a single message from Benthos.",
+  "/get/stream": "Read a continuous stream of messages from Benthos.",
+  "/metrics": "Returns a JSON object of Benthos metrics.",
+  "/ping": "Ping Benthos.",
+  "/post": "Post a message into Benthos.",
+  "/stack": "Returns a snapshot of the current Benthos stack trace.",
+  "/stats": "Returns a JSON object of Benthos metrics.",
+  "/version": "Returns the Benthos version."
+}

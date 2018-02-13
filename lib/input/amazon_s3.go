@@ -24,6 +24,7 @@ import (
 	"errors"
 
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -50,7 +51,7 @@ https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-
 //------------------------------------------------------------------------------
 
 // NewAmazonS3 creates a new amazon S3 input type.
-func NewAmazonS3(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	if len(conf.AmazonS3.Bucket) == 0 {
 		return nil, errors.New("invalid bucket (cannot be empty)")
 	}

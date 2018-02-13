@@ -39,11 +39,12 @@ import (
 type typeSpec struct {
 	brokerConstructor func(
 		conf Config,
+		mgr types.Manager,
 		log log.Modular,
 		stats metrics.Type,
 		pipelineConstructors ...pipeline.ConstructorFunc,
 	) (Type, error)
-	constructor func(conf Config, log log.Modular, stats metrics.Type) (Type, error)
+	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 	description string
 }
 
@@ -135,6 +136,7 @@ func Descriptions() string {
 // New creates an input type based on an input configuration.
 func New(
 	conf Config,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...pipeline.ConstructorFunc,
@@ -154,9 +156,9 @@ func New(
 	}
 	if c, ok := constructors[conf.Type]; ok {
 		if c.brokerConstructor != nil {
-			return c.brokerConstructor(conf, log, stats, pipelines...)
+			return c.brokerConstructor(conf, mgr, log, stats, pipelines...)
 		}
-		input, err := c.constructor(conf, log, stats)
+		input, err := c.constructor(conf, mgr, log, stats)
 		for err != nil {
 			return nil, err
 		}

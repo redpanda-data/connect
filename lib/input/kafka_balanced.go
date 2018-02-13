@@ -22,6 +22,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -41,7 +42,7 @@ across any members of the consumer group.`,
 //------------------------------------------------------------------------------
 
 // NewKafkaBalanced creates a new KafkaBalanced input type.
-func NewKafkaBalanced(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewKafkaBalanced(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	k, err := reader.NewKafkaBalanced(conf.KafkaBalanced, log, stats)
 	if err != nil {
 		return nil, err

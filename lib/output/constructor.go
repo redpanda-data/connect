@@ -37,7 +37,7 @@ import (
 
 // typeSpec is a constructor and a usage description for each output type.
 type typeSpec struct {
-	constructor func(conf Config, log log.Modular, stats metrics.Type) (Type, error)
+	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 	description string
 }
 
@@ -130,6 +130,7 @@ func Descriptions() string {
 // New creates an input type based on an input configuration.
 func New(
 	conf Config,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...pipeline.ConstructorFunc,
@@ -148,7 +149,7 @@ func New(
 		}}, pipelines...)
 	}
 	if c, ok := constructors[conf.Type]; ok {
-		output, err := c.constructor(conf, log, stats)
+		output, err := c.constructor(conf, mgr, log, stats)
 		if err != nil {
 			return nil, err
 		}

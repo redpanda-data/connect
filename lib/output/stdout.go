@@ -23,6 +23,7 @@ package output
 import (
 	"os"
 
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -64,7 +65,7 @@ func NewSTDOUTConfig() STDOUTConfig {
 //------------------------------------------------------------------------------
 
 // NewSTDOUT creates a new STDOUT output type.
-func NewSTDOUT(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewSTDOUT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	return NewLineWriter(os.Stdout, []byte(conf.STDOUT.CustomDelim), "stdout", log, stats)
 }
 

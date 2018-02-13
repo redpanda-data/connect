@@ -44,7 +44,7 @@ func TestHTTPClientGET(t *testing.T) {
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -134,7 +134,7 @@ func TestHTTPClientPOST(t *testing.T) {
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -223,7 +223,7 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -335,7 +335,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -434,7 +434,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 	conf.HTTPClient.Stream = true
 	conf.HTTPClient.StreamMultipart = true
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -509,7 +509,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 	conf.HTTPClient.Stream = true
 	conf.HTTPClient.StreamMultipart = true
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -580,7 +580,7 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 	conf.HTTPClient.Stream = true
 	conf.HTTPClient.StreamMultipart = false
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -662,7 +662,7 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		b.Error(err)
 		return

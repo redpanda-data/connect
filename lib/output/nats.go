@@ -80,7 +80,7 @@ type NATS struct {
 }
 
 // NewNATS creates a new NATS output type.
-func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNATS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	n := NATS{
 		running:      1,
 		log:          log.NewModule(".output.nats"),

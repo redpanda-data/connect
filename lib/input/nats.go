@@ -22,6 +22,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -43,7 +44,7 @@ nats://derek:pass@localhost:4222`,
 //------------------------------------------------------------------------------
 
 // NewNATS creates a new NATS input type.
-func NewNATS(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNATS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	n, err := reader.NewNATS(conf.NATS, log, stats)
 	if err != nil {
 		return nil, err

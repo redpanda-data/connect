@@ -83,7 +83,7 @@ type NSQ struct {
 }
 
 // NewNSQ creates a new NSQ output type.
-func NewNSQ(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	n := NSQ{
 		running:      1,
 		log:          log.NewModule(".output.nsq"),

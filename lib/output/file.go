@@ -23,6 +23,7 @@ package output
 import (
 	"os"
 
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -67,7 +68,7 @@ func NewFileConfig() FileConfig {
 //------------------------------------------------------------------------------
 
 // NewFile creates a new File output type.
-func NewFile(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	file, err := os.OpenFile(conf.File.Path, os.O_CREATE|os.O_RDWR|os.O_APPEND, os.FileMode(0666))
 	if err != nil {
 		return nil, err

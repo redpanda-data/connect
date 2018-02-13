@@ -22,6 +22,7 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/lib/output/writer"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -44,7 +45,7 @@ using function interpolations on the 'path' field as described
 //------------------------------------------------------------------------------
 
 // NewFiles creates a new File output type.
-func NewFiles(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewFiles(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	return NewWriter(
 		"files", writer.NewFiles(conf.Files, log, stats), log, stats,
 	)

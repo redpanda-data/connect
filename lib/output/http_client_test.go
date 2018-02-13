@@ -71,7 +71,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -133,7 +133,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	conf := NewConfig()
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -243,7 +243,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 	conf := NewConfig()
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

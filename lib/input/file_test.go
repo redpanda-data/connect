@@ -53,7 +53,7 @@ func TestFileSinglePart(t *testing.T) {
 	conf := NewConfig()
 	conf.File.Path = tmpfile.Name()
 
-	f, err := NewFile(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	f, err := NewFile(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -138,7 +138,7 @@ func TestFileMultiPart(t *testing.T) {
 	conf.File.Path = tmpfile.Name()
 	conf.File.Multipart = true
 
-	f, err := NewFile(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	f, err := NewFile(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
