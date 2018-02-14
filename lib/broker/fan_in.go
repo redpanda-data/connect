@@ -32,8 +32,9 @@ import (
 // wrappedMsg used to forward an inputs message and res channel to the FanIn
 // broker.
 type wrappedMsg struct {
-	msg     types.Message
-	resChan chan<- types.Response
+	msg        types.Message
+	resChan    chan<- types.Response
+	cancelChan <-chan struct{}
 }
 
 //------------------------------------------------------------------------------

@@ -1,0 +1,205 @@
+// Copyright (c) 2018 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package broker
+
+import (
+	"time"
+
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
+)
+
+//------------------------------------------------------------------------------
+
+// DynamicInput is an interface of input types that must be closable.
+type DynamicInput interface {
+	types.Response
+	types.Closable
+}
+
+//------------------------------------------------------------------------------
+
+// DynamicFanIn is a broker that implements types.Producer and manages a map of
+// inputs to unique string identifiers, routing them through a single message
+// channel. Inputs can be added and removed dynamically as the broker runs.
+type DynamicFanIn struct {
+	stats metrics.Type
+
+	messageChan  chan types.Message
+	responseChan <-chan types.Response
+
+	inputs map[string]DynamicInput
+
+	wrappedMsgsChan chan wrappedMsg
+	inputClosedChan chan string
+	inputMap        map[string]struct{}
+
+	closedChan chan struct{}
+}
+
+// NewDynamicFanIn creates a new DynamicFanIn type by providing an initial map
+// map of inputs.
+func NewDynamicFanIn(inputs map[string]types.Producer, stats metrics.Type) (*DynamicFanIn, error) {
+	d := &DynamicFanIn{
+		stats: stats,
+
+		messageChan:  make(chan types.Message),
+		responseChan: nil,
+
+		wrappedMsgsChan: make(chan wrappedMsg),
+		inputClosedChan: make(chan string),
+		inputMap:        make(map[string]struct{}),
+
+		closables:  map[string]types.Closable{},
+		closedChan: make(chan struct{}),
+	}
+
+	for key, input := range inputs {
+		d.AddInput(key, input)
+	}
+	return d, nil
+}
+
+func (d *DynamicFanIn) AddInput(ident string, input types.Producer) {
+	if prev, exists := d.closables[ident]; exists {
+
+	}
+
+	if closable, ok := input.(types.Closable); ok {
+		d.closables[key] = closable
+	}
+
+	// Keep track of # open inputs
+	i.inputMap[n] = struct{}{}
+
+	// Create unique response channel for each input
+	resChan := make(chan types.Response)
+	if err := inputs[n].StartListening(resChan); err != nil {
+		return nil, err
+	}
+
+	// Launch goroutine that async writes input into single channel
+	go func(index int) {
+		defer func() {
+			// If the input closes we need to signal to the broker
+			i.inputClosedChan <- index
+		}()
+		for {
+			in, open := <-inputs[index].MessageChan()
+			if !open {
+				return
+			}
+			i.wrappedMsgsChan <- wrappedMsg{
+				msg:     in,
+				resChan: resChan,
+			}
+		}
+	}(n)
+}
+
+//------------------------------------------------------------------------------
+
+// StartListening assigns a new responses channel for the broker to read.
+func (d *DynamicFanIn) StartListening(responseChan <-chan types.Response) error {
+	if d.responseChan != nil {
+		return types.ErrAlreadyStarted
+	}
+	d.responseChan = responseChan
+
+	go d.loop()
+	return nil
+}
+
+// MessageChan returns the channel used for consuming messages from this broker.
+func (d *DynamicFanIn) MessageChan() <-chan types.Message {
+	return d.messageChan
+}
+
+//------------------------------------------------------------------------------
+
+// readLoop is an internal loop that brokers multiple input streams into a
+// single channel.
+func (d *DynamicFanIn) loop() {
+	defer func() {
+		close(d.wrappedMsgsChan)
+		close(d.inputClosedChan)
+		close(d.messageChan)
+		close(d.closedChan)
+	}()
+
+	for {
+		select {
+		case wrap := <-d.wrappedMsgsChan:
+			d.stats.Incr("broker.dynamic_fan_in.messages.received", 1)
+			d.messageChan <- wrap.msg
+			// TODO: If our output closes it won't be propagated.
+
+			res, open := <-i.responseChan
+			if !open {
+				return
+			}
+			wrap.resChan <- res
+		}
+	}
+}
+
+// managerLoop is an internal loop that monitors new and dead input types.
+func (d *DynamicFanIn) loop() {
+	defer func() {
+		close(d.wrappedMsgsChan)
+		close(d.inputClosedChan)
+		close(d.messageChan)
+		close(d.closedChan)
+	}()
+
+	for {
+		select {
+		case wrap := <-d.wrappedMsgsChan:
+			d.stats.Incr("broker.dynamic_fan_in.messages.received", 1)
+			d.messageChan <- wrap.msg
+			// TODO: If our output closes it won't be propagated.
+
+			res, open := <-i.responseChan
+			if !open {
+			}
+			wrap.resChan <- <-i.responseChan
+		}
+	}
+}
+
+// CloseAsync shuts down the DynamicFanIn broker and stops processing requests.
+func (i *DynamicFanIn) CloseAsync() {
+	for _, closable := range i.closables {
+		closable.CloseAsync()
+	}
+}
+
+// WaitForClose blocks until the DynamicFanIn broker has closed down.
+func (i *DynamicFanIn) WaitForClose(timeout time.Duration) error {
+	select {
+	case <-i.closedChan:
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
