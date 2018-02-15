@@ -28,6 +28,18 @@ brokers, including RabbitMQ.
 
 Exchange type options are: direct|fanout|topic|x-custom
 
+## `dynamic_fan_in`
+
+The dynamic fan in type is similar to the regular fan in type except the inputs
+can be changed during runtime via a REST HTTP interface.
+
+To GET the full list of input identifiers use the '/inputs' endpoint.
+
+To perform CRUD actions on the inputs themselves use POST, DELETE, and GET
+methods on the '/input/{input_id}' endpoint. When using POST the body of the
+request should be a JSON configuration for the input, if the input already
+exists it will be changed.
+
 ## `fan_in`
 
 The fan in type allows you to combine multiple inputs. Each input will be read

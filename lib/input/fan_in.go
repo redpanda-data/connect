@@ -151,18 +151,20 @@ func NewFanInConfig() FanInConfig {
 // formats that we do not know at this stage, therefore we use the more hacky
 // method as performance is not an issue at this stage.
 func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
+	type confAlias Config
+
 	inputConfs := []Config{}
 
 	// NOTE: Use yaml here as it supports more types than JSON
 	// (map[interface{}]interface{}).
 	for i, boxedConfig := range conf.Inputs {
-		newConfs := []Config{NewConfig()}
+		newConfs := []confAlias{confAlias(NewConfig())}
 		if i > 0 {
 			// If the type of this output is 'ditto' we want to start with a
 			// duplicate of the previous config.
 			newConfsFromDitto := func(label string) error {
 				// Remove the vanilla config.
-				newConfs = []Config{}
+				newConfs = []confAlias{}
 
 				// Check if there is a ditto multiplier.
 				if len(label) > 5 && label[5] == '_' {
@@ -176,11 +178,11 @@ func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
 						return fmt.Errorf("failed to parse ditto multiplier: %v", err)
 					}
 					for j := 0; j < n; j++ {
-						newConfs = append(newConfs, inputConfs[i-1])
+						newConfs = append(newConfs, confAlias(inputConfs[i-1]))
 					}
 				} else {
 					// Otherwise just add a single dupe of the previous config.
-					newConfs = append(newConfs, inputConfs[i-1])
+					newConfs = append(newConfs, confAlias(inputConfs[i-1]))
 				}
 				return nil
 			}
@@ -213,7 +215,7 @@ func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
 			if err = yaml.Unmarshal(rawBytes, &conf); err != nil {
 				return nil, err
 			}
-			inputConfs = append(inputConfs, conf)
+			inputConfs = append(inputConfs, Config(conf))
 		}
 	}
 

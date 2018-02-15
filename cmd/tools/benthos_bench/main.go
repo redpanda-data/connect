@@ -31,6 +31,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util"
@@ -42,15 +43,10 @@ import (
 
 //------------------------------------------------------------------------------
 
-type httpConfig struct {
-	Address       string `json:"address" yaml:"address"`
-	ReadTimeoutMS int    `json:"read_timeout_ms" yaml:"read_timeout_ms"`
-}
-
 // Config is the benthos configuration struct.
 type Config struct {
 	ReportPeriodMS       int              `json:"report_period_ms" yaml:"report_period_ms"`
-	HTTP                 httpConfig       `json:"http" yaml:"http"`
+	HTTP                 api.Config       `json:"http" yaml:"http"`
 	Input                input.Config     `json:"input" yaml:"input"`
 	Logger               log.LoggerConfig `json:"logger" yaml:"logger"`
 	Metrics              metrics.Config   `json:"metrics" yaml:"metrics"`
@@ -63,11 +59,8 @@ func NewConfig() Config {
 	metricsConf.Prefix = "benthos"
 
 	return Config{
-		ReportPeriodMS: 60000,
-		HTTP: httpConfig{
-			Address:       "0.0.0.0:4196",
-			ReadTimeoutMS: 5000,
-		},
+		ReportPeriodMS:       60000,
+		HTTP:                 api.NewConfig(),
 		Input:                input.NewConfig(),
 		Logger:               log.NewLoggerConfig(),
 		Metrics:              metricsConf,
@@ -134,20 +127,15 @@ func main() {
 	}
 	defer stats.Close()
 
-	registerHTTPEndpoints(config, logger, stats)
+	httpServer := api.New(service.Version, service.DateBuilt, config.HTTP, config, logger, stats)
 
-	pool, err := createPipeline(config, httpManager{}, logger, stats)
+	pool, err := createPipeline(config, httpServer, logger, stats)
 	if err != nil {
 		logger.Errorf("Service closing due to: %v\n", err)
 		return
 	}
 
 	httpServerClosedChan := make(chan struct{})
-	httpServer := &http.Server{
-		Addr:        config.HTTP.Address,
-		Handler:     http.DefaultServeMux,
-		ReadTimeout: time.Millisecond * time.Duration(config.HTTP.ReadTimeoutMS),
-	}
 	go func() {
 		logger.Infof(
 			"Listening for HTTP requests at: %v\n",
@@ -155,7 +143,7 @@ func main() {
 		)
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil && httpErr != http.ErrServerClosed {
-			logger.Errorf("HTTP Server error: %v\n", err)
+			logger.Errorf("HTTP Server error: %v\n", httpErr)
 		}
 		close(httpServerClosedChan)
 	}()

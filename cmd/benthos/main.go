@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/buffer"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/output"
@@ -46,14 +47,9 @@ import (
 
 //------------------------------------------------------------------------------
 
-type httpConfig struct {
-	Address       string `json:"address" yaml:"address"`
-	ReadTimeoutMS int    `json:"read_timeout_ms" yaml:"read_timeout_ms"`
-}
-
 // Config is the benthos configuration struct.
 type Config struct {
-	HTTP                 httpConfig       `json:"http" yaml:"http"`
+	HTTP                 api.Config       `json:"http" yaml:"http"`
 	Input                input.Config     `json:"input" yaml:"input"`
 	Output               output.Config    `json:"output" yaml:"output"`
 	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
@@ -68,10 +64,7 @@ func NewConfig() Config {
 	metricsConf.Prefix = "benthos"
 
 	return Config{
-		HTTP: httpConfig{
-			Address:       "0.0.0.0:4195",
-			ReadTimeoutMS: 5000,
-		},
+		HTTP:                 api.NewConfig(),
 		Input:                input.NewConfig(),
 		Output:               output.NewConfig(),
 		Buffer:               buffer.NewConfig(),
@@ -234,20 +227,15 @@ func main() {
 	}
 	defer stats.Close()
 
-	registerHTTPEndpoints(config, logger, stats)
+	httpServer := api.New(service.Version, service.DateBuilt, config.HTTP, config, logger, stats)
 
-	poolTiered, poolNonTiered, outputsClosedChan, err := createPipeline(config, httpManager{}, logger, stats)
+	poolTiered, poolNonTiered, outputsClosedChan, err := createPipeline(config, httpServer, logger, stats)
 	if err != nil {
 		logger.Errorf("Service closing due to: %v\n", err)
 		return
 	}
 
 	httpServerClosedChan := make(chan struct{})
-	httpServer := &http.Server{
-		Addr:        config.HTTP.Address,
-		Handler:     http.DefaultServeMux,
-		ReadTimeout: time.Millisecond * time.Duration(config.HTTP.ReadTimeoutMS),
-	}
 	go func() {
 		logger.Infof(
 			"Listening for HTTP requests at: %v\n",

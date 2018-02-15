@@ -132,6 +132,10 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 
 	msg := types.NewMessage()
 
+	if len(output.Messages) == 0 {
+		return types.Message{}, types.ErrTimeout
+	}
+
 	for _, sqsMsg := range output.Messages {
 		if sqsMsg.ReceiptHandle != nil {
 			a.pendingHandles = append(a.pendingHandles, &sqs.DeleteMessageBatchRequestEntry{
@@ -143,6 +147,10 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 		if sqsMsg.Body != nil {
 			msg.Parts = append(msg.Parts, []byte(*sqsMsg.Body))
 		}
+	}
+
+	if len(msg.Parts) == 0 {
+		return types.Message{}, types.ErrTimeout
 	}
 
 	return msg, nil

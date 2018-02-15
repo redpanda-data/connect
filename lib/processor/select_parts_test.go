@@ -138,7 +138,7 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := exp, string(msgs[0].Parts[0]); exp != act {
+		if act := string(msgs[0].Parts[0]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
 	}

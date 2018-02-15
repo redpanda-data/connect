@@ -87,7 +87,6 @@ func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 			return sendStdin, nil
 		},
 		func() {
-			os.Stdin.Close()
 		},
 		log, stats,
 		OptLineReaderSetDelimiter(delim),

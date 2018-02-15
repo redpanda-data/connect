@@ -22,6 +22,7 @@ package input
 
 import (
 	"bytes"
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -60,6 +61,7 @@ type Config struct {
 	AmazonS3      reader.AmazonS3Config      `json:"amazon_s3" yaml:"amazon_s3"`
 	AmazonSQS     reader.AmazonSQSConfig     `json:"amazon_sqs" yaml:"amazon_sqs"`
 	AMQP          reader.AMQPConfig          `json:"amqp" yaml:"amqp"`
+	DynamicFanIn  DynamicFanInConfig         `json:"dynamic_fan_in" yaml:"dynamic_fan_in"`
 	FanIn         FanInConfig                `json:"fan_in" yaml:"fan_in"`
 	File          FileConfig                 `json:"file" yaml:"file"`
 	HTTPClient    HTTPClientConfig           `json:"http_client" yaml:"http_client"`
@@ -84,6 +86,7 @@ func NewConfig() Config {
 		AmazonS3:      reader.NewAmazonS3Config(),
 		AmazonSQS:     reader.NewAmazonSQSConfig(),
 		AMQP:          reader.NewAMQPConfig(),
+		DynamicFanIn:  NewDynamicFanInConfig(),
 		FanIn:         NewFanInConfig(),
 		File:          NewFileConfig(),
 		HTTPClient:    NewHTTPClientConfig(),
@@ -100,6 +103,36 @@ func NewConfig() Config {
 		ZMQ4:          NewZMQ4Config(),
 		Processors:    []processor.Config{processor.NewConfig()},
 	}
+}
+
+//------------------------------------------------------------------------------
+
+// UnmarshalJSON ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (c *Config) UnmarshalJSON(bytes []byte) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	if err := json.Unmarshal(bytes, &aliased); err != nil {
+		return err
+	}
+
+	*c = Config(aliased)
+	return nil
+}
+
+// UnmarshalYAML ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	if err := unmarshal(&aliased); err != nil {
+		return err
+	}
+
+	*c = Config(aliased)
+	return nil
 }
 
 //------------------------------------------------------------------------------

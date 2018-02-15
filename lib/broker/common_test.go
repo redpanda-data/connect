@@ -22,6 +22,7 @@ package broker
 
 import (
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -75,8 +76,9 @@ func (m MockInputType) WaitForClose(t time.Duration) error {
 
 // MockOutputType implements the output.Type interface.
 type MockOutputType struct {
-	ResChan chan types.Response
-	MsgChan <-chan types.Message
+	ResChan   chan types.Response
+	resClosed int32
+	MsgChan   <-chan types.Message
 }
 
 // StartReceiving sets the read channel. This implementation is NOT thread safe.
@@ -91,8 +93,10 @@ func (m *MockOutputType) ResponseChan() <-chan types.Response {
 }
 
 // CloseAsync does nothing.
-func (m MockOutputType) CloseAsync() {
-	close(m.ResChan)
+func (m *MockOutputType) CloseAsync() {
+	if atomic.CompareAndSwapInt32(&m.resClosed, 0, 1) {
+		close(m.ResChan)
+	}
 }
 
 // WaitForClose does nothing.

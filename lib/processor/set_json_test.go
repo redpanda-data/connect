@@ -99,7 +99,7 @@ func TestSetJSONPartBounds(t *testing.T) {
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := exp, string(msgs[0].Parts[j]); exp != act {
+		if act := string(msgs[0].Parts[j]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
 	}
