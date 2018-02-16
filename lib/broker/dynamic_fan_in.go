@@ -60,6 +60,9 @@ type DynamicFanIn struct {
 	messageChan  chan types.Message
 	responseChan <-chan types.Response
 
+	onAdd    func(label string)
+	onRemove func(label string)
+
 	wrappedMsgsChan chan wrappedMsg
 	newInputChan    chan wrappedInput
 	inputs          map[string]DynamicInput
@@ -74,6 +77,7 @@ func NewDynamicFanIn(
 	inputs map[string]DynamicInput,
 	logger log.Modular,
 	stats metrics.Type,
+	options ...func(*DynamicFanIn),
 ) (*DynamicFanIn, error) {
 	d := &DynamicFanIn{
 		running: 1,
@@ -83,6 +87,9 @@ func NewDynamicFanIn(
 		messageChan:  make(chan types.Message),
 		responseChan: nil,
 
+		onAdd:    func(l string) {},
+		onRemove: func(l string) {},
+
 		wrappedMsgsChan: make(chan wrappedMsg),
 		newInputChan:    make(chan wrappedInput),
 		inputs:          make(map[string]DynamicInput),
@@ -90,9 +97,16 @@ func NewDynamicFanIn(
 		closedChan: make(chan struct{}),
 		closeChan:  make(chan struct{}),
 	}
-
+	for _, opt := range options {
+		opt(d)
+	}
 	for key, input := range inputs {
-		d.addInput(key, input)
+		if err := d.addInput(key, input); err != nil {
+			d.stats.Incr("broker.dynamic_fan_in.input.add.error", 1)
+			d.log.Errorf("Failed to start new dynamic input '%v': %v\n", key, err)
+		} else {
+			d.onAdd(key)
+		}
 	}
 	go d.managerLoop()
 	return d, nil
@@ -122,8 +136,6 @@ func (d *DynamicFanIn) SetInput(ident string, input DynamicInput, timeout time.D
 	return <-resChan
 }
 
-//------------------------------------------------------------------------------
-
 // StartListening assigns a new responses channel for the broker to read.
 func (d *DynamicFanIn) StartListening(responseChan <-chan types.Response) error {
 	if d.responseChan != nil {
@@ -138,6 +150,24 @@ func (d *DynamicFanIn) StartListening(responseChan <-chan types.Response) error 
 // MessageChan returns the channel used for consuming messages from this broker.
 func (d *DynamicFanIn) MessageChan() <-chan types.Message {
 	return d.messageChan
+}
+
+//------------------------------------------------------------------------------
+
+// OptDynamicFanInSetOnAdd sets the function that is called whenever a dynamic
+// input is added.
+func OptDynamicFanInSetOnAdd(onAddFunc func(label string)) func(*DynamicFanIn) {
+	return func(d *DynamicFanIn) {
+		d.onAdd = onAddFunc
+	}
+}
+
+// OptDynamicFanInSetOnRemove sets the function that is called whenever a
+// dynamic input is removed.
+func OptDynamicFanInSetOnRemove(onRemoveFunc func(label string)) func(*DynamicFanIn) {
+	return func(d *DynamicFanIn) {
+		d.onRemove = onRemoveFunc
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -222,6 +252,7 @@ func (d *DynamicFanIn) managerLoop() {
 					d.log.Errorf("Failed to stop old copy of dynamic input '%v': %v\n", wrappedInput.Name, err)
 				} else {
 					d.stats.Incr("broker.dynamic_fan_in.input.remove.success", 1)
+					d.onRemove(wrappedInput.Name)
 				}
 			}
 			if err == nil && wrappedInput.Input != nil {
@@ -231,6 +262,7 @@ func (d *DynamicFanIn) managerLoop() {
 					d.log.Errorf("Failed to start new dynamic input '%v': %v\n", wrappedInput.Name, err)
 				} else {
 					d.stats.Incr("broker.dynamic_fan_in.input.add.success", 1)
+					d.onAdd(wrappedInput.Name)
 				}
 			}
 			select {

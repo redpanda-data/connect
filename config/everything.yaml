@@ -32,7 +32,7 @@ input:
     consumer_tag: benthos-consumer
     prefetch_count: 1
     prefetch_size: 0
-  dynamic_fan_in:
+  dynamic:
     inputs: {}
     prefix: ""
     timeout_ms: 5000
@@ -192,6 +192,10 @@ output:
     exchange: benthos-exchange
     exchange_type: direct
     key: benthos-key
+  dynamic:
+    outputs: {}
+    prefix: ""
+    timeout_ms: 5000
   fan_out:
     outputs: []
   file:

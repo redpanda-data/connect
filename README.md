@@ -36,6 +36,9 @@ Currently supported input/output targets:
 Setting up multiple outputs or inputs is done by choosing a routing strategy
 (fan-in, fan-out, round-robin, etc.)
 
+It is possible to enable a REST API to dynamically change inputs and outputs at
+runtime, [you read about that here][11].
+
 For a full and up to date list of all inputs, buffer options, processors, and
 outputs [you can find them in the docs][7], or print them from the binary:
 
@@ -172,6 +175,7 @@ containers using `docker-compose`.
 [8]: resources/docs/config_interpolation.md
 [9]: resources/docker/compose_examples
 [10]: resources/docs/processors/list.md
+[11]: resources/docs/dynamic_inputs_and_outputs.md
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
 [travis-url]: https://travis-ci.org/Jeffail/benthos
 [dep]: https://github.com/golang/dep

@@ -15,6 +15,19 @@ for each object you should use function interpolations described
 AMQP (0.91) is the underlying messaging protocol that is used by various message
 brokers, including RabbitMQ.
 
+## `dynamic`
+
+The dynamic type is similar to the 'fan_out' type except the outputs can be
+changed during runtime via a REST HTTP interface.
+
+To GET a JSON map of output identifiers with their current uptimes use the
+'/outputs' endpoint.
+
+To perform CRUD actions on the outputs themselves use POST, DELETE, and GET
+methods on the '/output/{output_id}' endpoint. When using POST the body of the
+request should be a JSON configuration for the output, if the output already
+exists it will be changed.
+
 ## `fan_out`
 
 The fan out output type allows you to configure multiple output targets. With

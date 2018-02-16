@@ -22,6 +22,7 @@ package output
 
 import (
 	"bytes"
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -52,6 +53,7 @@ type Config struct {
 	Type        string                 `json:"type" yaml:"type"`
 	AmazonS3    writer.AmazonS3Config  `json:"amazon_s3" yaml:"amazon_s3"`
 	AMQP        AMQPConfig             `json:"amqp" yaml:"amqp"`
+	Dynamic     DynamicConfig          `json:"dynamic" yaml:"dynamic"`
 	FanOut      FanOutConfig           `json:"fan_out" yaml:"fan_out"`
 	File        FileConfig             `json:"file" yaml:"file"`
 	Files       writer.FilesConfig     `json:"files" yaml:"files"`
@@ -76,6 +78,7 @@ func NewConfig() Config {
 		Type:        "stdout",
 		AmazonS3:    writer.NewAmazonS3Config(),
 		AMQP:        NewAMQPConfig(),
+		Dynamic:     NewDynamicConfig(),
 		FanOut:      NewFanOutConfig(),
 		File:        NewFileConfig(),
 		Files:       writer.NewFilesConfig(),
@@ -93,6 +96,36 @@ func NewConfig() Config {
 		ZMQ4:        NewZMQ4Config(),
 		Processors:  []processor.Config{},
 	}
+}
+
+//------------------------------------------------------------------------------
+
+// UnmarshalJSON ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (c *Config) UnmarshalJSON(bytes []byte) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	if err := json.Unmarshal(bytes, &aliased); err != nil {
+		return err
+	}
+
+	*c = Config(aliased)
+	return nil
+}
+
+// UnmarshalYAML ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	if err := unmarshal(&aliased); err != nil {
+		return err
+	}
+
+	*c = Config(aliased)
+	return nil
 }
 
 //------------------------------------------------------------------------------

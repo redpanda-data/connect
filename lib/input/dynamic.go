@@ -25,7 +25,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path"
-	"sort"
 	"sync"
 	"time"
 
@@ -40,13 +39,14 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["dynamic_fan_in"] = typeSpec{
-		brokerConstructor: NewDynamicFanIn,
+	constructors["dynamic"] = typeSpec{
+		brokerConstructor: NewDynamic,
 		description: `
-The dynamic fan in type is similar to the regular fan in type except the inputs
-can be changed during runtime via a REST HTTP interface.
+The dynamic type is similar to the 'fan_in' type except the inputs can be
+changed during runtime via a REST HTTP interface.
 
-To GET the full list of input identifiers use the '/inputs' endpoint.
+To GET a JSON map of input identifiers with their current uptimes use the
+'/inputs' endpoint.
 
 To perform CRUD actions on the inputs themselves use POST, DELETE, and GET
 methods on the '/input/{input_id}' endpoint. When using POST the body of the
@@ -57,16 +57,16 @@ exists it will be changed.`,
 
 //------------------------------------------------------------------------------
 
-// DynamicFanInConfig is configuration for the DynamicFanIn input type.
-type DynamicFanInConfig struct {
+// DynamicConfig is configuration for the Dynamic input type.
+type DynamicConfig struct {
 	Inputs    map[string]Config `json:"inputs" yaml:"inputs"`
 	Prefix    string            `json:"prefix" yaml:"prefix"`
 	TimeoutMS int               `json:"timeout_ms" yaml:"timeout_ms"`
 }
 
-// NewDynamicFanInConfig creates a new DynamicFanInConfig with default values.
-func NewDynamicFanInConfig() DynamicFanInConfig {
-	return DynamicFanInConfig{
+// NewDynamicConfig creates a new DynamicConfig with default values.
+func NewDynamicConfig() DynamicConfig {
+	return DynamicConfig{
 		Inputs:    map[string]Config{},
 		Prefix:    "",
 		TimeoutMS: 5000,
@@ -75,16 +75,19 @@ func NewDynamicFanInConfig() DynamicFanInConfig {
 
 //------------------------------------------------------------------------------
 
-// NewDynamicFanIn creates a new DynamicFanIn input type.
-func NewDynamicFanIn(
+// NewDynamic creates a new Dynamic input type.
+func NewDynamic(
 	conf Config,
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...pipeline.ConstructorFunc,
 ) (Type, error) {
+	inputMap := map[string]time.Time{}
+	inputMapMut := sync.Mutex{}
+
 	inputs := map[string]broker.DynamicInput{}
-	for k, v := range conf.DynamicFanIn.Inputs {
+	for k, v := range conf.Dynamic.Inputs {
 		newInput, err := New(v, mgr, log, stats, pipelines...)
 		if err != nil {
 			return nil, err
@@ -92,19 +95,33 @@ func NewDynamicFanIn(
 		inputs[k] = newInput
 	}
 
-	fanIn, err := broker.NewDynamicFanIn(inputs, log, stats)
+	fanIn, err := broker.NewDynamicFanIn(
+		inputs, log, stats,
+		broker.OptDynamicFanInSetOnAdd(func(l string) {
+			inputMapMut.Lock()
+			inputMap[l] = time.Now()
+			inputMapMut.Unlock()
+		}),
+		broker.OptDynamicFanInSetOnRemove(func(l string) {
+			inputMapMut.Lock()
+			delete(inputMap, l)
+			inputMapMut.Unlock()
+		}),
+	)
 	if err != nil {
 		return nil, err
 	}
+	inputs = nil
 
-	reqTimeout := time.Millisecond * time.Duration(conf.DynamicFanIn.TimeoutMS)
+	reqTimeout := time.Millisecond * time.Duration(conf.Dynamic.TimeoutMS)
 
-	inputConfigs := conf.DynamicFanIn.Inputs
+	inputConfigs := conf.Dynamic.Inputs
 	inputConfigsMut := sync.RWMutex{}
+
 	mgr.RegisterEndpoint(
-		path.Join(conf.DynamicFanIn.Prefix, "/input/{input_id}"),
+		path.Join(conf.Dynamic.Prefix, "/input/{input_id}"),
 		"Perform CRUD operations on the configuration of dynamic inputs. For"+
-			" more information read the `dynamic_fan_in` documentation.",
+			" more information read the `dynamic` input type documentation.",
 		func(w http.ResponseWriter, r *http.Request) {
 			var httpErr error
 			defer func() {
@@ -142,12 +159,28 @@ func NewDynamicFanIn(
 					inputConfigs[inputID] = newConf
 				}
 			case "GET":
-				if _, exists := inputConfigs[inputID]; !exists {
+				getConf, exists := inputConfigs[inputID]
+				if !exists {
 					http.Error(w, "Input does not exist", http.StatusBadRequest)
 					return
 				}
 				var cBytes []byte
-				cBytes, httpErr = json.Marshal(inputConfigs[inputID])
+				cBytes, httpErr = json.Marshal(getConf)
+				if httpErr != nil {
+					return
+				}
+
+				hashMap := map[string]interface{}{}
+				if httpErr = json.Unmarshal(cBytes, &hashMap); httpErr != nil {
+					return
+				}
+
+				outputMap := map[string]interface{}{}
+				outputMap["type"] = hashMap["type"]
+				outputMap[getConf.Type] = hashMap[getConf.Type]
+				outputMap["processors"] = hashMap["processors"]
+
+				cBytes, httpErr = json.Marshal(outputMap)
 				if httpErr != nil {
 					return
 				}
@@ -164,8 +197,8 @@ func NewDynamicFanIn(
 		},
 	)
 	mgr.RegisterEndpoint(
-		path.Join(conf.DynamicFanIn.Prefix, "/inputs"),
-		"Get a full list of all input identifiers.",
+		path.Join(conf.Dynamic.Prefix, "/inputs"),
+		"Get a map of running input identifiers with their current uptimes.",
 		func(w http.ResponseWriter, r *http.Request) {
 			var httpErr error
 			defer func() {
@@ -176,17 +209,16 @@ func NewDynamicFanIn(
 				}
 			}()
 
-			inputConfigsMut.Lock()
-			defer inputConfigsMut.Unlock()
+			inputMapMut.Lock()
+			defer inputMapMut.Unlock()
 
-			labels := []string{}
-			for k := range inputConfigs {
-				labels = append(labels, k)
+			uptimes := map[string]string{}
+			for k, v := range inputMap {
+				uptimes[k] = time.Since(v).String()
 			}
-			sort.Strings(labels)
 
 			var resBytes []byte
-			if resBytes, httpErr = json.Marshal(labels); httpErr == nil {
+			if resBytes, httpErr = json.Marshal(uptimes); httpErr == nil {
 				w.Write(resBytes)
 			}
 		},

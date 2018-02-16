@@ -46,6 +46,10 @@ input:
     queue: ${AMQP_INPUT_QUEUE:benthos-stream}
     key: ${AMQP_INPUT_KEY:benthos-key}
     consumer_tag: ${AMQP_INPUT_CONSUMER_TAG:benthos-consumer}
+  dynamic:
+    inputs: {}
+    prefix: ${DYNAMIC_INPUT_PREFIX}
+    timeout_ms: ${DYNAMIC_INPUT_TIMEOUT_MS:5000}
   file:
     path: ${FILE_INPUT_PATH}
     multipart: ${FILE_INPUT_MULTIPART:false}
@@ -147,6 +151,10 @@ output:
     exchange: ${AMQP_OUTPUT_EXCHANGE:benthos-exchange}
     exchange_type: ${AMQP_OUTPUT_EXCHANGE_TYPE:direct}
     key: ${AMQP_OUTPUT_KEY:benthos-key}
+  dynamic:
+    outputs: {}
+    prefix: ${DYNAMIC_OUTPUT_PREFIX}
+    timeout_ms: ${DYNAMIC_OUTPUT_TIMEOUT_MS:5000}
   file:
     path: ${FILE_OUTPUT_PATH}
   http_client:

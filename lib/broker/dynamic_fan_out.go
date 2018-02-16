@@ -63,10 +63,13 @@ type outputWithMsgChan struct {
 type DynamicFanOut struct {
 	running int32
 
-	logger log.Modular
-	stats  metrics.Type
+	log   log.Modular
+	stats metrics.Type
 
 	throt *throttle.Type
+
+	onAdd    func(label string)
+	onRemove func(label string)
 
 	messages     <-chan types.Message
 	responseChan chan types.Response
@@ -83,11 +86,14 @@ func NewDynamicFanOut(
 	outputs map[string]DynamicOutput,
 	logger log.Modular,
 	stats metrics.Type,
+	options ...func(*DynamicFanOut),
 ) (*DynamicFanOut, error) {
 	d := &DynamicFanOut{
 		running:       1,
 		stats:         stats,
-		logger:        logger.NewModule(".broker.dynamic_fan_out"),
+		log:           logger.NewModule(".broker.dynamic_fan_out"),
+		onAdd:         func(l string) {},
+		onRemove:      func(l string) {},
 		messages:      nil,
 		responseChan:  make(chan types.Response),
 		newOutputChan: make(chan wrappedOutput),
@@ -95,11 +101,17 @@ func NewDynamicFanOut(
 		closedChan:    make(chan struct{}),
 		closeChan:     make(chan struct{}),
 	}
+	for _, opt := range options {
+		opt(d)
+	}
 	d.throt = throttle.New(throttle.OptCloseChan(d.closeChan))
 
 	for k, v := range outputs {
 		if err := d.addOutput(k, v); err != nil {
-			d.logger.Errorf("Failed to initialise dynamic output '%v': %v\n", err)
+			d.log.Errorf("Failed to initialise dynamic output '%v': %v\n", k, err)
+			d.stats.Incr("broker.dynamic_fan_out.output.add.error", 1)
+		} else {
+			d.onAdd(k)
 		}
 	}
 	return d, nil
@@ -128,6 +140,24 @@ func (d *DynamicFanOut) SetOutput(ident string, output DynamicOutput, timeout ti
 		return types.ErrTypeClosed
 	}
 	return <-resChan
+}
+
+//------------------------------------------------------------------------------
+
+// OptDynamicFanOutSetOnAdd sets the function that is called whenever a dynamic
+// output is added.
+func OptDynamicFanOutSetOnAdd(onAddFunc func(label string)) func(*DynamicFanOut) {
+	return func(d *DynamicFanOut) {
+		d.onAdd = onAddFunc
+	}
+}
+
+// OptDynamicFanOutSetOnRemove sets the function that is called whenever a
+// dynamic output is removed.
+func OptDynamicFanOutSetOnRemove(onRemoveFunc func(label string)) func(*DynamicFanOut) {
+	return func(d *DynamicFanOut) {
+		d.onRemove = onRemoveFunc
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -218,16 +248,30 @@ func (d *DynamicFanOut) loop() {
 			if !open {
 				return
 			}
+			d.stats.Incr("broker.dynamic_fan_out.output.count", 1)
+
 			if _, exists := d.outputs[wrappedOutput.Name]; exists {
 				if err := d.removeOutput(wrappedOutput.Name, wrappedOutput.Timeout); err != nil {
+					d.stats.Incr("broker.dynamic_fan_out.output.remove.error", 1)
+					d.log.Errorf("Failed to stop old copy of dynamic output '%v': %v\n", wrappedOutput.Name, err)
 					wrappedOutput.ResChan <- err
 					continue
 				}
+				d.stats.Incr("broker.dynamic_fan_out.output.remove.success", 1)
+				d.onRemove(wrappedOutput.Name)
 			}
 			if wrappedOutput.Output == nil {
 				wrappedOutput.ResChan <- nil
 			} else {
-				wrappedOutput.ResChan <- d.addOutput(wrappedOutput.Name, wrappedOutput.Output)
+				err := d.addOutput(wrappedOutput.Name, wrappedOutput.Output)
+				if err != nil {
+					d.stats.Incr("broker.dynamic_fan_out.output.add.error", 1)
+					d.log.Errorf("Failed to start new dynamic output '%v': %v\n", wrappedOutput.Name, err)
+				} else {
+					d.stats.Incr("broker.dynamic_fan_out.output.add.success", 1)
+					d.onAdd(wrappedOutput.Name)
+				}
+				wrappedOutput.ResChan <- err
 			}
 			continue
 		case msg, open = <-msgChan:
@@ -260,11 +304,11 @@ func (d *DynamicFanOut) loop() {
 				select {
 				case res, open = <-v.output.ResponseChan():
 					if !open {
-						d.logger.Warnf("Dynamic output '%v' has closed\n", k)
+						d.log.Warnf("Dynamic output '%v' has closed\n", k)
 						d.removeOutput(k, time.Second)
 						delete(remainingTargets, k)
 					} else if res.Error() != nil {
-						d.logger.Errorf("Failed to dispatch dynamic fan out message: %v\n", res.Error())
+						d.log.Errorf("Failed to dispatch dynamic fan out message: %v\n", res.Error())
 						d.stats.Incr("broker.dynamic_fan_out.output.error", 1)
 						if !d.throt.Retry() {
 							return
