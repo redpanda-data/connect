@@ -47,14 +47,12 @@ var constructors = map[string]typeSpec{}
 type Config struct {
 	Type        string            `json:"type" yaml:"type"`
 	Archive     ArchiveConfig     `json:"archive" yaml:"archive"`
-	BlobToMulti struct{}          `json:"blob_to_multi" yaml:"blob_to_multi"`
 	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
 	Combine     CombineConfig     `json:"combine" yaml:"combine"`
 	Compress    CompressConfig    `json:"compress" yaml:"compress"`
 	Decompress  DecompressConfig  `json:"decompress" yaml:"decompress"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
-	MultiToBlob struct{}          `json:"multi_to_blob" yaml:"multi_to_blob"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
 	SelectParts SelectPartsConfig `json:"select_parts" yaml:"select_parts"`
 	SetJSON     SetJSONConfig     `json:"set_json" yaml:"set_json"`
@@ -67,14 +65,12 @@ func NewConfig() Config {
 	return Config{
 		Type:        "bounds_check",
 		Archive:     NewArchiveConfig(),
-		BlobToMulti: struct{}{},
 		BoundsCheck: NewBoundsCheckConfig(),
 		Combine:     NewCombineConfig(),
 		Compress:    NewCompressConfig(),
 		Decompress:  NewDecompressConfig(),
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),
-		MultiToBlob: struct{}{},
 		Sample:      NewSampleConfig(),
 		SelectParts: NewSelectPartsConfig(),
 		SetJSON:     NewSetJSONConfig(),
