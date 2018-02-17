@@ -101,6 +101,32 @@ func TestArchiveTar(t *testing.T) {
 	}
 }
 
+func TestArchiveBenthos(t *testing.T) {
+	conf := NewConfig()
+	conf.Archive.Format = "benthos"
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	proc, err := NewArchive(conf, testLog, metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	testMsg := types.Message{Parts: [][]byte{[]byte("hello"), []byte("world")}}
+	testMsgBlob := testMsg.Bytes()
+
+	if msgs, _ := proc.ProcessMessage(&testMsg); len(msgs) == 1 {
+		if lParts := len(msgs[0].Parts); lParts != 1 {
+			t.Errorf("Wrong number of parts returned: %v != %v", lParts, 1)
+		}
+		if !reflect.DeepEqual(testMsgBlob, msgs[0].Parts[0]) {
+			t.Errorf("Returned message did not match: %s != %s", msgs[0].Parts[0], testMsgBlob)
+		}
+	} else {
+		t.Error("Failed on good message")
+	}
+}
+
 func TestArchiveEmpty(t *testing.T) {
 	conf := NewConfig()
 

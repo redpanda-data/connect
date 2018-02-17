@@ -7,12 +7,12 @@ This document has been generated with `benthos --list-processors`.
 
 Archives all the parts of a message into a single part according to the selected
 archive type, treating each part as if it were a file. Supported archive types
-are: tar (I'll add more later).
+are: tar, benthos (I'll add more later).
 
-Message parts only contain raw data, and therefore in order to create an archive
-consisting of files per part you need to generate unique file names for each
-part. This can be done by using function interpolations on the 'path' field as
-described [here](../config_interpolation.md#functions).
+Some archive types (such as tar) treat each archive item (message part) as a
+file with a path. Since message parts only contain raw data a unique path must
+be generated for each part. This can be done by using function interpolations on
+the 'path' field as described [here](../config_interpolation.md#functions).
 
 ## `blob_to_multi`
 
@@ -191,8 +191,8 @@ the combine processor. For example:
 ## `unarchive`
 
 Unarchives parts of a message according to the selected archive type. Supported
-archive types are: tar (I'll add more later). If the list of target parts is
-empty the unarchive will be applied to all message parts.
+archive types are: tar, benthos. If the list of target parts is empty the
+unarchive will be applied to all message parts.
 
 When a part is unarchived into multiple files they will become their own message
 parts, appended from the position of the source part. If you wish to split the

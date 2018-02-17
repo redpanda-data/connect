@@ -38,8 +38,8 @@ func init() {
 		constructor: NewUnarchive,
 		description: `
 Unarchives parts of a message according to the selected archive type. Supported
-archive types are: tar (I'll add more later). If the list of target parts is
-empty the unarchive will be applied to all message parts.
+archive types are: tar, benthos. If the list of target parts is empty the
+unarchive will be applied to all message parts.
 
 When a part is unarchived into multiple files they will become their own message
 parts, appended from the position of the source part. If you wish to split the
@@ -103,10 +103,21 @@ func tarUnarchive(b []byte) ([][]byte, error) {
 	return newParts, nil
 }
 
+func benthosUnarchive(b []byte) ([][]byte, error) {
+	msg, err := types.FromBytes(b)
+	if err != nil {
+		return nil, err
+	}
+
+	return msg.Parts, nil
+}
+
 func strToUnarchiver(str string) (unarchiveFunc, error) {
 	switch str {
 	case "tar":
 		return tarUnarchive, nil
+	case "benthos":
+		return benthosUnarchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }

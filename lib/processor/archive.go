@@ -41,12 +41,12 @@ func init() {
 		description: `
 Archives all the parts of a message into a single part according to the selected
 archive type, treating each part as if it were a file. Supported archive types
-are: tar (I'll add more later).
+are: tar, benthos (I'll add more later).
 
-Message parts only contain raw data, and therefore in order to create an archive
-consisting of files per part you need to generate unique file names for each
-part. This can be done by using function interpolations on the 'path' field as
-described [here](../config_interpolation.md#functions).`,
+Some archive types (such as tar) treat each archive item (message part) as a
+file with a path. Since message parts only contain raw data a unique path must
+be generated for each part. This can be done by using function interpolations on
+the 'path' field as described [here](../config_interpolation.md#functions).`,
 	}
 }
 
@@ -94,10 +94,16 @@ func tarArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func benthosArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
+	return (&types.Message{Parts: parts}).Bytes(), nil
+}
+
 func strToArchiver(str string) (archiveFunc, error) {
 	switch str {
 	case "tar":
 		return tarArchive, nil
+	case "benthos":
+		return benthosArchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }

@@ -106,6 +106,40 @@ func TestUnarchiveTar(t *testing.T) {
 	}
 }
 
+func TestUnarchiveBenthos(t *testing.T) {
+	conf := NewConfig()
+	conf.Unarchive.Format = "benthos"
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	proc, err := NewUnarchive(conf, testLog, metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if msgs, res := proc.ProcessMessage(&types.Message{}); len(msgs) > 0 {
+		t.Error("Expected fail on bad message")
+	} else if _, ok := res.(types.SimpleResponse); !ok {
+		t.Error("Expected simple response from bad message")
+	}
+	if msgs, _ := proc.ProcessMessage(
+		&types.Message{Parts: [][]byte{[]byte("wat this isnt good")}},
+	); len(msgs) > 0 {
+		t.Error("Expected fail on bad message")
+	}
+
+	testMsg := types.Message{Parts: [][]byte{[]byte("hello"), []byte("world")}}
+	testMsgBlob := testMsg.Bytes()
+
+	if msgs, _ := proc.ProcessMessage(&types.Message{Parts: [][]byte{testMsgBlob}}); len(msgs) > 0 {
+		if !reflect.DeepEqual([]*types.Message{&testMsg}, msgs) {
+			t.Errorf("Returned message did not match: %v != %v", msgs, testMsg)
+		}
+	} else {
+		t.Error("Failed on good message")
+	}
+}
+
 func TestUnarchiveIndexBounds(t *testing.T) {
 	conf := NewConfig()
 
