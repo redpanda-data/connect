@@ -106,9 +106,9 @@ func TestUnarchiveTar(t *testing.T) {
 	}
 }
 
-func TestUnarchiveBenthos(t *testing.T) {
+func TestUnarchiveBinary(t *testing.T) {
 	conf := NewConfig()
-	conf.Unarchive.Format = "benthos"
+	conf.Unarchive.Format = "binary"
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	proc, err := NewUnarchive(conf, testLog, metrics.DudType{})
@@ -142,6 +142,7 @@ func TestUnarchiveBenthos(t *testing.T) {
 
 func TestUnarchiveIndexBounds(t *testing.T) {
 	conf := NewConfig()
+	conf.Unarchive.Format = "tar"
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 
@@ -245,6 +246,7 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 
 func TestUnarchiveEmpty(t *testing.T) {
 	conf := NewConfig()
+	conf.Unarchive.Format = "tar"
 	conf.Unarchive.Parts = []int{0, 1}
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})

@@ -101,9 +101,9 @@ func TestArchiveTar(t *testing.T) {
 	}
 }
 
-func TestArchiveBenthos(t *testing.T) {
+func TestArchiveBinary(t *testing.T) {
 	conf := NewConfig()
-	conf.Archive.Format = "benthos"
+	conf.Archive.Format = "binary"
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	proc, err := NewArchive(conf, testLog, metrics.DudType{})

@@ -32,6 +32,8 @@ func init() {
 	constructors["multi_to_blob"] = typeSpec{
 		constructor: NewMultiToBlob,
 		description: `
+DEPRECATED: Use the 'binary' type of the 'archive' processor instead.
+
 If an input supports multiple part messages but your output does not you will
 end up with each part being sent as a unique message. This can cause confusion
 and complexity regarding delivery guarantees.

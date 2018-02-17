@@ -32,6 +32,8 @@ func init() {
 	constructors["blob_to_multi"] = typeSpec{
 		constructor: NewBlobToMulti,
 		description: `
+DEPRECATED: Use the 'binary' type of the 'unarchive' processor instead.
+
 If a multiple part message has been encoded into a single part message using the
 multi to blob processor then this processor is able to convert it back into a
 multiple part message.

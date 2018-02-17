@@ -6,15 +6,17 @@ This document has been generated with `benthos --list-processors`.
 ## `archive`
 
 Archives all the parts of a message into a single part according to the selected
-archive type, treating each part as if it were a file. Supported archive types
-are: tar, benthos (I'll add more later).
+archive type. Supported archive types are: tar, binary (I'll add more later).
 
 Some archive types (such as tar) treat each archive item (message part) as a
 file with a path. Since message parts only contain raw data a unique path must
 be generated for each part. This can be done by using function interpolations on
-the 'path' field as described [here](../config_interpolation.md#functions).
+the 'path' field as described [here](../config_interpolation.md#functions). For
+types that aren't file based (such as binary) the file field is ignored.
 
 ## `blob_to_multi`
+
+DEPRECATED: Use the 'binary' type of the 'unarchive' processor instead.
 
 If a multiple part message has been encoded into a single part message using the
 multi to blob processor then this processor is able to convert it back into a
@@ -103,6 +105,8 @@ find a list of functions [here](../config_interpolation.md#functions).
 
 ## `multi_to_blob`
 
+DEPRECATED: Use the 'binary' type of the 'archive' processor instead.
+
 If an input supports multiple part messages but your output does not you will
 end up with each part being sent as a unique message. This can cause confusion
 and complexity regarding delivery guarantees.
@@ -190,13 +194,13 @@ the combine processor. For example:
 
 ## `unarchive`
 
-Unarchives parts of a message according to the selected archive type. Supported
-archive types are: tar, benthos. If the list of target parts is empty the
-unarchive will be applied to all message parts.
+Unarchives parts of a message according to the selected archive type into
+multiple parts. Supported archive types are: tar, binary. If the list of target
+parts is empty the unarchive will be applied to all message parts.
 
-When a part is unarchived into multiple files they will become their own message
-parts, appended from the position of the source part. If you wish to split the
-archive into one message per file then follow this with the 'split' processor.
+When a part is unarchived it is split into more message parts that replace the
+original part. If you wish to split the archive into one message per file then
+follow this with the 'split' processor.
 
 Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if index = -1 then the selected part

@@ -37,13 +37,13 @@ func init() {
 	constructors["unarchive"] = typeSpec{
 		constructor: NewUnarchive,
 		description: `
-Unarchives parts of a message according to the selected archive type. Supported
-archive types are: tar, benthos. If the list of target parts is empty the
-unarchive will be applied to all message parts.
+Unarchives parts of a message according to the selected archive type into
+multiple parts. Supported archive types are: tar, binary. If the list of target
+parts is empty the unarchive will be applied to all message parts.
 
-When a part is unarchived into multiple files they will become their own message
-parts, appended from the position of the source part. If you wish to split the
-archive into one message per file then follow this with the 'split' processor.
+When a part is unarchived it is split into more message parts that replace the
+original part. If you wish to split the archive into one message per file then
+follow this with the 'split' processor.
 
 Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if index = -1 then the selected part
@@ -66,7 +66,7 @@ type UnarchiveConfig struct {
 // NewUnarchiveConfig returns a UnarchiveConfig with default values.
 func NewUnarchiveConfig() UnarchiveConfig {
 	return UnarchiveConfig{
-		Format: "tar",
+		Format: "binary",
 		Parts:  []int{},
 	}
 }
@@ -103,7 +103,7 @@ func tarUnarchive(b []byte) ([][]byte, error) {
 	return newParts, nil
 }
 
-func benthosUnarchive(b []byte) ([][]byte, error) {
+func binaryUnarchive(b []byte) ([][]byte, error) {
 	msg, err := types.FromBytes(b)
 	if err != nil {
 		return nil, err
@@ -116,8 +116,8 @@ func strToUnarchiver(str string) (unarchiveFunc, error) {
 	switch str {
 	case "tar":
 		return tarUnarchive, nil
-	case "benthos":
-		return benthosUnarchive, nil
+	case "binary":
+		return binaryUnarchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }

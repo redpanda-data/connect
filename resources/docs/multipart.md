@@ -10,14 +10,23 @@ multipart messages with one part. Outputs, however, are more tricky.
 
 An output that only supports single part messages (such as Kafka), which
 receives a multipart message (perhaps from ZMQ), will output a unique message
-per part. These parts are 'at-least once', as message delivery can only be
-guaranteed for the whole batch of message parts. We could potentially read those
+per part. These parts are 'at-least-once', but if any part is unsuccessfully
+sent it will mean the whole set of parts will be resent as message delivery can
+only be guaranteed for the whole batch. We could potentially read those
 individual parts and use the `combine` processor to 'squash' them back into a
 multipart message, but such a system can be brittle.
 
-Alternatively we can use the `multi_to_blob` and `blob_to_multi` processors so
-that we can output any message as a single part and then seamlessly decode it
-back into its original multiple part format further down the pipeline.
+Alternatively we can use the `archive` and `unarchive` processors, which squash
+multipart messages into a single part and then expand them back out into
+multiple parts respectively. This allows us to archive before sending on the
+single part protocol, then unarchive back into the native multiple part
+representation further in the pipeline.
+
+The archive processor supports multiple algorithms including a binary blob
+format and the `.tar` format (where message parts are treated as individual
+files, read the type documentation for more information). In the following
+examples whenever we use the archive processor we will be using the binary
+format.
 
 ## Example
 
@@ -70,7 +79,8 @@ duplicated message parts that will break the ordering of message parts. This
 solution would also not be feasible if the number of parts per message is
 dynamic.
 
-Another option would be to configure both Benthos instances to use blobs.
+Another option would be to configure both Benthos instances to use archive
+processors.
 
 ![multipart demo 3][multipart_demo_3]
 
@@ -90,7 +100,7 @@ input:
     socket_type: PULL
   processors:
   - type: bounds_check
-  - type: multi_to_blob
+  - type: archive
 output:
   type: kafka
   kafka:
@@ -112,7 +122,7 @@ input:
     topic: benthos_stream
     partition: 0
   processors:
-  - type: blob_to_multi
+  - type: unarchive
   - type: bounds_check
 output:
   type: zmq4
@@ -141,7 +151,7 @@ input:
         topic: benthos_stream
         partition: 0
       processors:
-      - type: blob_to_multi
+      - type: unarchive
     - type: zmq4
       zmq4:
         addresses:
@@ -158,8 +168,8 @@ output:
     socket_type: PUSH
 ```
 
-Where the `blob_to_multi` processor is only applied to Kafka, but the
-`bounds_check` is correctly applied to all inputs.
+Where the `unarchive` processor is only applied to Kafka, but the `bounds_check`
+is correctly applied to all inputs.
 
 Solved.
 

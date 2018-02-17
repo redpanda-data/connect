@@ -40,13 +40,13 @@ func init() {
 		constructor: NewArchive,
 		description: `
 Archives all the parts of a message into a single part according to the selected
-archive type, treating each part as if it were a file. Supported archive types
-are: tar, benthos (I'll add more later).
+archive type. Supported archive types are: tar, binary (I'll add more later).
 
 Some archive types (such as tar) treat each archive item (message part) as a
 file with a path. Since message parts only contain raw data a unique path must
 be generated for each part. This can be done by using function interpolations on
-the 'path' field as described [here](../config_interpolation.md#functions).`,
+the 'path' field as described [here](../config_interpolation.md#functions). For
+types that aren't file based (such as binary) the file field is ignored.`,
 	}
 }
 
@@ -61,7 +61,7 @@ type ArchiveConfig struct {
 // NewArchiveConfig returns a ArchiveConfig with default values.
 func NewArchiveConfig() ArchiveConfig {
 	return ArchiveConfig{
-		Format: "tar",
+		Format: "binary",
 		Path:   "${!count:files}-${!timestamp_unix_nano}.txt",
 	}
 }
@@ -94,7 +94,7 @@ func tarArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func benthosArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
+func binaryArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
 	return (&types.Message{Parts: parts}).Bytes(), nil
 }
 
@@ -102,8 +102,8 @@ func strToArchiver(str string) (archiveFunc, error) {
 	switch str {
 	case "tar":
 		return tarArchive, nil
-	case "benthos":
-		return benthosArchive, nil
+	case "binary":
+		return binaryArchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }
