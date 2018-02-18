@@ -1,3 +1,6 @@
 language: go
 go:
   - stable
+script:
+  - make
+  - make test
