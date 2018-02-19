@@ -187,6 +187,13 @@ output:
       secret: ""
       token: ""
     timeout_s: 5
+  amazon_sqs:
+    region: eu-west-1
+    url: ""
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
   amqp:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange

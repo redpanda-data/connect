@@ -21,7 +21,6 @@
 package processor
 
 import (
-	"bytes"
 	"math/rand"
 	"os"
 	"reflect"
@@ -54,99 +53,6 @@ func TestCombineTwoParts(t *testing.T) {
 	}
 	if res != nil {
 		t.Error("Expected nil res")
-	}
-}
-
-func TestCombineMessagesSharedBuffer(t *testing.T) {
-	conf := NewConfig()
-	conf.Combine.Parts = 2
-
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewCombine(conf, testLog, metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	exp := [][]byte{[]byte("foo"), []byte("bar")}
-
-	buf := &bytes.Buffer{}
-	buf.Write([]byte("foo"))
-
-	msgs, res := proc.ProcessMessage(&types.Message{Parts: [][]byte{buf.Bytes()}})
-	if len(msgs) > 0 {
-		t.Error("Expected non success on first part")
-	}
-
-	buf.Reset()
-	buf.Write([]byte("bar"))
-
-	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{buf.Bytes()}})
-	if len(msgs) != 1 {
-		t.Error("Expected success on second part")
-	}
-	if !reflect.DeepEqual(exp, msgs[0].Parts) {
-		t.Errorf("Wrong result: %s != %s", msgs[0].Parts, exp)
-	}
-	if res != nil {
-		t.Error("Expected nil res")
-	}
-}
-
-func TestCombineMultiMessagesSharedBuffer(t *testing.T) {
-	conf := NewConfig()
-	conf.Combine.Parts = 3
-
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewCombine(conf, testLog, metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	inputs := [][]byte{[]byte("foo 1 2 3"), []byte("bar")}
-
-	buf := &bytes.Buffer{}
-
-	expEven := [][]byte{[]byte("foo 1 2 3"), []byte("bar"), []byte("foo 1 2 3")}
-	expOdd := [][]byte{[]byte("bar"), []byte("foo 1 2 3"), []byte("bar")}
-
-	results := 0
-
-	// For each loop we add three parts of a message.
-	for i := 0; i < 10; i++ {
-		buf.Reset()
-		bIndex := 0
-
-		inputMsg := types.NewMessage()
-
-		for _, input := range inputs {
-			written, _ := buf.Write(input)
-			inputMsg.Parts = append(inputMsg.Parts, buf.Bytes()[bIndex:bIndex+written])
-			bIndex += written
-		}
-
-		msgs, res := proc.ProcessMessage(&inputMsg)
-		if i%3 != 0 {
-			exp := expEven
-			if results%2 != 0 {
-				exp = expOdd
-			}
-
-			if len(msgs) != 1 {
-				t.Error("Expected success")
-			} else {
-				if !reflect.DeepEqual(exp, msgs[0].Parts) {
-					t.Errorf("Wrong result: %s != %s", msgs[0].Parts, exp)
-				}
-				if res != nil {
-					t.Error("Expected nil res")
-				}
-			}
-			results++
-		} else if len(msgs) > 0 {
-			t.Error("Expected non-success on first send")
-		}
 	}
 }
 
@@ -284,9 +190,10 @@ func TestCombineTwoDiffParts(t *testing.T) {
 		return
 	}
 
-	exp := [][]byte{[]byte("foo1"), []byte("bar1")}
+	input := [][]byte{[]byte("foo1"), []byte("bar1")}
+	exp := [][]byte{[]byte("foo1"), []byte("bar1"), []byte("foo1")}
 
-	msgs, res := proc.ProcessMessage(&types.Message{Parts: [][]byte{exp[0]}})
+	msgs, res := proc.ProcessMessage(&types.Message{Parts: [][]byte{input[0]}})
 	if len(msgs) != 0 {
 		t.Error("Expected fail on one part")
 	}
@@ -294,7 +201,7 @@ func TestCombineTwoDiffParts(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{exp[1], exp[0]}})
+	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{input[1], input[0]}})
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -305,7 +212,9 @@ func TestCombineTwoDiffParts(t *testing.T) {
 		t.Error("Expected nil res")
 	}
 
-	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{exp[1], exp[0]}})
+	exp = [][]byte{[]byte("bar1"), []byte("foo1")}
+
+	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{input[1], input[0]}})
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -316,7 +225,9 @@ func TestCombineTwoDiffParts(t *testing.T) {
 		t.Error("Expected nil res")
 	}
 
-	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{exp[1]}})
+	exp = [][]byte{[]byte("bar1"), []byte("foo1"), []byte("bar1")}
+
+	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{input[1], input[0], input[1]}})
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}

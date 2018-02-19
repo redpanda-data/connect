@@ -21,8 +21,6 @@
 package processor
 
 import (
-	"bytes"
-
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
@@ -43,10 +41,16 @@ messages into Kafka by splitting the parts. We could now consume our N*M
 messages from Kafka and squash them back into M part messages with the combine
 processor, and then subsequently push them into something like ZMQ.
 
-NOTE: If a message received has more parts than the 'combine' amount it will be
-sent unchanged with its original parts. This occurs even if there are cached
-parts waiting to be combined, which will change the ordering of message parts
-through the platform.`,
+If a message received has more parts than the 'combine' amount it will be sent
+unchanged with its original parts. This occurs even if there are cached parts
+waiting to be combined, which will change the ordering of message parts through
+the platform.
+
+When a message part is received that increases the total cached number of parts
+beyond the threshold it will have _all_ of its parts appended to the resuling
+message. E.g. if you set the threshold at 4 and send a message of 2 parts
+followed by a message of 3 parts then you will receive one output message of 5
+parts.`,
 	}
 }
 
@@ -73,19 +77,15 @@ type Combine struct {
 	log   log.Modular
 	stats metrics.Type
 	n     int
-
-	partsBuffer *bytes.Buffer
-	parts       []int
+	parts [][]byte
 }
 
 // NewCombine returns a Combine processor.
 func NewCombine(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	return &Combine{
-		log:         log.NewModule(".processor.combine"),
-		stats:       stats,
-		n:           conf.Combine.Parts,
-		partsBuffer: &bytes.Buffer{},
-		parts:       make([]int, conf.Combine.Parts)[:0],
+		log:   log.NewModule(".processor.combine"),
+		stats: stats,
+		n:     conf.Combine.Parts,
 	}, nil
 }
 
@@ -105,22 +105,13 @@ func (c *Combine) ProcessMessage(msg *types.Message) ([]*types.Message, types.Re
 
 	// Add new parts to the buffer.
 	for _, part := range msg.Parts {
-		c.partsBuffer.Write(part)
-		c.parts = append(c.parts, len(part))
+		c.parts = append(c.parts, part)
 	}
 
 	// If we have reached our target count of parts in the buffer.
 	if len(c.parts) >= c.n {
-		msg.Parts = make([][]byte, c.n)
-
-		// Extract them.
-		for i, pLen := range c.parts[:c.n] {
-			msg.Parts[i] = c.partsBuffer.Next(pLen)
-		}
-
-		oldParts := c.parts
-		c.parts = c.parts[c.n:]
-		copy(c.parts, oldParts[c.n:])
+		msg.Parts = c.parts
+		c.parts = nil
 
 		msgs := [1]*types.Message{msg}
 		return msgs[:], nil

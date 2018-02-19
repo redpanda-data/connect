@@ -10,6 +10,10 @@ with the path specified with the 'path' field, in order to have a different path
 for each object you should use function interpolations described
 [here](../config_interpolation.md#functions).
 
+## `amazon_sqs`
+
+Sends messages to an SQS queue.
+
 ## `amqp`
 
 AMQP (0.91) is the underlying messaging protocol that is used by various message
