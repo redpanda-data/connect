@@ -60,7 +60,7 @@ type Config struct {
 	Files       writer.FilesConfig     `json:"files" yaml:"files"`
 	HTTPClient  HTTPClientConfig       `json:"http_client" yaml:"http_client"`
 	HTTPServer  HTTPServerConfig       `json:"http_server" yaml:"http_server"`
-	Kafka       KafkaConfig            `json:"kafka" yaml:"kafka"`
+	Kafka       writer.KafkaConfig     `json:"kafka" yaml:"kafka"`
 	NATS        NATSConfig             `json:"nats" yaml:"nats"`
 	NATSStream  NATSStreamConfig       `json:"nats_stream" yaml:"nats_stream"`
 	NSQ         NSQConfig              `json:"nsq" yaml:"nsq"`
@@ -86,7 +86,7 @@ func NewConfig() Config {
 		Files:       writer.NewFilesConfig(),
 		HTTPClient:  NewHTTPClientConfig(),
 		HTTPServer:  NewHTTPServerConfig(),
-		Kafka:       NewKafkaConfig(),
+		Kafka:       writer.NewKafkaConfig(),
 		NATS:        NewNATSConfig(),
 		NATSStream:  NewNATSStreamConfig(),
 		NSQ:         NewNSQConfig(),

@@ -27,6 +27,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Shopify/sarama"
 )
 
@@ -36,6 +37,7 @@ import (
 type KafkaConfig struct {
 	Addresses   []string `json:"addresses" yaml:"addresses"`
 	ClientID    string   `json:"client_id" yaml:"client_id"`
+	Key         string   `json:"key" yaml:"key"`
 	Topic       string   `json:"topic" yaml:"topic"`
 	MaxMsgBytes int      `json:"max_msg_bytes" yaml:"max_msg_bytes"`
 	TimeoutMS   int      `json:"timeout_ms" yaml:"timeout_ms"`
@@ -47,6 +49,7 @@ func NewKafkaConfig() KafkaConfig {
 	return KafkaConfig{
 		Addresses:   []string{"localhost:9092"},
 		ClientID:    "benthos_kafka_output",
+		Key:         "",
 		Topic:       "benthos_stream",
 		MaxMsgBytes: 1000000,
 		TimeoutMS:   5000,
@@ -64,15 +67,23 @@ type Kafka struct {
 	addresses []string
 	conf      KafkaConfig
 
+	keyBytes       []byte
+	interpolateKey bool
+
 	producer sarama.SyncProducer
 }
 
 // NewKafka creates a new Kafka writer type.
 func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, error) {
+	keyBytes := []byte(conf.Key)
+	interpolateKey := text.ContainsFunctionVariables(keyBytes)
+
 	k := Kafka{
-		log:   log.NewModule(".output.kafka"),
-		stats: stats,
-		conf:  conf,
+		log:            log.NewModule(".output.kafka"),
+		stats:          stats,
+		conf:           conf,
+		keyBytes:       keyBytes,
+		interpolateKey: interpolateKey,
 	}
 
 	for _, addr := range conf.Addresses {
@@ -125,10 +136,18 @@ func (k *Kafka) Write(msg types.Message) error {
 	}
 	var err error
 	for _, part := range msg.Parts {
-		if _, _, err = k.producer.SendMessage(&sarama.ProducerMessage{
+		key := k.keyBytes
+		if k.interpolateKey {
+			key = text.ReplaceFunctionVariables(k.keyBytes)
+		}
+		prodMsg := &sarama.ProducerMessage{
 			Topic: k.conf.Topic,
 			Value: sarama.ByteEncoder(part),
-		}); err != nil {
+		}
+		if len(key) > 0 {
+			prodMsg.Key = sarama.ByteEncoder(key)
+		}
+		if _, _, err = k.producer.SendMessage(prodMsg); err != nil {
 			break
 		}
 	}

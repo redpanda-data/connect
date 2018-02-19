@@ -98,6 +98,10 @@ acknowledged, which is propagated back to the input. The config field
 'ack_replicas' determines whether we wait for acknowledgement from all replicas
 or just a single broker.
 
+If the field 'key' is not empty then each message will be given its contents as
+a key. This field can be dynamically set using function interpolations described
+[here](../config_interpolation.md#functions).
+
 ## `nats`
 
 Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.

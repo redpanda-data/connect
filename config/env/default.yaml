@@ -146,6 +146,13 @@ output:
       secret: ${AMAZON_OUTPUT_CREDENTIALS_SECRET}
       token: ${AMAZON_OUTPUT_CREDENTIALS_TOKEN}
     timeout_s: ${AMAZON_OUTPUT_TIMEOUT_S:5}
+  amazon_sqs:
+    region: ${AMAZON_OUTPUT_REGION:eu-west-1}
+    url: ${AMAZON_OUTPUT_SQS_URL}
+    credentials:
+      id: ${AMAZON_OUTPUT_CREDENTIALS_ID}
+      secret: ${AMAZON_OUTPUT_CREDENTIALS_SECRET}
+      token: ${AMAZON_OUTPUT_CREDENTIALS_TOKEN}
   amqp:
     url: ${AMQP_OUTPUT_URL}
     exchange: ${AMQP_OUTPUT_EXCHANGE:benthos-exchange}
@@ -178,6 +185,7 @@ output:
     addresses:
     - ${KAFKA_OUTPUT_BROKER_ADDRESSES}
     client_id: ${KAFKA_OUTPUT_CLIENT_ID:benthos-client}
+    key: ${KAFKA_OUTPUT_KEY}
     max_msg_bytes: ${KAFKA_OUTPUT_MAX_MSG_BYTES:1000000}
     topic: ${KAFKA_OUTPUT_TOPIC:benthos-stream}
     ack_replicas: ${KAFKA_OUTPUT_ACK_REP:true}
