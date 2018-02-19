@@ -139,7 +139,6 @@ input:
     archive:
       format: binary
       path: ${!count:files}-${!timestamp_unix_nano}.txt
-    blob_to_multi: {}
     bounds_check:
       max_parts: 100
       min_parts: 1
@@ -161,7 +160,6 @@ input:
     insert_part:
       index: -1
       content: ""
-    multi_to_blob: {}
     sample:
       retain: 0.1
       randomseed: 0

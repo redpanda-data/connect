@@ -18,7 +18,7 @@
 http:
   address: ${BENTHOS_HTTP_ADDRESS:0.0.0.0:4195}
 input:
-  type: ${BENTHOS_INPUT:http_server}
+  type: ${BENTHOS_INPUT:dynamic}
   amazon_s3:
     region: ${AMAZON_INPUT_REGION:eu-west-1}
     bucket: ${AMAZON_INPUT_BUCKET}
@@ -137,7 +137,7 @@ input:
       max_part_size: ${BENTHOS_MAX_PART_SIZE:1073741824}
   - type: ${BENTHOS_INPUT_PROCESSOR:noop}
 output:
-  type: ${BENTHOS_OUTPUT:http_server}
+  type: ${BENTHOS_OUTPUT:dynamic}
   amazon_s3:
     region: ${AMAZON_OUTPUT_REGION:eu-west-1}
     bucket: ${AMAZON_OUTPUT_BUCKET}

@@ -14,19 +14,6 @@ be generated for each part. This can be done by using function interpolations on
 the 'path' field as described [here](../config_interpolation.md#functions). For
 types that aren't file based (such as binary) the file field is ignored.
 
-## `blob_to_multi`
-
-DEPRECATED: Use the 'binary' type of the 'unarchive' processor instead.
-
-If a multiple part message has been encoded into a single part message using the
-multi to blob processor then this processor is able to convert it back into a
-multiple part message.
-
-You can therefore use this processor when multiple Benthos instances are
-bridging between message queues that don't support multiple parts.
-
-E.g. ZMQ => Benthos(multi to blob) => Kafka => Benthos(blob to multi)
-
 ## `bounds_check`
 
 Checks whether each message fits within certain boundaries, and drops messages
@@ -108,20 +95,6 @@ than the length of the existing parts it will be inserted at the beginning.
 
 This processor will interpolate functions within the 'content' field, you can
 find a list of functions [here](../config_interpolation.md#functions).
-
-## `multi_to_blob`
-
-DEPRECATED: Use the 'binary' type of the 'archive' processor instead.
-
-If an input supports multiple part messages but your output does not you will
-end up with each part being sent as a unique message. This can cause confusion
-and complexity regarding delivery guarantees.
-
-You can instead use this processor to encode multiple part messages into a
-binary single part message, which can be converted back further down the
-platform pipeline using the blob to multi processor.
-
-E.g. ZMQ => Benthos(multi to blob) => Kafka => Benthos(blob to multi)
 
 ## `noop`
 
