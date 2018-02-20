@@ -1,0 +1,291 @@
+// Copyright (c) 2018 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package api
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/gorilla/mux"
+)
+
+//------------------------------------------------------------------------------
+
+// dynamicConfMgr maintains a map of config hashes to ids for dynamic
+// inputs/outputs and thereby tracks whether a new configuration has changed for
+// a particular id.
+type dynamicConfMgr struct {
+	configHashes map[string]string
+}
+
+func newDynamicConfMgr() *dynamicConfMgr {
+	return &dynamicConfMgr{
+		configHashes: map[string]string{},
+	}
+}
+
+// Set will cache the config hash as the latest for the id and returns whether
+// this hash is different to the previous config.
+func (d *dynamicConfMgr) Set(id string, conf []byte) bool {
+	hasher := sha256.New()
+	hasher.Write(conf)
+	newHash := hex.EncodeToString(hasher.Sum(nil))
+
+	if hash, exists := d.configHashes[id]; exists {
+		if hash == newHash {
+			// Same config as before, ignore.
+			return false
+		}
+	}
+
+	d.configHashes[id] = newHash
+	return true
+}
+
+// Matches checks whether a provided config matches an existing config for the
+// same id.
+func (d *dynamicConfMgr) Matches(id string, conf []byte) bool {
+	if hash, exists := d.configHashes[id]; exists {
+		hasher := sha256.New()
+		hasher.Write(conf)
+		newHash := hex.EncodeToString(hasher.Sum(nil))
+
+		if hash == newHash {
+			// Same config as before.
+			return true
+		}
+	}
+
+	return false
+}
+
+// Remove will delete a cached hash for id if there is one.
+func (d *dynamicConfMgr) Remove(id string) {
+	delete(d.configHashes, id)
+}
+
+//------------------------------------------------------------------------------
+
+// Dynamic is a type for exposing CRUD operations on dynamic broker
+// configurations as an HTTP interface. Events can be registered for listening
+// to configuration changes, and these events should be forwarded to the
+// dynamic broker.
+type Dynamic struct {
+	onUpdate func(id string, conf []byte) ([]byte, error)
+	onDelete func(id string) error
+
+	// configs is a map of the latest sanitised configs from our CRUD clients.
+	configs      map[string][]byte
+	configHashes *dynamicConfMgr
+	configsMut   sync.Mutex
+
+	// ids is a map of dynamic components that are currently active and their
+	// start times.
+	ids    map[string]time.Time
+	idsMut sync.Mutex
+}
+
+// NewDynamic creates a new Dynamic API type.
+func NewDynamic() *Dynamic {
+	return &Dynamic{
+		onUpdate:     func(id string, conf []byte) ([]byte, error) { return conf, nil },
+		onDelete:     func(id string) error { return nil },
+		configs:      map[string][]byte{},
+		configHashes: newDynamicConfMgr(),
+		ids:          map[string]time.Time{},
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// OnUpdate registers a func to handle CRUD events where a request wants to set
+// a new value for a dynamic configuration. If the configuration is valid and
+// the dynamic component was created successfully then a normalised form of the
+// configuration should be returned. An error should be returned if the
+// configuration is invalid or the component failed.
+func (d *Dynamic) OnUpdate(onUpdate func(id string, conf []byte) ([]byte, error)) {
+	d.onUpdate = onUpdate
+}
+
+// OnDelete registers a func to handle CRUD events where a request wants to
+// remove a dynamic configuration. An error should be returned if the component
+// failed to close.
+func (d *Dynamic) OnDelete(onDelete func(id string) error) {
+	d.onDelete = onDelete
+}
+
+// Stopped should be called whenever an active dynamic component has closed,
+// whether by naturally winding down or from a request.
+func (d *Dynamic) Stopped(id string) {
+	d.idsMut.Lock()
+	defer d.idsMut.Unlock()
+
+	delete(d.ids, id)
+}
+
+// Started should be called whenever an active dynamic component has started
+// with a new configuration.
+func (d *Dynamic) Started(id string) {
+	d.idsMut.Lock()
+	defer d.idsMut.Unlock()
+
+	d.ids[id] = time.Now()
+}
+
+//------------------------------------------------------------------------------
+
+// HandleList is an http.HandleFunc for returning maps of active dynamic
+// components by their id to uptime.
+func (d *Dynamic) HandleList(w http.ResponseWriter, r *http.Request) {
+	var httpErr error
+	defer func() {
+		if r.Body != nil {
+			r.Body.Close()
+		}
+		if httpErr != nil {
+			http.Error(w, "Internal server error", http.StatusBadGateway)
+		}
+	}()
+
+	type confInfo struct {
+		Uptime string          `json:"uptime"`
+		Config json.RawMessage `json:"config"`
+	}
+	uptimes := map[string]confInfo{}
+
+	d.idsMut.Lock()
+	for k, v := range d.ids {
+		uptimes[k] = confInfo{
+			Uptime: time.Since(v).String(),
+			Config: []byte(`null`),
+		}
+	}
+	d.idsMut.Unlock()
+
+	d.configsMut.Lock()
+	for k, v := range d.configs {
+		if info, exists := uptimes[k]; exists {
+			info.Config = v
+			uptimes[k] = info
+		} else {
+			uptimes[k] = confInfo{
+				Uptime: "inactive",
+				Config: v,
+			}
+		}
+	}
+	d.configsMut.Unlock()
+
+	var resBytes []byte
+	if resBytes, httpErr = json.Marshal(uptimes); httpErr == nil {
+		w.Write(resBytes)
+	}
+}
+
+func (d *Dynamic) handleGETInput(w http.ResponseWriter, r *http.Request) error {
+	id := mux.Vars(r)["id"]
+
+	conf, exists := d.configs[id]
+	if !exists {
+		http.Error(w, fmt.Sprintf("Dynamic component '%v' is not active", id), http.StatusNotFound)
+		return nil
+	}
+	w.Write(conf)
+	return nil
+}
+
+func (d *Dynamic) handlePOSTInput(w http.ResponseWriter, r *http.Request) error {
+	id := mux.Vars(r)["id"]
+
+	reqBytes, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+
+	if d.configHashes.Matches(id, reqBytes) {
+		return nil
+	}
+
+	var sanitised []byte
+	if sanitised, err = d.onUpdate(id, reqBytes); err != nil {
+		return err
+	}
+
+	d.configHashes.Set(id, sanitised)
+	d.configs[id] = sanitised
+
+	return nil
+}
+
+func (d *Dynamic) handleDELInput(w http.ResponseWriter, r *http.Request) error {
+	id := mux.Vars(r)["id"]
+
+	if err := d.onDelete(id); err != nil {
+		return err
+	}
+
+	d.configHashes.Remove(id)
+	delete(d.configs, id)
+
+	return nil
+}
+
+// HandleCRUD is an http.HandleFunc for performing CRUD operations on dynamic
+// components by their ids.
+func (d *Dynamic) HandleCRUD(w http.ResponseWriter, r *http.Request) {
+	var httpErr error
+	defer func() {
+		if r.Body != nil {
+			r.Body.Close()
+		}
+		if httpErr != nil {
+			http.Error(w, "Internal server error", http.StatusBadGateway)
+		}
+	}()
+
+	d.configsMut.Lock()
+	defer d.configsMut.Unlock()
+
+	id := mux.Vars(r)["id"]
+	if len(id) == 0 {
+		http.Error(w, "Var `id` must be set", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case "POST":
+		httpErr = d.handlePOSTInput(w, r)
+	case "GET":
+		httpErr = d.handleGETInput(w, r)
+	case "DELETE":
+		httpErr = d.handleDELInput(w, r)
+	default:
+		httpErr = fmt.Errorf("verb not supported: %v", r.Method)
+	}
+}
+
+//------------------------------------------------------------------------------
