@@ -95,7 +95,7 @@ func (d *dynamicConfMgr) Remove(id string) {
 // to configuration changes, and these events should be forwarded to the
 // dynamic broker.
 type Dynamic struct {
-	onUpdate func(id string, conf []byte) ([]byte, error)
+	onUpdate func(id string, conf []byte) error
 	onDelete func(id string) error
 
 	// configs is a map of the latest sanitised configs from our CRUD clients.
@@ -112,7 +112,7 @@ type Dynamic struct {
 // NewDynamic creates a new Dynamic API type.
 func NewDynamic() *Dynamic {
 	return &Dynamic{
-		onUpdate:     func(id string, conf []byte) ([]byte, error) { return conf, nil },
+		onUpdate:     func(id string, conf []byte) error { return nil },
 		onDelete:     func(id string) error { return nil },
 		configs:      map[string][]byte{},
 		configHashes: newDynamicConfMgr(),
@@ -123,11 +123,9 @@ func NewDynamic() *Dynamic {
 //------------------------------------------------------------------------------
 
 // OnUpdate registers a func to handle CRUD events where a request wants to set
-// a new value for a dynamic configuration. If the configuration is valid and
-// the dynamic component was created successfully then a normalised form of the
-// configuration should be returned. An error should be returned if the
+// a new value for a dynamic configuration. An error should be returned if the
 // configuration is invalid or the component failed.
-func (d *Dynamic) OnUpdate(onUpdate func(id string, conf []byte) ([]byte, error)) {
+func (d *Dynamic) OnUpdate(onUpdate func(id string, conf []byte) error) {
 	d.onUpdate = onUpdate
 }
 
@@ -148,12 +146,16 @@ func (d *Dynamic) Stopped(id string) {
 }
 
 // Started should be called whenever an active dynamic component has started
-// with a new configuration.
-func (d *Dynamic) Started(id string) {
+// with a new configuration. A normalised form of the configuration should be
+// provided and will be delivered to clients that query the component contents.
+func (d *Dynamic) Started(id string, config []byte) {
 	d.idsMut.Lock()
-	defer d.idsMut.Unlock()
-
 	d.ids[id] = time.Now()
+	d.idsMut.Unlock()
+
+	d.configsMut.Lock()
+	d.configs[id] = config
+	d.configsMut.Unlock()
 }
 
 //------------------------------------------------------------------------------
@@ -193,7 +195,7 @@ func (d *Dynamic) HandleList(w http.ResponseWriter, r *http.Request) {
 			uptimes[k] = info
 		} else {
 			uptimes[k] = confInfo{
-				Uptime: "inactive",
+				Uptime: "stopped",
 				Config: v,
 			}
 		}
@@ -209,7 +211,9 @@ func (d *Dynamic) HandleList(w http.ResponseWriter, r *http.Request) {
 func (d *Dynamic) handleGETInput(w http.ResponseWriter, r *http.Request) error {
 	id := mux.Vars(r)["id"]
 
+	d.configsMut.Lock()
 	conf, exists := d.configs[id]
+	d.configsMut.Unlock()
 	if !exists {
 		http.Error(w, fmt.Sprintf("Dynamic component '%v' is not active", id), http.StatusNotFound)
 		return nil
@@ -226,18 +230,20 @@ func (d *Dynamic) handlePOSTInput(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
-	if d.configHashes.Matches(id, reqBytes) {
+	d.configsMut.Lock()
+	matched := d.configHashes.Matches(id, reqBytes)
+	d.configsMut.Unlock()
+	if matched {
 		return nil
 	}
 
-	var sanitised []byte
-	if sanitised, err = d.onUpdate(id, reqBytes); err != nil {
+	if err = d.onUpdate(id, reqBytes); err != nil {
 		return err
 	}
 
-	d.configHashes.Set(id, sanitised)
-	d.configs[id] = sanitised
-
+	d.configsMut.Lock()
+	d.configHashes.Set(id, reqBytes)
+	d.configsMut.Unlock()
 	return nil
 }
 
@@ -248,8 +254,10 @@ func (d *Dynamic) handleDELInput(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
+	d.configsMut.Lock()
 	d.configHashes.Remove(id)
 	delete(d.configs, id)
+	d.configsMut.Unlock()
 
 	return nil
 }
@@ -266,9 +274,6 @@ func (d *Dynamic) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal server error", http.StatusBadGateway)
 		}
 	}()
-
-	d.configsMut.Lock()
-	defer d.configsMut.Unlock()
 
 	id := mux.Vars(r)["id"]
 	if len(id) == 0 {

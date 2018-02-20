@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -110,9 +111,9 @@ func TestDynamicDelete(t *testing.T) {
 		removed = append(removed, id)
 		return nil
 	})
-	dAPI.OnUpdate(func(id string, content []byte) ([]byte, error) {
+	dAPI.OnUpdate(func(id string, content []byte) error {
 		t.Error("Unexpected update called")
-		return nil, nil
+		return nil
 	})
 
 	request, _ := http.NewRequest("DELETE", "/input/foo", nil)
@@ -152,13 +153,12 @@ func TestDynamicBasicCRUD(t *testing.T) {
 	})
 
 	updateExp := []byte("hello world")
-	updateRes := []byte("foo bar")
 	var updateErr error
-	dAPI.OnUpdate(func(id string, content []byte) ([]byte, error) {
+	dAPI.OnUpdate(func(id string, content []byte) error {
 		if exp, act := updateExp, content; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong content on update: %s != %s", act, exp)
 		}
-		return updateRes, updateErr
+		return updateErr
 	})
 
 	request, _ := http.NewRequest("GET", "/input/foo", nil)
@@ -175,6 +175,8 @@ func TestDynamicBasicCRUD(t *testing.T) {
 		t.Errorf("Unexpected response code: %v != %v", act, exp)
 	}
 
+	dAPI.Started("foo", []byte("foo bar"))
+
 	request, _ = http.NewRequest("GET", "/input/foo", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
@@ -183,6 +185,88 @@ func TestDynamicBasicCRUD(t *testing.T) {
 	}
 	if exp, act := []byte("foo bar"), response.Body.Bytes(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong content on GET: %s != %s", act, exp)
+	}
+
+	updateErr = errors.New("this shouldnt happen")
+	request, _ = http.NewRequest("POST", "/input/foo", bytes.NewReader([]byte("hello world")))
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected response code: %v != %v", act, exp)
+	}
+
+	request, _ = http.NewRequest("GET", "/input/foo", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected response code: %v != %v", act, exp)
+	}
+	if exp, act := []byte("foo bar"), response.Body.Bytes(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong content on GET: %s != %s", act, exp)
+	}
+}
+
+func TestDynamicListing(t *testing.T) {
+	dAPI := NewDynamic()
+	r := router(dAPI)
+
+	dAPI.OnDelete(func(id string) error {
+		return nil
+	})
+
+	dAPI.OnUpdate(func(id string, content []byte) error {
+		return nil
+	})
+
+	dAPI.Started("bar", []byte(`{"test":"sanitised"}`))
+
+	request, _ := http.NewRequest("POST", "/input/foo", bytes.NewReader([]byte(`{"test":"from crud raw"}`)))
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected response code: %v != %v", act, exp)
+	}
+
+	dAPI.Started("foo", []byte(`{"test":"second sanitised"}`))
+
+	request, _ = http.NewRequest("GET", "/inputs", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected response code: %v != %v", act, exp)
+	}
+
+	expSections := []string{
+		`{"bar":{"uptime":"`,
+		`","config":{"test":"sanitised"}},"foo":{"uptime":"`,
+		`","config":{"test":"second sanitised"}}}`,
+	}
+	res := string(response.Body.Bytes())
+	for _, exp := range expSections {
+		if !strings.Contains(res, exp) {
+			t.Errorf("Response does not contain substr: %v > %v", res, exp)
+		}
+	}
+
+	dAPI.Stopped("foo")
+
+	request, _ = http.NewRequest("DELETE", "/input/bar", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected response code: %v != %v", act, exp)
+	}
+
+	dAPI.Stopped("bar")
+
+	request, _ = http.NewRequest("GET", "/inputs", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected response code: %v != %v", act, exp)
+	}
+	if exp, act := []byte(`{"foo":{"uptime":"stopped","config":{"test":"second sanitised"}}}`), response.Body.Bytes(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong content on GET list: %s != %s", act, exp)
 	}
 }
 
