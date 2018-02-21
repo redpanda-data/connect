@@ -77,8 +77,8 @@ func (w *Writer) loop() {
 	var (
 		runningPath    = "output." + w.typeStr + ".running"
 		countPath      = "output." + w.typeStr + ".count"
-		successPath    = "output." + w.typeStr + ".success"
-		errorPath      = "output." + w.typeStr + ".error"
+		successPath    = "output." + w.typeStr + ".send.success"
+		errorPath      = "output." + w.typeStr + ".send.error"
 		connPath       = "output." + w.typeStr + ".connection.up"
 		failedConnPath = "output." + w.typeStr + ".connection.failed"
 		lostConnPath   = "output." + w.typeStr + ".connection.lost"

@@ -134,24 +134,29 @@ func (k *Kafka) Write(msg types.Message) error {
 	if k.producer == nil {
 		return types.ErrNotConnected
 	}
-	var err error
+
+	msgs := []*sarama.ProducerMessage{}
 	for _, part := range msg.Parts {
+		if len(part) > k.conf.MaxMsgBytes {
+			k.stats.Incr("output.kafka.send.dropped.max_msg_bytes", 1)
+			continue
+		}
+
 		key := k.keyBytes
 		if k.interpolateKey {
 			key = text.ReplaceFunctionVariables(k.keyBytes)
 		}
-		prodMsg := &sarama.ProducerMessage{
+		nextMsg := &sarama.ProducerMessage{
 			Topic: k.conf.Topic,
 			Value: sarama.ByteEncoder(part),
 		}
 		if len(key) > 0 {
-			prodMsg.Key = sarama.ByteEncoder(key)
+			nextMsg.Key = sarama.ByteEncoder(key)
 		}
-		if _, _, err = k.producer.SendMessage(prodMsg); err != nil {
-			break
-		}
+		msgs = append(msgs, nextMsg)
 	}
-	return err
+
+	return k.producer.SendMessages(msgs)
 }
 
 // CloseAsync shuts down the Kafka writer and stops processing messages.
