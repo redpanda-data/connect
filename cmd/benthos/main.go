@@ -74,6 +74,52 @@ func NewConfig() Config {
 	}
 }
 
+// Sanitised returns a sanitised copy of the Benthos configuration, meaning
+// fields of no consequence (unused inputs, outputs, processors etc) are
+// excluded.
+func (c Config) Sanitised() (interface{}, error) {
+	inConf, err := input.SanitiseConfig(c.Input)
+	if err != nil {
+		return nil, err
+	}
+
+	var outConf interface{}
+	outConf, err = output.SanitiseConfig(c.Output)
+	if err != nil {
+		return nil, err
+	}
+
+	var bufConf interface{}
+	bufConf, err = buffer.SanitiseConfig(c.Buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	var metConf interface{}
+	metConf, err = metrics.SanitiseConfig(c.Metrics)
+	if err != nil {
+		return nil, err
+	}
+
+	return struct {
+		HTTP                 interface{} `json:"http" yaml:"http"`
+		Input                interface{} `json:"input" yaml:"input"`
+		Output               interface{} `json:"output" yaml:"output"`
+		Buffer               interface{} `json:"buffer" yaml:"buffer"`
+		Logger               interface{} `json:"logger" yaml:"logger"`
+		Metrics              interface{} `json:"metrics" yaml:"metrics"`
+		SystemCloseTimeoutMS interface{} `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
+	}{
+		HTTP:                 c.HTTP,
+		Input:                inConf,
+		Output:               outConf,
+		Buffer:               bufConf,
+		Logger:               c.Logger,
+		Metrics:              metConf,
+		SystemCloseTimeoutMS: c.SystemCloseTimeoutMS,
+	}, nil
+}
+
 //------------------------------------------------------------------------------
 
 // Extra flags
@@ -227,7 +273,11 @@ func main() {
 	}
 	defer stats.Close()
 
-	httpServer := api.New(service.Version, service.DateBuilt, config.HTTP, config, logger, stats)
+	sanConf, err := config.Sanitised()
+	if err != nil {
+		logger.Warnf("Failed to generate sanitised config: %v\n", err)
+	}
+	httpServer := api.New(service.Version, service.DateBuilt, config.HTTP, sanConf, logger, stats)
 
 	poolTiered, poolNonTiered, outputsClosedChan, err := createPipeline(config, httpServer, logger, stats)
 	if err != nil {

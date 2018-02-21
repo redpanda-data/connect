@@ -79,6 +79,28 @@ func NewConfig() Config {
 	}
 }
 
+// SanitiseConfig returns a sanitised version of the Config, meaning sections
+// that aren't relevant to behaviour are removed.
+func SanitiseConfig(conf Config) (interface{}, error) {
+	cBytes, err := json.Marshal(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	hashMap := map[string]interface{}{}
+	if err = json.Unmarshal(cBytes, &hashMap); err != nil {
+		return nil, err
+	}
+
+	outputMap := map[string]interface{}{}
+	outputMap["type"] = hashMap["type"]
+	outputMap[conf.Type] = hashMap[conf.Type]
+
+	return outputMap, nil
+}
+
+//------------------------------------------------------------------------------
+
 // UnmarshalJSON ensures that when parsing configs that are in a slice the
 // default values are still applied.
 func (m *Config) UnmarshalJSON(bytes []byte) error {

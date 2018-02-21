@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,41 +18,33 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package buffer
+package input
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
-	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/processor"
 )
-
-func TestConstructorDescription(t *testing.T) {
-	if len(Descriptions()) == 0 {
-		t.Error("package descriptions were empty")
-	}
-}
-
-func TestConstructorBadType(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = "not_exist"
-
-	if _, err := New(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{}); err == nil {
-		t.Error("Expected error, received nil for invalid type")
-	}
-}
 
 func TestSanitise(t *testing.T) {
 	exp := map[string]interface{}{
-		"type": "none",
-		"none": map[string]interface{}{},
+		"type": "amqp",
+		"amqp": map[string]interface{}{
+			"consumer_tag":   "benthos-consumer",
+			"prefetch_count": float64(1),
+			"prefetch_size":  float64(0),
+			"url":            "amqp://guest:guest@localhost:5672/",
+			"exchange":       "benthos-exchange",
+			"exchange_type":  "direct",
+			"queue":          "benthos-queue",
+			"key":            "benthos-key",
+		},
 	}
 
 	conf := NewConfig()
-	conf.Type = "none"
-	conf.Mmap.FileSize = 10
+	conf.Type = "amqp"
+	conf.Processors = nil
 
 	act, err := SanitiseConfig(conf)
 	if err != nil {
@@ -62,16 +54,30 @@ func TestSanitise(t *testing.T) {
 		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
 	}
 
-	exp = map[string]interface{}{
-		"type": "memory",
-		"memory": map[string]interface{}{
-			"limit": float64(20),
+	exp["processors"] = []interface{}{
+		map[string]interface{}{
+			"type": "combine",
+			"combine": map[string]interface{}{
+				"parts": float64(2),
+			},
+		},
+		map[string]interface{}{
+			"type": "archive",
+			"archive": map[string]interface{}{
+				"format": "binary",
+				"path":   "nope",
+			},
 		},
 	}
 
-	conf = NewConfig()
-	conf.Type = "memory"
-	conf.Memory.Limit = 20
+	proc := processor.NewConfig()
+	proc.Type = "combine"
+	conf.Processors = append(conf.Processors, proc)
+
+	proc = processor.NewConfig()
+	proc.Type = "archive"
+	proc.Archive.Path = "nope"
+	conf.Processors = append(conf.Processors, proc)
 
 	act, err = SanitiseConfig(conf)
 	if err != nil {

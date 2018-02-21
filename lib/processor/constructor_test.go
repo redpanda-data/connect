@@ -23,6 +23,7 @@ package processor
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/util/service/log"
@@ -97,5 +98,46 @@ func TestConstructorConfigDefaultsYAML(t *testing.T) {
 	}
 	if exp, act := 50, conf[0].BoundsCheck.MaxPartSize; exp != act {
 		t.Errorf("Wrong overridden part size: %v != %v", act, exp)
+	}
+}
+
+func TestSanitise(t *testing.T) {
+	exp := map[string]interface{}{
+		"type": "combine",
+		"combine": map[string]interface{}{
+			"parts": float64(3),
+		},
+	}
+
+	conf := NewConfig()
+	conf.Type = "combine"
+	conf.Combine.Parts = 3
+
+	act, err := SanitiseConfig(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	}
+
+	exp = map[string]interface{}{
+		"type": "archive",
+		"archive": map[string]interface{}{
+			"format": "binary",
+			"path":   "nope",
+		},
+	}
+
+	conf = NewConfig()
+	conf.Type = "archive"
+	conf.Archive.Path = "nope"
+
+	act, err = SanitiseConfig(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
 	}
 }

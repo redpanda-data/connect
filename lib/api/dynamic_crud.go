@@ -153,9 +153,11 @@ func (d *Dynamic) Started(id string, config []byte) {
 	d.ids[id] = time.Now()
 	d.idsMut.Unlock()
 
-	d.configsMut.Lock()
-	d.configs[id] = config
-	d.configsMut.Unlock()
+	if len(config) > 0 {
+		d.configsMut.Lock()
+		d.configs[id] = config
+		d.configsMut.Unlock()
+	}
 }
 
 //------------------------------------------------------------------------------

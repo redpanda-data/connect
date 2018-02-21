@@ -22,17 +22,15 @@ package output
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"net/http"
 	"path"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/broker"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
-	"github.com/gorilla/mux"
 )
 
 //------------------------------------------------------------------------------
@@ -81,8 +79,7 @@ func NewDynamic(
 	log log.Modular,
 	stats metrics.Type,
 ) (Type, error) {
-	outputMap := map[string]time.Time{}
-	outputMapMut := sync.Mutex{}
+	dynAPI := api.NewDynamic()
 
 	outputs := map[string]broker.DynamicOutput{}
 	for k, v := range conf.Dynamic.Outputs {
@@ -93,134 +90,73 @@ func NewDynamic(
 		outputs[k] = newOutput
 	}
 
-	fanOut, err := broker.NewDynamicFanOut(
-		outputs, log, stats,
-		broker.OptDynamicFanOutSetOnAdd(func(l string) {
-			outputMapMut.Lock()
-			outputMap[l] = time.Now()
-			outputMapMut.Unlock()
-		}),
-		broker.OptDynamicFanOutSetOnRemove(func(l string) {
-			outputMapMut.Lock()
-			delete(outputMap, l)
-			outputMapMut.Unlock()
-		}),
-	)
-	if err != nil {
-		return nil, err
-	}
-	outputs = nil
-
 	reqTimeout := time.Millisecond * time.Duration(conf.Dynamic.TimeoutMS)
 
 	outputConfigs := conf.Dynamic.Outputs
 	outputConfigsMut := sync.RWMutex{}
 
-	mgr.RegisterEndpoint(
-		path.Join(conf.Dynamic.Prefix, "/output/{output_id}"),
-		"Perform CRUD operations on the configuration of dynamic outputs. For"+
-			" more information read the `dynamic` output type documentation.",
-		func(w http.ResponseWriter, r *http.Request) {
-			var httpErr error
-			defer func() {
-				r.Body.Close()
-				if httpErr != nil {
-					log.Warnf("Request error: %v\n", httpErr)
-					http.Error(w, "Internal server error", http.StatusBadGateway)
-				}
-			}()
-
+	fanOut, err := broker.NewDynamicFanOut(
+		outputs, log, stats,
+		broker.OptDynamicFanOutSetOnAdd(func(l string) {
 			outputConfigsMut.Lock()
 			defer outputConfigsMut.Unlock()
 
-			outputID := mux.Vars(r)["output_id"]
-			if len(outputID) == 0 {
-				http.Error(w, "Var `output_id` must be set", http.StatusBadRequest)
+			uConf, exists := outputConfigs[l]
+			if !exists {
 				return
 			}
-
-			switch r.Method {
-			case "POST":
-				newConf := NewConfig()
-				var reqBytes []byte
-				if reqBytes, httpErr = ioutil.ReadAll(r.Body); httpErr != nil {
-					return
-				}
-				if httpErr = json.Unmarshal(reqBytes, &newConf); httpErr != nil {
-					return
-				}
-				var newOutput Type
-				if newOutput, httpErr = New(newConf, mgr, log, stats); httpErr != nil {
-					return
-				}
-				if httpErr = fanOut.SetOutput(outputID, newOutput, reqTimeout); httpErr == nil {
-					outputConfigs[outputID] = newConf
-				}
-			case "GET":
-				getConf, exists := outputConfigs[outputID]
-				if !exists {
-					http.Error(w, "Output does not exist", http.StatusBadRequest)
-					return
-				}
-				var cBytes []byte
-				cBytes, httpErr = json.Marshal(getConf)
-				if httpErr != nil {
-					return
-				}
-
-				hashMap := map[string]interface{}{}
-				if httpErr = json.Unmarshal(cBytes, &hashMap); httpErr != nil {
-					return
-				}
-
-				outputMap := map[string]interface{}{}
-				outputMap["type"] = hashMap["type"]
-				outputMap[getConf.Type] = hashMap[getConf.Type]
-				outputMap["processors"] = hashMap["processors"]
-
-				cBytes, httpErr = json.Marshal(outputMap)
-				if httpErr != nil {
-					return
-				}
-				w.Write(cBytes)
-			case "DELETE":
-				if _, exists := outputConfigs[outputID]; !exists {
-					http.Error(w, "Output does not exist", http.StatusBadRequest)
-					return
-				}
-				if httpErr = fanOut.SetOutput(outputID, nil, reqTimeout); httpErr == nil {
-					delete(outputConfigs, outputID)
-				}
+			sConf, bErr := SanitiseConfig(uConf)
+			if bErr != nil {
+				log.Errorf("Failed to sanitise config: %v\n", bErr)
 			}
-		},
+
+			confBytes, _ := json.Marshal(sConf)
+			dynAPI.Started(l, confBytes)
+			delete(outputConfigs, l)
+		}),
+		broker.OptDynamicFanOutSetOnRemove(func(l string) {
+			dynAPI.Stopped(l)
+		}),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	dynAPI.OnUpdate(func(id string, c []byte) error {
+		newConf := NewConfig()
+		if err := json.Unmarshal(c, &newConf); err != nil {
+			return err
+		}
+		newOutput, err := New(newConf, mgr, log, stats)
+		if err != nil {
+			return err
+		}
+		outputConfigsMut.Lock()
+		outputConfigs[id] = newConf
+		outputConfigsMut.Unlock()
+		if err = fanOut.SetOutput(id, newOutput, reqTimeout); err != nil {
+			outputConfigsMut.Lock()
+			delete(outputConfigs, id)
+			outputConfigsMut.Unlock()
+		}
+		return err
+	})
+	dynAPI.OnDelete(func(id string) error {
+		return fanOut.SetOutput(id, nil, reqTimeout)
+	})
+
+	mgr.RegisterEndpoint(
+		path.Join(conf.Dynamic.Prefix, "/output/{id}"),
+		"Perform CRUD operations on the configuration of dynamic outputs. For"+
+			" more information read the `dynamic` output type documentation.",
+		dynAPI.HandleCRUD,
 	)
 	mgr.RegisterEndpoint(
 		path.Join(conf.Dynamic.Prefix, "/outputs"),
 		"Get a map of running output identifiers with their current uptimes.",
-		func(w http.ResponseWriter, r *http.Request) {
-			var httpErr error
-			defer func() {
-				r.Body.Close()
-				if httpErr != nil {
-					log.Warnf("Request error: %v\n", httpErr)
-					http.Error(w, "Internal server error", http.StatusBadGateway)
-				}
-			}()
-
-			outputMapMut.Lock()
-			defer outputMapMut.Unlock()
-
-			uptimes := map[string]string{}
-			for k, v := range outputMap {
-				uptimes[k] = time.Since(v).String()
-			}
-
-			var resBytes []byte
-			if resBytes, httpErr = json.Marshal(uptimes); httpErr == nil {
-				w.Write(resBytes)
-			}
-		},
+		dynAPI.HandleList,
 	)
+
 	return fanOut, nil
 }
 

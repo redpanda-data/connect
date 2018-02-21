@@ -14,6 +14,7 @@ services:
       HOSTNAME_COMMAND: "route -n | awk '/UG[ \t]/{print $$2}'"
       KAFKA_CREATE_TOPICS: "benthos_topic:1:1"
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_MESSAGE_MAX_BYTES: 100000000
     volumes:
         - /var/run/docker.sock:/var/run/docker.sock
   rabbitmq:

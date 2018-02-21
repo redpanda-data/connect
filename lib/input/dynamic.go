@@ -22,18 +22,16 @@ package input
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"net/http"
 	"path"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/broker"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
-	"github.com/gorilla/mux"
 )
 
 //------------------------------------------------------------------------------
@@ -83,8 +81,7 @@ func NewDynamic(
 	stats metrics.Type,
 	pipelines ...pipeline.ConstructorFunc,
 ) (Type, error) {
-	inputMap := map[string]time.Time{}
-	inputMapMut := sync.Mutex{}
+	dynAPI := api.NewDynamic()
 
 	inputs := map[string]broker.DynamicInput{}
 	for k, v := range conf.Dynamic.Inputs {
@@ -95,134 +92,73 @@ func NewDynamic(
 		inputs[k] = newInput
 	}
 
-	fanIn, err := broker.NewDynamicFanIn(
-		inputs, log, stats,
-		broker.OptDynamicFanInSetOnAdd(func(l string) {
-			inputMapMut.Lock()
-			inputMap[l] = time.Now()
-			inputMapMut.Unlock()
-		}),
-		broker.OptDynamicFanInSetOnRemove(func(l string) {
-			inputMapMut.Lock()
-			delete(inputMap, l)
-			inputMapMut.Unlock()
-		}),
-	)
-	if err != nil {
-		return nil, err
-	}
-	inputs = nil
-
 	reqTimeout := time.Millisecond * time.Duration(conf.Dynamic.TimeoutMS)
 
 	inputConfigs := conf.Dynamic.Inputs
 	inputConfigsMut := sync.RWMutex{}
 
-	mgr.RegisterEndpoint(
-		path.Join(conf.Dynamic.Prefix, "/input/{input_id}"),
-		"Perform CRUD operations on the configuration of dynamic inputs. For"+
-			" more information read the `dynamic` input type documentation.",
-		func(w http.ResponseWriter, r *http.Request) {
-			var httpErr error
-			defer func() {
-				r.Body.Close()
-				if httpErr != nil {
-					log.Warnf("Request error: %v\n", httpErr)
-					http.Error(w, "Internal server error", http.StatusBadGateway)
-				}
-			}()
-
+	fanIn, err := broker.NewDynamicFanIn(
+		inputs, log, stats,
+		broker.OptDynamicFanInSetOnAdd(func(l string) {
 			inputConfigsMut.Lock()
 			defer inputConfigsMut.Unlock()
 
-			inputID := mux.Vars(r)["input_id"]
-			if len(inputID) == 0 {
-				http.Error(w, "Var `input_id` must be set", http.StatusBadRequest)
+			uConf, exists := inputConfigs[l]
+			if !exists {
 				return
 			}
-
-			switch r.Method {
-			case "POST":
-				newConf := NewConfig()
-				var reqBytes []byte
-				if reqBytes, httpErr = ioutil.ReadAll(r.Body); httpErr != nil {
-					return
-				}
-				if httpErr = json.Unmarshal(reqBytes, &newConf); httpErr != nil {
-					return
-				}
-				var newInput Type
-				if newInput, httpErr = New(newConf, mgr, log, stats, pipelines...); httpErr != nil {
-					return
-				}
-				if httpErr = fanIn.SetInput(inputID, newInput, reqTimeout); httpErr == nil {
-					inputConfigs[inputID] = newConf
-				}
-			case "GET":
-				getConf, exists := inputConfigs[inputID]
-				if !exists {
-					http.Error(w, "Input does not exist", http.StatusBadRequest)
-					return
-				}
-				var cBytes []byte
-				cBytes, httpErr = json.Marshal(getConf)
-				if httpErr != nil {
-					return
-				}
-
-				hashMap := map[string]interface{}{}
-				if httpErr = json.Unmarshal(cBytes, &hashMap); httpErr != nil {
-					return
-				}
-
-				outputMap := map[string]interface{}{}
-				outputMap["type"] = hashMap["type"]
-				outputMap[getConf.Type] = hashMap[getConf.Type]
-				outputMap["processors"] = hashMap["processors"]
-
-				cBytes, httpErr = json.Marshal(outputMap)
-				if httpErr != nil {
-					return
-				}
-				w.Write(cBytes)
-			case "DELETE":
-				if _, exists := inputConfigs[inputID]; !exists {
-					http.Error(w, "Input does not exist", http.StatusBadRequest)
-					return
-				}
-				if httpErr = fanIn.SetInput(inputID, nil, reqTimeout); httpErr == nil {
-					delete(inputConfigs, inputID)
-				}
+			sConf, bErr := SanitiseConfig(uConf)
+			if bErr != nil {
+				log.Errorf("Failed to sanitise config: %v\n", bErr)
 			}
-		},
+
+			confBytes, _ := json.Marshal(sConf)
+			dynAPI.Started(l, confBytes)
+			delete(inputConfigs, l)
+		}),
+		broker.OptDynamicFanInSetOnRemove(func(l string) {
+			dynAPI.Stopped(l)
+		}),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	dynAPI.OnUpdate(func(id string, c []byte) error {
+		newConf := NewConfig()
+		if err := json.Unmarshal(c, &newConf); err != nil {
+			return err
+		}
+		newInput, err := New(newConf, mgr, log, stats, pipelines...)
+		if err != nil {
+			return err
+		}
+		inputConfigsMut.Lock()
+		inputConfigs[id] = newConf
+		inputConfigsMut.Unlock()
+		if err = fanIn.SetInput(id, newInput, reqTimeout); err != nil {
+			inputConfigsMut.Lock()
+			delete(inputConfigs, id)
+			inputConfigsMut.Unlock()
+		}
+		return err
+	})
+	dynAPI.OnDelete(func(id string) error {
+		return fanIn.SetInput(id, nil, reqTimeout)
+	})
+
+	mgr.RegisterEndpoint(
+		path.Join(conf.Dynamic.Prefix, "/input/{id}"),
+		"Perform CRUD operations on the configuration of dynamic inputs. For"+
+			" more information read the `dynamic` input type documentation.",
+		dynAPI.HandleCRUD,
 	)
 	mgr.RegisterEndpoint(
 		path.Join(conf.Dynamic.Prefix, "/inputs"),
 		"Get a map of running input identifiers with their current uptimes.",
-		func(w http.ResponseWriter, r *http.Request) {
-			var httpErr error
-			defer func() {
-				r.Body.Close()
-				if httpErr != nil {
-					log.Warnf("Request error: %v\n", httpErr)
-					http.Error(w, "Internal server error", http.StatusBadGateway)
-				}
-			}()
-
-			inputMapMut.Lock()
-			defer inputMapMut.Unlock()
-
-			uptimes := map[string]string{}
-			for k, v := range inputMap {
-				uptimes[k] = time.Since(v).String()
-			}
-
-			var resBytes []byte
-			if resBytes, httpErr = json.Marshal(uptimes); httpErr == nil {
-				w.Write(resBytes)
-			}
-		},
+		dynAPI.HandleList,
 	)
+
 	return fanIn, nil
 }
 

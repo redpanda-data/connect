@@ -1,0 +1,4 @@
+input:
+  type: dynamic
+output:
+  type: dynamic

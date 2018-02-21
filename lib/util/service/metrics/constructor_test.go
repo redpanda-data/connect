@@ -20,7 +20,10 @@
 
 package metrics
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestInterfaces(t *testing.T) {
 	foo, err := New(NewConfig())
@@ -30,4 +33,44 @@ func TestInterfaces(t *testing.T) {
 	bar := Type(foo)
 	foo.Incr("nope", 1)
 	bar.Incr("nope", 1)
+}
+
+func TestSanitise(t *testing.T) {
+	exp := map[string]interface{}{
+		"type":        "http_server",
+		"http_server": map[string]interface{}{},
+	}
+
+	conf := NewConfig()
+	conf.Type = "http_server"
+
+	act, err := SanitiseConfig(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	}
+
+	exp = map[string]interface{}{
+		"type": "statsd",
+		"statsd": map[string]interface{}{
+			"address":         "foo",
+			"flush_period":    "100ms",
+			"max_packet_size": float64(1440),
+			"network":         "udp",
+		},
+	}
+
+	conf = NewConfig()
+	conf.Type = "statsd"
+	conf.Statsd.Address = "foo"
+
+	act, err = SanitiseConfig(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	}
 }
