@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -156,7 +157,14 @@ func (k *Kafka) Write(msg types.Message) error {
 		msgs = append(msgs, nextMsg)
 	}
 
-	return k.producer.SendMessages(msgs)
+	err := k.producer.SendMessages(msgs)
+	if err != nil {
+		if pErr, ok := err.(sarama.ProducerErrors); ok && len(pErr) > 0 {
+			err = fmt.Errorf("failed to send %v parts from message: %v\n", len(pErr), pErr[0].Err)
+		}
+	}
+
+	return err
 }
 
 // CloseAsync shuts down the Kafka writer and stops processing messages.
