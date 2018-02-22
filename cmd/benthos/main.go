@@ -314,11 +314,10 @@ func main() {
 		go func() {
 			<-time.After(tout + time.Second)
 			logger.Warnln(
-				"Service failed to close cleanly within allocated time. Exiting forcefully.",
+				"Service failed to close cleanly within allocated time." +
+					" Exiting forcefully and dumping stack trace to stderr.",
 			)
-			if config.Logger.LogLevel == "DEBUG" {
-				pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
-			}
+			pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 			os.Exit(1)
 		}()
 
