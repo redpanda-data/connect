@@ -102,6 +102,11 @@ If the field 'key' is not empty then each message will be given its contents as
 a key. This field can be dynamically set using function interpolations described
 [here](../config_interpolation.md#functions).
 
+By default the paritioner will select partitions based on a hash of the key
+value. If the key is empty then a partition is chosen at random. You can
+alternatively force the partitioner to round-robin partitions with the field
+'round_robin_partitions'.
+
 ## `nats`
 
 Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.

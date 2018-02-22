@@ -235,6 +235,7 @@ output:
     - localhost:9092
     client_id: benthos_kafka_output
     key: ""
+    round_robin_partitions: false
     topic: benthos_stream
     max_msg_bytes: 1000000
     timeout_ms: 5000

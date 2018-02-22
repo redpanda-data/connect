@@ -111,6 +111,7 @@ KAFKA_INPUT_START_OLDEST      = true
 KAFKA_OUTPUT_BROKER_ADDRESSES =
 KAFKA_OUTPUT_CLIENT_ID        = benthos-client
 KAFKA_OUTPUT_KEY              =
+KAFKA_OUTPUT_ROUND_ROBIN      = false
 KAFKA_OUTPUT_CONSUMER_GROUP   = benthos-group
 KAFKA_OUTPUT_TOPIC            = benthos-stream
 KAFKA_OUTPUT_PARTITION        = 0

@@ -36,25 +36,27 @@ import (
 
 // KafkaConfig is configuration for the Kafka output type.
 type KafkaConfig struct {
-	Addresses   []string `json:"addresses" yaml:"addresses"`
-	ClientID    string   `json:"client_id" yaml:"client_id"`
-	Key         string   `json:"key" yaml:"key"`
-	Topic       string   `json:"topic" yaml:"topic"`
-	MaxMsgBytes int      `json:"max_msg_bytes" yaml:"max_msg_bytes"`
-	TimeoutMS   int      `json:"timeout_ms" yaml:"timeout_ms"`
-	AckReplicas bool     `json:"ack_replicas" yaml:"ack_replicas"`
+	Addresses            []string `json:"addresses" yaml:"addresses"`
+	ClientID             string   `json:"client_id" yaml:"client_id"`
+	Key                  string   `json:"key" yaml:"key"`
+	RoundRobinPartitions bool     `json:"round_robin_partitions" yaml:"round_robin_partitions"`
+	Topic                string   `json:"topic" yaml:"topic"`
+	MaxMsgBytes          int      `json:"max_msg_bytes" yaml:"max_msg_bytes"`
+	TimeoutMS            int      `json:"timeout_ms" yaml:"timeout_ms"`
+	AckReplicas          bool     `json:"ack_replicas" yaml:"ack_replicas"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
 func NewKafkaConfig() KafkaConfig {
 	return KafkaConfig{
-		Addresses:   []string{"localhost:9092"},
-		ClientID:    "benthos_kafka_output",
-		Key:         "",
-		Topic:       "benthos_stream",
-		MaxMsgBytes: 1000000,
-		TimeoutMS:   5000,
-		AckReplicas: true,
+		Addresses:            []string{"localhost:9092"},
+		ClientID:             "benthos_kafka_output",
+		Key:                  "",
+		RoundRobinPartitions: false,
+		Topic:                "benthos_stream",
+		MaxMsgBytes:          1000000,
+		TimeoutMS:            5000,
+		AckReplicas:          true,
 	}
 }
 
@@ -114,8 +116,9 @@ func (k *Kafka) Connect() error {
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 
-	// TODO: Configurable partition scheme
-	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
+	if k.conf.RoundRobinPartitions {
+		config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
+	}
 
 	if k.conf.AckReplicas {
 		config.Producer.RequiredAcks = sarama.WaitForAll
