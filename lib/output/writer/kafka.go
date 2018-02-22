@@ -114,6 +114,9 @@ func (k *Kafka) Connect() error {
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 
+	// TODO: Configurable partition scheme
+	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
+
 	if k.conf.AckReplicas {
 		config.Producer.RequiredAcks = sarama.WaitForAll
 	} else {
@@ -160,7 +163,7 @@ func (k *Kafka) Write(msg types.Message) error {
 	err := k.producer.SendMessages(msgs)
 	if err != nil {
 		if pErr, ok := err.(sarama.ProducerErrors); ok && len(pErr) > 0 {
-			err = fmt.Errorf("failed to send %v parts from message: %v\n", len(pErr), pErr[0].Err)
+			err = fmt.Errorf("failed to send %v parts from message: %v", len(pErr), pErr[0].Err)
 		}
 	}
 
