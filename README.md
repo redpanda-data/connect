@@ -24,6 +24,7 @@ Currently supported input/output targets:
 - File
 - HTTP(S)
 - [Kafka][kafka]
+- [MQTT][mqtt]
 - [Nanomsg][nanomsg]
 - [NATS][nats]
 - [NATS Streaming][natsstreaming]
@@ -183,6 +184,7 @@ containers using `docker-compose`.
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/
 [rabbitmq]: https://www.rabbitmq.com/
+[mqtt]: http://mqtt.org/
 [nsq]: http://nsq.io/
 [nats]: http://nats.io/
 [natsstreaming]: https://nats.io/documentation/streaming/nats-streaming-intro/

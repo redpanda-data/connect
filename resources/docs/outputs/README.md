@@ -107,6 +107,10 @@ value. If the key is empty then a partition is chosen at random. You can
 alternatively force the partitioner to round-robin partitions with the field
 'round_robin_partitions'.
 
+## `mqtt`
+
+Pushes messages to an MQTT broker.
+
 ## `nats`
 
 Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.

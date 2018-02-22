@@ -85,6 +85,13 @@ input:
     topics:
     - benthos_stream
     start_from_oldest: true
+  mqtt:
+    urls:
+    - tcp://localhost:1883
+    qos: 1
+    topics:
+    - benthos_topic
+    client_id: benthos_input
   nats:
     urls:
     - nats://localhost:4222
@@ -240,6 +247,12 @@ output:
     max_msg_bytes: 1000000
     timeout_ms: 5000
     ack_replicas: true
+  mqtt:
+    urls:
+    - tcp://localhost:1883
+    qos: 1
+    topic: benthos_topic
+    client_id: benthos_output
   nats:
     urls:
     - nats://localhost:4222

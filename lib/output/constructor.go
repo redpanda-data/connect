@@ -61,6 +61,7 @@ type Config struct {
 	HTTPClient  HTTPClientConfig       `json:"http_client" yaml:"http_client"`
 	HTTPServer  HTTPServerConfig       `json:"http_server" yaml:"http_server"`
 	Kafka       writer.KafkaConfig     `json:"kafka" yaml:"kafka"`
+	MQTT        writer.MQTTConfig      `json:"mqtt" yaml:"mqtt"`
 	NATS        NATSConfig             `json:"nats" yaml:"nats"`
 	NATSStream  NATSStreamConfig       `json:"nats_stream" yaml:"nats_stream"`
 	NSQ         NSQConfig              `json:"nsq" yaml:"nsq"`
@@ -87,6 +88,7 @@ func NewConfig() Config {
 		HTTPClient:  NewHTTPClientConfig(),
 		HTTPServer:  NewHTTPServerConfig(),
 		Kafka:       writer.NewKafkaConfig(),
+		MQTT:        writer.NewMQTTConfig(),
 		NATS:        NewNATSConfig(),
 		NATSStream:  NewNATSStreamConfig(),
 		NSQ:         NewNSQConfig(),

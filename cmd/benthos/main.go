@@ -311,6 +311,14 @@ func main() {
 			}
 		}()
 
+		if config.Logger.LogLevel == "DEBUG" {
+			go func() {
+				<-time.After(tout)
+				pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+				os.Exit(1)
+			}()
+		}
+
 		if err := poolTiered.Close(tout / 2); err != nil {
 			logger.Warnln(
 				"Service failed to close using ordered tiers, you may receive a duplicate " +
@@ -320,9 +328,6 @@ func main() {
 				logger.Warnln(
 					"Service failed to close cleanly within allocated time. Exiting forcefully.",
 				)
-				if config.Logger.LogLevel == "DEBUG" {
-					pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
-				}
 				os.Exit(1)
 			}
 		}

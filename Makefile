@@ -41,6 +41,9 @@ deps:
 test:
 	@go test ./...
 
+test-integration:
+	@go test -tags "integration" -timeout 20s ./...
+
 rpm:
 	@rpmbuild --define "_version $(VERSION)" -bb ./resources/rpm/benthos.spec
 

@@ -161,6 +161,10 @@ Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
 
+## `mqtt`
+
+Subscribe to topics on MQTT brokers
+
 ## `nats`
 
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
