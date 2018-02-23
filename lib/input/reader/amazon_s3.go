@@ -41,9 +41,9 @@ import (
 
 // AmazonAWSCredentialsConfig contains configuration params for AWS credentials.
 type AmazonAWSCredentialsConfig struct {
-	ID     string `json:"id"`
-	Secret string `json:"secret"`
-	Token  string `json:"token"`
+	ID     string `json:"id" yaml:"id"`
+	Secret string `json:"secret" yaml:"secret"`
+	Token  string `json:"token" yaml:"token"`
 }
 
 // AmazonS3Config is configuration values for the input type.

@@ -60,13 +60,13 @@ again it will send a duplicate message to some outputs.`,
 
 // FanOutConfig is configuration for the FanOut output type.
 type FanOutConfig struct {
-	Outputs []interface{} `json:"outputs" yaml:"outputs"`
+	Outputs brokerOutputList `json:"outputs" yaml:"outputs"`
 }
 
 // NewFanOutConfig creates a new FanOutConfig with default values.
 func NewFanOutConfig() FanOutConfig {
 	return FanOutConfig{
-		Outputs: []interface{}{},
+		Outputs: brokerOutputList{},
 	}
 }
 
@@ -76,14 +76,7 @@ func NewFanOutConfig() FanOutConfig {
 // outputs, outputs which block will apply backpressure upstream, meaning other
 // outputs will also stop receiving messages.
 func NewFanOut(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	if len(conf.FanOut.Outputs) == 0 {
-		return nil, ErrFanOutNoOutputs
-	}
-
-	outputConfs, err := parseOutputConfsWithDefaults(conf.FanOut.Outputs)
-	if err != nil {
-		return nil, err
-	}
+	outputConfs := conf.FanOut.Outputs
 
 	if len(outputConfs) == 0 {
 		return nil, ErrFanOutNoOutputs
@@ -93,6 +86,7 @@ func NewFanOut(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 
 	outputs := make([]types.Consumer, len(outputConfs))
 
+	var err error
 	for i, oConf := range outputConfs {
 		outputs[i], err = New(oConf, mgr, log, stats)
 		if err != nil {

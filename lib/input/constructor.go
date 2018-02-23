@@ -121,8 +121,24 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	}
 
 	outputMap := map[string]interface{}{}
-	outputMap["type"] = hashMap["type"]
-	outputMap[conf.Type] = hashMap[conf.Type]
+
+	t := conf.Type
+	outputMap["type"] = t
+	if t == "fan_in" {
+		inSlice := []interface{}{}
+		for _, input := range conf.FanIn.Inputs {
+			var sanInput interface{}
+			if sanInput, err = SanitiseConfig(input); err != nil {
+				return nil, err
+			}
+			inSlice = append(inSlice, sanInput)
+		}
+		outputMap["fan_in"] = map[string]interface{}{
+			"inputs": inSlice,
+		}
+	} else {
+		outputMap[t] = hashMap[t]
+	}
 
 	if len(conf.Processors) == 0 {
 		return outputMap, nil

@@ -43,8 +43,8 @@ all others.`,
 
 // SampleConfig contains any configuration for the Sample processor.
 type SampleConfig struct {
-	Retain     float64 `json:"retain"`
-	RandomSeed int64   `json:"seed"`
+	Retain     float64 `json:"retain" yaml:"retain"`
+	RandomSeed int64   `json:"seed" yaml:"seed"`
 }
 
 // NewSampleConfig returns a SampleConfig with default values.

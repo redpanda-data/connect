@@ -118,8 +118,31 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	}
 
 	outputMap := map[string]interface{}{}
-	outputMap["type"] = hashMap["type"]
-	outputMap[conf.Type] = hashMap[conf.Type]
+
+	t := conf.Type
+	outputMap["type"] = t
+
+	var nestedOutputs []Config
+	if t == "fan_out" {
+		nestedOutputs = conf.FanOut.Outputs
+	} else if t == "round_robin" {
+		nestedOutputs = conf.RoundRobin.Outputs
+	}
+	if len(nestedOutputs) > 0 {
+		outSlice := []interface{}{}
+		for _, output := range nestedOutputs {
+			var sanOutput interface{}
+			if sanOutput, err = SanitiseConfig(output); err != nil {
+				return nil, err
+			}
+			outSlice = append(outSlice, sanOutput)
+		}
+		outputMap[t] = map[string]interface{}{
+			"outputs": outSlice,
+		}
+	} else {
+		outputMap[t] = hashMap[t]
+	}
 
 	if len(conf.Processors) == 0 {
 		return outputMap, nil

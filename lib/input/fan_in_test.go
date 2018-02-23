@@ -54,11 +54,7 @@ func TestFanInConfigDefaults(t *testing.T) {
 		return
 	}
 
-	inputConfs, err := parseInputConfsWithDefaults(conf.FanIn)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	inputConfs := conf.FanIn.Inputs
 
 	if exp, actual := 2, len(inputConfs); exp != actual {
 		t.Errorf("unexpected number of input configs: %v != %v", exp, actual)
@@ -128,11 +124,7 @@ func TestFanInConfigDitto(t *testing.T) {
 		return
 	}
 
-	inputConfs, err := parseInputConfsWithDefaults(conf.FanIn)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	inputConfs := conf.FanIn.Inputs
 
 	if exp, actual := 3, len(inputConfs); exp != actual {
 		t.Errorf("unexpected number of input configs: %v != %v", exp, actual)
@@ -198,11 +190,7 @@ func TestFanInConfigDittoMulti(t *testing.T) {
 		return
 	}
 
-	inputConfs, err := parseInputConfsWithDefaults(conf.FanIn)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	inputConfs := conf.FanIn.Inputs
 
 	if exp, actual := 3, len(inputConfs); exp != actual {
 		t.Errorf("unexpected number of input configs: %v != %v", exp, actual)
@@ -268,11 +256,7 @@ func TestFanInConfigDittoZeroed(t *testing.T) {
 		return
 	}
 
-	inputConfs, err := parseInputConfsWithDefaults(conf.FanIn)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	inputConfs := conf.FanIn.Inputs
 
 	if exp, actual := 1, len(inputConfs); exp != actual {
 		t.Errorf("unexpected number of input configs: %v != %v", exp, actual)

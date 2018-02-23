@@ -21,12 +21,51 @@
 package output
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v2"
 )
+
+//------------------------------------------------------------------------------
+
+type brokerOutputList []Config
+
+// UnmarshalJSON ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (b *brokerOutputList) UnmarshalJSON(bytes []byte) error {
+	genericOutputs := []interface{}{}
+	if err := json.Unmarshal(bytes, &genericOutputs); err != nil {
+		return err
+	}
+
+	inputConfs, err := parseOutputConfsWithDefaults(genericOutputs)
+	if err != nil {
+		return err
+	}
+
+	*b = inputConfs
+	return nil
+}
+
+// UnmarshalYAML ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (b *brokerOutputList) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	genericOutputs := []interface{}{}
+	if err := unmarshal(&genericOutputs); err != nil {
+		return err
+	}
+
+	inputConfs, err := parseOutputConfsWithDefaults(genericOutputs)
+	if err != nil {
+		return err
+	}
+
+	*b = inputConfs
+	return nil
+}
 
 //------------------------------------------------------------------------------
 

@@ -54,11 +54,7 @@ func TestOutBrokerConfigDefaults(t *testing.T) {
 		return
 	}
 
-	outputConfs, err := parseOutputConfsWithDefaults(conf.FanOut.Outputs)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	outputConfs := conf.FanOut.Outputs
 
 	if exp, actual := 2, len(outputConfs); exp != actual {
 		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)
@@ -128,11 +124,7 @@ func TestOutBrokerConfigDitto(t *testing.T) {
 		return
 	}
 
-	outputConfs, err := parseOutputConfsWithDefaults(conf.FanOut.Outputs)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	outputConfs := conf.FanOut.Outputs
 
 	if exp, actual := 3, len(outputConfs); exp != actual {
 		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)
@@ -198,11 +190,7 @@ func TestOutBrokerConfigDittoMulti(t *testing.T) {
 		return
 	}
 
-	outputConfs, err := parseOutputConfsWithDefaults(conf.FanOut.Outputs)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	outputConfs := conf.FanOut.Outputs
 
 	if exp, actual := 3, len(outputConfs); exp != actual {
 		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)
@@ -268,11 +256,7 @@ func TestOutBrokerConfigDittoZeroed(t *testing.T) {
 		return
 	}
 
-	outputConfs, err := parseOutputConfsWithDefaults(conf.FanOut.Outputs)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	outputConfs := conf.FanOut.Outputs
 
 	if exp, actual := 1, len(outputConfs); exp != actual {
 		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)

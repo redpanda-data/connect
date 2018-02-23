@@ -21,6 +21,7 @@
 package input
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -126,14 +127,52 @@ and there's a chance you won't want any duplicates.`,
 
 // FanInConfig is configuration for the FanIn input type.
 type FanInConfig struct {
-	Inputs []interface{} `json:"inputs" yaml:"inputs"`
+	Inputs brokerInputList `json:"inputs" yaml:"inputs"`
 }
 
 // NewFanInConfig creates a new FanInConfig with default values.
 func NewFanInConfig() FanInConfig {
 	return FanInConfig{
-		Inputs: []interface{}{},
+		Inputs: brokerInputList{},
 	}
+}
+
+//------------------------------------------------------------------------------
+
+type brokerInputList []Config
+
+// UnmarshalJSON ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (b *brokerInputList) UnmarshalJSON(bytes []byte) error {
+	genericInputs := []interface{}{}
+	if err := json.Unmarshal(bytes, &genericInputs); err != nil {
+		return err
+	}
+
+	inputConfs, err := parseInputConfsWithDefaults(genericInputs)
+	if err != nil {
+		return err
+	}
+
+	*b = inputConfs
+	return nil
+}
+
+// UnmarshalYAML ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (b *brokerInputList) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	genericInputs := []interface{}{}
+	if err := unmarshal(&genericInputs); err != nil {
+		return err
+	}
+
+	inputConfs, err := parseInputConfsWithDefaults(genericInputs)
+	if err != nil {
+		return err
+	}
+
+	*b = inputConfs
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -150,14 +189,14 @@ func NewFanInConfig() FanInConfig {
 // json.RawMessage, but our config files can contain a range of different
 // formats that we do not know at this stage, therefore we use the more hacky
 // method as performance is not an issue at this stage.
-func parseInputConfsWithDefaults(conf FanInConfig) ([]Config, error) {
+func parseInputConfsWithDefaults(rawInputs []interface{}) ([]Config, error) {
 	type confAlias Config
 
 	inputConfs := []Config{}
 
 	// NOTE: Use yaml here as it supports more types than JSON
 	// (map[interface{}]interface{}).
-	for i, boxedConfig := range conf.Inputs {
+	for i, boxedConfig := range rawInputs {
 		newConfs := []confAlias{confAlias(NewConfig())}
 		if i > 0 {
 			// If the type of this output is 'ditto' we want to start with a
@@ -232,24 +271,19 @@ func NewFanIn(
 	stats metrics.Type,
 	pipelines ...pipeline.ConstructorFunc,
 ) (Type, error) {
-	if len(conf.FanIn.Inputs) == 0 {
+	lInputs := len(conf.FanIn.Inputs)
+
+	if lInputs == 0 {
 		return nil, ErrFanInNoInputs
 	}
-
-	inputConfs, err := parseInputConfsWithDefaults(conf.FanIn)
-	if err != nil {
-		return nil, err
+	if lInputs == 1 {
+		return New(conf.FanIn.Inputs[0], mgr, log, stats, pipelines...)
 	}
 
-	if len(inputConfs) == 0 {
-		return nil, ErrFanInNoInputs
-	} else if len(inputConfs) == 1 {
-		return New(inputConfs[0], mgr, log, stats, pipelines...)
-	}
+	inputs := make([]types.Producer, lInputs)
 
-	inputs := make([]types.Producer, len(inputConfs))
-
-	for i, iConf := range inputConfs {
+	var err error
+	for i, iConf := range conf.FanIn.Inputs {
 		inputs[i], err = New(iConf, mgr, log, stats, pipelines...)
 		if err != nil {
 			return nil, err

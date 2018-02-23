@@ -39,7 +39,7 @@ type KafkaConfig struct {
 	ClientID        string   `json:"client_id" yaml:"client_id"`
 	ConsumerGroup   string   `json:"consumer_group" yaml:"consumer_group"`
 	Topic           string   `json:"topic" yaml:"topic"`
-	Partition       int32    `json:"partition" yam:"partition"`
+	Partition       int32    `json:"partition" yaml:"partition"`
 	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
 }
 

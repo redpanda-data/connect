@@ -55,13 +55,13 @@ receiving content.`,
 
 // RoundRobinConfig is configuration for the RoundRobin output type.
 type RoundRobinConfig struct {
-	Outputs []interface{} `json:"outputs" yaml:"outputs"`
+	Outputs brokerOutputList `json:"outputs" yaml:"outputs"`
 }
 
 // NewRoundRobinConfig creates a new RoundRobinConfig with default values.
 func NewRoundRobinConfig() RoundRobinConfig {
 	return RoundRobinConfig{
-		Outputs: []interface{}{},
+		Outputs: brokerOutputList{},
 	}
 }
 
@@ -71,14 +71,7 @@ func NewRoundRobinConfig() RoundRobinConfig {
 // to an output chosen by following their original order. If an output blocks
 // this will block all throughput.
 func NewRoundRobin(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	if len(conf.RoundRobin.Outputs) == 0 {
-		return nil, ErrRoundRobinNoOutputs
-	}
-
-	outputConfs, err := parseOutputConfsWithDefaults(conf.RoundRobin.Outputs)
-	if err != nil {
-		return nil, err
-	}
+	outputConfs := conf.RoundRobin.Outputs
 
 	if len(outputConfs) == 0 {
 		return nil, ErrFanOutNoOutputs
@@ -88,6 +81,7 @@ func NewRoundRobin(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 	outputs := make([]types.Consumer, len(outputConfs))
 
+	var err error
 	for i, oConf := range outputConfs {
 		outputs[i], err = New(oConf, mgr, log, stats)
 		if err != nil {
