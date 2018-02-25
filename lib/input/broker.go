@@ -39,15 +39,15 @@ import (
 //------------------------------------------------------------------------------
 
 var (
-	// ErrFanInNoInputs is returned when creating a FanIn type with zero inputs.
-	ErrFanInNoInputs = errors.New("attempting to create fan_in input type with no inputs")
+	// ErrBrokerNoInputs is returned when creating a broker with zero inputs.
+	ErrBrokerNoInputs = errors.New("attempting to create broker input type with no inputs")
 )
 
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["fan_in"] = typeSpec{
-		brokerConstructor: NewFanIn,
+	constructors["broker"] = typeSpec{
+		brokerConstructor: NewBroker,
 		description: `
 The fan in type allows you to combine multiple inputs. Each input will be read
 in parallel. In order to configure a fan in type you simply add an array of
@@ -125,14 +125,14 @@ and there's a chance you won't want any duplicates.`,
 
 //------------------------------------------------------------------------------
 
-// FanInConfig is configuration for the FanIn input type.
-type FanInConfig struct {
+// BrokerConfig is configuration for the Broker input type.
+type BrokerConfig struct {
 	Inputs brokerInputList `json:"inputs" yaml:"inputs"`
 }
 
-// NewFanInConfig creates a new FanInConfig with default values.
-func NewFanInConfig() FanInConfig {
-	return FanInConfig{
+// NewBrokerConfig creates a new BrokerConfig with default values.
+func NewBrokerConfig() BrokerConfig {
+	return BrokerConfig{
 		Inputs: brokerInputList{},
 	}
 }
@@ -177,11 +177,11 @@ func (b *brokerInputList) UnmarshalYAML(unmarshal func(interface{}) error) error
 
 //------------------------------------------------------------------------------
 
-// parseInputConfsWithDefaults takes a fan in config and returns an array of
-// input configs with default values in place of omitted values. This is
-// necessary because when unmarshalling config files using structs you can
-// pre-populate non-reference type struct fields with default values, but array
-// objects will lose those defaults.
+// parseInputConfsWithDefaults takes a slice of generic input configs and
+// returns a slice of input configs with default values in place of omitted
+// values. This is necessary because when unmarshalling config files using
+// structs you can pre-populate non-reference type struct fields with default
+// values, but array objects will lose those defaults.
 //
 // In order to ensure that omitted values are set to default we initially parse
 // the array as interface{} types and then individually apply the defaults by
@@ -263,27 +263,27 @@ func parseInputConfsWithDefaults(rawInputs []interface{}) ([]Config, error) {
 
 //------------------------------------------------------------------------------
 
-// NewFanIn creates a new FanIn input type.
-func NewFanIn(
+// NewBroker creates a new Broker input type.
+func NewBroker(
 	conf Config,
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...pipeline.ConstructorFunc,
 ) (Type, error) {
-	lInputs := len(conf.FanIn.Inputs)
+	lInputs := len(conf.Broker.Inputs)
 
 	if lInputs == 0 {
-		return nil, ErrFanInNoInputs
+		return nil, ErrBrokerNoInputs
 	}
 	if lInputs == 1 {
-		return New(conf.FanIn.Inputs[0], mgr, log, stats, pipelines...)
+		return New(conf.Broker.Inputs[0], mgr, log, stats, pipelines...)
 	}
 
 	inputs := make([]types.Producer, lInputs)
 
 	var err error
-	for i, iConf := range conf.FanIn.Inputs {
+	for i, iConf := range conf.Broker.Inputs {
 		inputs[i], err = New(iConf, mgr, log, stats, pipelines...)
 		if err != nil {
 			return nil, err

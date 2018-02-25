@@ -22,6 +22,7 @@ package output
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/Jeffail/benthos/lib/broker"
 	"github.com/Jeffail/benthos/lib/types"
@@ -32,49 +33,61 @@ import (
 //------------------------------------------------------------------------------
 
 var (
-	// ErrRoundRobinNoOutputs is returned when creating a RoundRobin type with
-	// zero outputs.
-	ErrRoundRobinNoOutputs = errors.New("attempting to create round_robin output with no outputs")
+	// ErrBrokerNoOutputs is returned when creating a Broker type with zero
+	// outputs.
+	ErrBrokerNoOutputs = errors.New("attempting to create broker output type with no outputs")
 )
 
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["round_robin"] = typeSpec{
-		constructor: NewRoundRobin,
+	constructors["broker"] = typeSpec{
+		constructor: NewBroker,
 		description: `
-The round robin output type allows you to send messages across multiple outputs,
-where each message is sent to exactly one output following a strict order.
+The broker output type allows you to configure multiple output targets following
+a broker pattern from this list:
 
-If an output applies back pressure this will also block other outputs from
-receiving content.`,
+## ` + "`fan_out`" + `
+
+With the fan out pattern all outputs will be sent every message that passes
+through benthos. If an output applies back pressure it will block all subsequent
+messages, and if an output fails to send a message it will be retried
+continuously until completion or service shut down.
+
+## ` + "`round_robin`" + `
+
+With the round robin pattern each message will be assigned a single output
+following their order. If an output applies back pressure it will block all
+subsequent messages. If an output fails to send a message then the message will
+be re-attempted with the next input, and so on.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// RoundRobinConfig is configuration for the RoundRobin output type.
-type RoundRobinConfig struct {
+// BrokerConfig is configuration for the Broker output type.
+type BrokerConfig struct {
+	Pattern string           `json:"pattern" yaml:"pattern"`
 	Outputs brokerOutputList `json:"outputs" yaml:"outputs"`
 }
 
-// NewRoundRobinConfig creates a new RoundRobinConfig with default values.
-func NewRoundRobinConfig() RoundRobinConfig {
-	return RoundRobinConfig{
+// NewBrokerConfig creates a new BrokerConfig with default values.
+func NewBrokerConfig() BrokerConfig {
+	return BrokerConfig{
+		Pattern: "fan_out",
 		Outputs: brokerOutputList{},
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewRoundRobin creates a new RoundRobin output type. Messages will be sent out
-// to an output chosen by following their original order. If an output blocks
-// this will block all throughput.
-func NewRoundRobin(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	outputConfs := conf.RoundRobin.Outputs
+// NewBroker creates a new Broker output type. Messages will be sent out to the
+// list of outputs according to the chosen broker pattern.
+func NewBroker(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	outputConfs := conf.Broker.Outputs
 
 	if len(outputConfs) == 0 {
-		return nil, ErrFanOutNoOutputs
+		return nil, ErrBrokerNoOutputs
 	} else if len(outputConfs) == 1 {
 		return New(outputConfs[0], mgr, log, stats)
 	}
@@ -89,7 +102,14 @@ func NewRoundRobin(conf Config, mgr types.Manager, log log.Modular, stats metric
 		}
 	}
 
-	return broker.NewRoundRobin(outputs, stats)
+	switch conf.Broker.Pattern {
+	case "fan_out":
+		return broker.NewFanOut(broker.NewFanOutConfig(), outputs, log, stats)
+	case "round_robin":
+		return broker.NewRoundRobin(outputs, stats)
+	}
+
+	return nil, fmt.Errorf("broker pattern was not recognised: %v", conf.Broker.Pattern)
 }
 
 //------------------------------------------------------------------------------

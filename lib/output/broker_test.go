@@ -33,7 +33,7 @@ import (
 	"github.com/go-mangos/mangos/transport/tcp"
 )
 
-func TestFanOutWithScaleProto(t *testing.T) {
+func TestBrokerWithScaleProto(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
@@ -45,10 +45,10 @@ func TestFanOutWithScaleProto(t *testing.T) {
 	scaleTwo.ScaleProto.URLs = []string{"tcp://localhost:1242"}
 	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PUSH", "PUSH"
 
-	conf.FanOut.Outputs = append(conf.FanOut.Outputs, scaleOne)
-	conf.FanOut.Outputs = append(conf.FanOut.Outputs, scaleTwo)
+	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleOne)
+	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleTwo)
 
-	s, err := NewFanOut(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewBroker(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -118,6 +118,109 @@ func TestFanOutWithScaleProto(t *testing.T) {
 		}
 		if res := string(data); res != testStr {
 			t.Errorf("Wrong value on output: %v != %v", res, testStr)
+		}
+
+		select {
+		case res := <-s.ResponseChan():
+			if res.Error() != nil {
+				t.Error(res.Error())
+				return
+			}
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+	}
+}
+
+func TestRoundRobinWithScaleProto(t *testing.T) {
+	nTestLoops := 1000
+
+	conf := NewConfig()
+	conf.Broker.Pattern = "round_robin"
+
+	scaleOne, scaleTwo := NewConfig(), NewConfig()
+	scaleOne.Type, scaleTwo.Type = "scalability_protocols", "scalability_protocols"
+	scaleOne.ScaleProto.Bind, scaleTwo.ScaleProto.Bind = true, true
+	scaleOne.ScaleProto.URLs = []string{"tcp://localhost:1245"}
+	scaleTwo.ScaleProto.URLs = []string{"tcp://localhost:1246"}
+	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PUSH", "PUSH"
+
+	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleOne)
+	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleTwo)
+
+	s, err := NewBroker(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	sendChan := make(chan types.Message)
+
+	if err = s.StartReceiving(sendChan); err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer func() {
+		s.CloseAsync()
+		if err := s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	socketOne, err := pull.NewSocket()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	socketTwo, err := pull.NewSocket()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	socketOne.AddTransport(tcp.NewTransport())
+	socketTwo.AddTransport(tcp.NewTransport())
+
+	if err = socketOne.Dial("tcp://localhost:1245"); err != nil {
+		t.Error(err)
+		return
+	}
+	if err = socketTwo.Dial("tcp://localhost:1246"); err != nil {
+		t.Error(err)
+		return
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
+
+		select {
+		case sendChan <- testMsg:
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+
+		if i%2 == 0 {
+			data, err := socketOne.Recv()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if res := string(data); res != testStr {
+				t.Errorf("Wrong value on output: %v != %v", res, testStr)
+			}
+		} else {
+			data, err := socketTwo.Recv()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if res := string(data); res != testStr {
+				t.Errorf("Wrong value on output: %v != %v", res, testStr)
+			}
 		}
 
 		select {
