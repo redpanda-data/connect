@@ -1,6 +1,6 @@
 input:
-  type: fan_in
-  fan_in:
+  type: broker
+  broker:
     inputs:
       - type: kafka
         kafka:

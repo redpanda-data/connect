@@ -28,20 +28,7 @@ brokers, including RabbitMQ.
 
 Exchange type options are: direct|fanout|topic|x-custom
 
-## `dynamic`
-
-The dynamic type is similar to the 'fan_in' type except the inputs can be
-changed during runtime via a REST HTTP interface.
-
-To GET a JSON map of input identifiers with their current uptimes use the
-'/inputs' endpoint.
-
-To perform CRUD actions on the inputs themselves use POST, DELETE, and GET
-methods on the '/input/{input_id}' endpoint. When using POST the body of the
-request should be a JSON configuration for the input, if the input already
-exists it will be changed.
-
-## `fan_in`
+## `broker`
 
 The fan in type allows you to combine multiple inputs. Each input will be read
 in parallel. In order to configure a fan in type you simply add an array of
@@ -114,6 +101,20 @@ inputs:
 Which results in a total of four kafka_balanced inputs. Note that ditto_0 will
 result in no duplicate configs, this might be useful if the config is generated
 and there's a chance you won't want any duplicates.
+
+## `dynamic`
+
+The dynamic type is a special broker type where the inputs are identified by
+unique labels and can be created, changed and removed during runtime via a REST
+HTTP interface.
+
+To GET a JSON map of input identifiers with their current uptimes use the
+'/inputs' endpoint.
+
+To perform CRUD actions on the inputs themselves use POST, DELETE, and GET
+methods on the '/input/{input_id}' endpoint. When using POST the body of the
+request should be a JSON configuration for the input, if the input already
+exists it will be changed.
 
 ## `file`
 

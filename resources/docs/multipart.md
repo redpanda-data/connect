@@ -140,8 +140,8 @@ the streams we could change the config to this:
 
 ``` yaml
 input:
-  type: fan_in
-  fan_in:
+  type: broker
+  broker:
     inputs:
     - type: kafka
       kafka:

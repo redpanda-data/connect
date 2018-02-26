@@ -23,9 +23,8 @@ We can do this with the `sample` processor:
 
 ``` yaml
 input:
-  type: fan_in
-  kafka:
-  fan_in:
+  type: broker
+  broker:
     inputs:
     - type: kafka
       kafka:
@@ -71,8 +70,9 @@ input:
     - tcp://localhost:5555
     socket_type: PULL
 output:
-  type: fan_out
-  fan_out:
+  type: broker
+  broker:
+    pattern: fan_out
     outputs:
     - type: file
       file:
@@ -114,8 +114,9 @@ input:
     - tcp://localhost:5555
     socket_type: PULL
 output:
-  type: fan_out
-  fan_out:
+  type: broker
+  broker:
+    pattern: fan_out
     outputs:
     - type: zmq4
       zmq4:

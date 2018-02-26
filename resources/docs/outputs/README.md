@@ -19,10 +19,30 @@ Sends messages to an SQS queue.
 AMQP (0.91) is the underlying messaging protocol that is used by various message
 brokers, including RabbitMQ.
 
+## `broker`
+
+The broker output type allows you to configure multiple output targets following
+a broker pattern from this list:
+
+## `fan_out`
+
+With the fan out pattern all outputs will be sent every message that passes
+through benthos. If an output applies back pressure it will block all subsequent
+messages, and if an output fails to send a message it will be retried
+continuously until completion or service shut down.
+
+## `round_robin`
+
+With the round robin pattern each message will be assigned a single output
+following their order. If an output applies back pressure it will block all
+subsequent messages. If an output fails to send a message then the message will
+be re-attempted with the next input, and so on.
+
 ## `dynamic`
 
-The dynamic type is similar to the 'fan_out' type except the outputs can be
-changed during runtime via a REST HTTP interface.
+The dynamic type is a special broker type where the outputs are identified by
+unique labels and can be created, changed and removed during runtime via a REST
+HTTP interface.
 
 To GET a JSON map of output identifiers with their current uptimes use the
 '/outputs' endpoint.
@@ -31,19 +51,6 @@ To perform CRUD actions on the outputs themselves use POST, DELETE, and GET
 methods on the '/output/{output_id}' endpoint. When using POST the body of the
 request should be a JSON configuration for the output, if the output already
 exists it will be changed.
-
-## `fan_out`
-
-The fan out output type allows you to configure multiple output targets. With
-the fan out model all outputs will be sent every message that passes through
-benthos.
-
-This process is blocking, meaning if any output applies backpressure then it
-will block all outputs from receiving messages. If an output fails to guarantee
-receipt of a message it will be tried again until success.
-
-If Benthos is stopped during a fan out send it is possible that when started
-again it will send a duplicate message to some outputs.
 
 ## `file`
 
@@ -134,14 +141,6 @@ already exist) using the RPUSH command.
 
 Publishes messages through the Redis PubSub model. It is not possible to
 guarantee that messages have been received.
-
-## `round_robin`
-
-The round robin output type allows you to send messages across multiple outputs,
-where each message is sent to exactly one output following a strict order.
-
-If an output applies back pressure this will also block other outputs from
-receiving content.
 
 ## `scalability_protocols`
 

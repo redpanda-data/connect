@@ -5,8 +5,9 @@ input:
   http_server:
     path: /post
 output:
-  type: round_robin
-  round_robin:
+  type: broker
+  broker:
+    pattern: round_robin
     outputs:
     - type: redis_pubsub
       redis_pubsub:
