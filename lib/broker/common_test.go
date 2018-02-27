@@ -22,7 +22,6 @@ package broker
 
 import (
 	"errors"
-	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -39,30 +38,23 @@ var logConfig = log.LoggerConfig{
 
 // MockInputType implements the input.Type interface.
 type MockInputType struct {
-	MsgChan chan types.Message
-	ResChan <-chan types.Response
+	TChan chan types.Transaction
 }
 
-// StartListening sets the channel used for reading responses.
-func (m *MockInputType) StartListening(resChan <-chan types.Response) error {
-	m.ResChan = resChan
-	return nil
-}
-
-// MessageChan returns the messages channel.
-func (m *MockInputType) MessageChan() <-chan types.Message {
-	return m.MsgChan
+// TransactionChan returns the messages channel.
+func (m *MockInputType) TransactionChan() <-chan types.Transaction {
+	return m.TChan
 }
 
 // CloseAsync does nothing.
 func (m MockInputType) CloseAsync() {
-	close(m.MsgChan)
+	close(m.TChan)
 }
 
 // WaitForClose does nothing.
 func (m MockInputType) WaitForClose(t time.Duration) error {
 	select {
-	case _, open := <-m.MsgChan:
+	case _, open := <-m.TChan:
 		if open {
 			return errors.New("received unexpected message")
 		}
@@ -76,39 +68,21 @@ func (m MockInputType) WaitForClose(t time.Duration) error {
 
 // MockOutputType implements the output.Type interface.
 type MockOutputType struct {
-	ResChan   chan types.Response
-	resClosed int32
-	MsgChan   <-chan types.Message
+	TChan <-chan types.Transaction
 }
 
 // StartReceiving sets the read channel. This implementation is NOT thread safe.
-func (m *MockOutputType) StartReceiving(msgs <-chan types.Message) error {
-	m.MsgChan = msgs
+func (m *MockOutputType) StartReceiving(msgs <-chan types.Transaction) error {
+	m.TChan = msgs
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (m *MockOutputType) ResponseChan() <-chan types.Response {
-	return m.ResChan
 }
 
 // CloseAsync does nothing.
 func (m *MockOutputType) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&m.resClosed, 0, 1) {
-		close(m.ResChan)
-	}
 }
 
 // WaitForClose does nothing.
 func (m MockOutputType) WaitForClose(t time.Duration) error {
-	select {
-	case _, open := <-m.ResChan:
-		if open {
-			return errors.New("received unexpected message")
-		}
-	case <-time.After(t):
-		return types.ErrTimeout
-	}
 	return nil
 }
 

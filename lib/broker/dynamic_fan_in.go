@@ -33,8 +33,7 @@ import (
 
 // DynamicInput is an interface of input types that must be closable.
 type DynamicInput interface {
-	types.MessageSender
-	types.ResponderListener
+	types.Transactor
 	types.Closable
 }
 
@@ -57,15 +56,14 @@ type DynamicFanIn struct {
 	stats metrics.Type
 	log   log.Modular
 
-	messageChan  chan types.Message
-	responseChan <-chan types.Response
+	transactionChan chan types.Transaction
+	internalTsChan  chan types.Transaction
 
 	onAdd    func(label string)
 	onRemove func(label string)
 
-	wrappedMsgsChan chan wrappedMsg
-	newInputChan    chan wrappedInput
-	inputs          map[string]DynamicInput
+	newInputChan chan wrappedInput
+	inputs       map[string]DynamicInput
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -84,15 +82,13 @@ func NewDynamicFanIn(
 		stats:   stats,
 		log:     logger,
 
-		messageChan:  make(chan types.Message),
-		responseChan: nil,
+		transactionChan: make(chan types.Transaction),
 
 		onAdd:    func(l string) {},
 		onRemove: func(l string) {},
 
-		wrappedMsgsChan: make(chan wrappedMsg),
-		newInputChan:    make(chan wrappedInput),
-		inputs:          make(map[string]DynamicInput),
+		newInputChan: make(chan wrappedInput),
+		inputs:       make(map[string]DynamicInput),
 
 		closedChan: make(chan struct{}),
 		closeChan:  make(chan struct{}),
@@ -136,20 +132,10 @@ func (d *DynamicFanIn) SetInput(ident string, input DynamicInput, timeout time.D
 	return <-resChan
 }
 
-// StartListening assigns a new responses channel for the broker to read.
-func (d *DynamicFanIn) StartListening(responseChan <-chan types.Response) error {
-	if d.responseChan != nil {
-		return types.ErrAlreadyStarted
-	}
-	d.responseChan = responseChan
-
-	go d.readLoop()
-	return nil
-}
-
-// MessageChan returns the channel used for consuming messages from this broker.
-func (d *DynamicFanIn) MessageChan() <-chan types.Message {
-	return d.messageChan
+// TransactionChan returns the channel used for consuming messages from this
+// broker.
+func (d *DynamicFanIn) TransactionChan() <-chan types.Transaction {
+	return d.transactionChan
 }
 
 //------------------------------------------------------------------------------
@@ -173,28 +159,16 @@ func OptDynamicFanInSetOnRemove(onRemoveFunc func(label string)) func(*DynamicFa
 //------------------------------------------------------------------------------
 
 func (d *DynamicFanIn) addInput(ident string, input DynamicInput) error {
-	// Create unique response channel for each input
-	resChan := make(chan types.Response)
-	if err := input.StartListening(resChan); err != nil {
-		return err
-	}
-
 	// Launch goroutine that async writes input into single channel
-	go func(in DynamicInput, rChan chan types.Response) {
-		cancelChan := make(chan struct{})
-		defer close(cancelChan)
+	go func(in DynamicInput) {
 		for {
-			in, open := <-input.MessageChan()
+			in, open := <-input.TransactionChan()
 			if !open {
 				return
 			}
-			d.wrappedMsgsChan <- wrappedMsg{
-				msg:        in,
-				cancelChan: cancelChan,
-				resChan:    rChan,
-			}
+			d.transactionChan <- in
 		}
-	}(input, resChan)
+	}(input)
 
 	// Add new input to our map
 	d.inputs[ident] = input
@@ -234,7 +208,8 @@ func (d *DynamicFanIn) managerLoop() {
 			}
 		}
 		d.inputs = make(map[string]DynamicInput)
-		close(d.wrappedMsgsChan)
+		close(d.transactionChan)
+		close(d.closedChan)
 	}()
 
 	for {
@@ -273,38 +248,6 @@ func (d *DynamicFanIn) managerLoop() {
 			}
 		case <-d.closeChan:
 			return
-		}
-	}
-}
-
-// readLoop is an internal loop that brokers multiple input streams into a
-// single channel.
-func (d *DynamicFanIn) readLoop() {
-	defer func() {
-		d.CloseAsync()
-		close(d.messageChan)
-		close(d.closedChan)
-	}()
-
-	for {
-		select {
-		case wrap, open := <-d.wrappedMsgsChan:
-			if !open {
-				return
-			}
-
-			d.stats.Incr("broker.dynamic_fan_in.messages.received", 1)
-			d.messageChan <- wrap.msg
-
-			res, open := <-d.responseChan
-			if !open {
-				return
-			}
-
-			select {
-			case wrap.resChan <- res:
-			case <-wrap.cancelChan:
-			}
 		}
 	}
 }
