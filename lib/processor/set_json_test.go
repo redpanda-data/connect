@@ -29,7 +29,7 @@ func TestSetJSONValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := &types.Message{Parts: [][]byte{[]byte("this is bad json")}}
+	msgIn := types.Message{Parts: [][]byte{[]byte("this is bad json")}}
 	msgs, res := jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
@@ -48,7 +48,7 @@ func TestSetJSONValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn = &types.Message{Parts: [][]byte{[]byte("{}")}}
+	msgIn = types.Message{Parts: [][]byte{[]byte("{}")}}
 	msgs, res = jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad index")
@@ -93,7 +93,7 @@ func TestSetJSONPartBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+		msgs, res := proc.ProcessMessage(types.Message{Parts: input})
 		if len(msgs) != 1 {
 			t.Errorf("Select Parts failed on index: %v", i)
 		} else if res != nil {
@@ -175,7 +175,7 @@ func TestSetJSON(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := &types.Message{
+		inMsg := types.Message{
 			Parts: [][]byte{
 				[]byte(test.input),
 			},
@@ -231,7 +231,7 @@ value:
 			t.Fatalf("Error creating proc '%v': %v", config, err)
 		}
 
-		inMsg := &types.Message{
+		inMsg := types.Message{
 			Parts: [][]byte{
 				[]byte(input),
 			},

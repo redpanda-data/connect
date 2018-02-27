@@ -64,7 +64,7 @@ func TestArchiveTar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(&types.Message{Parts: exp})
+	msgs, res := proc.ProcessMessage(types.Message{Parts: exp})
 	if len(msgs) != 1 {
 		t.Error("Archive failed")
 	} else if res != nil {
@@ -115,7 +115,7 @@ func TestArchiveBinary(t *testing.T) {
 	testMsg := types.Message{Parts: [][]byte{[]byte("hello"), []byte("world")}}
 	testMsgBlob := testMsg.Bytes()
 
-	if msgs, _ := proc.ProcessMessage(&testMsg); len(msgs) == 1 {
+	if msgs, _ := proc.ProcessMessage(testMsg); len(msgs) == 1 {
 		if lParts := len(msgs[0].Parts); lParts != 1 {
 			t.Errorf("Wrong number of parts returned: %v != %v", lParts, 1)
 		}
@@ -137,7 +137,7 @@ func TestArchiveEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(&types.Message{Parts: [][]byte{}})
+	msgs, _ := proc.ProcessMessage(types.Message{Parts: [][]byte{}})
 	if len(msgs) != 0 {
 		t.Error("Expected failure with zero part message")
 	}

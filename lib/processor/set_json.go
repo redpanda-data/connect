@@ -185,10 +185,10 @@ func NewSetJSON(conf Config, log log.Modular, stats metrics.Type) (Type, error) 
 //------------------------------------------------------------------------------
 
 // ProcessMessage prepends a new message part to the message.
-func (p *SetJSON) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.stats.Incr("processor.set_json.count", 1)
 
-	msgs := [1]*types.Message{msg}
+	msgs := [1]types.Message{msg}
 
 	valueBytes := p.valueBytes
 	if p.interpolate {

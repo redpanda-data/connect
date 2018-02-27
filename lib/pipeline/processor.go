@@ -43,11 +43,10 @@ type Processor struct {
 
 	msgProcessors []processor.Type
 
-	messagesOut  chan types.Message
-	responsesOut chan types.Response
+	messagesOut chan types.Transaction
+	responsesIn chan types.Response
 
-	messagesIn  <-chan types.Message
-	responsesIn <-chan types.Response
+	messagesIn <-chan types.Transaction
 
 	closeChan chan struct{}
 	closed    chan struct{}
@@ -64,8 +63,8 @@ func NewProcessor(
 		msgProcessors: msgProcessors,
 		log:           log.NewModule(".pipeline.processor"),
 		stats:         stats,
-		messagesOut:   make(chan types.Message),
-		responsesOut:  make(chan types.Response),
+		messagesOut:   make(chan types.Transaction),
+		responsesIn:   make(chan types.Response),
 		closeChan:     make(chan struct{}),
 		closed:        make(chan struct{}),
 	}
@@ -78,16 +77,15 @@ func (p *Processor) loop() {
 	defer func() {
 		atomic.StoreInt32(&p.running, 0)
 
-		close(p.responsesOut)
 		close(p.messagesOut)
 		close(p.closed)
 	}()
 
 	var open bool
 	for atomic.LoadInt32(&p.running) == 1 {
-		var msg types.Message
+		var tran types.Transaction
 		select {
-		case msg, open = <-p.messagesIn:
+		case tran, open = <-p.messagesIn:
 			if !open {
 				return
 			}
@@ -96,12 +94,12 @@ func (p *Processor) loop() {
 		}
 		p.stats.Incr("pipeline.processor.count", 1)
 
-		resultMsgs := []*types.Message{&msg}
+		resultMsgs := []types.Message{tran.Payload}
 		var resultRes types.Response
 		for i := 0; len(resultMsgs) > 0 && i < len(p.msgProcessors); i++ {
-			var nextResultMsgs []*types.Message
+			var nextResultMsgs []types.Message
 			for _, m := range resultMsgs {
-				var rMsgs []*types.Message
+				var rMsgs []types.Message
 				rMsgs, resultRes = p.msgProcessors[i].ProcessMessage(m)
 				nextResultMsgs = append(nextResultMsgs, rMsgs...)
 			}
@@ -111,7 +109,7 @@ func (p *Processor) loop() {
 		if len(resultMsgs) == 0 {
 			p.stats.Incr("pipeline.processor.dropped", 1)
 			select {
-			case p.responsesOut <- resultRes:
+			case tran.ResponseChan <- resultRes:
 			case <-p.closeChan:
 				return
 			}
@@ -121,7 +119,7 @@ func (p *Processor) loop() {
 		var res types.Response
 		for _, m := range resultMsgs {
 			select {
-			case p.messagesOut <- *m:
+			case p.messagesOut <- types.NewTransaction(m, p.responsesIn):
 			case <-p.closeChan:
 				return
 			}
@@ -136,7 +134,7 @@ func (p *Processor) loop() {
 			}
 		}
 		select {
-		case p.responsesOut <- res:
+		case tran.ResponseChan <- res:
 		case <-p.closeChan:
 			return
 		}
@@ -146,38 +144,19 @@ func (p *Processor) loop() {
 //------------------------------------------------------------------------------
 
 // StartReceiving assigns a messages channel for the pipeline to read.
-func (p *Processor) StartReceiving(msgs <-chan types.Message) error {
+func (p *Processor) StartReceiving(msgs <-chan types.Transaction) error {
 	if p.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}
 	p.messagesIn = msgs
-	if p.responsesIn != nil {
-		go p.loop()
-	}
+	go p.loop()
 	return nil
 }
 
-// MessageChan returns the channel used for consuming messages from this
+// TransactionChan returns the channel used for consuming messages from this
 // pipeline.
-func (p *Processor) MessageChan() <-chan types.Message {
+func (p *Processor) TransactionChan() <-chan types.Transaction {
 	return p.messagesOut
-}
-
-// StartListening sets the channel that this pipeline will read responses from.
-func (p *Processor) StartListening(responses <-chan types.Response) error {
-	if p.responsesIn != nil {
-		return types.ErrAlreadyStarted
-	}
-	p.responsesIn = responses
-	if p.messagesIn != nil {
-		go p.loop()
-	}
-	return nil
-}
-
-// ResponseChan returns the response channel from this pipeline.
-func (p *Processor) ResponseChan() <-chan types.Response {
-	return p.responsesOut
 }
 
 // CloseAsync shuts down the pipeline and stops processing messages.

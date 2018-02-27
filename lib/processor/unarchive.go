@@ -152,7 +152,7 @@ func NewUnarchive(conf Config, log log.Modular, stats metrics.Type) (Type, error
 
 // ProcessMessage takes a message, attempts to unarchive parts of the message,
 // and returns the result.
-func (d *Unarchive) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.stats.Incr("processor.unarchive.count", 1)
 
 	newMsg := types.Message{}
@@ -188,7 +188,7 @@ func (d *Unarchive) ProcessMessage(msg *types.Message) ([]*types.Message, types.
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	msgs := [1]*types.Message{&newMsg}
+	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }
 

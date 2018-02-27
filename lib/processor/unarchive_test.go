@@ -95,7 +95,7 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+	msgs, res := proc.ProcessMessage(types.Message{Parts: input})
 	if len(msgs) != 1 {
 		t.Error("Unarchive failed")
 	} else if res != nil {
@@ -117,13 +117,13 @@ func TestUnarchiveBinary(t *testing.T) {
 		return
 	}
 
-	if msgs, res := proc.ProcessMessage(&types.Message{}); len(msgs) > 0 {
+	if msgs, res := proc.ProcessMessage(types.Message{}); len(msgs) > 0 {
 		t.Error("Expected fail on bad message")
 	} else if _, ok := res.(types.SimpleResponse); !ok {
 		t.Error("Expected simple response from bad message")
 	}
 	if msgs, _ := proc.ProcessMessage(
-		&types.Message{Parts: [][]byte{[]byte("wat this isnt good")}},
+		types.Message{Parts: [][]byte{[]byte("wat this isnt good")}},
 	); len(msgs) > 0 {
 		t.Error("Expected fail on bad message")
 	}
@@ -131,8 +131,8 @@ func TestUnarchiveBinary(t *testing.T) {
 	testMsg := types.Message{Parts: [][]byte{[]byte("hello"), []byte("world")}}
 	testMsgBlob := testMsg.Bytes()
 
-	if msgs, _ := proc.ProcessMessage(&types.Message{Parts: [][]byte{testMsgBlob}}); len(msgs) > 0 {
-		if !reflect.DeepEqual([]*types.Message{&testMsg}, msgs) {
+	if msgs, _ := proc.ProcessMessage(types.Message{Parts: [][]byte{testMsgBlob}}); len(msgs) > 0 {
+		if !reflect.DeepEqual([]types.Message{testMsg}, msgs) {
 			t.Errorf("Returned message did not match: %v != %v", msgs, testMsg)
 		}
 	} else {
@@ -232,7 +232,7 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+		msgs, res := proc.ProcessMessage(types.Message{Parts: input})
 		if len(msgs) != 1 {
 			t.Errorf("Unarchive failed on index: %v", i)
 		} else if res != nil {
@@ -256,12 +256,12 @@ func TestUnarchiveEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(&types.Message{Parts: [][]byte{}})
+	msgs, _ := proc.ProcessMessage(types.Message{Parts: [][]byte{}})
 	if len(msgs) != 0 {
 		t.Error("Expected failure with zero part message")
 	}
 
-	msgs, _ = proc.ProcessMessage(&types.Message{
+	msgs, _ = proc.ProcessMessage(types.Message{
 		Parts: [][]byte{[]byte("first"), []byte("second")},
 	})
 	if len(msgs) != 0 {

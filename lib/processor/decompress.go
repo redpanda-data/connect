@@ -124,7 +124,7 @@ func NewDecompress(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 
 // ProcessMessage takes a message, attempts to decompress parts of the message,
 // and returns the result.
-func (d *Decompress) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.stats.Incr("processor.decompress.count", 1)
 
 	newMsg := types.Message{}
@@ -160,7 +160,7 @@ func (d *Decompress) ProcessMessage(msg *types.Message) ([]*types.Message, types
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	msgs := [1]*types.Message{&newMsg}
+	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }
 

@@ -50,46 +50,32 @@ type Closable interface {
 
 //------------------------------------------------------------------------------
 
-// Responder defines a type that will send a response every time a message is
-// received.
-type Responder interface {
-	// ResponseChan returns a response for every input message received.
-	ResponseChan() <-chan Response
+// Transactor is a type that sends messages and waits for a response back, the
+// response indicates whether the message was successfully propagated to a new
+// destination (and can be discarded from the source.)
+type Transactor interface {
+	// TransactionChan returns a channel used for consuming transactions from
+	// this type. Every transaction received must be resolved before another
+	// transaction will be sent.
+	TransactionChan() <-chan Transaction
 }
 
-// ResponderListener is a type that listens to a Responder type.
-type ResponderListener interface {
-	// StartListening starts the type listening to a channel.
-	StartListening(<-chan Response) error
-}
-
-//------------------------------------------------------------------------------
-
-// MessageSender is a type that sends messages to an output.
-type MessageSender interface {
-	// MessageChan returns the channel used for consuming messages from this
-	// input.
-	MessageChan() <-chan Message
-}
-
-// MessageReceiver is a type that receives messages from an input.
-type MessageReceiver interface {
-	// StartReceiving starts the type receiving messages from a channel.
-	StartReceiving(<-chan Message) error
+// TransactionReceiver is a type that receives transactions from a Transactor.
+type TransactionReceiver interface {
+	// StartReceiving starts the type receiving transactions from a Transactor.
+	StartReceiving(<-chan Transaction) error
 }
 
 //------------------------------------------------------------------------------
 
 // Producer is the higher level producer type.
 type Producer interface {
-	MessageSender
-	ResponderListener
+	Transactor
 }
 
 // Consumer is the higher level consumer type.
 type Consumer interface {
-	MessageReceiver
-	Responder
+	TransactionReceiver
 }
 
 //------------------------------------------------------------------------------

@@ -51,7 +51,7 @@ func TestInsertBoundaries(t *testing.T) {
 				parts = append(parts, []byte("foo"))
 			}
 
-			msgs, res := proc.ProcessMessage(&types.Message{Parts: parts})
+			msgs, res := proc.ProcessMessage(types.Message{Parts: parts})
 			if len(msgs) != 1 {
 				t.Error("Insert Part failed")
 			} else if res != nil {
@@ -190,7 +190,7 @@ func TestInsertPart(t *testing.T) {
 			return
 		}
 
-		msgs, res := proc.ProcessMessage(&types.Message{Parts: test.in})
+		msgs, res := proc.ProcessMessage(types.Message{Parts: test.in})
 		if len(msgs) != 1 {
 			t.Errorf("Insert Part failed on: %s", test.in)
 		} else if res != nil {
@@ -241,7 +241,7 @@ func TestInsertPartInterpolation(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		msgs, res := proc.ProcessMessage(&types.Message{Parts: test.in})
+		msgs, res := proc.ProcessMessage(types.Message{Parts: test.in})
 		if len(msgs) != 1 {
 			t.Errorf("Insert Part failed on: %s", test.in)
 		} else if res != nil {

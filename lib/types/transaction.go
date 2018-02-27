@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,23 +18,32 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package processor
-
-import (
-	"github.com/Jeffail/benthos/lib/types"
-)
+package types
 
 //------------------------------------------------------------------------------
 
-// Type reads a message, performs a processing operation, and returns either a
-// slice of messages resulting from the process to be propagated through the,
-// pipeline, or a response that should be sent back to the source instead.
-type Type interface {
-	// ProcessMessage attempts to process a message. Since processing can fail
-	// this call returns both a slice of messages in case of success or a
-	// response in case of failure. If the slice of messages is empty the
-	// response should be returned to the source.
-	ProcessMessage(msg types.Message) ([]types.Message, types.Response)
+// Transaction is a type respesenting a transaction containing a payload (the
+// message) and a response channel, which is used to indicate whether the
+// message was successfully propagated to the next destination.
+type Transaction struct {
+	// Payload is the message payload of this transaction.
+	Payload Message
+
+	// ResponseChan should receive a response at the end of a transaction (once
+	// the message is no longer owned by the receiver.) The response itself
+	// indicates whether the message has been propagated successfully.
+	ResponseChan chan<- Response
+}
+
+//------------------------------------------------------------------------------
+
+// NewTransaction creates a new transaction object from a message payload and a
+// response channel.
+func NewTransaction(payload Message, resChan chan<- Response) Transaction {
+	return Transaction{
+		Payload:      payload,
+		ResponseChan: resChan,
+	}
 }
 
 //------------------------------------------------------------------------------

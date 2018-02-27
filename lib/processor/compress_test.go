@@ -79,7 +79,7 @@ func TestCompressGZIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+	msgs, res := proc.ProcessMessage(types.Message{Parts: input})
 	if len(msgs) != 1 {
 		t.Error("Compress failed")
 	} else if res != nil {
@@ -135,7 +135,7 @@ func TestCompressIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+		msgs, res := proc.ProcessMessage(types.Message{Parts: input})
 		if len(msgs) != 1 {
 			t.Errorf("Compress failed on index: %v", i)
 		} else if res != nil {
@@ -158,7 +158,7 @@ func TestCompressEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(&types.Message{Parts: [][]byte{}})
+	msgs, _ := proc.ProcessMessage(types.Message{Parts: [][]byte{}})
 	if len(msgs) > 0 {
 		t.Error("Expected failure with zero part message")
 	}

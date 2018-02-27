@@ -57,7 +57,7 @@ func TestSplitParts(t *testing.T) {
 	}
 
 	for _, tIn := range tests {
-		msgs, _ := proc.ProcessMessage(&types.Message{Parts: tIn})
+		msgs, _ := proc.ProcessMessage(types.Message{Parts: tIn})
 		if exp, act := len(tIn), len(msgs); exp != act {
 			t.Errorf("Wrong count of messages: %v != %v", act, exp)
 			continue

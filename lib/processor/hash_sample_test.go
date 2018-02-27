@@ -92,7 +92,7 @@ func TestHashSample(t *testing.T) {
 			}
 
 			msgIn := types.Message{Parts: [][]byte{tc.input}}
-			msgs, _ := proc.ProcessMessage(&msgIn)
+			msgs, _ := proc.ProcessMessage(msgIn)
 
 			if nil != tc.expected && len(msgs) == 0 {
 				t.Error("Message told not to propagate even if it was expected to propagate")
@@ -150,9 +150,9 @@ func TestHashSamplePartSelection(t *testing.T) {
 			parts[tc.insertPart] = doc1
 
 			msgIn := types.Message{Parts: parts}
-			msgs, _ := proc.ProcessMessage(&msgIn)
+			msgs, _ := proc.ProcessMessage(msgIn)
 			if len(msgs) > 0 {
-				if &msgIn != msgs[0] {
+				if !reflect.DeepEqual(msgIn, msgs[0]) {
 					t.Error("Message told to propagate but not given")
 				}
 			} else {
@@ -173,7 +173,7 @@ func TestHashSampleBoundsCheck(t *testing.T) {
 	}
 
 	msgIn := types.Message{Parts: [][]byte{}}
-	msgs, res := proc.ProcessMessage(&msgIn)
+	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")
 	}
@@ -194,7 +194,7 @@ func TestHashSampleNegBoundsCheck(t *testing.T) {
 	}
 
 	msgIn := types.Message{Parts: [][]byte{}}
-	msgs, res := proc.ProcessMessage(&msgIn)
+	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")
 	}

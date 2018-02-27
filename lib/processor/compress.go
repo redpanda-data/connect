@@ -123,7 +123,7 @@ func NewCompress(conf Config, log log.Modular, stats metrics.Type) (Type, error)
 
 // ProcessMessage takes a message, attempts to compress parts of the message and
 // returns the result.
-func (c *Compress) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.stats.Incr("processor.compress.count", 1)
 
 	newMsg := types.Message{}
@@ -160,7 +160,7 @@ func (c *Compress) ProcessMessage(msg *types.Message) ([]*types.Message, types.R
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	msgs := [1]*types.Message{&newMsg}
+	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }
 

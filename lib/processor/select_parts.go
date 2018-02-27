@@ -85,7 +85,7 @@ func NewSelectParts(conf Config, log log.Modular, stats metrics.Type) (Type, err
 //------------------------------------------------------------------------------
 
 // ProcessMessage extracts a set of parts from each message.
-func (m *SelectParts) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	m.stats.Incr("processor.select_parts.count", 1)
 
 	newMsg := types.NewMessage()
@@ -109,7 +109,7 @@ func (m *SelectParts) ProcessMessage(msg *types.Message) ([]*types.Message, type
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	msgs := [1]*types.Message{&newMsg}
+	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }
 
