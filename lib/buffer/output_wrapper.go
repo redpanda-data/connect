@@ -42,9 +42,8 @@ type OutputWrapper struct {
 
 	running int32
 
-	messagesIn   <-chan types.Message
-	messagesOut  chan types.Message
-	responsesIn  <-chan types.Response
+	messagesIn   <-chan types.Transaction
+	messagesOut  chan types.Transaction
 	responsesOut chan types.Response
 	errorsChan   chan []error
 
@@ -64,7 +63,7 @@ func NewOutputWrapper(
 		stats:        stats,
 		buffer:       buffer,
 		running:      1,
-		messagesOut:  make(chan types.Message),
+		messagesOut:  make(chan types.Transaction),
 		responsesOut: make(chan types.Response),
 		errorsChan:   make(chan []error),
 		closeChan:    make(chan struct{}),
@@ -85,23 +84,22 @@ func NewOutputWrapper(
 // inputLoop is an internal loop that brokers incoming messages to the buffer.
 func (m *OutputWrapper) inputLoop() {
 	defer func() {
-		close(m.responsesOut)
 		m.buffer.CloseOnceEmpty()
 		m.closedWG.Done()
 	}()
 
 	for atomic.LoadInt32(&m.running) == 1 {
-		var msg types.Message
+		var tr types.Transaction
 		var open bool
 		select {
-		case msg, open = <-m.messagesIn:
+		case tr, open = <-m.messagesIn:
 			if !open {
 				return
 			}
 		case <-m.closeChan:
 			return
 		}
-		backlog, err := m.buffer.PushMessage(msg)
+		backlog, err := m.buffer.PushMessage(tr.Payload)
 		if err == nil {
 			m.stats.Incr("buffer.write.count", 1)
 			m.stats.Gauge("buffer.backlog", int64(backlog))
@@ -109,7 +107,7 @@ func (m *OutputWrapper) inputLoop() {
 			m.stats.Incr("buffer.write.error", 1)
 		}
 		select {
-		case m.responsesOut <- types.NewSimpleResponse(err):
+		case tr.ResponseChan <- types.NewSimpleResponse(err):
 		case <-m.closeChan:
 			return
 		}
@@ -156,11 +154,11 @@ func (m *OutputWrapper) outputLoop() {
 
 		if msg.Parts != nil {
 			select {
-			case m.messagesOut <- msg:
+			case m.messagesOut <- types.NewTransaction(msg, m.responsesOut):
 			case <-m.closeChan:
 				return
 			}
-			res, open := <-m.responsesIn
+			res, open := <-m.responsesOut
 			if !open {
 				return
 			}
@@ -196,51 +194,25 @@ func (m *OutputWrapper) outputLoop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (m *OutputWrapper) StartReceiving(msgs <-chan types.Message) error {
+func (m *OutputWrapper) StartReceiving(msgs <-chan types.Transaction) error {
 	if m.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}
 	m.messagesIn = msgs
 
-	if m.responsesIn != nil {
-		m.closedWG.Add(2)
-		go m.inputLoop()
-		go m.outputLoop()
-		go func() {
-			m.closedWG.Wait()
-			close(m.closedChan)
-		}()
-	}
+	m.closedWG.Add(2)
+	go m.inputLoop()
+	go m.outputLoop()
+	go func() {
+		m.closedWG.Wait()
+		close(m.closedChan)
+	}()
 	return nil
 }
 
-// MessageChan returns the channel used for consuming messages from this input.
-func (m *OutputWrapper) MessageChan() <-chan types.Message {
+// TransactionChan returns the channel used for consuming messages from this input.
+func (m *OutputWrapper) TransactionChan() <-chan types.Transaction {
 	return m.messagesOut
-}
-
-// StartListening sets the channel for reading responses.
-func (m *OutputWrapper) StartListening(responses <-chan types.Response) error {
-	if m.responsesIn != nil {
-		return types.ErrAlreadyStarted
-	}
-	m.responsesIn = responses
-
-	if m.messagesIn != nil {
-		m.closedWG.Add(2)
-		go m.inputLoop()
-		go m.outputLoop()
-		go func() {
-			m.closedWG.Wait()
-			close(m.closedChan)
-		}()
-	}
-	return nil
-}
-
-// ResponseChan returns the response channel.
-func (m *OutputWrapper) ResponseChan() <-chan types.Response {
-	return m.responsesOut
 }
 
 // ErrorsChan returns the errors channel.

@@ -50,11 +50,8 @@ type Empty struct {
 
 	throt *throttle.Type
 
-	messagesOut  chan types.Message
-	responsesOut chan types.Response
-
-	messagesIn  <-chan types.Message
-	responsesIn <-chan types.Response
+	messagesOut chan types.Transaction
+	messagesIn  <-chan types.Transaction
 
 	closeChan chan struct{}
 	closed    chan struct{}
@@ -63,11 +60,10 @@ type Empty struct {
 // NewEmpty creates a new buffer interface but doesn't buffer messages.
 func NewEmpty(config Config, log log.Modular, stats metrics.Type) (Type, error) {
 	e := &Empty{
-		running:      1,
-		messagesOut:  make(chan types.Message),
-		responsesOut: make(chan types.Response),
-		closeChan:    make(chan struct{}),
-		closed:       make(chan struct{}),
+		running:     1,
+		messagesOut: make(chan types.Transaction),
+		closeChan:   make(chan struct{}),
+		closed:      make(chan struct{}),
 	}
 	e.throt = throttle.New(
 		throttle.OptCloseChan(e.closeChan),
@@ -85,74 +81,51 @@ func (e *Empty) loop() {
 	defer func() {
 		atomic.StoreInt32(&e.running, 0)
 
-		close(e.responsesOut)
 		close(e.messagesOut)
 		close(e.closed)
 	}()
 
 	var open bool
 	for atomic.LoadInt32(&e.running) == 1 {
-		var msg types.Message
-		if msg, open = <-e.messagesIn; !open {
+		var inT types.Transaction
+		if inT, open = <-e.messagesIn; !open {
 			return
 		}
+
 		select {
-		case e.messagesOut <- msg:
+		case e.messagesOut <- inT:
 		case <-e.closeChan:
 			return
 		}
-		var res types.Response
-		if res, open = <-e.responsesIn; !open {
-			return
-		}
-		if res.Error() != nil {
-			// Back off on consecutive retries
-			e.throt.Retry()
-		} else {
-			e.throt.Reset()
-		}
-		select {
-		case e.responsesOut <- res:
-		case <-e.closeChan:
-			return
-		}
+
+		// TODO: Reimplement async throttle.
+		/*
+			if res.Error() != nil {
+				// Back off on consecutive retries
+				e.throt.Retry()
+			} else {
+				e.throt.Reset()
+			}
+		*/
 	}
 }
 
 //------------------------------------------------------------------------------
 
 // StartReceiving assigns a messages channel for the output to read.
-func (e *Empty) StartReceiving(msgs <-chan types.Message) error {
+func (e *Empty) StartReceiving(msgs <-chan types.Transaction) error {
 	if e.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}
 	e.messagesIn = msgs
-	if e.responsesIn != nil {
-		go e.loop()
-	}
+	go e.loop()
 	return nil
 }
 
-// MessageChan returns the channel used for consuming messages from this input.
-func (e *Empty) MessageChan() <-chan types.Message {
+// TransactionChan returns the channel used for consuming messages from this
+// input.
+func (e *Empty) TransactionChan() <-chan types.Transaction {
 	return e.messagesOut
-}
-
-// StartListening sets the channel for reading responses.
-func (e *Empty) StartListening(responses <-chan types.Response) error {
-	if e.responsesIn != nil {
-		return types.ErrAlreadyStarted
-	}
-	e.responsesIn = responses
-	if e.messagesIn != nil {
-		go e.loop()
-	}
-	return nil
-}
-
-// ResponseChan returns the response channel.
-func (e *Empty) ResponseChan() <-chan types.Response {
-	return e.responsesOut
 }
 
 // ErrorsChan returns the errors channel.
