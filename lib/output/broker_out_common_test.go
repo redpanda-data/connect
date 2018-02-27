@@ -27,8 +27,8 @@ import (
 
 func TestOutBrokerConfigDefaults(t *testing.T) {
 	testConf := []byte(`{
-		"type": "fan_out",
-		"fan_out": {
+		"type": "broker",
+		"broker": {
 			"outputs": [
 				{
 					"type": "http_client",
@@ -54,7 +54,7 @@ func TestOutBrokerConfigDefaults(t *testing.T) {
 		return
 	}
 
-	outputConfs := conf.FanOut.Outputs
+	outputConfs := conf.Broker.Outputs
 
 	if exp, actual := 2, len(outputConfs); exp != actual {
 		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)
@@ -92,8 +92,8 @@ func TestOutBrokerConfigDefaults(t *testing.T) {
 
 func TestOutBrokerConfigDitto(t *testing.T) {
 	testConf := []byte(`{
-		"type": "fan_out",
-		"fan_out": {
+		"type": "broker",
+		"broker": {
 			"outputs": [
 				{
 					"type": "http_client",
@@ -124,7 +124,7 @@ func TestOutBrokerConfigDitto(t *testing.T) {
 		return
 	}
 
-	outputConfs := conf.FanOut.Outputs
+	outputConfs := conf.Broker.Outputs
 
 	if exp, actual := 3, len(outputConfs); exp != actual {
 		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)
@@ -164,8 +164,8 @@ func TestOutBrokerConfigDitto(t *testing.T) {
 
 func TestOutBrokerConfigDittoMulti(t *testing.T) {
 	testConf := []byte(`{
-		"type": "fan_out",
-		"fan_out": {
+		"type": "broker",
+		"broker": {
 			"outputs": [
 				{
 					"type": "http_client",
@@ -190,7 +190,7 @@ func TestOutBrokerConfigDittoMulti(t *testing.T) {
 		return
 	}
 
-	outputConfs := conf.FanOut.Outputs
+	outputConfs := conf.Broker.Outputs
 
 	if exp, actual := 3, len(outputConfs); exp != actual {
 		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)
@@ -230,8 +230,8 @@ func TestOutBrokerConfigDittoMulti(t *testing.T) {
 
 func TestOutBrokerConfigDittoZeroed(t *testing.T) {
 	testConf := []byte(`{
-		"type": "fan_out",
-		"fan_out": {
+		"type": "broker",
+		"broker": {
 			"outputs": [
 				{
 					"type": "http_client",
@@ -256,7 +256,7 @@ func TestOutBrokerConfigDittoZeroed(t *testing.T) {
 		return
 	}
 
-	outputConfs := conf.FanOut.Outputs
+	outputConfs := conf.Broker.Outputs
 
 	if exp, actual := 1, len(outputConfs); exp != actual {
 		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)

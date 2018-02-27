@@ -2,10 +2,11 @@ input:
   type: stdin
 output:
   # Fanning out means every output will receive each message. If an output
-  # blocks then all outputs will block also. The 'round_robin' output type will
-  # only send each message to one output, following them in order.
-  type: fan_out
-  fan_out:
+  # blocks then all outputs will block also. The 'round_robin' pattern will only
+  # send each message to one output, following them in order.
+  type: broker
+  broker:
+    pattern: fan_out
     outputs:
       - type: kafka
         kafka:

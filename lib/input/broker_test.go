@@ -25,10 +25,10 @@ import (
 	"testing"
 )
 
-func TestFanInConfigDefaults(t *testing.T) {
+func TestBrokerConfigDefaults(t *testing.T) {
 	testConf := []byte(`{
-		"type": "fan_in",
-		"fan_in": {
+		"type": "broker",
+		"broker": {
 			"inputs": [
 				{
 					"type": "http_server",
@@ -54,7 +54,7 @@ func TestFanInConfigDefaults(t *testing.T) {
 		return
 	}
 
-	inputConfs := conf.FanIn.Inputs
+	inputConfs := conf.Broker.Inputs
 
 	if exp, actual := 2, len(inputConfs); exp != actual {
 		t.Errorf("unexpected number of input configs: %v != %v", exp, actual)
@@ -90,10 +90,10 @@ func TestFanInConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestFanInConfigDitto(t *testing.T) {
+func TestBrokerConfigDitto(t *testing.T) {
 	testConf := []byte(`{
-		"type": "fan_in",
-		"fan_in": {
+		"type": "broker",
+		"broker": {
 			"inputs": [
 				{
 					"type": "http_server",
@@ -124,7 +124,7 @@ func TestFanInConfigDitto(t *testing.T) {
 		return
 	}
 
-	inputConfs := conf.FanIn.Inputs
+	inputConfs := conf.Broker.Inputs
 
 	if exp, actual := 3, len(inputConfs); exp != actual {
 		t.Errorf("unexpected number of input configs: %v != %v", exp, actual)
@@ -162,10 +162,10 @@ func TestFanInConfigDitto(t *testing.T) {
 	}
 }
 
-func TestFanInConfigDittoMulti(t *testing.T) {
+func TestBrokerConfigDittoMulti(t *testing.T) {
 	testConf := []byte(`{
-		"type": "fan_in",
-		"fan_in": {
+		"type": "broker",
+		"broker": {
 			"inputs": [
 				{
 					"type": "http_server",
@@ -190,7 +190,7 @@ func TestFanInConfigDittoMulti(t *testing.T) {
 		return
 	}
 
-	inputConfs := conf.FanIn.Inputs
+	inputConfs := conf.Broker.Inputs
 
 	if exp, actual := 3, len(inputConfs); exp != actual {
 		t.Errorf("unexpected number of input configs: %v != %v", exp, actual)
@@ -228,10 +228,10 @@ func TestFanInConfigDittoMulti(t *testing.T) {
 	}
 }
 
-func TestFanInConfigDittoZeroed(t *testing.T) {
+func TestBrokerConfigDittoZeroed(t *testing.T) {
 	testConf := []byte(`{
-		"type": "fan_in",
-		"fan_in": {
+		"type": "broker",
+		"broker": {
 			"inputs": [
 				{
 					"type": "http_server",
@@ -256,7 +256,7 @@ func TestFanInConfigDittoZeroed(t *testing.T) {
 		return
 	}
 
-	inputConfs := conf.FanIn.Inputs
+	inputConfs := conf.Broker.Inputs
 
 	if exp, actual := 1, len(inputConfs); exp != actual {
 		t.Errorf("unexpected number of input configs: %v != %v", exp, actual)

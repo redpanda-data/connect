@@ -40,8 +40,9 @@ func init() {
 	constructors["dynamic"] = typeSpec{
 		brokerConstructor: NewDynamic,
 		description: `
-The dynamic type is similar to the 'fan_in' type except the inputs can be
-changed during runtime via a REST HTTP interface.
+The dynamic type is a special broker type where the inputs are identified by
+unique labels and can be created, changed and removed during runtime via a REST
+HTTP interface.
 
 To GET a JSON map of input identifiers with their current uptimes use the
 '/inputs' endpoint.

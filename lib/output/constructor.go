@@ -54,8 +54,8 @@ type Config struct {
 	AmazonS3    writer.AmazonS3Config  `json:"amazon_s3" yaml:"amazon_s3"`
 	AmazonSQS   writer.AmazonSQSConfig `json:"amazon_sqs" yaml:"amazon_sqs"`
 	AMQP        AMQPConfig             `json:"amqp" yaml:"amqp"`
+	Broker      BrokerConfig           `json:"broker" yaml:"broker"`
 	Dynamic     DynamicConfig          `json:"dynamic" yaml:"dynamic"`
-	FanOut      FanOutConfig           `json:"fan_out" yaml:"fan_out"`
 	File        FileConfig             `json:"file" yaml:"file"`
 	Files       writer.FilesConfig     `json:"files" yaml:"files"`
 	HTTPClient  HTTPClientConfig       `json:"http_client" yaml:"http_client"`
@@ -67,7 +67,6 @@ type Config struct {
 	NSQ         NSQConfig              `json:"nsq" yaml:"nsq"`
 	RedisList   writer.RedisListConfig `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub RedisPubSubConfig      `json:"redis_pubsub" yaml:"redis_pubsub"`
-	RoundRobin  RoundRobinConfig       `json:"round_robin" yaml:"round_robin"`
 	ScaleProto  ScaleProtoConfig       `json:"scalability_protocols" yaml:"scalability_protocols"`
 	STDOUT      STDOUTConfig           `json:"stdout" yaml:"stdout"`
 	ZMQ4        *ZMQ4Config            `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
@@ -81,8 +80,8 @@ func NewConfig() Config {
 		AmazonS3:    writer.NewAmazonS3Config(),
 		AmazonSQS:   writer.NewAmazonSQSConfig(),
 		AMQP:        NewAMQPConfig(),
+		Broker:      NewBrokerConfig(),
 		Dynamic:     NewDynamicConfig(),
-		FanOut:      NewFanOutConfig(),
 		File:        NewFileConfig(),
 		Files:       writer.NewFilesConfig(),
 		HTTPClient:  NewHTTPClientConfig(),
@@ -94,7 +93,6 @@ func NewConfig() Config {
 		NSQ:         NewNSQConfig(),
 		RedisList:   writer.NewRedisListConfig(),
 		RedisPubSub: NewRedisPubSubConfig(),
-		RoundRobin:  NewRoundRobinConfig(),
 		ScaleProto:  NewScaleProtoConfig(),
 		STDOUT:      NewSTDOUTConfig(),
 		ZMQ4:        NewZMQ4Config(),
@@ -123,10 +121,8 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	outputMap["type"] = t
 
 	var nestedOutputs []Config
-	if t == "fan_out" {
-		nestedOutputs = conf.FanOut.Outputs
-	} else if t == "round_robin" {
-		nestedOutputs = conf.RoundRobin.Outputs
+	if t == "broker" {
+		nestedOutputs = conf.Broker.Outputs
 	}
 	if len(nestedOutputs) > 0 {
 		outSlice := []interface{}{}
@@ -138,6 +134,7 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 			outSlice = append(outSlice, sanOutput)
 		}
 		outputMap[t] = map[string]interface{}{
+			"pattern": conf.Broker.Pattern,
 			"outputs": outSlice,
 		}
 	} else {

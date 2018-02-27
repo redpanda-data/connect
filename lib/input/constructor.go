@@ -61,8 +61,8 @@ type Config struct {
 	AmazonS3      reader.AmazonS3Config      `json:"amazon_s3" yaml:"amazon_s3"`
 	AmazonSQS     reader.AmazonSQSConfig     `json:"amazon_sqs" yaml:"amazon_sqs"`
 	AMQP          reader.AMQPConfig          `json:"amqp" yaml:"amqp"`
+	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
 	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
-	FanIn         FanInConfig                `json:"fan_in" yaml:"fan_in"`
 	File          FileConfig                 `json:"file" yaml:"file"`
 	HTTPClient    HTTPClientConfig           `json:"http_client" yaml:"http_client"`
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
@@ -87,8 +87,8 @@ func NewConfig() Config {
 		AmazonS3:      reader.NewAmazonS3Config(),
 		AmazonSQS:     reader.NewAmazonSQSConfig(),
 		AMQP:          reader.NewAMQPConfig(),
+		Broker:        NewBrokerConfig(),
 		Dynamic:       NewDynamicConfig(),
-		FanIn:         NewFanInConfig(),
 		File:          NewFileConfig(),
 		HTTPClient:    NewHTTPClientConfig(),
 		HTTPServer:    NewHTTPServerConfig(),
@@ -124,16 +124,16 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 
 	t := conf.Type
 	outputMap["type"] = t
-	if t == "fan_in" {
+	if t == "broker" {
 		inSlice := []interface{}{}
-		for _, input := range conf.FanIn.Inputs {
+		for _, input := range conf.Broker.Inputs {
 			var sanInput interface{}
 			if sanInput, err = SanitiseConfig(input); err != nil {
 				return nil, err
 			}
 			inSlice = append(inSlice, sanInput)
 		}
-		outputMap["fan_in"] = map[string]interface{}{
+		outputMap["broker"] = map[string]interface{}{
 			"inputs": inSlice,
 		}
 	} else {

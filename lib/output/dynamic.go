@@ -39,8 +39,9 @@ func init() {
 	constructors["dynamic"] = typeSpec{
 		constructor: NewDynamic,
 		description: `
-The dynamic type is similar to the 'fan_out' type except the outputs can be
-changed during runtime via a REST HTTP interface.
+The dynamic type is a special broker type where the outputs are identified by
+unique labels and can be created, changed and removed during runtime via a REST
+HTTP interface.
 
 To GET a JSON map of output identifiers with their current uptimes use the
 '/outputs' endpoint.

@@ -32,12 +32,12 @@ input:
     consumer_tag: benthos-consumer
     prefetch_count: 1
     prefetch_size: 0
+  broker:
+    inputs: []
   dynamic:
     inputs: {}
     prefix: ""
     timeout_ms: 5000
-  fan_in:
-    inputs: []
   file:
     path: ""
     multipart: false
@@ -169,7 +169,7 @@ input:
       content: ""
     sample:
       retain: 0.1
-      randomseed: 0
+      seed: 0
     select_parts:
       parts:
       - 0
@@ -204,12 +204,13 @@ output:
     exchange: benthos-exchange
     exchange_type: direct
     key: benthos-key
+  broker:
+    pattern: fan_out
+    outputs: []
   dynamic:
     outputs: {}
     prefix: ""
     timeout_ms: 5000
-  fan_out:
-    outputs: []
   file:
     path: ""
     custom_delimiter: ""
@@ -274,8 +275,6 @@ output:
   redis_pubsub:
     url: tcp://localhost:6379
     channel: benthos_chan
-  round_robin:
-    outputs: []
   scalability_protocols:
     urls:
     - tcp://localhost:5556

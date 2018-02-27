@@ -1,8 +1,8 @@
 http:
   address: 0.0.0.0:4196
 input:
-  type: fan_in
-  fan_in:
+  type: broker
+  broker:
     inputs:
     - type: redis_pubsub
       redis_pubsub:
