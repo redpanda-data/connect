@@ -68,7 +68,7 @@ type HTTPClientConfig struct {
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		URL:            "http://localhost:8081/post",
+		URL:            "http://localhost:4195/post",
 		Verb:           "POST",
 		ContentType:    "application/octet-stream",
 		OAuth:          oauth.NewClientConfig(),

@@ -79,10 +79,14 @@ func (e *Empty) loop() {
 	var open bool
 	for atomic.LoadInt32(&e.running) == 1 {
 		var inT types.Transaction
-		if inT, open = <-e.messagesIn; !open {
+		select {
+		case inT, open = <-e.messagesIn:
+			if !open {
+				return
+			}
+		case <-e.closeChan:
 			return
 		}
-
 		select {
 		case e.messagesOut <- inT:
 		case <-e.closeChan:

@@ -123,7 +123,12 @@ func (p *Processor) loop() {
 			case <-p.closeChan:
 				return
 			}
-			if res, open = <-p.responsesIn; !open {
+			select {
+			case res, open = <-p.responsesIn:
+				if !open {
+					return
+				}
+			case <-p.closeChan:
 				return
 			}
 			if res.Error() == nil {

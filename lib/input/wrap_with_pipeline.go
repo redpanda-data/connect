@@ -78,6 +78,7 @@ func (i *WithPipeline) TransactionChan() <-chan types.Transaction {
 // CloseAsync triggers a closure of this object but does not block.
 func (i *WithPipeline) CloseAsync() {
 	i.in.CloseAsync()
+	i.pipe.CloseAsync()
 }
 
 // WaitForClose is a blocking call to wait until the object has finished closing
