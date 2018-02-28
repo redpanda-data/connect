@@ -60,7 +60,6 @@ func TestNoneBufferBasic(t *testing.T) {
 	nThreads, nMessages := 5, 100
 
 	conf := NewConfig()
-	conf.RetryThrottleMS = 1
 	empty, err := NewEmpty(conf, nil, nil)
 	if err != nil {
 		t.Error(err)

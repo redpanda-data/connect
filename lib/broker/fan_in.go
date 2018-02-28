@@ -80,6 +80,8 @@ func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
 			}
 		}(n)
 	}
+
+	go i.loop()
 	return i, nil
 }
 
@@ -102,10 +104,8 @@ func (i *FanIn) loop() {
 	}()
 
 	for len(i.inputMap) > 0 {
-		select {
-		case index := <-i.inputClosedChan:
-			delete(i.inputMap, index)
-		}
+		index := <-i.inputClosedChan
+		delete(i.inputMap, index)
 	}
 }
 

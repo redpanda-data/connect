@@ -25,7 +25,6 @@ import (
 
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util"
 )
 
 //------------------------------------------------------------------------------
@@ -45,7 +44,8 @@ func WrapWithPipeline(out Type, pipeConstructor pipeline.ConstructorFunc) (*With
 	if err != nil {
 		return nil, err
 	}
-	if err = util.Couple(pipe, out); err != nil {
+
+	if err = out.StartReceiving(pipe.TransactionChan()); err != nil {
 		return nil, err
 	}
 	return &WithPipeline{
@@ -67,16 +67,10 @@ func WrapWithPipelines(out Type, pipeConstructors ...pipeline.ConstructorFunc) (
 
 //------------------------------------------------------------------------------
 
-// ResponseChan returns the channel used for reading response messages from this
-// output.
-func (i *WithPipeline) ResponseChan() <-chan types.Response {
-	return i.pipe.ResponseChan()
-}
-
 // StartReceiving starts the type listening to a message channel from a
 // producer.
-func (i *WithPipeline) StartReceiving(msgChan <-chan types.Message) error {
-	return i.pipe.StartReceiving(msgChan)
+func (i *WithPipeline) StartReceiving(tsChan <-chan types.Transaction) error {
+	return i.pipe.StartReceiving(tsChan)
 }
 
 //------------------------------------------------------------------------------

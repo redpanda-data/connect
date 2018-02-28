@@ -85,8 +85,7 @@ type HTTPServer struct {
 	mux    *http.ServeMux
 	server *http.Server
 
-	messages  chan types.Message
-	responses <-chan types.Response
+	transactions chan types.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -103,16 +102,15 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	h := HTTPServer{
-		running:    1,
-		conf:       conf,
-		stats:      stats,
-		log:        log.NewModule(".input.http"),
-		mux:        mux,
-		server:     server,
-		messages:   make(chan types.Message),
-		responses:  nil,
-		closeChan:  make(chan struct{}),
-		closedChan: make(chan struct{}),
+		running:      1,
+		conf:         conf,
+		stats:        stats,
+		log:          log.NewModule(".input.http"),
+		mux:          mux,
+		server:       server,
+		transactions: make(chan types.Transaction),
+		closeChan:    make(chan struct{}),
+		closedChan:   make(chan struct{}),
 	}
 
 	if mux != nil {
@@ -123,6 +121,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		)
 	}
 
+	go h.loop()
 	return &h, nil
 }
 
@@ -186,8 +185,9 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		msg.Parts = [][]byte{msgBytes}
 	}
 
+	resChan := make(chan types.Response)
 	select {
-	case h.messages <- msg:
+	case h.transactions <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
 		h.stats.Incr("input.http_server.send.timeout", 1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
@@ -198,7 +198,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	select {
-	case res, open := <-h.responses:
+	case res, open := <-resChan:
 		if !open {
 			http.Error(w, "Server closing", http.StatusServiceUnavailable)
 			return
@@ -213,7 +213,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		go func() {
 			// Even if the request times out, we still need to drain a response.
-			resAsync := <-h.responses
+			resAsync := <-resChan
 			if resAsync.Error() != nil {
 				h.stats.Incr("input.http_server.send.async_error", 1)
 			} else {
@@ -236,7 +236,7 @@ func (h *HTTPServer) loop() {
 
 		h.stats.Decr("input.http_server.running", 1)
 
-		close(h.messages)
+		close(h.transactions)
 		close(h.closedChan)
 	}()
 	h.stats.Incr("input.http_server.running", 1)
@@ -265,20 +265,9 @@ func (h *HTTPServer) loop() {
 	<-h.closeChan
 }
 
-// StartListening sets the channel used by the input to validate message
-// receipt.
-func (h *HTTPServer) StartListening(responses <-chan types.Response) error {
-	if h.responses != nil {
-		return types.ErrAlreadyStarted
-	}
-	h.responses = responses
-	go h.loop()
-	return nil
-}
-
-// MessageChan returns the messages channel.
-func (h *HTTPServer) MessageChan() <-chan types.Message {
-	return h.messages
+// TransactionChan returns the transactions channel.
+func (h *HTTPServer) TransactionChan() <-chan types.Transaction {
+	return h.transactions
 }
 
 // CloseAsync shuts down the HTTPServer input and stops processing requests.

@@ -95,7 +95,12 @@ func (o *RoundRobin) loop() {
 	open := false
 	for atomic.LoadInt32(&o.running) == 1 {
 		var ts types.Transaction
-		if ts, open = <-o.transactions; !open {
+		select {
+		case ts, open = <-o.transactions:
+			if !open {
+				return
+			}
+		case <-o.closeChan:
 			return
 		}
 		o.stats.Incr("broker.round_robin.messages.received", 1)

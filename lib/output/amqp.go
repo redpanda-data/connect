@@ -77,8 +77,7 @@ type AMQP struct {
 	amqpChan        *amqp.Channel
 	amqpConfirmChan <-chan amqp.Confirmation
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -87,14 +86,12 @@ type AMQP struct {
 // NewAMQP creates a new AMQP output type.
 func NewAMQP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	a := AMQP{
-		running:      1,
-		log:          log.NewModule(".output.amqp"),
-		stats:        stats,
-		conf:         conf,
-		messages:     nil,
-		responseChan: make(chan types.Response),
-		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		running:    1,
+		log:        log.NewModule(".output.amqp"),
+		stats:      stats,
+		conf:       conf,
+		closedChan: make(chan struct{}),
+		closeChan:  make(chan struct{}),
 	}
 
 	return &a, nil
@@ -158,7 +155,6 @@ func (a *AMQP) loop() {
 		a.disconnect()
 		a.stats.Decr("output.amqp.running", 1)
 
-		close(a.responseChan)
 		close(a.closedChan)
 	}()
 	a.stats.Incr("output.amqp.running", 1)
@@ -194,9 +190,9 @@ func (a *AMQP) loop() {
 			}
 		}
 
-		var msg types.Message
+		var ts types.Transaction
 		select {
-		case msg, open = <-a.messages:
+		case ts, open = <-a.transactions:
 			if !open {
 				return
 			}
@@ -206,7 +202,7 @@ func (a *AMQP) loop() {
 
 		a.stats.Incr("output.amqp.count", 1)
 		var err error
-		for _, part := range msg.Parts {
+		for _, part := range ts.Payload.Parts {
 			err = a.amqpChan.Publish(
 				a.conf.AMQP.Exchange,   // publish to an exchange
 				a.conf.AMQP.BindingKey, // routing to 0 or more queues
@@ -243,7 +239,7 @@ func (a *AMQP) loop() {
 		}
 
 		select {
-		case a.responseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- types.NewSimpleResponse(err):
 		case <-a.closeChan:
 			return
 		}
@@ -251,18 +247,13 @@ func (a *AMQP) loop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (a *AMQP) StartReceiving(msgs <-chan types.Message) error {
-	if a.messages != nil {
+func (a *AMQP) StartReceiving(ts <-chan types.Transaction) error {
+	if a.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	a.messages = msgs
+	a.transactions = ts
 	go a.loop()
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (a *AMQP) ResponseChan() <-chan types.Response {
-	return a.responseChan
 }
 
 // CloseAsync shuts down the AMQP output and stops processing messages.

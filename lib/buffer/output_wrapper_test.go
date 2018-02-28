@@ -39,7 +39,6 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	conf.RetryThrottleMS = 1
 	b := NewOutputWrapper(conf, impl.NewMemory(impl.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), metrics.DudType{})
@@ -214,7 +213,6 @@ func TestBufferClosing(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	conf.RetryThrottleMS = 1
 	b := NewOutputWrapper(conf, impl.NewMemory(impl.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), metrics.DudType{})
@@ -285,7 +283,6 @@ func TestOutputWrapperErrProp(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	conf.RetryThrottleMS = 1
 	b := NewOutputWrapper(conf, impl.NewMemory(impl.NewMemoryConfig()), metrics.DudType{})
 	if err := b.StartReceiving(tChan); err != nil {
 		t.Error(err)

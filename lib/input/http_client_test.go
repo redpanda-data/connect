@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -29,7 +30,12 @@ func TestHTTPClientGET(t *testing.T) {
 
 	var reqCount uint32
 	index := 0
+
+	var reqMut sync.Mutex
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqMut.Lock()
+		defer reqMut.Unlock()
+
 		if exp, act := "GET", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -50,38 +56,39 @@ func TestHTTPClientGET(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-	if err = h.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
+	var tr types.Transaction
+	var open bool
 
+	reqMut.Lock()
 	for _, expPart := range inputs {
+		reqMut.Unlock()
 		select {
-		case msg, open := <-h.MessageChan():
+		case tr, open = <-h.TransactionChan():
 			if !open {
 				t.Fatal("Chan not open")
 			}
-			if exp, act := 1, len(msg.Parts); exp != act {
+			if exp, act := 1, len(tr.Payload.Parts); exp != act {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
-			if exp, act := expPart, string(msg.Parts[0]); exp != act {
+			if exp, act := expPart, string(tr.Payload.Parts[0]); exp != act {
 				t.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
 
+		reqMut.Lock()
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case tr.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
 	}
 
-	close(resChan)
+	h.CloseAsync()
+	reqMut.Unlock()
 	select {
-	case <-h.MessageChan():
+	case <-h.TransactionChan():
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 	}
@@ -90,7 +97,7 @@ func TestHTTPClientGET(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := uint32(len(inputs)+1), atomic.LoadUint32(&reqCount); exp != act {
+	if exp, act := uint32(len(inputs)), atomic.LoadUint32(&reqCount); exp != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", act, exp)
 	}
 }
@@ -105,8 +112,13 @@ func TestHTTPClientPOST(t *testing.T) {
 		"foo5",
 	}
 
+	var reqMut sync.Mutex
+
 	index := 0
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqMut.Lock()
+		defer reqMut.Unlock()
+
 		if exp, act := "POST", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -140,38 +152,40 @@ func TestHTTPClientPOST(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-	if err = h.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
+	reqMut.Lock()
 	for _, expPart := range inputs {
+		var ts types.Transaction
+		var open bool
+
+		reqMut.Unlock()
 		select {
-		case msg, open := <-h.MessageChan():
+		case ts, open = <-h.TransactionChan():
 			if !open {
 				t.Fatal("Chan not open")
 			}
-			if exp, act := 1, len(msg.Parts); exp != act {
+			if exp, act := 1, len(ts.Payload.Parts); exp != act {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
-			if exp, act := expPart, string(msg.Parts[0]); exp != act {
+			if exp, act := expPart, string(ts.Payload.Parts[0]); exp != act {
 				t.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
 
+		reqMut.Lock()
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
 	}
 
-	close(resChan)
+	h.CloseAsync()
+	reqMut.Unlock()
+
 	select {
-	case <-h.MessageChan():
+	case <-h.TransactionChan():
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 	}
@@ -180,14 +194,19 @@ func TestHTTPClientPOST(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := uint32(len(inputs)+1), atomic.LoadUint32(&reqCount); exp != act {
+	if exp, act := uint32(len(inputs)), atomic.LoadUint32(&reqCount); exp != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", act, exp)
 	}
 }
 
 func TestHTTPClientGETMultipart(t *testing.T) {
+	var reqMut sync.Mutex
+
 	var reqCount uint32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqMut.Lock()
+		defer reqMut.Unlock()
+
 		if exp, act := "GET", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -229,42 +248,41 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-	if err = h.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
+	var tr types.Transaction
+	var open bool
 
 	select {
-	case msg, open := <-h.MessageChan():
+	case tr, open = <-h.TransactionChan():
 		if !open {
 			t.Fatal("Chan not open")
 		}
-		if exp, act := 3, len(msg.Parts); exp != act {
+		if exp, act := 3, len(tr.Payload.Parts); exp != act {
 			t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 		}
-		if exp, act := "hello", string(msg.Parts[0]); exp != act {
+		if exp, act := "hello", string(tr.Payload.Parts[0]); exp != act {
 			t.Errorf("Wrong part: %v != %v", act, exp)
 		}
-		if exp, act := "http", string(msg.Parts[1]); exp != act {
+		if exp, act := "http", string(tr.Payload.Parts[1]); exp != act {
 			t.Errorf("Wrong part: %v != %v", act, exp)
 		}
-		if exp, act := "world", string(msg.Parts[2]); exp != act {
+		if exp, act := "world", string(tr.Payload.Parts[2]); exp != act {
 			t.Errorf("Wrong part: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 	}
 
+	reqMut.Lock()
 	select {
-	case resChan <- types.NewSimpleResponse(nil):
+	case tr.ResponseChan <- types.NewSimpleResponse(nil):
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 	}
+	h.CloseAsync()
+	reqMut.Unlock()
 
-	close(resChan)
 	select {
-	case <-h.MessageChan():
+	case <-h.TransactionChan():
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 	}
@@ -273,7 +291,7 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := uint32(2), atomic.LoadUint32(&reqCount); exp != act {
+	if exp, act := uint32(1), atomic.LoadUint32(&reqCount); exp != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", act, exp)
 	}
 }
@@ -300,8 +318,13 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 		},
 	}
 
+	var reqMut sync.Mutex
+
 	var index int
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tserve := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqMut.Lock()
+		defer reqMut.Unlock()
+
 		if exp, act := "GET", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -328,10 +351,10 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 		w.Header().Add("Content-Type", writer.FormDataContentType())
 		w.Write(body.Bytes())
 	}))
-	defer ts.Close()
+	defer tserve.Close()
 
 	conf := NewConfig()
-	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 
@@ -341,23 +364,22 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-	if err = h.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
+	reqMut.Lock()
 	for _, test := range tests {
+		var ts types.Transaction
+		var open bool
+
+		reqMut.Unlock()
 		select {
-		case msg, open := <-h.MessageChan():
+		case ts, open = <-h.TransactionChan():
 			if !open {
 				t.Fatal("Chan not open")
 			}
-			if exp, act := len(test), len(msg.Parts); exp != act {
+			if exp, act := len(test), len(ts.Payload.Parts); exp != act {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
 			for i, part := range test {
-				if exp, act := part, string(msg.Parts[i]); exp != act {
+				if exp, act := part, string(ts.Payload.Parts[i]); exp != act {
 					t.Errorf("Wrong part: %v != %v", act, exp)
 				}
 			}
@@ -365,16 +387,19 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 			t.Errorf("Action timed out")
 		}
 
+		reqMut.Lock()
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
 	}
 
-	close(resChan)
+	h.CloseAsync()
+	reqMut.Unlock()
+
 	select {
-	case <-h.MessageChan():
+	case <-h.TransactionChan():
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 	}
@@ -406,7 +431,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 		},
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tserve := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if exp, act := "GET", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -425,10 +450,10 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 		w.Header().Add("Content-Type", "application/octet-stream")
 		w.Write(body.Bytes())
 	}))
-	defer ts.Close()
+	defer tserve.Close()
 
 	conf := NewConfig()
-	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 	conf.HTTPClient.Stream = true
@@ -440,23 +465,20 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-	if err = h.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
 	for _, test := range tests {
+		var ts types.Transaction
+		var open bool
+
 		select {
-		case msg, open := <-h.MessageChan():
+		case ts, open = <-h.TransactionChan():
 			if !open {
 				t.Fatal("Chan not open")
 			}
-			if exp, act := len(test), len(msg.Parts); exp != act {
+			if exp, act := len(test), len(ts.Payload.Parts); exp != act {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
 			for i, part := range test {
-				if exp, act := part, string(msg.Parts[i]); exp != act {
+				if exp, act := part, string(ts.Payload.Parts[i]); exp != act {
 					t.Errorf("Wrong part: %v != %v", act, exp)
 				}
 			}
@@ -465,7 +487,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 		}
 
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
@@ -483,7 +505,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 		{"foo", "baz"},
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tserve := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if exp, act := "GET", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -500,10 +522,10 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 		w.Header().Add("Content-Type", "application/octet-stream")
 		w.Write(body.Bytes())
 	}))
-	defer ts.Close()
+	defer tserve.Close()
 
 	conf := NewConfig()
-	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 	conf.HTTPClient.Stream = true
@@ -515,24 +537,20 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-	if err = h.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
 	for i := 0; i < 10; i++ {
 		for _, testMsg := range msgs {
+			var ts types.Transaction
+			var open bool
 			select {
-			case msg, open := <-h.MessageChan():
+			case ts, open = <-h.TransactionChan():
 				if !open {
 					t.Fatal("Chan not open")
 				}
-				if exp, act := len(testMsg), len(msg.Parts); exp != act {
+				if exp, act := len(testMsg), len(ts.Payload.Parts); exp != act {
 					t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 				}
 				for j, part := range testMsg {
-					if exp, act := part, string(msg.Parts[j]); exp != act {
+					if exp, act := part, string(ts.Payload.Parts[j]); exp != act {
 						t.Errorf("Wrong part: %v != %v", act, exp)
 					}
 				}
@@ -541,7 +559,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 			}
 
 			select {
-			case resChan <- types.NewSimpleResponse(nil):
+			case ts.ResponseChan <- types.NewSimpleResponse(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
@@ -557,7 +575,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 func TestHTTPClientStreamGETRecover(t *testing.T) {
 	msgs := []string{"foo", "bar"}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tserve := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if exp, act := "GET", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -571,10 +589,10 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 		w.Header().Add("Content-Type", "application/octet-stream")
 		w.Write(body.Bytes())
 	}))
-	defer ts.Close()
+	defer tserve.Close()
 
 	conf := NewConfig()
-	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 	conf.HTTPClient.Stream = true
@@ -586,23 +604,19 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-	if err = h.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
 	for i := 0; i < 10; i++ {
 		for _, testMsg := range msgs {
+			var ts types.Transaction
+			var open bool
 			select {
-			case msg, open := <-h.MessageChan():
+			case ts, open = <-h.TransactionChan():
 				if !open {
 					t.Fatal("Chan not open")
 				}
-				if exp, act := 1, len(msg.Parts); exp != act {
+				if exp, act := 1, len(ts.Payload.Parts); exp != act {
 					t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 				}
-				if exp, act := testMsg, string(msg.Parts[0]); exp != act {
+				if exp, act := testMsg, string(ts.Payload.Parts[0]); exp != act {
 					t.Errorf("Wrong part: %v != %v", act, exp)
 				}
 			case <-time.After(time.Second):
@@ -610,7 +624,7 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 			}
 
 			select {
-			case resChan <- types.NewSimpleResponse(nil):
+			case ts.ResponseChan <- types.NewSimpleResponse(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
@@ -647,7 +661,7 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 	writer.Close()
 	header := writer.FormDataContentType()
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tserve := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if exp, act := "GET", r.Method; exp != act {
 			b.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -655,10 +669,10 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 		w.Header().Add("Content-Type", header)
 		w.Write(body.Bytes())
 	}))
-	defer ts.Close()
+	defer tserve.Close()
 
 	conf := NewConfig()
-	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
 
@@ -668,40 +682,28 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-	if err = h.StartListening(resChan); err != nil {
-		b.Error(err)
-		return
-	}
-
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		msg, open := <-h.MessageChan()
+		ts, open := <-h.TransactionChan()
 		if !open {
 			b.Fatal("Chan not open")
 		}
-		if exp, act := 3, len(msg.Parts); exp != act {
+		if exp, act := 3, len(ts.Payload.Parts); exp != act {
 			b.Fatalf("Wrong count of parts: %v != %v", act, exp)
 		}
 		for i, part := range parts {
-			if exp, act := part, string(msg.Parts[i]); exp != act {
+			if exp, act := part, string(ts.Payload.Parts[i]); exp != act {
 				b.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		}
-		resChan <- types.NewSimpleResponse(nil)
+		ts.ResponseChan <- types.NewSimpleResponse(nil)
 	}
 
 	b.StopTimer()
 
-	close(resChan)
-	select {
-	case <-h.MessageChan():
-	case <-time.After(time.Second):
-		b.Errorf("Action timed out")
-	}
-
+	h.CloseAsync()
 	if err := h.WaitForClose(time.Second); err != nil {
 		b.Error(err)
 	}

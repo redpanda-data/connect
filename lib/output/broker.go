@@ -104,7 +104,7 @@ func NewBroker(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 
 	switch conf.Broker.Pattern {
 	case "fan_out":
-		return broker.NewFanOut(broker.NewFanOutConfig(), outputs, log, stats)
+		return broker.NewFanOut(outputs, log, stats)
 	case "round_robin":
 		return broker.NewRoundRobin(outputs, stats)
 	}

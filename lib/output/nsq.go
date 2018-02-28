@@ -75,8 +75,7 @@ type NSQ struct {
 
 	producer *nsq.Producer
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -85,14 +84,12 @@ type NSQ struct {
 // NewNSQ creates a new NSQ output type.
 func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	n := NSQ{
-		running:      1,
-		log:          log.NewModule(".output.nsq"),
-		stats:        stats,
-		conf:         conf,
-		messages:     nil,
-		responseChan: make(chan types.Response),
-		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		running:    1,
+		log:        log.NewModule(".output.nsq"),
+		stats:      stats,
+		conf:       conf,
+		closedChan: make(chan struct{}),
+		closeChan:  make(chan struct{}),
 	}
 
 	return &n, nil
@@ -133,7 +130,6 @@ func (n *NSQ) loop() {
 		n.disconnect()
 		n.stats.Decr("output.nsq.running", 1)
 
-		close(n.responseChan)
 		close(n.closedChan)
 	}()
 	n.stats.Incr("output.nsq.running", 1)
@@ -154,9 +150,9 @@ func (n *NSQ) loop() {
 
 	var open bool
 	for atomic.LoadInt32(&n.running) == 1 {
-		var msg types.Message
+		var ts types.Transaction
 		select {
-		case msg, open = <-n.messages:
+		case ts, open = <-n.transactions:
 			if !open {
 				return
 			}
@@ -165,7 +161,7 @@ func (n *NSQ) loop() {
 		}
 		n.stats.Incr("output.nsq.count", 1)
 		var err error
-		for _, part := range msg.Parts {
+		for _, part := range ts.Payload.Parts {
 			err = n.producer.Publish(n.conf.NSQ.Topic, part)
 			if err != nil {
 				n.stats.Incr("output.nsq.send.error", 1)
@@ -175,7 +171,7 @@ func (n *NSQ) loop() {
 			}
 		}
 		select {
-		case n.responseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- types.NewSimpleResponse(err):
 		case <-n.closeChan:
 			return
 		}
@@ -183,18 +179,13 @@ func (n *NSQ) loop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (n *NSQ) StartReceiving(msgs <-chan types.Message) error {
-	if n.messages != nil {
+func (n *NSQ) StartReceiving(ts <-chan types.Transaction) error {
+	if n.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	n.messages = msgs
+	n.transactions = ts
 	go n.loop()
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (n *NSQ) ResponseChan() <-chan types.Response {
-	return n.responseChan
 }
 
 // CloseAsync shuts down the NSQ output and stops processing messages.

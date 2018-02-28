@@ -40,7 +40,8 @@ import (
 func TestScaleProtoBasic(t *testing.T) {
 	nTestLoops := 1000
 
-	sendChan := make(chan types.Message)
+	sendChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
 
 	conf := NewConfig()
 	conf.ScaleProto.URLs = []string{"tcp://localhost:1324"}
@@ -86,7 +87,7 @@ func TestScaleProtoBasic(t *testing.T) {
 		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
 
 		select {
-		case sendChan <- testMsg:
+		case sendChan <- types.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 			return
@@ -102,7 +103,7 @@ func TestScaleProtoBasic(t *testing.T) {
 		}
 
 		select {
-		case res := <-s.ResponseChan():
+		case res := <-resChan:
 			if res.Error() != nil {
 				t.Error(res.Error())
 				return

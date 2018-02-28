@@ -27,7 +27,6 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
-	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -48,8 +47,6 @@ output will be directly applied down the pipeline.`,
 type Empty struct {
 	running int32
 
-	throt *throttle.Type
-
 	messagesOut chan types.Transaction
 	messagesIn  <-chan types.Transaction
 
@@ -65,12 +62,6 @@ func NewEmpty(config Config, log log.Modular, stats metrics.Type) (Type, error) 
 		closeChan:   make(chan struct{}),
 		closed:      make(chan struct{}),
 	}
-	e.throt = throttle.New(
-		throttle.OptCloseChan(e.closeChan),
-		throttle.OptThrottlePeriod(
-			time.Millisecond*time.Duration(config.RetryThrottleMS),
-		),
-	)
 	return e, nil
 }
 
@@ -97,16 +88,6 @@ func (e *Empty) loop() {
 		case <-e.closeChan:
 			return
 		}
-
-		// TODO: Reimplement async throttle.
-		/*
-			if res.Error() != nil {
-				// Back off on consecutive retries
-				e.throt.Retry()
-			} else {
-				e.throt.Reset()
-			}
-		*/
 	}
 }
 

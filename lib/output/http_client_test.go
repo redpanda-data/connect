@@ -42,7 +42,8 @@ import (
 //------------------------------------------------------------------------------
 
 func TestHTTPClientRetries(t *testing.T) {
-	sendChan, resultChan := make(chan types.Message), make(chan types.Message, 1)
+	sendChan, resultChan := make(chan types.Transaction), make(chan types.Message, 1)
+	resChan := make(chan types.Response)
 
 	var allowReq, reqCount uint32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -83,14 +84,14 @@ func TestHTTPClientRetries(t *testing.T) {
 	}
 
 	select {
-	case sendChan <- types.Message{Parts: [][]byte{[]byte("test")}}:
+	case sendChan <- types.NewTransaction(types.Message{Parts: [][]byte{[]byte("test")}}, resChan):
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 		return
 	}
 
 	select {
-	case res := <-h.ResponseChan():
+	case res := <-resChan:
 		if res.Error() == nil {
 			t.Error("Expected error from end of retries")
 		}
@@ -113,7 +114,8 @@ func TestHTTPClientRetries(t *testing.T) {
 func TestHTTPClientBasic(t *testing.T) {
 	nTestLoops := 1000
 
-	sendChan, resultChan := make(chan types.Message), make(chan types.Message, 1)
+	sendChan, resultChan := make(chan types.Transaction), make(chan types.Message, 1)
+	resChan := make(chan types.Response)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var msg types.Message
@@ -152,7 +154,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
 
 		select {
-		case sendChan <- testMsg:
+		case sendChan <- types.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 			return
@@ -174,7 +176,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		}
 
 		select {
-		case res := <-h.ResponseChan():
+		case res := <-resChan:
 			if res.Error() != nil {
 				t.Error(res.Error())
 				return
@@ -196,7 +198,8 @@ func TestHTTPClientBasic(t *testing.T) {
 func TestHTTPClientMultipart(t *testing.T) {
 	nTestLoops := 1000
 
-	sendChan, resultChan := make(chan types.Message), make(chan types.Message, 1)
+	sendChan, resultChan := make(chan types.Transaction), make(chan types.Message, 1)
+	resChan := make(chan types.Response)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var msg types.Message
@@ -262,7 +265,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 		}}
 
 		select {
-		case sendChan <- testMsg:
+		case sendChan <- types.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 			return
@@ -288,7 +291,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 		}
 
 		select {
-		case res := <-h.ResponseChan():
+		case res := <-resChan:
 			if res.Error() != nil {
 				t.Error(res.Error())
 				return

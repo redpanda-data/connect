@@ -78,8 +78,7 @@ type NATSStream struct {
 	urls string
 	conf Config
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -97,14 +96,12 @@ func NewNATSStream(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	n := NATSStream{
-		running:      1,
-		log:          log.NewModule(".output.nats_stream"),
-		stats:        stats,
-		conf:         conf,
-		messages:     nil,
-		responseChan: make(chan types.Response),
-		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		running:    1,
+		log:        log.NewModule(".output.nats_stream"),
+		stats:      stats,
+		conf:       conf,
+		closedChan: make(chan struct{}),
+		closeChan:  make(chan struct{}),
 	}
 	n.urls = strings.Join(conf.NATSStream.URLs, ",")
 
@@ -134,7 +131,6 @@ func (n *NATSStream) loop() {
 		}
 		n.stats.Decr("output.nats_stream.running", 1)
 
-		close(n.responseChan)
 		close(n.closedChan)
 	}()
 	n.stats.Incr("output.nats_stream.running", 1)
@@ -155,9 +151,9 @@ func (n *NATSStream) loop() {
 
 	var open bool
 	for atomic.LoadInt32(&n.running) == 1 {
-		var msg types.Message
+		var ts types.Transaction
 		select {
-		case msg, open = <-n.messages:
+		case ts, open = <-n.transactions:
 			if !open {
 				return
 			}
@@ -166,7 +162,7 @@ func (n *NATSStream) loop() {
 		}
 		n.stats.Incr("output.nats_stream.count", 1)
 		var err error
-		for _, part := range msg.Parts {
+		for _, part := range ts.Payload.Parts {
 			err = n.natsConn.Publish(n.conf.NATSStream.Subject, part)
 			if err != nil {
 				n.stats.Incr("output.nats_stream.send.error", 1)
@@ -176,7 +172,7 @@ func (n *NATSStream) loop() {
 			}
 		}
 		select {
-		case n.responseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- types.NewSimpleResponse(err):
 		case <-n.closeChan:
 			return
 		}
@@ -184,18 +180,13 @@ func (n *NATSStream) loop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (n *NATSStream) StartReceiving(msgs <-chan types.Message) error {
-	if n.messages != nil {
+func (n *NATSStream) StartReceiving(ts <-chan types.Transaction) error {
+	if n.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	n.messages = msgs
+	n.transactions = ts
 	go n.loop()
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (n *NATSStream) ResponseChan() <-chan types.Response {
-	return n.responseChan
 }
 
 // CloseAsync shuts down the NATSStream output and stops processing messages.

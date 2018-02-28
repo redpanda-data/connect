@@ -24,7 +24,6 @@ import (
 	"errors"
 	"os"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -87,7 +86,7 @@ func TestWriterCantConnect(t *testing.T) {
 		return
 	}
 
-	if err = w.StartReceiving(make(chan types.Message)); err != nil {
+	if err = w.StartReceiving(make(chan types.Transaction)); err != nil {
 		t.Error(err)
 	}
 	if err = w.StartReceiving(nil); err == nil {
@@ -119,60 +118,6 @@ func (w *writerCantSend) WaitForClose(time.Duration) error {
 	return nil
 }
 
-func TestWriterCantSend(t *testing.T) {
-	t.Parallel()
-
-	writerImpl := &writerCantSend{}
-
-	w, err := NewWriter(
-		"foo", writerImpl,
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
-	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	msgChan := make(chan types.Message)
-
-	if err = w.StartReceiving(msgChan); err != nil {
-		t.Error(err)
-	}
-	if err = w.StartReceiving(nil); err == nil {
-		t.Error("Expected error from duplicate receiver call")
-	}
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		res, open := <-w.ResponseChan()
-		if open {
-			if act, exp := res.Error(), types.ErrNotConnected; exp != act {
-				t.Errorf("Received unexpected response: %v != %v", act, exp)
-			}
-		}
-		wg.Done()
-	}()
-
-	select {
-	case msgChan <- types.Message{}:
-	case <-time.After(time.Second):
-		t.Error("Timed out")
-	}
-
-	// We will be failing to send but should still exit immediately.
-	w.CloseAsync()
-	if err = w.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
-
-	wg.Wait()
-
-	if writerImpl.connected < 1 {
-		t.Errorf("Connected wasn't called enough times: %v", writerImpl.connected)
-	}
-}
-
 func TestWriterCantSendClosed(t *testing.T) {
 	t.Parallel()
 
@@ -187,7 +132,7 @@ func TestWriterCantSendClosed(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
 
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -213,7 +158,7 @@ func TestWriterCantSendClosedChan(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
 
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -241,7 +186,7 @@ func TestWriterStartClosed(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
 
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -272,7 +217,8 @@ func TestWriterClosesOnReconn(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
 
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -298,7 +244,7 @@ func TestWriterClosesOnReconn(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.Message{}:
+	case msgChan <- types.NewTransaction(types.Message{}, resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -322,7 +268,8 @@ func TestWriterClosesOnResend(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
 
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -353,7 +300,7 @@ func TestWriterClosesOnResend(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.Message{}:
+	case msgChan <- types.NewTransaction(types.Message{}, resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -379,7 +326,8 @@ func TestWriterCanReconnect(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
 
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -410,12 +358,12 @@ func TestWriterCanReconnect(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.Message{}:
+	case msgChan <- types.NewTransaction(types.Message{}, resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 	select {
-	case res, open := <-w.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Res chan closed")
 		}
@@ -447,7 +395,8 @@ func TestWriterCantReconnect(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
 
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -455,7 +404,7 @@ func TestWriterCantReconnect(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.Message{}:
+		case msgChan <- types.NewTransaction(types.Message{}, resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -503,7 +452,8 @@ func TestWriterHappyPath(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
 
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -511,9 +461,9 @@ func TestWriterHappyPath(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.Message{
+		case msgChan <- types.NewTransaction(types.Message{
 			Parts: exp,
-		}:
+		}, resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -531,7 +481,7 @@ func TestWriterHappyPath(t *testing.T) {
 	}
 
 	select {
-	case res, open := <-w.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Fatal("Chan closed")
 		}
@@ -572,7 +522,8 @@ func TestWriterSadPath(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
 
 	if err = w.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -580,9 +531,9 @@ func TestWriterSadPath(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.Message{
+		case msgChan <- types.NewTransaction(types.Message{
 			Parts: exp,
-		}:
+		}, resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -600,7 +551,7 @@ func TestWriterSadPath(t *testing.T) {
 	}
 
 	select {
-	case res, open := <-w.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Fatal("Chan closed")
 		}

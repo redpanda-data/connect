@@ -45,8 +45,7 @@ type LineWriter struct {
 
 	customDelim []byte
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	handle io.WriteCloser
 
@@ -63,16 +62,14 @@ func NewLineWriter(
 	stats metrics.Type,
 ) (Type, error) {
 	return &LineWriter{
-		running:      1,
-		typeStr:      typeStr,
-		log:          log.NewModule(".output." + typeStr),
-		stats:        stats,
-		customDelim:  customDelimiter,
-		messages:     nil,
-		responseChan: make(chan types.Response),
-		handle:       handle,
-		closeChan:    make(chan struct{}),
-		closedChan:   make(chan struct{}),
+		running:     1,
+		typeStr:     typeStr,
+		log:         log.NewModule(".output." + typeStr),
+		stats:       stats,
+		customDelim: customDelimiter,
+		handle:      handle,
+		closeChan:   make(chan struct{}),
+		closedChan:  make(chan struct{}),
 	}, nil
 }
 
@@ -92,7 +89,6 @@ func (w *LineWriter) loop() {
 		w.handle.Close()
 		w.stats.Decr(runningPath, 1)
 
-		close(w.responseChan)
 		close(w.closedChan)
 	}()
 	w.stats.Incr(runningPath, 1)
@@ -103,10 +99,10 @@ func (w *LineWriter) loop() {
 	}
 
 	for atomic.LoadInt32(&w.running) == 1 {
-		var msg types.Message
+		var ts types.Transaction
 		var open bool
 		select {
-		case msg, open = <-w.messages:
+		case ts, open = <-w.transactions:
 			if !open {
 				return
 			}
@@ -115,10 +111,10 @@ func (w *LineWriter) loop() {
 			return
 		}
 		var err error
-		if len(msg.Parts) == 1 {
-			_, err = fmt.Fprintf(w.handle, "%s%s", msg.Parts[0], delim)
+		if len(ts.Payload.Parts) == 1 {
+			_, err = fmt.Fprintf(w.handle, "%s%s", ts.Payload.Parts[0], delim)
 		} else {
-			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(msg.Parts, delim), delim, delim)
+			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(ts.Payload.Parts, delim), delim, delim)
 		}
 		if err != nil {
 			w.stats.Incr(errorPath, 1)
@@ -126,7 +122,7 @@ func (w *LineWriter) loop() {
 			w.stats.Incr(successPath, 1)
 		}
 		select {
-		case w.responseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- types.NewSimpleResponse(err):
 		case <-w.closeChan:
 			return
 		}
@@ -134,18 +130,13 @@ func (w *LineWriter) loop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (w *LineWriter) StartReceiving(msgs <-chan types.Message) error {
-	if w.messages != nil {
+func (w *LineWriter) StartReceiving(ts <-chan types.Transaction) error {
+	if w.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	w.messages = msgs
+	w.transactions = ts
 	go w.loop()
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (w *LineWriter) ResponseChan() <-chan types.Response {
-	return w.responseChan
 }
 
 // CloseAsync shuts down the File output and stops processing messages.

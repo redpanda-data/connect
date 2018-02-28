@@ -35,21 +35,15 @@ import (
 //------------------------------------------------------------------------------
 
 type mockInput struct {
-	msgs chan types.Message
-	res  <-chan types.Response
+	ts chan types.Transaction
 }
 
-func (m *mockInput) StartListening(res <-chan types.Response) error {
-	m.res = res
-	return nil
-}
-
-func (m *mockInput) MessageChan() <-chan types.Message {
-	return m.msgs
+func (m *mockInput) TransactionChan() <-chan types.Transaction {
+	return m.ts
 }
 
 func (m *mockInput) CloseAsync() {
-	close(m.msgs)
+	close(m.ts)
 }
 
 func (m *mockInput) WaitForClose(time.Duration) error {
@@ -59,35 +53,21 @@ func (m *mockInput) WaitForClose(time.Duration) error {
 //------------------------------------------------------------------------------
 
 type mockPipe struct {
-	msgsIn <-chan types.Message
-
-	msgs chan types.Message
-	res  chan types.Response
-
-	resBack <-chan types.Response
+	tsIn <-chan types.Transaction
+	ts   chan types.Transaction
 }
 
-func (m *mockPipe) StartListening(res <-chan types.Response) error {
-	m.resBack = res
+func (m *mockPipe) StartReceiving(ts <-chan types.Transaction) error {
+	m.tsIn = ts
 	return nil
 }
 
-func (m *mockPipe) StartReceiving(msgs <-chan types.Message) error {
-	m.msgsIn = msgs
-	return nil
-}
-
-func (m *mockPipe) MessageChan() <-chan types.Message {
-	return m.msgs
-}
-
-func (m *mockPipe) ResponseChan() <-chan types.Response {
-	return m.res
+func (m *mockPipe) TransactionChan() <-chan types.Transaction {
+	return m.ts
 }
 
 func (m *mockPipe) CloseAsync() {
-	close(m.msgs)
-	close(m.res)
+	close(m.ts)
 }
 
 func (m *mockPipe) WaitForClose(time.Duration) error {
@@ -97,10 +77,9 @@ func (m *mockPipe) WaitForClose(time.Duration) error {
 //------------------------------------------------------------------------------
 
 func TestBasicWrapPipeline(t *testing.T) {
-	mockIn := &mockInput{msgs: make(chan types.Message)}
+	mockIn := &mockInput{ts: make(chan types.Transaction)}
 	mockPi := &mockPipe{
-		msgs: make(chan types.Message),
-		res:  make(chan types.Response),
+		ts: make(chan types.Transaction),
 	}
 
 	newInput, err := WrapWithPipeline(mockIn, func() (pipeline.Type, error) {
@@ -115,25 +94,12 @@ func TestBasicWrapPipeline(t *testing.T) {
 		return mockPi, nil
 	})
 
-	if newInput.MessageChan() != mockPi.msgs {
-		t.Error("Wrong message chan in new input type")
+	if newInput.TransactionChan() != mockPi.ts {
+		t.Error("Wrong transaction chan in new input type")
 	}
 
-	dudResChan := make(chan types.Response)
-	if err = newInput.StartListening(dudResChan); err != nil {
-		t.Error(err)
-	}
-
-	if mockPi.resBack != dudResChan {
-		t.Error("Wrong response chan in mock pipe")
-	}
-
-	if mockIn.res != mockPi.res {
-		t.Error("Wrong response chan in mock input")
-	}
-
-	if mockIn.msgs != mockPi.msgsIn {
-		t.Error("Wrong messages chan in mock pipe")
+	if mockIn.ts != mockPi.tsIn {
+		t.Error("Wrong transactions chan in mock pipe")
 	}
 
 	newInput.CloseAsync()
@@ -142,11 +108,11 @@ func TestBasicWrapPipeline(t *testing.T) {
 	}
 
 	select {
-	case _, open := <-mockIn.msgs:
+	case _, open := <-mockIn.ts:
 		if open {
 			t.Error("mock input is still open after close")
 		}
-	case _, open := <-mockPi.msgs:
+	case _, open := <-mockPi.ts:
 		if !open {
 			t.Error("mock pipe is not open after close")
 		}
@@ -156,7 +122,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 }
 
 func TestWrapZeroPipelines(t *testing.T) {
-	mockIn := &mockInput{msgs: make(chan types.Message)}
+	mockIn := &mockInput{ts: make(chan types.Transaction)}
 	newInput, err := WrapWithPipelines(mockIn)
 	if err != nil {
 		t.Error(err)
@@ -168,14 +134,12 @@ func TestWrapZeroPipelines(t *testing.T) {
 }
 
 func TestBasicWrapMultiPipelines(t *testing.T) {
-	mockIn := &mockInput{msgs: make(chan types.Message)}
+	mockIn := &mockInput{ts: make(chan types.Transaction)}
 	mockPi1 := &mockPipe{
-		msgs: make(chan types.Message),
-		res:  make(chan types.Response),
+		ts: make(chan types.Transaction),
 	}
 	mockPi2 := &mockPipe{
-		msgs: make(chan types.Message),
-		res:  make(chan types.Response),
+		ts: make(chan types.Transaction),
 	}
 
 	newInput, err := WrapWithPipelines(mockIn, func() (pipeline.Type, error) {
@@ -192,33 +156,17 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 		return mockPi2, nil
 	})
 
-	if newInput.MessageChan() != mockPi2.msgs {
+	if newInput.TransactionChan() != mockPi2.ts {
 		t.Error("Wrong message chan in new input type")
 	}
-	if mockPi2.msgsIn != mockPi1.msgs {
+	if mockPi2.tsIn != mockPi1.ts {
 		t.Error("Wrong message chan in mock pipe 2")
 	}
 
-	dudResChan := make(chan types.Response)
-	if err = newInput.StartListening(dudResChan); err != nil {
-		t.Error(err)
-	}
-
-	if mockPi2.resBack != dudResChan {
-		t.Error("Wrong response chan in mock pipe 2")
-	}
-
-	if mockIn.res != mockPi1.res {
-		t.Error("Wrong response chan in mock input")
-	}
-	if mockPi2.res != mockPi1.resBack {
-		t.Error("Wrong response chan in mock pipe 1")
-	}
-
-	if mockIn.msgs != mockPi1.msgsIn {
+	if mockIn.ts != mockPi1.tsIn {
 		t.Error("Wrong messages chan in mock pipe 1")
 	}
-	if mockPi1.msgs != mockPi2.msgsIn {
+	if mockPi1.ts != mockPi2.tsIn {
 		t.Error("Wrong messages chan in mock pipe 2")
 	}
 
@@ -228,15 +176,15 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 	}
 
 	select {
-	case _, open := <-mockIn.msgs:
+	case _, open := <-mockIn.ts:
 		if open {
 			t.Error("mock input is still open after close")
 		}
-	case _, open := <-mockPi1.msgs:
+	case _, open := <-mockPi1.ts:
 		if !open {
 			t.Error("mock pipe is not open after close")
 		}
-	case _, open := <-mockPi2.msgs:
+	case _, open := <-mockPi2.ts:
 		if !open {
 			t.Error("mock pipe is not open after close")
 		}
@@ -253,18 +201,18 @@ type mockProc struct {
 	value string
 }
 
-func (m mockProc) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (m mockProc) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	if string(msg.Parts[0]) == m.value {
 		return nil, types.NewSimpleResponse(errMockProc)
 	}
-	msgs := [1]*types.Message{msg}
+	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }
 
 //------------------------------------------------------------------------------
 
 func TestBasicWrapProcessors(t *testing.T) {
-	mockIn := &mockInput{msgs: make(chan types.Message)}
+	mockIn := &mockInput{ts: make(chan types.Transaction)}
 
 	l := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	s := metrics.DudType{}
@@ -282,22 +230,19 @@ func TestBasicWrapProcessors(t *testing.T) {
 	}
 
 	resChan := make(chan types.Response)
-	if err = newInput.StartListening(resChan); err != nil {
-		t.Error(err)
-	}
 
 	msg := types.NewMessage()
 	msg.Parts = [][]byte{[]byte("foo")}
 
 	select {
-	case mockIn.msgs <- msg:
+	case mockIn.ts <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
 
 	// Message should be discarded
 	select {
-	case res, open := <-mockIn.res:
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Channel was closed")
 		}
@@ -312,14 +257,14 @@ func TestBasicWrapProcessors(t *testing.T) {
 	msg.Parts = [][]byte{[]byte("bar")}
 
 	select {
-	case mockIn.msgs <- msg:
+	case mockIn.ts <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
 
 	// Message should also be discarded
 	select {
-	case res, open := <-mockIn.res:
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Channel was closed")
 		}
@@ -334,22 +279,24 @@ func TestBasicWrapProcessors(t *testing.T) {
 	msg.Parts = [][]byte{[]byte("baz")}
 
 	select {
-	case mockIn.msgs <- msg:
+	case mockIn.ts <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
 
 	// Message should not be discarded
+	var ts types.Transaction
+	var open bool
 	select {
-	case res, open := <-mockIn.res:
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Channel was closed")
 		}
 		t.Errorf("Unexpected response: %v", res.Error())
-	case newMsg, open := <-newInput.MessageChan():
+	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
-		} else if exp, act := "baz", string(newMsg.Parts[0]); exp != act {
+		} else if exp, act := "baz", string(ts.Payload.Parts[0]); exp != act {
 			t.Errorf("Wrong message received: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -358,13 +305,13 @@ func TestBasicWrapProcessors(t *testing.T) {
 
 	errFailed := errors.New("derp, failed")
 	select {
-	case resChan <- types.NewSimpleResponse(errFailed):
+	case ts.ResponseChan <- types.NewSimpleResponse(errFailed):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
 
 	select {
-	case res, open := <-mockIn.res:
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Channel was closed")
 		}
@@ -382,7 +329,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 }
 
 func TestBasicWrapDoubleProcessors(t *testing.T) {
-	mockIn := &mockInput{msgs: make(chan types.Message)}
+	mockIn := &mockInput{ts: make(chan types.Transaction)}
 
 	l := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	s := metrics.DudType{}
@@ -397,22 +344,19 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 	}
 
 	resChan := make(chan types.Response)
-	if err = newInput.StartListening(resChan); err != nil {
-		t.Error(err)
-	}
 
 	msg := types.NewMessage()
 	msg.Parts = [][]byte{[]byte("foo")}
 
 	select {
-	case mockIn.msgs <- msg:
+	case mockIn.ts <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
 
 	// Message should be discarded
 	select {
-	case res, open := <-mockIn.res:
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Channel was closed")
 		}
@@ -427,14 +371,14 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 	msg.Parts = [][]byte{[]byte("bar")}
 
 	select {
-	case mockIn.msgs <- msg:
+	case mockIn.ts <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
 
 	// Message should also be discarded
 	select {
-	case res, open := <-mockIn.res:
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Channel was closed")
 		}
@@ -449,22 +393,24 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 	msg.Parts = [][]byte{[]byte("baz")}
 
 	select {
-	case mockIn.msgs <- msg:
+	case mockIn.ts <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
 
 	// Message should not be discarded
+	var ts types.Transaction
+	var open bool
 	select {
-	case res, open := <-mockIn.res:
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Channel was closed")
 		}
 		t.Errorf("Unexpected response: %v", res.Error())
-	case newMsg, open := <-newInput.MessageChan():
+	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
-		} else if exp, act := "baz", string(newMsg.Parts[0]); exp != act {
+		} else if exp, act := "baz", string(ts.Payload.Parts[0]); exp != act {
 			t.Errorf("Wrong message received: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -473,13 +419,13 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 
 	errFailed := errors.New("derp, failed")
 	select {
-	case resChan <- types.NewSimpleResponse(errFailed):
+	case ts.ResponseChan <- types.NewSimpleResponse(errFailed):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
 
 	select {
-	case res, open := <-mockIn.res:
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Channel was closed")
 		}

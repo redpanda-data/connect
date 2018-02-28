@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -56,7 +57,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
-			MsgChan: make(chan types.Message),
+			TChan: make(chan types.Transaction),
 		})
 		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
 	}
@@ -67,37 +68,35 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 		return
 	}
 
-	if err = fanIn.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
 	for i := 0; i < nMsgs; i++ {
 		for j := 0; j < nInputs; j++ {
 			content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 			select {
-			case mockInputs[j].MsgChan <- types.Message{Parts: content}:
+			case mockInputs[j].TChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for broker send: %v, %v", i, j)
 				return
 			}
-			select {
-			case msg := <-fanIn.MessageChan():
-				if string(msg.Parts[0]) != string(content[0]) {
-					t.Errorf("Wrong content returned %s != %s", msg.Parts[0], content[0])
+			go func() {
+				var ts types.Transaction
+				select {
+				case ts = <-fanIn.TransactionChan():
+					if string(ts.Payload.Parts[0]) != string(content[0]) {
+						t.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], content[0])
+					}
+				case <-time.After(time.Second):
+					t.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
+					return
 				}
-			case <-time.After(time.Second):
-				t.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
-				return
-			}
+				select {
+				case ts.ResponseChan <- types.NewSimpleResponse(nil):
+				case <-time.After(time.Second):
+					t.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
+					return
+				}
+			}()
 			select {
-			case resChan <- types.NewSimpleResponse(nil):
-			case <-time.After(time.Second):
-				t.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
-				return
-			}
-			select {
-			case <-mockInputs[j].ResChan:
+			case <-resChan:
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for response to input: %v, %v", i, j)
 				return
@@ -116,21 +115,14 @@ func TestBasicDynamicFanIn(t *testing.T) {
 	nMsgs := 1000
 
 	inputOne := &MockInputType{
-		MsgChan: make(chan types.Message),
+		TChan: make(chan types.Transaction),
 	}
 	inputTwo := &MockInputType{
-		MsgChan: make(chan types.Message),
+		TChan: make(chan types.Transaction),
 	}
-
-	resChan := make(chan types.Response)
 
 	fanIn, err := NewDynamicFanIn(nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err = fanIn.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -141,11 +133,12 @@ func TestBasicDynamicFanIn(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	sendAllTestMessages := func(input *MockInputType, label string) {
+		rChan := make(chan types.Response)
 		for i := 0; i < nMsgs; i++ {
 			content := [][]byte{[]byte(fmt.Sprintf("%v-%v", label, i))}
-			input.MsgChan <- types.Message{Parts: content}
+			input.TChan <- types.NewTransaction(types.Message{Parts: content}, rChan)
 			select {
-			case <-input.ResChan:
+			case <-rChan:
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for response to input: %v", i)
 				return
@@ -159,18 +152,19 @@ func TestBasicDynamicFanIn(t *testing.T) {
 	go sendAllTestMessages(inputTwo, "inputTwo")
 
 	for i := 0; i < nMsgs; i++ {
+		var ts types.Transaction
 		expContent := fmt.Sprintf("inputOne-%v", i)
 		select {
-		case msg := <-fanIn.MessageChan():
-			if string(msg.Parts[0]) != expContent {
-				t.Errorf("Wrong content returned %s != %s", msg.Parts[0], expContent)
+		case ts = <-fanIn.TransactionChan():
+			if string(ts.Payload.Parts[0]) != expContent {
+				t.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], expContent)
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
 			return
 		}
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return
@@ -182,18 +176,19 @@ func TestBasicDynamicFanIn(t *testing.T) {
 	}
 
 	for i := 0; i < nMsgs; i++ {
+		var ts types.Transaction
 		expContent := fmt.Sprintf("inputTwo-%v", i)
 		select {
-		case msg := <-fanIn.MessageChan():
-			if string(msg.Parts[0]) != expContent {
-				t.Errorf("Wrong content returned %s != %s", msg.Parts[0], expContent)
+		case ts = <-fanIn.TransactionChan():
+			if string(ts.Payload.Parts[0]) != expContent {
+				t.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], expContent)
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
 			return
 		}
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return
@@ -214,29 +209,36 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 
 	Inputs := map[string]DynamicInput{}
 	mockInputs := []*MockInputType{}
-	resChan := make(chan types.Response)
 
+	expInputAddedMap := map[string]struct{}{}
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
-			MsgChan: make(chan types.Message),
+			TChan: make(chan types.Transaction),
 		})
-		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
+		label := fmt.Sprintf("testinput%v", i)
+		Inputs[label] = mockInputs[i]
+		expInputAddedMap[label] = struct{}{}
 	}
 
-	fanIn, err := NewDynamicFanIn(Inputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	inputAddedMap := map[string]struct{}{}
+	inputRemovedList := []string{}
+
+	fanIn, err := NewDynamicFanIn(
+		Inputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		OptDynamicFanInSetOnAdd(func(label string) {
+			inputAddedMap[label] = struct{}{}
+		}), OptDynamicFanInSetOnRemove(func(label string) {
+			inputRemovedList = append(inputRemovedList, label)
+		}),
+	)
 	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err = fanIn.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
 	}
 
 	for _, mockIn := range mockInputs {
 		select {
-		case _, open := <-mockIn.MessageChan():
+		case _, open := <-mockIn.TransactionChan():
 			if !open {
 				t.Error("fan in closed early")
 			} else {
@@ -251,7 +253,7 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 	// All inputs should be closed.
 	for _, mockIn := range mockInputs {
 		select {
-		case _, open := <-mockIn.MessageChan():
+		case _, open := <-mockIn.TransactionChan():
 			if open {
 				t.Error("fan in sent unexpected message")
 			}
@@ -263,6 +265,14 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 	if err := fanIn.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
+
+	if exp, act := expInputAddedMap, inputAddedMap; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong list of added inputs: %v != %v", act, exp)
+	}
+	if exp, act := []string{}, inputRemovedList; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong list of removed inputs: %v != %v", act, exp)
+	}
+
 }
 
 func TestStaticDynamicFanInAsync(t *testing.T) {
@@ -270,11 +280,10 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 
 	Inputs := map[string]DynamicInput{}
 	mockInputs := []*MockInputType{}
-	resChan := make(chan types.Response)
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
-			MsgChan: make(chan types.Message),
+			TChan: make(chan types.Transaction),
 		})
 		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
 	}
@@ -285,26 +294,22 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 		return
 	}
 
-	if err = fanIn.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
 	wg := sync.WaitGroup{}
 	wg.Add(nInputs)
 
 	for j := 0; j < nInputs; j++ {
 		go func(index int) {
+			rChan := make(chan types.Response)
 			for i := 0; i < nMsgs; i++ {
 				content := [][]byte{[]byte(fmt.Sprintf("hello world %v %v", i, index))}
 				select {
-				case mockInputs[index].MsgChan <- types.Message{Parts: content}:
+				case mockInputs[index].TChan <- types.NewTransaction(types.Message{Parts: content}, rChan):
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for broker send: %v, %v", i, index)
 					return
 				}
 				select {
-				case res := <-mockInputs[index].ResChan:
+				case res := <-rChan:
 					if expected, actual := string(content[0]), res.Error().Error(); expected != actual {
 						t.Errorf("Wrong response: %v != %v", expected, actual)
 					}
@@ -318,15 +323,15 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 	}
 
 	for i := 0; i < nMsgs*nInputs; i++ {
-		var msg types.Message
+		var ts types.Transaction
 		select {
-		case msg = <-fanIn.MessageChan():
+		case ts = <-fanIn.TransactionChan():
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
 			return
 		}
 		select {
-		case resChan <- types.NewSimpleResponse(errors.New(string(msg.Parts[0]))):
+		case ts.ResponseChan <- types.NewSimpleResponse(errors.New(string(ts.Payload.Parts[0]))):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return

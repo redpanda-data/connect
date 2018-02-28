@@ -134,16 +134,9 @@ func (o *FanOut) loop() {
 			}
 			newTargets := []int{}
 			for _, i := range outputTargets {
-				var res types.Response
 				select {
-				case res, open = <-o.outputResChans[i]:
-					if !open {
-						// If any of our outputs is closed then we exit
-						// completely. We want to avoid silently starving a
-						// particular output.
-						o.logger.Warnln("Closing fan_out broker due to closed output")
-						return
-					} else if res.Error() != nil {
+				case res := <-o.outputResChans[i]:
+					if res.Error() != nil {
 						newTargets = append(newTargets, i)
 						o.logger.Errorf("Failed to dispatch fan out message: %v\n", res.Error())
 						o.stats.Incr("broker.fan_out.output.error", 1)

@@ -50,6 +50,14 @@ input:
         cluster_id: test-cluster
         client_id: benthos_client_2
         subject: benthos_messages
+    - type: mqtt
+      mqtt:
+        urls:
+        - tcp://mqtt:1883
+        qos: 1
+        topics:
+        - benthos_topic
+        client_id: benthos_input
 output:
   type: http_server
 logger:

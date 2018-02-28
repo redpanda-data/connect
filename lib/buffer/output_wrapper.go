@@ -28,7 +28,6 @@ import (
 	"github.com/Jeffail/benthos/lib/buffer/impl"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
-	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -38,7 +37,6 @@ type OutputWrapper struct {
 	stats metrics.Type
 
 	buffer impl.Buffer
-	throt  *throttle.Type
 
 	running int32
 
@@ -69,13 +67,6 @@ func NewOutputWrapper(
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
-	m.throt = throttle.New(
-		throttle.OptCloseChan(m.closeChan),
-		throttle.OptThrottlePeriod(
-			time.Millisecond*time.Duration(conf.RetryThrottleMS),
-		),
-	)
-
 	return &m
 }
 
@@ -163,7 +154,6 @@ func (m *OutputWrapper) outputLoop() {
 				return
 			}
 			if res.Error() == nil {
-				m.throt.Reset()
 				msg = types.Message{}
 				backlog, _ := m.buffer.ShiftMessage()
 				m.stats.Incr("buffer.send.success", 1)
@@ -173,9 +163,6 @@ func (m *OutputWrapper) outputLoop() {
 				if _, exists := errMap[res.Error()]; !exists {
 					errMap[res.Error()] = struct{}{}
 					errs = append(errs, res.Error())
-				}
-				if !m.throt.Retry() {
-					return
 				}
 			}
 		}

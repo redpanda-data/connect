@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -35,14 +34,6 @@ func TestSTDINClose(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
-	}
-
-	c := make(chan types.Response)
-	if err := s.StartListening(c); err != nil {
-		t.Error(err)
-	}
-	if err := s.StartListening(c); err == nil {
-		t.Error("Expected error from second listener")
 	}
 
 	s.CloseAsync()

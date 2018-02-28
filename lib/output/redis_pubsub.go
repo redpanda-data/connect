@@ -72,8 +72,7 @@ type RedisPubSub struct {
 
 	client *redis.Client
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -82,14 +81,12 @@ type RedisPubSub struct {
 // NewRedisPubSub creates a new RedisPubSub output type.
 func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	r := &RedisPubSub{
-		running:      1,
-		log:          log.NewModule(".output.redis_pubsub"),
-		stats:        stats,
-		conf:         conf,
-		messages:     nil,
-		responseChan: make(chan types.Response),
-		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		running:    1,
+		log:        log.NewModule(".output.redis_pubsub"),
+		stats:      stats,
+		conf:       conf,
+		closedChan: make(chan struct{}),
+		closeChan:  make(chan struct{}),
 	}
 
 	var err error
@@ -145,7 +142,6 @@ func (r *RedisPubSub) loop() {
 		}
 		r.stats.Decr("output.redis_pubsub.running", 1)
 
-		close(r.responseChan)
 		close(r.closedChan)
 	}()
 	r.stats.Incr("output.redis_pubsub.running", 1)
@@ -181,9 +177,9 @@ func (r *RedisPubSub) loop() {
 			}
 		}
 
-		var msg types.Message
+		var ts types.Transaction
 		select {
-		case msg, open = <-r.messages:
+		case ts, open = <-r.transactions:
 			if !open {
 				return
 			}
@@ -193,7 +189,7 @@ func (r *RedisPubSub) loop() {
 
 		r.stats.Incr("output.redis_pubsub.count", 1)
 		var err error
-		for _, part := range msg.Parts {
+		for _, part := range ts.Payload.Parts {
 			if _, err = r.client.Publish(r.conf.RedisPubSub.Channel, part).Result(); err == nil {
 				r.stats.Incr("output.redis_pubsub.send.success", 1)
 			} else {
@@ -204,7 +200,7 @@ func (r *RedisPubSub) loop() {
 		}
 
 		select {
-		case r.responseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- types.NewSimpleResponse(err):
 		case <-r.closeChan:
 			return
 		}
@@ -212,18 +208,13 @@ func (r *RedisPubSub) loop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (r *RedisPubSub) StartReceiving(msgs <-chan types.Message) error {
-	if r.messages != nil {
+func (r *RedisPubSub) StartReceiving(ts <-chan types.Transaction) error {
+	if r.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	r.messages = msgs
+	r.transactions = ts
 	go r.loop()
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (r *RedisPubSub) ResponseChan() <-chan types.Response {
-	return r.responseChan
 }
 
 // CloseAsync shuts down the RedisPubSub output and stops processing messages.

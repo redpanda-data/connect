@@ -42,8 +42,7 @@ type Writer struct {
 	log   log.Modular
 	stats metrics.Type
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -62,8 +61,7 @@ func NewWriter(
 		writer:       w,
 		log:          log.NewModule(".output." + typeStr),
 		stats:        stats,
-		messages:     nil,
-		responseChan: make(chan types.Response),
+		transactions: nil,
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}, nil
@@ -89,8 +87,6 @@ func (w *Writer) loop() {
 		for ; err != nil; err = w.writer.WaitForClose(time.Second) {
 		}
 		w.stats.Decr(runningPath, 1)
-
-		close(w.responseChan)
 		close(w.closedChan)
 	}()
 	w.stats.Incr(runningPath, 1)
@@ -116,10 +112,10 @@ func (w *Writer) loop() {
 	w.stats.Incr(connPath, 1)
 
 	for atomic.LoadInt32(&w.running) == 1 {
-		var msg types.Message
+		var ts types.Transaction
 		var open bool
 		select {
-		case msg, open = <-w.messages:
+		case ts, open = <-w.transactions:
 			if !open {
 				return
 			}
@@ -128,7 +124,7 @@ func (w *Writer) loop() {
 			return
 		}
 
-		err := w.writer.Write(msg)
+		err := w.writer.Write(ts.Payload)
 
 		// If our writer says it is not connected.
 		if err == types.ErrNotConnected {
@@ -149,7 +145,7 @@ func (w *Writer) loop() {
 					case <-w.closeChan:
 						return
 					}
-				} else if err = w.writer.Write(msg); err != types.ErrNotConnected {
+				} else if err = w.writer.Write(ts.Payload); err != types.ErrNotConnected {
 					w.stats.Incr(connPath, 1)
 					break
 				}
@@ -168,7 +164,7 @@ func (w *Writer) loop() {
 			w.stats.Incr(successPath, 1)
 		}
 		select {
-		case w.responseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- types.NewSimpleResponse(err):
 		case <-w.closeChan:
 			return
 		}
@@ -176,18 +172,13 @@ func (w *Writer) loop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (w *Writer) StartReceiving(msgs <-chan types.Message) error {
-	if w.messages != nil {
+func (w *Writer) StartReceiving(ts <-chan types.Transaction) error {
+	if w.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	w.messages = msgs
+	w.transactions = ts
 	go w.loop()
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (w *Writer) ResponseChan() <-chan types.Response {
-	return w.responseChan
 }
 
 // CloseAsync shuts down the File output and stops processing messages.
