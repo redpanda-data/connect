@@ -23,6 +23,7 @@ package input
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -234,7 +235,7 @@ func New(
 				var err error
 				processors[i], err = processor.New(procConf, log.NewModule("."+conf.Type), stats)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 				}
 			}
 			return pipeline.NewProcessor(log, stats, processors...), nil
@@ -246,7 +247,7 @@ func New(
 		}
 		input, err := c.constructor(conf, mgr, log, stats)
 		for err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create input '%v': %v", conf.Type, err)
 		}
 		return WrapWithPipelines(input, pipelines...)
 	}

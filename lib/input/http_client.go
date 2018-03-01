@@ -52,7 +52,7 @@ requests for a single message.
 You should set a sensible number of max retries and retry delays so as to not
 stress your target server.
 
-## Streaming
+### Streaming
 
 If you enable streaming with the 'stream' field then benthos will consume the
 body of the response using the same rules as the 'stdin' and 'file' input types.
