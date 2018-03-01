@@ -50,7 +50,7 @@ a broker pattern from this list:
 ## ` + "`fan_out`" + `
 
 With the fan out pattern all outputs will be sent every message that passes
-through benthos. If an output applies back pressure it will block all subsequent
+through Benthos. If an output applies back pressure it will block all subsequent
 messages, and if an output fails to send a message it will be retried
 continuously until completion or service shut down.
 
@@ -59,7 +59,15 @@ continuously until completion or service shut down.
 With the round robin pattern each message will be assigned a single output
 following their order. If an output applies back pressure it will block all
 subsequent messages. If an output fails to send a message then the message will
-be re-attempted with the next input, and so on.`,
+be re-attempted with the next input, and so on.
+
+## ` + "`greedy`" + `
+
+The greedy pattern results in higher output throughput at the cost of
+disproportionate message allocations to those outputs. Each message is sent to a
+single output, and the output chosen is randomly selected only from outputs
+ready to process a message. It is therefore possible for certain outputs to
+receive a disproportionate number of messages depending on their throughput.`,
 	}
 }
 
@@ -92,7 +100,7 @@ func NewBroker(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 		return New(outputConfs[0], mgr, log, stats)
 	}
 
-	outputs := make([]types.Consumer, len(outputConfs))
+	outputs := make([]types.Output, len(outputConfs))
 
 	var err error
 	for i, oConf := range outputConfs {
@@ -107,6 +115,8 @@ func NewBroker(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 		return broker.NewFanOut(outputs, log, stats)
 	case "round_robin":
 		return broker.NewRoundRobin(outputs, stats)
+	case "greedy":
+		return broker.NewGreedy(outputs)
 	}
 
 	return nil, fmt.Errorf("broker pattern was not recognised: %v", conf.Broker.Pattern)

@@ -113,8 +113,8 @@ func TestBasicWrapPipeline(t *testing.T) {
 			t.Error("mock input is still open after close")
 		}
 	case _, open := <-mockPi.ts:
-		if !open {
-			t.Error("mock pipe is not open after close")
+		if open {
+			t.Error("mock pipe is still open after close")
 		}
 	default:
 		t.Error("neither type was closed")
@@ -181,12 +181,12 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 			t.Error("mock input is still open after close")
 		}
 	case _, open := <-mockPi1.ts:
-		if !open {
-			t.Error("mock pipe is not open after close")
+		if open {
+			t.Error("mock pipe is still open after close")
 		}
 	case _, open := <-mockPi2.ts:
-		if !open {
-			t.Error("mock pipe is not open after close")
+		if open {
+			t.Error("mock pipe is still open after close")
 		}
 	default:
 		t.Error("neither type was closed")

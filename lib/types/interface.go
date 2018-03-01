@@ -79,3 +79,17 @@ type Consumer interface {
 }
 
 //------------------------------------------------------------------------------
+
+// Output is a closable consumer.
+type Output interface {
+	Consumer
+	Closable
+}
+
+// Input is a closable producer.
+type Input interface {
+	Producer
+	Closable
+}
+
+//------------------------------------------------------------------------------

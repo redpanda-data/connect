@@ -49,7 +49,7 @@ func TestFanOutInterfaces(t *testing.T) {
 func TestBasicFanOut(t *testing.T) {
 	nOutputs, nMsgs := 10, 1000
 
-	outputs := []types.Consumer{}
+	outputs := []types.Output{}
 	mockOutputs := []*MockOutputType{}
 
 	for i := 0; i < nOutputs; i++ {
@@ -124,7 +124,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
-	outputs := []types.Consumer{&mockOne, &mockTwo}
+	outputs := []types.Output{&mockOne, &mockTwo}
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
@@ -208,7 +208,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 }
 
 func TestFanOutShutDownFromErrorResponse(t *testing.T) {
-	outputs := []types.Consumer{}
+	outputs := []types.Output{}
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
 	readChan := make(chan types.Transaction)
@@ -265,7 +265,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 }
 
 func TestFanOutShutDownFromReceive(t *testing.T) {
-	outputs := []types.Consumer{}
+	outputs := []types.Output{}
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
 	readChan := make(chan types.Transaction)
@@ -314,7 +314,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 }
 
 func TestFanOutShutDownFromSend(t *testing.T) {
-	outputs := []types.Consumer{}
+	outputs := []types.Output{}
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
 	readChan := make(chan types.Transaction)
@@ -358,7 +358,7 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 func BenchmarkBasicFanOut(b *testing.B) {
 	nOutputs, nMsgs := 3, b.N
 
-	outputs := []types.Consumer{}
+	outputs := []types.Output{}
 	mockOutputs := []*MockOutputType{}
 
 	for i := 0; i < nOutputs; i++ {

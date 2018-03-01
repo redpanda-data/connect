@@ -75,6 +75,7 @@ func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	s.stats.Incr("processor.split.count", 1)
 
 	if len(msg.Parts) == 0 {
+		s.stats.Incr("processor.split.dropped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
@@ -83,6 +84,7 @@ func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		msgs[i] = types.Message{Parts: [][]byte{part}}
 	}
 
+	s.stats.Incr("processor.split.sent", int64(len(msgs)))
 	return msgs, nil
 }
 

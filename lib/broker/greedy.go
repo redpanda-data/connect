@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,39 +18,65 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// +build ZMQ4
-
-package output
+package broker
 
 import (
-	"github.com/Jeffail/benthos/lib/output/writer"
+	"time"
+
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
 
-func init() {
-	constructors["zmq4"] = typeSpec{
-		constructor: NewZMQ4,
-		description: `
-The zmq4 output type attempts to send messages to a ZMQ4 port, currently only
-PUSH and PUB sockets are supported.`,
-	}
+// Greedy is a broker that implements types.Consumer and sends each message
+// out to a single consumer chosen from an array in round-robin fashion.
+// Consumers that apply backpressure will block all consumers.
+type Greedy struct {
+	outputs []types.Output
+}
+
+// NewGreedy creates a new Greedy type by providing consumers.
+func NewGreedy(outputs []types.Output) (*Greedy, error) {
+	return &Greedy{
+		outputs: outputs,
+	}, nil
 }
 
 //------------------------------------------------------------------------------
 
-// NewZMQ4 creates a new ZMQ4 output type.
-func NewZMQ4(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	z, err := writer.NewZMQ4(conf.ZMQ4, log, stats)
-	if err != nil {
-		return nil, err
+// StartReceiving assigns a new messages channel for the broker to read.
+func (g *Greedy) StartReceiving(ts <-chan types.Transaction) error {
+	for _, out := range g.outputs {
+		if err := out.StartReceiving(ts); err != nil {
+			return err
+		}
 	}
-	return NewWriter(
-		"zmq4", z, log, stats,
-	)
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// CloseAsync shuts down the Greedy broker and stops processing requests.
+func (g *Greedy) CloseAsync() {
+	for _, out := range g.outputs {
+		out.CloseAsync()
+	}
+}
+
+// WaitForClose blocks until the Greedy broker has closed down.
+func (g *Greedy) WaitForClose(timeout time.Duration) error {
+	tStarted := time.Now()
+	remaining := timeout
+	for _, out := range g.outputs {
+		if err := out.WaitForClose(remaining); err != nil {
+			return err
+		}
+		remaining = remaining - time.Since(tStarted)
+		if remaining <= 0 {
+			return types.ErrTimeout
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------

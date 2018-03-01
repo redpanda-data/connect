@@ -113,6 +113,7 @@ func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		msg.Parts = c.parts
 		c.parts = nil
 
+		c.stats.Incr("processor.combine.sent", 1)
 		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}

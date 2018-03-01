@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,23 +26,22 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
 
-func TestRoundRobinInterfaces(t *testing.T) {
-	f := &RoundRobin{}
+func TestGreedyInterfaces(t *testing.T) {
+	f := &Greedy{}
 	if types.Consumer(f) == nil {
-		t.Errorf("RoundRobin: nil types.Consumer")
+		t.Errorf("Greedy: nil types.Consumer")
 	}
 	if types.Closable(f) == nil {
-		t.Errorf("RoundRobin: nil types.Closable")
+		t.Errorf("Greedy: nil types.Closable")
 	}
 }
 
-func TestRoundRobinDoubleClose(t *testing.T) {
-	oTM, err := NewRoundRobin([]types.Output{}, metrics.DudType{})
+func TestGreedyDoubleClose(t *testing.T) {
+	oTM, err := NewGreedy([]types.Output{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -55,7 +54,7 @@ func TestRoundRobinDoubleClose(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
-func TestBasicRoundRobin(t *testing.T) {
+func TestBasicGreedy(t *testing.T) {
 	nMsgs := 1000
 
 	outputs := []types.Output{}
@@ -72,7 +71,7 @@ func TestBasicRoundRobin(t *testing.T) {
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	oTM, err := NewRoundRobin(outputs, metrics.DudType{})
+	oTM, err := NewGreedy(outputs)
 	if err != nil {
 		t.Error(err)
 		return
@@ -82,28 +81,16 @@ func TestBasicRoundRobin(t *testing.T) {
 		return
 	}
 
+	// Only read from a single output.
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
-		select {
-		case readChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
-		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for broker send")
-			return
-		}
-
 		go func() {
 			var ts types.Transaction
 			select {
-			case ts = <-mockOutputs[i%3].TChan:
+			case ts = <-mockOutputs[0].TChan:
 				if string(ts.Payload.Parts[0]) != string(content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], content[0])
 				}
-			case <-mockOutputs[(i+1)%3].TChan:
-				t.Errorf("Received message in wrong order: %v != %v", i%3, (i+1)%3)
-				return
-			case <-mockOutputs[(i+2)%3].TChan:
-				t.Errorf("Received message in wrong order: %v != %v", i%3, (i+2)%3)
-				return
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for broker propagate")
 				return
@@ -116,6 +103,13 @@ func TestBasicRoundRobin(t *testing.T) {
 				return
 			}
 		}()
+
+		select {
+		case readChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
+		case <-time.After(time.Second):
+			t.Errorf("Timed out waiting for broker send")
+			return
+		}
 
 		select {
 		case res := <-resChan:
@@ -132,49 +126,6 @@ func TestBasicRoundRobin(t *testing.T) {
 	if err := oTM.WaitForClose(time.Second * 10); err != nil {
 		t.Error(err)
 	}
-}
-
-//------------------------------------------------------------------------------
-
-func BenchmarkBasicRoundRobin(b *testing.B) {
-	nOutputs, nMsgs := 3, b.N
-
-	outputs := []types.Output{}
-	mockOutputs := []*MockOutputType{}
-
-	for i := 0; i < nOutputs; i++ {
-		mockOutputs = append(mockOutputs, &MockOutputType{})
-		outputs = append(outputs, mockOutputs[i])
-	}
-
-	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
-
-	oTM, err := NewRoundRobin(outputs, metrics.DudType{})
-	if err != nil {
-		b.Error(err)
-		return
-	}
-	if err = oTM.StartReceiving(readChan); err != nil {
-		b.Error(err)
-		return
-	}
-
-	content := [][]byte{[]byte("hello world")}
-
-	b.StartTimer()
-
-	for i := 0; i < nMsgs; i++ {
-		readChan <- types.NewTransaction(types.Message{Parts: content}, resChan)
-		ts := <-mockOutputs[i%3].TChan
-		ts.ResponseChan <- types.NewSimpleResponse(nil)
-		res := <-resChan
-		if res.Error() != nil {
-			b.Errorf("Received unexpected errors from broker: %v", res.Error())
-		}
-	}
-
-	b.StopTimer()
 }
 
 //------------------------------------------------------------------------------

@@ -202,12 +202,14 @@ func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 
 	if index < 0 || index >= len(msg.Parts) {
 		p.stats.Incr("processor.set_json.skipped", 1)
+		p.stats.Incr("processor.set_json.dropped", 1)
 		return msgs[:], nil
 	}
 
 	jsonPart, err := msg.GetJSON(index)
 	if err != nil {
 		p.stats.Incr("processor.set_json.error.json_parse", 1)
+		p.stats.Incr("processor.set_json.dropped", 1)
 		p.log.Errorf("Failed to parse part into json: %v\n", err)
 		return msgs[:], nil
 	}
@@ -215,6 +217,7 @@ func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	var gPart *gabs.Container
 	if gPart, err = gabs.Consume(jsonPart); err != nil {
 		p.stats.Incr("processor.set_json.error.json_parse", 1)
+		p.stats.Incr("processor.set_json.dropped", 1)
 		p.log.Errorf("Failed to parse part into json: %v\n", err)
 		return msgs[:], nil
 	}
@@ -226,6 +229,7 @@ func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		p.log.Errorf("Failed to convert json into part: %v\n", err)
 	}
 
+	p.stats.Incr("processor.set_json.sent", 1)
 	return msgs[:], nil
 }
 

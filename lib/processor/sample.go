@@ -87,6 +87,7 @@ func (s *Sample) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		s.stats.Incr("processor.sample.dropped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}
+	s.stats.Incr("processor.sample.sent", 1)
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

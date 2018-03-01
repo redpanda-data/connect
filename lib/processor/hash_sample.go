@@ -131,6 +131,7 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	rate := scaleNum(hash.Sum64())
 	if rate >= s.conf.HashSample.RetainMin && rate < s.conf.HashSample.RetainMax {
+		s.stats.Incr("processor.hash_sample.sent", 1)
 		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}

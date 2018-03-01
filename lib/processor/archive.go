@@ -205,6 +205,7 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		d.stats.Incr("processor.archive.error", 1)
 	}
 
+	d.stats.Incr("processor.archive.sent", 1)
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

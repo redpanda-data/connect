@@ -128,6 +128,7 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	msg.Parts = newParts
 
+	p.stats.Incr("processor.insert_part.sent", 1)
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

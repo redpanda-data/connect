@@ -160,6 +160,7 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		return nil, types.NewSimpleResponse(nil)
 	}
 
+	d.stats.Incr("processor.decompress.sent", 1)
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

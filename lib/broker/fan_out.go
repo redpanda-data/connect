@@ -46,7 +46,7 @@ type FanOut struct {
 
 	outputTsChans  []chan types.Transaction
 	outputResChans []chan types.Response
-	outputs        []types.Consumer
+	outputs        []types.Output
 	outputNs       []int
 
 	closedChan chan struct{}
@@ -55,7 +55,7 @@ type FanOut struct {
 
 // NewFanOut creates a new FanOut type by providing outputs.
 func NewFanOut(
-	outputs []types.Consumer, logger log.Modular, stats metrics.Type,
+	outputs []types.Output, logger log.Modular, stats metrics.Type,
 ) (*FanOut, error) {
 	o := &FanOut{
 		running:      1,

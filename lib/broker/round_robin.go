@@ -41,14 +41,14 @@ type RoundRobin struct {
 	transactions <-chan types.Transaction
 
 	outputTsChans []chan types.Transaction
-	outputs       []types.Consumer
+	outputs       []types.Output
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
 
 // NewRoundRobin creates a new RoundRobin type by providing consumers.
-func NewRoundRobin(outputs []types.Consumer, stats metrics.Type) (*RoundRobin, error) {
+func NewRoundRobin(outputs []types.Output, stats metrics.Type) (*RoundRobin, error) {
 	o := &RoundRobin{
 		running:      1,
 		stats:        stats,

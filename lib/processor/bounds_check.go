@@ -112,6 +112,7 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 		}
 	}
 
+	m.stats.Incr("processor.bounds_check.sent", 1)
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

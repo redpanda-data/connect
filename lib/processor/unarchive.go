@@ -185,9 +185,11 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 
 	if len(newMsg.Parts) == 0 {
 		d.stats.Incr("processor.unarchive.skipped", 1)
+		d.stats.Incr("processor.unarchive.dropped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
+	d.stats.Incr("processor.unarchive.sent", 1)
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

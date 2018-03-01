@@ -106,9 +106,11 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 	}
 
 	if len(newMsg.Parts) == 0 {
+		m.stats.Incr("processor.select_parts.dropped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
+	m.stats.Incr("processor.select_parts.sent", 1)
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

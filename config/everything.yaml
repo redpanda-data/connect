@@ -217,7 +217,7 @@ output:
   files:
     path: ${!count:files}-${!timestamp_unix_nano}.txt
   http_client:
-    url: http://localhost:8081/post
+    url: http://localhost:4195/post
     verb: POST
     content_type: application/octet-stream
     oauth:
@@ -289,10 +289,10 @@ output:
     bind: true
     socket_type: PUSH
     high_water_mark: 0
+    poll_timeout_ms: 5000
   processors: []
 buffer:
   type: none
-  retry_throttle_ms: 1000
   memory:
     limit: 524288000
   mmap_file:

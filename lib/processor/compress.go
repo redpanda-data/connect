@@ -160,6 +160,7 @@ func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		return nil, types.NewSimpleResponse(nil)
 	}
 
+	c.stats.Incr("processor.compress.sent", 1)
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

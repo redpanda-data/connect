@@ -71,7 +71,7 @@ func TestBasicFanIn(t *testing.T) {
 			content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 			select {
 			case mockInputs[j].TChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
-			case <-time.After(time.Second):
+			case <-time.After(time.Second * 5):
 				t.Errorf("Timed out waiting for broker send: %v, %v", i, j)
 				return
 			}
@@ -82,20 +82,18 @@ func TestBasicFanIn(t *testing.T) {
 					if string(ts.Payload.Parts[0]) != string(content[0]) {
 						t.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], content[0])
 					}
-				case <-time.After(time.Second):
-					t.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
-					return
+				case <-time.After(time.Second * 5):
+					t.Fatalf("Timed out waiting for broker propagate: %v, %v", i, j)
 				}
 				select {
 				case ts.ResponseChan <- types.NewSimpleResponse(nil):
-				case <-time.After(time.Second):
-					t.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
-					return
+				case <-time.After(time.Second * 5):
+					t.Fatalf("Timed out waiting for response to broker: %v, %v", i, j)
 				}
 			}()
 			select {
 			case <-resChan:
-			case <-time.After(time.Second):
+			case <-time.After(time.Second * 5):
 				t.Errorf("Timed out waiting for response to input: %v, %v", i, j)
 				return
 			}
@@ -143,7 +141,7 @@ func TestFanInShutdown(t *testing.T) {
 
 	select {
 	case <-fanIn.TransactionChan():
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Error("fan in failed to close")
 	}
 }
@@ -177,7 +175,7 @@ func TestFanInAsync(t *testing.T) {
 				content := [][]byte{[]byte(fmt.Sprintf("hello world %v %v", i, index))}
 				select {
 				case mockInputs[index].TChan <- types.NewTransaction(types.Message{Parts: content}, rChan):
-				case <-time.After(time.Second):
+				case <-time.After(time.Second * 5):
 					t.Errorf("Timed out waiting for broker send: %v, %v", i, index)
 					return
 				}
@@ -186,7 +184,7 @@ func TestFanInAsync(t *testing.T) {
 					if expected, actual := string(content[0]), res.Error().Error(); expected != actual {
 						t.Errorf("Wrong response: %v != %v", expected, actual)
 					}
-				case <-time.After(time.Second):
+				case <-time.After(time.Second * 5):
 					t.Errorf("Timed out waiting for response to input: %v, %v", i, index)
 					return
 				}
@@ -199,13 +197,13 @@ func TestFanInAsync(t *testing.T) {
 		var ts types.Transaction
 		select {
 		case ts = <-fanIn.TransactionChan():
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
 			return
 		}
 		select {
 		case ts.ResponseChan <- types.NewSimpleResponse(errors.New(string(ts.Payload.Parts[0]))):
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return
 		}
@@ -246,7 +244,7 @@ func BenchmarkBasicFanIn(b *testing.B) {
 			content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 			select {
 			case mockInputs[j].TChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
-			case <-time.After(time.Second):
+			case <-time.After(time.Second * 5):
 				b.Errorf("Timed out waiting for broker send: %v, %v", i, j)
 				return
 			}
@@ -256,19 +254,19 @@ func BenchmarkBasicFanIn(b *testing.B) {
 				if string(ts.Payload.Parts[0]) != string(content[0]) {
 					b.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], content[0])
 				}
-			case <-time.After(time.Second):
+			case <-time.After(time.Second * 5):
 				b.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
 				return
 			}
 			select {
 			case ts.ResponseChan <- types.NewSimpleResponse(nil):
-			case <-time.After(time.Second):
+			case <-time.After(time.Second * 5):
 				b.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
 				return
 			}
 			select {
 			case <-resChan:
-			case <-time.After(time.Second):
+			case <-time.After(time.Second * 5):
 				b.Errorf("Timed out waiting for response to input: %v, %v", i, j)
 				return
 			}

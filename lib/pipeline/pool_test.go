@@ -94,7 +94,7 @@ func TestPoolBasic(t *testing.T) {
 			// decoupled
 			t.Error(res.Error())
 		}
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
@@ -106,7 +106,7 @@ func TestPoolBasic(t *testing.T) {
 	// Send message
 	select {
 	case tChan <- types.NewTransaction(msg, resChan):
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
@@ -121,7 +121,7 @@ func TestPoolBasic(t *testing.T) {
 		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
@@ -134,7 +134,7 @@ func TestPoolBasic(t *testing.T) {
 			t.Error(res.Error())
 		}
 		// Expect decoupled response
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
@@ -142,7 +142,7 @@ func TestPoolBasic(t *testing.T) {
 	errTest := errors.New("This is a test")
 	select {
 	case procT.ResponseChan <- types.NewSimpleResponse(errTest):
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
@@ -155,14 +155,14 @@ func TestPoolBasic(t *testing.T) {
 		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
 	// Respond with no error this time
 	select {
 	case procT.ResponseChan <- types.NewSimpleResponse(nil):
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
@@ -174,7 +174,7 @@ func TestPoolBasic(t *testing.T) {
 	// Send message
 	select {
 	case tChan <- types.NewTransaction(msg, resChan):
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
@@ -187,7 +187,7 @@ func TestPoolBasic(t *testing.T) {
 		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
-	case <-time.After(time.Second * 10):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
@@ -201,14 +201,14 @@ func TestPoolBasic(t *testing.T) {
 			t.Error(res.Error())
 		}
 		// Expect decoupled response
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
 	// Respond without error
 	select {
 	case procT.ResponseChan <- types.NewSimpleResponse(nil):
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
