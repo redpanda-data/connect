@@ -81,13 +81,14 @@ func NewSample(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 //------------------------------------------------------------------------------
 
 // ProcessMessage checks each message against a set of bounds.
-func (s *Sample) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (s *Sample) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.stats.Incr("processor.sample.count", 1)
 	if s.gen.Float64() > s.conf.Sample.Retain {
 		s.stats.Incr("processor.sample.dropped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}
-	msgs := [1]*types.Message{msg}
+	s.stats.Incr("processor.sample.sent", 1)
+	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }
 

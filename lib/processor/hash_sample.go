@@ -100,7 +100,7 @@ func NewHashSample(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 //------------------------------------------------------------------------------
 
 // ProcessMessage checks each message against a set of bounds.
-func (s *HashSample) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.stats.Incr("processor.hash_sample.count", 1)
 
 	hash := xxhash.New64()
@@ -131,7 +131,8 @@ func (s *HashSample) ProcessMessage(msg *types.Message) ([]*types.Message, types
 
 	rate := scaleNum(hash.Sum64())
 	if rate >= s.conf.HashSample.RetainMin && rate < s.conf.HashSample.RetainMax {
-		msgs := [1]*types.Message{msg}
+		s.stats.Incr("processor.hash_sample.sent", 1)
+		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}
 

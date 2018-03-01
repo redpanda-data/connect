@@ -38,31 +38,29 @@ type RoundRobin struct {
 
 	stats metrics.Type
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
-	outputMsgChans []chan types.Message
-	outputs        []types.Consumer
+	outputTsChans []chan types.Transaction
+	outputs       []types.Output
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
 
 // NewRoundRobin creates a new RoundRobin type by providing consumers.
-func NewRoundRobin(outputs []types.Consumer, stats metrics.Type) (*RoundRobin, error) {
+func NewRoundRobin(outputs []types.Output, stats metrics.Type) (*RoundRobin, error) {
 	o := &RoundRobin{
 		running:      1,
 		stats:        stats,
-		messages:     nil,
-		responseChan: make(chan types.Response),
+		transactions: nil,
 		outputs:      outputs,
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
 	}
-	o.outputMsgChans = make([]chan types.Message, len(o.outputs))
-	for i := range o.outputMsgChans {
-		o.outputMsgChans[i] = make(chan types.Message)
-		if err := o.outputs[i].StartReceiving(o.outputMsgChans[i]); err != nil {
+	o.outputTsChans = make([]chan types.Transaction, len(o.outputs))
+	for i := range o.outputTsChans {
+		o.outputTsChans[i] = make(chan types.Transaction)
+		if err := o.outputs[i].StartReceiving(o.outputTsChans[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -72,11 +70,11 @@ func NewRoundRobin(outputs []types.Consumer, stats metrics.Type) (*RoundRobin, e
 //------------------------------------------------------------------------------
 
 // StartReceiving assigns a new messages channel for the broker to read.
-func (o *RoundRobin) StartReceiving(msgs <-chan types.Message) error {
-	if o.messages != nil {
+func (o *RoundRobin) StartReceiving(ts <-chan types.Transaction) error {
+	if o.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	o.messages = msgs
+	o.transactions = ts
 
 	go o.loop()
 	return nil
@@ -87,53 +85,36 @@ func (o *RoundRobin) StartReceiving(msgs <-chan types.Message) error {
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (o *RoundRobin) loop() {
 	defer func() {
-		for _, c := range o.outputMsgChans {
+		for _, c := range o.outputTsChans {
 			close(c)
 		}
-		close(o.responseChan)
 		close(o.closedChan)
 	}()
 
 	i := 0
 	open := false
 	for atomic.LoadInt32(&o.running) == 1 {
-		var msg types.Message
-		if msg, open = <-o.messages; !open {
-			return
-		}
-		o.stats.Incr("broker.round_robin.messages.received", 1)
+		var ts types.Transaction
 		select {
-		case o.outputMsgChans[i] <- msg:
-		case <-o.closeChan:
-			return
-		}
-
-		var res types.Response
-		select {
-		case res, open = <-o.outputs[i].ResponseChan():
+		case ts, open = <-o.transactions:
 			if !open {
 				return
 			}
 		case <-o.closeChan:
 			return
 		}
-		if res.Error() != nil {
-			o.stats.Incr("broker.round_robin.output.error", 1)
-		} else {
-			o.stats.Incr("broker.round_robin.messages.sent", 1)
+		o.stats.Incr("broker.round_robin.messages.received", 1)
+		select {
+		case o.outputTsChans[i] <- ts:
+		case <-o.closeChan:
+			return
 		}
-		o.responseChan <- res
 
 		i++
-		if i >= len(o.outputMsgChans) {
+		if i >= len(o.outputTsChans) {
 			i = 0
 		}
 	}
-}
-
-// ResponseChan returns the response channel.
-func (o *RoundRobin) ResponseChan() <-chan types.Response {
-	return o.responseChan
 }
 
 // CloseAsync shuts down the RoundRobin broker and stops processing requests.

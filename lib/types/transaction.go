@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,42 +18,32 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package util
-
-import (
-	"time"
-
-	"github.com/Jeffail/benthos/lib/types"
-)
+package types
 
 //------------------------------------------------------------------------------
 
-// MockOutputType implements the output.Type interface.
-type MockOutputType struct {
-	ResChan chan types.Response
-	MsgChan <-chan types.Message
+// Transaction is a type respesenting a transaction containing a payload (the
+// message) and a response channel, which is used to indicate whether the
+// message was successfully propagated to the next destination.
+type Transaction struct {
+	// Payload is the message payload of this transaction.
+	Payload Message
+
+	// ResponseChan should receive a response at the end of a transaction (once
+	// the message is no longer owned by the receiver.) The response itself
+	// indicates whether the message has been propagated successfully.
+	ResponseChan chan<- Response
 }
 
-// StartReceiving sets the read channel. This implementation is NOT thread safe.
-func (m *MockOutputType) StartReceiving(msgs <-chan types.Message) error {
-	m.MsgChan = msgs
-	return nil
-}
+//------------------------------------------------------------------------------
 
-// ResponseChan returns the errors channel.
-func (m *MockOutputType) ResponseChan() <-chan types.Response {
-	return m.ResChan
-}
-
-// CloseAsync does nothing.
-func (m MockOutputType) CloseAsync() {
-	// Do nothing
-}
-
-// WaitForClose does nothing.
-func (m MockOutputType) WaitForClose(time.Duration) error {
-	// Do nothing
-	return nil
+// NewTransaction creates a new transaction object from a message payload and a
+// response channel.
+func NewTransaction(payload Message, resChan chan<- Response) Transaction {
+	return Transaction{
+		Payload:      payload,
+		ResponseChan: resChan,
+	}
 }
 
 //------------------------------------------------------------------------------

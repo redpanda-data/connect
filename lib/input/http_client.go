@@ -114,8 +114,7 @@ type HTTPClient struct {
 	buffer *bytes.Buffer
 	client http.Client
 
-	messages  chan types.Message
-	responses <-chan types.Response
+	transactions chan types.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -124,14 +123,14 @@ type HTTPClient struct {
 // NewHTTPClient creates a new HTTPClient output type.
 func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	h := HTTPClient{
-		running:    1,
-		stats:      stats,
-		log:        log.NewModule(".input.http_client"),
-		conf:       conf,
-		buffer:     &bytes.Buffer{},
-		messages:   make(chan types.Message),
-		closeChan:  make(chan struct{}),
-		closedChan: make(chan struct{}),
+		running:      1,
+		stats:        stats,
+		log:          log.NewModule(".input.http_client"),
+		conf:         conf,
+		buffer:       &bytes.Buffer{},
+		transactions: make(chan types.Transaction),
+		closeChan:    make(chan struct{}),
+		closedChan:   make(chan struct{}),
 	}
 
 	if h.conf.HTTPClient.SkipCertVerify {
@@ -143,6 +142,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	if !h.conf.HTTPClient.Stream {
 		// Timeout should be left at zero if we are streaming.
 		h.client.Timeout = time.Duration(h.conf.HTTPClient.TimeoutMS) * time.Millisecond
+		go h.loop()
 		return &h, nil
 	}
 
@@ -336,16 +336,18 @@ func (h *HTTPClient) loop() {
 		atomic.StoreInt32(&h.running, 0)
 		h.stats.Decr("input.http_client.running", 1)
 
-		close(h.messages)
+		close(h.transactions)
 		close(h.closedChan)
 	}()
 
 	h.stats.Incr("input.http_client.running", 1)
 	h.log.Infof("Polling for HTTP messages from: %s\n", h.conf.HTTPClient.URL)
 
-	var msgOut *types.Message
+	resOut := make(chan types.Response)
+
+	var msgOut types.Message
 	for atomic.LoadInt32(&h.running) == 1 {
-		if msgOut == nil {
+		if len(msgOut.Parts) == 0 {
 			var res *http.Response
 			var err error
 
@@ -364,7 +366,7 @@ func (h *HTTPClient) loop() {
 					h.log.Errorf("Failed to decode response: %v\n", err)
 				} else {
 					h.stats.Incr("input.http_client.request.success", 1)
-					msgOut = &types.Message{
+					msgOut = types.Message{
 						Parts: parts,
 					}
 				}
@@ -373,21 +375,21 @@ func (h *HTTPClient) loop() {
 			h.stats.Incr("input.http_client.count", 1)
 		}
 
-		if msgOut != nil {
+		if len(msgOut.Parts) > 0 {
 			select {
-			case h.messages <- *msgOut:
+			case h.transactions <- types.NewTransaction(msgOut, resOut):
 			case <-h.closeChan:
 				return
 			}
 			select {
-			case res, open := <-h.responses:
+			case res, open := <-resOut:
 				if !open {
 					return
 				}
 				if res.Error() != nil {
 					h.stats.Incr("input.http_client.send.error", 1)
 				} else {
-					msgOut = nil
+					msgOut = types.Message{}
 					h.stats.Incr("input.http_client.send.success", 1)
 				}
 			case <-h.closeChan:
@@ -398,20 +400,9 @@ func (h *HTTPClient) loop() {
 	}
 }
 
-// StartListening sets the channel used by the input to validate message
-// receipt.
-func (h *HTTPClient) StartListening(responses <-chan types.Response) error {
-	if h.responses != nil {
-		return types.ErrAlreadyStarted
-	}
-	h.responses = responses
-	go h.loop()
-	return nil
-}
-
-// MessageChan returns the messages channel.
-func (h *HTTPClient) MessageChan() <-chan types.Message {
-	return h.messages
+// TransactionChan returns the transactions channel.
+func (h *HTTPClient) TransactionChan() <-chan types.Transaction {
+	return h.transactions
 }
 
 // CloseAsync shuts down the HTTPClient output and stops processing messages.

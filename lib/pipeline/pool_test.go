@@ -56,18 +56,12 @@ func TestPoolBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgChan, resChan := make(chan types.Message), make(chan types.Response)
+	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
 
-	if err := proc.StartListening(resChan); err != nil {
+	if err := proc.StartReceiving(tChan); err != nil {
 		t.Fatal(err)
 	}
-	if err := proc.StartListening(resChan); err == nil {
-		t.Error("Expected error from dupe listening")
-	}
-	if err := proc.StartReceiving(msgChan); err != nil {
-		t.Fatal(err)
-	}
-	if err := proc.StartReceiving(msgChan); err == nil {
+	if err := proc.StartReceiving(tChan); err == nil {
 		t.Error("Expected error from dupe receiving")
 	}
 
@@ -79,19 +73,19 @@ func TestPoolBasic(t *testing.T) {
 
 	// First message should be dropped and return immediately
 	select {
-	case msgChan <- msg:
+	case tChan <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
 	select {
-	case _, open := <-proc.MessageChan():
+	case _, open := <-proc.TransactionChan():
 		if !open {
 			t.Fatal("Closed early")
 		} else {
 			t.Fatal("Message was not dropped")
 		}
 
-	case res, open := <-proc.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Fatal("Closed early")
 		}
@@ -100,7 +94,7 @@ func TestPoolBasic(t *testing.T) {
 			// decoupled
 			t.Error(res.Error())
 		}
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
@@ -111,62 +105,64 @@ func TestPoolBasic(t *testing.T) {
 
 	// Send message
 	select {
-	case msgChan <- msg:
-	case <-time.After(time.Second):
+	case tChan <- types.NewTransaction(msg, resChan):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
 	// Receive message
+	var procT types.Transaction
+	var open bool
 	select {
-	case procMsg, open := <-proc.MessageChan():
+	case procT, open = <-proc.TransactionChan():
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procMsg.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
 	// Receive decoupled response
 	select {
-	case res, open := <-proc.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
 		} else if res.Error() != nil {
 			t.Error(res.Error())
 		}
 		// Expect decoupled response
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
 	// Respond with error
 	errTest := errors.New("This is a test")
 	select {
-	case resChan <- types.NewSimpleResponse(errTest):
-	case <-time.After(time.Second):
+	case procT.ResponseChan <- types.NewSimpleResponse(errTest):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
 	// Receive message second attempt
 	select {
-	case procMsg, open := <-proc.MessageChan():
+	case procT, open := <-proc.TransactionChan():
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procMsg.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
 	// Respond with no error this time
 	select {
-	case resChan <- types.NewSimpleResponse(nil):
-	case <-time.After(time.Second):
+	case procT.ResponseChan <- types.NewSimpleResponse(nil):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
@@ -177,27 +173,27 @@ func TestPoolBasic(t *testing.T) {
 
 	// Send message
 	select {
-	case msgChan <- msg:
-	case <-time.After(time.Second):
+	case tChan <- types.NewTransaction(msg, resChan):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
 	// Receive new message
 	select {
-	case procMsg, open := <-proc.MessageChan():
+	case procT, open := <-proc.TransactionChan():
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procMsg.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
-	case <-time.After(time.Second * 10):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
 	// Receive decoupled response
 	select {
-	case res, open := <-proc.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
 		}
@@ -205,14 +201,14 @@ func TestPoolBasic(t *testing.T) {
 			t.Error(res.Error())
 		}
 		// Expect decoupled response
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
 	// Respond without error
 	select {
-	case resChan <- types.NewSimpleResponse(nil):
-	case <-time.After(time.Second):
+	case procT.ResponseChan <- types.NewSimpleResponse(nil):
+	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 

@@ -51,8 +51,8 @@ func NewNoop(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 //------------------------------------------------------------------------------
 
 // ProcessMessage does nothing and returns the message unchanged.
-func (c *Noop) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
-	msgs := [1]*types.Message{msg}
+func (c *Noop) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }
 

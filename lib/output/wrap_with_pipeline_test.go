@@ -32,17 +32,12 @@ import (
 //------------------------------------------------------------------------------
 
 type mockOutput struct {
-	msgs <-chan types.Message
-	res  chan types.Response
+	ts <-chan types.Transaction
 }
 
-func (m *mockOutput) StartReceiving(msgs <-chan types.Message) error {
-	m.msgs = msgs
+func (m *mockOutput) StartReceiving(ts <-chan types.Transaction) error {
+	m.ts = ts
 	return nil
-}
-
-func (m *mockOutput) ResponseChan() <-chan types.Response {
-	return m.res
 }
 
 func (m *mockOutput) CloseAsync() {
@@ -51,11 +46,10 @@ func (m *mockOutput) CloseAsync() {
 
 func (m *mockOutput) WaitForClose(dur time.Duration) error {
 	select {
-	case _, open := <-m.msgs:
+	case _, open := <-m.ts:
 		if open {
 			return errors.New("Messages chan still open")
 		}
-		close(m.res)
 	case <-time.After(dur):
 		return errors.New("timed out")
 	}
@@ -65,35 +59,21 @@ func (m *mockOutput) WaitForClose(dur time.Duration) error {
 //------------------------------------------------------------------------------
 
 type mockPipe struct {
-	msgsIn <-chan types.Message
-
-	msgs chan types.Message
-	res  chan types.Response
-
-	resBack <-chan types.Response
+	tsIn <-chan types.Transaction
+	ts   chan types.Transaction
 }
 
-func (m *mockPipe) StartListening(res <-chan types.Response) error {
-	m.resBack = res
+func (m *mockPipe) StartReceiving(ts <-chan types.Transaction) error {
+	m.tsIn = ts
 	return nil
 }
 
-func (m *mockPipe) StartReceiving(msgs <-chan types.Message) error {
-	m.msgsIn = msgs
-	return nil
-}
-
-func (m *mockPipe) MessageChan() <-chan types.Message {
-	return m.msgs
-}
-
-func (m *mockPipe) ResponseChan() <-chan types.Response {
-	return m.res
+func (m *mockPipe) TransactionChan() <-chan types.Transaction {
+	return m.ts
 }
 
 func (m *mockPipe) CloseAsync() {
-	close(m.msgs)
-	close(m.res)
+	close(m.ts)
 }
 
 func (m *mockPipe) WaitForClose(time.Duration) error {
@@ -103,10 +83,9 @@ func (m *mockPipe) WaitForClose(time.Duration) error {
 //------------------------------------------------------------------------------
 
 func TestBasicWrapPipeline(t *testing.T) {
-	mockOut := &mockOutput{res: make(chan types.Response)}
+	mockOut := &mockOutput{}
 	mockPi := &mockPipe{
-		msgs: make(chan types.Message),
-		res:  make(chan types.Response),
+		ts: make(chan types.Transaction),
 	}
 
 	newOutput, err := WrapWithPipeline(mockOut, func() (pipeline.Type, error) {
@@ -121,39 +100,22 @@ func TestBasicWrapPipeline(t *testing.T) {
 		return mockPi, nil
 	})
 
-	if newOutput.ResponseChan() != mockPi.res {
-		t.Error("Wrong response chan in new output type")
-	}
-
-	dudMsgChan := make(chan types.Message)
+	dudMsgChan := make(chan types.Transaction)
 	if err = newOutput.StartReceiving(dudMsgChan); err != nil {
 		t.Error(err)
 	}
 
-	if mockPi.msgsIn != dudMsgChan {
+	if mockPi.tsIn != dudMsgChan {
 		t.Error("Wrong message chan in mock pipe")
 	}
 
-	if mockOut.res != mockPi.resBack {
-		t.Error("Wrong response chan in mock output")
-	}
-
-	if mockOut.msgs != mockPi.msgs {
+	if mockOut.ts != mockPi.ts {
 		t.Error("Wrong messages chan in mock pipe")
 	}
 
 	newOutput.CloseAsync()
 	if err = newOutput.WaitForClose(time.Second); err != nil {
 		t.Error(err)
-	}
-
-	select {
-	case _, open := <-mockOut.res:
-		if open {
-			t.Error("mock output is still open after close")
-		}
-	default:
-		t.Error("neither type was closed")
 	}
 }
 

@@ -71,18 +71,20 @@ func NewSplit(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 
 // ProcessMessage takes a single message and returns a slice of messages,
 // containing a message per part.
-func (s *Split) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.stats.Incr("processor.split.count", 1)
 
 	if len(msg.Parts) == 0 {
+		s.stats.Incr("processor.split.dropped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	msgs := make([]*types.Message, len(msg.Parts))
+	msgs := make([]types.Message, len(msg.Parts))
 	for i, part := range msg.Parts {
-		msgs[i] = &types.Message{Parts: [][]byte{part}}
+		msgs[i] = types.Message{Parts: [][]byte{part}}
 	}
 
+	s.stats.Incr("processor.split.sent", int64(len(msgs)))
 	return msgs, nil
 }
 

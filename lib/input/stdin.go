@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
@@ -74,8 +75,7 @@ func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 	}
 
 	stdin := os.Stdin
-	return NewLineReader(
-		"stdin",
+	rdr, err := reader.NewLines(
 		func() (io.Reader, error) {
 			// Swap so this only works once since we don't want to read stdin
 			// multiple times.
@@ -86,12 +86,18 @@ func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 			stdin = nil
 			return sendStdin, nil
 		},
-		func() {
-		},
+		func() {},
+		reader.OptLinesSetDelimiter(delim),
+		reader.OptLinesSetMaxBuffer(conf.STDIN.MaxBuffer),
+		reader.OptLinesSetMultipart(conf.STDIN.Multipart),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return NewReader(
+		"stdin",
+		reader.NewCutOff(reader.NewPreserver(rdr)),
 		log, stats,
-		OptLineReaderSetDelimiter(delim),
-		OptLineReaderSetMaxBuffer(conf.STDIN.MaxBuffer),
-		OptLineReaderSetMultipart(conf.STDIN.Multipart),
 	)
 }
 

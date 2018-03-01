@@ -42,8 +42,8 @@ type Reader struct {
 	stats metrics.Type
 	log   log.Modular
 
-	messages  chan types.Message
-	responses <-chan types.Response
+	transactions chan types.Transaction
+	responses    chan types.Response
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -56,17 +56,20 @@ func NewReader(
 	log log.Modular,
 	stats metrics.Type,
 ) (Type, error) {
-	return &Reader{
-		running:    1,
-		typeStr:    typeStr,
-		reader:     r,
-		log:        log.NewModule(".input." + typeStr),
-		stats:      stats,
-		messages:   make(chan types.Message),
-		responses:  nil,
-		closeChan:  make(chan struct{}),
-		closedChan: make(chan struct{}),
-	}, nil
+	rdr := &Reader{
+		running:      1,
+		typeStr:      typeStr,
+		reader:       r,
+		log:          log.NewModule(".input." + typeStr),
+		stats:        stats,
+		transactions: make(chan types.Transaction),
+		responses:    make(chan types.Response),
+		closeChan:    make(chan struct{}),
+		closedChan:   make(chan struct{}),
+	}
+
+	go rdr.loop()
+	return rdr, nil
 }
 
 //------------------------------------------------------------------------------
@@ -93,7 +96,7 @@ func (r *Reader) loop() {
 		}
 		r.stats.Decr(runningPath, 1)
 
-		close(r.messages)
+		close(r.transactions)
 		close(r.closedChan)
 	}()
 	r.stats.Incr(runningPath, 1)
@@ -162,7 +165,7 @@ func (r *Reader) loop() {
 		}
 
 		select {
-		case r.messages <- msg:
+		case r.transactions <- types.NewTransaction(msg, r.responses):
 		case <-r.closeChan:
 			return
 		}
@@ -190,20 +193,9 @@ func (r *Reader) loop() {
 	}
 }
 
-// StartListening sets the channel used by the input to validate message
-// receipt.
-func (r *Reader) StartListening(responses <-chan types.Response) error {
-	if r.responses != nil {
-		return types.ErrAlreadyStarted
-	}
-	r.responses = responses
-	go r.loop()
-	return nil
-}
-
-// MessageChan returns the messages channel.
-func (r *Reader) MessageChan() <-chan types.Message {
-	return r.messages
+// TransactionChan returns the transactions channel.
+func (r *Reader) TransactionChan() <-chan types.Transaction {
+	return r.transactions
 }
 
 // CloseAsync shuts down the Reader input and stops processing requests.

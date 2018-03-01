@@ -59,13 +59,6 @@ func TestFileSinglePart(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-
-	if err = f.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
 	defer func() {
 		f.CloseAsync()
 		if err := f.WaitForClose(time.Second); err != nil {
@@ -74,25 +67,27 @@ func TestFileSinglePart(t *testing.T) {
 	}()
 
 	for _, msg := range messages {
+		var ts types.Transaction
+		var open bool
 		select {
-		case resMsg, open := <-f.MessageChan():
+		case ts, open = <-f.TransactionChan():
 			if !open {
 				t.Error("channel closed early")
-			} else if res := string(resMsg.Parts[0]); res != msg {
+			} else if res := string(ts.Payload.Parts[0]); res != msg {
 				t.Errorf("Wrong result, %v != %v", res, msg)
 			}
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}
 	}
 
 	select {
-	case _, open := <-f.MessageChan():
+	case _, open := <-f.TransactionChan():
 		if open {
 			t.Error("Channel not closed at end of messages")
 		}
@@ -144,13 +139,6 @@ func TestFileMultiPart(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-
-	if err = f.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-
 	defer func() {
 		f.CloseAsync()
 		if err := f.WaitForClose(time.Second); err != nil {
@@ -159,13 +147,15 @@ func TestFileMultiPart(t *testing.T) {
 	}()
 
 	for _, msg := range messages {
+		var ts types.Transaction
+		var open bool
 		select {
-		case resMsg, open := <-f.MessageChan():
+		case ts, open = <-f.TransactionChan():
 			if !open {
 				t.Error("channel closed early")
 			} else {
 				for i, part := range msg {
-					if res := string(resMsg.Parts[i]); res != part {
+					if res := string(ts.Payload.Parts[i]); res != part {
 						t.Errorf("Wrong result, %v != %v", res, part)
 					}
 				}
@@ -174,14 +164,14 @@ func TestFileMultiPart(t *testing.T) {
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}
 	}
 
 	select {
-	case _, open := <-f.MessageChan():
+	case _, open := <-f.TransactionChan():
 		if open {
 			t.Error("Channel not closed at end of messages")
 		}

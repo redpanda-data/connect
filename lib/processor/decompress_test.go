@@ -81,7 +81,7 @@ func TestDecompressGZIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+	msgs, res := proc.ProcessMessage(types.Message{Parts: input})
 	if len(msgs) != 1 {
 		t.Error("Decompress failed")
 	} else if res != nil {
@@ -170,7 +170,7 @@ func TestDecompressIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+		msgs, res := proc.ProcessMessage(types.Message{Parts: input})
 		if len(msgs) != 1 {
 			t.Errorf("Decompress failed on index: %v", i)
 		} else if res != nil {
@@ -193,12 +193,12 @@ func TestDecompressEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(&types.Message{Parts: [][]byte{}})
+	msgs, _ := proc.ProcessMessage(types.Message{Parts: [][]byte{}})
 	if len(msgs) > 0 {
 		t.Error("Expected failure with zero part message")
 	}
 
-	msgs, _ = proc.ProcessMessage(&types.Message{
+	msgs, _ = proc.ProcessMessage(types.Message{
 		Parts: [][]byte{[]byte("first"), []byte("second")},
 	})
 	if len(msgs) > 0 {

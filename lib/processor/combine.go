@@ -94,12 +94,12 @@ func NewCombine(conf Config, log log.Modular, stats metrics.Type) (Type, error) 
 // ProcessMessage takes a single message and buffers it, drops it, returning a
 // NoAck response, until eventually it has N buffered messages, at which point
 // it combines those messages into one multiple part message which is sent on.
-func (c *Combine) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.stats.Incr("processor.combine.count", 1)
 
 	if len(msg.Parts) > c.n {
 		c.stats.Incr("processor.combine.warning.too_many_parts", 1)
-		msgs := [1]*types.Message{msg}
+		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}
 
@@ -113,7 +113,8 @@ func (c *Combine) ProcessMessage(msg *types.Message) ([]*types.Message, types.Re
 		msg.Parts = c.parts
 		c.parts = nil
 
-		msgs := [1]*types.Message{msg}
+		c.stats.Incr("processor.combine.sent", 1)
+		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}
 

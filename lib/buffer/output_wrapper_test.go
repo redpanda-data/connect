@@ -35,19 +35,14 @@ import (
 func TestBasicMemoryBuffer(t *testing.T) {
 	var incr, total uint8 = 100, 50
 
-	msgChan := make(chan types.Message)
+	tChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	conf.RetryThrottleMS = 1
 	b := NewOutputWrapper(conf, impl.NewMemory(impl.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), metrics.DudType{})
-	if err := b.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-	if err := b.StartReceiving(msgChan); err != nil {
+	if err := b.StartReceiving(tChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -62,7 +57,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 
 		select {
 		// Send to buffer
-		case msgChan <- types.Message{Parts: msgBytes}:
+		case tChan <- types.NewTransaction(types.Message{Parts: msgBytes}, resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered message %v send", i)
 			return
@@ -70,7 +65,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 
 		// Instant response from buffer
 		select {
-		case res := <-b.ResponseChan():
+		case res := <-resChan:
 			if res.Error() != nil {
 				t.Error(res.Error())
 			}
@@ -80,9 +75,10 @@ func TestBasicMemoryBuffer(t *testing.T) {
 		}
 
 		// Receive on output
+		var outTr types.Transaction
 		select {
-		case outMsg := <-b.MessageChan():
-			if actual := uint8(outMsg.Parts[0][0]); actual != i {
+		case outTr = <-b.TransactionChan():
+			if actual := uint8(outTr.Payload.Parts[0][0]); actual != i {
 				t.Errorf("Wrong order receipt of unbuffered message receive: %v != %v", actual, i)
 			}
 		case <-time.After(time.Second):
@@ -92,7 +88,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 
 		// Response from output
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case outTr.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered response send back %v", i)
 			return
@@ -105,13 +101,13 @@ func TestBasicMemoryBuffer(t *testing.T) {
 		msgBytes[0][0] = byte(i)
 
 		select {
-		case msgChan <- types.Message{Parts: msgBytes}:
+		case tChan <- types.NewTransaction(types.Message{Parts: msgBytes}, resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered message %v send", i)
 			return
 		}
 		select {
-		case res := <-b.ResponseChan():
+		case res := <-resChan:
 			if res.Error() != nil {
 				t.Error(res.Error())
 			}
@@ -126,7 +122,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	msgBytes[0] = make([]byte, int(incr))
 
 	select {
-	case msgChan <- types.Message{Parts: msgBytes}:
+	case tChan <- types.NewTransaction(types.Message{Parts: msgBytes}, resChan):
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for final buffered message send")
 		return
@@ -134,7 +130,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 
 	// Response should block until buffer is relieved
 	select {
-	case res := <-b.ResponseChan():
+	case res := <-resChan:
 		if res.Error() != nil {
 			t.Error(res.Error())
 		} else {
@@ -144,13 +140,15 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 
+	var outTr types.Transaction
+
 	// Extract last message
 	select {
-	case val := <-b.MessageChan():
-		if actual := uint8(val.Parts[0][0]); actual != 0 {
+	case outTr = <-b.TransactionChan():
+		if actual := uint8(outTr.Payload.Parts[0][0]); actual != 0 {
 			t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, 0)
 		}
-		resChan <- types.NewSimpleResponse(nil)
+		outTr.ResponseChan <- types.NewSimpleResponse(nil)
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for final buffered message read")
 		return
@@ -158,7 +156,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 
 	// Response from the last attempt should no longer be blocking
 	select {
-	case res := <-b.ResponseChan():
+	case res := <-resChan:
 		if res.Error() != nil {
 			t.Error(res.Error())
 		}
@@ -169,8 +167,8 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	// Extract all other messages
 	for i = 1; i < total; i++ {
 		select {
-		case outMsg := <-b.MessageChan():
-			if actual := uint8(outMsg.Parts[0][0]); actual != i {
+		case outTr = <-b.TransactionChan():
+			if actual := uint8(outTr.Payload.Parts[0][0]); actual != i {
 				t.Errorf("Wrong order receipt of buffered message: %v != %v", actual, i)
 			}
 		case <-time.After(time.Second):
@@ -179,7 +177,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 		}
 
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case outTr.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered response send back %v", i)
 			return
@@ -188,14 +186,14 @@ func TestBasicMemoryBuffer(t *testing.T) {
 
 	// Get final message
 	select {
-	case <-b.MessageChan():
+	case outTr = <-b.TransactionChan():
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for buffered message %v read", i)
 		return
 	}
 
 	select {
-	case resChan <- types.NewSimpleResponse(nil):
+	case outTr.ResponseChan <- types.NewSimpleResponse(nil):
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for buffered response send back %v", i)
 		return
@@ -205,25 +203,20 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	b.WaitForClose(time.Second)
 
 	close(resChan)
-	close(msgChan)
+	close(tChan)
 }
 
 func TestBufferClosing(t *testing.T) {
 	var incr, total uint8 = 100, 5
 
-	msgChan := make(chan types.Message)
+	tChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	conf.RetryThrottleMS = 1
 	b := NewOutputWrapper(conf, impl.NewMemory(impl.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), metrics.DudType{})
-	if err := b.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-	if err := b.StartReceiving(msgChan); err != nil {
+	if err := b.StartReceiving(tChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -237,13 +230,13 @@ func TestBufferClosing(t *testing.T) {
 		msgBytes[0][0] = byte(i)
 
 		select {
-		case msgChan <- types.Message{Parts: msgBytes}:
+		case tChan <- types.NewTransaction(types.Message{Parts: msgBytes}, resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered message %v send", i)
 			return
 		}
 		select {
-		case res := <-b.ResponseChan():
+		case res := <-resChan:
 			if res.Error() != nil {
 				t.Error(res.Error())
 			}
@@ -254,16 +247,16 @@ func TestBufferClosing(t *testing.T) {
 	}
 
 	// Close input, this should prompt the stack buffer to CloseOnceEmpty().
-	close(msgChan)
+	close(tChan)
 
 	// Receive all of those messages from the buffer
 	for i = 0; i < total; i++ {
 		select {
-		case val := <-b.MessageChan():
-			if actual := uint8(val.Parts[0][0]); actual != i {
+		case val := <-b.TransactionChan():
+			if actual := uint8(val.Payload.Parts[0][0]); actual != i {
 				t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, i)
 			}
-			resChan <- types.NewSimpleResponse(nil)
+			val.ResponseChan <- types.NewSimpleResponse(nil)
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for final buffered message read")
 			return
@@ -272,7 +265,7 @@ func TestBufferClosing(t *testing.T) {
 
 	// The buffer should now be closed, therefore so should our read channel.
 	select {
-	case _, open := <-b.MessageChan():
+	case _, open := <-b.TransactionChan():
 		if open {
 			t.Error("Reader channel still open after clearing buffer")
 		}
@@ -283,22 +276,15 @@ func TestBufferClosing(t *testing.T) {
 
 	// Should already be shut down.
 	b.WaitForClose(time.Second)
-
-	close(resChan)
 }
 
 func TestOutputWrapperErrProp(t *testing.T) {
-	msgChan := make(chan types.Message)
+	tChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	conf.RetryThrottleMS = 1
 	b := NewOutputWrapper(conf, impl.NewMemory(impl.NewMemoryConfig()), metrics.DudType{})
-	if err := b.StartReceiving(msgChan); err != nil {
-		t.Error(err)
-		return
-	}
-	if err := b.StartListening(resChan); err != nil {
+	if err := b.StartReceiving(tChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -307,12 +293,12 @@ func TestOutputWrapperErrProp(t *testing.T) {
 	msg.Parts = append(msg.Parts, []byte(`hello world`))
 
 	select {
-	case msgChan <- msg:
+	case tChan <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
 	select {
-	case res, open := <-b.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Error("buffer closed early")
 			return
@@ -324,8 +310,10 @@ func TestOutputWrapperErrProp(t *testing.T) {
 		t.Error("Timed out waiting for result")
 	}
 
+	var outTr types.Transaction
+	var open bool
 	select {
-	case _, open := <-b.MessageChan():
+	case outTr, open = <-b.TransactionChan():
 		if !open {
 			t.Error("buffer closed early")
 			return
@@ -335,13 +323,13 @@ func TestOutputWrapperErrProp(t *testing.T) {
 	}
 
 	errTest := errors.New("test error")
-	go func() {
+	go func(rc chan<- types.Response) {
 		select {
-		case resChan <- types.NewSimpleResponse(errTest):
+		case rc <- types.NewSimpleResponse(errTest):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for error response")
 		}
-	}()
+	}(outTr.ResponseChan)
 
 	select {
 	case errs, open := <-b.ErrorsChan():
@@ -360,7 +348,7 @@ func TestOutputWrapperErrProp(t *testing.T) {
 	}
 
 	select {
-	case _, open := <-b.MessageChan():
+	case outTr, open = <-b.TransactionChan():
 		if !open {
 			t.Error("buffer closed early")
 			return
@@ -368,189 +356,21 @@ func TestOutputWrapperErrProp(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for message")
 	}
-	select {
-	case resChan <- types.NewSimpleResponse(nil):
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for error response")
-	}
 
-	close(resChan)
-	close(msgChan)
+	go func(rc chan<- types.Response) {
+		select {
+		case rc <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for error response")
+		}
+	}(outTr.ResponseChan)
+
+	close(tChan)
 
 	b.CloseAsync()
 	if err := b.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 }
-
-/*
-func TestSyncBuffer(t *testing.T) {
-	msgChan := make(chan types.Message)
-	resChan := make(chan types.Response)
-
-	b := NewOutputWrapper(1)
-	if err := b.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-	if err := b.StartReceiving(msgChan); err != nil {
-		t.Error(err)
-		return
-	}
-
-	checkNoWrite := func() error {
-		select {
-		case msgChan <- types.Message{Parts: [][]byte{}}:
-			return errors.New("Message sent without response")
-		case <-time.After(time.Millisecond * 100):
-		}
-		return nil
-	}
-
-	checkNoRead := func() error {
-		select {
-		case <-b.ResponseChan():
-			return errors.New("Response received without full read")
-		case <-time.After(time.Millisecond * 100):
-		}
-		return nil
-	}
-
-	// Send a message
-	select {
-	case msgChan <- types.Message{Parts: [][]byte{[]byte("test")}}:
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for first message send")
-		return
-	}
-
-	// Ensure no response back
-	if err := checkNoRead(); err != nil {
-		t.Error(err)
-	}
-	// Check that we cant send another
-	if err := checkNoWrite(); err != nil {
-		t.Error(err)
-	}
-
-	// Receive on output
-	select {
-	case <-b.MessageChan():
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for first message read")
-		return
-	}
-
-	// Ensure no response back
-	if err := checkNoRead(); err != nil {
-		t.Error(err)
-	}
-	// Check that we cant send another
-	if err := checkNoWrite(); err != nil {
-		t.Error(err)
-	}
-
-	// Response from output
-	select {
-	case resChan <- types.NewSimpleResponse(nil):
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for first response send back")
-		return
-	}
-
-	// Response from buffer
-	select {
-	case <-b.ResponseChan():
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for message response")
-		return
-	}
-
-	// We should now be able to send a new message
-	select {
-	case msgChan <- types.Message{Parts: [][]byte{[]byte("test")}}:
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for second message send")
-		return
-	}
-
-	b.CloseAsync()
-	if err := b.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
-}
-*/
-
-/*
-func TestEmptyMemoryBuffer(t *testing.T) {
-	var incr, total uint8 = 100, 50
-
-	msgChan := make(chan types.Message)
-	resChan := make(chan types.Response)
-
-	b := NewOutputWrapper(1)
-	if err := b.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-	if err := b.StartReceiving(msgChan); err != nil {
-		t.Error(err)
-		return
-	}
-
-	var i uint8
-
-	// Check correct flow no blocking
-	for ; i < total; i++ {
-		msgBytes := make([][]byte, 1)
-		msgBytes[0] = make([]byte, int(incr))
-		msgBytes[0][0] = byte(i)
-
-		select {
-		// Send to buffer
-		case msgChan <- types.Message{Parts: msgBytes}:
-		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for unbuffered message %v send", i)
-			return
-		}
-
-		// Receive on output
-		select {
-		case outMsg := <-b.MessageChan():
-			if actual := uint8(outMsg.Parts[0][0]); actual != i {
-				t.Errorf("Wrong order receipt of unbuffered message receive: %v != %v", actual, i)
-			}
-		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for unbuffered message %v read", i)
-			return
-		}
-
-		// Response from output
-		select {
-		case resChan <- types.NewSimpleResponse(nil):
-		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for unbuffered response send back %v", i)
-			return
-		}
-
-		// Response from buffer
-		select {
-		case res := <-b.ResponseChan():
-			if res.Error() != nil {
-				t.Error(res.Error())
-			}
-		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for unbuffered message %v response", i)
-			return
-		}
-	}
-
-	b.CloseAsync()
-	b.WaitForClose(time.Second)
-
-	close(resChan)
-	close(msgChan)
-}
-*/
 
 //------------------------------------------------------------------------------

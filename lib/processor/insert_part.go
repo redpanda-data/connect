@@ -92,7 +92,7 @@ func NewInsertPart(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 //------------------------------------------------------------------------------
 
 // ProcessMessage prepends a new message part to the message.
-func (p *InsertPart) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.stats.Incr("processor.insert_part.count", 1)
 
 	var newPart []byte
@@ -128,7 +128,8 @@ func (p *InsertPart) ProcessMessage(msg *types.Message) ([]*types.Message, types
 
 	msg.Parts = newParts
 
-	msgs := [1]*types.Message{msg}
+	p.stats.Incr("processor.insert_part.sent", 1)
+	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }
 

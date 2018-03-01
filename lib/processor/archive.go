@@ -186,7 +186,7 @@ func (d *Archive) createHeader(body []byte) os.FileInfo {
 
 // ProcessMessage takes a message, attempts to archive the parts of the message,
 // and returns the result as a single part message.
-func (d *Archive) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.stats.Incr("processor.archive.count", 1)
 
 	if len(msg.Parts) == 0 {
@@ -205,7 +205,8 @@ func (d *Archive) ProcessMessage(msg *types.Message) ([]*types.Message, types.Re
 		d.stats.Incr("processor.archive.error", 1)
 	}
 
-	msgs := [1]*types.Message{&newMsg}
+	d.stats.Incr("processor.archive.sent", 1)
+	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }
 

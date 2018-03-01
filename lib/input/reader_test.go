@@ -97,13 +97,6 @@ func TestReaderCantConnect(t *testing.T) {
 		return
 	}
 
-	if err = r.StartListening(make(chan types.Response)); err != nil {
-		t.Error(err)
-	}
-	if err = r.StartListening(nil); err == nil {
-		t.Error("Expected error from duplicate listen call")
-	}
-
 	// We will fail to connect but should still exit immediately.
 	r.CloseAsync()
 	if err = r.WaitForClose(time.Second); err != nil {
@@ -146,12 +139,6 @@ func TestReaderCantRead(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-
-	if err = r.StartListening(resChan); err != nil {
-		t.Error(err)
-	}
-
 	// We will be failing to send but should still exit immediately.
 	r.CloseAsync()
 	if err = r.WaitForClose(time.Second); err != nil {
@@ -179,12 +166,6 @@ func TestReaderTypeClosedOnConn(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-
-	if err = r.StartListening(resChan); err != nil {
-		t.Error(err)
-	}
-
 	go func() {
 		select {
 		case readerImpl.connChan <- types.ErrTypeClosed:
@@ -210,12 +191,6 @@ func TestReaderTypeClosedOnReconn(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
-	}
-
-	resChan := make(chan types.Response)
-
-	if err = r.StartListening(resChan); err != nil {
-		t.Error(err)
 	}
 
 	go func() {
@@ -253,12 +228,6 @@ func TestReaderTypeClosedOnReread(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
-	}
-
-	resChan := make(chan types.Response)
-
-	if err = r.StartListening(resChan); err != nil {
-		t.Error(err)
 	}
 
 	go func() {
@@ -305,12 +274,6 @@ func TestReaderCanReconnect(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-
-	if err = r.StartListening(resChan); err != nil {
-		t.Error(err)
-	}
-
 	go func() {
 		select {
 		case readerImpl.connChan <- nil:
@@ -339,8 +302,10 @@ func TestReaderCanReconnect(t *testing.T) {
 		}
 	}()
 
+	var ts types.Transaction
+	var open bool
 	select {
-	case _, open := <-r.MessageChan():
+	case ts, open = <-r.TransactionChan():
 		if !open {
 			t.Fatal("Closed early")
 		}
@@ -349,7 +314,7 @@ func TestReaderCanReconnect(t *testing.T) {
 	}
 
 	select {
-	case resChan <- types.NewSimpleResponse(nil):
+	case ts.ResponseChan <- types.NewSimpleResponse(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -381,12 +346,6 @@ func TestReaderFailsReconnect(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
-	}
-
-	resChan := make(chan types.Response)
-
-	if err = r.StartListening(resChan); err != nil {
-		t.Error(err)
 	}
 
 	go func() {
@@ -422,8 +381,10 @@ func TestReaderFailsReconnect(t *testing.T) {
 		}
 	}()
 
+	var ts types.Transaction
+	var open bool
 	select {
-	case _, open := <-r.MessageChan():
+	case ts, open = <-r.TransactionChan():
 		if !open {
 			t.Fatal("Closed early")
 		}
@@ -432,7 +393,7 @@ func TestReaderFailsReconnect(t *testing.T) {
 	}
 
 	select {
-	case resChan <- types.NewSimpleResponse(nil):
+	case ts.ResponseChan <- types.NewSimpleResponse(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -464,12 +425,6 @@ func TestReaderCloseDuringReconnect(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
-	}
-
-	resChan := make(chan types.Response)
-
-	if err = r.StartListening(resChan); err != nil {
-		t.Error(err)
 	}
 
 	select {
@@ -518,12 +473,6 @@ func TestReaderHappyPath(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-
-	if err = r.StartListening(resChan); err != nil {
-		t.Error(err)
-	}
-
 	select {
 	case readerImpl.connChan <- nil:
 	case <-time.After(time.Second):
@@ -543,12 +492,15 @@ func TestReaderHappyPath(t *testing.T) {
 		}
 	}()
 
+	var ts types.Transaction
+	var open bool
+
 	select {
-	case msg, open := <-r.MessageChan():
+	case ts, open = <-r.TransactionChan():
 		if !open {
 			t.Fatal("Chan closed")
 		}
-		if act := msg.Parts; !reflect.DeepEqual(exp, act) {
+		if act := ts.Payload.Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -556,7 +508,7 @@ func TestReaderHappyPath(t *testing.T) {
 	}
 
 	select {
-	case resChan <- types.NewSimpleResponse(nil):
+	case ts.ResponseChan <- types.NewSimpleResponse(nil):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -594,12 +546,6 @@ func TestReaderSadPath(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-
-	if err = r.StartListening(resChan); err != nil {
-		t.Error(err)
-	}
-
 	select {
 	case readerImpl.connChan <- nil:
 	case <-time.After(time.Second):
@@ -619,12 +565,15 @@ func TestReaderSadPath(t *testing.T) {
 		}
 	}()
 
+	var ts types.Transaction
+	var open bool
+
 	select {
-	case msg, open := <-r.MessageChan():
+	case ts, open = <-r.TransactionChan():
 		if !open {
 			t.Fatal("Chan closed")
 		}
-		if act := msg.Parts; !reflect.DeepEqual(exp, act) {
+		if act := ts.Payload.Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -632,7 +581,7 @@ func TestReaderSadPath(t *testing.T) {
 	}
 
 	select {
-	case resChan <- types.NewSimpleResponse(expErr):
+	case ts.ResponseChan <- types.NewSimpleResponse(expErr):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -670,12 +619,6 @@ func TestReaderSkipAcks(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-
-	if err = r.StartListening(resChan); err != nil {
-		t.Error(err)
-	}
-
 	select {
 	case readerImpl.connChan <- nil:
 	case <-time.After(time.Second):
@@ -691,12 +634,14 @@ func TestReaderSkipAcks(t *testing.T) {
 			}
 		}()
 
+		var ts types.Transaction
+		var open bool
 		select {
-		case msg, open := <-r.MessageChan():
+		case ts, open = <-r.TransactionChan():
 			if !open {
 				t.Fatal("Chan closed")
 			}
-			if act := msg.Parts; !reflect.DeepEqual(exp, act) {
+			if act := ts.Payload.Parts; !reflect.DeepEqual(exp, act) {
 				t.Errorf("Wrong message returned: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
@@ -704,7 +649,7 @@ func TestReaderSkipAcks(t *testing.T) {
 		}
 
 		select {
-		case resChan <- types.NewUnacknowledgedResponse():
+		case ts.ResponseChan <- types.NewUnacknowledgedResponse():
 		case <-time.After(time.Second):
 			t.Fatal("Timed out")
 		}

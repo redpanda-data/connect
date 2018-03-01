@@ -86,7 +86,7 @@ func TestSelectParts(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		msgs, res := proc.ProcessMessage(&types.Message{Parts: test.in})
+		msgs, res := proc.ProcessMessage(types.Message{Parts: test.in})
 		if len(msgs) != 1 {
 			t.Errorf("Select Parts failed on: %s", test.in)
 		} else if res != nil {
@@ -132,7 +132,7 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+		msgs, res := proc.ProcessMessage(types.Message{Parts: input})
 		if len(msgs) != 1 {
 			t.Errorf("Select Parts failed on index: %v", i)
 		} else if res != nil {
@@ -155,7 +155,7 @@ func TestSelectPartsEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(&types.Message{Parts: [][]byte{[]byte("foo")}})
+	msgs, _ := proc.ProcessMessage(types.Message{Parts: [][]byte{[]byte("foo")}})
 	if len(msgs) != 0 {
 		t.Error("Expected failure with zero parts selected")
 	}

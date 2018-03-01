@@ -35,8 +35,7 @@ import (
 
 // DynamicOutput is an interface of output types that must be closable.
 type DynamicOutput interface {
-	types.MessageReceiver
-	types.Responder
+	types.TransactionReceiver
 	types.Closable
 }
 
@@ -49,10 +48,11 @@ type wrappedOutput struct {
 	ResChan chan<- error
 }
 
-// outputWithMsgChan is a struct containing both an output and the message chan
+// outputWithResChan is a struct containing both an output and the response chan
 // it reads from.
-type outputWithMsgChan struct {
-	msgChan chan types.Message
+type outputWithResChan struct {
+	tsChan  chan types.Transaction
+	resChan chan types.Response
 	output  DynamicOutput
 }
 
@@ -71,11 +71,10 @@ type DynamicFanOut struct {
 	onAdd    func(label string)
 	onRemove func(label string)
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	newOutputChan chan wrappedOutput
-	outputs       map[string]outputWithMsgChan
+	outputs       map[string]outputWithResChan
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -94,10 +93,9 @@ func NewDynamicFanOut(
 		log:           logger.NewModule(".broker.dynamic_fan_out"),
 		onAdd:         func(l string) {},
 		onRemove:      func(l string) {},
-		messages:      nil,
-		responseChan:  make(chan types.Response),
+		transactions:  nil,
 		newOutputChan: make(chan wrappedOutput),
-		outputs:       make(map[string]outputWithMsgChan, len(outputs)),
+		outputs:       make(map[string]outputWithResChan, len(outputs)),
 		closedChan:    make(chan struct{}),
 		closeChan:     make(chan struct{}),
 	}
@@ -162,12 +160,12 @@ func OptDynamicFanOutSetOnRemove(onRemoveFunc func(label string)) func(*DynamicF
 
 //------------------------------------------------------------------------------
 
-// StartReceiving assigns a new messages channel for the broker to read.
-func (d *DynamicFanOut) StartReceiving(msgs <-chan types.Message) error {
-	if d.messages != nil {
+// StartReceiving assigns a new transactions channel for the broker to read.
+func (d *DynamicFanOut) StartReceiving(transactions <-chan types.Transaction) error {
+	if d.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	d.messages = msgs
+	d.transactions = transactions
 
 	go d.loop()
 	return nil
@@ -180,12 +178,13 @@ func (d *DynamicFanOut) addOutput(ident string, output DynamicOutput) error {
 		return fmt.Errorf("output key '%v' already exists", ident)
 	}
 
-	ow := outputWithMsgChan{
-		msgChan: make(chan types.Message),
+	ow := outputWithResChan{
+		tsChan:  make(chan types.Transaction),
+		resChan: make(chan types.Response),
 		output:  output,
 	}
 
-	if err := output.StartReceiving(ow.msgChan); err != nil {
+	if err := output.StartReceiving(ow.tsChan); err != nil {
 		output.CloseAsync()
 		return err
 	}
@@ -205,7 +204,7 @@ func (d *DynamicFanOut) removeOutput(ident string, timeout time.Duration) error 
 		return err
 	}
 
-	close(ow.msgChan)
+	close(ow.tsChan)
 	delete(d.outputs, ident)
 	return nil
 }
@@ -217,7 +216,7 @@ func (d *DynamicFanOut) loop() {
 	defer func() {
 		for _, ow := range d.outputs {
 			ow.output.CloseAsync()
-			close(ow.msgChan)
+			close(ow.tsChan)
 		}
 		for _, ow := range d.outputs {
 			if err := ow.output.WaitForClose(time.Second); err != nil {
@@ -226,19 +225,18 @@ func (d *DynamicFanOut) loop() {
 				}
 			}
 		}
-		d.outputs = map[string]outputWithMsgChan{}
-		close(d.responseChan)
+		d.outputs = map[string]outputWithResChan{}
 		close(d.closedChan)
 	}()
 
 	for atomic.LoadInt32(&d.running) == 1 {
-		var msg types.Message
+		var ts types.Transaction
 		var open bool
 
 		// Only actually consume messages if we have at least one output.
-		var msgChan <-chan types.Message
+		var tsChan <-chan types.Transaction
 		if len(d.outputs) > 0 {
-			msgChan = d.messages
+			tsChan = d.transactions
 		}
 
 		// Either attempt to read the next message or listen for changes to our
@@ -274,7 +272,7 @@ func (d *DynamicFanOut) loop() {
 				wrappedOutput.ResChan <- err
 			}
 			continue
-		case msg, open = <-msgChan:
+		case ts, open = <-tsChan:
 			if !open {
 				return
 			}
@@ -284,7 +282,7 @@ func (d *DynamicFanOut) loop() {
 		d.stats.Incr("broker.dynamic_fan_out.messages.received", 1)
 
 		// If we received a message attempt to send it to each output.
-		remainingTargets := make(map[string]outputWithMsgChan, len(d.outputs))
+		remainingTargets := make(map[string]outputWithResChan, len(d.outputs))
 		for k, v := range d.outputs {
 			remainingTargets[k] = v
 		}
@@ -292,9 +290,9 @@ func (d *DynamicFanOut) loop() {
 			for _, v := range remainingTargets {
 				// Perform a copy here as it could be dangerous to release the
 				// same message to parallel processor pipelines.
-				msgCopy := msg.ShallowCopy()
+				msgCopy := ts.Payload.ShallowCopy()
 				select {
-				case v.msgChan <- msgCopy:
+				case v.tsChan <- types.NewTransaction(msgCopy, v.resChan):
 				case <-d.closeChan:
 					return
 				}
@@ -302,7 +300,7 @@ func (d *DynamicFanOut) loop() {
 			for k, v := range remainingTargets {
 				var res types.Response
 				select {
-				case res, open = <-v.output.ResponseChan():
+				case res, open = <-v.resChan:
 					if !open {
 						d.log.Warnf("Dynamic output '%v' has closed\n", k)
 						d.removeOutput(k, time.Second)
@@ -324,16 +322,11 @@ func (d *DynamicFanOut) loop() {
 			}
 		}
 		select {
-		case d.responseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-d.closeChan:
 			return
 		}
 	}
-}
-
-// ResponseChan returns the response channel.
-func (d *DynamicFanOut) ResponseChan() <-chan types.Response {
-	return d.responseChan
 }
 
 // CloseAsync shuts down the DynamicFanOut broker and stops processing requests.

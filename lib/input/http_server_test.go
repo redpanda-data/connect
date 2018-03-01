@@ -48,16 +48,6 @@ func TestHTTPBasic(t *testing.T) {
 		return
 	}
 
-	resChan := make(chan types.Response)
-
-	if err = h.StartListening(resChan); err != nil {
-		t.Error(err)
-		return
-	}
-	if err = h.StartListening(resChan); err == nil {
-		t.Error("Expected error from double listen")
-	}
-
 	<-time.After(time.Millisecond * 1000)
 
 	// Test both single and multipart messages.
@@ -77,16 +67,18 @@ func TestHTTPBasic(t *testing.T) {
 				return
 			}
 		}()
+
+		var ts types.Transaction
 		select {
-		case resMsg := <-h.MessageChan():
-			if res := string(resMsg.Parts[0]); res != testStr {
-				t.Errorf("Wrong result, %v != %v", resMsg, res)
+		case ts = <-h.TransactionChan():
+			if res := string(ts.Payload.Parts[0]); res != testStr {
+				t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 			}
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}
@@ -121,20 +113,22 @@ func TestHTTPBasic(t *testing.T) {
 				return
 			}
 		}()
+
+		var ts types.Transaction
 		select {
-		case resMsg := <-h.MessageChan():
-			if exp, actual := 2, len(resMsg.Parts); exp != actual {
+		case ts = <-h.TransactionChan():
+			if exp, actual := 2, len(ts.Payload.Parts); exp != actual {
 				t.Errorf("Wrong number of parts: %v != %v", actual, exp)
-			} else if exp, actual := partOne, string(resMsg.Parts[0]); exp != actual {
+			} else if exp, actual := partOne, string(ts.Payload.Parts[0]); exp != actual {
 				t.Errorf("Wrong result, %v != %v", actual, exp)
-			} else if exp, actual := partTwo, string(resMsg.Parts[1]); exp != actual {
+			} else if exp, actual := partTwo, string(ts.Payload.Parts[1]); exp != actual {
 				t.Errorf("Wrong result, %v != %v", actual, exp)
 			}
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case resChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}
@@ -159,13 +153,6 @@ func TestHTTPBadRequests(t *testing.T) {
 
 	h, err := NewHTTPServer(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	resChan := make(chan types.Response)
-
-	if err = h.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -202,13 +189,6 @@ func TestHTTPTimeout(t *testing.T) {
 
 	h, err := NewHTTPServer(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	resChan := make(chan types.Response)
-
-	if err = h.StartListening(resChan); err != nil {
 		t.Error(err)
 		return
 	}

@@ -33,11 +33,8 @@ type Pool struct {
 
 	workChan chan types.Message
 
-	messagesOut  chan types.Message
-	responsesOut chan types.Response
-
-	messagesIn  <-chan types.Message
-	responsesIn <-chan types.Response
+	messagesOut chan types.Transaction
+	messagesIn  <-chan types.Transaction
 
 	closeChan chan struct{}
 	closed    chan struct{}
@@ -58,8 +55,7 @@ func NewPool(
 		log:              log,
 		stats:            stats,
 		workChan:         make(chan types.Message),
-		messagesOut:      make(chan types.Message),
-		responsesOut:     make(chan types.Response),
+		messagesOut:      make(chan types.Transaction),
 		closeChan:        make(chan struct{}),
 		closed:           make(chan struct{}),
 	}
@@ -78,21 +74,16 @@ func NewPool(
 
 // workerLoop is the processing loop of a pool worker.
 func (p *Pool) workerLoop(worker Type, wg *sync.WaitGroup) {
-	sendChan := make(chan types.Message)
+	sendChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
 	defer func() {
 		close(sendChan)
-		close(resChan)
 		atomic.AddInt32(&p.remainingWorkers, -1)
 		wg.Done()
 	}()
 
 	if err := worker.StartReceiving(sendChan); err != nil {
-		p.log.Errorf("Failed to start pool worker: %v\n", err)
-		return
-	}
-	if err := worker.StartListening(resChan); err != nil {
 		p.log.Errorf("Failed to start pool worker: %v\n", err)
 		return
 	}
@@ -111,23 +102,27 @@ func (p *Pool) workerLoop(worker Type, wg *sync.WaitGroup) {
 			p.stats.Incr("pipeline.pool.worker.message.received", 1)
 
 			// Send work to processing pipeline.
-			sendChan <- msgIn
+			sendChan <- types.NewTransaction(msgIn, resChan)
 			p.stats.Incr("pipeline.pool.worker.message.sent", 1)
+
+			var tOut types.Transaction
 
 			// Receive result from processing pipeline or response.
 			select {
-			case msgOut, open = <-worker.MessageChan():
+			case tOut, open = <-worker.TransactionChan():
 				if !open {
 					return
 				}
 				p.stats.Incr("pipeline.pool.worker.result.received", 1)
 
 				// Send decoupled response to processing pipeline
-				resChan <- types.NewSimpleResponse(nil)
-				if _, open = <-worker.ResponseChan(); !open {
+				tOut.ResponseChan <- types.NewSimpleResponse(nil)
+				if _, open = <-resChan; !open {
 					return
 				}
-			case _, open = <-worker.ResponseChan():
+
+				msgOut = tOut.Payload
+			case _, open = <-resChan:
 				if !open {
 					return
 				}
@@ -137,16 +132,12 @@ func (p *Pool) workerLoop(worker Type, wg *sync.WaitGroup) {
 
 		if len(msgOut.Parts) > 0 {
 			// Send result to shared output channel.
-			p.messagesOut <- msgOut
+			p.messagesOut <- types.NewTransaction(msgOut, resChan)
 			p.stats.Incr("pipeline.pool.worker.result.sent", 1)
 
 			// Receive output response from shared response channel.
-			var res types.Response
-			if res, open = <-p.responsesIn; !open {
-				// TODO: LOST MESSAGE
-				p.stats.Incr("pipeline.pool.worker.response.lost.shut_down", 1)
-				return
-			} else if err := res.Error(); err != nil {
+			res := <-resChan
+			if err := res.Error(); err != nil {
 				p.log.Errorf("Failed to send message: %v\n", err)
 			} else {
 				msgOut = types.Message{}
@@ -181,9 +172,7 @@ func (p *Pool) loop() {
 
 		workerGroup.Wait()
 
-		close(p.responsesOut)
 		close(p.messagesOut)
-
 		close(p.closed)
 	}()
 
@@ -195,9 +184,9 @@ func (p *Pool) loop() {
 
 	var open bool
 	for atomic.LoadUint32(&p.running) == 1 && atomic.LoadInt32(&p.remainingWorkers) > 0 {
-		var msg types.Message
+		var t types.Transaction
 		select {
-		case msg, open = <-p.messagesIn:
+		case t, open = <-p.messagesIn:
 			if !open {
 				return
 			}
@@ -207,13 +196,13 @@ func (p *Pool) loop() {
 		p.stats.Incr("pipeline.pool.message.received", 1)
 
 		select {
-		case p.workChan <- msg:
+		case p.workChan <- t.Payload:
 		case <-p.closeChan:
 			return
 		}
 
 		select {
-		case p.responsesOut <- types.NewSimpleResponse(nil):
+		case t.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-p.closeChan:
 			return
 		}
@@ -223,38 +212,19 @@ func (p *Pool) loop() {
 //------------------------------------------------------------------------------
 
 // StartReceiving assigns a messages channel for the pipeline to read.
-func (p *Pool) StartReceiving(msgs <-chan types.Message) error {
+func (p *Pool) StartReceiving(msgs <-chan types.Transaction) error {
 	if p.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}
 	p.messagesIn = msgs
-	if p.responsesIn != nil {
-		go p.loop()
-	}
+	go p.loop()
 	return nil
 }
 
-// MessageChan returns the channel used for consuming messages from this
+// TransactionChan returns the channel used for consuming messages from this
 // pipeline.
-func (p *Pool) MessageChan() <-chan types.Message {
+func (p *Pool) TransactionChan() <-chan types.Transaction {
 	return p.messagesOut
-}
-
-// StartListening sets the channel that this pipeline will read responses from.
-func (p *Pool) StartListening(responses <-chan types.Response) error {
-	if p.responsesIn != nil {
-		return types.ErrAlreadyStarted
-	}
-	p.responsesIn = responses
-	if p.messagesIn != nil {
-		go p.loop()
-	}
-	return nil
-}
-
-// ResponseChan returns the response channel from this pipeline.
-func (p *Pool) ResponseChan() <-chan types.Response {
-	return p.responsesOut
 }
 
 // CloseAsync shuts down the pipeline and stops processing messages.

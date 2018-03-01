@@ -232,8 +232,9 @@ func createPipeline(
 	poolt1.Add(10, outputPipe)
 	poolt2.Add(0, outputPipe)
 
-	util.Couple(buf, outputPipe)
-	util.Couple(inputPipe, buf)
+	outputPipe.StartReceiving(buf.TransactionChan())
+	buf.StartReceiving(inputPipe.TransactionChan())
+
 	closeChan := make(chan struct{})
 
 	// If our outputs close down then we should shut down the service

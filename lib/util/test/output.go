@@ -41,8 +41,7 @@ type BenchOutput struct {
 
 	period time.Duration
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -55,14 +54,12 @@ func NewBenchOutput(
 	stats metrics.Type,
 ) output.Type {
 	return &BenchOutput{
-		running:      1,
-		log:          log.NewModule(".output.bench"),
-		stats:        stats,
-		period:       period,
-		messages:     nil,
-		responseChan: make(chan types.Response),
-		closeChan:    make(chan struct{}),
-		closedChan:   make(chan struct{}),
+		running:    1,
+		log:        log.NewModule(".output.bench"),
+		stats:      stats,
+		period:     period,
+		closeChan:  make(chan struct{}),
+		closedChan: make(chan struct{}),
 	}
 }
 
@@ -76,16 +73,15 @@ func (o *BenchOutput) loop() {
 		o.stats.Decr("output.bench.running", 1)
 
 		close(benchChan)
-		close(o.responseChan)
 		close(o.closedChan)
 	}()
 	o.stats.Incr("output.bench.running", 1)
 
 	for atomic.LoadInt32(&o.running) == 1 {
-		var msg types.Message
+		var ts types.Transaction
 		var open bool
 		select {
-		case msg, open = <-o.messages:
+		case ts, open = <-o.transactions:
 			if !open {
 				return
 			}
@@ -94,7 +90,7 @@ func (o *BenchOutput) loop() {
 			return
 		}
 
-		benchMsg, err := BenchFromMessage(msg)
+		benchMsg, err := BenchFromMessage(ts.Payload)
 		if err != nil {
 			o.log.Errorf("Failed to create bench: %v\n", err)
 		} else {
@@ -108,7 +104,7 @@ func (o *BenchOutput) loop() {
 
 		o.stats.Incr("output.bench.success", 1)
 		select {
-		case o.responseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- types.NewSimpleResponse(nil):
 		case <-o.closeChan:
 			return
 		}
@@ -116,18 +112,13 @@ func (o *BenchOutput) loop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (o *BenchOutput) StartReceiving(msgs <-chan types.Message) error {
-	if o.messages != nil {
+func (o *BenchOutput) StartReceiving(ts <-chan types.Transaction) error {
+	if o.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	o.messages = msgs
+	o.transactions = ts
 	go o.loop()
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (o *BenchOutput) ResponseChan() <-chan types.Response {
-	return o.responseChan
 }
 
 // CloseAsync shuts down the File output and stops processing messages.

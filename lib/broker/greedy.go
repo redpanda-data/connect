@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,68 +21,61 @@
 package broker
 
 import (
-	"errors"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
 )
 
 //------------------------------------------------------------------------------
 
-var logConfig = log.LoggerConfig{
-	LogLevel: "NONE",
+// Greedy is a broker that implements types.Consumer and sends each message
+// out to a single consumer chosen from an array in round-robin fashion.
+// Consumers that apply backpressure will block all consumers.
+type Greedy struct {
+	outputs []types.Output
+}
+
+// NewGreedy creates a new Greedy type by providing consumers.
+func NewGreedy(outputs []types.Output) (*Greedy, error) {
+	return &Greedy{
+		outputs: outputs,
+	}, nil
 }
 
 //------------------------------------------------------------------------------
 
-// MockInputType implements the input.Type interface.
-type MockInputType struct {
-	TChan chan types.Transaction
-}
-
-// TransactionChan returns the messages channel.
-func (m *MockInputType) TransactionChan() <-chan types.Transaction {
-	return m.TChan
-}
-
-// CloseAsync does nothing.
-func (m MockInputType) CloseAsync() {
-	close(m.TChan)
-}
-
-// WaitForClose does nothing.
-func (m MockInputType) WaitForClose(t time.Duration) error {
-	select {
-	case _, open := <-m.TChan:
-		if open {
-			return errors.New("received unexpected message")
+// StartReceiving assigns a new messages channel for the broker to read.
+func (g *Greedy) StartReceiving(ts <-chan types.Transaction) error {
+	for _, out := range g.outputs {
+		if err := out.StartReceiving(ts); err != nil {
+			return err
 		}
-	case <-time.After(t):
-		return types.ErrTimeout
 	}
 	return nil
 }
 
 //------------------------------------------------------------------------------
 
-// MockOutputType implements the output.Type interface.
-type MockOutputType struct {
-	TChan <-chan types.Transaction
+// CloseAsync shuts down the Greedy broker and stops processing requests.
+func (g *Greedy) CloseAsync() {
+	for _, out := range g.outputs {
+		out.CloseAsync()
+	}
 }
 
-// StartReceiving sets the read channel. This implementation is NOT thread safe.
-func (m *MockOutputType) StartReceiving(msgs <-chan types.Transaction) error {
-	m.TChan = msgs
-	return nil
-}
-
-// CloseAsync does nothing.
-func (m *MockOutputType) CloseAsync() {
-}
-
-// WaitForClose does nothing.
-func (m MockOutputType) WaitForClose(t time.Duration) error {
+// WaitForClose blocks until the Greedy broker has closed down.
+func (g *Greedy) WaitForClose(timeout time.Duration) error {
+	tStarted := time.Now()
+	remaining := timeout
+	for _, out := range g.outputs {
+		if err := out.WaitForClose(remaining); err != nil {
+			return err
+		}
+		remaining = remaining - time.Since(tStarted)
+		if remaining <= 0 {
+			return types.ErrTimeout
+		}
+	}
 	return nil
 }
 

@@ -91,8 +91,7 @@ type HTTPServer struct {
 	mux    *http.ServeMux
 	server *http.Server
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	closedChan chan struct{}
 }
@@ -108,15 +107,13 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	h := HTTPServer{
-		running:      1,
-		conf:         conf,
-		stats:        stats,
-		log:          log.NewModule(".output.http_server"),
-		mux:          mux,
-		server:       server,
-		messages:     nil,
-		responseChan: make(chan types.Response),
-		closedChan:   make(chan struct{}),
+		running:    1,
+		conf:       conf,
+		stats:      stats,
+		log:        log.NewModule(".output.http_server"),
+		mux:        mux,
+		server:     server,
+		closedChan: make(chan struct{}),
 	}
 
 	if mux != nil {
@@ -164,12 +161,12 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	tStart := time.Now()
 	tOutDuration := time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)
 
-	var msg types.Message
+	var ts types.Transaction
 	var open bool
 	var err error
 
 	select {
-	case msg, open = <-h.messages:
+	case ts, open = <-h.transactions:
 		if !open {
 			http.Error(w, "Server closed", http.StatusServiceUnavailable)
 			go h.CloseAsync()
@@ -182,16 +179,16 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(msg.Parts) > 1 {
+	if len(ts.Payload.Parts) > 1 {
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 
-		for i := 0; i < len(msg.Parts) && err == nil; i++ {
+		for i := 0; i < len(ts.Payload.Parts) && err == nil; i++ {
 			var part io.Writer
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
 				"Content-Type": []string{"application/octet-stream"},
 			}); err == nil {
-				_, err = io.Copy(part, bytes.NewReader(msg.Parts[i]))
+				_, err = io.Copy(part, bytes.NewReader(ts.Payload.Parts[i]))
 			}
 		}
 
@@ -200,10 +197,10 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(body.Bytes())
 	} else {
 		w.Header().Add("Content-Type", "application/octet-stream")
-		w.Write(msg.Parts[0])
+		w.Write(ts.Payload.Parts[0])
 	}
 
-	h.responseChan <- types.NewSimpleResponse(nil)
+	ts.ResponseChan <- types.NewSimpleResponse(nil)
 	h.stats.Incr("output.http_server.send.success", 1)
 	h.stats.Incr("output.http_server.get.send.success", 1)
 }
@@ -228,11 +225,11 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for atomic.LoadInt32(&h.running) == 1 {
-		var msg types.Message
+		var ts types.Transaction
 		var open bool
 
 		select {
-		case msg, open = <-h.messages:
+		case ts, open = <-h.transactions:
 			if !open {
 				go h.CloseAsync()
 				return
@@ -245,14 +242,14 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		h.stats.Incr("output.http_server.stream.count", 1)
 
 		var data []byte
-		if len(msg.Parts) == 1 {
-			data = msg.Parts[0]
+		if len(ts.Payload.Parts) == 1 {
+			data = ts.Payload.Parts[0]
 		} else {
-			data = append(bytes.Join(msg.Parts, []byte("\n")), byte('\n'))
+			data = append(bytes.Join(ts.Payload.Parts, []byte("\n")), byte('\n'))
 		}
 
 		_, err := w.Write(data)
-		h.responseChan <- types.NewSimpleResponse(err)
+		ts.ResponseChan <- types.NewSimpleResponse(err)
 
 		if err != nil {
 			h.stats.Incr("output.http_server.stream.error.write", 1)
@@ -269,11 +266,11 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 //------------------------------------------------------------------------------
 
 // StartReceiving assigns a messages channel for the output to read.
-func (h *HTTPServer) StartReceiving(msgs <-chan types.Message) error {
-	if h.messages != nil {
+func (h *HTTPServer) StartReceiving(ts <-chan types.Transaction) error {
+	if h.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	h.messages = msgs
+	h.transactions = ts
 
 	if h.server != nil {
 		go func() {
@@ -299,16 +296,10 @@ func (h *HTTPServer) StartReceiving(msgs <-chan types.Message) error {
 			h.stats.Decr("output.http_server.running", 1)
 
 			atomic.StoreInt32(&h.running, 0)
-			close(h.responseChan)
 			close(h.closedChan)
 		}()
 	}
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (h *HTTPServer) ResponseChan() <-chan types.Response {
-	return h.responseChan
 }
 
 // CloseAsync shuts down the HTTPServer input and stops processing requests.

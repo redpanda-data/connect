@@ -45,7 +45,8 @@ func (t *testBuffer) Close() error {
 func TestLineWriterBasic(t *testing.T) {
 	var buf testBuffer
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
 
 	writer, err := NewLineWriter(&buf, []byte{}, "foo", log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
@@ -81,13 +82,13 @@ func TestLineWriterBasic(t *testing.T) {
 		}
 
 		select {
-		case msgChan <- msg:
+		case msgChan <- types.NewTransaction(msg, resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out sending message")
 		}
 
 		select {
-		case res, open := <-writer.ResponseChan():
+		case res, open := <-resChan:
 			if !open {
 				t.Error("writer closed early")
 				return
@@ -118,7 +119,8 @@ func TestLineWriterBasic(t *testing.T) {
 func TestLineWriterCustomDelim(t *testing.T) {
 	var buf testBuffer
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
 
 	writer, err := NewLineWriter(&buf, []byte("<FOO>"), "foo", log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
@@ -154,13 +156,13 @@ func TestLineWriterCustomDelim(t *testing.T) {
 		}
 
 		select {
-		case msgChan <- msg:
+		case msgChan <- types.NewTransaction(msg, resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out sending message")
 		}
 
 		select {
-		case res, open := <-writer.ResponseChan():
+		case res, open := <-resChan:
 			if !open {
 				t.Error("writer closed early")
 				return

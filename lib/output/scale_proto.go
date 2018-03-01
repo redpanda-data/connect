@@ -92,8 +92,7 @@ type ScaleProto struct {
 
 	socket mangos.Socket
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -102,14 +101,12 @@ type ScaleProto struct {
 // NewScaleProto creates a new ScaleProto output type.
 func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	s := ScaleProto{
-		running:      1,
-		log:          log.NewModule(".output.scale_proto"),
-		stats:        stats,
-		conf:         conf,
-		messages:     nil,
-		responseChan: make(chan types.Response),
-		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		running:    1,
+		log:        log.NewModule(".output.scale_proto"),
+		stats:      stats,
+		conf:       conf,
+		closedChan: make(chan struct{}),
+		closeChan:  make(chan struct{}),
 	}
 	for _, u := range conf.ScaleProto.URLs {
 		for _, splitU := range strings.Split(u, ",") {
@@ -181,7 +178,6 @@ func (s *ScaleProto) loop() {
 		s.socket.Close()
 		s.stats.Decr("output.scale_proto.running", 1)
 
-		close(s.responseChan)
 		close(s.closedChan)
 	}()
 	s.stats.Incr("output.scale_proto.running", 1)
@@ -200,9 +196,9 @@ func (s *ScaleProto) loop() {
 
 	var open bool
 	for atomic.LoadInt32(&s.running) == 1 {
-		var msg types.Message
+		var ts types.Transaction
 		select {
-		case msg, open = <-s.messages:
+		case ts, open = <-s.transactions:
 			if !open {
 				return
 			}
@@ -211,7 +207,7 @@ func (s *ScaleProto) loop() {
 		}
 		s.stats.Incr("output.scale_proto.count", 1)
 		var err error
-		for _, part := range msg.Parts {
+		for _, part := range ts.Payload.Parts {
 			if err = s.socket.Send(part); err != nil {
 				break
 			}
@@ -222,7 +218,7 @@ func (s *ScaleProto) loop() {
 			s.stats.Incr("output.scale_proto.send.success", 1)
 		}
 		select {
-		case s.responseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- types.NewSimpleResponse(err):
 		case <-s.closeChan:
 			return
 		}
@@ -230,18 +226,13 @@ func (s *ScaleProto) loop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (s *ScaleProto) StartReceiving(msgs <-chan types.Message) error {
-	if s.messages != nil {
+func (s *ScaleProto) StartReceiving(ts <-chan types.Transaction) error {
+	if s.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	s.messages = msgs
+	s.transactions = ts
 	go s.loop()
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (s *ScaleProto) ResponseChan() <-chan types.Response {
-	return s.responseChan
 }
 
 // CloseAsync shuts down the ScaleProto output and stops processing messages.

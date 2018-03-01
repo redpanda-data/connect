@@ -78,7 +78,7 @@ func NewBoundsCheck(conf Config, log log.Modular, stats metrics.Type) (Type, err
 //------------------------------------------------------------------------------
 
 // ProcessMessage checks each message against a set of bounds.
-func (m *BoundsCheck) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	m.stats.Incr("processor.bounds_check.count", 1)
 
 	lParts := len(msg.Parts)
@@ -112,7 +112,8 @@ func (m *BoundsCheck) ProcessMessage(msg *types.Message) ([]*types.Message, type
 		}
 	}
 
-	msgs := [1]*types.Message{msg}
+	m.stats.Incr("processor.bounds_check.sent", 1)
+	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }
 

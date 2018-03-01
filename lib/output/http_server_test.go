@@ -45,7 +45,8 @@ func TestHTTPBasic(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
 
 	if err = h.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -65,13 +66,13 @@ func TestHTTPBasic(t *testing.T) {
 			testMsg := types.NewMessage()
 			testMsg.Parts = [][]byte{[]byte(testStr)}
 			select {
-			case msgChan <- testMsg:
+			case msgChan <- types.NewTransaction(testMsg, resChan):
 			case <-time.After(time.Second):
 				t.Error("Timed out waiting for message")
 				return
 			}
 			select {
-			case resMsg := <-h.ResponseChan():
+			case resMsg := <-resChan:
 				if resMsg.Error() != nil {
 					t.Error(resMsg.Error())
 				}
@@ -106,7 +107,7 @@ func TestHTTPBadRequests(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
 
 	if err = h.StartReceiving(msgChan); err != nil {
 		t.Error(err)
@@ -138,7 +139,7 @@ func TestHTTPTimeout(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Message)
+	msgChan := make(chan types.Transaction)
 
 	if err = h.StartReceiving(msgChan); err != nil {
 		t.Error(err)

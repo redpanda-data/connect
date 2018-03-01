@@ -44,7 +44,7 @@ func TestCombineTwoParts(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 
-	msgs, res := proc.ProcessMessage(&types.Message{Parts: exp})
+	msgs, res := proc.ProcessMessage(types.Message{Parts: exp})
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -77,7 +77,7 @@ func BenchmarkCombineMultiMessagesSharedBuffer(b *testing.B) {
 		expParts = append(expParts, dataBlob)
 	}
 
-	inputMsg := &types.Message{
+	inputMsg := types.Message{
 		Parts: expParts,
 	}
 
@@ -113,7 +113,7 @@ func TestCombineLotsOfParts(t *testing.T) {
 		[]byte("bar3"), []byte("bar4"), []byte("bar5"),
 	}
 
-	msgs, res := proc.ProcessMessage(&types.Message{Parts: input})
+	msgs, res := proc.ProcessMessage(types.Message{Parts: input})
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -138,7 +138,7 @@ func TestCombineTwoSingleParts(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo1"), []byte("bar1")}
 
-	msgs, res := proc.ProcessMessage(&types.Message{Parts: [][]byte{exp[0]}})
+	msgs, res := proc.ProcessMessage(types.Message{Parts: [][]byte{exp[0]}})
 	if len(msgs) != 0 {
 		t.Error("Expected fail on one part")
 	}
@@ -146,7 +146,7 @@ func TestCombineTwoSingleParts(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{exp[1]}})
+	msgs, res = proc.ProcessMessage(types.Message{Parts: [][]byte{exp[1]}})
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -159,7 +159,7 @@ func TestCombineTwoSingleParts(t *testing.T) {
 
 	exp = [][]byte{[]byte("foo2"), []byte("bar2")}
 
-	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{exp[0]}})
+	msgs, res = proc.ProcessMessage(types.Message{Parts: [][]byte{exp[0]}})
 	if len(msgs) != 0 {
 		t.Error("Expected fail on one part")
 	}
@@ -167,7 +167,7 @@ func TestCombineTwoSingleParts(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{exp[1]}})
+	msgs, res = proc.ProcessMessage(types.Message{Parts: [][]byte{exp[1]}})
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -193,7 +193,7 @@ func TestCombineTwoDiffParts(t *testing.T) {
 	input := [][]byte{[]byte("foo1"), []byte("bar1")}
 	exp := [][]byte{[]byte("foo1"), []byte("bar1"), []byte("foo1")}
 
-	msgs, res := proc.ProcessMessage(&types.Message{Parts: [][]byte{input[0]}})
+	msgs, res := proc.ProcessMessage(types.Message{Parts: [][]byte{input[0]}})
 	if len(msgs) != 0 {
 		t.Error("Expected fail on one part")
 	}
@@ -201,7 +201,7 @@ func TestCombineTwoDiffParts(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{input[1], input[0]}})
+	msgs, res = proc.ProcessMessage(types.Message{Parts: [][]byte{input[1], input[0]}})
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -214,7 +214,7 @@ func TestCombineTwoDiffParts(t *testing.T) {
 
 	exp = [][]byte{[]byte("bar1"), []byte("foo1")}
 
-	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{input[1], input[0]}})
+	msgs, res = proc.ProcessMessage(types.Message{Parts: [][]byte{input[1], input[0]}})
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -227,7 +227,7 @@ func TestCombineTwoDiffParts(t *testing.T) {
 
 	exp = [][]byte{[]byte("bar1"), []byte("foo1"), []byte("bar1")}
 
-	msgs, res = proc.ProcessMessage(&types.Message{Parts: [][]byte{input[1], input[0], input[1]}})
+	msgs, res = proc.ProcessMessage(types.Message{Parts: [][]byte{input[1], input[0], input[1]}})
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}

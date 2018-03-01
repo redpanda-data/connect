@@ -105,8 +105,7 @@ func createPipeline(
 	)
 	pool.Add(10, outputPipe)
 
-	util.Couple(inputPipe, outputPipe)
-
+	outputPipe.StartReceiving(inputPipe.TransactionChan())
 	return pool, nil
 }
 

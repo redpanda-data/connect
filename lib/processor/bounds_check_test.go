@@ -22,6 +22,7 @@ package processor
 
 import (
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -83,16 +84,16 @@ func TestBoundsCheck(t *testing.T) {
 	}
 
 	for _, parts := range goodParts {
-		msg := &types.Message{Parts: parts}
+		msg := types.Message{Parts: parts}
 		if msgs, _ := proc.ProcessMessage(msg); len(msgs) == 0 {
 			t.Errorf("Bounds check failed on: %s", parts)
-		} else if msgs[0] != msg {
+		} else if !reflect.DeepEqual(msgs[0], msg) {
 			t.Error("Wrong message returned (expected same)")
 		}
 	}
 
 	for _, parts := range badParts {
-		if msgs, res := proc.ProcessMessage(&types.Message{Parts: parts}); len(msgs) > 0 {
+		if msgs, res := proc.ProcessMessage(types.Message{Parts: parts}); len(msgs) > 0 {
 			t.Errorf("Bounds check didnt fail on: %s", parts)
 		} else if _, ok := res.(types.SimpleResponse); !ok {
 			t.Error("Expected simple response from bad message")

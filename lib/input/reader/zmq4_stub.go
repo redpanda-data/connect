@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,41 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package util
+// +build !ZMQ4
 
-import (
-	"time"
-
-	"github.com/Jeffail/benthos/lib/types"
-)
+package reader
 
 //------------------------------------------------------------------------------
 
-// MockInputType implements the input.Type interface.
-type MockInputType struct {
-	MsgChan chan types.Message
-	ResChan <-chan types.Response
-}
+// ZMQ4Config is an empty stub for when ZMQ4 is not compiled.
+type ZMQ4Config struct{}
 
-// StartListening sets the channel used for reading responses.
-func (m *MockInputType) StartListening(resChan <-chan types.Response) error {
-	m.ResChan = resChan
-	return nil
-}
-
-// MessageChan returns the messages channel.
-func (m *MockInputType) MessageChan() <-chan types.Message {
-	return m.MsgChan
-}
-
-// CloseAsync does nothing.
-func (m MockInputType) CloseAsync() {
-	// Do nothing
-}
-
-// WaitForClose does nothing.
-func (m MockInputType) WaitForClose(time.Duration) error {
-	// Do nothing
+// NewZMQ4Config returns nil.
+func NewZMQ4Config() *ZMQ4Config {
 	return nil
 }
 

@@ -38,7 +38,7 @@ type mockMsgProcessor struct {
 	dropChan chan bool
 }
 
-func (m *mockMsgProcessor) ProcessMessage(msg *types.Message) ([]*types.Message, types.Response) {
+func (m *mockMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	if drop := <-m.dropChan; drop {
 		return nil, types.NewSimpleResponse(errMockProc)
 	}
@@ -47,7 +47,7 @@ func (m *mockMsgProcessor) ProcessMessage(msg *types.Message) ([]*types.Message,
 		[]byte("foo"),
 		[]byte("bar"),
 	}
-	msgs := [1]*types.Message{&newMsg}
+	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }
 
@@ -65,19 +65,13 @@ func TestProcessorPipeline(t *testing.T) {
 		mockProc,
 	)
 
-	msgChan, resChan := make(chan types.Message), make(chan types.Response)
+	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
 
-	if err := proc.StartListening(resChan); err != nil {
+	if err := proc.StartReceiving(tChan); err != nil {
 		t.Error(err)
 	}
-	if err := proc.StartListening(resChan); err == nil {
+	if err := proc.StartReceiving(tChan); err == nil {
 		t.Error("Expected error from dupe listening")
-	}
-	if err := proc.StartReceiving(msgChan); err != nil {
-		t.Error(err)
-	}
-	if err := proc.StartReceiving(msgChan); err == nil {
-		t.Error("Expected error from dupe receiving")
 	}
 
 	msg := types.NewMessage()
@@ -88,18 +82,18 @@ func TestProcessorPipeline(t *testing.T) {
 
 	// First message should be dropped and return immediately
 	select {
-	case msgChan <- msg:
+	case tChan <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 	select {
-	case _, open := <-proc.MessageChan():
+	case _, open := <-proc.TransactionChan():
 		if !open {
 			t.Error("Closed early")
 		} else {
 			t.Error("Message was not dropped")
 		}
-	case res, open := <-proc.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
 		}
@@ -117,19 +111,22 @@ func TestProcessorPipeline(t *testing.T) {
 
 	// Send message
 	select {
-	case msgChan <- msg:
+	case tChan <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
+
+	var procT types.Transaction
+	var open bool
 	select {
-	case procMsg, open := <-proc.MessageChan():
+	case procT, open = <-proc.TransactionChan():
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procMsg.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
-	case res, open := <-proc.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
 		}
@@ -145,8 +142,8 @@ func TestProcessorPipeline(t *testing.T) {
 	// Respond with error
 	errTest := errors.New("This is a test")
 	select {
-	case resChan <- types.NewSimpleResponse(errTest):
-	case _, open := <-proc.ResponseChan():
+	case procT.ResponseChan <- types.NewSimpleResponse(errTest):
+	case _, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
 		} else {
@@ -158,7 +155,7 @@ func TestProcessorPipeline(t *testing.T) {
 
 	// Receive error
 	select {
-	case res, open := <-proc.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
 		} else if exp, act := errTest, res.Error(); exp != act {
@@ -175,16 +172,16 @@ func TestProcessorPipeline(t *testing.T) {
 
 	// Send message
 	select {
-	case msgChan <- msg:
+	case tChan <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 	select {
-	case procMsg, open := <-proc.MessageChan():
+	case procT, open = <-proc.TransactionChan():
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procMsg.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -193,14 +190,14 @@ func TestProcessorPipeline(t *testing.T) {
 
 	// Respond without error
 	select {
-	case resChan <- types.NewSimpleResponse(nil):
+	case procT.ResponseChan <- types.NewSimpleResponse(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 
 	// Receive error
 	select {
-	case res, open := <-proc.ResponseChan():
+	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
 		} else if res.Error() != nil {

@@ -22,6 +22,7 @@ package processor
 
 import (
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -45,9 +46,9 @@ func TestSample10Percent(t *testing.T) {
 	margin := 0.01
 	for i := 0; i < total; i++ {
 		msgIn := types.NewMessage()
-		msgs, _ := proc.ProcessMessage(&msgIn)
+		msgs, _ := proc.ProcessMessage(msgIn)
 		if len(msgs) > 0 {
-			if &msgIn != msgs[0] {
+			if !reflect.DeepEqual(msgIn, msgs[0]) {
 				t.Error("Message told to propagate but not given")
 			}
 			totalSampled++
@@ -82,9 +83,9 @@ func TestSample24Percent(t *testing.T) {
 	margin := 0.01
 	for i := 0; i < total; i++ {
 		msgIn := types.NewMessage()
-		msgs, _ := proc.ProcessMessage(&msgIn)
+		msgs, _ := proc.ProcessMessage(msgIn)
 		if len(msgs) == 1 {
-			if &msgIn != msgs[0] {
+			if !reflect.DeepEqual(msgIn, msgs[0]) {
 				t.Error("Message told to propagate but not given")
 			}
 			totalSampled++

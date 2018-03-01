@@ -68,7 +68,7 @@ type HTTPClientConfig struct {
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		URL:            "http://localhost:8081/post",
+		URL:            "http://localhost:4195/post",
 		Verb:           "POST",
 		ContentType:    "application/octet-stream",
 		OAuth:          oauth.NewClientConfig(),
@@ -90,8 +90,7 @@ type HTTPClient struct {
 
 	conf Config
 
-	messages     <-chan types.Message
-	responseChan chan types.Response
+	transactions <-chan types.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -100,14 +99,12 @@ type HTTPClient struct {
 // NewHTTPClient creates a new HTTPClient output type.
 func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	h := HTTPClient{
-		running:      1,
-		stats:        stats,
-		log:          log.NewModule(".output.http"),
-		conf:         conf,
-		messages:     nil,
-		responseChan: make(chan types.Response),
-		closeChan:    make(chan struct{}),
-		closedChan:   make(chan struct{}),
+		running:    1,
+		stats:      stats,
+		log:        log.NewModule(".output.http"),
+		conf:       conf,
+		closeChan:  make(chan struct{}),
+		closedChan: make(chan struct{}),
 	}
 
 	return &h, nil
@@ -116,7 +113,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 //------------------------------------------------------------------------------
 
 // createRequest creates an HTTP request out of a single message.
-func (h *HTTPClient) createRequest(msg *types.Message) (req *http.Request, err error) {
+func (h *HTTPClient) createRequest(msg types.Message) (req *http.Request, err error) {
 	if len(msg.Parts) == 1 {
 		body := bytes.NewBuffer(msg.Parts[0])
 		if req, err = http.NewRequest(
@@ -161,7 +158,6 @@ func (h *HTTPClient) loop() {
 		atomic.StoreInt32(&h.running, 0)
 		h.stats.Decr("output.http_client.running", 1)
 
-		close(h.responseChan)
 		close(h.closedChan)
 	}()
 	h.stats.Incr("output.http_client.running", 1)
@@ -179,8 +175,8 @@ func (h *HTTPClient) loop() {
 
 	var open bool
 	for atomic.LoadInt32(&h.running) == 1 {
-		var msg types.Message
-		if msg, open = <-h.messages; !open {
+		var ts types.Transaction
+		if ts, open = <-h.transactions; !open {
 			return
 		}
 		h.stats.Incr("output.http_client.count", 1)
@@ -190,7 +186,7 @@ func (h *HTTPClient) loop() {
 		var res *http.Response
 		var err error
 
-		if req, err = h.createRequest(&msg); err == nil {
+		if req, err = h.createRequest(ts.Payload); err == nil {
 			if res, err = client.Do(req); err == nil {
 				if res.StatusCode < 200 || res.StatusCode > 299 {
 					err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
@@ -200,7 +196,7 @@ func (h *HTTPClient) loop() {
 
 			i, j := 0, h.conf.HTTPClient.NumRetries
 			for i < j && err != nil {
-				req, err = h.createRequest(&msg)
+				req, err = h.createRequest(ts.Payload)
 				if err != nil {
 					continue
 				}
@@ -226,7 +222,7 @@ func (h *HTTPClient) loop() {
 			h.stats.Incr("output.http_client.send.success", 1)
 		}
 		select {
-		case h.responseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- types.NewSimpleResponse(err):
 		case <-h.closeChan:
 			return
 		}
@@ -234,18 +230,13 @@ func (h *HTTPClient) loop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (h *HTTPClient) StartReceiving(msgs <-chan types.Message) error {
-	if h.messages != nil {
+func (h *HTTPClient) StartReceiving(ts <-chan types.Transaction) error {
+	if h.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
-	h.messages = msgs
+	h.transactions = ts
 	go h.loop()
 	return nil
-}
-
-// ResponseChan returns the errors channel.
-func (h *HTTPClient) ResponseChan() <-chan types.Response {
-	return h.responseChan
 }
 
 // CloseAsync shuts down the HTTPClient output and stops processing messages.

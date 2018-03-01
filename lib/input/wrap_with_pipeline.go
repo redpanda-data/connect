@@ -25,7 +25,6 @@ import (
 
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util"
 )
 
 //------------------------------------------------------------------------------
@@ -45,7 +44,8 @@ func WrapWithPipeline(in Type, pipeConstructor pipeline.ConstructorFunc) (*WithP
 	if err != nil {
 		return nil, err
 	}
-	if err = util.Couple(in, pipe); err != nil {
+
+	if err = pipe.StartReceiving(in.TransactionChan()); err != nil {
 		return nil, err
 	}
 	return &WithPipeline{
@@ -67,15 +67,10 @@ func WrapWithPipelines(in Type, pipeConstructors ...pipeline.ConstructorFunc) (T
 
 //------------------------------------------------------------------------------
 
-// MessageChan returns the channel used for consuming messages from this input.
-func (i *WithPipeline) MessageChan() <-chan types.Message {
-	return i.pipe.MessageChan()
-}
-
-// StartListening starts the type listening to a response channel from a
-// consumer.
-func (i *WithPipeline) StartListening(resChan <-chan types.Response) error {
-	return i.pipe.StartListening(resChan)
+// TransactionChan returns the channel used for consuming transactions from this
+// input.
+func (i *WithPipeline) TransactionChan() <-chan types.Transaction {
+	return i.pipe.TransactionChan()
 }
 
 //------------------------------------------------------------------------------
@@ -83,6 +78,7 @@ func (i *WithPipeline) StartListening(resChan <-chan types.Response) error {
 // CloseAsync triggers a closure of this object but does not block.
 func (i *WithPipeline) CloseAsync() {
 	i.in.CloseAsync()
+	i.pipe.CloseAsync()
 }
 
 // WaitForClose is a blocking call to wait until the object has finished closing
