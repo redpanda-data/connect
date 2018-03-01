@@ -47,7 +47,7 @@ func init() {
 The broker output type allows you to configure multiple output targets following
 a broker pattern from this list:
 
-## ` + "`fan_out`" + `
+## ` + "`fan_out`" + `
 
 With the fan out pattern all outputs will be sent every message that passes
 through Benthos. If an output applies back pressure it will block all subsequent
