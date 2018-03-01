@@ -47,21 +47,21 @@ func init() {
 The broker output type allows you to configure multiple output targets following
 a broker pattern from this list:
 
-## ` + "`fan_out`" + `
+### ` + "`fan_out`" + `
 
 With the fan out pattern all outputs will be sent every message that passes
 through Benthos. If an output applies back pressure it will block all subsequent
 messages, and if an output fails to send a message it will be retried
 continuously until completion or service shut down.
 
-## ` + "`round_robin`" + `
+### ` + "`round_robin`" + `
 
 With the round robin pattern each message will be assigned a single output
 following their order. If an output applies back pressure it will block all
 subsequent messages. If an output fails to send a message then the message will
 be re-attempted with the next input, and so on.
 
-## ` + "`greedy`" + `
+### ` + "`greedy`" + `
 
 The greedy pattern results in higher output throughput at the cost of
 disproportionate message allocations to those outputs. Each message is sent to a
