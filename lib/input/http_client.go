@@ -35,7 +35,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/oauth"
+	"github.com/Jeffail/benthos/lib/util/http/auth"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -54,8 +54,10 @@ stress your target server.
 
 ### Streaming
 
-If you enable streaming with the 'stream' field then benthos will consume the
-body of the response using the same rules as the 'stdin' and 'file' input types.
+If you enable streaming then Benthos will consume the body of the response as a
+line delimited list of message parts. Each part is read as an individual message
+unless multipart is set to true, in which case an empty line indicates the end
+of a message.
 
 For more information about sending HTTP messages, including details on sending
 multipart, please read the 'docs/using_http.md' document.`,
@@ -64,39 +66,46 @@ multipart, please read the 'docs/using_http.md' document.`,
 
 //------------------------------------------------------------------------------
 
+// StreamConfig contains fields for specifiying stream consumption behaviour.
+type StreamConfig struct {
+	Enabled     bool   `json:"enabled" yaml:"enabled"`
+	Multipart   bool   `json:"multipart" yaml:"multipart"`
+	MaxBuffer   int    `json:"max_buffer" yaml:"max_buffer"`
+	CustomDelim string `json:"custom_delimiter" yaml:"custom_delimiter"`
+}
+
 // HTTPClientConfig is configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	URL               string             `json:"url" yaml:"url"`
-	Verb              string             `json:"verb" yaml:"verb"`
-	Payload           string             `json:"payload" yaml:"payload"`
-	ContentType       string             `json:"content_type" yaml:"content_type"`
-	Stream            bool               `json:"stream" yaml:"stream"`
-	StreamMultipart   bool               `json:"stream_multipart" yaml:"stream_multipart"`
-	StreamMaxBuffer   int                `json:"stream_max_buffer" yaml:"stream_max_buffer"`
-	StreamCustomDelim string             `json:"stream_custom_delimiter" yaml:"stream_custom_delimiter"`
-	OAuth             oauth.ClientConfig `json:"oauth" yaml:"oauth"`
-	TimeoutMS         int64              `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS           int64              `json:"retry_period_ms" yaml:"retry_period_ms"`
-	NumRetries        int                `json:"retries" yaml:"retries"`
-	SkipCertVerify    bool               `json:"skip_cert_verify" yaml:"skip_cert_verify"`
+	URL            string       `json:"url" yaml:"url"`
+	Verb           string       `json:"verb" yaml:"verb"`
+	Payload        string       `json:"payload" yaml:"payload"`
+	ContentType    string       `json:"content_type" yaml:"content_type"`
+	Stream         StreamConfig `json:"stream" yaml:"stream"`
+	TimeoutMS      int64        `json:"timeout_ms" yaml:"timeout_ms"`
+	RetryMS        int64        `json:"retry_period_ms" yaml:"retry_period_ms"`
+	NumRetries     int          `json:"retries" yaml:"retries"`
+	SkipCertVerify bool         `json:"skip_cert_verify" yaml:"skip_cert_verify"`
+	auth.Config    `json:",inline" yaml:",inline"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		URL:               "http://localhost:4195/get/stream",
-		Verb:              "GET",
-		Payload:           "",
-		ContentType:       "application/octet-stream",
-		Stream:            false,
-		StreamMultipart:   false,
-		StreamMaxBuffer:   bufio.MaxScanTokenSize,
-		StreamCustomDelim: "",
-		OAuth:             oauth.NewClientConfig(),
-		TimeoutMS:         5000,
-		RetryMS:           1000,
-		NumRetries:        3,
-		SkipCertVerify:    false,
+		URL:         "http://localhost:4195/get/stream",
+		Verb:        "GET",
+		Payload:     "",
+		ContentType: "application/octet-stream",
+		Stream: StreamConfig{
+			Enabled:     false,
+			Multipart:   false,
+			MaxBuffer:   bufio.MaxScanTokenSize,
+			CustomDelim: "",
+		},
+		TimeoutMS:      5000,
+		RetryMS:        1000,
+		NumRetries:     3,
+		SkipCertVerify: false,
+		Config:         auth.NewConfig(),
 	}
 }
 
@@ -139,7 +148,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 		}
 	}
 
-	if !h.conf.HTTPClient.Stream {
+	if !h.conf.HTTPClient.Stream.Enabled {
 		// Timeout should be left at zero if we are streaming.
 		h.client.Timeout = time.Duration(h.conf.HTTPClient.TimeoutMS) * time.Millisecond
 		go h.loop()
@@ -147,8 +156,8 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	delim := "\n"
-	if len(conf.HTTPClient.StreamCustomDelim) > 0 {
-		delim = conf.HTTPClient.StreamCustomDelim
+	if len(conf.HTTPClient.Stream.CustomDelim) > 0 {
+		delim = conf.HTTPClient.Stream.CustomDelim
 	}
 
 	var resMux sync.Mutex
@@ -201,8 +210,8 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 			}
 		},
 		reader.OptLinesSetDelimiter(delim),
-		reader.OptLinesSetMaxBuffer(conf.HTTPClient.StreamMaxBuffer),
-		reader.OptLinesSetMultipart(conf.HTTPClient.StreamMultipart),
+		reader.OptLinesSetMaxBuffer(conf.HTTPClient.Stream.MaxBuffer),
+		reader.OptLinesSetMultipart(conf.HTTPClient.Stream.Multipart),
 	)
 	if err != nil {
 		return nil, err
@@ -237,10 +246,7 @@ func (h *HTTPClient) createRequest() (req *http.Request, err error) {
 		req.Header.Add("Content-Type", contentType)
 	}
 
-	if h.conf.HTTPClient.OAuth.Enabled {
-		err = h.conf.HTTPClient.OAuth.Sign(req)
-	}
-
+	err = h.conf.HTTPClient.Config.Sign(req)
 	return
 }
 

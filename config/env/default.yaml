@@ -59,10 +59,13 @@ input:
     verb: ${HTTP_CLIENT_INPUT_VERB:GET}
     payload: ${HTTP_CLIENT_INPUT_PAYLOAD}
     content_type: ${HTTP_CLIENT_INPUT_CONTENT_TYPE:application/octet-stream}
-    stream: ${HTTP_CLIENT_INPUT_STREAM:false}
-    stream_multipart: ${HTTP_CLIENT_INPUT_STREAM_MULTIPART:false}
-    stream_max_buffer: ${HTTP_CLIENT_INPUT_STREAM_MAX_BUFFER:65536}
-    stream_custom_delimiter: ${HTTP_CLIENT_INPUT_STREAM_DELIMITER}
+    stream:
+      enabled: ${HTTP_CLIENT_INPUT_STREAM:false}
+      multipart: ${HTTP_CLIENT_INPUT_STREAM_MULTIPART:false}
+      max_buffer: ${HTTP_CLIENT_INPUT_STREAM_MAX_BUFFER:65536}
+      custom_delimiter: ${HTTP_CLIENT_INPUT_STREAM_DELIMITER}
+    timeout_ms: ${HTTP_CLIENT_INPUT_TIMEOUT_MS:5000}
+    skip_cert_verify: ${HTTP_CLIENT_INPUT_SKIP_CERT_VERIFY:false}
     oauth:
       consumer_key: ${HTTP_CLIENT_INPUT_OAUTH_KEY}
       consumer_secret: ${HTTP_CLIENT_INPUT_OAUTH_SECRET}
@@ -70,8 +73,10 @@ input:
       access_token_secret: ${HTTP_CLIENT_INPUT_OAUTH_TOKEN_SECRET}
       request_url: ${HTTP_CLIENT_INPUT_OAUTH_URL}
       enabled: ${HTTP_CLIENT_INPUT_OAUTH_ENABLED:false}
-    timeout_ms: ${HTTP_CLIENT_INPUT_TIMEOUT_MS:5000}
-    skip_cert_verify: ${HTTP_CLIENT_INPUT_SKIP_CERT_VERIFY:false}
+    basic_auth:
+      enabled: ${HTTP_CLIENT_INPUT_BASIC_AUTH_ENABLED:false}
+      username: ${HTTP_CLIENT_INPUT_BASIC_AUTH_USERNAME}
+      password: ${HTTP_CLIENT_INPUT_BASIC_AUTH_PASSWORD}
   http_server:
     address: ${HTTP_SERVER_INPUT_ADDRESS}
     path: ${HTTP_SERVER_INPUT_PATH:/post}
@@ -175,6 +180,10 @@ output:
       access_token_secret: ${HTTP_CLIENT_OUTPUT_OAUTH_TOKEN_SECRET}
       request_url: ${HTTP_CLIENT_OUTPUT_OAUTH_URL}
       enabled: ${HTTP_CLIENT_OUTPUT_OAUTH_ENABLED:false}
+    basic_auth:
+      enabled: ${HTTP_CLIENT_OUTPUT_BASIC_AUTH_ENABLED:false}
+      username: ${HTTP_CLIENT_OUTPUT_BASIC_AUTH_USERNAME}
+      password: ${HTTP_CLIENT_OUTPUT_BASIC_AUTH_PASSWORD}
     timeout_ms: ${HTTP_CLIENT_OUTPUT_TIMEOUT_MS:5000}
     skip_cert_verify: ${HTTP_CLIENT_OUTPUT_SKIP_CERT_VERIFY:false}
   http_server:

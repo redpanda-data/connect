@@ -48,21 +48,26 @@ input:
     verb: GET
     payload: ""
     content_type: application/octet-stream
-    stream: false
-    stream_multipart: false
-    stream_max_buffer: 65536
-    stream_custom_delimiter: ""
+    stream:
+      enabled: false
+      multipart: false
+      max_buffer: 65536
+      custom_delimiter: ""
+    timeout_ms: 5000
+    retry_period_ms: 1000
+    retries: 3
+    skip_cert_verify: false
     oauth:
+      enabled: false
       consumer_key: ""
       consumer_secret: ""
       access_token: ""
       access_token_secret: ""
       request_url: ""
+    basic_auth:
       enabled: false
-    timeout_ms: 5000
-    retry_period_ms: 1000
-    retries: 3
-    skip_cert_verify: false
+      username: ""
+      password: ""
   http_server:
     address: ""
     path: /post
@@ -220,17 +225,21 @@ output:
     url: http://localhost:4195/post
     verb: POST
     content_type: application/octet-stream
+    timeout_ms: 5000
+    retry_period_ms: 1000
+    retries: 3
+    skip_cert_verify: false
     oauth:
+      enabled: false
       consumer_key: ""
       consumer_secret: ""
       access_token: ""
       access_token_secret: ""
       request_url: ""
+    basic_auth:
       enabled: false
-    timeout_ms: 5000
-    retry_period_ms: 1000
-    retries: 3
-    skip_cert_verify: false
+      username: ""
+      password: ""
   http_server:
     address: ""
     path: /get

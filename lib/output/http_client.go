@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/oauth"
+	"github.com/Jeffail/benthos/lib/util/http/auth"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -55,14 +55,14 @@ multipart, please read the 'docs/using_http.md' document.`,
 
 // HTTPClientConfig is configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	URL            string             `json:"url" yaml:"url"`
-	Verb           string             `json:"verb" yaml:"verb"`
-	ContentType    string             `json:"content_type" yaml:"content_type"`
-	OAuth          oauth.ClientConfig `json:"oauth" yaml:"oauth"`
-	TimeoutMS      int64              `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS        int64              `json:"retry_period_ms" yaml:"retry_period_ms"`
-	NumRetries     int                `json:"retries" yaml:"retries"`
-	SkipCertVerify bool               `json:"skip_cert_verify" yaml:"skip_cert_verify"`
+	URL            string `json:"url" yaml:"url"`
+	Verb           string `json:"verb" yaml:"verb"`
+	ContentType    string `json:"content_type" yaml:"content_type"`
+	TimeoutMS      int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	RetryMS        int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
+	NumRetries     int    `json:"retries" yaml:"retries"`
+	SkipCertVerify bool   `json:"skip_cert_verify" yaml:"skip_cert_verify"`
+	auth.Config    `json:",inline" yaml:",inline"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
@@ -71,11 +71,11 @@ func NewHTTPClientConfig() HTTPClientConfig {
 		URL:            "http://localhost:4195/post",
 		Verb:           "POST",
 		ContentType:    "application/octet-stream",
-		OAuth:          oauth.NewClientConfig(),
 		TimeoutMS:      5000,
 		RetryMS:        1000,
 		NumRetries:     3,
 		SkipCertVerify: false,
+		Config:         auth.NewConfig(),
 	}
 }
 
@@ -145,9 +145,7 @@ func (h *HTTPClient) createRequest(msg types.Message) (req *http.Request, err er
 			req.Header.Add("Content-Type", writer.FormDataContentType())
 		}
 	}
-	if h.conf.HTTPClient.OAuth.Enabled {
-		err = h.conf.HTTPClient.OAuth.Sign(req)
-	}
+	err = h.conf.HTTPClient.Config.Sign(req)
 	return
 }
 

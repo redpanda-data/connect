@@ -135,8 +135,10 @@ stress your target server.
 
 ### Streaming
 
-If you enable streaming with the 'stream' field then benthos will consume the
-body of the response using the same rules as the 'stdin' and 'file' input types.
+If you enable streaming then Benthos will consume the body of the response as a
+line delimited list of message parts. Each part is read as an individual message
+unless multipart is set to true, in which case an empty line indicates the end
+of a message.
 
 For more information about sending HTTP messages, including details on sending
 multipart, please read the 'docs/using_http.md' document.

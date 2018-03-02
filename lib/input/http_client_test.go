@@ -456,8 +456,8 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
-	conf.HTTPClient.Stream = true
-	conf.HTTPClient.StreamMultipart = true
+	conf.HTTPClient.Stream.Enabled = true
+	conf.HTTPClient.Stream.Multipart = true
 
 	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
@@ -528,8 +528,8 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
-	conf.HTTPClient.Stream = true
-	conf.HTTPClient.StreamMultipart = true
+	conf.HTTPClient.Stream.Enabled = true
+	conf.HTTPClient.Stream.Multipart = true
 
 	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
@@ -595,8 +595,8 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.RetryMS = 1
 	conf.HTTPClient.NumRetries = 3
-	conf.HTTPClient.Stream = true
-	conf.HTTPClient.StreamMultipart = false
+	conf.HTTPClient.Stream.Enabled = true
+	conf.HTTPClient.Stream.Multipart = false
 
 	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {

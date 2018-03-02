@@ -64,10 +64,17 @@ be re-attempted with the next input, and so on.
 ### ` + "`greedy`" + `
 
 The greedy pattern results in higher output throughput at the cost of
-disproportionate message allocations to those outputs. Each message is sent to a
-single output, and the output chosen is randomly selected only from outputs
-ready to process a message. It is therefore possible for certain outputs to
-receive a disproportionate number of messages depending on their throughput.`,
+potentially disproportionate message allocations to those outputs. Each message
+is sent to a single output, which is determined by allowing outputs to claim
+messages as soon as they are able to process them. This results in certain
+faster outputs potentially processing more messages at the cost of slower
+outputs.
+
+Inputs will still be tightly coupled to outputs, meaning acknowledgements are
+still correctly propagated back to the input source in lock-step. Therefore, in
+order to benefit from N parallel output writes you will either need to have M>=N
+parallel input sources or combine and split messages to create parallel batches
+(a tutorial for this is on the way).`,
 	}
 }
 

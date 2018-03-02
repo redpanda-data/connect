@@ -1,4 +1,24 @@
-package oauth
+// Copyright (c) 2018 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package auth
 
 import (
 	"crypto/hmac"
@@ -14,32 +34,36 @@ import (
 
 //------------------------------------------------------------------------------
 
-// ClientConfig holds the configuration parameters for an OAuth exchange.
-type ClientConfig struct {
+// OAuthConfig holds the configuration parameters for an OAuth exchange.
+type OAuthConfig struct {
+	Enabled           bool   `json:"enabled" yaml:"enabled"`
 	ConsumerKey       string `json:"consumer_key" yaml:"consumer_key"`
 	ConsumerSecret    string `json:"consumer_secret" yaml:"consumer_secret"`
 	AccessToken       string `json:"access_token" yaml:"access_token"`
 	AccessTokenSecret string `json:"access_token_secret" yaml:"access_token_secret"`
 	RequestURL        string `json:"request_url" yaml:"request_url"`
-	Enabled           bool   `json:"enabled" yaml:"enabled"`
 }
 
-// NewClientConfig returns a new ClientConfig with default values.
-func NewClientConfig() ClientConfig {
-	return ClientConfig{
+// NewOAuthConfig returns a new OAuthConfig with default values.
+func NewOAuthConfig() OAuthConfig {
+	return OAuthConfig{
+		Enabled:           false,
 		ConsumerKey:       "",
 		ConsumerSecret:    "",
 		AccessToken:       "",
 		AccessTokenSecret: "",
 		RequestURL:        "",
-		Enabled:           false,
 	}
 }
 
 //------------------------------------------------------------------------------
 
 // Sign method to sign an HTTP request for an OAuth exchange.
-func (oauth ClientConfig) Sign(req *http.Request) error {
+func (oauth OAuthConfig) Sign(req *http.Request) error {
+	if !oauth.Enabled {
+		return nil
+	}
+
 	nonceGenerator := rand.New(rand.NewSource(time.Now().UnixNano()))
 	nonce := strconv.FormatInt(nonceGenerator.Int63(), 10)
 	ts := fmt.Sprintf("%d", time.Now().Unix())
@@ -74,7 +98,7 @@ func (oauth ClientConfig) Sign(req *http.Request) error {
 	return nil
 }
 
-func (oauth ClientConfig) getSignature(
+func (oauth OAuthConfig) getSignature(
 	req *http.Request,
 	params *url.Values,
 ) (string, error) {
@@ -88,7 +112,7 @@ func (oauth ClientConfig) getSignature(
 	return oauth.computeHMAC(baseSignatureString, signingKey)
 }
 
-func (oauth ClientConfig) computeHMAC(
+func (oauth OAuthConfig) computeHMAC(
 	message string,
 	key string,
 ) (string, error) {
