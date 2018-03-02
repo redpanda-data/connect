@@ -3,13 +3,13 @@ http:
   address: 0.0.0.0:4195
   read_timeout_ms: 5000
 input:
-  redis_pubsub:
-    channels:
-    - benthos_chan
+  redis_list:
+    key: benthos_list
+    timeout_ms: 5000
     url: tcp://localhost:6379
-  type: redis_pubsub
+  type: redis_list
 output:
-  redis_pubsub:
-    channel: benthos_chan
+  redis_list:
+    key: benthos_list
     url: tcp://localhost:6379
-  type: redis_pubsub
+  type: redis_list

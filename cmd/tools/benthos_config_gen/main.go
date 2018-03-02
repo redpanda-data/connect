@@ -22,6 +22,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	_ "net/http/pprof"
 	"path/filepath"
@@ -119,11 +120,11 @@ func main() {
 		}
 		resBytes = append(resBytes, cBytes...)
 
-		if err = ioutil.WriteFile(
-			filepath.Join(configsDir, t+".yaml"), resBytes, 0644,
-		); err != nil {
+		confPath := filepath.Join(configsDir, t+".yaml")
+		if err = ioutil.WriteFile(confPath, resBytes, 0644); err != nil {
 			panic(err)
 		}
+		fmt.Printf("Generated '%v' config at: %v\n", t, confPath)
 	}
 }
 

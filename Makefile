@@ -62,3 +62,4 @@ docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --list-processors > ./resources/docs/processors/list.md; true
 	@$(PATHINSTBIN)/benthos --list-buffers > ./resources/docs/buffers/README.md; true
 	@$(PATHINSTBIN)/benthos --list-outputs > ./resources/docs/outputs/README.md; true
+	@go run ./cmd/tools/benthos_config_gen/main.go
