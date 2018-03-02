@@ -196,6 +196,20 @@ func (m *Message) ShallowCopy() Message {
 	}
 }
 
+// DeepCopy creates a new deep copy of the message. This can be considered an
+// entirely new object that is safe to use anywhere.
+func (m *Message) DeepCopy() Message {
+	newParts := make([][]byte, len(m.Parts))
+	for i, p := range m.Parts {
+		np := make([]byte, len(p))
+		copy(np, p)
+		newParts[i] = np
+	}
+	return Message{
+		Parts: newParts,
+	}
+}
+
 //------------------------------------------------------------------------------
 
 // GetJSON returns a message part parsed into an `interface{}` type. This is

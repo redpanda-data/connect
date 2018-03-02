@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -75,7 +76,10 @@ func NewPool(
 // workerLoop is the processing loop of a pool worker.
 func (p *Pool) workerLoop(worker Type, wg *sync.WaitGroup) {
 	sendChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	dummyResChan := make(chan types.Response)
+	outputResChan := make(chan types.Response)
+
+	throt := throttle.New()
 
 	defer func() {
 		close(sendChan)
@@ -88,26 +92,24 @@ func (p *Pool) workerLoop(worker Type, wg *sync.WaitGroup) {
 		return
 	}
 
-	var msgOut types.Message
 	for {
 		var open bool
+		var msgIn types.Message
 
-		if len(msgOut.Parts) == 0 {
-			var msgIn types.Message
+		// Read new work from pool.
+		if msgIn, open = <-p.workChan; !open {
+			return
+		}
+		p.stats.Incr("pipeline.pool.worker.message.received", 1)
 
-			// Read new work from pool.
-			if msgIn, open = <-p.workChan; !open {
-				return
-			}
-			p.stats.Incr("pipeline.pool.worker.message.received", 1)
+		// Send work to processing pipeline.
+		sendChan <- types.NewTransaction(msgIn, dummyResChan)
+		p.stats.Incr("pipeline.pool.worker.message.sent", 1)
 
-			// Send work to processing pipeline.
-			sendChan <- types.NewTransaction(msgIn, resChan)
-			p.stats.Incr("pipeline.pool.worker.message.sent", 1)
-
+		// Receive result(s) from processing pipeline.
+	pipelineMsgsLoop:
+		for {
 			var tOut types.Transaction
-
-			// Receive result from processing pipeline or response.
 			select {
 			case tOut, open = <-worker.TransactionChan():
 				if !open {
@@ -117,33 +119,30 @@ func (p *Pool) workerLoop(worker Type, wg *sync.WaitGroup) {
 
 				// Send decoupled response to processing pipeline
 				tOut.ResponseChan <- types.NewSimpleResponse(nil)
-				if _, open = <-resChan; !open {
-					return
+				p.stats.Incr("pipeline.pool.worker.dummy_res.sent", 1)
+
+				// Send result(s) to output, keep looping until successful.
+			outputMsgsLoop:
+				for {
+					// Send result to shared output channel.
+					p.messagesOut <- types.NewTransaction(tOut.Payload, outputResChan)
+					p.stats.Incr("pipeline.pool.worker.result.sent", 1)
+
+					// Receive output response from shared response channel.
+					res := <-outputResChan
+					if err := res.Error(); err != nil {
+						p.log.Errorf("Failed to send message: %v\n", err)
+						throt.Retry()
+					} else {
+						p.stats.Incr("pipeline.pool.worker.response.received", 1)
+						throt.Reset()
+						break outputMsgsLoop
+					}
 				}
-
-				msgOut = tOut.Payload
-			case _, open = <-resChan:
-				if !open {
-					return
-				}
-				// Message was dropped, move onto next.
+			case <-dummyResChan:
+				p.stats.Incr("pipeline.pool.worker.dummy_res.received", 1)
+				break pipelineMsgsLoop
 			}
-		}
-
-		if len(msgOut.Parts) > 0 {
-			// Send result to shared output channel.
-			p.messagesOut <- types.NewTransaction(msgOut, resChan)
-			p.stats.Incr("pipeline.pool.worker.result.sent", 1)
-
-			// Receive output response from shared response channel.
-			res := <-resChan
-			if err := res.Error(); err != nil {
-				p.log.Errorf("Failed to send message: %v\n", err)
-			} else {
-				msgOut = types.Message{}
-				p.stats.Incr("pipeline.pool.worker.response.received", 1)
-			}
-			p.stats.Incr("pipeline.worker.response.sent", 1)
 		}
 	}
 }
@@ -196,7 +195,9 @@ func (p *Pool) loop() {
 		p.stats.Incr("pipeline.pool.message.received", 1)
 
 		select {
-		case p.workChan <- t.Payload:
+		// We do a deep copy here because we are decoupling from the input,
+		// making it possible for the input to recycle the memory.
+		case p.workChan <- t.Payload.DeepCopy():
 		case <-p.closeChan:
 			return
 		}
