@@ -46,7 +46,7 @@ var (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["broker"] = typeSpec{
+	Constructors["broker"] = TypeSpec{
 		brokerConstructor: NewBroker,
 		description: `
 The fan in type allows you to combine multiple inputs. Each input will be read

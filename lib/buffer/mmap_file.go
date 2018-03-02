@@ -29,7 +29,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["mmap_file"] = typeSpec{
+	Constructors["mmap_file"] = TypeSpec{
 		constructor: NewMmapFile,
 		description: `
 The mmap file buffer type uses memory mapped files to perform low-latency,

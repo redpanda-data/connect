@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["kafka"] = typeSpec{
+	Constructors["kafka"] = TypeSpec{
 		constructor: NewKafka,
 		description: `
 The kafka output type writes messages to a kafka broker, these messages are

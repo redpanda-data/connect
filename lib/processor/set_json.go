@@ -35,7 +35,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["set_json"] = typeSpec{
+	Constructors["set_json"] = TypeSpec{
 		constructor: NewSetJSON,
 		description: `
 Parses a message part as a JSON blob, sets a path to a value, and writes the

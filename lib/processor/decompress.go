@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["decompress"] = typeSpec{
+	Constructors["decompress"] = TypeSpec{
 		constructor: NewDecompress,
 		description: `
 Decompresses the parts of a message according to the selected algorithm.

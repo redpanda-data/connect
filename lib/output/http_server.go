@@ -38,7 +38,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["http_server"] = typeSpec{
+	Constructors["http_server"] = TypeSpec{
 		constructor: NewHTTPServer,
 		description: `
 Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP

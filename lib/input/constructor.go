@@ -37,8 +37,8 @@ import (
 
 //------------------------------------------------------------------------------
 
-// typeSpec is a constructor and a usage description for each input type.
-type typeSpec struct {
+// TypeSpec is a constructor and a usage description for each input type.
+type TypeSpec struct {
 	brokerConstructor func(
 		conf Config,
 		mgr types.Manager,
@@ -50,7 +50,8 @@ type typeSpec struct {
 	description string
 }
 
-var constructors = map[string]typeSpec{}
+// Constructors is a map of all input types with their specs.
+var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
@@ -195,7 +196,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 func Descriptions() string {
 	// Order our input types alphabetically
 	names := []string{}
-	for name := range constructors {
+	for name := range Constructors {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -212,7 +213,7 @@ func Descriptions() string {
 		buf.WriteString("## ")
 		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
-		buf.WriteString(constructors[name].description)
+		buf.WriteString(Constructors[name].description)
 		if i != (len(names) - 1) {
 			buf.WriteString("\n\n")
 		}
@@ -241,7 +242,7 @@ func New(
 			return pipeline.NewProcessor(log, stats, processors...), nil
 		}}, pipelines...)
 	}
-	if c, ok := constructors[conf.Type]; ok {
+	if c, ok := Constructors[conf.Type]; ok {
 		if c.brokerConstructor != nil {
 			return c.brokerConstructor(conf, mgr, log, stats, pipelines...)
 		}

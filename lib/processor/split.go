@@ -29,7 +29,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["split"] = typeSpec{
+	Constructors["split"] = TypeSpec{
 		constructor: NewSplit,
 		description: `
 Extracts the individual parts of a multipart message and turns them each into a

@@ -39,7 +39,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["http_server"] = typeSpec{
+	Constructors["http_server"] = TypeSpec{
 		constructor: NewHTTPServer,
 		description: `
 Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,

@@ -37,7 +37,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["dynamic"] = typeSpec{
+	Constructors["dynamic"] = TypeSpec{
 		brokerConstructor: NewDynamic,
 		description: `
 The dynamic type is a special broker type where the inputs are identified by

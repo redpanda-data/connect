@@ -41,7 +41,7 @@ var (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["broker"] = typeSpec{
+	Constructors["broker"] = TypeSpec{
 		constructor: NewBroker,
 		description: `
 The broker output type allows you to configure multiple output targets following

@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["redis_pubsub"] = typeSpec{
+	Constructors["redis_pubsub"] = TypeSpec{
 		constructor: NewRedisPubSub,
 		description: `
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple

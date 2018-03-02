@@ -39,7 +39,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["http_client"] = typeSpec{
+	Constructors["http_client"] = TypeSpec{
 		constructor: NewHTTPClient,
 		description: `
 The HTTP client output type connects to a server and sends POST requests for

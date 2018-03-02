@@ -29,7 +29,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["combine"] = typeSpec{
+	Constructors["combine"] = TypeSpec{
 		constructor: NewCombine,
 		description: `
 If a message queue contains multiple part messages as individual parts it can

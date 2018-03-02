@@ -36,7 +36,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["nats_stream"] = typeSpec{
+	Constructors["nats_stream"] = TypeSpec{
 		constructor: NewNATSStream,
 		description: `
 Publish to a NATS Stream subject. NATS Streaming is at-least-once and therefore

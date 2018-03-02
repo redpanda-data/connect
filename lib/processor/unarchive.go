@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["unarchive"] = typeSpec{
+	Constructors["unarchive"] = TypeSpec{
 		constructor: NewUnarchive,
 		description: `
 Unarchives parts of a message according to the selected archive type into

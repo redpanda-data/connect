@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["nsq"] = typeSpec{
+	Constructors["nsq"] = TypeSpec{
 		constructor: NewNSQ,
 		description: `
 Subscribe to an NSQ instance topic and channel.`,

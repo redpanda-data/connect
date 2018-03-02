@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["stdout"] = typeSpec{
+	Constructors["stdout"] = TypeSpec{
 		constructor: NewSTDOUT,
 		description: `
 The stdout output type prints messages to stdout. Single part messages are

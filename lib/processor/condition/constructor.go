@@ -33,13 +33,14 @@ import (
 
 //------------------------------------------------------------------------------
 
-// typeSpec Constructor and a usage description for each condition type.
-type typeSpec struct {
+// TypeSpec Constructor and a usage description for each condition type.
+type TypeSpec struct {
 	constructor func(conf Config, log log.Modular, stats metrics.Type) (Type, error)
 	description string
 }
 
-var constructors = map[string]typeSpec{}
+// Constructors is a map of all condition types with their specs.
+var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
@@ -112,7 +113,7 @@ func (m *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 func Descriptions() string {
 	// Order our buffer types alphabetically
 	names := []string{}
-	for name := range constructors {
+	for name := range Constructors {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -129,7 +130,7 @@ func Descriptions() string {
 		buf.WriteString("## ")
 		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
-		buf.WriteString(constructors[name].description)
+		buf.WriteString(Constructors[name].description)
 		if i != (len(names) - 1) {
 			buf.WriteString("\n\n")
 		}
@@ -139,7 +140,7 @@ func Descriptions() string {
 
 // New creates a condition type based on a condition configuration.
 func New(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	if c, ok := constructors[conf.Type]; ok {
+	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, log, stats)
 	}
 	return nil, types.ErrInvalidConditionType

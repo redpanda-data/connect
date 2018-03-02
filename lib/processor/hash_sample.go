@@ -33,7 +33,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["hash_sample"] = typeSpec{
+	Constructors["hash_sample"] = TypeSpec{
 		constructor: NewHashSample,
 		description: `
 Passes on a percentage of messages deterministically by hashing selected parts

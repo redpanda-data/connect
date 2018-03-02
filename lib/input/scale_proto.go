@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["scalability_protocols"] = typeSpec{
+	Constructors["scalability_protocols"] = TypeSpec{
 		constructor: NewScaleProto,
 		description: `
 The scalability protocols are common communication patterns which will be

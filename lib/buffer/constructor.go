@@ -34,13 +34,14 @@ import (
 
 //------------------------------------------------------------------------------
 
-// typeSpec is a constructor and usage description for each buffer type.
-type typeSpec struct {
+// TypeSpec is a constructor and usage description for each buffer type.
+type TypeSpec struct {
 	constructor func(conf Config, log log.Modular, stats metrics.Type) (Type, error)
 	description string
 }
 
-var constructors = map[string]typeSpec{}
+// Constructors is a map of all buffer types with their specs.
+var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
@@ -88,7 +89,7 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 func Descriptions() string {
 	// Order our buffer types alphabetically
 	names := []string{}
-	for name := range constructors {
+	for name := range Constructors {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -105,7 +106,7 @@ func Descriptions() string {
 		buf.WriteString("## ")
 		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
-		buf.WriteString(constructors[name].description)
+		buf.WriteString(Constructors[name].description)
 		if i != (len(names) - 1) {
 			buf.WriteString("\n\n")
 		}
@@ -115,7 +116,7 @@ func Descriptions() string {
 
 // New creates an input type based on an input configuration.
 func New(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	if c, ok := constructors[conf.Type]; ok {
+	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, log, stats)
 	}
 	return nil, types.ErrInvalidBufferType

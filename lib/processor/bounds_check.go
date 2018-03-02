@@ -29,7 +29,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["bounds_check"] = typeSpec{
+	Constructors["bounds_check"] = TypeSpec{
 		constructor: NewBoundsCheck,
 		description: `
 Checks whether each message fits within certain boundaries, and drops messages

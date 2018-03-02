@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["files"] = typeSpec{
+	Constructors["files"] = TypeSpec{
 		constructor: NewFiles,
 		description: `
 Writes each individual part of each message to a new file.

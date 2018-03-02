@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["none"] = typeSpec{
+	Constructors["none"] = TypeSpec{
 		constructor: NewEmpty,
 		description: `
 Selecting no buffer (default) is the lowest latency option since no extra work

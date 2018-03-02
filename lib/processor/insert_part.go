@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["insert_part"] = typeSpec{
+	Constructors["insert_part"] = TypeSpec{
 		constructor: NewInsertPart,
 		description: `
 Insert a new message part at an index. If the specified index is greater than

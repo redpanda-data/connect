@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["nats"] = typeSpec{
+	Constructors["nats"] = TypeSpec{
 		constructor: NewNATS,
 		description: `
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once

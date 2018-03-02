@@ -37,13 +37,14 @@ import (
 
 //------------------------------------------------------------------------------
 
-// typeSpec is a constructor and a usage description for each output type.
-type typeSpec struct {
+// TypeSpec is a constructor and a usage description for each output type.
+type TypeSpec struct {
 	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 	description string
 }
 
-var constructors = map[string]typeSpec{}
+// Constructors is a map of all output types with their specs.
+var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
@@ -197,7 +198,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 func Descriptions() string {
 	// Order our output types alphabetically
 	names := []string{}
-	for name := range constructors {
+	for name := range Constructors {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -214,7 +215,7 @@ func Descriptions() string {
 		buf.WriteString("## ")
 		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
-		buf.WriteString(constructors[name].description)
+		buf.WriteString(Constructors[name].description)
 		if i != (len(names) - 1) {
 			buf.WriteString("\n\n")
 		}
@@ -243,7 +244,7 @@ func New(
 			return pipeline.NewProcessor(log, stats, processors...), nil
 		}}, pipelines...)
 	}
-	if c, ok := constructors[conf.Type]; ok {
+	if c, ok := Constructors[conf.Type]; ok {
 		output, err := c.constructor(conf, mgr, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create output '%v': %v", conf.Type, err)

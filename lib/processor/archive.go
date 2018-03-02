@@ -36,7 +36,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["archive"] = typeSpec{
+	Constructors["archive"] = TypeSpec{
 		constructor: NewArchive,
 		description: `
 Archives all the parts of a message into a single part according to the selected

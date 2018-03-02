@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["redis_pubsub"] = typeSpec{
+	Constructors["redis_pubsub"] = TypeSpec{
 		constructor: NewRedisPubSub,
 		description: `
 Publishes messages through the Redis PubSub model. It is not possible to

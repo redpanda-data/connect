@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["amazon_s3"] = typeSpec{
+	Constructors["amazon_s3"] = TypeSpec{
 		constructor: NewAmazonS3,
 		description: `
 Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an

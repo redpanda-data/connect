@@ -29,7 +29,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["memory"] = typeSpec{
+	Constructors["memory"] = TypeSpec{
 		constructor: NewMemory,
 		description: `
 The memory buffer type simply allocates a set amount of RAM for buffering

@@ -29,7 +29,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["select_parts"] = typeSpec{
+	Constructors["select_parts"] = TypeSpec{
 		constructor: NewSelectParts,
 		description: `
 Cherry pick a set of parts from messages by their index. Indexes larger than the

@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["amazon_s3"] = typeSpec{
+	Constructors["amazon_s3"] = TypeSpec{
 		constructor: NewAmazonS3,
 		description: `
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded

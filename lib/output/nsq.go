@@ -35,7 +35,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["nsq"] = typeSpec{
+	Constructors["nsq"] = TypeSpec{
 		constructor: NewNSQ,
 		description: `
 Publish to an NSQ topic.`,

@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["zmq4"] = typeSpec{
+	Constructors["zmq4"] = TypeSpec{
 		constructor: NewZMQ4,
 		description: `
 ZMQ4 is supported but currently depends on C bindings. Since this is an

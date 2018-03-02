@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["sample"] = typeSpec{
+	Constructors["sample"] = TypeSpec{
 		constructor: NewSample,
 		description: `
 Passes on a percentage of messages, either randomly or sequentially, and drops

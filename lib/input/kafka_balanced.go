@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["kafka_balanced"] = typeSpec{
+	Constructors["kafka_balanced"] = TypeSpec{
 		constructor: NewKafkaBalanced,
 		description: `
 Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the

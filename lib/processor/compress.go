@@ -33,7 +33,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["compress"] = typeSpec{
+	Constructors["compress"] = TypeSpec{
 		constructor: NewCompress,
 		description: `
 Compresses parts of a message according to the selected algorithm. Supported

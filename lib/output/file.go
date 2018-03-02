@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["file"] = typeSpec{
+	Constructors["file"] = TypeSpec{
 		constructor: NewFile,
 		description: `
 The file output type simply appends all messages to an output file. Single part

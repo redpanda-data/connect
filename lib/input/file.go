@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["file"] = typeSpec{
+	Constructors["file"] = TypeSpec{
 		constructor: NewFile,
 		description: `
 The file type reads input from a file. If multipart is set to false each line

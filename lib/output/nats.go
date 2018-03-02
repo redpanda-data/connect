@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["nats"] = typeSpec{
+	Constructors["nats"] = TypeSpec{
 		constructor: NewNATS,
 		description: `
 Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.
