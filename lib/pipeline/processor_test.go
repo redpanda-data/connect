@@ -212,3 +212,257 @@ func TestProcessorPipeline(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+type mockMultiMsgProcessor struct {
+	N int
+}
+
+func (m *mockMultiMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+	var msgs []types.Message
+	for i := 0; i < m.N; i++ {
+		newMsg := types.NewMessage()
+		newMsg.Parts = [][]byte{
+			[]byte("foo"),
+			[]byte("bar"),
+		}
+		msgs = append(msgs, newMsg)
+	}
+	return msgs, nil
+}
+
+func TestProcessorMultiMsgs(t *testing.T) {
+	mockProc := &mockMultiMsgProcessor{N: 3}
+
+	proc := NewProcessor(
+		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		metrics.DudType{},
+		mockProc,
+	)
+
+	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
+
+	if err := proc.StartReceiving(tChan); err != nil {
+		t.Error(err)
+	}
+
+	msg := types.NewMessage()
+	msg.Parts = [][]byte{
+		[]byte(`one`),
+		[]byte(`two`),
+	}
+
+	// Send message
+	select {
+	case tChan <- types.NewTransaction(msg, resChan):
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	var procT types.Transaction
+	var open bool
+
+	// Receive N messages
+	for i := 0; i < mockProc.N; i++ {
+		select {
+		case procT, open = <-proc.TransactionChan():
+			if !open {
+				t.Error("Closed early")
+			}
+			if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+				t.Errorf("Wrong message received: %s != %s", act, exp)
+			}
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}
+
+	// Respond without error N times
+	for i := 0; i < mockProc.N; i++ {
+		select {
+		case procT.ResponseChan <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}
+
+	// Receive error
+	select {
+	case res, open := <-resChan:
+		if !open {
+			t.Error("Closed early")
+		} else if res.Error() != nil {
+			t.Error(res.Error())
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	proc.CloseAsync()
+	if err := proc.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestProcessorMultiMsgsOddSync(t *testing.T) {
+	mockProc := &mockMultiMsgProcessor{N: 3}
+
+	proc := NewProcessor(
+		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		metrics.DudType{},
+		mockProc,
+	)
+
+	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
+
+	if err := proc.StartReceiving(tChan); err != nil {
+		t.Error(err)
+	}
+
+	msg := types.NewMessage()
+	msg.Parts = [][]byte{
+		[]byte(`one`),
+		[]byte(`two`),
+	}
+
+	// Send message
+	select {
+	case tChan <- types.NewTransaction(msg, resChan):
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	var procT types.Transaction
+	var open bool
+
+	// Receive 1 message
+	select {
+	case procT, open = <-proc.TransactionChan():
+		if !open {
+			t.Error("Closed early")
+		}
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+			t.Errorf("Wrong message received: %s != %s", act, exp)
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	// Respond with 1 error
+	select {
+	case procT.ResponseChan <- types.NewSimpleResponse(nil):
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	// Receive N-1 messages
+	for i := 0; i < mockProc.N-1; i++ {
+		select {
+		case procT, open = <-proc.TransactionChan():
+			if !open {
+				t.Error("Closed early")
+			}
+			if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+				t.Errorf("Wrong message received: %s != %s", act, exp)
+			}
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}
+
+	// Respond without error N-1 times
+	for i := 0; i < mockProc.N-1; i++ {
+		select {
+		case procT.ResponseChan <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}
+
+	// Receive error
+	select {
+	case res, open := <-resChan:
+		if !open {
+			t.Error("Closed early")
+		} else if res.Error() != nil {
+			t.Error(res.Error())
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	proc.CloseAsync()
+	if err := proc.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestProcessorMultiMsgsErr(t *testing.T) {
+	mockProc := &mockMultiMsgProcessor{N: 3}
+
+	proc := NewProcessor(
+		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		metrics.DudType{},
+		mockProc,
+	)
+
+	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
+
+	if err := proc.StartReceiving(tChan); err != nil {
+		t.Error(err)
+	}
+
+	msg := types.NewMessage()
+	msg.Parts = [][]byte{
+		[]byte(`one`),
+		[]byte(`two`),
+	}
+
+	// Send message
+	select {
+	case tChan <- types.NewTransaction(msg, resChan):
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	var procT types.Transaction
+	var open bool
+
+	// Receive 1 message
+	select {
+	case procT, open = <-proc.TransactionChan():
+		if !open {
+			t.Error("Closed early")
+		}
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+			t.Errorf("Wrong message received: %s != %s", act, exp)
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	errFoo := errors.New("foo")
+
+	// Respond with 1 error
+	select {
+	case procT.ResponseChan <- types.NewSimpleResponse(errFoo):
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	// Receive error
+	select {
+	case res, open := <-resChan:
+		if !open {
+			t.Error("Closed early")
+		} else if res.Error() != errFoo {
+			t.Errorf("Wrong error: %v != %v", res.Error(), errFoo)
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	proc.CloseAsync()
+	if err := proc.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}

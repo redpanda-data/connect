@@ -48,25 +48,27 @@ type AmazonAWSCredentialsConfig struct {
 
 // AmazonS3Config is configuration values for the input type.
 type AmazonS3Config struct {
-	Region        string                     `json:"region" yaml:"region"`
-	Bucket        string                     `json:"bucket" yaml:"bucket"`
-	Prefix        string                     `json:"prefix" yaml:"prefix"`
-	DeleteObjects bool                       `json:"delete_objects" yaml:"delete_objects"`
-	SQSURL        string                     `json:"sqs_url" yaml:"sqs_url"`
-	SQSBodyPath   string                     `json:"sqs_body_path" yaml:"sqs_body_path"`
-	Credentials   AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
-	TimeoutS      int64                      `json:"timeout_s" yaml:"timeout_s"`
+	Region         string                     `json:"region" yaml:"region"`
+	Bucket         string                     `json:"bucket" yaml:"bucket"`
+	Prefix         string                     `json:"prefix" yaml:"prefix"`
+	DeleteObjects  bool                       `json:"delete_objects" yaml:"delete_objects"`
+	SQSURL         string                     `json:"sqs_url" yaml:"sqs_url"`
+	SQSBodyPath    string                     `json:"sqs_body_path" yaml:"sqs_body_path"`
+	SQSMaxMessages int64                      `json:"sqs_max_messages" yaml:"sqs_max_messages"`
+	Credentials    AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
+	TimeoutS       int64                      `json:"timeout_s" yaml:"timeout_s"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
 	return AmazonS3Config{
-		Region:        "eu-west-1",
-		Bucket:        "",
-		Prefix:        "",
-		DeleteObjects: false,
-		SQSURL:        "",
-		SQSBodyPath:   "Records.s3.object.key",
+		Region:         "eu-west-1",
+		Bucket:         "",
+		Prefix:         "",
+		DeleteObjects:  false,
+		SQSURL:         "",
+		SQSBodyPath:    "Records.s3.object.key",
+		SQSMaxMessages: 10,
 		Credentials: AmazonAWSCredentialsConfig{
 			ID:     "",
 			Secret: "",
@@ -173,7 +175,7 @@ func (a *AmazonS3) readSQSEvents() error {
 
 	output, err := a.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(a.conf.SQSURL),
-		MaxNumberOfMessages: aws.Int64(10),
+		MaxNumberOfMessages: aws.Int64(a.conf.SQSMaxMessages),
 		WaitTimeSeconds:     aws.Int64(a.conf.TimeoutS),
 	})
 	if err != nil {

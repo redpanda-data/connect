@@ -218,23 +218,6 @@ func TestPoolBasic(t *testing.T) {
 	}
 }
 
-type mockMultiMsgProcessor struct {
-	N int
-}
-
-func (m *mockMultiMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	var msgs []types.Message
-	for i := 0; i < m.N; i++ {
-		newMsg := types.NewMessage()
-		newMsg.Parts = [][]byte{
-			[]byte("foo"),
-			[]byte("bar"),
-		}
-		msgs = append(msgs, newMsg)
-	}
-	return msgs, nil
-}
-
 func TestPoolMultiMsgs(t *testing.T) {
 	mockProc := &mockMultiMsgProcessor{N: 3}
 

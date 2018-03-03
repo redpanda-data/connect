@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker clean-docker clean docs test
+.PHONY: all deps rpm docker clean-docker clean docs test fmt
 
 BENTHOS_PATH = github.com/Jeffail/benthos
 
@@ -37,6 +37,9 @@ docker: $(PATHINSTDOCKER)/benthos.tar
 deps:
 	@go get github.com/golang/dep/cmd/dep
 	@$$GOPATH/bin/dep ensure
+
+fmt:
+	@go list ./... | xargs -I{} gofmt -w -s $$GOPATH/src/{}
 
 test:
 	@go test ./...

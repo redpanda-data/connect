@@ -117,27 +117,37 @@ func (p *Processor) loop() {
 		}
 
 		var res types.Response
-		for _, m := range resultMsgs {
-			select {
-			case p.messagesOut <- types.NewTransaction(m, p.responsesIn):
-			case <-p.closeChan:
-				return
+
+		remainingResponses := len(resultMsgs)
+		currentMsg := 0
+
+	responsesLoop:
+		for remainingResponses > 0 {
+			var tsOut chan<- types.Transaction
+			tsIndex := 0
+			if currentMsg < len(resultMsgs) {
+				tsOut = p.messagesOut
+				tsIndex = currentMsg
 			}
 			select {
+			case tsOut <- types.NewTransaction(resultMsgs[tsIndex], p.responsesIn):
+				currentMsg++
 			case res, open = <-p.responsesIn:
 				if !open {
 					return
 				}
+				if res.Error() == nil {
+					p.stats.Incr("pipeline.processor.send.success", 1)
+					remainingResponses--
+				} else {
+					p.stats.Incr("pipeline.processor.send.error", 1)
+					break responsesLoop
+				}
 			case <-p.closeChan:
 				return
 			}
-			if res.Error() == nil {
-				p.stats.Incr("pipeline.processor.send.success", 1)
-			} else {
-				p.stats.Incr("pipeline.processor.send.error", 1)
-				break
-			}
 		}
+
 		select {
 		case tran.ResponseChan <- res:
 		case <-p.closeChan:
