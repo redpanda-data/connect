@@ -38,7 +38,7 @@ Setting up multiple outputs or inputs is done by choosing a routing strategy
 (fan-in, fan-out, round-robin, etc.)
 
 It is possible to enable a REST API to dynamically change inputs and outputs at
-runtime, [you read about that here][11].
+runtime, [which you can read about here][11].
 
 For a full and up to date list of all inputs, buffer options, processors, and
 outputs [you can find them in the docs][7], or print them from the binary:
