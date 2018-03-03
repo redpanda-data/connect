@@ -40,7 +40,7 @@ be sent as individual messages.
 Please note that when you split a message you will lose the coupling between the
 acknowledgement from the output destination to the origin message at the input
 source. If all but one part of a split message is successfully propagated to the
-destination the source will still see an error and may attempt to resent the
+destination the source will still see an error and may attempt to resend the
 entire message again.
 
 The split operator is useful for breaking down messages containing a large
