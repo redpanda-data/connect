@@ -30,16 +30,16 @@ Exchange type options are: direct|fanout|topic|x-custom
 
 ## `broker`
 
-The fan in type allows you to combine multiple inputs. Each input will be read
-in parallel. In order to configure a fan in type you simply add an array of
-input configuration objects into the inputs field.
+The broker type allows you to combine multiple inputs, where each input will be
+read in parallel. A broker type is configured with its own list of input
+configurations.
 
 Adding more input types allows you to merge streams from multiple sources into
 one. For example, having both a ZMQ4 PULL socket and a Nanomsg PULL socket:
 
 ``` yaml
-type: fan_in
-fan_in:
+type: broker
+broker:
   inputs:
   -
     type: scalability_protocols
@@ -55,12 +55,12 @@ fan_in:
       socket_type: PULL
 ```
 
-Sometimes you will want several inputs of very similar configuration. You can
-use the special type ditto in this case to duplicate the previous config and
+Sometimes you will want several inputs of the same or similar configuration. You
+can use the special type ditto in this case to duplicate the previous config and
 apply selective changes.
 
-For example, if combining two kafka inputs with the same set up, reading
-different partitions you can use this shortcut:
+For example, if combining two kafka inputs with mostly the same set up but
+reading different partitions you can use this shortcut:
 
 ``` yaml
 inputs:
