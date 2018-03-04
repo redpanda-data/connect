@@ -40,15 +40,15 @@ not:
   type: content
   content:
     operator: equal
-	part: 0
-	arg: foo
+    part: 0
+    arg: foo
 ```
 
 Or, the same example as JSON:
 
 ``` json
 {
-	"type": "not"
+	"type": "not",
 	"not": {
 		"type": "content",
 		"content": {
