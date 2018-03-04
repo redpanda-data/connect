@@ -51,6 +51,7 @@ input:
     content_type: application/octet-stream
     stream:
       enabled: false
+      reconnect: true
       multipart: false
       max_buffer: 65536
       custom_delimiter: ""

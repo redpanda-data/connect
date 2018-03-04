@@ -25,6 +25,7 @@ input:
       enabled: false
       max_buffer: 65536
       multipart: false
+      reconnect: true
     timeout_ms: 5000
     url: http://localhost:4195/get/stream
     verb: GET
