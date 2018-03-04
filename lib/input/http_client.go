@@ -69,6 +69,7 @@ multipart, please read the 'docs/using_http.md' document.`,
 // StreamConfig contains fields for specifiying stream consumption behaviour.
 type StreamConfig struct {
 	Enabled     bool   `json:"enabled" yaml:"enabled"`
+	Reconnect   bool   `json:"reconnect" yaml:"reconnect"`
 	Multipart   bool   `json:"multipart" yaml:"multipart"`
 	MaxBuffer   int    `json:"max_buffer" yaml:"max_buffer"`
 	CustomDelim string `json:"custom_delimiter" yaml:"custom_delimiter"`
@@ -97,6 +98,7 @@ func NewHTTPClientConfig() HTTPClientConfig {
 		ContentType: "application/octet-stream",
 		Stream: StreamConfig{
 			Enabled:     false,
+			Reconnect:   true,
 			Multipart:   false,
 			MaxBuffer:   bufio.MaxScanTokenSize,
 			CustomDelim: "",
@@ -164,12 +166,18 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	var closed bool
 	var res *http.Response
 
+	conn := false
+
 	rdr, err := reader.NewLines(
 		func() (io.Reader, error) {
 			h.stats.Incr("input.http_client.stream.constructor", 1)
 
 			resMux.Lock()
 			defer resMux.Unlock()
+
+			if conn && !conf.HTTPClient.Stream.Reconnect {
+				return nil, io.EOF
+			}
 
 			if res != nil {
 				res.Body.Close()
@@ -192,6 +200,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 				return nil, io.EOF
 			}
 
+			conn = true
 			return res.Body, nil
 		},
 		func() {
