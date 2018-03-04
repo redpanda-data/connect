@@ -57,7 +57,7 @@ last element with be selected, and so on.
 ## `condition`
 
 Tests each message against a condition, if the condition fails then the message
-is dropped.
+is dropped. You can read a [full list of conditions here](../conditions).
 
 ## `decompress`
 

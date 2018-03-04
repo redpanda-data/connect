@@ -1,12 +1,13 @@
 Conditions
 ==========
 
-Within Benthos [processors][0] you will find the `condition` processor, which
-applies a condition to every message and only propagates them if the condition
-passes. Conditions themselves can modify (`not`) and combine (`and`, `or`) other
-conditions, and can therefore be used to create complex filters.
+Within the list of Benthos [processors][0] you will find the [`condition`][1]
+processor, which applies a condition to every message and only propagates them
+if the condition passes. Conditions themselves can modify (`not`) and combine
+(`and`, `or`) other conditions, and can therefore be used to create complex
+filters.
 
-For a full list of available conditions [check out this generated document][1].
+For a full list of available conditions [check out this generated document][2].
 
 Conditions can be extremely useful for creating filters on an output. By using a
 `fan_out` output broker with `condition` processors on the brokered outputs
@@ -51,4 +52,5 @@ output:
 ```
 
 [0]: ../processors/README.md
-[1]: ./list.md
+[1]: ../processors/list.md#condition
+[2]: ./list.md

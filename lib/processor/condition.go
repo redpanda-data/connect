@@ -36,7 +36,7 @@ func init() {
 		constructor: NewCondition,
 		description: `
 Tests each message against a condition, if the condition fails then the message
-is dropped.`,
+is dropped. You can read a [full list of conditions here](../conditions).`,
 	}
 }
 
