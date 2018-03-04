@@ -1,13 +1,15 @@
 Conditions
 ==========
 
-Within Benthos [processors][0] you will find the `conditional` processor, which
+Within Benthos [processors][0] you will find the `condition` processor, which
 applies a condition to every message and only propagates them if the condition
 passes. Conditions themselves can modify (`not`) and combine (`and`, `or`) other
 conditions, and can therefore be used to create complex filters.
 
+For a full list of available conditions [check out this generated document][1].
+
 Conditions can be extremely useful for creating filters on an output. By using a
-`fan_out` output broker with `conditional` processors on the brokered outputs
+`fan_out` output broker with `condition` processors on the brokered outputs
 it is possible to build curated data streams that filter on the content of each
 message.
 
@@ -25,8 +27,8 @@ output:
         file:
           path: ./foo.txt
         processors:
-        - type: conditional
-          conditional:
+        - type: condition
+          condition:
             type: content
             content:
               operator: contains
@@ -36,8 +38,8 @@ output:
         file:
           path: ./bar.txt
         processors:
-        - type: conditional
-          conditional:
+        - type: condition
+          condition:
             type: content
             content:
               operator: contains
@@ -47,8 +49,6 @@ output:
         file:
           path: ./everything.txt
 ```
-
-For a full list of available conditions [check out this generated document][1].
 
 [0]: ../processors/README.md
 [1]: ./list.md
