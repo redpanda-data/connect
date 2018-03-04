@@ -71,9 +71,9 @@ var (
 // ContentConfig is a configuration struct containing fields for the content
 // condition.
 type ContentConfig struct {
-	Operator string `json:"operator"`
-	Part     int    `json:"part"`
-	Arg      string `json:"arg"`
+	Operator string `json:"operator" yaml:"operator"`
+	Part     int    `json:"part" yaml:"part"`
+	Arg      string `json:"arg" yaml:"arg"`
 }
 
 // NewContentConfig returns a ContentConfig with default values.

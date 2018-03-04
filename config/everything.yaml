@@ -163,6 +163,13 @@ input:
       algorithm: gzip
       level: -1
       parts: []
+    condition:
+      type: content
+      content:
+        operator: equals_cs
+        part: 0
+        arg: ""
+      not: {}
     decompress:
       algorithm: gzip
       parts: []

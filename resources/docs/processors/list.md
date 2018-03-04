@@ -54,6 +54,11 @@ counting backwards starting from -1. E.g. if index = -1 then the selected part
 will be the last part of the message, if index = -2 then the part before the
 last element with be selected, and so on.
 
+## `condition`
+
+Tests each message against a condition, if the condition fails then the message
+is dropped.
+
 ## `decompress`
 
 Decompresses the parts of a message according to the selected algorithm.
