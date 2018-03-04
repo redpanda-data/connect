@@ -38,6 +38,7 @@ import (
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util"
 	"github.com/Jeffail/benthos/lib/util/service"
@@ -140,6 +141,10 @@ var (
 		"list-processors", false,
 		"Print a list of available processor options, then exit",
 	)
+	printConditions = flag.Bool(
+		"list-conditions", false,
+		"Print a list of available processor condition options, then exit",
+	)
 )
 
 //------------------------------------------------------------------------------
@@ -173,12 +178,15 @@ func bootstrap() Config {
 	}
 
 	// If we only want to print our inputs or outputs we should exit afterwards
-	if *printInputs || *printOutputs || *printBuffers || *printProcessors {
+	if *printInputs || *printOutputs || *printBuffers || *printProcessors || *printConditions {
 		if *printInputs {
 			fmt.Println(input.Descriptions())
 		}
 		if *printProcessors {
 			fmt.Println(processor.Descriptions())
+		}
+		if *printConditions {
+			fmt.Println(condition.Descriptions())
 		}
 		if *printBuffers {
 			fmt.Println(buffer.Descriptions())

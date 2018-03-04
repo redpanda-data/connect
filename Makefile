@@ -17,7 +17,7 @@ LDFLAGS = -X $(BENTHOS_PATH)/lib/util/service.Version=$(VERSION) \
 APPS = benthos
 all: $(APPS)
 
-$(PATHINSTBIN)/benthos: $(wildcard lib/*/*.go lib/*/*/*.go cmd/benthos/*.go)
+$(PATHINSTBIN)/benthos: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/benthos/*.go)
 
 $(PATHINSTBIN)/%: deps
 	@mkdir -p $(dir $@)
@@ -63,6 +63,7 @@ docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --print-yaml > ./config/everything.yaml; true
 	@$(PATHINSTBIN)/benthos --list-inputs > ./resources/docs/inputs/README.md; true
 	@$(PATHINSTBIN)/benthos --list-processors > ./resources/docs/processors/list.md; true
+	@$(PATHINSTBIN)/benthos --list-conditions > ./resources/docs/conditions/list.md; true
 	@$(PATHINSTBIN)/benthos --list-buffers > ./resources/docs/buffers/README.md; true
 	@$(PATHINSTBIN)/benthos --list-outputs > ./resources/docs/outputs/README.md; true
 	@go run ./cmd/tools/benthos_config_gen/main.go

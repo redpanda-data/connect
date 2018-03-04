@@ -46,13 +46,17 @@ var Constructors = map[string]TypeSpec{}
 
 // Config is the all encompassing configuration struct for all condition types.
 type Config struct {
-	Type string `json:"type" yaml:"type"`
+	Type    string        `json:"type" yaml:"type"`
+	Content ContentConfig `json:"content" yaml:"content"`
+	Not     NotConfig     `json:"not" yaml:"not"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type: "bounds_check",
+		Type:    "content",
+		Content: NewContentConfig(),
+		Not:     NewNotConfig(),
 	}
 }
 

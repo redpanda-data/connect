@@ -21,11 +21,14 @@
 package condition
 
 import (
+	"encoding/json"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func TestConstructorDescription(t *testing.T) {
@@ -43,5 +46,81 @@ func TestConstructorBadType(t *testing.T) {
 
 	if _, err := New(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{}); err == nil {
 		t.Error("Expected error, received nil for invalid type")
+	}
+}
+
+func TestConstructorConfigDefaults(t *testing.T) {
+	conf := []Config{}
+
+	if err := json.Unmarshal([]byte(`[
+		{
+			"type": "content",
+			"content": {
+				"part": 1
+			}
+		}
+	]`), &conf); err != nil {
+		t.Error(err)
+	}
+
+	if exp, act := 1, len(conf); exp != act {
+		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
+		return
+	}
+	if exp, act := "equals_cs", conf[0].Content.Operator; exp != act {
+		t.Errorf("Wrong default operator: %v != %v", act, exp)
+	}
+	if exp, act := 1, conf[0].Content.Part; exp != act {
+		t.Errorf("Wrong default part: %v != %v", act, exp)
+	}
+}
+
+func TestConstructorConfigDefaultsYAML(t *testing.T) {
+	conf := []Config{}
+
+	if err := yaml.Unmarshal([]byte(`[
+		{
+			"type": "content",
+			"content": {
+				"part": 1
+			}
+		}
+	]`), &conf); err != nil {
+		t.Error(err)
+	}
+
+	if exp, act := 1, len(conf); exp != act {
+		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
+		return
+	}
+	if exp, act := "equals_cs", conf[0].Content.Operator; exp != act {
+		t.Errorf("Wrong default operator: %v != %v", act, exp)
+	}
+	if exp, act := 1, conf[0].Content.Part; exp != act {
+		t.Errorf("Wrong default part: %v != %v", act, exp)
+	}
+}
+
+func TestSanitise(t *testing.T) {
+	exp := map[string]interface{}{
+		"type": "content",
+		"content": map[string]interface{}{
+			"operator": "equals_cs",
+			"part":     float64(1),
+			"arg":      "foo",
+		},
+	}
+
+	conf := NewConfig()
+	conf.Type = "content"
+	conf.Content.Part = 1
+	conf.Content.Arg = "foo"
+
+	act, err := SanitiseConfig(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
 	}
 }
