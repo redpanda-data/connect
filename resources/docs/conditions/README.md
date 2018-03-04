@@ -20,32 +20,32 @@ output:
   type: broker
   broker:
     pattern: fan_out
-	outputs:
-	  - type: file
-	    file:
-		  path: ./foo.txt
-		processors:
-		- type: conditional
-		  conditional:
-		    type: content
-			content:
-			  operator: contains
-			  part: 0
-			  arg: foo
-	  - type: file
-	    file:
-		  path: ./bar.txt
-		processors:
-		- type: conditional
-		  conditional:
-		    type: content
-			content:
-			  operator: contains
-			  part: 0
-			  arg: bar
-	  - type: file
-	    file:
-		  path: ./everything.txt
+    outputs:
+      - type: file
+        file:
+          path: ./foo.txt
+        processors:
+        - type: conditional
+          conditional:
+            type: content
+            content:
+              operator: contains
+              part: 0
+              arg: foo
+      - type: file
+        file:
+          path: ./bar.txt
+        processors:
+        - type: conditional
+          conditional:
+            type: content
+            content:
+              operator: contains
+              part: 0
+              arg: bar
+      - type: file
+        file:
+          path: ./everything.txt
 ```
 
 For a full list of available conditions [check out this generated document][1].
