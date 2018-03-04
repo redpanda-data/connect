@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -210,25 +211,32 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 	Inputs := map[string]DynamicInput{}
 	mockInputs := []*MockInputType{}
 
-	expInputAddedMap := map[string]struct{}{}
+	expInputAddedList := []string{}
+	expInputRemovedList := []string{}
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
 			TChan: make(chan types.Transaction),
 		})
 		label := fmt.Sprintf("testinput%v", i)
 		Inputs[label] = mockInputs[i]
-		expInputAddedMap[label] = struct{}{}
+		expInputAddedList = append(expInputAddedList, label)
+		expInputRemovedList = append(expInputRemovedList, label)
 	}
 
-	inputAddedMap := map[string]struct{}{}
+	var mapMut sync.Mutex
+	inputAddedList := []string{}
 	inputRemovedList := []string{}
 
 	fanIn, err := NewDynamicFanIn(
 		Inputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
 		OptDynamicFanInSetOnAdd(func(label string) {
-			inputAddedMap[label] = struct{}{}
+			mapMut.Lock()
+			inputAddedList = append(inputAddedList, label)
+			mapMut.Unlock()
 		}), OptDynamicFanInSetOnRemove(func(label string) {
+			mapMut.Lock()
 			inputRemovedList = append(inputRemovedList, label)
+			mapMut.Unlock()
 		}),
 	)
 	if err != nil {
@@ -266,13 +274,21 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := expInputAddedMap, inputAddedMap; !reflect.DeepEqual(exp, act) {
+	mapMut.Lock()
+
+	sort.Strings(expInputAddedList)
+	sort.Strings(inputAddedList)
+	sort.Strings(expInputRemovedList)
+	sort.Strings(inputRemovedList)
+
+	if exp, act := expInputAddedList, inputAddedList; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong list of added inputs: %v != %v", act, exp)
 	}
-	if exp, act := []string{}, inputRemovedList; !reflect.DeepEqual(exp, act) {
+	if exp, act := expInputRemovedList, inputRemovedList; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong list of removed inputs: %v != %v", act, exp)
 	}
 
+	mapMut.Unlock()
 }
 
 func TestStaticDynamicFanInAsync(t *testing.T) {

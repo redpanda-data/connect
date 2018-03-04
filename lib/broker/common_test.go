@@ -22,6 +22,7 @@ package broker
 
 import (
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -38,7 +39,8 @@ var logConfig = log.LoggerConfig{
 
 // MockInputType implements the input.Type interface.
 type MockInputType struct {
-	TChan chan types.Transaction
+	closed int32
+	TChan  chan types.Transaction
 }
 
 // TransactionChan returns the messages channel.
@@ -47,8 +49,10 @@ func (m *MockInputType) TransactionChan() <-chan types.Transaction {
 }
 
 // CloseAsync does nothing.
-func (m MockInputType) CloseAsync() {
-	close(m.TChan)
+func (m *MockInputType) CloseAsync() {
+	if atomic.CompareAndSwapInt32(&m.closed, 0, 1) {
+		close(m.TChan)
+	}
 }
 
 // WaitForClose does nothing.

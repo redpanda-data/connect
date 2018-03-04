@@ -62,8 +62,9 @@ type DynamicFanIn struct {
 	onAdd    func(label string)
 	onRemove func(label string)
 
-	newInputChan chan wrappedInput
-	inputs       map[string]DynamicInput
+	newInputChan     chan wrappedInput
+	inputs           map[string]DynamicInput
+	inputClosedChans map[string]chan struct{}
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -87,8 +88,9 @@ func NewDynamicFanIn(
 		onAdd:    func(l string) {},
 		onRemove: func(l string) {},
 
-		newInputChan: make(chan wrappedInput),
-		inputs:       make(map[string]DynamicInput),
+		newInputChan:     make(chan wrappedInput),
+		inputs:           make(map[string]DynamicInput),
+		inputClosedChans: make(map[string]chan struct{}),
 
 		closedChan: make(chan struct{}),
 		closeChan:  make(chan struct{}),
@@ -100,8 +102,6 @@ func NewDynamicFanIn(
 		if err := d.addInput(key, input); err != nil {
 			d.stats.Incr("broker.dynamic_fan_in.input.add.error", 1)
 			d.log.Errorf("Failed to start new dynamic input '%v': %v\n", key, err)
-		} else {
-			d.onAdd(key)
 		}
 	}
 	go d.managerLoop()
@@ -159,19 +159,27 @@ func OptDynamicFanInSetOnRemove(onRemoveFunc func(label string)) func(*DynamicFa
 //------------------------------------------------------------------------------
 
 func (d *DynamicFanIn) addInput(ident string, input DynamicInput) error {
+	closedChan := make(chan struct{})
 	// Launch goroutine that async writes input into single channel
-	go func(in DynamicInput) {
+	go func(in DynamicInput, cChan chan struct{}) {
+		defer func() {
+			d.onRemove(ident)
+			close(cChan)
+		}()
+		d.onAdd(ident)
 		for {
 			in, open := <-input.TransactionChan()
 			if !open {
+				// Race condition: This will be called when shutting down.
 				return
 			}
 			d.transactionChan <- in
 		}
-	}(input)
+	}(input, closedChan)
 
 	// Add new input to our map
 	d.inputs[ident] = input
+	d.inputClosedChans[ident] = closedChan
 
 	return nil
 }
@@ -184,13 +192,17 @@ func (d *DynamicFanIn) removeInput(ident string, timeout time.Duration) error {
 	}
 
 	input.CloseAsync()
-	if err := input.WaitForClose(timeout); err != nil {
+	select {
+	case <-d.inputClosedChans[ident]:
+	case <-time.After(timeout):
 		// Do NOT remove inputs from our map unless we are sure they are
 		// closed.
-		return err
+		return types.ErrTimeout
 	}
 
 	delete(d.inputs, ident)
+	delete(d.inputClosedChans, ident)
+
 	return nil
 }
 
@@ -200,14 +212,13 @@ func (d *DynamicFanIn) managerLoop() {
 		for _, i := range d.inputs {
 			i.CloseAsync()
 		}
-		for _, i := range d.inputs {
-			if err := i.WaitForClose(time.Second); err != nil {
+		for key := range d.inputs {
+			if err := d.removeInput(key, time.Second); err != nil {
 				for err != nil {
-					err = i.WaitForClose(time.Second)
+					err = d.removeInput(key, time.Second)
 				}
 			}
 		}
-		d.inputs = make(map[string]DynamicInput)
 		close(d.transactionChan)
 		close(d.closedChan)
 	}()
@@ -227,7 +238,6 @@ func (d *DynamicFanIn) managerLoop() {
 					d.log.Errorf("Failed to stop old copy of dynamic input '%v': %v\n", wrappedInput.Name, err)
 				} else {
 					d.stats.Incr("broker.dynamic_fan_in.input.remove.success", 1)
-					d.onRemove(wrappedInput.Name)
 				}
 			}
 			if err == nil && wrappedInput.Input != nil {
@@ -237,7 +247,6 @@ func (d *DynamicFanIn) managerLoop() {
 					d.log.Errorf("Failed to start new dynamic input '%v': %v\n", wrappedInput.Name, err)
 				} else {
 					d.stats.Incr("broker.dynamic_fan_in.input.add.success", 1)
-					d.onAdd(wrappedInput.Name)
 				}
 			}
 			select {
