@@ -3,6 +3,10 @@ CONDITIONS
 
 This document has been generated with `benthos --list-conditions`.
 
+## `and`
+
+And is a condition that returns the logical AND of its children conditions.
+
 ## `content`
 
 Content is a condition that checks the content of a message part against a
@@ -59,3 +63,7 @@ Or, the same example as JSON:
 	}
 }
 ```
+
+## `or`
+
+Or is a condition that returns the logical OR of its children conditions.
