@@ -126,16 +126,18 @@ func NewDynamic(
 	}
 
 	dynAPI.OnUpdate(func(id string, c []byte) error {
-		newConf := NewConfig()
+		type confAlias Config
+		newConf := confAlias(NewConfig())
+		newConf.Processors = nil // Remove default processors
 		if err := json.Unmarshal(c, &newConf); err != nil {
 			return err
 		}
-		newInput, err := New(newConf, mgr, log, stats, pipelines...)
+		newInput, err := New(Config(newConf), mgr, log, stats, pipelines...)
 		if err != nil {
 			return err
 		}
 		inputConfigsMut.Lock()
-		inputConfigs[id] = newConf
+		inputConfigs[id] = Config(newConf)
 		inputConfigsMut.Unlock()
 		if err = fanIn.SetInput(id, newInput, reqTimeout); err != nil {
 			inputConfigsMut.Lock()

@@ -1,0 +1,22 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000
+	},
+	"input": {
+		"dynamic": {
+			"inputs": {},
+			"prefix": "",
+			"timeout_ms": 5000
+		},
+		"type": "dynamic"
+	},
+	"output": {
+		"dynamic": {
+			"outputs": {},
+			"prefix": "",
+			"timeout_ms": 5000
+		},
+		"type": "dynamic"
+	}
+}

@@ -7,12 +7,15 @@
 Benthos is a service that bridges message queues in ways that can simplify your
 platform and reduce development time. It also offers a variety of
 [configurable message processors][10] that can be chained together for solving
-common streaming problems such as filtering, modifying, batching, splitting,
-(de)compressing, (un)archiving, etc.
+common streaming problems such as content based multiplexing, filtering,
+modifying, batching, splitting, (de)compressing, (un)archiving, etc.
 
 A range of optional buffer strategies are available, allowing you to select a
 balance between latency, protection against back pressure and file based
 persistence, or nothing at all (direct bridge).
+
+Benthos is a single binary with zero dependencies, and uses a configuration file
+written in either YAML or JSON, making it quick and easy to package and deploy.
 
 ## Supported Protocols
 
@@ -99,7 +102,7 @@ configuration file:
 
 ``` shell
 benthos --print-yaml > config.yaml
-benthos --print-json > config.json
+benthos --print-json | jq '.' > config.json
 ```
 
 If we wanted to pipe Stdin to a ZMQ push socket our YAML config might look like

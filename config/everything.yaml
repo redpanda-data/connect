@@ -157,6 +157,7 @@ input:
       max_parts: 100
       min_parts: 1
       max_part_size: 1073741824
+      min_part_size: 1
     combine:
       parts: 2
     compress:

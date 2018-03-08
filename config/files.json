@@ -1,0 +1,20 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000
+	},
+	"input": {
+		"stdin": {
+			"custom_delimiter": "",
+			"max_buffer": 65536,
+			"multipart": false
+		},
+		"type": "stdin"
+	},
+	"output": {
+		"files": {
+			"path": "${!count:files}-${!timestamp_unix_nano}.txt"
+		},
+		"type": "files"
+	}
+}

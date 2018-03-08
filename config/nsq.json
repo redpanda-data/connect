@@ -1,0 +1,30 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000
+	},
+	"input": {
+		"nsq": {
+			"channel": "benthos_stream",
+			"lookupd_http_addresses": [
+				"localhost:4161"
+			],
+			"max_in_flight": 100,
+			"nsqd_tcp_addresses": [
+				"localhost:4150"
+			],
+			"topic": "benthos_messages",
+			"user_agent": "benthos_consumer"
+		},
+		"type": "nsq"
+	},
+	"output": {
+		"nsq": {
+			"max_in_flight": 100,
+			"nsqd_tcp_address": "localhost:4150",
+			"topic": "benthos_messages",
+			"user_agent": "benthos_producer"
+		},
+		"type": "nsq"
+	}
+}

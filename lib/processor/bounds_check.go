@@ -45,6 +45,7 @@ type BoundsCheckConfig struct {
 	MaxParts    int `json:"max_parts" yaml:"max_parts"`
 	MinParts    int `json:"min_parts" yaml:"min_parts"`
 	MaxPartSize int `json:"max_part_size" yaml:"max_part_size"`
+	MinPartSize int `json:"min_part_size" yaml:"min_part_size"`
 }
 
 // NewBoundsCheckConfig returns a BoundsCheckConfig with default values.
@@ -53,6 +54,7 @@ func NewBoundsCheckConfig() BoundsCheckConfig {
 		MaxParts:    100,
 		MinParts:    1,
 		MaxPartSize: 1 * 1024 * 1024 * 1024, // 1GB
+		MinPartSize: 1,
 	}
 }
 
@@ -83,7 +85,7 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 
 	lParts := len(msg.Parts)
 	if lParts < m.conf.BoundsCheck.MinParts {
-		m.log.Warnf(
+		m.log.Debugf(
 			"Rejecting message due to message parts below minimum (%v): %v\n",
 			m.conf.BoundsCheck.MinParts, lParts,
 		)
@@ -91,7 +93,7 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 		m.stats.Incr("processor.bounds_check.dropped_empty", 1)
 		return nil, types.NewSimpleResponse(nil)
 	} else if lParts > m.conf.BoundsCheck.MaxParts {
-		m.log.Warnf(
+		m.log.Debugf(
 			"Rejecting message due to message parts exceeding limit (%v): %v\n",
 			m.conf.BoundsCheck.MaxParts, lParts,
 		)
@@ -101,10 +103,13 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 	}
 
 	for _, part := range msg.Parts {
-		if size := len(part); size > m.conf.BoundsCheck.MaxPartSize {
-			m.log.Warnf(
-				"Rejecting message due to message part size exceeding limit (%v): %v\n",
-				m.conf.BoundsCheck.MaxPartSize, size,
+		if size := len(part); size > m.conf.BoundsCheck.MaxPartSize ||
+			size < m.conf.BoundsCheck.MinPartSize {
+			m.log.Debugf(
+				"Rejecting message due to message part size (%v -> %v): %v\n",
+				m.conf.BoundsCheck.MinPartSize,
+				m.conf.BoundsCheck.MaxPartSize,
+				size,
 			)
 			m.stats.Incr("processor.bounds_check.dropped", 1)
 			m.stats.Incr("processor.bounds_check.dropped_part_size", 1)

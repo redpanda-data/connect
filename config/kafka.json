@@ -1,0 +1,34 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000
+	},
+	"input": {
+		"kafka": {
+			"addresses": [
+				"localhost:9092"
+			],
+			"client_id": "benthos_kafka_input",
+			"consumer_group": "benthos_consumer_group",
+			"partition": 0,
+			"start_from_oldest": true,
+			"topic": "benthos_stream"
+		},
+		"type": "kafka"
+	},
+	"output": {
+		"kafka": {
+			"ack_replicas": true,
+			"addresses": [
+				"localhost:9092"
+			],
+			"client_id": "benthos_kafka_output",
+			"key": "",
+			"max_msg_bytes": 1000000,
+			"round_robin_partitions": false,
+			"timeout_ms": 5000,
+			"topic": "benthos_stream"
+		},
+		"type": "kafka"
+	}
+}

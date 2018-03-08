@@ -1,0 +1,24 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000
+	},
+	"input": {
+		"nats": {
+			"subject": "benthos_messages",
+			"urls": [
+				"nats://localhost:4222"
+			]
+		},
+		"type": "nats"
+	},
+	"output": {
+		"nats": {
+			"subject": "benthos_messages",
+			"urls": [
+				"nats://localhost:4222"
+			]
+		},
+		"type": "nats"
+	}
+}

@@ -16,7 +16,19 @@ endpoints:
 
 ### `/inputs`
 
-Returns a JSON object of labels to uptime of the currently active inputs.
+Returns a JSON object that maps input labels to an object containing details
+about the input, including uptime and configuration. If the input has terminated
+naturally the uptime will be set to `stopped`.
+
+``` json
+{
+  "<string, input_label>": {
+    "uptime": "<string>",
+    "config": <object>
+  },
+  ...
+}
+```
 
 ### `/input/{input_label}`
 
@@ -30,7 +42,19 @@ DELETE stops and removes the input identified by `input_label`.
 
 ### `/outputs`
 
-Returns a JSON object of labels to uptime of the currently active outputs.
+Returns a JSON object that maps output labels to an object containing details
+about the output, including uptime and configuration. If the output has
+terminated naturally the uptime will be set to `stopped`.
+
+``` json
+{
+  "<string, output_label>": {
+    "uptime": "<string>",
+    "config": <object>
+  },
+  ...
+}
+```
 
 ### `/output/{output_label}`
 
@@ -49,12 +73,24 @@ A custom prefix can be set for these endpoints in configuration.
 Dynamic types are useful when a platforms data streams might need to change
 regularly and automatically. It is also useful for triggering batches of
 platform data, e.g. a cron job can be created to send hourly curl requests that
-adds a dynamic input to read a file directory of sample data.
+adds a dynamic input to read a file of sample data:
+
+``` sh
+curl http://localhost:4195/input/read_sample -d @- << EOF
+{
+	"type": "file",
+	"file": {
+		"path": "/tmp/line_delim_sample_data.txt"
+	}
+}
+EOF
+```
 
 Some inputs have a finite lifetime, e.g. `amazon_s3` without an SQS queue
 configured will close once the whole bucket has been read. When a dynamic types
-lifetime ends the label will be no longer appear in queries. You can use this to
-write tools that trigger new inputs (to move onto the next bucket, for example).
+lifetime ends the `uptime` field of an input listing will be set to `stopped`.
+You can use this to write tools that trigger new inputs (to move onto the next
+bucket, for example).
 
 [dynamic_inputs]: ./inputs/README.md#dynamic
 [dynamic_outputs]: ./outputs/README.md#dynamic

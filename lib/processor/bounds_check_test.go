@@ -35,6 +35,7 @@ func TestBoundsCheck(t *testing.T) {
 	conf.BoundsCheck.MinParts = 2
 	conf.BoundsCheck.MaxParts = 3
 	conf.BoundsCheck.MaxPartSize = 10
+	conf.BoundsCheck.MinPartSize = 1
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	proc, err := NewBoundsCheck(conf, testLog, metrics.DudType{})
@@ -80,6 +81,10 @@ func TestBoundsCheck(t *testing.T) {
 			[]byte("max"),
 			[]byte("num"),
 			[]byte("parts"),
+		},
+		{
+			[]byte("hello"),
+			[]byte(""),
 		},
 	}
 
