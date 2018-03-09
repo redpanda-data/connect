@@ -80,6 +80,11 @@ func NewAmazonS3Config() AmazonS3Config {
 
 //------------------------------------------------------------------------------
 
+type objKey struct {
+	s3Key     string
+	sqsHandle *sqs.DeleteMessageBatchRequestEntry
+}
+
 // AmazonS3 is a benthos reader.Type implementation that reads messages from an
 // Amazon S3 bucket.
 type AmazonS3 struct {
@@ -87,8 +92,8 @@ type AmazonS3 struct {
 
 	sqsBodyPath []string
 
-	readKeys   []string
-	targetKeys []string
+	readKeys   []objKey
+	targetKeys []objKey
 
 	session    *session.Session
 	s3         *s3.S3
@@ -156,7 +161,9 @@ func (a *AmazonS3) Connect() error {
 			return fmt.Errorf("failed to list objects: %v", err)
 		}
 		for _, obj := range objList.Contents {
-			a.targetKeys = append(a.targetKeys, *obj.Key)
+			a.targetKeys = append(a.targetKeys, objKey{
+				s3Key: *obj.Key,
+			})
 		}
 	} else {
 		a.sqs = sqs.New(sess)
@@ -171,7 +178,7 @@ func (a *AmazonS3) Connect() error {
 }
 
 func (a *AmazonS3) readSQSEvents() error {
-	var messageHandles []*sqs.DeleteMessageBatchRequestEntry
+	var dudMessageHandles []*sqs.DeleteMessageBatchRequestEntry
 
 	output, err := a.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(a.conf.SQSURL),
@@ -183,19 +190,19 @@ func (a *AmazonS3) readSQSEvents() error {
 	}
 
 	for _, sqsMsg := range output.Messages {
-		if sqsMsg.ReceiptHandle != nil {
-			messageHandles = append(messageHandles, &sqs.DeleteMessageBatchRequestEntry{
-				Id:            sqsMsg.MessageId,
-				ReceiptHandle: sqsMsg.ReceiptHandle,
-			})
+		msgHandle := &sqs.DeleteMessageBatchRequestEntry{
+			Id:            sqsMsg.MessageId,
+			ReceiptHandle: sqsMsg.ReceiptHandle,
 		}
 
 		if sqsMsg.Body == nil {
+			dudMessageHandles = append(dudMessageHandles, msgHandle)
 			continue
 		}
 
 		gObj, err := gabs.ParseJSON([]byte(*sqsMsg.Body))
 		if err != nil {
+			dudMessageHandles = append(dudMessageHandles, msgHandle)
 			a.log.Errorf("Failed to parse SQS message body: %v\n", err)
 			continue
 		}
@@ -203,25 +210,37 @@ func (a *AmazonS3) readSQSEvents() error {
 		switch t := gObj.S(a.sqsBodyPath...).Data().(type) {
 		case string:
 			if strings.HasPrefix(t, a.conf.Prefix) {
-				a.targetKeys = append(a.targetKeys, t)
+				a.targetKeys = append(a.targetKeys, objKey{
+					s3Key:     t,
+					sqsHandle: msgHandle,
+				})
 			}
 		case []interface{}:
+			newTargets := []string{}
 			for _, jStr := range t {
 				if p, ok := jStr.(string); ok {
 					if strings.HasPrefix(p, a.conf.Prefix) {
-						a.targetKeys = append(a.targetKeys, p)
+						newTargets = append(newTargets, p)
 					}
 				}
+			}
+			if len(newTargets) == 0 {
+				dudMessageHandles = append(dudMessageHandles, msgHandle)
+			} else {
+				for _, target := range newTargets {
+					a.targetKeys = append(a.targetKeys, objKey{
+						s3Key: target,
+					})
+				}
+				a.targetKeys[len(a.targetKeys)-1].sqsHandle = msgHandle
 			}
 		}
 	}
 
-	// Ignore errors here for now, it would be nice to clear these after ack,
-	// but there could be more than one target key from each message, so it's
-	// very hard to map SQS message handles to discrete benthos messages.
+	// Discard any SQS messages not associated with a target file.
 	a.sqs.DeleteMessageBatch(&sqs.DeleteMessageBatchInput{
 		QueueUrl: aws.String(a.conf.SQSURL),
-		Entries:  messageHandles,
+		Entries:  dudMessageHandles,
 	})
 	return types.ErrTimeout
 }
@@ -253,7 +272,7 @@ func (a *AmazonS3) Read() (types.Message, error) {
 	// Write the contents of S3 Object to the file
 	if _, err := a.downloader.Download(buff, &s3.GetObjectInput{
 		Bucket: aws.String(a.conf.Bucket),
-		Key:    aws.String(target),
+		Key:    aws.String(target.s3Key),
 	}); err != nil {
 		return types.Message{}, fmt.Errorf("failed to download file, %v", err)
 	}
@@ -263,10 +282,7 @@ func (a *AmazonS3) Read() (types.Message, error) {
 	} else {
 		a.targetKeys = nil
 	}
-
-	if a.conf.DeleteObjects {
-		a.readKeys = append(a.readKeys, target)
-	}
+	a.readKeys = append(a.readKeys, target)
 
 	return types.Message{
 		Parts: [][]byte{buff.Bytes()},
@@ -276,16 +292,31 @@ func (a *AmazonS3) Read() (types.Message, error) {
 // Acknowledge confirms whether or not our unacknowledged messages have been
 // successfully propagated or not.
 func (a *AmazonS3) Acknowledge(err error) error {
-	if err == nil && a.conf.DeleteObjects {
+	if err == nil {
+		deleteHandles := []*sqs.DeleteMessageBatchRequestEntry{}
 		for _, key := range a.readKeys {
-			_, err := a.s3.DeleteObject(&s3.DeleteObjectInput{
-				Bucket: aws.String(a.conf.Bucket),
-				Key:    aws.String(key),
-			})
-			if err != nil {
-				a.log.Errorf("Failed to delete consumed object: %v\n", err)
+			if a.conf.DeleteObjects {
+				_, err := a.s3.DeleteObject(&s3.DeleteObjectInput{
+					Bucket: aws.String(a.conf.Bucket),
+					Key:    aws.String(key.s3Key),
+				})
+				if err != nil {
+					a.log.Errorf("Failed to delete consumed object: %v\n", err)
+				}
+			}
+			if key.sqsHandle != nil {
+				deleteHandles = append(deleteHandles, key.sqsHandle)
 			}
 		}
+		if len(deleteHandles) > 0 {
+			a.sqs.DeleteMessageBatch(&sqs.DeleteMessageBatchInput{
+				QueueUrl: aws.String(a.conf.SQSURL),
+				Entries:  deleteHandles,
+			})
+		}
+		a.readKeys = nil
+	} else {
+		a.targetKeys = append(a.readKeys, a.targetKeys...)
 		a.readKeys = nil
 	}
 	return nil
