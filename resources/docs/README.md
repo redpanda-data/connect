@@ -129,5 +129,5 @@ TODO
 [default-conf]: ../../config/everything.yaml
 [processors]: ./processors
 [broker-output]: ./outputs/README.md#broker
-[condition-processor]: ./processors/list.md#condition
+[condition-processor]: ./processors/README.md#condition
 [conditions]: ./conditions

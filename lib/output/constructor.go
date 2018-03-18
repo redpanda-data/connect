@@ -238,9 +238,9 @@ maximize throughput. For more information regarding these patterns please read
 
 It is possible to perform content based multiplexing of messages to specific
 outputs using a broker with the 'fan_out' pattern and a
-[condition processor](../processors/list.md#condition) on each output, which is
-a processor that drops messages if the condition does not pass. Conditions are
-content aware logical operators that can be combined using boolean logic.
+[condition processor](../processors/README.md#condition) on each output, which
+is a processor that drops messages if the condition does not pass. Conditions
+are content aware logical operators that can be combined using boolean logic.
 
 For example, say we have an output 'foo' that we only want to receive messages
 that contain the word 'foo', and an output 'bar' that we wish to send everything

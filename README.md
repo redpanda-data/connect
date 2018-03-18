@@ -178,7 +178,7 @@ containers using `docker-compose`.
 [7]: resources/docs
 [8]: resources/docs/config_interpolation.md
 [9]: resources/docker/compose_examples
-[10]: resources/docs/processors/list.md
+[10]: resources/docs/processors
 [11]: resources/docs/dynamic_inputs_and_outputs.md
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
 [travis-url]: https://travis-ci.org/Jeffail/benthos

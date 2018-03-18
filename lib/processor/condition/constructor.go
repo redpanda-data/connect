@@ -116,6 +116,60 @@ func (m *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 //------------------------------------------------------------------------------
 
+var header = "This document was generated with `benthos --list-conditions`" + `
+
+Within the list of Benthos [processors][0] you will find the [condition][1]
+processor, which applies a condition to every message and only propagates them
+if the condition passes. Conditions themselves can modify ('not') and combine
+('and', 'or') other conditions, and can therefore be used to create complex
+filters.
+
+Conditions can be extremely useful for creating filters on an output. By using a
+fan out output broker with 'condition' processors on the brokered outputs it is
+possible to build curated data streams that filter on the content of each
+message.
+
+Here is an example config, where we have an output that receives only 'foo'
+messages, and an output that receives only 'bar' messages, and a third output
+that receives everything:
+
+` + "``` yaml" + `
+output:
+  type: broker
+  broker:
+    pattern: fan_out
+    outputs:
+      - type: file
+        file:
+          path: ./foo.txt
+        processors:
+        - type: condition
+          condition:
+            type: content
+            content:
+              operator: contains
+              part: 0
+              arg: foo
+      - type: file
+        file:
+          path: ./bar.txt
+        processors:
+        - type: condition
+          condition:
+            type: content
+            content:
+              operator: contains
+              part: 0
+              arg: bar
+      - type: file
+        file:
+          path: ./everything.txt
+` + "```"
+
+var footer = `
+[0]: ../processors/README.md
+[1]: ../processors/README.md#condition`
+
 // Descriptions returns a formatted string of collated descriptions of each
 // type.
 func Descriptions() string {
@@ -130,7 +184,7 @@ func Descriptions() string {
 	buf.WriteString("CONDITIONS\n")
 	buf.WriteString(strings.Repeat("=", 10))
 	buf.WriteString("\n\n")
-	buf.WriteString("This document has been generated with `benthos --list-conditions`.")
+	buf.WriteString(header)
 	buf.WriteString("\n\n")
 
 	// Append each description
@@ -139,10 +193,13 @@ func Descriptions() string {
 		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
 		buf.WriteString(Constructors[name].description)
+		buf.WriteString("\n")
 		if i != (len(names) - 1) {
-			buf.WriteString("\n\n")
+			buf.WriteString("\n")
 		}
 	}
+
+	buf.WriteString(footer)
 	return buf.String()
 }
 

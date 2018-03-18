@@ -62,8 +62,8 @@ clean-docker:
 docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --print-yaml > ./config/everything.yaml; true
 	@$(PATHINSTBIN)/benthos --list-inputs > ./resources/docs/inputs/README.md; true
-	@$(PATHINSTBIN)/benthos --list-processors > ./resources/docs/processors/list.md; true
-	@$(PATHINSTBIN)/benthos --list-conditions > ./resources/docs/conditions/list.md; true
+	@$(PATHINSTBIN)/benthos --list-processors > ./resources/docs/processors/README.md; true
+	@$(PATHINSTBIN)/benthos --list-conditions > ./resources/docs/conditions/README.md; true
 	@$(PATHINSTBIN)/benthos --list-buffers > ./resources/docs/buffers/README.md; true
 	@$(PATHINSTBIN)/benthos --list-outputs > ./resources/docs/outputs/README.md; true
 	@go run ./cmd/tools/benthos_config_gen/main.go

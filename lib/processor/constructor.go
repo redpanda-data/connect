@@ -134,6 +134,22 @@ func (m *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 //------------------------------------------------------------------------------
 
+var header = "This document was generated with `benthos --list-processors`." + `
+
+Benthos has a concept of processors, these are functions that will be applied to
+each message passing through a pipeline. The function signature allows a
+processor to mutate or drop messages depending on the content of the message.
+
+Processors are set via config, and depending on where in the config they are
+placed they will be run either immediately after a specific input (set in the
+input section) or before a specific output (set in the output section).
+
+By organising processors you can configure complex behaviours in your pipeline.
+You can [find some examples here][0].`
+
+var footer = `
+[0]: ./examples.md`
+
 // Descriptions returns a formatted string of collated descriptions of each
 // type.
 func Descriptions() string {
@@ -148,7 +164,7 @@ func Descriptions() string {
 	buf.WriteString("PROCESSORS\n")
 	buf.WriteString(strings.Repeat("=", 10))
 	buf.WriteString("\n\n")
-	buf.WriteString("This document has been generated with `benthos --list-processors`.")
+	buf.WriteString(header)
 	buf.WriteString("\n\n")
 
 	// Append each description
@@ -157,10 +173,12 @@ func Descriptions() string {
 		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
 		buf.WriteString(Constructors[name].description)
+		buf.WriteString("\n")
 		if i != (len(names) - 1) {
-			buf.WriteString("\n\n")
+			buf.WriteString("\n")
 		}
 	}
+	buf.WriteString(footer)
 	return buf.String()
 }
 
