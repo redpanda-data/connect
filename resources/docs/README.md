@@ -6,8 +6,8 @@ Benthos
 - [1. Configuration](#configuration)
 - [2. Mutating And Filtering Content](#mutating-and-filtering-content)
 - [3. Content Based Multiplexing](#content-based-multiplexing)
-- [4. Maximising IO Throughput](#maxmising-io-throughput)
-- [5. Maximising CPU Utilisation](#maxmising-cpu-utilisation)
+- [4. Maximising IO Throughput](#maximising-io-throughput)
+- [5. Maximising CPU Utilisation](#maximising-cpu-utilisation)
 
 ## Configuration
 
@@ -52,9 +52,9 @@ and, although long, shows you every type and field available to you.
 A Benthos configuration consists of a number of root sections, the key parts
 being:
 
-- [`input`](resources/docs/inputs)
-- [`buffer`](resources/docs/buffers)
-- [`output`](resources/docs/inputs)
+- [`input`](./inputs)
+- [`buffer`](./buffers)
+- [`output`](./inputs)
 
 Please refer to those links for more information.
 
@@ -126,7 +126,7 @@ TODO
 
 TODO
 
-[default-conf]: config/everything.yaml
+[default-conf]: ../../config/everything.yaml
 [processors]: ./processors
 [broker-output]: ./outputs/README.md#broker
 [condition-processor]: ./processors/list.md#condition
