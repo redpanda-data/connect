@@ -26,13 +26,11 @@ import (
 )
 
 func TestMessageSerialization(t *testing.T) {
-	m := Message{
-		Parts: [][]byte{
-			[]byte("hello"),
-			[]byte("world"),
-			[]byte("12345"),
-		},
-	}
+	m := NewMessage([][]byte{
+		[]byte("hello"),
+		[]byte("world"),
+		[]byte("12345"),
+	})
 
 	b := m.Bytes()
 
@@ -49,8 +47,8 @@ func TestMessageSerialization(t *testing.T) {
 }
 
 func TestNewMessage(t *testing.T) {
-	m := NewMessage()
-	if act := len(m.Parts); act > 0 {
+	m := NewMessage(nil)
+	if act := m.Len(); act > 0 {
 		t.Errorf("NewMessage returned more than zero message parts: %v", act)
 	}
 }
@@ -74,9 +72,9 @@ func TestMessageInvalidBytesFormat(t *testing.T) {
 }
 
 func TestMessageJSONGet(t *testing.T) {
-	msg := Message{
-		Parts: [][]byte{[]byte(`{"foo":{"bar":"baz"}}`)},
-	}
+	msg := NewMessage(
+		[][]byte{[]byte(`{"foo":{"bar":"baz"}}`)},
+	)
 
 	if _, err := msg.GetJSON(1); err != ErrMessagePartNotExist {
 		t.Errorf("Wrong error returned on bad part: %v != %v", err, ErrMessagePartNotExist)
@@ -96,7 +94,7 @@ func TestMessageJSONGet(t *testing.T) {
 		t.Errorf("Wrong output from jsonGet: %v != %v", act, exp)
 	}
 
-	msg.Parts[0] = []byte(`{"foo":{"bar":"baz2"}}`)
+	msg.Set(0, []byte(`{"foo":{"bar":"baz2"}}`))
 
 	jObj, err = msg.GetJSON(0)
 	if err != nil {
@@ -114,8 +112,8 @@ func TestMessageJSONGet(t *testing.T) {
 }
 
 func TestMessageJSONSet(t *testing.T) {
-	msg := Message{
-		Parts: [][]byte{[]byte(`hello world`)},
+	msg := messageImpl{
+		parts: [][]byte{[]byte(`hello world`)},
 	}
 
 	if err := msg.SetJSON(1, nil); err != ErrMessagePartNotExist {
@@ -139,28 +137,28 @@ func TestMessageJSONSet(t *testing.T) {
 	if err := msg.SetJSON(0, p1Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p1Str, string(msg.Parts[0]); exp != act {
+	if exp, act := p1Str, string(msg.parts[0]); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
 
 	if err := msg.SetJSON(0, p2Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p2Str, string(msg.Parts[0]); exp != act {
+	if exp, act := p2Str, string(msg.parts[0]); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
 
 	if err := msg.SetJSON(0, p1Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p1Str, string(msg.Parts[0]); exp != act {
+	if exp, act := p1Str, string(msg.parts[0]); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
 }
 
 func TestMessageJSONSetGet(t *testing.T) {
-	msg := Message{
-		Parts: [][]byte{[]byte(`hello world`)},
+	msg := messageImpl{
+		parts: [][]byte{[]byte(`hello world`)},
 	}
 
 	p1Obj := map[string]interface{}{
@@ -183,7 +181,7 @@ func TestMessageJSONSetGet(t *testing.T) {
 	if err = msg.SetJSON(0, p1Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p1Str, string(msg.Parts[0]); exp != act {
+	if exp, act := p1Str, string(msg.parts[0]); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
 	if jObj, err = msg.GetJSON(0); err != nil {
@@ -196,7 +194,7 @@ func TestMessageJSONSetGet(t *testing.T) {
 	if err := msg.SetJSON(0, p2Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p2Str, string(msg.Parts[0]); exp != act {
+	if exp, act := p2Str, string(msg.parts[0]); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
 	if jObj, err = msg.GetJSON(0); err != nil {
@@ -209,7 +207,7 @@ func TestMessageJSONSetGet(t *testing.T) {
 	if err := msg.SetJSON(0, p1Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p1Str, string(msg.Parts[0]); exp != act {
+	if exp, act := p1Str, string(msg.parts[0]); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
 	if jObj, err = msg.GetJSON(0); err != nil {
@@ -221,8 +219,8 @@ func TestMessageJSONSetGet(t *testing.T) {
 }
 
 func TestMessageSplitJSON(t *testing.T) {
-	msg1 := Message{
-		Parts: [][]byte{
+	msg1 := messageImpl{
+		parts: [][]byte{
 			[]byte("Foo plain text"),
 			[]byte(`nothing here`),
 		},
@@ -234,13 +232,13 @@ func TestMessageSplitJSON(t *testing.T) {
 
 	msg2 := msg1.ShallowCopy()
 
-	if exp, act := msg1.Parts, msg2.Parts; !reflect.DeepEqual(exp, act) {
+	if exp, act := msg1.parts, msg2.GetAll(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Parts unmatched from shallow copy: %v != %v", act, exp)
 	}
 
-	msg2.Parts[0] = []byte("Bar different text")
+	msg2.Set(0, []byte("Bar different text"))
 
-	if exp, act := "Foo plain text", string(msg1.Parts[0]); exp != act {
+	if exp, act := "Foo plain text", string(msg1.parts[0]); exp != act {
 		t.Errorf("Original content was changed from shallow copy: %v != %v", act, exp)
 	}
 
@@ -257,7 +255,7 @@ func TestMessageSplitJSON(t *testing.T) {
 	if exp, act := map[string]interface{}{"foo": "baz"}, jCont; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"baz"}`, string(msg1.Parts[1]); exp != act {
+	if exp, act := `{"foo":"baz"}`, string(msg1.parts[1]); exp != act {
 		t.Errorf("Unexpected original content: %v != %v", act, exp)
 	}
 
@@ -268,7 +266,7 @@ func TestMessageSplitJSON(t *testing.T) {
 	if exp, act := map[string]interface{}{"foo": "bar"}, jCont; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"bar"}`, string(msg2.Parts[1]); exp != act {
+	if exp, act := `{"foo":"bar"}`, string(msg2.Get(1)); exp != act {
 		t.Errorf("Unexpected shallow content: %v != %v", act, exp)
 	}
 
@@ -285,7 +283,7 @@ func TestMessageSplitJSON(t *testing.T) {
 	if exp, act := map[string]interface{}{"foo": "baz2"}, jCont; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"baz2"}`, string(msg2.Parts[1]); exp != act {
+	if exp, act := `{"foo":"baz2"}`, string(msg2.Get(1)); exp != act {
 		t.Errorf("Unexpected shallow copy content: %v != %v", act, exp)
 	}
 
@@ -296,14 +294,14 @@ func TestMessageSplitJSON(t *testing.T) {
 	if exp, act := map[string]interface{}{"foo": "baz"}, jCont; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected original json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"baz"}`, string(msg1.Parts[1]); exp != act {
+	if exp, act := `{"foo":"baz"}`, string(msg1.parts[1]); exp != act {
 		t.Errorf("Unexpected original content: %v != %v", act, exp)
 	}
 }
 
 func TestMessageCrossContaminateJSON(t *testing.T) {
-	msg1 := Message{
-		Parts: [][]byte{
+	msg1 := messageImpl{
+		parts: [][]byte{
 			[]byte(`{"foo":"bar"}`),
 		},
 	}
@@ -333,7 +331,7 @@ func TestMessageCrossContaminateJSON(t *testing.T) {
 	if exp, act := map[string]interface{}{"foo": "baz"}, jCont1; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"baz"}`, string(msg1.Parts[0]); exp != act {
+	if exp, act := `{"foo":"baz"}`, string(msg1.parts[0]); exp != act {
 		t.Errorf("Unexpected raw content: %v != %v", exp, act)
 	}
 
@@ -343,7 +341,7 @@ func TestMessageCrossContaminateJSON(t *testing.T) {
 	if exp, act := map[string]interface{}{"foo": "bar"}, jCont2; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"bar"}`, string(msg2.Parts[0]); exp != act {
+	if exp, act := `{"foo":"bar"}`, string(msg2.Get(0)); exp != act {
 		t.Errorf("Unexpected raw content: %v != %v", exp, act)
 	}
 }
@@ -389,8 +387,8 @@ func BenchmarkJSONGet(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		msg := Message{
-			Parts: [][]byte{sample1},
+		msg := messageImpl{
+			parts: [][]byte{sample1},
 		}
 
 		jObj, err := msg.GetJSON(0)
@@ -409,7 +407,7 @@ func BenchmarkJSONGet(b *testing.B) {
 			b.Error("Couldn't cast to map")
 		}
 
-		msg.Parts[0] = sample2
+		msg.parts[0] = sample2
 
 		jObj, err = msg.GetJSON(0)
 		if err != nil {

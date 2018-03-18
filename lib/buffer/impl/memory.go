@@ -159,7 +159,7 @@ func (m *Memory) NextMessage() (types.Message, error) {
 		m.cond.Wait()
 	}
 	if m.closed {
-		return types.Message{}, types.ErrTypeClosed
+		return nil, types.ErrTypeClosed
 	}
 
 	msgSize := readMessageSize(m.block, index)
@@ -173,7 +173,7 @@ func (m *Memory) NextMessage() (types.Message, error) {
 			m.cond.Wait()
 		}
 		if m.closed {
-			return types.Message{}, types.ErrTypeClosed
+			return nil, types.ErrTypeClosed
 		}
 
 		msgSize = readMessageSize(m.block, index)
@@ -181,7 +181,7 @@ func (m *Memory) NextMessage() (types.Message, error) {
 
 	index = index + 4
 	if index+int(msgSize) > m.config.Limit {
-		return types.Message{}, types.ErrBlockCorrupted
+		return nil, types.ErrBlockCorrupted
 	}
 
 	return types.FromBytes(m.block[index : index+int(msgSize)])

@@ -229,15 +229,15 @@ func (k *Kafka) Read() (types.Message, error) {
 	k.sMut.Unlock()
 
 	if partConsumer == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	data, open := <-partConsumer.Messages()
 	if !open {
-		return types.Message{}, types.ErrTypeClosed
+		return nil, types.ErrTypeClosed
 	}
 	k.offset = data.Offset + 1
-	return types.Message{Parts: [][]byte{data.Value}}, nil
+	return types.NewMessage([][]byte{data.Value}), nil
 }
 
 // Acknowledge instructs whether the current offset should be committed.

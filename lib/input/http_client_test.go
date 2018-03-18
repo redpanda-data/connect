@@ -67,10 +67,10 @@ func TestHTTPClientGET(t *testing.T) {
 			if !open {
 				t.Fatal("Chan not open")
 			}
-			if exp, act := 1, len(tr.Payload.Parts); exp != act {
+			if exp, act := 1, tr.Payload.Len(); exp != act {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
-			if exp, act := expPart, string(tr.Payload.Parts[0]); exp != act {
+			if exp, act := expPart, string(tr.Payload.Get(0)); exp != act {
 				t.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
@@ -163,10 +163,10 @@ func TestHTTPClientPOST(t *testing.T) {
 			if !open {
 				t.Fatal("Chan not open")
 			}
-			if exp, act := 1, len(ts.Payload.Parts); exp != act {
+			if exp, act := 1, ts.Payload.Len(); exp != act {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
-			if exp, act := expPart, string(ts.Payload.Parts[0]); exp != act {
+			if exp, act := expPart, string(ts.Payload.Get(0)); exp != act {
 				t.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
@@ -256,16 +256,16 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 		if !open {
 			t.Fatal("Chan not open")
 		}
-		if exp, act := 3, len(tr.Payload.Parts); exp != act {
+		if exp, act := 3, tr.Payload.Len(); exp != act {
 			t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 		}
-		if exp, act := "hello", string(tr.Payload.Parts[0]); exp != act {
+		if exp, act := "hello", string(tr.Payload.Get(0)); exp != act {
 			t.Errorf("Wrong part: %v != %v", act, exp)
 		}
-		if exp, act := "http", string(tr.Payload.Parts[1]); exp != act {
+		if exp, act := "http", string(tr.Payload.Get(1)); exp != act {
 			t.Errorf("Wrong part: %v != %v", act, exp)
 		}
-		if exp, act := "world", string(tr.Payload.Parts[2]); exp != act {
+		if exp, act := "world", string(tr.Payload.Get(2)); exp != act {
 			t.Errorf("Wrong part: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -375,11 +375,11 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 			if !open {
 				t.Fatal("Chan not open")
 			}
-			if exp, act := len(test), len(ts.Payload.Parts); exp != act {
+			if exp, act := len(test), ts.Payload.Len(); exp != act {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
 			for i, part := range test {
-				if exp, act := part, string(ts.Payload.Parts[i]); exp != act {
+				if exp, act := part, string(ts.Payload.Get(i)); exp != act {
 					t.Errorf("Wrong part: %v != %v", act, exp)
 				}
 			}
@@ -474,11 +474,11 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 			if !open {
 				t.Fatal("Chan not open")
 			}
-			if exp, act := len(test), len(ts.Payload.Parts); exp != act {
+			if exp, act := len(test), ts.Payload.Len(); exp != act {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
 			for i, part := range test {
-				if exp, act := part, string(ts.Payload.Parts[i]); exp != act {
+				if exp, act := part, string(ts.Payload.Get(i)); exp != act {
 					t.Errorf("Wrong part: %v != %v", act, exp)
 				}
 			}
@@ -546,11 +546,11 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 				if !open {
 					t.Fatal("Chan not open")
 				}
-				if exp, act := len(testMsg), len(ts.Payload.Parts); exp != act {
+				if exp, act := len(testMsg), ts.Payload.Len(); exp != act {
 					t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 				}
 				for j, part := range testMsg {
-					if exp, act := part, string(ts.Payload.Parts[j]); exp != act {
+					if exp, act := part, string(ts.Payload.Get(j)); exp != act {
 						t.Errorf("Wrong part: %v != %v", act, exp)
 					}
 				}
@@ -613,10 +613,10 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 				if !open {
 					t.Fatal("Chan not open")
 				}
-				if exp, act := 1, len(ts.Payload.Parts); exp != act {
+				if exp, act := 1, ts.Payload.Len(); exp != act {
 					t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 				}
-				if exp, act := testMsg, string(ts.Payload.Parts[0]); exp != act {
+				if exp, act := testMsg, string(ts.Payload.Get(0)); exp != act {
 					t.Errorf("Wrong part: %v != %v", act, exp)
 				}
 			case <-time.After(time.Second):
@@ -690,11 +690,11 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 		if !open {
 			b.Fatal("Chan not open")
 		}
-		if exp, act := 3, len(ts.Payload.Parts); exp != act {
+		if exp, act := 3, ts.Payload.Len(); exp != act {
 			b.Fatalf("Wrong count of parts: %v != %v", act, exp)
 		}
 		for i, part := range parts {
-			if exp, act := part, string(ts.Payload.Parts[i]); exp != act {
+			if exp, act := part, string(ts.Payload.Get(i)); exp != act {
 				b.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		}

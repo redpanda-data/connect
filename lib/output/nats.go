@@ -140,7 +140,7 @@ func (n *NATS) loop() {
 		}
 		n.stats.Incr("output.nats.count", 1)
 		var err error
-		for _, part := range ts.Payload.Parts {
+		for _, part := range ts.Payload.GetAll() {
 			err = n.natsConn.Publish(n.conf.NATS.Subject, part)
 			if err != nil {
 				n.stats.Incr("output.nats.send.error", 1)

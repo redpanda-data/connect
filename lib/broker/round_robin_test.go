@@ -85,7 +85,7 @@ func TestBasicRoundRobin(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
+		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -95,8 +95,8 @@ func TestBasicRoundRobin(t *testing.T) {
 			var ts types.Transaction
 			select {
 			case ts = <-mockOutputs[i%3].TChan:
-				if string(ts.Payload.Parts[0]) != string(content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], content[0])
+				if string(ts.Payload.Get(0)) != string(content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0), content[0])
 				}
 			case <-mockOutputs[(i+1)%3].TChan:
 				t.Errorf("Received message in wrong order: %v != %v", i%3, (i+1)%3)
@@ -165,7 +165,7 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < nMsgs; i++ {
-		readChan <- types.NewTransaction(types.Message{Parts: content}, resChan)
+		readChan <- types.NewTransaction(types.NewMessage(content), resChan)
 		ts := <-mockOutputs[i%3].TChan
 		ts.ResponseChan <- types.NewSimpleResponse(nil)
 		res := <-resChan

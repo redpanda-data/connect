@@ -88,8 +88,8 @@ func NewSelectParts(conf Config, log log.Modular, stats metrics.Type) (Type, err
 func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	m.stats.Incr("processor.select_parts.count", 1)
 
-	newMsg := types.NewMessage()
-	lParts := len(msg.Parts)
+	newMsg := types.NewMessage(nil)
+	lParts := msg.Len()
 	for _, index := range m.conf.SelectParts.Parts {
 		if index < 0 {
 			// Negative indexes count backwards from the end.
@@ -101,11 +101,11 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 			m.stats.Incr("processor.select_parts.skipped", 1)
 		} else {
 			m.stats.Incr("processor.select_parts.selected", 1)
-			newMsg.Parts = append(newMsg.Parts, msg.Parts[index])
+			newMsg.Append(msg.Get(index))
 		}
 	}
 
-	if len(newMsg.Parts) == 0 {
+	if newMsg.Len() == 0 {
 		m.stats.Incr("processor.select_parts.dropped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}

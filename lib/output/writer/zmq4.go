@@ -161,11 +161,11 @@ func (z *ZMQ4) Write(msg types.Message) error {
 	if z.socket == nil {
 		return types.ErrNotConnected
 	}
-	_, err := z.socket.SendMessageDontwait(msg.Parts)
+	_, err := z.socket.SendMessageDontwait(msg.GetAll())
 	if err != nil {
 		var polled []zmq4.Polled
 		if polled, err = z.poller.Poll(z.pollTimeout); len(polled) == 1 {
-			_, err = z.socket.SendMessage(msg.Parts)
+			_, err = z.socket.SendMessage(msg.GetAll())
 		} else if err == nil {
 			return types.ErrTimeout
 		}

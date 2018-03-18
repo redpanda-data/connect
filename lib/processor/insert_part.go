@@ -103,33 +103,34 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	}
 
 	index := p.conf.InsertPart.Index
+	msgLen := msg.Len()
 	if index < 0 {
-		index = len(msg.Parts) + index + 1
+		index = msgLen + index + 1
 		if index < 0 {
 			index = 0
 		}
-	} else if index > len(msg.Parts) {
-		index = len(msg.Parts)
+	} else if index > msgLen {
+		index = msgLen
 	}
 
 	var pre, post [][]byte
 	if index > 0 {
-		pre = msg.Parts[:index]
+		pre = msg.GetAll()[:index]
 	}
-	if index < len(msg.Parts) {
-		post = msg.Parts[index:]
+	if index < msgLen {
+		post = msg.GetAll()[index:]
 	}
 
-	newParts := make([][]byte, len(msg.Parts)+1)
+	newParts := make([][]byte, msgLen+1)
 	newParts[index] = newPart
 
 	copy(newParts, pre)
 	copy(newParts[index+1:], post)
 
-	msg.Parts = newParts
+	newMsg := types.NewMessage(newParts)
 
 	p.stats.Incr("processor.insert_part.sent", 1)
-	msgs := [1]types.Message{msg}
+	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }
 

@@ -118,7 +118,7 @@ func (a *AmazonSQS) Connect() error {
 // Read attempts to read a new message from the target SQS.
 func (a *AmazonSQS) Read() (types.Message, error) {
 	if a.session == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	output, err := a.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
@@ -127,13 +127,13 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 		WaitTimeSeconds:     aws.Int64(a.conf.TimeoutS),
 	})
 	if err != nil {
-		return types.Message{}, err
+		return nil, err
 	}
 
-	msg := types.NewMessage()
+	msg := types.NewMessage(nil)
 
 	if len(output.Messages) == 0 {
-		return types.Message{}, types.ErrTimeout
+		return nil, types.ErrTimeout
 	}
 
 	for _, sqsMsg := range output.Messages {
@@ -145,12 +145,12 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 		}
 
 		if sqsMsg.Body != nil {
-			msg.Parts = append(msg.Parts, []byte(*sqsMsg.Body))
+			msg.Append([]byte(*sqsMsg.Body))
 		}
 	}
 
-	if len(msg.Parts) == 0 {
-		return types.Message{}, types.ErrTimeout
+	if msg.Len() == 0 {
+		return nil, types.ErrTimeout
 	}
 
 	return msg, nil

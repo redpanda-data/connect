@@ -43,14 +43,14 @@ func TestMemoryBasic(t *testing.T) {
 	block := NewMemory(MemoryConfig{Limit: 100000})
 
 	for i := 0; i < n; i++ {
-		if _, err := block.PushMessage(types.Message{
-			Parts: [][]byte{
+		if _, err := block.PushMessage(types.NewMessage(
+			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),
 				[]byte("12345"),
 				[]byte(fmt.Sprintf("test%v", i)),
 			},
-		}); err != nil {
+		)); err != nil {
 			t.Error(err)
 		}
 	}
@@ -61,9 +61,9 @@ func TestMemoryBasic(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if len(m.Parts) != 4 {
-			t.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
+		if m.Len() != 4 {
+			t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := block.ShiftMessage(); err != nil {
@@ -75,9 +75,9 @@ func TestMemoryBasic(t *testing.T) {
 func TestMemoryBacklogCounter(t *testing.T) {
 	block := NewMemory(MemoryConfig{Limit: 100000})
 
-	if _, err := block.PushMessage(types.Message{
-		Parts: [][]byte{[]byte("1234")}, // 4 bytes + 4 bytes
-	}); err != nil {
+	if _, err := block.PushMessage(types.NewMessage(
+		[][]byte{[]byte("1234")}, // 4 bytes + 4 bytes
+	)); err != nil {
 		t.Error(err)
 		return
 	}
@@ -86,12 +86,12 @@ func TestMemoryBacklogCounter(t *testing.T) {
 		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
 	}
 
-	if _, err := block.PushMessage(types.Message{
-		Parts: [][]byte{
+	if _, err := block.PushMessage(types.NewMessage(
+		[][]byte{
 			[]byte("1234"),
 			[]byte("1234"),
 		}, // ( 4 bytes + 4 bytes ) * 2
-	}); err != nil {
+	)); err != nil {
 		t.Error(err)
 		return
 	}
@@ -124,14 +124,14 @@ func TestMemoryNearLimit(t *testing.T) {
 
 	for j := 0; j < iter; j++ {
 		for i := 0; i < n; i++ {
-			if _, err := block.PushMessage(types.Message{
-				Parts: [][]byte{
+			if _, err := block.PushMessage(types.NewMessage(
+				[][]byte{
 					[]byte("hello"),
 					[]byte("world"),
 					[]byte("12345"),
 					[]byte(fmt.Sprintf("test%v", i)),
 				},
-			}); err != nil {
+			)); err != nil {
 				t.Error(err)
 				return
 			}
@@ -143,9 +143,9 @@ func TestMemoryNearLimit(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if len(m.Parts) != 4 {
-				t.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
+			if m.Len() != 4 {
+				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 			}
 			if _, err := block.ShiftMessage(); err != nil {
@@ -166,12 +166,12 @@ func TestMemoryLoopingRandom(t *testing.T) {
 			for k := range b {
 				b[k] = '0'
 			}
-			if _, err := block.PushMessage(types.Message{
-				Parts: [][]byte{
+			if _, err := block.PushMessage(types.NewMessage(
+				[][]byte{
 					b,
 					[]byte(fmt.Sprintf("test%v", i)),
 				},
-			}); err != nil {
+			)); err != nil {
 				t.Error(err)
 			}
 		}
@@ -182,10 +182,10 @@ func TestMemoryLoopingRandom(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if len(m.Parts) != 2 {
-				t.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
+			if m.Len() != 2 {
+				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
 				return
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[1]); expected != actual {
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(1)); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 				return
 			}
@@ -211,10 +211,10 @@ func TestMemoryLockStep(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-			if len(m.Parts) != 4 {
-				t.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
+			if m.Len() != 4 {
+				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
 				return
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 				return
 			}
@@ -226,14 +226,14 @@ func TestMemoryLockStep(t *testing.T) {
 
 	go func() {
 		for i := 0; i < n; i++ {
-			if _, err := block.PushMessage(types.Message{
-				Parts: [][]byte{
+			if _, err := block.PushMessage(types.NewMessage(
+				[][]byte{
 					[]byte("hello"),
 					[]byte("world"),
 					[]byte("12345"),
 					[]byte(fmt.Sprintf("test%v", i)),
 				},
-			}); err != nil {
+			)); err != nil {
 				t.Error(err)
 			}
 		}
@@ -272,14 +272,14 @@ func TestMemoryClose(t *testing.T) {
 
 	go func() {
 		for i := 0; i < 100; i++ {
-			if _, err := block.PushMessage(types.Message{
-				Parts: [][]byte{
+			if _, err := block.PushMessage(types.NewMessage(
+				[][]byte{
 					[]byte("hello"),
 					[]byte("world"),
 					[]byte("12345"),
 					[]byte(fmt.Sprintf("test%v", i)),
 				},
-			}); err != nil {
+			)); err != nil {
 				t.Error(err)
 			}
 		}
@@ -311,8 +311,8 @@ func TestMemoryClose(t *testing.T) {
 }
 
 func TestMemoryRejectLargeMessage(t *testing.T) {
-	tMsg := types.Message{Parts: make([][]byte, 1)}
-	tMsg.Parts[0] = []byte("hello world this message is too long!")
+	tMsg := types.NewMessage(make([][]byte, 1))
+	tMsg.Set(0, []byte("hello world this message is too long!"))
 
 	block := NewMemory(MemoryConfig{Limit: 10})
 

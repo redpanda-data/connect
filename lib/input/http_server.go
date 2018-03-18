@@ -142,7 +142,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var msg types.Message
+	msg := types.NewMessage(nil)
 	var err error
 
 	defer func() {
@@ -160,7 +160,6 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.HasPrefix(mediaType, "multipart/") {
-		msg.Parts = [][]byte{}
 		mr := multipart.NewReader(r.Body, params["boundary"])
 		for {
 			var p *multipart.Part
@@ -175,14 +174,14 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			if msgBytes, err = ioutil.ReadAll(p); err != nil {
 				return
 			}
-			msg.Parts = append(msg.Parts, msgBytes)
+			msg.Append(msgBytes)
 		}
 	} else {
 		var msgBytes []byte
 		if msgBytes, err = ioutil.ReadAll(r.Body); err != nil {
 			return
 		}
-		msg.Parts = [][]byte{msgBytes}
+		msg.Append(msgBytes)
 	}
 
 	resChan := make(chan types.Response)

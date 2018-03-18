@@ -63,7 +63,7 @@ func TestHTTPClientRetries(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		msg.Parts = [][]byte{b}
+		msg.SetAll([][]byte{b})
 	}))
 	defer ts.Close()
 
@@ -84,7 +84,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	}
 
 	select {
-	case sendChan <- types.NewTransaction(types.Message{Parts: [][]byte{[]byte("test")}}, resChan):
+	case sendChan <- types.NewTransaction(types.NewMessage([][]byte{[]byte("test")}), resChan):
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 		return
@@ -118,7 +118,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var msg types.Message
+		msg := types.NewMessage(nil)
 		defer func() {
 			resultChan <- msg
 		}()
@@ -128,7 +128,7 @@ func TestHTTPClientBasic(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		msg.Parts = [][]byte{b}
+		msg.SetAll([][]byte{b})
 	}))
 	defer ts.Close()
 
@@ -151,7 +151,7 @@ func TestHTTPClientBasic(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
+		testMsg := types.NewMessage([][]byte{[]byte(testStr)})
 
 		select {
 		case sendChan <- types.NewTransaction(testMsg, resChan):
@@ -162,11 +162,11 @@ func TestHTTPClientBasic(t *testing.T) {
 
 		select {
 		case resMsg := <-resultChan:
-			if len(resMsg.Parts) != 1 {
-				t.Errorf("Wrong # parts: %v != %v", len(resMsg.Parts), 1)
+			if resMsg.Len() != 1 {
+				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 1)
 				return
 			}
-			if exp, actual := testStr, string(resMsg.Parts[0]); exp != actual {
+			if exp, actual := testStr, string(resMsg.Get(0)); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}
@@ -202,7 +202,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var msg types.Message
+		msg := types.NewMessage(nil)
 		defer func() {
 			resultChan <- msg
 		}()
@@ -214,7 +214,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 		}
 
 		if strings.HasPrefix(mediaType, "multipart/") {
-			msg.Parts = [][]byte{}
+			msg.SetAll([][]byte{})
 			mr := multipart.NewReader(r.Body, params["boundary"])
 			for {
 				p, err := mr.NextPart()
@@ -230,7 +230,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				msg.Parts = append(msg.Parts, msgBytes)
+				msg.Append(msgBytes)
 			}
 		} else {
 			b, err := ioutil.ReadAll(r.Body)
@@ -238,7 +238,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			msg.Parts = [][]byte{b}
+			msg.SetAll([][]byte{b})
 		}
 	}))
 	defer ts.Close()
@@ -259,10 +259,10 @@ func TestHTTPClientMultipart(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := types.Message{Parts: [][]byte{
+		testMsg := types.NewMessage([][]byte{
 			[]byte(testStr + "PART-A"),
 			[]byte(testStr + "PART-B"),
-		}}
+		})
 
 		select {
 		case sendChan <- types.NewTransaction(testMsg, resChan):
@@ -273,15 +273,15 @@ func TestHTTPClientMultipart(t *testing.T) {
 
 		select {
 		case resMsg := <-resultChan:
-			if len(resMsg.Parts) != 2 {
-				t.Errorf("Wrong # parts: %v != %v", len(resMsg.Parts), 2)
+			if resMsg.Len() != 2 {
+				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 2)
 				return
 			}
-			if exp, actual := testStr+"PART-A", string(resMsg.Parts[0]); exp != actual {
+			if exp, actual := testStr+"PART-A", string(resMsg.Get(0)); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}
-			if exp, actual := testStr+"PART-B", string(resMsg.Parts[1]); exp != actual {
+			if exp, actual := testStr+"PART-B", string(resMsg.Get(1)); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}

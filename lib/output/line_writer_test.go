@@ -76,9 +76,9 @@ func TestLineWriterBasic(t *testing.T) {
 	}
 
 	for _, c := range testCases {
-		msg := types.Message{}
+		msg := types.NewMessage(nil)
 		for _, part := range c.message {
-			msg.Parts = append(msg.Parts, []byte(part))
+			msg.Append([]byte(part))
 		}
 
 		select {
@@ -150,9 +150,9 @@ func TestLineWriterCustomDelim(t *testing.T) {
 	}
 
 	for _, c := range testCases {
-		msg := types.Message{}
+		msg := types.NewMessage(nil)
 		for _, part := range c.message {
-			msg.Parts = append(msg.Parts, []byte(part))
+			msg.Append([]byte(part))
 		}
 
 		select {

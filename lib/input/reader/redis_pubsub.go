@@ -122,18 +122,16 @@ func (r *RedisPubSub) Read() (types.Message, error) {
 	r.cMut.Unlock()
 
 	if pubsub == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	rMsg, open := <-pubsub.Channel()
 	if !open {
 		r.disconnect()
-		return types.Message{}, types.ErrTypeClosed
+		return nil, types.ErrTypeClosed
 	}
 
-	return types.Message{
-		Parts: [][]byte{[]byte(rMsg.Payload)},
-	}, nil
+	return types.NewMessage([][]byte{[]byte(rMsg.Payload)}), nil
 }
 
 // Acknowledge instructs whether messages have been successfully propagated.

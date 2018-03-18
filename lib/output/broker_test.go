@@ -94,7 +94,7 @@ func TestBrokerWithScaleProto(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
+		testMsg := types.NewMessage([][]byte{[]byte(testStr)})
 
 		select {
 		case sendChan <- types.NewTransaction(testMsg, resChan):
@@ -196,7 +196,7 @@ func TestRoundRobinWithScaleProto(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := types.Message{Parts: [][]byte{[]byte(testStr)}}
+		testMsg := types.NewMessage([][]byte{[]byte(testStr)})
 
 		select {
 		case sendChan <- types.NewTransaction(testMsg, resChan):

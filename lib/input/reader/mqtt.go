@@ -137,18 +137,16 @@ func (m *MQTT) msgHandler(c mqtt.Client, msg mqtt.Message) {
 // Read attempts to read a new message from an MQTT broker.
 func (m *MQTT) Read() (types.Message, error) {
 	if m.client == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	select {
 	case msg := <-m.msgChan:
-		return types.Message{
-			Parts: [][]byte{[]byte(msg.Payload())},
-		}, nil
+		return types.NewMessage([][]byte{[]byte(msg.Payload())}), nil
 	case <-m.interruptChan:
 	}
 
-	return types.Message{}, types.ErrTypeClosed
+	return nil, types.ErrTypeClosed
 }
 
 // Acknowledge instructs whether messages have been successfully propagated.

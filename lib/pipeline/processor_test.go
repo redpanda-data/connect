@@ -42,11 +42,10 @@ func (m *mockMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, t
 	if drop := <-m.dropChan; drop {
 		return nil, types.NewSimpleResponse(errMockProc)
 	}
-	newMsg := types.NewMessage()
-	newMsg.Parts = [][]byte{
+	newMsg := types.NewMessage([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
-	}
+	})
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }
@@ -74,11 +73,10 @@ func TestProcessorPipeline(t *testing.T) {
 		t.Error("Expected error from dupe listening")
 	}
 
-	msg := types.NewMessage()
-	msg.Parts = [][]byte{
+	msg := types.NewMessage([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
-	}
+	})
 
 	// First message should be dropped and return immediately
 	select {
@@ -123,7 +121,7 @@ func TestProcessorPipeline(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
 	case res, open := <-resChan:
@@ -181,7 +179,7 @@ func TestProcessorPipeline(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -220,11 +218,10 @@ type mockMultiMsgProcessor struct {
 func (m *mockMultiMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	var msgs []types.Message
 	for i := 0; i < m.N; i++ {
-		newMsg := types.NewMessage()
-		newMsg.Parts = [][]byte{
+		newMsg := types.NewMessage([][]byte{
 			[]byte("foo"),
 			[]byte("bar"),
-		}
+		})
 		msgs = append(msgs, newMsg)
 	}
 	return msgs, nil
@@ -245,11 +242,10 @@ func TestProcessorMultiMsgs(t *testing.T) {
 		t.Error(err)
 	}
 
-	msg := types.NewMessage()
-	msg.Parts = [][]byte{
+	msg := types.NewMessage([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
-	}
+	})
 
 	// Send message
 	select {
@@ -268,7 +264,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 			if !open {
 				t.Error("Closed early")
 			}
-			if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+			if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 				t.Errorf("Wrong message received: %s != %s", act, exp)
 			}
 		case <-time.After(time.Second):
@@ -318,11 +314,10 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		t.Error(err)
 	}
 
-	msg := types.NewMessage()
-	msg.Parts = [][]byte{
+	msg := types.NewMessage([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
-	}
+	})
 
 	// Send message
 	select {
@@ -340,7 +335,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -361,7 +356,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 			if !open {
 				t.Error("Closed early")
 			}
-			if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+			if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 				t.Errorf("Wrong message received: %s != %s", act, exp)
 			}
 		case <-time.After(time.Second):
@@ -411,11 +406,10 @@ func TestProcessorMultiMsgsErr(t *testing.T) {
 		t.Error(err)
 	}
 
-	msg := types.NewMessage()
-	msg.Parts = [][]byte{
+	msg := types.NewMessage([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
-	}
+	})
 
 	// Send message
 	select {
@@ -433,7 +427,7 @@ func TestProcessorMultiMsgsErr(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
 	case <-time.After(time.Second):

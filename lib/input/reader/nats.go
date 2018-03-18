@@ -124,9 +124,9 @@ func (n *NATS) Read() (types.Message, error) {
 	}
 	if !open {
 		n.disconnect()
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
-	return types.Message{Parts: [][]byte{msg.Data}}, nil
+	return types.NewMessage([][]byte{msg.Data}), nil
 }
 
 // Acknowledge instructs whether read messages have been successfully

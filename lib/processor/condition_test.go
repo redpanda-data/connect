@@ -240,7 +240,7 @@ func TestConditionContentCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			_, got := c.ProcessMessage(types.Message{Parts: tt.arg})
+			_, got := c.ProcessMessage(types.NewMessage(tt.arg))
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Condition.ProcessMessage() = %v, want %v", got, tt.want)
 			}

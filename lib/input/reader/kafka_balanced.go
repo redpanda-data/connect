@@ -176,16 +176,16 @@ func (k *KafkaBalanced) Read() (types.Message, error) {
 	k.cMut.Unlock()
 
 	if consumer == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	data, open := <-consumer.Messages()
 	if !open {
 		k.closeClients()
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 	consumer.MarkOffset(data, "")
-	return types.Message{Parts: [][]byte{data.Value}}, nil
+	return types.NewMessage([][]byte{data.Value}), nil
 }
 
 // Acknowledge instructs whether the current offset should be committed.

@@ -207,7 +207,7 @@ func (s *ScaleProto) loop() {
 		}
 		s.stats.Incr("output.scale_proto.count", 1)
 		var err error
-		for _, part := range ts.Payload.Parts {
+		for _, part := range ts.Payload.GetAll() {
 			if err = s.socket.Send(part); err != nil {
 				break
 			}

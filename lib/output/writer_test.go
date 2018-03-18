@@ -244,7 +244,7 @@ func TestWriterClosesOnReconn(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(types.Message{}, resChan):
+	case msgChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -300,7 +300,7 @@ func TestWriterClosesOnResend(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(types.Message{}, resChan):
+	case msgChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -358,7 +358,7 @@ func TestWriterCanReconnect(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(types.Message{}, resChan):
+	case msgChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -404,7 +404,7 @@ func TestWriterCantReconnect(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(types.Message{}, resChan):
+		case msgChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -461,9 +461,7 @@ func TestWriterHappyPath(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(types.Message{
-			Parts: exp,
-		}, resChan):
+		case msgChan <- types.NewTransaction(types.NewMessage(exp), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -498,7 +496,7 @@ func TestWriterHappyPath(t *testing.T) {
 		t.Error(err)
 	}
 
-	if act := writerImpl.msgRcvd.Parts; !reflect.DeepEqual(exp, act) {
+	if act := writerImpl.msgRcvd.GetAll(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }
@@ -531,9 +529,7 @@ func TestWriterSadPath(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(types.Message{
-			Parts: exp,
-		}, resChan):
+		case msgChan <- types.NewTransaction(types.NewMessage(exp), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -568,7 +564,7 @@ func TestWriterSadPath(t *testing.T) {
 		t.Error(err)
 	}
 
-	if act := writerImpl.msgRcvd.Parts; !reflect.DeepEqual(exp, act) {
+	if act := writerImpl.msgRcvd.GetAll(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }

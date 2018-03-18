@@ -170,7 +170,7 @@ func (z *ZMQ4) Connect() error {
 // Read attempts to read a new message from the nanomsg socket.
 func (z *ZMQ4) Read() (types.Message, error) {
 	if z.socket == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	data, err := z.socket.RecvMessageBytes(zmq4.DONTWAIT)
@@ -179,14 +179,14 @@ func (z *ZMQ4) Read() (types.Message, error) {
 		if polled, err = z.poller.Poll(z.pollTimeout); len(polled) == 1 {
 			data, err = z.socket.RecvMessageBytes(0)
 		} else if err == nil {
-			return types.Message{}, types.ErrTimeout
+			return nil, types.ErrTimeout
 		}
 	}
 	if err != nil {
-		return types.Message{}, err
+		return nil, err
 	}
 
-	return types.Message{Parts: data}, nil
+	return types.NewMessage(data), nil
 }
 
 // Acknowledge instructs whether the pending messages were propagated

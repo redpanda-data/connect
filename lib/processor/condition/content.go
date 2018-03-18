@@ -155,27 +155,22 @@ func NewContent(conf Config, log log.Modular, stats metrics.Type) (Type, error) 
 // Check attempts to check a message part against a configured condition.
 func (c *Content) Check(msg types.Message) bool {
 	index := c.part
-	lParts := len(msg.Parts)
+	lParts := msg.Len()
 	if lParts == 0 {
 		c.stats.Incr("condition.content.skipped.empty_message", 1)
 		c.stats.Incr("condition.content.skipped", 1)
 		return false
 	}
 
-	if index < 0 {
-		// Negative indexes count backwards from the end.
-		index = lParts + index
-	}
-
-	// Check boundary of part index.
-	if index < 0 || index >= lParts {
+	msgPart := msg.Get(index)
+	if msgPart == nil {
 		c.stats.Incr("condition.content.skipped.out_of_bounds", 1)
 		c.stats.Incr("condition.content.skipped", 1)
 		return false
 	}
 
 	c.stats.Incr("condition.content.applied", 1)
-	return c.operator(msg.Parts[index])
+	return c.operator(msgPart)
 }
 
 //------------------------------------------------------------------------------

@@ -70,14 +70,14 @@ func TestMmapBufferBasic(t *testing.T) {
 	defer block.Close()
 
 	for i := 0; i < n; i++ {
-		if _, err := block.PushMessage(types.Message{
-			Parts: [][]byte{
+		if _, err := block.PushMessage(types.NewMessage(
+			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),
 				[]byte("12345"),
 				[]byte(fmt.Sprintf("test%v", i)),
 			},
-		}); err != nil {
+		)); err != nil {
 			t.Error(err)
 			return
 		}
@@ -89,9 +89,9 @@ func TestMmapBufferBasic(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if len(m.Parts) != 4 {
-			t.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
+		if m.Len() != 4 {
+			t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := block.ShiftMessage(); err != nil {
@@ -121,9 +121,9 @@ func TestMmapBufferBacklogCounter(t *testing.T) {
 	}
 	defer block.Close()
 
-	if _, err := block.PushMessage(types.Message{
-		Parts: [][]byte{[]byte("1234")}, // 4 bytes + 4 bytes
-	}); err != nil {
+	if _, err := block.PushMessage(types.NewMessage(
+		[][]byte{[]byte("1234")}, // 4 bytes + 4 bytes
+	)); err != nil {
 		t.Error(err)
 		return
 	}
@@ -132,12 +132,12 @@ func TestMmapBufferBacklogCounter(t *testing.T) {
 		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
 	}
 
-	if _, err := block.PushMessage(types.Message{
-		Parts: [][]byte{
+	if _, err := block.PushMessage(types.NewMessage(
+		[][]byte{
 			[]byte("1234"),
 			[]byte("1234"),
 		}, // ( 4 bytes + 4 bytes ) * 2
-	}); err != nil {
+	)); err != nil {
 		t.Error(err)
 		return
 	}
@@ -193,12 +193,12 @@ func TestMmapBufferLoopingRandom(t *testing.T) {
 			for k := range b {
 				b[k] = '0'
 			}
-			if _, err := block.PushMessage(types.Message{
-				Parts: [][]byte{
+			if _, err := block.PushMessage(types.NewMessage(
+				[][]byte{
 					b,
 					[]byte(fmt.Sprintf("test%v", i)),
 				},
-			}); err != nil {
+			)); err != nil {
 				t.Error(err)
 				return
 			}
@@ -210,9 +210,9 @@ func TestMmapBufferLoopingRandom(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if len(m.Parts) != 2 {
-				t.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[1]); expected != actual {
+			if m.Len() != 2 {
+				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(1)); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 			}
 			if _, err := block.ShiftMessage(); err != nil {
@@ -246,14 +246,14 @@ func TestMmapBufferMultiFiles(t *testing.T) {
 	defer block.Close()
 
 	for i := 0; i < n; i++ {
-		if _, err := block.PushMessage(types.Message{
-			Parts: [][]byte{
+		if _, err := block.PushMessage(types.NewMessage(
+			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),
 				[]byte("12345"),
 				[]byte(fmt.Sprintf("test%v", i)),
 			},
-		}); err != nil {
+		)); err != nil {
 			t.Error(err)
 			return
 		}
@@ -265,9 +265,9 @@ func TestMmapBufferMultiFiles(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if len(m.Parts) != 4 {
-			t.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
+		if m.Len() != 4 {
+			t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := block.ShiftMessage(); err != nil {
@@ -300,14 +300,14 @@ func TestMmapBufferRecoverFiles(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if _, err := block.PushMessage(types.Message{
-			Parts: [][]byte{
+		if _, err := block.PushMessage(types.NewMessage(
+			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),
 				[]byte("12345"),
 				[]byte(fmt.Sprintf("test%v", i)),
 			},
-		}); err != nil {
+		)); err != nil {
 			t.Error(err)
 			return
 		}
@@ -329,9 +329,9 @@ func TestMmapBufferRecoverFiles(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if len(m.Parts) != 4 {
-			t.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
+		if m.Len() != 4 {
+			t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := block.ShiftMessage(); err != nil {
@@ -352,8 +352,8 @@ func TestMmapBufferRejectLargeMessage(t *testing.T) {
 
 	defer cleanUpMmapDir(dir)
 
-	tMsg := types.Message{Parts: make([][]byte, 1)}
-	tMsg.Parts[0] = []byte("hello world this message is too long!")
+	tMsg := types.NewMessage(make([][]byte, 1))
+	tMsg.Set(0, []byte("hello world this message is too long!"))
 
 	conf := NewMmapBufferConfig()
 	conf.FileSize = 10
@@ -394,14 +394,14 @@ func BenchmarkMmapBufferBasic(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if _, err := block.PushMessage(types.Message{
-			Parts: [][]byte{
+		if _, err := block.PushMessage(types.NewMessage(
+			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),
 				[]byte("12345"),
 				[]byte(fmt.Sprintf("test%v", i)),
 			},
-		}); err != nil {
+		)); err != nil {
 			b.Error(err)
 			return
 		}
@@ -413,9 +413,9 @@ func BenchmarkMmapBufferBasic(b *testing.B) {
 			b.Error(err)
 			return
 		}
-		if len(m.Parts) != 4 {
-			b.Errorf("Wrong # parts, %v != %v", len(m.Parts), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Parts[3]); expected != actual {
+		if m.Len() != 4 {
+			b.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
 			b.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := block.ShiftMessage(); err != nil {

@@ -162,7 +162,7 @@ func (n *NATSStream) loop() {
 		}
 		n.stats.Incr("output.nats_stream.count", 1)
 		var err error
-		for _, part := range ts.Payload.Parts {
+		for _, part := range ts.Payload.GetAll() {
 			err = n.natsConn.Publish(n.conf.NATSStream.Subject, part)
 			if err != nil {
 				n.stats.Incr("output.nats_stream.send.error", 1)

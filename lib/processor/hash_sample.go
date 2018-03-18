@@ -105,7 +105,7 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	hash := xxhash.New64()
 
-	lParts := len(msg.Parts)
+	lParts := msg.Len()
 	for _, index := range s.conf.HashSample.Parts {
 		if index < 0 {
 			// Negative indexes count backwards from the end.
@@ -121,8 +121,7 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		}
 
 		// Attempt to add part to hash.
-		_, err := hash.Write(msg.Parts[index])
-		if nil != err {
+		if _, err := hash.Write(msg.Get(index)); nil != err {
 			s.stats.Incr("processor.hash_sample.hashing_error", 1)
 			s.log.Errorf("Cannot hash message part for sampling: %v\n", err)
 			return nil, types.NewSimpleResponse(nil)

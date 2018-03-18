@@ -75,7 +75,7 @@ func TestBasicFanOut(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
+		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -85,8 +85,8 @@ func TestBasicFanOut(t *testing.T) {
 			var ts types.Transaction
 			select {
 			case ts = <-mockOutputs[j].TChan:
-				if string(ts.Payload.Parts[0]) != string(content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], content[0])
+				if string(ts.Payload.Get(0)) != string(content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0), content[0])
 				}
 				resChanSlice = append(resChanSlice, ts.ResponseChan)
 			case <-time.After(time.Second):
@@ -144,7 +144,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.Message{Parts: [][]byte{[]byte("hello world")}}, resChan):
+	case readChan <- types.NewTransaction(types.NewMessage([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for broker send")
 		return
@@ -227,7 +227,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.Message{}, resChan):
+	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -284,7 +284,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.Message{}, resChan):
+	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -333,7 +333,7 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.Message{}, resChan):
+	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -387,7 +387,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < nMsgs; i++ {
-		readChan <- types.NewTransaction(types.Message{Parts: content}, resChan)
+		readChan <- types.NewTransaction(types.NewMessage(content), resChan)
 		for j := 0; j < nOutputs; j++ {
 			ts := <-mockOutputs[j].TChan
 			rChanSlice[i] = ts.ResponseChan

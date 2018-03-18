@@ -189,7 +189,7 @@ func (r *RedisPubSub) loop() {
 
 		r.stats.Incr("output.redis_pubsub.count", 1)
 		var err error
-		for _, part := range ts.Payload.Parts {
+		for _, part := range ts.Payload.GetAll() {
 			if _, err = r.client.Publish(r.conf.RedisPubSub.Channel, part).Result(); err == nil {
 				r.stats.Incr("output.redis_pubsub.send.success", 1)
 			} else {

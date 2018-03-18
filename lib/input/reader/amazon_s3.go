@@ -248,21 +248,21 @@ func (a *AmazonS3) readSQSEvents() error {
 // Read attempts to read a new message from the target S3 bucket.
 func (a *AmazonS3) Read() (types.Message, error) {
 	if a.session == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	if len(a.targetKeys) == 0 {
 		if a.sqs != nil {
 			if err := a.readSQSEvents(); err != nil {
-				return types.Message{}, err
+				return nil, err
 			}
 		} else {
 			// If we aren't using SQS but exhausted our targets we are done.
-			return types.Message{}, types.ErrTypeClosed
+			return nil, types.ErrTypeClosed
 		}
 	}
 	if len(a.targetKeys) == 0 {
-		return types.Message{}, types.ErrTimeout
+		return nil, types.ErrTimeout
 	}
 
 	target := a.targetKeys[0]
@@ -274,7 +274,7 @@ func (a *AmazonS3) Read() (types.Message, error) {
 		Bucket: aws.String(a.conf.Bucket),
 		Key:    aws.String(target.s3Key),
 	}); err != nil {
-		return types.Message{}, fmt.Errorf("failed to download file, %v", err)
+		return nil, fmt.Errorf("failed to download file, %v", err)
 	}
 
 	if len(a.targetKeys) > 1 {
@@ -284,9 +284,7 @@ func (a *AmazonS3) Read() (types.Message, error) {
 	}
 	a.readKeys = append(a.readKeys, target)
 
-	return types.Message{
-		Parts: [][]byte{buff.Bytes()},
-	}, nil
+	return types.NewMessage([][]byte{buff.Bytes()}), nil
 }
 
 // Acknowledge confirms whether or not our unacknowledged messages have been

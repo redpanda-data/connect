@@ -74,14 +74,14 @@ func NewSplit(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.stats.Incr("processor.split.count", 1)
 
-	if len(msg.Parts) == 0 {
+	if msg.Len() == 0 {
 		s.stats.Incr("processor.split.dropped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	msgs := make([]types.Message, len(msg.Parts))
-	for i, part := range msg.Parts {
-		msgs[i] = types.Message{Parts: [][]byte{part}}
+	msgs := make([]types.Message, msg.Len())
+	for i, part := range msg.GetAll() {
+		msgs[i] = types.NewMessage([][]byte{part})
 	}
 
 	s.stats.Incr("processor.split.sent", int64(len(msgs)))

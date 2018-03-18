@@ -56,7 +56,7 @@ func (r *mockReader) Connect() error {
 }
 func (r *mockReader) Read() (types.Message, error) {
 	if err := <-r.readChan; err != nil {
-		return types.Message{}, err
+		return nil, err
 	}
 	return r.msgToSnd, nil
 }
@@ -75,7 +75,7 @@ type readerCantConnect struct{}
 
 func (r readerCantConnect) Connect() error { return types.ErrNotConnected }
 func (r readerCantConnect) Read() (types.Message, error) {
-	return types.Message{}, types.ErrNotConnected
+	return nil, types.ErrNotConnected
 }
 func (r readerCantConnect) Acknowledge(err error) error {
 	return types.ErrNotConnected
@@ -115,7 +115,7 @@ func (r *readerCantRead) Connect() error {
 	return nil
 }
 func (r *readerCantRead) Read() (types.Message, error) {
-	return types.Message{}, types.ErrNotConnected
+	return nil, types.ErrNotConnected
 }
 func (r *readerCantRead) Acknowledge(err error) error {
 	return types.ErrNotConnected
@@ -459,9 +459,7 @@ func TestReaderHappyPath(t *testing.T) {
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 
 	readerImpl := newMockReader()
-	readerImpl.msgToSnd = types.Message{
-		Parts: exp,
-	}
+	readerImpl.msgToSnd = types.NewMessage(exp)
 	readerImpl.ackRcvd = errors.New("ack not received")
 
 	r, err := NewReader(
@@ -500,7 +498,7 @@ func TestReaderHappyPath(t *testing.T) {
 		if !open {
 			t.Fatal("Chan closed")
 		}
-		if act := ts.Payload.Parts; !reflect.DeepEqual(exp, act) {
+		if act := ts.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -532,9 +530,7 @@ func TestReaderSadPath(t *testing.T) {
 	expErr := errors.New("test error")
 
 	readerImpl := newMockReader()
-	readerImpl.msgToSnd = types.Message{
-		Parts: exp,
-	}
+	readerImpl.msgToSnd = types.NewMessage(exp)
 	readerImpl.ackRcvd = errors.New("ack not received")
 
 	r, err := NewReader(
@@ -573,7 +569,7 @@ func TestReaderSadPath(t *testing.T) {
 		if !open {
 			t.Fatal("Chan closed")
 		}
-		if act := ts.Payload.Parts; !reflect.DeepEqual(exp, act) {
+		if act := ts.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -605,9 +601,7 @@ func TestReaderSkipAcks(t *testing.T) {
 	expErr := errors.New("ack not received")
 
 	readerImpl := newMockReader()
-	readerImpl.msgToSnd = types.Message{
-		Parts: exp,
-	}
+	readerImpl.msgToSnd = types.NewMessage(exp)
 	readerImpl.ackRcvd = expErr
 
 	r, err := NewReader(
@@ -641,7 +635,7 @@ func TestReaderSkipAcks(t *testing.T) {
 			if !open {
 				t.Fatal("Chan closed")
 			}
-			if act := ts.Payload.Parts; !reflect.DeepEqual(exp, act) {
+			if act := ts.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 				t.Errorf("Wrong message returned: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):

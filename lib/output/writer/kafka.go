@@ -143,7 +143,7 @@ func (k *Kafka) Write(msg types.Message) error {
 	}
 
 	msgs := []*sarama.ProducerMessage{}
-	for _, part := range msg.Parts {
+	for _, part := range msg.GetAll() {
 		if len(part) > k.conf.MaxMsgBytes {
 			k.stats.Incr("output.kafka.send.dropped.max_msg_bytes", 1)
 			continue

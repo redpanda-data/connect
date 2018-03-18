@@ -181,9 +181,9 @@ func (n *NSQ) Read() (types.Message, error) {
 		}
 		n.unAckMsgs = nil
 		n.disconnect()
-		return types.Message{}, types.ErrTypeClosed
+		return nil, types.ErrTypeClosed
 	}
-	return types.Message{Parts: [][]byte{msg.Body}}, nil
+	return types.NewMessage([][]byte{msg.Body}), nil
 }
 
 // Acknowledge instructs whether unacknowledged messages have been successfully

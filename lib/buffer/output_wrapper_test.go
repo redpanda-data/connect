@@ -57,7 +57,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 
 		select {
 		// Send to buffer
-		case tChan <- types.NewTransaction(types.Message{Parts: msgBytes}, resChan):
+		case tChan <- types.NewTransaction(types.NewMessage(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered message %v send", i)
 			return
@@ -78,7 +78,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 		var outTr types.Transaction
 		select {
 		case outTr = <-b.TransactionChan():
-			if actual := uint8(outTr.Payload.Parts[0][0]); actual != i {
+			if actual := uint8(outTr.Payload.Get(0)[0]); actual != i {
 				t.Errorf("Wrong order receipt of unbuffered message receive: %v != %v", actual, i)
 			}
 		case <-time.After(time.Second):
@@ -101,7 +101,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 		msgBytes[0][0] = byte(i)
 
 		select {
-		case tChan <- types.NewTransaction(types.Message{Parts: msgBytes}, resChan):
+		case tChan <- types.NewTransaction(types.NewMessage(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered message %v send", i)
 			return
@@ -122,7 +122,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	msgBytes[0] = make([]byte, int(incr))
 
 	select {
-	case tChan <- types.NewTransaction(types.Message{Parts: msgBytes}, resChan):
+	case tChan <- types.NewTransaction(types.NewMessage(msgBytes), resChan):
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for final buffered message send")
 		return
@@ -145,7 +145,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	// Extract last message
 	select {
 	case outTr = <-b.TransactionChan():
-		if actual := uint8(outTr.Payload.Parts[0][0]); actual != 0 {
+		if actual := uint8(outTr.Payload.Get(0)[0]); actual != 0 {
 			t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, 0)
 		}
 		outTr.ResponseChan <- types.NewSimpleResponse(nil)
@@ -168,7 +168,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	for i = 1; i < total; i++ {
 		select {
 		case outTr = <-b.TransactionChan():
-			if actual := uint8(outTr.Payload.Parts[0][0]); actual != i {
+			if actual := uint8(outTr.Payload.Get(0)[0]); actual != i {
 				t.Errorf("Wrong order receipt of buffered message: %v != %v", actual, i)
 			}
 		case <-time.After(time.Second):
@@ -230,7 +230,7 @@ func TestBufferClosing(t *testing.T) {
 		msgBytes[0][0] = byte(i)
 
 		select {
-		case tChan <- types.NewTransaction(types.Message{Parts: msgBytes}, resChan):
+		case tChan <- types.NewTransaction(types.NewMessage(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered message %v send", i)
 			return
@@ -253,7 +253,7 @@ func TestBufferClosing(t *testing.T) {
 	for i = 0; i < total; i++ {
 		select {
 		case val := <-b.TransactionChan():
-			if actual := uint8(val.Payload.Parts[0][0]); actual != i {
+			if actual := uint8(val.Payload.Get(0)[0]); actual != i {
 				t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, i)
 			}
 			val.ResponseChan <- types.NewSimpleResponse(nil)
@@ -289,8 +289,8 @@ func TestOutputWrapperErrProp(t *testing.T) {
 		return
 	}
 
-	msg := types.NewMessage()
-	msg.Parts = append(msg.Parts, []byte(`hello world`))
+	msg := types.NewMessage(nil)
+	msg.Append([]byte(`hello world`))
 
 	select {
 	case tChan <- types.NewTransaction(msg, resChan):

@@ -85,7 +85,7 @@ func (f *Files) Connect() error {
 
 // Write attempts to write message contents to a directory as files.
 func (f *Files) Write(msg types.Message) error {
-	for _, part := range msg.Parts {
+	for _, part := range msg.GetAll() {
 		path := f.conf.Path
 		if f.interpolatePath {
 			path = string(text.ReplaceFunctionVariables(f.pathBytes))

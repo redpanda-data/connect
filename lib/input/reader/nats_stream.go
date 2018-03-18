@@ -177,9 +177,9 @@ func (n *NATSStream) Read() (types.Message, error) {
 	case <-n.interruptChan:
 		n.unAckMsgs = nil
 		n.disconnect()
-		return types.Message{}, types.ErrTypeClosed
+		return nil, types.ErrTypeClosed
 	}
-	return types.Message{Parts: [][]byte{msg.Data}}, nil
+	return types.NewMessage([][]byte{msg.Data}), nil
 }
 
 // Acknowledge instructs whether unacknowledged messages have been successfully

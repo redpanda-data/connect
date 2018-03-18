@@ -114,8 +114,8 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 // createRequest creates an HTTP request out of a single message.
 func (h *HTTPClient) createRequest(msg types.Message) (req *http.Request, err error) {
-	if len(msg.Parts) == 1 {
-		body := bytes.NewBuffer(msg.Parts[0])
+	if len(msg.GetAll()) == 1 {
+		body := bytes.NewBuffer(msg.GetAll()[0])
 		if req, err = http.NewRequest(
 			h.conf.HTTPClient.Verb,
 			h.conf.HTTPClient.URL,
@@ -127,12 +127,12 @@ func (h *HTTPClient) createRequest(msg types.Message) (req *http.Request, err er
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 
-		for i := 0; i < len(msg.Parts) && err == nil; i++ {
+		for i := 0; i < msg.Len() && err == nil; i++ {
 			var part io.Writer
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
 				"Content-Type": []string{h.conf.HTTPClient.ContentType},
 			}); err == nil {
-				_, err = io.Copy(part, bytes.NewReader(msg.Parts[i]))
+				_, err = io.Copy(part, bytes.NewReader(msg.Get(i)))
 			}
 		}
 

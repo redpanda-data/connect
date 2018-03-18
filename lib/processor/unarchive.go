@@ -109,7 +109,7 @@ func binaryUnarchive(b []byte) ([][]byte, error) {
 		return nil, err
 	}
 
-	return msg.Parts, nil
+	return msg.GetAll(), nil
 }
 
 func strToUnarchiver(str string) (unarchiveFunc, error) {
@@ -155,11 +155,11 @@ func NewUnarchive(conf Config, log log.Modular, stats metrics.Type) (Type, error
 func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.stats.Incr("processor.unarchive.count", 1)
 
-	newMsg := types.Message{}
-	lParts := len(msg.Parts)
+	newMsg := types.NewMessage(nil)
+	lParts := msg.Len()
 
 	noParts := len(d.conf.Parts) == 0
-	for i, part := range msg.Parts {
+	for i, part := range msg.GetAll() {
 		isTarget := noParts
 		if !isTarget {
 			nI := i - lParts
@@ -171,19 +171,19 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			}
 		}
 		if !isTarget {
-			newMsg.Parts = append(newMsg.Parts, part)
+			newMsg.Append(part)
 			continue
 		}
 		newParts, err := d.unarchive(part)
 		if err == nil {
 			d.stats.Incr("processor.unarchive.success", 1)
-			newMsg.Parts = append(newMsg.Parts, newParts...)
+			newMsg.Append(newParts...)
 		} else {
 			d.stats.Incr("processor.unarchive.error", 1)
 		}
 	}
 
-	if len(newMsg.Parts) == 0 {
+	if newMsg.Len() == 0 {
 		d.stats.Incr("processor.unarchive.skipped", 1)
 		d.stats.Incr("processor.unarchive.dropped", 1)
 		return nil, types.NewSimpleResponse(nil)

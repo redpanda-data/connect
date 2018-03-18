@@ -111,10 +111,10 @@ func (w *LineWriter) loop() {
 			return
 		}
 		var err error
-		if len(ts.Payload.Parts) == 1 {
-			_, err = fmt.Fprintf(w.handle, "%s%s", ts.Payload.Parts[0], delim)
+		if ts.Payload.Len() == 1 {
+			_, err = fmt.Fprintf(w.handle, "%s%s", ts.Payload.Get(0), delim)
 		} else {
-			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(ts.Payload.Parts, delim), delim, delim)
+			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(ts.Payload.GetAll(), delim), delim, delim)
 		}
 		if err != nil {
 			w.stats.Incr(errorPath, 1)

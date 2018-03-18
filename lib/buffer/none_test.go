@@ -75,7 +75,7 @@ func TestNoneBufferBasic(t *testing.T) {
 
 	go func() {
 		for tr := range empty.TransactionChan() {
-			tr.ResponseChan <- types.NewSimpleResponse(errors.New(string(tr.Payload.Parts[0])))
+			tr.ResponseChan <- types.NewSimpleResponse(errors.New(string(tr.Payload.Get(0))))
 		}
 	}()
 
@@ -87,9 +87,9 @@ func TestNoneBufferBasic(t *testing.T) {
 			for j := 0; j < nMessages; j++ {
 				resChan := make(chan types.Response)
 				msg := fmt.Sprintf("Hello World %v %v", nThread, j)
-				tChan <- types.NewTransaction(types.Message{
-					Parts: [][]byte{[]byte(msg)},
-				}, resChan)
+				tChan <- types.NewTransaction(types.NewMessage(
+					[][]byte{[]byte(msg)},
+				), resChan)
 				select {
 				case res := <-resChan:
 					if actual := res.Error().Error(); msg != actual {

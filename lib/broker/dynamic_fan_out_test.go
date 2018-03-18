@@ -84,8 +84,8 @@ func TestBasicDynamicFanOut(t *testing.T) {
 				var ts types.Transaction
 				select {
 				case ts = <-mockOutputs[index].TChan:
-					if string(ts.Payload.Parts[0]) != string(content[0]) {
-						t.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], content[0])
+					if string(ts.Payload.Get(0)) != string(content[0]) {
+						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0), content[0])
 					}
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for broker propagate")
@@ -100,7 +100,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 			}(j)
 		}
 		select {
-		case readChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
+		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -162,8 +162,8 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 				var ts types.Transaction
 				select {
 				case ts = <-out.TChan:
-					if string(ts.Payload.Parts[0]) != string(content[0]) {
-						t.Errorf("Wrong content returned for output '%v': %s != %s", name, ts.Payload.Parts[0], content[0])
+					if string(ts.Payload.Get(0)) != string(content[0]) {
+						t.Errorf("Wrong content returned for output '%v': %s != %s", name, ts.Payload.Get(0), content[0])
 					}
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for broker propagate")
@@ -179,7 +179,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		}
 
 		select {
-		case readChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
+		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -209,8 +209,8 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 				var ts types.Transaction
 				select {
 				case ts = <-out.TChan:
-					if string(ts.Payload.Parts[0]) != string(content[0]) {
-						t.Errorf("Wrong content returned for output '%v': %s != %s", name, ts.Payload.Parts[0], content[0])
+					if string(ts.Payload.Get(0)) != string(content[0]) {
+						t.Errorf("Wrong content returned for output '%v': %s != %s", name, ts.Payload.Get(0), content[0])
 					}
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for broker propagate")
@@ -226,7 +226,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		}
 
 		select {
-		case readChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
+		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -335,7 +335,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 	}()
 
 	select {
-	case readChan <- types.NewTransaction(types.Message{Parts: [][]byte{[]byte("hello world")}}, resChan):
+	case readChan <- types.NewTransaction(types.NewMessage([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for broker send")
 		return
@@ -389,7 +389,7 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.Message{}, resChan):
+	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -454,7 +454,7 @@ func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.Message{}, resChan):
+	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -504,7 +504,7 @@ func TestDynamicFanOutShutDownFromSend(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.Message{}, resChan):
+	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}

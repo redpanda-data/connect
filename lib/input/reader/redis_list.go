@@ -122,7 +122,7 @@ func (r *RedisList) Read() (types.Message, error) {
 	r.cMut.Unlock()
 
 	if client == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	res, err := client.BLPop(
@@ -133,16 +133,14 @@ func (r *RedisList) Read() (types.Message, error) {
 	if err != nil && err != redis.Nil {
 		r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	if len(res) < 2 {
-		return types.Message{}, types.ErrTimeout
+		return nil, types.ErrTimeout
 	}
 
-	return types.Message{
-		Parts: [][]byte{[]byte(res[1])},
-	}, nil
+	return types.NewMessage([][]byte{[]byte(res[1])}), nil
 }
 
 // Acknowledge instructs whether messages have been successfully propagated.
