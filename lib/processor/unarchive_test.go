@@ -95,13 +95,13 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.Message{Parts: input})
+	msgs, res := proc.ProcessMessage(types.NewMessage(input))
 	if len(msgs) != 1 {
 		t.Error("Unarchive failed")
 	} else if res != nil {
 		t.Errorf("Expected nil response: %v", res)
 	}
-	if act := msgs[0].Parts; !reflect.DeepEqual(exp, act) {
+	if act := msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 }
@@ -117,21 +117,21 @@ func TestUnarchiveBinary(t *testing.T) {
 		return
 	}
 
-	if msgs, res := proc.ProcessMessage(types.Message{}); len(msgs) > 0 {
+	if msgs, res := proc.ProcessMessage(types.NewMessage(nil)); len(msgs) > 0 {
 		t.Error("Expected fail on bad message")
 	} else if _, ok := res.(types.SimpleResponse); !ok {
 		t.Error("Expected simple response from bad message")
 	}
 	if msgs, _ := proc.ProcessMessage(
-		types.Message{Parts: [][]byte{[]byte("wat this isnt good")}},
+		types.NewMessage([][]byte{[]byte("wat this isnt good")}),
 	); len(msgs) > 0 {
 		t.Error("Expected fail on bad message")
 	}
 
-	testMsg := types.Message{Parts: [][]byte{[]byte("hello"), []byte("world")}}
+	testMsg := types.NewMessage([][]byte{[]byte("hello"), []byte("world")})
 	testMsgBlob := testMsg.Bytes()
 
-	if msgs, _ := proc.ProcessMessage(types.Message{Parts: [][]byte{testMsgBlob}}); len(msgs) > 0 {
+	if msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{testMsgBlob})); len(msgs) > 0 {
 		if !reflect.DeepEqual([]types.Message{testMsg}, msgs) {
 			t.Errorf("Returned message did not match: %v != %v", msgs, testMsg)
 		}
@@ -232,13 +232,13 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(types.Message{Parts: input})
+		msgs, res := proc.ProcessMessage(types.NewMessage(input))
 		if len(msgs) != 1 {
 			t.Errorf("Unarchive failed on index: %v", i)
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := result.value, string(msgs[0].Parts[result.index]); exp != act {
+		if exp, act := result.value, string(msgs[0].GetAll()[result.index]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
 	}
@@ -256,14 +256,14 @@ func TestUnarchiveEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(types.Message{Parts: [][]byte{}})
+	msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{}))
 	if len(msgs) != 0 {
 		t.Error("Expected failure with zero part message")
 	}
 
-	msgs, _ = proc.ProcessMessage(types.Message{
-		Parts: [][]byte{[]byte("first"), []byte("second")},
-	})
+	msgs, _ = proc.ProcessMessage(types.NewMessage(
+		[][]byte{[]byte("first"), []byte("second")},
+	))
 	if len(msgs) != 0 {
 		t.Error("Expected failure with bad data")
 	}

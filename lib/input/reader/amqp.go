@@ -206,21 +206,19 @@ func (a *AMQP) Read() (types.Message, error) {
 	a.m.RUnlock()
 
 	if c == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	data, open := <-c
 	if !open {
 		a.disconnect()
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
 	// Only store the latest delivery tag, but always Ack multiple.
 	a.ackTag = data.DeliveryTag
 
-	return types.Message{
-		Parts: [][]byte{data.Body},
-	}, nil
+	return types.NewMessage([][]byte{data.Body}), nil
 }
 
 // Acknowledge instructs whether unacknowledged messages have been successfully

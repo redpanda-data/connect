@@ -126,11 +126,11 @@ func NewCompress(conf Config, log log.Modular, stats metrics.Type) (Type, error)
 func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.stats.Incr("processor.compress.count", 1)
 
-	newMsg := types.Message{}
-	lParts := len(msg.Parts)
+	newMsg := types.NewMessage(nil)
+	lParts := msg.Len()
 
 	noParts := len(c.conf.Parts) == 0
-	for i, part := range msg.Parts {
+	for i, part := range msg.GetAll() {
 		isTarget := noParts
 		if !isTarget {
 			nI := i - lParts
@@ -142,20 +142,20 @@ func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			}
 		}
 		if !isTarget {
-			newMsg.Parts = append(newMsg.Parts, part)
+			newMsg.Append(part)
 			continue
 		}
 		newPart, err := c.comp(c.conf.Level, part)
 		if err == nil {
 			c.stats.Incr("processor.compress.success", 1)
-			newMsg.Parts = append(newMsg.Parts, newPart)
+			newMsg.Append(newPart)
 		} else {
 			c.log.Errorf("Failed to compress message part: %v\n", err)
 			c.stats.Incr("processor.compress.error", 1)
 		}
 	}
 
-	if len(newMsg.Parts) == 0 {
+	if newMsg.Len() == 0 {
 		c.stats.Incr("processor.compress.skipped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}

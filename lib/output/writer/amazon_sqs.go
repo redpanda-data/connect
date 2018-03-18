@@ -120,7 +120,7 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 
 	/*
 		msgs := []*sqs.SendMessageBatchRequestEntry{}
-		for _, part := range msg.Parts {
+		for _, part := range msg.GetAll() {
 			msgs = append(msgs, &sqs.SendMessageBatchRequestEntry{
 				MessageBody: aws.String(string(part)),
 			})
@@ -138,7 +138,7 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 		}
 	*/
 
-	for _, part := range msg.Parts {
+	for _, part := range msg.GetAll() {
 		if _, err := a.sqs.SendMessage(&sqs.SendMessageInput{
 			QueueUrl:    aws.String(a.conf.URL),
 			MessageBody: aws.String(string(part)),

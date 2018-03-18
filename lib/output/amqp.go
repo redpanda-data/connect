@@ -202,7 +202,7 @@ func (a *AMQP) loop() {
 
 		a.stats.Incr("output.amqp.count", 1)
 		var err error
-		for _, part := range ts.Payload.Parts {
+		for _, part := range ts.Payload.GetAll() {
 			err = a.amqpChan.Publish(
 				a.conf.AMQP.Exchange,   // publish to an exchange
 				a.conf.AMQP.BindingKey, // routing to 0 or more queues

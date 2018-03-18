@@ -179,16 +179,16 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(ts.Payload.Parts) > 1 {
+	if ts.Payload.Len() > 1 {
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 
-		for i := 0; i < len(ts.Payload.Parts) && err == nil; i++ {
+		for i := 0; i < ts.Payload.Len() && err == nil; i++ {
 			var part io.Writer
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
 				"Content-Type": []string{"application/octet-stream"},
 			}); err == nil {
-				_, err = io.Copy(part, bytes.NewReader(ts.Payload.Parts[i]))
+				_, err = io.Copy(part, bytes.NewReader(ts.Payload.Get(i)))
 			}
 		}
 
@@ -197,7 +197,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(body.Bytes())
 	} else {
 		w.Header().Add("Content-Type", "application/octet-stream")
-		w.Write(ts.Payload.Parts[0])
+		w.Write(ts.Payload.Get(0))
 	}
 
 	ts.ResponseChan <- types.NewSimpleResponse(nil)
@@ -242,10 +242,10 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		h.stats.Incr("output.http_server.stream.count", 1)
 
 		var data []byte
-		if len(ts.Payload.Parts) == 1 {
-			data = ts.Payload.Parts[0]
+		if ts.Payload.Len() == 1 {
+			data = ts.Payload.Get(0)
 		} else {
-			data = append(bytes.Join(ts.Payload.Parts, []byte("\n")), byte('\n'))
+			data = append(bytes.Join(ts.Payload.GetAll(), []byte("\n")), byte('\n'))
 		}
 
 		_, err := w.Write(data)

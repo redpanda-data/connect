@@ -361,7 +361,7 @@ func TestNotCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if got := c.Check(types.Message{Parts: tt.arg}); got == tt.want {
+			if got := c.Check(types.NewMessage(tt.arg)); got == tt.want {
 				t.Errorf("Content.Check() = %v, want %v", got, !tt.want)
 			}
 		})

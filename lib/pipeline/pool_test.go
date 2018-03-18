@@ -65,11 +65,10 @@ func TestPoolBasic(t *testing.T) {
 		t.Error("Expected error from dupe receiving")
 	}
 
-	msg := types.NewMessage()
-	msg.Parts = [][]byte{
+	msg := types.NewMessage([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
-	}
+	})
 
 	// First message should be dropped and return immediately
 	select {
@@ -118,7 +117,7 @@ func TestPoolBasic(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
 	case <-time.After(time.Second * 5):
@@ -152,7 +151,7 @@ func TestPoolBasic(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
 	case <-time.After(time.Second * 5):
@@ -184,7 +183,7 @@ func TestPoolBasic(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
 	case <-time.After(time.Second * 5):
@@ -243,11 +242,10 @@ func TestPoolMultiMsgs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := types.NewMessage()
-	msg.Parts = [][]byte{
+	msg := types.NewMessage([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
-	}
+	})
 
 	for j := 0; j < 10; j++ {
 		// Send message
@@ -279,7 +277,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 				if !open {
 					t.Error("Closed early")
 				}
-				if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.Parts; !reflect.DeepEqual(exp, act) {
+				if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
 					t.Errorf("Wrong message received: %s != %s", act, exp)
 				}
 			case <-time.After(time.Second * 5):

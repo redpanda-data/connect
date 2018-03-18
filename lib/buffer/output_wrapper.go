@@ -119,7 +119,7 @@ func (m *OutputWrapper) outputLoop() {
 
 	var msg types.Message
 	for atomic.LoadInt32(&m.running) == 1 {
-		if msg.Parts == nil {
+		if msg == nil {
 			var err error
 			if msg, err = m.buffer.NextMessage(); err != nil {
 				if err != types.ErrTypeClosed {
@@ -143,7 +143,7 @@ func (m *OutputWrapper) outputLoop() {
 			}
 		}
 
-		if msg.Parts != nil {
+		if msg != nil {
 			select {
 			case m.messagesOut <- types.NewTransaction(msg, m.responsesOut):
 			case <-m.closeChan:
@@ -154,7 +154,7 @@ func (m *OutputWrapper) outputLoop() {
 				return
 			}
 			if res.Error() == nil {
-				msg = types.Message{}
+				msg = nil
 				backlog, _ := m.buffer.ShiftMessage()
 				m.stats.Incr("buffer.send.success", 1)
 				m.stats.Gauge("buffer.backlog", int64(backlog))

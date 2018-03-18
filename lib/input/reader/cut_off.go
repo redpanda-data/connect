@@ -80,10 +80,10 @@ func (c *CutOff) Read() (types.Message, error) {
 	case m := <-c.msgChan:
 		return m, nil
 	case e := <-c.errChan:
-		return types.Message{}, e
+		return nil, e
 	case <-c.closeChan:
 	}
-	return types.Message{}, types.ErrTypeClosed
+	return nil, types.ErrTypeClosed
 }
 
 // CloseAsync triggers the asynchronous closing of the reader.

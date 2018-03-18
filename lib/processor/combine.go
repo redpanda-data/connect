@@ -97,24 +97,24 @@ func NewCombine(conf Config, log log.Modular, stats metrics.Type) (Type, error) 
 func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.stats.Incr("processor.combine.count", 1)
 
-	if len(msg.Parts) > c.n {
+	if msg.Len() > c.n {
 		c.stats.Incr("processor.combine.warning.too_many_parts", 1)
 		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}
 
 	// Add new parts to the buffer.
-	for _, part := range msg.Parts {
+	for _, part := range msg.GetAll() {
 		c.parts = append(c.parts, part)
 	}
 
 	// If we have reached our target count of parts in the buffer.
 	if len(c.parts) >= c.n {
-		msg.Parts = c.parts
+		newMsg := types.NewMessage(c.parts)
 		c.parts = nil
 
 		c.stats.Incr("processor.combine.sent", 1)
-		msgs := [1]types.Message{msg}
+		msgs := [1]types.Message{newMsg}
 		return msgs[:], nil
 	}
 

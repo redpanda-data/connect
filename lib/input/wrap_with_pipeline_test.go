@@ -202,7 +202,7 @@ type mockProc struct {
 }
 
 func (m mockProc) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	if string(msg.Parts[0]) == m.value {
+	if string(msg.Get(0)) == m.value {
 		return nil, types.NewSimpleResponse(errMockProc)
 	}
 	msgs := [1]types.Message{msg}
@@ -231,8 +231,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 
 	resChan := make(chan types.Response)
 
-	msg := types.NewMessage()
-	msg.Parts = [][]byte{[]byte("foo")}
+	msg := types.NewMessage([][]byte{[]byte("foo")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -253,8 +252,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	msg = types.NewMessage()
-	msg.Parts = [][]byte{[]byte("bar")}
+	msg = types.NewMessage([][]byte{[]byte("bar")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -275,8 +273,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	msg = types.NewMessage()
-	msg.Parts = [][]byte{[]byte("baz")}
+	msg = types.NewMessage([][]byte{[]byte("baz")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -296,7 +293,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
-		} else if exp, act := "baz", string(ts.Payload.Parts[0]); exp != act {
+		} else if exp, act := "baz", string(ts.Payload.Get(0)); exp != act {
 			t.Errorf("Wrong message received: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -345,8 +342,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 
 	resChan := make(chan types.Response)
 
-	msg := types.NewMessage()
-	msg.Parts = [][]byte{[]byte("foo")}
+	msg := types.NewMessage([][]byte{[]byte("foo")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -367,8 +363,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	msg = types.NewMessage()
-	msg.Parts = [][]byte{[]byte("bar")}
+	msg = types.NewMessage([][]byte{[]byte("bar")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -389,8 +384,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	msg = types.NewMessage()
-	msg.Parts = [][]byte{[]byte("baz")}
+	msg = types.NewMessage([][]byte{[]byte("baz")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -410,7 +404,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
-		} else if exp, act := "baz", string(ts.Payload.Parts[0]); exp != act {
+		} else if exp, act := "baz", string(ts.Payload.Get(0)); exp != act {
 			t.Errorf("Wrong message received: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):

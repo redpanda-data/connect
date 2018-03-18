@@ -95,7 +95,7 @@ func tarArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
 }
 
 func binaryArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
-	return (&types.Message{Parts: parts}).Bytes(), nil
+	return types.NewMessage(parts).Bytes(), nil
 }
 
 func strToArchiver(str string) (archiveFunc, error) {
@@ -189,24 +189,21 @@ func (d *Archive) createHeader(body []byte) os.FileInfo {
 func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.stats.Incr("processor.archive.count", 1)
 
-	if len(msg.Parts) == 0 {
+	if msg.Len() == 0 {
 		d.stats.Incr("processor.archive.skipped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	newMsg := types.Message{}
-
-	newPart, err := d.archive(d.createHeader, msg.Parts)
-	if err == nil {
-		newMsg.Parts = append(newMsg.Parts, newPart)
-		d.stats.Incr("processor.archive.success", 1)
-	} else {
+	newPart, err := d.archive(d.createHeader, msg.GetAll())
+	if err != nil {
 		d.log.Errorf("Failed to create archive: %v\n", err)
 		d.stats.Incr("processor.archive.error", 1)
+		return nil, types.NewSimpleResponse(nil)
 	}
 
+	d.stats.Incr("processor.archive.success", 1)
 	d.stats.Incr("processor.archive.sent", 1)
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]types.Message{types.NewMessage([][]byte{newPart})}
 	return msgs[:], nil
 }
 

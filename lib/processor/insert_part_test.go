@@ -51,13 +51,13 @@ func TestInsertBoundaries(t *testing.T) {
 				parts = append(parts, []byte("foo"))
 			}
 
-			msgs, res := proc.ProcessMessage(types.Message{Parts: parts})
+			msgs, res := proc.ProcessMessage(types.NewMessage(parts))
 			if len(msgs) != 1 {
 				t.Error("Insert Part failed")
 			} else if res != nil {
 				t.Errorf("Expected nil response: %v", res)
 			}
-			if exp, act := i+1, len(msgs[0].Parts); exp != act {
+			if exp, act := i+1, len(msgs[0].GetAll()); exp != act {
 				t.Errorf("Wrong count of result parts: %v != %v", act, exp)
 			}
 		}
@@ -190,13 +190,13 @@ func TestInsertPart(t *testing.T) {
 			return
 		}
 
-		msgs, res := proc.ProcessMessage(types.Message{Parts: test.in})
+		msgs, res := proc.ProcessMessage(types.NewMessage(test.in))
 		if len(msgs) != 1 {
 			t.Errorf("Insert Part failed on: %s", test.in)
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := test.out, msgs[0].Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := test.out, msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Unexpected output for %s at index %v: %s != %s", test.in, test.index, act, exp)
 		}
 	}
@@ -241,13 +241,13 @@ func TestInsertPartInterpolation(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		msgs, res := proc.ProcessMessage(types.Message{Parts: test.in})
+		msgs, res := proc.ProcessMessage(types.NewMessage(test.in))
 		if len(msgs) != 1 {
 			t.Errorf("Insert Part failed on: %s", test.in)
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := test.out, msgs[0].Parts; !reflect.DeepEqual(exp, act) {
+		if exp, act := test.out, msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Unexpected output for %s: %s != %s", test.in, act, exp)
 		}
 	}

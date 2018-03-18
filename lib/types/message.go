@@ -21,72 +21,134 @@
 package types
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 )
 
 //------------------------------------------------------------------------------
 
-type jsonPart struct {
-	rawBytesLen  int
-	rawBytesHash string
-	content      interface{}
-}
+// Message is an interface representing a payload of data that was received from
+// an input. Messages contain multiple parts, where each part is a byte array.
+// If an input supports only single part messages they will still be read as
+// multipart messages with one part.
+type Message interface {
+	// Get attempts to access a message part from an index. If the index is
+	// negative then the part is found by counting backwards from the last part
+	// starting at -1. If the index is out of bounds then nil is returned. It is
+	// not safe to edit the contents of a message directly.
+	Get(p int) []byte
 
-func (j *jsonPart) Get(rawBytes []byte) (interface{}, error) {
-	hasher := md5.New()
-	hasher.Write(rawBytes)
-	rawHash := hex.EncodeToString(hasher.Sum(nil))
+	// GetAll returns all message parts as a two-dimensional byte array. It is
+	// NOT safe to edit the contents of the result.
+	GetAll() [][]byte
 
-	if j.rawBytesLen == len(rawBytes) {
-		if rawHash == j.rawBytesHash {
-			return j.content, nil
-		}
-	}
+	// Set edits the contents of an existing message part. If the index is
+	// negative then the part is found by counting backwards from the last part
+	// starting at -1. If the index is out of bounds then nothing is done.
+	Set(p int, b []byte)
 
-	// Release whatever we were holding.
-	j.content = nil
-	if err := json.Unmarshal(rawBytes, &j.content); err != nil {
-		return nil, err
-	}
+	// SetAll replaces all parts of a message with a new set.
+	SetAll(p [][]byte)
 
-	j.rawBytesLen = len(rawBytes)
-	j.rawBytesHash = rawHash
-	return j.content, nil
-}
+	// GetJSON returns a message part parsed as JSON into an `interface{}` type.
+	// This is lazily evaluated and the result is cached. If multiple layers of
+	// a pipeline extract the same part as JSON it will only be unmarshalled
+	// once, unless the content of the part has changed. If the index is
+	// negative then the part is found by counting backwards from the last part
+	// starting at -1.
+	GetJSON(p int) (interface{}, error)
 
-func (j *jsonPart) Set(content interface{}) ([]byte, error) {
-	rawBytes, err := json.Marshal(content)
-	if err != nil {
-		return nil, err
-	}
+	// SetJSON sets a message part to the marshalled bytes of a JSON object, but
+	// also caches the object itself. If the JSON contents of a part is
+	// subsequently queried it will receive the cached version as long as the
+	// raw content has not changed. If the index is negative then the part is
+	// found by counting backwards from the last part starting at -1.
+	SetJSON(p int, jObj interface{}) error
 
-	hasher := md5.New()
-	hasher.Write(rawBytes)
-	rawHash := hex.EncodeToString(hasher.Sum(nil))
+	// Append appends new message parts to the message and returns the index of
+	// last part to be added.
+	Append(b ...[]byte) int
 
-	j.rawBytesLen = len(rawBytes)
-	j.rawBytesHash = rawHash
-	j.content = content
+	// Len returns the number of parts this message contains.
+	Len() int
 
-	return rawBytes, nil
+	// Iter will iterate each message part in order, calling the closure
+	// argument with the index and contents of the message part.
+	Iter(f func(i int, b []byte))
+
+	// Bytes returns a binary representation of the message, which can be later
+	// parsed back into a multipart message with `FromBytes`. The result of this
+	// call can itself be the part of a new message, which is a useful way of
+	// transporting multiple part messages across protocols that only support
+	// single parts.
+	Bytes() []byte
+
+	// ShallowCopy creates a shallow copy of the message, where the list of
+	// message parts can be edited independently from the original version.
+	// However, editing the byte array contents of a message part will still
+	// alter the contents of the original.
+	ShallowCopy() Message
+
+	// DeepCopy creates a deep copy of the message, where the message part
+	// contents are entirely copied and are therefore safe to edit without
+	// altering the original.
+	DeepCopy() Message
 }
 
 //------------------------------------------------------------------------------
 
-// Message is a struct containing any relevant fields of a benthos message and
-// helper functions.
-type Message struct {
-	Parts     [][]byte `json:"parts"`
-	jsonParts []*jsonPart
+// NewMessage initializes a new message.
+func NewMessage(parts [][]byte) Message {
+	return &messageImpl{
+		parts: parts,
+	}
 }
 
-// NewMessage initializes an empty message.
-func NewMessage() Message {
-	return Message{
-		Parts: [][]byte{},
+// FromBytes deserialises a Message from a byte array.
+func FromBytes(b []byte) (Message, error) {
+	if len(b) < 4 {
+		return nil, ErrBadMessageBytes
 	}
+
+	numParts := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+	if numParts >= uint32(len(b)) {
+		return nil, ErrBadMessageBytes
+	}
+
+	b = b[4:]
+
+	m := NewMessage(nil)
+	for i := uint32(0); i < numParts; i++ {
+		if len(b) < 4 {
+			return nil, ErrBadMessageBytes
+		}
+		partSize := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+		b = b[4:]
+
+		if uint32(len(b)) < partSize {
+			return nil, ErrBadMessageBytes
+		}
+		m.Append(b[:partSize])
+		b = b[partSize:]
+	}
+	return m, nil
+}
+
+//------------------------------------------------------------------------------
+
+// partCache is a cache of operations performed on message parts, a part cache
+// becomes invalid when the contents of a part is changed.
+type partCache struct {
+	json interface{}
+}
+
+//------------------------------------------------------------------------------
+
+// messageImpl is a struct containing any relevant fields of a benthos message
+// and
+// helper functions.
+type messageImpl struct {
+	parts      [][]byte
+	partCaches []*partCache
 }
 
 //------------------------------------------------------------------------------
@@ -117,12 +179,12 @@ v                                        v           v
 var intLen uint32 = 4
 
 // Bytes serialises the message into a single byte array.
-func (m *Message) Bytes() []byte {
-	lenParts := uint32(len(m.Parts))
+func (m *messageImpl) Bytes() []byte {
+	lenParts := uint32(len(m.parts))
 
 	l := (lenParts + 1) * intLen
-	for i := range m.Parts {
-		l += uint32(len(m.Parts[i]))
+	for i := range m.parts {
+		l += uint32(len(m.parts[i]))
 	}
 	b := make([]byte, l)
 
@@ -132,8 +194,8 @@ func (m *Message) Bytes() []byte {
 	b[3] = byte(lenParts)
 
 	b2 := b[intLen:]
-	for i := range m.Parts {
-		le := uint32(len(m.Parts[i]))
+	for i := range m.parts {
+		le := uint32(len(m.parts[i]))
 
 		b2[0] = byte(le >> 24)
 		b2[1] = byte(le >> 16)
@@ -142,43 +204,10 @@ func (m *Message) Bytes() []byte {
 
 		b2 = b2[intLen:]
 
-		copy(b2, m.Parts[i])
-		b2 = b2[len(m.Parts[i]):]
+		copy(b2, m.parts[i])
+		b2 = b2[len(m.parts[i]):]
 	}
 	return b
-}
-
-// FromBytes deserialises a Message from a byte array.
-func FromBytes(b []byte) (Message, error) {
-	var m Message
-
-	if len(b) < 4 {
-		return m, ErrBadMessageBytes
-	}
-
-	numParts := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
-	if numParts >= uint32(len(b)) {
-		return m, ErrBadMessageBytes
-	}
-
-	m.Parts = make([][]byte, numParts)
-
-	b = b[4:]
-
-	for i := uint32(0); i < numParts; i++ {
-		if len(b) < 4 {
-			return m, ErrBadMessageBytes
-		}
-		partSize := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
-		b = b[4:]
-
-		if uint32(len(b)) < partSize {
-			return m, ErrBadMessageBytes
-		}
-		m.Parts[i] = b[:partSize]
-		b = b[partSize:]
-	}
-	return m, nil
 }
 
 //------------------------------------------------------------------------------
@@ -187,75 +216,128 @@ func FromBytes(b []byte) (Message, error) {
 // re-arranged in the new copy and JSON parts can be get/set without impacting
 // other message copies. However, it is still unsafe to edit the content of
 // parts.
-func (m *Message) ShallowCopy() Message {
+func (m *messageImpl) ShallowCopy() Message {
 	// NOTE: JSON parts are not copied here, as even though we can safely copy
 	// the hash and len fields we cannot safely copy the content as it may
 	// contain pointers or ref types.
-	return Message{
-		Parts: append([][]byte(nil), m.Parts...),
+	return &messageImpl{
+		parts: append([][]byte(nil), m.parts...),
 	}
 }
 
 // DeepCopy creates a new deep copy of the message. This can be considered an
 // entirely new object that is safe to use anywhere.
-func (m *Message) DeepCopy() Message {
-	newParts := make([][]byte, len(m.Parts))
-	for i, p := range m.Parts {
+func (m *messageImpl) DeepCopy() Message {
+	newParts := make([][]byte, len(m.parts))
+	for i, p := range m.parts {
 		np := make([]byte, len(p))
 		copy(np, p)
 		newParts[i] = np
 	}
-	return Message{
-		Parts: newParts,
+	return &messageImpl{
+		parts: newParts,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// GetJSON returns a message part parsed into an `interface{}` type. This is
-// lazily evaluated and the result is cached. If multiple layers of a pipeline
-// extract the same part as JSON it will only be unmarshalled once, unless the
-// content of the part has changed.
-func (m *Message) GetJSON(part int) (interface{}, error) {
-	if len(m.Parts) <= part {
-		return nil, ErrMessagePartNotExist
+func (m *messageImpl) Get(index int) []byte {
+	if index < 0 {
+		index = len(m.parts) + index
 	}
-	if len(m.jsonParts) <= part {
-		jParts := make([]*jsonPart, part+1)
-		copy(jParts, m.jsonParts)
-		m.jsonParts = jParts
+	if index < 0 || index >= len(m.parts) {
+		return nil
 	}
-	jPart := m.jsonParts[part]
-	if jPart == nil {
-		jPart = &jsonPart{}
-		m.jsonParts[part] = jPart
-	}
-	return jPart.Get(m.Parts[part])
+	return m.parts[index]
 }
 
-// SetJSON sets a message part to the marshalled bytes of a JSON object, but
-// also caches the object itself. If the JSON contents of a part is subsequently
-// queried it will receive the cached version as long as the raw content has not
-// changed.
-func (m *Message) SetJSON(part int, jObj interface{}) error {
-	if len(m.Parts) <= part {
+func (m *messageImpl) GetAll() [][]byte {
+	return m.parts
+}
+
+func (m *messageImpl) Set(index int, b []byte) {
+	if index < 0 {
+		index = len(m.parts) + index
+	}
+	if index < 0 || index >= len(m.parts) {
+		return
+	}
+	if len(m.partCaches) > index {
+		// Remove now invalid part cache.
+		m.partCaches[index] = nil
+	}
+	m.parts[index] = b
+}
+
+func (m *messageImpl) SetAll(p [][]byte) {
+	m.parts = p
+	m.partCaches = nil
+}
+
+func (m *messageImpl) Append(b ...[]byte) int {
+	for _, p := range b {
+		m.parts = append(m.parts, p)
+	}
+	return len(m.parts) - 1
+}
+
+func (m *messageImpl) Len() int {
+	return len(m.parts)
+}
+
+func (m *messageImpl) Iter(f func(i int, b []byte)) {
+	for i, p := range m.parts {
+		f(i, p)
+	}
+}
+
+func (m *messageImpl) expandCache(index int) {
+	if len(m.partCaches) > index {
+		return
+	}
+	cParts := make([]*partCache, index+1)
+	copy(cParts, m.partCaches)
+	m.partCaches = cParts
+}
+
+func (m *messageImpl) GetJSON(part int) (interface{}, error) {
+	if part < 0 {
+		part = len(m.parts) + part
+	}
+	if part < 0 || part >= len(m.parts) {
+		return nil, ErrMessagePartNotExist
+	}
+	m.expandCache(part)
+	cPart := m.partCaches[part]
+	if cPart == nil {
+		cPart = &partCache{}
+		m.partCaches[part] = cPart
+	}
+	if err := json.Unmarshal(m.Get(part), &cPart.json); err != nil {
+		return nil, err
+	}
+	return cPart.json, nil
+}
+
+func (m *messageImpl) SetJSON(part int, jObj interface{}) error {
+	if part < 0 {
+		part = len(m.parts) + part
+	}
+	if part < 0 || part >= len(m.parts) {
 		return ErrMessagePartNotExist
 	}
-	if len(m.jsonParts) <= part {
-		jParts := make([]*jsonPart, part+1)
-		copy(jParts, m.jsonParts)
-		m.jsonParts = jParts
+	m.expandCache(part)
+
+	partBytes, err := json.Marshal(jObj)
+	if err != nil {
+		return err
 	}
-	jPart := m.jsonParts[part]
-	if jPart == nil {
-		jPart = &jsonPart{}
-		m.jsonParts[part] = jPart
+
+	m.Set(part, partBytes)
+	m.partCaches[part] = &partCache{
+		json: jObj,
 	}
-	rawBytes, err := jPart.Set(jObj)
-	if err == nil {
-		m.Parts[part] = rawBytes
-	}
-	return err
+	return nil
 }
 
 //------------------------------------------------------------------------------

@@ -33,11 +33,9 @@ func TestOrCheck(t *testing.T) {
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
-	testMsg := types.Message{
-		Parts: [][]byte{
-			[]byte("foo"),
-		},
-	}
+	testMsg := types.NewMessage([][]byte{
+		[]byte("foo"),
+	})
 
 	passConf := NewConfig()
 	passConf.Content.Operator = "contains"

@@ -161,7 +161,7 @@ func (n *NSQ) loop() {
 		}
 		n.stats.Incr("output.nsq.count", 1)
 		var err error
-		for _, part := range ts.Payload.Parts {
+		for _, part := range ts.Payload.GetAll() {
 			err = n.producer.Publish(n.conf.NSQ.Topic, part)
 			if err != nil {
 				n.stats.Incr("output.nsq.send.error", 1)

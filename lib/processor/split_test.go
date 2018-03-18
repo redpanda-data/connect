@@ -57,13 +57,13 @@ func TestSplitParts(t *testing.T) {
 	}
 
 	for _, tIn := range tests {
-		msgs, _ := proc.ProcessMessage(types.Message{Parts: tIn})
+		msgs, _ := proc.ProcessMessage(types.NewMessage(tIn))
 		if exp, act := len(tIn), len(msgs); exp != act {
 			t.Errorf("Wrong count of messages: %v != %v", act, exp)
 			continue
 		}
 		for i, exp := range tIn {
-			if act := msgs[i].Parts[0]; !reflect.DeepEqual(exp, act) {
+			if act := msgs[i].GetAll()[0]; !reflect.DeepEqual(exp, act) {
 				t.Errorf("Wrong contents: %s != %s", act, exp)
 			}
 		}

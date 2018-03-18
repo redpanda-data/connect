@@ -124,7 +124,7 @@ func (m *MQTT) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	for _, part := range msg.Parts {
+	for _, part := range msg.GetAll() {
 		mtok := m.client.Publish(m.conf.Topic, byte(m.conf.QoS), false, part)
 		mtok.Wait()
 		if err := mtok.Error(); err != nil {

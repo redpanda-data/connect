@@ -45,7 +45,7 @@ func TestSample10Percent(t *testing.T) {
 	totalSampled := 0
 	margin := 0.01
 	for i := 0; i < total; i++ {
-		msgIn := types.NewMessage()
+		msgIn := types.NewMessage(nil)
 		msgs, _ := proc.ProcessMessage(msgIn)
 		if len(msgs) > 0 {
 			if !reflect.DeepEqual(msgIn, msgs[0]) {
@@ -82,7 +82,7 @@ func TestSample24Percent(t *testing.T) {
 	totalSampled := 0
 	margin := 0.01
 	for i := 0; i < total; i++ {
-		msgIn := types.NewMessage()
+		msgIn := types.NewMessage(nil)
 		msgs, _ := proc.ProcessMessage(msgIn)
 		if len(msgs) == 1 {
 			if !reflect.DeepEqual(msgIn, msgs[0]) {

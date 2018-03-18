@@ -233,7 +233,7 @@ func (f *MmapBuffer) NextMessage() (types.Message, error) {
 		f.cache.Wait()
 	}
 	if f.closed {
-		return types.Message{}, types.ErrTypeClosed
+		return nil, types.ErrTypeClosed
 	}
 
 	index := f.readFrom
@@ -252,7 +252,7 @@ func (f *MmapBuffer) NextMessage() (types.Message, error) {
 			f.cache.Wait()
 		}
 		if f.closed {
-			return types.Message{}, types.ErrTypeClosed
+			return nil, types.ErrTypeClosed
 		}
 
 		// If we are meant to delete files as we are done with them
@@ -282,7 +282,7 @@ func (f *MmapBuffer) NextMessage() (types.Message, error) {
 			f.cache.Wait()
 		}
 		if f.closed {
-			return types.Message{}, types.ErrTypeClosed
+			return nil, types.ErrTypeClosed
 		}
 
 		// Read the next message.
@@ -291,7 +291,7 @@ func (f *MmapBuffer) NextMessage() (types.Message, error) {
 
 	index = index + 4
 	if index+int(msgSize) > len(block) {
-		return types.Message{}, types.ErrBlockCorrupted
+		return nil, types.ErrBlockCorrupted
 	}
 
 	return types.FromBytes(block[index : index+int(msgSize)])

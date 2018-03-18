@@ -185,16 +185,16 @@ func (s *ScaleProto) Connect() error {
 // Read attempts to read a new message from the nanomsg socket.
 func (s *ScaleProto) Read() (types.Message, error) {
 	if s.socket == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 	data, err := s.socket.Recv()
 	if err != nil {
 		if err == mangos.ErrRecvTimeout {
-			return types.Message{}, types.ErrTimeout
+			return nil, types.ErrTimeout
 		}
-		return types.Message{}, err
+		return nil, err
 	}
-	return types.Message{Parts: [][]byte{data}}, nil
+	return types.NewMessage([][]byte{data}), nil
 }
 
 // Acknowledge instructs whether the pending messages were propagated

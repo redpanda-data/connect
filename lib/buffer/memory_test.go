@@ -46,11 +46,10 @@ func TestMemoryBuffer(t *testing.T) {
 		t.Error(err)
 	}
 
-	msg := types.NewMessage()
-	msg.Parts = [][]byte{
+	msg := types.NewMessage([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
-	}
+	})
 
 	select {
 	case tChan <- types.NewTransaction(msg, resChan):
@@ -76,13 +75,13 @@ func TestMemoryBuffer(t *testing.T) {
 		if !open {
 			t.Error("buffer closed early")
 		}
-		if exp, act := 2, len(outTr.Payload.Parts); exp != act {
+		if exp, act := 2, outTr.Payload.Len(); exp != act {
 			t.Errorf("Wrong message length: %v != %v", exp, act)
 		} else {
-			if exp, act := `one`, string(outTr.Payload.Parts[0]); exp != act {
+			if exp, act := `one`, string(outTr.Payload.Get(0)); exp != act {
 				t.Errorf("Wrong message length: %s != %s", exp, act)
 			}
-			if exp, act := `two`, string(outTr.Payload.Parts[1]); exp != act {
+			if exp, act := `two`, string(outTr.Payload.Get(1)); exp != act {
 				t.Errorf("Wrong message length: %s != %s", exp, act)
 			}
 		}

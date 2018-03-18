@@ -127,11 +127,11 @@ func NewDecompress(conf Config, log log.Modular, stats metrics.Type) (Type, erro
 func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.stats.Incr("processor.decompress.count", 1)
 
-	newMsg := types.Message{}
-	lParts := len(msg.Parts)
+	newMsg := types.NewMessage(nil)
+	lParts := msg.Len()
 
 	noParts := len(d.conf.Parts) == 0
-	for i, part := range msg.Parts {
+	for i, part := range msg.GetAll() {
 		isTarget := noParts
 		if !isTarget {
 			nI := i - lParts
@@ -143,19 +143,19 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 			}
 		}
 		if !isTarget {
-			newMsg.Parts = append(newMsg.Parts, part)
+			newMsg.Append(part)
 			continue
 		}
 		newPart, err := d.decomp(part)
 		if err == nil {
 			d.stats.Incr("processor.decompress.success", 1)
-			newMsg.Parts = append(newMsg.Parts, newPart)
+			newMsg.Append(newPart)
 		} else {
 			d.stats.Incr("processor.decompress.error", 1)
 		}
 	}
 
-	if len(newMsg.Parts) == 0 {
+	if newMsg.Len() == 0 {
 		d.stats.Incr("processor.decompress.skipped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}

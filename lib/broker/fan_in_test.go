@@ -70,7 +70,7 @@ func TestBasicFanIn(t *testing.T) {
 		for j := 0; j < nInputs; j++ {
 			content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 			select {
-			case mockInputs[j].TChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
+			case mockInputs[j].TChan <- types.NewTransaction(types.NewMessage(content), resChan):
 			case <-time.After(time.Second * 5):
 				t.Errorf("Timed out waiting for broker send: %v, %v", i, j)
 				return
@@ -79,8 +79,8 @@ func TestBasicFanIn(t *testing.T) {
 				var ts types.Transaction
 				select {
 				case ts = <-fanIn.TransactionChan():
-					if string(ts.Payload.Parts[0]) != string(content[0]) {
-						t.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], content[0])
+					if string(ts.Payload.Get(0)) != string(content[0]) {
+						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0), content[0])
 					}
 				case <-time.After(time.Second * 5):
 					t.Fatalf("Timed out waiting for broker propagate: %v, %v", i, j)
@@ -174,7 +174,7 @@ func TestFanInAsync(t *testing.T) {
 			for i := 0; i < nMsgs; i++ {
 				content := [][]byte{[]byte(fmt.Sprintf("hello world %v %v", i, index))}
 				select {
-				case mockInputs[index].TChan <- types.NewTransaction(types.Message{Parts: content}, rChan):
+				case mockInputs[index].TChan <- types.NewTransaction(types.NewMessage(content), rChan):
 				case <-time.After(time.Second * 5):
 					t.Errorf("Timed out waiting for broker send: %v, %v", i, index)
 					return
@@ -202,7 +202,7 @@ func TestFanInAsync(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(errors.New(string(ts.Payload.Parts[0]))):
+		case ts.ResponseChan <- types.NewSimpleResponse(errors.New(string(ts.Payload.Get(0)))):
 		case <-time.After(time.Second * 5):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return
@@ -243,7 +243,7 @@ func BenchmarkBasicFanIn(b *testing.B) {
 		for j := 0; j < nInputs; j++ {
 			content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 			select {
-			case mockInputs[j].TChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
+			case mockInputs[j].TChan <- types.NewTransaction(types.NewMessage(content), resChan):
 			case <-time.After(time.Second * 5):
 				b.Errorf("Timed out waiting for broker send: %v, %v", i, j)
 				return
@@ -251,8 +251,8 @@ func BenchmarkBasicFanIn(b *testing.B) {
 			var ts types.Transaction
 			select {
 			case ts = <-fanIn.TransactionChan():
-				if string(ts.Payload.Parts[0]) != string(content[0]) {
-					b.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], content[0])
+				if string(ts.Payload.Get(0)) != string(content[0]) {
+					b.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0), content[0])
 				}
 			case <-time.After(time.Second * 5):
 				b.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)

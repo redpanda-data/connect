@@ -163,27 +163,25 @@ func (r *Lines) Connect() error {
 // Read attempts to read a new line from the io.Reader.
 func (r *Lines) Read() (types.Message, error) {
 	if r.scanner == nil {
-		return types.Message{}, types.ErrNotConnected
+		return nil, types.ErrNotConnected
 	}
 
-	msg := types.NewMessage()
+	msg := types.NewMessage(nil)
 
 	for r.scanner.Scan() {
 		partSize, err := r.messageBuffer.Write(r.scanner.Bytes())
 		rIndex := r.messageBufferIndex
 		r.messageBufferIndex += partSize
 		if err != nil {
-			return types.Message{}, err
+			return nil, err
 		}
 
 		if partSize > 0 {
-			msg.Parts = append(
-				msg.Parts, r.messageBuffer.Bytes()[rIndex:rIndex+partSize],
-			)
+			msg.Append(r.messageBuffer.Bytes()[rIndex : rIndex+partSize])
 			if !r.multipart {
 				return msg, nil
 			}
-		} else if r.multipart && len(msg.Parts) > 0 {
+		} else if r.multipart && msg.Len() > 0 {
 			// Empty line means we're finished reading parts for this
 			// message.
 			return msg, nil
@@ -192,15 +190,15 @@ func (r *Lines) Read() (types.Message, error) {
 
 	if err := r.scanner.Err(); err != nil {
 		r.closeHandle()
-		return types.Message{}, err
+		return nil, err
 	}
 
 	r.closeHandle()
 
-	if len(msg.Parts) > 0 {
+	if msg.Len() > 0 {
 		return msg, nil
 	}
-	return types.Message{}, types.ErrNotConnected
+	return nil, types.ErrNotConnected
 }
 
 // Acknowledge confirms whether or not our unacknowledged messages have been

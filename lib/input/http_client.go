@@ -362,7 +362,7 @@ func (h *HTTPClient) loop() {
 
 	var msgOut types.Message
 	for atomic.LoadInt32(&h.running) == 1 {
-		if len(msgOut.Parts) == 0 {
+		if msgOut == nil {
 			var res *http.Response
 			var err error
 
@@ -381,16 +381,14 @@ func (h *HTTPClient) loop() {
 					h.log.Errorf("Failed to decode response: %v\n", err)
 				} else {
 					h.stats.Incr("input.http_client.request.success", 1)
-					msgOut = types.Message{
-						Parts: parts,
-					}
+					msgOut = types.NewMessage(parts)
 				}
 				res.Body.Close()
 			}
 			h.stats.Incr("input.http_client.count", 1)
 		}
 
-		if len(msgOut.Parts) > 0 {
+		if msgOut != nil {
 			select {
 			case h.transactions <- types.NewTransaction(msgOut, resOut):
 			case <-h.closeChan:
@@ -404,7 +402,7 @@ func (h *HTTPClient) loop() {
 				if res.Error() != nil {
 					h.stats.Incr("input.http_client.send.error", 1)
 				} else {
-					msgOut = types.Message{}
+					msgOut = nil
 					h.stats.Incr("input.http_client.send.success", 1)
 				}
 			case <-h.closeChan:

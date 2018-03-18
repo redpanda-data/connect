@@ -91,7 +91,7 @@ func TestHashSample(t *testing.T) {
 				return
 			}
 
-			msgIn := types.Message{Parts: [][]byte{tc.input}}
+			msgIn := types.NewMessage([][]byte{tc.input})
 			msgs, _ := proc.ProcessMessage(msgIn)
 
 			if nil != tc.expected && len(msgs) == 0 {
@@ -101,8 +101,8 @@ func TestHashSample(t *testing.T) {
 				t.Error("Message told to propagate even if it was not expected to propagate")
 			}
 			if nil != tc.expected && len(msgs) > 0 {
-				if !reflect.DeepEqual(msgs[0].Parts[0], tc.expected) {
-					t.Errorf("Unexpected sampling: EXPECTED: %v, ACTUAL: %v", tc.expected, msgs[0].Parts[0])
+				if !reflect.DeepEqual(msgs[0].GetAll()[0], tc.expected) {
+					t.Errorf("Unexpected sampling: EXPECTED: %v, ACTUAL: %v", tc.expected, msgs[0].GetAll()[0])
 				}
 			}
 		})
@@ -149,7 +149,7 @@ func TestHashSamplePartSelection(t *testing.T) {
 			}
 			parts[tc.insertPart] = doc1
 
-			msgIn := types.Message{Parts: parts}
+			msgIn := types.NewMessage(parts)
 			msgs, _ := proc.ProcessMessage(msgIn)
 			if len(msgs) > 0 {
 				if !reflect.DeepEqual(msgIn, msgs[0]) {
@@ -172,7 +172,7 @@ func TestHashSampleBoundsCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := types.Message{Parts: [][]byte{}}
+	msgIn := types.NewMessage([][]byte{})
 	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")
@@ -193,7 +193,7 @@ func TestHashSampleNegBoundsCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := types.Message{Parts: [][]byte{}}
+	msgIn := types.NewMessage([][]byte{})
 	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")

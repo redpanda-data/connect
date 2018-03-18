@@ -29,7 +29,7 @@ func TestSetJSONValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := types.Message{Parts: [][]byte{[]byte("this is bad json")}}
+	msgIn := types.NewMessage([][]byte{[]byte("this is bad json")})
 	msgs, res := jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
@@ -37,7 +37,7 @@ func TestSetJSONValidation(t *testing.T) {
 	if res != nil {
 		t.Fatal("Non-nil result")
 	}
-	if exp, act := "this is bad json", string(msgs[0].Parts[0]); exp != act {
+	if exp, act := "this is bad json", string(msgs[0].GetAll()[0]); exp != act {
 		t.Errorf("Wrong output from bad json: %v != %v", act, exp)
 	}
 
@@ -48,7 +48,7 @@ func TestSetJSONValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn = types.Message{Parts: [][]byte{[]byte("{}")}}
+	msgIn = types.NewMessage([][]byte{[]byte("{}")})
 	msgs, res = jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad index")
@@ -56,7 +56,7 @@ func TestSetJSONValidation(t *testing.T) {
 	if res != nil {
 		t.Fatal("Non-nil result")
 	}
-	if exp, act := "{}", string(msgs[0].Parts[0]); exp != act {
+	if exp, act := "{}", string(msgs[0].GetAll()[0]); exp != act {
 		t.Errorf("Wrong output from bad index: %v != %v", act, exp)
 	}
 }
@@ -93,13 +93,13 @@ func TestSetJSONPartBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(types.Message{Parts: input})
+		msgs, res := proc.ProcessMessage(types.NewMessage(input))
 		if len(msgs) != 1 {
 			t.Errorf("Select Parts failed on index: %v", i)
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if act := string(msgs[0].Parts[j]); exp != act {
+		if act := string(msgs[0].GetAll()[j]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
 	}
@@ -175,17 +175,17 @@ func TestSetJSON(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.Message{
-			Parts: [][]byte{
+		inMsg := types.NewMessage(
+			[][]byte{
 				[]byte(test.input),
 			},
-		}
+		)
 		msgs, _ := jSet.ProcessMessage(inMsg)
 		if len(msgs) != 1 {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, string(msgs[0].Parts[0]); exp != act {
+		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
 	}
@@ -231,17 +231,17 @@ value:
 			t.Fatalf("Error creating proc '%v': %v", config, err)
 		}
 
-		inMsg := types.Message{
-			Parts: [][]byte{
+		inMsg := types.NewMessage(
+			[][]byte{
 				[]byte(input),
 			},
-		}
+		)
 		msgs, _ := jSet.ProcessMessage(inMsg)
 		if len(msgs) != 1 {
 			t.Fatalf("Test did not succeed with config: %v", config)
 		}
 
-		if act := string(msgs[0].Parts[0]); exp != act {
+		if act := string(msgs[0].GetAll()[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", config, act, exp)
 		}
 	}

@@ -43,16 +43,16 @@ type Bench struct {
 // BenchFromMessage returns the benchmarking stats from a message received.
 func BenchFromMessage(msg types.Message) (Bench, error) {
 	var b Bench
-	for _, part := range msg.Parts {
+	for _, part := range msg.GetAll() {
 		b.NBytes = b.NBytes + int(len(part))
 	}
 
 	var err error
 
 	// If more than one part we assume the first part is a timestamp.
-	if len(msg.Parts) > 1 {
+	if msg.Len() > 1 {
 		var tsNano int64
-		if tsNano, err = strconv.ParseInt(string(msg.Parts[0]), 10, 64); err != nil {
+		if tsNano, err = strconv.ParseInt(string(msg.Get(0)), 10, 64); err != nil {
 			return b, err
 		}
 		t := time.Unix(0, tsNano)
@@ -60,8 +60,8 @@ func BenchFromMessage(msg types.Message) (Bench, error) {
 	}
 
 	// If more than two parts we assume the second part is a message index.
-	if len(msg.Parts) > 2 {
-		if b.Index, err = strconv.ParseUint(string(msg.Parts[1]), 10, 64); err != nil {
+	if msg.Len() > 2 {
+		if b.Index, err = strconv.ParseUint(string(msg.Get(1)), 10, 64); err != nil {
 			return b, err
 		}
 	}

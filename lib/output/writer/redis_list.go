@@ -113,7 +113,7 @@ func (r *RedisList) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	for _, part := range msg.Parts {
+	for _, part := range msg.GetAll() {
 		if err := r.client.RPush(r.conf.Key, part).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)

@@ -88,8 +88,8 @@ func TestBasicGreedy(t *testing.T) {
 			var ts types.Transaction
 			select {
 			case ts = <-mockOutputs[0].TChan:
-				if string(ts.Payload.Parts[0]) != string(content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Parts[0], content[0])
+				if string(ts.Payload.Get(0)) != string(content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0), content[0])
 				}
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for broker propagate")
@@ -105,7 +105,7 @@ func TestBasicGreedy(t *testing.T) {
 		}()
 
 		select {
-		case readChan <- types.NewTransaction(types.Message{Parts: content}, resChan):
+		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return

@@ -63,8 +63,7 @@ func TestHTTPBasic(t *testing.T) {
 		testStr := fmt.Sprintf("test%v", i)
 
 		go func() {
-			testMsg := types.NewMessage()
-			testMsg.Parts = [][]byte{[]byte(testStr)}
+			testMsg := types.NewMessage([][]byte{[]byte(testStr)})
 			select {
 			case msgChan <- types.NewTransaction(testMsg, resChan):
 			case <-time.After(time.Second):

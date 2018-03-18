@@ -197,10 +197,10 @@ func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 
 	index := p.conf.SetJSON.Part
 	if index < 0 {
-		index = len(msg.Parts) + index
+		index = msg.Len() + index
 	}
 
-	if index < 0 || index >= len(msg.Parts) {
+	if index < 0 || index >= msg.Len() {
 		p.stats.Incr("processor.set_json.skipped", 1)
 		p.stats.Incr("processor.set_json.dropped", 1)
 		return msgs[:], nil

@@ -64,19 +64,19 @@ func TestArchiveTar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.Message{Parts: exp})
+	msgs, res := proc.ProcessMessage(types.NewMessage(exp))
 	if len(msgs) != 1 {
 		t.Error("Archive failed")
 	} else if res != nil {
 		t.Errorf("Expected nil response: %v", res)
 	}
-	if len(msgs[0].Parts) != 1 {
+	if msgs[0].Len() != 1 {
 		t.Fatal("More parts than expected")
 	}
 
 	act := [][]byte{}
 
-	buf := bytes.NewBuffer(msgs[0].Parts[0])
+	buf := bytes.NewBuffer(msgs[0].Get(0))
 	tr := tar.NewReader(buf)
 	for {
 		_, err = tr.Next()
@@ -112,15 +112,15 @@ func TestArchiveBinary(t *testing.T) {
 		return
 	}
 
-	testMsg := types.Message{Parts: [][]byte{[]byte("hello"), []byte("world")}}
+	testMsg := types.NewMessage([][]byte{[]byte("hello"), []byte("world")})
 	testMsgBlob := testMsg.Bytes()
 
 	if msgs, _ := proc.ProcessMessage(testMsg); len(msgs) == 1 {
-		if lParts := len(msgs[0].Parts); lParts != 1 {
+		if lParts := msgs[0].Len(); lParts != 1 {
 			t.Errorf("Wrong number of parts returned: %v != %v", lParts, 1)
 		}
-		if !reflect.DeepEqual(testMsgBlob, msgs[0].Parts[0]) {
-			t.Errorf("Returned message did not match: %s != %s", msgs[0].Parts[0], testMsgBlob)
+		if !reflect.DeepEqual(testMsgBlob, msgs[0].Get(0)) {
+			t.Errorf("Returned message did not match: %s != %s", msgs[0].Get(0), testMsgBlob)
 		}
 	} else {
 		t.Error("Failed on good message")
@@ -137,7 +137,7 @@ func TestArchiveEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(types.Message{Parts: [][]byte{}})
+	msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{}))
 	if len(msgs) != 0 {
 		t.Error("Expected failure with zero part message")
 	}

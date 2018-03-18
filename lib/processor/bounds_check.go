@@ -83,7 +83,7 @@ func NewBoundsCheck(conf Config, log log.Modular, stats metrics.Type) (Type, err
 func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	m.stats.Incr("processor.bounds_check.count", 1)
 
-	lParts := len(msg.Parts)
+	lParts := msg.Len()
 	if lParts < m.conf.BoundsCheck.MinParts {
 		m.log.Debugf(
 			"Rejecting message due to message parts below minimum (%v): %v\n",
@@ -102,7 +102,7 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	for _, part := range msg.Parts {
+	for _, part := range msg.GetAll() {
 		if size := len(part); size > m.conf.BoundsCheck.MaxPartSize ||
 			size < m.conf.BoundsCheck.MinPartSize {
 			m.log.Debugf(
