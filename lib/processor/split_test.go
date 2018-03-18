@@ -34,7 +34,7 @@ func TestSplitParts(t *testing.T) {
 	conf := NewConfig()
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewSplit(conf, testLog, metrics.DudType{})
+	proc, err := NewSplit(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

@@ -39,7 +39,7 @@ func TestUnarchiveBadAlgo(t *testing.T) {
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 
-	_, err := NewUnarchive(conf, testLog, metrics.DudType{})
+	_, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -90,7 +90,7 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewUnarchive(conf, testLog, metrics.DudType{})
+	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestUnarchiveBinary(t *testing.T) {
 	conf.Unarchive.Format = "binary"
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewUnarchive(conf, testLog, metrics.DudType{})
+	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -227,7 +227,7 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 
 	for i, result := range tests {
 		conf.Unarchive.Parts = []int{i}
-		proc, err := NewUnarchive(conf, testLog, metrics.DudType{})
+		proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -250,7 +250,7 @@ func TestUnarchiveEmpty(t *testing.T) {
 	conf.Unarchive.Parts = []int{0, 1}
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewUnarchive(conf, testLog, metrics.DudType{})
+	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

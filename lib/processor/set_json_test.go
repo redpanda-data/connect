@@ -18,13 +18,13 @@ func TestSetJSONValidation(t *testing.T) {
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 
-	if _, err := NewSetJSON(conf, testLog, metrics.DudType{}); err != ErrEmptyTargetPath {
+	if _, err := NewSetJSON(conf, nil, testLog, metrics.DudType{}); err != ErrEmptyTargetPath {
 		t.Errorf("Wrong error for empty target: %v != %v", err, ErrEmptyTargetPath)
 	}
 
 	conf.SetJSON.Path = "foo.bar"
 
-	jSet, err := NewSetJSON(conf, testLog, metrics.DudType{})
+	jSet, err := NewSetJSON(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestSetJSONValidation(t *testing.T) {
 
 	conf.SetJSON.Part = 5
 
-	jSet, err = NewSetJSON(conf, testLog, metrics.DudType{})
+	jSet, err = NewSetJSON(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestSetJSONPartBounds(t *testing.T) {
 		}
 
 		conf.SetJSON.Part = i
-		proc, err := NewSetJSON(conf, tLog, tStats)
+		proc, err := NewSetJSON(conf, nil, tLog, tStats)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -170,7 +170,7 @@ func TestSetJSON(t *testing.T) {
 		conf.SetJSON.Path = test.path
 		conf.SetJSON.Value = []byte(test.value)
 
-		jSet, err := NewSetJSON(conf, tLog, tStats)
+		jSet, err := NewSetJSON(conf, nil, tLog, tStats)
 		if err != nil {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
@@ -226,7 +226,7 @@ value:
 			t.Fatal(err)
 		}
 
-		jSet, err := NewSetJSON(conf, tLog, tStats)
+		jSet, err := NewSetJSON(conf, nil, tLog, tStats)
 		if err != nil {
 			t.Fatalf("Error creating proc '%v': %v", config, err)
 		}
@@ -300,7 +300,7 @@ value:
 			t.Errorf("Marshalled config does not match: %v != %v", string(act), config)
 		}
 
-		if _, err := NewSetJSON(conf, tLog, tStats); err != nil {
+		if _, err := NewSetJSON(conf, nil, tLog, tStats); err != nil {
 			t.Errorf("Error creating proc '%v': %v", config, err)
 		}
 	}

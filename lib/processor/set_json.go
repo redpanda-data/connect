@@ -167,7 +167,9 @@ type SetJSON struct {
 }
 
 // NewSetJSON returns a SetJSON processor.
-func NewSetJSON(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewSetJSON(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	j := &SetJSON{
 		target:     strings.Split(conf.SetJSON.Path, "."),
 		valueBytes: conf.SetJSON.Value,

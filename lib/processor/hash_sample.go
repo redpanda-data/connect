@@ -89,7 +89,9 @@ type HashSample struct {
 }
 
 // NewHashSample returns a HashSample processor.
-func NewHashSample(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewHashSample(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	return &HashSample{
 		conf:  conf,
 		log:   log.NewModule(".processor.hash_sample"),

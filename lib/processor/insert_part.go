@@ -77,7 +77,9 @@ type InsertPart struct {
 }
 
 // NewInsertPart returns a InsertPart processor.
-func NewInsertPart(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewInsertPart(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	part := []byte(conf.InsertPart.Content)
 	interpolate := text.ContainsFunctionVariables(part)
 	return &InsertPart{

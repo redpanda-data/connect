@@ -128,13 +128,15 @@ type Not struct {
 }
 
 // NewNot returns a Not processor.
-func NewNot(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNot(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	childConf := conf.Not.Config
 	if childConf == nil {
 		newConf := NewConfig()
 		childConf = &newConf
 	}
-	child, err := New(*childConf, log, stats)
+	child, err := New(*childConf, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

@@ -68,7 +68,9 @@ type Sample struct {
 }
 
 // NewSample returns a Sample processor.
-func NewSample(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewSample(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	gen := rand.New(rand.NewSource(conf.Sample.RandomSeed))
 	return &Sample{
 		conf:  conf,

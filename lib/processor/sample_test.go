@@ -35,7 +35,7 @@ func TestSample10Percent(t *testing.T) {
 	conf.Sample.Retain = 0.1
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewSample(conf, testLog, metrics.DudType{})
+	proc, err := NewSample(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -72,7 +72,7 @@ func TestSample24Percent(t *testing.T) {
 	conf.Sample.Retain = 0.24
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewSample(conf, testLog, metrics.DudType{})
+	proc, err := NewSample(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

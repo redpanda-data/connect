@@ -56,10 +56,12 @@ type And struct {
 }
 
 // NewAnd returns an And processor.
-func NewAnd(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewAnd(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	children := []Type{}
 	for _, childConf := range conf.And {
-		child, err := New(childConf, log, stats)
+		child, err := New(childConf, mgr, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create child '%v': %v", childConf.Type, err)
 		}

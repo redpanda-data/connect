@@ -235,7 +235,7 @@ func TestConditionContentCheck(t *testing.T) {
 			conf.Condition.Content.Part = tt.fields.part
 			conf.Condition.Content.Arg = tt.fields.arg
 
-			c, err := New(conf, testLog, testMet)
+			c, err := New(conf, nil, testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return

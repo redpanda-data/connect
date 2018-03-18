@@ -39,7 +39,7 @@ func TestArchiveBadAlgo(t *testing.T) {
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 
-	_, err := NewArchive(conf, testLog, metrics.DudType{})
+	_, err := NewArchive(conf, nil, testLog, metrics.DudType{})
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -59,7 +59,7 @@ func TestArchiveTar(t *testing.T) {
 		[]byte("5"),
 	}
 
-	proc, err := NewArchive(conf, testLog, metrics.DudType{})
+	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestArchiveBinary(t *testing.T) {
 	conf.Archive.Format = "binary"
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewArchive(conf, testLog, metrics.DudType{})
+	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -131,7 +131,7 @@ func TestArchiveEmpty(t *testing.T) {
 	conf := NewConfig()
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewArchive(conf, testLog, metrics.DudType{})
+	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

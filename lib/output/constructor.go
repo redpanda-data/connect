@@ -325,7 +325,7 @@ func New(
 			processors := make([]processor.Type, len(conf.Processors))
 			for i, procConf := range conf.Processors {
 				var err error
-				processors[i], err = processor.New(procConf, log.NewModule("."+conf.Type), stats)
+				processors[i], err = processor.New(procConf, mgr, log.NewModule("."+conf.Type), stats)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 				}

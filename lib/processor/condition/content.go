@@ -138,7 +138,9 @@ type Content struct {
 }
 
 // NewContent returns a Content processor.
-func NewContent(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewContent(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	op, err := strToContentOperator(conf.Content.Operator, conf.Content.Arg)
 	if err != nil {
 		return nil, fmt.Errorf("operator '%v': %v", conf.Content.Operator, err)

@@ -66,8 +66,10 @@ type Condition struct {
 }
 
 // NewCondition returns a Condition processor.
-func NewCondition(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
-	cond, err := condition.New(conf.Condition.Config, log, stats)
+func NewCondition(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
+	cond, err := condition.New(conf.Condition.Config, mgr, log, stats)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to construct condition '%v': %v",

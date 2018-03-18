@@ -38,7 +38,7 @@ func TestBoundsCheck(t *testing.T) {
 	conf.BoundsCheck.MinPartSize = 1
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewBoundsCheck(conf, testLog, metrics.DudType{})
+	proc, err := NewBoundsCheck(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

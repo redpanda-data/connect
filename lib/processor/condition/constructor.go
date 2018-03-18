@@ -35,7 +35,12 @@ import (
 
 // TypeSpec Constructor and a usage description for each condition type.
 type TypeSpec struct {
-	constructor func(conf Config, log log.Modular, stats metrics.Type) (Type, error)
+	constructor func(
+		conf Config,
+		mgr types.Manager,
+		log log.Modular,
+		stats metrics.Type,
+	) (Type, error)
 	description string
 }
 
@@ -204,9 +209,9 @@ func Descriptions() string {
 }
 
 // New creates a condition type based on a condition configuration.
-func New(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func New(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	if c, ok := Constructors[conf.Type]; ok {
-		return c.constructor(conf, log, stats)
+		return c.constructor(conf, mgr, log, stats)
 	}
 	return nil, types.ErrInvalidConditionType
 }

@@ -124,7 +124,9 @@ type Archive struct {
 }
 
 // NewArchive returns a Archive processor.
-func NewArchive(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewArchive(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	pathBytes := []byte(conf.Archive.Path)
 	interpolatePath := text.ContainsFunctionVariables(pathBytes)
 

@@ -81,7 +81,9 @@ type Combine struct {
 }
 
 // NewCombine returns a Combine processor.
-func NewCombine(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewCombine(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	return &Combine{
 		log:   log.NewModule(".processor.combine"),
 		stats: stats,

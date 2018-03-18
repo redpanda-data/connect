@@ -233,7 +233,7 @@ func TestContentCheck(t *testing.T) {
 			conf.Content.Part = tt.fields.part
 			conf.Content.Arg = tt.fields.arg
 
-			c, err := NewContent(conf, testLog, testMet)
+			c, err := NewContent(conf, nil, testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
@@ -253,7 +253,7 @@ func TestContentBadOperator(t *testing.T) {
 	conf.Type = "content"
 	conf.Content.Operator = "NOT_EXIST"
 
-	_, err := NewContent(conf, testLog, testMet)
+	_, err := NewContent(conf, nil, testLog, testMet)
 	if err == nil {
 		t.Error("expected error from bad operator")
 	}

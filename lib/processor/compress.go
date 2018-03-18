@@ -106,7 +106,9 @@ type Compress struct {
 }
 
 // NewCompress returns a Compress processor.
-func NewCompress(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewCompress(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	cor, err := strToCompressor(conf.Compress.Algorithm)
 	if err != nil {
 		return nil, err

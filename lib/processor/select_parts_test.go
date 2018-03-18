@@ -35,7 +35,7 @@ func TestSelectParts(t *testing.T) {
 	conf.SelectParts.Parts = []int{1, 3}
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewSelectParts(conf, testLog, metrics.DudType{})
+	proc, err := NewSelectParts(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -127,7 +127,7 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 
 	for i, exp := range tests {
 		conf.SelectParts.Parts = []int{i}
-		proc, err := NewSelectParts(conf, testLog, metrics.DudType{})
+		proc, err := NewSelectParts(conf, nil, testLog, metrics.DudType{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -149,7 +149,7 @@ func TestSelectPartsEmpty(t *testing.T) {
 	conf.SelectParts.Parts = []int{3}
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewSelectParts(conf, testLog, metrics.DudType{})
+	proc, err := NewSelectParts(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

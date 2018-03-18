@@ -60,7 +60,9 @@ type Split struct {
 }
 
 // NewSplit returns a Split processor.
-func NewSplit(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewSplit(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	return &Split{
 		log:   log.NewModule(".processor.split"),
 		stats: stats,

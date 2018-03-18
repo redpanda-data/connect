@@ -135,7 +135,9 @@ type Unarchive struct {
 }
 
 // NewUnarchive returns a Unarchive processor.
-func NewUnarchive(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewUnarchive(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	dcor, err := strToUnarchiver(conf.Unarchive.Format)
 	if err != nil {
 		return nil, err

@@ -103,7 +103,7 @@ func TestOrCheck(t *testing.T) {
 			conf.Type = "or"
 			conf.Or = tt.arg
 
-			c, err := New(conf, testLog, testMet)
+			c, err := New(conf, nil, testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
@@ -129,7 +129,7 @@ func TestOrBadOperator(t *testing.T) {
 		cConf,
 	}
 
-	_, err := NewOr(conf, testLog, testMet)
+	_, err := NewOr(conf, nil, testLog, testMet)
 	if err == nil {
 		t.Error("expected error from bad operator")
 	}

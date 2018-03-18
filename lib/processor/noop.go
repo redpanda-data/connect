@@ -44,7 +44,9 @@ type Noop struct {
 }
 
 // NewNoop returns a Noop processor.
-func NewNoop(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNoop(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	return &Noop{}, nil
 }
 

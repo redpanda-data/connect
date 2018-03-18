@@ -85,7 +85,7 @@ func TestHashSample(t *testing.T) {
 			conf.HashSample.Parts = []int{0}
 
 			testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-			proc, err := NewHashSample(conf, testLog, metrics.DudType{})
+			proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
 			if err != nil {
 				t.Error(err)
 				return
@@ -137,7 +137,7 @@ func TestHashSamplePartSelection(t *testing.T) {
 			conf.HashSample.Parts = []int{tc.selectPart}
 
 			testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-			proc, err := NewHashSample(conf, testLog, metrics.DudType{})
+			proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
 			if err != nil {
 				t.Error(err)
 				return
@@ -167,7 +167,7 @@ func TestHashSampleBoundsCheck(t *testing.T) {
 	conf.HashSample.Parts = []int{5}
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewHashSample(conf, testLog, metrics.DudType{})
+	proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestHashSampleNegBoundsCheck(t *testing.T) {
 	conf.HashSample.Parts = []int{-5}
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewHashSample(conf, testLog, metrics.DudType{})
+	proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}

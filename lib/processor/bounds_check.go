@@ -69,7 +69,9 @@ type BoundsCheck struct {
 }
 
 // NewBoundsCheck returns a BoundsCheck processor.
-func NewBoundsCheck(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewBoundsCheck(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	return &BoundsCheck{
 		conf:  conf,
 		log:   log.NewModule(".processor.bounds_check"),

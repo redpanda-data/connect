@@ -107,7 +107,9 @@ type Decompress struct {
 }
 
 // NewDecompress returns a Decompress processor.
-func NewDecompress(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewDecompress(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	dcor, err := strToDecompressor(conf.Decompress.Algorithm)
 	if err != nil {
 		return nil, err

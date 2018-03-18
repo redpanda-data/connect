@@ -356,7 +356,7 @@ func TestNotCheck(t *testing.T) {
 			nConf.Type = "not"
 			nConf.Not.Config = &conf
 
-			c, err := New(nConf, testLog, testMet)
+			c, err := New(nConf, nil, testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
@@ -380,7 +380,7 @@ func TestNotBadOperator(t *testing.T) {
 	conf.Type = "not"
 	conf.Not.Config = &cConf
 
-	_, err := NewNot(conf, testLog, testMet)
+	_, err := NewNot(conf, nil, testLog, testMet)
 	if err == nil {
 		t.Error("expected error from bad operator")
 	}

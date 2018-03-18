@@ -38,7 +38,7 @@ func TestCompressBadAlgo(t *testing.T) {
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 
-	_, err := NewCompress(conf, testLog, metrics.DudType{})
+	_, err := NewCompress(conf, nil, testLog, metrics.DudType{})
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -74,7 +74,7 @@ func TestCompressGZIP(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewCompress(conf, testLog, metrics.DudType{})
+	proc, err := NewCompress(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestCompressIndexBounds(t *testing.T) {
 
 	for i, expIndex := range tests {
 		conf.Compress.Parts = []int{i}
-		proc, err := NewCompress(conf, testLog, metrics.DudType{})
+		proc, err := NewCompress(conf, nil, testLog, metrics.DudType{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -152,7 +152,7 @@ func TestCompressEmpty(t *testing.T) {
 	conf.Compress.Parts = []int{0, 1}
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewCompress(conf, testLog, metrics.DudType{})
+	proc, err := NewCompress(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

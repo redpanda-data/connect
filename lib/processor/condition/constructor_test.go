@@ -44,7 +44,7 @@ func TestConstructorBadType(t *testing.T) {
 	logConfig := log.NewLoggerConfig()
 	logConfig.LogLevel = "NONE"
 
-	if _, err := New(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{}); err == nil {
+	if _, err := New(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{}); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }

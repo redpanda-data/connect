@@ -74,7 +74,9 @@ type SelectParts struct {
 }
 
 // NewSelectParts returns a SelectParts processor.
-func NewSelectParts(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewSelectParts(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	return &SelectParts{
 		conf:  conf,
 		log:   log.NewModule(".processor.select_parts"),

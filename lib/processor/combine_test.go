@@ -36,7 +36,7 @@ func TestCombineTwoParts(t *testing.T) {
 	conf.Combine.Parts = 2
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewCombine(conf, testLog, metrics.DudType{})
+	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -61,7 +61,7 @@ func BenchmarkCombineMultiMessagesSharedBuffer(b *testing.B) {
 	conf.Combine.Parts = 3
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewCombine(conf, testLog, metrics.DudType{})
+	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestCombineLotsOfParts(t *testing.T) {
 	conf.Combine.Parts = 2
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewCombine(conf, testLog, metrics.DudType{})
+	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -128,7 +128,7 @@ func TestCombineTwoSingleParts(t *testing.T) {
 	conf.Combine.Parts = 2
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewCombine(conf, testLog, metrics.DudType{})
+	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -182,7 +182,7 @@ func TestCombineTwoDiffParts(t *testing.T) {
 	conf.Combine.Parts = 2
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err := NewCombine(conf, testLog, metrics.DudType{})
+	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
