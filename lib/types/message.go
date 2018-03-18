@@ -21,8 +21,6 @@
 package types
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 )
 
@@ -137,49 +135,10 @@ func FromBytes(b []byte) (Message, error) {
 
 //------------------------------------------------------------------------------
 
-type jsonPart struct {
-	rawBytesLen  int
-	rawBytesHash string
-	content      interface{}
-}
-
-func (j *jsonPart) Get(rawBytes []byte) (interface{}, error) {
-	hasher := md5.New()
-	hasher.Write(rawBytes)
-	rawHash := hex.EncodeToString(hasher.Sum(nil))
-
-	if j.rawBytesLen == len(rawBytes) {
-		if rawHash == j.rawBytesHash {
-			return j.content, nil
-		}
-	}
-
-	// Release whatever we were holding.
-	j.content = nil
-	if err := json.Unmarshal(rawBytes, &j.content); err != nil {
-		return nil, err
-	}
-
-	j.rawBytesLen = len(rawBytes)
-	j.rawBytesHash = rawHash
-	return j.content, nil
-}
-
-func (j *jsonPart) Set(content interface{}) ([]byte, error) {
-	rawBytes, err := json.Marshal(content)
-	if err != nil {
-		return nil, err
-	}
-
-	hasher := md5.New()
-	hasher.Write(rawBytes)
-	rawHash := hex.EncodeToString(hasher.Sum(nil))
-
-	j.rawBytesLen = len(rawBytes)
-	j.rawBytesHash = rawHash
-	j.content = content
-
-	return rawBytes, nil
+// partCache is a cache of operations performed on message parts, a part cache
+// becomes invalid when the contents of a part is changed.
+type partCache struct {
+	json interface{}
 }
 
 //------------------------------------------------------------------------------
@@ -188,8 +147,8 @@ func (j *jsonPart) Set(content interface{}) ([]byte, error) {
 // and
 // helper functions.
 type messageImpl struct {
-	parts     [][]byte
-	jsonParts []*jsonPart
+	parts      [][]byte
+	partCaches []*partCache
 }
 
 //------------------------------------------------------------------------------
@@ -303,11 +262,16 @@ func (m *messageImpl) Set(index int, b []byte) {
 	if index < 0 || index >= len(m.parts) {
 		return
 	}
+	if len(m.partCaches) > index {
+		// Remove now invalid part cache.
+		m.partCaches[index] = nil
+	}
 	m.parts[index] = b
 }
 
 func (m *messageImpl) SetAll(p [][]byte) {
 	m.parts = p
+	m.partCaches = nil
 }
 
 func (m *messageImpl) Append(b ...[]byte) int {
@@ -327,56 +291,53 @@ func (m *messageImpl) Iter(f func(i int, b []byte)) {
 	}
 }
 
-// GetJSON returns a message part parsed into an `interface{}` type. This is
-// lazily evaluated and the result is cached. If multiple layers of a pipeline
-// extract the same part as JSON it will only be unmarshalled once, unless the
-// content of the part has changed.
+func (m *messageImpl) expandCache(index int) {
+	if len(m.partCaches) > index {
+		return
+	}
+	cParts := make([]*partCache, index+1)
+	copy(cParts, m.partCaches)
+	m.partCaches = cParts
+}
+
 func (m *messageImpl) GetJSON(part int) (interface{}, error) {
 	if part < 0 {
 		part = len(m.parts) + part
 	}
-	if len(m.parts) <= part {
+	if part < 0 || part >= len(m.parts) {
 		return nil, ErrMessagePartNotExist
 	}
-	if len(m.jsonParts) <= part {
-		jParts := make([]*jsonPart, part+1)
-		copy(jParts, m.jsonParts)
-		m.jsonParts = jParts
+	m.expandCache(part)
+	cPart := m.partCaches[part]
+	if cPart == nil {
+		cPart = &partCache{}
+		m.partCaches[part] = cPart
 	}
-	jPart := m.jsonParts[part]
-	if jPart == nil {
-		jPart = &jsonPart{}
-		m.jsonParts[part] = jPart
+	if err := json.Unmarshal(m.Get(part), &cPart.json); err != nil {
+		return nil, err
 	}
-	return jPart.Get(m.parts[part])
+	return cPart.json, nil
 }
 
-// SetJSON sets a message part to the marshalled bytes of a JSON object, but
-// also caches the object itself. If the JSON contents of a part is subsequently
-// queried it will receive the cached version as long as the raw content has not
-// changed.
 func (m *messageImpl) SetJSON(part int, jObj interface{}) error {
 	if part < 0 {
 		part = len(m.parts) + part
 	}
-	if len(m.parts) <= part {
+	if part < 0 || part >= len(m.parts) {
 		return ErrMessagePartNotExist
 	}
-	if len(m.jsonParts) <= part {
-		jParts := make([]*jsonPart, part+1)
-		copy(jParts, m.jsonParts)
-		m.jsonParts = jParts
+	m.expandCache(part)
+
+	partBytes, err := json.Marshal(jObj)
+	if err != nil {
+		return err
 	}
-	jPart := m.jsonParts[part]
-	if jPart == nil {
-		jPart = &jsonPart{}
-		m.jsonParts[part] = jPart
+
+	m.Set(part, partBytes)
+	m.partCaches[part] = &partCache{
+		json: jObj,
 	}
-	rawBytes, err := jPart.Set(jObj)
-	if err == nil {
-		m.parts[part] = rawBytes
-	}
-	return err
+	return nil
 }
 
 //------------------------------------------------------------------------------
