@@ -173,6 +173,7 @@ input:
         arg: ""
       not: {}
       or: []
+      resource: ""
     decompress:
       algorithm: gzip
       parts: []
@@ -323,6 +324,24 @@ buffer:
     clean_up: true
     reserved_disk_space: 104857600
   none: {}
+resources:
+  caches:
+    default:
+      type: memory
+      memory:
+        ttl: 300
+        compaction_interval_s: 60
+  conditions:
+    default:
+      type: content
+      and: []
+      content:
+        operator: equals_cs
+        part: 0
+        arg: ""
+      not: {}
+      or: []
+      resource: ""
 logger:
   prefix: service
   log_level: INFO

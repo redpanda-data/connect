@@ -27,12 +27,45 @@ import (
 
 //------------------------------------------------------------------------------
 
+// Cache is a key/value store that can be shared across components and executing
+// threads of a Benthos service.
+type Cache interface {
+	// Get attempts to locate and return a cached value by its key, returns an
+	// error if the key does not exist or if the command fails.
+	Get(key string) (string, error)
+
+	// Set attempts to set the value of a key, returns an error if the command
+	// fails.
+	Set(key, value string) error
+
+	// Add attempts to set the value of a key only if the key does not already
+	// exist, returns an error if the key already exists or if the command
+	// fails.
+	Add(key, value string) error
+}
+
+//------------------------------------------------------------------------------
+
+// Condition reads a message, calculates a condition and returns a boolean.
+type Condition interface {
+	// Check tests a message against a configured condition.
+	Check(msg Message) bool
+}
+
+//------------------------------------------------------------------------------
+
 // Manager is an interface expected by Benthos components that allows them to
 // register their service wide behaviours such as HTTP endpoints and event
-// listeners.
+// listeners, and obtain service wide shared resources such as caches.
 type Manager interface {
 	// RegisterEndpoint registers a server wide HTTP endpoint.
 	RegisterEndpoint(path, desc string, h http.HandlerFunc)
+
+	// GetCache attempts to find a service wide cache by its name.
+	GetCache(name string) (Cache, error)
+
+	// GetCondition attempts to find a service wide condition by its name.
+	GetCondition(name string) (Condition, error)
 }
 
 //------------------------------------------------------------------------------

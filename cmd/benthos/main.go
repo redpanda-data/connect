@@ -35,7 +35,9 @@ import (
 
 	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/buffer"
+	"github.com/Jeffail/benthos/lib/cache"
 	"github.com/Jeffail/benthos/lib/input"
+	"github.com/Jeffail/benthos/lib/manager"
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/processor/condition"
@@ -54,6 +56,7 @@ type Config struct {
 	Input                input.Config     `json:"input" yaml:"input"`
 	Output               output.Config    `json:"output" yaml:"output"`
 	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
+	Manager              manager.Config   `json:"resources" yaml:"resources"`
 	Logger               log.LoggerConfig `json:"logger" yaml:"logger"`
 	Metrics              metrics.Config   `json:"metrics" yaml:"metrics"`
 	SystemCloseTimeoutMS int              `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
@@ -69,6 +72,7 @@ func NewConfig() Config {
 		Input:                input.NewConfig(),
 		Output:               output.NewConfig(),
 		Buffer:               buffer.NewConfig(),
+		Manager:              manager.NewConfig(),
 		Logger:               log.NewLoggerConfig(),
 		Metrics:              metricsConf,
 		SystemCloseTimeoutMS: 20000,
@@ -107,6 +111,7 @@ func (c Config) Sanitised() (interface{}, error) {
 		Input                interface{} `json:"input" yaml:"input"`
 		Output               interface{} `json:"output" yaml:"output"`
 		Buffer               interface{} `json:"buffer" yaml:"buffer"`
+		Manager              interface{} `json:"resources" yaml:"resources"`
 		Logger               interface{} `json:"logger" yaml:"logger"`
 		Metrics              interface{} `json:"metrics" yaml:"metrics"`
 		SystemCloseTimeoutMS interface{} `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
@@ -115,6 +120,7 @@ func (c Config) Sanitised() (interface{}, error) {
 		Input:                inConf,
 		Output:               outConf,
 		Buffer:               bufConf,
+		Manager:              c.Manager,
 		Logger:               c.Logger,
 		Metrics:              metConf,
 		SystemCloseTimeoutMS: c.SystemCloseTimeoutMS,
@@ -144,6 +150,10 @@ var (
 	printConditions = flag.Bool(
 		"list-conditions", false,
 		"Print a list of available processor condition options, then exit",
+	)
+	printCaches = flag.Bool(
+		"list-caches", false,
+		"Print a list of available cache options, then exit",
 	)
 )
 
@@ -178,7 +188,7 @@ func bootstrap() Config {
 	}
 
 	// If we only want to print our inputs or outputs we should exit afterwards
-	if *printInputs || *printOutputs || *printBuffers || *printProcessors || *printConditions {
+	if *printInputs || *printOutputs || *printBuffers || *printProcessors || *printConditions || *printCaches {
 		if *printInputs {
 			fmt.Println(input.Descriptions())
 		}
@@ -193,6 +203,9 @@ func bootstrap() Config {
 		}
 		if *printOutputs {
 			fmt.Println(output.Descriptions())
+		}
+		if *printCaches {
+			fmt.Println(cache.Descriptions())
 		}
 		os.Exit(1)
 	}
@@ -259,13 +272,13 @@ func createPipeline(
 }
 
 func main() {
-	// Bootstrap by reading cmd flags and configuration file
+	// Bootstrap by reading cmd flags and configuration file.
 	config := bootstrap()
 
-	// Logging and stats aggregation
+	// Logging and stats aggregation.
 	var logger log.Modular
 
-	// Note: Only log to Stderr if one of our outputs is stdout
+	// Note: Only log to Stderr if one of our outputs is stdout.
 	if config.Output.Type == "stdout" {
 		logger = log.NewLogger(os.Stderr, config.Logger)
 	} else {
@@ -274,26 +287,36 @@ func main() {
 
 	logger.Infoln("Launching a benthos instance, use CTRL+C to close.")
 
-	// Create our metrics type
+	// Create our metrics type.
 	stats, err := metrics.New(config.Metrics)
 	if err != nil {
 		logger.Errorf("Metrics error: %v\n", err)
-		return
+		os.Exit(1)
 	}
 	defer stats.Close()
 
+	// Create HTTP API with a sanitised service config.
 	sanConf, err := config.Sanitised()
 	if err != nil {
 		logger.Warnf("Failed to generate sanitised config: %v\n", err)
 	}
 	httpServer := api.New(service.Version, service.DateBuilt, config.HTTP, sanConf, logger, stats)
 
-	poolTiered, poolNonTiered, outputsClosedChan, err := createPipeline(config, httpServer, logger, stats)
+	// Create resource manager.
+	manager, err := manager.New(config.Manager, httpServer, logger, stats)
 	if err != nil {
-		logger.Errorf("Service closing due to: %v\n", err)
-		return
+		logger.Errorf("Failed to create resource: %v\n", err)
+		os.Exit(1)
 	}
 
+	// Create data pipelines.
+	poolTiered, poolNonTiered, outputsClosedChan, err := createPipeline(config, manager, logger, stats)
+	if err != nil {
+		logger.Errorf("Service closing due to: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Start HTTP server.
 	httpServerClosedChan := make(chan struct{})
 	go func() {
 		logger.Infof(

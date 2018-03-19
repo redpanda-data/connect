@@ -36,6 +36,7 @@ var (
 	ErrNotConnected = errors.New("not connected to target source or sink")
 
 	ErrInvalidProcessorType = errors.New("processor type was not recognised")
+	ErrInvalidCacheType     = errors.New("cache type was not recognised")
 	ErrInvalidConditionType = errors.New("condition type was not recognised")
 	ErrInvalidBufferType    = errors.New("buffer type was not recognised")
 	ErrInvalidInputType     = errors.New("input type was not recognised")
@@ -53,6 +54,16 @@ var (
 	ErrBlockCorrupted      = errors.New("serialised messages block was in unexpected format")
 
 	ErrNoAck = errors.New("failed to receive acknowledgement")
+)
+
+//------------------------------------------------------------------------------
+
+// Manager errors
+var (
+	ErrCacheNotFound     = errors.New("cache not found")
+	ErrConditionNotFound = errors.New("condition not found")
+	ErrKeyAlreadyExists  = errors.New("key already exists")
+	ErrKeyNotFound       = errors.New("key does not exist")
 )
 
 //------------------------------------------------------------------------------

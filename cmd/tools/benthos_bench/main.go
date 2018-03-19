@@ -33,6 +33,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/input"
+	"github.com/Jeffail/benthos/lib/manager"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util"
 	"github.com/Jeffail/benthos/lib/util/service"
@@ -48,6 +49,7 @@ type Config struct {
 	ReportPeriodMS       int              `json:"report_period_ms" yaml:"report_period_ms"`
 	HTTP                 api.Config       `json:"http" yaml:"http"`
 	Input                input.Config     `json:"input" yaml:"input"`
+	Manager              manager.Config   `json:"resources" yaml:"resources"`
 	Logger               log.LoggerConfig `json:"logger" yaml:"logger"`
 	Metrics              metrics.Config   `json:"metrics" yaml:"metrics"`
 	SystemCloseTimeoutMS int              `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
@@ -62,6 +64,7 @@ func NewConfig() Config {
 		ReportPeriodMS:       60000,
 		HTTP:                 api.NewConfig(),
 		Input:                input.NewConfig(),
+		Manager:              manager.NewConfig(),
 		Logger:               log.NewLoggerConfig(),
 		Metrics:              metricsConf,
 		SystemCloseTimeoutMS: 20000,
@@ -128,7 +131,13 @@ func main() {
 
 	httpServer := api.New(service.Version, service.DateBuilt, config.HTTP, config, logger, stats)
 
-	pool, err := createPipeline(config, httpServer, logger, stats)
+	mgr, err := manager.New(config.Manager, httpServer, logger, stats)
+	if err != nil {
+		logger.Errorf("Failed to create resource: %v\n", err)
+		return
+	}
+
+	pool, err := createPipeline(config, mgr, logger, stats)
 	if err != nil {
 		logger.Errorf("Service closing due to: %v\n", err)
 		return

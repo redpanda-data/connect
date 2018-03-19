@@ -51,21 +51,23 @@ var Constructors = map[string]TypeSpec{}
 
 // Config is the all encompassing configuration struct for all condition types.
 type Config struct {
-	Type    string        `json:"type" yaml:"type"`
-	And     AndConfig     `json:"and" yaml:"and"`
-	Content ContentConfig `json:"content" yaml:"content"`
-	Not     NotConfig     `json:"not" yaml:"not"`
-	Or      OrConfig      `json:"or" yaml:"or"`
+	Type     string        `json:"type" yaml:"type"`
+	And      AndConfig     `json:"and" yaml:"and"`
+	Content  ContentConfig `json:"content" yaml:"content"`
+	Not      NotConfig     `json:"not" yaml:"not"`
+	Or       OrConfig      `json:"or" yaml:"or"`
+	Resource string        `json:"resource" yaml:"resource"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:    "content",
-		And:     NewAndConfig(),
-		Content: NewContentConfig(),
-		Not:     NewNotConfig(),
-		Or:      NewOrConfig(),
+		Type:     "content",
+		And:      NewAndConfig(),
+		Content:  NewContentConfig(),
+		Not:      NewNotConfig(),
+		Or:       NewOrConfig(),
+		Resource: "",
 	}
 }
 
@@ -169,11 +171,16 @@ output:
       - type: file
         file:
           path: ./everything.txt
-` + "```"
+` + "```" + `
+
+Sometimes large chunks of logic are reused across processors, or nested multiple
+times as branches of a larger condition. It is possible to avoid writing
+duplicate condition configs by using the [resource condition][2].`
 
 var footer = `
 [0]: ../processors/README.md
-[1]: ../processors/README.md#condition`
+[1]: ../processors/README.md#condition
+[2]: #resource`
 
 // Descriptions returns a formatted string of collated descriptions of each
 // type.

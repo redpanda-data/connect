@@ -6,8 +6,9 @@ Benthos
 - [1. Configuration](#configuration)
 - [2. Mutating And Filtering Content](#mutating-and-filtering-content)
 - [3. Content Based Multiplexing](#content-based-multiplexing)
-- [4. Maximising IO Throughput](#maximising-io-throughput)
-- [5. Maximising CPU Utilisation](#maximising-cpu-utilisation)
+- [4. Sharing Resources Across Processors](#sharing-resources-across-processors)
+- [5. Maximising IO Throughput](#maximising-io-throughput)
+- [6. Maximising CPU Utilisation](#maximising-cpu-utilisation)
 
 ## Configuration
 
@@ -118,6 +119,84 @@ output:
 For more information regarding conditions, including the list of conditions
 available, please [read the docs here][conditions].
 
+## Sharing Resources Across Processors
+
+Sometimes it is advantageous to share configurations for resources such as
+caches or complex conditions between processors when they would otherwise be
+duplicated. For this purpose there is a `resource` section in a Benthos config
+where [caches][caches] and [conditions][conditions] can be configured to a label
+that is referred to by any processors/conditions that wish to use them.
+
+For example, let's imagine we have three inputs, two of which we wish to
+deduplicate using a shared cache. We also have two outputs, one of which only
+receives messages that satisfy a condition and the other receives the logical
+NOT of that same condition. In this example we can save ourselves the trouble of
+configuring the same cache and condition twice by referring to them as resources
+like this:
+
+``` yaml
+input:
+  type: broker
+  broker:
+    inputs:
+    - type: foo
+      processors:
+      - type: dedupe
+        dedupe:
+          cache: foobarcache
+          key_part: 0
+          hash: none
+    - type: bar
+      processors:
+      - type: dedupe
+        dedupe:
+          cache: foobarcache
+          key_part: 0
+          hash: none
+    - type: baz
+output:
+  type: broker
+  broker:
+    pattern: fan_out
+    outputs:
+    - type: quz
+      quz:
+        processors:
+        - type: condition
+          condition:
+            type: resource
+            resource: foobarcondition
+    - type: qux
+      qux:
+        processors:
+        - type: condition
+          condition:
+            type: not
+            not:
+              type: resource
+              resource: foobarcondition
+resources:
+  caches:
+    foobarcache:
+      type: memcached
+      memcached:
+        addresses:
+        - localhost:11211
+        ttl: 60
+  conditions:
+    foobarcondition:
+      type: content
+      content:
+        operator: equals_cs
+        part: 1
+        arg: filter me please
+```
+
+It is also worth noting that when conditions are used as resources in this way
+they will only be executed once per message, regardless of how many times they
+are referenced (unless the content is modified). Therefore, resource conditions
+can act as a runtime optimisation as well as a config optimisation.
+
 ## Maximising IO Throughput
 
 TODO
@@ -131,3 +210,4 @@ TODO
 [broker-output]: ./outputs/README.md#broker
 [condition-processor]: ./processors/README.md#condition
 [conditions]: ./conditions
+[caches]: ./caches
