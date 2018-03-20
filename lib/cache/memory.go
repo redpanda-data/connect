@@ -65,7 +65,7 @@ func NewMemoryConfig() MemoryConfig {
 //------------------------------------------------------------------------------
 
 type item struct {
-	value string
+	value []byte
 	ts    time.Time
 }
 
@@ -103,18 +103,18 @@ func (m *Memory) compaction() {
 
 // Get attempts to locate and return a cached value by its key, returns an error
 // if the key does not exist.
-func (m *Memory) Get(key string) (string, error) {
+func (m *Memory) Get(key string) ([]byte, error) {
 	m.RLock()
 	k, exists := m.items[key]
 	m.RUnlock()
 	if !exists {
-		return "", types.ErrKeyNotFound
+		return nil, types.ErrKeyNotFound
 	}
 	return k.value, nil
 }
 
 // Set attempts to set the value of a key.
-func (m *Memory) Set(key, value string) error {
+func (m *Memory) Set(key string, value []byte) error {
 	m.Lock()
 	m.compaction()
 	m.items[key] = item{value: value, ts: time.Now()}
@@ -124,7 +124,7 @@ func (m *Memory) Set(key, value string) error {
 
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
-func (m *Memory) Add(key, value string) error {
+func (m *Memory) Add(key string, value []byte) error {
 	m.Lock()
 	if _, exists := m.items[key]; exists {
 		m.Unlock()
@@ -132,6 +132,15 @@ func (m *Memory) Add(key, value string) error {
 	}
 	m.compaction()
 	m.items[key] = item{value: value, ts: time.Now()}
+	m.Unlock()
+	return nil
+}
+
+// Delete attempts to remove a key.
+func (m *Memory) Delete(key string) error {
+	m.Lock()
+	m.compaction()
+	delete(m.items, key)
 	m.Unlock()
 	return nil
 }

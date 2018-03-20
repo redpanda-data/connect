@@ -44,6 +44,11 @@ by the dedupe processors of both the 'foo' and 'bar' inputs. A message received
 from both 'foo' and 'bar' would therefore be detected and removed since the
 cache is the same for both inputs.
 
+## `memcached`
+
+Connects to a cluster of memcached services, a prefix can be specified to allow
+multiple cache types to share a memcached cluster under different namespaces.
+
 ## `memory`
 
 The memory cache simply stores key/value pairs in a map held in memory. This
