@@ -58,7 +58,7 @@ type Config struct {
 	Compress    CompressConfig    `json:"compress" yaml:"compress"`
 	Condition   ConditionConfig   `json:"condition" yaml:"condition"`
 	Decompress  DecompressConfig  `json:"decompress" yaml:"decompress"`
-	HashDedupe  HashDedupeConfig  `json:"hash_dedupe" yaml:"hash_dedupe"`
+	Dedupe      DedupeConfig      `json:"dedupe" yaml:"dedupe"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
@@ -78,7 +78,7 @@ func NewConfig() Config {
 		Compress:    NewCompressConfig(),
 		Condition:   NewConditionConfig(),
 		Decompress:  NewDecompressConfig(),
-		HashDedupe:  NewHashDedupeConfig(),
+		Dedupe:      NewDedupeConfig(),
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),
 		Sample:      NewSampleConfig(),

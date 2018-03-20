@@ -32,16 +32,19 @@ import (
 type Cache interface {
 	// Get attempts to locate and return a cached value by its key, returns an
 	// error if the key does not exist or if the command fails.
-	Get(key string) (string, error)
+	Get(key string) ([]byte, error)
 
 	// Set attempts to set the value of a key, returns an error if the command
 	// fails.
-	Set(key, value string) error
+	Set(key string, value []byte) error
 
 	// Add attempts to set the value of a key only if the key does not already
 	// exist, returns an error if the key already exists or if the command
 	// fails.
-	Add(key, value string) error
+	Add(key string, value []byte) error
+
+	// Delete attempts to remove a key. Returns an error if a failure occurs.
+	Delete(key string) error
 }
 
 //------------------------------------------------------------------------------

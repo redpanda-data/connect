@@ -18,39 +18,66 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// +build integration
-
 package processor
 
 import (
 	"math/rand"
+	"net/http"
 	"os"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/cache"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 func init() {
-    rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano())
 }
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
+type fakeMgr struct {
+	caches map[string]types.Cache
+}
 
-func TestHashDedupe(t *testing.T) {
+func (f *fakeMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
+}
+func (f *fakeMgr) GetCache(name string) (types.Cache, error) {
+	if c, exists := f.caches[name]; exists {
+		return c, nil
+	}
+	return nil, types.ErrCacheNotFound
+}
+func (f *fakeMgr) GetCondition(name string) (types.Condition, error) {
+	return nil, types.ErrConditionNotFound
+}
+
+func TestDedupe(t *testing.T) {
 	rndText1 := randStringRunes(20)
 	rndText2 := randStringRunes(15)
 	doc1 := []byte(rndText1)
 	doc2 := []byte(rndText1) // duplicate
 	doc3 := []byte(rndText2)
 
-	conf := NewConfig()
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err1 := NewHashDedupe(conf, nil, testLog, metrics.DudType{})
+
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	if cacheErr != nil {
+		t.Fatal(cacheErr)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+
+	conf := NewConfig()
+	conf.Dedupe.Cache = "foocache"
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
 	if err1 != nil {
 		t.Error(err1)
 		return
@@ -84,7 +111,63 @@ func TestHashDedupe(t *testing.T) {
 	}
 }
 
-func TestHashDedupePartSelection(t *testing.T) {
+func TestDedupeXXHash(t *testing.T) {
+	rndText1 := randStringRunes(20)
+	rndText2 := randStringRunes(15)
+	doc1 := []byte(rndText1)
+	doc2 := []byte(rndText1) // duplicate
+	doc3 := []byte(rndText2)
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	if cacheErr != nil {
+		t.Fatal(cacheErr)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+
+	conf := NewConfig()
+	conf.Dedupe.Cache = "foocache"
+	conf.Dedupe.HashType = "xxhash"
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	if err1 != nil {
+		t.Error(err1)
+		return
+	}
+
+	msgIn := types.NewMessage([][]byte{doc1})
+	msgOut, err := proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
+	}
+	if nil == msgOut {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate")
+	}
+
+	msgIn = types.NewMessage([][]byte{doc2})
+	msgOut, err = proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
+	}
+	if nil != msgOut {
+		t.Error("Message 2 told to propagate even if it was expected not to propagate")
+	}
+
+	msgIn = types.NewMessage([][]byte{doc3})
+	msgOut, err = proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
+	}
+	if nil == msgOut {
+		t.Error("Message 3 told not to propagate even if it was expected to propagate")
+	}
+}
+
+func TestDedupePartSelection(t *testing.T) {
 	hdr := []byte(`some header`)
 	rndText1 := randStringRunes(20)
 	rndText2 := randStringRunes(15)
@@ -92,10 +175,22 @@ func TestHashDedupePartSelection(t *testing.T) {
 	doc2 := []byte(rndText1) // duplicate
 	doc3 := []byte(rndText2)
 
-	conf := NewConfig()
-	conf.HashDedupe.Parts = []int{1} // only take the 2nd part
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err1 := NewHashDedupe(conf, nil, testLog, metrics.DudType{})
+
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	if cacheErr != nil {
+		t.Fatal(cacheErr)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+
+	conf := NewConfig()
+	conf.Dedupe.Cache = "foocache"
+	conf.Dedupe.Parts = []int{1} // only take the 2nd part
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
 	if err1 != nil {
 		t.Error(err1)
 		return
@@ -129,12 +224,59 @@ func TestHashDedupePartSelection(t *testing.T) {
 	}
 }
 
-func TestHashDedupeBoundsCheck(t *testing.T) {
+func TestDedupeBadCache(t *testing.T) {
 	conf := NewConfig()
-	conf.HashDedupe.Parts = []int{5}
+	conf.Dedupe.Cache = "foocache"
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err1 := NewHashDedupe(conf, nil, testLog, metrics.DudType{})
+
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{},
+	}
+	if _, err := NewDedupe(conf, mgr, testLog, metrics.DudType{}); err == nil {
+		t.Error("Expected error from missing cache")
+	}
+}
+
+func TestDedupeBadHash(t *testing.T) {
+	conf := NewConfig()
+	conf.Dedupe.Cache = "foocache"
+	conf.Dedupe.HashType = "notexist"
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	if cacheErr != nil {
+		t.Fatal(cacheErr)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+	if _, err := NewDedupe(conf, mgr, testLog, metrics.DudType{}); err == nil {
+		t.Error("Expected error from bad hash")
+	}
+}
+
+func TestDedupeBoundsCheck(t *testing.T) {
+	conf := NewConfig()
+	conf.Dedupe.Cache = "foocache"
+	conf.Dedupe.Parts = []int{5}
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	if cacheErr != nil {
+		t.Fatal(cacheErr)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
 	if err1 != nil {
 		t.Fatal(err1)
 	}
@@ -150,12 +292,24 @@ func TestHashDedupeBoundsCheck(t *testing.T) {
 	}
 }
 
-func TestHashDedupeNegBoundsCheck(t *testing.T) {
+func TestDedupeNegBoundsCheck(t *testing.T) {
 	conf := NewConfig()
-	conf.HashDedupe.Parts = []int{-5}
+	conf.Dedupe.Cache = "foocache"
+	conf.Dedupe.Parts = []int{-5}
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-	proc, err1 := NewHashDedupe(conf, nil, testLog, metrics.DudType{})
+
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	if cacheErr != nil {
+		t.Fatal(cacheErr)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
 	if err1 != nil {
 		t.Fatal(err1)
 	}
@@ -172,9 +326,9 @@ func TestHashDedupeNegBoundsCheck(t *testing.T) {
 }
 
 func randStringRunes(n int) string {
-    b := make([]rune, n)
-    for i := range b {
-        b[i] = letterRunes[rand.Intn(len(letterRunes))]
-    }
-    return string(b)
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }

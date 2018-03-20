@@ -47,15 +47,17 @@ var Constructors = map[string]TypeSpec{}
 
 // Config is the all encompassing configuration struct for all cache types.
 type Config struct {
-	Type   string       `json:"type" yaml:"type"`
-	Memory MemoryConfig `json:"memory" yaml:"memory"`
+	Type      string          `json:"type" yaml:"type"`
+	Memcached MemcachedConfig `json:"memcached" yaml:"memcached"`
+	Memory    MemoryConfig    `json:"memory" yaml:"memory"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:   "memory",
-		Memory: NewMemoryConfig(),
+		Type:      "memory",
+		Memcached: NewMemcachedConfig(),
+		Memory:    NewMemoryConfig(),
 	}
 }
 

@@ -84,6 +84,15 @@ last element with be selected, and so on.
 Parts that fail to decompress (invalid format) will be removed from the message.
 If the message results in zero parts it is skipped entirely.
 
+## `dedupe`
+
+Dedupes messages by caching selected (and optionally hashed) parts, dropping
+messages that are already cached. The hash type can be chosen from: none or
+xxhash (more will come soon).
+
+Caches should be configured as a resource, for more information check out the
+[documentation here](../caches).
+
 ## `hash_sample`
 
 Passes on a percentage of messages deterministically by hashing selected parts

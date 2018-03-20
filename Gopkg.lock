@@ -72,6 +72,12 @@
   revision = "4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/bradfitz/gomemcache"
+  packages = ["memcache"]
+  revision = "1952afaa557dc08e8e0d89eafab110fb501c1a2b"
+
+[[projects]]
   name = "github.com/bsm/sarama-cluster"
   packages = ["."]
   revision = "cf455bc755fe41ac9bb2861e7a961833d9c2ecc3"
@@ -323,6 +329,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "beebab40c50fb14ccb3eb7c07b0921828ec26f7670971b28e89b1ac1ff4034f6"
+  inputs-digest = "5f97500d7aef822a95e562d480528d26cba7b9dc7d7ddadf6694875bb434b996"
   solver-name = "gps-cdcl"
   solver-version = 1

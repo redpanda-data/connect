@@ -177,6 +177,11 @@ input:
     decompress:
       algorithm: gzip
       parts: []
+    dedupe:
+      cache: ""
+      hash_type: none
+      parts:
+      - 0
     hash_sample:
       retain_min: 0
       retain_max: 10
@@ -328,6 +333,11 @@ resources:
   caches:
     default:
       type: memory
+      memcached:
+        addresses:
+        - localhost:11211
+        prefix: ""
+        ttl: 300
       memory:
         ttl: 300
         compaction_interval_s: 60
