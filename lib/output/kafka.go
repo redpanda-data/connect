@@ -38,6 +38,9 @@ acknowledged, which is propagated back to the input. The config field
 'ack_replicas' determines whether we wait for acknowledgement from all replicas
 or just a single broker.
 
+It is possible to specify a compression codec to use out of the following
+options: none, snappy, lz4 and gzip.
+
 If the field 'key' is not empty then each message will be given its contents as
 a key. This field can be dynamically set using function interpolations described
 [here](../config_interpolation.md#functions).

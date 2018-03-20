@@ -18,6 +18,7 @@ output:
     addresses:
     - localhost:9092
     client_id: benthos_kafka_output
+    compression: none
     key: ""
     max_msg_bytes: 1e+06
     round_robin_partitions: false

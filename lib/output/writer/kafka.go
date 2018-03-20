@@ -41,6 +41,7 @@ type KafkaConfig struct {
 	Key                  string   `json:"key" yaml:"key"`
 	RoundRobinPartitions bool     `json:"round_robin_partitions" yaml:"round_robin_partitions"`
 	Topic                string   `json:"topic" yaml:"topic"`
+	Compression          string   `json:"compression" yaml:"compression"`
 	MaxMsgBytes          int      `json:"max_msg_bytes" yaml:"max_msg_bytes"`
 	TimeoutMS            int      `json:"timeout_ms" yaml:"timeout_ms"`
 	AckReplicas          bool     `json:"ack_replicas" yaml:"ack_replicas"`
@@ -54,6 +55,7 @@ func NewKafkaConfig() KafkaConfig {
 		Key:                  "",
 		RoundRobinPartitions: false,
 		Topic:                "benthos_stream",
+		Compression:          "none",
 		MaxMsgBytes:          1000000,
 		TimeoutMS:            5000,
 		AckReplicas:          true,
@@ -73,7 +75,8 @@ type Kafka struct {
 	keyBytes       []byte
 	interpolateKey bool
 
-	producer sarama.SyncProducer
+	producer    sarama.SyncProducer
+	compression sarama.CompressionCodec
 }
 
 // NewKafka creates a new Kafka writer type.
@@ -81,12 +84,18 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 	keyBytes := []byte(conf.Key)
 	interpolateKey := text.ContainsFunctionVariables(keyBytes)
 
+	compression, err := strToCompressionCodec(conf.Compression)
+	if err != nil {
+		return nil, err
+	}
+
 	k := Kafka{
 		log:            log.NewModule(".output.kafka"),
 		stats:          stats,
 		conf:           conf,
 		keyBytes:       keyBytes,
 		interpolateKey: interpolateKey,
+		compression:    compression,
 	}
 
 	for _, addr := range conf.Addresses {
@@ -102,6 +111,22 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 
 //------------------------------------------------------------------------------
 
+func strToCompressionCodec(str string) (sarama.CompressionCodec, error) {
+	switch str {
+	case "none":
+		return sarama.CompressionNone, nil
+	case "snappy":
+		return sarama.CompressionSnappy, nil
+	case "lz4":
+		return sarama.CompressionLZ4, nil
+	case "gzip":
+		return sarama.CompressionGZIP, nil
+	}
+	return sarama.CompressionNone, fmt.Errorf("compression codec not recognised: %v", str)
+}
+
+//------------------------------------------------------------------------------
+
 // Connect attempts to establish a connection to a Kafka broker.
 func (k *Kafka) Connect() error {
 	if k.producer != nil {
@@ -111,6 +136,7 @@ func (k *Kafka) Connect() error {
 	config := sarama.NewConfig()
 	config.ClientID = k.conf.ClientID
 
+	config.Producer.Compression = k.compression
 	config.Producer.MaxMessageBytes = k.conf.MaxMsgBytes
 	config.Producer.Timeout = time.Duration(k.conf.TimeoutMS) * time.Millisecond
 	config.Producer.Return.Errors = true

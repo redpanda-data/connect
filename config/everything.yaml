@@ -272,6 +272,7 @@ output:
     key: ""
     round_robin_partitions: false
     topic: benthos_stream
+    compression: none
     max_msg_bytes: 1000000
     timeout_ms: 5000
     ack_replicas: true
