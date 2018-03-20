@@ -57,6 +57,9 @@ set_json:
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
 contains keys that aren't strings those fields will be ignored.
 
+If the path is empty or "." the original contents of the target message part
+will be overridden entirely by the contents of 'value'.
+
 The part index can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the
@@ -177,8 +180,8 @@ func NewSetJSON(
 		log:        log.NewModule(".processor.set_json"),
 		stats:      stats,
 	}
-	if len(j.target) == 0 || len(conf.SetJSON.Path) == 0 {
-		return nil, ErrEmptyTargetPath
+	if len(conf.SetJSON.Path) == 0 || conf.SetJSON.Path == "." {
+		j.target = nil
 	}
 	j.interpolate = text.ContainsFunctionVariables(j.valueBytes)
 	return j, nil
@@ -208,25 +211,30 @@ func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		return msgs[:], nil
 	}
 
-	jsonPart, err := msg.GetJSON(index)
-	if err != nil {
-		p.stats.Incr("processor.set_json.error.json_parse", 1)
-		p.stats.Incr("processor.set_json.dropped", 1)
-		p.log.Errorf("Failed to parse part into json: %v\n", err)
-		return msgs[:], nil
+	var data interface{} = valueBytes
+
+	if len(p.target) > 0 {
+		jsonPart, err := msg.GetJSON(index)
+		if err != nil {
+			p.stats.Incr("processor.set_json.error.json_parse", 1)
+			p.stats.Incr("processor.set_json.dropped", 1)
+			p.log.Errorf("Failed to parse part into json: %v\n", err)
+			return msgs[:], nil
+		}
+
+		var gPart *gabs.Container
+		if gPart, err = gabs.Consume(jsonPart); err != nil {
+			p.stats.Incr("processor.set_json.error.json_parse", 1)
+			p.stats.Incr("processor.set_json.dropped", 1)
+			p.log.Errorf("Failed to parse part into json: %v\n", err)
+			return msgs[:], nil
+		}
+
+		gPart.Set(valueBytes, p.target...)
+		data = gPart.Data()
 	}
 
-	var gPart *gabs.Container
-	if gPart, err = gabs.Consume(jsonPart); err != nil {
-		p.stats.Incr("processor.set_json.error.json_parse", 1)
-		p.stats.Incr("processor.set_json.dropped", 1)
-		p.log.Errorf("Failed to parse part into json: %v\n", err)
-		return msgs[:], nil
-	}
-
-	gPart.Set(valueBytes, p.target...)
-
-	if err = msg.SetJSON(index, gPart.Data()); err != nil {
+	if err := msg.SetJSON(index, data); err != nil {
 		p.stats.Incr("processor.set_json.error.json_set", 1)
 		p.log.Errorf("Failed to convert json into part: %v\n", err)
 	}

@@ -13,16 +13,10 @@ import (
 func TestSetJSONValidation(t *testing.T) {
 	conf := NewConfig()
 	conf.SetJSON.Part = 0
-	conf.SetJSON.Path = ""
+	conf.SetJSON.Path = "foo.bar"
 	conf.SetJSON.Value = []byte(`this isnt valid json`)
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
-
-	if _, err := NewSetJSON(conf, nil, testLog, metrics.DudType{}); err != ErrEmptyTargetPath {
-		t.Errorf("Wrong error for empty target: %v != %v", err, ErrEmptyTargetPath)
-	}
-
-	conf.SetJSON.Path = "foo.bar"
 
 	jSet, err := NewSetJSON(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
@@ -161,6 +155,20 @@ func TestSetJSON(t *testing.T) {
 			value:  `${!echo:10}`,
 			input:  `{"foo":{"bar":5}}`,
 			output: `{"foo":{"bar":10}}`,
+		},
+		{
+			name:   "set root 1",
+			path:   "",
+			value:  `{"baz":1}`,
+			input:  `hello world`,
+			output: `{"baz":1}`,
+		},
+		{
+			name:   "set root 2",
+			path:   ".",
+			value:  `{"baz":1}`,
+			input:  `{"foo":2}`,
+			output: `{"baz":1}`,
 		},
 	}
 
