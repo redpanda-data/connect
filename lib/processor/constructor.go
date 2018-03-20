@@ -62,6 +62,7 @@ type Config struct {
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
+	SelectJSON  SelectJSONConfig  `json:"select_json" yaml:"select_json"`
 	SelectParts SelectPartsConfig `json:"select_parts" yaml:"select_parts"`
 	SetJSON     SetJSONConfig     `json:"set_json" yaml:"set_json"`
 	Split       struct{}          `json:"split" yaml:"split"`
@@ -82,6 +83,7 @@ func NewConfig() Config {
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),
 		Sample:      NewSampleConfig(),
+		SelectJSON:  NewSelectJSONConfig(),
 		SelectParts: NewSelectPartsConfig(),
 		SetJSON:     NewSetJSONConfig(),
 		Split:       struct{}{},

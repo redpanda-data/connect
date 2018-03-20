@@ -193,6 +193,9 @@ input:
     sample:
       retain: 0.1
       seed: 0
+    select_json:
+      part: 0
+      path: ""
     select_parts:
       parts:
       - 0

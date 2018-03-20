@@ -131,6 +131,46 @@ unchanged.
 Passes on a percentage of messages, either randomly or sequentially, and drops
 all others.
 
+## `select_json`
+
+Parses a message part as a JSON blob and attempts to obtain a field within the
+structure identified by a dot path. If found successfully the value will become
+the new contents of the target message part according to its type, meaning a
+string field will be unquoted, but an object/array will remain valid JSON.
+
+For example, with the following config:
+
+``` yaml
+select_json:
+  part: 0
+  path: foo.bar
+```
+
+If the initial contents of part 0 were:
+
+``` json
+{"foo":{"bar":"1", "baz":"2"}}
+```
+
+Then the resulting contents of part 0 would be: `1`. However, if the
+initial contents of part 0 were:
+
+``` json
+{"foo":{"bar":{"baz":"1"}}}
+```
+
+The resulting contents of part 0 would be: `{"baz":"1"}`
+
+Sometimes messages are received in an enveloped form, where the real payload is
+a field inside a larger JSON structure. The 'select_json' processor can extract
+the payload into the message contents as a valid JSON structure in this case
+even if the payload is an escaped string.
+
+The part index can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if part = -1 then the selected part
+will be the last part of the message, if part = -2 then the part before the
+last element with be selected, and so on.
+
 ## `select_parts`
 
 Cherry pick a set of parts from messages by their index. Indexes larger than the
@@ -168,6 +208,9 @@ set_json:
 
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
 contains keys that aren't strings those fields will be ignored.
+
+If the path is empty or "." the original contents of the target message part
+will be overridden entirely by the contents of 'value'.
 
 The part index can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if part = -1 then the selected part

@@ -22,7 +22,6 @@ package processor
 
 import (
 	"encoding/json"
-	"errors"
 	"strings"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -69,13 +68,6 @@ This processor will interpolate functions within the 'value' field, you can find
 a list of functions [here](../config_interpolation.md#functions).`,
 	}
 }
-
-//------------------------------------------------------------------------------
-
-// Errors for the SetJSON type.
-var (
-	ErrEmptyTargetPath = errors.New("target path is empty")
-)
 
 //------------------------------------------------------------------------------
 
@@ -234,7 +226,10 @@ func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		data = gPart.Data()
 	}
 
-	if err := msg.SetJSON(index, data); err != nil {
+	newMsg := msg.ShallowCopy()
+	msgs[0] = newMsg
+
+	if err := newMsg.SetJSON(index, data); err != nil {
 		p.stats.Incr("processor.set_json.error.json_set", 1)
 		p.log.Errorf("Failed to convert json into part: %v\n", err)
 	}
