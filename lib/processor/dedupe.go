@@ -52,7 +52,7 @@ Caches should be configured as a resource, for more information check out the
 // DedupeConfig contains any configuration for the Dedupe processor.
 type DedupeConfig struct {
 	Cache    string `json:"cache" yaml:"cache"`
-	HashType string `json:"hash_type" yaml:"hash_type"`
+	HashType string `json:"hash" yaml:"hash"`
 	Parts    []int  `json:"parts" yaml:"parts"` // message parts to hash
 }
 

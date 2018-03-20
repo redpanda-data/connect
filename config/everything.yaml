@@ -179,7 +179,7 @@ input:
       parts: []
     dedupe:
       cache: ""
-      hash_type: none
+      hash: none
       parts:
       - 0
     hash_sample:

@@ -144,15 +144,15 @@ input:
       - type: dedupe
         dedupe:
           cache: foobarcache
-          key_part: 0
           hash: none
+          parts: [0]
     - type: bar
       processors:
       - type: dedupe
         dedupe:
           cache: foobarcache
-          key_part: 0
           hash: none
+          parts: [0]
     - type: baz
 output:
   type: broker

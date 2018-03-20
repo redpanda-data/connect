@@ -19,15 +19,15 @@ input:
       - type: dedupe
         dedupe:
           cache: foobar
-          key_part: 0
           hash: none
+          parts: [0]
     - type: bar
       processors:
       - type: dedupe
         dedupe:
           cache: foobar
-          key_part: 0
           hash: none
+          parts: [0]
     - type: baz
 resources:
   caches:
