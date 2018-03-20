@@ -9,14 +9,52 @@ if the condition passes. Conditions themselves can modify ('not') and combine
 ('and', 'or') other conditions, and can therefore be used to create complex
 filters.
 
+The format of a condition is similar to other Benthos types:
+
+``` yaml
+condition:
+  type: content
+  content:
+    operator: equals
+    part: 0
+    arg: hello world
+```
+
+And using boolean condition types we can combine multiple conditions together:
+
+``` yaml
+condition:
+  type: and
+  and:
+  - type: content
+    content:
+      operator: contains
+      arg: hello world
+  - type: or
+    or:
+    - type: content
+      content:
+        operator: contains
+        arg: foo
+    - type: not
+      not:
+        type: content
+        content:
+          operator: contains
+          arg: bar
+```
+
+The above example could be summarised as 'content contains "hello world" and
+also either contains "foo" or does _not_ contain "bar"'.
+
 Conditions can be extremely useful for creating filters on an output. By using a
 fan out output broker with 'condition' processors on the brokered outputs it is
 possible to build curated data streams that filter on the content of each
 message.
 
 Here is an example config, where we have an output that receives only 'foo'
-messages, and an output that receives only 'bar' messages, and a third output
-that receives everything:
+messages, an output that receives only 'bar' messages, and a third output that
+receives everything:
 
 ``` yaml
 output:
