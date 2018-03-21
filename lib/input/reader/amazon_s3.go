@@ -48,27 +48,29 @@ type AmazonAWSCredentialsConfig struct {
 
 // AmazonS3Config is configuration values for the input type.
 type AmazonS3Config struct {
-	Region         string                     `json:"region" yaml:"region"`
-	Bucket         string                     `json:"bucket" yaml:"bucket"`
-	Prefix         string                     `json:"prefix" yaml:"prefix"`
-	DeleteObjects  bool                       `json:"delete_objects" yaml:"delete_objects"`
-	SQSURL         string                     `json:"sqs_url" yaml:"sqs_url"`
-	SQSBodyPath    string                     `json:"sqs_body_path" yaml:"sqs_body_path"`
-	SQSMaxMessages int64                      `json:"sqs_max_messages" yaml:"sqs_max_messages"`
-	Credentials    AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
-	TimeoutS       int64                      `json:"timeout_s" yaml:"timeout_s"`
+	Region          string                     `json:"region" yaml:"region"`
+	Bucket          string                     `json:"bucket" yaml:"bucket"`
+	Prefix          string                     `json:"prefix" yaml:"prefix"`
+	DeleteObjects   bool                       `json:"delete_objects" yaml:"delete_objects"`
+	SQSURL          string                     `json:"sqs_url" yaml:"sqs_url"`
+	SQSBodyPath     string                     `json:"sqs_body_path" yaml:"sqs_body_path"`
+	SQSEnvelopePath string                     `json:"sqs_envelope_path" yaml:"sqs_envelope_path"`
+	SQSMaxMessages  int64                      `json:"sqs_max_messages" yaml:"sqs_max_messages"`
+	Credentials     AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
+	TimeoutS        int64                      `json:"timeout_s" yaml:"timeout_s"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
 	return AmazonS3Config{
-		Region:         "eu-west-1",
-		Bucket:         "",
-		Prefix:         "",
-		DeleteObjects:  false,
-		SQSURL:         "",
-		SQSBodyPath:    "Records.s3.object.key",
-		SQSMaxMessages: 10,
+		Region:          "eu-west-1",
+		Bucket:          "",
+		Prefix:          "",
+		DeleteObjects:   false,
+		SQSURL:          "",
+		SQSBodyPath:     "Records.s3.object.key",
+		SQSEnvelopePath: "",
+		SQSMaxMessages:  10,
 		Credentials: AmazonAWSCredentialsConfig{
 			ID:     "",
 			Secret: "",
@@ -91,6 +93,7 @@ type AmazonS3 struct {
 	conf AmazonS3Config
 
 	sqsBodyPath []string
+	sqsEnvPath  []string
 
 	readKeys   []objKey
 	targetKeys []objKey
@@ -114,9 +117,14 @@ func NewAmazonS3(
 	if len(conf.SQSBodyPath) > 0 {
 		path = strings.Split(conf.SQSBodyPath, ".")
 	}
+	var envPath []string
+	if len(conf.SQSEnvelopePath) > 0 {
+		envPath = strings.Split(conf.SQSEnvelopePath, ".")
+	}
 	return &AmazonS3{
 		conf:        conf,
 		sqsBodyPath: path,
+		sqsEnvPath:  envPath,
 		log:         log.NewModule(".input.amazon_s3"),
 		stats:       stats,
 	}
@@ -189,6 +197,7 @@ func (a *AmazonS3) readSQSEvents() error {
 		return err
 	}
 
+messageLoop:
 	for _, sqsMsg := range output.Messages {
 		msgHandle := &sqs.DeleteMessageBatchRequestEntry{
 			Id:            sqsMsg.MessageId,
@@ -197,14 +206,29 @@ func (a *AmazonS3) readSQSEvents() error {
 
 		if sqsMsg.Body == nil {
 			dudMessageHandles = append(dudMessageHandles, msgHandle)
-			continue
+			continue messageLoop
 		}
 
 		gObj, err := gabs.ParseJSON([]byte(*sqsMsg.Body))
 		if err != nil {
 			dudMessageHandles = append(dudMessageHandles, msgHandle)
 			a.log.Errorf("Failed to parse SQS message body: %v\n", err)
-			continue
+			continue messageLoop
+		}
+
+		if len(a.sqsEnvPath) > 0 {
+			switch t := gObj.S(a.sqsEnvPath...).Data().(type) {
+			case string:
+				if gObj, err = gabs.ParseJSON([]byte(t)); err != nil {
+					dudMessageHandles = append(dudMessageHandles, msgHandle)
+					a.log.Errorf("Failed to parse SQS message envelope: %v\n", err)
+					continue messageLoop
+				}
+			default:
+				dudMessageHandles = append(dudMessageHandles, msgHandle)
+				a.log.Errorf("Unexpected envelope value: %v", t)
+				continue messageLoop
+			}
 		}
 
 		switch t := gObj.S(a.sqsBodyPath...).Data().(type) {

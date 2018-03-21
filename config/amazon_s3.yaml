@@ -13,6 +13,7 @@ input:
     prefix: ""
     region: eu-west-1
     sqs_body_path: Records.s3.object.key
+    sqs_envelope_path: ""
     sqs_max_messages: 10
     sqs_url: ""
     timeout_s: 5
