@@ -335,7 +335,7 @@ buffer:
   none: {}
 resources:
   caches:
-    default:
+    example:
       type: memory
       memcached:
         addresses:
@@ -346,7 +346,7 @@ resources:
         ttl: 300
         compaction_interval_s: 60
   conditions:
-    default:
+    example:
       type: content
       and: []
       content:

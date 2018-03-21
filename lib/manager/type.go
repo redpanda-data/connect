@@ -50,10 +50,10 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Caches: map[string]cache.Config{
-			"default": cache.NewConfig(),
+			"example": cache.NewConfig(),
 		},
 		Conditions: map[string]condition.Config{
-			"default": condition.NewConfig(),
+			"example": condition.NewConfig(),
 		},
 	}
 }
