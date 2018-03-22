@@ -122,6 +122,24 @@ Checks whether the part contains the argument (case sensitive.)
 Checks whether the part contains the argument under unicode case-folding (case
 insensitive.)
 
+### `prefix_cs`
+
+Checks whether the part begins with the argument (case sensitive.)
+
+### `prefix`
+
+Checks whether the part begins with the argument under unicode case-folding
+(case insensitive.)
+
+### `suffix_cs`
+
+Checks whether the part ends with the argument (case sensitive.)
+
+### `suffix`
+
+Checks whether the part ends with the argument under unicode case-folding (case
+insensitive.)
+
 ## `not`
 
 Not is a condition that returns the opposite (NOT) of its child condition. The

@@ -57,6 +57,24 @@ Checks whether the part contains the argument (case sensitive.)
 ### ` + "`contains`" + `
 
 Checks whether the part contains the argument under unicode case-folding (case
+insensitive.)
+
+### ` + "`prefix_cs`" + `
+
+Checks whether the part begins with the argument (case sensitive.)
+
+### ` + "`prefix`" + `
+
+Checks whether the part begins with the argument under unicode case-folding
+(case insensitive.)
+
+### ` + "`suffix_cs`" + `
+
+Checks whether the part ends with the argument (case sensitive.)
+
+### ` + "`suffix`" + `
+
+Checks whether the part ends with the argument under unicode case-folding (case
 insensitive.)`,
 	}
 }
@@ -114,6 +132,32 @@ func contentContainsFoldOperator(arg []byte) contentOperator {
 	}
 }
 
+func contentPrefixOperator(arg []byte) contentOperator {
+	return func(c []byte) bool {
+		return bytes.HasPrefix(c, arg)
+	}
+}
+
+func contentPrefixFoldOperator(arg []byte) contentOperator {
+	argLower := bytes.ToLower(arg)
+	return func(c []byte) bool {
+		return bytes.HasPrefix(bytes.ToLower(c), argLower)
+	}
+}
+
+func contentSuffixOperator(arg []byte) contentOperator {
+	return func(c []byte) bool {
+		return bytes.HasSuffix(c, arg)
+	}
+}
+
+func contentSuffixFoldOperator(arg []byte) contentOperator {
+	argLower := bytes.ToLower(arg)
+	return func(c []byte) bool {
+		return bytes.HasSuffix(bytes.ToLower(c), argLower)
+	}
+}
+
 func strToContentOperator(str, arg string) (contentOperator, error) {
 	switch str {
 	case "equals_cs":
@@ -124,6 +168,14 @@ func strToContentOperator(str, arg string) (contentOperator, error) {
 		return contentContainsOperator([]byte(arg)), nil
 	case "contains":
 		return contentContainsFoldOperator([]byte(arg)), nil
+	case "prefix_cs":
+		return contentPrefixOperator([]byte(arg)), nil
+	case "prefix":
+		return contentPrefixFoldOperator([]byte(arg)), nil
+	case "suffix_cs":
+		return contentSuffixOperator([]byte(arg)), nil
+	case "suffix":
+		return contentSuffixFoldOperator([]byte(arg)), nil
 	}
 	return nil, ErrInvalidContentOperator
 }

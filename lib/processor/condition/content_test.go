@@ -224,6 +224,150 @@ func TestContentCheck(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "prefix_cs foo pos",
+			fields: fields{
+				operator: "prefix_cs",
+				part:     0,
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("foo hello world"),
+			},
+			want: true,
+		},
+		{
+			name: "prefix_cs foo neg",
+			fields: fields{
+				operator: "prefix_cs",
+				part:     0,
+				arg:      "fOo",
+			},
+			arg: [][]byte{
+				[]byte("foo hello world"),
+			},
+			want: false,
+		},
+		{
+			name: "prefix_cs foo neg 2",
+			fields: fields{
+				operator: "prefix_cs",
+				part:     0,
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("hello foo world"),
+			},
+			want: false,
+		},
+		{
+			name: "prefix foo pos",
+			fields: fields{
+				operator: "prefix",
+				part:     0,
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("foo hello world"),
+			},
+			want: true,
+		},
+		{
+			name: "prefix foo pos 2",
+			fields: fields{
+				operator: "prefix",
+				part:     0,
+				arg:      "fOo",
+			},
+			arg: [][]byte{
+				[]byte("FoO hello world"),
+			},
+			want: true,
+		},
+		{
+			name: "prefix foo neg",
+			fields: fields{
+				operator: "prefix",
+				part:     0,
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("hello foo world"),
+			},
+			want: false,
+		},
+		{
+			name: "suffix_cs foo pos",
+			fields: fields{
+				operator: "suffix_cs",
+				part:     0,
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("hello world foo"),
+			},
+			want: true,
+		},
+		{
+			name: "suffix_cs foo neg",
+			fields: fields{
+				operator: "suffix_cs",
+				part:     0,
+				arg:      "fOo",
+			},
+			arg: [][]byte{
+				[]byte("hello world foo"),
+			},
+			want: false,
+		},
+		{
+			name: "suffix_cs foo neg 2",
+			fields: fields{
+				operator: "suffix_cs",
+				part:     0,
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("hello foo world"),
+			},
+			want: false,
+		},
+		{
+			name: "suffix foo pos",
+			fields: fields{
+				operator: "suffix",
+				part:     0,
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("hello world foo"),
+			},
+			want: true,
+		},
+		{
+			name: "suffix foo pos 2",
+			fields: fields{
+				operator: "suffix",
+				part:     0,
+				arg:      "fOo",
+			},
+			arg: [][]byte{
+				[]byte("hello world FoO"),
+			},
+			want: true,
+		},
+		{
+			name: "suffix foo neg",
+			fields: fields{
+				operator: "suffix",
+				part:     0,
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("hello foo world"),
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
