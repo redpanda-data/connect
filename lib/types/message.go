@@ -82,6 +82,11 @@ type Message interface {
 	// single parts.
 	Bytes() []byte
 
+	// LazyCondition lazily evaluates conditions on the message by caching the
+	// results as per a label to identify the condition. The cache of results is
+	// cleared whenever the contents of the message is changed.
+	LazyCondition(label string, cond Condition) bool
+
 	// ShallowCopy creates a shallow copy of the message, where the list of
 	// message parts can be edited independently from the original version.
 	// However, editing the byte array contents of a message part will still
@@ -147,8 +152,9 @@ type partCache struct {
 // and
 // helper functions.
 type messageImpl struct {
-	parts      [][]byte
-	partCaches []*partCache
+	parts       [][]byte
+	partCaches  []*partCache
+	resultCache map[string]bool
 }
 
 //------------------------------------------------------------------------------
@@ -221,7 +227,8 @@ func (m *messageImpl) ShallowCopy() Message {
 	// the hash and len fields we cannot safely copy the content as it may
 	// contain pointers or ref types.
 	return &messageImpl{
-		parts: append([][]byte(nil), m.parts...),
+		parts:       append([][]byte(nil), m.parts...),
+		resultCache: m.resultCache,
 	}
 }
 
@@ -266,18 +273,20 @@ func (m *messageImpl) Set(index int, b []byte) {
 		// Remove now invalid part cache.
 		m.partCaches[index] = nil
 	}
+	m.clearGeneralCaches()
 	m.parts[index] = b
 }
 
 func (m *messageImpl) SetAll(p [][]byte) {
 	m.parts = p
-	m.partCaches = nil
+	m.clearAllCaches()
 }
 
 func (m *messageImpl) Append(b ...[]byte) int {
 	for _, p := range b {
 		m.parts = append(m.parts, p)
 	}
+	m.clearGeneralCaches()
 	return len(m.parts) - 1
 }
 
@@ -298,6 +307,15 @@ func (m *messageImpl) expandCache(index int) {
 	cParts := make([]*partCache, index+1)
 	copy(cParts, m.partCaches)
 	m.partCaches = cParts
+}
+
+func (m *messageImpl) clearGeneralCaches() {
+	m.resultCache = nil
+}
+
+func (m *messageImpl) clearAllCaches() {
+	m.resultCache = nil
+	m.partCaches = nil
 }
 
 func (m *messageImpl) GetJSON(part int) (interface{}, error) {
@@ -337,7 +355,20 @@ func (m *messageImpl) SetJSON(part int, jObj interface{}) error {
 	m.partCaches[part] = &partCache{
 		json: jObj,
 	}
+	m.clearGeneralCaches()
 	return nil
+}
+
+func (m *messageImpl) LazyCondition(label string, cond Condition) bool {
+	if m.resultCache == nil {
+		m.resultCache = map[string]bool{}
+	} else if res, exists := m.resultCache[label]; exists {
+		return res
+	}
+
+	res := cond.Check(m)
+	m.resultCache[label] = res
+	return res
 }
 
 //------------------------------------------------------------------------------

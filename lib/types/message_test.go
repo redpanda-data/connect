@@ -299,6 +299,85 @@ func TestMessageSplitJSON(t *testing.T) {
 	}
 }
 
+type dummyCond struct {
+	call  func(m Message) bool
+	calls int
+}
+
+func (d *dummyCond) Check(m Message) bool {
+	d.calls++
+	return d.call(m)
+}
+
+func TestMessageConditionCaching(t *testing.T) {
+	msg := messageImpl{
+		parts: [][]byte{
+			[]byte(`foo`),
+		},
+	}
+
+	dummyCond1 := &dummyCond{
+		call: func(m Message) bool {
+			return string(m.Get(0)) == "foo"
+		},
+	}
+	dummyCond2 := &dummyCond{
+		call: func(m Message) bool {
+			return string(m.Get(0)) == "bar"
+		},
+	}
+
+	if !msg.LazyCondition("1", dummyCond1) {
+		t.Error("Wrong result from cond 1")
+	}
+	if !msg.LazyCondition("1", dummyCond1) {
+		t.Error("Wrong result from cached cond 1")
+	}
+	if !msg.LazyCondition("1", dummyCond2) {
+		t.Error("Wrong result from cached cond 1 with cond 2")
+	}
+
+	if msg.LazyCondition("2", dummyCond2) {
+		t.Error("Wrong result from cond 2")
+	}
+	if msg.LazyCondition("2", dummyCond2) {
+		t.Error("Wrong result from cached cond 2")
+	}
+
+	if exp, act := 1, dummyCond1.calls; exp != act {
+		t.Errorf("Wrong count of calls for cond 1: %v != %v", act, exp)
+	}
+	if exp, act := 1, dummyCond2.calls; exp != act {
+		t.Errorf("Wrong count of calls for cond 2: %v != %v", act, exp)
+	}
+
+	msg.Set(0, []byte("bar"))
+
+	if msg.LazyCondition("1", dummyCond1) {
+		t.Error("Wrong result from cond 1")
+	}
+	if msg.LazyCondition("1", dummyCond1) {
+		t.Error("Wrong result from cached cond 1")
+	}
+	if msg.LazyCondition("1", dummyCond2) {
+		t.Error("Wrong result from cached cond 1 with cond 2")
+	}
+
+	if !msg.LazyCondition("2", dummyCond2) {
+		t.Error("Wrong result from cond 2")
+	}
+	if !msg.LazyCondition("2", dummyCond2) {
+		t.Error("Wrong result from cached cond 2")
+	}
+
+	if exp, act := 2, dummyCond1.calls; exp != act {
+		t.Errorf("Wrong count of calls for cond 1: %v != %v", act, exp)
+	}
+	if exp, act := 2, dummyCond2.calls; exp != act {
+		t.Errorf("Wrong count of calls for cond 2: %v != %v", act, exp)
+	}
+}
+
 func TestMessageCrossContaminateJSON(t *testing.T) {
 	msg1 := messageImpl{
 		parts: [][]byte{
