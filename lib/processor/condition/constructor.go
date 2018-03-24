@@ -57,6 +57,7 @@ type Config struct {
 	Not      NotConfig     `json:"not" yaml:"not"`
 	Or       OrConfig      `json:"or" yaml:"or"`
 	Resource string        `json:"resource" yaml:"resource"`
+	Xor      XorConfig     `json:"xor" yaml:"xor"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -68,6 +69,7 @@ func NewConfig() Config {
 		Not:      NewNotConfig(),
 		Or:       NewOrConfig(),
 		Resource: "",
+		Xor:      NewXorConfig(),
 	}
 }
 

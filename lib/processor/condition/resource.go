@@ -114,8 +114,7 @@ func (c *Resource) Check(msg types.Message) bool {
 		c.log.Errorf("Failed to obtain condition resource '%v': %v", c.name, err)
 		return false
 	}
-	// TODO: Result caching.
-	return cond.Check(msg)
+	return msg.LazyCondition(c.name, cond)
 }
 
 //------------------------------------------------------------------------------
