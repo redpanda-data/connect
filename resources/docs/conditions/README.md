@@ -140,6 +140,36 @@ Checks whether the part ends with the argument (case sensitive.)
 Checks whether the part ends with the argument under unicode case-folding (case
 insensitive.)
 
+## `jmespath`
+
+Parses a message part as a JSON blob and attempts to apply a JMESPath expression
+to it, expecting a boolean response. If the response is true the condition
+passes, otherwise it does not. Please refer to the
+[JMESPath website](http://jmespath.org/) for information and tutorials regarding
+the syntax of expressions.
+
+For example, with the following config:
+
+``` yaml
+jmespath:
+  part: 0
+  query: a == 'foo'
+```
+
+If the initial jmespaths of part 0 were:
+
+``` json
+{
+	"a": "foo"
+}
+```
+
+Then the condition would pass.
+
+JMESPath is traditionally used for mutating JSON jmespath, in order to do this
+please instead use the [`jmespath`](../processors/README.md#jmespath)
+processor instead.
+
 ## `not`
 
 Not is a condition that returns the opposite (NOT) of its child condition. The
@@ -223,6 +253,12 @@ It is also worth noting that when conditions are used as resources in this way
 they will only be executed once per message, regardless of how many times they
 are referenced (unless the content is modified). Therefore, resource conditions
 can act as a runtime optimisation as well as a config optimisation.
+
+## `xor`
+
+Xor is a condition that returns the logical XOR of its children conditions,
+meaning it only resolves to true if _exactly_ one of its children conditions
+resolves to true.
 
 [0]: ../processors/README.md
 [1]: ../processors/README.md#condition

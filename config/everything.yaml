@@ -172,9 +172,13 @@ input:
         operator: equals_cs
         part: 0
         arg: ""
+      jmespath:
+        part: 0
+        query: ""
       not: {}
       or: []
       resource: ""
+      xor: []
     decompress:
       algorithm: gzip
       parts: []
@@ -191,6 +195,9 @@ input:
     insert_part:
       index: -1
       content: ""
+    jmespath:
+      part: 0
+      query: ""
     sample:
       retain: 0.1
       seed: 0
@@ -354,9 +361,13 @@ resources:
         operator: equals_cs
         part: 0
         arg: ""
+      jmespath:
+        part: 0
+        query: ""
       not: {}
       or: []
       resource: ""
+      xor: []
 logger:
   prefix: service
   log_level: INFO

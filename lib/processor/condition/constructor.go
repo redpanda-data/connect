@@ -51,13 +51,14 @@ var Constructors = map[string]TypeSpec{}
 
 // Config is the all encompassing configuration struct for all condition types.
 type Config struct {
-	Type     string        `json:"type" yaml:"type"`
-	And      AndConfig     `json:"and" yaml:"and"`
-	Content  ContentConfig `json:"content" yaml:"content"`
-	Not      NotConfig     `json:"not" yaml:"not"`
-	Or       OrConfig      `json:"or" yaml:"or"`
-	Resource string        `json:"resource" yaml:"resource"`
-	Xor      XorConfig     `json:"xor" yaml:"xor"`
+	Type     string         `json:"type" yaml:"type"`
+	And      AndConfig      `json:"and" yaml:"and"`
+	Content  ContentConfig  `json:"content" yaml:"content"`
+	JMESPath JMESPathConfig `json:"jmespath" yaml:"jmespath"`
+	Not      NotConfig      `json:"not" yaml:"not"`
+	Or       OrConfig       `json:"or" yaml:"or"`
+	Resource string         `json:"resource" yaml:"resource"`
+	Xor      XorConfig      `json:"xor" yaml:"xor"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -66,6 +67,7 @@ func NewConfig() Config {
 		Type:     "content",
 		And:      NewAndConfig(),
 		Content:  NewContentConfig(),
+		JMESPath: NewJMESPathConfig(),
 		Not:      NewNotConfig(),
 		Or:       NewOrConfig(),
 		Resource: "",

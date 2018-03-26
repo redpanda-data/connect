@@ -121,6 +121,49 @@ than the length of the existing parts it will be inserted at the beginning.
 This processor will interpolate functions within the 'content' field, you can
 find a list of functions [here](../config_interpolation.md#functions).
 
+## `jmespath`
+
+Parses a message part as a JSON blob and attempts to apply a JMESPath expression
+to it, replacing the contents of the part with the result. Please refer to the
+[JMESPath website](http://jmespath.org/) for information and tutorials regarding
+the syntax of expressions.
+
+For example, with the following config:
+
+``` yaml
+jmespath:
+  part: 0
+  query: locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}
+```
+
+If the initial contents of part 0 were:
+
+``` json
+{
+  "locations": [
+    {"name": "Seattle", "state": "WA"},
+    {"name": "New York", "state": "NY"},
+    {"name": "Bellevue", "state": "WA"},
+    {"name": "Olympia", "state": "WA"}
+  ]
+}
+```
+
+Then the resulting contents of part 0 would be:
+
+``` json
+{"Cities": "Bellevue, Olympia, Seattle"}
+```
+
+It is possible to create boolean queries with JMESPath, in order to filter
+messages with boolean queries please instead use the
+[`jmespath`](../conditions/README.md#jmespath) condition instead.
+
+The part index can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if part = -1 then the selected part
+will be the last part of the message, if part = -2 then the part before the
+last element with be selected, and so on.
+
 ## `noop`
 
 Noop is a no-op processor that does nothing, the message passes through

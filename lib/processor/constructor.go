@@ -61,6 +61,7 @@ type Config struct {
 	Dedupe      DedupeConfig      `json:"dedupe" yaml:"dedupe"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
+	JMESPath    JMESPathConfig    `json:"jmespath" yaml:"jmespath"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
 	SelectJSON  SelectJSONConfig  `json:"select_json" yaml:"select_json"`
 	SelectParts SelectPartsConfig `json:"select_parts" yaml:"select_parts"`
@@ -82,6 +83,7 @@ func NewConfig() Config {
 		Dedupe:      NewDedupeConfig(),
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),
+		JMESPath:    NewJMESPathConfig(),
 		Sample:      NewSampleConfig(),
 		SelectJSON:  NewSelectJSONConfig(),
 		SelectParts: NewSelectPartsConfig(),
