@@ -6,6 +6,7 @@ input:
   amazon_sqs:
     credentials:
       id: ""
+      role: ""
       secret: ""
       token: ""
     region: eu-west-1
@@ -16,6 +17,7 @@ output:
   amazon_sqs:
     credentials:
       id: ""
+      role: ""
       secret: ""
       token: ""
     region: eu-west-1

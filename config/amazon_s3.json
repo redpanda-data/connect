@@ -8,6 +8,7 @@
 			"bucket": "",
 			"credentials": {
 				"id": "",
+				"role": "",
 				"secret": "",
 				"token": ""
 			},
@@ -27,6 +28,7 @@
 			"bucket": "",
 			"credentials": {
 				"id": "",
+				"role": "",
 				"secret": "",
 				"token": ""
 			},

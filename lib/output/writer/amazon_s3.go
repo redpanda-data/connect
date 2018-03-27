@@ -30,6 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
@@ -41,6 +42,7 @@ type AmazonAWSCredentialsConfig struct {
 	ID     string `json:"id" yaml:"id"`
 	Secret string `json:"secret" yaml:"secret"`
 	Token  string `json:"token" yaml:"token"`
+	Role   string `json:"role" yaml:"role"`
 }
 
 // AmazonS3Config is configuration values for the input type.
@@ -123,6 +125,12 @@ func (a *AmazonS3) Connect() error {
 	sess, err := session.NewSession(awsConf)
 	if err != nil {
 		return err
+	}
+
+	if len(a.conf.Credentials.Role) > 0 {
+		sess.Config = sess.Config.WithCredentials(
+			stscreds.NewCredentials(sess, a.conf.Credentials.Role),
+		)
 	}
 
 	a.session = sess

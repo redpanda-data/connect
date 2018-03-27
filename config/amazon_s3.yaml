@@ -7,6 +7,7 @@ input:
     bucket: ""
     credentials:
       id: ""
+      role: ""
       secret: ""
       token: ""
     delete_objects: false
@@ -23,6 +24,7 @@ output:
     bucket: ""
     credentials:
       id: ""
+      role: ""
       secret: ""
       token: ""
     path: ${!count:files}-${!timestamp_unix_nano}.txt

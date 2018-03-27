@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
@@ -103,6 +104,12 @@ func (a *AmazonSQS) Connect() error {
 	sess, err := session.NewSession(awsConf)
 	if err != nil {
 		return err
+	}
+
+	if len(a.conf.Credentials.Role) > 0 {
+		sess.Config = sess.Config.WithCredentials(
+			stscreds.NewCredentials(sess, a.conf.Credentials.Role),
+		)
 	}
 
 	a.session = sess

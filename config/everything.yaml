@@ -16,6 +16,7 @@ input:
       id: ""
       secret: ""
       token: ""
+      role: ""
     timeout_s: 5
   amazon_sqs:
     region: eu-west-1
@@ -24,6 +25,7 @@ input:
       id: ""
       secret: ""
       token: ""
+      role: ""
     timeout_s: 5
   amqp:
     url: amqp://guest:guest@localhost:5672/
@@ -225,6 +227,7 @@ output:
       id: ""
       secret: ""
       token: ""
+      role: ""
     timeout_s: 5
   amazon_sqs:
     region: eu-west-1
@@ -233,6 +236,7 @@ output:
       id: ""
       secret: ""
       token: ""
+      role: ""
   amqp:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange

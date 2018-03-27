@@ -7,6 +7,7 @@
 		"amazon_sqs": {
 			"credentials": {
 				"id": "",
+				"role": "",
 				"secret": "",
 				"token": ""
 			},
@@ -20,6 +21,7 @@
 		"amazon_sqs": {
 			"credentials": {
 				"id": "",
+				"role": "",
 				"secret": "",
 				"token": ""
 			},
