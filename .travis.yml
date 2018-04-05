@@ -1,6 +1,9 @@
 language: go
 go:
   - stable
+sudo: required
+services:
+  - docker
 script:
   - make
-  - make test
+  - make test-integration

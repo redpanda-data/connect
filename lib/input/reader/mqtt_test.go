@@ -18,8 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// +build integration
-
 package reader
 
 import (
@@ -33,9 +31,10 @@ import (
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/ory/dockertest"
 )
 
-func getMQTTConn(urls []string, t *testing.T) mqtt.Client {
+func getMQTTConn(urls []string) (mqtt.Client, error) {
 	inConf := mqtt.NewClientOptions().
 		SetClientID("UNIT_TEST")
 	for _, u := range urls {
@@ -46,24 +45,64 @@ func getMQTTConn(urls []string, t *testing.T) mqtt.Client {
 	tok := mIn.Connect()
 	tok.Wait()
 	if cErr := tok.Error(); cErr != nil {
-		t.Fatal(cErr)
+		return nil, cErr
 	}
 
-	return mIn
+	return mIn, nil
 }
 
-func sendMsg(c mqtt.Client, topic, msg string, t *testing.T) {
+func sendMsg(c mqtt.Client, topic, msg string) error {
 	mtok := c.Publish(topic, 2, false, msg)
 	mtok.Wait()
-	if mErr := mtok.Error(); mErr != nil {
-		t.Error(mErr)
-	}
+	return mtok.Error()
 }
 
-func TestMQTTConnect(t *testing.T) {
+func TestMQTTIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	pool, err := dockertest.NewPool("")
+	if err != nil {
+		t.Skipf("Could not connect to docker: %s", err)
+	}
+
+	resource, err := pool.Run("ncarlier/mqtt", "latest", nil)
+	if err != nil {
+		t.Fatalf("Could not start resource: %s", err)
+	}
+
+	urls := []string{fmt.Sprintf("tcp://localhost:%v", resource.GetPort("1883/tcp"))}
+
+	if err = pool.Retry(func() error {
+		client, err := getMQTTConn(urls)
+		if err == nil {
+			client.Disconnect(0)
+		}
+		return err
+	}); err != nil {
+		t.Fatalf("Could not connect to docker resource: %s", err)
+	}
+
+	defer func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %v", err)
+		}
+	}()
+
+	t.Run("TestMQTTConnect", func(te *testing.T) {
+		testMQTTConnect(urls, te)
+	})
+	t.Run("TestMQTTDisconnect", func(te *testing.T) {
+		testMQTTDisconnect(urls, te)
+	})
+}
+
+func testMQTTConnect(urls []string, t *testing.T) {
 	conf := NewMQTTConfig()
 	conf.ClientID = "foo"
 	conf.Topics = []string{"test_input_1"}
+	conf.URLs = urls
 
 	m, err := NewMQTT(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
@@ -81,13 +120,28 @@ func TestMQTTConnect(t *testing.T) {
 		}
 	}()
 
-	mIn := getMQTTConn(m.urls, t)
+	var mIn mqtt.Client
+	if mIn, err = getMQTTConn(urls); err != nil {
+		t.Fatal(err)
+	}
+
+	defer mIn.Disconnect(0)
+
+	N := 10
+
+	wg := sync.WaitGroup{}
+	wg.Add(N)
 
 	testMsgs := map[string]struct{}{}
-	for i := 0; i < 10; i++ {
+	for i := 0; i < N; i++ {
 		str := fmt.Sprintf("hello world: %v", i)
 		testMsgs[str] = struct{}{}
-		go sendMsg(mIn, "test_input_1", str, t)
+		go func(testStr string) {
+			if sErr := sendMsg(mIn, "test_input_1", testStr); sErr != nil {
+				t.Error(err)
+			}
+			wg.Done()
+		}(str)
 	}
 
 	lMsgs := len(testMsgs)
@@ -97,7 +151,7 @@ func TestMQTTConnect(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else {
-			act := string(actM.Parts[0])
+			act := string(actM.Get(0))
 			if _, exists := testMsgs[act]; !exists {
 				t.Errorf("Unexpected message: %v", act)
 			}
@@ -105,12 +159,15 @@ func TestMQTTConnect(t *testing.T) {
 		}
 		lMsgs = len(testMsgs)
 	}
+
+	wg.Wait()
 }
 
-func TestMQTTDisconnect(t *testing.T) {
+func testMQTTDisconnect(urls []string, t *testing.T) {
 	conf := NewMQTTConfig()
 	conf.ClientID = "foo"
 	conf.Topics = []string{"test_input_1"}
+	conf.URLs = urls
 
 	m, err := NewMQTT(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
