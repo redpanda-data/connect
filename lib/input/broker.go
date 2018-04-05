@@ -51,40 +51,50 @@ func init() {
 		description: `
 The broker type allows you to combine multiple inputs, where each input will be
 read in parallel. A broker type is configured with its own list of input
-configurations.
+configurations and a field to specify how many copies of the list of inputs
+should be created.
 
 Adding more input types allows you to merge streams from multiple sources into
-one. For example, having both a ZMQ4 PULL socket and a Nanomsg PULL socket:
+one. For example, reading from both RabbitMQ and Kafka:
 
 ` + "``` yaml" + `
 type: broker
 broker:
+  copies: 1
   inputs:
-  -
-    type: scalability_protocols
-    scalability_protocols:
-      address: tcp://nanoserver:3003
-      bind_address: false
-      socket_type: PULL
-  -
-    type: zmq4
-    zmq4:
+  - type: amqp
+    amqp:
+      url: amqp://guest:guest@localhost:5672/
+      consumer_tag: benthos-consumer
+      exchange: benthos-exchange
+      exchange_type: direct
+      key: benthos-key
+      queue: benthos-queue
+  - type: kafka
+    kafka:
       addresses:
-      - tcp://zmqserver:3004
-      socket_type: PULL
+      - localhost:9092
+      client_id: benthos_kafka_input
+      consumer_group: benthos_consumer_group
+      partition: 0
+      topic: benthos_stream
+
 ` + "```" + `
 
-Sometimes you will want several inputs of the same or similar configuration. You
-can use the special type ditto in this case to duplicate the previous config and
-apply selective changes.
+If the number of copies is greater than zero the list will be copied that number
+of times. For example, if your inputs were of type foo and bar, with 'copies'
+set to '2', you would end up with two 'foo' inputs and two 'bar' inputs.
 
-For example, if combining two kafka inputs with mostly the same set up but
+Sometimes you will want several inputs of similar configuration. For this
+purpose you can use the special type 'ditto', which duplicates the previous
+config and applies selective changes.
+
+For example, if combining two Kafka inputs with mostly the same set up but
 reading different partitions you can use this shortcut:
 
 ` + "``` yaml" + `
 inputs:
--
-  type: kafka
+- type: kafka
   kafka:
     addresses:
       - localhost:9092
@@ -92,29 +102,27 @@ inputs:
     consumer_group: benthos_consumer_group
     topic: benthos_stream
     partition: 0
--
-  type: ditto
+- type: ditto
   kafka:
     partition: 1
 ` + "```" + `
 
-Which will result in two inputs targeting the same kafka brokers, on the same
-consumer group etc, but consuming their own partitions. Ditto can also be
-specified with a multiplier, which is useful if you want multiple inputs that do
-not differ in config, like this:
+Which will result in two inputs targeting the same Kafka brokers, on the same
+consumer group etc, but consuming their own partitions.
+
+Ditto can also be specified with a multiplier, which is useful if you want
+multiple inputs that do not differ in config, like this:
 
 ` + "``` yaml" + `
 inputs:
--
-  type: kafka_balanced
+- type: kafka_balanced
   kafka:
     addresses:
       - localhost:9092
     client_id: benthos_kafka_input
     consumer_group: benthos_consumer_group
     topic: benthos_stream
--
-  type: ditto_3
+- type: ditto_3
 ` + "```" + `
 
 Which results in a total of four kafka_balanced inputs. Note that ditto_0 will
@@ -127,12 +135,14 @@ and there's a chance you won't want any duplicates.`,
 
 // BrokerConfig is configuration for the Broker input type.
 type BrokerConfig struct {
+	Copies int             `json:"copies" yaml:"copies"`
 	Inputs brokerInputList `json:"inputs" yaml:"inputs"`
 }
 
 // NewBrokerConfig creates a new BrokerConfig with default values.
 func NewBrokerConfig() BrokerConfig {
 	return BrokerConfig{
+		Copies: 1,
 		Inputs: brokerInputList{},
 	}
 }
@@ -271,9 +281,9 @@ func NewBroker(
 	stats metrics.Type,
 	pipelines ...pipeline.ConstructorFunc,
 ) (Type, error) {
-	lInputs := len(conf.Broker.Inputs)
+	lInputs := len(conf.Broker.Inputs) * conf.Broker.Copies
 
-	if lInputs == 0 {
+	if lInputs <= 0 {
 		return nil, ErrBrokerNoInputs
 	}
 	if lInputs == 1 {
@@ -283,10 +293,12 @@ func NewBroker(
 	inputs := make([]types.Producer, lInputs)
 
 	var err error
-	for i, iConf := range conf.Broker.Inputs {
-		inputs[i], err = New(iConf, mgr, log, stats, pipelines...)
-		if err != nil {
-			return nil, err
+	for j := 0; j < conf.Broker.Copies; j++ {
+		for i, iConf := range conf.Broker.Inputs {
+			inputs[len(conf.Broker.Inputs)*j+i], err = New(iConf, mgr, log, stats, pipelines...)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

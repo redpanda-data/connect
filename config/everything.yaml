@@ -37,6 +37,7 @@ input:
     prefetch_count: 1
     prefetch_size: 0
   broker:
+    copies: 1
     inputs: []
   dynamic:
     inputs: {}
@@ -245,6 +246,7 @@ output:
     exchange_type: direct
     key: benthos-key
   broker:
+    copies: 1
     pattern: fan_out
     outputs: []
   dynamic:

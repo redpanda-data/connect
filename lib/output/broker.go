@@ -82,6 +82,7 @@ parallel input sources or combine and split messages to create parallel batches
 
 // BrokerConfig is configuration for the Broker output type.
 type BrokerConfig struct {
+	Copies  int              `json:"copies" yaml:"copies"`
 	Pattern string           `json:"pattern" yaml:"pattern"`
 	Outputs brokerOutputList `json:"outputs" yaml:"outputs"`
 }
@@ -89,6 +90,7 @@ type BrokerConfig struct {
 // NewBrokerConfig creates a new BrokerConfig with default values.
 func NewBrokerConfig() BrokerConfig {
 	return BrokerConfig{
+		Copies:  1,
 		Pattern: "fan_out",
 		Outputs: brokerOutputList{},
 	}
@@ -101,19 +103,24 @@ func NewBrokerConfig() BrokerConfig {
 func NewBroker(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	outputConfs := conf.Broker.Outputs
 
-	if len(outputConfs) == 0 {
+	lOutputs := len(outputConfs) * conf.Broker.Copies
+
+	if lOutputs <= 0 {
 		return nil, ErrBrokerNoOutputs
-	} else if len(outputConfs) == 1 {
+	}
+	if lOutputs == 1 {
 		return New(outputConfs[0], mgr, log, stats)
 	}
 
-	outputs := make([]types.Output, len(outputConfs))
+	outputs := make([]types.Output, lOutputs)
 
 	var err error
-	for i, oConf := range outputConfs {
-		outputs[i], err = New(oConf, mgr, log, stats)
-		if err != nil {
-			return nil, err
+	for j := 0; j < conf.Broker.Copies; j++ {
+		for i, oConf := range outputConfs {
+			outputs[j*len(outputConfs)+i], err = New(oConf, mgr, log, stats)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

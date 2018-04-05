@@ -136,6 +136,7 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 			inSlice = append(inSlice, sanInput)
 		}
 		outputMap["broker"] = map[string]interface{}{
+			"copies": conf.Broker.Copies,
 			"inputs": inSlice,
 		}
 	} else {

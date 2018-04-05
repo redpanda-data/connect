@@ -5,12 +5,14 @@
 	},
 	"input": {
 		"broker": {
+			"copies": 1,
 			"inputs": []
 		},
 		"type": "broker"
 	},
 	"output": {
 		"broker": {
+			"copies": 1,
 			"outputs": [],
 			"pattern": "fan_out"
 		},

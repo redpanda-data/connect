@@ -4,10 +4,12 @@ http:
   read_timeout_ms: 5000
 input:
   broker:
+    copies: 1
     inputs: []
   type: broker
 output:
   broker:
+    copies: 1
     outputs: []
     pattern: fan_out
   type: broker
