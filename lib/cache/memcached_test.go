@@ -18,21 +18,65 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// +build integration
-
 package cache
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/ory/dockertest"
 )
 
-func TestMemcachedAddDuplicate(t *testing.T) {
+func TestMemcachedIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	pool, err := dockertest.NewPool("")
+	if err != nil {
+		t.Skipf("Could not connect to docker: %s", err)
+	}
+
+	resource, err := pool.Run("memcached", "latest", nil)
+	if err != nil {
+		t.Fatalf("Could not start resource: %s", err)
+	}
+
+	addrs := []string{fmt.Sprintf("localhost:%v", resource.GetPort("11211/tcp"))}
+
+	if err = pool.Retry(func() error {
+		conf := NewConfig()
+		conf.Memcached.Addresses = addrs
+
+		testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+		_, cErr := NewMemcached(conf, nil, testLog, metrics.DudType{})
+		return cErr
+	}); err != nil {
+		t.Fatalf("Could not connect to docker resource: %s", err)
+	}
+
+	defer func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %v", err)
+		}
+	}()
+
+	t.Run("TestMemcachedAddDuplicate", func(te *testing.T) {
+		testMemcachedAddDuplicate(addrs, te)
+	})
+	t.Run("TestMemcachedGetAndSet", func(te *testing.T) {
+		testMemcachedGetAndSet(addrs, te)
+	})
+}
+
+func testMemcachedAddDuplicate(addrs []string, t *testing.T) {
 	conf := NewConfig()
+	conf.Memcached.Addresses = addrs
+
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	c, err := NewMemcached(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
@@ -68,8 +112,10 @@ func TestMemcachedAddDuplicate(t *testing.T) {
 	}
 }
 
-func TestMemcachedGetAndSet(t *testing.T) {
+func testMemcachedGetAndSet(addrs []string, t *testing.T) {
 	conf := NewConfig()
+	conf.Memcached.Addresses = addrs
+
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	c, err := NewMemcached(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
