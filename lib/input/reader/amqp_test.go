@@ -30,34 +30,11 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/ory/dockertest"
+	"github.com/streadway/amqp"
 )
 
-func getMQTTConn(urls []string) (mqtt.Client, error) {
-	inConf := mqtt.NewClientOptions().
-		SetClientID("UNIT_TEST")
-	for _, u := range urls {
-		inConf = inConf.AddBroker(u)
-	}
-
-	mIn := mqtt.NewClient(inConf)
-	tok := mIn.Connect()
-	tok.Wait()
-	if cErr := tok.Error(); cErr != nil {
-		return nil, cErr
-	}
-
-	return mIn, nil
-}
-
-func sendMQTTMsg(c mqtt.Client, topic, msg string) error {
-	mtok := c.Publish(topic, 2, false, msg)
-	mtok.Wait()
-	return mtok.Error()
-}
-
-func TestMQTTIntegration(t *testing.T) {
+func TestAMQPIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -67,17 +44,17 @@ func TestMQTTIntegration(t *testing.T) {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
 
-	resource, err := pool.Run("ncarlier/mqtt", "latest", nil)
+	resource, err := pool.Run("rabbitmq", "latest", nil)
 	if err != nil {
 		t.Fatalf("Could not start resource: %s", err)
 	}
 
-	urls := []string{fmt.Sprintf("tcp://localhost:%v", resource.GetPort("1883/tcp"))}
+	url := fmt.Sprintf("amqp://guest:guest@localhost:%v/", resource.GetPort("5672/tcp"))
 
 	if err = pool.Retry(func() error {
-		client, err := getMQTTConn(urls)
+		client, err := amqp.Dial(url)
 		if err == nil {
-			client.Disconnect(0)
+			client.Close()
 		}
 		return err
 	}); err != nil {
@@ -90,21 +67,19 @@ func TestMQTTIntegration(t *testing.T) {
 		}
 	}()
 
-	t.Run("TestMQTTConnect", func(te *testing.T) {
-		testMQTTConnect(urls, te)
+	t.Run("TestAMQPConnect", func(te *testing.T) {
+		testAMQPConnect(url, te)
 	})
-	t.Run("TestMQTTDisconnect", func(te *testing.T) {
-		testMQTTDisconnect(urls, te)
+	t.Run("TestAMQPDisconnect", func(te *testing.T) {
+		testAMQPDisconnect(url, te)
 	})
 }
 
-func testMQTTConnect(urls []string, t *testing.T) {
-	conf := NewMQTTConfig()
-	conf.ClientID = "foo"
-	conf.Topics = []string{"test_input_1"}
-	conf.URLs = urls
+func testAMQPConnect(url string, t *testing.T) {
+	conf := NewAMQPConfig()
+	conf.URL = url
 
-	m, err := NewMQTT(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewAMQP(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,12 +95,20 @@ func testMQTTConnect(urls []string, t *testing.T) {
 		}
 	}()
 
-	var mIn mqtt.Client
-	if mIn, err = getMQTTConn(urls); err != nil {
+	var mIn *amqp.Connection
+	if mIn, err = amqp.Dial(url); err != nil {
 		t.Fatal(err)
 	}
 
-	defer mIn.Disconnect(0)
+	var mChan *amqp.Channel
+	if mChan, err = mIn.Channel(); err != nil {
+		t.Fatalf("AMQP Channel: %s", err)
+	}
+
+	defer func() {
+		mChan.Close()
+		mIn.Close()
+	}()
 
 	N := 10
 
@@ -137,8 +120,15 @@ func testMQTTConnect(urls []string, t *testing.T) {
 		str := fmt.Sprintf("hello world: %v", i)
 		testMsgs[str] = struct{}{}
 		go func(testStr string) {
-			if sErr := sendMQTTMsg(mIn, "test_input_1", testStr); sErr != nil {
-				t.Error(err)
+			if pErr := mChan.Publish(conf.Exchange, conf.BindingKey, false, false, amqp.Publishing{
+				Headers:         amqp.Table{},
+				ContentType:     "application/octet-stream",
+				ContentEncoding: "",
+				Body:            []byte(testStr),
+				DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
+				Priority:        0,              // 0-9
+			}); pErr != nil {
+				t.Error(pErr)
 			}
 			wg.Done()
 		}(str)
@@ -157,19 +147,20 @@ func testMQTTConnect(urls []string, t *testing.T) {
 			}
 			delete(testMsgs, act)
 		}
+		if err = m.Acknowledge(nil); err != nil {
+			t.Error(err)
+		}
 		lMsgs = len(testMsgs)
 	}
 
 	wg.Wait()
 }
 
-func testMQTTDisconnect(urls []string, t *testing.T) {
-	conf := NewMQTTConfig()
-	conf.ClientID = "foo"
-	conf.Topics = []string{"test_input_1"}
-	conf.URLs = urls
+func testAMQPDisconnect(url string, t *testing.T) {
+	conf := NewAMQPConfig()
+	conf.URL = url
 
-	m, err := NewMQTT(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewAMQP(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +179,7 @@ func testMQTTDisconnect(urls []string, t *testing.T) {
 		wg.Done()
 	}()
 
-	if _, err = m.Read(); err != types.ErrTypeClosed {
+	if _, err = m.Read(); err != types.ErrTypeClosed && err != types.ErrNotConnected {
 		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
 	}
 
