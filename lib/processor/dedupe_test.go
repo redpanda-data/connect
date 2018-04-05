@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"errors"
 	"math/rand"
 	"net/http"
 	"os"
@@ -235,6 +236,56 @@ func TestDedupeBadCache(t *testing.T) {
 	}
 	if _, err := NewDedupe(conf, mgr, testLog, metrics.DudType{}); err == nil {
 		t.Error("Expected error from missing cache")
+	}
+}
+
+type errCache struct{}
+
+func (e errCache) Get(key string) ([]byte, error) {
+	return nil, errors.New("test err")
+}
+func (e errCache) Set(key string, value []byte) error {
+	return errors.New("test err")
+}
+func (e errCache) Add(key string, value []byte) error {
+	return errors.New("test err")
+}
+func (e errCache) Delete(key string) error {
+	return errors.New("test err")
+}
+
+func TestDedupeCacheErrors(t *testing.T) {
+	conf := NewConfig()
+	conf.Dedupe.Cache = "foocache"
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": errCache{},
+		},
+	}
+
+	proc, err := NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{[]byte("foo"), []byte("bar")}))
+	if exp := types.NewSimpleResponse(nil); !reflect.DeepEqual(exp, res) || len(msgs) > 0 {
+		t.Error("Expected message drop on error: %v - %v", res, len(msgs))
+	}
+
+	conf.Dedupe.DropOnCacheErr = false
+
+	proc, err = NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{[]byte("foo"), []byte("bar")}))
+	if res != nil || len(msgs) != 1 {
+		t.Error("Expected message propagate on error: %v - %v", res, len(msgs))
 	}
 }
 

@@ -190,6 +190,7 @@ input:
       hash: none
       parts:
       - 0
+      drop_on_err: true
     hash_sample:
       retain_min: 0
       retain_max: 10

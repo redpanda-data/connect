@@ -51,17 +51,19 @@ Caches should be configured as a resource, for more information check out the
 
 // DedupeConfig contains any configuration for the Dedupe processor.
 type DedupeConfig struct {
-	Cache    string `json:"cache" yaml:"cache"`
-	HashType string `json:"hash" yaml:"hash"`
-	Parts    []int  `json:"parts" yaml:"parts"` // message parts to hash
+	Cache          string `json:"cache" yaml:"cache"`
+	HashType       string `json:"hash" yaml:"hash"`
+	Parts          []int  `json:"parts" yaml:"parts"` // message parts to hash
+	DropOnCacheErr bool   `json:"drop_on_err" yaml:"drop_on_err"`
 }
 
 // NewDedupeConfig returns a DedupeConfig with default values.
 func NewDedupeConfig() DedupeConfig {
 	return DedupeConfig{
-		Cache:    "",
-		HashType: "none",
-		Parts:    []int{0}, // only consider the 1st part
+		Cache:          "",
+		HashType:       "none",
+		Parts:          []int{0}, // only consider the 1st part
+		DropOnCacheErr: true,
 	}
 }
 
@@ -172,12 +174,17 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	}
 
 	if err := d.cache.Add(string(hasher.Bytes()), []byte{'t'}); err != nil {
-		d.stats.Incr("processor.dedupe.dropped", 1)
 		if err != types.ErrKeyAlreadyExists {
 			d.stats.Incr("processor.dedupe.error.cache", 1)
 			d.log.Errorf("Cache error: %v\n", err)
+			if d.conf.Dedupe.DropOnCacheErr {
+				d.stats.Incr("processor.dedupe.dropped", 1)
+				return nil, types.NewSimpleResponse(nil)
+			}
+		} else {
+			d.stats.Incr("processor.dedupe.dropped", 1)
+			return nil, types.NewSimpleResponse(nil)
 		}
-		return nil, types.NewSimpleResponse(nil)
 	}
 
 	d.stats.Incr("processor.dedupe.sent", 1)
