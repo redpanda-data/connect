@@ -45,6 +45,7 @@ type KafkaConfig struct {
 	MaxMsgBytes          int      `json:"max_msg_bytes" yaml:"max_msg_bytes"`
 	TimeoutMS            int      `json:"timeout_ms" yaml:"timeout_ms"`
 	AckReplicas          bool     `json:"ack_replicas" yaml:"ack_replicas"`
+	TargetVersion        string   `json:"target_version" yaml:"target_version"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -59,6 +60,7 @@ func NewKafkaConfig() KafkaConfig {
 		MaxMsgBytes:          1000000,
 		TimeoutMS:            5000,
 		AckReplicas:          true,
+		TargetVersion:        sarama.V0_8_2_0.String(),
 	}
 }
 
@@ -70,6 +72,7 @@ type Kafka struct {
 	stats metrics.Type
 
 	addresses []string
+	version   sarama.KafkaVersion
 	conf      KafkaConfig
 
 	keyBytes       []byte
@@ -96,6 +99,10 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 		keyBytes:       keyBytes,
 		interpolateKey: interpolateKey,
 		compression:    compression,
+	}
+
+	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
+		return nil, err
 	}
 
 	for _, addr := range conf.Addresses {
@@ -135,6 +142,8 @@ func (k *Kafka) Connect() error {
 
 	config := sarama.NewConfig()
 	config.ClientID = k.conf.ClientID
+
+	config.Version = k.version
 
 	config.Producer.Compression = k.compression
 	config.Producer.MaxMessageBytes = k.conf.MaxMsgBytes

@@ -87,6 +87,7 @@ input:
     topic: benthos_stream
     partition: 0
     start_from_oldest: true
+    target_version: 0.8.2.0
   kafka_balanced:
     addresses:
     - localhost:9092
@@ -291,6 +292,7 @@ output:
     max_msg_bytes: 1000000
     timeout_ms: 5000
     ack_replicas: true
+    target_version: 0.8.2.0
   mqtt:
     urls:
     - tcp://localhost:1883

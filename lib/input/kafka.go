@@ -36,7 +36,12 @@ func init() {
 Connects to a kafka (0.8+) server. Offsets are managed within kafka as per the
 consumer group (set via config). Only one partition per input is supported, if
 you wish to balance partitions across a consumer group look at the
-'kafka_balanced' input type instead.`,
+'kafka_balanced' input type instead.
+
+The target version by default will be the oldest supported, as it is expected
+that the server will be backwards compatible. In order to support newer client
+features you should increase this version up to the known version of the target
+server.`,
 	}
 }
 

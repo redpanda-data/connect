@@ -48,7 +48,12 @@ a key. This field can be dynamically set using function interpolations described
 By default the paritioner will select partitions based on a hash of the key
 value. If the key is empty then a partition is chosen at random. You can
 alternatively force the partitioner to round-robin partitions with the field
-'round_robin_partitions'.`,
+'round_robin_partitions'.
+
+The target version by default will be the oldest supported, as it is expected
+that the server will be backwards compatible. In order to support newer client
+features you should increase this version up to the known version of the target
+server.`,
 	}
 }
 

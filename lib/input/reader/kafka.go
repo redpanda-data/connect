@@ -41,6 +41,7 @@ type KafkaConfig struct {
 	Topic           string   `json:"topic" yaml:"topic"`
 	Partition       int32    `json:"partition" yaml:"partition"`
 	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TargetVersion   string   `json:"target_version" yaml:"target_version"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -52,6 +53,7 @@ func NewKafkaConfig() KafkaConfig {
 		Topic:           "benthos_stream",
 		Partition:       0,
 		StartFromOldest: true,
+		TargetVersion:   sarama.V0_8_2_0.String(),
 	}
 }
 
@@ -62,6 +64,7 @@ type Kafka struct {
 	client       sarama.Client
 	coordinator  *sarama.Broker
 	partConsumer sarama.PartitionConsumer
+	version      sarama.KafkaVersion
 
 	sMut sync.Mutex
 
@@ -83,6 +86,12 @@ func NewKafka(
 		stats:  stats,
 		log:    log.NewModule(".input.kafka"),
 	}
+
+	var err error
+	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
+		return nil, err
+	}
+
 	for _, addr := range conf.Addresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
 			if len(splitAddr) > 0 {
@@ -143,6 +152,7 @@ func (k *Kafka) Connect() error {
 	}
 
 	config := sarama.NewConfig()
+	config.Version = k.version
 	config.ClientID = k.conf.ClientID
 	config.Net.DialTimeout = time.Second
 	config.Consumer.Return.Errors = true
