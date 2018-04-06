@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package impl
+package sequential
 
 import (
 	"fmt"
@@ -29,13 +29,6 @@ import (
 
 	"github.com/Jeffail/benthos/lib/types"
 )
-
-func TestMemoryInterface(t *testing.T) {
-	b := &Memory{}
-	if c := Buffer(b); c == nil {
-		t.Error("Memory does not satisfy the MessageStack interface")
-	}
-}
 
 func TestMemoryBasic(t *testing.T) {
 	n := 100

@@ -27,9 +27,4 @@ type Type interface {
 	types.Producer
 	types.Consumer
 	types.Closable
-
-	// ErrorsChan returns the channel used for returning any accumulated errors.
-	// This needs reading in the same select block where messages are sent as
-	// the errors can occur at any time.
-	ErrorsChan() <-chan []error
 }

@@ -25,25 +25,53 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/buffer/impl"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
 
-// OutputWrapper wraps a buffer with a Producer/Consumer interface.
-type OutputWrapper struct {
-	stats metrics.Type
+// Sequential represents a method of buffering sequential messages, supporting
+// only a single consumer.
+type Sequential interface {
+	// ShiftMessage removes the oldest message from the stack. Returns the
+	// backlog in bytes.
+	ShiftMessage() (int, error)
 
-	buffer impl.Buffer
+	// NextMessage reads the oldest message, the message is preserved until
+	// ShiftMessage is called.
+	NextMessage() (types.Message, error)
+
+	// PushMessage adds a new message to the stack. Returns the backlog in
+	// bytes.
+	PushMessage(types.Message) (int, error)
+
+	// CloseOnceEmpty closes the Buffer once the buffer has been emptied, this
+	// is a way for a writer to signal to a reader that it is finished writing
+	// messages, and therefore the reader can close once it is caught up. This
+	// call blocks until the close is completed.
+	CloseOnceEmpty()
+
+	// Close closes the Buffer so that blocked readers or writers become
+	// unblocked.
+	Close()
+}
+
+//------------------------------------------------------------------------------
+
+// SequentialWrapper wraps a buffer with a Producer/Consumer interface.
+type SequentialWrapper struct {
+	stats metrics.Type
+	log   log.Modular
+
+	buffer Sequential
 
 	running int32
 
 	messagesIn   <-chan types.Transaction
 	messagesOut  chan types.Transaction
 	responsesOut chan types.Response
-	errorsChan   chan []error
 
 	closedWG sync.WaitGroup
 
@@ -51,19 +79,20 @@ type OutputWrapper struct {
 	closedChan chan struct{}
 }
 
-// NewOutputWrapper creates a new Producer/Consumer around a buffer.
-func NewOutputWrapper(
+// NewSequentialWrapper creates a new Producer/Consumer around a buffer.
+func NewSequentialWrapper(
 	conf Config,
-	buffer impl.Buffer,
+	buffer Sequential,
+	log log.Modular,
 	stats metrics.Type,
 ) Type {
-	m := OutputWrapper{
+	m := SequentialWrapper{
 		stats:        stats,
+		log:          log,
 		buffer:       buffer,
 		running:      1,
 		messagesOut:  make(chan types.Transaction),
 		responsesOut: make(chan types.Response),
-		errorsChan:   make(chan []error),
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
@@ -73,7 +102,7 @@ func NewOutputWrapper(
 //------------------------------------------------------------------------------
 
 // inputLoop is an internal loop that brokers incoming messages to the buffer.
-func (m *OutputWrapper) inputLoop() {
+func (m *SequentialWrapper) inputLoop() {
 	defer func() {
 		m.buffer.CloseOnceEmpty()
 		m.closedWG.Done()
@@ -106,16 +135,12 @@ func (m *OutputWrapper) inputLoop() {
 }
 
 // outputLoop is an internal loop brokers buffer messages to output pipe.
-func (m *OutputWrapper) outputLoop() {
+func (m *SequentialWrapper) outputLoop() {
 	defer func() {
 		m.buffer.Close()
 		close(m.messagesOut)
-		close(m.errorsChan)
 		m.closedWG.Done()
 	}()
-
-	errs := []error{}
-	errMap := map[error]struct{}{}
 
 	var msg types.Message
 	for atomic.LoadInt32(&m.running) == 1 {
@@ -124,16 +149,13 @@ func (m *OutputWrapper) outputLoop() {
 			if msg, err = m.buffer.NextMessage(); err != nil {
 				if err != types.ErrTypeClosed {
 					m.stats.Incr("buffer.read.error", 1)
+					m.log.Errorf("Failed to read buffer: %v\n", err)
 
 					// Unconventional errors here should always indicate some
 					// sort of corruption. Hopefully the corruption was message
 					// specific and not the whole buffer, so we can try shifting
 					// and reading again.
 					m.buffer.ShiftMessage()
-					if _, exists := errMap[err]; !exists {
-						errMap[err] = struct{}{}
-						errs = append(errs, err)
-					}
 				} else {
 					// If our buffer is closed then we exit.
 					return
@@ -160,28 +182,13 @@ func (m *OutputWrapper) outputLoop() {
 				m.stats.Gauge("buffer.backlog", int64(backlog))
 			} else {
 				m.stats.Incr("buffer.send.error", 1)
-				if _, exists := errMap[res.Error()]; !exists {
-					errMap[res.Error()] = struct{}{}
-					errs = append(errs, res.Error())
-				}
-			}
-		}
-
-		// If we have errors built up.
-		if len(errs) > 0 {
-			select {
-			case m.errorsChan <- errs:
-				errMap = map[error]struct{}{}
-				errs = []error{}
-			default:
-				// Reader not ready, do not block here.
 			}
 		}
 	}
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (m *OutputWrapper) StartReceiving(msgs <-chan types.Transaction) error {
+func (m *SequentialWrapper) StartReceiving(msgs <-chan types.Transaction) error {
 	if m.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}
@@ -197,25 +204,21 @@ func (m *OutputWrapper) StartReceiving(msgs <-chan types.Transaction) error {
 	return nil
 }
 
-// TransactionChan returns the channel used for consuming messages from this input.
-func (m *OutputWrapper) TransactionChan() <-chan types.Transaction {
+// TransactionChan returns the channel used for consuming messages from this
+// buffer.
+func (m *SequentialWrapper) TransactionChan() <-chan types.Transaction {
 	return m.messagesOut
 }
 
-// ErrorsChan returns the errors channel.
-func (m *OutputWrapper) ErrorsChan() <-chan []error {
-	return m.errorsChan
-}
-
-// CloseAsync shuts down the OutputWrapper and stops processing messages.
-func (m *OutputWrapper) CloseAsync() {
+// CloseAsync shuts down the SequentialWrapper and stops processing messages.
+func (m *SequentialWrapper) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&m.running, 1, 0) {
 		close(m.closeChan)
 	}
 }
 
-// WaitForClose blocks until the OutputWrapper output has closed down.
-func (m *OutputWrapper) WaitForClose(timeout time.Duration) error {
+// WaitForClose blocks until the SequentialWrapper output has closed down.
+func (m *SequentialWrapper) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-m.closedChan:
 	case <-time.After(timeout):

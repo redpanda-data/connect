@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package impl
+package sequential
 
 import (
 	"fmt"
@@ -38,13 +38,6 @@ var logConfig = log.LoggerConfig{
 
 func cleanUpMmapDir(dir string) {
 	os.RemoveAll(dir)
-}
-
-func TestMmapBufferInterface(t *testing.T) {
-	b := &MmapBuffer{}
-	if c := Buffer(b); c == nil {
-		t.Error("MmapBuffer does not satisfy the Buffer interface")
-	}
 }
 
 func TestMmapBufferBasic(t *testing.T) {

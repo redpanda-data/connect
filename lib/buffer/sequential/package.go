@@ -18,35 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package impl
-
-import "github.com/Jeffail/benthos/lib/types"
-
-//------------------------------------------------------------------------------
-
-// Buffer represents a method of storing messages.
-type Buffer interface {
-	// ShiftMessage removes the oldest message from the stack. Returns the
-	// backlog in bytes.
-	ShiftMessage() (int, error)
-
-	// NextMessage reads the oldest message, the message is preserved until
-	// ShiftMessage is called.
-	NextMessage() (types.Message, error)
-
-	// PushMessage adds a new message to the stack. Returns the backlog in
-	// bytes.
-	PushMessage(types.Message) (int, error)
-
-	// CloseOnceEmpty closes the Buffer once the buffer has been emptied, this
-	// is a way for a writer to signal to a reader that it is finished writing
-	// messages, and therefore the reader can close once it is caught up. This
-	// call blocks until the close is completed.
-	CloseOnceEmpty()
-
-	// Close closes the Buffer so that blocked readers or writers become
-	// unblocked.
-	Close()
-}
-
-//------------------------------------------------------------------------------
+// Package sequential contains implementations of various buffer types where the
+// buffer can only be consumed once in a set sequence.
+package sequential

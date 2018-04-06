@@ -21,7 +21,7 @@
 package buffer
 
 import (
-	"github.com/Jeffail/benthos/lib/buffer/impl"
+	"github.com/Jeffail/benthos/lib/buffer/sequential"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -42,7 +42,7 @@ full. The messages are lost if the service is stopped.`,
 
 // NewMemory - Create a buffer held in memory.
 func NewMemory(config Config, log log.Modular, stats metrics.Type) (Type, error) {
-	return NewOutputWrapper(config, impl.NewMemory(config.Memory), stats), nil
+	return NewSequentialWrapper(config, sequential.NewMemory(config.Memory), log, stats), nil
 }
 
 //------------------------------------------------------------------------------

@@ -21,12 +21,13 @@
 package buffer
 
 import (
-	"errors"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/buffer/impl"
+	"github.com/Jeffail/benthos/lib/buffer/sequential"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
@@ -39,9 +40,9 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	b := NewOutputWrapper(conf, impl.NewMemory(impl.MemoryConfig{
+	b := NewSequentialWrapper(conf, sequential.NewMemory(sequential.MemoryConfig{
 		Limit: int(incr+15) * int(total),
-	}), metrics.DudType{})
+	}), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err := b.StartReceiving(tChan); err != nil {
 		t.Error(err)
 		return
@@ -213,9 +214,9 @@ func TestBufferClosing(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	b := NewOutputWrapper(conf, impl.NewMemory(impl.MemoryConfig{
+	b := NewSequentialWrapper(conf, sequential.NewMemory(sequential.MemoryConfig{
 		Limit: int(incr+15) * int(total),
-	}), metrics.DudType{})
+	}), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err := b.StartReceiving(tChan); err != nil {
 		t.Error(err)
 		return
@@ -276,101 +277,6 @@ func TestBufferClosing(t *testing.T) {
 
 	// Should already be shut down.
 	b.WaitForClose(time.Second)
-}
-
-func TestOutputWrapperErrProp(t *testing.T) {
-	tChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
-
-	conf := NewConfig()
-	b := NewOutputWrapper(conf, impl.NewMemory(impl.NewMemoryConfig()), metrics.DudType{})
-	if err := b.StartReceiving(tChan); err != nil {
-		t.Error(err)
-		return
-	}
-
-	msg := types.NewMessage(nil)
-	msg.Append([]byte(`hello world`))
-
-	select {
-	case tChan <- types.NewTransaction(msg, resChan):
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg send")
-	}
-	select {
-	case res, open := <-resChan:
-		if !open {
-			t.Error("buffer closed early")
-			return
-		}
-		if res.Error() != nil {
-			t.Error(res.Error())
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for result")
-	}
-
-	var outTr types.Transaction
-	var open bool
-	select {
-	case outTr, open = <-b.TransactionChan():
-		if !open {
-			t.Error("buffer closed early")
-			return
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for message")
-	}
-
-	errTest := errors.New("test error")
-	go func(rc chan<- types.Response) {
-		select {
-		case rc <- types.NewSimpleResponse(errTest):
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for error response")
-		}
-	}(outTr.ResponseChan)
-
-	select {
-	case errs, open := <-b.ErrorsChan():
-		if !open {
-			t.Error("buffer closed early")
-			return
-		}
-		if exp, act := 1, len(errs); exp != act {
-			t.Errorf("Wrong # of errors returned: %v != %v", exp, act)
-		}
-		if exp, act := errTest, errs[0]; exp != act {
-			t.Errorf("Wrong error returned: %v != %v", exp, act)
-		}
-	case <-time.After(time.Second * 5):
-		t.Error("Timed out waiting for errors returned")
-	}
-
-	select {
-	case outTr, open = <-b.TransactionChan():
-		if !open {
-			t.Error("buffer closed early")
-			return
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for message")
-	}
-
-	go func(rc chan<- types.Response) {
-		select {
-		case rc <- types.NewSimpleResponse(nil):
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for error response")
-		}
-	}(outTr.ResponseChan)
-
-	close(tChan)
-
-	b.CloseAsync()
-	if err := b.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
 }
 
 //------------------------------------------------------------------------------
