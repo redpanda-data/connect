@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/buffer/sequential"
+	"github.com/Jeffail/benthos/lib/buffer/single"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
@@ -40,7 +40,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	b := NewSequentialWrapper(conf, sequential.NewMemory(sequential.MemoryConfig{
+	b := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err := b.StartReceiving(tChan); err != nil {
@@ -214,7 +214,7 @@ func TestBufferClosing(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	b := NewSequentialWrapper(conf, sequential.NewMemory(sequential.MemoryConfig{
+	b := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err := b.StartReceiving(tChan); err != nil {
@@ -277,6 +277,56 @@ func TestBufferClosing(t *testing.T) {
 
 	// Should already be shut down.
 	b.WaitForClose(time.Second)
+}
+
+func BenchmarkSingleMem(b *testing.B) {
+	tChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+
+	conf := NewConfig()
+	buffer := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
+		Limit: 50000000,
+	}), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err := buffer.StartReceiving(tChan); err != nil {
+		b.Error(err)
+		return
+	}
+
+	contents := [][]byte{
+		make([]byte, 1024*1024*1),
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		select {
+		case tChan <- types.NewTransaction(types.NewMessage(contents), resChan):
+		case <-time.After(time.Second):
+			b.Errorf("Timed out waiting for buffered message %v send", i)
+			return
+		}
+		select {
+		case res := <-resChan:
+			if res.Error() != nil {
+				b.Error(res.Error())
+			}
+		case <-time.After(time.Second):
+			b.Errorf("Timed out waiting for buffered message %v response", i)
+			return
+		}
+
+		select {
+		case val := <-buffer.TransactionChan():
+			val.ResponseChan <- types.NewSimpleResponse(nil)
+		case <-time.After(time.Second):
+			b.Errorf("Timed out waiting for final buffered message read")
+			return
+		}
+	}
+	b.StopTimer()
+
+	buffer.CloseAsync()
+	buffer.WaitForClose(time.Second)
 }
 
 //------------------------------------------------------------------------------

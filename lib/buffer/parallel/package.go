@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// Package sequential contains implementations of various buffer types where the
-// buffer can only be consumed once in a set sequence.
-package sequential
+// Package parallel contains implementations of various buffer types where the
+// buffer can be consumed by any number of parallel consumer threads. Therefore,
+// since it is possible for consumers to requeue a message if the propagation
+// failed, it is possible for messages to be consumed out of sequence.
+package parallel

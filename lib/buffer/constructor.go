@@ -26,7 +26,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Jeffail/benthos/lib/buffer/sequential"
+	"github.com/Jeffail/benthos/lib/buffer/single"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
@@ -47,18 +47,18 @@ var Constructors = map[string]TypeSpec{}
 
 // Config is the all encompassing configuration struct for all input types.
 type Config struct {
-	Type   string                      `json:"type" yaml:"type"`
-	Memory sequential.MemoryConfig     `json:"memory" yaml:"memory"`
-	Mmap   sequential.MmapBufferConfig `json:"mmap_file" yaml:"mmap_file"`
-	None   struct{}                    `json:"none" yaml:"none"`
+	Type   string                  `json:"type" yaml:"type"`
+	Memory single.MemoryConfig     `json:"memory" yaml:"memory"`
+	Mmap   single.MmapBufferConfig `json:"mmap_file" yaml:"mmap_file"`
+	None   struct{}                `json:"none" yaml:"none"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
 		Type:   "none",
-		Memory: sequential.NewMemoryConfig(),
-		Mmap:   sequential.NewMmapBufferConfig(),
+		Memory: single.NewMemoryConfig(),
+		Mmap:   single.NewMmapBufferConfig(),
 		None:   struct{}{},
 	}
 }

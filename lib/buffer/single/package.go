@@ -18,31 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package buffer
-
-import (
-	"github.com/Jeffail/benthos/lib/buffer/parallel"
-	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
-)
-
-//------------------------------------------------------------------------------
-
-func init() {
-	Constructors["memory"] = TypeSpec{
-		constructor: NewMemory,
-		description: `
-The memory buffer type simply allocates a set amount of RAM for buffering
-messages. This can be useful when reading from sources that produce large bursts
-of data. Messages inside the buffer are lost if the service is stopped.`,
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// NewMemory - Create a buffer held in memory.
-func NewMemory(config Config, log log.Modular, stats metrics.Type) (Type, error) {
-	return NewParallelWrapper(config, parallel.NewMemory(config.Memory.Limit), log, stats), nil
-}
-
-//------------------------------------------------------------------------------
+// Package single contains implementations of various buffer types where the
+// buffer can only be consumed by a single thread (but any number of writers).
+package single

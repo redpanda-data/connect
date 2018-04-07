@@ -28,13 +28,14 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
 
-// Sequential represents a method of buffering sequential messages, supporting
+// Single represents a method of buffering sequential messages, supporting
 // only a single consumer.
-type Sequential interface {
+type Single interface {
 	// ShiftMessage removes the oldest message from the stack. Returns the
 	// backlog in bytes.
 	ShiftMessage() (int, error)
@@ -60,12 +61,13 @@ type Sequential interface {
 
 //------------------------------------------------------------------------------
 
-// SequentialWrapper wraps a buffer with a Producer/Consumer interface.
-type SequentialWrapper struct {
+// SingleWrapper wraps a buffer with a Producer/Consumer interface.
+type SingleWrapper struct {
 	stats metrics.Type
 	log   log.Modular
 
-	buffer Sequential
+	buffer      Single
+	errThrottle *throttle.Type
 
 	running int32
 
@@ -79,14 +81,14 @@ type SequentialWrapper struct {
 	closedChan chan struct{}
 }
 
-// NewSequentialWrapper creates a new Producer/Consumer around a buffer.
-func NewSequentialWrapper(
+// NewSingleWrapper creates a new Producer/Consumer around a buffer.
+func NewSingleWrapper(
 	conf Config,
-	buffer Sequential,
+	buffer Single,
 	log log.Modular,
 	stats metrics.Type,
 ) Type {
-	m := SequentialWrapper{
+	m := SingleWrapper{
 		stats:        stats,
 		log:          log,
 		buffer:       buffer,
@@ -96,13 +98,15 @@ func NewSequentialWrapper(
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
+
+	m.errThrottle = throttle.New(throttle.OptCloseChan(m.closeChan))
 	return &m
 }
 
 //------------------------------------------------------------------------------
 
 // inputLoop is an internal loop that brokers incoming messages to the buffer.
-func (m *SequentialWrapper) inputLoop() {
+func (m *SingleWrapper) inputLoop() {
 	defer func() {
 		m.buffer.CloseOnceEmpty()
 		m.closedWG.Done()
@@ -135,7 +139,7 @@ func (m *SequentialWrapper) inputLoop() {
 }
 
 // outputLoop is an internal loop brokers buffer messages to output pipe.
-func (m *SequentialWrapper) outputLoop() {
+func (m *SingleWrapper) outputLoop() {
 	defer func() {
 		m.buffer.Close()
 		close(m.messagesOut)
@@ -151,6 +155,8 @@ func (m *SequentialWrapper) outputLoop() {
 					m.stats.Incr("buffer.read.error", 1)
 					m.log.Errorf("Failed to read buffer: %v\n", err)
 
+					m.errThrottle.Retry()
+
 					// Unconventional errors here should always indicate some
 					// sort of corruption. Hopefully the corruption was message
 					// specific and not the whole buffer, so we can try shifting
@@ -162,6 +168,7 @@ func (m *SequentialWrapper) outputLoop() {
 				}
 			} else {
 				m.stats.Incr("buffer.read.count", 1)
+				m.errThrottle.Reset()
 			}
 		}
 
@@ -188,7 +195,7 @@ func (m *SequentialWrapper) outputLoop() {
 }
 
 // StartReceiving assigns a messages channel for the output to read.
-func (m *SequentialWrapper) StartReceiving(msgs <-chan types.Transaction) error {
+func (m *SingleWrapper) StartReceiving(msgs <-chan types.Transaction) error {
 	if m.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}
@@ -206,19 +213,19 @@ func (m *SequentialWrapper) StartReceiving(msgs <-chan types.Transaction) error 
 
 // TransactionChan returns the channel used for consuming messages from this
 // buffer.
-func (m *SequentialWrapper) TransactionChan() <-chan types.Transaction {
+func (m *SingleWrapper) TransactionChan() <-chan types.Transaction {
 	return m.messagesOut
 }
 
-// CloseAsync shuts down the SequentialWrapper and stops processing messages.
-func (m *SequentialWrapper) CloseAsync() {
+// CloseAsync shuts down the SingleWrapper and stops processing messages.
+func (m *SingleWrapper) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&m.running, 1, 0) {
 		close(m.closeChan)
 	}
 }
 
-// WaitForClose blocks until the SequentialWrapper output has closed down.
-func (m *SequentialWrapper) WaitForClose(timeout time.Duration) error {
+// WaitForClose blocks until the SingleWrapper output has closed down.
+func (m *SingleWrapper) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-m.closedChan:
 	case <-time.After(timeout):
