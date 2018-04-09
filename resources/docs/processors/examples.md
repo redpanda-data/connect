@@ -26,7 +26,7 @@ input:
       processors:
       - type: sample
         sample:
-          retain: 0.1
+          retain: 10.0
           seed: 0
 output:
   type: zmq4
