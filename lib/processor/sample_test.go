@@ -32,7 +32,7 @@ import (
 
 func TestSample10Percent(t *testing.T) {
 	conf := NewConfig()
-	conf.Sample.Retain = 0.1
+	conf.Sample.Retain = 10.0
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	proc, err := NewSample(conf, nil, testLog, metrics.DudType{})
@@ -55,7 +55,7 @@ func TestSample10Percent(t *testing.T) {
 		}
 	}
 
-	act, exp := float64(totalSampled)/float64(total), conf.Sample.Retain
+	act, exp := (float64(totalSampled)/float64(total))*100.0, conf.Sample.Retain
 	var sampleError float64
 	if exp > act {
 		sampleError = (exp - act) / exp
@@ -69,7 +69,7 @@ func TestSample10Percent(t *testing.T) {
 
 func TestSample24Percent(t *testing.T) {
 	conf := NewConfig()
-	conf.Sample.Retain = 0.24
+	conf.Sample.Retain = 24.0
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	proc, err := NewSample(conf, nil, testLog, metrics.DudType{})
@@ -92,7 +92,7 @@ func TestSample24Percent(t *testing.T) {
 		}
 	}
 
-	act, exp := float64(totalSampled)/float64(total), conf.Sample.Retain
+	act, exp := (float64(totalSampled)/float64(total))*100.0, conf.Sample.Retain
 	var sampleError float64
 	if exp > act {
 		sampleError = (exp - act) / exp

@@ -34,8 +34,9 @@ func init() {
 	Constructors["sample"] = TypeSpec{
 		constructor: NewSample,
 		description: `
-Passes on a percentage of messages, either randomly or sequentially, and drops
-all others.`,
+Passes on a randomly sampled percentage of messages. The random seed is static
+in order to sample deterministically, but can be set in config to allow parallel
+samples that are unique.`,
 	}
 }
 
@@ -50,7 +51,7 @@ type SampleConfig struct {
 // NewSampleConfig returns a SampleConfig with default values.
 func NewSampleConfig() SampleConfig {
 	return SampleConfig{
-		Retain:     0.1, // 10%
+		Retain:     10.0, // 10%
 		RandomSeed: 0,
 	}
 }
@@ -64,7 +65,8 @@ type Sample struct {
 	log   log.Modular
 	stats metrics.Type
 
-	gen *rand.Rand
+	retain float64
+	gen    *rand.Rand
 }
 
 // NewSample returns a Sample processor.
@@ -73,10 +75,11 @@ func NewSample(
 ) (Type, error) {
 	gen := rand.New(rand.NewSource(conf.Sample.RandomSeed))
 	return &Sample{
-		conf:  conf,
-		log:   log.NewModule(".processor.sample"),
-		stats: stats,
-		gen:   gen,
+		conf:   conf,
+		log:    log.NewModule(".processor.sample"),
+		stats:  stats,
+		retain: conf.Sample.Retain / 100.0,
+		gen:    gen,
 	}, nil
 }
 
@@ -85,7 +88,7 @@ func NewSample(
 // ProcessMessage checks each message against a set of bounds.
 func (s *Sample) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.stats.Incr("processor.sample.count", 1)
-	if s.gen.Float64() > s.conf.Sample.Retain {
+	if s.gen.Float64() > s.retain {
 		s.stats.Incr("processor.sample.dropped", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}

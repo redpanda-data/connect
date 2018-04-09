@@ -204,7 +204,7 @@ input:
       part: 0
       query: ""
     sample:
-      retain: 0.1
+      retain: 10
       seed: 0
     select_json:
       part: 0

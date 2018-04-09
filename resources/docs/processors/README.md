@@ -171,8 +171,9 @@ unchanged.
 
 ## `sample`
 
-Passes on a percentage of messages, either randomly or sequentially, and drops
-all others.
+Passes on a randomly sampled percentage of messages. The random seed is static
+in order to sample deterministically, but can be set in config to allow parallel
+samples that are unique.
 
 ## `select_json`
 

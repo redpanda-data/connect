@@ -273,7 +273,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 
 	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{[]byte("foo"), []byte("bar")}))
 	if exp := types.NewSimpleResponse(nil); !reflect.DeepEqual(exp, res) || len(msgs) > 0 {
-		t.Error("Expected message drop on error: %v - %v", res, len(msgs))
+		t.Errorf("Expected message drop on error: %v - %v", res, len(msgs))
 	}
 
 	conf.Dedupe.DropOnCacheErr = false
@@ -285,7 +285,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 
 	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{[]byte("foo"), []byte("bar")}))
 	if res != nil || len(msgs) != 1 {
-		t.Error("Expected message propagate on error: %v - %v", res, len(msgs))
+		t.Errorf("Expected message propagate on error: %v - %v", res, len(msgs))
 	}
 }
 
