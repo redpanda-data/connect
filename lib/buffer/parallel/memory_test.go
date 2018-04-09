@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package sequential
+package parallel
 
 import (
 	"fmt"
@@ -33,7 +33,7 @@ import (
 func TestMemoryBasic(t *testing.T) {
 	n := 100
 
-	block := NewMemory(MemoryConfig{Limit: 100000})
+	block := NewMemory(100000)
 
 	for i := 0; i < n; i++ {
 		if _, err := block.PushMessage(types.NewMessage(
@@ -49,7 +49,7 @@ func TestMemoryBasic(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		m, err := block.NextMessage()
+		m, ackFunc, err := block.NextMessage()
 		if err != nil {
 			t.Error(err)
 			return
@@ -59,61 +59,16 @@ func TestMemoryBasic(t *testing.T) {
 		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
-		if _, err := block.ShiftMessage(); err != nil {
+		if _, err := ackFunc(true); err != nil {
 			t.Error(err)
 		}
-	}
-}
-
-func TestMemoryBacklogCounter(t *testing.T) {
-	block := NewMemory(MemoryConfig{Limit: 100000})
-
-	if _, err := block.PushMessage(types.NewMessage(
-		[][]byte{[]byte("1234")}, // 4 bytes + 4 bytes
-	)); err != nil {
-		t.Error(err)
-		return
-	}
-
-	if expected, actual := 16, block.backlog(); expected != actual {
-		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
-	}
-
-	if _, err := block.PushMessage(types.NewMessage(
-		[][]byte{
-			[]byte("1234"),
-			[]byte("1234"),
-		}, // ( 4 bytes + 4 bytes ) * 2
-	)); err != nil {
-		t.Error(err)
-		return
-	}
-
-	if expected, actual := 40, block.backlog(); expected != actual {
-		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
-	}
-
-	if _, err := block.ShiftMessage(); err != nil {
-		t.Error(err)
-	}
-
-	if expected, actual := 24, block.backlog(); expected != actual {
-		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
-	}
-
-	if _, err := block.ShiftMessage(); err != nil {
-		t.Error(err)
-	}
-
-	if expected, actual := 0, block.backlog(); expected != actual {
-		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
 	}
 }
 
 func TestMemoryNearLimit(t *testing.T) {
 	n, iter := 50, 5
 
-	block := NewMemory(MemoryConfig{Limit: 2285})
+	block := NewMemory(2285)
 
 	for j := 0; j < iter; j++ {
 		for i := 0; i < n; i++ {
@@ -131,7 +86,7 @@ func TestMemoryNearLimit(t *testing.T) {
 		}
 
 		for i := 0; i < n; i++ {
-			m, err := block.NextMessage()
+			m, ackFunc, err := block.NextMessage()
 			if err != nil {
 				t.Error(err)
 				return
@@ -141,7 +96,7 @@ func TestMemoryNearLimit(t *testing.T) {
 			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 			}
-			if _, err := block.ShiftMessage(); err != nil {
+			if _, err := ackFunc(true); err != nil {
 				t.Error(err)
 			}
 		}
@@ -151,7 +106,7 @@ func TestMemoryNearLimit(t *testing.T) {
 func TestMemoryLoopingRandom(t *testing.T) {
 	n, iter := 50, 5
 
-	block := NewMemory(MemoryConfig{Limit: 8000})
+	block := NewMemory(8000)
 
 	for j := 0; j < iter; j++ {
 		for i := 0; i < n; i++ {
@@ -170,7 +125,7 @@ func TestMemoryLoopingRandom(t *testing.T) {
 		}
 
 		for i := 0; i < n; i++ {
-			m, err := block.NextMessage()
+			m, ackFunc, err := block.NextMessage()
 			if err != nil {
 				t.Error(err)
 				return
@@ -182,7 +137,7 @@ func TestMemoryLoopingRandom(t *testing.T) {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 				return
 			}
-			if _, err := block.ShiftMessage(); err != nil {
+			if _, err := ackFunc(true); err != nil {
 				t.Error(err)
 			}
 		}
@@ -192,7 +147,7 @@ func TestMemoryLoopingRandom(t *testing.T) {
 func TestMemoryLockStep(t *testing.T) {
 	n := 10000
 
-	block := NewMemory(MemoryConfig{Limit: 1000})
+	block := NewMemory(1000)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -200,7 +155,7 @@ func TestMemoryLockStep(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < n; i++ {
-			m, err := block.NextMessage()
+			m, ackFunc, err := block.NextMessage()
 			if err != nil {
 				t.Error(err)
 			}
@@ -211,7 +166,7 @@ func TestMemoryLockStep(t *testing.T) {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 				return
 			}
-			if _, err := block.ShiftMessage(); err != nil {
+			if _, err := ackFunc(true); err != nil {
 				t.Error(err)
 			}
 		}
@@ -235,79 +190,106 @@ func TestMemoryLockStep(t *testing.T) {
 	wg.Wait()
 }
 
+func TestMemoryAck(t *testing.T) {
+	block := NewMemory(1000)
+
+	block.PushMessage(types.NewMessage([][]byte{
+		[]byte("1"),
+	}))
+	block.PushMessage(types.NewMessage([][]byte{
+		[]byte("2"),
+	}))
+
+	m, ackFunc, err := block.NextMessage()
+	if err != nil {
+		t.Error(err)
+	} else {
+		if expected, actual := "1", string(m.Get(0)); expected != actual {
+			t.Fatalf("Wrong message contents, %v != %v", expected, actual)
+		}
+		if _, err := ackFunc(false); err != nil {
+			t.Error(err)
+		}
+	}
+
+	m, ackFunc, err = block.NextMessage()
+	if err != nil {
+		t.Error(err)
+	} else {
+		if expected, actual := "1", string(m.Get(0)); expected != actual {
+			t.Fatalf("Wrong message contents, %v != %v", expected, actual)
+		}
+		if _, err := ackFunc(true); err != nil {
+			t.Error(err)
+		}
+	}
+
+	m, ackFunc, err = block.NextMessage()
+	if err != nil {
+		t.Error(err)
+	} else {
+		if expected, actual := "2", string(m.Get(0)); expected != actual {
+			t.Fatalf("Wrong message contents, %v != %v", expected, actual)
+		}
+		if _, err := ackFunc(true); err != nil {
+			t.Error(err)
+		}
+	}
+
+	block.Close()
+
+	if _, err = block.PushMessage(types.NewMessage(nil)); err != types.ErrTypeClosed {
+		t.Errorf("Wrong error returned: %v != %v", err, types.ErrTypeClosed)
+	}
+	if _, _, err = block.NextMessage(); err != types.ErrTypeClosed {
+		t.Errorf("Wrong error returned: %v != %v", err, types.ErrTypeClosed)
+	}
+}
+
 func TestMemoryClose(t *testing.T) {
-	// Test reader block
+	block := NewMemory(1000)
 
-	block := NewMemory(MemoryConfig{Limit: 20})
-	doneChan := make(chan struct{})
-
-	go func() {
-		_, err := block.NextMessage()
-		if err != types.ErrTypeClosed {
-			t.Errorf("Wrong error returned: %v != %v", err, types.ErrTypeClosed)
-		}
-		close(doneChan)
-	}()
-
-	<-time.After(100 * time.Millisecond)
-	block.Close()
-
-	select {
-	case <-doneChan:
-	case <-time.After(time.Second):
-		t.Errorf("Timed out after block close on reader")
+	for i := 0; i < 10; i++ {
+		block.PushMessage(types.NewMessage([][]byte{
+			[]byte("hello world"),
+		}))
 	}
 
-	// Test writer block
-
-	block = NewMemory(MemoryConfig{Limit: 100})
-	doneChan = make(chan struct{})
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 
 	go func() {
-		for i := 0; i < 100; i++ {
-			if _, err := block.PushMessage(types.NewMessage(
-				[][]byte{
-					[]byte("hello"),
-					[]byte("world"),
-					[]byte("12345"),
-					[]byte(fmt.Sprintf("test%v", i)),
-				},
-			)); err != nil {
+		block.CloseOnceEmpty()
+		wg.Done()
+	}()
+
+	<-time.After(time.Millisecond * 100)
+	for i := 0; i < 10; i++ {
+		m, ackFunc, err := block.NextMessage()
+		if err != nil {
+			t.Error(err)
+		} else {
+			if expected, actual := "hello world", string(m.Get(0)); expected != actual {
+				t.Errorf("Wrong message contents, %v != %v", expected, actual)
+			}
+			if _, err := ackFunc(true); err != nil {
 				t.Error(err)
 			}
 		}
-		close(doneChan)
-	}()
-
-	go func() {
-		for {
-			_, err := block.NextMessage()
-			if err == types.ErrTypeClosed {
-				return
-			} else if err != nil {
-				t.Error(err)
-			}
-			if _, err := block.ShiftMessage(); err != nil {
-				t.Error(err)
-			}
-		}
-	}()
-
-	<-time.After(100 * time.Millisecond)
-	block.Close()
-
-	select {
-	case <-doneChan:
-	case <-time.After(time.Second * 1):
-		t.Errorf("Timed out after block close on writer")
 	}
+
+	if _, _, err := block.NextMessage(); err != types.ErrTypeClosed {
+		t.Errorf("Wrong error returned: %v != %v", err, types.ErrTypeClosed)
+	}
+
+	wg.Wait()
 }
 
 func TestMemoryRejectLargeMessage(t *testing.T) {
 	tMsg := types.NewMessage(make([][]byte, 1))
 	tMsg.Set(0, []byte("hello world this message is too long!"))
 
-	block := NewMemory(MemoryConfig{Limit: 10})
+	block := NewMemory(10)
 
 	_, err := block.PushMessage(tMsg)
 	if exp, actual := types.ErrMessageTooLarge, err; exp != actual {

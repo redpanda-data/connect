@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,31 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package buffer
-
-import (
-	"github.com/Jeffail/benthos/lib/buffer/parallel"
-	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
-)
+package parallel
 
 //------------------------------------------------------------------------------
 
-func init() {
-	Constructors["memory"] = TypeSpec{
-		constructor: NewMemory,
-		description: `
-The memory buffer type simply allocates a set amount of RAM for buffering
-messages. This can be useful when reading from sources that produce large bursts
-of data. Messages inside the buffer are lost if the service is stopped.`,
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// NewMemory - Create a buffer held in memory.
-func NewMemory(config Config, log log.Modular, stats metrics.Type) (Type, error) {
-	return NewParallelWrapper(config, parallel.NewMemory(config.Memory.Limit), log, stats), nil
-}
+// AckFunc is a func returned when a message is read from a parallel buffer. The
+// func should be called when the message is finished with, and a flag indicates
+// whether the message was successfully propagated and can be removed from the
+// buffer. Returns the current backlog of the buffer in bytes, or an error if
+// the message was not successfully removed.
+//
+// It is safe to call this func even if the buffer has closed.
+type AckFunc func(ack bool) (int, error)
 
 //------------------------------------------------------------------------------

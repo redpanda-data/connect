@@ -21,7 +21,7 @@
 package buffer
 
 import (
-	"github.com/Jeffail/benthos/lib/buffer/sequential"
+	"github.com/Jeffail/benthos/lib/buffer/single"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
@@ -50,11 +50,11 @@ fill up as fast as data passes through.`,
 // NewMmapFile creates a buffer held in memory and persisted to file through
 // memory map.
 func NewMmapFile(config Config, log log.Modular, stats metrics.Type) (Type, error) {
-	b, err := sequential.NewMmapBuffer(config.Mmap, log.NewModule(".buffer.mmap_file"), stats)
+	b, err := single.NewMmapBuffer(config.Mmap, log.NewModule(".buffer.mmap_file"), stats)
 	if err != nil {
 		return nil, err
 	}
-	return NewSequentialWrapper(config, b, log, stats), nil
+	return NewSingleWrapper(config, b, log, stats), nil
 }
 
 //------------------------------------------------------------------------------
