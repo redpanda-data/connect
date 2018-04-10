@@ -21,13 +21,19 @@
 package parallel
 
 import (
+	"bytes"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/dgraph-io/badger"
 )
+
+//------------------------------------------------------------------------------
+
+var benthosSeqKey = []byte("benthos_msg_seq")
 
 //------------------------------------------------------------------------------
 
@@ -38,6 +44,8 @@ type Badger struct {
 	messageKeys [][]byte
 
 	pendingCtr int64
+
+	gcInterval time.Duration
 
 	db   *badger.DB
 	seq  *badger.Sequence
@@ -52,14 +60,15 @@ func NewBadger(dir string, syncWrites bool) (*Badger, error) {
 	opts.SyncWrites = syncWrites
 
 	b := &Badger{
-		cond: sync.NewCond(&sync.Mutex{}),
+		gcInterval: time.Millisecond * 100,
+		cond:       sync.NewCond(&sync.Mutex{}),
 	}
 
 	var err error
 	if b.db, err = badger.Open(opts); err != nil {
 		return nil, err
 	}
-	if b.seq, err = b.db.GetSequence([]byte("benthos_msg_seq"), 1000); err != nil {
+	if b.seq, err = b.db.GetSequence(benthosSeqKey, 1000); err != nil {
 		return nil, err
 	}
 
@@ -70,7 +79,12 @@ func NewBadger(dir string, syncWrites bool) (*Badger, error) {
 		defer iter.Close()
 		for iter.Rewind(); iter.Valid(); iter.Next() {
 			key := iter.Item().Key()
-			b.messageKeys = append(b.messageKeys, key)
+			if bytes.Equal(benthosSeqKey, key) {
+				continue
+			}
+			keyBytes := make([]byte, len(key))
+			copy(keyBytes, key)
+			b.messageKeys = append(b.messageKeys, keyBytes)
 			atomic.AddInt64(&b.pendingCtr, 1)
 		}
 		return nil
@@ -79,7 +93,26 @@ func NewBadger(dir string, syncWrites bool) (*Badger, error) {
 		return nil, err
 	}
 
+	go b.gcLoop()
+
 	return b, nil
+}
+
+//------------------------------------------------------------------------------
+
+func (b *Badger) gcLoop() {
+	for {
+		<-time.After(b.gcInterval)
+
+		b.cond.L.Lock()
+		if b.db == nil {
+			b.cond.L.Unlock()
+			return
+		}
+		b.db.PurgeOlderVersions()
+		b.db.RunValueLogGC(0.5)
+		b.cond.L.Unlock()
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -115,8 +148,12 @@ func (b *Badger) NextMessage() (types.Message, AckFunc, error) {
 		if err != nil {
 			return err
 		}
-		msg, err = types.FromBytes(val)
-		return err
+		borrowMsg, err := types.FromBytes(val)
+		if err != nil {
+			return err
+		}
+		msg = borrowMsg.DeepCopy()
+		return nil
 	}); err != nil {
 		b.cond.L.Lock()
 		b.messageKeys = append([][]byte{key}, b.messageKeys...)
@@ -161,6 +198,7 @@ func (b *Badger) PushMessage(msg types.Message) (int, error) {
 
 	keyNum, err := b.seq.Next()
 	if err != nil {
+		b.cond.L.Unlock()
 		return 0, err
 	}
 
@@ -169,6 +207,7 @@ func (b *Badger) PushMessage(msg types.Message) (int, error) {
 	if err = b.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, msg.Bytes())
 	}); err != nil {
+		b.cond.L.Unlock()
 		return 0, err
 	}
 
