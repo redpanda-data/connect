@@ -178,12 +178,12 @@ func (b *Badger) NextMessage() (types.Message, AckFunc, error) {
 		} else {
 			b.messageKeys = append([][]byte{key}, b.messageKeys...)
 		}
+		_, backlog := b.db.Size()
+
 		b.cond.Broadcast()
 		b.cond.L.Unlock()
 
-		backlog := 1 // TODO
-
-		return backlog, err
+		return int(backlog), err
 	}, nil
 }
 
@@ -214,12 +214,12 @@ func (b *Badger) PushMessage(msg types.Message) (int, error) {
 	b.messageKeys = append(b.messageKeys, key)
 	atomic.AddInt64(&b.pendingCtr, 1)
 
-	backlog := 1 // TODO
+	_, backlog := b.db.Size()
 
 	b.cond.Broadcast()
 	b.cond.L.Unlock()
 
-	return backlog, nil
+	return int(backlog), nil
 }
 
 func (b *Badger) cleanUpBadger() (err error) {
