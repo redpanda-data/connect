@@ -28,6 +28,9 @@ package parallel
 // buffer. Returns the current backlog of the buffer in bytes, or an error if
 // the message was not successfully removed.
 //
+// If an error is returned it is safe to call the function again. Otherwise, it
+// is not.
+//
 // It is safe to call this func even if the buffer has closed.
 type AckFunc func(ack bool) (int, error)
 
