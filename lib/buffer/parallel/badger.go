@@ -22,7 +22,7 @@ package parallel
 
 import (
 	"bytes"
-	"strconv"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -202,7 +202,7 @@ func (b *Badger) PushMessage(msg types.Message) (int, error) {
 		return 0, err
 	}
 
-	key := []byte(strconv.FormatUint(keyNum, 10))
+	key := []byte(fmt.Sprintf("%020d", keyNum))
 
 	if err = b.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, msg.Bytes())

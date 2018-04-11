@@ -358,3 +358,36 @@ func TestBadgerClose(t *testing.T) {
 
 	wg.Wait()
 }
+
+func BenchmarkParallelBadger(b *testing.B) {
+	dir, err := ioutil.TempDir("", "benthos_badger_test")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	bgr, err := NewBadger(dir, false)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	contents := [][]byte{
+		make([]byte, 1024*1024*1),
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err = bgr.PushMessage(types.NewMessage(contents)); err != nil {
+			b.Fatal(err)
+		}
+		_, ackFunc, err := bgr.NextMessage()
+		if err != nil {
+			b.Fatal(err)
+		}
+		ackFunc(true)
+	}
+	b.StopTimer()
+
+	bgr.Close()
+}
