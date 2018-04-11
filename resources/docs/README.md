@@ -199,6 +199,74 @@ can act as a runtime optimisation as well as a config optimisation.
 
 ## Maximising IO Throughput
 
+This section assumes your Benthos instance is doing minimal or zero processing,
+and therefore has minimal reliance on your CPU resource. Even if this is not the
+case the following still applies to an extent, but you should also refer to
+[the next section regarding CPU utilisation](#maximising-cpu-utilisation)
+
+Building a high throughput platform is an endless topic, instead this section
+outlines a few common throughput issues and ways in which they can be solved
+within Benthos.
+
+Before venturing into Benthos configurations you should first take an in-depth
+look at your sources and sinks. Benthos is generally much simpler
+architecturally than the inputs and outputs it supports. Spend some time
+understanding how to squeeze the most out of these services and it will make it
+easier (or unnecessary) to tune your bridge within Benthos.
+
+### The input source is low throughput
+
+If Benthos isn't reading fast enough from your source it might not necessarily
+be due to a slow consumer. If the sink is slow this can cause back pressure that
+throttles the amount Benthos can read. Try replacing the output with `stdout`
+and pipe it to `/dev/null` (or use `file` with the path set to `/dev/null`). If
+you notice that the input suddenly speeds up then the issue is likely with the
+output, in which case [try the next section](#my-output-sink-cant-keep-up).
+
+If the `/dev/null` output pipe didn't help and your source supports multiple
+parallel consumers then you can try doing that within Benthos by using a
+[broker][broker-input]. For example, if you started with:
+
+``` yaml
+input:
+  type: foo
+  foo:
+    field1: etc
+```
+
+You would change to:
+
+``` yaml
+input:
+  type: broker
+  broker:
+    copies: 4
+    inputs:
+    - type: foo
+      foo:
+        field1: etc
+```
+
+Which would create the exact same consumer as before with four copies in total.
+Try increasing the number of copies to see how that affects the throughput. If
+your multiple consumers would require different configurations then set copies
+to `1` and write each consumer as an object in the `inputs` array.
+
+If your source doesn't support multiple parallel consumers then unfortunately
+your options are limited. A logical next step might be to look at your
+network/disk configuration to see if that's a potential cause of contention.
+
+### My Output Sink Can't Keep Up
+
+If you have an output sink that regularly places back pressure on your source
+there are a few solutions depending on the details of the issue:
+
+#### Increase the number of parallel output sinks
+
+TODO
+
+#### Level out input spikes with a buffer
+
 TODO
 
 ## Maximising CPU Utilisation
@@ -207,6 +275,7 @@ TODO
 
 [default-conf]: ../../config/everything.yaml
 [processors]: ./processors
+[broker-input]: ./inputs/README.md#broker
 [broker-output]: ./outputs/README.md#broker
 [condition-processor]: ./processors/README.md#condition
 [conditions]: ./conditions
