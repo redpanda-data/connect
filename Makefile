@@ -27,10 +27,9 @@ $(APPS): %: $(PATHINSTBIN)/%
 
 $(PATHINSTDOCKER)/benthos.tar:
 	@mkdir -p $(dir $@)
-	@docker build -f ./resources/docker/Dockerfile . -t benthos:$(VERSION)
-	@docker tag benthos:$(VERSION) benthos:latest
-	@docker tag benthos:latest jeffail/benthos:latest
-	@docker save benthos:$(VERSION) > $@
+	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VERSION)
+	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:latest
+	@docker save jeffail/benthos:$(VERSION) > $@
 
 docker: $(PATHINSTDOCKER)/benthos.tar
 
@@ -55,9 +54,6 @@ clean:
 
 clean-docker:
 	rm -rf $(PATHINSTDOCKER)
-	docker rmi jeffail/benthos; true
-	docker rmi benthos:latest; true
-	docker rmi benthos:$(VERSION); true
 
 docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --print-yaml > ./config/everything.yaml; true

@@ -46,6 +46,8 @@ input:
     queue: ${AMQP_INPUT_QUEUE:benthos-stream}
     key: ${AMQP_INPUT_KEY:benthos-key}
     consumer_tag: ${AMQP_INPUT_CONSUMER_TAG:benthos-consumer}
+    prefetch_count: ${AMQP_INPUT_PREFETCH_COUNT:1}
+    prefetch_size: ${AMQP_INPUT_PREFETCH_SIZE:0}
   dynamic:
     inputs: {}
     prefix: ${DYNAMIC_INPUT_PREFIX}
@@ -141,6 +143,8 @@ input:
       min_parts: ${BENTHOS_MIN_PARTS:1}
       max_part_size: ${BENTHOS_MAX_PART_SIZE:1073741824}
   - type: ${BENTHOS_INPUT_PROCESSOR:noop}
+    combine:
+      parts: ${BENTHOS_INPUT_PROCESSOR_COMBINE:1}
 output:
   type: ${BENTHOS_OUTPUT:dynamic}
   amazon_s3:
