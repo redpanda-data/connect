@@ -214,14 +214,14 @@ architecturally than the inputs and outputs it supports. Spend some time
 understanding how to squeeze the most out of these services and it will make it
 easier (or unnecessary) to tune your bridge within Benthos.
 
-### The input source is low throughput
+### Benthos Reads Too Slowly
 
 If Benthos isn't reading fast enough from your source it might not necessarily
 be due to a slow consumer. If the sink is slow this can cause back pressure that
 throttles the amount Benthos can read. Try replacing the output with `stdout`
 and pipe it to `/dev/null` (or use `file` with the path set to `/dev/null`). If
 you notice that the input suddenly speeds up then the issue is likely with the
-output, in which case [try the next section](#my-output-sink-cant-keep-up).
+output, in which case [try the next section](#benthos-writes-too-slowly).
 
 If the `/dev/null` output pipe didn't help and your source supports multiple
 parallel consumers then you can try doing that within Benthos by using a
@@ -256,7 +256,7 @@ If your source doesn't support multiple parallel consumers then unfortunately
 your options are limited. A logical next step might be to look at your
 network/disk configuration to see if that's a potential cause of contention.
 
-### My Output Sink Can't Keep Up
+### Benthos Writes Too Slowly
 
 If you have an output sink that regularly places back pressure on your source
 there are a few solutions depending on the details of the issue:
