@@ -3,6 +3,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/AndreasBriese/bbloom"
+  packages = ["."]
+  revision = "28f7e881ca57bc00e028f9ede9f0d9104cfeef5e"
+
+[[projects]]
+  branch = "master"
   name = "github.com/Azure/go-ansiterm"
   packages = [
     ".",
@@ -83,8 +89,8 @@
     "service/sqs",
     "service/sts"
   ]
-  revision = "7f68df2a5baf19398d17def23a514a6e617e5937"
-  version = "v1.13.28"
+  revision = "a72204b9bf8d48230ee0fe8995613b394c66f2da"
+  version = "v1.13.31"
 
 [[projects]]
   branch = "master"
@@ -123,6 +129,25 @@
   version = "v1.1.0"
 
 [[projects]]
+  name = "github.com/dgraph-io/badger"
+  packages = [
+    ".",
+    "options",
+    "protos",
+    "skl",
+    "table",
+    "y"
+  ]
+  revision = "69611218c7078be6de16f4ea13fb256e701b6b73"
+  version = "v1.3.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/dgryski/go-farm"
+  packages = ["."]
+  revision = "2de33835d10275975374b37b2dcfd22c9020a1f5"
+
+[[projects]]
   branch = "master"
   name = "github.com/docker/docker"
   packages = [
@@ -152,7 +177,7 @@
     "pkg/term",
     "pkg/term/windows"
   ]
-  revision = "8a9e1808cfdef414e60307b4ccd96719731be304"
+  revision = "cbde00b44273a584bed2ee3513db68924b4a6dba"
 
 [[projects]]
   name = "github.com/docker/go-connections"
@@ -163,8 +188,8 @@
 [[projects]]
   name = "github.com/docker/go-units"
   packages = ["."]
-  revision = "0dadbb0345b35ec7ef35e228dabb8de89a65bf52"
-  version = "v0.3.2"
+  revision = "47565b4f722fb6ceae66b95f853feed578a4a51c"
+  version = "v0.3.3"
 
 [[projects]]
   name = "github.com/eapache/go-resiliency"
@@ -343,14 +368,14 @@
 [[projects]]
   name = "github.com/ory/dockertest"
   packages = ["."]
-  revision = "15c8e8835bba04e0d7c2b57958ffe294d5e643dc"
-  version = "v3.1.6"
+  revision = "f70891c9e81cc80ce5b8337fecf4751f9241b8c4"
+  version = "v3.1.7"
 
 [[projects]]
   branch = "master"
   name = "github.com/pebbe/zmq4"
   packages = ["."]
-  revision = "5643cd30b2c0b33ec40466b0da138a84e5357cca"
+  revision = "5b443b6471cea4b4f9f85025530c04c93233f76a"
 
 [[projects]]
   name = "github.com/pierrec/lz4"
@@ -404,13 +429,13 @@
     "nfs",
     "xfs"
   ]
-  revision = "780932d4fbbe0e69b84c34c20f5c8d0981e109ea"
+  revision = "8b1c2da0d56deffdbb9e48d4414b4e674bd8083e"
 
 [[projects]]
   branch = "master"
   name = "github.com/rcrowley/go-metrics"
   packages = ["."]
-  revision = "8732c616f52954686704c8645fe1a9d59e9df7c1"
+  revision = "d932a24a8ccb8fcadc993e5c6c58f93dac168294"
 
 [[projects]]
   name = "github.com/satori/go.uuid"
@@ -434,7 +459,7 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "b2aa35443fbc700ab74c586ae79b81c171851023"
+  revision = "beb2a9779c3b677077c41673505f150149fce895"
 
 [[projects]]
   branch = "master"
@@ -442,10 +467,13 @@
   packages = [
     "context",
     "context/ctxhttp",
+    "internal/socks",
+    "internal/timeseries",
     "proxy",
+    "trace",
     "websocket"
   ]
-  revision = "b3c676e531a6dc479fa1b35ac961c13f5e2b4d2e"
+  revision = "61147c48b25b599e5b561d2e9c4f3e1ef489ca41"
 
 [[projects]]
   branch = "master"
@@ -454,7 +482,7 @@
     "unix",
     "windows"
   ]
-  revision = "1d206c9fa8975fb4cf00df1dc8bf3283dc24ba0e"
+  revision = "3b87a42e500a6dc65dae1a55d0b641295971163e"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"
@@ -471,6 +499,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8163c732efddd877fb0a4cb4ec7cbea6d578241848c99560640b5bf0791e3daf"
+  inputs-digest = "39927eaec8560d26d8f0705c288b2f227926b7f8e63baa00cbf53d00d62c576f"
   solver-name = "gps-cdcl"
   solver-version = 1

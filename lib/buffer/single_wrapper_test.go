@@ -21,6 +21,7 @@
 package buffer
 
 import (
+	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -287,6 +288,70 @@ func BenchmarkSingleMem(b *testing.B) {
 	buffer := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: 50000000,
 	}), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err := buffer.StartReceiving(tChan); err != nil {
+		b.Error(err)
+		return
+	}
+
+	contents := [][]byte{
+		make([]byte, 1024*1024*1),
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		select {
+		case tChan <- types.NewTransaction(types.NewMessage(contents), resChan):
+		case <-time.After(time.Second):
+			b.Errorf("Timed out waiting for buffered message %v send", i)
+			return
+		}
+		select {
+		case res := <-resChan:
+			if res.Error() != nil {
+				b.Error(res.Error())
+			}
+		case <-time.After(time.Second):
+			b.Errorf("Timed out waiting for buffered message %v response", i)
+			return
+		}
+
+		select {
+		case val := <-buffer.TransactionChan():
+			val.ResponseChan <- types.NewSimpleResponse(nil)
+		case <-time.After(time.Second):
+			b.Errorf("Timed out waiting for final buffered message read")
+			return
+		}
+	}
+	b.StopTimer()
+
+	buffer.CloseAsync()
+	buffer.WaitForClose(time.Second)
+}
+
+func BenchmarkSingleMmap(b *testing.B) {
+	dir, err := ioutil.TempDir("", "benthos_mmap_test")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	tChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+
+	mmapConf := single.NewMmapBufferConfig()
+	mmapConf.CleanUp = true
+	mmapConf.FileSize = 50000000
+	mmapConf.Path = dir
+
+	mmap, err := single.NewMmapBuffer(mmapConf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	conf := NewConfig()
+	buffer := NewSingleWrapper(conf, mmap, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
 	if err := buffer.StartReceiving(tChan); err != nil {
 		b.Error(err)
 		return

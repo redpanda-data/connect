@@ -341,6 +341,10 @@ output:
   processors: []
 buffer:
   type: none
+  badger:
+    directory: ""
+    sync_writes: true
+    gc_interval_ms: 1000
   memory:
     limit: 524288000
   mmap_file:
