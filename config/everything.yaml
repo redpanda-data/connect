@@ -34,7 +34,7 @@ input:
     queue: benthos-queue
     key: benthos-key
     consumer_tag: benthos-consumer
-    prefetch_count: 1
+    prefetch_count: 10
     prefetch_size: 0
   broker:
     copies: 1
@@ -294,7 +294,7 @@ output:
     compression: none
     max_msg_bytes: 1000000
     timeout_ms: 5000
-    ack_replicas: true
+    ack_replicas: false
     target_version: 0.8.2.0
   mqtt:
     urls:

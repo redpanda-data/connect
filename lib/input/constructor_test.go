@@ -32,7 +32,7 @@ func TestSanitise(t *testing.T) {
 		"type": "amqp",
 		"amqp": map[string]interface{}{
 			"consumer_tag":   "benthos-consumer",
-			"prefetch_count": float64(1),
+			"prefetch_count": float64(10),
 			"prefetch_size":  float64(0),
 			"url":            "amqp://guest:guest@localhost:5672/",
 			"exchange":       "benthos-exchange",

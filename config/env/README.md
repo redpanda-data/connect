@@ -50,7 +50,7 @@ AMQP_INPUT_EXCHANGE_TYPE  = direct
 AMQP_INPUT_QUEUE          = benthos-stream
 AMQP_INPUT_KEY            = benthos-key
 AMQP_INPUT_CONSUMER_TAG   = benthos-consumer
-AMQP_INPUT_PREFETCH_COUNT = 1
+AMQP_INPUT_PREFETCH_COUNT = 10
 AMQP_INPUT_PREFETCH_SIZE  = 0
 AMQP_OUTPUT_URL           =
 AMQP_OUTPUT_EXCHANGE      = benthos-exchange
@@ -126,7 +126,7 @@ KAFKA_OUTPUT_TOPIC            = benthos-stream
 KAFKA_OUTPUT_PARTITION        = 0
 KAFKA_OUTPUT_MAX_MSG_BYTES    = 1000000
 KAFKA_OUTPUT_START_OLDEST     = true
-KAFKA_OUTPUT_ACK_REP          = true
+KAFKA_OUTPUT_ACK_REP          = false
 
 NATS_INPUT_URLS         =
 NATS_INPUT_SUBJECT      = benthos-stream

@@ -54,7 +54,7 @@ func NewAMQPConfig() AMQPConfig {
 		Queue:         "benthos-queue",
 		BindingKey:    "benthos-key",
 		ConsumerTag:   "benthos-consumer",
-		PrefetchCount: 1,
+		PrefetchCount: 10,
 		PrefetchSize:  0,
 	}
 }

@@ -19,7 +19,7 @@
 	},
 	"output": {
 		"kafka": {
-			"ack_replicas": true,
+			"ack_replicas": false,
 			"addresses": [
 				"localhost:9092"
 			],

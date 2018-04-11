@@ -46,7 +46,7 @@ input:
     queue: ${AMQP_INPUT_QUEUE:benthos-stream}
     key: ${AMQP_INPUT_KEY:benthos-key}
     consumer_tag: ${AMQP_INPUT_CONSUMER_TAG:benthos-consumer}
-    prefetch_count: ${AMQP_INPUT_PREFETCH_COUNT:1}
+    prefetch_count: ${AMQP_INPUT_PREFETCH_COUNT:10}
     prefetch_size: ${AMQP_INPUT_PREFETCH_SIZE:0}
   dynamic:
     inputs: {}
@@ -202,7 +202,7 @@ output:
     round_robin_partitions: ${KAFKA_OUTPUT_ROUND_ROBIN:false}
     max_msg_bytes: ${KAFKA_OUTPUT_MAX_MSG_BYTES:1000000}
     topic: ${KAFKA_OUTPUT_TOPIC:benthos-stream}
-    ack_replicas: ${KAFKA_OUTPUT_ACK_REP:true}
+    ack_replicas: ${KAFKA_OUTPUT_ACK_REP:false}
   nats:
     urls:
     - ${NATS_OUTPUT_URLS}

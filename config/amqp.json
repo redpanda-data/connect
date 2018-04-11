@@ -9,7 +9,7 @@
 			"exchange": "benthos-exchange",
 			"exchange_type": "direct",
 			"key": "benthos-key",
-			"prefetch_count": 1,
+			"prefetch_count": 10,
 			"prefetch_size": 0,
 			"queue": "benthos-queue",
 			"url": "amqp://guest:guest@localhost:5672/"
