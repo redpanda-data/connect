@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/lib/buffer/parallel"
 	"github.com/Jeffail/benthos/lib/buffer/single"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
@@ -48,6 +49,7 @@ var Constructors = map[string]TypeSpec{}
 // Config is the all encompassing configuration struct for all input types.
 type Config struct {
 	Type   string                  `json:"type" yaml:"type"`
+	Badger parallel.BadgerConfig   `json:"badger" yaml:"badger"`
 	Memory single.MemoryConfig     `json:"memory" yaml:"memory"`
 	Mmap   single.MmapBufferConfig `json:"mmap_file" yaml:"mmap_file"`
 	None   struct{}                `json:"none" yaml:"none"`
@@ -57,6 +59,7 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Type:   "none",
+		Badger: parallel.NewBadgerConfig(),
 		Memory: single.NewMemoryConfig(),
 		Mmap:   single.NewMmapBufferConfig(),
 		None:   struct{}{},
@@ -85,6 +88,44 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 
 //------------------------------------------------------------------------------
 
+var header = "This document was generated with `benthos --list-buffers`" + `
+
+Buffers can solve a number of typical streaming problems and are worth
+considering if you face circumstances similar to the following:
+
+- Input sources can periodically spike beyond the capacity of your output sinks.
+- You have more outputs than inputs and wish to distribute messages across them
+  in order to maximize overall throughput.
+- Your input source needs occasional protection against back pressure from your
+  sink, e.g. during restarts. Please keep in mind that all buffers have an
+  eventual limit.
+
+If you believe that a problem you have would be solved by a buffer the next step
+is to choose an implementation based on the throughput and delivery guarantees
+you need. In order to help here are some simplified tables outlining the
+different options and their qualities:
+
+#### Performance
+
+| Type      | Throughput | Consumers | Capacity |
+| --------- | ---------- | --------- | -------- |
+| Memory    | Highest    | Parallel  | RAM      |
+| Mmap File | High       | Single    | Disk     |
+| Badger    | Medium     | Parallel  | Disk     |
+
+#### Delivery Guarantees
+
+| Type      | On Restart | On Crash  | On Disk Corruption |
+| --------- | ---------- | --------- | ------------------ |
+| Memory    | Lost       | Lost      | Lost               |
+| Mmap File | Persisted  | Lost      | Lost               |
+| Badger    | Persisted  | Persisted | Lost               |
+
+Please note that the badger buffer can be set to disable synchronous writes.
+This removes the guarantee of message persistence after a crash, but brings
+performance on par with the mmap file buffer. This can make it the faster
+overall disk persisted buffer when writing to multiple outputs.`
+
 // Descriptions returns a formatted string of collated descriptions of each type.
 func Descriptions() string {
 	// Order our buffer types alphabetically
@@ -98,7 +139,7 @@ func Descriptions() string {
 	buf.WriteString("BUFFERS\n")
 	buf.WriteString(strings.Repeat("=", 7))
 	buf.WriteString("\n\n")
-	buf.WriteString("This document has been generated with `benthos --list-buffers`.")
+	buf.WriteString(header)
 	buf.WriteString("\n\n")
 
 	// Append each description

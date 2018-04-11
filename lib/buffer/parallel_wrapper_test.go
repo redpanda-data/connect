@@ -343,7 +343,11 @@ func BenchmarkParallelBadger(b *testing.B) {
 	tChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	badger, err := parallel.NewBadger(dir, false)
+	bconf := parallel.NewBadgerConfig()
+	bconf.Directory = dir
+	bconf.SyncWrites = false
+
+	badger, err := parallel.NewBadger(bconf)
 	if err != nil {
 		b.Fatal(err)
 	}

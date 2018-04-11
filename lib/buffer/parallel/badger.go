@@ -37,6 +37,24 @@ var benthosSeqKey = []byte("benthos_msg_seq")
 
 //------------------------------------------------------------------------------
 
+// BadgerConfig contains configuration fields for a badger based buffer.
+type BadgerConfig struct {
+	Directory    string `json:"directory" yaml:"directory"`
+	SyncWrites   bool   `json:"sync_writes" yaml:"sync_writes"`
+	GCIntervalMS int    `json:"gc_interval_ms" yaml:"gc_interval_ms"`
+}
+
+// NewBadgerConfig creates a BadgerConfig with default values.
+func NewBadgerConfig() BadgerConfig {
+	return BadgerConfig{
+		Directory:    "",
+		SyncWrites:   true,
+		GCIntervalMS: 1000,
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // Badger is a parallel buffer implementation that allows multiple parallel
 // consumers to read and purge messages from a Badger embedded key/value store,
 // where messages are persisted to disk.
@@ -53,14 +71,14 @@ type Badger struct {
 }
 
 // NewBadger creates a Badger based parallel buffer.
-func NewBadger(dir string, syncWrites bool) (*Badger, error) {
+func NewBadger(conf BadgerConfig) (*Badger, error) {
 	opts := badger.DefaultOptions
-	opts.Dir = dir
-	opts.ValueDir = dir
-	opts.SyncWrites = syncWrites
+	opts.Dir = conf.Directory
+	opts.ValueDir = conf.Directory
+	opts.SyncWrites = conf.SyncWrites
 
 	b := &Badger{
-		gcInterval: time.Millisecond * 100,
+		gcInterval: time.Millisecond * time.Duration(conf.GCIntervalMS),
 		cond:       sync.NewCond(&sync.Mutex{}),
 	}
 

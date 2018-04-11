@@ -39,7 +39,10 @@ func TestBadgerBasic(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	block, err := NewBadger(dir, true)
+	conf := NewBadgerConfig()
+	conf.Directory = dir
+
+	block, err := NewBadger(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +86,10 @@ func TestBadgerLoopingRandom(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	block, err := NewBadger(dir, true)
+	conf := NewBadgerConfig()
+	conf.Directory = dir
+
+	block, err := NewBadger(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +139,10 @@ func TestBadgerLockStep(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	block, err := NewBadger(dir, true)
+	conf := NewBadgerConfig()
+	conf.Directory = dir
+
+	block, err := NewBadger(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +197,10 @@ func TestBadgerRestart(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	block, err := NewBadger(dir, true)
+	conf := NewBadgerConfig()
+	conf.Directory = dir
+
+	block, err := NewBadger(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +227,7 @@ func TestBadgerRestart(t *testing.T) {
 	block.Close()
 	block = nil
 
-	block, err = NewBadger(dir, true)
+	block, err = NewBadger(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +265,10 @@ func TestBadgerAck(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	block, err := NewBadger(dir, true)
+	conf := NewBadgerConfig()
+	conf.Directory = dir
+
+	block, err := NewBadger(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +333,10 @@ func TestBadgerClose(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	block, err := NewBadger(dir, true)
+	conf := NewBadgerConfig()
+	conf.Directory = dir
+
+	block, err := NewBadger(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,14 +377,54 @@ func TestBadgerClose(t *testing.T) {
 	wg.Wait()
 }
 
-func BenchmarkParallelBadger(b *testing.B) {
+func BenchmarkParallelBadgerSync(b *testing.B) {
 	dir, err := ioutil.TempDir("", "benthos_badger_test")
 	if err != nil {
 		b.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 
-	bgr, err := NewBadger(dir, false)
+	conf := NewBadgerConfig()
+	conf.Directory = dir
+
+	bgr, err := NewBadger(conf)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	contents := [][]byte{
+		make([]byte, 1024*1024*1),
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err = bgr.PushMessage(types.NewMessage(contents)); err != nil {
+			b.Fatal(err)
+		}
+		_, ackFunc, err := bgr.NextMessage()
+		if err != nil {
+			b.Fatal(err)
+		}
+		ackFunc(true)
+	}
+	b.StopTimer()
+
+	bgr.Close()
+}
+
+func BenchmarkParallelBadgerNoSync(b *testing.B) {
+	dir, err := ioutil.TempDir("", "benthos_badger_test")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	conf := NewBadgerConfig()
+	conf.Directory = dir
+	conf.SyncWrites = false
+
+	bgr, err := NewBadger(conf)
 	if err != nil {
 		b.Fatal(err)
 	}
