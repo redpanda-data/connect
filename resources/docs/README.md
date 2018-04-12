@@ -223,9 +223,15 @@ and pipe it to `/dev/null` (or use `file` with the path set to `/dev/null`). If
 you notice that the input suddenly speeds up then the issue is likely with the
 output, in which case [try the next section](#benthos-writes-too-slowly).
 
-If the `/dev/null` output pipe didn't help and your source supports multiple
-parallel consumers then you can try doing that within Benthos by using a
-[broker][broker-input]. For example, if you started with:
+If the `/dev/null` output pipe didn't help then take a quick look at the basic
+configuration fields for the input source type. Sometimes there are fields for
+setting a number of background prefetches or similar concepts that can increase
+your throughput. For example, increasing the value of `prefetch_count` for an
+AMQP consumer can greatly increase the rate at which it is consumed.
+
+Next, if your source supports multiple parallel consumers then you can try doing
+that within Benthos by using a [broker][broker-input]. For example, if you
+started with:
 
 ``` yaml
 input:
@@ -234,7 +240,7 @@ input:
     field1: etc
 ```
 
-You would change to:
+You could change to:
 
 ``` yaml
 input:
@@ -250,7 +256,10 @@ input:
 Which would create the exact same consumer as before with four copies in total.
 Try increasing the number of copies to see how that affects the throughput. If
 your multiple consumers would require different configurations then set copies
-to `1` and write each consumer as an object in the `inputs` array.
+to `1` and write each consumer as a separate object in the `inputs` array.
+
+Read the [broker documentation][broker-input] for more tips on simplifying
+broker configs.
 
 If your source doesn't support multiple parallel consumers then unfortunately
 your options are limited. A logical next step might be to look at your
@@ -259,15 +268,134 @@ network/disk configuration to see if that's a potential cause of contention.
 ### Benthos Writes Too Slowly
 
 If you have an output sink that regularly places back pressure on your source
-there are a few solutions depending on the details of the issue:
+there are a few solutions depending on the details of the issue.
 
-#### Increase the number of parallel output sinks
+Firstly, you should check the config parameters of your output sink. There are
+often fields specifically for controlling the level of acknowledgement to expect
+before moving onto the next message, if these levels of guarantee are overkill
+you can disable them for greater throughput. For example, setting the
+`ack_replicas` field to `false` in the Kafka sink can have a high impact on
+throughput.
 
-TODO
+If the config parameters for an output sink aren't enough then you can try the
+following:
+
+#### Send messages in batches
+
+Some output sinks do not support multipart messages and when receiving one will
+send each part as an individual message as a batch (the Kafka output will do
+this). You can use this to your advantage by using the `combine` processor to
+create batches of messages to send.
+
+For example, given the following input and output combination:
+
+``` yaml
+input:
+  type: foo
+output:
+  type: kafka
+```
+
+This bridge will send messages one at a time, wait for acknowledgement from the
+output and propagate that acknowledgement to the input. Instead, using this
+config:
+
+``` yaml
+input:
+  type: foo
+  processors:
+  - type: combine
+    combine:
+      parts: 8
+output:
+  type: kafka
+```
+
+The bridge will read 8 messages from the input, send those 8 messages to the
+output as a batch, receive the acknowledgement from the output for all messages
+together, then propagate the acknowledgement for all those messages to the input
+together.
+
+Therefore, provided the input is able to send messages and acknowledge them
+outside of lock-step (or doesn't support acknowledgement at all), you can
+improve throughput without losing delivery guarantees.
 
 #### Level out input spikes with a buffer
 
-TODO
+There are many reasons why an input source might have spikes or inconsistent
+throughput rates. It is possible that your output is capable of keeping up with
+the long term average flow of data, but fails to keep up when an intermittent
+spike occurs.
+
+In situations like these it is sometimes a better use of your hardware and
+resources to level out the flow of data rather than try and match the peak
+throughput. This would depend on the frequency and duration of the spikes as
+well as your latency requirements, and is therefore a matter of judgement.
+
+Leveling out the flow of data can be done within Benthos using a
+[buffer][buffers]. Buffers allow an input source to store a bounded amount of
+data temporarily, which a consumer can work through at its own pace. Buffers
+always have a fixed capacity, which when full will proceed to block the input
+just like a busy output would.
+
+Therefore, it's still important to have an output that can keep up with the flow
+of data, the difference that a buffer makes is that the output only needs to
+keep up with the _average_ flow of data versus the instantaneous flow of data.
+
+If your input usually produces 10 msgs/s, but occasionally spikes to 100 msgs/s,
+and your output can handle up to 50 msgs/s, it might be possible to configure a
+buffer large enough to store spikes in their entirety. As long as the average
+flow of messages from the input remains below 50 msgs/s then your bridge should
+be able to continue indefinitely without ever blocking the input source.
+
+Benthos offers [a range of buffer strategies][buffers] and it is worth studying
+them all in order to find the correct combination of resilience, throughput and
+capacity that you need.
+
+#### Increase the number of parallel output sinks
+
+If your output sink supports multiple parallel writers then it can greatly
+increase your throughput to have multiple outputs configured. However, one thing
+to keep in mind is that due to the lock-step of reading/sending/acknowledging of
+a Benthos bridge, if the number of output writers exceeds the number of input
+consumers you will need a [buffer][buffers] between them in order to keep all
+outputs busy, the buffer doesn't need to be large.
+
+Increasing the number of parallel output sinks is similar to doing the same for
+input sources and is done using a [broker][broker-output]. The output broker
+type supports a few different routing patterns depending on your intention. In
+this case we want to maximize throughput so our best choice is a `greedy`
+pattern. For example, if you started with:
+
+``` yaml
+output:
+  type: foo
+  foo:
+    field1: etc
+```
+
+You could change to:
+
+``` yaml
+output:
+  type: broker
+  broker:
+    pattern: greedy
+    copies: 4
+    outputs:
+    - type: foo
+      foo:
+        field1: etc
+```
+
+Which would create the exact same output writer as before with four copies in
+total. Try increasing the number of copies to see how that affects the
+throughput. If your multiple output writers would require different
+configurations (client ids, for example) then set copies to `1` and write each
+consumer as a separate object in the `outputs` array.
+
+Read the [broker documentation][broker-output] for more tips on simplifying
+broker configs.
 
 ## Maximising CPU Utilisation
 
@@ -275,6 +403,7 @@ TODO
 
 [default-conf]: ../../config/everything.yaml
 [processors]: ./processors
+[buffers]: ./buffers
 [broker-input]: ./inputs/README.md#broker
 [broker-output]: ./outputs/README.md#broker
 [condition-processor]: ./processors/README.md#condition
