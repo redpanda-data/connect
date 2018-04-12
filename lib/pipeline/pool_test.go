@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
@@ -259,6 +260,81 @@ func TestPoolMultiMsgs(t *testing.T) {
 			}
 		}
 
+		// Receive response
+		select {
+		case res, open := <-resChan:
+			if !open {
+				t.Error("Closed early")
+			} else if res.Error() != nil {
+				t.Error(res.Error())
+			}
+		case <-time.After(time.Second * 5):
+			t.Fatal("Timed out")
+		}
+	}
+
+	proc.CloseAsync()
+	if err := proc.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestPoolMultiThreads(t *testing.T) {
+	conf := NewConfig()
+	conf.Threads = 2
+	conf.Processors = append(conf.Processors, processor.NewConfig())
+
+	proc, err := New(
+		conf, nil,
+		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		metrics.DudType{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
+	if err := proc.StartReceiving(tChan); err != nil {
+		t.Fatal(err)
+	}
+
+	msg := types.NewMessage([][]byte{
+		[]byte(`one`),
+		[]byte(`two`),
+	})
+
+	for j := 0; j < conf.Threads; j++ {
+		// Send message
+		select {
+		case tChan <- types.NewTransaction(msg, resChan):
+		case <-time.After(time.Second * 5):
+			t.Fatal("Timed out")
+		}
+	}
+	for j := 0; j < conf.Threads; j++ {
+		// Receive messages
+		var procT types.Transaction
+		var open bool
+		select {
+		case procT, open = <-proc.TransactionChan():
+			if !open {
+				t.Error("Closed early")
+			}
+			if exp, act := [][]byte{[]byte("one"), []byte("two")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
+				t.Errorf("Wrong message received: %s != %s", act, exp)
+			}
+		case <-time.After(time.Second * 5):
+			t.Fatal("Timed out")
+		}
+
+		// Respond with no error
+		select {
+		case procT.ResponseChan <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second * 5):
+			t.Fatal("Timed out")
+		}
+	}
+	for j := 0; j < conf.Threads; j++ {
 		// Receive response
 		select {
 		case res, open := <-resChan:
