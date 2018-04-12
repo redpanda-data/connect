@@ -220,6 +220,9 @@ input:
     unarchive:
       format: binary
       parts: []
+pipeline:
+  threads: 1
+  processors: []
 output:
   type: stdout
   amazon_s3:

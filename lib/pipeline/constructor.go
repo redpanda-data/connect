@@ -82,7 +82,7 @@ func New(
 	log log.Modular,
 	stats metrics.Type,
 ) (Type, error) {
-	return NewPool(func() (Type, error) {
+	procCtor := func() (Type, error) {
 		processors := make([]processor.Type, len(conf.Processors))
 		for i, procConf := range conf.Processors {
 			var err error
@@ -92,7 +92,11 @@ func New(
 			}
 		}
 		return NewProcessor(log, stats, processors...), nil
-	}, conf.Threads, log, stats)
+	}
+	if conf.Threads <= 1 {
+		return procCtor()
+	}
+	return NewPool(procCtor, conf.Threads, log, stats)
 }
 
 //------------------------------------------------------------------------------

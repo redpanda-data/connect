@@ -54,8 +54,9 @@ A Benthos configuration consists of a number of root sections, the key parts
 being:
 
 - [`input`](./inputs)
+- [`pipeline`](./pipeline.md)
 - [`buffer`](./buffers)
-- [`output`](./inputs)
+- [`output`](./outputs)
 
 Please refer to those links for more information.
 
@@ -419,8 +420,9 @@ pipeline will be duplicated once for each discrete input. This is one way to
 create parallel processing threads.
 
 The other way to create parallel processor threads is to configure them inside
-the buffer configuration block, where we can set any number of parallel
-processor threads independant of how many inputs or outputs we want to use.
+the [pipeline][pipeline] configuration block, where we can set any number of
+parallel processor threads independant of how many inputs or outputs we want to
+use.
 
 Here are some examples to illustrate:
 
@@ -435,6 +437,7 @@ TODO: diagram
 ```
 
 [default-conf]: ../../config/everything.yaml
+[pipeline]: ./pipeline.md
 [processors]: ./processors
 [buffers]: ./buffers
 [broker-input]: ./inputs/README.md#broker

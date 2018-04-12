@@ -39,6 +39,7 @@ import (
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/manager"
 	"github.com/Jeffail/benthos/lib/output"
+	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
@@ -54,6 +55,7 @@ import (
 type Config struct {
 	HTTP                 api.Config       `json:"http" yaml:"http"`
 	Input                input.Config     `json:"input" yaml:"input"`
+	Pipeline             pipeline.Config  `json:"pipeline" yaml:"pipeline"`
 	Output               output.Config    `json:"output" yaml:"output"`
 	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
 	Manager              manager.Config   `json:"resources" yaml:"resources"`
@@ -70,6 +72,7 @@ func NewConfig() Config {
 	return Config{
 		HTTP:                 api.NewConfig(),
 		Input:                input.NewConfig(),
+		Pipeline:             pipeline.NewConfig(),
 		Output:               output.NewConfig(),
 		Buffer:               buffer.NewConfig(),
 		Manager:              manager.NewConfig(),
@@ -84,6 +87,12 @@ func NewConfig() Config {
 // excluded.
 func (c Config) Sanitised() (interface{}, error) {
 	inConf, err := input.SanitiseConfig(c.Input)
+	if err != nil {
+		return nil, err
+	}
+
+	var pipeConf interface{}
+	pipeConf, err = pipeline.SanitiseConfig(c.Pipeline)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +118,7 @@ func (c Config) Sanitised() (interface{}, error) {
 	return struct {
 		HTTP                 interface{} `json:"http" yaml:"http"`
 		Input                interface{} `json:"input" yaml:"input"`
+		Pipeline             interface{} `json:"pipeline" yaml:"pipeline"`
 		Output               interface{} `json:"output" yaml:"output"`
 		Buffer               interface{} `json:"buffer" yaml:"buffer"`
 		Manager              interface{} `json:"resources" yaml:"resources"`
@@ -118,6 +128,7 @@ func (c Config) Sanitised() (interface{}, error) {
 	}{
 		HTTP:                 c.HTTP,
 		Input:                inConf,
+		Pipeline:             pipeConf,
 		Output:               outConf,
 		Buffer:               bufConf,
 		Manager:              c.Manager,
@@ -235,6 +246,15 @@ func createPipeline(
 	poolt1.Add(1, inputPipe)
 	poolt2.Add(0, inputPipe)
 
+	// Create pipeline pool
+	pipe, err := pipeline.New(config.Pipeline, mgr, logger, stats)
+	if err != nil {
+		logger.Errorf("Pipeline error: %v\n", err)
+		return nil, nil, nil, err
+	}
+	poolt1.Add(2, pipe)
+	poolt2.Add(0, pipe)
+
 	// Create a buffer
 	buf, err := buffer.New(config.Buffer, logger, stats)
 	if err != nil {
@@ -254,7 +274,8 @@ func createPipeline(
 	poolt2.Add(0, outputPipe)
 
 	outputPipe.StartReceiving(buf.TransactionChan())
-	buf.StartReceiving(inputPipe.TransactionChan())
+	buf.StartReceiving(pipe.TransactionChan())
+	pipe.StartReceiving(inputPipe.TransactionChan())
 
 	closeChan := make(chan struct{})
 
