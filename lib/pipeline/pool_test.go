@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -83,14 +83,11 @@ func TestPoolBasic(t *testing.T) {
 		} else {
 			t.Fatal("Message was not dropped")
 		}
-
 	case res, open := <-resChan:
 		if !open {
 			t.Fatal("Closed early")
 		}
-		if res.Error() != nil {
-			// We don't expect our own error back since the workers are
-			// decoupled
+		if res.Error() != errMockProc {
 			t.Error(res.Error())
 		}
 	case <-time.After(time.Second * 5):
@@ -107,6 +104,7 @@ func TestPoolBasic(t *testing.T) {
 	case tChan <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
+
 	}
 
 	// Receive message
@@ -124,43 +122,24 @@ func TestPoolBasic(t *testing.T) {
 		t.Fatal("Timed out")
 	}
 
-	// Receive decoupled response
+	// Respond with error
+	go func() {
+		errTest := errors.New("This is a test")
+		select {
+		case procT.ResponseChan <- types.NewSimpleResponse(errTest):
+		case <-time.After(time.Second * 5):
+			t.Fatal("Timed out")
+		}
+	}()
+
+	// Receive response
 	select {
 	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
-		} else if res.Error() != nil {
+		} else if res.Error().Error() != "This is a test" {
 			t.Error(res.Error())
 		}
-		// Expect decoupled response
-	case <-time.After(time.Second * 5):
-		t.Fatal("Timed out")
-	}
-
-	// Respond with error
-	errTest := errors.New("This is a test")
-	select {
-	case procT.ResponseChan <- types.NewSimpleResponse(errTest):
-	case <-time.After(time.Second * 5):
-		t.Fatal("Timed out")
-	}
-
-	// Receive message second attempt
-	select {
-	case procT, open := <-proc.TransactionChan():
-		if !open {
-			t.Error("Closed early")
-		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
-			t.Errorf("Wrong message received: %s != %s", act, exp)
-		}
-	case <-time.After(time.Second * 5):
-		t.Fatal("Timed out")
-	}
-
-	// Respond with no error this time
-	select {
-	case procT.ResponseChan <- types.NewSimpleResponse(nil):
 	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
@@ -190,7 +169,16 @@ func TestPoolBasic(t *testing.T) {
 		t.Fatal("Timed out")
 	}
 
-	// Receive decoupled response
+	// Respond without error
+	go func() {
+		select {
+		case procT.ResponseChan <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second * 5):
+			t.Fatal("Timed out")
+		}
+	}()
+
+	// Receive response
 	select {
 	case res, open := <-resChan:
 		if !open {
@@ -199,14 +187,6 @@ func TestPoolBasic(t *testing.T) {
 		if res.Error() != nil {
 			t.Error(res.Error())
 		}
-		// Expect decoupled response
-	case <-time.After(time.Second * 5):
-		t.Fatal("Timed out")
-	}
-
-	// Respond without error
-	select {
-	case procT.ResponseChan <- types.NewSimpleResponse(nil):
 	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
@@ -255,19 +235,6 @@ func TestPoolMultiMsgs(t *testing.T) {
 			t.Fatal("Timed out")
 		}
 
-		// Receive decoupled response
-		select {
-		case res, open := <-resChan:
-			if !open {
-				t.Error("Closed early")
-			} else if res.Error() != nil {
-				t.Error(res.Error())
-			}
-			// Expect decoupled response
-		case <-time.After(time.Second * 5):
-			t.Fatal("Timed out")
-		}
-
 		for i := 0; i < mockProc.N; i++ {
 			// Receive messages
 			var procT types.Transaction
@@ -290,6 +257,18 @@ func TestPoolMultiMsgs(t *testing.T) {
 			case <-time.After(time.Second * 5):
 				t.Fatal("Timed out")
 			}
+		}
+
+		// Receive response
+		select {
+		case res, open := <-resChan:
+			if !open {
+				t.Error("Closed early")
+			} else if res.Error() != nil {
+				t.Error(res.Error())
+			}
+		case <-time.After(time.Second * 5):
+			t.Fatal("Timed out")
 		}
 	}
 

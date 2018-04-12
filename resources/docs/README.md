@@ -399,7 +399,40 @@ broker configs.
 
 ## Maximising CPU Utilisation
 
-TODO
+Some [processors][processors] within Benthos are relatively heavy on your CPU,
+and can potentially become the bottleneck of a bridge. In these circumstances
+it is worth configuring your bridge so that your processors are running on each
+available core of your machine without contention.
+
+In the following examples we will assume that Benthos is running on a machine
+with 8 logical CPU cores, and our goal is therefore to have 8 parallel
+processing pipelines in our config. It's possible depending on our IO that we
+would want more than one pipeline per thread but don't worry about this for now.
+
+### What is a processor
+
+A list of processors in a Benthos config becomes a single logical pipeline of
+steps running on a single logical thread.
+
+When the target of the processors (an input or output) is a broker type the
+pipeline will be duplicated once for each discrete input. This is one way to
+create parallel processing threads.
+
+The other way to create parallel processor threads is to configure them inside
+the buffer configuration block, where we can set any number of parallel
+processor threads independant of how many inputs or outputs we want to use.
+
+Here are some examples to illustrate:
+
+``` yaml
+TODO: config
+```
+
+Is a config that creates pipelines like this:
+
+```
+TODO: diagram
+```
 
 [default-conf]: ../../config/everything.yaml
 [processors]: ./processors
