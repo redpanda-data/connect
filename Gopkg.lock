@@ -89,8 +89,8 @@
     "service/sqs",
     "service/sts"
   ]
-  revision = "a72204b9bf8d48230ee0fe8995613b394c66f2da"
-  version = "v1.13.31"
+  revision = "9b0098a71f6d4d473a26ec8ad3c2feaac6eb1da6"
+  version = "v1.13.32"
 
 [[projects]]
   branch = "master"
@@ -113,8 +113,8 @@
 [[projects]]
   name = "github.com/cenkalti/backoff"
   packages = ["."]
-  revision = "61153c768f31ee5f130071d08fc82b85208528de"
-  version = "v1.1.0"
+  revision = "2ea60e5f094469f9e65adb9cd103795b73ae743e"
+  version = "v2.0.0"
 
 [[projects]]
   branch = "master"
@@ -146,38 +146,6 @@
   name = "github.com/dgryski/go-farm"
   packages = ["."]
   revision = "2de33835d10275975374b37b2dcfd22c9020a1f5"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/docker/docker"
-  packages = [
-    "api/types",
-    "api/types/blkiodev",
-    "api/types/container",
-    "api/types/filters",
-    "api/types/mount",
-    "api/types/network",
-    "api/types/registry",
-    "api/types/strslice",
-    "api/types/swarm",
-    "api/types/swarm/runtime",
-    "api/types/versions",
-    "opts",
-    "pkg/archive",
-    "pkg/fileutils",
-    "pkg/homedir",
-    "pkg/idtools",
-    "pkg/ioutils",
-    "pkg/jsonmessage",
-    "pkg/longpath",
-    "pkg/mount",
-    "pkg/pools",
-    "pkg/stdcopy",
-    "pkg/system",
-    "pkg/term",
-    "pkg/term/windows"
-  ]
-  revision = "cbde00b44273a584bed2ee3513db68924b4a6dba"
 
 [[projects]]
   name = "github.com/docker/go-connections"
@@ -225,16 +193,10 @@
   revision = "0bce6a6887123b67a60366d2c9fe2dfb74289d2e"
 
 [[projects]]
-  name = "github.com/fsouza/go-dockerclient"
-  packages = ["."]
-  revision = "ca33ff277b527ce11b793e62f9ba244129b01caf"
-  version = "v1.2.0"
-
-[[projects]]
   name = "github.com/go-ini/ini"
   packages = ["."]
-  revision = "5e9692864e22d02ac79e2fa499cffb00520b4fea"
-  version = "v1.34.0"
+  revision = "ace140f73450505f33e8b8418216792275ae82a7"
+  version = "v1.35.0"
 
 [[projects]]
   name = "github.com/go-mangos/mangos"
@@ -367,9 +329,35 @@
 
 [[projects]]
   name = "github.com/ory/dockertest"
-  packages = ["."]
-  revision = "f70891c9e81cc80ce5b8337fecf4751f9241b8c4"
-  version = "v3.1.7"
+  packages = [
+    ".",
+    "docker",
+    "docker/opts",
+    "docker/pkg/archive",
+    "docker/pkg/fileutils",
+    "docker/pkg/homedir",
+    "docker/pkg/idtools",
+    "docker/pkg/ioutils",
+    "docker/pkg/jsonmessage",
+    "docker/pkg/longpath",
+    "docker/pkg/mount",
+    "docker/pkg/pools",
+    "docker/pkg/stdcopy",
+    "docker/pkg/system",
+    "docker/pkg/term",
+    "docker/pkg/term/windows",
+    "docker/types",
+    "docker/types/blkiodev",
+    "docker/types/container",
+    "docker/types/filters",
+    "docker/types/mount",
+    "docker/types/network",
+    "docker/types/registry",
+    "docker/types/strslice",
+    "docker/types/versions"
+  ]
+  revision = "2e92e7784b6fb199fd168aa46269a2f1b34f299e"
+  version = "v3.3.0"
 
 [[projects]]
   branch = "master"
@@ -418,7 +406,7 @@
     "internal/bitbucket.org/ww/goautoneg",
     "model"
   ]
-  revision = "38c53a9f4bfcd932d1b00bfc65e256a7fba6b37a"
+  revision = "d0f7cd64bda49e08b22ae8a730aa57aa0db125d6"
 
 [[projects]]
   branch = "master"
@@ -459,14 +447,13 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "beb2a9779c3b677077c41673505f150149fce895"
+  revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = [
     "context",
-    "context/ctxhttp",
     "internal/socks",
     "internal/timeseries",
     "proxy",
