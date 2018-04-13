@@ -122,7 +122,7 @@ func (m *Memory) PushMessage(msg types.Message) (int, error) {
 		}
 	}
 
-	m.messages = append(m.messages, msg)
+	m.messages = append(m.messages, msg.DeepCopy())
 	m.bytes += extraBytes
 
 	backlog := m.bytes

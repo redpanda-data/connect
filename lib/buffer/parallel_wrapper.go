@@ -117,7 +117,7 @@ func (m *ParallelWrapper) inputLoop() {
 		case <-m.closeChan:
 			return
 		}
-		backlog, err := m.buffer.PushMessage(tr.Payload.DeepCopy())
+		backlog, err := m.buffer.PushMessage(tr.Payload)
 		if err == nil {
 			m.stats.Incr("buffer.write.count", 1)
 			m.stats.Gauge("buffer.backlog", int64(backlog))
