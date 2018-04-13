@@ -429,17 +429,8 @@ use. If the number of inputs is less than or close to the number of processing
 threads then it is also important to use a [buffer][buffers] in order to
 decouple those inputs.
 
-Here are some examples to illustrate:
-
-``` yaml
-TODO: config
-```
-
-Is a config that creates pipelines like this:
-
-```
-TODO: diagram
-```
+Please refer [to the documentation regarding pipelines][pipeline] for some
+examples.
 
 [default-conf]: ../../config/everything.yaml
 [pipeline]: ./pipeline.md

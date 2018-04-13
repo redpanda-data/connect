@@ -9,12 +9,12 @@ output.
 If you have processors that are heavy on CPU and aren't specific to a certain
 input or output they are best suited for the pipeline section. It is
 advantageous to use the pipeline section as it allows you to set an explicit
-number of parallel threads of execution which, should ideally match the number
-of available logical CPU cores.
+number of parallel threads of execution which should ideally match the number of
+available logical CPU cores.
 
 If [a buffer is chosen][buffers] these processors are applied to messages read
-from it. It is therefore possible to use buffers to distribute messages from a
-single input across multiple parallel processing threads.
+from it. It is therefore possible to use buffers as a way of distributing
+messages from a single input across multiple parallel processing threads.
 
 The following are some examples of how to get good performance out of your
 processing pipelines.
@@ -59,7 +59,8 @@ output:
   type: bar
 ```
 
-With this config the block diagram of our Benthos instance might look like this:
+With this config the pipeline within our Benthos instance would look something
+like the following:
 
 ```
 foo -> memory buffer ---> processor ---> bar
@@ -95,9 +96,7 @@ input:
     inputs:
     - type: baz
 buffer:
-  type: memory
-  memory:
-    limit: 5000000
+  type: none
 pipeline:
   threads: 4
   processors:
@@ -109,7 +108,8 @@ output:
   type: bar
 ```
 
-With this config the block diagram of our Benthos instance might look like this:
+With this config the pipeline within our Benthos instance would look something
+like the following:
 
 ```
 baz -\
