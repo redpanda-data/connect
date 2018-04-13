@@ -405,15 +405,8 @@ and can potentially become the bottleneck of a bridge. In these circumstances
 it is worth configuring your bridge so that your processors are running on each
 available core of your machine without contention.
 
-In the following examples we will assume that Benthos is running on a machine
-with 8 logical CPU cores, and our goal is therefore to have 8 parallel
-processing pipelines in our config. It's possible depending on our IO that we
-would want more than one pipeline per thread but don't worry about this for now.
-
-### What is a processor
-
-A list of processors in a Benthos config becomes a single logical pipeline of
-steps running on a single logical thread.
+An array of processors in any section of a Benthos config becomes a single
+logical pipeline of steps running on a single logical thread.
 
 When the target of the processors (an input or output) is a broker type the
 pipeline will be duplicated once for each discrete input/output. This is one way
@@ -423,11 +416,11 @@ results in uneven and varying loads which is unideal for distributing processing
 work across logical CPUs.
 
 The other way to create parallel processor threads is to configure them inside
-the [pipeline][pipeline] configuration block, where we can set any number of
-parallel processor threads independant of how many inputs or outputs we want to
-use. If the number of inputs is less than or close to the number of processing
-threads then it is also important to use a [buffer][buffers] in order to
-decouple those inputs.
+the [pipeline][pipeline] configuration block, where we can explicitly set any
+number of parallel processor threads independent of how many inputs or outputs
+we want to use. If the number of inputs is less than or close to the number of
+processing threads then it is also important to use a [buffer][buffers] in order
+to decouple those inputs.
 
 Please refer [to the documentation regarding pipelines][pipeline] for some
 examples.

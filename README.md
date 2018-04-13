@@ -4,18 +4,19 @@
 [![goreportcard for Jeffail/benthos][3]][4]
 [![Build Status][travis-badge]][travis-url]
 
-Benthos is a service that bridges message queues in ways that can simplify your
-platform and reduce development time. It also offers a variety of
-[configurable message processors][10] that can be chained together for solving
-common streaming problems such as content based multiplexing, filtering,
+Benthos is a stream multiplexer service driven by a [config file](config) in
+either YAML or JSON format and deploys as a single binary with zero runtime
+dependencies.
+
+A variety of [configurable message processors][10] can be chained together for
+solving common streaming problems such as content based multiplexing, filtering,
 modifying, batching, splitting, (de)compressing, (un)archiving, etc.
 
-A range of optional buffer strategies are available, allowing you to select a
-balance between latency, protection against back pressure and file based
-persistence, or nothing at all (direct bridge).
+A range of optional [buffer][12] strategies are available, allowing you to
+select a balance between latency, protection against back pressure and file
+based persistence, or nothing at all (direct bridge).
 
-Benthos is a single binary with zero dependencies, and uses a configuration file
-written in either YAML or JSON, making it quick and easy to package and deploy.
+For more details [check out the general documentation][general-docs].
 
 ## Supported Protocols
 
@@ -180,6 +181,8 @@ containers using `docker-compose`.
 [9]: resources/docker/compose_examples
 [10]: resources/docs/processors
 [11]: resources/docs/dynamic_inputs_and_outputs.md
+[12]: resources/docs/buffers
+[general-docs]: resources/docs#benthos
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
 [travis-url]: https://travis-ci.org/Jeffail/benthos
 [dep]: https://github.com/golang/dep
