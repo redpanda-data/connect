@@ -55,9 +55,9 @@ import (
 type Config struct {
 	HTTP                 api.Config       `json:"http" yaml:"http"`
 	Input                input.Config     `json:"input" yaml:"input"`
+	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
 	Pipeline             pipeline.Config  `json:"pipeline" yaml:"pipeline"`
 	Output               output.Config    `json:"output" yaml:"output"`
-	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
 	Manager              manager.Config   `json:"resources" yaml:"resources"`
 	Logger               log.LoggerConfig `json:"logger" yaml:"logger"`
 	Metrics              metrics.Config   `json:"metrics" yaml:"metrics"`
@@ -72,9 +72,9 @@ func NewConfig() Config {
 	return Config{
 		HTTP:                 api.NewConfig(),
 		Input:                input.NewConfig(),
+		Buffer:               buffer.NewConfig(),
 		Pipeline:             pipeline.NewConfig(),
 		Output:               output.NewConfig(),
-		Buffer:               buffer.NewConfig(),
 		Manager:              manager.NewConfig(),
 		Logger:               log.NewLoggerConfig(),
 		Metrics:              metricsConf,
@@ -118,9 +118,9 @@ func (c Config) Sanitised() (interface{}, error) {
 	return struct {
 		HTTP                 interface{} `json:"http" yaml:"http"`
 		Input                interface{} `json:"input" yaml:"input"`
+		Buffer               interface{} `json:"buffer" yaml:"buffer"`
 		Pipeline             interface{} `json:"pipeline" yaml:"pipeline"`
 		Output               interface{} `json:"output" yaml:"output"`
-		Buffer               interface{} `json:"buffer" yaml:"buffer"`
 		Manager              interface{} `json:"resources" yaml:"resources"`
 		Logger               interface{} `json:"logger" yaml:"logger"`
 		Metrics              interface{} `json:"metrics" yaml:"metrics"`
@@ -128,9 +128,9 @@ func (c Config) Sanitised() (interface{}, error) {
 	}{
 		HTTP:                 c.HTTP,
 		Input:                inConf,
+		Buffer:               bufConf,
 		Pipeline:             pipeConf,
 		Output:               outConf,
-		Buffer:               bufConf,
 		Manager:              c.Manager,
 		Logger:               c.Logger,
 		Metrics:              metConf,
@@ -246,23 +246,23 @@ func createPipeline(
 	poolt1.Add(1, inputPipe)
 	poolt2.Add(0, inputPipe)
 
-	// Create pipeline pool
-	pipe, err := pipeline.New(config.Pipeline, mgr, logger, stats)
-	if err != nil {
-		logger.Errorf("Pipeline error: %v\n", err)
-		return nil, nil, nil, err
-	}
-	poolt1.Add(2, pipe)
-	poolt2.Add(0, pipe)
-
 	// Create a buffer
 	buf, err := buffer.New(config.Buffer, logger, stats)
 	if err != nil {
 		logger.Errorf("Buffer error (%s): %v\n", config.Buffer.Type, err)
 		return nil, nil, nil, err
 	}
-	poolt1.Add(3, buf)
+	poolt1.Add(2, buf)
 	poolt2.Add(0, buf)
+
+	// Create pipeline pool
+	pipe, err := pipeline.New(config.Pipeline, mgr, logger, stats)
+	if err != nil {
+		logger.Errorf("Pipeline error: %v\n", err)
+		return nil, nil, nil, err
+	}
+	poolt1.Add(3, pipe)
+	poolt2.Add(0, pipe)
 
 	// Create our output pipe
 	outputPipe, err := output.New(config.Output, mgr, logger, stats)
@@ -273,9 +273,9 @@ func createPipeline(
 	poolt1.Add(10, outputPipe)
 	poolt2.Add(0, outputPipe)
 
-	outputPipe.StartReceiving(buf.TransactionChan())
-	buf.StartReceiving(pipe.TransactionChan())
-	pipe.StartReceiving(inputPipe.TransactionChan())
+	outputPipe.StartReceiving(pipe.TransactionChan())
+	pipe.StartReceiving(buf.TransactionChan())
+	buf.StartReceiving(inputPipe.TransactionChan())
 
 	closeChan := make(chan struct{})
 

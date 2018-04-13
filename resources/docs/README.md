@@ -54,8 +54,8 @@ A Benthos configuration consists of a number of root sections, the key parts
 being:
 
 - [`input`](./inputs)
-- [`pipeline`](./pipeline.md)
 - [`buffer`](./buffers)
+- [`pipeline`](./pipeline.md)
 - [`output`](./outputs)
 
 Please refer to those links for more information.
@@ -416,13 +416,18 @@ A list of processors in a Benthos config becomes a single logical pipeline of
 steps running on a single logical thread.
 
 When the target of the processors (an input or output) is a broker type the
-pipeline will be duplicated once for each discrete input. This is one way to
-create parallel processing threads.
+pipeline will be duplicated once for each discrete input/output. This is one way
+to create parallel processing threads but they will be tightly coupled to the
+input or output they are bound to. Using processing pipelines in this way
+results in uneven and varying loads which is unideal for distributing processing
+work across logical CPUs.
 
 The other way to create parallel processor threads is to configure them inside
 the [pipeline][pipeline] configuration block, where we can set any number of
 parallel processor threads independant of how many inputs or outputs we want to
-use.
+use. If the number of inputs is less than or close to the number of processing
+threads then it is also important to use a [buffer][buffers] in order to
+decouple those inputs.
 
 Here are some examples to illustrate:
 

@@ -220,6 +220,21 @@ input:
     unarchive:
       format: binary
       parts: []
+buffer:
+  type: none
+  badger:
+    directory: ""
+    sync_writes: true
+    gc_interval_ms: 1000
+  memory:
+    limit: 524288000
+  mmap_file:
+    directory: ""
+    file_size: 262144000
+    retry_period_ms: 1000
+    clean_up: true
+    reserved_disk_space: 104857600
+  none: {}
 pipeline:
   threads: 1
   processors: []
@@ -342,21 +357,6 @@ output:
     high_water_mark: 0
     poll_timeout_ms: 5000
   processors: []
-buffer:
-  type: none
-  badger:
-    directory: ""
-    sync_writes: true
-    gc_interval_ms: 1000
-  memory:
-    limit: 524288000
-  mmap_file:
-    directory: ""
-    file_size: 262144000
-    retry_period_ms: 1000
-    clean_up: true
-    reserved_disk_space: 104857600
-  none: {}
 resources:
   caches:
     example:

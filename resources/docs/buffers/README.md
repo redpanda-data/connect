@@ -7,6 +7,7 @@ Buffers can solve a number of typical streaming problems and are worth
 considering if you face circumstances similar to the following:
 
 - Input sources can periodically spike beyond the capacity of your output sinks.
+- You want to use parallel [processing pipelines](../pipeline.md).
 - You have more outputs than inputs and wish to distribute messages across them
   in order to maximize overall throughput.
 - Your input source needs occasional protection against back pressure from your
