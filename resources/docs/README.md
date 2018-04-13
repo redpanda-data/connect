@@ -3,12 +3,12 @@ Benthos
 
 ## Contents
 
-- [1. Configuration](#configuration)
-- [2. Mutating And Filtering Content](#mutating-and-filtering-content)
-- [3. Content Based Multiplexing](#content-based-multiplexing)
-- [4. Sharing Resources Across Processors](#sharing-resources-across-processors)
-- [5. Maximising IO Throughput](#maximising-io-throughput)
-- [6. Maximising CPU Utilisation](#maximising-cpu-utilisation)
+1. [Configuration](#configuration)
+2. [Mutating And Filtering Content](#mutating-and-filtering-content)
+3. [Content Based Multiplexing](#content-based-multiplexing)
+4. [Sharing Resources Across Processors](#sharing-resources-across-processors)
+5. [Maximising IO Throughput](#maximising-io-throughput)
+6. [Maximising CPU Utilisation](#maximising-cpu-utilisation)
 
 ## Configuration
 
