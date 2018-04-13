@@ -353,3 +353,29 @@ func TestPoolMultiThreads(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestPoolMultiNaturalClose(t *testing.T) {
+	conf := NewConfig()
+	conf.Threads = 2
+	conf.Processors = append(conf.Processors, processor.NewConfig())
+
+	proc, err := New(
+		conf, nil,
+		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		metrics.DudType{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tChan := make(chan types.Transaction)
+	if err := proc.StartReceiving(tChan); err != nil {
+		t.Fatal(err)
+	}
+
+	close(tChan)
+
+	if err := proc.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}

@@ -82,16 +82,20 @@ func (p *Pool) loop() {
 	}()
 
 	internalMessages := make(chan types.Transaction)
+	remainingWorkers := int64(len(p.workers))
 
-	var remainingWorkers int32
 	for _, worker := range p.workers {
 		if err := worker.StartReceiving(p.messagesIn); err != nil {
 			p.log.Errorf("Failed to start pipeline worker: %v\n", err)
+			atomic.AddInt64(&remainingWorkers, -1)
 			continue
 		}
-		atomic.AddInt32(&remainingWorkers, 1)
 		go func(w Type) {
-			defer atomic.AddInt32(&remainingWorkers, -1)
+			defer func() {
+				if atomic.AddInt64(&remainingWorkers, -1) == 0 {
+					close(internalMessages)
+				}
+			}()
 			for {
 				t, open := <-w.TransactionChan()
 				if !open {
@@ -106,9 +110,12 @@ func (p *Pool) loop() {
 		}(worker)
 	}
 
-	for atomic.LoadUint32(&p.running) == 1 && atomic.LoadInt32(&remainingWorkers) > 0 {
+	for atomic.LoadUint32(&p.running) == 1 && atomic.LoadInt64(&remainingWorkers) > 0 {
 		select {
-		case t := <-internalMessages:
+		case t, open := <-internalMessages:
+			if !open {
+				return
+			}
 			select {
 			case p.messagesOut <- t:
 			case <-p.closeChan:
