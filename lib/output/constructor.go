@@ -39,6 +39,13 @@ import (
 
 // TypeSpec is a constructor and a usage description for each output type.
 type TypeSpec struct {
+	brokerConstructor func(
+		conf Config,
+		mgr types.Manager,
+		log log.Modular,
+		stats metrics.Type,
+		pipelineConstructors ...pipeline.ConstructorFunc,
+	) (Type, error)
 	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 	description string
 }
@@ -335,6 +342,9 @@ func New(
 		}}, pipelines...)
 	}
 	if c, ok := Constructors[conf.Type]; ok {
+		if c.brokerConstructor != nil {
+			return c.brokerConstructor(conf, mgr, log, stats, pipelines...)
+		}
 		output, err := c.constructor(conf, mgr, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create output '%v': %v", conf.Type, err)

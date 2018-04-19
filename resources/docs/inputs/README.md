@@ -147,6 +147,14 @@ Which results in a total of four kafka_balanced inputs. Note that ditto_0 will
 result in no duplicate configs, this might be useful if the config is generated
 and there's a chance you won't want any duplicates.
 
+### Processors
+
+It is possible to configure [processors](../processors/README.md) at the broker
+level, where they will be applied to _all_ child inputs, as well as on the
+individual child inputs. If you have processors at both the broker level _and_
+on child inputs then the broker processors will be applied _after_ the child
+nodes processors.
+
 ## `dynamic`
 
 The dynamic type is a special broker type where the inputs are identified by

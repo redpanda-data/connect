@@ -22,11 +22,16 @@ package output
 
 import (
 	"errors"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/pipeline"
+	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -111,6 +116,103 @@ func TestBasicWrapPipeline(t *testing.T) {
 
 	if mockOut.ts != mockPi.ts {
 		t.Error("Wrong messages chan in mock pipe")
+	}
+
+	newOutput.CloseAsync()
+	if err = newOutput.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestBasicWrapPipelinesOrdering(t *testing.T) {
+	mockOut := &mockOutput{}
+
+	firstProc := processor.NewConfig()
+	firstProc.Type = "insert_part"
+	firstProc.InsertPart.Content = "foo"
+	firstProc.InsertPart.Index = 0
+
+	secondProc := processor.NewConfig()
+	secondProc.Type = "select_parts"
+
+	conf := NewConfig()
+	conf.Processors = append(conf.Processors, firstProc)
+
+	newOutput, err := WrapWithPipelines(
+		mockOut,
+		func() (pipeline.Type, error) {
+			proc, err := processor.New(
+				firstProc, nil,
+				log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+				metrics.DudType{},
+			)
+			if err != nil {
+				return nil, err
+			}
+			return pipeline.NewProcessor(
+				log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+				metrics.DudType{},
+				proc,
+			), nil
+		},
+		func() (pipeline.Type, error) {
+			proc, err := processor.New(
+				secondProc, nil,
+				log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+				metrics.DudType{},
+			)
+			if err != nil {
+				return nil, err
+			}
+			return pipeline.NewProcessor(
+				log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+				metrics.DudType{},
+				proc,
+			), nil
+		},
+	)
+
+	tChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+	if err = newOutput.StartReceiving(tChan); err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	case tChan <- types.NewTransaction(
+		types.NewMessage([][]byte{[]byte("bar")}), resChan,
+	):
+	}
+
+	var tran types.Transaction
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	case tran = <-mockOut.ts:
+	}
+
+	exp := [][]byte{
+		[]byte("foo"),
+	}
+	if act := tran.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong contents: %s != %s", act, exp)
+	}
+
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	case tran.ResponseChan <- types.NewSimpleResponse(nil):
+	}
+
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	case res := <-resChan:
+		if res.Error() != nil {
+			t.Error(res.Error())
+		}
 	}
 
 	newOutput.CloseAsync()

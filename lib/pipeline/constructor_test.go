@@ -157,4 +157,9 @@ func TestProcCtor(t *testing.T) {
 			t.Error(res.Error())
 		}
 	}
+
+	pipe.CloseAsync()
+	if err = pipe.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
 }

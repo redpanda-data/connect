@@ -111,21 +111,21 @@ brokers, including RabbitMQ.
 The broker output type allows you to configure multiple output targets following
 a broker pattern from this list:
 
-### `fan_out`
+#### `fan_out`
 
 With the fan out pattern all outputs will be sent every message that passes
 through Benthos. If an output applies back pressure it will block all subsequent
 messages, and if an output fails to send a message it will be retried
 continuously until completion or service shut down.
 
-### `round_robin`
+#### `round_robin`
 
 With the round robin pattern each message will be assigned a single output
 following their order. If an output applies back pressure it will block all
 subsequent messages. If an output fails to send a message then the message will
 be re-attempted with the next input, and so on.
 
-### `greedy`
+#### `greedy`
 
 The greedy pattern results in higher output throughput at the cost of
 potentially disproportionate message allocations to those outputs. Each message
@@ -134,11 +134,20 @@ messages as soon as they are able to process them. This results in certain
 faster outputs potentially processing more messages at the cost of slower
 outputs.
 
-Inputs will still be tightly coupled to outputs, meaning acknowledgements are
-still correctly propagated back to the input source in lock-step. Therefore, in
-order to benefit from N parallel output writes you will either need to have M>=N
-parallel input sources or combine and split messages to create parallel batches
-(a tutorial for this is on the way).
+### Utilising More Outputs
+
+When using brokered outputs with patterns such as round robin or greedy it is
+possible to have multiple messages in-flight at the same time. In order to fully
+utilise this you either need to have a greater number of input sources than
+output sources [or use a buffer](../buffers/README.md).
+
+### Processors
+
+It is possible to configure [processors](../processors/README.md) at the broker
+level, where they will be applied to _all_ child outputs, as well as on the
+individual child outputs. If you have processors at both the broker level _and_
+on child outputs then the broker processors will be applied _after_ the child
+nodes processors.
 
 ## `dynamic`
 

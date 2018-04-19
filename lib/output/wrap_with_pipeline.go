@@ -57,8 +57,8 @@ func WrapWithPipeline(out Type, pipeConstructor pipeline.ConstructorFunc) (*With
 // WrapWithPipelines wraps an output with a variadic number of pipelines.
 func WrapWithPipelines(out Type, pipeConstructors ...pipeline.ConstructorFunc) (Type, error) {
 	var err error
-	for _, ctor := range pipeConstructors {
-		if out, err = WrapWithPipeline(out, ctor); err != nil {
+	for i := len(pipeConstructors) - 1; i >= 0; i-- {
+		if out, err = WrapWithPipeline(out, pipeConstructors[i]); err != nil {
 			return nil, err
 		}
 	}
