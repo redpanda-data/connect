@@ -25,6 +25,7 @@ For more details [check out the general documentation][general-docs].
 Currently supported input/output targets:
 
 - [Amazon (S3, SQS)][amazons3]
+- [Elasticsearch][elasticsearch]
 - File
 - HTTP(S)
 - [Kafka][kafka]
@@ -196,3 +197,4 @@ containers using `docker-compose`.
 [natsstreaming]: https://nats.io/documentation/streaming/nats-streaming-intro/
 [redis]: https://redis.io/
 [kafka]: https://kafka.apache.org/
+[elasticsearch]: https://www.elastic.co/

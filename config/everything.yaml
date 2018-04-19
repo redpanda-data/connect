@@ -271,6 +271,16 @@ output:
     outputs: {}
     prefix: ""
     timeout_ms: 5000
+  elasticsearch:
+    urls:
+    - http://localhost:9200
+    id: ${!count:elastic_ids}-${!timestamp_unix}
+    index: benthos_index
+    timeout_ms: 5000
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
   file:
     path: ""
     custom_delimiter: ""

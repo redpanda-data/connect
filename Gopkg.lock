@@ -120,7 +120,7 @@
   branch = "master"
   name = "github.com/containerd/continuity"
   packages = ["pathdriver"]
-  revision = "3e8f2ea4b190484acb976a5b378d373429639a1a"
+  revision = "c6cef34830231743494fe2969284df7b82cc0ad0"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
@@ -267,6 +267,17 @@
   revision = "0b12d6b5"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/mailru/easyjson"
+  packages = [
+    ".",
+    "buffer",
+    "jlexer",
+    "jwriter"
+  ]
+  revision = "8b799c424f57fa123fc63a99d6383bc6e4c02578"
+
+[[projects]]
   name = "github.com/matttproud/golang_protobuf_extensions"
   packages = ["pbutil"]
   revision = "3247c84500bff8d9fb6d579d800f20b3e091582c"
@@ -302,6 +313,16 @@
   packages = ["."]
   revision = "eee57a3ac4174c55924125bb15eeeda8cffb6e6f"
   version = "v1.0.7"
+
+[[projects]]
+  name = "github.com/olivere/elastic"
+  packages = [
+    ".",
+    "config",
+    "uritemplates"
+  ]
+  revision = "d6362604399c7af560b54f048b4fcfbdd6eff293"
+  version = "v6.1.14"
 
 [[projects]]
   name = "github.com/opencontainers/go-digest"
@@ -460,7 +481,7 @@
     "trace",
     "websocket"
   ]
-  revision = "61147c48b25b599e5b561d2e9c4f3e1ef489ca41"
+  revision = "d41e8174641f662c5a2d1c7a5f9e828788eb8706"
 
 [[projects]]
   branch = "master"
@@ -469,7 +490,7 @@
     "unix",
     "windows"
   ]
-  revision = "3b87a42e500a6dc65dae1a55d0b641295971163e"
+  revision = "3ccc7e5779793fd54564baf60c51bf017955e0ba"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"
@@ -486,6 +507,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "39927eaec8560d26d8f0705c288b2f227926b7f8e63baa00cbf53d00d62c576f"
+  inputs-digest = "6b6319d190c5951354bd2a9c81886b90682d9dc7c47382ce65c8b770dd0d5f1f"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -66,6 +66,7 @@ func TestMQTTIntegration(t *testing.T) {
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
+	pool.MaxWait = time.Second * 30
 
 	resource, err := pool.Run("ncarlier/mqtt", "latest", nil)
 	if err != nil {

@@ -164,6 +164,11 @@ methods on the '/output/{output_id}' endpoint. When using POST the body of the
 request should be a JSON configuration for the output, if the output already
 exists it will be changed.
 
+## `elasticsearch`
+
+Publishes messages into an Elasticsearch index as documents. This output
+currently does not support creating the target index.
+
 ## `file`
 
 The file output type simply appends all messages to an output file. Single part

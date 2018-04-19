@@ -59,53 +59,55 @@ var Constructors = map[string]TypeSpec{}
 // Note that some configs are empty structs, as the type has no optional values
 // but we want to list it as an option.
 type Config struct {
-	Type        string                 `json:"type" yaml:"type"`
-	AmazonS3    writer.AmazonS3Config  `json:"amazon_s3" yaml:"amazon_s3"`
-	AmazonSQS   writer.AmazonSQSConfig `json:"amazon_sqs" yaml:"amazon_sqs"`
-	AMQP        AMQPConfig             `json:"amqp" yaml:"amqp"`
-	Broker      BrokerConfig           `json:"broker" yaml:"broker"`
-	Dynamic     DynamicConfig          `json:"dynamic" yaml:"dynamic"`
-	File        FileConfig             `json:"file" yaml:"file"`
-	Files       writer.FilesConfig     `json:"files" yaml:"files"`
-	HTTPClient  HTTPClientConfig       `json:"http_client" yaml:"http_client"`
-	HTTPServer  HTTPServerConfig       `json:"http_server" yaml:"http_server"`
-	Kafka       writer.KafkaConfig     `json:"kafka" yaml:"kafka"`
-	MQTT        writer.MQTTConfig      `json:"mqtt" yaml:"mqtt"`
-	NATS        NATSConfig             `json:"nats" yaml:"nats"`
-	NATSStream  NATSStreamConfig       `json:"nats_stream" yaml:"nats_stream"`
-	NSQ         NSQConfig              `json:"nsq" yaml:"nsq"`
-	RedisList   writer.RedisListConfig `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub RedisPubSubConfig      `json:"redis_pubsub" yaml:"redis_pubsub"`
-	ScaleProto  ScaleProtoConfig       `json:"scalability_protocols" yaml:"scalability_protocols"`
-	STDOUT      STDOUTConfig           `json:"stdout" yaml:"stdout"`
-	ZMQ4        *writer.ZMQ4Config     `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	Processors  []processor.Config     `json:"processors" yaml:"processors"`
+	Type          string                     `json:"type" yaml:"type"`
+	AmazonS3      writer.AmazonS3Config      `json:"amazon_s3" yaml:"amazon_s3"`
+	AmazonSQS     writer.AmazonSQSConfig     `json:"amazon_sqs" yaml:"amazon_sqs"`
+	AMQP          AMQPConfig                 `json:"amqp" yaml:"amqp"`
+	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
+	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
+	Elasticsearch writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
+	File          FileConfig                 `json:"file" yaml:"file"`
+	Files         writer.FilesConfig         `json:"files" yaml:"files"`
+	HTTPClient    HTTPClientConfig           `json:"http_client" yaml:"http_client"`
+	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
+	Kafka         writer.KafkaConfig         `json:"kafka" yaml:"kafka"`
+	MQTT          writer.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
+	NATS          NATSConfig                 `json:"nats" yaml:"nats"`
+	NATSStream    NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
+	NSQ           NSQConfig                  `json:"nsq" yaml:"nsq"`
+	RedisList     writer.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
+	RedisPubSub   RedisPubSubConfig          `json:"redis_pubsub" yaml:"redis_pubsub"`
+	ScaleProto    ScaleProtoConfig           `json:"scalability_protocols" yaml:"scalability_protocols"`
+	STDOUT        STDOUTConfig               `json:"stdout" yaml:"stdout"`
+	ZMQ4          *writer.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Processors    []processor.Config         `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:        "stdout",
-		AmazonS3:    writer.NewAmazonS3Config(),
-		AmazonSQS:   writer.NewAmazonSQSConfig(),
-		AMQP:        NewAMQPConfig(),
-		Broker:      NewBrokerConfig(),
-		Dynamic:     NewDynamicConfig(),
-		File:        NewFileConfig(),
-		Files:       writer.NewFilesConfig(),
-		HTTPClient:  NewHTTPClientConfig(),
-		HTTPServer:  NewHTTPServerConfig(),
-		Kafka:       writer.NewKafkaConfig(),
-		MQTT:        writer.NewMQTTConfig(),
-		NATS:        NewNATSConfig(),
-		NATSStream:  NewNATSStreamConfig(),
-		NSQ:         NewNSQConfig(),
-		RedisList:   writer.NewRedisListConfig(),
-		RedisPubSub: NewRedisPubSubConfig(),
-		ScaleProto:  NewScaleProtoConfig(),
-		STDOUT:      NewSTDOUTConfig(),
-		ZMQ4:        writer.NewZMQ4Config(),
-		Processors:  []processor.Config{},
+		Type:          "stdout",
+		AmazonS3:      writer.NewAmazonS3Config(),
+		AmazonSQS:     writer.NewAmazonSQSConfig(),
+		AMQP:          NewAMQPConfig(),
+		Broker:        NewBrokerConfig(),
+		Dynamic:       NewDynamicConfig(),
+		Elasticsearch: writer.NewElasticsearchConfig(),
+		File:          NewFileConfig(),
+		Files:         writer.NewFilesConfig(),
+		HTTPClient:    NewHTTPClientConfig(),
+		HTTPServer:    NewHTTPServerConfig(),
+		Kafka:         writer.NewKafkaConfig(),
+		MQTT:          writer.NewMQTTConfig(),
+		NATS:          NewNATSConfig(),
+		NATSStream:    NewNATSStreamConfig(),
+		NSQ:           NewNSQConfig(),
+		RedisList:     writer.NewRedisListConfig(),
+		RedisPubSub:   NewRedisPubSubConfig(),
+		ScaleProto:    NewScaleProtoConfig(),
+		STDOUT:        NewSTDOUTConfig(),
+		ZMQ4:          writer.NewZMQ4Config(),
+		Processors:    []processor.Config{},
 	}
 }
 

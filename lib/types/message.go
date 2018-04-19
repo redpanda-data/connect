@@ -73,7 +73,7 @@ type Message interface {
 
 	// Iter will iterate each message part in order, calling the closure
 	// argument with the index and contents of the message part.
-	Iter(f func(i int, b []byte))
+	Iter(f func(i int, b []byte) error) error
 
 	// Bytes returns a binary representation of the message, which can be later
 	// parsed back into a multipart message with `FromBytes`. The result of this
@@ -294,10 +294,13 @@ func (m *messageImpl) Len() int {
 	return len(m.parts)
 }
 
-func (m *messageImpl) Iter(f func(i int, b []byte)) {
+func (m *messageImpl) Iter(f func(i int, b []byte) error) error {
 	for i, p := range m.parts {
-		f(i, p)
+		if err := f(i, p); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (m *messageImpl) expandCache(index int) {

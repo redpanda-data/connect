@@ -65,6 +65,11 @@ services:
     image: ncarlier/mqtt
     ports:
       - "1883:1883"
+  elasticsearch:
+    image: elasticsearch
+    ports:
+      - "9200:9200"
+      - "9300:9300"
   benthos-in:
     image: jeffail/benthos
     volumes:
