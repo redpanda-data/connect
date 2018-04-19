@@ -21,10 +21,15 @@
 package pipeline
 
 import (
+	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 func TestSanitise(t *testing.T) {
@@ -76,5 +81,80 @@ func TestSanitise(t *testing.T) {
 	}
 	if !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	}
+}
+
+func TestProcCtor(t *testing.T) {
+	firstProc := processor.NewConfig()
+	firstProc.Type = "bounds_check"
+	firstProc.BoundsCheck.MinPartSize = 5
+
+	secondProc := processor.NewConfig()
+	secondProc.Type = "insert_part"
+	secondProc.InsertPart.Content = "1"
+	secondProc.InsertPart.Index = 0
+
+	conf := NewConfig()
+	conf.Processors = append(conf.Processors, firstProc)
+
+	pipe, err := New(
+		conf, nil,
+		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		metrics.DudType{},
+		func() (processor.Type, error) {
+			return processor.New(
+				secondProc, nil,
+				log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+				metrics.DudType{},
+			)
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+
+	if err = pipe.StartReceiving(tChan); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	case tChan <- types.NewTransaction(
+		types.NewMessage([][]byte{[]byte("foo bar baz")}), resChan,
+	):
+	}
+
+	var tran types.Transaction
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	case tran = <-pipe.TransactionChan():
+	}
+
+	exp := [][]byte{
+		[]byte("1"),
+		[]byte("foo bar baz"),
+	}
+	if act := tran.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong contents: %s != %s", act, exp)
+	}
+
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	case tran.ResponseChan <- types.NewSimpleResponse(nil):
+	}
+
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	case res := <-resChan:
+		if res.Error() != nil {
+			t.Error(res.Error())
+		}
 	}
 }

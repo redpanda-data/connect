@@ -81,14 +81,22 @@ func New(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
+	processorCtors ...ProcConstructorFunc,
 ) (Type, error) {
 	procCtor := func() (Type, error) {
-		processors := make([]processor.Type, len(conf.Processors))
+		processors := make([]processor.Type, len(conf.Processors)+len(processorCtors))
 		for i, procConf := range conf.Processors {
 			var err error
 			processors[i], err = processor.New(procConf, mgr, log, stats)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
+			}
+		}
+		for j, procCtor := range processorCtors {
+			var err error
+			processors[j+len(conf.Processors)], err = procCtor()
+			if err != nil {
+				return nil, fmt.Errorf("failed to create processor: %v", err)
 			}
 		}
 		return NewProcessor(log, stats, processors...), nil

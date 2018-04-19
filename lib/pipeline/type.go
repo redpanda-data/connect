@@ -20,9 +20,15 @@
 
 package pipeline
 
-import "github.com/Jeffail/benthos/lib/types"
+import (
+	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/types"
+)
 
-// ConstructorFunc is a common type for constructing a pipeline type.
+// ProcConstructorFunc is a func for constructing a processor type.
+type ProcConstructorFunc func() (processor.Type, error)
+
+// ConstructorFunc is a func for constructing a pipeline type.
 type ConstructorFunc func() (Type, error)
 
 // Type is an interface that all pipeline types should implement.
