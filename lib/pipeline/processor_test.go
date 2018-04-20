@@ -22,6 +22,7 @@ package pipeline
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -219,8 +220,7 @@ func (m *mockMultiMsgProcessor) ProcessMessage(msg types.Message) ([]types.Messa
 	var msgs []types.Message
 	for i := 0; i < m.N; i++ {
 		newMsg := types.NewMessage([][]byte{
-			[]byte("foo"),
-			[]byte("bar"),
+			[]byte(fmt.Sprintf("test%v", i)),
 		})
 		msgs = append(msgs, newMsg)
 	}
@@ -242,20 +242,20 @@ func TestProcessorMultiMsgs(t *testing.T) {
 		t.Error(err)
 	}
 
-	msg := types.NewMessage([][]byte{
-		[]byte(`one`),
-		[]byte(`two`),
-	})
-
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(msg, resChan):
+	case tChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 
 	var procT types.Transaction
 	var open bool
+
+	expMsgs := map[string]struct{}{}
+	for i := 0; i < mockProc.N; i++ {
+		expMsgs[fmt.Sprintf("test%v", i)] = struct{}{}
+	}
 
 	// Receive N messages
 	for i := 0; i < mockProc.N; i++ {
@@ -264,12 +264,19 @@ func TestProcessorMultiMsgs(t *testing.T) {
 			if !open {
 				t.Error("Closed early")
 			}
-			if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
-				t.Errorf("Wrong message received: %s != %s", act, exp)
+			act := string(procT.Payload.Get(0))
+			if _, exists := expMsgs[act]; !exists {
+				t.Errorf("Unexpected result: %v", act)
+			} else {
+				delete(expMsgs, act)
 			}
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
+	}
+
+	if len(expMsgs) != 0 {
+		t.Errorf("Expected messages were not received: %v", expMsgs)
 	}
 
 	// Respond without error N times
@@ -314,14 +321,14 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		t.Error(err)
 	}
 
-	msg := types.NewMessage([][]byte{
-		[]byte(`one`),
-		[]byte(`two`),
-	})
+	expMsgs := map[string]struct{}{}
+	for i := 0; i < mockProc.N; i++ {
+		expMsgs[fmt.Sprintf("test%v", i)] = struct{}{}
+	}
 
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(msg, resChan):
+	case tChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -335,8 +342,11 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
-			t.Errorf("Wrong message received: %s != %s", act, exp)
+		act := string(procT.Payload.Get(0))
+		if _, exists := expMsgs[act]; !exists {
+			t.Errorf("Unexpected result: %v", act)
+		} else {
+			delete(expMsgs, act)
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out")
@@ -356,12 +366,19 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 			if !open {
 				t.Error("Closed early")
 			}
-			if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
-				t.Errorf("Wrong message received: %s != %s", act, exp)
+			act := string(procT.Payload.Get(0))
+			if _, exists := expMsgs[act]; !exists {
+				t.Errorf("Unexpected result: %v", act)
+			} else {
+				delete(expMsgs, act)
 			}
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
+	}
+
+	if len(expMsgs) != 0 {
+		t.Errorf("Expected messages were not received: %v", expMsgs)
 	}
 
 	// Respond without error N-1 times
@@ -406,14 +423,14 @@ func TestProcessorMultiMsgsErr(t *testing.T) {
 		t.Error(err)
 	}
 
-	msg := types.NewMessage([][]byte{
-		[]byte(`one`),
-		[]byte(`two`),
-	})
+	expMsgs := map[string]struct{}{}
+	for i := 0; i < mockProc.N; i++ {
+		expMsgs[fmt.Sprintf("test%v", i)] = struct{}{}
+	}
 
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(msg, resChan):
+	case tChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -427,8 +444,9 @@ func TestProcessorMultiMsgsErr(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
-			t.Errorf("Wrong message received: %s != %s", act, exp)
+		act := string(procT.Payload.Get(0))
+		if _, exists := expMsgs[act]; !exists {
+			t.Errorf("Unexpected result: %v", act)
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out")

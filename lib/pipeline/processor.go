@@ -124,13 +124,13 @@ func (p *Processor) loop() {
 	responsesLoop:
 		for remainingResponses > 0 {
 			var tsOut chan<- types.Transaction
-			tsIndex := 0
+			var transactionOut types.Transaction
 			if currentMsg < len(resultMsgs) {
 				tsOut = p.messagesOut
-				tsIndex = currentMsg
+				transactionOut = types.NewTransaction(resultMsgs[currentMsg], p.responsesIn)
 			}
 			select {
-			case tsOut <- types.NewTransaction(resultMsgs[tsIndex], p.responsesIn):
+			case tsOut <- transactionOut:
 				currentMsg++
 			case res, open = <-p.responsesIn:
 				if !open {

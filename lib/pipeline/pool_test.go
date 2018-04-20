@@ -22,6 +22,7 @@ package pipeline
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -223,15 +224,15 @@ func TestPoolMultiMsgs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := types.NewMessage([][]byte{
-		[]byte(`one`),
-		[]byte(`two`),
-	})
-
 	for j := 0; j < 10; j++ {
+		expMsgs := map[string]struct{}{}
+		for i := 0; i < mockProc.N; i++ {
+			expMsgs[fmt.Sprintf("test%v", i)] = struct{}{}
+		}
+
 		// Send message
 		select {
-		case tChan <- types.NewTransaction(msg, resChan):
+		case tChan <- types.NewTransaction(types.NewMessage(nil), resChan):
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
 		}
@@ -245,8 +246,11 @@ func TestPoolMultiMsgs(t *testing.T) {
 				if !open {
 					t.Error("Closed early")
 				}
-				if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
-					t.Errorf("Wrong message received: %s != %s", act, exp)
+				act := string(procT.Payload.Get(0))
+				if _, exists := expMsgs[act]; !exists {
+					t.Errorf("Unexpected result: %v", act)
+				} else {
+					delete(expMsgs, act)
 				}
 			case <-time.After(time.Second * 5):
 				t.Fatal("Timed out")
@@ -258,6 +262,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 			case <-time.After(time.Second * 5):
 				t.Fatal("Timed out")
 			}
+
 		}
 
 		// Receive response
@@ -270,6 +275,10 @@ func TestPoolMultiMsgs(t *testing.T) {
 			}
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
+		}
+
+		if len(expMsgs) != 0 {
+			t.Errorf("Expected messages were not received: %v", expMsgs)
 		}
 	}
 
