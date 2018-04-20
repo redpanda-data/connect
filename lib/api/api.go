@@ -39,15 +39,17 @@ import (
 
 // Config contains the configuration fields for the Benthos API.
 type Config struct {
-	Address       string `json:"address" yaml:"address"`
-	ReadTimeoutMS int    `json:"read_timeout_ms" yaml:"read_timeout_ms"`
+	Address        string `json:"address" yaml:"address"`
+	ReadTimeoutMS  int    `json:"read_timeout_ms" yaml:"read_timeout_ms"`
+	DebugEndpoints bool   `json:"debug_endpoints" yaml:"debug_endpoints"`
 }
 
 // NewConfig creates a new API config with default values.
 func NewConfig() Config {
 	return Config{
-		Address:       "0.0.0.0:4195",
-		ReadTimeoutMS: 5000,
+		Address:        "0.0.0.0:4195",
+		ReadTimeoutMS:  5000,
+		DebugEndpoints: false,
 	}
 }
 
@@ -130,18 +132,20 @@ func New(
 		}
 	}
 
-	t.RegisterEndpoint(
-		"/config/json", "Returns the loaded config as JSON.",
-		handlePrintJSONConfig,
-	)
-	t.RegisterEndpoint(
-		"/config/yaml", "Returns the loaded config as YAML.",
-		handlePrintYAMLConfig,
-	)
-	t.RegisterEndpoint(
-		"/stack", "Returns a snapshot of the current Benthos stack trace.",
-		handleStackTrace,
-	)
+	if t.conf.DebugEndpoints {
+		t.RegisterEndpoint(
+			"/config/json", "Returns the loaded config as JSON.",
+			handlePrintJSONConfig,
+		)
+		t.RegisterEndpoint(
+			"/config/yaml", "Returns the loaded config as YAML.",
+			handlePrintYAMLConfig,
+		)
+		t.RegisterEndpoint(
+			"/stack", "Returns a snapshot of the current Benthos stack trace.",
+			handleStackTrace,
+		)
+	}
 	t.RegisterEndpoint("/ping", "Ping Benthos.", handlePing)
 	t.RegisterEndpoint("/version", "Returns the Benthos version.", handleVersion)
 	t.RegisterEndpoint("/endpoints", "Returns this map of endpoints.", handleEndpoints)

@@ -1,7 +1,8 @@
 {
 	"http": {
 		"address": "0.0.0.0:4195",
-		"read_timeout_ms": 5000
+		"read_timeout_ms": 5000,
+		"debug_endpoints": false
 	},
 	"input": {
 		"amqp": {
