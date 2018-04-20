@@ -273,7 +273,7 @@ func (d *Dynamic) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 			r.Body.Close()
 		}
 		if httpErr != nil {
-			http.Error(w, "Internal server error", http.StatusBadGateway)
+			http.Error(w, fmt.Sprintf("Error: %v", httpErr), http.StatusBadGateway)
 		}
 	}()
 
