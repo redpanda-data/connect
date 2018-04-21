@@ -11,8 +11,10 @@ PATHINSTDOCKER = $(DEST_DIR)/docker
 VERSION := $(shell git describe --tags || echo "v0.0.0")
 DATE    := $(shell date +"%c" | tr ' :' '__')
 
-LDFLAGS = -X $(BENTHOS_PATH)/lib/util/service.Version=$(VERSION) \
+VER_FLAGS = -X $(BENTHOS_PATH)/lib/util/service.Version=$(VERSION) \
 	-X $(BENTHOS_PATH)/lib/util/service.DateBuilt=$(DATE)
+
+LD_FLAGS =
 
 APPS = benthos
 all: $(APPS)
@@ -21,7 +23,7 @@ $(PATHINSTBIN)/benthos: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/be
 
 $(PATHINSTBIN)/%: deps
 	@mkdir -p $(dir $@)
-	@go build -tags "$(TAGS)" -ldflags "$(LDFLAGS)" -o $@ ./cmd/$*
+	@go build -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
 $(APPS): %: $(PATHINSTBIN)/%
 

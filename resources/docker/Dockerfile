@@ -3,7 +3,11 @@ FROM golang:latest
 WORKDIR /go/src/github.com/Jeffail/benthos/
 COPY . /go/src/github.com/Jeffail/benthos/
 
-RUN CGO_ENABLED=0 GOOS=linux make
+RUN apt-get update
+RUN apt-get install -y upx-ucl
+
+RUN CGO_ENABLED=0 GOOS=linux make LD_FLAGS="-s -w"
+RUN upx ./target/bin/benthos
 
 FROM scratch
 
