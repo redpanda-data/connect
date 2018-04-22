@@ -3,8 +3,9 @@ Streaming AWS S3 Archives
 
 This example demonstrates how Benthos can be used to stream an S3 bucket of
 `.tar.gz` archives containing JSON documents into any output target. This
-example is able to listen for newly added archives, decompresses, unarchives and
-streams the JSON documents found within to a Kafka topic.
+example is able to listen for newly added archives and then downloads,
+decompresses, unarchives and streams the JSON documents found within to a Kafka
+topic.
 
 The method used to stream archives is via an [SQS queue][s3-tracking], which is
 a common pattern. Benthos can work either with S3 events sent via SQS directly,

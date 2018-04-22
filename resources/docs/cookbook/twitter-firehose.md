@@ -19,8 +19,8 @@ The full config for this [example can be found here][example].
 ## Input
 
 The input of this example is fairly standard. We initiate an HTTP stream which
-is automatically recovered if a disconnected occurs. The only processor attached
-to the input is a `bounds_check` filter that removes any empty lines.
+is automatically recovered if a disconnection occurs. The only processor
+attached to the input is a `bounds_check` filter that removes any empty lines.
 
 It's worth noting that you can use the `backfillMinutes` URL parameter if you
 have the feature enabled. This means any connection recovery will always gain a
@@ -35,7 +35,7 @@ buffer:
     limit: 500000000
 ```
 
-We add a memory based buffer in this config, which will help us keep up with the
+We add a memory based buffer in this config which will help us keep up with the
 stream during sudden traffic spikes. It also allows us to parallelise the next
 layer of deduplication processors.
 
@@ -60,9 +60,9 @@ pipeline:
 The pipeline section contains two processors.
 
 The first processor is a JMESPath query that checks whether the message object
-is a system error message from Twitter. We remove these messages as client
-disconnects are handled automatically and it's possible to observe the reasons
-for a disconnection from the API dashboard.
+is a system error message from Twitter. We chose to remove these messages since
+client disconnects are handled automatically and it's possible to observe the
+reasons for a disconnection from the API dashboard.
 
 The second processor is a deduplication step which checks the `xxhash` of the
 message contents against a shared Memcached cluster (the cache details are

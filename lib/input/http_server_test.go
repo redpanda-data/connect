@@ -172,11 +172,6 @@ func TestHTTPBadRequests(t *testing.T) {
 	if err := h.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
-
-	res, err = http.Get("http://localhost:1233/testpost")
-	if err == nil {
-		t.Error("request success when service should be closed")
-	}
 }
 
 func TestHTTPTimeout(t *testing.T) {
