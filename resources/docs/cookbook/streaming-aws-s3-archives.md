@@ -1,0 +1,98 @@
+Streaming AWS S3 Archives
+=========================
+
+This example demonstrates how Benthos can be used to stream an S3 bucket of
+`.tar.gz` archives containing JSON documents into any output target. This
+example is able to listen for newly added archives, decompresses, unarchives and
+streams the JSON documents found within to a Kafka topic.
+
+The method used to stream archives is via an [SQS queue][s3-tracking], which is
+a common pattern. Benthos can work either with S3 events sent via SQS directly,
+or by S3 events broadcast via SNS to SQS, there is a small adjustment to the
+config which is explained in the input section.
+
+The full config for this [example can be found here][example].
+
+## Input
+
+``` yaml
+input:
+  type: broker
+  broker:
+    copies: 8 # Increase this to gain more parallel consumers
+    inputs:
+    - type: amazon_s3
+      amazon_s3:
+        region: eu-west-1 # TODO
+        bucket: TODO
+        delete_objects: false
+        sqs_url: TODO
+        sqs_body_path: Records.s3.object.key
+        sqs_envelope_path: ""
+        sqs_max_messages: 10
+        credentials:
+          id: "TODO"
+          secret: "TODO"
+          token: "TODO"
+          role: "TODO"
+```
+
+This input section contains lots of fields to be completed which are self
+explanatory, such as `bucket`, `sqs_url` and the `credentials` section.
+
+The `sqs_body_path` field is the JSON path within an SQS message that contains
+the name of new S3 files, which should be left as `Records.s3.object.key` unless
+you have built a custom solution.
+
+If SNS is being used to broadcast S3 events instead of connecting SQS directly
+you will need to fill in the `sqs_envelope_path`, which is the JSON path inside
+an SNS message that contains the enveloped S3 event. The value of
+`sqs_envelope_path` should be `Message` when using the standard AWS set up.
+
+Another unique aspect of the example input is that we have used a broker instead
+of a single input. This is because you can have any number of consumers of the
+bucket and messages will automatically be distributed amongst them. Later on in
+the pipeline we do some heavy CPU processing so it will be useful to tune the
+number of parallel consumers.
+
+## Pipeline
+
+``` yaml
+pipeline:
+  threads: 4 # Try to match the number of available logical CPU cores
+  processors:
+  - type: decompress
+    decompress:
+      algorithm: gzip
+  - type: unarchive
+    unarchive:
+      format: tar
+  - type: split
+  - type: combine
+    combine:
+      parts: 10 # The size of message batches to send to Kafka
+```
+
+The processors in this example start off with a simple decompress and unarchive
+of the payload. This results in a single payload of multiple documents. The
+split processor turns this payload into individual messages.
+
+The final processor is optional. It is a combine stage that bundles the
+individual messages back into smaller batches to be sent to the Kafka topic,
+increasing the throughput. If the combine processor is used it should be a
+factor of the number of messages inside the S3 archives. The size also needs to
+be low enough so that the overall size of the batch doesn't exceed the maximum
+bytes of a Kafka request.
+
+These processors are heavy on CPU, which is why they are configured inside the
+pipeline section. This allows you to explicitly set the number of parallel
+threads to exactly match the number of logical CPU cores available. Make sure
+the number of parallel consumers is greater than this number so that the
+pipelines are fully utilised.
+
+## Output
+
+The output config is a standard Kafka output.
+
+[s3-tracking]: https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html
+[example]: ./streaming-aws-s3-archives.yaml

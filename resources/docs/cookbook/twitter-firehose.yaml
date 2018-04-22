@@ -1,0 +1,54 @@
+input:
+  type: http_client
+  http_client:
+    url: https://gnip-stream.twitter.com/stream/firehose/accounts/foo/publishers/twitter/prod.json?partition=1
+    verb: GET
+    content_type: application/json
+    basic_auth:
+      enabled: true
+      password: "" # TODO
+      username: "" # TODO
+    stream:
+      enabled: true
+      max_buffer: 10000000 # 10MB - The max supported length of a single line
+  processors:
+  - type: bounds_check # Filter out keep alives (/r/n)
+    bounds_check:
+      min_part_size: 2
+
+buffer:
+  type: memory
+  memory:
+    limit: 500000000
+
+pipeline:
+  threads: 16 # Determines the max number of concurrent calls to dedupe cache
+  processors:
+  - type: condition # Filter out error messages
+    condition:
+      type: jmespath
+      jmespath:
+        query: "keys(@) | !contains(@, 'error')"
+  - type: dedupe
+    dedupe:
+      cache: dedupe
+      parts: [0]
+      hash: xxhash
+
+output:
+  type: kafka
+  kafka:
+    addresses:
+    - localhost:9092 # TODO
+    client_id: benthos_firehose_bridge
+    topic: twitter_firehose
+    max_msg_bytes: 10000000 # 10MB - The max supported message size
+
+resources:
+  caches:
+    dedupe:
+      type: memcached
+      memcached:
+        addresses:
+        - localhost:11211 # TODO
+        ttl: 60
