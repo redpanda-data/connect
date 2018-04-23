@@ -53,7 +53,6 @@ pipeline:
   processors:
   - type: jmespath
     jmespath:
-      part: 0
       query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
 output:
   type: bar
@@ -102,7 +101,6 @@ pipeline:
   processors:
   - type: jmespath
     jmespath:
-      part: 0
       query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
 output:
   type: bar

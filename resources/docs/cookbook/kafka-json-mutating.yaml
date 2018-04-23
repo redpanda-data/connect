@@ -1,0 +1,32 @@
+input:
+  type: broker
+  broker:
+    count: 8 # Try cranking this value up if your CPUs aren't maxed out
+    inputs:
+    - type: kafka_balanced
+      kafka_balanced:
+        addresses:
+        - localhost:9092 # TODO
+        client_id: benthos_mutator_1
+        consumer_group: benthos_mutator_group
+        topics:
+        - data_stream
+pipeline:
+  threads: 4 # This should exactly match the number of logical CPUs
+  processors:
+  - type: jmespath
+    jmespath:
+      part: 0
+      query: "TODO"
+output:
+  type: broker
+  broker:
+    pattern: greedy
+    copies: 8 # Try cranking this value up if your CPUs aren't maxed out
+    outputs:
+    - type: kafka
+      kafka:
+        addresses:
+        - localhost:9092 # TODO
+        client_id: benthos_mutator_1
+        topic: mutated_data_stream

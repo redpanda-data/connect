@@ -38,13 +38,14 @@ func init() {
 Parses a message part as a JSON blob and attempts to apply a JMESPath expression
 to it, replacing the contents of the part with the result. Please refer to the
 [JMESPath website](http://jmespath.org/) for information and tutorials regarding
-the syntax of expressions.
+the syntax of expressions. If the list of target parts is empty the query will
+be applied to all message parts.
 
 For example, with the following config:
 
 ` + "``` yaml" + `
 jmespath:
-  part: 0
+  parts: [ 0 ]
   query: locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}
 ` + "```" + `
 
@@ -71,7 +72,7 @@ It is possible to create boolean queries with JMESPath, in order to filter
 messages with boolean queries please instead use the
 ` + "[`jmespath`](../conditions/README.md#jmespath)" + ` condition instead.
 
-The part index can be negative, and if so the part will be selected from the end
+Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the
 last element with be selected, and so on.`,
@@ -82,14 +83,14 @@ last element with be selected, and so on.`,
 
 // JMESPathConfig contains any configuration for the JMESPath processor.
 type JMESPathConfig struct {
-	Part  int    `json:"part" yaml:"part"`
+	Parts []int  `json:"parts" yaml:"parts"`
 	Query string `json:"query" yaml:"query"`
 }
 
 // NewJMESPathConfig returns a JMESPathConfig with default values.
 func NewJMESPathConfig() JMESPathConfig {
 	return JMESPathConfig{
-		Part:  0,
+		Parts: []int{},
 		Query: "",
 	}
 }
@@ -99,7 +100,7 @@ func NewJMESPathConfig() JMESPathConfig {
 // JMESPath is a processor that executes JMESPath queries on a message part and
 // replaces the contents with the result.
 type JMESPath struct {
-	part  int
+	parts []int
 	query *jmespath.JMESPath
 
 	conf  Config
@@ -116,7 +117,7 @@ func NewJMESPath(
 		return nil, fmt.Errorf("failed to compile JMESPath query: %v", err)
 	}
 	j := &JMESPath{
-		part:  conf.JMESPath.Part,
+		parts: conf.JMESPath.Parts,
 		query: query,
 		conf:  conf,
 		log:   log.NewModule(".processor.jmespath"),
@@ -131,42 +132,40 @@ func NewJMESPath(
 func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.stats.Incr("processor.jmespath.count", 1)
 
-	msgs := [1]types.Message{msg}
-
-	index := p.part
-	if index < 0 {
-		index = msg.Len() + index
-	}
-
-	if index < 0 || index >= msg.Len() {
-		p.stats.Incr("processor.jmespath.skipped", 1)
-		p.stats.Incr("processor.jmespath.dropped", 1)
-		return msgs[:], nil
-	}
-
-	jsonPart, err := msg.GetJSON(index)
-	if err != nil {
-		p.stats.Incr("processor.jmespath.error.json_parse", 1)
-		p.stats.Incr("processor.jmespath.dropped", 1)
-		p.log.Errorf("Failed to parse part into json: %v\n", err)
-		return msgs[:], nil
-	}
-
-	var result interface{}
-	if result, err = p.query.Search(jsonPart); err != nil {
-		p.stats.Incr("processor.jmespath.error.jmespath_search", 1)
-		p.stats.Incr("processor.jmespath.dropped", 1)
-		p.log.Errorf("Failed to search json: %v\n", err)
-		return msgs[:], nil
-	}
-
 	newMsg := msg.ShallowCopy()
-	msgs[0] = newMsg
 
-	if err = newMsg.SetJSON(index, result); err != nil {
-		p.stats.Incr("processor.jmespath.error.json_set", 1)
-		p.log.Errorf("Failed to convert jmespath result into part: %v\n", err)
+	targetParts := p.parts
+	if len(targetParts) == 0 {
+		targetParts = make([]int, newMsg.Len())
+		for i := range targetParts {
+			targetParts[i] = i
+		}
 	}
+
+	for _, index := range targetParts {
+		jsonPart, err := msg.GetJSON(index)
+		if err != nil {
+			p.stats.Incr("processor.jmespath.error.json_parse", 1)
+			p.log.Errorf("Failed to parse part into json: %v\n", err)
+			continue
+		}
+
+		var result interface{}
+		if result, err = p.query.Search(jsonPart); err != nil {
+			p.stats.Incr("processor.jmespath.error.jmespath_search", 1)
+			p.log.Errorf("Failed to search json: %v\n", err)
+			continue
+		}
+
+		if err = newMsg.SetJSON(index, result); err != nil {
+			p.stats.Incr("processor.jmespath.error.json_set", 1)
+			p.log.Errorf("Failed to convert jmespath result into part: %v\n", err)
+		} else {
+			p.stats.Incr("processor.jmespath.success", 1)
+		}
+	}
+
+	msgs := [1]types.Message{newMsg}
 
 	p.stats.Incr("processor.jmespath.sent", 1)
 	return msgs[:], nil

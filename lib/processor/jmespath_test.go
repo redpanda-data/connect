@@ -2,6 +2,7 @@ package processor
 
 import (
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/types"
@@ -9,9 +10,40 @@ import (
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
+func TestJMESPathAllParts(t *testing.T) {
+	conf := NewConfig()
+	conf.JMESPath.Parts = []int{}
+	conf.JMESPath.Query = "foo.bar"
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+
+	jSet, err := NewJMESPath(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgIn := types.NewMessage([][]byte{
+		[]byte(`{"foo":{"bar":0}}`),
+		[]byte(`{"foo":{"bar":1}}`),
+		[]byte(`{"foo":{"bar":2}}`),
+	})
+	msgs, res := jSet.ProcessMessage(msgIn)
+	if len(msgs) != 1 {
+		t.Fatal("Wrong count of messages")
+	}
+	if res != nil {
+		t.Fatal("Non-nil result")
+	}
+	for i, part := range msgs[0].GetAll() {
+		if exp, act := strconv.Itoa(i), string(part); exp != act {
+			t.Errorf("Wrong output from json: %v != %v", act, exp)
+		}
+	}
+}
+
 func TestJMESPathValidation(t *testing.T) {
 	conf := NewConfig()
-	conf.JMESPath.Part = 0
+	conf.JMESPath.Parts = []int{0}
 	conf.JMESPath.Query = "foo.bar"
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
@@ -33,7 +65,7 @@ func TestJMESPathValidation(t *testing.T) {
 		t.Errorf("Wrong output from bad json: %v != %v", act, exp)
 	}
 
-	conf.JMESPath.Part = 5
+	conf.JMESPath.Parts = []int{5}
 
 	jSet, err = NewJMESPath(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
@@ -111,7 +143,7 @@ func TestJMESPath(t *testing.T) {
 
 	for _, test := range tests {
 		conf := NewConfig()
-		conf.JMESPath.Part = 0
+		conf.JMESPath.Parts = []int{0}
 		conf.JMESPath.Query = test.path
 
 		jSet, err := NewJMESPath(conf, nil, tLog, tStats)

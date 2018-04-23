@@ -202,7 +202,7 @@ input:
       index: -1
       content: ""
     jmespath:
-      part: 0
+      parts: []
       query: ""
     sample:
       retain: 10
