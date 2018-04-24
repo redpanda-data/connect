@@ -98,21 +98,14 @@ func New(
 	// Sometimes condition resources might refer to other condition resources.
 	// When they are constructed they will check will the manager to ensure the
 	// resource they point to is valid, but not use the condition. Since we
-	// cannot guarantee an order of initialisation we simple create placeholder
-	// conditions during construction. However, we make sure we don't add the
-	// constructing condition itself in order to avoid recursive conditions.
+	// cannot guarantee an order of initialisation we create placeholder
+	// conditions during construction.
 	for k := range conf.Conditions {
 		t.conditions[k] = nil
 	}
 
 	// TODO: Prevent recursive conditions.
 	for k, newConf := range conf.Conditions {
-		for k2 := range conf.Conditions {
-			if k != k2 {
-				t.conditions[k2] = nil
-			}
-		}
-
 		newCond, err := condition.New(newConf, t, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf(
