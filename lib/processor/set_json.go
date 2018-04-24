@@ -46,7 +46,7 @@ with the config:
 
 ` + "``` yaml" + `
 set_json:
-  part: 0
+  parts: [0]
   path: some.path
   value:
     foo:
@@ -59,10 +59,11 @@ contains keys that aren't strings those fields will be ignored.
 If the path is empty or "." the original contents of the target message part
 will be overridden entirely by the contents of 'value'.
 
-The part index can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if part = -1 then the selected part
-will be the last part of the message, if part = -2 then the part before the
-last element with be selected, and so on.
+If the list of target parts is empty the processor will be applied to all
+message parts. Part indexes can be negative, and if so the part will be selected
+from the end counting backwards starting from -1. E.g. if part = -1 then the
+selected part will be the last part of the message, if part = -2 then the part
+before the last element with be selected, and so on.
 
 This processor will interpolate functions within the 'value' field, you can find
 a list of functions [here](../config_interpolation.md#functions).`,
@@ -133,7 +134,7 @@ func (r rawJSONValue) MarshalYAML() (interface{}, error) {
 
 // SetJSONConfig contains any configuration for the SetJSON processor.
 type SetJSONConfig struct {
-	Part  int          `json:"part" yaml:"part"`
+	Parts []int        `json:"parts" yaml:"parts"`
 	Path  string       `json:"path" yaml:"path"`
 	Value rawJSONValue `json:"value" yaml:"value"`
 }
@@ -141,7 +142,7 @@ type SetJSONConfig struct {
 // NewSetJSONConfig returns a SetJSONConfig with default values.
 func NewSetJSONConfig() SetJSONConfig {
 	return SetJSONConfig{
-		Part:  0,
+		Parts: []int{},
 		Path:  "",
 		Value: rawJSONValue(`""`),
 	}
@@ -153,6 +154,7 @@ func NewSetJSONConfig() SetJSONConfig {
 // index.
 type SetJSON struct {
 	target      []string
+	parts       []int
 	interpolate bool
 	valueBytes  rawJSONValue
 
@@ -167,6 +169,7 @@ func NewSetJSON(
 ) (Type, error) {
 	j := &SetJSON{
 		target:     strings.Split(conf.SetJSON.Path, "."),
+		parts:      conf.SetJSON.Parts,
 		valueBytes: conf.SetJSON.Value,
 		conf:       conf,
 		log:        log.NewModule(".processor.set_json"),
@@ -185,54 +188,53 @@ func NewSetJSON(
 func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.stats.Incr("processor.set_json.count", 1)
 
-	msgs := [1]types.Message{msg}
+	newMsg := msg.ShallowCopy()
 
 	valueBytes := p.valueBytes
 	if p.interpolate {
 		valueBytes = text.ReplaceFunctionVariables(valueBytes)
 	}
 
-	index := p.conf.SetJSON.Part
-	if index < 0 {
-		index = msg.Len() + index
+	targetParts := p.parts
+	if len(targetParts) == 0 {
+		targetParts = make([]int, newMsg.Len())
+		for i := range targetParts {
+			targetParts[i] = i
+		}
 	}
 
-	if index < 0 || index >= msg.Len() {
-		p.stats.Incr("processor.set_json.skipped", 1)
-		p.stats.Incr("processor.set_json.dropped", 1)
-		return msgs[:], nil
-	}
+	for _, index := range targetParts {
+		var data interface{} = valueBytes
 
-	var data interface{} = valueBytes
+		if len(p.target) > 0 {
+			jsonPart, err := msg.GetJSON(index)
+			if err != nil {
+				p.stats.Incr("processor.set_json.error.json_parse", 1)
+				p.log.Debugf("Failed to parse part into json: %v\n", err)
+				continue
+			}
 
-	if len(p.target) > 0 {
-		jsonPart, err := msg.GetJSON(index)
-		if err != nil {
-			p.stats.Incr("processor.set_json.error.json_parse", 1)
-			p.stats.Incr("processor.set_json.dropped", 1)
-			p.log.Errorf("Failed to parse part into json: %v\n", err)
-			return msgs[:], nil
+			var gPart *gabs.Container
+			if gPart, err = gabs.Consume(jsonPart); err != nil {
+				p.stats.Incr("processor.set_json.error.json_parse", 1)
+				p.log.Debugf("Failed to parse part into json: %v\n", err)
+				continue
+			}
+
+			gPart.Set(valueBytes, p.target...)
+			data = gPart.Data()
 		}
 
-		var gPart *gabs.Container
-		if gPart, err = gabs.Consume(jsonPart); err != nil {
-			p.stats.Incr("processor.set_json.error.json_parse", 1)
-			p.stats.Incr("processor.set_json.dropped", 1)
-			p.log.Errorf("Failed to parse part into json: %v\n", err)
-			return msgs[:], nil
+		if err := newMsg.SetJSON(index, data); err != nil {
+			p.stats.Incr("processor.set_json.error.json_set", 1)
+			p.log.Debugf("Failed to convert json into part: %v\n", err)
+			continue
 		}
 
-		gPart.Set(valueBytes, p.target...)
-		data = gPart.Data()
+		p.stats.Incr("processor.set_json.success", 1)
 	}
 
-	newMsg := msg.ShallowCopy()
-	msgs[0] = newMsg
-
-	if err := newMsg.SetJSON(index, data); err != nil {
-		p.stats.Incr("processor.set_json.error.json_set", 1)
-		p.log.Errorf("Failed to convert json into part: %v\n", err)
-	}
+	msgs := [1]types.Message{newMsg}
 
 	p.stats.Incr("processor.set_json.sent", 1)
 	return msgs[:], nil

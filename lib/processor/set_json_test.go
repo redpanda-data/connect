@@ -12,7 +12,7 @@ import (
 
 func TestSetJSONValidation(t *testing.T) {
 	conf := NewConfig()
-	conf.SetJSON.Part = 0
+	conf.SetJSON.Parts = []int{0}
 	conf.SetJSON.Path = "foo.bar"
 	conf.SetJSON.Value = []byte(`this isnt valid json`)
 
@@ -35,7 +35,7 @@ func TestSetJSONValidation(t *testing.T) {
 		t.Errorf("Wrong output from bad json: %v != %v", act, exp)
 	}
 
-	conf.SetJSON.Part = 5
+	conf.SetJSON.Parts = []int{5}
 
 	jSet, err = NewSetJSON(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
@@ -81,7 +81,7 @@ func TestSetJSONPartBounds(t *testing.T) {
 			[]byte(`{"foo":{"bar":2}}`),
 		}
 
-		conf.SetJSON.Part = i
+		conf.SetJSON.Parts = []int{i}
 		proc, err := NewSetJSON(conf, nil, tLog, tStats)
 		if err != nil {
 			t.Fatal(err)
@@ -174,7 +174,7 @@ func TestSetJSON(t *testing.T) {
 
 	for _, test := range tests {
 		conf := NewConfig()
-		conf.SetJSON.Part = 0
+		conf.SetJSON.Parts = []int{0}
 		conf.SetJSON.Path = test.path
 		conf.SetJSON.Value = []byte(test.value)
 
@@ -227,7 +227,7 @@ value:
 
 	for config, exp := range tests {
 		conf := NewConfig()
-		conf.SetJSON.Part = 0
+		conf.SetJSON.Parts = []int{}
 		conf.SetJSON.Path = "foo.bar"
 
 		if err := yaml.Unmarshal([]byte(config), &conf.SetJSON); err != nil {
@@ -260,14 +260,16 @@ func TestSetJSONConfigYAMLMarshal(t *testing.T) {
 	tStats := metrics.DudType{}
 
 	tests := []string{
-		`part: 0
+		`parts:
+- 0
 path: foo.bar
 value:
   baz:
     deeper: look at me
   here: 11
 `,
-		`part: 0
+		`parts:
+- 0
 path: foo.bar
 value:
   baz:
@@ -277,15 +279,18 @@ value:
     - third
   here: 11
 `,
-		`part: 5
+		`parts:
+- 5
 path: foo.bar.baz
 value: 5
 `,
-		`part: 0
+		`parts:
+- 0
 path: foo.bar
 value: hello world
 `,
-		`part: 0
+		`parts:
+- 0
 path: foo.bar
 value:
   foo:

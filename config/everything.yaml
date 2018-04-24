@@ -224,13 +224,13 @@ input:
       retain: 10
       seed: 0
     select_json:
-      part: 0
+      parts: []
       path: ""
     select_parts:
       parts:
       - 0
     set_json:
-      part: 0
+      parts: []
       path: ""
       value: ""
     split: {}

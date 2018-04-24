@@ -11,7 +11,7 @@ import (
 
 func TestSelectJSONValidation(t *testing.T) {
 	conf := NewConfig()
-	conf.SelectJSON.Part = 0
+	conf.SelectJSON.Parts = []int{0}
 	conf.SelectJSON.Path = "foo.bar"
 
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
@@ -33,7 +33,7 @@ func TestSelectJSONValidation(t *testing.T) {
 		t.Errorf("Wrong output from bad json: %v != %v", act, exp)
 	}
 
-	conf.SelectJSON.Part = 5
+	conf.SelectJSON.Parts = []int{5}
 
 	jSet, err = NewSelectJSON(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
@@ -111,7 +111,7 @@ func TestSelectJSON(t *testing.T) {
 
 	for _, test := range tests {
 		conf := NewConfig()
-		conf.SelectJSON.Part = 0
+		conf.SelectJSON.Parts = []int{0}
 		conf.SelectJSON.Path = test.path
 
 		jSet, err := NewSelectJSON(conf, nil, tLog, tStats)

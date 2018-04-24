@@ -187,7 +187,7 @@ For example, with the following config:
 
 ``` yaml
 select_json:
-  part: 0
+  parts: [0]
   path: foo.bar
 ```
 
@@ -211,10 +211,11 @@ a field inside a larger JSON structure. The 'select_json' processor can extract
 the payload into the message contents as a valid JSON structure in this case
 even if the payload is an escaped string.
 
-The part index can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if part = -1 then the selected part
-will be the last part of the message, if part = -2 then the part before the
-last element with be selected, and so on.
+If the list of target parts is empty the processor will be applied to all
+message parts. Part indexes can be negative, and if so the part will be selected
+from the end counting backwards starting from -1. E.g. if part = -1 then the
+selected part will be the last part of the message, if part = -2 then the part
+before the last element with be selected, and so on.
 
 ## `select_parts`
 
@@ -244,7 +245,7 @@ with the config:
 
 ``` yaml
 set_json:
-  part: 0
+  parts: [0]
   path: some.path
   value:
     foo:
@@ -257,10 +258,11 @@ contains keys that aren't strings those fields will be ignored.
 If the path is empty or "." the original contents of the target message part
 will be overridden entirely by the contents of 'value'.
 
-The part index can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if part = -1 then the selected part
-will be the last part of the message, if part = -2 then the part before the
-last element with be selected, and so on.
+If the list of target parts is empty the processor will be applied to all
+message parts. Part indexes can be negative, and if so the part will be selected
+from the end counting backwards starting from -1. E.g. if part = -1 then the
+selected part will be the last part of the message, if part = -2 then the part
+before the last element with be selected, and so on.
 
 This processor will interpolate functions within the 'value' field, you can find
 a list of functions [here](../config_interpolation.md#functions).
