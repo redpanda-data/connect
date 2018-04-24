@@ -1,0 +1,36 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000,
+		"debug_endpoints": false
+	},
+	"input": {
+		"read_until": {
+			"condition": {
+				"and": [],
+				"content": {
+					"arg": "",
+					"operator": "equals_cs",
+					"part": 0
+				},
+				"jmespath": {
+					"part": 0,
+					"query": ""
+				},
+				"not": {},
+				"or": [],
+				"resource": "",
+				"type": "content",
+				"xor": []
+			},
+			"input": {}
+		},
+		"type": "read_until"
+	},
+	"output": {
+		"stdout": {
+			"custom_delimiter": ""
+		},
+		"type": "stdout"
+	}
+}

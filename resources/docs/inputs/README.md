@@ -248,6 +248,12 @@ are consumed from the most recently published message.
 
 Subscribe to an NSQ instance topic and channel.
 
+## `read_until`
+
+Reads from an input and tests a condition on each message. When the condition
+returns true the message is sent out and the input is closed. Use this type to
+define inputs where the stream should end once a certain message appears.
+
 ## `redis_list`
 
 Pops messages from the beginning of a Redis list using the BLPop command.

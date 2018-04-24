@@ -74,6 +74,7 @@ type Config struct {
 	NATS          reader.NATSConfig          `json:"nats" yaml:"nats"`
 	NATSStream    reader.NATSStreamConfig    `json:"nats_stream" yaml:"nats_stream"`
 	NSQ           reader.NSQConfig           `json:"nsq" yaml:"nsq"`
+	ReadUntil     ReadUntilConfig            `json:"read_until" yaml:"read_until"`
 	RedisList     reader.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub   reader.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
 	ScaleProto    reader.ScaleProtoConfig    `json:"scalability_protocols" yaml:"scalability_protocols"`
@@ -100,6 +101,7 @@ func NewConfig() Config {
 		NATS:          reader.NewNATSConfig(),
 		NATSStream:    reader.NewNATSStreamConfig(),
 		NSQ:           reader.NewNSQConfig(),
+		ReadUntil:     NewReadUntilConfig(),
 		RedisList:     reader.NewRedisListConfig(),
 		RedisPubSub:   reader.NewRedisPubSubConfig(),
 		ScaleProto:    reader.NewScaleProtoConfig(),
