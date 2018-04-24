@@ -126,6 +126,22 @@ input:
     channel: benthos_stream
     user_agent: benthos_consumer
     max_in_flight: 100
+  read_until:
+    input: {}
+    condition:
+      type: content
+      and: []
+      content:
+        operator: equals_cs
+        part: 0
+        arg: ""
+      jmespath:
+        part: 0
+        query: ""
+      not: {}
+      or: []
+      resource: ""
+      xor: []
   redis_list:
     url: tcp://localhost:6379
     key: benthos_list
