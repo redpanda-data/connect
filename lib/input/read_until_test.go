@@ -66,6 +66,9 @@ baz`)
 	t.Run("ReadUntilEarlyClose", func(te *testing.T) {
 		testReadUntilEarlyClose(inconf, te)
 	})
+	t.Run("ReadUntilInputClose", func(te *testing.T) {
+		testReadUntilInputClose(inconf, te)
+	})
 }
 
 func testReadUntilBasic(inConf Config, t *testing.T) {
@@ -247,6 +250,66 @@ func testReadUntilEarlyClose(inConf Config, t *testing.T) {
 	}
 
 	in.CloseAsync()
+	if err = in.WaitForClose(time.Second); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testReadUntilInputClose(inConf Config, t *testing.T) {
+	cond := condition.NewConfig()
+	cond.Type = "content"
+	cond.Content.Operator = "equals"
+	cond.Content.Arg = "this never resolves"
+
+	rConf := NewConfig()
+	rConf.Type = "read_until"
+	rConf.ReadUntil.Input = &inConf
+	rConf.ReadUntil.Condition = cond
+
+	in, err := New(rConf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expMsgs := []string{
+		"foo",
+		"bar",
+		"baz",
+	}
+
+	for _, exp := range expMsgs {
+		var tran types.Transaction
+		var open bool
+		select {
+		case tran, open = <-in.TransactionChan():
+			if !open {
+				t.Fatal("transaction chan closed")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+
+		if act := string(tran.Payload.Get(0)); exp != act {
+			t.Errorf("Wrong message contents: %v != %v", act, exp)
+		}
+
+		select {
+		case tran.ResponseChan <- types.NewSimpleResponse(nil):
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+	}
+
+	// Should close automatically now
+	select {
+	case _, open := <-in.TransactionChan():
+		if open {
+			t.Fatal("transaction chan not closed")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	}
+
 	if err = in.WaitForClose(time.Second); err != nil {
 		t.Fatal(err)
 	}
