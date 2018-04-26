@@ -20,7 +20,15 @@ pipeline:
   processors:
   - type: jmespath
     jmespath:
-      query: "TODO"
+      query: |
+        {
+          content: content,
+          entities: sentiment[?confidence > `0.3`].{
+            name: entity,
+            sentiment: level
+          },
+          language: max_by(language, &confidence).code
+        }
 output:
   type: kafka
   kafka:
