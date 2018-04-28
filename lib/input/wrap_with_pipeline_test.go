@@ -195,15 +195,13 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
-var errMockProc = errors.New("mock proc error")
-
 type mockProc struct {
 	value string
 }
 
 func (m mockProc) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	if string(msg.Get(0)) == m.value {
-		return nil, types.NewSimpleResponse(errMockProc)
+		return nil, types.NewUnacknowledgedResponse()
 	}
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
@@ -245,8 +243,8 @@ func TestBasicWrapProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if res.Error() != errMockProc {
-			t.Error(res.Error())
+		if !res.SkipAck() {
+			t.Error("expected skip ack")
 		}
 	case <-time.After(time.Second):
 		t.Error("action timed out")
@@ -266,8 +264,8 @@ func TestBasicWrapProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if res.Error() != errMockProc {
-			t.Error(res.Error())
+		if !res.SkipAck() {
+			t.Error("expected skip ack")
 		}
 	case <-time.After(time.Second):
 		t.Error("action timed out")
@@ -300,6 +298,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
+	// Send error
 	errFailed := errors.New("derp, failed")
 	select {
 	case ts.ResponseChan <- types.NewSimpleResponse(errFailed):
@@ -307,13 +306,38 @@ func TestBasicWrapProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
+	// Receive again
 	select {
 	case res, open := <-resChan:
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if exp, act := errFailed, res.Error(); exp != act {
-			t.Errorf("Unexpected response: %v != %v", act, exp)
+		t.Errorf("Unexpected response: %v", res.Error())
+	case ts, open = <-newInput.TransactionChan():
+		if !open {
+			t.Error("channel was closed")
+		} else if exp, act := "baz", string(ts.Payload.Get(0)); exp != act {
+			t.Errorf("Wrong message received: %v != %v", act, exp)
+		}
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	// Send non-error
+	select {
+	case ts.ResponseChan <- types.NewSimpleResponse(nil):
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	// Receive response
+	select {
+	case res, open := <-resChan:
+		if !open {
+			t.Error("Channel was closed")
+		}
+		if res.Error() != nil {
+			t.Error(res.Error())
 		}
 	case <-time.After(time.Second):
 		t.Error("action timed out")
@@ -356,8 +380,8 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if res.Error() != errMockProc {
-			t.Error(res.Error())
+		if !res.SkipAck() {
+			t.Error("expected skip ack")
 		}
 	case <-time.After(time.Second):
 		t.Error("action timed out")
@@ -377,8 +401,8 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if res.Error() != errMockProc {
-			t.Error(res.Error())
+		if !res.SkipAck() {
+			t.Error("expected skip ack")
 		}
 	case <-time.After(time.Second):
 		t.Error("action timed out")
@@ -411,6 +435,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
+	// Send error
 	errFailed := errors.New("derp, failed")
 	select {
 	case ts.ResponseChan <- types.NewSimpleResponse(errFailed):
@@ -418,13 +443,38 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
+	// Receive again
 	select {
 	case res, open := <-resChan:
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if exp, act := errFailed, res.Error(); exp != act {
-			t.Errorf("Unexpected response: %v != %v", act, exp)
+		t.Errorf("Unexpected response: %v", res.Error())
+	case ts, open = <-newInput.TransactionChan():
+		if !open {
+			t.Error("channel was closed")
+		} else if exp, act := "baz", string(ts.Payload.Get(0)); exp != act {
+			t.Errorf("Wrong message received: %v != %v", act, exp)
+		}
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	// Send non-error
+	select {
+	case ts.ResponseChan <- types.NewSimpleResponse(nil):
+	case <-time.After(time.Second):
+		t.Error("action timed out")
+	}
+
+	// Receive response
+	select {
+	case res, open := <-resChan:
+		if !open {
+			t.Error("Channel was closed")
+		}
+		if res.Error() != nil {
+			t.Error(res.Error())
 		}
 	case <-time.After(time.Second):
 		t.Error("action timed out")

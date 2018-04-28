@@ -21,6 +21,7 @@
 package pipeline
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -81,6 +83,8 @@ func (p *Processor) loop() {
 		close(p.closed)
 	}()
 
+	throt := throttle.New(throttle.OptCloseChan(p.closeChan))
+
 	var open bool
 	for atomic.LoadInt32(&p.running) == 1 {
 		var tran types.Transaction
@@ -116,36 +120,59 @@ func (p *Processor) loop() {
 			continue
 		}
 
-		var res types.Response
+		wg := sync.WaitGroup{}
+		wg.Add(len(resultMsgs))
 
-		remainingResponses := len(resultMsgs)
-		currentMsg := 0
+		var skipAcks int64
 
-	responsesLoop:
-		for remainingResponses > 0 {
-			var tsOut chan<- types.Transaction
-			var transactionOut types.Transaction
-			if currentMsg < len(resultMsgs) {
-				tsOut = p.messagesOut
-				transactionOut = types.NewTransaction(resultMsgs[currentMsg], p.responsesIn)
-			}
-			select {
-			case tsOut <- transactionOut:
-				currentMsg++
-			case res, open = <-p.responsesIn:
-				if !open {
-					return
-				}
-				if res.Error() == nil {
-					p.stats.Incr("pipeline.processor.send.success", 1)
-					remainingResponses--
-				} else {
+		for _, msg := range resultMsgs {
+			go func(m types.Message) {
+				defer wg.Done()
+
+				resChan := make(chan types.Response)
+				transac := types.NewTransaction(m, resChan)
+
+				for {
+					select {
+					case p.messagesOut <- transac:
+					case <-p.closeChan:
+						return
+					}
+
+					var res types.Response
+					var open bool
+					select {
+					case res, open = <-resChan:
+						if !open {
+							return
+						}
+					case <-p.closeChan:
+						return
+					}
+
+					if skipAck := res.SkipAck(); res.Error() == nil || skipAck {
+						if skipAck {
+							atomic.AddInt64(&skipAcks, 1)
+						}
+						p.stats.Incr("pipeline.processor.send.success", 1)
+						return
+					}
 					p.stats.Incr("pipeline.processor.send.error", 1)
-					break responsesLoop
+					if !throt.Retry() {
+						return
+					}
 				}
-			case <-p.closeChan:
-				return
-			}
+			}(msg)
+		}
+
+		wg.Wait()
+		throt.Reset()
+
+		var res types.Response
+		if skipAcks == int64(len(resultMsgs)) {
+			res = types.NewUnacknowledgedResponse()
+		} else {
+			res = types.NewSimpleResponse(nil)
 		}
 
 		select {
