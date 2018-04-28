@@ -123,6 +123,8 @@ func (p *Processor) loop() {
 		wg := sync.WaitGroup{}
 		wg.Add(len(resultMsgs))
 
+		var skipAcks int64
+
 		for _, msg := range resultMsgs {
 			go func(m types.Message) {
 				defer wg.Done()
@@ -148,7 +150,10 @@ func (p *Processor) loop() {
 						return
 					}
 
-					if res.Error() == nil || res.SkipAck() {
+					if skipAck := res.SkipAck(); res.Error() == nil || skipAck {
+						if skipAck {
+							atomic.AddInt64(&skipAcks, 1)
+						}
 						p.stats.Incr("pipeline.processor.send.success", 1)
 						return
 					}
@@ -163,8 +168,15 @@ func (p *Processor) loop() {
 		wg.Wait()
 		throt.Reset()
 
+		var res types.Response
+		if skipAcks == int64(len(resultMsgs)) {
+			res = types.NewUnacknowledgedResponse()
+		} else {
+			res = types.NewSimpleResponse(nil)
+		}
+
 		select {
-		case tran.ResponseChan <- types.NewSimpleResponse(nil):
+		case tran.ResponseChan <- res:
 		case <-p.closeChan:
 			return
 		}
