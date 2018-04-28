@@ -21,7 +21,6 @@
 package pipeline
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -106,61 +105,14 @@ func TestPoolBasic(t *testing.T) {
 	case tChan <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
-
 	}
 
-	// Receive message
 	var procT types.Transaction
 	var open bool
-	select {
-	case procT, open = <-proc.TransactionChan():
-		if !open {
-			t.Error("Closed early")
-		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
-			t.Errorf("Wrong message received: %s != %s", act, exp)
-		}
-	case <-time.After(time.Second * 5):
-		t.Fatal("Timed out")
-	}
-
-	// Respond with error
-	go func() {
-		errTest := errors.New("This is a test")
-		select {
-		case procT.ResponseChan <- types.NewSimpleResponse(errTest):
-		case <-time.After(time.Second * 5):
-			t.Fatal("Timed out")
-		}
-	}()
-
-	// Receive response
-	select {
-	case res, open := <-resChan:
-		if !open {
-			t.Error("Closed early")
-		} else if res.Error().Error() != "This is a test" {
-			t.Error(res.Error())
-		}
-	case <-time.After(time.Second * 5):
-		t.Fatal("Timed out")
-	}
-
-	// Do not drop next message again
-	go func() {
-		mockProc.dropChan <- false
-	}()
-
-	// Send message
-	select {
-	case tChan <- types.NewTransaction(msg, resChan):
-	case <-time.After(time.Second * 5):
-		t.Fatal("Timed out")
-	}
 
 	// Receive new message
 	select {
-	case procT, open := <-proc.TransactionChan():
+	case procT, open = <-proc.TransactionChan():
 		if !open {
 			t.Error("Closed early")
 		}
