@@ -146,7 +146,7 @@ func Descriptions() string {
 
 	buf.WriteString("### Contents\n\n")
 	for i, name := range names {
-		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, strings.Replace(name, "_", "-", -1)))
+		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, name))
 	}
 	buf.WriteString("\n")
 

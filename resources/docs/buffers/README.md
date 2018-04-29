@@ -44,7 +44,7 @@ overall disk persisted buffer when writing to multiple outputs.
 
 1. [`badger`](#badger)
 2. [`memory`](#memory)
-3. [`mmap_file`](#mmap-file)
+3. [`mmap_file`](#mmap_file)
 4. [`none`](#none)
 
 ## `badger`
