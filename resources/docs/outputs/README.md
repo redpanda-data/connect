@@ -1,4 +1,4 @@
-OUTPUTS
+Outputs
 =======
 
 This document was generated with `benthos --list-outputs`
@@ -89,6 +89,29 @@ output:
 
 For more information regarding conditions please
 [read the docs here](../conditions/README.md)
+
+### Contents
+
+1. [`amazon_s3`](#amazon-s3)
+2. [`amazon_sqs`](#amazon-sqs)
+3. [`amqp`](#amqp)
+4. [`broker`](#broker)
+5. [`dynamic`](#dynamic)
+6. [`elasticsearch`](#elasticsearch)
+7. [`file`](#file)
+8. [`files`](#files)
+9. [`http_client`](#http-client)
+10. [`http_server`](#http-server)
+11. [`kafka`](#kafka)
+12. [`mqtt`](#mqtt)
+13. [`nats`](#nats)
+14. [`nats_stream`](#nats-stream)
+15. [`nsq`](#nsq)
+16. [`redis_list`](#redis-list)
+17. [`redis_pubsub`](#redis-pubsub)
+18. [`scalability_protocols`](#scalability-protocols)
+19. [`stdout`](#stdout)
+20. [`zmq4`](#zmq4)
 
 ## `amazon_s3`
 

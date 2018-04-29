@@ -1,4 +1,4 @@
-INPUTS
+Inputs
 ======
 
 This document was generated with `benthos --list-inputs`
@@ -33,6 +33,29 @@ input:
 Note that in this example we have specified a processor at the broker level
 which will be applied to _all_ inputs, and we also have a processor at the baz
 level which is only applied to messages from the baz input.
+
+### Contents
+
+1. [`amazon_s3`](#amazon-s3)
+2. [`amazon_sqs`](#amazon-sqs)
+3. [`amqp`](#amqp)
+4. [`broker`](#broker)
+5. [`dynamic`](#dynamic)
+6. [`file`](#file)
+7. [`http_client`](#http-client)
+8. [`http_server`](#http-server)
+9. [`kafka`](#kafka)
+10. [`kafka_balanced`](#kafka-balanced)
+11. [`mqtt`](#mqtt)
+12. [`nats`](#nats)
+13. [`nats_stream`](#nats-stream)
+14. [`nsq`](#nsq)
+15. [`read_until`](#read-until)
+16. [`redis_list`](#redis-list)
+17. [`redis_pubsub`](#redis-pubsub)
+18. [`scalability_protocols`](#scalability-protocols)
+19. [`stdin`](#stdin)
+20. [`zmq4`](#zmq4)
 
 ## `amazon_s3`
 

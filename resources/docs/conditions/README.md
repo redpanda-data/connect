@@ -1,4 +1,4 @@
-CONDITIONS
+Conditions
 ==========
 
 This document was generated with `benthos --list-conditions`
@@ -92,6 +92,16 @@ output:
 Sometimes large chunks of logic are reused across processors, or nested multiple
 times as branches of a larger condition. It is possible to avoid writing
 duplicate condition configs by using the [resource condition][2].
+
+### Contents
+
+1. [`and`](#and)
+2. [`content`](#content)
+3. [`jmespath`](#jmespath)
+4. [`not`](#not)
+5. [`or`](#or)
+6. [`resource`](#resource)
+7. [`xor`](#xor)
 
 ## `and`
 

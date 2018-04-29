@@ -9,6 +9,18 @@ input:
     urls:
     - nats://localhost:4222
   type: nats
+buffer:
+  none: {}
+  type: none
+pipeline:
+  processors:
+  - bounds_check:
+      max_part_size: 1.073741824e+09
+      max_parts: 100
+      min_part_size: 1
+      min_parts: 1
+    type: bounds_check
+  threads: 1
 output:
   nats:
     subject: benthos_messages

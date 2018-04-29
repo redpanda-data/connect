@@ -1,4 +1,4 @@
-CACHES
+Caches
 ======
 
 This document was generated with `benthos --list-caches`
@@ -43,6 +43,11 @@ In that example we have a single memcached based cache 'foobar', which is used
 by the dedupe processors of both the 'foo' and 'bar' inputs. A message received
 from both 'foo' and 'bar' would therefore be detected and removed since the
 cache is the same for both inputs.
+
+### Contents
+
+1. [`memcached`](#memcached)
+2. [`memory`](#memory)
 
 ## `memcached`
 

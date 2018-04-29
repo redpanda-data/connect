@@ -18,6 +18,24 @@
 		},
 		"type": "kafka"
 	},
+	"buffer": {
+		"none": {},
+		"type": "none"
+	},
+	"pipeline": {
+		"processors": [
+			{
+				"bounds_check": {
+					"max_part_size": 1073741824,
+					"max_parts": 100,
+					"min_part_size": 1,
+					"min_parts": 1
+				},
+				"type": "bounds_check"
+			}
+		],
+		"threads": 1
+	},
 	"output": {
 		"kafka": {
 			"ack_replicas": false,

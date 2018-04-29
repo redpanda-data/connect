@@ -14,6 +14,18 @@ input:
     topic: benthos_messages
     user_agent: benthos_consumer
   type: nsq
+buffer:
+  none: {}
+  type: none
+pipeline:
+  processors:
+  - bounds_check:
+      max_part_size: 1.073741824e+09
+      max_parts: 100
+      min_part_size: 1
+      min_parts: 1
+    type: bounds_check
+  threads: 1
 output:
   nsq:
     max_in_flight: 100

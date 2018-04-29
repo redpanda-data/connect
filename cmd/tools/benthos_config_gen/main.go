@@ -29,8 +29,11 @@ import (
 	"path/filepath"
 
 	"github.com/Jeffail/benthos/lib/api"
+	"github.com/Jeffail/benthos/lib/buffer"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/output"
+	"github.com/Jeffail/benthos/lib/pipeline"
+	"github.com/Jeffail/benthos/lib/processor"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -38,17 +41,21 @@ import (
 
 // Config is the benthos configuration struct.
 type Config struct {
-	HTTP   api.Config    `json:"http" yaml:"http"`
-	Input  input.Config  `json:"input" yaml:"input"`
-	Output output.Config `json:"output" yaml:"output"`
+	HTTP     api.Config      `json:"http" yaml:"http"`
+	Input    input.Config    `json:"input" yaml:"input"`
+	Buffer   buffer.Config   `json:"buffer" yaml:"buffer"`
+	Pipeline pipeline.Config `json:"pipeline" yaml:"pipeline"`
+	Output   output.Config   `json:"output" yaml:"output"`
 }
 
 // NewConfig returns a new configuration with default values.
 func NewConfig() Config {
 	return Config{
-		HTTP:   api.NewConfig(),
-		Input:  input.NewConfig(),
-		Output: output.NewConfig(),
+		HTTP:     api.NewConfig(),
+		Input:    input.NewConfig(),
+		Buffer:   buffer.NewConfig(),
+		Pipeline: pipeline.NewConfig(),
+		Output:   output.NewConfig(),
 	}
 }
 
@@ -61,6 +68,18 @@ func (c Config) Sanitised() (interface{}, error) {
 		return nil, err
 	}
 
+	var bufConf interface{}
+	bufConf, err = buffer.SanitiseConfig(c.Buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	var pipeConf interface{}
+	pipeConf, err = pipeline.SanitiseConfig(c.Pipeline)
+	if err != nil {
+		return nil, err
+	}
+
 	var outConf interface{}
 	outConf, err = output.SanitiseConfig(c.Output)
 	if err != nil {
@@ -68,13 +87,17 @@ func (c Config) Sanitised() (interface{}, error) {
 	}
 
 	return struct {
-		HTTP   interface{} `json:"http" yaml:"http"`
-		Input  interface{} `json:"input" yaml:"input"`
-		Output interface{} `json:"output" yaml:"output"`
+		HTTP     interface{} `json:"http" yaml:"http"`
+		Input    interface{} `json:"input" yaml:"input"`
+		Buffer   interface{} `json:"buffer" yaml:"buffer"`
+		Pipeline interface{} `json:"pipeline" yaml:"pipeline"`
+		Output   interface{} `json:"output" yaml:"output"`
 	}{
-		HTTP:   c.HTTP,
-		Input:  inConf,
-		Output: outConf,
+		HTTP:     c.HTTP,
+		Input:    inConf,
+		Buffer:   bufConf,
+		Pipeline: pipeConf,
+		Output:   outConf,
 	}, nil
 }
 
@@ -126,6 +149,7 @@ func main() {
 		conf := NewConfig()
 		conf.Input.Processors = nil
 		conf.Output.Processors = nil
+		conf.Pipeline.Processors = append(conf.Pipeline.Processors, processor.NewConfig())
 
 		if _, exists := input.Constructors[t]; exists {
 			conf.Input.Type = t

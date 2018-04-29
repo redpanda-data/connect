@@ -1,4 +1,4 @@
-BUFFERS
+Buffers
 =======
 
 This document was generated with `benthos --list-buffers`
@@ -39,6 +39,13 @@ Please note that the badger buffer can be set to disable synchronous writes.
 This removes the guarantee of message persistence after a crash, but brings
 performance on par with the mmap file buffer. This can make it the faster
 overall disk persisted buffer when writing to multiple outputs.
+
+### Contents
+
+1. [`badger`](#badger)
+2. [`memory`](#memory)
+3. [`mmap_file`](#mmap-file)
+4. [`none`](#none)
 
 ## `badger`
 

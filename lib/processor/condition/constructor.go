@@ -23,6 +23,7 @@ package condition
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -235,11 +236,17 @@ func Descriptions() string {
 	sort.Strings(names)
 
 	buf := bytes.Buffer{}
-	buf.WriteString("CONDITIONS\n")
+	buf.WriteString("Conditions\n")
 	buf.WriteString(strings.Repeat("=", 10))
 	buf.WriteString("\n\n")
 	buf.WriteString(header)
 	buf.WriteString("\n\n")
+
+	buf.WriteString("### Contents\n\n")
+	for i, name := range names {
+		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, strings.Replace(name, "_", "-", -1)))
+	}
+	buf.WriteString("\n")
 
 	// Append each description
 	for i, name := range names {

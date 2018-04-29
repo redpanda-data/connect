@@ -1,4 +1,4 @@
-PROCESSORS
+Processors
 ==========
 
 This document was generated with `benthos --list-processors`.
@@ -13,6 +13,26 @@ input section) or before a specific output (set in the output section).
 
 By organising processors you can configure complex behaviours in your pipeline.
 You can [find some examples here][0].
+
+### Contents
+
+1. [`archive`](#archive)
+2. [`bounds_check`](#bounds-check)
+3. [`combine`](#combine)
+4. [`compress`](#compress)
+5. [`condition`](#condition)
+6. [`decompress`](#decompress)
+7. [`dedupe`](#dedupe)
+8. [`hash_sample`](#hash-sample)
+9. [`insert_part`](#insert-part)
+10. [`jmespath`](#jmespath)
+11. [`noop`](#noop)
+12. [`sample`](#sample)
+13. [`select_json`](#select-json)
+14. [`select_parts`](#select-parts)
+15. [`set_json`](#set-json)
+16. [`split`](#split)
+17. [`unarchive`](#unarchive)
 
 ## `archive`
 

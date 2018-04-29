@@ -22,7 +22,7 @@ Kafka [check out the cookbook section][cookbook-docs].
 
 ## Supported Protocols
 
-![Arch Diagram](resources/img/inputs_doodle.png "Benthos Inputs")
+![Big Blob Benthos](resources/img/big_blob.png "Big Blob Benthos")
 
 Currently supported input/output targets:
 

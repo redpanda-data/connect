@@ -9,6 +9,18 @@ input:
     timeout_ms: 5000
     url: tcp://localhost:6379
   type: redis_list
+buffer:
+  none: {}
+  type: none
+pipeline:
+  processors:
+  - bounds_check:
+      max_part_size: 1.073741824e+09
+      max_parts: 100
+      min_part_size: 1
+      min_parts: 1
+    type: bounds_check
+  threads: 1
 output:
   redis_list:
     key: benthos_list
