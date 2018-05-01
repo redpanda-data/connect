@@ -62,22 +62,30 @@ func NewConfig() Config {
 // Sanitised returns a sanitised copy of the Benthos configuration, meaning
 // fields of no consequence (unused inputs, outputs, processors etc) are
 // excluded.
-func (c Config) Sanitised() (interface{}, error) {
+func (c Config) Sanitised(sanitBuffer, sanitPipe bool) (interface{}, error) {
 	inConf, err := input.SanitiseConfig(c.Input)
 	if err != nil {
 		return nil, err
 	}
 
 	var bufConf interface{}
-	bufConf, err = buffer.SanitiseConfig(c.Buffer)
-	if err != nil {
-		return nil, err
+	if sanitBuffer {
+		bufConf, err = buffer.SanitiseConfig(c.Buffer)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		bufConf = c.Buffer
 	}
 
 	var pipeConf interface{}
-	pipeConf, err = pipeline.SanitiseConfig(c.Pipeline)
-	if err != nil {
-		return nil, err
+	if sanitPipe {
+		pipeConf, err = pipeline.SanitiseConfig(c.Pipeline)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		pipeConf = c.Pipeline
 	}
 
 	var outConf interface{}
@@ -158,7 +166,42 @@ func main() {
 			conf.Output.Type = t
 		}
 
-		sanit, err := conf.Sanitised()
+		sanit, err := conf.Sanitised(true, true)
+		if err != nil {
+			panic(err)
+		}
+
+		createYAML(t, filepath.Join(configsDir, t+".yaml"), sanit)
+		createJSON(t, filepath.Join(configsDir, t+".json"), sanit)
+	}
+
+	// Create processor config
+	{
+		t := "processors"
+
+		conf := NewConfig()
+		conf.Input.Processors = nil
+		conf.Output.Processors = nil
+		conf.Pipeline.Processors = append(conf.Pipeline.Processors, processor.NewConfig())
+
+		sanit, err := conf.Sanitised(true, false)
+		if err != nil {
+			panic(err)
+		}
+
+		createYAML(t, filepath.Join(configsDir, t+".yaml"), sanit)
+		createJSON(t, filepath.Join(configsDir, t+".json"), sanit)
+	}
+
+	// Create buffers config
+	{
+		t := "buffers"
+
+		conf := NewConfig()
+		conf.Input.Processors = nil
+		conf.Output.Processors = nil
+
+		sanit, err := conf.Sanitised(false, true)
 		if err != nil {
 			panic(err)
 		}

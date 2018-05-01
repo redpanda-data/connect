@@ -1,0 +1,44 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000,
+		"debug_endpoints": false
+	},
+	"input": {
+		"stdin": {
+			"custom_delimiter": "",
+			"max_buffer": 65536,
+			"multipart": false
+		},
+		"type": "stdin"
+	},
+	"buffer": {
+		"type": "none",
+		"badger": {
+			"directory": "",
+			"sync_writes": true,
+			"gc_interval_ms": 1000
+		},
+		"memory": {
+			"limit": 524288000
+		},
+		"mmap_file": {
+			"directory": "",
+			"file_size": 262144000,
+			"retry_period_ms": 1000,
+			"clean_up": true,
+			"reserved_disk_space": 104857600
+		},
+		"none": {}
+	},
+	"pipeline": {
+		"processors": [],
+		"threads": 1
+	},
+	"output": {
+		"stdout": {
+			"custom_delimiter": ""
+		},
+		"type": "stdout"
+	}
+}
