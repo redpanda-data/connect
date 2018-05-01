@@ -135,6 +135,8 @@ input:
         operator: equals_cs
         part: 0
         arg: ""
+      count:
+        arg: 100
       jmespath:
         part: 0
         query: ""
@@ -193,6 +195,8 @@ input:
         operator: equals_cs
         part: 0
         arg: ""
+      count:
+        arg: 100
       jmespath:
         part: 0
         query: ""
@@ -404,6 +408,8 @@ resources:
         operator: equals_cs
         part: 0
         arg: ""
+      count:
+        arg: 100
       jmespath:
         part: 0
         query: ""

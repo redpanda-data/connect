@@ -37,6 +37,8 @@ pipeline:
         operator: equals_cs
         part: 0
         arg: ""
+      count:
+        arg: 100
       jmespath:
         part: 0
         query: ""

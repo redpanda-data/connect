@@ -55,6 +55,7 @@ type Config struct {
 	Type     string         `json:"type" yaml:"type"`
 	And      AndConfig      `json:"and" yaml:"and"`
 	Content  ContentConfig  `json:"content" yaml:"content"`
+	Count    CountConfig    `json:"count" yaml:"count"`
 	JMESPath JMESPathConfig `json:"jmespath" yaml:"jmespath"`
 	Not      NotConfig      `json:"not" yaml:"not"`
 	Or       OrConfig       `json:"or" yaml:"or"`
@@ -68,6 +69,7 @@ func NewConfig() Config {
 		Type:     "content",
 		And:      NewAndConfig(),
 		Content:  NewContentConfig(),
+		Count:    NewCountConfig(),
 		JMESPath: NewJMESPathConfig(),
 		Not:      NewNotConfig(),
 		Or:       NewOrConfig(),
