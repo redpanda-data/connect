@@ -127,7 +127,7 @@ func (c *JMESPath) Check(msg types.Message) bool {
 	if err != nil {
 		c.stats.Incr("condition.jmespath.error.json_parse", 1)
 		c.stats.Incr("condition.jmespath.dropped", 1)
-		c.log.Errorf("Failed to parse part into json: %v\n", err)
+		c.log.Debugf("Failed to parse part into json: %v\n", err)
 		return false
 	}
 
@@ -135,7 +135,7 @@ func (c *JMESPath) Check(msg types.Message) bool {
 	if result, err = c.query.Search(jsonPart); err != nil {
 		c.stats.Incr("condition.jmespath.error.jmespath_search", 1)
 		c.stats.Incr("condition.jmespath.dropped", 1)
-		c.log.Errorf("Failed to search json: %v\n", err)
+		c.log.Debugf("Failed to search json: %v\n", err)
 		return false
 	}
 	c.stats.Incr("condition.jmespath.applied", 1)

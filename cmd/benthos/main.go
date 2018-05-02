@@ -21,6 +21,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	_ "net/http/pprof"
@@ -383,6 +384,11 @@ func main() {
 				logger.Warnln(
 					"Service failed to close cleanly within allocated time. Exiting forcefully.",
 				)
+
+				dumpBuf := bytes.NewBuffer(nil)
+				pprof.Lookup("goroutine").WriteTo(dumpBuf, 1)
+
+				logger.Debugln(dumpBuf.String())
 				os.Exit(1)
 			}
 		}

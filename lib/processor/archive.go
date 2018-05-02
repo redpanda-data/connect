@@ -198,7 +198,7 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 
 	newPart, err := d.archive(d.createHeader, msg.GetAll())
 	if err != nil {
-		d.log.Errorf("Failed to create archive: %v\n", err)
+		d.log.Debugf("Failed to create archive: %v\n", err)
 		d.stats.Incr("processor.archive.error", 1)
 		return nil, types.NewSimpleResponse(nil)
 	}

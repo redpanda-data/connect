@@ -168,7 +168,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		if _, err := hasher.Write(msg.Get(index)); nil != err {
 			d.stats.Incr("processor.dedupe.error.hash", 1)
 			d.stats.Incr("processor.dedupe.dropped", 1)
-			d.log.Errorf("Hash error: %v\n", err)
+			d.log.Debugf("Hash error: %v\n", err)
 			return nil, types.NewSimpleResponse(nil)
 		}
 	}

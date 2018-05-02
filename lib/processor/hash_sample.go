@@ -118,14 +118,14 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		if index < 0 || index >= lParts {
 			s.stats.Incr("processor.hash_sample.dropped_part_out_of_bounds", 1)
 			s.stats.Incr("processor.hash_sample.dropped", 1)
-			s.log.Errorf("Cannot sample message part %v for parts count: %v\n", index, lParts)
+			s.log.Debugf("Cannot sample message part %v for parts count: %v\n", index, lParts)
 			return nil, types.NewSimpleResponse(nil)
 		}
 
 		// Attempt to add part to hash.
 		if _, err := hash.Write(msg.Get(index)); nil != err {
 			s.stats.Incr("processor.hash_sample.hashing_error", 1)
-			s.log.Errorf("Cannot hash message part for sampling: %v\n", err)
+			s.log.Debugf("Cannot hash message part for sampling: %v\n", err)
 			return nil, types.NewSimpleResponse(nil)
 		}
 	}

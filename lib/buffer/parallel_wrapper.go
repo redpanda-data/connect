@@ -166,11 +166,8 @@ func (m *ParallelWrapper) outputLoop() {
 
 		go func(rChan chan types.Response, aFunc parallel.AckFunc) {
 			res, open := <-rChan
-			if !open {
-				return
-			}
 			doAck := false
-			if res.Error() == nil {
+			if open && res.Error() == nil {
 				m.stats.Incr("buffer.send.success", 1)
 				doAck = true
 			} else {

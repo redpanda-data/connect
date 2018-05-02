@@ -12,7 +12,7 @@ input:
       enabled: true
       max_buffer: 10000000 # 10MB - The max supported length of a single line
   processors:
-  - type: bounds_check # Filter out keep alives (/r/n)
+  - type: bounds_check # Filter out keep alives (empty message)
     bounds_check:
       min_part_size: 2
 

@@ -89,8 +89,8 @@
     "service/sqs",
     "service/sts"
   ]
-  revision = "9b0098a71f6d4d473a26ec8ad3c2feaac6eb1da6"
-  version = "v1.13.32"
+  revision = "236a3fce423171d03ae327a8aa2512e6fb24df36"
+  version = "v1.13.39"
 
 [[projects]]
   branch = "master"
@@ -195,8 +195,8 @@
 [[projects]]
   name = "github.com/go-ini/ini"
   packages = ["."]
-  revision = "ace140f73450505f33e8b8418216792275ae82a7"
-  version = "v1.35.0"
+  revision = "6529cf7c58879c08d927016dde4477f18a0634cb"
+  version = "v1.36.0"
 
 [[projects]]
   name = "github.com/go-mangos/mangos"
@@ -240,8 +240,8 @@
 [[projects]]
   name = "github.com/golang/protobuf"
   packages = ["proto"]
-  revision = "925541529c1fa6821df4e44ce2723319eb2be768"
-  version = "v1.0.0"
+  revision = "b4deda0973fb4c70b50d226b1af49f3da59f5265"
+  version = "v1.1.0"
 
 [[projects]]
   branch = "master"
@@ -321,8 +321,8 @@
     "config",
     "uritemplates"
   ]
-  revision = "d6362604399c7af560b54f048b4fcfbdd6eff293"
-  version = "v6.1.14"
+  revision = "80585846d765de967183044c2840d4ed5e93f9e4"
+  version = "v6.1.16"
 
 [[projects]]
   name = "github.com/opencontainers/go-digest"
@@ -427,7 +427,7 @@
     "internal/bitbucket.org/ww/goautoneg",
     "model"
   ]
-  revision = "d0f7cd64bda49e08b22ae8a730aa57aa0db125d6"
+  revision = "d811d2e9bf898806ecfb6ef6296774b13ffc314c"
 
 [[projects]]
   branch = "master"
@@ -468,7 +468,7 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
+  revision = "613d6eafa307c6881a737a3c35c0e312e8d3a8c5"
 
 [[projects]]
   branch = "master"
@@ -481,7 +481,7 @@
     "trace",
     "websocket"
   ]
-  revision = "d41e8174641f662c5a2d1c7a5f9e828788eb8706"
+  revision = "5f9ae10d9af5b1c89ae6904293b14b064d4ada23"
 
 [[projects]]
   branch = "master"
@@ -490,7 +490,7 @@
     "unix",
     "windows"
   ]
-  revision = "3ccc7e5779793fd54564baf60c51bf017955e0ba"
+  revision = "78d5f264b493f125018180c204871ecf58a2dce1"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"

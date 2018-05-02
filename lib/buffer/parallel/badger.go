@@ -257,7 +257,7 @@ func (b *Badger) cleanUpBadger() (err error) {
 // until the close is completed.
 func (b *Badger) CloseOnceEmpty() {
 	b.cond.L.Lock()
-	for atomic.LoadInt64(&b.pendingCtr) > 0 {
+	for atomic.LoadInt64(&b.pendingCtr) > 0 && b.db != nil {
 		b.cond.Wait()
 	}
 	b.cleanUpBadger()

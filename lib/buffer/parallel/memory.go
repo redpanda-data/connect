@@ -141,11 +141,13 @@ func (m *Memory) PushMessage(msg types.Message) (int, error) {
 // until the close is completed.
 func (m *Memory) CloseOnceEmpty() {
 	m.cond.L.Lock()
-	for m.bytes > 0 {
+	for m.bytes > 0 && !m.closed {
 		m.cond.Wait()
 	}
-	m.closed = true
-	m.cond.Broadcast()
+	if !m.closed {
+		m.closed = true
+		m.cond.Broadcast()
+	}
 	m.cond.L.Unlock()
 }
 

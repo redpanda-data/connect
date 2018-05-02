@@ -146,20 +146,20 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		jsonPart, err := msg.GetJSON(index)
 		if err != nil {
 			p.stats.Incr("processor.jmespath.error.json_parse", 1)
-			p.log.Errorf("Failed to parse part into json: %v\n", err)
+			p.log.Debugf("Failed to parse part into json: %v\n", err)
 			continue
 		}
 
 		var result interface{}
 		if result, err = p.query.Search(jsonPart); err != nil {
 			p.stats.Incr("processor.jmespath.error.jmespath_search", 1)
-			p.log.Errorf("Failed to search json: %v\n", err)
+			p.log.Debugf("Failed to search json: %v\n", err)
 			continue
 		}
 
 		if err = newMsg.SetJSON(index, result); err != nil {
 			p.stats.Incr("processor.jmespath.error.json_set", 1)
-			p.log.Errorf("Failed to convert jmespath result into part: %v\n", err)
+			p.log.Debugf("Failed to convert jmespath result into part: %v\n", err)
 		} else {
 			p.stats.Incr("processor.jmespath.success", 1)
 		}

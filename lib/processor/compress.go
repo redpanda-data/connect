@@ -152,7 +152,7 @@ func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			c.stats.Incr("processor.compress.success", 1)
 			newMsg.Append(newPart)
 		} else {
-			c.log.Errorf("Failed to compress message part: %v\n", err)
+			c.log.Debugf("Failed to compress message part: %v\n", err)
 			c.stats.Incr("processor.compress.error", 1)
 		}
 	}

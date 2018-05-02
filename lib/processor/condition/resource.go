@@ -111,7 +111,7 @@ func NewResource(
 func (c *Resource) Check(msg types.Message) bool {
 	cond, err := c.mgr.GetCondition(c.name)
 	if err != nil {
-		c.log.Errorf("Failed to obtain condition resource '%v': %v", c.name, err)
+		c.log.Debugf("Failed to obtain condition resource '%v': %v", c.name, err)
 		return false
 	}
 	return msg.LazyCondition(c.name, cond)
