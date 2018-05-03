@@ -18,223 +18,239 @@
 http:
   address: ${BENTHOS_HTTP_ADDRESS:0.0.0.0:4195}
 input:
-  type: ${BENTHOS_INPUT:dynamic}
-  amazon_s3:
-    region: ${AMAZON_INPUT_REGION:eu-west-1}
-    bucket: ${AMAZON_INPUT_BUCKET}
-    prefix: ${AMAZON_INPUT_PREFIX}
-    delete_objects: ${AMAZON_INPUT_DELETE_OBJECTS:false}
-    sqs_url: ${AMAZON_INPUT_SQS_URL}
-    sqs_body_path: ${AMAZON_INPUT_SQS_BODY_PATH:Records.s3.object.key}
-    credentials:
-      id: ${AMAZON_INPUT_CREDENTIALS_ID}
-      secret: ${AMAZON_INPUT_CREDENTIALS_SECRET}
-      token: ${AMAZON_INPUT_CREDENTIALS_TOKEN}
-    timeout_s: ${AMAZON_INPUT_TIMEOUT_S:5}
-  amazon_sqs:
-    region: ${AMAZON_INPUT_REGION:eu-west-1}
-    url: ${AMAZON_INPUT_SQS_URL}
-    credentials:
-      id: ${AMAZON_INPUT_CREDENTIALS_ID}
-      secret: ${AMAZON_INPUT_CREDENTIALS_SECRET}
-      token: ${AMAZON_INPUT_CREDENTIALS_TOKEN}
-    timeout_s: ${AMAZON_INPUT_TIMEOUT_S:5}
-  amqp:
-    url: ${AMQP_INPUT_URL}
-    exchange: ${AMQP_INPUT_EXCHANGE:benthos-exchange}
-    exchange_type: ${AMQP_INPUT_EXCHANGE_TYPE:direct}
-    queue: ${AMQP_INPUT_QUEUE:benthos-stream}
-    key: ${AMQP_INPUT_KEY:benthos-key}
-    consumer_tag: ${AMQP_INPUT_CONSUMER_TAG:benthos-consumer}
-    prefetch_count: ${AMQP_INPUT_PREFETCH_COUNT:10}
-    prefetch_size: ${AMQP_INPUT_PREFETCH_SIZE:0}
-  dynamic:
-    inputs: {}
-    prefix: ${DYNAMIC_INPUT_PREFIX}
-    timeout_ms: ${DYNAMIC_INPUT_TIMEOUT_MS:5000}
-  file:
-    path: ${FILE_INPUT_PATH}
-    multipart: ${FILE_INPUT_MULTIPART:false}
-    max_buffer: ${FILE_INPUT_MAX_BUFFER:65536}
-  http_client:
-    url: ${HTTP_CLIENT_INPUT_URL}
-    verb: ${HTTP_CLIENT_INPUT_VERB:GET}
-    payload: ${HTTP_CLIENT_INPUT_PAYLOAD}
-    content_type: ${HTTP_CLIENT_INPUT_CONTENT_TYPE:application/octet-stream}
-    stream:
-      enabled: ${HTTP_CLIENT_INPUT_STREAM:false}
-      multipart: ${HTTP_CLIENT_INPUT_STREAM_MULTIPART:false}
-      max_buffer: ${HTTP_CLIENT_INPUT_STREAM_MAX_BUFFER:65536}
-      custom_delimiter: ${HTTP_CLIENT_INPUT_STREAM_DELIMITER}
-    timeout_ms: ${HTTP_CLIENT_INPUT_TIMEOUT_MS:5000}
-    skip_cert_verify: ${HTTP_CLIENT_INPUT_SKIP_CERT_VERIFY:false}
-    oauth:
-      consumer_key: ${HTTP_CLIENT_INPUT_OAUTH_KEY}
-      consumer_secret: ${HTTP_CLIENT_INPUT_OAUTH_SECRET}
-      access_token: ${HTTP_CLIENT_INPUT_OAUTH_TOKEN}
-      access_token_secret: ${HTTP_CLIENT_INPUT_OAUTH_TOKEN_SECRET}
-      request_url: ${HTTP_CLIENT_INPUT_OAUTH_URL}
-      enabled: ${HTTP_CLIENT_INPUT_OAUTH_ENABLED:false}
-    basic_auth:
-      enabled: ${HTTP_CLIENT_INPUT_BASIC_AUTH_ENABLED:false}
-      username: ${HTTP_CLIENT_INPUT_BASIC_AUTH_USERNAME}
-      password: ${HTTP_CLIENT_INPUT_BASIC_AUTH_PASSWORD}
-  http_server:
-    address: ${HTTP_SERVER_INPUT_ADDRESS}
-    path: ${HTTP_SERVER_INPUT_PATH:/post}
-  kafka:
-    addresses:
-    - ${KAFKA_INPUT_BROKER_ADDRESSES}
-    client_id: ${KAFKA_INPUT_CLIENT_ID:benthos-client}
-    consumer_group: ${KAFKA_INPUT_CONSUMER_GROUP:benthos-group}
-    topic: ${KAFKA_INPUT_TOPIC:benthos-stream}
-    partition: ${KAFKA_INPUT_PARTITION:0}
-    start_from_oldest: ${KAFKA_INPUT_START_OLDEST:true}
-  kafka_balanced:
-    addresses:
-    - ${KAFKA_INPUT_BROKER_ADDRESSES}
-    client_id: ${KAFKA_INPUT_CLIENT_ID:benthos-client}
-    consumer_group: ${KAFKA_INPUT_CONSUMER_GROUP:benthos-group}
-    topics:
-    - ${KAFKA_INPUT_TOPIC:benthos-stream}
-    start_from_oldest: ${KAFKA_INPUT_START_OLDEST:true}
-  nats:
-    urls:
-    - ${NATS_INPUT_URLS}
-    subject: ${NATS_INPUT_SUBJECT:benthos-stream}
-  nats_stream:
-    urls:
-    - ${NATS_INPUT_URLS}
-    cluster_id: ${NATS_INPUT_CLUSTER_ID:benthos-cluster}
-    client_id: ${NATS_INPUT_CLIENT_ID:benthos-consumer}
-    queue: ${NATS_INPUT_QUEUE:benthos-queue}
-    durable_name: ${NATS_INPUT_DURABLE_NAME:benthos-offset}
-    subject: ${NATS_INPUT_SUBJECT:benthos-stream}
-  nsq:
-    nsqd_tcp_addresses:
-    - ${NSQD_INPUT_TCP_ADDRESSES}
-    lookupd_http_addresses:
-    - ${NSQD_INPUT_LOOKUP_ADDRESSES}
-    topic: ${NSQ_INPUT_TOPIC:benthos-messages}
-    channel: ${NSQ_INPUT_CHANNEL:benthos-stream}
-    user_agent: ${NSQ_INPUT_USER_AGENT:benthos-consumer}
-  redis_list:
-    url: ${REDIS_INPUT_URL}
-    key: ${REDIS_INPUT_LIST:benthos_list}
-    timeout_ms: ${REDIS_INPUT_TIMEOUT_MS:5000}
-  redis_pubsub:
-    url: ${REDIS_INPUT_URL}
-    channels:
-    - ${REDIS_INPUT_CHANNEL:benthos-stream}
-  scalability_protocols:
-    urls:
-    - ${SCALE_PROTO_INPUT_URLS}
-    bind: ${SCALE_PROTO_INPUT_BIND:true}
-    socket_type: ${SCALE_PROTO_INPUT_SOCKET:PULL}
-  zmq4:
-    urls:
-    - ${ZMQ_INPUT_URLS}
-    bind: ${ZMQ_INPUT_BIND:true}
-    socket_type: ${ZMQ_INPUT_SOCKET:PULL}
+  type: broker
+  broker:
+    copies: ${BENTHOS_INPUTS:1}
+    inputs:
+    - type: ${BENTHOS_INPUT:dynamic}
+      amazon_s3:
+        region: ${AMAZON_INPUT_REGION:eu-west-1}
+        bucket: ${AMAZON_INPUT_BUCKET}
+        prefix: ${AMAZON_INPUT_PREFIX}
+        delete_objects: ${AMAZON_INPUT_DELETE_OBJECTS:false}
+        sqs_url: ${AMAZON_INPUT_SQS_URL}
+        sqs_body_path: ${AMAZON_INPUT_SQS_BODY_PATH:Records.s3.object.key}
+        credentials:
+          id: ${AMAZON_INPUT_CREDENTIALS_ID}
+          secret: ${AMAZON_INPUT_CREDENTIALS_SECRET}
+          token: ${AMAZON_INPUT_CREDENTIALS_TOKEN}
+        timeout_s: ${AMAZON_INPUT_TIMEOUT_S:5}
+      amazon_sqs:
+        region: ${AMAZON_INPUT_REGION:eu-west-1}
+        url: ${AMAZON_INPUT_SQS_URL}
+        credentials:
+          id: ${AMAZON_INPUT_CREDENTIALS_ID}
+          secret: ${AMAZON_INPUT_CREDENTIALS_SECRET}
+          token: ${AMAZON_INPUT_CREDENTIALS_TOKEN}
+        timeout_s: ${AMAZON_INPUT_TIMEOUT_S:5}
+      amqp:
+        url: ${AMQP_INPUT_URL}
+        exchange: ${AMQP_INPUT_EXCHANGE:benthos-exchange}
+        exchange_type: ${AMQP_INPUT_EXCHANGE_TYPE:direct}
+        queue: ${AMQP_INPUT_QUEUE:benthos-stream}
+        key: ${AMQP_INPUT_KEY:benthos-key}
+        consumer_tag: ${AMQP_INPUT_CONSUMER_TAG:benthos-consumer}
+        prefetch_count: ${AMQP_INPUT_PREFETCH_COUNT:10}
+        prefetch_size: ${AMQP_INPUT_PREFETCH_SIZE:0}
+      dynamic:
+        inputs: {}
+        prefix: ${DYNAMIC_INPUT_PREFIX}
+        timeout_ms: ${DYNAMIC_INPUT_TIMEOUT_MS:5000}
+      file:
+        path: ${FILE_INPUT_PATH}
+        multipart: ${FILE_INPUT_MULTIPART:false}
+        max_buffer: ${FILE_INPUT_MAX_BUFFER:65536}
+      http_client:
+        url: ${HTTP_CLIENT_INPUT_URL}
+        verb: ${HTTP_CLIENT_INPUT_VERB:GET}
+        payload: ${HTTP_CLIENT_INPUT_PAYLOAD}
+        content_type: ${HTTP_CLIENT_INPUT_CONTENT_TYPE:application/octet-stream}
+        stream:
+          enabled: ${HTTP_CLIENT_INPUT_STREAM:false}
+          multipart: ${HTTP_CLIENT_INPUT_STREAM_MULTIPART:false}
+          max_buffer: ${HTTP_CLIENT_INPUT_STREAM_MAX_BUFFER:65536}
+          custom_delimiter: ${HTTP_CLIENT_INPUT_STREAM_DELIMITER}
+        timeout_ms: ${HTTP_CLIENT_INPUT_TIMEOUT_MS:5000}
+        skip_cert_verify: ${HTTP_CLIENT_INPUT_SKIP_CERT_VERIFY:false}
+        oauth:
+          consumer_key: ${HTTP_CLIENT_INPUT_OAUTH_KEY}
+          consumer_secret: ${HTTP_CLIENT_INPUT_OAUTH_SECRET}
+          access_token: ${HTTP_CLIENT_INPUT_OAUTH_TOKEN}
+          access_token_secret: ${HTTP_CLIENT_INPUT_OAUTH_TOKEN_SECRET}
+          request_url: ${HTTP_CLIENT_INPUT_OAUTH_URL}
+          enabled: ${HTTP_CLIENT_INPUT_OAUTH_ENABLED:false}
+        basic_auth:
+          enabled: ${HTTP_CLIENT_INPUT_BASIC_AUTH_ENABLED:false}
+          username: ${HTTP_CLIENT_INPUT_BASIC_AUTH_USERNAME}
+          password: ${HTTP_CLIENT_INPUT_BASIC_AUTH_PASSWORD}
+      http_server:
+        address: ${HTTP_SERVER_INPUT_ADDRESS}
+        path: ${HTTP_SERVER_INPUT_PATH:/post}
+      kafka:
+        addresses:
+        - ${KAFKA_INPUT_BROKER_ADDRESSES}
+        client_id: ${KAFKA_INPUT_CLIENT_ID:benthos-client}
+        consumer_group: ${KAFKA_INPUT_CONSUMER_GROUP:benthos-group}
+        topic: ${KAFKA_INPUT_TOPIC:benthos-stream}
+        partition: ${KAFKA_INPUT_PARTITION:0}
+        start_from_oldest: ${KAFKA_INPUT_START_OLDEST:true}
+      kafka_balanced:
+        addresses:
+        - ${KAFKA_INPUT_BROKER_ADDRESSES}
+        client_id: ${KAFKA_INPUT_CLIENT_ID:benthos-client}
+        consumer_group: ${KAFKA_INPUT_CONSUMER_GROUP:benthos-group}
+        topics:
+        - ${KAFKA_INPUT_TOPIC:benthos-stream}
+        start_from_oldest: ${KAFKA_INPUT_START_OLDEST:true}
+      nats:
+        urls:
+        - ${NATS_INPUT_URLS}
+        subject: ${NATS_INPUT_SUBJECT:benthos-stream}
+      nats_stream:
+        urls:
+        - ${NATS_INPUT_URLS}
+        cluster_id: ${NATS_INPUT_CLUSTER_ID:benthos-cluster}
+        client_id: ${NATS_INPUT_CLIENT_ID:benthos-consumer}
+        queue: ${NATS_INPUT_QUEUE:benthos-queue}
+        durable_name: ${NATS_INPUT_DURABLE_NAME:benthos-offset}
+        subject: ${NATS_INPUT_SUBJECT:benthos-stream}
+      nsq:
+        nsqd_tcp_addresses:
+        - ${NSQD_INPUT_TCP_ADDRESSES}
+        lookupd_http_addresses:
+        - ${NSQD_INPUT_LOOKUP_ADDRESSES}
+        topic: ${NSQ_INPUT_TOPIC:benthos-messages}
+        channel: ${NSQ_INPUT_CHANNEL:benthos-stream}
+        user_agent: ${NSQ_INPUT_USER_AGENT:benthos-consumer}
+      redis_list:
+        url: ${REDIS_INPUT_URL}
+        key: ${REDIS_INPUT_LIST:benthos_list}
+        timeout_ms: ${REDIS_INPUT_TIMEOUT_MS:5000}
+      redis_pubsub:
+        url: ${REDIS_INPUT_URL}
+        channels:
+        - ${REDIS_INPUT_CHANNEL:benthos-stream}
+      scalability_protocols:
+        urls:
+        - ${SCALE_PROTO_INPUT_URLS}
+        bind: ${SCALE_PROTO_INPUT_BIND:true}
+        socket_type: ${SCALE_PROTO_INPUT_SOCKET:PULL}
+      zmq4:
+        urls:
+        - ${ZMQ_INPUT_URLS}
+        bind: ${ZMQ_INPUT_BIND:true}
+        socket_type: ${ZMQ_INPUT_SOCKET:PULL}
+buffer:
+  type: ${BENTHOS_BUFFER:none}
+pipeline:
+  threads: ${PROCESSOR_THREADS:1}
   processors:
   - type: bounds_check
     bounds_check:
-      max_parts: ${BENTHOS_MAX_PARTS:100}
-      min_parts: ${BENTHOS_MIN_PARTS:1}
-      max_part_size: ${BENTHOS_MAX_PART_SIZE:1073741824}
-  - type: ${BENTHOS_INPUT_PROCESSOR:noop}
+      max_parts: ${MAX_PARTS:100}
+      min_parts: ${MIN_PARTS:1}
+      max_part_size: ${MAX_PART_SIZE:1073741824}
+  - type: ${PROCESSOR:noop}
     combine:
-      parts: ${BENTHOS_INPUT_PROCESSOR_COMBINE:1}
+      parts: ${PROCESSOR_COMBINE:1}
 output:
-  type: ${BENTHOS_OUTPUT:dynamic}
-  amazon_s3:
-    region: ${AMAZON_OUTPUT_REGION:eu-west-1}
-    bucket: ${AMAZON_OUTPUT_BUCKET}
-    credentials:
-      id: ${AMAZON_OUTPUT_CREDENTIALS_ID}
-      secret: ${AMAZON_OUTPUT_CREDENTIALS_SECRET}
-      token: ${AMAZON_OUTPUT_CREDENTIALS_TOKEN}
-    timeout_s: ${AMAZON_OUTPUT_TIMEOUT_S:5}
-  amazon_sqs:
-    region: ${AMAZON_OUTPUT_REGION:eu-west-1}
-    url: ${AMAZON_OUTPUT_SQS_URL}
-    credentials:
-      id: ${AMAZON_OUTPUT_CREDENTIALS_ID}
-      secret: ${AMAZON_OUTPUT_CREDENTIALS_SECRET}
-      token: ${AMAZON_OUTPUT_CREDENTIALS_TOKEN}
-  amqp:
-    url: ${AMQP_OUTPUT_URL}
-    exchange: ${AMQP_OUTPUT_EXCHANGE:benthos-exchange}
-    exchange_type: ${AMQP_OUTPUT_EXCHANGE_TYPE:direct}
-    key: ${AMQP_OUTPUT_KEY:benthos-key}
-  dynamic:
-    outputs: {}
-    prefix: ${DYNAMIC_OUTPUT_PREFIX}
-    timeout_ms: ${DYNAMIC_OUTPUT_TIMEOUT_MS:5000}
-  file:
-    path: ${FILE_OUTPUT_PATH}
-  http_client:
-    url: ${HTTP_CLIENT_OUTPUT_URL}
-    verb: ${HTTP_CLIENT_OUTPUT_VERB:POST}
-    content_type: ${HTTP_CLIENT_OUTPUT_CONTENT_TYPE:application/octet-stream}
-    oauth:
-      consumer_key: ${HTTP_CLIENT_OUTPUT_OAUTH_KEY}
-      consumer_secret: ${HTTP_CLIENT_OUTPUT_OAUTH_SECRET}
-      access_token: ${HTTP_CLIENT_OUTPUT_OAUTH_TOKEN}
-      access_token_secret: ${HTTP_CLIENT_OUTPUT_OAUTH_TOKEN_SECRET}
-      request_url: ${HTTP_CLIENT_OUTPUT_OAUTH_URL}
-      enabled: ${HTTP_CLIENT_OUTPUT_OAUTH_ENABLED:false}
-    basic_auth:
-      enabled: ${HTTP_CLIENT_OUTPUT_BASIC_AUTH_ENABLED:false}
-      username: ${HTTP_CLIENT_OUTPUT_BASIC_AUTH_USERNAME}
-      password: ${HTTP_CLIENT_OUTPUT_BASIC_AUTH_PASSWORD}
-    timeout_ms: ${HTTP_CLIENT_OUTPUT_TIMEOUT_MS:5000}
-    skip_cert_verify: ${HTTP_CLIENT_OUTPUT_SKIP_CERT_VERIFY:false}
-  http_server:
-    address: ${HTTP_SERVER_OUTPUT_ADDRESS}
-    path: ${HTTP_SERVER_OUTPUT_PATH:/get}
-    stream_path: ${HTTP_SERVER_OUTPUT_STREAM_PATH:/get/stream}
-  kafka:
-    addresses:
-    - ${KAFKA_OUTPUT_BROKER_ADDRESSES}
-    client_id: ${KAFKA_OUTPUT_CLIENT_ID:benthos-client}
-    key: ${KAFKA_OUTPUT_KEY}
-    round_robin_partitions: ${KAFKA_OUTPUT_ROUND_ROBIN:false}
-    max_msg_bytes: ${KAFKA_OUTPUT_MAX_MSG_BYTES:1000000}
-    topic: ${KAFKA_OUTPUT_TOPIC:benthos-stream}
-    ack_replicas: ${KAFKA_OUTPUT_ACK_REP:false}
-  nats:
-    urls:
-    - ${NATS_OUTPUT_URLS}
-    subject: ${NATS_OUTPUT_SUBJECT:benthos-stream}
-  nats_stream:
-    urls:
-    - ${NATS_OUTPUT_URLS}
-    cluster_id: ${NATS_OUTPUT_CLUSTER_ID:benthos-cluster}
-    client_id: ${NATS_OUTPUT_CLIENT_ID:benthos-consumer}
-    subject: ${NATS_OUTPUT_SUBJECT:benthos-stream}
-  nsq:
-    nsqd_tcp_address: ${NSQ_OUTPUT_TCP_ADDRESS}
-    topic: ${NSQ_OUTPUT_TOPIC:benthos-messages}
-    user_agent: ${NSQ_OUTPUT_USER_AGENT:benthos-consumer}
-  redis_list:
-    url: ${REDIS_OUTPUT_URL}
-    key: ${REDIS_OUTPUT_LIST:benthos_list}
-  redis_pubsub:
-    url: ${REDIS_OUTPUT_URL}
-    channel: ${REDIS_OUTPUT_CHANNEL:benthos-stream}
-  scalability_protocols:
-    urls:
-    - ${SCALE_PROTO_OUTPUT_URLS}
-    bind: ${SCALE_PROTO_OUTPUT_BIND:false}
-    socket_type: ${SCALE_PROTO_OUTPUT_SOCKET:PUSH}
-  zmq4:
-    urls:
-    - ${ZMQ_OUTPUT_URLS}
-    bind: ${ZMQ_OUTPUT_BIND:true}
-    socket_type: ${ZMQ_OUTPUT_SOCKET:PULL}
-  processors:
-  - type: ${BENTHOS_OUTPUT_PROCESSOR:noop}
+  type: broker
+  broker:
+    pattern: fan_out
+    copies: ${BENTHOS_OUTPUTS:1}
+    outputs:
+    - type: ${BENTHOS_OUTPUT:dynamic}
+      amazon_s3:
+        region: ${AMAZON_OUTPUT_REGION:eu-west-1}
+        bucket: ${AMAZON_OUTPUT_BUCKET}
+        credentials:
+          id: ${AMAZON_OUTPUT_CREDENTIALS_ID}
+          secret: ${AMAZON_OUTPUT_CREDENTIALS_SECRET}
+          token: ${AMAZON_OUTPUT_CREDENTIALS_TOKEN}
+        timeout_s: ${AMAZON_OUTPUT_TIMEOUT_S:5}
+      amazon_sqs:
+        region: ${AMAZON_OUTPUT_REGION:eu-west-1}
+        url: ${AMAZON_OUTPUT_SQS_URL}
+        credentials:
+          id: ${AMAZON_OUTPUT_CREDENTIALS_ID}
+          secret: ${AMAZON_OUTPUT_CREDENTIALS_SECRET}
+          token: ${AMAZON_OUTPUT_CREDENTIALS_TOKEN}
+      amqp:
+        url: ${AMQP_OUTPUT_URL}
+        exchange: ${AMQP_OUTPUT_EXCHANGE:benthos-exchange}
+        exchange_type: ${AMQP_OUTPUT_EXCHANGE_TYPE:direct}
+        key: ${AMQP_OUTPUT_KEY:benthos-key}
+      dynamic:
+        outputs: {}
+        prefix: ${DYNAMIC_OUTPUT_PREFIX}
+        timeout_ms: ${DYNAMIC_OUTPUT_TIMEOUT_MS:5000}
+      elasticsearch:
+        index: ${ELASTICSEARCH_OUTPUT_INDEX:benthos_index}
+        timeout_ms: ${ELASTICSEARCH_OUTPUT_TIMEOUT_MS:5000}
+        urls:
+        - ${ELASTICSEARCH_OUTPUT_URLS}
+      file:
+        path: ${FILE_OUTPUT_PATH}
+      http_client:
+        url: ${HTTP_CLIENT_OUTPUT_URL}
+        verb: ${HTTP_CLIENT_OUTPUT_VERB:POST}
+        content_type: ${HTTP_CLIENT_OUTPUT_CONTENT_TYPE:application/octet-stream}
+        oauth:
+          consumer_key: ${HTTP_CLIENT_OUTPUT_OAUTH_KEY}
+          consumer_secret: ${HTTP_CLIENT_OUTPUT_OAUTH_SECRET}
+          access_token: ${HTTP_CLIENT_OUTPUT_OAUTH_TOKEN}
+          access_token_secret: ${HTTP_CLIENT_OUTPUT_OAUTH_TOKEN_SECRET}
+          request_url: ${HTTP_CLIENT_OUTPUT_OAUTH_URL}
+          enabled: ${HTTP_CLIENT_OUTPUT_OAUTH_ENABLED:false}
+        basic_auth:
+          enabled: ${HTTP_CLIENT_OUTPUT_BASIC_AUTH_ENABLED:false}
+          username: ${HTTP_CLIENT_OUTPUT_BASIC_AUTH_USERNAME}
+          password: ${HTTP_CLIENT_OUTPUT_BASIC_AUTH_PASSWORD}
+        timeout_ms: ${HTTP_CLIENT_OUTPUT_TIMEOUT_MS:5000}
+        skip_cert_verify: ${HTTP_CLIENT_OUTPUT_SKIP_CERT_VERIFY:false}
+      http_server:
+        address: ${HTTP_SERVER_OUTPUT_ADDRESS}
+        path: ${HTTP_SERVER_OUTPUT_PATH:/get}
+        stream_path: ${HTTP_SERVER_OUTPUT_STREAM_PATH:/get/stream}
+      kafka:
+        addresses:
+        - ${KAFKA_OUTPUT_BROKER_ADDRESSES}
+        client_id: ${KAFKA_OUTPUT_CLIENT_ID:benthos-client}
+        key: ${KAFKA_OUTPUT_KEY}
+        round_robin_partitions: ${KAFKA_OUTPUT_ROUND_ROBIN:false}
+        max_msg_bytes: ${KAFKA_OUTPUT_MAX_MSG_BYTES:1000000}
+        topic: ${KAFKA_OUTPUT_TOPIC:benthos-stream}
+        ack_replicas: ${KAFKA_OUTPUT_ACK_REP:false}
+      nats:
+        urls:
+        - ${NATS_OUTPUT_URLS}
+        subject: ${NATS_OUTPUT_SUBJECT:benthos-stream}
+      nats_stream:
+        urls:
+        - ${NATS_OUTPUT_URLS}
+        cluster_id: ${NATS_OUTPUT_CLUSTER_ID:benthos-cluster}
+        client_id: ${NATS_OUTPUT_CLIENT_ID:benthos-consumer}
+        subject: ${NATS_OUTPUT_SUBJECT:benthos-stream}
+      nsq:
+        nsqd_tcp_address: ${NSQ_OUTPUT_TCP_ADDRESS}
+        topic: ${NSQ_OUTPUT_TOPIC:benthos-messages}
+        user_agent: ${NSQ_OUTPUT_USER_AGENT:benthos-consumer}
+      redis_list:
+        url: ${REDIS_OUTPUT_URL}
+        key: ${REDIS_OUTPUT_LIST:benthos_list}
+      redis_pubsub:
+        url: ${REDIS_OUTPUT_URL}
+        channel: ${REDIS_OUTPUT_CHANNEL:benthos-stream}
+      scalability_protocols:
+        urls:
+        - ${SCALE_PROTO_OUTPUT_URLS}
+        bind: ${SCALE_PROTO_OUTPUT_BIND:false}
+        socket_type: ${SCALE_PROTO_OUTPUT_SOCKET:PUSH}
+      zmq4:
+        urls:
+        - ${ZMQ_OUTPUT_URLS}
+        bind: ${ZMQ_OUTPUT_BIND:true}
+        socket_type: ${ZMQ_OUTPUT_SOCKET:PULL}
 logger:
   prefix: benthos
   log_level: ${BENTHOS_LOG_LEVEL:INFO}
