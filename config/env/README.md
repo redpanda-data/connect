@@ -7,6 +7,8 @@ env variables for all important fields.
 Values for `BENTHOS_INPUT` and `BENTHOS_OUTPUT` should be chosen from [here][0]
 and [here][1] respectively.
 
+Choose a value for `BENTHOS_BUFFER` from [here][2], and `PROCESSOR` [here][3].
+
 The full list of variables and their default values:
 
 ``` sh
@@ -182,3 +184,5 @@ ZMQ_OUTPUT_SOCKET = PULL
 
 [0]: ../../resources/docs/inputs/README.md
 [1]: ../../resources/docs/outputs/README.md
+[2]: ../../resources/docs/buffers/README.md
+[3]: ../../resources/docs/processors/README.md

@@ -22,8 +22,6 @@ Kafka [check out the cookbook section][cookbook-docs].
 
 ## Supported Protocols
 
-![Big Blob Benthos](resources/img/big_blob.png "Big Blob Benthos")
-
 Currently supported input/output targets:
 
 - [Amazon (S3, SQS)][amazons3]
@@ -179,12 +177,12 @@ containers using `docker-compose`.
 [4]: https://goreportcard.com/report/Jeffail/benthos
 [5]: resources/docs/multipart.md
 [6]: resources/docs/metrics.md
-[7]: resources/docs
+[7]: resources/docs/README.md
 [8]: resources/docs/config_interpolation.md
 [9]: resources/docker/compose_examples
-[10]: resources/docs/processors
+[10]: resources/docs/processors/README.md
 [11]: resources/docs/dynamic_inputs_and_outputs.md
-[12]: resources/docs/buffers
+[12]: resources/docs/buffers/README.md
 [general-docs]: resources/docs/README.md#benthos
 [cookbook-docs]: resources/docs/cookbook/README.md
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
