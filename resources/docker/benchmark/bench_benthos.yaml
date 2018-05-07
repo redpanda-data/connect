@@ -1,0 +1,17 @@
+http:
+  address: 0.0.0.0:4195
+input:
+  type: http_server
+buffer:
+  type: none
+pipeline:
+  threads: 1
+  processors: []
+output:
+  type: http_server
+logger:
+  prefix: service
+  log_level: INFO
+metrics:
+  type: prometheus
+  prefix: benthos
