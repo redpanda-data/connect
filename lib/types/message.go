@@ -22,6 +22,7 @@ package types
 
 import (
 	"encoding/json"
+	"time"
 )
 
 //------------------------------------------------------------------------------
@@ -97,6 +98,9 @@ type Message interface {
 	// contents are entirely copied and are therefore safe to edit without
 	// altering the original.
 	DeepCopy() Message
+
+	// CreatedAt returns the time at which the message was created.
+	CreatedAt() time.Time
 }
 
 //------------------------------------------------------------------------------
@@ -104,7 +108,8 @@ type Message interface {
 // NewMessage initializes a new message.
 func NewMessage(parts [][]byte) Message {
 	return &messageImpl{
-		parts: parts,
+		createdAt: time.Now(),
+		parts:     parts,
 	}
 }
 
@@ -152,6 +157,7 @@ type partCache struct {
 // and
 // helper functions.
 type messageImpl struct {
+	createdAt   time.Time
 	parts       [][]byte
 	partCaches  []*partCache
 	resultCache map[string]bool
@@ -227,6 +233,7 @@ func (m *messageImpl) ShallowCopy() Message {
 	// the hash and len fields we cannot safely copy the content as it may
 	// contain pointers or ref types.
 	return &messageImpl{
+		createdAt:   m.createdAt,
 		parts:       append([][]byte(nil), m.parts...),
 		resultCache: m.resultCache,
 	}
@@ -242,7 +249,8 @@ func (m *messageImpl) DeepCopy() Message {
 		newParts[i] = np
 	}
 	return &messageImpl{
-		parts: newParts,
+		createdAt: m.createdAt,
+		parts:     newParts,
 	}
 }
 
@@ -372,6 +380,10 @@ func (m *messageImpl) LazyCondition(label string, cond Condition) bool {
 	res := cond.Check(m)
 	m.resultCache[label] = res
 	return res
+}
+
+func (m *messageImpl) CreatedAt() time.Time {
+	return m.createdAt
 }
 
 //------------------------------------------------------------------------------

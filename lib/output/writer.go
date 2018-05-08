@@ -73,23 +73,25 @@ func NewWriter(
 func (w *Writer) loop() {
 	// Metrics paths
 	var (
-		runningPath    = "output." + w.typeStr + ".running"
-		countPath      = "output." + w.typeStr + ".count"
-		successPath    = "output." + w.typeStr + ".send.success"
-		errorPath      = "output." + w.typeStr + ".send.error"
-		connPath       = "output." + w.typeStr + ".connection.up"
-		failedConnPath = "output." + w.typeStr + ".connection.failed"
-		lostConnPath   = "output." + w.typeStr + ".connection.lost"
+		runningPath    = [2]string{"output." + w.typeStr + ".running", "output.running"}
+		countPath      = [2]string{"output." + w.typeStr + ".count", "output.count"}
+		successPath    = [2]string{"output." + w.typeStr + ".send.success", "output.send.success"}
+		errorPath      = [2]string{"output." + w.typeStr + ".send.error", "output.send.error"}
+		connPath       = [2]string{"output." + w.typeStr + ".connection.up", "output.connection.up"}
+		failedConnPath = [2]string{"output." + w.typeStr + ".connection.failed", "output.connection.failed"}
+		lostConnPath   = [2]string{"output." + w.typeStr + ".connection.lost", "output.connection.lost"}
 	)
 
 	defer func() {
 		err := w.writer.WaitForClose(time.Second)
 		for ; err != nil; err = w.writer.WaitForClose(time.Second) {
 		}
-		w.stats.Decr(runningPath, 1)
+		w.stats.Decr(runningPath[0], 1)
+		w.stats.Decr(runningPath[1], 1)
 		close(w.closedChan)
 	}()
-	w.stats.Incr(runningPath, 1)
+	w.stats.Incr(runningPath[0], 1)
+	w.stats.Incr(runningPath[1], 1)
 
 	for {
 		if err := w.writer.Connect(); err != nil {
@@ -99,7 +101,8 @@ func (w *Writer) loop() {
 			}
 
 			w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
-			w.stats.Incr(failedConnPath, 1)
+			w.stats.Incr(failedConnPath[0], 1)
+			w.stats.Incr(failedConnPath[1], 1)
 			select {
 			case <-time.After(time.Second):
 			case <-w.closeChan:
@@ -109,7 +112,8 @@ func (w *Writer) loop() {
 			break
 		}
 	}
-	w.stats.Incr(connPath, 1)
+	w.stats.Incr(connPath[0], 1)
+	w.stats.Incr(connPath[1], 1)
 
 	for atomic.LoadInt32(&w.running) == 1 {
 		var ts types.Transaction
@@ -119,7 +123,8 @@ func (w *Writer) loop() {
 			if !open {
 				return
 			}
-			w.stats.Incr(countPath, 1)
+			w.stats.Incr(countPath[0], 1)
+			w.stats.Incr(countPath[1], 1)
 		case <-w.closeChan:
 			return
 		}
@@ -128,7 +133,8 @@ func (w *Writer) loop() {
 
 		// If our writer says it is not connected.
 		if err == types.ErrNotConnected {
-			w.stats.Incr(lostConnPath, 1)
+			w.stats.Incr(lostConnPath[0], 1)
+			w.stats.Incr(lostConnPath[1], 1)
 
 			// Continue to try to reconnect while still active.
 			for atomic.LoadInt32(&w.running) == 1 {
@@ -139,14 +145,16 @@ func (w *Writer) loop() {
 					}
 
 					w.log.Errorf("Failed to reconnect to %v: %v\n", w.typeStr, err)
-					w.stats.Incr(failedConnPath, 1)
+					w.stats.Incr(failedConnPath[0], 1)
+					w.stats.Incr(failedConnPath[1], 1)
 					select {
 					case <-time.After(time.Second):
 					case <-w.closeChan:
 						return
 					}
 				} else if err = w.writer.Write(ts.Payload); err != types.ErrNotConnected {
-					w.stats.Incr(connPath, 1)
+					w.stats.Incr(connPath[0], 1)
+					w.stats.Incr(connPath[1], 1)
 					break
 				}
 			}
@@ -159,9 +167,11 @@ func (w *Writer) loop() {
 
 		if err != nil {
 			w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
-			w.stats.Incr(errorPath, 1)
+			w.stats.Incr(errorPath[0], 1)
+			w.stats.Incr(errorPath[1], 1)
 		} else {
-			w.stats.Incr(successPath, 1)
+			w.stats.Incr(successPath[0], 1)
+			w.stats.Incr(successPath[1], 1)
 		}
 		select {
 		case ts.ResponseChan <- types.NewSimpleResponse(err):

@@ -41,7 +41,7 @@ func TestMessageSerialization(t *testing.T) {
 		return
 	}
 
-	if !reflect.DeepEqual(m, m2) {
+	if !reflect.DeepEqual(m.GetAll(), m2.GetAll()) {
 		t.Errorf("Messages not equal: %v != %v", m, m2)
 	}
 }

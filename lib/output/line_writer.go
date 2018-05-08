@@ -79,19 +79,21 @@ func NewLineWriter(
 func (w *LineWriter) loop() {
 	// Metrics paths
 	var (
-		runningPath = "output." + w.typeStr + ".running"
-		countPath   = "output." + w.typeStr + ".count"
-		successPath = "output." + w.typeStr + ".success"
-		errorPath   = "output." + w.typeStr + ".error"
+		runningPath = [2]string{"output." + w.typeStr + ".running", "output.running"}
+		countPath   = [2]string{"output." + w.typeStr + ".count", "output.count"}
+		successPath = [2]string{"output." + w.typeStr + ".success", "output.success"}
+		errorPath   = [2]string{"output." + w.typeStr + ".error", "output.error"}
 	)
 
 	defer func() {
 		w.handle.Close()
-		w.stats.Decr(runningPath, 1)
+		w.stats.Decr(runningPath[0], 1)
+		w.stats.Decr(runningPath[1], 1)
 
 		close(w.closedChan)
 	}()
-	w.stats.Incr(runningPath, 1)
+	w.stats.Incr(runningPath[0], 1)
+	w.stats.Incr(runningPath[1], 1)
 
 	delim := []byte("\n")
 	if len(w.customDelim) > 0 {
@@ -106,7 +108,8 @@ func (w *LineWriter) loop() {
 			if !open {
 				return
 			}
-			w.stats.Incr(countPath, 1)
+			w.stats.Incr(countPath[0], 1)
+			w.stats.Incr(countPath[1], 1)
 		case <-w.closeChan:
 			return
 		}
@@ -117,9 +120,11 @@ func (w *LineWriter) loop() {
 			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(ts.Payload.GetAll(), delim), delim, delim)
 		}
 		if err != nil {
-			w.stats.Incr(errorPath, 1)
+			w.stats.Incr(errorPath[0], 1)
+			w.stats.Incr(errorPath[1], 1)
 		} else {
-			w.stats.Incr(successPath, 1)
+			w.stats.Incr(successPath[0], 1)
+			w.stats.Incr(successPath[1], 1)
 		}
 		select {
 		case ts.ResponseChan <- types.NewSimpleResponse(err):

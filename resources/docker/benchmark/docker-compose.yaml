@@ -3,6 +3,7 @@ version: '3.3'
 volumes:
  prometheus_data: {}
  grafana_data: {}
+ nats_data: {}
 
 services:
   benthos:
@@ -13,6 +14,15 @@ services:
         target: /benthos.yaml
     ports:
       - 4195:4195
+
+  nats-streaming:
+    image: nats-streaming
+    volumes:
+      - nats_data:/datastore
+    command: '-store file -dir datastore'
+    ports:
+      - 4222:4222
+      - 8222:8222
 
   prometheus:
     image: prom/prometheus

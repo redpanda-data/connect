@@ -9,6 +9,7 @@ input:
     cluster_id: test-cluster
     durable_name: benthos_offset
     queue: benthos_queue
+    start_from_oldest: true
     subject: benthos_messages
     urls:
     - nats://localhost:4222

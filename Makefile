@@ -1,9 +1,10 @@
-.PHONY: all deps rpm docker clean-docker clean docs test fmt lint
+.PHONY: all deps rpm docker clean-docker clean docs test fmt lint install
 
 BENTHOS_PATH = github.com/Jeffail/benthos
 
 TAGS =
 
+INSTALL_DIR    = $(GOPATH)/bin
 DEST_DIR       = ./target
 PATHINSTBIN    = $(DEST_DIR)/bin
 PATHINSTDOCKER = $(DEST_DIR)/docker
@@ -20,6 +21,9 @@ APPS = benthos
 all: $(APPS)
 
 $(PATHINSTBIN)/benthos: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/benthos/*.go)
+
+install: $(PATHINSTBIN)/benthos
+	@cp $(PATHINSTBIN)/benthos $(INSTALL_DIR)/benthos
 
 $(PATHINSTBIN)/%: deps
 	@mkdir -p $(dir $@)

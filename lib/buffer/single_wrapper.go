@@ -183,6 +183,7 @@ func (m *SingleWrapper) outputLoop() {
 				return
 			}
 			if res.Error() == nil {
+				m.stats.Timing("buffer.latency", time.Since(msg.CreatedAt()).Nanoseconds())
 				msg = nil
 				backlog, _ := m.buffer.ShiftMessage()
 				m.stats.Incr("buffer.send.success", 1)

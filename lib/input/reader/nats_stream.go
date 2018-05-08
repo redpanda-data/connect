@@ -36,23 +36,25 @@ import (
 
 // NATSStreamConfig is configuration for the NATSStream input type.
 type NATSStreamConfig struct {
-	URLs        []string `json:"urls" yaml:"urls"`
-	ClusterID   string   `json:"cluster_id" yaml:"cluster_id"`
-	ClientID    string   `json:"client_id" yaml:"client_id"`
-	QueueID     string   `json:"queue" yaml:"queue"`
-	DurableName string   `json:"durable_name" yaml:"durable_name"`
-	Subject     string   `json:"subject" yaml:"subject"`
+	URLs            []string `json:"urls" yaml:"urls"`
+	ClusterID       string   `json:"cluster_id" yaml:"cluster_id"`
+	ClientID        string   `json:"client_id" yaml:"client_id"`
+	QueueID         string   `json:"queue" yaml:"queue"`
+	DurableName     string   `json:"durable_name" yaml:"durable_name"`
+	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	Subject         string   `json:"subject" yaml:"subject"`
 }
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
 func NewNATSStreamConfig() NATSStreamConfig {
 	return NATSStreamConfig{
-		URLs:        []string{stan.DefaultNatsURL},
-		ClusterID:   "test-cluster",
-		ClientID:    "benthos_client",
-		QueueID:     "benthos_queue",
-		DurableName: "benthos_offset",
-		Subject:     "benthos_messages",
+		URLs:            []string{stan.DefaultNatsURL},
+		ClusterID:       "test-cluster",
+		ClientID:        "benthos_client",
+		QueueID:         "benthos_queue",
+		DurableName:     "benthos_offset",
+		StartFromOldest: true,
+		Subject:         "benthos_messages",
 	}
 }
 
@@ -138,6 +140,9 @@ func (n *NATSStream) Connect() error {
 	}
 	if len(n.conf.DurableName) > 0 {
 		options = append(options, stan.DurableName(n.conf.DurableName))
+	}
+	if n.conf.StartFromOldest {
+		options = append(options, stan.DeliverAllAvailable())
 	} else {
 		options = append(options, stan.StartWithLastReceived())
 	}

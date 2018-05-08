@@ -169,6 +169,7 @@ func (m *ParallelWrapper) outputLoop() {
 			doAck := false
 			if open && res.Error() == nil {
 				m.stats.Incr("buffer.send.success", 1)
+				m.stats.Timing("buffer.latency", time.Since(msg.CreatedAt()).Nanoseconds())
 				doAck = true
 			} else {
 				m.stats.Incr("buffer.send.error", 1)

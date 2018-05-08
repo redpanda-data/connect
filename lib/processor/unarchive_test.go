@@ -131,8 +131,8 @@ func TestUnarchiveBinary(t *testing.T) {
 	testMsg := types.NewMessage([][]byte{[]byte("hello"), []byte("world")})
 	testMsgBlob := testMsg.Bytes()
 
-	if msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{testMsgBlob})); len(msgs) > 0 {
-		if !reflect.DeepEqual([]types.Message{testMsg}, msgs) {
+	if msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{testMsgBlob})); len(msgs) == 1 {
+		if !reflect.DeepEqual(testMsg.GetAll(), msgs[0].GetAll()) {
 			t.Errorf("Returned message did not match: %v != %v", msgs, testMsg)
 		}
 	} else {

@@ -45,6 +45,7 @@ type mockReader struct {
 
 func newMockReader() *mockReader {
 	return &mockReader{
+		msgToSnd: types.NewMessage(nil),
 		connChan: make(chan error),
 		readChan: make(chan error),
 		ackChan:  make(chan error),
@@ -58,7 +59,7 @@ func (r *mockReader) Read() (types.Message, error) {
 	if err := <-r.readChan; err != nil {
 		return nil, err
 	}
-	return r.msgToSnd, nil
+	return r.msgToSnd.DeepCopy(), nil
 }
 func (r *mockReader) Acknowledge(err error) error {
 	r.ackRcvd = err

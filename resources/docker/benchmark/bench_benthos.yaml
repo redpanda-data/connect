@@ -1,14 +1,25 @@
 http:
   address: 0.0.0.0:4195
 input:
-  type: http_server
+  type: nats_stream
+  nats_stream:
+    urls:
+    - nats://nats-streaming:4222
+    cluster_id: test-cluster
+    client_id: benthos_client
+    queue: benthos_queue
+    start_from_oldest: true
+    durable_name: benthos_offset
+    subject: benthos_messages
 buffer:
-  type: none
+  type: memory
 pipeline:
   threads: 1
   processors: []
 output:
-  type: http_server
+  type: file
+  file:
+    path: "/dev/null"
 logger:
   prefix: service
   log_level: INFO
