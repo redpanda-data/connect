@@ -10,6 +10,7 @@ input:
       password: ""
       username: ""
     content_type: application/octet-stream
+    max_retry_backoff_ms: 300000
     oauth:
       access_token: ""
       access_token_secret: ""
@@ -18,7 +19,6 @@ input:
       enabled: false
       request_url: ""
     payload: ""
-    retries: 3
     retry_period_ms: 1000
     skip_cert_verify: false
     stream:
@@ -50,6 +50,7 @@ output:
       password: ""
       username: ""
     content_type: application/octet-stream
+    max_retry_backoff_ms: 300000
     oauth:
       access_token: ""
       access_token_secret: ""

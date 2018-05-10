@@ -206,8 +206,8 @@ breaks.
 The HTTP client input type connects to a server and continuously performs
 requests for a single message.
 
-You should set a sensible number of max retries and retry delays so as to not
-stress your target server.
+You should set a sensible retry period and max backoff so as to not flood your
+target server.
 
 ### Streaming
 

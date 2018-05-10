@@ -62,7 +62,7 @@ input:
       custom_delimiter: ""
     timeout_ms: 5000
     retry_period_ms: 1000
-    retries: 3
+    max_retry_backoff_ms: 300000
     skip_cert_verify: false
     oauth:
       enabled: false
@@ -314,6 +314,7 @@ output:
     content_type: application/octet-stream
     timeout_ms: 5000
     retry_period_ms: 1000
+    max_retry_backoff_ms: 300000
     retries: 3
     skip_cert_verify: false
     oauth:
