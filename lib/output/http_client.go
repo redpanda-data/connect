@@ -34,6 +34,7 @@ import (
 	"github.com/Jeffail/benthos/lib/util/http/auth"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -60,6 +61,7 @@ type HTTPClientConfig struct {
 	ContentType    string `json:"content_type" yaml:"content_type"`
 	TimeoutMS      int64  `json:"timeout_ms" yaml:"timeout_ms"`
 	RetryMS        int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
+	MaxBackoffMS   int64  `json:"max_retry_backoff_ms" yaml:"max_retry_backoff_ms"`
 	NumRetries     int    `json:"retries" yaml:"retries"`
 	SkipCertVerify bool   `json:"skip_cert_verify" yaml:"skip_cert_verify"`
 	auth.Config    `json:",inline" yaml:",inline"`
@@ -73,6 +75,7 @@ func NewHTTPClientConfig() HTTPClientConfig {
 		ContentType:    "application/octet-stream",
 		TimeoutMS:      5000,
 		RetryMS:        1000,
+		MaxBackoffMS:   300000,
 		NumRetries:     3,
 		SkipCertVerify: false,
 		Config:         auth.NewConfig(),
@@ -88,7 +91,8 @@ type HTTPClient struct {
 	stats metrics.Type
 	log   log.Modular
 
-	conf Config
+	conf          Config
+	retryThrottle *throttle.Type
 
 	transactions <-chan types.Transaction
 
@@ -106,6 +110,13 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
+
+	h.retryThrottle = throttle.New(
+		throttle.OptMaxUnthrottledRetries(0),
+		throttle.OptCloseChan(h.closeChan),
+		throttle.OptThrottlePeriod(time.Millisecond*time.Duration(conf.HTTPClient.RetryMS)),
+		throttle.OptMaxExponentPeriod(time.Millisecond*time.Duration(conf.HTTPClient.MaxBackoffMS)),
+	)
 
 	return &h, nil
 }
@@ -185,8 +196,12 @@ func (h *HTTPClient) loop() {
 		var err error
 
 		if req, err = h.createRequest(ts.Payload); err == nil {
+			rateLimited := false
 			if res, err = client.Do(req); err == nil {
 				if res.StatusCode < 200 || res.StatusCode > 299 {
+					if res.StatusCode == 429 {
+						rateLimited = true
+					}
 					err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
 				}
 				res.Body.Close()
@@ -198,13 +213,21 @@ func (h *HTTPClient) loop() {
 				if err != nil {
 					continue
 				}
-				select {
-				case <-time.After(time.Duration(h.conf.HTTPClient.RetryMS) * time.Millisecond):
-				case <-h.closeChan:
-					return
+				if rateLimited {
+					if !h.retryThrottle.ExponentialRetry() {
+						return
+					}
+				} else {
+					if !h.retryThrottle.Retry() {
+						return
+					}
 				}
+				rateLimited = false
 				if res, err = client.Do(req); err == nil {
 					if res.StatusCode < 200 || res.StatusCode > 299 {
+						if res.StatusCode == 429 {
+							rateLimited = true
+						}
 						err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
 					}
 					res.Body.Close()
@@ -218,6 +241,7 @@ func (h *HTTPClient) loop() {
 			h.stats.Incr("output.http_client.send.error", 1)
 		} else {
 			h.stats.Incr("output.http_client.send.success", 1)
+			h.retryThrottle.Reset()
 		}
 		select {
 		case ts.ResponseChan <- types.NewSimpleResponse(err):
