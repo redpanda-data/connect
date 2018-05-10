@@ -13,7 +13,15 @@ type Type struct {
 	// comfortable attempting before throttling begins.
 	unthrottledRetries int
 
-	// throttlePeriod is the static duration for which our throttle lasts.
+	// maxExponentialPeriod is the maximum duration for which our throttle lasts
+	// when exponentially increasing.
+	maxExponentialPeriod time.Duration
+
+	// baseThrottlePeriod is the static duration for which our throttle lasts.
+	baseThrottlePeriod time.Duration
+
+	// throttlePeriod is the current throttle period, by default this is set to
+	// the baseThrottlePeriod.
 	throttlePeriod time.Duration
 
 	// closeChan can interrupt a throttle when closed.
@@ -28,10 +36,12 @@ type Type struct {
 // of consecutive retries.
 func New(options ...func(*Type)) *Type {
 	t := &Type{
-		unthrottledRetries: 3,
-		throttlePeriod:     time.Second,
-		closeChan:          nil,
+		unthrottledRetries:   3,
+		baseThrottlePeriod:   time.Second,
+		maxExponentialPeriod: time.Minute,
+		closeChan:            nil,
 	}
+	t.throttlePeriod = t.baseThrottlePeriod
 	for _, option := range options {
 		option(t)
 	}
@@ -48,9 +58,18 @@ func OptMaxUnthrottledRetries(n int) func(*Type) {
 	}
 }
 
+// OptMaxExponentPeriod sets the maximum period of time that throttles will last
+// when exponentially increasing.
+func OptMaxExponentPeriod(period time.Duration) func(*Type) {
+	return func(t *Type) {
+		t.maxExponentialPeriod = period
+	}
+}
+
 // OptThrottlePeriod sets the static period of time that throttles will last.
 func OptThrottlePeriod(period time.Duration) func(*Type) {
 	return func(t *Type) {
+		t.baseThrottlePeriod = period
 		t.throttlePeriod = period
 	}
 }
@@ -81,9 +100,25 @@ func (t *Type) Retry() bool {
 	return true
 }
 
-// Reset clears the count of consecutive retries.
+// ExponentialRetry is the same as Retry except also sets the throttle period to
+// exponentially increase after each consecutive retry.
+func (t *Type) ExponentialRetry() bool {
+	if t.consecutiveRetries > t.unthrottledRetries {
+		if t.throttlePeriod < t.maxExponentialPeriod {
+			t.throttlePeriod = t.throttlePeriod * 2
+			if t.throttlePeriod > t.maxExponentialPeriod {
+				t.throttlePeriod = t.maxExponentialPeriod
+			}
+		}
+	}
+	return t.Retry()
+}
+
+// Reset clears the count of consecutive retries and resets the exponential
+// backoff.
 func (t *Type) Reset() {
 	t.consecutiveRetries = 0
+	t.throttlePeriod = t.baseThrottlePeriod
 }
 
 //------------------------------------------------------------------------------
