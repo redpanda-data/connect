@@ -52,13 +52,15 @@ func TestThrottleReset(t *testing.T) {
 }
 
 func TestThrottleLinear(t *testing.T) {
+	t.Parallel()
+
 	throt := New(
 		OptMaxUnthrottledRetries(1),
-		OptMaxExponentPeriod(time.Millisecond*10),
-		OptThrottlePeriod(time.Millisecond),
+		OptMaxExponentPeriod(time.Millisecond*500),
+		OptThrottlePeriod(time.Millisecond*100),
 	)
 
-	errMargin := 0.0005
+	errMargin := 0.005
 
 	tBefore := time.Now()
 	throt.Retry()
@@ -68,11 +70,11 @@ func TestThrottleLinear(t *testing.T) {
 		t.Errorf("Unexpected retry period: %v != %v", act, exp)
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 5; i++ {
 		tBefore = time.Now()
 		throt.Retry()
 
-		exp = time.Millisecond
+		exp = time.Millisecond * 100
 		if act := time.Since(tBefore); (act - exp).Seconds() > errMargin {
 			t.Errorf("Unexpected retry period: %v != %v", act, exp)
 		}
@@ -80,13 +82,17 @@ func TestThrottleLinear(t *testing.T) {
 }
 
 func TestThrottleExponent(t *testing.T) {
+	t.Parallel()
+
+	base := time.Millisecond * 50
+
 	throt := New(
 		OptMaxUnthrottledRetries(1),
-		OptMaxExponentPeriod(time.Millisecond*10),
-		OptThrottlePeriod(time.Millisecond),
+		OptMaxExponentPeriod(base*8),
+		OptThrottlePeriod(base),
 	)
 
-	errMargin := 0.0005
+	errMargin := 0.005
 
 	tBefore := time.Now()
 	throt.ExponentialRetry()
@@ -99,7 +105,7 @@ func TestThrottleExponent(t *testing.T) {
 	tBefore = time.Now()
 	throt.ExponentialRetry()
 
-	exp = time.Millisecond
+	exp = base
 	if act := time.Since(tBefore); (act - exp).Seconds() > errMargin {
 		t.Errorf("Unexpected retry period: %v != %v", act, exp)
 	}
@@ -107,7 +113,7 @@ func TestThrottleExponent(t *testing.T) {
 	tBefore = time.Now()
 	throt.ExponentialRetry()
 
-	exp = time.Millisecond * 2
+	exp = base * 2
 	if act := time.Since(tBefore); (act - exp).Seconds() > errMargin {
 		t.Errorf("Unexpected retry period: %v != %v", act, exp)
 	}
@@ -115,7 +121,7 @@ func TestThrottleExponent(t *testing.T) {
 	tBefore = time.Now()
 	throt.ExponentialRetry()
 
-	exp = time.Millisecond * 4
+	exp = base * 4
 	if act := time.Since(tBefore); (act - exp).Seconds() > errMargin {
 		t.Errorf("Unexpected retry period: %v != %v", act, exp)
 	}
@@ -123,7 +129,7 @@ func TestThrottleExponent(t *testing.T) {
 	tBefore = time.Now()
 	throt.ExponentialRetry()
 
-	exp = time.Millisecond * 8
+	exp = base * 8
 	if act := time.Since(tBefore); (act - exp).Seconds() > errMargin {
 		t.Errorf("Unexpected retry period: %v != %v", act, exp)
 	}
@@ -131,15 +137,7 @@ func TestThrottleExponent(t *testing.T) {
 	tBefore = time.Now()
 	throt.ExponentialRetry()
 
-	exp = time.Millisecond * 10
-	if act := time.Since(tBefore); (act - exp).Seconds() > errMargin {
-		t.Errorf("Unexpected retry period: %v != %v", act, exp)
-	}
-
-	tBefore = time.Now()
-	throt.ExponentialRetry()
-
-	exp = time.Millisecond * 10
+	exp = base * 8
 	if act := time.Since(tBefore); (act - exp).Seconds() > errMargin {
 		t.Errorf("Unexpected retry period: %v != %v", act, exp)
 	}
@@ -157,7 +155,7 @@ func TestThrottleExponent(t *testing.T) {
 	tBefore = time.Now()
 	throt.ExponentialRetry()
 
-	exp = time.Millisecond
+	exp = base
 	if act := time.Since(tBefore); (act - exp).Seconds() > errMargin {
 		t.Errorf("Unexpected retry period: %v != %v", act, exp)
 	}
