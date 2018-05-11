@@ -23,6 +23,7 @@ package metrics
 import (
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -57,6 +58,8 @@ type Prometheus struct {
 
 	gauges map[string]prometheus.Gauge
 	timers map[string]prometheus.Summary
+
+	sync.Mutex
 }
 
 // NewPrometheus creates and returns a new Prometheus object.
@@ -87,6 +90,7 @@ func toPromName(dotSepName string) string {
 
 // Incr increments a stat by a value.
 func (p *Prometheus) Incr(stat string, value int64) error {
+	p.Lock()
 	if ctr, exists := p.gauges[stat]; exists {
 		ctr.Add(float64(value))
 	} else {
@@ -99,11 +103,13 @@ func (p *Prometheus) Incr(stat string, value int64) error {
 		prometheus.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
+	p.Unlock()
 	return nil
 }
 
 // Decr decrements a stat by a value.
 func (p *Prometheus) Decr(stat string, value int64) error {
+	p.Lock()
 	if ctr, exists := p.gauges[stat]; exists {
 		ctr.Sub(float64(value))
 	} else {
@@ -116,11 +122,13 @@ func (p *Prometheus) Decr(stat string, value int64) error {
 		prometheus.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
+	p.Unlock()
 	return nil
 }
 
 // Timing sets a stat representing a duration.
 func (p *Prometheus) Timing(stat string, delta int64) error {
+	p.Lock()
 	if tmr, exists := p.timers[stat]; exists {
 		tmr.Observe(float64(delta))
 	} else {
@@ -133,11 +141,13 @@ func (p *Prometheus) Timing(stat string, delta int64) error {
 		prometheus.MustRegister(tmr)
 		p.timers[stat] = tmr
 	}
+	p.Unlock()
 	return nil
 }
 
 // Gauge sets a stat as a gauge value.
 func (p *Prometheus) Gauge(stat string, value int64) error {
+	p.Lock()
 	if ctr, exists := p.gauges[stat]; exists {
 		ctr.Set(float64(value))
 	} else {
@@ -150,6 +160,7 @@ func (p *Prometheus) Gauge(stat string, value int64) error {
 		prometheus.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
+	p.Unlock()
 	return nil
 }
 
