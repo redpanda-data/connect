@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker clean-docker clean docs test fmt lint install
+.PHONY: all deps rpm docker clean docs test fmt lint install
 
 BENTHOS_PATH = github.com/Jeffail/benthos
 
@@ -61,8 +61,6 @@ rpm:
 
 clean:
 	rm -rf $(PATHINSTBIN)
-
-clean-docker:
 	rm -rf $(PATHINSTDOCKER)
 
 docs: $(APPS)
