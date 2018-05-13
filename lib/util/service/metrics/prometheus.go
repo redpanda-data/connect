@@ -55,6 +55,7 @@ func NewPrometheusConfig() PrometheusConfig {
 // endpoint.
 type Prometheus struct {
 	config Config
+	prefix string
 
 	gauges map[string]prometheus.Gauge
 	timers map[string]prometheus.Summary
@@ -66,6 +67,7 @@ type Prometheus struct {
 func NewPrometheus(config Config) (Type, error) {
 	return &Prometheus{
 		config: config,
+		prefix: toPromName(config.Prefix),
 		gauges: map[string]prometheus.Gauge{},
 		timers: map[string]prometheus.Summary{},
 	}, nil
@@ -95,7 +97,7 @@ func (p *Prometheus) Incr(stat string, value int64) error {
 		ctr.Add(float64(value))
 	} else {
 		ctr = prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: toPromName(p.config.Prefix),
+			Namespace: p.prefix,
 			Name:      toPromName(stat),
 			Help:      "Benthos Gauge metric",
 		})
@@ -114,7 +116,7 @@ func (p *Prometheus) Decr(stat string, value int64) error {
 		ctr.Sub(float64(value))
 	} else {
 		ctr = prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: toPromName(p.config.Prefix),
+			Namespace: p.prefix,
 			Name:      toPromName(stat),
 			Help:      "Benthos Gauge metric",
 		})
@@ -133,7 +135,7 @@ func (p *Prometheus) Timing(stat string, delta int64) error {
 		tmr.Observe(float64(delta))
 	} else {
 		tmr = prometheus.NewSummary(prometheus.SummaryOpts{
-			Namespace: toPromName(p.config.Prefix),
+			Namespace: p.prefix,
 			Name:      toPromName(stat),
 			Help:      "Benthos Timing metric",
 		})
@@ -152,7 +154,7 @@ func (p *Prometheus) Gauge(stat string, value int64) error {
 		ctr.Set(float64(value))
 	} else {
 		ctr = prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: toPromName(p.config.Prefix),
+			Namespace: p.prefix,
 			Name:      toPromName(stat),
 			Help:      "Benthos Gauge metric",
 		})
