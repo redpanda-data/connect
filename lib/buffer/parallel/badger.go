@@ -127,7 +127,6 @@ func (b *Badger) gcLoop() {
 			b.cond.L.Unlock()
 			return
 		}
-		b.db.PurgeOlderVersions()
 		b.db.RunValueLogGC(0.5)
 		b.cond.L.Unlock()
 	}

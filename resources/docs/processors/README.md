@@ -26,13 +26,14 @@ You can [find some examples here][0].
 8. [`hash_sample`](#hash_sample)
 9. [`insert_part`](#insert_part)
 10. [`jmespath`](#jmespath)
-11. [`noop`](#noop)
-12. [`sample`](#sample)
-13. [`select_json`](#select_json)
-14. [`select_parts`](#select_parts)
-15. [`set_json`](#set_json)
-16. [`split`](#split)
-17. [`unarchive`](#unarchive)
+11. [`merge_json`](#merge_json)
+12. [`noop`](#noop)
+13. [`sample`](#sample)
+14. [`select_json`](#select_json)
+15. [`select_parts`](#select_parts)
+16. [`set_json`](#set_json)
+17. [`split`](#split)
+18. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -184,6 +185,19 @@ Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the
 last element with be selected, and so on.
+
+## `merge_json`
+
+Parses selected message parts as JSON blobs, attempts to merge them into one
+single JSON value and then writes it to a new message part at the end of the
+message. Merged parts are removed unless `retain_parts` is set to
+true.
+
+If the list of target parts is empty the processor will be applied to all
+message parts. Part indexes can be negative, and if so the part will be selected
+from the end counting backwards starting from -1. E.g. if part = -1 then the
+selected part will be the last part of the message, if part = -2 then the part
+before the last element with be selected, and so on.
 
 ## `noop`
 

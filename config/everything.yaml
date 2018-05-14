@@ -225,6 +225,9 @@ input:
     jmespath:
       parts: []
       query: ""
+    merge_json:
+      parts: []
+      retain_parts: false
     sample:
       retain: 10
       seed: 0

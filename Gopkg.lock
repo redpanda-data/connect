@@ -19,8 +19,8 @@
 [[projects]]
   name = "github.com/Jeffail/gabs"
   packages = ["."]
-  revision = "2a3aa15961d5fee6047b8151b67ac2f08ba2c48c"
-  version = "1.0"
+  revision = "7a0fed31069aba77993a518cc2f37b28ee7aa883"
+  version = "1.1"
 
 [[projects]]
   name = "github.com/Microsoft/go-winio"
@@ -89,8 +89,8 @@
     "service/sqs",
     "service/sts"
   ]
-  revision = "236a3fce423171d03ae327a8aa2512e6fb24df36"
-  version = "v1.13.39"
+  revision = "31a85efbe3bc741eb539d6310c8e66030b7c5cb7"
+  version = "v1.13.47"
 
 [[projects]]
   branch = "master"
@@ -138,8 +138,8 @@
     "table",
     "y"
   ]
-  revision = "69611218c7078be6de16f4ea13fb256e701b6b73"
-  version = "v1.3.0"
+  revision = "3ff1bfbb11c02c78c11269096669396c2d2cbbd3"
+  version = "v1.5.0"
 
 [[projects]]
   branch = "master"
@@ -258,8 +258,8 @@
 [[projects]]
   name = "github.com/gorilla/mux"
   packages = ["."]
-  revision = "53c1911da2b537f792e7cafcb446b05ffe33b996"
-  version = "v1.6.1"
+  revision = "e3702bed27f0d39777b0b37b664b6280e8ef8fbf"
+  version = "v1.6.2"
 
 [[projects]]
   name = "github.com/jmespath/go-jmespath"
@@ -321,8 +321,8 @@
     "config",
     "uritemplates"
   ]
-  revision = "80585846d765de967183044c2840d4ed5e93f9e4"
-  version = "v6.1.16"
+  revision = "4586a6964b5cb45a2dadd67577f83f00b1ec5029"
+  version = "v6.1.18"
 
 [[projects]]
   name = "github.com/opencontainers/go-digest"
@@ -444,7 +444,7 @@
   branch = "master"
   name = "github.com/rcrowley/go-metrics"
   packages = ["."]
-  revision = "d932a24a8ccb8fcadc993e5c6c58f93dac168294"
+  revision = "e2704e165165ec55d062f5919b4b29494e9fa790"
 
 [[projects]]
   name = "github.com/satori/go.uuid"
@@ -468,7 +468,7 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "613d6eafa307c6881a737a3c35c0e312e8d3a8c5"
+  revision = "034e5325b6ab92faa14d15c30e86919e911cf8e0"
 
 [[projects]]
   branch = "master"
@@ -481,7 +481,7 @@
     "trace",
     "websocket"
   ]
-  revision = "5f9ae10d9af5b1c89ae6904293b14b064d4ada23"
+  revision = "2491c5de3490fced2f6cff376127c667efeed857"
 
 [[projects]]
   branch = "master"
@@ -490,7 +490,7 @@
     "unix",
     "windows"
   ]
-  revision = "78d5f264b493f125018180c204871ecf58a2dce1"
+  revision = "7c87d13f8e835d2fb3a70a2912c811ed0c1d241b"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"
