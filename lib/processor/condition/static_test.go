@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,26 +18,44 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package types
+package condition
 
 import (
-	"net/http"
+	"os"
+	"testing"
+
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
-// DudMgr is a noop implementation of a types.Manager.
-type DudMgr struct {
-}
+func TestStatic(t *testing.T) {
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testMet := metrics.DudType{}
 
-// RegisterEndpoint is a noop.
-func (f DudMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
-}
+	conf := NewConfig()
+	conf.Type = "static"
+	conf.Static = false
 
-// GetCache always returns ErrCacheNotFound.
-func (f DudMgr) GetCache(name string) (Cache, error) {
-	return nil, ErrCacheNotFound
-}
+	c, err := New(conf, nil, testLog, testMet)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// GetCondition always returns ErrConditionNotFound.
-func (f DudMgr) GetCondition(name string) (Condition, error) {
-	return nil, ErrConditionNotFound
+	if c.Check(types.NewMessage(nil)) {
+		t.Error("True on static false")
+	}
+
+	conf = NewConfig()
+	conf.Type = "static"
+	conf.Static = true
+
+	c, err = New(conf, nil, testLog, testMet)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !c.Check(types.NewMessage(nil)) {
+		t.Error("False on static true")
+	}
 }

@@ -18,36 +18,45 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package stream
+package condition
 
 import (
-	"testing"
-	"time"
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
-func TestTypeConstruction(t *testing.T) {
-	conf := NewConfig()
-	conf.Input.Type = "scalability_protocols"
-	conf.Output.Type = "scalability_protocols"
+//------------------------------------------------------------------------------
 
-	strm, err := New(conf) // nanomsg => nanomsg
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if strm.logger == nil {
-		t.Error("nil logger")
-	}
-
-	if strm.stats == nil {
-		t.Error("nil stats")
-	}
-
-	if strm.manager == nil {
-		t.Error("nil manager")
-	}
-
-	if err = strm.Stop(time.Second); err != nil {
-		t.Error(err)
+func init() {
+	Constructors["static"] = TypeSpec{
+		constructor: NewStatic,
+		description: `
+Static is a condition that always resolves to the same static boolean value.`,
 	}
 }
+
+//------------------------------------------------------------------------------
+
+// Static is a condition that always returns a static boolean value.
+type Static struct {
+	value bool
+}
+
+// NewStatic returns a Static processor.
+func NewStatic(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
+	return &Static{
+		value: conf.Static,
+	}, nil
+}
+
+//------------------------------------------------------------------------------
+
+// Check attempts to check a message part against a configured condition.
+func (s *Static) Check(msg types.Message) bool {
+	return s.value
+}
+
+//------------------------------------------------------------------------------

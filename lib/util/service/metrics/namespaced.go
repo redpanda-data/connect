@@ -35,7 +35,7 @@ type namespacedWrapper struct {
 // prefix of the embedded aggregator is still the ultimate prefix of metrics.
 func Namespaced(t Type, ns string) Type {
 	return namespacedWrapper{
-		ns: ns,
+		ns: ns + ".",
 		t:  t,
 	}
 }

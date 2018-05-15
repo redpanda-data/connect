@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,26 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package types
-
-import (
-	"net/http"
-)
-
-// DudMgr is a noop implementation of a types.Manager.
-type DudMgr struct {
-}
-
-// RegisterEndpoint is a noop.
-func (f DudMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
-}
-
-// GetCache always returns ErrCacheNotFound.
-func (f DudMgr) GetCache(name string) (Cache, error) {
-	return nil, ErrCacheNotFound
-}
-
-// GetCondition always returns ErrConditionNotFound.
-func (f DudMgr) GetCondition(name string) (Condition, error) {
-	return nil, ErrConditionNotFound
-}
+// Package manager creates and manages multiple streams, providing an API for
+// performing CRUD operations.
+package manager

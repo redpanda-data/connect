@@ -60,6 +60,7 @@ type Config struct {
 	Not      NotConfig      `json:"not" yaml:"not"`
 	Or       OrConfig       `json:"or" yaml:"or"`
 	Resource string         `json:"resource" yaml:"resource"`
+	Static   bool           `json:"static" yaml:"static"`
 	Xor      XorConfig      `json:"xor" yaml:"xor"`
 }
 
@@ -74,6 +75,7 @@ func NewConfig() Config {
 		Not:      NewNotConfig(),
 		Or:       NewOrConfig(),
 		Resource: "",
+		Static:   true,
 		Xor:      NewXorConfig(),
 	}
 }
