@@ -21,7 +21,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	_ "net/http/pprof"
@@ -43,8 +42,7 @@ import (
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/processor/condition"
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util"
+	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/util/service"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
@@ -54,11 +52,8 @@ import (
 
 // Config is the benthos configuration struct.
 type Config struct {
-	HTTP                 api.Config       `json:"http" yaml:"http"`
-	Input                input.Config     `json:"input" yaml:"input"`
-	Buffer               buffer.Config    `json:"buffer" yaml:"buffer"`
-	Pipeline             pipeline.Config  `json:"pipeline" yaml:"pipeline"`
-	Output               output.Config    `json:"output" yaml:"output"`
+	HTTP                 api.Config `json:"http" yaml:"http"`
+	stream.Config        `json:",inline" yaml:",inline"`
 	Manager              manager.Config   `json:"resources" yaml:"resources"`
 	Logger               log.LoggerConfig `json:"logger" yaml:"logger"`
 	Metrics              metrics.Config   `json:"metrics" yaml:"metrics"`
@@ -72,10 +67,7 @@ func NewConfig() Config {
 
 	return Config{
 		HTTP:                 api.NewConfig(),
-		Input:                input.NewConfig(),
-		Buffer:               buffer.NewConfig(),
-		Pipeline:             pipeline.NewConfig(),
-		Output:               output.NewConfig(),
+		Config:               stream.NewConfig(),
 		Manager:              manager.NewConfig(),
 		Logger:               log.NewLoggerConfig(),
 		Metrics:              metricsConf,
@@ -225,74 +217,6 @@ func bootstrap() Config {
 	return config
 }
 
-// createPipeline creates a pipeline based on the supplied configuration file,
-// and return a closable pool of pipeline objects, a channel indicating that all
-// inputs and outputs have seized, or an error.
-func createPipeline(
-	config Config, mgr types.Manager, logger log.Modular, stats metrics.Type,
-) (*util.ClosablePool, *util.ClosablePool, chan struct{}, error) {
-	// Create two pools, this helps manage ordered closure of all pipeline
-	// components. We have a tiered (t1) and an non-tiered (t2) pool. If the
-	// tiered pool cannot close within our allotted time period then we try
-	// closing the second non-tiered pool. If the second pool also fails then we
-	// exit the service ungracefully.
-	poolt1, poolt2 := util.NewClosablePool(), util.NewClosablePool()
-
-	// Create our input pipe
-	inputPipe, err := input.New(config.Input, mgr, logger, stats)
-	if err != nil {
-		logger.Errorf("Input error (%s): %v\n", config.Input.Type, err)
-		return nil, nil, nil, err
-	}
-	poolt1.Add(1, inputPipe)
-	poolt2.Add(0, inputPipe)
-
-	// Create a buffer
-	buf, err := buffer.New(config.Buffer, logger, stats)
-	if err != nil {
-		logger.Errorf("Buffer error (%s): %v\n", config.Buffer.Type, err)
-		return nil, nil, nil, err
-	}
-	poolt1.Add(2, buf)
-	poolt2.Add(0, buf)
-
-	// Create pipeline pool
-	pipe, err := pipeline.New(config.Pipeline, mgr, logger, stats)
-	if err != nil {
-		logger.Errorf("Pipeline error: %v\n", err)
-		return nil, nil, nil, err
-	}
-	poolt1.Add(3, pipe)
-	poolt2.Add(0, pipe)
-
-	// Create our output pipe
-	outputPipe, err := output.New(config.Output, mgr, logger, stats)
-	if err != nil {
-		logger.Errorf("Output error (%s): %v\n", config.Output.Type, err)
-		return nil, nil, nil, err
-	}
-	poolt1.Add(10, outputPipe)
-	poolt2.Add(0, outputPipe)
-
-	outputPipe.StartReceiving(pipe.TransactionChan())
-	pipe.StartReceiving(buf.TransactionChan())
-	buf.StartReceiving(inputPipe.TransactionChan())
-
-	closeChan := make(chan struct{})
-
-	// If our outputs close down then we should shut down the service
-	go func() {
-		for {
-			if err := outputPipe.WaitForClose(time.Second * 60); err == nil {
-				closeChan <- struct{}{}
-				return
-			}
-		}
-	}()
-
-	return poolt1, poolt2, closeChan, nil
-}
-
 func main() {
 	// Bootstrap by reading cmd flags and configuration file.
 	config := bootstrap()
@@ -331,8 +255,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create data pipelines.
-	poolTiered, poolNonTiered, outputsClosedChan, err := createPipeline(config, manager, logger, stats)
+	// Create data streams.
+	dataStreamClosedChan := make(chan struct{})
+	dataStream, err := stream.New(
+		config.Config,
+		stream.OptSetLogger(logger),
+		stream.OptSetStats(stats),
+		stream.OptSetManager(manager),
+		stream.OptOnClose(func() {
+			close(dataStreamClosedChan)
+		}),
+	)
 	if err != nil {
 		logger.Errorf("Service closing due to: %v\n", err)
 		os.Exit(1)
@@ -352,7 +285,7 @@ func main() {
 		close(httpServerClosedChan)
 	}()
 
-	// Defer ordered pool clean up.
+	// Defer clean up.
 	defer func() {
 		tout := time.Millisecond * time.Duration(config.SystemCloseTimeoutMS)
 
@@ -375,22 +308,8 @@ func main() {
 			os.Exit(1)
 		}()
 
-		if err := poolTiered.Close(tout / 2); err != nil {
-			logger.Warnln(
-				"Service failed to close using ordered tiers, you may receive a duplicate " +
-					"message on the next service start.",
-			)
-			if err = poolNonTiered.Close(tout / 2); err != nil {
-				logger.Warnln(
-					"Service failed to close cleanly within allocated time. Exiting forcefully.",
-				)
-
-				dumpBuf := bytes.NewBuffer(nil)
-				pprof.Lookup("goroutine").WriteTo(dumpBuf, 1)
-
-				logger.Debugln(dumpBuf.String())
-				os.Exit(1)
-			}
+		if err := dataStream.Stop(tout); err != nil {
+			os.Exit(1)
 		}
 	}()
 
@@ -401,7 +320,7 @@ func main() {
 	select {
 	case <-sigChan:
 		logger.Infoln("Received SIGTERM, the service is closing.")
-	case <-outputsClosedChan:
+	case <-dataStreamClosedChan:
 		logger.Infoln("Pipeline has terminated. Shutting down the service.")
 	case <-httpServerClosedChan:
 		logger.Infoln("HTTP Server has terminated. Shutting down the service.")

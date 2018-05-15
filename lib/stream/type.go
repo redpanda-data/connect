@@ -1,0 +1,350 @@
+// Copyright (c) 2018 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package stream
+
+import (
+	"bytes"
+	"os"
+	"runtime/pprof"
+	"time"
+
+	"github.com/Jeffail/benthos/lib/buffer"
+	"github.com/Jeffail/benthos/lib/input"
+	"github.com/Jeffail/benthos/lib/output"
+	"github.com/Jeffail/benthos/lib/pipeline"
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/service/metrics"
+)
+
+//------------------------------------------------------------------------------
+
+// Type creates and manages the lifetime of a Benthos stream.
+type Type struct {
+	conf Config
+
+	inputLayer    input.Type
+	bufferLayer   buffer.Type
+	pipelineLayer pipeline.Type
+	outputLayer   output.Type
+
+	complementaryInputPipes  []pipeline.ConstructorFunc
+	complementaryProcs       []pipeline.ProcConstructorFunc
+	complementaryOutputPipes []pipeline.ConstructorFunc
+
+	manager types.Manager
+	stats   metrics.Type
+	logger  log.Modular
+
+	onClose func()
+}
+
+// New creates a new stream.Type.
+func New(conf Config, opts ...func(*Type)) (*Type, error) {
+	t := &Type{
+		conf:    conf,
+		stats:   metrics.DudType{},
+		logger:  log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		manager: types.DudMgr{},
+		onClose: func() {},
+	}
+	for _, opt := range opts {
+		opt(t)
+	}
+	if err := t.start(); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+//------------------------------------------------------------------------------
+
+// OptAddInputPipelines adds additional pipelines that will be constructed for
+// each input of the Benthos stream.
+func OptAddInputPipelines(pipes ...pipeline.ConstructorFunc) func(*Type) {
+	return func(t *Type) {
+		t.complementaryInputPipes = append(t.complementaryInputPipes, pipes...)
+	}
+}
+
+// OptAddProcessors adds additional processors that will be constructed for each
+// logical thread of the processing pipeline layer of the Benthos stream.
+func OptAddProcessors(procs ...pipeline.ProcConstructorFunc) func(*Type) {
+	return func(t *Type) {
+		t.complementaryProcs = append(t.complementaryProcs, procs...)
+	}
+}
+
+// OptAddOutputPipelines adds additional pipelines that will be constructed for
+// each output of the Benthos stream.
+func OptAddOutputPipelines(pipes ...pipeline.ConstructorFunc) func(*Type) {
+	return func(t *Type) {
+		t.complementaryOutputPipes = append(t.complementaryOutputPipes, pipes...)
+	}
+}
+
+// OptSetStats sets the metrics aggregator to be used by all components of the
+// stream.
+func OptSetStats(stats metrics.Type) func(*Type) {
+	return func(t *Type) {
+		t.stats = stats
+	}
+}
+
+// OptSetLogger sets the logging output to be used by all components of the
+// stream.
+func OptSetLogger(log log.Modular) func(*Type) {
+	return func(t *Type) {
+		t.logger = log
+	}
+}
+
+// OptSetManager sets the service manager to be used by all components of the
+// stream.
+func OptSetManager(mgr types.Manager) func(*Type) {
+	return func(t *Type) {
+		t.manager = mgr
+	}
+}
+
+// OptOnClose sets a closure to be called when the stream closes.
+func OptOnClose(onClose func()) func(*Type) {
+	return func(t *Type) {
+		t.onClose = onClose
+	}
+}
+
+//------------------------------------------------------------------------------
+
+func (t *Type) start() (err error) {
+	// Constructors
+	if t.inputLayer, err = input.New(
+		t.conf.Input, t.manager, t.logger, t.stats, t.complementaryInputPipes...,
+	); err != nil {
+		return
+	}
+	if t.bufferLayer, err = buffer.New(
+		t.conf.Buffer, t.logger, t.stats,
+	); err != nil {
+		return
+	}
+	if t.pipelineLayer, err = pipeline.New(
+		t.conf.Pipeline, t.manager, t.logger, t.stats, t.complementaryProcs...,
+	); err != nil {
+		return
+	}
+	if t.outputLayer, err = output.New(
+		t.conf.Output, t.manager, t.logger, t.stats, t.complementaryOutputPipes...,
+	); err != nil {
+		return
+	}
+
+	// Kick off stream
+	if err = t.bufferLayer.StartReceiving(t.inputLayer.TransactionChan()); err != nil {
+		return
+	}
+	if err = t.pipelineLayer.StartReceiving(t.bufferLayer.TransactionChan()); err != nil {
+		return
+	}
+	if err = t.outputLayer.StartReceiving(t.pipelineLayer.TransactionChan()); err != nil {
+		return
+	}
+
+	go func(out output.Type) {
+		for {
+			if err := out.WaitForClose(time.Second); err == nil {
+				t.onClose()
+				return
+			}
+		}
+	}(t.outputLayer)
+
+	return nil
+}
+
+// stopGracefully attempts to close the stream in the most graceful way by only
+// closing the input layer and waiting for all other layers to terminate by
+// proxy. This should guarantee that all in-flight and buffered data is resolved
+// before shutting down.
+func (t *Type) stopGracefully(timeout time.Duration) (err error) {
+	t.inputLayer.CloseAsync()
+	started := time.Now()
+	if err = t.inputLayer.WaitForClose(timeout); err != nil {
+		return
+	}
+
+	remaining := timeout - time.Since(started)
+	if remaining < 0 {
+		return types.ErrTimeout
+	}
+	if err = t.bufferLayer.WaitForClose(remaining); err != nil {
+		return
+	}
+
+	remaining = timeout - time.Since(started)
+	if remaining < 0 {
+		return types.ErrTimeout
+	}
+	if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
+		return
+	}
+
+	remaining = timeout - time.Since(started)
+	if remaining < 0 {
+		return types.ErrTimeout
+	}
+	if err = t.outputLayer.WaitForClose(remaining); err != nil {
+		return
+	}
+
+	return nil
+}
+
+// stopOrdered attempts to close all components of the stream in the order of
+// positions within the stream, this allows data to flush all the way through
+// the pipeline under certain circumstances but is less graceful than
+// stopGracefully, which should be attempted first.
+func (t *Type) stopOrdered(timeout time.Duration) (err error) {
+	t.inputLayer.CloseAsync()
+	started := time.Now()
+	if err = t.inputLayer.WaitForClose(timeout); err != nil {
+		return
+	}
+
+	t.bufferLayer.CloseAsync()
+	remaining := timeout - time.Since(started)
+	if remaining < 0 {
+		return types.ErrTimeout
+	}
+	if err = t.bufferLayer.WaitForClose(remaining); err != nil {
+		return
+	}
+
+	t.pipelineLayer.CloseAsync()
+	remaining = timeout - time.Since(started)
+	if remaining < 0 {
+		return types.ErrTimeout
+	}
+	if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
+		return
+	}
+
+	t.outputLayer.CloseAsync()
+	remaining = timeout - time.Since(started)
+	if remaining < 0 {
+		return types.ErrTimeout
+	}
+	if err = t.outputLayer.WaitForClose(remaining); err != nil {
+		return
+	}
+
+	return nil
+}
+
+// stopUnorderd attempts to close all components in parallel without allowing
+// the stream to gracefully wind down in the order of component layers. This
+// should only be attempted if both stopGracefully and stopOrdered failed.
+func (t *Type) stopUnordered(timeout time.Duration) (err error) {
+	t.inputLayer.CloseAsync()
+	t.bufferLayer.CloseAsync()
+	t.pipelineLayer.CloseAsync()
+	t.outputLayer.CloseAsync()
+
+	started := time.Now()
+	if err = t.inputLayer.WaitForClose(timeout); err != nil {
+		return
+	}
+
+	remaining := timeout - time.Since(started)
+	if remaining < 0 {
+		return types.ErrTimeout
+	}
+	if err = t.bufferLayer.WaitForClose(remaining); err != nil {
+		return
+	}
+
+	remaining = timeout - time.Since(started)
+	if remaining < 0 {
+		return types.ErrTimeout
+	}
+	if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
+		return
+	}
+
+	remaining = timeout - time.Since(started)
+	if remaining < 0 {
+		return types.ErrTimeout
+	}
+	if err = t.outputLayer.WaitForClose(remaining); err != nil {
+		return
+	}
+
+	return nil
+}
+
+// Stop attempts to close the stream within the specified timeout period.
+// Initially the attempt is graceful, but as the timeout draws close the attempt
+// becomes progressively less graceful.
+func (t *Type) Stop(timeout time.Duration) error {
+	tOutUnordered := timeout / 4
+	tOutOrdered := timeout/2 - tOutUnordered
+	tOutGraceful := timeout - tOutOrdered - tOutUnordered
+
+	err := t.stopGracefully(tOutGraceful)
+	if err == nil {
+		return nil
+	}
+	if err == types.ErrTimeout {
+		t.logger.Infoln("Failed to stop stream gracefully within target time.")
+	} else {
+		t.logger.Errorf("Encountered error whilst shutting down: %v\n", err)
+	}
+
+	err = t.stopOrdered(tOutOrdered)
+	if err == nil {
+		return nil
+	}
+	if err == types.ErrTimeout {
+		t.logger.Warnln("Failed to stop stream following order within target time.")
+		t.logger.Warnln("This could result in duplicate data on your next run.")
+	} else {
+		t.logger.Errorf("Encountered error whilst shutting down: %v\n", err)
+	}
+
+	err = t.stopOrdered(tOutOrdered)
+	if err == nil {
+		return nil
+	}
+	if err == types.ErrTimeout {
+		t.logger.Errorln("Failed to stop stream within target time.")
+
+		dumpBuf := bytes.NewBuffer(nil)
+		pprof.Lookup("goroutine").WriteTo(dumpBuf, 1)
+
+		t.logger.Debugln(dumpBuf.String())
+	} else {
+		t.logger.Errorf("Encountered error whilst shutting down: %v\n", err)
+	}
+
+	return err
+}
+
+//------------------------------------------------------------------------------
