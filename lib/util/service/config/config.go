@@ -22,7 +22,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 
@@ -48,12 +47,10 @@ func Read(path string, replaceEnvs bool, config interface{}) error {
 		if err = json.Unmarshal(configBytes, config); err != nil {
 			return err
 		}
-	} else if ".yml" == ext || ".yaml" == ext {
+	} else { // if ".yml" == ext || ".yaml" == ext {
 		if err = yaml.Unmarshal(configBytes, config); err != nil {
 			return err
 		}
-	} else {
-		return fmt.Errorf("config file extension not recognised: %v", path)
 	}
 	return nil
 }
