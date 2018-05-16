@@ -22,6 +22,7 @@ package cache
 
 import (
 	"strings"
+	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
 
@@ -45,17 +46,21 @@ multiple cache types to share a memcached cluster under different namespaces.`,
 
 // MemcachedConfig is a config struct for a memcached connection.
 type MemcachedConfig struct {
-	Addresses []string `json:"addresses" yaml:"addresses"`
-	Prefix    string   `json:"prefix" yaml:"prefix"`
-	TTL       int32    `json:"ttl" yaml:"ttl"`
+	Addresses     []string `json:"addresses" yaml:"addresses"`
+	Prefix        string   `json:"prefix" yaml:"prefix"`
+	TTL           int32    `json:"ttl" yaml:"ttl"`
+	Retries       int      `json:"retries" yaml:"retries"`
+	RetryPeriodMS int      `json:"retry_period_ms" yaml:"retry_period_ms"`
 }
 
 // NewMemcachedConfig returns a MemcachedConfig with default values.
 func NewMemcachedConfig() MemcachedConfig {
 	return MemcachedConfig{
-		Addresses: []string{"localhost:11211"},
-		Prefix:    "",
-		TTL:       300,
+		Addresses:     []string{"localhost:11211"},
+		Prefix:        "",
+		TTL:           300,
+		Retries:       3,
+		RetryPeriodMS: 500,
 	}
 }
 
@@ -67,7 +72,8 @@ type Memcached struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mc *memcache.Client
+	mc          *memcache.Client
+	retryPeriod time.Duration
 }
 
 // NewMemcached returns a Memcached processor.
@@ -87,7 +93,8 @@ func NewMemcached(
 		log:   log.NewModule(".cache.memcached"),
 		stats: stats,
 
-		mc: memcache.New(addresses...),
+		retryPeriod: time.Duration(conf.Memcached.RetryPeriodMS) * time.Millisecond,
+		mc:          memcache.New(addresses...),
 	}, nil
 }
 
@@ -106,11 +113,18 @@ func (m *Memcached) getItemFor(key string, value []byte) *memcache.Item {
 // if the key does not exist or if the operation failed.
 func (m *Memcached) Get(key string) ([]byte, error) {
 	m.stats.Incr("cache.memcached.get.count", 1)
+
 	item, err := m.mc.Get(m.conf.Memcached.Prefix + key)
+	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
+		<-time.After(m.retryPeriod)
+		m.stats.Incr("cache.memcached.get.retry", 1)
+		item, err = m.mc.Get(m.conf.Memcached.Prefix + key)
+	}
 	if err != nil {
 		m.stats.Incr("cache.memcached.get.failed.error", 1)
 		return nil, err
 	}
+
 	m.stats.Incr("cache.memcached.get.success", 1)
 	return item.Value, err
 }
@@ -118,12 +132,19 @@ func (m *Memcached) Get(key string) ([]byte, error) {
 // Set attempts to set the value of a key.
 func (m *Memcached) Set(key string, value []byte) error {
 	m.stats.Incr("cache.memcached.set.count", 1)
+
 	err := m.mc.Set(m.getItemFor(key, value))
+	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
+		<-time.After(m.retryPeriod)
+		m.stats.Incr("cache.memcached.set.retry", 1)
+		err = m.mc.Set(m.getItemFor(key, value))
+	}
 	if err != nil {
 		m.stats.Incr("cache.memcached.set.failed.error", 1)
 	} else {
 		m.stats.Incr("cache.memcached.set.success", 1)
 	}
+
 	return err
 }
 
@@ -131,10 +152,19 @@ func (m *Memcached) Set(key string, value []byte) error {
 // and returns an error if the key already exists or if the operation fails.
 func (m *Memcached) Add(key string, value []byte) error {
 	m.stats.Incr("cache.memcached.add.count", 1)
+
 	err := m.mc.Add(m.getItemFor(key, value))
 	if memcache.ErrNotStored == err {
 		m.stats.Incr("cache.memcached.add.failed.duplicate", 1)
 		return types.ErrKeyAlreadyExists
+	}
+	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
+		<-time.After(m.retryPeriod)
+		m.stats.Incr("cache.memcached.add.retry", 1)
+		if err := m.mc.Add(m.getItemFor(key, value)); memcache.ErrNotStored == err {
+			m.stats.Incr("cache.memcached.add.failed.duplicate", 1)
+			return types.ErrKeyAlreadyExists
+		}
 	}
 	if err != nil {
 		m.stats.Incr("cache.memcached.add.failed.error", 1)
@@ -147,9 +177,17 @@ func (m *Memcached) Add(key string, value []byte) error {
 // Delete attempts to remove a key.
 func (m *Memcached) Delete(key string) error {
 	m.stats.Incr("cache.memcached.delete.count", 1)
+
 	err := m.mc.Delete(m.conf.Memcached.Prefix + key)
 	if err == memcache.ErrCacheMiss {
 		err = nil
+	}
+	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
+		<-time.After(m.retryPeriod)
+		m.stats.Incr("cache.memcached.delete.retry", 1)
+		if err = m.mc.Delete(m.conf.Memcached.Prefix + key); err == memcache.ErrCacheMiss {
+			err = nil
+		}
 	}
 	if err != nil {
 		m.stats.Incr("cache.memcached.delete.failed.error", 1)
@@ -159,4 +197,4 @@ func (m *Memcached) Delete(key string) error {
 	return err
 }
 
-//------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
