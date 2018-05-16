@@ -22,7 +22,9 @@ package manager
 
 import (
 	"errors"
+	"net/http"
 	"os"
+	"path"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -38,14 +40,69 @@ import (
 
 // streamWrapper tracks a stream along with information regarding its internals.
 type streamWrapper struct {
-	strm      *stream.Type
-	config    stream.Config
-	running   uint32
-	createdAt time.Time
+	strm         *stream.Type
+	config       stream.Config
+	createdAt    time.Time
+	stoppedAfter int64
 }
 
-func (s *streamWrapper) Running() bool {
-	return atomic.LoadUint32(&s.running) == 1
+func newStreamWrapper(conf stream.Config) *streamWrapper {
+	return &streamWrapper{
+		config:    conf,
+		createdAt: time.Now(),
+	}
+}
+
+func (s *streamWrapper) IsRunning() bool {
+	return atomic.LoadInt64(&s.stoppedAfter) == 0
+}
+
+func (s *streamWrapper) Uptime() time.Duration {
+	if stoppedAfter := atomic.LoadInt64(&s.stoppedAfter); stoppedAfter > 0 {
+		return time.Duration(stoppedAfter)
+	}
+	return time.Since(s.createdAt)
+}
+
+func (s *streamWrapper) Config() stream.Config {
+	return s.config
+}
+
+func (s *streamWrapper) SetClosed() {
+	atomic.SwapInt64(&s.stoppedAfter, int64(time.Since(s.createdAt)))
+}
+
+func (s *streamWrapper) SetStream(strm *stream.Type) {
+	s.strm = strm
+}
+
+//------------------------------------------------------------------------------
+
+type nsMgr struct {
+	ns  string
+	mgr types.Manager
+}
+
+func namespacedMgr(ns string, mgr types.Manager) *nsMgr {
+	return &nsMgr{
+		ns:  ns,
+		mgr: mgr,
+	}
+}
+
+// RegisterEndpoint registers a server wide HTTP endpoint.
+func (n *nsMgr) RegisterEndpoint(p, desc string, h http.HandlerFunc) {
+	n.mgr.RegisterEndpoint(path.Join(n.ns, p), desc, h)
+}
+
+// GetCache attempts to find a service wide cache by its name.
+func (n *nsMgr) GetCache(name string) (types.Cache, error) {
+	return n.mgr.GetCache(name)
+}
+
+// GetCondition attempts to find a service wide condition by its name.
+func (n *nsMgr) GetCondition(name string) (types.Condition, error) {
+	return n.mgr.GetCondition(name)
 }
 
 //------------------------------------------------------------------------------
@@ -122,24 +179,21 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		return ErrStreamExists
 	}
 
-	wrapper := &streamWrapper{
-		running:   1,
-		config:    conf,
-		createdAt: time.Now(),
-	}
-
-	var err error
-	if wrapper.strm, err = stream.New(
+	wrapper := newStreamWrapper(conf)
+	strm, err := stream.New(
 		conf,
 		stream.OptSetLogger(m.logger.NewModule("."+id)),
 		stream.OptSetStats(metrics.Namespaced(m.stats, id)),
-		stream.OptSetManager(m.manager),
+		stream.OptSetManager(namespacedMgr(id, m.manager)),
 		stream.OptOnClose(func() {
-			atomic.StoreUint32(&wrapper.running, 0)
+			wrapper.SetClosed()
 		}),
-	); err != nil {
+	)
+	if err != nil {
 		return err
 	}
+
+	wrapper.SetStream(strm)
 
 	m.streams[id] = wrapper
 	return nil
@@ -165,9 +219,9 @@ func (m *Type) Read(id string) (StreamStatus, error) {
 		return status, ErrStreamDoesNotExist
 	}
 
-	status.Active = wrapper.Running()
-	status.Config = wrapper.config
-	status.Uptime = time.Since(wrapper.createdAt)
+	status.Active = wrapper.IsRunning()
+	status.Config = wrapper.Config()
+	status.Uptime = wrapper.Uptime()
 
 	return status, nil
 }
