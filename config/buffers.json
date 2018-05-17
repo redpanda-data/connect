@@ -16,7 +16,7 @@
 		"type": "none",
 		"badger": {
 			"directory": "",
-			"sync_writes": true,
+			"sync_writes": false,
 			"gc_interval_ms": 1000
 		},
 		"memory": {

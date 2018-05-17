@@ -48,7 +48,7 @@ type BadgerConfig struct {
 func NewBadgerConfig() BadgerConfig {
 	return BadgerConfig{
 		Directory:    "",
-		SyncWrites:   true,
+		SyncWrites:   false,
 		GCIntervalMS: 1000,
 	}
 }
