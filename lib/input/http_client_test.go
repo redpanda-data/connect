@@ -101,6 +101,122 @@ func TestHTTPClientGET(t *testing.T) {
 	}
 }
 
+func TestHTTPClientGETError(t *testing.T) {
+	t.Parallel()
+
+	requestChan := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "nah", http.StatusBadGateway)
+		select {
+		case requestChan <- struct{}{}:
+		default:
+		}
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf.HTTPClient.RetryMS = 1
+
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	for i := 0; i < 3; i++ {
+		select {
+		case <-requestChan:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}
+
+	h.CloseAsync()
+	if err := h.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHTTPClientGETNotExist(t *testing.T) {
+	t.Parallel()
+
+	conf := NewConfig()
+	conf.HTTPClient.URL = "jgljksdfhjgkldfjglkf"
+	conf.HTTPClient.RetryMS = 1
+
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	<-time.After(time.Millisecond * 500)
+
+	h.CloseAsync()
+	if err := h.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHTTPClientGETStreamNotExist(t *testing.T) {
+	t.Parallel()
+
+	conf := NewConfig()
+	conf.HTTPClient.URL = "jgljksdfhjgkldfjglkf"
+	conf.HTTPClient.RetryMS = 1
+	conf.HTTPClient.Stream.Enabled = true
+
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	<-time.After(time.Millisecond * 500)
+
+	h.CloseAsync()
+	if err := h.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHTTPClientGETStreamError(t *testing.T) {
+	t.Parallel()
+
+	requestChan := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "nah", http.StatusBadGateway)
+		select {
+		case requestChan <- struct{}{}:
+		default:
+		}
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf.HTTPClient.RetryMS = 1
+	conf.HTTPClient.Stream.Enabled = true
+
+	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	select {
+	case <-requestChan:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	h.CloseAsync()
+	if err := h.WaitForClose(time.Second * 2); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestHTTPClientPOST(t *testing.T) {
 	var reqCount uint32
 	inputs := []string{

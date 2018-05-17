@@ -55,7 +55,7 @@ pipeline:
       hash: none
       parts:
       - 0
-      json_path: ""
+      json_paths: []
       drop_on_err: true
     hash_sample:
       retain_min: 0

@@ -43,10 +43,12 @@ Dedupes messages by caching selected (and optionally hashed) parts, dropping
 messages that are already cached. The hash type can be chosen from: none or
 xxhash (more will come soon).
 
-It's possible to extract JSON field data from message parts by setting the value
-of ` + "`json_path`" + `, which will become the value that is deduplicated
-against. Please note that this extraction will apply to all message parts
-specified.
+It's possible to dedupe based on JSON field data from message parts by setting
+the value of ` + "`json_paths`" + `, which is an array of JSON dot paths that
+will be extracted from the message payload and concatinated. The result will
+then be used to deduplicate. If the result is empty (i.e. none of the target
+paths were found in the data) then this is considered an error, and the message
+will be dropped or propagated based on the value of ` + "`drop_on_err`." + `
 
 For example, if each message is a single part containing a JSON blob of the
 following format:
@@ -66,7 +68,8 @@ type: dedupe
 dedupe:
   cache: foo_cache
   parts: [0]
-  json_path: id
+  json_paths:
+    - id
   hash: none
 ` + "```" + `
 
@@ -79,11 +82,11 @@ Caches should be configured as a resource, for more information check out the
 
 // DedupeConfig contains any configuration for the Dedupe processor.
 type DedupeConfig struct {
-	Cache          string `json:"cache" yaml:"cache"`
-	HashType       string `json:"hash" yaml:"hash"`
-	Parts          []int  `json:"parts" yaml:"parts"` // message parts to hash
-	JSONPath       string `json:"json_path" yaml:"json_path"`
-	DropOnCacheErr bool   `json:"drop_on_err" yaml:"drop_on_err"`
+	Cache          string   `json:"cache" yaml:"cache"`
+	HashType       string   `json:"hash" yaml:"hash"`
+	Parts          []int    `json:"parts" yaml:"parts"` // message parts to hash
+	JSONPaths      []string `json:"json_paths" yaml:"json_paths"`
+	DropOnCacheErr bool     `json:"drop_on_err" yaml:"drop_on_err"`
 }
 
 // NewDedupeConfig returns a DedupeConfig with default values.
@@ -92,7 +95,7 @@ func NewDedupeConfig() DedupeConfig {
 		Cache:          "",
 		HashType:       "none",
 		Parts:          []int{0}, // only consider the 1st part
-		JSONPath:       "",
+		JSONPaths:      []string{},
 		DropOnCacheErr: true,
 	}
 }
@@ -149,7 +152,7 @@ type Dedupe struct {
 
 	cache      types.Cache
 	hasherFunc hasherFunc
-	jPath      string
+	jPaths     []string
 }
 
 // NewDedupe returns a Dedupe processor.
@@ -171,7 +174,7 @@ func NewDedupe(
 
 		cache:      c,
 		hasherFunc: hFunc,
-		jPath:      conf.Dedupe.JSONPath,
+		jPaths:     conf.Dedupe.JSONPaths,
 	}, nil
 }
 
@@ -180,67 +183,71 @@ func NewDedupe(
 // ProcessMessage checks each message against a set of bounds.
 func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.stats.Incr("processor.dedupe.count", 1)
+
+	extractedHash := false
 	hasher := d.hasherFunc()
 
-	lParts := msg.Len()
 	for _, index := range d.conf.Dedupe.Parts {
-		if index < 0 {
-			// Negative indexes count backwards from the end.
-			index = lParts + index
-		}
-
-		// Check boundary of part index.
-		if index < 0 || index >= lParts {
-			d.stats.Incr("processor.dedupe.dropped_part_out_of_bounds", 1)
-			d.stats.Incr("processor.dedupe.dropped", 1)
-			return nil, types.NewSimpleResponse(nil)
-		}
-
-		if len(d.jPath) > 0 {
-			// Attempt to add JSON field from part to hash.
+		if len(d.jPaths) > 0 {
+			// Attempt to add JSON fields from part to hash.
 			jPart, err := msg.GetJSON(index)
 			if err != nil {
 				d.stats.Incr("processor.dedupe.error.json_parse", 1)
 				d.stats.Incr("processor.dedupe.dropped", 1)
 				d.log.Debugf("JSON Parse error: %v\n", err)
-				return nil, types.NewSimpleResponse(nil)
+				continue
 			}
+
 			var gPart *gabs.Container
 			if gPart, err = gabs.Consume(jPart); err != nil {
 				d.stats.Incr("processor.dedupe.error.json_parse", 1)
 				d.stats.Incr("processor.dedupe.dropped", 1)
 				d.log.Debugf("JSON Parse error: %v\n", err)
-				return nil, types.NewSimpleResponse(nil)
+				continue
 			}
 
-			var hashBytes []byte
+			for _, jPath := range d.jPaths {
+				gTarget := gPart.Path(jPath)
+				if gTarget.Data() == nil {
+					continue
+				}
 
-			gTarget := gPart.Path(d.jPath)
-			switch t := gTarget.Data().(type) {
-			case string:
-				hashBytes = []byte(t)
-			default:
-				hashBytes = gTarget.Bytes()
-			}
+				var hashBytes []byte
+				switch t := gTarget.Data().(type) {
+				case string:
+					hashBytes = []byte(t)
+				default:
+					hashBytes = gTarget.Bytes()
+				}
 
-			if _, err := hasher.Write(hashBytes); nil != err {
-				d.stats.Incr("processor.dedupe.error.hash", 1)
-				d.stats.Incr("processor.dedupe.dropped", 1)
-				d.log.Debugf("Hash error: %v\n", err)
-				return nil, types.NewSimpleResponse(nil)
+				if _, err := hasher.Write(hashBytes); nil != err {
+					d.stats.Incr("processor.dedupe.error.hash", 1)
+					d.stats.Incr("processor.dedupe.dropped", 1)
+					d.log.Debugf("Hash error: %v\n", err)
+				} else {
+					extractedHash = true
+				}
 			}
 		} else {
 			// Attempt to add whole part to hash.
-			if _, err := hasher.Write(msg.Get(index)); nil != err {
-				d.stats.Incr("processor.dedupe.error.hash", 1)
-				d.stats.Incr("processor.dedupe.dropped", 1)
-				d.log.Debugf("Hash error: %v\n", err)
-				return nil, types.NewSimpleResponse(nil)
+			if partBytes := msg.Get(index); partBytes != nil {
+				if _, err := hasher.Write(msg.Get(index)); nil != err {
+					d.stats.Incr("processor.dedupe.error.hash", 1)
+					d.stats.Incr("processor.dedupe.dropped", 1)
+					d.log.Debugf("Hash error: %v\n", err)
+				} else {
+					extractedHash = true
+				}
 			}
 		}
 	}
 
-	if err := d.cache.Add(string(hasher.Bytes()), []byte{'t'}); err != nil {
+	if !extractedHash {
+		if d.conf.Dedupe.DropOnCacheErr {
+			d.stats.Incr("processor.dedupe.dropped", 1)
+			return nil, types.NewSimpleResponse(nil)
+		}
+	} else if err := d.cache.Add(string(hasher.Bytes()), []byte{'t'}); err != nil {
 		if err != types.ErrKeyAlreadyExists {
 			d.stats.Incr("processor.dedupe.error.cache", 1)
 			d.log.Errorf("Cache error: %v\n", err)
