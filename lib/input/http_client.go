@@ -295,9 +295,8 @@ func (h *HTTPClient) doRequest() (*http.Response, error) {
 			h.retryThrottle.Retry()
 		}
 		return nil, err
-	} else {
-		h.retryThrottle.Reset()
 	}
+	h.retryThrottle.Reset()
 
 	return res, nil
 }
