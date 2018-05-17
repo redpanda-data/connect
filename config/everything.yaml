@@ -129,6 +129,7 @@ input:
     max_in_flight: 100
   read_until:
     input: {}
+    restart_input: false
     condition:
       type: content
       and: []

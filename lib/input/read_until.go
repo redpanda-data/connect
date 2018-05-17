@@ -72,6 +72,7 @@ func NewReadUntilConfig() ReadUntilConfig {
 
 type dummyReadUntilConfig struct {
 	Input     interface{}      `json:"input" yaml:"input"`
+	Restart   bool             `json:"restart_input" yaml:"restart_input"`
 	Condition condition.Config `json:"condition" yaml:"condition"`
 }
 
@@ -79,6 +80,7 @@ type dummyReadUntilConfig struct {
 func (r ReadUntilConfig) MarshalJSON() ([]byte, error) {
 	dummy := dummyReadUntilConfig{
 		Input:     r.Input,
+		Restart:   r.Restart,
 		Condition: r.Condition,
 	}
 	if r.Input == nil {
@@ -91,6 +93,7 @@ func (r ReadUntilConfig) MarshalJSON() ([]byte, error) {
 func (r ReadUntilConfig) MarshalYAML() (interface{}, error) {
 	dummy := dummyReadUntilConfig{
 		Input:     r.Input,
+		Restart:   r.Restart,
 		Condition: r.Condition,
 	}
 	if r.Input == nil {

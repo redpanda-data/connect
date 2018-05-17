@@ -1,16 +1,16 @@
 http:
   address: 0.0.0.0:4195
 input:
-  type: nats_stream
-  nats_stream:
-    urls:
-    - nats://nats-streaming:4222
-    cluster_id: test-cluster
-    client_id: benthos_client
-    queue: benthos_queue
-    start_from_oldest: true
-    durable_name: benthos_offset
-    subject: benthos_messages
+  type: read_until
+  read_until:
+    input:
+      type: file
+      file:
+        path: /sample_data.txt
+    restart_input: true
+    condition:
+      type: static
+      static: false
 buffer:
   type: memory
 pipeline:

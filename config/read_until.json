@@ -27,7 +27,8 @@
 				"type": "content",
 				"xor": []
 			},
-			"input": {}
+			"input": {},
+			"restart_input": false
 		},
 		"type": "read_until"
 	},

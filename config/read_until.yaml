@@ -23,6 +23,7 @@ input:
       type: content
       xor: []
     input: {}
+    restart_input: false
   type: read_until
 buffer:
   none: {}

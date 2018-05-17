@@ -9,14 +9,9 @@ services:
     image: jeffail/benthos
     volumes:
       - ./bench_benthos.yaml:/benthos.yaml
+      - ./sample_data.txt:/sample_data.txt
     ports:
       - 4195:4195
-
-  nats-streaming:
-    image: nats-streaming
-    ports:
-      - 4222:4222
-      - 8222:8222
 
   prometheus:
     image: prom/prometheus
