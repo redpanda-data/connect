@@ -69,6 +69,9 @@ baz`)
 	t.Run("ReadUntilInputClose", func(te *testing.T) {
 		testReadUntilInputClose(inconf, te)
 	})
+	t.Run("ReadUntilInputCloseRestart", func(te *testing.T) {
+		testReadUntilInputCloseRestart(inconf, te)
+	})
 }
 
 func testReadUntilBasic(inConf Config, t *testing.T) {
@@ -310,6 +313,60 @@ func testReadUntilInputClose(inConf Config, t *testing.T) {
 		t.Fatal("timed out")
 	}
 
+	if err = in.WaitForClose(time.Second); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testReadUntilInputCloseRestart(inConf Config, t *testing.T) {
+	cond := condition.NewConfig()
+	cond.Type = "static"
+	cond.Static = false
+
+	rConf := NewConfig()
+	rConf.Type = "read_until"
+	rConf.ReadUntil.Input = &inConf
+	rConf.ReadUntil.Condition = cond
+	rConf.ReadUntil.Restart = true
+
+	in, err := New(rConf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expMsgs := []string{
+		"foo",
+		"bar",
+		"baz",
+	}
+
+	// Each loop results in the input being recreated.
+	for i := 0; i < 3; i++ {
+		for _, exp := range expMsgs {
+			var tran types.Transaction
+			var open bool
+			select {
+			case tran, open = <-in.TransactionChan():
+				if !open {
+					t.Fatal("transaction chan closed")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
+
+			if act := string(tran.Payload.Get(0)); exp != act {
+				t.Errorf("Wrong message contents: %v != %v", act, exp)
+			}
+
+			select {
+			case tran.ResponseChan <- types.NewSimpleResponse(nil):
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
+		}
+	}
+
+	in.CloseAsync()
 	if err = in.WaitForClose(time.Second); err != nil {
 		t.Fatal(err)
 	}

@@ -57,6 +57,7 @@
 					"not": {},
 					"or": [],
 					"resource": "",
+					"static": true,
 					"xor": []
 				},
 				"decompress": {
@@ -69,6 +70,7 @@
 					"parts": [
 						0
 					],
+					"json_path": "",
 					"drop_on_err": true
 				},
 				"hash_sample": {

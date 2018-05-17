@@ -22,6 +22,7 @@ package processor
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"os"
@@ -78,6 +79,118 @@ func TestDedupe(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	if err1 != nil {
+		t.Error(err1)
+		return
+	}
+
+	msgIn := types.NewMessage([][]byte{doc1})
+	msgOut, err := proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
+	}
+	if nil == msgOut {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate")
+	}
+
+	msgIn = types.NewMessage([][]byte{doc2})
+	msgOut, err = proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
+	}
+	if nil != msgOut {
+		t.Error("Message 2 told to propagate even if it was expected not to propagate")
+	}
+
+	msgIn = types.NewMessage([][]byte{doc3})
+	msgOut, err = proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
+	}
+	if nil == msgOut {
+		t.Error("Message 3 told not to propagate even if it was expected to propagate")
+	}
+}
+
+func TestDedupeJSONPaths(t *testing.T) {
+	rndText1 := randStringRunes(20)
+	rndText2 := randStringRunes(15)
+	doc1 := []byte(fmt.Sprintf(`{"id":"%s","content":"foo"}`, rndText1))
+	doc2 := []byte(fmt.Sprintf(`{"id":"%s","content":"bar"}`, rndText1)) // duplicate
+	doc3 := []byte(fmt.Sprintf(`{"id":"%s","content":"foo"}`, rndText2))
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	if cacheErr != nil {
+		t.Fatal(cacheErr)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+
+	conf := NewConfig()
+	conf.Dedupe.Cache = "foocache"
+	conf.Dedupe.JSONPath = "id"
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	if err1 != nil {
+		t.Error(err1)
+		return
+	}
+
+	msgIn := types.NewMessage([][]byte{doc1})
+	msgOut, err := proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
+	}
+	if nil == msgOut {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate")
+	}
+
+	msgIn = types.NewMessage([][]byte{doc2})
+	msgOut, err = proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
+	}
+	if nil != msgOut {
+		t.Error("Message 2 told to propagate even if it was expected not to propagate")
+	}
+
+	msgIn = types.NewMessage([][]byte{doc3})
+	msgOut, err = proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
+	}
+	if nil == msgOut {
+		t.Error("Message 3 told not to propagate even if it was expected to propagate")
+	}
+}
+
+func TestDedupeJSONObjPaths(t *testing.T) {
+	rndText1 := randStringRunes(20)
+	rndText2 := randStringRunes(15)
+	doc1 := []byte(fmt.Sprintf(`{"id":{"test":"obj","key":"%s"},"content":"foo"}`, rndText1))
+	doc2 := []byte(fmt.Sprintf(`{"id":{"test":"obj","key":"%s"},"content":"bar"}`, rndText1)) // duplicate
+	doc3 := []byte(fmt.Sprintf(`{"id":{"test":"obj","key":"%s"},"content":"baz"}`, rndText2))
+
+	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	if cacheErr != nil {
+		t.Fatal(cacheErr)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+
+	conf := NewConfig()
+	conf.Dedupe.Cache = "foocache"
+	conf.Dedupe.JSONPath = "id"
 	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
 	if err1 != nil {
 		t.Error(err1)

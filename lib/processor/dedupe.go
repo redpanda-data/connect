@@ -30,6 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
+	"github.com/Jeffail/gabs"
 )
 
 //------------------------------------------------------------------------------
@@ -41,6 +42,33 @@ func init() {
 Dedupes messages by caching selected (and optionally hashed) parts, dropping
 messages that are already cached. The hash type can be chosen from: none or
 xxhash (more will come soon).
+
+It's possible to extract JSON field data from message parts by setting the value
+of ` + "`json_path`" + `, which will become the value that is deduplicated
+against. Please note that this extraction will apply to all message parts
+specified.
+
+For example, if each message is a single part containing a JSON blob of the
+following format:
+
+` + "``` json" + `
+{
+	"id": "3274892374892374",
+	"content": "hello world"
+}
+` + "```" + `
+
+Then you could deduplicate using the raw contents of the 'id' field instead of
+the whole body with the following config:
+
+` + "``` json" + `
+type: dedupe
+dedupe:
+  cache: foo_cache
+  parts: [0]
+  json_path: id
+  hash: none
+` + "```" + `
 
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).`,
@@ -54,6 +82,7 @@ type DedupeConfig struct {
 	Cache          string `json:"cache" yaml:"cache"`
 	HashType       string `json:"hash" yaml:"hash"`
 	Parts          []int  `json:"parts" yaml:"parts"` // message parts to hash
+	JSONPath       string `json:"json_path" yaml:"json_path"`
 	DropOnCacheErr bool   `json:"drop_on_err" yaml:"drop_on_err"`
 }
 
@@ -63,6 +92,7 @@ func NewDedupeConfig() DedupeConfig {
 		Cache:          "",
 		HashType:       "none",
 		Parts:          []int{0}, // only consider the 1st part
+		JSONPath:       "",
 		DropOnCacheErr: true,
 	}
 }
@@ -119,6 +149,7 @@ type Dedupe struct {
 
 	cache      types.Cache
 	hasherFunc hasherFunc
+	jPath      string
 }
 
 // NewDedupe returns a Dedupe processor.
@@ -140,6 +171,7 @@ func NewDedupe(
 
 		cache:      c,
 		hasherFunc: hFunc,
+		jPath:      conf.Dedupe.JSONPath,
 	}, nil
 }
 
@@ -164,12 +196,47 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			return nil, types.NewSimpleResponse(nil)
 		}
 
-		// Attempt to add part to hash.
-		if _, err := hasher.Write(msg.Get(index)); nil != err {
-			d.stats.Incr("processor.dedupe.error.hash", 1)
-			d.stats.Incr("processor.dedupe.dropped", 1)
-			d.log.Debugf("Hash error: %v\n", err)
-			return nil, types.NewSimpleResponse(nil)
+		if len(d.jPath) > 0 {
+			// Attempt to add JSON field from part to hash.
+			jPart, err := msg.GetJSON(index)
+			if err != nil {
+				d.stats.Incr("processor.dedupe.error.json_parse", 1)
+				d.stats.Incr("processor.dedupe.dropped", 1)
+				d.log.Debugf("JSON Parse error: %v\n", err)
+				return nil, types.NewSimpleResponse(nil)
+			}
+			var gPart *gabs.Container
+			if gPart, err = gabs.Consume(jPart); err != nil {
+				d.stats.Incr("processor.dedupe.error.json_parse", 1)
+				d.stats.Incr("processor.dedupe.dropped", 1)
+				d.log.Debugf("JSON Parse error: %v\n", err)
+				return nil, types.NewSimpleResponse(nil)
+			}
+
+			var hashBytes []byte
+
+			gTarget := gPart.Path(d.jPath)
+			switch t := gTarget.Data().(type) {
+			case string:
+				hashBytes = []byte(t)
+			default:
+				hashBytes = gTarget.Bytes()
+			}
+
+			if _, err := hasher.Write(hashBytes); nil != err {
+				d.stats.Incr("processor.dedupe.error.hash", 1)
+				d.stats.Incr("processor.dedupe.dropped", 1)
+				d.log.Debugf("Hash error: %v\n", err)
+				return nil, types.NewSimpleResponse(nil)
+			}
+		} else {
+			// Attempt to add whole part to hash.
+			if _, err := hasher.Write(msg.Get(index)); nil != err {
+				d.stats.Incr("processor.dedupe.error.hash", 1)
+				d.stats.Incr("processor.dedupe.dropped", 1)
+				d.log.Debugf("Hash error: %v\n", err)
+				return nil, types.NewSimpleResponse(nil)
+			}
 		}
 	}
 

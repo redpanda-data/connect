@@ -111,6 +111,33 @@ Dedupes messages by caching selected (and optionally hashed) parts, dropping
 messages that are already cached. The hash type can be chosen from: none or
 xxhash (more will come soon).
 
+It's possible to extract JSON field data from message parts by setting the value
+of `json_path`, which will become the value that is deduplicated
+against. Please note that this extraction will apply to all message parts
+specified.
+
+For example, if each message is a single part containing a JSON blob of the
+following format:
+
+``` json
+{
+	"id": "3274892374892374",
+	"content": "hello world"
+}
+```
+
+Then you could deduplicate using the raw contents of the 'id' field instead of
+the whole body with the following config:
+
+``` json
+type: dedupe
+dedupe:
+  cache: foo_cache
+  parts: [0]
+  json_path: id
+  hash: none
+```
+
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).
 

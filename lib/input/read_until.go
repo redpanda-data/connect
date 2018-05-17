@@ -41,7 +41,12 @@ func init() {
 		description: `
 Reads from an input and tests a condition on each message. When the condition
 returns true the message is sent out and the input is closed. Use this type to
-define inputs where the stream should end once a certain message appears.`,
+define inputs where the stream should end once a certain message appears.
+
+Sometimes inputs close themselves. For example, when the ` + "`file`" + ` input
+type reaches the end of a file it will shut down. By default this type will also
+shut down. If you wish for the input type to be restarted every time it shuts
+down until the condition is met then set ` + "`restart_input` to `true`.",
 	}
 }
 
@@ -50,6 +55,7 @@ define inputs where the stream should end once a certain message appears.`,
 // ReadUntilConfig is configuration values for the ReadUntil input type.
 type ReadUntilConfig struct {
 	Input     *Config          `json:"input" yaml:"input"`
+	Restart   bool             `json:"restart_input" yaml:"restart_input"`
 	Condition condition.Config `json:"condition" yaml:"condition"`
 }
 
@@ -57,6 +63,7 @@ type ReadUntilConfig struct {
 func NewReadUntilConfig() ReadUntilConfig {
 	return ReadUntilConfig{
 		Input:     nil,
+		Restart:   false,
 		Condition: condition.NewConfig(),
 	}
 }
@@ -97,9 +104,14 @@ func (r ReadUntilConfig) MarshalYAML() (interface{}, error) {
 // ReadUntil is an input type that reads from a ReadUntil instance.
 type ReadUntil struct {
 	running int32
+	conf    ReadUntilConfig
 
 	wrapped Type
 	cond    condition.Type
+
+	wrapperMgr   types.Manager
+	wrapperLog   log.Modular
+	wrapperStats metrics.Type
 
 	stats metrics.Type
 	log   log.Modular
@@ -132,7 +144,13 @@ func NewReadUntil(
 	}
 
 	rdr := &ReadUntil{
-		running:      1,
+		running: 1,
+		conf:    conf.ReadUntil,
+
+		wrapperLog:   log,
+		wrapperStats: stats,
+		wrapperMgr:   mgr,
+
 		log:          log.NewModule(".input.read_until"),
 		stats:        stats,
 		wrapped:      wrapped,
@@ -150,9 +168,11 @@ func NewReadUntil(
 
 func (r *ReadUntil) loop() {
 	defer func() {
-		r.wrapped.CloseAsync()
-		err := r.wrapped.WaitForClose(time.Second)
-		for ; err != nil; err = r.wrapped.WaitForClose(time.Second) {
+		if r.wrapped != nil {
+			r.wrapped.CloseAsync()
+			err := r.wrapped.WaitForClose(time.Second)
+			for ; err != nil; err = r.wrapped.WaitForClose(time.Second) {
+			}
 		}
 		r.stats.Decr("input.read_until.running", 1)
 
@@ -162,12 +182,32 @@ func (r *ReadUntil) loop() {
 	r.stats.Incr("input.read_until.running", 1)
 
 	var open bool
+
+runLoop:
 	for atomic.LoadInt32(&r.running) == 1 {
+		if r.wrapped == nil {
+			if r.conf.Restart {
+				var err error
+				if r.wrapped, err = New(
+					*r.conf.Input, r.wrapperMgr, r.wrapperLog, r.wrapperStats,
+				); err != nil {
+					r.stats.Incr("input.read_until.input.restart.error", 1)
+					r.log.Errorf("Failed to create input '%v': %v\n", r.conf.Input.Type, err)
+					return
+				}
+				r.stats.Incr("input.read_until.input.restart.success", 1)
+			} else {
+				return
+			}
+		}
+
 		var tran types.Transaction
 		select {
 		case tran, open = <-r.wrapped.TransactionChan():
 			if !open {
-				return
+				r.stats.Incr("input.read_until.input.closed", 1)
+				r.wrapped = nil
+				continue runLoop
 			}
 		case <-r.closeChan:
 			return

@@ -23,6 +23,7 @@
 				"not": {},
 				"or": [],
 				"resource": "",
+				"static": true,
 				"type": "content",
 				"xor": []
 			},

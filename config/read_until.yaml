@@ -19,6 +19,7 @@ input:
       not: {}
       or: []
       resource: ""
+      static: true
       type: content
       xor: []
     input: {}

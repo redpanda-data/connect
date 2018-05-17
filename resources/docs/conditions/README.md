@@ -102,7 +102,8 @@ duplicate condition configs by using the [resource condition][2].
 5. [`not`](#not)
 6. [`or`](#or)
 7. [`resource`](#resource)
-8. [`xor`](#xor)
+8. [`static`](#static)
+9. [`xor`](#xor)
 
 ## `and`
 
@@ -277,6 +278,10 @@ It is also worth noting that when conditions are used as resources in this way
 they will only be executed once per message, regardless of how many times they
 are referenced (unless the content is modified). Therefore, resource conditions
 can act as a runtime optimisation as well as a config optimisation.
+
+## `static`
+
+Static is a condition that always resolves to the same static boolean value.
 
 ## `xor`
 
