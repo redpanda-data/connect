@@ -1,13 +1,16 @@
 {
-  "/config/json": "Returns the loaded config as JSON.",
-  "/config/yaml": "Returns the loaded config as YAML.",
+  "/debug/config/json": "DEBUG: Returns the loaded config as JSON.",
+  "/debug/config/yaml": "DEBUG: Returns the loaded config as YAML.",
+  "/debug/pprof/profile": "DEBUG: Responds with a pprof-formatted cpu profile.",
+  "/debug/pprof/symbol": "DEBUG: looks up the program counters listed in the request, responding with a table mapping program counters to function names.",
+  "/debug/pprof/trace": "DEBUG: Responds with the execution trace in binary form. Tracing lasts for duration specified in seconds GET parameter, or for 1 second if not specified.",
+  "/debug/stack": "DEBUG: Returns a snapshot of the current Benthos stack trace.",
   "/endpoints": "Returns this map of endpoints.",
   "/get": "Read a single message from Benthos.",
   "/get/stream": "Read a continuous stream of messages from Benthos.",
   "/metrics": "Returns a JSON object of Benthos metrics.",
   "/ping": "Ping Benthos.",
   "/post": "Post a message into Benthos.",
-  "/stack": "Returns a snapshot of the current Benthos stack trace.",
   "/stats": "Returns a JSON object of Benthos metrics.",
   "/version": "Returns the Benthos version."
 }

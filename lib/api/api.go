@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"runtime"
 	"sync"
 	"time"
@@ -134,18 +135,36 @@ func New(
 
 	if t.conf.DebugEndpoints {
 		t.RegisterEndpoint(
-			"/config/json", "Returns the loaded config as JSON.",
+			"/debug/config/json", "DEBUG: Returns the loaded config as JSON.",
 			handlePrintJSONConfig,
 		)
 		t.RegisterEndpoint(
-			"/config/yaml", "Returns the loaded config as YAML.",
+			"/debug/config/yaml", "DEBUG: Returns the loaded config as YAML.",
 			handlePrintYAMLConfig,
 		)
 		t.RegisterEndpoint(
-			"/stack", "Returns a snapshot of the current Benthos stack trace.",
+			"/debug/stack", "DEBUG: Returns a snapshot of the current Benthos stack trace.",
 			handleStackTrace,
 		)
+		t.RegisterEndpoint(
+			"/debug/pprof/profile", "DEBUG: Responds with a pprof-formatted cpu profile.",
+			pprof.Profile,
+		)
+		t.RegisterEndpoint(
+			"/debug/pprof/symbol", "DEBUG: looks up the program counters listed"+
+				" in the request, responding with a table mapping program"+
+				" counters to function names.",
+			pprof.Symbol,
+		)
+		t.RegisterEndpoint(
+			"/debug/pprof/trace",
+			"DEBUG: Responds with the execution trace in binary form."+
+				" Tracing lasts for duration specified in seconds GET"+
+				" parameter, or for 1 second if not specified.",
+			pprof.Trace,
+		)
 	}
+
 	t.RegisterEndpoint("/ping", "Ping Benthos.", handlePing)
 	t.RegisterEndpoint("/version", "Returns the Benthos version.", handleVersion)
 	t.RegisterEndpoint("/endpoints", "Returns this map of endpoints.", handleEndpoints)
