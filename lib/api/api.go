@@ -151,6 +151,18 @@ func New(
 			pprof.Profile,
 		)
 		t.RegisterEndpoint(
+			"/debug/pprof/heap", "DEBUG: Responds with a pprof-formatted heap profile.",
+			pprof.Index,
+		)
+		t.RegisterEndpoint(
+			"/debug/pprof/block", "DEBUG: Responds with a pprof-formatted block profile.",
+			pprof.Index,
+		)
+		t.RegisterEndpoint(
+			"/debug/pprof/mutex", "DEBUG: Responds with a pprof-formatted mutex profile.",
+			pprof.Index,
+		)
+		t.RegisterEndpoint(
 			"/debug/pprof/symbol", "DEBUG: looks up the program counters listed"+
 				" in the request, responding with a table mapping program"+
 				" counters to function names.",

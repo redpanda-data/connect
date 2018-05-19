@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker clean docs test fmt lint install
+.PHONY: all deps rpm docker clean docs test fmt lint install docker-export
 
 BENTHOS_PATH = github.com/Jeffail/benthos
 
@@ -31,13 +31,17 @@ $(PATHINSTBIN)/%: deps
 
 $(APPS): %: $(PATHINSTBIN)/%
 
-$(PATHINSTDOCKER)/benthos.tar:
+$(PATHINSTDOCKER)/benthos.tar: docker
 	@mkdir -p $(dir $@)
-	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VERSION)
-	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:latest
 	@docker save jeffail/benthos:$(VERSION) > $@
 
-docker: $(PATHINSTDOCKER)/benthos.tar
+docker-export: $(PATHINSTDOCKER)/benthos.tar
+
+docker:
+	@docker rmi jeffail/benthos:$(VERSION); true
+	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VERSION)
+	@docker rmi jeffail/benthos:latest; true
+	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:latest
 
 deps:
 	@go get github.com/golang/dep/cmd/dep

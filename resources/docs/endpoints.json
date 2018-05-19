@@ -1,6 +1,9 @@
 {
   "/debug/config/json": "DEBUG: Returns the loaded config as JSON.",
   "/debug/config/yaml": "DEBUG: Returns the loaded config as YAML.",
+  "/debug/pprof/block": "DEBUG: Responds with a pprof-formatted block profile.",
+  "/debug/pprof/heap": "DEBUG: Responds with a pprof-formatted heap profile.",
+  "/debug/pprof/mutex": "DEBUG: Responds with a pprof-formatted mutex profile.",
   "/debug/pprof/profile": "DEBUG: Responds with a pprof-formatted cpu profile.",
   "/debug/pprof/symbol": "DEBUG: looks up the program counters listed in the request, responding with a table mapping program counters to function names.",
   "/debug/pprof/trace": "DEBUG: Responds with the execution trace in binary form. Tracing lasts for duration specified in seconds GET parameter, or for 1 second if not specified.",

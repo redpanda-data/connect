@@ -1,5 +1,6 @@
 http:
   address: 0.0.0.0:4195
+  debug_endpoints: true
 input:
   type: read_until
   read_until:

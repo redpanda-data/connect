@@ -112,9 +112,10 @@ func (n *nsMgr) GetCondition(name string) (types.Condition, error) {
 type Type struct {
 	streams map[string]*streamWrapper
 
-	manager types.Manager
-	stats   metrics.Type
-	logger  log.Modular
+	manager    types.Manager
+	stats      metrics.Type
+	logger     log.Modular
+	apiTimeout time.Duration
 
 	lock sync.Mutex
 }
@@ -122,14 +123,16 @@ type Type struct {
 // New creates a new stream manager.Type.
 func New(opts ...func(*Type)) *Type {
 	t := &Type{
-		streams: map[string]*streamWrapper{},
-		manager: types.DudMgr{},
-		stats:   metrics.DudType{},
-		logger:  log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		streams:    map[string]*streamWrapper{},
+		manager:    types.DudMgr{},
+		stats:      metrics.DudType{},
+		apiTimeout: time.Second * 5,
+		logger:     log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
 	}
 	for _, opt := range opts {
 		opt(t)
 	}
+	t.registerEndpoints()
 	return t
 }
 
@@ -156,6 +159,13 @@ func OptSetLogger(log log.Modular) func(*Type) {
 func OptSetManager(mgr types.Manager) func(*Type) {
 	return func(t *Type) {
 		t.manager = mgr
+	}
+}
+
+// OptSetAPITimeout sets the default timeout for HTTP API requests.
+func OptSetAPITimeout(tout time.Duration) func(*Type) {
+	return func(t *Type) {
+		t.apiTimeout = tout
 	}
 }
 

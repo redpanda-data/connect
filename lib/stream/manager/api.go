@@ -82,14 +82,18 @@ func (m *Type) HandleList(w http.ResponseWriter, r *http.Request) {
 
 // HandleCRUD is an http.HandleFunc for performing CRUD operations on streams.
 func (m *Type) HandleCRUD(w http.ResponseWriter, r *http.Request) {
-	var httpErr error
+	var serverErr, requestErr error
 	defer func() {
 		if r.Body != nil {
 			r.Body.Close()
 		}
-		if httpErr != nil {
-			m.logger.Warnf("Streams CRUD Error: %v", httpErr)
-			http.Error(w, fmt.Sprintf("Error: %v", httpErr), http.StatusBadRequest)
+		if serverErr != nil {
+			m.logger.Errorf("Streams CRUD Error: %v", serverErr)
+			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
+		}
+		if requestErr != nil {
+			m.logger.Debugf("Streams request CRUD Error: %v", requestErr)
+			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadRequest)
 		}
 	}()
 
@@ -111,47 +115,54 @@ func (m *Type) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 
 	deadline, hasDeadline := r.Context().Deadline()
 	if !hasDeadline {
-		deadline = time.Now().Add(time.Second * 5)
+		deadline = time.Now().Add(m.apiTimeout)
 	}
 
 	var conf stream.Config
 	switch r.Method {
 	case "POST":
-		if conf, httpErr = readConfig(); httpErr != nil {
+		if conf, requestErr = readConfig(); requestErr != nil {
 			return
 		}
-		httpErr = m.Create(id, conf)
+		serverErr = m.Create(id, conf)
 	case "GET":
 		var info StreamStatus
-		if info, httpErr = m.Read(id); httpErr != nil {
-			return
+		if info, serverErr = m.Read(id); serverErr == nil {
+			sanit, _ := info.Config.Sanitised()
+
+			var bodyBytes []byte
+			if bodyBytes, serverErr = json.Marshal(struct {
+				Active bool        `json:"active"`
+				Uptime string      `json:"uptime"`
+				Config interface{} `json:"config"`
+			}{
+				Active: info.Active,
+				Uptime: info.Uptime.String(),
+				Config: sanit,
+			}); serverErr != nil {
+				return
+			}
+
+			w.Write(bodyBytes)
 		}
-
-		sanit, _ := info.Config.Sanitised()
-
-		var bodyBytes []byte
-		if bodyBytes, httpErr = json.Marshal(struct {
-			Active bool        `json:"active"`
-			Uptime string      `json:"uptime"`
-			Config interface{} `json:"config"`
-		}{
-			Active: info.Active,
-			Uptime: info.Uptime.String(),
-			Config: sanit,
-		}); httpErr != nil {
-			return
-		}
-
-		w.Write(bodyBytes)
 	case "PUT":
-		if conf, httpErr = readConfig(); httpErr != nil {
+		if conf, requestErr = readConfig(); requestErr != nil {
 			return
 		}
-		httpErr = m.Update(id, conf, time.Until(deadline))
+		serverErr = m.Update(id, conf, time.Until(deadline))
 	case "DELETE":
-		httpErr = m.Delete(id, time.Until(deadline))
+		serverErr = m.Delete(id, time.Until(deadline))
 	default:
-		httpErr = fmt.Errorf("verb not supported: %v", r.Method)
+		serverErr = fmt.Errorf("verb not supported: %v", r.Method)
+	}
+
+	if serverErr == ErrStreamDoesNotExist {
+		serverErr = nil
+		http.Error(w, "Stream not found", http.StatusNotFound)
+	}
+	if serverErr == ErrStreamExists {
+		serverErr = nil
+		http.Error(w, "Stream already exists", http.StatusBadRequest)
 	}
 }
 
