@@ -42,6 +42,18 @@ func Namespaced(t Type, ns string) Type {
 
 //------------------------------------------------------------------------------
 
+func (d namespacedWrapper) GetCounter(path ...string) StatCounter {
+	return d.t.GetCounter(append([]string{d.ns}, path...)...)
+}
+
+func (d namespacedWrapper) GetTimer(path ...string) StatTimer {
+	return d.t.GetTimer(append([]string{d.ns}, path...)...)
+}
+
+func (d namespacedWrapper) GetGauge(path ...string) StatGauge {
+	return d.t.GetGauge(append([]string{d.ns}, path...)...)
+}
+
 func (d namespacedWrapper) Incr(path string, count int64) error {
 	return d.t.Incr(d.ns+path, count)
 }

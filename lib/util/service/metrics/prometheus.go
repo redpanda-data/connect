@@ -51,6 +51,46 @@ func NewPrometheusConfig() PrometheusConfig {
 
 //------------------------------------------------------------------------------
 
+// PromGauge is a representation of a single metric stat. Interactions with this
+// stat are thread safe.
+type PromGauge struct {
+	ctr prometheus.Gauge
+}
+
+// Incr increments a metric by an amount.
+func (p *PromGauge) Incr(count int64) error {
+	p.ctr.Add(float64(count))
+	return nil
+}
+
+// Decr decrements a metric by an amount.
+func (p *PromGauge) Decr(count int64) error {
+	p.ctr.Add(float64(-count))
+	return nil
+}
+
+// Gauge sets a gauge metric.
+func (p *PromGauge) Gauge(value int64) error {
+	p.ctr.Set(float64(value))
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// PromTiming is a representation of a single metric stat. Interactions with
+// this stat are thread safe.
+type PromTiming struct {
+	sum prometheus.Summary
+}
+
+// Timing sets a timing metric.
+func (p *PromTiming) Timing(val int64) error {
+	p.sum.Observe(float64(val))
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
 // Prometheus is a stats object with capability to hold internal stats as a JSON
 // endpoint.
 type Prometheus struct {
@@ -88,6 +128,81 @@ func toPromName(dotSepName string) string {
 	dotSepName = strings.Replace(dotSepName, "_", "__", -1)
 	dotSepName = strings.Replace(dotSepName, "-", "__", -1)
 	return strings.Replace(dotSepName, ".", "_", -1)
+}
+
+// GetCounter returns a stat counter object for a path.
+func (p *Prometheus) GetCounter(path ...string) StatCounter {
+	dotPath := strings.Join(path, ".")
+	stat := toPromName(dotPath)
+
+	var ctr prometheus.Gauge
+
+	p.Lock()
+	var exists bool
+	if ctr, exists = p.gauges[stat]; !exists {
+		ctr = prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: p.prefix,
+			Name:      stat,
+			Help:      "Benthos Gauge metric",
+		})
+		prometheus.MustRegister(ctr)
+		p.gauges[stat] = ctr
+	}
+	p.Unlock()
+
+	return &PromGauge{
+		ctr: ctr,
+	}
+}
+
+// GetTimer returns a stat timer object for a path.
+func (p *Prometheus) GetTimer(path ...string) StatTimer {
+	dotPath := strings.Join(path, ".")
+	stat := toPromName(dotPath)
+
+	var tmr prometheus.Summary
+
+	p.Lock()
+	var exists bool
+	if tmr, exists = p.timers[stat]; !exists {
+		tmr = prometheus.NewSummary(prometheus.SummaryOpts{
+			Namespace: p.prefix,
+			Name:      stat,
+			Help:      "Benthos Timing metric",
+		})
+		prometheus.MustRegister(tmr)
+		p.timers[stat] = tmr
+	}
+	p.Unlock()
+
+	return &PromTiming{
+		sum: tmr,
+	}
+}
+
+// GetGauge returns a stat gauge object for a path.
+func (p *Prometheus) GetGauge(path ...string) StatGauge {
+	dotPath := strings.Join(path, ".")
+	stat := toPromName(dotPath)
+
+	var ctr prometheus.Gauge
+
+	p.Lock()
+	var exists bool
+	if ctr, exists = p.gauges[stat]; !exists {
+		ctr = prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: p.prefix,
+			Name:      stat,
+			Help:      "Benthos Gauge metric",
+		})
+		prometheus.MustRegister(ctr)
+		p.gauges[stat] = ctr
+	}
+	p.Unlock()
+
+	return &PromGauge{
+		ctr: ctr,
+	}
 }
 
 // Incr increments a stat by a value.

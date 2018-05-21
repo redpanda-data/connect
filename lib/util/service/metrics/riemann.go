@@ -104,6 +104,21 @@ func NewRiemann(config Config) (Type, error) {
 
 //------------------------------------------------------------------------------
 
+// GetCounter returns a stat counter object for a path.
+func (r *Riemann) GetCounter(path ...string) StatCounter {
+	return DudStat{} // TODO
+}
+
+// GetTimer returns a stat timer object for a path.
+func (r *Riemann) GetTimer(path ...string) StatTimer {
+	return DudStat{} // TODO
+}
+
+// GetGauge returns a stat gauge object for a path.
+func (r *Riemann) GetGauge(path ...string) StatGauge {
+	return DudStat{} // TODO
+}
+
 // Incr increments a stat by a value.
 func (r *Riemann) Incr(stat string, value int64) error {
 	r.Lock()

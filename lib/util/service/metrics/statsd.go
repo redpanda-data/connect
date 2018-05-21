@@ -22,6 +22,7 @@ package metrics
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"gopkg.in/alexcesaro/statsd.v2"
@@ -58,6 +59,39 @@ func NewStatsdConfig() StatsdConfig {
 
 //------------------------------------------------------------------------------
 
+// StatsdStat is a representation of a single metric stat. Interactions with
+// this stat are thread safe.
+type StatsdStat struct {
+	path string
+	s    *statsd.Client
+}
+
+// Incr increments a metric by an amount.
+func (s *StatsdStat) Incr(count int64) error {
+	s.s.Count(s.path, count)
+	return nil
+}
+
+// Decr decrements a metric by an amount.
+func (s *StatsdStat) Decr(count int64) error {
+	s.s.Count(s.path, -count)
+	return nil
+}
+
+// Timing sets a timing metric.
+func (s *StatsdStat) Timing(delta int64) error {
+	s.s.Timing(s.path, delta)
+	return nil
+}
+
+// Gauge sets a gauge metric.
+func (s *StatsdStat) Gauge(value int64) error {
+	s.s.Gauge(s.path, value)
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
 // Statsd is a stats object with capability to hold internal stats as a JSON
 // endpoint.
 type Statsd struct {
@@ -88,6 +122,30 @@ func NewStatsd(config Config) (Type, error) {
 }
 
 //------------------------------------------------------------------------------
+
+// GetCounter returns a stat counter object for a path.
+func (h *Statsd) GetCounter(path ...string) StatCounter {
+	return &StatsdStat{
+		path: strings.Join(path, "."),
+		s:    h.s,
+	}
+}
+
+// GetTimer returns a stat timer object for a path.
+func (h *Statsd) GetTimer(path ...string) StatTimer {
+	return &StatsdStat{
+		path: strings.Join(path, "."),
+		s:    h.s,
+	}
+}
+
+// GetGauge returns a stat gauge object for a path.
+func (h *Statsd) GetGauge(path ...string) StatGauge {
+	return &StatsdStat{
+		path: strings.Join(path, "."),
+		s:    h.s,
+	}
+}
 
 // Incr increments a stat by a value.
 func (h *Statsd) Incr(stat string, value int64) error {
