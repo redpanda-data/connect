@@ -25,8 +25,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 func TestConstructorDescription(t *testing.T) {

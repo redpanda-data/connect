@@ -34,11 +34,11 @@ import (
 	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/manager"
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util"
 	"github.com/Jeffail/benthos/lib/util/service"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/Jeffail/benthos/lib/util/test"
 )
 
