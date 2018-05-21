@@ -190,7 +190,7 @@ containers using `docker-compose`.
 [10]: resources/docs/processors/README.md
 [11]: resources/docs/dynamic_inputs_and_outputs.md
 [12]: resources/docs/buffers/README.md
-[streams-api]: resources/api/streams.md
+[streams-api]: resources/docs/api/streams.md
 [general-docs]: resources/docs/README.md#benthos
 [cookbook-docs]: resources/docs/cookbook/README.md
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
