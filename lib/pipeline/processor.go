@@ -83,6 +83,13 @@ func (p *Processor) loop() {
 		close(p.closed)
 	}()
 
+	var (
+		mProcCount   = p.stats.GetCounter("pipeline.processor.count")
+		mProcDropped = p.stats.GetCounter("pipeline.processor.dropped")
+		mSndSucc     = p.stats.GetCounter("pipeline.processor.send.success")
+		mSndErr      = p.stats.GetCounter("pipeline.processor.send.error")
+	)
+
 	throt := throttle.New(throttle.OptCloseChan(p.closeChan))
 
 	var open bool
@@ -96,7 +103,7 @@ func (p *Processor) loop() {
 		case <-p.closeChan:
 			return
 		}
-		p.stats.Incr("pipeline.processor.count", 1)
+		mProcCount.Incr(1)
 
 		resultMsgs := []types.Message{tran.Payload}
 		var resultRes types.Response
@@ -111,7 +118,7 @@ func (p *Processor) loop() {
 		}
 
 		if len(resultMsgs) == 0 {
-			p.stats.Incr("pipeline.processor.dropped", 1)
+			mProcDropped.Incr(1)
 			select {
 			case tran.ResponseChan <- resultRes:
 			case <-p.closeChan:
@@ -154,10 +161,10 @@ func (p *Processor) loop() {
 						if skipAck {
 							atomic.AddInt64(&skipAcks, 1)
 						}
-						p.stats.Incr("pipeline.processor.send.success", 1)
+						mSndSucc.Incr(1)
 						return
 					}
-					p.stats.Incr("pipeline.processor.send.error", 1)
+					mSndErr.Incr(1)
 					if !throt.Retry() {
 						return
 					}

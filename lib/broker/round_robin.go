@@ -91,6 +91,10 @@ func (o *RoundRobin) loop() {
 		close(o.closedChan)
 	}()
 
+	var (
+		mMsgsRcvd = o.stats.GetCounter("broker.round_robin.messages.received")
+	)
+
 	i := 0
 	open := false
 	for atomic.LoadInt32(&o.running) == 1 {
@@ -103,7 +107,7 @@ func (o *RoundRobin) loop() {
 		case <-o.closeChan:
 			return
 		}
-		o.stats.Incr("broker.round_robin.messages.received", 1)
+		mMsgsRcvd.Incr(1)
 		select {
 		case o.outputTsChans[i] <- ts:
 		case <-o.closeChan:

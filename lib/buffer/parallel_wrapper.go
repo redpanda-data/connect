@@ -106,6 +106,12 @@ func (m *ParallelWrapper) inputLoop() {
 		m.closedWG.Done()
 	}()
 
+	var (
+		mWriteCount   = m.stats.GetCounter("buffer.write.count")
+		mWriteErr     = m.stats.GetCounter("buffer.write.error")
+		mWriteBacklog = m.stats.GetGauge("buffer.backlog")
+	)
+
 	for atomic.LoadInt32(&m.running) == 1 {
 		var tr types.Transaction
 		var open bool
@@ -119,10 +125,10 @@ func (m *ParallelWrapper) inputLoop() {
 		}
 		backlog, err := m.buffer.PushMessage(tr.Payload)
 		if err == nil {
-			m.stats.Incr("buffer.write.count", 1)
-			m.stats.Gauge("buffer.backlog", int64(backlog))
+			mWriteCount.Incr(1)
+			mWriteBacklog.Gauge(int64(backlog))
 		} else {
-			m.stats.Incr("buffer.write.error", 1)
+			mWriteErr.Incr(1)
 		}
 		select {
 		case tr.ResponseChan <- types.NewSimpleResponse(err):
@@ -140,11 +146,21 @@ func (m *ParallelWrapper) outputLoop() {
 		m.closedWG.Done()
 	}()
 
+	var (
+		mReadCount   = m.stats.GetCounter("buffer.read.count")
+		mReadErr     = m.stats.GetCounter("buffer.read.error")
+		mSendSuccess = m.stats.GetCounter("buffer.send.success")
+		mSendErr     = m.stats.GetCounter("buffer.send.error")
+		mAckErr      = m.stats.GetCounter("buffer.ack.error")
+		mLatency     = m.stats.GetTimer("buffer.latency")
+		mBacklog     = m.stats.GetGauge("buffer.backlog")
+	)
+
 	for atomic.LoadInt32(&m.running) == 1 {
 		msg, ackFunc, err := m.buffer.NextMessage()
 		if err != nil {
 			if err != types.ErrTypeClosed {
-				m.stats.Incr("buffer.read.error", 1)
+				mReadErr.Incr(1)
 				m.log.Errorf("Failed to read buffer: %v\n", err)
 				m.errThrottle.Retry()
 			} else {
@@ -154,7 +170,7 @@ func (m *ParallelWrapper) outputLoop() {
 			continue
 		}
 
-		m.stats.Incr("buffer.read.count", 1)
+		mReadCount.Incr(1)
 		m.errThrottle.Reset()
 
 		resChan := make(chan types.Response)
@@ -168,20 +184,20 @@ func (m *ParallelWrapper) outputLoop() {
 			res, open := <-rChan
 			doAck := false
 			if open && res.Error() == nil {
-				m.stats.Incr("buffer.send.success", 1)
-				m.stats.Timing("buffer.latency", time.Since(msg.CreatedAt()).Nanoseconds())
+				mSendSuccess.Incr(1)
+				mLatency.Timing(time.Since(msg.CreatedAt()).Nanoseconds())
 				doAck = true
 			} else {
-				m.stats.Incr("buffer.send.error", 1)
+				mSendErr.Incr(1)
 			}
 			blog, ackErr := aFunc(doAck)
 			if ackErr != nil {
-				m.stats.Incr("buffer.ack.error", 1)
+				mAckErr.Incr(1)
 				if ackErr != types.ErrTypeClosed {
 					m.log.Errorf("Failed to ack buffer message: %v\n", ackErr)
 				}
 			} else {
-				m.stats.Gauge("buffer.backlog", int64(blog))
+				mBacklog.Gauge(int64(blog))
 			}
 		}(resChan, ackFunc)
 	}
