@@ -36,6 +36,7 @@ import (
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/gorilla/mux"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func router(m *Type) *mux.Router {
@@ -68,9 +69,33 @@ func genRequest(verb, url string, conf *stream.Config) *http.Request {
 	return req
 }
 
+func genYAMLRequest(verb, url string, conf *stream.Config) *http.Request {
+	var body io.Reader
+
+	if conf != nil {
+		sanit, err := conf.Sanitised()
+		if err != nil {
+			panic(err)
+		}
+		bodyBytes, err := yaml.Marshal(sanit)
+		if err != nil {
+			panic(err)
+		}
+		body = bytes.NewReader(bodyBytes)
+	}
+
+	req, err := http.NewRequest(verb, url, body)
+	if err != nil {
+		panic(err)
+	}
+
+	return req
+}
+
 type listItemBody struct {
-	Active bool   `json:"active"`
-	Uptime string `json:"uptime"`
+	Active    bool    `json:"active"`
+	Uptime    float64 `json:"uptime"`
+	UptimeStr string  `json:"uptime_str"`
 }
 
 type listBody map[string]listItemBody
@@ -84,9 +109,10 @@ func parseListBody(data *bytes.Buffer) listBody {
 }
 
 type getBody struct {
-	Active bool          `json:"active"`
-	Uptime string        `json:"uptime"`
-	Config stream.Config `json:"config"`
+	Active    bool          `json:"active"`
+	Uptime    float64       `json:"uptime"`
+	UptimeStr string        `json:"uptime_str"`
+	Config    stream.Config `json:"config"`
 }
 
 func parseGetBody(data *bytes.Buffer) getBody {
@@ -196,6 +222,103 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	}
 }
 
+func TestTypeAPIBasicOperationsYAML(t *testing.T) {
+	mgr := New(
+		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetStats(metrics.DudType{}),
+		OptSetManager(types.DudMgr{}),
+		OptSetAPITimeout(time.Millisecond*100),
+	)
+
+	r := router(mgr)
+	conf := harmlessConf()
+
+	request := genYAMLRequest("PUT", "/stream/foo", &conf)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusNotFound, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genYAMLRequest("GET", "/stream/foo", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusNotFound, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genYAMLRequest("POST", "/stream/foo", &conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genYAMLRequest("POST", "/stream/foo", &conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusBadRequest, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genYAMLRequest("GET", "/stream/bar", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusNotFound, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genYAMLRequest("GET", "/stream/foo", &conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+	info := parseGetBody(response.Body)
+	if !info.Active {
+		t.Error("Stream not active")
+	} else if act, exp := info.Config, conf; !reflect.DeepEqual(act, exp) {
+		t.Errorf("Unexpected config: %v != %v", act, exp)
+	}
+
+	newConf := harmlessConf()
+	newConf.Buffer.Type = "memory"
+
+	request = genYAMLRequest("PUT", "/stream/foo", &newConf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genYAMLRequest("GET", "/stream/foo", &conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+	info = parseGetBody(response.Body)
+	if !info.Active {
+		t.Error("Stream not active")
+	} else if act, exp := info.Config, newConf; !reflect.DeepEqual(act, exp) {
+		t.Errorf("Unexpected config: %v != %v", act, exp)
+	}
+
+	request = genYAMLRequest("DELETE", "/stream/foo", &conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genYAMLRequest("DELETE", "/stream/foo", &conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusNotFound, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+}
+
 func TestTypeAPIList(t *testing.T) {
 	mgr := New(
 		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
@@ -230,5 +353,26 @@ func TestTypeAPIList(t *testing.T) {
 	info = parseListBody(response.Body)
 	if exp, act := true, info["foo"].Active; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong list response: %v != %v", act, exp)
+	}
+}
+
+func TestTypeAPIDefaultConf(t *testing.T) {
+	mgr := New(
+		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetStats(metrics.DudType{}),
+		OptSetManager(types.DudMgr{}),
+		OptSetAPITimeout(time.Millisecond*100),
+	)
+
+	r := router(mgr)
+
+	request, err := http.NewRequest("POST", "/stream/foo", bytes.NewReader([]byte(`{}`)))
+	if err != nil {
+		panic(err)
+	}
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 }

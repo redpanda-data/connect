@@ -22,6 +22,7 @@ package manager
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -110,6 +111,7 @@ func (n *nsMgr) GetCondition(name string) (types.Condition, error) {
 // Type manages a collection of streams, providing APIs for CRUD operations on
 // the streams.
 type Type struct {
+	closed  bool
 	streams map[string]*streamWrapper
 
 	manager    types.Manager
@@ -185,6 +187,10 @@ func (m *Type) Create(id string, conf stream.Config) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
+	if m.closed {
+		return types.ErrTypeClosed
+	}
+
 	if _, exists := m.streams[id]; exists {
 		return ErrStreamExists
 	}
@@ -224,6 +230,10 @@ func (m *Type) Read(id string) (StreamStatus, error) {
 	defer m.lock.Unlock()
 
 	status := StreamStatus{}
+	if m.closed {
+		return status, types.ErrTypeClosed
+	}
+
 	wrapper, exists := m.streams[id]
 	if !exists {
 		return status, ErrStreamDoesNotExist
@@ -241,7 +251,12 @@ func (m *Type) Read(id string) (StreamStatus, error) {
 func (m *Type) Update(id string, conf stream.Config, timeout time.Duration) error {
 	m.lock.Lock()
 	wrapper, exists := m.streams[id]
+	closed := m.closed
 	m.lock.Unlock()
+
+	if closed {
+		return types.ErrTypeClosed
+	}
 	if !exists {
 		return ErrStreamDoesNotExist
 	}
@@ -263,6 +278,10 @@ func (m *Type) Delete(id string, timeout time.Duration) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
+	if m.closed {
+		return types.ErrTypeClosed
+	}
+
 	wrapper, exists := m.streams[id]
 	if !exists {
 		return ErrStreamDoesNotExist
@@ -273,6 +292,42 @@ func (m *Type) Delete(id string, timeout time.Duration) error {
 	}
 	delete(m.streams, id)
 
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// Stop attempts to gracefully shut down all active streams and close the
+// stream manager.
+func (m *Type) Stop(timeout time.Duration) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	resultChan := make(chan string)
+
+	for k, v := range m.streams {
+		go func(id string, strm *streamWrapper) {
+			if err := strm.strm.Stop(timeout); err != nil {
+				resultChan <- id
+			} else {
+				resultChan <- ""
+			}
+		}(k, v)
+	}
+
+	failedStreams := []string{}
+	for i := 0; i < len(m.streams); i++ {
+		if failedStrm := <-resultChan; len(failedStrm) > 0 {
+			failedStreams = append(failedStreams, failedStrm)
+		}
+	}
+
+	m.streams = map[string]*streamWrapper{}
+	m.closed = true
+
+	if len(failedStreams) > 0 {
+		return fmt.Errorf("failed to gracefully stop the following streams: %v", failedStreams)
+	}
 	return nil
 }
 

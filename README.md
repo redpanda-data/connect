@@ -94,6 +94,13 @@ docker run --rm \
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 ```
 
+## Streams
+
+Benthos can be run in `--streams` mode which, instead of running a single stream
+of inputs to outputs, opens up a [REST HTTP API][streams-api] for creating and
+managing multiple streams. Each stream has its own input, buffer, pipeline and
+output sections which contains an isolated stream of data with its own lifetime.
+
 ## Config
 
 Benthos has inputs, optional processors, an optional buffer, and outputs, which
@@ -183,6 +190,7 @@ containers using `docker-compose`.
 [10]: resources/docs/processors/README.md
 [11]: resources/docs/dynamic_inputs_and_outputs.md
 [12]: resources/docs/buffers/README.md
+[streams-api]: resources/api/streams.md
 [general-docs]: resources/docs/README.md#benthos
 [cookbook-docs]: resources/docs/cookbook/README.md
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master

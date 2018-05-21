@@ -89,4 +89,35 @@ func TestTypeBasicOperations(t *testing.T) {
 	if err := mgr.Delete("foo", time.Second); err == nil {
 		t.Error("Expected error on duplicate delete")
 	}
+
+	if err := mgr.Stop(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	if exp, act := types.ErrTypeClosed, mgr.Create("foo", harmlessConf()); act != exp {
+		t.Errorf("Unexpected error: %v != %v", act, exp)
+	}
+}
+
+func TestTypeBasicClose(t *testing.T) {
+	mgr := New(
+		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetStats(metrics.DudType{}),
+		OptSetManager(types.DudMgr{}),
+	)
+
+	conf := harmlessConf()
+	conf.Output.Type = "scalability_protocols"
+
+	if err := mgr.Create("foo", conf); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := mgr.Stop(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	if exp, act := types.ErrTypeClosed, mgr.Create("foo", harmlessConf()); act != exp {
+		t.Errorf("Unexpected error: %v != %v", act, exp)
+	}
 }

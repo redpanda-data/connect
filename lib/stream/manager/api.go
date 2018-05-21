@@ -29,13 +29,14 @@ import (
 
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/gorilla/mux"
+	yaml "gopkg.in/yaml.v2"
 )
 
 //------------------------------------------------------------------------------
 
 func (m *Type) registerEndpoints() {
 	m.manager.RegisterEndpoint(
-		"/list", "List all streams along with their status and uptimes.",
+		"/streams", "List all streams along with their status and uptimes.",
 		m.HandleList,
 	)
 	m.manager.RegisterEndpoint(
@@ -60,16 +61,18 @@ func (m *Type) HandleList(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	type confInfo struct {
-		Active bool   `json:"active"`
-		Uptime string `json:"uptime"`
+		Active    bool    `json:"active"`
+		Uptime    float64 `json:"uptime"`
+		UptimeStr string  `json:"uptime_str"`
 	}
 	infos := map[string]confInfo{}
 
 	m.lock.Lock()
 	for id, strInfo := range m.streams {
 		infos[id] = confInfo{
-			Active: strInfo.IsRunning(),
-			Uptime: strInfo.Uptime().String(),
+			Active:    strInfo.IsRunning(),
+			Uptime:    strInfo.Uptime().Seconds(),
+			UptimeStr: strInfo.Uptime().String(),
 		}
 	}
 	m.lock.Unlock()
@@ -88,11 +91,11 @@ func (m *Type) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 			r.Body.Close()
 		}
 		if serverErr != nil {
-			m.logger.Errorf("Streams CRUD Error: %v", serverErr)
+			m.logger.Errorf("Streams CRUD Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
 		}
 		if requestErr != nil {
-			m.logger.Debugf("Streams request CRUD Error: %v", requestErr)
+			m.logger.Debugf("Streams request CRUD Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadRequest)
 		}
 	}()
@@ -109,7 +112,8 @@ func (m *Type) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = json.Unmarshal(confBytes, &conf)
+		conf = stream.NewConfig()
+		err = yaml.Unmarshal(confBytes, &conf)
 		return
 	}
 
@@ -132,13 +136,15 @@ func (m *Type) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 
 			var bodyBytes []byte
 			if bodyBytes, serverErr = json.Marshal(struct {
-				Active bool        `json:"active"`
-				Uptime string      `json:"uptime"`
-				Config interface{} `json:"config"`
+				Active    bool        `json:"active"`
+				Uptime    float64     `json:"uptime"`
+				UptimeStr string      `json:"uptime_str"`
+				Config    interface{} `json:"config"`
 			}{
-				Active: info.Active,
-				Uptime: info.Uptime.String(),
-				Config: sanit,
+				Active:    info.Active,
+				Uptime:    info.Uptime.Seconds(),
+				UptimeStr: info.Uptime.String(),
+				Config:    sanit,
 			}); serverErr != nil {
 				return
 			}

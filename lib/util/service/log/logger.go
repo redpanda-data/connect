@@ -106,7 +106,7 @@ func NewLoggerConfig() LoggerConfig {
 		Prefix:       "service",
 		LogLevel:     "INFO",
 		AddTimeStamp: true,
-		JSONFormat:   false,
+		JSONFormat:   true,
 	}
 }
 
@@ -179,13 +179,13 @@ func (l *Logger) writeLine(message, level string) {
 	if l.config.JSONFormat {
 		if l.config.AddTimeStamp {
 			fmt.Fprintf(l.stream,
-				"{\"timestamp\":\"%v\",\"level\":\"%v\",\"service\":\"%v\",\"message\":%v}\n",
+				"{\"@timestamp\":\"%v\",\"level\":\"%v\",\"@service\":\"%v\",\"message\":%v}\n",
 				time.Now().Format(time.RFC3339), level, l.config.Prefix,
 				strconv.QuoteToASCII(message),
 			)
 		} else {
 			fmt.Fprintf(l.stream,
-				"{\"level\":\"%v\",\"service\":\"%v\",\"message\":%v}\n",
+				"{\"level\":\"%v\",\"@service\":\"%v\",\"message\":%v}\n",
 				level, l.config.Prefix,
 				strconv.QuoteToASCII(message),
 			)

@@ -433,7 +433,7 @@ logger:
   prefix: service
   log_level: INFO
   add_timestamp: true
-  json_format: false
+  json_format: true
 metrics:
   type: http_server
   prefix: benthos

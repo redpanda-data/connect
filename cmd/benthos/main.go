@@ -42,6 +42,7 @@ import (
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/stream"
+	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
 	"github.com/Jeffail/benthos/lib/util/service"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/benthos/lib/util/service/metrics"
@@ -158,6 +159,13 @@ var (
 		"list-caches", false,
 		"Print a list of available cache options, then exit",
 	)
+	streamsMode = flag.Bool(
+		"streams", false,
+		"Run Benthos in streams mode, where streams can be created, updated"+
+			" and removed via REST HTTP endpoints. In streams mode the stream"+
+			" fields of a config file (input, buffer, pipeline, output) will"+
+			" be ignored",
+	)
 )
 
 //------------------------------------------------------------------------------
@@ -216,6 +224,10 @@ func bootstrap() Config {
 	return config
 }
 
+type stoppableStreams interface {
+	Stop(timeout time.Duration) error
+}
+
 func main() {
 	// Bootstrap by reading cmd flags and configuration file.
 	config := bootstrap()
@@ -254,20 +266,30 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create data streams.
+	var dataStream stoppableStreams
 	dataStreamClosedChan := make(chan struct{})
-	dataStream, err := stream.New(
-		config.Config,
-		stream.OptSetLogger(logger),
-		stream.OptSetStats(stats),
-		stream.OptSetManager(manager),
-		stream.OptOnClose(func() {
-			close(dataStreamClosedChan)
-		}),
-	)
-	if err != nil {
-		logger.Errorf("Service closing due to: %v\n", err)
-		os.Exit(1)
+
+	// Create data streams.
+	if *streamsMode {
+		dataStream = strmmgr.New(
+			strmmgr.OptSetAPITimeout(time.Duration(config.HTTP.ReadTimeoutMS)*time.Millisecond),
+			strmmgr.OptSetLogger(logger),
+			strmmgr.OptSetManager(manager),
+			strmmgr.OptSetStats(stats),
+		)
+	} else {
+		if dataStream, err = stream.New(
+			config.Config,
+			stream.OptSetLogger(logger),
+			stream.OptSetStats(stats),
+			stream.OptSetManager(manager),
+			stream.OptOnClose(func() {
+				close(dataStreamClosedChan)
+			}),
+		); err != nil {
+			logger.Errorf("Service closing due to: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	// Start HTTP server.

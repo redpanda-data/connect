@@ -20,7 +20,7 @@ pipeline:
 output:
   type: file
   file:
-    path: "/dev/null"
+    path: /dev/null
 logger:
   prefix: service
   log_level: INFO
