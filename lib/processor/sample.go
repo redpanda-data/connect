@@ -67,6 +67,10 @@ type Sample struct {
 
 	retain float64
 	gen    *rand.Rand
+
+	mCount   metrics.StatCounter
+	mDropped metrics.StatCounter
+	mSent    metrics.StatCounter
 }
 
 // NewSample returns a Sample processor.
@@ -80,6 +84,10 @@ func NewSample(
 		stats:  stats,
 		retain: conf.Sample.Retain / 100.0,
 		gen:    gen,
+
+		mCount:   stats.GetCounter("processor.sample.count"),
+		mDropped: stats.GetCounter("processor.sample.dropped"),
+		mSent:    stats.GetCounter("processor.sample.sent"),
 	}, nil
 }
 
@@ -87,12 +95,12 @@ func NewSample(
 
 // ProcessMessage checks each message against a set of bounds.
 func (s *Sample) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	s.stats.Incr("processor.sample.count", 1)
+	s.mCount.Incr(1)
 	if s.gen.Float64() > s.retain {
-		s.stats.Incr("processor.sample.dropped", 1)
+		s.mDropped.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	}
-	s.stats.Incr("processor.sample.sent", 1)
+	s.mSent.Incr(1)
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

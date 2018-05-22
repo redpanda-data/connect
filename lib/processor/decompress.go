@@ -104,6 +104,12 @@ type Decompress struct {
 
 	log   log.Modular
 	stats metrics.Type
+
+	mCount   metrics.StatCounter
+	mSucc    metrics.StatCounter
+	mErr     metrics.StatCounter
+	mSkipped metrics.StatCounter
+	mSent    metrics.StatCounter
 }
 
 // NewDecompress returns a Decompress processor.
@@ -119,6 +125,12 @@ func NewDecompress(
 		decomp: dcor,
 		log:    log.NewModule(".processor.decompress"),
 		stats:  stats,
+
+		mCount:   stats.GetCounter("processor.decompress.count"),
+		mSucc:    stats.GetCounter("processor.decompress.success"),
+		mErr:     stats.GetCounter("processor.decompress.error"),
+		mSkipped: stats.GetCounter("processor.decompress.skipped"),
+		mSent:    stats.GetCounter("processor.decompress.sent"),
 	}, nil
 }
 
@@ -127,7 +139,7 @@ func NewDecompress(
 // ProcessMessage takes a message, attempts to decompress parts of the message,
 // and returns the result.
 func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	d.stats.Incr("processor.decompress.count", 1)
+	d.mCount.Incr(1)
 
 	newMsg := types.NewMessage(nil)
 	lParts := msg.Len()
@@ -150,19 +162,19 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		}
 		newPart, err := d.decomp(part)
 		if err == nil {
-			d.stats.Incr("processor.decompress.success", 1)
+			d.mSucc.Incr(1)
 			newMsg.Append(newPart)
 		} else {
-			d.stats.Incr("processor.decompress.error", 1)
+			d.mErr.Incr(1)
 		}
 	}
 
 	if newMsg.Len() == 0 {
-		d.stats.Incr("processor.decompress.skipped", 1)
+		d.mSkipped.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	d.stats.Incr("processor.decompress.sent", 1)
+	d.mSent.Incr(1)
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

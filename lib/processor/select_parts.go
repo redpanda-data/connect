@@ -71,6 +71,12 @@ type SelectParts struct {
 	conf  Config
 	log   log.Modular
 	stats metrics.Type
+
+	mCount    metrics.StatCounter
+	mSkipped  metrics.StatCounter
+	mSelected metrics.StatCounter
+	mDropped  metrics.StatCounter
+	mSent     metrics.StatCounter
 }
 
 // NewSelectParts returns a SelectParts processor.
@@ -81,6 +87,12 @@ func NewSelectParts(
 		conf:  conf,
 		log:   log.NewModule(".processor.select_parts"),
 		stats: stats,
+
+		mCount:    stats.GetCounter("processor.select_parts.count"),
+		mSkipped:  stats.GetCounter("processor.select_parts.skipped"),
+		mSelected: stats.GetCounter("processor.select_parts.selected"),
+		mDropped:  stats.GetCounter("processor.select_parts.dropped"),
+		mSent:     stats.GetCounter("processor.select_parts.sent"),
 	}, nil
 }
 
@@ -88,7 +100,7 @@ func NewSelectParts(
 
 // ProcessMessage extracts a set of parts from each message.
 func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	m.stats.Incr("processor.select_parts.count", 1)
+	m.mCount.Incr(1)
 
 	newMsg := types.NewMessage(nil)
 	lParts := msg.Len()
@@ -100,19 +112,19 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 
 		// Check boundary of part index.
 		if index < 0 || index >= lParts {
-			m.stats.Incr("processor.select_parts.skipped", 1)
+			m.mSkipped.Incr(1)
 		} else {
-			m.stats.Incr("processor.select_parts.selected", 1)
+			m.mSelected.Incr(1)
 			newMsg.Append(msg.Get(index))
 		}
 	}
 
 	if newMsg.Len() == 0 {
-		m.stats.Incr("processor.select_parts.dropped", 1)
+		m.mDropped.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	m.stats.Incr("processor.select_parts.sent", 1)
+	m.mSent.Incr(1)
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

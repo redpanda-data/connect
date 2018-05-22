@@ -132,6 +132,13 @@ type Unarchive struct {
 
 	log   log.Modular
 	stats metrics.Type
+
+	mCount   metrics.StatCounter
+	mSucc    metrics.StatCounter
+	mErr     metrics.StatCounter
+	mSkipped metrics.StatCounter
+	mDropped metrics.StatCounter
+	mSent    metrics.StatCounter
 }
 
 // NewUnarchive returns a Unarchive processor.
@@ -147,6 +154,13 @@ func NewUnarchive(
 		unarchive: dcor,
 		log:       log.NewModule(".processor.unarchive"),
 		stats:     stats,
+
+		mCount:   stats.GetCounter("processor.unarchive.count"),
+		mSucc:    stats.GetCounter("processor.unarchive.success"),
+		mErr:     stats.GetCounter("processor.unarchive.error"),
+		mSkipped: stats.GetCounter("processor.unarchive.skipped"),
+		mDropped: stats.GetCounter("processor.unarchive.dropped"),
+		mSent:    stats.GetCounter("processor.unarchive.sent"),
 	}, nil
 }
 
@@ -155,7 +169,7 @@ func NewUnarchive(
 // ProcessMessage takes a message, attempts to unarchive parts of the message,
 // and returns the result.
 func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	d.stats.Incr("processor.unarchive.count", 1)
+	d.mCount.Incr(1)
 
 	newMsg := types.NewMessage(nil)
 	lParts := msg.Len()
@@ -178,20 +192,20 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		}
 		newParts, err := d.unarchive(part)
 		if err == nil {
-			d.stats.Incr("processor.unarchive.success", 1)
+			d.mSucc.Incr(1)
 			newMsg.Append(newParts...)
 		} else {
-			d.stats.Incr("processor.unarchive.error", 1)
+			d.mErr.Incr(1)
 		}
 	}
 
 	if newMsg.Len() == 0 {
-		d.stats.Incr("processor.unarchive.skipped", 1)
-		d.stats.Incr("processor.unarchive.dropped", 1)
+		d.mSkipped.Incr(1)
+		d.mDropped.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	d.stats.Incr("processor.unarchive.sent", 1)
+	d.mSent.Incr(1)
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

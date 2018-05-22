@@ -177,9 +177,15 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 	conn := false
 
+	var (
+		mStrmConstructor = h.stats.GetCounter("input.http_client.stream.constructor")
+		mStrmReqErr      = h.stats.GetCounter("input.http_client.stream.request.error")
+		mStrnOnClose     = h.stats.GetCounter("input.http_client.stream.on_close")
+	)
+
 	rdr, err := reader.NewLines(
 		func() (io.Reader, error) {
-			h.stats.Incr("input.http_client.stream.constructor", 1)
+			mStrmConstructor.Incr(1)
 
 			resMux.Lock()
 			defer resMux.Unlock()
@@ -196,7 +202,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 			res, err = h.doRequest()
 			for err != nil && !closed {
 				h.log.Errorf("HTTP stream request failed: %v\n", err)
-				h.stats.Incr("input.http_client.stream.request.error", 1)
+				mStrmReqErr.Incr(1)
 
 				resMux.Unlock()
 				<-time.After(time.Second)
@@ -213,7 +219,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 			return res.Body, nil
 		},
 		func() {
-			h.stats.Incr("input.http_client.stream.on_close", 1)
+			mStrnOnClose.Incr(1)
 
 			resMux.Lock()
 			defer resMux.Unlock()
@@ -349,15 +355,26 @@ func (h *HTTPClient) parseResponse(res *http.Response) (parts [][]byte, err erro
 // loop is an internal loop brokers incoming messages to output pipe through
 // POST requests.
 func (h *HTTPClient) loop() {
+	var (
+		mRunning     = h.stats.GetCounter("input.http_client.running")
+		mReqTimedOut = h.stats.GetCounter("input.http_client.request.timed_out")
+		mReqErr      = h.stats.GetCounter("input.http_client.request.error")
+		mReqParseErr = h.stats.GetCounter("input.http_client.request.parse.error")
+		mReqSucc     = h.stats.GetCounter("input.http_client.request.success")
+		mCount       = h.stats.GetCounter("input.http_client.count")
+		mSendErr     = h.stats.GetCounter("input.http_client.send.error")
+		mSendSucc    = h.stats.GetCounter("input.http_client.send.success")
+	)
+
 	defer func() {
 		atomic.StoreInt32(&h.running, 0)
-		h.stats.Decr("input.http_client.running", 1)
+		mRunning.Decr(1)
 
 		close(h.transactions)
 		close(h.closedChan)
 	}()
 
-	h.stats.Incr("input.http_client.running", 1)
+	mRunning.Incr(1)
 	h.log.Infof("Polling for HTTP messages from: %s\n", h.conf.HTTPClient.URL)
 
 	resOut := make(chan types.Response)
@@ -371,23 +388,23 @@ func (h *HTTPClient) loop() {
 			if res, err = h.doRequest(); err != nil {
 				if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
 					// Hate this ^
-					h.stats.Incr("input.http_client.request.timed_out", 1)
+					mReqTimedOut.Incr(1)
 				} else {
 					h.log.Errorf("Request failed: %v\n", err)
-					h.stats.Incr("input.http_client.request.error", 1)
+					mReqErr.Incr(1)
 				}
 			} else {
 				var parts [][]byte
 				if parts, err = h.parseResponse(res); err != nil {
-					h.stats.Incr("input.http_client.request.parse.error", 1)
+					mReqParseErr.Incr(1)
 					h.log.Errorf("Failed to decode response: %v\n", err)
 				} else {
-					h.stats.Incr("input.http_client.request.success", 1)
+					mReqSucc.Incr(1)
 					msgOut = types.NewMessage(parts)
 				}
 				res.Body.Close()
 			}
-			h.stats.Incr("input.http_client.count", 1)
+			mCount.Incr(1)
 		}
 
 		if msgOut != nil {
@@ -402,10 +419,10 @@ func (h *HTTPClient) loop() {
 					return
 				}
 				if res.Error() != nil {
-					h.stats.Incr("input.http_client.send.error", 1)
+					mSendErr.Incr(1)
 				} else {
 					msgOut = nil
-					h.stats.Incr("input.http_client.send.success", 1)
+					mSendSucc.Incr(1)
 				}
 			case <-h.closeChan:
 				return

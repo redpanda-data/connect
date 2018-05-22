@@ -127,52 +127,58 @@ func (p *Processor) loop() {
 			continue
 		}
 
-		wg := sync.WaitGroup{}
-		wg.Add(len(resultMsgs))
-
 		var skipAcks int64
+		sendMsg := func(m types.Message) {
+			resChan := make(chan types.Response)
+			transac := types.NewTransaction(m, resChan)
 
-		for _, msg := range resultMsgs {
-			go func(m types.Message) {
-				defer wg.Done()
-
-				resChan := make(chan types.Response)
-				transac := types.NewTransaction(m, resChan)
-
-				for {
-					select {
-					case p.messagesOut <- transac:
-					case <-p.closeChan:
-						return
-					}
-
-					var res types.Response
-					var open bool
-					select {
-					case res, open = <-resChan:
-						if !open {
-							return
-						}
-					case <-p.closeChan:
-						return
-					}
-
-					if skipAck := res.SkipAck(); res.Error() == nil || skipAck {
-						if skipAck {
-							atomic.AddInt64(&skipAcks, 1)
-						}
-						mSndSucc.Incr(1)
-						return
-					}
-					mSndErr.Incr(1)
-					if !throt.Retry() {
-						return
-					}
+			for {
+				select {
+				case p.messagesOut <- transac:
+				case <-p.closeChan:
+					return
 				}
-			}(msg)
+
+				var res types.Response
+				var open bool
+				select {
+				case res, open = <-resChan:
+					if !open {
+						return
+					}
+				case <-p.closeChan:
+					return
+				}
+
+				if skipAck := res.SkipAck(); res.Error() == nil || skipAck {
+					if skipAck {
+						atomic.AddInt64(&skipAcks, 1)
+					}
+					mSndSucc.Incr(1)
+					return
+				}
+				mSndErr.Incr(1)
+				if !throt.Retry() {
+					return
+				}
+			}
 		}
 
-		wg.Wait()
+		if len(resultMsgs) > 1 {
+			wg := sync.WaitGroup{}
+			wg.Add(len(resultMsgs))
+
+			for _, msg := range resultMsgs {
+				go func(m types.Message) {
+					defer wg.Done()
+					sendMsg(m)
+				}(msg)
+			}
+
+			wg.Wait()
+		} else {
+			sendMsg(resultMsgs[0])
+		}
 		throt.Reset()
 
 		var res types.Response

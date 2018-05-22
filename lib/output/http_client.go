@@ -163,13 +163,20 @@ func (h *HTTPClient) createRequest(msg types.Message) (req *http.Request, err er
 // loop is an internal loop brokers incoming messages to output pipe through
 // POST requests.
 func (h *HTTPClient) loop() {
+	var (
+		mRunning  = h.stats.GetCounter("output.http_client.running")
+		mCount    = h.stats.GetCounter("output.http_client.count")
+		mSendErr  = h.stats.GetCounter("output.http_client.send.error")
+		mSendSucc = h.stats.GetCounter("output.http_client.send.success")
+	)
+
 	defer func() {
 		atomic.StoreInt32(&h.running, 0)
-		h.stats.Decr("output.http_client.running", 1)
+		mRunning.Decr(1)
 
 		close(h.closedChan)
 	}()
-	h.stats.Incr("output.http_client.running", 1)
+	mRunning.Incr(1)
 
 	h.log.Infof("Sending HTTP Post messages to: %s\n", h.conf.HTTPClient.URL)
 
@@ -188,7 +195,7 @@ func (h *HTTPClient) loop() {
 		if ts, open = <-h.transactions; !open {
 			return
 		}
-		h.stats.Incr("output.http_client.count", 1)
+		mCount.Incr(1)
 
 		// POST message
 		var req *http.Request
@@ -238,9 +245,9 @@ func (h *HTTPClient) loop() {
 
 		if err != nil {
 			h.log.Errorf("POST request failed: %v\n", err)
-			h.stats.Incr("output.http_client.send.error", 1)
+			mSendErr.Incr(1)
 		} else {
-			h.stats.Incr("output.http_client.send.success", 1)
+			mSendSucc.Incr(1)
 			h.retryThrottle.Reset()
 		}
 		select {

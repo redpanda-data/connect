@@ -170,6 +170,19 @@ func NewReadUntil(
 //------------------------------------------------------------------------------
 
 func (r *ReadUntil) loop() {
+	var (
+		mRunning         = r.stats.GetCounter("input.read_until.running")
+		mRestartErr      = r.stats.GetCounter("input.read_until.input.restart.error")
+		mRestartSucc     = r.stats.GetCounter("input.read_until.input.restart.success")
+		mInputClosed     = r.stats.GetCounter("input.read_until.input.closed")
+		mCount           = r.stats.GetCounter("input.read_until.count")
+		mPropagated      = r.stats.GetCounter("input.read_until.propagated")
+		mFinalPropagated = r.stats.GetCounter("input.read_until.final.propagated")
+		mFinalResSent    = r.stats.GetCounter("input.read_until.final.response.sent")
+		mFinalResSucc    = r.stats.GetCounter("input.read_until.final.response.success")
+		mFinalResErr     = r.stats.GetCounter("input.read_until.final.response.error")
+	)
+
 	defer func() {
 		if r.wrapped != nil {
 			r.wrapped.CloseAsync()
@@ -177,12 +190,12 @@ func (r *ReadUntil) loop() {
 			for ; err != nil; err = r.wrapped.WaitForClose(time.Second) {
 			}
 		}
-		r.stats.Decr("input.read_until.running", 1)
+		mRunning.Decr(1)
 
 		close(r.transactions)
 		close(r.closedChan)
 	}()
-	r.stats.Incr("input.read_until.running", 1)
+	mRunning.Incr(1)
 
 	var open bool
 
@@ -194,11 +207,11 @@ runLoop:
 				if r.wrapped, err = New(
 					*r.conf.Input, r.wrapperMgr, r.wrapperLog, r.wrapperStats,
 				); err != nil {
-					r.stats.Incr("input.read_until.input.restart.error", 1)
+					mRestartErr.Incr(1)
 					r.log.Errorf("Failed to create input '%v': %v\n", r.conf.Input.Type, err)
 					return
 				}
-				r.stats.Incr("input.read_until.input.restart.success", 1)
+				mRestartSucc.Incr(1)
 			} else {
 				return
 			}
@@ -208,19 +221,19 @@ runLoop:
 		select {
 		case tran, open = <-r.wrapped.TransactionChan():
 			if !open {
-				r.stats.Incr("input.read_until.input.closed", 1)
+				mInputClosed.Incr(1)
 				r.wrapped = nil
 				continue runLoop
 			}
 		case <-r.closeChan:
 			return
 		}
-		r.stats.Incr("input.read_until.count", 1)
+		mCount.Incr(1)
 
 		if !r.cond.Check(tran.Payload) {
 			select {
 			case r.transactions <- tran:
-				r.stats.Incr("input.read_until.propagated", 1)
+				mPropagated.Incr(1)
 			case <-r.closeChan:
 				return
 			}
@@ -231,7 +244,7 @@ runLoop:
 		tmpRes := make(chan types.Response)
 		select {
 		case r.transactions <- types.NewTransaction(tran.Payload, tmpRes):
-			r.stats.Incr("input.read_until.final.propagated", 1)
+			mFinalPropagated.Incr(1)
 		case <-r.closeChan:
 			return
 		}
@@ -242,15 +255,15 @@ runLoop:
 			streamEnds := res.Error() == nil
 			select {
 			case tran.ResponseChan <- res:
-				r.stats.Incr("input.read_until.final.response.sent", 1)
+				mFinalResSent.Incr(1)
 			case <-r.closeChan:
 				return
 			}
 			if streamEnds {
-				r.stats.Incr("input.read_until.final.response.sent", 1)
+				mFinalResSucc.Incr(1)
 				return
 			}
-			r.stats.Incr("input.read_until.final.response.error", 1)
+			mFinalResErr.Incr(1)
 		case <-r.closeChan:
 			return
 		}

@@ -1,29 +1,47 @@
 http:
   address: 0.0.0.0:4195
   debug_endpoints: true
+
 input:
-  type: read_until
-  read_until:
-    input:
-      type: file
-      file:
-        path: /sample_data.txt
-    restart_input: true
-    condition:
-      type: static
-      static: false
+  type: broker
+  broker:
+    copies: 1
+    inputs:
+    - type: read_until
+      read_until:
+        input:
+          type: file
+          file:
+            path: /sample_data.txt
+        restart_input: true
+        condition:
+          type: static
+          static: false
+
 buffer:
-  type: memory
+  type: none
+
 pipeline:
   threads: 1
-  processors: []
+  processors:
+  - type: jmespath
+    jmespath:
+      query: content
+
 output:
-  type: file
-  file:
-    path: /dev/null
+  type: broker
+  broker:
+    pattern: greedy
+    copies: 1
+    outputs:
+    - type: file
+      file:
+        path: /dev/null
+
 logger:
   prefix: service
   log_level: INFO
+
 metrics:
   type: prometheus
   prefix: benthos

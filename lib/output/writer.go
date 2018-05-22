@@ -73,25 +73,32 @@ func NewWriter(
 func (w *Writer) loop() {
 	// Metrics paths
 	var (
-		runningPath    = [2]string{"output." + w.typeStr + ".running", "output.running"}
-		countPath      = [2]string{"output." + w.typeStr + ".count", "output.count"}
-		successPath    = [2]string{"output." + w.typeStr + ".send.success", "output.send.success"}
-		errorPath      = [2]string{"output." + w.typeStr + ".send.error", "output.send.error"}
-		connPath       = [2]string{"output." + w.typeStr + ".connection.up", "output.connection.up"}
-		failedConnPath = [2]string{"output." + w.typeStr + ".connection.failed", "output.connection.failed"}
-		lostConnPath   = [2]string{"output." + w.typeStr + ".connection.lost", "output.connection.lost"}
+		mRunning     = w.stats.GetCounter("output.running")
+		mRunningF    = w.stats.GetCounter("output." + w.typeStr + ".running")
+		mCount       = w.stats.GetCounter("output.count")
+		mCountF      = w.stats.GetCounter("output." + w.typeStr + ".count")
+		mSuccess     = w.stats.GetCounter("output.send.success")
+		mSuccessF    = w.stats.GetCounter("output." + w.typeStr + ".send.success")
+		mError       = w.stats.GetCounter("output.send.error")
+		mErrorF      = w.stats.GetCounter("output." + w.typeStr + ".send.error")
+		mConn        = w.stats.GetCounter("output.connection.up")
+		mConnF       = w.stats.GetCounter("output." + w.typeStr + ".connection.up")
+		mFailedConn  = w.stats.GetCounter("output.connection.failed")
+		mFailedConnF = w.stats.GetCounter("output." + w.typeStr + ".connection.failed")
+		mLostConn    = w.stats.GetCounter("output.connection.lost")
+		mLostConnF   = w.stats.GetCounter("output." + w.typeStr + ".connection.lost")
 	)
 
 	defer func() {
 		err := w.writer.WaitForClose(time.Second)
 		for ; err != nil; err = w.writer.WaitForClose(time.Second) {
 		}
-		w.stats.Decr(runningPath[0], 1)
-		w.stats.Decr(runningPath[1], 1)
+		mRunning.Decr(1)
+		mRunningF.Decr(1)
 		close(w.closedChan)
 	}()
-	w.stats.Incr(runningPath[0], 1)
-	w.stats.Incr(runningPath[1], 1)
+	mRunning.Incr(1)
+	mRunningF.Incr(1)
 
 	for {
 		if err := w.writer.Connect(); err != nil {
@@ -101,8 +108,8 @@ func (w *Writer) loop() {
 			}
 
 			w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
-			w.stats.Incr(failedConnPath[0], 1)
-			w.stats.Incr(failedConnPath[1], 1)
+			mFailedConn.Incr(1)
+			mFailedConnF.Incr(1)
 			select {
 			case <-time.After(time.Second):
 			case <-w.closeChan:
@@ -112,8 +119,8 @@ func (w *Writer) loop() {
 			break
 		}
 	}
-	w.stats.Incr(connPath[0], 1)
-	w.stats.Incr(connPath[1], 1)
+	mConn.Incr(1)
+	mConnF.Incr(1)
 
 	for atomic.LoadInt32(&w.running) == 1 {
 		var ts types.Transaction
@@ -123,8 +130,8 @@ func (w *Writer) loop() {
 			if !open {
 				return
 			}
-			w.stats.Incr(countPath[0], 1)
-			w.stats.Incr(countPath[1], 1)
+			mCount.Incr(1)
+			mCountF.Incr(1)
 		case <-w.closeChan:
 			return
 		}
@@ -133,8 +140,8 @@ func (w *Writer) loop() {
 
 		// If our writer says it is not connected.
 		if err == types.ErrNotConnected {
-			w.stats.Incr(lostConnPath[0], 1)
-			w.stats.Incr(lostConnPath[1], 1)
+			mLostConn.Incr(1)
+			mLostConnF.Incr(1)
 
 			// Continue to try to reconnect while still active.
 			for atomic.LoadInt32(&w.running) == 1 {
@@ -145,16 +152,16 @@ func (w *Writer) loop() {
 					}
 
 					w.log.Errorf("Failed to reconnect to %v: %v\n", w.typeStr, err)
-					w.stats.Incr(failedConnPath[0], 1)
-					w.stats.Incr(failedConnPath[1], 1)
+					mFailedConn.Incr(1)
+					mFailedConnF.Incr(1)
 					select {
 					case <-time.After(time.Second):
 					case <-w.closeChan:
 						return
 					}
 				} else if err = w.writer.Write(ts.Payload); err != types.ErrNotConnected {
-					w.stats.Incr(connPath[0], 1)
-					w.stats.Incr(connPath[1], 1)
+					mConn.Incr(1)
+					mConnF.Incr(1)
 					break
 				}
 			}
@@ -167,11 +174,11 @@ func (w *Writer) loop() {
 
 		if err != nil {
 			w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
-			w.stats.Incr(errorPath[0], 1)
-			w.stats.Incr(errorPath[1], 1)
+			mError.Incr(1)
+			mErrorF.Incr(1)
 		} else {
-			w.stats.Incr(successPath[0], 1)
-			w.stats.Incr(successPath[1], 1)
+			mSuccess.Incr(1)
+			mSuccessF.Incr(1)
 		}
 		select {
 		case ts.ResponseChan <- types.NewSimpleResponse(err):

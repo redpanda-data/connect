@@ -89,6 +89,13 @@ type HTTPServer struct {
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
+
+	mCount     metrics.StatCounter
+	mTimeout   metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mAsyncErr  metrics.StatCounter
+	mAsyncSucc metrics.StatCounter
 }
 
 // NewHTTPServer creates a new HTTPServer input type.
@@ -111,6 +118,13 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		transactions: make(chan types.Transaction),
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
+
+		mCount:     stats.GetCounter("input.http_server.count"),
+		mTimeout:   stats.GetCounter("input.http_server.send.timeout"),
+		mErr:       stats.GetCounter("input.http_server.send.error"),
+		mSucc:      stats.GetCounter("input.http_server.send.success"),
+		mAsyncErr:  stats.GetCounter("input.http_server.send.async_error"),
+		mAsyncSucc: stats.GetCounter("input.http_server.send.async_success"),
 	}
 
 	if mux != nil {
@@ -135,7 +149,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.stats.Incr("input.http_server.count", 1)
+	h.mCount.Incr(1)
 
 	if r.Method != "POST" {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
@@ -188,7 +202,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	select {
 	case h.transactions <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
-		h.stats.Incr("input.http_server.send.timeout", 1)
+		h.mTimeout.Incr(1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		return
 	case <-h.closeChan:
@@ -202,21 +216,21 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Server closing", http.StatusServiceUnavailable)
 			return
 		} else if res.Error() != nil {
-			h.stats.Incr("input.http_server.send.error", 1)
+			h.mErr.Incr(1)
 			http.Error(w, res.Error().Error(), http.StatusBadGateway)
 			return
 		}
-		h.stats.Incr("input.http_server.send.success", 1)
+		h.mSucc.Incr(1)
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
-		h.stats.Incr("input.http_server.send.timeout", 1)
+		h.mTimeout.Incr(1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		go func() {
 			// Even if the request times out, we still need to drain a response.
 			resAsync := <-resChan
 			if resAsync.Error() != nil {
-				h.stats.Incr("input.http_server.send.async_error", 1)
+				h.mAsyncErr.Incr(1)
 			} else {
-				h.stats.Incr("input.http_server.send.async_success", 1)
+				h.mAsyncSucc.Incr(1)
 			}
 		}()
 		return
@@ -226,6 +240,8 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 //------------------------------------------------------------------------------
 
 func (h *HTTPServer) loop() {
+	mRunning := h.stats.GetCounter("input.http_server.running")
+
 	defer func() {
 		atomic.StoreInt32(&h.running, 0)
 
@@ -233,12 +249,12 @@ func (h *HTTPServer) loop() {
 			h.server.Shutdown(context.Background())
 		}
 
-		h.stats.Decr("input.http_server.running", 1)
+		mRunning.Decr(1)
 
 		close(h.transactions)
 		close(h.closedChan)
 	}()
-	h.stats.Incr("input.http_server.running", 1)
+	mRunning.Incr(1)
 
 	if h.server != nil {
 		h.log.Infof(

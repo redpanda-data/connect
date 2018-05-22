@@ -161,6 +161,12 @@ type SetJSON struct {
 	conf  Config
 	log   log.Modular
 	stats metrics.Type
+
+	mCount    metrics.StatCounter
+	mErrJSONP metrics.StatCounter
+	mErrJSONS metrics.StatCounter
+	mSucc     metrics.StatCounter
+	mSent     metrics.StatCounter
 }
 
 // NewSetJSON returns a SetJSON processor.
@@ -174,6 +180,12 @@ func NewSetJSON(
 		conf:       conf,
 		log:        log.NewModule(".processor.set_json"),
 		stats:      stats,
+
+		mCount:    stats.GetCounter("processor.set_json.count"),
+		mErrJSONP: stats.GetCounter("processor.set_json.error.json_parse"),
+		mErrJSONS: stats.GetCounter("processor.set_json.error.json_set"),
+		mSucc:     stats.GetCounter("processor.set_json.success"),
+		mSent:     stats.GetCounter("processor.set_json.sent"),
 	}
 	if len(conf.SetJSON.Path) == 0 || conf.SetJSON.Path == "." {
 		j.target = nil
@@ -186,7 +198,7 @@ func NewSetJSON(
 
 // ProcessMessage prepends a new message part to the message.
 func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	p.stats.Incr("processor.set_json.count", 1)
+	p.mCount.Incr(1)
 
 	newMsg := msg.ShallowCopy()
 
@@ -209,14 +221,14 @@ func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		if len(p.target) > 0 {
 			jsonPart, err := msg.GetJSON(index)
 			if err != nil {
-				p.stats.Incr("processor.set_json.error.json_parse", 1)
+				p.mErrJSONP.Incr(1)
 				p.log.Debugf("Failed to parse part into json: %v\n", err)
 				continue
 			}
 
 			var gPart *gabs.Container
 			if gPart, err = gabs.Consume(jsonPart); err != nil {
-				p.stats.Incr("processor.set_json.error.json_parse", 1)
+				p.mErrJSONP.Incr(1)
 				p.log.Debugf("Failed to parse part into json: %v\n", err)
 				continue
 			}
@@ -226,17 +238,17 @@ func (p *SetJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		}
 
 		if err := newMsg.SetJSON(index, data); err != nil {
-			p.stats.Incr("processor.set_json.error.json_set", 1)
+			p.mErrJSONS.Incr(1)
 			p.log.Debugf("Failed to convert json into part: %v\n", err)
 			continue
 		}
 
-		p.stats.Incr("processor.set_json.success", 1)
+		p.mSucc.Incr(1)
 	}
 
 	msgs := [1]types.Message{newMsg}
 
-	p.stats.Incr("processor.set_json.sent", 1)
+	p.mSent.Incr(1)
 	return msgs[:], nil
 }
 

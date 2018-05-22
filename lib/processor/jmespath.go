@@ -106,6 +106,13 @@ type JMESPath struct {
 	conf  Config
 	log   log.Modular
 	stats metrics.Type
+
+	mCount    metrics.StatCounter
+	mErrJSONP metrics.StatCounter
+	mErrJMES  metrics.StatCounter
+	mErrJSONS metrics.StatCounter
+	mSucc     metrics.StatCounter
+	mSent     metrics.StatCounter
 }
 
 // NewJMESPath returns a JMESPath processor.
@@ -122,6 +129,13 @@ func NewJMESPath(
 		conf:  conf,
 		log:   log.NewModule(".processor.jmespath"),
 		stats: stats,
+
+		mCount:    stats.GetCounter("processor.jmespath.count"),
+		mErrJSONP: stats.GetCounter("processor.jmespath.error.json_parse"),
+		mErrJMES:  stats.GetCounter("processor.jmespath.error.jmespath_search"),
+		mErrJSONS: stats.GetCounter("processor.jmespath.error.json_set"),
+		mSucc:     stats.GetCounter("processor.jmespath.success"),
+		mSent:     stats.GetCounter("processor.jmespath.sent"),
 	}
 	return j, nil
 }
@@ -130,7 +144,7 @@ func NewJMESPath(
 
 // ProcessMessage prepends a new message part to the message.
 func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	p.stats.Incr("processor.jmespath.count", 1)
+	p.mCount.Incr(1)
 
 	newMsg := msg.ShallowCopy()
 
@@ -145,29 +159,29 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	for _, index := range targetParts {
 		jsonPart, err := msg.GetJSON(index)
 		if err != nil {
-			p.stats.Incr("processor.jmespath.error.json_parse", 1)
+			p.mErrJSONP.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
 			continue
 		}
 
 		var result interface{}
 		if result, err = p.query.Search(jsonPart); err != nil {
-			p.stats.Incr("processor.jmespath.error.jmespath_search", 1)
+			p.mErrJMES.Incr(1)
 			p.log.Debugf("Failed to search json: %v\n", err)
 			continue
 		}
 
 		if err = newMsg.SetJSON(index, result); err != nil {
-			p.stats.Incr("processor.jmespath.error.json_set", 1)
+			p.mErrJSONS.Incr(1)
 			p.log.Debugf("Failed to convert jmespath result into part: %v\n", err)
 		} else {
-			p.stats.Incr("processor.jmespath.success", 1)
+			p.mSucc.Incr(1)
 		}
 	}
 
 	msgs := [1]types.Message{newMsg}
 
-	p.stats.Incr("processor.jmespath.sent", 1)
+	p.mSent.Incr(1)
 	return msgs[:], nil
 }
 

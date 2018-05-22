@@ -79,21 +79,25 @@ func NewLineWriter(
 func (w *LineWriter) loop() {
 	// Metrics paths
 	var (
-		runningPath = [2]string{"output." + w.typeStr + ".running", "output.running"}
-		countPath   = [2]string{"output." + w.typeStr + ".count", "output.count"}
-		successPath = [2]string{"output." + w.typeStr + ".success", "output.success"}
-		errorPath   = [2]string{"output." + w.typeStr + ".error", "output.error"}
+		mRunning  = w.stats.GetCounter("output.running")
+		mRunningF = w.stats.GetCounter("output." + w.typeStr + ".running")
+		mCount    = w.stats.GetCounter("output.count")
+		mCountF   = w.stats.GetCounter("output." + w.typeStr + ".count")
+		mSuccess  = w.stats.GetCounter("output.success")
+		mSuccessF = w.stats.GetCounter("output." + w.typeStr + ".success")
+		mError    = w.stats.GetCounter("output.error")
+		mErrorF   = w.stats.GetCounter("output." + w.typeStr + ".error")
 	)
 
 	defer func() {
 		w.handle.Close()
-		w.stats.Decr(runningPath[0], 1)
-		w.stats.Decr(runningPath[1], 1)
+		mRunning.Decr(1)
+		mRunningF.Decr(1)
 
 		close(w.closedChan)
 	}()
-	w.stats.Incr(runningPath[0], 1)
-	w.stats.Incr(runningPath[1], 1)
+	mRunning.Incr(1)
+	mRunningF.Incr(1)
 
 	delim := []byte("\n")
 	if len(w.customDelim) > 0 {
@@ -108,8 +112,8 @@ func (w *LineWriter) loop() {
 			if !open {
 				return
 			}
-			w.stats.Incr(countPath[0], 1)
-			w.stats.Incr(countPath[1], 1)
+			mCount.Incr(1)
+			mCountF.Incr(1)
 		case <-w.closeChan:
 			return
 		}
@@ -120,11 +124,11 @@ func (w *LineWriter) loop() {
 			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(ts.Payload.GetAll(), delim), delim, delim)
 		}
 		if err != nil {
-			w.stats.Incr(errorPath[0], 1)
-			w.stats.Incr(errorPath[1], 1)
+			mError.Incr(1)
+			mErrorF.Incr(1)
 		} else {
-			w.stats.Incr(successPath[0], 1)
-			w.stats.Incr(successPath[1], 1)
+			mSuccess.Incr(1)
+			mSuccessF.Incr(1)
 		}
 		select {
 		case ts.ResponseChan <- types.NewSimpleResponse(err):

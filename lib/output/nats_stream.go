@@ -122,6 +122,13 @@ func (n *NATSStream) connect() error {
 
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (n *NATSStream) loop() {
+	var (
+		mRunning = n.stats.GetCounter("output.nats_stream.running")
+		mCount   = n.stats.GetCounter("output.nats_stream.count")
+		mErr     = n.stats.GetCounter("output.nats_stream.send.error")
+		mSucc    = n.stats.GetCounter("output.nats_stream.send.success")
+	)
+
 	defer func() {
 		atomic.StoreInt32(&n.running, 0)
 
@@ -129,11 +136,11 @@ func (n *NATSStream) loop() {
 			n.natsConn.Close()
 			n.natsConn = nil
 		}
-		n.stats.Decr("output.nats_stream.running", 1)
+		mRunning.Decr(1)
 
 		close(n.closedChan)
 	}()
-	n.stats.Incr("output.nats_stream.running", 1)
+	mRunning.Incr(1)
 
 	for {
 		if err := n.connect(); err != nil {
@@ -160,15 +167,15 @@ func (n *NATSStream) loop() {
 		case <-n.closeChan:
 			return
 		}
-		n.stats.Incr("output.nats_stream.count", 1)
+		mCount.Incr(1)
 		var err error
 		for _, part := range ts.Payload.GetAll() {
 			err = n.natsConn.Publish(n.conf.NATSStream.Subject, part)
 			if err != nil {
-				n.stats.Incr("output.nats_stream.send.error", 1)
+				mErr.Incr(1)
 				break
 			} else {
-				n.stats.Incr("output.nats_stream.send.success", 1)
+				mSucc.Incr(1)
 			}
 		}
 		select {
