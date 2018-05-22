@@ -47,15 +47,6 @@
   version = "v1.16.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/amir/raidman"
-  packages = [
-    ".",
-    "proto"
-  ]
-  revision = "1ccc43bfb9c93cb401a4025e49c64ba71e5e668b"
-
-[[projects]]
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
@@ -507,6 +498,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6b6319d190c5951354bd2a9c81886b90682d9dc7c47382ce65c8b770dd0d5f1f"
+  inputs-digest = "f3685a32e2d2e650097cf2246aa43605781a18a870d9ab95c60f26573848d9d9"
   solver-name = "gps-cdcl"
   solver-version = 1
