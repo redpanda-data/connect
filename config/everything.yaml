@@ -439,13 +439,6 @@ metrics:
   prefix: benthos
   http_server: {}
   prometheus: {}
-  riemann:
-    server: ""
-    ttl: 5
-    tags:
-    - service
-    - meter
-    flush_interval: 2s
   statsd:
     address: localhost:4040
     flush_period: 100ms
