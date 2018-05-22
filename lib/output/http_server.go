@@ -30,9 +30,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -94,6 +94,21 @@ type HTTPServer struct {
 	transactions <-chan types.Transaction
 
 	closedChan chan struct{}
+
+	mCount    metrics.StatCounter
+	mSendSucc metrics.StatCounter
+
+	mGetReqRcvd  metrics.StatCounter
+	mGetCount    metrics.StatCounter
+	mGetSendSucc metrics.StatCounter
+
+	mStrmReqRcvd  metrics.StatCounter
+	mStrmErrCast  metrics.StatCounter
+	mStrmErrWrong metrics.StatCounter
+	mStrmClosed   metrics.StatCounter
+	mStrmCount    metrics.StatCounter
+	mStrmErrWrite metrics.StatCounter
+	mStrmSndSucc  metrics.StatCounter
 }
 
 // NewHTTPServer creates a new HTTPServer input type.
@@ -114,6 +129,19 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mux:        mux,
 		server:     server,
 		closedChan: make(chan struct{}),
+
+		mCount:        stats.GetCounter("output.http_server.count"),
+		mSendSucc:     stats.GetCounter("output.http_server.send.success"),
+		mGetReqRcvd:   stats.GetCounter("output.http_server.get.request.received"),
+		mGetCount:     stats.GetCounter("output.http_server.get.count"),
+		mGetSendSucc:  stats.GetCounter("output.http_server.get.send.success"),
+		mStrmReqRcvd:  stats.GetCounter("output.http_server.stream.request.received"),
+		mStrmErrCast:  stats.GetCounter("output.http_server.stream.error.cast_flusher"),
+		mStrmErrWrong: stats.GetCounter("output.http_server.stream.error.wrong_method"),
+		mStrmClosed:   stats.GetCounter("output.http_server.stream.client_closed"),
+		mStrmCount:    stats.GetCounter("output.http_server.stream.count"),
+		mStrmErrWrite: stats.GetCounter("output.http_server.stream.error.write"),
+		mStrmSndSucc:  stats.GetCounter("output.http_server.stream.send.success"),
 	}
 
 	if mux != nil {
@@ -146,7 +174,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	h.stats.Incr("output.http_server.get.request.received", 1)
+	h.mGetReqRcvd.Incr(1)
 
 	if atomic.LoadInt32(&h.running) != 1 {
 		http.Error(w, "Server closed", http.StatusServiceUnavailable)
@@ -172,8 +200,8 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 			go h.CloseAsync()
 			return
 		}
-		h.stats.Incr("output.http_server.get.count", 1)
-		h.stats.Incr("output.http_server.count", 1)
+		h.mGetCount.Incr(1)
+		h.mCount.Incr(1)
 	case <-time.After(tOutDuration - time.Since(tStart)):
 		http.Error(w, "Timed out waiting for message", http.StatusRequestTimeout)
 		return
@@ -201,26 +229,26 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ts.ResponseChan <- types.NewSimpleResponse(nil)
-	h.stats.Incr("output.http_server.send.success", 1)
-	h.stats.Incr("output.http_server.get.send.success", 1)
+	h.mSendSucc.Incr(1)
+	h.mGetSendSucc.Incr(1)
 }
 
 func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	h.stats.Incr("output.http_server.stream.request.received", 1)
+	h.mStrmReqRcvd.Incr(1)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Server error", http.StatusInternalServerError)
-		h.stats.Incr("output.http_server.stream.error.cast_flusher", 1)
+		h.mStrmErrCast.Incr(1)
 		h.log.Errorln("Failed to cast response writer to flusher")
 		return
 	}
 
 	if r.Method != "GET" {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
-		h.stats.Incr("output.http_server.stream.error.wrong_method", 1)
+		h.mStrmErrWrong.Incr(1)
 		return
 	}
 
@@ -235,11 +263,12 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-r.Context().Done():
+			h.mStrmClosed.Incr(1)
 			h.stats.Incr("output.http_server.stream.client_closed", 1)
 			return
 		}
-		h.stats.Incr("output.http_server.count", 1)
-		h.stats.Incr("output.http_server.stream.count", 1)
+		h.mStrmCount.Incr(1)
+		h.mCount.Incr(1)
 
 		var data []byte
 		if ts.Payload.Len() == 1 {
@@ -252,14 +281,14 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		ts.ResponseChan <- types.NewSimpleResponse(err)
 
 		if err != nil {
-			h.stats.Incr("output.http_server.stream.error.write", 1)
+			h.mStrmErrWrite.Incr(1)
 			return
 		}
 
 		w.Write([]byte("\n"))
 		flusher.Flush()
-		h.stats.Incr("output.http_server.send.success", 1)
-		h.stats.Incr("output.http_server.stream.send.success", 1)
+		h.mStrmSndSucc.Incr(1)
+		h.mSendSucc.Incr(1)
 	}
 }
 

@@ -21,9 +21,9 @@
 package processor
 
 import (
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -57,6 +57,10 @@ the combine processor. For example:
 type Split struct {
 	log   log.Modular
 	stats metrics.Type
+
+	mCount   metrics.StatCounter
+	mDropped metrics.StatCounter
+	mSent    metrics.StatCounter
 }
 
 // NewSplit returns a Split processor.
@@ -66,6 +70,10 @@ func NewSplit(
 	return &Split{
 		log:   log.NewModule(".processor.split"),
 		stats: stats,
+
+		mCount:   stats.GetCounter("processor.split.count"),
+		mDropped: stats.GetCounter("processor.split.dropped"),
+		mSent:    stats.GetCounter("processor.split.sent"),
 	}, nil
 }
 
@@ -74,10 +82,10 @@ func NewSplit(
 // ProcessMessage takes a single message and returns a slice of messages,
 // containing a message per part.
 func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	s.stats.Incr("processor.split.count", 1)
+	s.mCount.Incr(1)
 
 	if msg.Len() == 0 {
-		s.stats.Incr("processor.split.dropped", 1)
+		s.mDropped.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
@@ -86,7 +94,7 @@ func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		msgs[i] = types.NewMessage([][]byte{part})
 	}
 
-	s.stats.Incr("processor.split.sent", int64(len(msgs)))
+	s.mSent.Incr(int64(len(msgs)))
 	return msgs, nil
 }
 

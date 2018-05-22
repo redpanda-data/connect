@@ -25,9 +25,9 @@ import (
 
 	"github.com/OneOfOne/xxhash"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -86,6 +86,12 @@ type HashSample struct {
 	conf  Config
 	log   log.Modular
 	stats metrics.Type
+
+	mCount   metrics.StatCounter
+	mDropOOB metrics.StatCounter
+	mDropped metrics.StatCounter
+	mErrHash metrics.StatCounter
+	mSent    metrics.StatCounter
 }
 
 // NewHashSample returns a HashSample processor.
@@ -96,6 +102,12 @@ func NewHashSample(
 		conf:  conf,
 		log:   log.NewModule(".processor.hash_sample"),
 		stats: stats,
+
+		mCount:   stats.GetCounter("processor.hash_sample.count"),
+		mDropOOB: stats.GetCounter("processor.hash_sample.dropped_part_out_of_bounds"),
+		mDropped: stats.GetCounter("processor.hash_sample.dropped"),
+		mErrHash: stats.GetCounter("processor.hash_sample.hashing_error"),
+		mSent:    stats.GetCounter("processor.hash_sample.sent"),
 	}, nil
 }
 
@@ -103,7 +115,7 @@ func NewHashSample(
 
 // ProcessMessage checks each message against a set of bounds.
 func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	s.stats.Incr("processor.hash_sample.count", 1)
+	s.mCount.Incr(1)
 
 	hash := xxhash.New64()
 
@@ -116,15 +128,15 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 		// Check boundary of part index.
 		if index < 0 || index >= lParts {
-			s.stats.Incr("processor.hash_sample.dropped_part_out_of_bounds", 1)
-			s.stats.Incr("processor.hash_sample.dropped", 1)
+			s.mDropOOB.Incr(1)
+			s.mDropped.Incr(1)
 			s.log.Debugf("Cannot sample message part %v for parts count: %v\n", index, lParts)
 			return nil, types.NewSimpleResponse(nil)
 		}
 
 		// Attempt to add part to hash.
 		if _, err := hash.Write(msg.Get(index)); nil != err {
-			s.stats.Incr("processor.hash_sample.hashing_error", 1)
+			s.mErrHash.Incr(1)
 			s.log.Debugf("Cannot hash message part for sampling: %v\n", err)
 			return nil, types.NewSimpleResponse(nil)
 		}
@@ -132,12 +144,12 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	rate := scaleNum(hash.Sum64())
 	if rate >= s.conf.HashSample.RetainMin && rate < s.conf.HashSample.RetainMax {
-		s.stats.Incr("processor.hash_sample.sent", 1)
+		s.mSent.Incr(1)
 		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}
 
-	s.stats.Incr("processor.hash_sample.dropped", 1)
+	s.mDropped.Incr(1)
 	return nil, types.NewSimpleResponse(nil)
 }
 

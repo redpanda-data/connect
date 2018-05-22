@@ -23,10 +23,10 @@ package processor
 import (
 	"fmt"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -63,6 +63,10 @@ type Condition struct {
 	stats metrics.Type
 
 	condition condition.Type
+
+	mCount   metrics.StatCounter
+	mDropped metrics.StatCounter
+	mSent    metrics.StatCounter
 }
 
 // NewCondition returns a Condition processor.
@@ -80,6 +84,10 @@ func NewCondition(
 		log:       log.NewModule(".processor.condition"),
 		stats:     stats,
 		condition: cond,
+
+		mCount:   stats.GetCounter("processor.condition.count"),
+		mDropped: stats.GetCounter("processor.condition.dropped"),
+		mSent:    stats.GetCounter("processor.condition.sent"),
 	}, nil
 }
 
@@ -87,14 +95,14 @@ func NewCondition(
 
 // ProcessMessage checks each message against a set of bounds.
 func (c *Condition) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	c.stats.Incr("processor.condition.count", 1)
+	c.mCount.Incr(1)
 
 	if !c.condition.Check(msg) {
-		c.stats.Incr("processor.condition.dropped", 1)
+		c.mDropped.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	c.stats.Incr("processor.condition.sent", 1)
+	c.mSent.Incr(1)
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

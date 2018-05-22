@@ -21,9 +21,9 @@
 package processor
 
 import (
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -78,6 +78,11 @@ type Combine struct {
 	stats metrics.Type
 	n     int
 	parts [][]byte
+
+	mCount     metrics.StatCounter
+	mWarnParts metrics.StatCounter
+	mSent      metrics.StatCounter
+	mDropped   metrics.StatCounter
 }
 
 // NewCombine returns a Combine processor.
@@ -88,6 +93,11 @@ func NewCombine(
 		log:   log.NewModule(".processor.combine"),
 		stats: stats,
 		n:     conf.Combine.Parts,
+
+		mCount:     stats.GetCounter("processor.combine.count"),
+		mWarnParts: stats.GetCounter("processor.combine.warning.too_many_parts"),
+		mSent:      stats.GetCounter("processor.combine.sent"),
+		mDropped:   stats.GetCounter("processor.combine.dropped"),
 	}, nil
 }
 
@@ -97,10 +107,10 @@ func NewCombine(
 // NoAck response, until eventually it has N buffered messages, at which point
 // it combines those messages into one multiple part message which is sent on.
 func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	c.stats.Incr("processor.combine.count", 1)
+	c.mCount.Incr(1)
 
 	if msg.Len() > c.n {
-		c.stats.Incr("processor.combine.warning.too_many_parts", 1)
+		c.mWarnParts.Incr(1)
 		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}
@@ -115,12 +125,12 @@ func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		newMsg := types.NewMessage(c.parts)
 		c.parts = nil
 
-		c.stats.Incr("processor.combine.sent", 1)
+		c.mSent.Incr(1)
 		msgs := [1]types.Message{newMsg}
 		return msgs[:], nil
 	}
 
-	c.stats.Incr("processor.combine.dropped", 1)
+	c.mDropped.Incr(1)
 	return nil, types.NewUnacknowledgedResponse()
 }
 

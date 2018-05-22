@@ -1,6 +1,9 @@
 package throttle
 
-import "time"
+import (
+	"sync/atomic"
+	"time"
+)
 
 //------------------------------------------------------------------------------
 
@@ -11,24 +14,24 @@ import "time"
 type Type struct {
 	// unthrottledRetries is the number of concecutive retries we are
 	// comfortable attempting before throttling begins.
-	unthrottledRetries int
+	unthrottledRetries int64
 
 	// maxExponentialPeriod is the maximum duration for which our throttle lasts
 	// when exponentially increasing.
-	maxExponentialPeriod time.Duration
+	maxExponentialPeriod int64
 
 	// baseThrottlePeriod is the static duration for which our throttle lasts.
-	baseThrottlePeriod time.Duration
+	baseThrottlePeriod int64
 
 	// throttlePeriod is the current throttle period, by default this is set to
 	// the baseThrottlePeriod.
-	throttlePeriod time.Duration
+	throttlePeriod int64
 
 	// closeChan can interrupt a throttle when closed.
 	closeChan <-chan struct{}
 
 	// consecutiveRetries is the live count of consecutive retries.
-	consecutiveRetries int
+	consecutiveRetries int64
 }
 
 // New creates a new throttle, which permits a static number of consecutive
@@ -37,8 +40,8 @@ type Type struct {
 func New(options ...func(*Type)) *Type {
 	t := &Type{
 		unthrottledRetries:   3,
-		baseThrottlePeriod:   time.Second,
-		maxExponentialPeriod: time.Minute,
+		baseThrottlePeriod:   int64(time.Second),
+		maxExponentialPeriod: int64(time.Minute),
 		closeChan:            nil,
 	}
 	t.throttlePeriod = t.baseThrottlePeriod
@@ -52,7 +55,7 @@ func New(options ...func(*Type)) *Type {
 
 // OptMaxUnthrottledRetries sets the maximum number of consecutive retries that
 // will be attempted before throttling will begin.
-func OptMaxUnthrottledRetries(n int) func(*Type) {
+func OptMaxUnthrottledRetries(n int64) func(*Type) {
 	return func(t *Type) {
 		t.unthrottledRetries = n
 	}
@@ -62,15 +65,15 @@ func OptMaxUnthrottledRetries(n int) func(*Type) {
 // when exponentially increasing.
 func OptMaxExponentPeriod(period time.Duration) func(*Type) {
 	return func(t *Type) {
-		t.maxExponentialPeriod = period
+		t.maxExponentialPeriod = int64(period)
 	}
 }
 
 // OptThrottlePeriod sets the static period of time that throttles will last.
 func OptThrottlePeriod(period time.Duration) func(*Type) {
 	return func(t *Type) {
-		t.baseThrottlePeriod = period
-		t.throttlePeriod = period
+		t.baseThrottlePeriod = int64(period)
+		t.throttlePeriod = int64(period)
 	}
 }
 
@@ -88,12 +91,11 @@ func OptCloseChan(c <-chan struct{}) func(*Type) {
 // block until either the throttle period is over and the retry may be attempted
 // (returning true) or that the close channel has closed (returning false).
 func (t *Type) Retry() bool {
-	t.consecutiveRetries++
-	if t.consecutiveRetries <= t.unthrottledRetries {
+	if rets := atomic.AddInt64(&t.consecutiveRetries, 1); rets <= t.unthrottledRetries {
 		return true
 	}
 	select {
-	case <-time.After(t.throttlePeriod):
+	case <-time.After(time.Duration(t.throttlePeriod)):
 	case <-t.closeChan:
 		return false
 	}
@@ -103,12 +105,13 @@ func (t *Type) Retry() bool {
 // ExponentialRetry is the same as Retry except also sets the throttle period to
 // exponentially increase after each consecutive retry.
 func (t *Type) ExponentialRetry() bool {
-	if t.consecutiveRetries > t.unthrottledRetries {
-		if t.throttlePeriod < t.maxExponentialPeriod {
-			t.throttlePeriod = t.throttlePeriod * 2
-			if t.throttlePeriod > t.maxExponentialPeriod {
-				t.throttlePeriod = t.maxExponentialPeriod
+	if atomic.LoadInt64(&t.consecutiveRetries) > t.unthrottledRetries {
+		if throtPrd := atomic.LoadInt64(&t.throttlePeriod); throtPrd < t.maxExponentialPeriod {
+			throtPrd = throtPrd * 2
+			if throtPrd > t.maxExponentialPeriod {
+				throtPrd = t.maxExponentialPeriod
 			}
+			atomic.StoreInt64(&t.throttlePeriod, throtPrd)
 		}
 	}
 	return t.Retry()

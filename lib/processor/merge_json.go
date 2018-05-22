@@ -21,9 +21,9 @@
 package processor
 
 import (
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/Jeffail/gabs"
 )
 
@@ -72,6 +72,12 @@ type MergeJSON struct {
 
 	log   log.Modular
 	stats metrics.Type
+
+	mCount    metrics.StatCounter
+	mErrJSONP metrics.StatCounter
+	mErrJSONS metrics.StatCounter
+	mSucc     metrics.StatCounter
+	mSent     metrics.StatCounter
 }
 
 // NewMergeJSON returns a MergeJSON processor.
@@ -83,6 +89,12 @@ func NewMergeJSON(
 		retain: conf.MergeJSON.RetainParts,
 		log:    log.NewModule(".processor.merge_json"),
 		stats:  stats,
+
+		mCount:    stats.GetCounter("processor.merge_json.count"),
+		mErrJSONP: stats.GetCounter("processor.merge_json.error.json_parse"),
+		mErrJSONS: stats.GetCounter("processor.merge_json.error.json_set"),
+		mSucc:     stats.GetCounter("processor.merge_json.success"),
+		mSent:     stats.GetCounter("processor.merge_json.sent"),
 	}
 	return j, nil
 }
@@ -92,20 +104,20 @@ func NewMergeJSON(
 // ProcessMessage applies the processor to a message, returning one or more
 // resulting messages or a response.
 func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	p.stats.Incr("processor.merge_json.count", 1)
+	p.mCount.Incr(1)
 
 	newPart := gabs.New()
 	mergeFunc := func(index int) {
 		jsonPart, err := msg.GetJSON(index)
 		if err != nil {
-			p.stats.Incr("processor.merge_json.error.json_parse", 1)
+			p.mErrJSONP.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
 			return
 		}
 
 		var gPart *gabs.Container
 		if gPart, err = gabs.Consume(jsonPart); err != nil {
-			p.stats.Incr("processor.merge_json.error.json_parse", 1)
+			p.mErrJSONP.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
 			return
 		}
@@ -147,15 +159,15 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 
 	i := newMsg.Append([]byte{})
 	if err := newMsg.SetJSON(i, newPart.Data()); err != nil {
-		p.stats.Incr("processor.merge_json.error.json_set", 1)
+		p.mErrJSONS.Incr(1)
 		p.log.Debugf("Failed to marshal merged part into json: %v\n", err)
 	} else {
-		p.stats.Incr("processor.merge_json.success", 1)
+		p.mSucc.Incr(1)
 	}
 
 	msgs := [1]types.Message{newMsg}
 
-	p.stats.Incr("processor.merge_json.sent", 1)
+	p.mSent.Incr(1)
 	return msgs[:], nil
 }
 

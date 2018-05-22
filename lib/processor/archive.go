@@ -27,9 +27,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/Jeffail/benthos/lib/util/text"
 )
 
@@ -119,6 +119,12 @@ type Archive struct {
 	pathBytes       []byte
 	interpolatePath bool
 
+	mCount   metrics.StatCounter
+	mSkipped metrics.StatCounter
+	mErr     metrics.StatCounter
+	mSucc    metrics.StatCounter
+	mSent    metrics.StatCounter
+
 	log   log.Modular
 	stats metrics.Type
 }
@@ -142,6 +148,12 @@ func NewArchive(
 		archive:         archiver,
 		log:             log.NewModule(".processor.archive"),
 		stats:           stats,
+
+		mCount:   stats.GetCounter("processor.archive.count"),
+		mSkipped: stats.GetCounter("processor.archive.skipped"),
+		mErr:     stats.GetCounter("processor.archive.error"),
+		mSucc:    stats.GetCounter("processor.archive.success"),
+		mSent:    stats.GetCounter("processor.archive.sent"),
 	}, nil
 }
 
@@ -189,22 +201,22 @@ func (d *Archive) createHeader(body []byte) os.FileInfo {
 // ProcessMessage takes a message, attempts to archive the parts of the message,
 // and returns the result as a single part message.
 func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	d.stats.Incr("processor.archive.count", 1)
+	d.mCount.Incr(1)
 
 	if msg.Len() == 0 {
-		d.stats.Incr("processor.archive.skipped", 1)
+		d.mSkipped.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
 	newPart, err := d.archive(d.createHeader, msg.GetAll())
 	if err != nil {
 		d.log.Debugf("Failed to create archive: %v\n", err)
-		d.stats.Incr("processor.archive.error", 1)
+		d.mErr.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	d.stats.Incr("processor.archive.success", 1)
-	d.stats.Incr("processor.archive.sent", 1)
+	d.mSucc.Incr(1)
+	d.mSent.Incr(1)
 	msgs := [1]types.Message{types.NewMessage([][]byte{newPart})}
 	return msgs[:], nil
 }

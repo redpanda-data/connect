@@ -24,9 +24,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
@@ -106,6 +106,12 @@ func (o *FanOut) loop() {
 		close(o.closedChan)
 	}()
 
+	var (
+		mMsgsRcvd  = o.stats.GetCounter("broker.fan_out.messages.received")
+		mOutputErr = o.stats.GetCounter("broker.fan_out.output.error")
+		mMsgsSnt   = o.stats.GetCounter("broker.fan_out.messages.sent")
+	)
+
 	for atomic.LoadInt32(&o.running) == 1 {
 		var ts types.Transaction
 		var open bool
@@ -118,7 +124,7 @@ func (o *FanOut) loop() {
 		case <-o.closeChan:
 			return
 		}
-		o.stats.Incr("broker.fan_out.messages.received", 1)
+		mMsgsRcvd.Incr(1)
 
 		outputTargets := o.outputNs
 		for len(outputTargets) > 0 {
@@ -139,13 +145,13 @@ func (o *FanOut) loop() {
 					if res.Error() != nil {
 						newTargets = append(newTargets, i)
 						o.logger.Errorf("Failed to dispatch fan out message: %v\n", res.Error())
-						o.stats.Incr("broker.fan_out.output.error", 1)
+						mOutputErr.Incr(1)
 						if !o.throt.Retry() {
 							return
 						}
 					} else {
 						o.throt.Reset()
-						o.stats.Incr("broker.fan_out.messages.sent", 1)
+						mMsgsSnt.Incr(1)
 					}
 				case <-o.closeChan:
 					return

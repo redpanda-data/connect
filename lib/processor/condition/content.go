@@ -25,9 +25,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -187,6 +187,11 @@ type Content struct {
 	stats    metrics.Type
 	operator contentOperator
 	part     int
+
+	mSkippedEmpty metrics.StatCounter
+	mSkipped      metrics.StatCounter
+	mSkippedOOB   metrics.StatCounter
+	mApplied      metrics.StatCounter
 }
 
 // NewContent returns a Content processor.
@@ -201,6 +206,11 @@ func NewContent(
 		stats:    stats,
 		operator: op,
 		part:     conf.Content.Part,
+
+		mSkippedEmpty: stats.GetCounter("condition.content.skipped.empty_message"),
+		mSkipped:      stats.GetCounter("condition.content.skipped"),
+		mSkippedOOB:   stats.GetCounter("condition.content.skipped.out_of_bounds"),
+		mApplied:      stats.GetCounter("condition.content.applied"),
 	}, nil
 }
 
@@ -211,19 +221,19 @@ func (c *Content) Check(msg types.Message) bool {
 	index := c.part
 	lParts := msg.Len()
 	if lParts == 0 {
-		c.stats.Incr("condition.content.skipped.empty_message", 1)
-		c.stats.Incr("condition.content.skipped", 1)
+		c.mSkippedEmpty.Incr(1)
+		c.mSkipped.Incr(1)
 		return false
 	}
 
 	msgPart := msg.Get(index)
 	if msgPart == nil {
-		c.stats.Incr("condition.content.skipped.out_of_bounds", 1)
-		c.stats.Incr("condition.content.skipped", 1)
+		c.mSkippedOOB.Incr(1)
+		c.mSkipped.Incr(1)
 		return false
 	}
 
-	c.stats.Incr("condition.content.applied", 1)
+	c.mApplied.Incr(1)
 	return c.operator(msgPart)
 }
 

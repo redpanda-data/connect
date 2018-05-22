@@ -23,9 +23,9 @@ package condition
 import (
 	"fmt"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	jmespath "github.com/jmespath/go-jmespath"
 )
 
@@ -90,6 +90,12 @@ type JMESPath struct {
 	log   log.Modular
 	part  int
 	query *jmespath.JMESPath
+
+	mSkipped  metrics.StatCounter
+	mErrJSONP metrics.StatCounter
+	mDropped  metrics.StatCounter
+	mErrJMES  metrics.StatCounter
+	mApplied  metrics.StatCounter
 }
 
 // NewJMESPath returns a JMESPath processor.
@@ -106,6 +112,12 @@ func NewJMESPath(
 		log:   log,
 		part:  conf.JMESPath.Part,
 		query: query,
+
+		mSkipped:  stats.GetCounter("condition.jmespath.skipped"),
+		mErrJSONP: stats.GetCounter("condition.jmespath.error.json_parse"),
+		mDropped:  stats.GetCounter("condition.jmespath.dropped"),
+		mErrJMES:  stats.GetCounter("condition.jmespath.error.jmespath_search"),
+		mApplied:  stats.GetCounter("condition.jmespath.applied"),
 	}, nil
 }
 
@@ -119,26 +131,26 @@ func (c *JMESPath) Check(msg types.Message) bool {
 	}
 
 	if index < 0 || index >= msg.Len() {
-		c.stats.Incr("condition.jmespath.skipped", 1)
+		c.mSkipped.Incr(1)
 		return false
 	}
 
 	jsonPart, err := msg.GetJSON(index)
 	if err != nil {
-		c.stats.Incr("condition.jmespath.error.json_parse", 1)
-		c.stats.Incr("condition.jmespath.dropped", 1)
+		c.mErrJSONP.Incr(1)
+		c.mDropped.Incr(1)
 		c.log.Debugf("Failed to parse part into json: %v\n", err)
 		return false
 	}
 
 	var result interface{}
 	if result, err = c.query.Search(jsonPart); err != nil {
-		c.stats.Incr("condition.jmespath.error.jmespath_search", 1)
-		c.stats.Incr("condition.jmespath.dropped", 1)
+		c.mErrJMES.Incr(1)
+		c.mDropped.Incr(1)
 		c.log.Debugf("Failed to search json: %v\n", err)
 		return false
 	}
-	c.stats.Incr("condition.jmespath.applied", 1)
+	c.mApplied.Incr(1)
 
 	resultBool, _ := result.(bool)
 	return resultBool

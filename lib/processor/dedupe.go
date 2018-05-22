@@ -27,9 +27,9 @@ import (
 
 	"github.com/OneOfOne/xxhash"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/Jeffail/gabs"
 )
 
@@ -153,6 +153,13 @@ type Dedupe struct {
 	cache      types.Cache
 	hasherFunc hasherFunc
 	jPaths     []string
+
+	mCount    metrics.StatCounter
+	mErrJSON  metrics.StatCounter
+	mDropped  metrics.StatCounter
+	mErrHash  metrics.StatCounter
+	mErrCache metrics.StatCounter
+	mSent     metrics.StatCounter
 }
 
 // NewDedupe returns a Dedupe processor.
@@ -175,6 +182,13 @@ func NewDedupe(
 		cache:      c,
 		hasherFunc: hFunc,
 		jPaths:     conf.Dedupe.JSONPaths,
+
+		mCount:    stats.GetCounter("processor.dedupe.count"),
+		mErrJSON:  stats.GetCounter("processor.dedupe.error.json_parse"),
+		mDropped:  stats.GetCounter("processor.dedupe.dropped"),
+		mErrHash:  stats.GetCounter("processor.dedupe.error.hash"),
+		mErrCache: stats.GetCounter("processor.dedupe.error.cache"),
+		mSent:     stats.GetCounter("processor.dedupe.sent"),
 	}, nil
 }
 
@@ -182,7 +196,7 @@ func NewDedupe(
 
 // ProcessMessage checks each message against a set of bounds.
 func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	d.stats.Incr("processor.dedupe.count", 1)
+	d.mCount.Incr(1)
 
 	extractedHash := false
 	hasher := d.hasherFunc()
@@ -192,16 +206,16 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			// Attempt to add JSON fields from part to hash.
 			jPart, err := msg.GetJSON(index)
 			if err != nil {
-				d.stats.Incr("processor.dedupe.error.json_parse", 1)
-				d.stats.Incr("processor.dedupe.dropped", 1)
+				d.mErrJSON.Incr(1)
+				d.mDropped.Incr(1)
 				d.log.Debugf("JSON Parse error: %v\n", err)
 				continue
 			}
 
 			var gPart *gabs.Container
 			if gPart, err = gabs.Consume(jPart); err != nil {
-				d.stats.Incr("processor.dedupe.error.json_parse", 1)
-				d.stats.Incr("processor.dedupe.dropped", 1)
+				d.mErrJSON.Incr(1)
+				d.mDropped.Incr(1)
 				d.log.Debugf("JSON Parse error: %v\n", err)
 				continue
 			}
@@ -221,8 +235,8 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 				}
 
 				if _, err := hasher.Write(hashBytes); nil != err {
-					d.stats.Incr("processor.dedupe.error.hash", 1)
-					d.stats.Incr("processor.dedupe.dropped", 1)
+					d.mErrHash.Incr(1)
+					d.mDropped.Incr(1)
 					d.log.Debugf("Hash error: %v\n", err)
 				} else {
 					extractedHash = true
@@ -232,8 +246,8 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			// Attempt to add whole part to hash.
 			if partBytes := msg.Get(index); partBytes != nil {
 				if _, err := hasher.Write(msg.Get(index)); nil != err {
-					d.stats.Incr("processor.dedupe.error.hash", 1)
-					d.stats.Incr("processor.dedupe.dropped", 1)
+					d.mErrHash.Incr(1)
+					d.mDropped.Incr(1)
 					d.log.Debugf("Hash error: %v\n", err)
 				} else {
 					extractedHash = true
@@ -244,24 +258,24 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 
 	if !extractedHash {
 		if d.conf.Dedupe.DropOnCacheErr {
-			d.stats.Incr("processor.dedupe.dropped", 1)
+			d.mDropped.Incr(1)
 			return nil, types.NewSimpleResponse(nil)
 		}
 	} else if err := d.cache.Add(string(hasher.Bytes()), []byte{'t'}); err != nil {
 		if err != types.ErrKeyAlreadyExists {
-			d.stats.Incr("processor.dedupe.error.cache", 1)
+			d.mErrCache.Incr(1)
 			d.log.Errorf("Cache error: %v\n", err)
 			if d.conf.Dedupe.DropOnCacheErr {
-				d.stats.Incr("processor.dedupe.dropped", 1)
+				d.mDropped.Incr(1)
 				return nil, types.NewSimpleResponse(nil)
 			}
 		} else {
-			d.stats.Incr("processor.dedupe.dropped", 1)
+			d.mDropped.Incr(1)
 			return nil, types.NewSimpleResponse(nil)
 		}
 	}
 
-	d.stats.Incr("processor.dedupe.sent", 1)
+	d.mSent.Incr(1)
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

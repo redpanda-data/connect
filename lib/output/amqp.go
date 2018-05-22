@@ -25,9 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/streadway/amqp"
 )
 
@@ -149,15 +149,24 @@ func (a *AMQP) disconnect() error {
 
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (a *AMQP) loop() {
+	var (
+		mRunning   = a.stats.GetCounter("output.amqp.running")
+		mReconErr  = a.stats.GetCounter("output.amqp.reconnect.error")
+		mReconSucc = a.stats.GetCounter("output.amqp.reconnect.success")
+		mCount     = a.stats.GetCounter("output.amqp.count")
+		mSucc      = a.stats.GetCounter("output.amqp.send.success")
+		mErr       = a.stats.GetCounter("output.amqp.send.error")
+	)
+
 	defer func() {
 		atomic.StoreInt32(&a.running, 0)
 
 		a.disconnect()
-		a.stats.Decr("output.amqp.running", 1)
+		mRunning.Decr(1)
 
 		close(a.closedChan)
 	}()
-	a.stats.Incr("output.amqp.running", 1)
+	mRunning.Incr(1)
 
 	for {
 		if err := a.connect(); err != nil {
@@ -178,7 +187,7 @@ func (a *AMQP) loop() {
 		for a.amqpChan == nil {
 			a.log.Warnln("Lost AMQP connection, attempting to reconnect.")
 			if err := a.connect(); err != nil {
-				a.stats.Incr("output.amqp.reconnect.error", 1)
+				mReconErr.Incr(1)
 				select {
 				case <-time.After(time.Second):
 				case <-a.closeChan:
@@ -186,7 +195,7 @@ func (a *AMQP) loop() {
 				}
 			} else {
 				a.log.Warnln("Successfully reconnected to AMQP.")
-				a.stats.Incr("output.amqp.reconnect.success", 1)
+				mReconSucc.Incr(1)
 			}
 		}
 
@@ -200,7 +209,7 @@ func (a *AMQP) loop() {
 			return
 		}
 
-		a.stats.Incr("output.amqp.count", 1)
+		mCount.Incr(1)
 		var err error
 		for _, part := range ts.Payload.GetAll() {
 			err = a.amqpChan.Publish(
@@ -231,9 +240,9 @@ func (a *AMQP) loop() {
 				a.disconnect()
 			}
 			if err == nil {
-				a.stats.Incr("output.amqp.send.success", 1)
+				mSucc.Incr(1)
 			} else {
-				a.stats.Incr("output.amqp.send.error", 1)
+				mErr.Incr(1)
 				break
 			}
 		}

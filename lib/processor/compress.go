@@ -25,9 +25,9 @@ import (
 	"compress/gzip"
 	"fmt"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -103,6 +103,12 @@ type Compress struct {
 
 	log   log.Modular
 	stats metrics.Type
+
+	mCount   metrics.StatCounter
+	mSucc    metrics.StatCounter
+	mErr     metrics.StatCounter
+	mSkipped metrics.StatCounter
+	mSent    metrics.StatCounter
 }
 
 // NewCompress returns a Compress processor.
@@ -118,6 +124,12 @@ func NewCompress(
 		comp:  cor,
 		log:   log.NewModule(".processor.compress"),
 		stats: stats,
+
+		mCount:   stats.GetCounter("processor.compress.count"),
+		mSucc:    stats.GetCounter("processor.compress.success"),
+		mErr:     stats.GetCounter("processor.compress.error"),
+		mSkipped: stats.GetCounter("processor.compress.skipped"),
+		mSent:    stats.GetCounter("processor.compress.sent"),
 	}, nil
 }
 
@@ -126,7 +138,7 @@ func NewCompress(
 // ProcessMessage takes a message, attempts to compress parts of the message and
 // returns the result.
 func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	c.stats.Incr("processor.compress.count", 1)
+	c.mCount.Incr(1)
 
 	newMsg := types.NewMessage(nil)
 	lParts := msg.Len()
@@ -149,20 +161,20 @@ func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		}
 		newPart, err := c.comp(c.conf.Level, part)
 		if err == nil {
-			c.stats.Incr("processor.compress.success", 1)
+			c.mSucc.Incr(1)
 			newMsg.Append(newPart)
 		} else {
 			c.log.Debugf("Failed to compress message part: %v\n", err)
-			c.stats.Incr("processor.compress.error", 1)
+			c.mErr.Incr(1)
 		}
 	}
 
 	if newMsg.Len() == 0 {
-		c.stats.Incr("processor.compress.skipped", 1)
+		c.mSkipped.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	c.stats.Incr("processor.compress.sent", 1)
+	c.mSent.Incr(1)
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

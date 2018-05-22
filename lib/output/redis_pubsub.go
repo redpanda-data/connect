@@ -25,9 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/go-redis/redis"
 )
 
@@ -134,17 +134,26 @@ func (r *RedisPubSub) disconnect() error {
 
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (r *RedisPubSub) loop() {
+	var (
+		mRunning   = r.stats.GetCounter("output.redis_pubsub.running")
+		mReconErr  = r.stats.GetCounter("output.redis_pubsub.reconnect.error")
+		mReconSucc = r.stats.GetCounter("output.redis_pubsub.reconnect.success")
+		mCount     = r.stats.GetCounter("output.redis_pubsub.count")
+		mSucc      = r.stats.GetCounter("output.redis_pubsub.send.success")
+		mErr       = r.stats.GetCounter("output.redis_pubsub.send.error")
+	)
+
 	defer func() {
 		atomic.StoreInt32(&r.running, 0)
 
 		if err := r.disconnect(); err != nil {
 			r.log.Errorf("Failed to disconnect redis client: %v\n", err)
 		}
-		r.stats.Decr("output.redis_pubsub.running", 1)
+		mRunning.Decr(1)
 
 		close(r.closedChan)
 	}()
-	r.stats.Incr("output.redis_pubsub.running", 1)
+	mRunning.Incr(1)
 
 	for {
 		if err := r.connect(); err != nil {
@@ -165,7 +174,7 @@ func (r *RedisPubSub) loop() {
 		for r.client == nil {
 			r.log.Warnln("Lost RedisPubSub connection, attempting to reconnect.")
 			if err := r.connect(); err != nil {
-				r.stats.Incr("output.redis_pubsub.reconnect.error", 1)
+				mReconErr.Incr(1)
 				select {
 				case <-time.After(time.Second):
 				case <-r.closeChan:
@@ -173,7 +182,7 @@ func (r *RedisPubSub) loop() {
 				}
 			} else {
 				r.log.Warnln("Successfully reconnected to RedisPubSub.")
-				r.stats.Incr("output.redis_pubsub.reconnect.success", 1)
+				mReconSucc.Incr(1)
 			}
 		}
 
@@ -187,14 +196,14 @@ func (r *RedisPubSub) loop() {
 			return
 		}
 
-		r.stats.Incr("output.redis_pubsub.count", 1)
+		mCount.Incr(1)
 		var err error
 		for _, part := range ts.Payload.GetAll() {
 			if _, err = r.client.Publish(r.conf.RedisPubSub.Channel, part).Result(); err == nil {
-				r.stats.Incr("output.redis_pubsub.send.success", 1)
+				mSucc.Incr(1)
 			} else {
 				r.disconnect()
-				r.stats.Incr("output.redis_pubsub.send.error", 1)
+				mErr.Incr(1)
 				break
 			}
 		}

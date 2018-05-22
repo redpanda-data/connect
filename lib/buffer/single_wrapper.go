@@ -25,9 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
@@ -112,6 +112,12 @@ func (m *SingleWrapper) inputLoop() {
 		m.closedWG.Done()
 	}()
 
+	var (
+		mWriteCount   = m.stats.GetCounter("buffer.write.count")
+		mWriteErr     = m.stats.GetCounter("buffer.write.error")
+		mWriteBacklog = m.stats.GetGauge("buffer.backlog")
+	)
+
 	for atomic.LoadInt32(&m.running) == 1 {
 		var tr types.Transaction
 		var open bool
@@ -125,10 +131,10 @@ func (m *SingleWrapper) inputLoop() {
 		}
 		backlog, err := m.buffer.PushMessage(tr.Payload)
 		if err == nil {
-			m.stats.Incr("buffer.write.count", 1)
-			m.stats.Gauge("buffer.backlog", int64(backlog))
+			mWriteCount.Incr(1)
+			mWriteBacklog.Gauge(int64(backlog))
 		} else {
-			m.stats.Incr("buffer.write.error", 1)
+			mWriteErr.Incr(1)
 		}
 		select {
 		case tr.ResponseChan <- types.NewSimpleResponse(err):
@@ -146,13 +152,22 @@ func (m *SingleWrapper) outputLoop() {
 		m.closedWG.Done()
 	}()
 
+	var (
+		mReadCount   = m.stats.GetCounter("buffer.read.count")
+		mReadErr     = m.stats.GetCounter("buffer.read.error")
+		mSendSuccess = m.stats.GetCounter("buffer.send.success")
+		mSendErr     = m.stats.GetCounter("buffer.send.error")
+		mLatency     = m.stats.GetTimer("buffer.latency")
+		mBacklog     = m.stats.GetGauge("buffer.backlog")
+	)
+
 	var msg types.Message
 	for atomic.LoadInt32(&m.running) == 1 {
 		if msg == nil {
 			var err error
 			if msg, err = m.buffer.NextMessage(); err != nil {
 				if err != types.ErrTypeClosed {
-					m.stats.Incr("buffer.read.error", 1)
+					mReadErr.Incr(1)
 					m.log.Errorf("Failed to read buffer: %v\n", err)
 
 					m.errThrottle.Retry()
@@ -167,7 +182,7 @@ func (m *SingleWrapper) outputLoop() {
 					return
 				}
 			} else {
-				m.stats.Incr("buffer.read.count", 1)
+				mReadCount.Incr(1)
 				m.errThrottle.Reset()
 			}
 		}
@@ -183,13 +198,13 @@ func (m *SingleWrapper) outputLoop() {
 				return
 			}
 			if res.Error() == nil {
-				m.stats.Timing("buffer.latency", time.Since(msg.CreatedAt()).Nanoseconds())
+				mLatency.Timing(time.Since(msg.CreatedAt()).Nanoseconds())
 				msg = nil
 				backlog, _ := m.buffer.ShiftMessage()
-				m.stats.Incr("buffer.send.success", 1)
-				m.stats.Gauge("buffer.backlog", int64(backlog))
+				mBacklog.Gauge(int64(backlog))
+				mSendSuccess.Incr(1)
 			} else {
-				m.stats.Incr("buffer.send.error", 1)
+				mSendErr.Incr(1)
 			}
 		}
 	}

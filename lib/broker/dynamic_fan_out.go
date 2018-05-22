@@ -25,9 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
@@ -229,6 +229,17 @@ func (d *DynamicFanOut) loop() {
 		close(d.closedChan)
 	}()
 
+	var (
+		mCount      = d.stats.GetCounter("broker.dynamic_fan_out.output.count")
+		mRemoveErr  = d.stats.GetCounter("broker.dynamic_fan_out.output.remove.error")
+		mRemoveSucc = d.stats.GetCounter("broker.dynamic_fan_out.output.remove.success")
+		mAddErr     = d.stats.GetCounter("broker.dynamic_fan_out.output.add.error")
+		mAddSucc    = d.stats.GetCounter("broker.dynamic_fan_out.output.add.success")
+		mMsgsRcd    = d.stats.GetCounter("broker.dynamic_fan_out.messages.received")
+		mOutputErr  = d.stats.GetCounter("broker.dynamic_fan_out.output.error")
+		mMsgsSnt    = d.stats.GetCounter("broker.dynamic_fan_out.messages.sent")
+	)
+
 	for atomic.LoadInt32(&d.running) == 1 {
 		var ts types.Transaction
 		var open bool
@@ -246,16 +257,16 @@ func (d *DynamicFanOut) loop() {
 			if !open {
 				return
 			}
-			d.stats.Incr("broker.dynamic_fan_out.output.count", 1)
+			mCount.Incr(1)
 
 			if _, exists := d.outputs[wrappedOutput.Name]; exists {
 				if err := d.removeOutput(wrappedOutput.Name, wrappedOutput.Timeout); err != nil {
-					d.stats.Incr("broker.dynamic_fan_out.output.remove.error", 1)
+					mRemoveErr.Incr(1)
 					d.log.Errorf("Failed to stop old copy of dynamic output '%v': %v\n", wrappedOutput.Name, err)
 					wrappedOutput.ResChan <- err
 					continue
 				}
-				d.stats.Incr("broker.dynamic_fan_out.output.remove.success", 1)
+				mRemoveSucc.Incr(1)
 				d.onRemove(wrappedOutput.Name)
 			}
 			if wrappedOutput.Output == nil {
@@ -263,10 +274,10 @@ func (d *DynamicFanOut) loop() {
 			} else {
 				err := d.addOutput(wrappedOutput.Name, wrappedOutput.Output)
 				if err != nil {
-					d.stats.Incr("broker.dynamic_fan_out.output.add.error", 1)
+					mAddErr.Incr(1)
 					d.log.Errorf("Failed to start new dynamic output '%v': %v\n", wrappedOutput.Name, err)
 				} else {
-					d.stats.Incr("broker.dynamic_fan_out.output.add.success", 1)
+					mAddSucc.Incr(1)
 					d.onAdd(wrappedOutput.Name)
 				}
 				wrappedOutput.ResChan <- err
@@ -279,7 +290,7 @@ func (d *DynamicFanOut) loop() {
 		case <-d.closeChan:
 			return
 		}
-		d.stats.Incr("broker.dynamic_fan_out.messages.received", 1)
+		mMsgsRcd.Incr(1)
 
 		// If we received a message attempt to send it to each output.
 		remainingTargets := make(map[string]outputWithResChan, len(d.outputs))
@@ -307,13 +318,13 @@ func (d *DynamicFanOut) loop() {
 						delete(remainingTargets, k)
 					} else if res.Error() != nil {
 						d.log.Errorf("Failed to dispatch dynamic fan out message: %v\n", res.Error())
-						d.stats.Incr("broker.dynamic_fan_out.output.error", 1)
+						mOutputErr.Incr(1)
 						if !d.throt.Retry() {
 							return
 						}
 					} else {
 						d.throt.Reset()
-						d.stats.Incr("broker.dynamic_fan_out.messages.sent", 1)
+						mMsgsSnt.Incr(1)
 						delete(remainingTargets, k)
 					}
 				case <-d.closeChan:

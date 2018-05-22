@@ -22,8 +22,34 @@ package metrics
 
 //------------------------------------------------------------------------------
 
+// DudStat implements the Stat interface but doesn't actual do anything.
+type DudStat struct{}
+
+// Incr does nothing.
+func (d DudStat) Incr(count int64) error { return nil }
+
+// Decr does nothing.
+func (d DudStat) Decr(count int64) error { return nil }
+
+// Timing does nothing.
+func (d DudStat) Timing(delta int64) error { return nil }
+
+// Gauge does nothing.
+func (d DudStat) Gauge(value int64) error { return nil }
+
+//------------------------------------------------------------------------------
+
 // DudType implements the Type interface but doesn't actual do anything.
 type DudType struct{}
+
+// GetCounter returns a DudStat.
+func (d DudType) GetCounter(path ...string) StatCounter { return DudStat{} }
+
+// GetTimer returns a DudStat.
+func (d DudType) GetTimer(path ...string) StatTimer { return DudStat{} }
+
+// GetGauge returns a DudStat.
+func (d DudType) GetGauge(path ...string) StatGauge { return DudStat{} }
 
 // Incr does nothing.
 func (d DudType) Incr(path string, count int64) error { return nil }

@@ -26,9 +26,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	nsq "github.com/nsqio/go-nsq"
 )
 
@@ -124,15 +124,22 @@ func (n *NSQ) disconnect() error {
 
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (n *NSQ) loop() {
+	var (
+		mRunning  = n.stats.GetCounter("output.nsq.running")
+		mCount    = n.stats.GetCounter("output.nsq.count")
+		mSendErr  = n.stats.GetCounter("output.nsq.send.error")
+		mSendSucc = n.stats.GetCounter("output.nsq.send.success")
+	)
+
 	defer func() {
 		atomic.StoreInt32(&n.running, 0)
 
 		n.disconnect()
-		n.stats.Decr("output.nsq.running", 1)
+		mRunning.Decr(1)
 
 		close(n.closedChan)
 	}()
-	n.stats.Incr("output.nsq.running", 1)
+	mRunning.Incr(1)
 
 	for {
 		if err := n.connect(); err != nil {
@@ -159,15 +166,15 @@ func (n *NSQ) loop() {
 		case <-n.closeChan:
 			return
 		}
-		n.stats.Incr("output.nsq.count", 1)
+		mCount.Incr(1)
 		var err error
 		for _, part := range ts.Payload.GetAll() {
 			err = n.producer.Publish(n.conf.NSQ.Topic, part)
 			if err != nil {
-				n.stats.Incr("output.nsq.send.error", 1)
+				mSendErr.Incr(1)
 				break
 			} else {
-				n.stats.Incr("output.nsq.send.success", 1)
+				mSendSucc.Incr(1)
 			}
 		}
 		select {

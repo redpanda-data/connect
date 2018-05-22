@@ -22,8 +22,41 @@ package metrics
 
 import "net/http"
 
+// StatCounter is a representation of a single counter metric stat. Interactions
+// with this stat are thread safe.
+type StatCounter interface {
+	// Incr increments a metric by an amount.
+	Incr(count int64) error
+
+	// Decr decrements a metric by an amount.
+	Decr(count int64) error
+}
+
+// StatTimer is a representation of a single timer metric stat. Interactions
+// with this stat are thread safe.
+type StatTimer interface {
+	// Timing sets a timing metric.
+	Timing(delta int64) error
+}
+
+// StatGauge is a representation of a single gauge metric stat. Interactions
+// with this stat are thread safe.
+type StatGauge interface {
+	// Gauge sets a gauge metric.
+	Gauge(value int64) error
+}
+
 // Type is an interface for metrics aggregation.
 type Type interface {
+	// GetCounter returns an editable counter stat for a given path.
+	GetCounter(path ...string) StatCounter
+
+	// GetTimer returns an editable timer stat for a given path.
+	GetTimer(path ...string) StatTimer
+
+	// GetGauge returns an editable gauge stat for a given path.
+	GetGauge(path ...string) StatGauge
+
 	// Incr increments a metric by an amount.
 	Incr(path string, count int64) error
 

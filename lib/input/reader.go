@@ -25,9 +25,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/input/reader"
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -77,32 +77,44 @@ func NewReader(
 func (r *Reader) loop() {
 	// Metrics paths
 	var (
-		runningPath     = [2]string{"input." + r.typeStr + ".running", "input.running"}
-		countPath       = [2]string{"input." + r.typeStr + ".count", "input.count"}
-		readSuccessPath = [2]string{"input." + r.typeStr + ".read.success", "input.read.success"}
-		readErrorPath   = [2]string{"input." + r.typeStr + ".read.error", "input.read.error"}
-		sendSuccessPath = [2]string{"input." + r.typeStr + ".send.success", "input.send.success"}
-		sendErrorPath   = [2]string{"input." + r.typeStr + ".send.error", "input.send.error"}
-		ackSuccessPath  = [2]string{"input." + r.typeStr + ".ack.success", "input.ack.success"}
-		ackErrorPath    = [2]string{"input." + r.typeStr + ".ack.error", "input.ack.error"}
-		connPath        = [2]string{"input." + r.typeStr + ".connection.up", "input.connection.up"}
-		failedConnPath  = [2]string{"input." + r.typeStr + ".connection.failed", "input.connection.failed"}
-		lostConnPath    = [2]string{"input." + r.typeStr + ".connection.lost", "input.connection.lost"}
-		latencyPath     = [2]string{"input." + r.typeStr + ".latency", "input.latency"}
+		mRunning      = r.stats.GetCounter("input." + r.typeStr + ".running")
+		mRunningF     = r.stats.GetCounter("input.running")
+		mCount        = r.stats.GetCounter("input." + r.typeStr + ".count")
+		mCountF       = r.stats.GetCounter("input.count")
+		mReadSuccess  = r.stats.GetCounter("input." + r.typeStr + ".read.success")
+		mReadSuccessF = r.stats.GetCounter("input.read.success")
+		mReadError    = r.stats.GetCounter("input." + r.typeStr + ".read.error")
+		mReadErrorF   = r.stats.GetCounter("input.read.error")
+		mSendSuccess  = r.stats.GetCounter("input." + r.typeStr + ".send.success")
+		mSendSuccessF = r.stats.GetCounter("input.send.success")
+		mSendError    = r.stats.GetCounter("input." + r.typeStr + ".send.error")
+		mSendErrorF   = r.stats.GetCounter("input.send.error")
+		mAckSuccess   = r.stats.GetCounter("input." + r.typeStr + ".ack.success")
+		mAckSuccessF  = r.stats.GetCounter("input.ack.success")
+		mAckError     = r.stats.GetCounter("input." + r.typeStr + ".ack.error")
+		mAckErrorF    = r.stats.GetCounter("input.ack.error")
+		mConn         = r.stats.GetCounter("input." + r.typeStr + ".connection.up")
+		mConnF        = r.stats.GetCounter("input.connection.up")
+		mFailedConn   = r.stats.GetCounter("input." + r.typeStr + ".connection.failed")
+		mFailedConnF  = r.stats.GetCounter("input.connection.failed")
+		mLostConn     = r.stats.GetCounter("input." + r.typeStr + ".connection.lost")
+		mLostConnF    = r.stats.GetCounter("input.connection.lost")
+		mLatency      = r.stats.GetTimer("input." + r.typeStr + ".latency")
+		mLatencyF     = r.stats.GetTimer("input.latency")
 	)
 
 	defer func() {
 		err := r.reader.WaitForClose(time.Second)
 		for ; err != nil; err = r.reader.WaitForClose(time.Second) {
 		}
-		r.stats.Decr(runningPath[0], 1)
-		r.stats.Decr(runningPath[1], 1)
+		mRunning.Decr(1)
+		mRunningF.Decr(1)
 
 		close(r.transactions)
 		close(r.closedChan)
 	}()
-	r.stats.Incr(runningPath[0], 1)
-	r.stats.Incr(runningPath[1], 1)
+	mRunning.Incr(1)
+	mRunningF.Incr(1)
 
 	for {
 		if err := r.reader.Connect(); err != nil {
@@ -110,8 +122,8 @@ func (r *Reader) loop() {
 				return
 			}
 			r.log.Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
-			r.stats.Incr(failedConnPath[0], 1)
-			r.stats.Incr(failedConnPath[1], 1)
+			mFailedConn.Incr(1)
+			mFailedConnF.Incr(1)
 			select {
 			case <-time.After(time.Second):
 			case <-r.closeChan:
@@ -121,16 +133,16 @@ func (r *Reader) loop() {
 			break
 		}
 	}
-	r.stats.Incr(connPath[0], 1)
-	r.stats.Incr(connPath[1], 1)
+	mConn.Incr(1)
+	mConnF.Incr(1)
 
 	for atomic.LoadInt32(&r.running) == 1 {
 		msg, err := r.reader.Read()
 
 		// If our reader says it is not connected.
 		if err == types.ErrNotConnected {
-			r.stats.Incr(lostConnPath[0], 1)
-			r.stats.Incr(lostConnPath[1], 1)
+			mLostConn.Incr(1)
+			mLostConnF.Incr(1)
 
 			// Continue to try to reconnect while still active.
 			for atomic.LoadInt32(&r.running) == 1 {
@@ -141,16 +153,16 @@ func (r *Reader) loop() {
 					}
 
 					r.log.Errorf("Failed to reconnect to %v: %v\n", r.typeStr, err)
-					r.stats.Incr(failedConnPath[0], 1)
-					r.stats.Incr(failedConnPath[1], 1)
+					mFailedConn.Incr(1)
+					mFailedConnF.Incr(1)
 					select {
 					case <-time.After(time.Second):
 					case <-r.closeChan:
 						return
 					}
 				} else if msg, err = r.reader.Read(); err != types.ErrNotConnected {
-					r.stats.Incr(connPath[0], 1)
-					r.stats.Incr(connPath[1], 1)
+					mConn.Incr(1)
+					mConnF.Incr(1)
 					break
 				}
 			}
@@ -163,16 +175,16 @@ func (r *Reader) loop() {
 
 		if err != nil || msg == nil {
 			if err != types.ErrTimeout && err != types.ErrNotConnected {
-				r.stats.Incr(readErrorPath[0], 1)
-				r.stats.Incr(readErrorPath[1], 1)
+				mReadError.Incr(1)
+				mReadErrorF.Incr(1)
 				r.log.Errorf("Failed to read message: %v\n", err)
 			}
 			continue
 		} else {
-			r.stats.Incr(countPath[0], 1)
-			r.stats.Incr(countPath[1], 1)
-			r.stats.Incr(readSuccessPath[0], 1)
-			r.stats.Incr(readSuccessPath[1], 1)
+			mCount.Incr(1)
+			mCountF.Incr(1)
+			mReadSuccess.Incr(1)
+			mReadSuccessF.Incr(1)
 		}
 
 		select {
@@ -187,22 +199,22 @@ func (r *Reader) loop() {
 				return
 			}
 			if res.Error() != nil {
-				r.stats.Incr(sendErrorPath[0], 1)
-				r.stats.Incr(sendErrorPath[1], 1)
+				mSendError.Incr(1)
+				mSendErrorF.Incr(1)
 			} else {
-				r.stats.Incr(sendSuccessPath[0], 1)
-				r.stats.Incr(sendSuccessPath[1], 1)
+				mSendSuccess.Incr(1)
+				mSendSuccessF.Incr(1)
 			}
 			if res.Error() != nil || !res.SkipAck() {
 				if err = r.reader.Acknowledge(res.Error()); err != nil {
-					r.stats.Incr(ackErrorPath[0], 1)
-					r.stats.Incr(ackErrorPath[1], 1)
+					mAckError.Incr(1)
+					mAckErrorF.Incr(1)
 				} else {
 					tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
-					r.stats.Timing(latencyPath[0], tTaken)
-					r.stats.Timing(latencyPath[1], tTaken)
-					r.stats.Incr(ackSuccessPath[0], 1)
-					r.stats.Incr(ackSuccessPath[1], 1)
+					mLatency.Timing(tTaken)
+					mLatencyF.Timing(tTaken)
+					mAckSuccess.Incr(1)
+					mAckSuccessF.Incr(1)
 				}
 			}
 		case <-r.closeChan:

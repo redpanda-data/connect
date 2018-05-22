@@ -149,13 +149,13 @@ func (l *Logger) writeFormatted(message, level string, other ...interface{}) {
 	if l.config.JSONFormat {
 		if l.config.AddTimeStamp {
 			fmt.Fprintf(l.stream, fmt.Sprintf(
-				"{\"timestamp\":\"%v\",\"level\":\"%v\",\"service\":\"%v\",\"message\":%v}\n",
+				"{\"@timestamp\":\"%v\",\"level\":\"%v\",\"@service\":\"%v\",\"message\":%v}\n",
 				time.Now().Format(time.RFC3339), level, l.config.Prefix,
 				strconv.QuoteToASCII(message),
 			), other...)
 		} else {
 			fmt.Fprintf(l.stream, fmt.Sprintf(
-				"{\"level\":\"%v\",\"service\":\"%v\",\"message\":%v}\n",
+				"{\"level\":\"%v\",\"@service\":\"%v\",\"message\":%v}\n",
 				level, l.config.Prefix,
 				strconv.QuoteToASCII(message),
 			), other...)

@@ -31,9 +31,9 @@ import (
 	"github.com/go-mangos/mangos/transport/ipc"
 	"github.com/go-mangos/mangos/transport/tcp"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -172,15 +172,22 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 // loop is an internal loop that brokers incoming messages to output pipe, does
 // not use select.
 func (s *ScaleProto) loop() {
+	var (
+		mRunning  = s.stats.GetCounter("output.scale_proto.running")
+		mCount    = s.stats.GetCounter("output.scale_proto.count")
+		mSendErr  = s.stats.GetCounter("output.scale_proto.send.error")
+		mSendSucc = s.stats.GetCounter("output.scale_proto.send.success")
+	)
+
 	defer func() {
 		atomic.StoreInt32(&s.running, 0)
 
 		s.socket.Close()
-		s.stats.Decr("output.scale_proto.running", 1)
+		mRunning.Decr(1)
 
 		close(s.closedChan)
 	}()
-	s.stats.Incr("output.scale_proto.running", 1)
+	mRunning.Incr(1)
 
 	if s.conf.ScaleProto.Bind {
 		s.log.Infof(
@@ -205,7 +212,7 @@ func (s *ScaleProto) loop() {
 		case <-s.closeChan:
 			return
 		}
-		s.stats.Incr("output.scale_proto.count", 1)
+		mCount.Incr(1)
 		var err error
 		for _, part := range ts.Payload.GetAll() {
 			if err = s.socket.Send(part); err != nil {
@@ -213,9 +220,9 @@ func (s *ScaleProto) loop() {
 			}
 		}
 		if err != nil {
-			s.stats.Incr("output.scale_proto.send.error", 1)
+			mSendErr.Incr(1)
 		} else {
-			s.stats.Incr("output.scale_proto.send.success", 1)
+			mSendSucc.Incr(1)
 		}
 		select {
 		case ts.ResponseChan <- types.NewSimpleResponse(err):

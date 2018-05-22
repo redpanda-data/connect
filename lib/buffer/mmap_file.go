@@ -22,8 +22,8 @@ package buffer
 
 import (
 	"github.com/Jeffail/benthos/lib/buffer/single"
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------

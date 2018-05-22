@@ -25,9 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 	nats "github.com/nats-io/go-nats"
 )
 
@@ -103,15 +103,22 @@ func (n *NATS) connect() error {
 
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (n *NATS) loop() {
+	var (
+		mRunning = n.stats.GetCounter("output.nats.running")
+		mCount   = n.stats.GetCounter("output.nats.count")
+		mErr     = n.stats.GetCounter("output.nats.send.error")
+		mSucc    = n.stats.GetCounter("output.nats.send.success")
+	)
+
 	defer func() {
 		atomic.StoreInt32(&n.running, 0)
 
 		n.natsConn.Close()
-		n.stats.Decr("output.nats.running", 1)
+		mRunning.Decr(1)
 
 		close(n.closedChan)
 	}()
-	n.stats.Incr("output.nats.running", 1)
+	mRunning.Incr(1)
 
 	for {
 		if err := n.connect(); err != nil {
@@ -138,15 +145,15 @@ func (n *NATS) loop() {
 		case <-n.closeChan:
 			return
 		}
-		n.stats.Incr("output.nats.count", 1)
+		mCount.Incr(1)
 		var err error
 		for _, part := range ts.Payload.GetAll() {
 			err = n.natsConn.Publish(n.conf.NATS.Subject, part)
 			if err != nil {
-				n.stats.Incr("output.nats.send.error", 1)
+				mErr.Incr(1)
 				break
 			} else {
-				n.stats.Incr("output.nats.send.success", 1)
+				mSucc.Incr(1)
 			}
 		}
 		select {

@@ -21,9 +21,9 @@
 package processor
 
 import (
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
-	"github.com/Jeffail/benthos/lib/util/service/metrics"
 )
 
 //------------------------------------------------------------------------------
@@ -66,6 +66,13 @@ type BoundsCheck struct {
 	conf  Config
 	log   log.Modular
 	stats metrics.Type
+
+	mCount           metrics.StatCounter
+	mDropped         metrics.StatCounter
+	mDroppedEmpty    metrics.StatCounter
+	mDroppedNumParts metrics.StatCounter
+	mDroppedPartSize metrics.StatCounter
+	mSent            metrics.StatCounter
 }
 
 // NewBoundsCheck returns a BoundsCheck processor.
@@ -76,6 +83,13 @@ func NewBoundsCheck(
 		conf:  conf,
 		log:   log.NewModule(".processor.bounds_check"),
 		stats: stats,
+
+		mCount:           stats.GetCounter("processor.bounds_check.count"),
+		mDropped:         stats.GetCounter("processor.bounds_check.dropped"),
+		mDroppedEmpty:    stats.GetCounter("processor.bounds_check.dropped_empty"),
+		mDroppedNumParts: stats.GetCounter("processor.bounds_check.dropped_num_parts"),
+		mDroppedPartSize: stats.GetCounter("processor.bounds_check.dropped_part_size"),
+		mSent:            stats.GetCounter("processor.bounds_check.sent"),
 	}, nil
 }
 
@@ -83,7 +97,7 @@ func NewBoundsCheck(
 
 // ProcessMessage checks each message against a set of bounds.
 func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	m.stats.Incr("processor.bounds_check.count", 1)
+	m.mCount.Incr(1)
 
 	lParts := msg.Len()
 	if lParts < m.conf.BoundsCheck.MinParts {
@@ -91,16 +105,16 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 			"Rejecting message due to message parts below minimum (%v): %v\n",
 			m.conf.BoundsCheck.MinParts, lParts,
 		)
-		m.stats.Incr("processor.bounds_check.dropped", 1)
-		m.stats.Incr("processor.bounds_check.dropped_empty", 1)
+		m.mDropped.Incr(1)
+		m.mDroppedEmpty.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	} else if lParts > m.conf.BoundsCheck.MaxParts {
 		m.log.Debugf(
 			"Rejecting message due to message parts exceeding limit (%v): %v\n",
 			m.conf.BoundsCheck.MaxParts, lParts,
 		)
-		m.stats.Incr("processor.bounds_check.dropped", 1)
-		m.stats.Incr("processor.bounds_check.dropped_num_parts", 1)
+		m.mDropped.Incr(1)
+		m.mDroppedNumParts.Incr(1)
 		return nil, types.NewSimpleResponse(nil)
 	}
 
@@ -113,13 +127,13 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 				m.conf.BoundsCheck.MaxPartSize,
 				size,
 			)
-			m.stats.Incr("processor.bounds_check.dropped", 1)
-			m.stats.Incr("processor.bounds_check.dropped_part_size", 1)
+			m.mDropped.Incr(1)
+			m.mDroppedPartSize.Incr(1)
 			return nil, types.NewSimpleResponse(nil)
 		}
 	}
 
-	m.stats.Incr("processor.bounds_check.sent", 1)
+	m.mSent.Incr(1)
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }
