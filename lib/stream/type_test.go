@@ -23,6 +23,8 @@ package stream
 import (
 	"testing"
 	"time"
+
+	"github.com/Jeffail/benthos/lib/processor"
 )
 
 func TestTypeConstruction(t *testing.T) {
@@ -48,6 +50,123 @@ func TestTypeConstruction(t *testing.T) {
 	}
 
 	if err = strm.Stop(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestTypeCloseGracefully(t *testing.T) {
+	conf := NewConfig()
+	conf.Input.Type = "scalability_protocols"
+	conf.Output.Type = "scalability_protocols"
+
+	strm, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = strm.stopGracefully(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	conf.Buffer.Type = "memory"
+
+	strm, err = New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = strm.stopGracefully(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	conf.Pipeline.Processors = []processor.Config{
+		processor.NewConfig(),
+	}
+
+	strm, err = New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = strm.stopGracefully(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestTypeCloseOrdered(t *testing.T) {
+	conf := NewConfig()
+	conf.Input.Type = "scalability_protocols"
+	conf.Output.Type = "scalability_protocols"
+
+	strm, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = strm.stopOrdered(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	conf.Buffer.Type = "memory"
+
+	strm, err = New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = strm.stopOrdered(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	conf.Pipeline.Processors = []processor.Config{
+		processor.NewConfig(),
+	}
+
+	strm, err = New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = strm.stopOrdered(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestTypeCloseUnordered(t *testing.T) {
+	conf := NewConfig()
+	conf.Input.Type = "scalability_protocols"
+	conf.Output.Type = "scalability_protocols"
+
+	strm, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = strm.stopUnordered(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	conf.Buffer.Type = "memory"
+
+	strm, err = New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = strm.stopUnordered(time.Second); err != nil {
+		t.Error(err)
+	}
+
+	conf.Pipeline.Processors = []processor.Config{
+		processor.NewConfig(),
+	}
+
+	strm, err = New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = strm.stopUnordered(time.Second); err != nil {
 		t.Error(err)
 	}
 }

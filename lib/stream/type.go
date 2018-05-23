@@ -141,15 +141,19 @@ func (t *Type) start() (err error) {
 	); err != nil {
 		return
 	}
-	if t.bufferLayer, err = buffer.New(
-		t.conf.Buffer, t.logger, t.stats,
-	); err != nil {
-		return
+	if t.conf.Buffer.Type != "none" {
+		if t.bufferLayer, err = buffer.New(
+			t.conf.Buffer, t.logger, t.stats,
+		); err != nil {
+			return
+		}
 	}
-	if t.pipelineLayer, err = pipeline.New(
-		t.conf.Pipeline, t.manager, t.logger, t.stats, t.complementaryProcs...,
-	); err != nil {
-		return
+	if tLen := len(t.complementaryProcs) + len(t.conf.Pipeline.Processors); tLen > 0 {
+		if t.pipelineLayer, err = pipeline.New(
+			t.conf.Pipeline, t.manager, t.logger, t.stats, t.complementaryProcs...,
+		); err != nil {
+			return
+		}
 	}
 	if t.outputLayer, err = output.New(
 		t.conf.Output, t.manager, t.logger, t.stats, t.complementaryOutputPipes...,
@@ -157,14 +161,23 @@ func (t *Type) start() (err error) {
 		return
 	}
 
-	// Kick off stream
-	if err = t.bufferLayer.StartReceiving(t.inputLayer.TransactionChan()); err != nil {
-		return
+	// Start chaining components
+	var nextTranChan <-chan types.Transaction
+
+	nextTranChan = t.inputLayer.TransactionChan()
+	if t.bufferLayer != nil {
+		if err = t.bufferLayer.StartReceiving(nextTranChan); err != nil {
+			return
+		}
+		nextTranChan = t.bufferLayer.TransactionChan()
 	}
-	if err = t.pipelineLayer.StartReceiving(t.bufferLayer.TransactionChan()); err != nil {
-		return
+	if t.pipelineLayer != nil {
+		if err = t.pipelineLayer.StartReceiving(nextTranChan); err != nil {
+			return
+		}
+		nextTranChan = t.pipelineLayer.TransactionChan()
 	}
-	if err = t.outputLayer.StartReceiving(t.pipelineLayer.TransactionChan()); err != nil {
+	if err = t.outputLayer.StartReceiving(nextTranChan); err != nil {
 		return
 	}
 
@@ -191,20 +204,26 @@ func (t *Type) stopGracefully(timeout time.Duration) (err error) {
 		return
 	}
 
-	remaining := timeout - time.Since(started)
-	if remaining < 0 {
-		return types.ErrTimeout
-	}
-	if err = t.bufferLayer.WaitForClose(remaining); err != nil {
-		return
+	var remaining time.Duration
+
+	if t.bufferLayer != nil {
+		remaining = timeout - time.Since(started)
+		if remaining < 0 {
+			return types.ErrTimeout
+		}
+		if err = t.bufferLayer.WaitForClose(remaining); err != nil {
+			return
+		}
 	}
 
-	remaining = timeout - time.Since(started)
-	if remaining < 0 {
-		return types.ErrTimeout
-	}
-	if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
-		return
+	if t.pipelineLayer != nil {
+		remaining = timeout - time.Since(started)
+		if remaining < 0 {
+			return types.ErrTimeout
+		}
+		if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
+			return
+		}
 	}
 
 	remaining = timeout - time.Since(started)
@@ -229,22 +248,28 @@ func (t *Type) stopOrdered(timeout time.Duration) (err error) {
 		return
 	}
 
-	t.bufferLayer.CloseAsync()
-	remaining := timeout - time.Since(started)
-	if remaining < 0 {
-		return types.ErrTimeout
-	}
-	if err = t.bufferLayer.WaitForClose(remaining); err != nil {
-		return
+	var remaining time.Duration
+
+	if t.bufferLayer != nil {
+		t.bufferLayer.CloseAsync()
+		remaining = timeout - time.Since(started)
+		if remaining < 0 {
+			return types.ErrTimeout
+		}
+		if err = t.bufferLayer.WaitForClose(remaining); err != nil {
+			return
+		}
 	}
 
-	t.pipelineLayer.CloseAsync()
-	remaining = timeout - time.Since(started)
-	if remaining < 0 {
-		return types.ErrTimeout
-	}
-	if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
-		return
+	if t.pipelineLayer != nil {
+		t.pipelineLayer.CloseAsync()
+		remaining = timeout - time.Since(started)
+		if remaining < 0 {
+			return types.ErrTimeout
+		}
+		if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
+			return
+		}
 	}
 
 	t.outputLayer.CloseAsync()
@@ -264,8 +289,12 @@ func (t *Type) stopOrdered(timeout time.Duration) (err error) {
 // should only be attempted if both stopGracefully and stopOrdered failed.
 func (t *Type) stopUnordered(timeout time.Duration) (err error) {
 	t.inputLayer.CloseAsync()
-	t.bufferLayer.CloseAsync()
-	t.pipelineLayer.CloseAsync()
+	if t.bufferLayer != nil {
+		t.bufferLayer.CloseAsync()
+	}
+	if t.pipelineLayer != nil {
+		t.pipelineLayer.CloseAsync()
+	}
 	t.outputLayer.CloseAsync()
 
 	started := time.Now()
@@ -273,20 +302,26 @@ func (t *Type) stopUnordered(timeout time.Duration) (err error) {
 		return
 	}
 
-	remaining := timeout - time.Since(started)
-	if remaining < 0 {
-		return types.ErrTimeout
-	}
-	if err = t.bufferLayer.WaitForClose(remaining); err != nil {
-		return
+	var remaining time.Duration
+
+	if t.bufferLayer != nil {
+		remaining = timeout - time.Since(started)
+		if remaining < 0 {
+			return types.ErrTimeout
+		}
+		if err = t.bufferLayer.WaitForClose(remaining); err != nil {
+			return
+		}
 	}
 
-	remaining = timeout - time.Since(started)
-	if remaining < 0 {
-		return types.ErrTimeout
-	}
-	if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
-		return
+	if t.pipelineLayer != nil {
+		remaining = timeout - time.Since(started)
+		if remaining < 0 {
+			return types.ErrTimeout
+		}
+		if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
+			return
+		}
 	}
 
 	remaining = timeout - time.Since(started)
