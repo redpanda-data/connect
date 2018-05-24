@@ -118,6 +118,11 @@ func (e *Empty) ErrorsChan() <-chan []error {
 	return nil
 }
 
+// StopConsuming instructs the buffer to no longer consume data.
+func (e *Empty) StopConsuming() {
+	e.CloseAsync()
+}
+
 // CloseAsync shuts down the StackBuffer output and stops processing messages.
 func (e *Empty) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&e.running, 1, 0) {

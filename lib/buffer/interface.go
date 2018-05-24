@@ -27,4 +27,9 @@ type Type interface {
 	types.Producer
 	types.Consumer
 	types.Closable
+
+	// StopConsuming instructs the buffer to cut off the input. It will then
+	// enter a mode whereby messages can only be read, and when the buffer is
+	// empty it will shut down.
+	StopConsuming()
 }

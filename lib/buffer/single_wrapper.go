@@ -69,7 +69,8 @@ type SingleWrapper struct {
 	buffer      Single
 	errThrottle *throttle.Type
 
-	running int32
+	running   int32
+	consuming int32
 
 	messagesIn   <-chan types.Transaction
 	messagesOut  chan types.Transaction
@@ -77,8 +78,9 @@ type SingleWrapper struct {
 
 	closedWG sync.WaitGroup
 
-	closeChan  chan struct{}
-	closedChan chan struct{}
+	stopConsumingChan chan struct{}
+	closeChan         chan struct{}
+	closedChan        chan struct{}
 }
 
 // NewSingleWrapper creates a new Producer/Consumer around a buffer.
@@ -89,14 +91,16 @@ func NewSingleWrapper(
 	stats metrics.Type,
 ) Type {
 	m := SingleWrapper{
-		stats:        stats,
-		log:          log,
-		buffer:       buffer,
-		running:      1,
-		messagesOut:  make(chan types.Transaction),
-		responsesOut: make(chan types.Response),
-		closeChan:    make(chan struct{}),
-		closedChan:   make(chan struct{}),
+		stats:             stats,
+		log:               log,
+		buffer:            buffer,
+		running:           1,
+		consuming:         1,
+		messagesOut:       make(chan types.Transaction),
+		responsesOut:      make(chan types.Response),
+		stopConsumingChan: make(chan struct{}),
+		closeChan:         make(chan struct{}),
+		closedChan:        make(chan struct{}),
 	}
 
 	m.errThrottle = throttle.New(throttle.OptCloseChan(m.closeChan))
@@ -118,7 +122,7 @@ func (m *SingleWrapper) inputLoop() {
 		mWriteBacklog = m.stats.GetGauge("buffer.backlog")
 	)
 
-	for atomic.LoadInt32(&m.running) == 1 {
+	for atomic.LoadInt32(&m.consuming) == 1 {
 		var tr types.Transaction
 		var open bool
 		select {
@@ -126,7 +130,7 @@ func (m *SingleWrapper) inputLoop() {
 			if !open {
 				return
 			}
-		case <-m.closeChan:
+		case <-m.stopConsumingChan:
 			return
 		}
 		backlog, err := m.buffer.PushMessage(tr.Payload)
@@ -138,7 +142,7 @@ func (m *SingleWrapper) inputLoop() {
 		}
 		select {
 		case tr.ResponseChan <- types.NewSimpleResponse(err):
-		case <-m.closeChan:
+		case <-m.stopConsumingChan:
 			return
 		}
 	}
@@ -235,8 +239,17 @@ func (m *SingleWrapper) TransactionChan() <-chan types.Transaction {
 
 // CloseAsync shuts down the SingleWrapper and stops processing messages.
 func (m *SingleWrapper) CloseAsync() {
+	m.StopConsuming()
 	if atomic.CompareAndSwapInt32(&m.running, 1, 0) {
 		close(m.closeChan)
+	}
+}
+
+// StopConsuming instructs the buffer to stop consuming messages and close once
+// the buffer is empty.
+func (m *SingleWrapper) StopConsuming() {
+	if atomic.CompareAndSwapInt32(&m.consuming, 1, 0) {
+		close(m.stopConsumingChan)
 	}
 }
 

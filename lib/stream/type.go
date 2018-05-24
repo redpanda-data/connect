@@ -206,7 +206,10 @@ func (t *Type) stopGracefully(timeout time.Duration) (err error) {
 
 	var remaining time.Duration
 
+	// If we have a buffer then wait right here. We want to try and allow the
+	// buffer to empty out before prompting the other layers to shut down.
 	if t.bufferLayer != nil {
+		t.bufferLayer.StopConsuming()
 		remaining = timeout - time.Since(started)
 		if remaining < 0 {
 			return types.ErrTimeout
@@ -216,7 +219,9 @@ func (t *Type) stopGracefully(timeout time.Duration) (err error) {
 		}
 	}
 
+	// After this point we can start closing the remaining components.
 	if t.pipelineLayer != nil {
+		t.pipelineLayer.CloseAsync()
 		remaining = timeout - time.Since(started)
 		if remaining < 0 {
 			return types.ErrTimeout
@@ -226,6 +231,7 @@ func (t *Type) stopGracefully(timeout time.Duration) (err error) {
 		}
 	}
 
+	t.outputLayer.CloseAsync()
 	remaining = timeout - time.Since(started)
 	if remaining < 0 {
 		return types.ErrTimeout
