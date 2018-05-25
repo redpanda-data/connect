@@ -346,36 +346,24 @@ func (t *Type) stopUnordered(timeout time.Duration) (err error) {
 // becomes progressively less graceful.
 func (t *Type) Stop(timeout time.Duration) error {
 	tOutUnordered := timeout / 4
-	tOutOrdered := timeout/2 - tOutUnordered
-	tOutGraceful := timeout - tOutOrdered - tOutUnordered
+	tOutGraceful := timeout - tOutUnordered
 
 	err := t.stopGracefully(tOutGraceful)
 	if err == nil {
 		return nil
 	}
 	if err == types.ErrTimeout {
-		t.logger.Infoln("Failed to stop stream gracefully within target time.")
+		t.logger.Infoln("Unable to fully drain buffered messages within target time.")
 	} else {
 		t.logger.Errorf("Encountered error whilst shutting down: %v\n", err)
 	}
 
-	err = t.stopOrdered(tOutOrdered)
+	err = t.stopUnordered(tOutUnordered)
 	if err == nil {
 		return nil
 	}
 	if err == types.ErrTimeout {
-		t.logger.Warnln("Failed to stop stream following order within target time.")
-		t.logger.Warnln("This could result in duplicate data on your next run.")
-	} else {
-		t.logger.Errorf("Encountered error whilst shutting down: %v\n", err)
-	}
-
-	err = t.stopOrdered(tOutOrdered)
-	if err == nil {
-		return nil
-	}
-	if err == types.ErrTimeout {
-		t.logger.Errorln("Failed to stop stream within target time.")
+		t.logger.Errorln("Failed to stop stream gracefully within target time.")
 
 		dumpBuf := bytes.NewBuffer(nil)
 		pprof.Lookup("goroutine").WriteTo(dumpBuf, 1)

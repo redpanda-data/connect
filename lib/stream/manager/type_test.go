@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/pipeline"
+	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
@@ -37,6 +39,86 @@ func harmlessConf() stream.Config {
 	c.Input.Type = "http_server"
 	c.Output.Type = "http_server"
 	return c
+}
+
+type mockProc struct {
+	mChan chan struct{}
+}
+
+func (m *mockProc) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+	m.mChan <- struct{}{}
+	return []types.Message{msg}, nil
+}
+
+func TestTypeProcsAndPipes(t *testing.T) {
+	var mockProcs []*mockProc
+	for i := 0; i < 6; i++ {
+		mockProcs = append(mockProcs, &mockProc{
+			mChan: make(chan struct{}),
+		})
+	}
+
+	logger := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	stats := metrics.DudType{}
+
+	mgr := New(
+		OptSetLogger(logger),
+		OptSetStats(stats),
+		OptSetManager(types.DudMgr{}),
+		OptAddInputPipelines(func(id string) (pipeline.Type, error) {
+			if id != "foo" {
+				t.Errorf("Wrong id: %v != %v", id, "foo")
+			}
+			return pipeline.NewProcessor(logger, stats, mockProcs[0]), nil
+		}, func(id string) (pipeline.Type, error) {
+			if id != "foo" {
+				t.Errorf("Wrong id: %v != %v", id, "foo")
+			}
+			return pipeline.NewProcessor(logger, stats, mockProcs[1]), nil
+		}),
+		OptAddProcessors(func(id string) (processor.Type, error) {
+			if id != "foo" {
+				t.Errorf("Wrong id: %v != %v", id, "foo")
+			}
+			return mockProcs[2], nil
+		}, func(id string) (processor.Type, error) {
+			if id != "foo" {
+				t.Errorf("Wrong id: %v != %v", id, "foo")
+			}
+			return mockProcs[3], nil
+		}),
+		OptAddOutputPipelines(func(id string) (pipeline.Type, error) {
+			if id != "foo" {
+				t.Errorf("Wrong id: %v != %v", id, "foo")
+			}
+			return pipeline.NewProcessor(logger, stats, mockProcs[4]), nil
+		}, func(id string) (pipeline.Type, error) {
+			if id != "foo" {
+				t.Errorf("Wrong id: %v != %v", id, "foo")
+			}
+			return pipeline.NewProcessor(logger, stats, mockProcs[5]), nil
+		}),
+	)
+
+	conf := harmlessConf()
+	conf.Input.Type = "file"
+	conf.Input.File.Path = "./package.go"
+
+	if err := mgr.Create("foo", conf); err != nil {
+		t.Fatal(err)
+	}
+
+	for i, proc := range mockProcs {
+		select {
+		case <-proc.mChan:
+		case <-time.After(time.Second):
+			t.Errorf("Timed out waiting for message to reach pipe: %v", i)
+		}
+	}
+
+	if err := mgr.Stop(time.Second); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestTypeBasicOperations(t *testing.T) {

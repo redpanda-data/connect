@@ -366,7 +366,16 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 
 	r := router(mgr)
 
-	request, err := http.NewRequest("POST", "/stream/foo", bytes.NewReader([]byte(`{}`)))
+	body := []byte(`{
+	"input": {
+		"type": "scalability_protocols"
+	},
+	"output": {
+		"type": "scalability_protocols"
+	}
+}`)
+
+	request, err := http.NewRequest("POST", "/stream/foo", bytes.NewReader(body))
 	if err != nil {
 		panic(err)
 	}

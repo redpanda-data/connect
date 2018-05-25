@@ -32,6 +32,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/pipeline"
+	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
@@ -108,6 +110,16 @@ func (n *nsMgr) GetCondition(name string) (types.Condition, error) {
 
 //------------------------------------------------------------------------------
 
+// StreamProcConstructorFunc is a closure type that constructs a processor type
+// for new streams, where the id of the stream is provided as an argument.
+type StreamProcConstructorFunc func(streamID string) (processor.Type, error)
+
+// StreamPipeConstructorFunc is a closure type that constructs a pipeline type
+// for new streams, where the id of the stream is provided as an argument.
+type StreamPipeConstructorFunc func(streamID string) (pipeline.Type, error)
+
+//------------------------------------------------------------------------------
+
 // Type manages a collection of streams, providing APIs for CRUD operations on
 // the streams.
 type Type struct {
@@ -118,6 +130,10 @@ type Type struct {
 	stats      metrics.Type
 	logger     log.Modular
 	apiTimeout time.Duration
+
+	inputPipeCtors    []StreamPipeConstructorFunc
+	pipelineProcCtors []StreamProcConstructorFunc
+	outputPipeCtors   []StreamPipeConstructorFunc
 
 	lock sync.Mutex
 }
@@ -171,6 +187,33 @@ func OptSetAPITimeout(tout time.Duration) func(*Type) {
 	}
 }
 
+// OptAddInputPipelines adds pipeline constructors that will be called for every
+// new stream and attached to the input component. The constructor is given the
+// name of the stream as an argument.
+func OptAddInputPipelines(pipes ...StreamPipeConstructorFunc) func(*Type) {
+	return func(t *Type) {
+		t.inputPipeCtors = append(t.inputPipeCtors, pipes...)
+	}
+}
+
+// OptAddProcessors adds processor constructors that will be called for every
+// new stream and attached to the processor pipelines. The constructor is given
+// the name of the stream as an argument.
+func OptAddProcessors(procs ...StreamProcConstructorFunc) func(*Type) {
+	return func(t *Type) {
+		t.pipelineProcCtors = append(t.pipelineProcCtors, procs...)
+	}
+}
+
+// OptAddOutputPipelines adds pipeline constructors that will be called for
+// every new stream and attached to the output component. The constructor is
+// given the name of the stream as an argument.
+func OptAddOutputPipelines(pipes ...StreamPipeConstructorFunc) func(*Type) {
+	return func(t *Type) {
+		t.outputPipeCtors = append(t.outputPipeCtors, pipes...)
+	}
+}
+
 //------------------------------------------------------------------------------
 
 // Errors specifically returned by a stream manager.
@@ -195,9 +238,38 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		return ErrStreamExists
 	}
 
+	var inputPipeCtors []pipeline.ConstructorFunc
+	var procCtors []pipeline.ProcConstructorFunc
+	var outputPipeCtors []pipeline.ConstructorFunc
+
+	for _, ctor := range m.inputPipeCtors {
+		func(c StreamPipeConstructorFunc) {
+			inputPipeCtors = append(inputPipeCtors, func() (pipeline.Type, error) {
+				return c(id)
+			})
+		}(ctor)
+	}
+	for _, ctor := range m.pipelineProcCtors {
+		func(c StreamProcConstructorFunc) {
+			procCtors = append(procCtors, func() (processor.Type, error) {
+				return c(id)
+			})
+		}(ctor)
+	}
+	for _, ctor := range m.outputPipeCtors {
+		func(c StreamPipeConstructorFunc) {
+			outputPipeCtors = append(outputPipeCtors, func() (pipeline.Type, error) {
+				return c(id)
+			})
+		}(ctor)
+	}
+
 	wrapper := newStreamWrapper(conf)
 	strm, err := stream.New(
 		conf,
+		stream.OptAddInputPipelines(inputPipeCtors...),
+		stream.OptAddProcessors(procCtors...),
+		stream.OptAddOutputPipelines(outputPipeCtors...),
 		stream.OptSetLogger(m.logger.NewModule("."+id)),
 		stream.OptSetStats(metrics.Namespaced(m.stats, id)),
 		stream.OptSetManager(namespacedMgr(id, m.manager)),

@@ -21,10 +21,14 @@
 package stream
 
 import (
+	"os"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
 )
 
 func TestTypeConstruction(t *testing.T) {
@@ -51,6 +55,31 @@ func TestTypeConstruction(t *testing.T) {
 
 	if err = strm.Stop(time.Second); err != nil {
 		t.Error(err)
+	}
+
+	newStats := metrics.DudType{
+		ID: 1,
+	}
+	newLogger := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	newMgr := types.DudMgr{
+		ID: 2,
+	}
+
+	strm, err = New(conf, OptSetLogger(newLogger), OptSetStats(newStats), OptSetManager(newMgr))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strm.logger != newLogger {
+		t.Error("wrong logger")
+	}
+
+	if strm.stats != newStats {
+		t.Error("wrong stats")
+	}
+
+	if strm.manager != newMgr {
+		t.Error("wrong manager")
 	}
 }
 

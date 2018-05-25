@@ -39,17 +39,55 @@ var benthosSeqKey = []byte("benthos_msg_seq")
 
 // BadgerConfig contains configuration fields for a badger based buffer.
 type BadgerConfig struct {
-	Directory    string `json:"directory" yaml:"directory"`
-	SyncWrites   bool   `json:"sync_writes" yaml:"sync_writes"`
-	GCIntervalMS int    `json:"gc_interval_ms" yaml:"gc_interval_ms"`
+	Directory    string             `json:"directory" yaml:"directory"`
+	SizeCap      int64              `json:"max_bytes" yaml:"max_bytes"`
+	SyncWrites   bool               `json:"sync_writes" yaml:"sync_writes"`
+	GCIntervalMS int                `json:"gc_interval_ms" yaml:"gc_interval_ms"`
+	Tuning       BadgerTuningParams `json:"tuning" yaml:"tuning"`
 }
 
 // NewBadgerConfig creates a BadgerConfig with default values.
 func NewBadgerConfig() BadgerConfig {
 	return BadgerConfig{
 		Directory:    "",
+		SizeCap:      20000000000, // 20 GB
 		SyncWrites:   false,
 		GCIntervalMS: 1000,
+		Tuning:       NewBadgerTuningParams(),
+	}
+}
+
+// BadgerTuningParams are more granular parameters for tuning the cache
+// performance.
+type BadgerTuningParams struct {
+	MaxTableSize            int64  `json:"max_table_size" yaml:"max_table_size"`
+	LevelSizeMultiplier     int    `json:"level_size_multiplier" yaml:"level_size_multiplier"`
+	MaxLevels               int    `json:"max_levels" yaml:"max_levels"`
+	ValueThreshold          int    `json:"value_threshold" yaml:"value_threshold"`
+	NumMemtables            int    `json:"num_memtables" yaml:"num_memtables"`
+	NumLevelZeroTables      int    `json:"num_level_zero_tables" yaml:"num_level_zero_tables"`
+	NumLevelZeroTablesStall int    `json:"num_level_zero_tables_stall" yaml:"num_level_zero_tables_stall"`
+	LevelOneSize            int64  `json:"level_one_size" yaml:"level_one_size"`
+	ValueLogFileSize        int64  `json:"value_log_file_size" yaml:"value_log_file_size"`
+	ValueLogMaxEntries      uint32 `json:"value_log_max_entries" yaml:"value_log_max_entries"`
+	NumCompactors           int    `json:"num_compactors" yaml:"num_compactors"`
+}
+
+// NewBadgerTuningParams returns a default set of tuning params.
+func NewBadgerTuningParams() BadgerTuningParams {
+	defBgr := badger.DefaultOptions
+	return BadgerTuningParams{
+		MaxTableSize:            defBgr.MaxTableSize,
+		LevelSizeMultiplier:     defBgr.LevelSizeMultiplier,
+		MaxLevels:               defBgr.MaxLevels,
+		ValueThreshold:          defBgr.ValueThreshold,
+		NumMemtables:            defBgr.NumMemtables,
+		NumLevelZeroTables:      defBgr.NumLevelZeroTables,
+		NumLevelZeroTablesStall: defBgr.NumLevelZeroTablesStall,
+		LevelOneSize:            defBgr.LevelOneSize,
+		ValueLogFileSize:        defBgr.ValueLogFileSize,
+		ValueLogMaxEntries:      defBgr.ValueLogMaxEntries,
+		NumCompactors:           defBgr.NumCompactors,
 	}
 }
 
@@ -64,6 +102,7 @@ type Badger struct {
 	pendingCtr int64
 
 	gcInterval time.Duration
+	sizeCap    int64
 
 	db   *badger.DB
 	seq  *badger.Sequence
@@ -77,9 +116,22 @@ func NewBadger(conf BadgerConfig) (*Badger, error) {
 	opts.ValueDir = conf.Directory
 	opts.SyncWrites = conf.SyncWrites
 
+	opts.MaxTableSize = conf.Tuning.MaxTableSize
+	opts.LevelSizeMultiplier = conf.Tuning.LevelSizeMultiplier
+	opts.MaxLevels = conf.Tuning.MaxLevels
+	opts.ValueThreshold = conf.Tuning.ValueThreshold
+	opts.NumMemtables = conf.Tuning.NumMemtables
+	opts.NumLevelZeroTables = conf.Tuning.NumLevelZeroTables
+	opts.NumLevelZeroTablesStall = conf.Tuning.NumLevelZeroTablesStall
+	opts.LevelOneSize = conf.Tuning.LevelOneSize
+	opts.ValueLogFileSize = conf.Tuning.ValueLogFileSize
+	opts.ValueLogMaxEntries = conf.Tuning.ValueLogMaxEntries
+	opts.NumCompactors = conf.Tuning.NumCompactors
+
 	b := &Badger{
 		gcInterval: time.Millisecond * time.Duration(conf.GCIntervalMS),
 		cond:       sync.NewCond(&sync.Mutex{}),
+		sizeCap:    conf.SizeCap,
 	}
 
 	var err error
@@ -211,6 +263,16 @@ func (b *Badger) PushMessage(msg types.Message) (int, error) {
 	if b.db == nil {
 		b.cond.L.Unlock()
 		return 0, types.ErrTypeClosed
+	}
+
+	slsm, slog := b.db.Size()
+	for slsm+slog > b.sizeCap {
+		if b.db == nil {
+			b.cond.L.Unlock()
+			return 0, types.ErrTypeClosed
+		}
+		slsm, slog = b.db.Size()
+		b.cond.Wait()
 	}
 
 	keyNum, err := b.seq.Next()

@@ -40,7 +40,9 @@ func (d DudStat) Gauge(value int64) error { return nil }
 //------------------------------------------------------------------------------
 
 // DudType implements the Type interface but doesn't actual do anything.
-type DudType struct{}
+type DudType struct {
+	ID int
+}
 
 // GetCounter returns a DudStat.
 func (d DudType) GetCounter(path ...string) StatCounter { return DudStat{} }

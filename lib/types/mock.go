@@ -26,6 +26,7 @@ import (
 
 // DudMgr is a noop implementation of a types.Manager.
 type DudMgr struct {
+	ID int
 }
 
 // RegisterEndpoint is a noop.
