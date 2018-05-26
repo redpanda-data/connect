@@ -4,6 +4,7 @@ http:
   read_timeout_ms: 5000
   debug_endpoints: false
 input:
+  type: scalability_protocols
   scalability_protocols:
     bind: true
     poll_timeout_ms: 5000
@@ -12,24 +13,23 @@ input:
     sub_filters: []
     urls:
     - tcp://*:5555
-  type: scalability_protocols
 buffer:
-  none: {}
   type: none
+  none: {}
 pipeline:
   processors:
-  - bounds_check:
+  - type: bounds_check
+    bounds_check:
       max_part_size: 1.073741824e+09
       max_parts: 100
       min_part_size: 1
       min_parts: 1
-    type: bounds_check
   threads: 1
 output:
+  type: scalability_protocols
   scalability_protocols:
     bind: false
     poll_timeout_ms: 5000
     socket_type: PUSH
     urls:
     - tcp://localhost:5556
-  type: scalability_protocols

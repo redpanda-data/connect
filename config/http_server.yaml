@@ -4,26 +4,27 @@ http:
   read_timeout_ms: 5000
   debug_endpoints: false
 input:
+  type: http_server
   http_server:
     address: ""
     cert_file: ""
     key_file: ""
     path: /post
     timeout_ms: 5000
-  type: http_server
 buffer:
-  none: {}
   type: none
+  none: {}
 pipeline:
   processors:
-  - bounds_check:
+  - type: bounds_check
+    bounds_check:
       max_part_size: 1.073741824e+09
       max_parts: 100
       min_part_size: 1
       min_parts: 1
-    type: bounds_check
   threads: 1
 output:
+  type: http_server
   http_server:
     address: ""
     cert_file: ""
@@ -31,4 +32,3 @@ output:
     path: /get
     stream_path: /get/stream
     timeout_ms: 5000
-  type: http_server

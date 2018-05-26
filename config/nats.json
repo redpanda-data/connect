@@ -5,39 +5,39 @@
 		"debug_endpoints": false
 	},
 	"input": {
+		"type": "nats",
 		"nats": {
 			"subject": "benthos_messages",
 			"urls": [
 				"nats://localhost:4222"
 			]
-		},
-		"type": "nats"
+		}
 	},
 	"buffer": {
-		"none": {},
-		"type": "none"
+		"type": "none",
+		"none": {}
 	},
 	"pipeline": {
 		"processors": [
 			{
+				"type": "bounds_check",
 				"bounds_check": {
 					"max_part_size": 1073741824,
 					"max_parts": 100,
 					"min_part_size": 1,
 					"min_parts": 1
-				},
-				"type": "bounds_check"
+				}
 			}
 		],
 		"threads": 1
 	},
 	"output": {
+		"type": "nats",
 		"nats": {
 			"subject": "benthos_messages",
 			"urls": [
 				"nats://localhost:4222"
 			]
-		},
-		"type": "nats"
+		}
 	}
 }

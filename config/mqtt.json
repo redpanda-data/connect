@@ -5,6 +5,7 @@
 		"debug_endpoints": false
 	},
 	"input": {
+		"type": "mqtt",
 		"mqtt": {
 			"client_id": "benthos_input",
 			"qos": 1,
@@ -14,28 +15,28 @@
 			"urls": [
 				"tcp://localhost:1883"
 			]
-		},
-		"type": "mqtt"
+		}
 	},
 	"buffer": {
-		"none": {},
-		"type": "none"
+		"type": "none",
+		"none": {}
 	},
 	"pipeline": {
 		"processors": [
 			{
+				"type": "bounds_check",
 				"bounds_check": {
 					"max_part_size": 1073741824,
 					"max_parts": 100,
 					"min_part_size": 1,
 					"min_parts": 1
-				},
-				"type": "bounds_check"
+				}
 			}
 		],
 		"threads": 1
 	},
 	"output": {
+		"type": "mqtt",
 		"mqtt": {
 			"client_id": "benthos_output",
 			"qos": 1,
@@ -43,7 +44,6 @@
 			"urls": [
 				"tcp://localhost:1883"
 			]
-		},
-		"type": "mqtt"
+		}
 	}
 }

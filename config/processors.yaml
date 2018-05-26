@@ -4,14 +4,14 @@ http:
   read_timeout_ms: 5000
   debug_endpoints: false
 input:
+  type: stdin
   stdin:
     delimiter: ""
     max_buffer: 65536
     multipart: false
-  type: stdin
 buffer:
-  none: {}
   type: none
+  none: {}
 pipeline:
   threads: 1
   processors:
@@ -89,6 +89,6 @@ pipeline:
       format: binary
       parts: []
 output:
+  type: stdout
   stdout:
     delimiter: ""
-  type: stdout

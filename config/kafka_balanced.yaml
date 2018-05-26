@@ -4,6 +4,7 @@ http:
   read_timeout_ms: 5000
   debug_endpoints: false
 input:
+  type: kafka_balanced
   kafka_balanced:
     addresses:
     - localhost:9092
@@ -12,20 +13,19 @@ input:
     start_from_oldest: true
     topics:
     - benthos_stream
-  type: kafka_balanced
 buffer:
-  none: {}
   type: none
+  none: {}
 pipeline:
   processors:
-  - bounds_check:
+  - type: bounds_check
+    bounds_check:
       max_part_size: 1.073741824e+09
       max_parts: 100
       min_part_size: 1
       min_parts: 1
-    type: bounds_check
   threads: 1
 output:
+  type: stdout
   stdout:
     delimiter: ""
-  type: stdout

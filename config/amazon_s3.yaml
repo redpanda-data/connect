@@ -4,6 +4,7 @@ http:
   read_timeout_ms: 5000
   debug_endpoints: false
 input:
+  type: amazon_s3
   amazon_s3:
     bucket: ""
     credentials:
@@ -19,20 +20,20 @@ input:
     sqs_max_messages: 10
     sqs_url: ""
     timeout_s: 5
-  type: amazon_s3
 buffer:
-  none: {}
   type: none
+  none: {}
 pipeline:
   processors:
-  - bounds_check:
+  - type: bounds_check
+    bounds_check:
       max_part_size: 1.073741824e+09
       max_parts: 100
       min_part_size: 1
       min_parts: 1
-    type: bounds_check
   threads: 1
 output:
+  type: amazon_s3
   amazon_s3:
     bucket: ""
     credentials:
@@ -43,4 +44,3 @@ output:
     path: ${!count:files}-${!timestamp_unix_nano}.txt
     region: eu-west-1
     timeout_s: 5
-  type: amazon_s3

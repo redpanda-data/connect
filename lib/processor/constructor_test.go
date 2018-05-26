@@ -23,7 +23,6 @@ package processor
 import (
 	"encoding/json"
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -102,42 +101,50 @@ func TestConstructorConfigDefaultsYAML(t *testing.T) {
 }
 
 func TestSanitise(t *testing.T) {
-	exp := map[string]interface{}{
-		"type": "combine",
-		"combine": map[string]interface{}{
-			"parts": float64(3),
-		},
-	}
+	var actObj interface{}
+	var act []byte
+	var err error
+
+	exp := `{` +
+		`"type":"combine",` +
+		`"combine":{` +
+		`"parts":3` +
+		`}` +
+		`}`
 
 	conf := NewConfig()
 	conf.Type = "combine"
 	conf.Combine.Parts = 3
 
-	act, err := SanitiseConfig(conf)
-	if err != nil {
+	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	if act, err = json.Marshal(actObj); err != nil {
+		t.Fatal(err)
+	}
+	if string(act) != exp {
+		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 
-	exp = map[string]interface{}{
-		"type": "archive",
-		"archive": map[string]interface{}{
-			"format": "binary",
-			"path":   "nope",
-		},
-	}
+	exp = `{` +
+		`"type":"archive",` +
+		`"archive":{` +
+		`"format":"binary",` +
+		`"path":"nope"` +
+		`}` +
+		`}`
 
 	conf = NewConfig()
 	conf.Type = "archive"
 	conf.Archive.Path = "nope"
 
-	act, err = SanitiseConfig(conf)
-	if err != nil {
+	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	if act, err = json.Marshal(actObj); err != nil {
+		t.Fatal(err)
+	}
+	if string(act) != exp {
+		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 }

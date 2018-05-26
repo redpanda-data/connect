@@ -21,6 +21,7 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
@@ -33,38 +34,47 @@ import (
 )
 
 func TestSanitise(t *testing.T) {
-	exp := map[string]interface{}{
-		"threads":    float64(10),
-		"processors": []interface{}{},
-	}
+	var actObj interface{}
+	var act []byte
+	var err error
+
+	exp := `{` +
+		`"processors":[],` +
+		`"threads":10` +
+		`}`
 
 	conf := NewConfig()
 	conf.Threads = 10
 	conf.Processors = nil
 
-	act, err := SanitiseConfig(conf)
-	if err != nil {
+	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	if act, err = json.Marshal(actObj); err != nil {
+		t.Fatal(err)
+	}
+	if string(act) != exp {
+		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 
-	exp["processors"] = []interface{}{
-		map[string]interface{}{
-			"type": "combine",
-			"combine": map[string]interface{}{
-				"parts": float64(2),
-			},
-		},
-		map[string]interface{}{
-			"type": "archive",
-			"archive": map[string]interface{}{
-				"format": "binary",
-				"path":   "nope",
-			},
-		},
-	}
+	exp = `{` +
+		`"processors":[` +
+		`{` +
+		`"type":"combine",` +
+		`"combine":{` +
+		`"parts":2` +
+		`}` +
+		`},` +
+		`{` +
+		`"type":"archive",` +
+		`"archive":{` +
+		`"format":"binary",` +
+		`"path":"nope"` +
+		`}` +
+		`}` +
+		`],` +
+		`"threads":10` +
+		`}`
 
 	proc := processor.NewConfig()
 	proc.Type = "combine"
@@ -75,12 +85,14 @@ func TestSanitise(t *testing.T) {
 	proc.Archive.Path = "nope"
 	conf.Processors = append(conf.Processors, proc)
 
-	act, err = SanitiseConfig(conf)
-	if err != nil {
+	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	if act, err = json.Marshal(actObj); err != nil {
+		t.Fatal(err)
+	}
+	if string(act) != exp {
+		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 }
 

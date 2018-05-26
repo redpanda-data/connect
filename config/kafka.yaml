@@ -4,6 +4,7 @@ http:
   read_timeout_ms: 5000
   debug_endpoints: false
 input:
+  type: kafka
   kafka:
     addresses:
     - localhost:9092
@@ -13,20 +14,20 @@ input:
     start_from_oldest: true
     target_version: 0.8.2.0
     topic: benthos_stream
-  type: kafka
 buffer:
-  none: {}
   type: none
+  none: {}
 pipeline:
   processors:
-  - bounds_check:
+  - type: bounds_check
+    bounds_check:
       max_part_size: 1.073741824e+09
       max_parts: 100
       min_part_size: 1
       min_parts: 1
-    type: bounds_check
   threads: 1
 output:
+  type: kafka
   kafka:
     ack_replicas: false
     addresses:
@@ -39,4 +40,3 @@ output:
     target_version: 0.8.2.0
     timeout_ms: 5000
     topic: benthos_stream
-  type: kafka

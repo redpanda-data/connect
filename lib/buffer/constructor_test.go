@@ -21,6 +21,7 @@
 package buffer
 
 import (
+	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
@@ -45,39 +46,47 @@ func TestConstructorBadType(t *testing.T) {
 }
 
 func TestSanitise(t *testing.T) {
-	exp := map[string]interface{}{
-		"type": "none",
-		"none": map[string]interface{}{},
-	}
+	var actObj interface{}
+	var act []byte
+	var err error
+
+	exp := `{` +
+		`"type":"none",` +
+		`"none":{}` +
+		`}`
 
 	conf := NewConfig()
 	conf.Type = "none"
 	conf.Mmap.FileSize = 10
 
-	act, err := SanitiseConfig(conf)
-	if err != nil {
+	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	if act, err = json.Marshal(actObj); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(string(act), exp) {
+		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 
-	exp = map[string]interface{}{
-		"type": "memory",
-		"memory": map[string]interface{}{
-			"limit": float64(20),
-		},
-	}
+	exp = `{` +
+		`"type":"memory",` +
+		`"memory":{` +
+		`"limit":20` +
+		`}` +
+		`}`
 
 	conf = NewConfig()
 	conf.Type = "memory"
 	conf.Memory.Limit = 20
 
-	act, err = SanitiseConfig(conf)
-	if err != nil {
+	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	if act, err = json.Marshal(actObj); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(string(act), exp) {
+		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 }

@@ -4,6 +4,7 @@ http:
   read_timeout_ms: 5000
   debug_endpoints: false
 input:
+  type: amqp
   amqp:
     consumer_tag: benthos-consumer
     exchange: benthos-exchange
@@ -13,23 +14,22 @@ input:
     prefetch_size: 0
     queue: benthos-queue
     url: amqp://guest:guest@localhost:5672/
-  type: amqp
 buffer:
-  none: {}
   type: none
+  none: {}
 pipeline:
   processors:
-  - bounds_check:
+  - type: bounds_check
+    bounds_check:
       max_part_size: 1.073741824e+09
       max_parts: 100
       min_part_size: 1
       min_parts: 1
-    type: bounds_check
   threads: 1
 output:
+  type: amqp
   amqp:
     exchange: benthos-exchange
     exchange_type: direct
     key: benthos-key
     url: amqp://guest:guest@localhost:5672/
-  type: amqp

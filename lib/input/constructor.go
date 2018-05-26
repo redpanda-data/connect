@@ -32,6 +32,7 @@ import (
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/config"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 )
 
@@ -124,7 +125,7 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 		return nil, err
 	}
 
-	outputMap := map[string]interface{}{}
+	outputMap := config.Sanitised{}
 
 	t := conf.Type
 	outputMap["type"] = t

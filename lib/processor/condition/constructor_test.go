@@ -23,7 +23,6 @@ package condition
 import (
 	"encoding/json"
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -102,25 +101,31 @@ func TestConstructorConfigDefaultsYAML(t *testing.T) {
 }
 
 func TestSanitise(t *testing.T) {
-	exp := map[string]interface{}{
-		"type": "content",
-		"content": map[string]interface{}{
-			"operator": "equals_cs",
-			"part":     float64(1),
-			"arg":      "foo",
-		},
-	}
+	var actObj interface{}
+	var act []byte
+	var err error
+
+	exp := `{` +
+		`"type":"content",` +
+		`"content":{` +
+		`"arg":"foo",` +
+		`"operator":"equals_cs",` +
+		`"part":1` +
+		`}` +
+		`}`
 
 	conf := NewConfig()
 	conf.Type = "content"
 	conf.Content.Part = 1
 	conf.Content.Arg = "foo"
 
-	act, err := SanitiseConfig(conf)
-	if err != nil {
+	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	if act, err = json.Marshal(actObj); err != nil {
+		t.Fatal(err)
+	}
+	if string(act) != exp {
+		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 }

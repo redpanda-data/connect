@@ -5,32 +5,33 @@
 		"debug_endpoints": false
 	},
 	"input": {
+		"type": "stdin",
 		"stdin": {
 			"delimiter": "",
 			"max_buffer": 65536,
 			"multipart": false
-		},
-		"type": "stdin"
+		}
 	},
 	"buffer": {
-		"none": {},
-		"type": "none"
+		"type": "none",
+		"none": {}
 	},
 	"pipeline": {
 		"processors": [
 			{
+				"type": "bounds_check",
 				"bounds_check": {
 					"max_part_size": 1073741824,
 					"max_parts": 100,
 					"min_part_size": 1,
 					"min_parts": 1
-				},
-				"type": "bounds_check"
+				}
 			}
 		],
 		"threads": 1
 	},
 	"output": {
+		"type": "elasticsearch",
 		"elasticsearch": {
 			"basic_auth": {
 				"enabled": false,
@@ -43,7 +44,6 @@
 			"urls": [
 				"http://localhost:9200"
 			]
-		},
-		"type": "elasticsearch"
+		}
 	}
 }

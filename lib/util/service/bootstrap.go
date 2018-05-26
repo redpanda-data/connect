@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Jeffail/benthos/lib/util/service/config"
+	"github.com/Jeffail/benthos/lib/util/config"
 	"gopkg.in/yaml.v2"
 )
 

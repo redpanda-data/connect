@@ -5,12 +5,12 @@
 		"debug_endpoints": false
 	},
 	"input": {
+		"type": "stdin",
 		"stdin": {
 			"delimiter": "",
 			"max_buffer": 65536,
 			"multipart": false
-		},
-		"type": "stdin"
+		}
 	},
 	"buffer": {
 		"type": "none",
@@ -50,9 +50,9 @@
 		"threads": 1
 	},
 	"output": {
+		"type": "stdout",
 		"stdout": {
 			"delimiter": ""
-		},
-		"type": "stdout"
+		}
 	}
 }

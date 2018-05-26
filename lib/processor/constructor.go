@@ -29,6 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/config"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 )
 
@@ -109,7 +110,7 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 		return nil, err
 	}
 
-	outputMap := map[string]interface{}{}
+	outputMap := config.Sanitised{}
 	outputMap["type"] = hashMap["type"]
 	outputMap[conf.Type] = hashMap[conf.Type]
 

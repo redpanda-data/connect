@@ -5,6 +5,7 @@
 		"debug_endpoints": false
 	},
 	"input": {
+		"type": "scalability_protocols",
 		"scalability_protocols": {
 			"bind": true,
 			"poll_timeout_ms": 5000,
@@ -14,28 +15,28 @@
 			"urls": [
 				"tcp://*:5555"
 			]
-		},
-		"type": "scalability_protocols"
+		}
 	},
 	"buffer": {
-		"none": {},
-		"type": "none"
+		"type": "none",
+		"none": {}
 	},
 	"pipeline": {
 		"processors": [
 			{
+				"type": "bounds_check",
 				"bounds_check": {
 					"max_part_size": 1073741824,
 					"max_parts": 100,
 					"min_part_size": 1,
 					"min_parts": 1
-				},
-				"type": "bounds_check"
+				}
 			}
 		],
 		"threads": 1
 	},
 	"output": {
+		"type": "scalability_protocols",
 		"scalability_protocols": {
 			"bind": false,
 			"poll_timeout_ms": 5000,
@@ -43,7 +44,6 @@
 			"urls": [
 				"tcp://localhost:5556"
 			]
-		},
-		"type": "scalability_protocols"
+		}
 	}
 }

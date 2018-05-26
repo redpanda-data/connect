@@ -5,37 +5,37 @@
 		"debug_endpoints": false
 	},
 	"input": {
+		"type": "redis_pubsub",
 		"redis_pubsub": {
 			"channels": [
 				"benthos_chan"
 			],
 			"url": "tcp://localhost:6379"
-		},
-		"type": "redis_pubsub"
+		}
 	},
 	"buffer": {
-		"none": {},
-		"type": "none"
+		"type": "none",
+		"none": {}
 	},
 	"pipeline": {
 		"processors": [
 			{
+				"type": "bounds_check",
 				"bounds_check": {
 					"max_part_size": 1073741824,
 					"max_parts": 100,
 					"min_part_size": 1,
 					"min_parts": 1
-				},
-				"type": "bounds_check"
+				}
 			}
 		],
 		"threads": 1
 	},
 	"output": {
+		"type": "redis_pubsub",
 		"redis_pubsub": {
 			"channel": "benthos_chan",
 			"url": "tcp://localhost:6379"
-		},
-		"type": "redis_pubsub"
+		}
 	}
 }

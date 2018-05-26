@@ -5,37 +5,37 @@
 		"debug_endpoints": false
 	},
 	"input": {
+		"type": "file",
 		"file": {
 			"delimiter": "",
 			"max_buffer": 65536,
 			"multipart": false,
 			"path": ""
-		},
-		"type": "file"
+		}
 	},
 	"buffer": {
-		"none": {},
-		"type": "none"
+		"type": "none",
+		"none": {}
 	},
 	"pipeline": {
 		"processors": [
 			{
+				"type": "bounds_check",
 				"bounds_check": {
 					"max_part_size": 1073741824,
 					"max_parts": 100,
 					"min_part_size": 1,
 					"min_parts": 1
-				},
-				"type": "bounds_check"
+				}
 			}
 		],
 		"threads": 1
 	},
 	"output": {
+		"type": "file",
 		"file": {
 			"delimiter": "",
 			"path": ""
-		},
-		"type": "file"
+		}
 	}
 }

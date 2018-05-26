@@ -4,6 +4,7 @@ http:
   read_timeout_ms: 5000
   debug_endpoints: false
 input:
+  type: mqtt
   mqtt:
     client_id: benthos_input
     qos: 1
@@ -11,24 +12,23 @@ input:
     - benthos_topic
     urls:
     - tcp://localhost:1883
-  type: mqtt
 buffer:
-  none: {}
   type: none
+  none: {}
 pipeline:
   processors:
-  - bounds_check:
+  - type: bounds_check
+    bounds_check:
       max_part_size: 1.073741824e+09
       max_parts: 100
       min_part_size: 1
       min_parts: 1
-    type: bounds_check
   threads: 1
 output:
+  type: mqtt
   mqtt:
     client_id: benthos_output
     qos: 1
     topic: benthos_topic
     urls:
     - tcp://localhost:1883
-  type: mqtt

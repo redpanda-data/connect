@@ -21,6 +21,7 @@
 package output
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -28,43 +29,58 @@ import (
 )
 
 func TestSanitise(t *testing.T) {
-	exp := map[string]interface{}{
-		"type": "amqp",
-		"amqp": map[string]interface{}{
-			"url":           "amqp://guest:guest@localhost:5672/",
-			"key":           "benthos-key",
-			"exchange":      "benthos-exchange",
-			"exchange_type": "direct",
-		},
-	}
+	var actObj interface{}
+	var act []byte
+	var err error
+
+	exp := `{` +
+		`"type":"amqp",` +
+		`"amqp":{` +
+		`"exchange":"benthos-exchange",` +
+		`"exchange_type":"direct",` +
+		`"key":"benthos-key",` +
+		`"url":"amqp://guest:guest@localhost:5672/"` +
+		`}` +
+		`}`
 
 	conf := NewConfig()
 	conf.Type = "amqp"
 	conf.Processors = nil
 
-	act, err := SanitiseConfig(conf)
-	if err != nil {
+	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	if act, err = json.Marshal(actObj); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(string(act), exp) {
+		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 
-	exp["processors"] = []interface{}{
-		map[string]interface{}{
-			"type": "combine",
-			"combine": map[string]interface{}{
-				"parts": float64(2),
-			},
-		},
-		map[string]interface{}{
-			"type": "archive",
-			"archive": map[string]interface{}{
-				"format": "binary",
-				"path":   "nope",
-			},
-		},
-	}
+	exp = `{` +
+		`"type":"amqp",` +
+		`"amqp":{` +
+		`"exchange":"benthos-exchange",` +
+		`"exchange_type":"direct",` +
+		`"key":"benthos-key",` +
+		`"url":"amqp://guest:guest@localhost:5672/"` +
+		`},` +
+		`"processors":[` +
+		`{` +
+		`"type":"combine",` +
+		`"combine":{` +
+		`"parts":2` +
+		`}` +
+		`},` +
+		`{` +
+		`"type":"archive",` +
+		`"archive":{` +
+		`"format":"binary",` +
+		`"path":"nope"` +
+		`}` +
+		`}` +
+		`]` +
+		`}`
 
 	proc := processor.NewConfig()
 	proc.Type = "combine"
@@ -75,11 +91,13 @@ func TestSanitise(t *testing.T) {
 	proc.Archive.Path = "nope"
 	conf.Processors = append(conf.Processors, proc)
 
-	act, err = SanitiseConfig(conf)
-	if err != nil {
+	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	if act, err = json.Marshal(actObj); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(string(act), exp) {
+		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 }
