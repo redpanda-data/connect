@@ -37,6 +37,13 @@ You can [find some examples here][0].
 
 ## `archive`
 
+``` yaml
+type: archive
+archive:
+  format: binary
+  path: ${!count:files}-${!timestamp_unix_nano}.txt
+```
+
 Archives all the parts of a message into a single part according to the selected
 archive type. Supported archive types are: tar, binary (I'll add more later).
 
@@ -48,10 +55,25 @@ types that aren't file based (such as binary) the file field is ignored.
 
 ## `bounds_check`
 
+``` yaml
+type: bounds_check
+bounds_check:
+  max_part_size: 1.073741824e+09
+  max_parts: 100
+  min_part_size: 1
+  min_parts: 1
+```
+
 Checks whether each message fits within certain boundaries, and drops messages
 that do not (log warning message and a metric).
 
 ## `combine`
+
+``` yaml
+type: combine
+combine:
+  parts: 2
+```
 
 If a message queue contains multiple part messages as individual parts it can
 be useful to 'squash' them back into a single message. We can then push it
@@ -75,6 +97,14 @@ parts.
 
 ## `compress`
 
+``` yaml
+type: compress
+compress:
+  algorithm: gzip
+  level: -1
+  parts: []
+```
+
 Compresses parts of a message according to the selected algorithm. Supported
 compression types are: gzip (I'll add more later). If the list of target parts
 is empty the compression will be applied to all message parts.
@@ -87,6 +117,13 @@ will be the last part of the message, if index = -2 then the part before the
 last element with be selected, and so on.
 
 ## `decompress`
+
+``` yaml
+type: decompress
+decompress:
+  algorithm: gzip
+  parts: []
+```
 
 Decompresses the parts of a message according to the selected algorithm.
 Supported decompression types are: gzip (I'll add more later). If the list of
@@ -101,6 +138,17 @@ Parts that fail to decompress (invalid format) will be removed from the message.
 If the message results in zero parts it is skipped entirely.
 
 ## `dedupe`
+
+``` yaml
+type: dedupe
+dedupe:
+  cache: ""
+  drop_on_err: true
+  hash: none
+  json_paths: []
+  parts:
+  - 0
+```
 
 Dedupes messages by caching selected (and optionally hashed) parts, dropping
 messages that are already cached. The hash type can be chosen from: none or
@@ -141,10 +189,40 @@ Caches should be configured as a resource, for more information check out the
 
 ## `filter`
 
+``` yaml
+type: filter
+filter:
+  and: []
+  content:
+    arg: ""
+    operator: equals_cs
+    part: 0
+  count:
+    arg: 100
+  jmespath:
+    part: 0
+    query: ""
+  not: {}
+  or: []
+  resource: ""
+  static: true
+  type: content
+  xor: []
+```
+
 Tests each message against a condition, if the condition fails then the message
 is dropped. You can read a [full list of conditions here](../conditions).
 
 ## `hash_sample`
+
+``` yaml
+type: hash_sample
+hash_sample:
+  parts:
+  - 0
+  retain_max: 10
+  retain_min: 0
+```
 
 Passes on a percentage of messages deterministically by hashing selected parts
 of the message and checking the hash against a valid range, dropping all others.
@@ -160,6 +238,13 @@ the last element with be selected, and so on.
 
 ## `insert_part`
 
+``` yaml
+type: insert_part
+insert_part:
+  content: ""
+  index: -1
+```
+
 Insert a new message part at an index. If the specified index is greater than
 the length of the existing parts it will be appended to the end.
 
@@ -173,6 +258,13 @@ This processor will interpolate functions within the 'content' field, you can
 find a list of functions [here](../config_interpolation.md#functions).
 
 ## `jmespath`
+
+``` yaml
+type: jmespath
+jmespath:
+  parts: []
+  query: ""
+```
 
 Parses a message part as a JSON blob and attempts to apply a JMESPath expression
 to it, replacing the contents of the part with the result. Please refer to the
@@ -218,6 +310,13 @@ last element with be selected, and so on.
 
 ## `merge_json`
 
+``` yaml
+type: merge_json
+merge_json:
+  parts: []
+  retain_parts: false
+```
+
 Parses selected message parts as JSON blobs, attempts to merge them into one
 single JSON value and then writes it to a new message part at the end of the
 message. Merged parts are removed unless `retain_parts` is set to
@@ -231,16 +330,35 @@ before the last element with be selected, and so on.
 
 ## `noop`
 
+``` yaml
+type: noop
+noop: null
+```
+
 Noop is a no-op processor that does nothing, the message passes through
 unchanged.
 
 ## `sample`
+
+``` yaml
+type: sample
+sample:
+  retain: 10
+  seed: 0
+```
 
 Passes on a randomly sampled percentage of messages. The random seed is static
 in order to sample deterministically, but can be set in config to allow parallel
 samples that are unique.
 
 ## `select_json`
+
+``` yaml
+type: select_json
+select_json:
+  parts: []
+  path: ""
+```
 
 Parses a message part as a JSON blob and attempts to obtain a field within the
 structure identified by a dot path. If found successfully the value will become
@@ -283,6 +401,13 @@ before the last element with be selected, and so on.
 
 ## `select_parts`
 
+``` yaml
+type: select_parts
+select_parts:
+  parts:
+  - 0
+```
+
 Cherry pick a set of parts from messages by their index. Indexes larger than the
 number of parts are simply ignored.
 
@@ -299,6 +424,14 @@ will be the last part of the message, if index = -2 then the part before the
 last element with be selected, and so on.
 
 ## `set_json`
+
+``` yaml
+type: set_json
+set_json:
+  parts: []
+  path: ""
+  value: ""
+```
 
 Parses a message part as a JSON blob, sets a path to a value, and writes the
 modified JSON back to the message part.
@@ -333,6 +466,11 @@ a list of functions [here](../config_interpolation.md#functions).
 
 ## `split`
 
+``` yaml
+type: split
+split: {}
+```
+
 Extracts the individual parts of a multipart message and turns them each into a
 unique message. It is NOT necessary to use the split processor when your output
 only supports single part messages, since those message parts will automatically
@@ -351,6 +489,13 @@ the combine processor. For example:
 1 Message of 1000 parts -> Split -> Combine 10 -> 100 Messages of 10 parts.
 
 ## `unarchive`
+
+``` yaml
+type: unarchive
+unarchive:
+  format: binary
+  parts: []
+```
 
 Unarchives parts of a message according to the selected archive type into
 multiple parts. Supported archive types are: tar, binary. If the list of target

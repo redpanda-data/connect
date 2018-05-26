@@ -49,6 +49,27 @@ overall disk persisted buffer when writing to multiple outputs.
 
 ## `badger`
 
+``` yaml
+type: badger
+badger:
+  directory: ""
+  gc_interval_ms: 1000
+  max_bytes: 2e+10
+  sync_writes: false
+  tuning:
+    level_one_size: 2.68435456e+08
+    level_size_multiplier: 10
+    max_levels: 7
+    max_table_size: 6.7108864e+07
+    num_compactors: 3
+    num_level_zero_tables: 5
+    num_level_zero_tables_stall: 10
+    num_memtables: 5
+    value_log_file_size: 1.073741824e+09
+    value_log_max_entries: 1e+06
+    value_threshold: 32
+```
+
 The badger buffer type uses a [badger](https://github.com/dgraph-io/badger) db
 in order to persist messages to disk as a key/value store. The benefit of this
 method is that unlike the mmap_file approach this buffer can be emptied by
@@ -63,11 +84,27 @@ output throughput.
 
 ## `memory`
 
+``` yaml
+type: memory
+memory:
+  limit: 5.24288e+08
+```
+
 The memory buffer type simply allocates a set amount of RAM for buffering
 messages. This can be useful when reading from sources that produce large bursts
 of data. Messages inside the buffer are lost if the service is stopped.
 
 ## `mmap_file`
+
+``` yaml
+type: mmap_file
+mmap_file:
+  clean_up: true
+  directory: ""
+  file_size: 2.62144e+08
+  reserved_disk_space: 1.048576e+08
+  retry_period_ms: 1000
+```
 
 The mmap file buffer type uses memory mapped files to perform low-latency,
 file-persisted buffering of messages.
@@ -81,6 +118,11 @@ feature if you wish to preserve the data indefinitely, but the directory will
 fill up as fast as data passes through.
 
 ## `none`
+
+``` yaml
+type: none
+none: {}
+```
 
 Selecting no buffer (default) is the lowest latency option since no extra work
 is done to messages that pass through. With this option back pressure from the

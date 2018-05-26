@@ -34,6 +34,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
 	"github.com/Jeffail/benthos/lib/util/service/log"
+	yaml "gopkg.in/yaml.v2"
 )
 
 //------------------------------------------------------------------------------
@@ -318,9 +319,22 @@ func Descriptions() string {
 
 	// Append each description
 	for i, name := range names {
+		var confBytes []byte
+
+		conf := NewConfig()
+		conf.Type = name
+		if confSanit, err := SanitiseConfig(conf); err == nil {
+			confBytes, _ = yaml.Marshal(confSanit)
+		}
+
 		buf.WriteString("## ")
 		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
+		if confBytes != nil {
+			buf.WriteString("\n``` yaml\n")
+			buf.Write(confBytes)
+			buf.WriteString("```\n")
+		}
 		buf.WriteString(Constructors[name].description)
 		if i != (len(names) - 1) {
 			buf.WriteString("\n\n")

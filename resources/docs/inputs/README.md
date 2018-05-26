@@ -59,6 +59,25 @@ level which is only applied to messages from the baz input.
 
 ## `amazon_s3`
 
+``` yaml
+type: amazon_s3
+amazon_s3:
+  bucket: ""
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  delete_objects: false
+  prefix: ""
+  region: eu-west-1
+  sqs_body_path: Records.s3.object.key
+  sqs_envelope_path: ""
+  sqs_max_messages: 10
+  sqs_url: ""
+  timeout_s: 5
+```
+
 Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
 SQS queue has been configured then only object keys read from the queue will be
 downloaded. Otherwise, the entire list of objects found when this input is
@@ -78,10 +97,36 @@ https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-
 
 ## `amazon_sqs`
 
+``` yaml
+type: amazon_sqs
+amazon_sqs:
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  region: eu-west-1
+  timeout_s: 5
+  url: ""
+```
+
 Receive messages from an Amazon SQS URL, only the body is extracted into
 messages.
 
 ## `amqp`
+
+``` yaml
+type: amqp
+amqp:
+  consumer_tag: benthos-consumer
+  exchange: benthos-exchange
+  exchange_type: direct
+  key: benthos-key
+  prefetch_count: 10
+  prefetch_size: 0
+  queue: benthos-queue
+  url: amqp://guest:guest@localhost:5672/
+```
 
 AMQP (0.91) is the underlying messaging protocol that is used by various message
 brokers, including RabbitMQ.
@@ -89,6 +134,13 @@ brokers, including RabbitMQ.
 Exchange type options are: direct|fanout|topic|x-custom
 
 ## `broker`
+
+``` yaml
+type: broker
+broker:
+  copies: 1
+  inputs: []
+```
 
 The broker type allows you to combine multiple inputs, where each input will be
 read in parallel. A broker type is configured with its own list of input
@@ -180,6 +232,14 @@ nodes processors.
 
 ## `dynamic`
 
+``` yaml
+type: dynamic
+dynamic:
+  inputs: {}
+  prefix: ""
+  timeout_ms: 5000
+```
+
 The dynamic type is a special broker type where the inputs are identified by
 unique labels and can be created, changed and removed during runtime via a REST
 HTTP interface.
@@ -194,6 +254,15 @@ exists it will be changed.
 
 ## `file`
 
+``` yaml
+type: file
+file:
+  delimiter: ""
+  max_buffer: 65536
+  multipart: false
+  path: ""
+```
+
 The file type reads input from a file. If multipart is set to false each line
 is read as a separate message. If multipart is set to true each line is read as
 a message part, and an empty line indicates the end of a message.
@@ -201,6 +270,36 @@ a message part, and an empty line indicates the end of a message.
 If the delimiter field is left empty then line feed (\n) is used.
 
 ## `http_client`
+
+``` yaml
+type: http_client
+http_client:
+  basic_auth:
+    enabled: false
+    password: ""
+    username: ""
+  content_type: application/octet-stream
+  max_retry_backoff_ms: 300000
+  oauth:
+    access_token: ""
+    access_token_secret: ""
+    consumer_key: ""
+    consumer_secret: ""
+    enabled: false
+    request_url: ""
+  payload: ""
+  retry_period_ms: 1000
+  skip_cert_verify: false
+  stream:
+    delimiter: ""
+    enabled: false
+    max_buffer: 65536
+    multipart: false
+    reconnect: true
+  timeout_ms: 5000
+  url: http://localhost:4195/get/stream
+  verb: GET
+```
 
 The HTTP client input type connects to a server and continuously performs
 requests for a single message.
@@ -220,6 +319,16 @@ multipart, please read the 'docs/using_http.md' document.
 
 ## `http_server`
 
+``` yaml
+type: http_server
+http_server:
+  address: ""
+  cert_file: ""
+  key_file: ""
+  path: /post
+  timeout_ms: 5000
+```
+
 Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
 which is enabled when key and cert files are specified.
 
@@ -227,6 +336,19 @@ You can leave the 'address' config field blank in order to use the default
 service, but this will ignore TLS options.
 
 ## `kafka`
+
+``` yaml
+type: kafka
+kafka:
+  addresses:
+  - localhost:9092
+  client_id: benthos_kafka_input
+  consumer_group: benthos_consumer_group
+  partition: 0
+  start_from_oldest: true
+  target_version: 0.8.2.0
+  topic: benthos_stream
+```
 
 Connects to a kafka (0.8+) server. Offsets are managed within kafka as per the
 consumer group (set via config). Only one partition per input is supported, if
@@ -240,15 +362,46 @@ server.
 
 ## `kafka_balanced`
 
+``` yaml
+type: kafka_balanced
+kafka_balanced:
+  addresses:
+  - localhost:9092
+  client_id: benthos_kafka_input
+  consumer_group: benthos_consumer_group
+  start_from_oldest: true
+  topics:
+  - benthos_stream
+```
+
 Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
 
 ## `mqtt`
 
+``` yaml
+type: mqtt
+mqtt:
+  client_id: benthos_input
+  qos: 1
+  topics:
+  - benthos_topic
+  urls:
+  - tcp://localhost:1883
+```
+
 Subscribe to topics on MQTT brokers
 
 ## `nats`
+
+``` yaml
+type: nats
+nats:
+  subject: benthos_messages
+  urls:
+  - nats://localhost:4222
+```
 
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
 behaviour then look at NATS Stream.
@@ -257,6 +410,19 @@ The urls can contain username/password semantics. e.g.
 nats://derek:pass@localhost:4222
 
 ## `nats_stream`
+
+``` yaml
+type: nats_stream
+nats_stream:
+  client_id: benthos_client
+  cluster_id: test-cluster
+  durable_name: benthos_offset
+  queue: benthos_queue
+  start_from_oldest: true
+  subject: benthos_messages
+  urls:
+  - nats://localhost:4222
+```
 
 Subscribe to a NATS Stream subject, which is at-least-once. Joining a queue is
 optional and allows multiple clients of a subject to consume using queue
@@ -268,9 +434,46 @@ are consumed from the most recently published message.
 
 ## `nsq`
 
+``` yaml
+type: nsq
+nsq:
+  channel: benthos_stream
+  lookupd_http_addresses:
+  - localhost:4161
+  max_in_flight: 100
+  nsqd_tcp_addresses:
+  - localhost:4150
+  topic: benthos_messages
+  user_agent: benthos_consumer
+```
+
 Subscribe to an NSQ instance topic and channel.
 
 ## `read_until`
+
+``` yaml
+type: read_until
+read_until:
+  condition:
+    and: []
+    content:
+      arg: ""
+      operator: equals_cs
+      part: 0
+    count:
+      arg: 100
+    jmespath:
+      part: 0
+      query: ""
+    not: {}
+    or: []
+    resource: ""
+    static: true
+    type: content
+    xor: []
+  input: {}
+  restart_input: false
+```
 
 Reads from an input and tests a condition on each message. When the condition
 returns true the message is sent out and the input is closed. Use this type to
@@ -283,14 +486,42 @@ down until the condition is met then set `restart_input` to `true`.
 
 ## `redis_list`
 
+``` yaml
+type: redis_list
+redis_list:
+  key: benthos_list
+  timeout_ms: 5000
+  url: tcp://localhost:6379
+```
+
 Pops messages from the beginning of a Redis list using the BLPop command.
 
 ## `redis_pubsub`
+
+``` yaml
+type: redis_pubsub
+redis_pubsub:
+  channels:
+  - benthos_chan
+  url: tcp://localhost:6379
+```
 
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple
 channels using this input.
 
 ## `scalability_protocols`
+
+``` yaml
+type: scalability_protocols
+scalability_protocols:
+  bind: true
+  poll_timeout_ms: 5000
+  reply_timeout_ms: 5000
+  socket_type: PULL
+  sub_filters: []
+  urls:
+  - tcp://*:5555
+```
 
 The scalability protocols are common communication patterns which will be
 familiar to anyone accustomed to service messaging protocols.
@@ -309,6 +540,14 @@ Currently only PULL and SUB sockets are supported.
 
 ## `stdin`
 
+``` yaml
+type: stdin
+stdin:
+  delimiter: ""
+  max_buffer: 65536
+  multipart: false
+```
+
 The stdin input simply reads any data piped to stdin as messages. By default the
 messages are assumed single part and are line delimited. If the multipart option
 is set to true then lines are interpretted as message parts, and an empty line
@@ -317,6 +556,18 @@ indicates the end of the message.
 If the delimiter field is left empty then line feed (\n) is used.
 
 ## `zmq4`
+
+``` yaml
+type: zmq4
+zmq4:
+  bind: false
+  high_water_mark: 0
+  poll_timeout_ms: 5000
+  socket_type: PULL
+  sub_filters: []
+  urls:
+  - tcp://localhost:5555
+```
 
 ZMQ4 is supported but currently depends on C bindings. Since this is an
 annoyance when building or using Benthos it is not compiled by default.

@@ -115,6 +115,20 @@ conditions please [read the docs here](../conditions/README.md)
 
 ## `amazon_s3`
 
+``` yaml
+type: amazon_s3
+amazon_s3:
+  bucket: ""
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  path: ${!count:files}-${!timestamp_unix_nano}.txt
+  region: eu-west-1
+  timeout_s: 5
+```
+
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
 with the path specified with the 'path' field, in order to have a different path
 for each object you should use function interpolations described
@@ -122,14 +136,43 @@ for each object you should use function interpolations described
 
 ## `amazon_sqs`
 
+``` yaml
+type: amazon_sqs
+amazon_sqs:
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  region: eu-west-1
+  url: ""
+```
+
 Sends messages to an SQS queue.
 
 ## `amqp`
+
+``` yaml
+type: amqp
+amqp:
+  exchange: benthos-exchange
+  exchange_type: direct
+  key: benthos-key
+  url: amqp://guest:guest@localhost:5672/
+```
 
 AMQP (0.91) is the underlying messaging protocol that is used by various message
 brokers, including RabbitMQ.
 
 ## `broker`
+
+``` yaml
+type: broker
+broker:
+  copies: 1
+  outputs: []
+  pattern: fan_out
+```
 
 The broker output type allows you to configure multiple output targets following
 a broker pattern from this list:
@@ -174,6 +217,14 @@ nodes processors.
 
 ## `dynamic`
 
+``` yaml
+type: dynamic
+dynamic:
+  outputs: {}
+  prefix: ""
+  timeout_ms: 5000
+```
+
 The dynamic type is a special broker type where the outputs are identified by
 unique labels and can be created, changed and removed during runtime via a REST
 HTTP interface. The broker pattern used is 'fan_out', meaning each message will
@@ -189,10 +240,31 @@ exists it will be changed.
 
 ## `elasticsearch`
 
+``` yaml
+type: elasticsearch
+elasticsearch:
+  basic_auth:
+    enabled: false
+    password: ""
+    username: ""
+  id: ${!count:elastic_ids}-${!timestamp_unix}
+  index: benthos_index
+  timeout_ms: 5000
+  urls:
+  - http://localhost:9200
+```
+
 Publishes messages into an Elasticsearch index as documents. This output
 currently does not support creating the target index.
 
 ## `file`
+
+``` yaml
+type: file
+file:
+  delimiter: ""
+  path: ""
+```
 
 The file output type simply appends all messages to an output file. Single part
 messages are printed with a delimiter (defaults to '\n' if left empty).
@@ -206,6 +278,12 @@ baz\n\n
 
 ## `files`
 
+``` yaml
+type: files
+files:
+  path: ${!count:files}-${!timestamp_unix_nano}.txt
+```
+
 Writes each individual part of each message to a new file.
 
 Message parts only contain raw data, and therefore in order to create a unique
@@ -215,6 +293,30 @@ using function interpolations on the 'path' field as described
 
 ## `http_client`
 
+``` yaml
+type: http_client
+http_client:
+  basic_auth:
+    enabled: false
+    password: ""
+    username: ""
+  content_type: application/octet-stream
+  max_retry_backoff_ms: 300000
+  oauth:
+    access_token: ""
+    access_token_secret: ""
+    consumer_key: ""
+    consumer_secret: ""
+    enabled: false
+    request_url: ""
+  retries: 3
+  retry_period_ms: 1000
+  skip_cert_verify: false
+  timeout_ms: 5000
+  url: http://localhost:4195/post
+  verb: POST
+```
+
 The HTTP client output type connects to a server and sends POST requests for
 each message. The body of the request is the raw message contents. The output
 will apply back pressure until a 2XX response has been returned from the server.
@@ -223,6 +325,17 @@ For more information about sending HTTP messages, including details on sending
 multipart, please read the 'docs/using_http.md' document.
 
 ## `http_server`
+
+``` yaml
+type: http_server
+http_server:
+  address: ""
+  cert_file: ""
+  key_file: ""
+  path: /get
+  stream_path: /get/stream
+  timeout_ms: 5000
+```
 
 Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
 2.0 is supported when using TLS, which is enabled when key and cert files are
@@ -236,6 +349,22 @@ receive a constant stream of line delimited messages on the configured
 'stream_path' endpoint.
 
 ## `kafka`
+
+``` yaml
+type: kafka
+kafka:
+  ack_replicas: false
+  addresses:
+  - localhost:9092
+  client_id: benthos_kafka_output
+  compression: none
+  key: ""
+  max_msg_bytes: 1e+06
+  round_robin_partitions: false
+  target_version: 0.8.2.0
+  timeout_ms: 5000
+  topic: benthos_stream
+```
 
 The kafka output type writes messages to a kafka broker, these messages are
 acknowledged, which is propagated back to the input. The config field
@@ -261,33 +390,94 @@ server.
 
 ## `mqtt`
 
+``` yaml
+type: mqtt
+mqtt:
+  client_id: benthos_output
+  qos: 1
+  topic: benthos_topic
+  urls:
+  - tcp://localhost:1883
+```
+
 Pushes messages to an MQTT broker.
 
 ## `nats`
+
+``` yaml
+type: nats
+nats:
+  subject: benthos_messages
+  urls:
+  - nats://localhost:4222
+```
 
 Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.
 For at-least-once behaviour with NATS look at NATS Stream.
 
 ## `nats_stream`
 
+``` yaml
+type: nats_stream
+nats_stream:
+  client_id: benthos_client
+  cluster_id: test-cluster
+  subject: benthos_messages
+  urls:
+  - nats://localhost:4222
+```
+
 Publish to a NATS Stream subject. NATS Streaming is at-least-once and therefore
 this output is able to guarantee delivery on success.
 
 ## `nsq`
 
+``` yaml
+type: nsq
+nsq:
+  max_in_flight: 100
+  nsqd_tcp_address: localhost:4150
+  topic: benthos_messages
+  user_agent: benthos_producer
+```
+
 Publish to an NSQ topic.
 
 ## `redis_list`
+
+``` yaml
+type: redis_list
+redis_list:
+  key: benthos_list
+  url: tcp://localhost:6379
+```
 
 Pushes messages onto the end of a Redis list (which is created if it doesn't
 already exist) using the RPUSH command.
 
 ## `redis_pubsub`
 
+``` yaml
+type: redis_pubsub
+redis_pubsub:
+  channel: benthos_chan
+  url: tcp://localhost:6379
+```
+
 Publishes messages through the Redis PubSub model. It is not possible to
 guarantee that messages have been received.
 
 ## `scalability_protocols`
+
+``` yaml
+type: scalability_protocols
+scalability_protocols:
+  bind: false
+  poll_timeout_ms: 5000
+  socket_type: PUSH
+  urls:
+  - tcp://localhost:5556
+```
 
 The scalability protocols are common communication patterns which will be
 familiar to anyone accustomed to service messaging protocols.
@@ -305,6 +495,12 @@ Currently only PUSH and PUB sockets are supported.
 
 ## `stdout`
 
+``` yaml
+type: stdout
+stdout:
+  delimiter: ""
+```
+
 The stdout output type prints messages to stdout. Single part messages are
 printed with a delimiter (defaults to '\n' if left empty). Multipart messages
 are written with each part delimited, with the final part followed by two
@@ -316,6 +512,17 @@ bar\n
 baz\n\n
 
 ## `zmq4`
+
+``` yaml
+type: zmq4
+zmq4:
+  bind: true
+  high_water_mark: 0
+  poll_timeout_ms: 5000
+  socket_type: PUSH
+  urls:
+  - tcp://*:5556
+```
 
 The zmq4 output type attempts to send messages to a ZMQ4 port, currently only
 PUSH and PUB sockets are supported.

@@ -107,9 +107,22 @@ duplicate condition configs by using the [resource condition][2].
 
 ## `and`
 
+``` yaml
+type: and
+and: []
+```
+
 And is a condition that returns the logical AND of its children conditions.
 
 ## `content`
+
+``` yaml
+type: content
+content:
+  arg: ""
+  operator: equals_cs
+  part: 0
+```
 
 Content is a condition that checks the content of a message part against a
 logical operator and an argument.
@@ -154,6 +167,12 @@ insensitive.)
 
 ## `count`
 
+``` yaml
+type: count
+count:
+  arg: 100
+```
+
 Counts messages starting from one, returning true until the counter reaches its
 target, at which point it will return false and reset the counter. This
 condition is useful when paired with the `read_until` input, as it can
@@ -166,6 +185,13 @@ independently. It is, however, possible to share the counter across processor
 pipelines by defining the count condition as a resource.
 
 ## `jmespath`
+
+``` yaml
+type: jmespath
+jmespath:
+  part: 0
+  query: ""
+```
 
 Parses a message part as a JSON blob and attempts to apply a JMESPath expression
 to it, expecting a boolean response. If the response is true the condition
@@ -196,6 +222,11 @@ please instead use the [`jmespath`](../processors/README.md#jmespath)
 processor instead.
 
 ## `not`
+
+``` yaml
+type: not
+not: {}
+```
 
 Not is a condition that returns the opposite (NOT) of its child condition. The
 body of a not object is the child condition, i.e. in order to express 'part 0
@@ -229,9 +260,19 @@ Or, the same example as JSON:
 
 ## `or`
 
+``` yaml
+type: or
+or: []
+```
+
 Or is a condition that returns the logical OR of its children conditions.
 
 ## `resource`
+
+``` yaml
+type: resource
+resource: ""
+```
 
 Resource is a condition type that runs a condition resource by its name. This
 condition allows you to run the same configured condition resource in multiple
@@ -281,9 +322,19 @@ can act as a runtime optimisation as well as a config optimisation.
 
 ## `static`
 
+``` yaml
+type: static
+static: true
+```
+
 Static is a condition that always resolves to the same static boolean value.
 
 ## `xor`
+
+``` yaml
+type: xor
+xor: []
+```
 
 Xor is a condition that returns the logical XOR of its children conditions,
 meaning it only resolves to true if _exactly_ one of its children conditions
