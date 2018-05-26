@@ -1,0 +1,34 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000,
+		"debug_endpoints": false
+	},
+	"input": {
+		"type": "stdin",
+		"stdin": {
+			"delimiter": "",
+			"max_buffer": 65536,
+			"multipart": false
+		}
+	},
+	"buffer": {
+		"type": "none",
+		"none": {}
+	},
+	"pipeline": {
+		"processors": [
+			{
+				"type": "split",
+				"split": {}
+			}
+		],
+		"threads": 1
+	},
+	"output": {
+		"type": "stdout",
+		"stdout": {
+			"delimiter": ""
+		}
+	}
+}

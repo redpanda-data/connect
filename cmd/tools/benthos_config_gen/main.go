@@ -175,22 +175,24 @@ func main() {
 		createJSON(t, filepath.Join(configsDir, t+".json"), sanit)
 	}
 
-	// Create processor config
-	{
-		t := "processors"
-
+	// Create processor configs for all types.
+	for t := range processor.Constructors {
 		conf := NewConfig()
 		conf.Input.Processors = nil
 		conf.Output.Processors = nil
-		conf.Pipeline.Processors = append(conf.Pipeline.Processors, processor.NewConfig())
 
-		sanit, err := conf.Sanitised(true, false)
+		procConf := processor.NewConfig()
+		procConf.Type = t
+
+		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
+
+		sanit, err := conf.Sanitised(true, true)
 		if err != nil {
 			panic(err)
 		}
 
-		createYAML(t, filepath.Join(configsDir, t+".yaml"), sanit)
-		createJSON(t, filepath.Join(configsDir, t+".json"), sanit)
+		createYAML(t, filepath.Join(configsDir, "processors", t+".yaml"), sanit)
+		createJSON(t, filepath.Join(configsDir, "processors", t+".json"), sanit)
 	}
 
 	// Create buffers config
