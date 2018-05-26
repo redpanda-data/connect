@@ -45,8 +45,8 @@ layer of deduplication processors.
 pipeline:
   threads: 16 # Determines the max number of concurrent calls to dedupe cache
   processors:
-  - type: condition # Filter out error messages
-    condition:
+  - type: filter # Filter out error messages
+    filter:
       type: jmespath
       jmespath:
         query: "keys(@) | !contains(@, 'error')"

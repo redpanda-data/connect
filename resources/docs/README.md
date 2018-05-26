@@ -76,9 +76,10 @@ specific sinks.
 
 It is possible to perform content based multiplexing of messages to specific
 outputs using [an output broker with the `fan_out` pattern][broker-output] and a
-[condition processor][condition-processor] on each output, which is a processor
-that drops messages if the condition does not pass. Conditions are content aware
-logical operators that can be combined using boolean logic.
+[filter processor][filter-processor] on each output, which is a processor
+that drops messages if the [condition][conditions] does not pass.
+[Conditions][conditions] are content aware logical operators that can be
+combined using boolean logic.
 
 For example, say we have an output `foo` that we only want to receive messages
 that contain the word `foo`, and an output `bar` that we wish to send everything
@@ -94,8 +95,8 @@ output:
       foo:
         foo_field_1: value1
       processors:
-      - type: condition
-        condition:
+      - type: filter
+        filter:
           type: content
           content:
             operator: contains
@@ -106,8 +107,8 @@ output:
         bar_field_1: value2
         bar_field_2: value3
       processors:
-      - type: condition
-        condition:
+      - type: filter
+        filter:
           type: not
           not:
             type: content
@@ -117,8 +118,8 @@ output:
               arg: foo
 ```
 
-For more information regarding conditions, including the list of conditions
-available, please [read the docs here][conditions].
+For more information regarding filter conditions, including the full list of
+conditions available, please [read the docs here][conditions].
 
 ## Sharing Resources Across Processors
 
@@ -163,15 +164,15 @@ output:
     - type: quz
       quz:
         processors:
-        - type: condition
-          condition:
+        - type: filter
+          filter:
             type: resource
             resource: foobarcondition
     - type: qux
       qux:
         processors:
-        - type: condition
-          condition:
+        - type: filter
+          filter:
             type: not
             not:
               type: resource
@@ -431,6 +432,6 @@ examples.
 [buffers]: ./buffers
 [broker-input]: ./inputs/README.md#broker
 [broker-output]: ./outputs/README.md#broker
-[condition-processor]: ./processors/README.md#condition
+[filter-processor]: ./processors/README.md#filter
 [conditions]: ./conditions
 [caches]: ./caches

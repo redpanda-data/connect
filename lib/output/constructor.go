@@ -248,7 +248,7 @@ maximize throughput. For more information regarding these patterns please read
 
 It is possible to perform content based multiplexing of messages to specific
 outputs using a broker with the 'fan_out' pattern and a
-[condition processor](../processors/README.md#condition) on each output, which
+[filter processor](../processors/README.md#filter) on each output, which
 is a processor that drops messages if the condition does not pass. Conditions
 are content aware logical operators that can be combined using boolean logic.
 
@@ -266,8 +266,8 @@ output:
       foo:
         foo_field_1: value1
       processors:
-      - type: condition
-        condition:
+      - type: filter
+        filter:
           type: content
           content:
             operator: contains
@@ -278,8 +278,8 @@ output:
         bar_field_1: value2
         bar_field_2: value3
       processors:
-      - type: condition
-        condition:
+      - type: filter
+        filter:
           type: not
           not:
             type: content
@@ -289,8 +289,8 @@ output:
               arg: foo
 ` + "```" + `
 
-For more information regarding conditions please
-[read the docs here](../conditions/README.md)`
+For more information regarding conditions, including a full list of available
+conditions please [read the docs here](../conditions/README.md)`
 
 // Descriptions returns a formatted string of collated descriptions of each
 // type.

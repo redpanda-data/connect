@@ -46,7 +46,7 @@ maximize throughput. For more information regarding these patterns please read
 
 It is possible to perform content based multiplexing of messages to specific
 outputs using a broker with the 'fan_out' pattern and a
-[condition processor](../processors/README.md#condition) on each output, which
+[filter processor](../processors/README.md#filter) on each output, which
 is a processor that drops messages if the condition does not pass. Conditions
 are content aware logical operators that can be combined using boolean logic.
 
@@ -64,8 +64,8 @@ output:
       foo:
         foo_field_1: value1
       processors:
-      - type: condition
-        condition:
+      - type: filter
+        filter:
           type: content
           content:
             operator: contains
@@ -76,8 +76,8 @@ output:
         bar_field_1: value2
         bar_field_2: value3
       processors:
-      - type: condition
-        condition:
+      - type: filter
+        filter:
           type: not
           not:
             type: content
@@ -87,8 +87,8 @@ output:
               arg: foo
 ```
 
-For more information regarding conditions please
-[read the docs here](../conditions/README.md)
+For more information regarding conditions, including a full list of available
+conditions please [read the docs here](../conditions/README.md)
 
 ### Contents
 
@@ -195,17 +195,14 @@ currently does not support creating the target index.
 ## `file`
 
 The file output type simply appends all messages to an output file. Single part
-messages are printed with a line separator '\n'. Multipart messages are written
-with each part line separated, with the final part followed by two line
-separators, e.g. a multipart message [ "foo", "bar", "baz" ] would be written
-as:
+messages are printed with a delimiter (defaults to '\n' if left empty).
+Multipart messages are written with each part delimited, with the final part
+followed by two delimiters, e.g. a multipart message [ "foo", "bar", "baz" ]
+would be written as:
 
 foo\n
 bar\n
 baz\n\n
-
-You can alternatively specify a custom delimiter that will follow the same rules
-as '\n' above.
 
 ## `files`
 
@@ -309,16 +306,14 @@ Currently only PUSH and PUB sockets are supported.
 ## `stdout`
 
 The stdout output type prints messages to stdout. Single part messages are
-printed with a line separator '\n'. Multipart messages are written with each
-part line separated, with the final part followed by two line separators, e.g.
-a multipart message [ "foo", "bar", "baz" ] would be written as:
+printed with a delimiter (defaults to '\n' if left empty). Multipart messages
+are written with each part delimited, with the final part followed by two
+delimiters, e.g. a multipart message [ "foo", "bar", "baz" ] would be written
+as:
 
 foo\n
 bar\n
 baz\n\n
-
-You can alternatively specify a custom delimiter that will follow the same rules
-as '\n' above.
 
 ## `zmq4`
 

@@ -30,7 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/util/service/log"
 )
 
-func TestConditionContentCheck(t *testing.T) {
+func TestFilterContentCheck(t *testing.T) {
 	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
@@ -229,11 +229,11 @@ func TestConditionContentCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := NewConfig()
-			conf.Type = "condition"
-			conf.Condition.Type = "content"
-			conf.Condition.Content.Operator = tt.fields.operator
-			conf.Condition.Content.Part = tt.fields.part
-			conf.Condition.Content.Arg = tt.fields.arg
+			conf.Type = "filter"
+			conf.Filter.Type = "content"
+			conf.Filter.Content.Operator = tt.fields.operator
+			conf.Filter.Content.Part = tt.fields.part
+			conf.Filter.Content.Arg = tt.fields.arg
 
 			c, err := New(conf, nil, testLog, testMet)
 			if err != nil {
@@ -242,7 +242,7 @@ func TestConditionContentCheck(t *testing.T) {
 			}
 			_, got := c.ProcessMessage(types.NewMessage(tt.arg))
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Condition.ProcessMessage() = %v, want %v", got, tt.want)
+				t.Errorf("Filter.ProcessMessage() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -6,7 +6,7 @@
 	},
 	"input": {
 		"stdin": {
-			"custom_delimiter": "",
+			"delimiter": "",
 			"max_buffer": 65536,
 			"multipart": false
 		},
@@ -32,7 +32,7 @@
 	},
 	"output": {
 		"stdout": {
-			"custom_delimiter": ""
+			"delimiter": ""
 		},
 		"type": "stdout"
 	}

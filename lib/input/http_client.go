@@ -69,11 +69,11 @@ multipart, please read the 'docs/using_http.md' document.`,
 
 // StreamConfig contains fields for specifiying stream consumption behaviour.
 type StreamConfig struct {
-	Enabled     bool   `json:"enabled" yaml:"enabled"`
-	Reconnect   bool   `json:"reconnect" yaml:"reconnect"`
-	Multipart   bool   `json:"multipart" yaml:"multipart"`
-	MaxBuffer   int    `json:"max_buffer" yaml:"max_buffer"`
-	CustomDelim string `json:"custom_delimiter" yaml:"custom_delimiter"`
+	Enabled   bool   `json:"enabled" yaml:"enabled"`
+	Reconnect bool   `json:"reconnect" yaml:"reconnect"`
+	Multipart bool   `json:"multipart" yaml:"multipart"`
+	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
+	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
 // HTTPClientConfig is configuration for the HTTPClient output type.
@@ -98,11 +98,11 @@ func NewHTTPClientConfig() HTTPClientConfig {
 		Payload:     "",
 		ContentType: "application/octet-stream",
 		Stream: StreamConfig{
-			Enabled:     false,
-			Reconnect:   true,
-			Multipart:   false,
-			MaxBuffer:   bufio.MaxScanTokenSize,
-			CustomDelim: "",
+			Enabled:   false,
+			Reconnect: true,
+			Multipart: false,
+			MaxBuffer: bufio.MaxScanTokenSize,
+			Delim:     "",
 		},
 		TimeoutMS:      5000,
 		RetryMS:        1000,
@@ -166,9 +166,9 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 		return &h, nil
 	}
 
-	delim := "\n"
-	if len(conf.HTTPClient.Stream.CustomDelim) > 0 {
-		delim = conf.HTTPClient.Stream.CustomDelim
+	delim := conf.HTTPClient.Stream.Delim
+	if len(delim) == 0 {
+		delim = "\n"
 	}
 
 	var resMux sync.Mutex

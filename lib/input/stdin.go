@@ -42,8 +42,7 @@ messages are assumed single part and are line delimited. If the multipart option
 is set to true then lines are interpretted as message parts, and an empty line
 indicates the end of the message.
 
-Alternatively, a custom delimiter can be set that is used instead of line
-breaks.`,
+If the delimiter field is left empty then line feed (\n) is used.`,
 	}
 }
 
@@ -51,17 +50,17 @@ breaks.`,
 
 // STDINConfig contains config fields for the STDIN input type.
 type STDINConfig struct {
-	Multipart   bool   `json:"multipart" yaml:"multipart"`
-	MaxBuffer   int    `json:"max_buffer" yaml:"max_buffer"`
-	CustomDelim string `json:"custom_delimiter" yaml:"custom_delimiter"`
+	Multipart bool   `json:"multipart" yaml:"multipart"`
+	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
+	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewSTDINConfig creates a STDINConfig populated with default values.
 func NewSTDINConfig() STDINConfig {
 	return STDINConfig{
-		Multipart:   false,
-		MaxBuffer:   bufio.MaxScanTokenSize,
-		CustomDelim: "",
+		Multipart: false,
+		MaxBuffer: bufio.MaxScanTokenSize,
+		Delim:     "",
 	}
 }
 
@@ -69,9 +68,9 @@ func NewSTDINConfig() STDINConfig {
 
 // NewSTDIN creates a new STDIN input type.
 func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	delim := "\n"
-	if len(conf.STDIN.CustomDelim) > 0 {
-		delim = conf.STDIN.CustomDelim
+	delim := conf.STDIN.Delim
+	if len(delim) == 0 {
+		delim = "\n"
 	}
 
 	stdin := os.Stdin

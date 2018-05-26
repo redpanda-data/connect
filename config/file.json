@@ -6,7 +6,7 @@
 	},
 	"input": {
 		"file": {
-			"custom_delimiter": "",
+			"delimiter": "",
 			"max_buffer": 65536,
 			"multipart": false,
 			"path": ""
@@ -33,7 +33,7 @@
 	},
 	"output": {
 		"file": {
-			"custom_delimiter": "",
+			"delimiter": "",
 			"path": ""
 		},
 		"type": "file"

@@ -20,9 +20,9 @@ You can [find some examples here][0].
 2. [`bounds_check`](#bounds_check)
 3. [`combine`](#combine)
 4. [`compress`](#compress)
-5. [`condition`](#condition)
-6. [`decompress`](#decompress)
-7. [`dedupe`](#dedupe)
+5. [`decompress`](#decompress)
+6. [`dedupe`](#dedupe)
+7. [`filter`](#filter)
 8. [`hash_sample`](#hash_sample)
 9. [`insert_part`](#insert_part)
 10. [`jmespath`](#jmespath)
@@ -86,11 +86,6 @@ counting backwards starting from -1. E.g. if index = -1 then the selected part
 will be the last part of the message, if index = -2 then the part before the
 last element with be selected, and so on.
 
-## `condition`
-
-Tests each message against a condition, if the condition fails then the message
-is dropped. You can read a [full list of conditions here](../conditions).
-
 ## `decompress`
 
 Decompresses the parts of a message according to the selected algorithm.
@@ -143,6 +138,11 @@ dedupe:
 
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).
+
+## `filter`
+
+Tests each message against a condition, if the condition fails then the message
+is dropped. You can read a [full list of conditions here](../conditions).
 
 ## `hash_sample`
 

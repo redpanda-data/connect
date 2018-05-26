@@ -35,16 +35,14 @@ func init() {
 		constructor: NewSTDOUT,
 		description: `
 The stdout output type prints messages to stdout. Single part messages are
-printed with a line separator '\n'. Multipart messages are written with each
-part line separated, with the final part followed by two line separators, e.g.
-a multipart message [ "foo", "bar", "baz" ] would be written as:
+printed with a delimiter (defaults to '\n' if left empty). Multipart messages
+are written with each part delimited, with the final part followed by two
+delimiters, e.g. a multipart message [ "foo", "bar", "baz" ] would be written
+as:
 
 foo\n
 bar\n
-baz\n\n
-
-You can alternatively specify a custom delimiter that will follow the same rules
-as '\n' above.`,
+baz\n\n`,
 	}
 }
 
@@ -52,13 +50,13 @@ as '\n' above.`,
 
 // STDOUTConfig is configuration values for the stdout based output type.
 type STDOUTConfig struct {
-	CustomDelim string `json:"custom_delimiter" yaml:"custom_delimiter"`
+	Delim string `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewSTDOUTConfig creates a new STDOUTConfig with default values.
 func NewSTDOUTConfig() STDOUTConfig {
 	return STDOUTConfig{
-		CustomDelim: "",
+		Delim: "",
 	}
 }
 
@@ -66,7 +64,7 @@ func NewSTDOUTConfig() STDOUTConfig {
 
 // NewSTDOUT creates a new STDOUT output type.
 func NewSTDOUT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	return NewLineWriter(os.Stdout, []byte(conf.STDOUT.CustomDelim), "stdout", log, stats)
+	return NewLineWriter(os.Stdout, []byte(conf.STDOUT.Delim), "stdout", log, stats)
 }
 
 //------------------------------------------------------------------------------

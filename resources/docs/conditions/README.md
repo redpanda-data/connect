@@ -3,7 +3,7 @@ Conditions
 
 This document was generated with `benthos --list-conditions`
 
-Within the list of Benthos [processors][0] you will find the [condition][1]
+Within the list of Benthos [processors][0] you will find the [filter][1]
 processor, which applies a condition to every message and only propagates them
 if the condition passes. Conditions themselves can modify ('not') and combine
 ('and', 'or') other conditions, and can therefore be used to create complex
@@ -48,7 +48,7 @@ The above example could be summarised as 'content contains "hello world" and
 also either contains "foo" or does _not_ contain "bar"'.
 
 Conditions can be extremely useful for creating filters on an output. By using a
-fan out output broker with 'condition' processors on the brokered outputs it is
+fan out output broker with 'filter' processors on the brokered outputs it is
 possible to build curated data streams that filter on the content of each
 message.
 
@@ -66,8 +66,8 @@ output:
         file:
           path: ./foo.txt
         processors:
-        - type: condition
-          condition:
+        - type: filter
+          filter:
             type: content
             content:
               operator: contains
@@ -77,8 +77,8 @@ output:
         file:
           path: ./bar.txt
         processors:
-        - type: condition
-          condition:
+        - type: filter
+          filter:
             type: content
             content:
               operator: contains
@@ -290,5 +290,5 @@ meaning it only resolves to true if _exactly_ one of its children conditions
 resolves to true.
 
 [0]: ../processors/README.md
-[1]: ../processors/README.md#condition
+[1]: ../processors/README.md#filter
 [2]: #resource

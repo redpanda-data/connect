@@ -25,7 +25,7 @@
 			"retry_period_ms": 1000,
 			"skip_cert_verify": false,
 			"stream": {
-				"custom_delimiter": "",
+				"delimiter": "",
 				"enabled": false,
 				"max_buffer": 65536,
 				"multipart": false,

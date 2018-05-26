@@ -52,7 +52,7 @@
 	},
 	"output": {
 		"stdout": {
-			"custom_delimiter": ""
+			"delimiter": ""
 		},
 		"type": "stdout"
 	}

@@ -198,8 +198,7 @@ The file type reads input from a file. If multipart is set to false each line
 is read as a separate message. If multipart is set to true each line is read as
 a message part, and an empty line indicates the end of a message.
 
-Alternatively, a custom delimiter can be set that is used instead of line
-breaks.
+If the delimiter field is left empty then line feed (\n) is used.
 
 ## `http_client`
 
@@ -315,8 +314,7 @@ messages are assumed single part and are line delimited. If the multipart option
 is set to true then lines are interpretted as message parts, and an empty line
 indicates the end of the message.
 
-Alternatively, a custom delimiter can be set that is used instead of line
-breaks.
+If the delimiter field is left empty then line feed (\n) is used.
 
 ## `zmq4`
 

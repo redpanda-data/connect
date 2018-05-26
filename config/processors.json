@@ -6,7 +6,7 @@
 	},
 	"input": {
 		"stdin": {
-			"custom_delimiter": "",
+			"delimiter": "",
 			"max_buffer": 65536,
 			"multipart": false
 		},
@@ -39,7 +39,20 @@
 					"level": -1,
 					"parts": []
 				},
-				"condition": {
+				"decompress": {
+					"algorithm": "gzip",
+					"parts": []
+				},
+				"dedupe": {
+					"cache": "",
+					"hash": "none",
+					"parts": [
+						0
+					],
+					"json_paths": [],
+					"drop_on_err": true
+				},
+				"filter": {
 					"type": "content",
 					"and": [],
 					"content": {
@@ -59,19 +72,6 @@
 					"resource": "",
 					"static": true,
 					"xor": []
-				},
-				"decompress": {
-					"algorithm": "gzip",
-					"parts": []
-				},
-				"dedupe": {
-					"cache": "",
-					"hash": "none",
-					"parts": [
-						0
-					],
-					"json_paths": [],
-					"drop_on_err": true
 				},
 				"hash_sample": {
 					"retain_min": 0,
@@ -120,7 +120,7 @@
 	},
 	"output": {
 		"stdout": {
-			"custom_delimiter": ""
+			"delimiter": ""
 		},
 		"type": "stdout"
 	}

@@ -5,7 +5,7 @@ http:
   debug_endpoints: false
 input:
   stdin:
-    custom_delimiter: ""
+    delimiter: ""
     max_buffer: 65536
     multipart: false
   type: stdin
@@ -30,7 +30,17 @@ pipeline:
       algorithm: gzip
       level: -1
       parts: []
-    condition:
+    decompress:
+      algorithm: gzip
+      parts: []
+    dedupe:
+      cache: ""
+      hash: none
+      parts:
+      - 0
+      json_paths: []
+      drop_on_err: true
+    filter:
       type: content
       and: []
       content:
@@ -47,16 +57,6 @@ pipeline:
       resource: ""
       static: true
       xor: []
-    decompress:
-      algorithm: gzip
-      parts: []
-    dedupe:
-      cache: ""
-      hash: none
-      parts:
-      - 0
-      json_paths: []
-      drop_on_err: true
     hash_sample:
       retain_min: 0
       retain_max: 10
@@ -90,5 +90,5 @@ pipeline:
       parts: []
 output:
   stdout:
-    custom_delimiter: ""
+    delimiter: ""
   type: stdout

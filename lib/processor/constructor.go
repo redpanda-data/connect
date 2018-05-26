@@ -57,9 +57,9 @@ type Config struct {
 	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
 	Combine     CombineConfig     `json:"combine" yaml:"combine"`
 	Compress    CompressConfig    `json:"compress" yaml:"compress"`
-	Condition   ConditionConfig   `json:"condition" yaml:"condition"`
 	Decompress  DecompressConfig  `json:"decompress" yaml:"decompress"`
 	Dedupe      DedupeConfig      `json:"dedupe" yaml:"dedupe"`
+	Filter      FilterConfig      `json:"filter" yaml:"filter"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
 	JMESPath    JMESPathConfig    `json:"jmespath" yaml:"jmespath"`
@@ -80,9 +80,9 @@ func NewConfig() Config {
 		BoundsCheck: NewBoundsCheckConfig(),
 		Combine:     NewCombineConfig(),
 		Compress:    NewCompressConfig(),
-		Condition:   NewConditionConfig(),
 		Decompress:  NewDecompressConfig(),
 		Dedupe:      NewDedupeConfig(),
+		Filter:      NewFilterConfig(),
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),
 		JMESPath:    NewJMESPathConfig(),

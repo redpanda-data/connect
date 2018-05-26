@@ -6,7 +6,7 @@
 	},
 	"input": {
 		"stdin": {
-			"custom_delimiter": "",
+			"delimiter": "",
 			"max_buffer": 65536,
 			"multipart": false
 		},
@@ -16,8 +16,22 @@
 		"type": "none",
 		"badger": {
 			"directory": "",
+			"max_bytes": 20000000000,
 			"sync_writes": false,
-			"gc_interval_ms": 1000
+			"gc_interval_ms": 1000,
+			"tuning": {
+				"max_table_size": 67108864,
+				"level_size_multiplier": 10,
+				"max_levels": 7,
+				"value_threshold": 32,
+				"num_memtables": 5,
+				"num_level_zero_tables": 5,
+				"num_level_zero_tables_stall": 10,
+				"level_one_size": 268435456,
+				"value_log_file_size": 1073741824,
+				"value_log_max_entries": 1000000,
+				"num_compactors": 3
+			}
 		},
 		"memory": {
 			"limit": 524288000
@@ -37,7 +51,7 @@
 	},
 	"output": {
 		"stdout": {
-			"custom_delimiter": ""
+			"delimiter": ""
 		},
 		"type": "stdout"
 	}

@@ -35,17 +35,14 @@ func init() {
 		constructor: NewFile,
 		description: `
 The file output type simply appends all messages to an output file. Single part
-messages are printed with a line separator '\n'. Multipart messages are written
-with each part line separated, with the final part followed by two line
-separators, e.g. a multipart message [ "foo", "bar", "baz" ] would be written
-as:
+messages are printed with a delimiter (defaults to '\n' if left empty).
+Multipart messages are written with each part delimited, with the final part
+followed by two delimiters, e.g. a multipart message [ "foo", "bar", "baz" ]
+would be written as:
 
 foo\n
 bar\n
-baz\n\n
-
-You can alternatively specify a custom delimiter that will follow the same rules
-as '\n' above.`,
+baz\n\n`,
 	}
 }
 
@@ -53,15 +50,15 @@ as '\n' above.`,
 
 // FileConfig is configuration values for the file based output type.
 type FileConfig struct {
-	Path        string `json:"path" yaml:"path"`
-	CustomDelim string `json:"custom_delimiter" yaml:"custom_delimiter"`
+	Path  string `json:"path" yaml:"path"`
+	Delim string `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewFileConfig creates a new FileConfig with default values.
 func NewFileConfig() FileConfig {
 	return FileConfig{
-		Path:        "",
-		CustomDelim: "",
+		Path:  "",
+		Delim: "",
 	}
 }
 
@@ -73,7 +70,7 @@ func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	return NewLineWriter(file, []byte(conf.File.CustomDelim), "file", log, stats)
+	return NewLineWriter(file, []byte(conf.File.Delim), "file", log, stats)
 }
 
 //------------------------------------------------------------------------------

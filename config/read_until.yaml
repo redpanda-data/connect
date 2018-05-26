@@ -39,5 +39,5 @@ pipeline:
   threads: 1
 output:
   stdout:
-    custom_delimiter: ""
+    delimiter: ""
   type: stdout

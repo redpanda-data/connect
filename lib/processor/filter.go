@@ -32,8 +32,8 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["condition"] = TypeSpec{
-		constructor: NewCondition,
+	Constructors["filter"] = TypeSpec{
+		constructor: NewFilter,
 		description: `
 Tests each message against a condition, if the condition fails then the message
 is dropped. You can read a [full list of conditions here](../conditions).`,
@@ -42,23 +42,23 @@ is dropped. You can read a [full list of conditions here](../conditions).`,
 
 //------------------------------------------------------------------------------
 
-// ConditionConfig contains configuration fields for the Condition processor.
-type ConditionConfig struct {
+// FilterConfig contains configuration fields for the Filter processor.
+type FilterConfig struct {
 	condition.Config `json:",inline" yaml:",inline"`
 }
 
-// NewConditionConfig returns a ConditionConfig with default values.
-func NewConditionConfig() ConditionConfig {
-	return ConditionConfig{
+// NewFilterConfig returns a FilterConfig with default values.
+func NewFilterConfig() FilterConfig {
+	return FilterConfig{
 		Config: condition.NewConfig(),
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// Condition is a processor that checks each message against a set of bounds
-// and rejects messages if they aren't within them.
-type Condition struct {
+// Filter is a processor that checks each message against a condition and
+// rejects when the condition returns false.
+type Filter struct {
 	log   log.Modular
 	stats metrics.Type
 
@@ -69,32 +69,32 @@ type Condition struct {
 	mSent    metrics.StatCounter
 }
 
-// NewCondition returns a Condition processor.
-func NewCondition(
+// NewFilter returns a Filter processor.
+func NewFilter(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	cond, err := condition.New(conf.Condition.Config, mgr, log, stats)
+	cond, err := condition.New(conf.Filter.Config, mgr, log, stats)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to construct condition '%v': %v",
-			conf.Condition.Config.Type, err,
+			conf.Filter.Config.Type, err,
 		)
 	}
-	return &Condition{
-		log:       log.NewModule(".processor.condition"),
+	return &Filter{
+		log:       log.NewModule(".processor.filter"),
 		stats:     stats,
 		condition: cond,
 
-		mCount:   stats.GetCounter("processor.condition.count"),
-		mDropped: stats.GetCounter("processor.condition.dropped"),
-		mSent:    stats.GetCounter("processor.condition.sent"),
+		mCount:   stats.GetCounter("processor.filter.count"),
+		mDropped: stats.GetCounter("processor.filter.dropped"),
+		mSent:    stats.GetCounter("processor.filter.sent"),
 	}, nil
 }
 
 //------------------------------------------------------------------------------
 
 // ProcessMessage checks each message against a set of bounds.
-func (c *Condition) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (c *Filter) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 
 	if !c.condition.Check(msg) {

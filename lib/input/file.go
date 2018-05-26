@@ -41,8 +41,7 @@ The file type reads input from a file. If multipart is set to false each line
 is read as a separate message. If multipart is set to true each line is read as
 a message part, and an empty line indicates the end of a message.
 
-Alternatively, a custom delimiter can be set that is used instead of line
-breaks.`,
+If the delimiter field is left empty then line feed (\n) is used.`,
 	}
 }
 
@@ -50,19 +49,19 @@ breaks.`,
 
 // FileConfig is configuration values for the File input type.
 type FileConfig struct {
-	Path        string `json:"path" yaml:"path"`
-	Multipart   bool   `json:"multipart" yaml:"multipart"`
-	MaxBuffer   int    `json:"max_buffer" yaml:"max_buffer"`
-	CustomDelim string `json:"custom_delimiter" yaml:"custom_delimiter"`
+	Path      string `json:"path" yaml:"path"`
+	Multipart bool   `json:"multipart" yaml:"multipart"`
+	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
+	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewFileConfig creates a new FileConfig with default values.
 func NewFileConfig() FileConfig {
 	return FileConfig{
-		Path:        "",
-		Multipart:   false,
-		MaxBuffer:   bufio.MaxScanTokenSize,
-		CustomDelim: "",
+		Path:      "",
+		Multipart: false,
+		MaxBuffer: bufio.MaxScanTokenSize,
+		Delim:     "",
 	}
 }
 
@@ -74,9 +73,9 @@ func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	delim := "\n"
-	if len(conf.File.CustomDelim) > 0 {
-		delim = conf.File.CustomDelim
+	delim := conf.File.Delim
+	if len(delim) == 0 {
+		delim = "\n"
 	}
 
 	rdr, err := reader.NewLines(
