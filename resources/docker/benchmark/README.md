@@ -4,7 +4,7 @@ Benchmark
 This docker-compose example is designed to set up similar Benthos and Logstash
 pipelines and compare the throughput and resource usage of each.
 
-Sets up:
+Creates:
 
 - Prometheus
 - Grafana
