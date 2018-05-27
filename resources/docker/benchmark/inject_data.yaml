@@ -1,0 +1,35 @@
+http:
+  address: 0.0.0.0:4196
+
+input:
+  type: read_until
+  read_until:
+    input:
+      type: file
+      file:
+        path: ./sample_data.txt
+        max_buffer: 10000000
+    restart_input: true
+    condition:
+      type: static
+      static: false
+
+buffer:
+  type: none
+
+pipeline:
+  threads: 1
+  processors: []
+
+output:
+  type: kafka
+  kafka:
+    addresses:
+    - localhost:9092
+    topic: data_source
+    target_version: 1.1.0
+    max_msg_bytes: 10000000
+
+logger:
+  prefix: service
+  log_level: INFO

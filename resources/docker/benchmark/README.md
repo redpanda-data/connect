@@ -1,15 +1,37 @@
 Benchmark
 =========
 
-This docker compose sets a Benthos instance up with a custom config,
-[Prometheus][prometheus] and [Grafana][grafana] in order to observe its
-performance.
+This docker-compose example is designed to set up similar Benthos and Logstash
+pipelines and compare the throughput and resource usage of each.
 
-Edit the config in this directory in order to change the sources and sinks of
-the Benthos instance.
+Sets up:
 
-Go to [http://localhost:3000](http://localhost:3000) in order to set up your own
-dashboards.
+- Prometheus
+- Grafana
+- Kafka
+- Exporter for Kafka metrics to Prometheus
+- Benthos
+- Logstash
 
-[prometheus]: https://prometheus.io/
-[grafana]: https://grafana.com/
+Both Benthos and Logstash are configured to read data from the same topic
+`data_source` and write to the topics `benthos_sink` and `logstash_sink`
+respectively.
+
+# Set up
+
+Edit the `benthos.yaml` and `pipeline/kafka.conf` configs in order to create
+equivalent test pipelines for both services.
+
+Next, edit the data in `sample_data.txt` to data types of your choosing, and run
+`docker-compose up`. You might need to restart `kafka_exporter` if it crashes.
+
+Finally, use `benthos -c ./inject_data.yaml` to start sending data into the
+`data_source` Kafka topic. This config will continue writing the sample data in
+a loop until stopped.
+
+# Monitoring
+
+Go to [http://localhost:3000](http://localhost:3000) (admin/admin) in order to
+view dashboards. There is a dashboard `kafka_offsets` that will show the current
+offset of both services sink destinations, this can be used to observe the raw
+data throughput of both.

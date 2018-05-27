@@ -19,8 +19,3 @@ scrape_configs:
     scrape_interval: 5s
     static_configs:
       - targets: ['benthos:4195']
-
-  - job_name: 'kafka'
-    scrape_interval: 5s
-    static_configs:
-      - targets: ['kafka_exporter:9308']
