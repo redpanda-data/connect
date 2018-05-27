@@ -69,10 +69,10 @@ clean:
 
 docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --print-yaml > ./config/everything.yaml; true
-	@$(PATHINSTBIN)/benthos --list-inputs > ./resources/docs/inputs/README.md; true
-	@$(PATHINSTBIN)/benthos --list-processors > ./resources/docs/processors/README.md; true
-	@$(PATHINSTBIN)/benthos --list-conditions > ./resources/docs/conditions/README.md; true
-	@$(PATHINSTBIN)/benthos --list-buffers > ./resources/docs/buffers/README.md; true
-	@$(PATHINSTBIN)/benthos --list-outputs > ./resources/docs/outputs/README.md; true
-	@$(PATHINSTBIN)/benthos --list-caches > ./resources/docs/caches/README.md; true
+	@$(PATHINSTBIN)/benthos --list-inputs > ./docs/inputs/README.md; true
+	@$(PATHINSTBIN)/benthos --list-processors > ./docs/processors/README.md; true
+	@$(PATHINSTBIN)/benthos --list-conditions > ./docs/conditions/README.md; true
+	@$(PATHINSTBIN)/benthos --list-buffers > ./docs/buffers/README.md; true
+	@$(PATHINSTBIN)/benthos --list-outputs > ./docs/outputs/README.md; true
+	@$(PATHINSTBIN)/benthos --list-caches > ./docs/caches/README.md; true
 	@go run ./cmd/tools/benthos_config_gen/main.go

@@ -1,28 +1,30 @@
 ![Benthos](icon.png "Benthos")
 
-[![godoc for Jeffail/benthos][1]][2]
-[![goreportcard for Jeffail/benthos][3]][4]
+[![godoc for Jeffail/benthos][godoc-badge]][godoc-url]
+[![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
 [![Build Status][travis-badge]][travis-url]
 
-Benthos is a stream multiplexer service driven by a [config file](config) in
-either YAML or JSON format and deploys as a single binary with zero runtime
-dependencies.
+Benthos is a generic and high performance streaming service, able to connect
+various sources and sinks and perform arbitrary
+[actions, transformations and filters][processors] on payloads. It is ready to
+drop into your pipeline either as a static binary or a docker image.
 
-A variety of [configurable message processors][10] can be chained together for
-solving common streaming problems such as content based multiplexing, filtering,
-modifying, batching, splitting, (de)compressing, (un)archiving, etc.
+A Benthos instance (stream) consists of four components; [inputs][inputs],
+optional [buffer][buffers], [processor][processors] workers and
+[outputs][outputs]. Inputs and outputs can be combined in a range of broker
+patterns. It is possible to run multiple isolated streams within a single
+Benthos instance using [`--streams` mode][streams-mode].
 
-A range of optional [buffer][12] strategies are available, allowing you to
-select a balance between latency, protection against back pressure and file
-based persistence, or nothing at all (direct bridge).
+### Delivery Guarantees
 
-For more details [check out the general documentation][general-docs]. For some
-applied examples such as streaming and deduplicating the Twitter firehose to
-Kafka [check out the cookbook section][cookbook-docs].
+Benthos is crash resilient by default. When connecting to at-least-once sources
+and sinks without a buffer it guarantees at-least-once delivery without needing
+to persist messages during transit.
 
-## Supported Protocols
+When running a Benthos stream with a [buffer][buffers] there are various options
+for choosing a level of resiliency that meets your needs.
 
-Currently supported input/output targets:
+## Supported Sources & Sinks
 
 - [Amazon (S3, SQS)][amazons3]
 - [Elasticsearch][elasticsearch]
@@ -39,38 +41,13 @@ Currently supported input/output targets:
 - Stdin/Stdout
 - [ZMQ4][zmq]
 
-Setting up multiple outputs or inputs is done by choosing a routing strategy
-(fan-in, fan-out, round-robin, etc.)
+## Documentation
 
-It is possible to enable a REST API to dynamically change inputs and outputs at
-runtime, [which you can read about here][11].
+Documentation for Benthos components, concepts and recommendations can be found
+in the [docs directory.][general-docs]
 
-For a full and up to date list of all inputs, buffer options, processors, and
-outputs [you can find them in the docs][7], or print them from the binary:
-
-```
-# Print inputs, buffers and output options
-benthos --list-inputs --list-buffers --list-outputs --list-processors | less
-```
-
-Mixing multiple part message protocols with single part can be done in different
-ways, for more guidance [check out this doc.][5]
-
-## Install
-
-Build with Go:
-
-``` shell
-go get github.com/Jeffail/benthos/cmd/benthos
-```
-
-Or, pull the docker image:
-
-``` shell
-docker pull jeffail/benthos
-```
-
-Or, [download from here.](https://github.com/Jeffail/benthos/releases)
+For some applied examples of Benthos such as streaming and deduplicating the
+Twitter firehose to Kafka [check out the cookbook section][cookbook-docs].
 
 ## Run
 
@@ -94,69 +71,64 @@ docker run --rm \
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 ```
 
-## Streams
+## Configuration
 
-Benthos can be run in `--streams` mode which, instead of running a single stream
-of inputs to outputs, opens up a [REST HTTP API][streams-api] for creating and
-managing multiple streams. Each stream has its own input, buffer, pipeline and
-output sections which contains an isolated stream of data with its own lifetime.
+The configuration file for a Benthos stream is made up of four main sections;
+input, buffer, pipeline, output. If we were to pipe stdin directly to Kafka it
+would look like this:
 
-## Config
+``` yaml
+input:
+  type: stdin
+buffer:
+  type: none
+pipeline:
+  threads: 1
+  processors: []
+output:
+  type: kafka
+  kafka:
+    addresses:
+    - localhost:9092
+    topic: benthos_stream
+```
 
-Benthos has inputs, optional processors, an optional buffer, and outputs, which
-are all set in a single config file.
+There are example configs demonstrating each input, output, buffer and processor
+option which [can be found here](config).
 
-Check out the samples in [./config](config), or create a fully populated default
-configuration file:
+You can print a configuration file containing fields for all types with the
+following command:
 
 ``` shell
 benthos --print-yaml > config.yaml
 benthos --print-json | jq '.' > config.json
 ```
 
-If we wanted to pipe Stdin to a ZMQ push socket our YAML config might look like
-this:
-
-``` yaml
-input:
-  type: stdin
-output:
-  type: zmq4
-  zmq4:
-    addresses:
-      - tcp://*:1234
-    socket_type: PUSH
-```
-
-There are also configuration sections for logging and metrics, if you print an
-example config you will see the available options.
-
-For a list of metrics within Benthos [check out this spec][6].
+There are also sections for setting logging, metrics and HTTP server options.
 
 ### Environment Variables
 
-[You can use environment variables][8] to replace fields in your config files.
+It is possible to select fields inside a configuration file to be set via
+[environment variables][config-interp]. The docker image, for example, is built
+with [a config file][env-config] where _all_ common fields can be set this way.
 
-## ZMQ4 Support
+## Install
 
-Benthos supports ZMQ4 for both data input and output. To add this you need to
-install libzmq4 and use the compile time flag when building Benthos:
+Build with Go:
 
 ``` shell
-go install -tags "ZMQ4" ./cmd/...
+go get github.com/Jeffail/benthos/cmd/benthos
 ```
 
-## Vendoring
+Or, pull the docker image:
 
-Benthos uses [dep][dep] for managing dependencies. To get started make sure you
-have dep installed:
+``` shell
+docker pull jeffail/benthos
+```
 
-`go get -u github.com/golang/dep/cmd/dep`
+Or, [grab a binary for your OS from here.][releases]
 
-And then run `dep ensure`. You can decrease the size of vendor by only storing
-needed files with `dep prune`.
-
-## Docker
+### Docker Builds
 
 There's a multi-stage `Dockerfile` for creating a Benthos docker image which
 results in a minimal image from scratch. You can build it with:
@@ -175,26 +147,40 @@ docker run --rm \
 	benthos -c /config.yaml
 ```
 
-There are a [few examples here][9] that show you some ways of setting up Benthos
-containers using `docker-compose`.
+There are a [few examples here][compose-examples] that show you some ways of
+setting up Benthos containers using `docker-compose`.
 
-[1]: https://godoc.org/github.com/Jeffail/benthos?status.svg
-[2]: https://godoc.org/github.com/Jeffail/benthos
-[3]: https://goreportcard.com/badge/github.com/Jeffail/benthos
-[4]: https://goreportcard.com/report/Jeffail/benthos
-[5]: resources/docs/multipart.md
-[6]: resources/docs/metrics.md
-[7]: resources/docs/README.md
-[8]: resources/docs/config_interpolation.md
-[9]: resources/docker/compose_examples
-[10]: resources/docs/processors/README.md
-[11]: resources/docs/dynamic_inputs_and_outputs.md
-[12]: resources/docs/buffers/README.md
-[streams-api]: resources/docs/api/streams.md
-[general-docs]: resources/docs/README.md#benthos
-[cookbook-docs]: resources/docs/cookbook/README.md
+### ZMQ4 Support
+
+Benthos supports ZMQ4 for both data input and output. To add this you need to
+install libzmq4 and use the compile time flag when building Benthos:
+
+``` shell
+go install -tags "ZMQ4" ./cmd/...
+```
+
+[inputs]: docs/inputs/README.md
+[buffers]: docs/buffers/README.md
+[processors]: docs/processors/README.md
+[outputs]: docs/outputs/README.md
+
+[config-interp]: docs/config_interpolation.md
+[compose-examples]: resources/docker/compose_examples
+[streams-api]: docs/api/streams.md
+[streams-mode]: docs/api/streams.md
+[general-docs]: docs/README.md
+[cookbook-docs]: docs/cookbook/README.md
+[env-config]: config/env/default.yaml
+
+[releases]: https://github.com/Jeffail/benthos/releases
+
+[godoc-badge]: https://godoc.org/github.com/Jeffail/benthos?status.svg
+[godoc-url]: https://godoc.org/github.com/Jeffail/benthos
+[goreport-badge]: https://goreportcard.com/badge/github.com/Jeffail/benthos
+[goreport-url]: https://goreportcard.com/report/Jeffail/benthos
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
 [travis-url]: https://travis-ci.org/Jeffail/benthos
+
 [dep]: https://github.com/golang/dep
 [amazons3]: https://aws.amazon.com/s3/
 [zmq]: http://zeromq.org/

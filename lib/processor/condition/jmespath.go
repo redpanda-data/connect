@@ -61,7 +61,7 @@ Then the condition would pass.
 
 JMESPath is traditionally used for mutating JSON jmespath, in order to do this
 please instead use the ` + "[`jmespath`](../processors/README.md#jmespath)" + `
-processor instead.`,
+processor.`,
 	}
 }
 

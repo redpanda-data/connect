@@ -182,7 +182,7 @@ ZMQ_OUTPUT_BIND   = true
 ZMQ_OUTPUT_SOCKET = PULL
 ```
 
-[0]: ../../resources/docs/inputs/README.md
-[1]: ../../resources/docs/outputs/README.md
-[2]: ../../resources/docs/buffers/README.md
-[3]: ../../resources/docs/processors/README.md
+[0]: ../../docs/inputs/README.md
+[1]: ../../docs/outputs/README.md
+[2]: ../../docs/buffers/README.md
+[3]: ../../docs/processors/README.md

@@ -173,6 +173,6 @@ is correctly applied to all inputs.
 
 Solved.
 
-[multipart_demo_1]: ../img/docs/multipart_demo_1.png
-[multipart_demo_2]: ../img/docs/multipart_demo_2.png
-[multipart_demo_3]: ../img/docs/multipart_demo_3.png
+[multipart_demo_1]: ../resources/img/docs/multipart_demo_1.png
+[multipart_demo_2]: ../resources/img/docs/multipart_demo_2.png
+[multipart_demo_3]: ../resources/img/docs/multipart_demo_3.png
