@@ -301,7 +301,7 @@ Then the resulting contents of part 0 would be:
 
 It is possible to create boolean queries with JMESPath, in order to filter
 messages with boolean queries please instead use the
-[`jmespath`](../conditions/README.md#jmespath) condition instead.
+[`jmespath`](../conditions/README.md#jmespath) condition.
 
 Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if part = -1 then the selected part
