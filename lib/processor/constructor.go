@@ -56,6 +56,7 @@ var Constructors = map[string]TypeSpec{}
 type Config struct {
 	Type        string            `json:"type" yaml:"type"`
 	Archive     ArchiveConfig     `json:"archive" yaml:"archive"`
+	Batch       BatchConfig       `json:"batch" yaml:"batch"`
 	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
 	Combine     CombineConfig     `json:"combine" yaml:"combine"`
 	Compress    CompressConfig    `json:"compress" yaml:"compress"`
@@ -79,6 +80,7 @@ func NewConfig() Config {
 	return Config{
 		Type:        "bounds_check",
 		Archive:     NewArchiveConfig(),
+		Batch:       NewBatchConfig(),
 		BoundsCheck: NewBoundsCheckConfig(),
 		Combine:     NewCombineConfig(),
 		Compress:    NewCompressConfig(),

@@ -17,23 +17,24 @@ You can [find some examples here][0].
 ### Contents
 
 1. [`archive`](#archive)
-2. [`bounds_check`](#bounds_check)
-3. [`combine`](#combine)
-4. [`compress`](#compress)
-5. [`decompress`](#decompress)
-6. [`dedupe`](#dedupe)
-7. [`filter`](#filter)
-8. [`hash_sample`](#hash_sample)
-9. [`insert_part`](#insert_part)
-10. [`jmespath`](#jmespath)
-11. [`merge_json`](#merge_json)
-12. [`noop`](#noop)
-13. [`sample`](#sample)
-14. [`select_json`](#select_json)
-15. [`select_parts`](#select_parts)
-16. [`set_json`](#set_json)
-17. [`split`](#split)
-18. [`unarchive`](#unarchive)
+2. [`batch`](#batch)
+3. [`bounds_check`](#bounds_check)
+4. [`combine`](#combine)
+5. [`compress`](#compress)
+6. [`decompress`](#decompress)
+7. [`dedupe`](#dedupe)
+8. [`filter`](#filter)
+9. [`hash_sample`](#hash_sample)
+10. [`insert_part`](#insert_part)
+11. [`jmespath`](#jmespath)
+12. [`merge_json`](#merge_json)
+13. [`noop`](#noop)
+14. [`sample`](#sample)
+15. [`select_json`](#select_json)
+16. [`select_parts`](#select_parts)
+17. [`set_json`](#set_json)
+18. [`split`](#split)
+19. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -52,6 +53,32 @@ file with a path. Since message parts only contain raw data a unique path must
 be generated for each part. This can be done by using function interpolations on
 the 'path' field as described [here](../config_interpolation.md#functions). For
 types that aren't file based (such as binary) the file field is ignored.
+
+## `batch`
+
+``` yaml
+type: batch
+batch:
+  byte_size: 10000
+```
+
+Reads a number of discrete messages, buffering (but not acknowledging) the
+message parts until the total size of the batch in bytes matches or exceeds the
+configured byte size. Once the limit is reached the parts are combined into a
+single batch of messages and sent through the pipeline. Once the combined batch
+has reached a destination the acknowledgment is sent out for all messages inside
+the batch, preserving at-least-once delivery guarantees.
+
+When a batch is sent to an output the behaviour will differ depending on the
+protocol. If the output type supports multipart messages then the batch is sent
+as a single message with multiple parts. If the output only supports single part
+messages then the parts will be sent as a batch of single part messages. If the
+output supports neither multipart or batches of messages then Benthos falls back
+to sending them individually.
+
+If a Benthos stream contains multiple brokered inputs or outputs then the batch
+operator should *always* be applied directly after an input in order to avoid
+unexpected behaviour and message ordering.
 
 ## `bounds_check`
 
