@@ -29,6 +29,13 @@ Finally, use `benthos -c ./inject_data.yaml` to start sending data into the
 `data_source` Kafka topic. This config will continue writing the sample data in
 a loop until stopped.
 
+You can compare the resulting data streams of each queue with:
+
+```
+TARGET=logstash benthos -c ./extract_data.yaml
+TARGET=benthos benthos -c ./extract_data.yaml
+```
+
 # Monitoring
 
 Go to [http://localhost:3000](http://localhost:3000) (admin/admin) in order to

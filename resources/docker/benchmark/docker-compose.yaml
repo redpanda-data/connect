@@ -19,6 +19,8 @@ services:
       - ./pipeline/:/usr/share/logstash/pipeline/
     ports:
       - 9600:9600
+    command:
+      - '--filterworkers=8'
 
   zookeeper:
     image: wurstmeister/zookeeper
