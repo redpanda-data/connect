@@ -60,6 +60,7 @@ type Config struct {
 	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
 	Combine     CombineConfig     `json:"combine" yaml:"combine"`
 	Compress    CompressConfig    `json:"compress" yaml:"compress"`
+	Conditional ConditionalConfig `json:"conditional" yaml:"conditional"`
 	Decompress  DecompressConfig  `json:"decompress" yaml:"decompress"`
 	Dedupe      DedupeConfig      `json:"dedupe" yaml:"dedupe"`
 	Filter      FilterConfig      `json:"filter" yaml:"filter"`
@@ -84,6 +85,7 @@ func NewConfig() Config {
 		BoundsCheck: NewBoundsCheckConfig(),
 		Combine:     NewCombineConfig(),
 		Compress:    NewCompressConfig(),
+		Conditional: NewConditionalConfig(),
 		Decompress:  NewDecompressConfig(),
 		Dedupe:      NewDedupeConfig(),
 		Filter:      NewFilterConfig(),

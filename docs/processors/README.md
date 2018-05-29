@@ -21,20 +21,21 @@ You can [find some examples here][0].
 3. [`bounds_check`](#bounds_check)
 4. [`combine`](#combine)
 5. [`compress`](#compress)
-6. [`decompress`](#decompress)
-7. [`dedupe`](#dedupe)
-8. [`filter`](#filter)
-9. [`hash_sample`](#hash_sample)
-10. [`insert_part`](#insert_part)
-11. [`jmespath`](#jmespath)
-12. [`merge_json`](#merge_json)
-13. [`noop`](#noop)
-14. [`sample`](#sample)
-15. [`select_json`](#select_json)
-16. [`select_parts`](#select_parts)
-17. [`set_json`](#set_json)
-18. [`split`](#split)
-19. [`unarchive`](#unarchive)
+6. [`conditional`](#conditional)
+7. [`decompress`](#decompress)
+8. [`dedupe`](#dedupe)
+9. [`filter`](#filter)
+10. [`hash_sample`](#hash_sample)
+11. [`insert_part`](#insert_part)
+12. [`jmespath`](#jmespath)
+13. [`merge_json`](#merge_json)
+14. [`noop`](#noop)
+15. [`sample`](#sample)
+16. [`select_json`](#select_json)
+17. [`select_parts`](#select_parts)
+18. [`set_json`](#set_json)
+19. [`split`](#split)
+20. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -142,6 +143,36 @@ Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if index = -1 then the selected part
 will be the last part of the message, if index = -2 then the part before the
 last element with be selected, and so on.
+
+## `conditional`
+
+``` yaml
+type: conditional
+conditional:
+  condition:
+    and: []
+    content:
+      arg: ""
+      operator: equals_cs
+      part: 0
+    count:
+      arg: 100
+    jmespath:
+      part: 0
+      query: ""
+    not: {}
+    or: []
+    resource: ""
+    static: true
+    type: content
+    xor: []
+  processors: []
+```
+
+Conditional is a processor that has a list of child processors and a condition.
+For each message if the condition passes the child processors will be applied,
+otherwise the message is passed through directly. This processor is useful for
+applying processors such as 'dedupe' based on the content type of the message
 
 ## `decompress`
 
