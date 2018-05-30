@@ -41,20 +41,16 @@ import (
 
 func router(m *Type) *mux.Router {
 	router := mux.NewRouter()
-	router.HandleFunc("/streams", m.HandleList)
-	router.HandleFunc("/stream/{id}", m.HandleCRUD)
+	router.HandleFunc("/streams", m.HandleStreamsCRUD)
+	router.HandleFunc("/stream/{id}", m.HandleStreamCRUD)
 	return router
 }
 
-func genRequest(verb, url string, conf *stream.Config) *http.Request {
+func genRequest(verb, url string, payload interface{}) *http.Request {
 	var body io.Reader
 
-	if conf != nil {
-		sanit, err := conf.Sanitised()
-		if err != nil {
-			panic(err)
-		}
-		bodyBytes, err := json.Marshal(sanit)
+	if payload != nil {
+		bodyBytes, err := json.Marshal(payload)
 		if err != nil {
 			panic(err)
 		}
@@ -69,15 +65,11 @@ func genRequest(verb, url string, conf *stream.Config) *http.Request {
 	return req
 }
 
-func genYAMLRequest(verb, url string, conf *stream.Config) *http.Request {
+func genYAMLRequest(verb, url string, payload interface{}) *http.Request {
 	var body io.Reader
 
-	if conf != nil {
-		sanit, err := conf.Sanitised()
-		if err != nil {
-			panic(err)
-		}
-		bodyBytes, err := yaml.Marshal(sanit)
+	if payload != nil {
+		bodyBytes, err := yaml.Marshal(payload)
 		if err != nil {
 			panic(err)
 		}
@@ -125,6 +117,31 @@ func parseGetBody(data *bytes.Buffer) getBody {
 	return result
 }
 
+func TestTypeAPIBadMethods(t *testing.T) {
+	mgr := New(
+		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetStats(metrics.DudType{}),
+		OptSetManager(types.DudMgr{}),
+		OptSetAPITimeout(time.Millisecond*100),
+	)
+
+	r := router(mgr)
+
+	request := genRequest("DELETE", "/streams", nil)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusBadRequest, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genRequest("DERP", "/stream/foo", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusBadRequest, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+}
+
 func TestTypeAPIBasicOperations(t *testing.T) {
 	mgr := New(
 		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
@@ -136,7 +153,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	r := router(mgr)
 	conf := harmlessConf()
 
-	request := genRequest("PUT", "/stream/foo", &conf)
+	request := genRequest("PUT", "/stream/foo", conf)
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusNotFound, response.Code; exp != act {
@@ -150,14 +167,14 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genRequest("POST", "/stream/foo", &conf)
+	request = genRequest("POST", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genRequest("POST", "/stream/foo", &conf)
+	request = genRequest("POST", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusBadRequest, response.Code; exp != act {
@@ -171,7 +188,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genRequest("GET", "/stream/foo", &conf)
+	request = genRequest("GET", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -187,14 +204,14 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	newConf := harmlessConf()
 	newConf.Buffer.Type = "memory"
 
-	request = genRequest("PUT", "/stream/foo", &newConf)
+	request = genRequest("PUT", "/stream/foo", newConf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genRequest("GET", "/stream/foo", &conf)
+	request = genRequest("GET", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -207,14 +224,14 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 		t.Errorf("Unexpected config: %v != %v", act, exp)
 	}
 
-	request = genRequest("DELETE", "/stream/foo", &conf)
+	request = genRequest("DELETE", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genRequest("DELETE", "/stream/foo", &conf)
+	request = genRequest("DELETE", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusNotFound, response.Code; exp != act {
@@ -233,7 +250,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	r := router(mgr)
 	conf := harmlessConf()
 
-	request := genYAMLRequest("PUT", "/stream/foo", &conf)
+	request := genYAMLRequest("PUT", "/stream/foo", conf)
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusNotFound, response.Code; exp != act {
@@ -247,14 +264,14 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genYAMLRequest("POST", "/stream/foo", &conf)
+	request = genYAMLRequest("POST", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genYAMLRequest("POST", "/stream/foo", &conf)
+	request = genYAMLRequest("POST", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusBadRequest, response.Code; exp != act {
@@ -268,7 +285,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genYAMLRequest("GET", "/stream/foo", &conf)
+	request = genYAMLRequest("GET", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -284,14 +301,14 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	newConf := harmlessConf()
 	newConf.Buffer.Type = "memory"
 
-	request = genYAMLRequest("PUT", "/stream/foo", &newConf)
+	request = genYAMLRequest("PUT", "/stream/foo", newConf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genYAMLRequest("GET", "/stream/foo", &conf)
+	request = genYAMLRequest("GET", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -304,14 +321,14 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 		t.Errorf("Unexpected config: %v != %v", act, exp)
 	}
 
-	request = genYAMLRequest("DELETE", "/stream/foo", &conf)
+	request = genYAMLRequest("DELETE", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genYAMLRequest("DELETE", "/stream/foo", &conf)
+	request = genYAMLRequest("DELETE", "/stream/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusNotFound, response.Code; exp != act {
@@ -353,6 +370,77 @@ func TestTypeAPIList(t *testing.T) {
 	info = parseListBody(response.Body)
 	if exp, act := true, info["foo"].Active; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong list response: %v != %v", act, exp)
+	}
+}
+
+func TestTypeAPISetStreams(t *testing.T) {
+	mgr := New(
+		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetStats(metrics.DudType{}),
+		OptSetManager(types.DudMgr{}),
+		OptSetAPITimeout(time.Millisecond*100),
+	)
+
+	r := router(mgr)
+
+	if err := mgr.Create("foo", harmlessConf()); err != nil {
+		t.Fatal(err)
+	}
+	if err := mgr.Create("bar", harmlessConf()); err != nil {
+		t.Fatal(err)
+	}
+
+	request := genRequest("GET", "/streams", nil)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+	info := parseListBody(response.Body)
+	if exp, act := true, info["foo"].Active; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong list response: %v != %v", act, exp)
+	}
+	if exp, act := true, info["bar"].Active; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong list response: %v != %v", act, exp)
+	}
+
+	barConf := harmlessConf()
+	barConf.Buffer.Type = "memory"
+	streamsBody := map[string]stream.Config{
+		"bar": barConf,
+		"baz": harmlessConf(),
+	}
+
+	request = genRequest("POST", "/streams", streamsBody)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genRequest("GET", "/streams", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+	info = parseListBody(response.Body)
+	if _, exists := info["foo"]; exists {
+		t.Error("Expected foo to be deleted")
+	}
+	if exp, act := true, info["bar"].Active; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong list response: %v != %v", act, exp)
+	}
+	if exp, act := true, info["baz"].Active; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong list response: %v != %v", act, exp)
+	}
+
+	mgr.lock.Lock()
+	memType := mgr.streams["bar"].Config().Buffer.Type
+	mgr.lock.Unlock()
+
+	if act, exp := memType, "memory"; act != exp {
+		t.Errorf("Bar was not updated: %v != %v", act, exp)
 	}
 }
 

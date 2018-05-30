@@ -22,9 +22,11 @@ package manager
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/stream"
@@ -36,27 +38,36 @@ import (
 
 func (m *Type) registerEndpoints() {
 	m.manager.RegisterEndpoint(
-		"/streams", "List all streams along with their status and uptimes.",
-		m.HandleList,
+		"/streams",
+		"GET: List all streams along with their status and uptimes."+
+			" POST: Post an object of stream ids to stream configs, all"+
+			" streams will be replaced by this new set.",
+		m.HandleStreamsCRUD,
 	)
 	m.manager.RegisterEndpoint(
 		"/stream/{id}",
 		"Perform CRUD operations on streams, supporting POST (Create),"+
 			" GET (Read), PUT (Update) and DELETE (Delete).",
-		m.HandleCRUD,
+		m.HandleStreamCRUD,
 	)
 }
 
-// HandleList is an http.HandleFunc for returning maps of active benthos
-// streams by their id, status and uptime.
-func (m *Type) HandleList(w http.ResponseWriter, r *http.Request) {
-	var httpErr error
+// HandleStreamsCRUD is an http.HandleFunc for returning maps of active benthos
+// streams by their id, status and uptime or overwriting the entire set of
+// streams.
+func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
+	var serverErr, requestErr error
 	defer func() {
 		if r.Body != nil {
 			r.Body.Close()
 		}
-		if httpErr != nil {
-			http.Error(w, "Internal server error", http.StatusBadGateway)
+		if serverErr != nil {
+			m.logger.Errorf("Streams CRUD Error: %v\n", serverErr)
+			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
+		}
+		if requestErr != nil {
+			m.logger.Debugf("Streams request CRUD Error: %v\n", requestErr)
+			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadRequest)
 		}
 	}()
 
@@ -77,14 +88,81 @@ func (m *Type) HandleList(w http.ResponseWriter, r *http.Request) {
 	}
 	m.lock.Unlock()
 
-	var resBytes []byte
-	if resBytes, httpErr = json.Marshal(infos); httpErr == nil {
-		w.Write(resBytes)
+	switch r.Method {
+	case "GET":
+		var resBytes []byte
+		if resBytes, serverErr = json.Marshal(infos); serverErr == nil {
+			w.Write(resBytes)
+		}
+		return
+	case "POST":
+	default:
+		requestErr = errors.New("Method not supported")
+		return
 	}
+
+	newSet := map[string]stream.Config{}
+
+	var setBytes []byte
+	if setBytes, requestErr = ioutil.ReadAll(r.Body); requestErr != nil {
+		return
+	}
+	if requestErr = yaml.Unmarshal(setBytes, &newSet); requestErr != nil {
+		return
+	}
+
+	toDelete := []string{}
+	toUpdate := map[string]stream.Config{}
+	toCreate := map[string]stream.Config{}
+
+	for id := range infos {
+		if newConf, exists := newSet[id]; !exists {
+			toDelete = append(toDelete, id)
+		} else {
+			toUpdate[id] = newConf
+		}
+	}
+	for id, conf := range newSet {
+		if _, exists := infos[id]; !exists {
+			toCreate[id] = conf
+		}
+	}
+
+	deadline, hasDeadline := r.Context().Deadline()
+	if !hasDeadline {
+		deadline = time.Now().Add(m.apiTimeout)
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(len(toDelete))
+	wg.Add(len(toUpdate))
+	wg.Add(len(toCreate))
+
+	for _, id := range toDelete {
+		go func(sid string) {
+			m.Delete(sid, time.Until(deadline))
+			wg.Done()
+		}(id)
+	}
+	for id, conf := range toUpdate {
+		go func(sid string, sconf *stream.Config) {
+			m.Update(sid, *sconf, time.Until(deadline))
+			wg.Done()
+		}(id, &conf)
+	}
+	for id, conf := range toCreate {
+		go func(sid string, sconf *stream.Config) {
+			m.Create(sid, *sconf)
+			wg.Done()
+		}(id, &conf)
+	}
+
+	wg.Wait()
 }
 
-// HandleCRUD is an http.HandleFunc for performing CRUD operations on streams.
-func (m *Type) HandleCRUD(w http.ResponseWriter, r *http.Request) {
+// HandleStreamCRUD is an http.HandleFunc for performing CRUD operations on
+// individual streams.
+func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 	var serverErr, requestErr error
 	defer func() {
 		if r.Body != nil {
@@ -159,7 +237,7 @@ func (m *Type) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 	case "DELETE":
 		serverErr = m.Delete(id, time.Until(deadline))
 	default:
-		serverErr = fmt.Errorf("verb not supported: %v", r.Method)
+		requestErr = fmt.Errorf("verb not supported: %v", r.Method)
 	}
 
 	if serverErr == ErrStreamDoesNotExist {

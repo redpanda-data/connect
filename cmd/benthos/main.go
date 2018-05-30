@@ -164,7 +164,15 @@ var (
 		"Run Benthos in streams mode, where streams can be created, updated"+
 			" and removed via REST HTTP endpoints. In streams mode the stream"+
 			" fields of a config file (input, buffer, pipeline, output) will"+
-			" be ignored",
+			" be ignored. Instead, any .yaml or .json files inside the"+
+			" --streams-dir directory will be parsed as stream configs.",
+	)
+	streamsDir = flag.String(
+		"streams-dir", "/benthos/streams",
+		"When running Benthos in streams mode any files in this directory with"+
+			" a .json or .yaml extension will be parsed as a stream"+
+			" configuration (input, buffer, pipeline, output), where the"+
+			" filename less the extension will be the id of the stream.",
 	)
 )
 
@@ -242,8 +250,6 @@ func main() {
 		logger = log.NewLogger(os.Stdout, config.Logger)
 	}
 
-	logger.Infoln("Launching a benthos instance, use CTRL+C to close.")
-
 	// Create our metrics type.
 	stats, err := metrics.New(config.Metrics)
 	if err != nil {
@@ -271,12 +277,28 @@ func main() {
 
 	// Create data streams.
 	if *streamsMode {
-		dataStream = strmmgr.New(
+		streamMgr := strmmgr.New(
 			strmmgr.OptSetAPITimeout(time.Duration(config.HTTP.ReadTimeoutMS)*time.Millisecond),
 			strmmgr.OptSetLogger(logger),
 			strmmgr.OptSetManager(manager),
 			strmmgr.OptSetStats(stats),
 		)
+		var streamConfs map[string]stream.Config
+		if streamConfs, err = strmmgr.LoadStreamConfigsFromDirectory(*streamsDir); err != nil {
+			logger.Errorf("Failed to load stream configs: %v\n", err)
+			os.Exit(1)
+		}
+		dataStream = streamMgr
+		for id, conf := range streamConfs {
+			if err = streamMgr.Create(id, conf); err != nil {
+				logger.Errorf("Failed to create stream (%v): %v\n", id, err)
+				os.Exit(1)
+			}
+		}
+		logger.Infoln("Launching benthos in streams mode, use CTRL+C to close.")
+		if lStreams := len(streamConfs); lStreams > 0 {
+			logger.Infof("Created %v streams from directory: %v\n", lStreams, *streamsDir)
+		}
 	} else {
 		if dataStream, err = stream.New(
 			config.Config,
@@ -290,6 +312,7 @@ func main() {
 			logger.Errorf("Service closing due to: %v\n", err)
 			os.Exit(1)
 		}
+		logger.Infoln("Launching a benthos instance, use CTRL+C to close.")
 	}
 
 	// Start HTTP server.

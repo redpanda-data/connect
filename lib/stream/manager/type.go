@@ -348,13 +348,13 @@ func (m *Type) Update(id string, conf stream.Config, timeout time.Duration) erro
 // of time.
 func (m *Type) Delete(id string, timeout time.Duration) error {
 	m.lock.Lock()
-	defer m.lock.Unlock()
-
 	if m.closed {
+		m.lock.Unlock()
 		return types.ErrTypeClosed
 	}
 
 	wrapper, exists := m.streams[id]
+	m.lock.Unlock()
 	if !exists {
 		return ErrStreamDoesNotExist
 	}
@@ -362,7 +362,10 @@ func (m *Type) Delete(id string, timeout time.Duration) error {
 	if err := wrapper.strm.Stop(timeout); err != nil {
 		return err
 	}
+
+	m.lock.Lock()
 	delete(m.streams, id)
+	m.lock.Unlock()
 
 	return nil
 }
