@@ -167,7 +167,7 @@ go install -tags "ZMQ4" ./cmd/...
 [config-interp]: docs/config_interpolation.md
 [compose-examples]: resources/docker/compose_examples
 [streams-api]: docs/api/streams.md
-[streams-mode]: docs/api/streams.md
+[streams-mode]: docs/streams_mode.md
 [general-docs]: docs/README.md
 [cookbook-docs]: docs/cookbook/README.md
 [env-config]: config/env/default.yaml

@@ -27,6 +27,23 @@ showing their status and uptime.
 }
 ```
 
+### POST `/streams`
+
+Sets the entire collection of streams to the body of the request. Streams that
+exist but aren't within the request body are *removed*, streams that exist
+already and are in the request body are updated, other streams within the
+request body are created.
+
+``` json
+{
+	"<string, stream id>": "<object, a standard Benthos stream configuration>"
+}
+```
+
+#### Response 200
+
+The streams were updated successfully.
+
 ### POST `/stream/{id}`
 
 Create a new stream identified by `id` by posting a body containing the stream
