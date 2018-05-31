@@ -35,7 +35,7 @@ type namespacedWrapper struct {
 // prefix of the embedded aggregator is still the ultimate prefix of metrics.
 func Namespaced(t Type, ns string) Type {
 	return namespacedWrapper{
-		ns: ns + ".",
+		ns: ns,
 		t:  t,
 	}
 }
@@ -55,19 +55,19 @@ func (d namespacedWrapper) GetGauge(path ...string) StatGauge {
 }
 
 func (d namespacedWrapper) Incr(path string, count int64) error {
-	return d.t.Incr(d.ns+path, count)
+	return d.t.Incr(d.ns+"."+path, count)
 }
 
 func (d namespacedWrapper) Decr(path string, count int64) error {
-	return d.t.Decr(d.ns+path, count)
+	return d.t.Decr(d.ns+"."+path, count)
 }
 
 func (d namespacedWrapper) Timing(path string, delta int64) error {
-	return d.t.Timing(d.ns+path, delta)
+	return d.t.Timing(d.ns+"."+path, delta)
 }
 
 func (d namespacedWrapper) Gauge(path string, value int64) error {
-	return d.t.Gauge(d.ns+path, value)
+	return d.t.Gauge(d.ns+"."+path, value)
 }
 
 func (d namespacedWrapper) Close() error {

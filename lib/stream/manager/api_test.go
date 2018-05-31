@@ -405,10 +405,15 @@ func TestTypeAPISetStreams(t *testing.T) {
 	}
 
 	barConf := harmlessConf()
-	barConf.Buffer.Type = "memory"
+	barConf.Input.File.Path = "BAR_ONE"
+	bar2Conf := harmlessConf()
+	bar2Conf.Input.File.Path = "BAR_TWO"
+	bazConf := harmlessConf()
+	bazConf.Input.File.Path = "BAZ_ONE"
 	streamsBody := map[string]stream.Config{
-		"bar": barConf,
-		"baz": harmlessConf(),
+		"bar":  barConf,
+		"bar2": bar2Conf,
+		"baz":  bazConf,
 	}
 
 	request = genRequest("POST", "/streams", streamsBody)
@@ -416,6 +421,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
+		t.Logf("Message: %v", response.Body.String())
 	}
 
 	request = genRequest("GET", "/streams", nil)
@@ -423,6 +429,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
+		t.Logf("Message: %v", response.Body.String())
 	}
 	info = parseListBody(response.Body)
 	if _, exists := info["foo"]; exists {
@@ -435,12 +442,28 @@ func TestTypeAPISetStreams(t *testing.T) {
 		t.Errorf("Wrong list response: %v != %v", act, exp)
 	}
 
+	var barVal, bar2Val, bazVal string
+
 	mgr.lock.Lock()
-	memType := mgr.streams["bar"].Config().Buffer.Type
+	if val, exists := mgr.streams["bar"]; exists {
+		barVal = val.Config().Input.File.Path
+	}
+	if val, exists := mgr.streams["bar2"]; exists {
+		bar2Val = val.Config().Input.File.Path
+	}
+	if val, exists := mgr.streams["baz"]; exists {
+		bazVal = val.Config().Input.File.Path
+	}
 	mgr.lock.Unlock()
 
-	if act, exp := memType, "memory"; act != exp {
+	if act, exp := barVal, "BAR_ONE"; act != exp {
 		t.Errorf("Bar was not updated: %v != %v", act, exp)
+	}
+	if act, exp := bar2Val, "BAR_TWO"; act != exp {
+		t.Errorf("Bar2 was not created: %v != %v", act, exp)
+	}
+	if act, exp := bazVal, "BAZ_ONE"; act != exp {
+		t.Errorf("Baz was not created: %v != %v", act, exp)
 	}
 }
 

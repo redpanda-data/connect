@@ -84,7 +84,7 @@ func LoadStreamConfigsFromDirectory(dir string) (map[string]stream.Config, error
 			return readerr
 		}
 
-		var conf stream.Config
+		conf := stream.NewConfig()
 		if readerr = yaml.Unmarshal(streamBytes, &conf); readerr != nil {
 			return readerr
 		}

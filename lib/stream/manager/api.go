@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,7 +68,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 		if requestErr != nil {
 			m.logger.Debugf("Streams request CRUD Error: %v\n", requestErr)
-			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadRequest)
+			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
 		}
 	}()
 
@@ -101,7 +102,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newSet := map[string]stream.Config{}
+	newSet := ConfigSet{}
 
 	var setBytes []byte
 	if setBytes, requestErr = ioutil.ReadAll(r.Body); requestErr != nil {
@@ -138,26 +139,57 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 	wg.Add(len(toUpdate))
 	wg.Add(len(toCreate))
 
-	for _, id := range toDelete {
-		go func(sid string) {
-			m.Delete(sid, time.Until(deadline))
+	errDelete := make([]error, len(toDelete))
+	errUpdate := make([]error, len(toUpdate))
+	errCreate := make([]error, len(toCreate))
+
+	for i, id := range toDelete {
+		go func(sid string, j int) {
+			errDelete[j] = m.Delete(sid, time.Until(deadline))
 			wg.Done()
-		}(id)
+		}(id, i)
 	}
+	i := 0
 	for id, conf := range toUpdate {
-		go func(sid string, sconf *stream.Config) {
-			m.Update(sid, *sconf, time.Until(deadline))
+		newConf := conf
+		go func(sid string, sconf *stream.Config, j int) {
+			errUpdate[j] = m.Update(sid, *sconf, time.Until(deadline))
 			wg.Done()
-		}(id, &conf)
+		}(id, &newConf, i)
+		i++
 	}
+	i = 0
 	for id, conf := range toCreate {
-		go func(sid string, sconf *stream.Config) {
-			m.Create(sid, *sconf)
+		newConf := conf
+		go func(sid string, sconf *stream.Config, j int) {
+			errCreate[j] = m.Create(sid, *sconf)
 			wg.Done()
-		}(id, &conf)
+		}(id, &newConf, i)
+		i++
 	}
 
 	wg.Wait()
+
+	errs := []string{}
+	for _, err := range errDelete {
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("failed to delete stream: %v", err))
+		}
+	}
+	for _, err := range errUpdate {
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("failed to update stream: %v", err))
+		}
+	}
+	for _, err := range errCreate {
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("failed to create stream: %v", err))
+		}
+	}
+
+	if len(errs) > 0 {
+		requestErr = errors.New(strings.Join(errs, "\n"))
+	}
 }
 
 // HandleStreamCRUD is an http.HandleFunc for performing CRUD operations on
