@@ -96,7 +96,7 @@ func New(
 	}
 
 	// Sometimes condition resources might refer to other condition resources.
-	// When they are constructed they will check will the manager to ensure the
+	// When they are constructed they will check with the manager to ensure the
 	// resource they point to is valid, but not use the condition. Since we
 	// cannot guarantee an order of initialisation we create placeholder
 	// conditions during construction.
