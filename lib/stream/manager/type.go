@@ -88,7 +88,7 @@ type nsMgr struct {
 
 func namespacedMgr(ns string, mgr types.Manager) *nsMgr {
 	return &nsMgr{
-		ns:  ns,
+		ns:  "/" + ns,
 		mgr: mgr,
 	}
 }

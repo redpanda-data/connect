@@ -14,6 +14,10 @@ config file for each stream (`/benthos/streams` by default).
 During runtime streams can also be added, updated, removed and monitored using
 [a REST HTTP interface][http-interface].
 
+Note that stream configs loaded from `--streams-dir` can benefit from
+[interpolation][interpolation] but configs loaded through the HTTP REST
+endpoints cannot.
+
 ## Using directory of stream configs
 
 Make a directory of stream configs:
@@ -22,44 +26,44 @@ Make a directory of stream configs:
 $ mkdir ./streams
 
 $ cat > ./streams/foo.yaml <<EOF
-> input:
->   type: http_server
-> buffer:
->   type: memory
-> pipeline:
->   threads: 4
->   processors:
->   - type: jmespath
->     jmespath:
->       query: "{id: user.id, content: body.content}"
-> output:
->   type: http_server
-> EOF
+input:
+  type: http_server
+buffer:
+  type: memory
+pipeline:
+  threads: 4
+  processors:
+  - type: jmespath
+    jmespath:
+      query: "{id: user.id, content: body.content}"
+output:
+  type: http_server
+EOF
 
 $ cat > ./streams/bar.yaml <<EOF
-> input:
->   type: kafka
->   kafka:
->     addresses:
->     - localhost:9092
->     topic: my_topic
-> buffer:
->   type: none
-> pipeline:
->   threads: 1
->   processors:
->   - type: sample
->     sample:
->       retain: 10
-> output:
->   type: elasticsearch
->   elasticsearch:
->     urls:
->     - http://localhost:9200
-> EOF
+input:
+  type: kafka
+  kafka:
+    addresses:
+    - localhost:9092
+    topic: my_topic
+buffer:
+  type: none
+pipeline:
+  threads: 1
+  processors:
+  - type: sample
+    sample:
+      retain: 10
+output:
+  type: elasticsearch
+  elasticsearch:
+    urls:
+    - http://localhost:9200
+EOF
 ```
 
-Run Benthos:
+Run Benthos in streams mode, pointing to our directory of streams:
 
 ``` bash
 $ benthos --streams --streams-dir ./streams
@@ -68,7 +72,7 @@ $ benthos --streams --streams-dir ./streams
 On a separate terminal you can query the set of streams loaded:
 
 ``` bash
-$ curl http://localhost:4195/streams
+$ curl http://localhost:4195/streams | jq '.'
 {
   "bar": {
     "active": true,
@@ -150,3 +154,4 @@ There are other endpoints [in the REST API][http-interface] for creating,
 updating and deleting streams.
 
 [http-interface]: api/streams.md
+[interpolation]: config_interpolation.md

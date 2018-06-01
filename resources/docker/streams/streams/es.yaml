@@ -1,0 +1,12 @@
+input:
+  type: http_server
+buffer:
+  type: none
+pipeline:
+  threads: 1
+  processors: []
+output:
+  type: elasticsearch
+  elasticsearch:
+    urls:
+    - http://elasticsearch:9200

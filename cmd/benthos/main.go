@@ -284,7 +284,7 @@ func main() {
 			strmmgr.OptSetStats(stats),
 		)
 		var streamConfs map[string]stream.Config
-		if streamConfs, err = strmmgr.LoadStreamConfigsFromDirectory(*streamsDir); err != nil {
+		if streamConfs, err = strmmgr.LoadStreamConfigsFromDirectory(true, *streamsDir); err != nil {
 			logger.Errorf("Failed to load stream configs: %v\n", err)
 			os.Exit(1)
 		}

@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/lib/stream"
+	"github.com/Jeffail/benthos/lib/util/text"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -35,7 +36,7 @@ import (
 
 // LoadStreamConfigsFromDirectory reads a map of stream ids to configurations
 // by walking a directory of .json and .yaml files.
-func LoadStreamConfigsFromDirectory(dir string) (map[string]stream.Config, error) {
+func LoadStreamConfigsFromDirectory(replaceEnvVars bool, dir string) (map[string]stream.Config, error) {
 	streamMap := map[string]stream.Config{}
 
 	dir = filepath.Clean(dir)
@@ -82,6 +83,9 @@ func LoadStreamConfigsFromDirectory(dir string) (map[string]stream.Config, error
 		streamBytes, readerr := ioutil.ReadAll(file)
 		if readerr != nil {
 			return readerr
+		}
+		if replaceEnvVars {
+			streamBytes = text.ReplaceEnvVariables(streamBytes)
 		}
 
 		conf := stream.NewConfig()

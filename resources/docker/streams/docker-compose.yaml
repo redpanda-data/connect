@@ -1,0 +1,24 @@
+version: '3.3'
+
+services:
+  benthos:
+    image: jeffail/benthos
+    volumes:
+      - ./streams:/benthos/streams
+    ports:
+      - 4195:4195
+    command:
+      - "--streams"
+    environment:
+      AWS_BUCKET: TODO
+      AWS_ID: TODO
+      AWS_ROLE: TODO
+      AWS_SECRET: TODO
+      AWS_TOKEN: TODO
+      AWS_REGION: eu-west-1
+
+  elasticsearch:
+    image: elasticsearch
+    ports:
+      - "9200:9200"
+      - "9300:9300"

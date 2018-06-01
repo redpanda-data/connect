@@ -25,7 +25,7 @@ $(PATHINSTBIN)/benthos: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/be
 install: $(PATHINSTBIN)/benthos
 	@cp $(PATHINSTBIN)/benthos $(INSTALL_DIR)/benthos
 
-$(PATHINSTBIN)/%: deps
+$(PATHINSTBIN)/%:
 	@mkdir -p $(dir $@)
 	@go build -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 

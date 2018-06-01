@@ -1,0 +1,18 @@
+input:
+  type: http_server
+buffer:
+  type: none
+pipeline:
+  threads: 1
+  processors: []
+output:
+  type: amazon_s3
+  amazon_s3:
+    bucket: ${AWS_BUCKET}
+    credentials:
+      id: ${AWS_ID}
+      role: ${AWS_ROLE}
+      secret: ${AWS_SECRET}
+      token: ${AWS_TOKEN}
+    path: ${!count:files}-${!timestamp_unix_nano}.txt
+    region: ${AWS_REGION:eu-west-1}

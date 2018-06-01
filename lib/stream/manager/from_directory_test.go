@@ -76,7 +76,7 @@ func TestFromDirectory(t *testing.T) {
 	}
 
 	var actConfs map[string]stream.Config
-	if actConfs, err = LoadStreamConfigsFromDirectory(testDir); err != nil {
+	if actConfs, err = LoadStreamConfigsFromDirectory(true, testDir); err != nil {
 		t.Fatal(err)
 	}
 
