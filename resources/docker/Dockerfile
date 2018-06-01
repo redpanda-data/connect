@@ -5,16 +5,16 @@ COPY . /go/src/github.com/Jeffail/benthos/
 
 RUN CGO_ENABLED=0 GOOS=linux make
 
-# RUN apt-get update
-# RUN apt-get install -y upx-ucl
-# RUN CGO_ENABLED=0 GOOS=linux make LD_FLAGS="-s -w"
-# RUN upx ./target/bin/benthos
-
-FROM scratch
+FROM alpine:latest
 
 LABEL maintainer="Ashley Jeffs <ash.jeffs@gmail.com>"
 
 WORKDIR /root/
+
+RUN apk --update upgrade
+RUN apk add ca-certificates
+RUN update-ca-certificates
+
 COPY --from=0 /go/src/github.com/Jeffail/benthos/target/bin/benthos .
 COPY ./config/env/default.yaml /benthos.yaml
 
