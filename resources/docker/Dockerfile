@@ -5,16 +5,13 @@ COPY . /go/src/github.com/Jeffail/benthos/
 
 RUN CGO_ENABLED=0 GOOS=linux make
 
-FROM alpine:latest
+FROM scratch
 
 LABEL maintainer="Ashley Jeffs <ash.jeffs@gmail.com>"
 
 WORKDIR /root/
 
-RUN apk --update upgrade
-RUN apk add ca-certificates
-RUN update-ca-certificates
-
+COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=0 /go/src/github.com/Jeffail/benthos/target/bin/benthos .
 COPY ./config/env/default.yaml /benthos.yaml
 

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Back to using Scratch as base for Docker image, instead taking ca-certificates
+  from the build image.
+
 ## 0.13.0 - 2018-06-02
 
 ### Added
