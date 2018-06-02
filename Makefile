@@ -10,7 +10,7 @@ PATHINSTBIN    = $(DEST_DIR)/bin
 PATHINSTDOCKER = $(DEST_DIR)/docker
 
 VERSION := $(shell git describe --tags || echo "v0.0.0")
-DATE    := $(shell date +"%c" | tr ' :' '__')
+DATE    := $(shell date +"%Y-%m-%dT%H:%M:%SZ")
 
 VER_FLAGS = -X $(BENTHOS_PATH)/lib/util/service.Version=$(VERSION) \
 	-X $(BENTHOS_PATH)/lib/util/service.DateBuilt=$(DATE)

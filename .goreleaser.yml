@@ -12,9 +12,9 @@ builds:
       - 5
       - 6
       - 7
-    ldflags:
-      - -X github.com/Jeffail/benthos/lib/util/service.Version={{.Version}}
-      - -X github.com/Jeffail/benthos/lib/util/service.DateBuilt={{.Date}}
+    ldflags: >
+      -X github.com/Jeffail/benthos/lib/util/service.Version={{.Version}}
+      -X github.com/Jeffail/benthos/lib/util/service.DateBuilt={{.Date}}
 archive:
   format: tar.gz
   files:
