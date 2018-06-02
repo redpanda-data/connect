@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.13.0 - 2018-06-02
+
 ### Added
 
 - New `batch` processor for combining payloads up to a number of bytes.
@@ -19,3 +21,4 @@ All notable changes to this project will be documented in this file.
 - The `condition` processor has been renamed `filter`.
 - The `custom_delimiter` fields in any line reader types `file`, `stdin`,
   `stdout`, etc have been renamed `delimiter`, where the behaviour is the same.
+- Now using Alpine as base for Docker image, includes ca-certificates.
