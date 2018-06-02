@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.13.1 - 2018-06-02
+
+### Added
+
+- Goreleaser config for generating release packages.
+
 ### Changed
 
 - Back to using Scratch as base for Docker image, instead taking ca-certificates
