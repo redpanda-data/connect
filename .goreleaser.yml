@@ -27,4 +27,7 @@ archive:
     - docs/**/*
 dist: target/dist
 release:
+  github:
+    owner: Jeffail
+    name: benthos
   disable: false

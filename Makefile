@@ -73,6 +73,7 @@ rpm:
 
 clean:
 	rm -rf $(PATHINSTBIN)
+	rm -rf $(DEST_DIR)/dist
 	rm -rf $(PATHINSTDOCKER)
 
 docs: $(APPS)
