@@ -39,6 +39,7 @@ for choosing a level of resiliency that meets your needs.
 - [RabbitMQ (AMQP 0.91)][rabbitmq]
 - [Redis][redis]
 - Stdin/Stdout
+- Websocket
 - [ZMQ4][zmq]
 
 ## Documentation
