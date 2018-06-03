@@ -55,7 +55,8 @@ level which is only applied to messages from the baz input.
 17. [`redis_pubsub`](#redis_pubsub)
 18. [`scalability_protocols`](#scalability_protocols)
 19. [`stdin`](#stdin)
-20. [`zmq4`](#zmq4)
+20. [`websocket`](#websocket)
+21. [`zmq4`](#zmq4)
 
 ## `amazon_s3`
 
@@ -555,6 +556,16 @@ is set to true then lines are interpretted as message parts, and an empty line
 indicates the end of the message.
 
 If the delimiter field is left empty then line feed (\n) is used.
+
+## `websocket`
+
+``` yaml
+type: websocket
+websocket:
+  url: ws://localhost:4195/get/ws
+```
+
+Sends messages to an HTTP server via a websocket connection.
 
 ## `zmq4`
 

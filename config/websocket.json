@@ -5,11 +5,9 @@
 		"debug_endpoints": false
 	},
 	"input": {
-		"type": "stdin",
-		"stdin": {
-			"delimiter": "",
-			"max_buffer": 65536,
-			"multipart": false
+		"type": "websocket",
+		"websocket": {
+			"url": "ws://localhost:4195/get/ws"
 		}
 	},
 	"buffer": {

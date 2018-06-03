@@ -41,7 +41,8 @@
 			"key_file": "",
 			"path": "/get",
 			"stream_path": "/get/stream",
-			"timeout_ms": 5000
+			"timeout_ms": 5000,
+			"ws_path": "/get/ws"
 		}
 	}
 }

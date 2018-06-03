@@ -336,6 +336,7 @@ http_server:
   path: /get
   stream_path: /get/stream
   timeout_ms: 5000
+  ws_path: /get/ws
 ```
 
 Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP

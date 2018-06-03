@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New websocket endpoint for `http_server` input.
+- New websocket endpoint for `http_server` output.
+- New `websocket` input type.
 - New `websocket` output type.
 
 ## 0.13.1 - 2018-06-02

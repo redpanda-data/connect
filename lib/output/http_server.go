@@ -33,6 +33,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/gorilla/websocket"
 )
 
 //------------------------------------------------------------------------------
@@ -61,6 +62,7 @@ type HTTPServerConfig struct {
 	Address    string `json:"address" yaml:"address"`
 	Path       string `json:"path" yaml:"path"`
 	StreamPath string `json:"stream_path" yaml:"stream_path"`
+	WSPath     string `json:"ws_path" yaml:"ws_path"`
 	TimeoutMS  int64  `json:"timeout_ms" yaml:"timeout_ms"`
 	CertFile   string `json:"cert_file" yaml:"cert_file"`
 	KeyFile    string `json:"key_file" yaml:"key_file"`
@@ -72,6 +74,7 @@ func NewHTTPServerConfig() HTTPServerConfig {
 		Address:    "",
 		Path:       "/get",
 		StreamPath: "/get/stream",
+		WSPath:     "/get/ws",
 		TimeoutMS:  5000,
 		CertFile:   "",
 		KeyFile:    "",
@@ -93,6 +96,7 @@ type HTTPServer struct {
 
 	transactions <-chan types.Transaction
 
+	closeChan  chan struct{}
 	closedChan chan struct{}
 
 	mCount    metrics.StatCounter
@@ -101,6 +105,11 @@ type HTTPServer struct {
 	mGetReqRcvd  metrics.StatCounter
 	mGetCount    metrics.StatCounter
 	mGetSendSucc metrics.StatCounter
+
+	mWSReqRcvd  metrics.StatCounter
+	mWSCount    metrics.StatCounter
+	mWSSendSucc metrics.StatCounter
+	mWSSendErr  metrics.StatCounter
 
 	mStrmReqRcvd  metrics.StatCounter
 	mStrmErrCast  metrics.StatCounter
@@ -128,6 +137,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		log:        log.NewModule(".output.http_server"),
 		mux:        mux,
 		server:     server,
+		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 
 		mCount:        stats.GetCounter("output.http_server.count"),
@@ -135,6 +145,10 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mGetReqRcvd:   stats.GetCounter("output.http_server.get.request.received"),
 		mGetCount:     stats.GetCounter("output.http_server.get.count"),
 		mGetSendSucc:  stats.GetCounter("output.http_server.get.send.success"),
+		mWSCount:      stats.GetCounter("output.http_server.ws.count"),
+		mWSReqRcvd:    stats.GetCounter("output.http_server.stream.request.received"),
+		mWSSendSucc:   stats.GetCounter("output.http_server.ws.send.success"),
+		mWSSendErr:    stats.GetCounter("output.http_server.ws.send.error"),
 		mStrmReqRcvd:  stats.GetCounter("output.http_server.stream.request.received"),
 		mStrmErrCast:  stats.GetCounter("output.http_server.stream.error.cast_flusher"),
 		mStrmErrWrong: stats.GetCounter("output.http_server.stream.error.wrong_method"),
@@ -151,6 +165,9 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		if len(h.conf.HTTPServer.StreamPath) > 0 {
 			h.mux.HandleFunc(h.conf.HTTPServer.StreamPath, h.streamHandler)
 		}
+		if len(h.conf.HTTPServer.WSPath) > 0 {
+			h.mux.HandleFunc(h.conf.HTTPServer.WSPath, h.wsHandler)
+		}
 	} else {
 		if len(h.conf.HTTPServer.Path) > 0 {
 			mgr.RegisterEndpoint(
@@ -163,6 +180,13 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 				h.conf.HTTPServer.StreamPath,
 				"Read a continuous stream of messages from Benthos.",
 				h.streamHandler,
+			)
+		}
+		if len(h.conf.HTTPServer.WSPath) > 0 {
+			mgr.RegisterEndpoint(
+				h.conf.HTTPServer.WSPath,
+				"Read messages from Benthos via websockets.",
+				h.wsHandler,
 			)
 		}
 	}
@@ -228,9 +252,14 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(ts.Payload.Get(0))
 	}
 
-	ts.ResponseChan <- types.NewSimpleResponse(nil)
 	h.mSendSucc.Incr(1)
 	h.mGetSendSucc.Incr(1)
+
+	select {
+	case ts.ResponseChan <- types.NewSimpleResponse(nil):
+	case <-h.closeChan:
+		return
+	}
 }
 
 func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
@@ -278,7 +307,11 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		_, err := w.Write(data)
-		ts.ResponseChan <- types.NewSimpleResponse(err)
+		select {
+		case ts.ResponseChan <- types.NewSimpleResponse(err):
+		case <-h.closeChan:
+			return
+		}
 
 		if err != nil {
 			h.mStrmErrWrite.Incr(1)
@@ -289,6 +322,66 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		h.mStrmSndSucc.Incr(1)
 		h.mSendSucc.Incr(1)
+	}
+}
+
+func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
+	h.mWSReqRcvd.Incr(1)
+
+	var err error
+	defer func() {
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			h.log.Warnf("Websocket request failed: %v\n", err)
+			return
+		}
+	}()
+
+	upgrader := websocket.Upgrader{}
+
+	var ws *websocket.Conn
+	if ws, err = upgrader.Upgrade(w, r, nil); err != nil {
+		return
+	}
+	defer ws.Close()
+
+	for atomic.LoadInt32(&h.running) == 1 {
+		var ts types.Transaction
+		var open bool
+
+		select {
+		case ts, open = <-h.transactions:
+			if !open {
+				go h.CloseAsync()
+				return
+			}
+		case <-r.Context().Done():
+			h.mStrmClosed.Incr(1)
+			h.stats.Incr("output.http_server.stream.client_closed", 1)
+			return
+		case <-h.closeChan:
+			return
+		}
+		h.mWSCount.Incr(1)
+		h.mCount.Incr(1)
+
+		var werr error
+		for _, msg := range ts.Payload.GetAll() {
+			if werr = ws.WriteMessage(websocket.BinaryMessage, msg); werr != nil {
+				break
+			}
+			h.mWSSendSucc.Incr(1)
+			h.mSendSucc.Incr(1)
+		}
+
+		if werr != nil {
+			h.mWSSendErr.Incr(1)
+		}
+		select {
+		case ts.ResponseChan <- types.NewSimpleResponse(werr):
+		case <-h.closeChan:
+			return
+		}
 	}
 }
 
@@ -325,6 +418,7 @@ func (h *HTTPServer) StartReceiving(ts <-chan types.Transaction) error {
 			h.stats.Decr("output.http_server.running", 1)
 
 			atomic.StoreInt32(&h.running, 0)
+			close(h.closeChan)
 			close(h.closedChan)
 		}()
 	}

@@ -81,6 +81,7 @@ type Config struct {
 	RedisPubSub   reader.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
 	ScaleProto    reader.ScaleProtoConfig    `json:"scalability_protocols" yaml:"scalability_protocols"`
 	STDIN         STDINConfig                `json:"stdin" yaml:"stdin"`
+	Websocket     reader.WebsocketConfig     `json:"websocket" yaml:"websocket"`
 	ZMQ4          *reader.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors    []processor.Config         `json:"processors" yaml:"processors"`
 }
@@ -108,6 +109,7 @@ func NewConfig() Config {
 		RedisPubSub:   reader.NewRedisPubSubConfig(),
 		ScaleProto:    reader.NewScaleProtoConfig(),
 		STDIN:         NewSTDINConfig(),
+		Websocket:     reader.NewWebsocketConfig(),
 		ZMQ4:          reader.NewZMQ4Config(),
 		Processors:    []processor.Config{processor.NewConfig()},
 	}
