@@ -327,13 +327,14 @@ http_server:
   key_file: ""
   path: /post
   timeout_ms: 5000
+  ws_path: /post/ws
 ```
 
 Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
 which is enabled when key and cert files are specified.
 
-You can leave the 'address' config field blank in order to use the default
-service, but this will ignore TLS options.
+You can leave the 'address' config field blank in order to use the instance wide
+HTTP server.
 
 ## `kafka`
 

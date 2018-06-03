@@ -4,14 +4,11 @@ http:
   read_timeout_ms: 5000
   debug_endpoints: false
 input:
-  type: http_server
-  http_server:
-    address: ""
-    cert_file: ""
-    key_file: ""
-    path: /post
-    timeout_ms: 5000
-    ws_path: /post/ws
+  type: stdin
+  stdin:
+    delimiter: ""
+    max_buffer: 65536
+    multipart: false
 buffer:
   type: none
   none: {}
@@ -25,11 +22,6 @@ pipeline:
       min_parts: 1
   threads: 1
 output:
-  type: http_server
-  http_server:
-    address: ""
-    cert_file: ""
-    key_file: ""
-    path: /get
-    stream_path: /get/stream
-    timeout_ms: 5000
+  type: websocket
+  websocket:
+    url: ws://localhost:4195/post/ws

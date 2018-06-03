@@ -78,6 +78,7 @@ input:
   http_server:
     address: ""
     path: /post
+    ws_path: /post/ws
     timeout_ms: 5000
     cert_file: ""
     key_file: ""
@@ -423,6 +424,8 @@ output:
     poll_timeout_ms: 5000
   stdout:
     delimiter: ""
+  websocket:
+    url: ws://localhost:4195/post/ws
   zmq4:
     urls:
     - tcp://*:5556

@@ -111,7 +111,8 @@ conditions please [read the docs here](../conditions/README.md)
 17. [`redis_pubsub`](#redis_pubsub)
 18. [`scalability_protocols`](#scalability_protocols)
 19. [`stdout`](#stdout)
-20. [`zmq4`](#zmq4)
+20. [`websocket`](#websocket)
+21. [`zmq4`](#zmq4)
 
 ## `amazon_s3`
 
@@ -510,6 +511,16 @@ as:
 foo\n
 bar\n
 baz\n\n
+
+## `websocket`
+
+``` yaml
+type: websocket
+websocket:
+  url: ws://localhost:4195/post/ws
+```
+
+Sends messages to an HTTP server via a websocket connection.
 
 ## `zmq4`
 

@@ -34,6 +34,8 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/throttle"
+	"github.com/gorilla/websocket"
 )
 
 //------------------------------------------------------------------------------
@@ -45,8 +47,8 @@ func init() {
 Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
 which is enabled when key and cert files are specified.
 
-You can leave the 'address' config field blank in order to use the default
-service, but this will ignore TLS options.`,
+You can leave the 'address' config field blank in order to use the instance wide
+HTTP server.`,
 	}
 }
 
@@ -56,6 +58,7 @@ service, but this will ignore TLS options.`,
 type HTTPServerConfig struct {
 	Address   string `json:"address" yaml:"address"`
 	Path      string `json:"path" yaml:"path"`
+	WSPath    string `json:"ws_path" yaml:"ws_path"`
 	TimeoutMS int64  `json:"timeout_ms" yaml:"timeout_ms"`
 	CertFile  string `json:"cert_file" yaml:"cert_file"`
 	KeyFile   string `json:"key_file" yaml:"key_file"`
@@ -66,6 +69,7 @@ func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
 		Address:   "",
 		Path:      "/post",
+		WSPath:    "/post/ws",
 		TimeoutMS: 5000,
 		CertFile:  "",
 		KeyFile:   "",
@@ -91,9 +95,15 @@ type HTTPServer struct {
 	closedChan chan struct{}
 
 	mCount     metrics.StatCounter
+	mCountF    metrics.StatCounter
+	mWSCount   metrics.StatCounter
 	mTimeout   metrics.StatCounter
 	mErr       metrics.StatCounter
+	mErrF      metrics.StatCounter
+	mWSErr     metrics.StatCounter
 	mSucc      metrics.StatCounter
+	mSuccF     metrics.StatCounter
+	mWSSucc    metrics.StatCounter
 	mAsyncErr  metrics.StatCounter
 	mAsyncSucc metrics.StatCounter
 }
@@ -120,18 +130,28 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		closedChan:   make(chan struct{}),
 
 		mCount:     stats.GetCounter("input.http_server.count"),
+		mCountF:    stats.GetCounter("input.count"),
+		mWSCount:   stats.GetCounter("input.http_server.ws.count"),
 		mTimeout:   stats.GetCounter("input.http_server.send.timeout"),
 		mErr:       stats.GetCounter("input.http_server.send.error"),
+		mErrF:      stats.GetCounter("input.send.error"),
+		mWSErr:     stats.GetCounter("input.http_server.ws.send.error"),
 		mSucc:      stats.GetCounter("input.http_server.send.success"),
+		mSuccF:     stats.GetCounter("input.send.success"),
+		mWSSucc:    stats.GetCounter("input.http_server.ws.send.success"),
 		mAsyncErr:  stats.GetCounter("input.http_server.send.async_error"),
 		mAsyncSucc: stats.GetCounter("input.http_server.send.async_success"),
 	}
 
 	if mux != nil {
 		mux.HandleFunc(h.conf.HTTPServer.Path, h.postHandler)
+		mux.HandleFunc(h.conf.HTTPServer.WSPath, h.wsHandler)
 	} else {
 		mgr.RegisterEndpoint(
 			h.conf.HTTPServer.Path, "Post a message into Benthos.", h.postHandler,
+		)
+		mgr.RegisterEndpoint(
+			h.conf.HTTPServer.WSPath, "Post messages via websocket into Benthos.", h.wsHandler,
 		)
 	}
 
@@ -150,6 +170,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mCount.Incr(1)
+	h.mCountF.Incr(1)
 
 	if r.Method != "POST" {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
@@ -217,10 +238,12 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		} else if res.Error() != nil {
 			h.mErr.Incr(1)
+			h.mErrF.Incr(1)
 			http.Error(w, res.Error().Error(), http.StatusBadGateway)
 			return
 		}
 		h.mSucc.Incr(1)
+		h.mSuccF.Incr(1)
 	case <-time.After(time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)):
 		h.mTimeout.Incr(1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
@@ -229,11 +252,73 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			resAsync := <-resChan
 			if resAsync.Error() != nil {
 				h.mAsyncErr.Incr(1)
+				h.mErrF.Incr(1)
 			} else {
 				h.mAsyncSucc.Incr(1)
+				h.mSuccF.Incr(1)
 			}
 		}()
 		return
+	}
+}
+
+func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
+	var err error
+	defer func() {
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			h.log.Warnf("Websocket request failed: %v\n", err)
+			return
+		}
+	}()
+
+	upgrader := websocket.Upgrader{}
+
+	var ws *websocket.Conn
+	if ws, err = upgrader.Upgrade(w, r, nil); err != nil {
+		return
+	}
+	defer ws.Close()
+
+	for atomic.LoadInt32(&h.running) == 1 {
+		_, message, wsErr := ws.ReadMessage()
+		if wsErr != nil {
+			return
+		}
+
+		h.mWSCount.Incr(1)
+		h.mCountF.Incr(1)
+
+		go func(contents []byte) {
+			msg := types.NewMessage([][]byte{contents})
+			resChan := make(chan types.Response)
+			throt := throttle.New(throttle.OptCloseChan(h.closeChan))
+
+			for atomic.LoadInt32(&h.running) == 1 {
+				select {
+				case h.transactions <- types.NewTransaction(msg, resChan):
+				case <-h.closeChan:
+					return
+				}
+				select {
+				case res, open := <-resChan:
+					if !open {
+						return
+					}
+					if res.Error() != nil {
+						h.mWSErr.Incr(1)
+						h.mErrF.Incr(1)
+					} else {
+						h.mWSSucc.Incr(1)
+						h.mSuccF.Incr(1)
+						return
+					}
+				case <-h.closeChan:
+					return
+				}
+				throt.Retry()
+			}
+		}(message)
 	}
 }
 

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New websocket endpoint for `http_server` input.
+- New `websocket` output type.
+
 ## 0.13.1 - 2018-06-02
 
 ### Added
