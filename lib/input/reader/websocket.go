@@ -127,6 +127,7 @@ func (w *Websocket) Read() (types.Message, error) {
 		w.lock.Lock()
 		w.client = nil
 		w.lock.Unlock()
+		err = types.ErrNotConnected
 		return nil, err
 	}
 
