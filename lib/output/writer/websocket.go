@@ -21,11 +21,13 @@
 package writer
 
 import (
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/http/auth"
 	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/gorilla/websocket"
 )
@@ -34,13 +36,15 @@ import (
 
 // WebsocketConfig is configuration for the Websocket output type.
 type WebsocketConfig struct {
-	URL string `json:"url" yaml:"url"`
+	URL         string `json:"url" yaml:"url"`
+	auth.Config `json:",inline" yaml:",inline"`
 }
 
 // NewWebsocketConfig creates a new WebsocketConfig with default values.
 func NewWebsocketConfig() WebsocketConfig {
 	return WebsocketConfig{
-		URL: "ws://localhost:4195/post/ws",
+		URL:    "ws://localhost:4195/post/ws",
+		Config: auth.NewConfig(),
 	}
 }
 
@@ -92,7 +96,15 @@ func (w *Websocket) Connect() error {
 		return nil
 	}
 
-	client, _, err := websocket.DefaultDialer.Dial(w.conf.URL, nil)
+	headers := http.Header{}
+
+	if err := w.conf.Sign(&http.Request{
+		Header: headers,
+	}); err != nil {
+		return err
+	}
+
+	client, _, err := websocket.DefaultDialer.Dial(w.conf.URL, headers)
 	if err != nil {
 		return err
 	}

@@ -135,6 +135,19 @@ input:
         - ${SCALE_PROTO_INPUT_URLS}
         bind: ${SCALE_PROTO_INPUT_BIND:true}
         socket_type: ${SCALE_PROTO_INPUT_SOCKET:PULL}
+      websocket:
+        url: ${WEBSOCKET_INPUT_URL}
+        oauth:
+          consumer_key: ${WEBSOCKET_INPUT_OAUTH_KEY}
+          consumer_secret: ${WEBSOCKET_INPUT_OAUTH_SECRET}
+          access_token: ${WEBSOCKET_INPUT_OAUTH_TOKEN}
+          access_token_secret: ${WEBSOCKET_INPUT_OAUTH_TOKEN_SECRET}
+          request_url: ${WEBSOCKET_INPUT_OAUTH_URL}
+          enabled: ${WEBSOCKET_INPUT_OAUTH_ENABLED:false}
+        basic_auth:
+          enabled: ${WEBSOCKET_INPUT_BASIC_AUTH_ENABLED:false}
+          username: ${WEBSOCKET_INPUT_BASIC_AUTH_USERNAME}
+          password: ${WEBSOCKET_INPUT_BASIC_AUTH_PASSWORD}
       zmq4:
         urls:
         - ${ZMQ_INPUT_URLS}
@@ -246,6 +259,19 @@ output:
         - ${SCALE_PROTO_OUTPUT_URLS}
         bind: ${SCALE_PROTO_OUTPUT_BIND:false}
         socket_type: ${SCALE_PROTO_OUTPUT_SOCKET:PUSH}
+      websocket:
+        url: ${WEBSOCKET_OUTPUT_URL}
+        oauth:
+          consumer_key: ${WEBSOCKET_OUTPUT_OAUTH_KEY}
+          consumer_secret: ${WEBSOCKET_OUTPUT_OAUTH_SECRET}
+          access_token: ${WEBSOCKET_OUTPUT_OAUTH_TOKEN}
+          access_token_secret: ${WEBSOCKET_OUTPUT_OAUTH_TOKEN_SECRET}
+          request_url: ${WEBSOCKET_OUTPUT_OAUTH_URL}
+          enabled: ${WEBSOCKET_OUTPUT_OAUTH_ENABLED:false}
+        basic_auth:
+          enabled: ${WEBSOCKET_OUTPUT_BASIC_AUTH_ENABLED:false}
+          username: ${WEBSOCKET_OUTPUT_BASIC_AUTH_USERNAME}
+          password: ${WEBSOCKET_OUTPUT_BASIC_AUTH_PASSWORD}
       zmq4:
         urls:
         - ${ZMQ_OUTPUT_URLS}

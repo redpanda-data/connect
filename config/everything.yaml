@@ -170,6 +170,17 @@ input:
     delimiter: ""
   websocket:
     url: ws://localhost:4195/get/ws
+    oauth:
+      enabled: false
+      consumer_key: ""
+      consumer_secret: ""
+      access_token: ""
+      access_token_secret: ""
+      request_url: ""
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
   zmq4:
     urls:
     - tcp://localhost:5555
@@ -429,6 +440,17 @@ output:
     delimiter: ""
   websocket:
     url: ws://localhost:4195/post/ws
+    oauth:
+      enabled: false
+      consumer_key: ""
+      consumer_secret: ""
+      access_token: ""
+      access_token_secret: ""
+      request_url: ""
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
   zmq4:
     urls:
     - tcp://*:5556
