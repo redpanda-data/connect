@@ -1,22 +1,18 @@
 input:
-  type: broker
-  broker:
-    copies: 8 # Increase this to gain more parallel consumers
-    inputs:
-    - type: amazon_s3
-      amazon_s3:
-        region: eu-west-1 # TODO
-        bucket: "TODO"
-        delete_objects: false
-        sqs_url: "TODO"
-        sqs_body_path: Records.s3.object.key
-        sqs_envelope_path: ""
-        sqs_max_messages: 10
-        credentials:
-          id: "TODO"
-          secret: "TODO"
-          token: "TODO"
-          role: "TODO"
+  type: amazon_s3
+  amazon_s3:
+    region: eu-west-1 # TODO
+    bucket: "TODO"
+    delete_objects: false
+    sqs_url: "TODO"
+    sqs_body_path: Records.s3.object.key
+    sqs_envelope_path: ""
+    sqs_max_messages: 10
+    credentials:
+      id: "TODO"
+      secret: "TODO"
+      token: "TODO"
+      role: "TODO"
 
 pipeline:
   threads: 4 # Try to match the number of available logical CPU cores
