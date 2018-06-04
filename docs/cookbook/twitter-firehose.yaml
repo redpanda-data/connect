@@ -10,7 +10,7 @@ input:
       username: "" # TODO
     stream:
       enabled: true
-      max_buffer: 10000000 # 10MB - The max supported length of a single line
+      max_buffer: 10_000_000 # 10MB - The max supported length of a single line
   processors:
   - type: bounds_check # Filter out keep alives (empty message)
     bounds_check:
@@ -19,21 +19,24 @@ input:
 buffer:
   type: memory
   memory:
-    limit: 500000000
+    limit: 500_000_000
 
 pipeline:
   threads: 16 # Determines the max number of concurrent calls to dedupe cache
   processors:
-  - type: filter # Filter out error messages
+  - type: filter # Filter out non-json objects and error messages
     filter:
       type: jmespath
       jmespath:
-        query: "keys(@) | !contains(@, 'error')"
+        query: "keys(@) | length(@) > `0` && !contains(@, 'error')"
   - type: dedupe
     dedupe:
       cache: dedupe
       parts: [0]
-      hash: xxhash
+      drop_on_err: false # Prefer occasional duplicates over lost messages
+      json_paths:
+      - "id_str" # Dedupe based on the 'id_str' field of tweets
+      hash: none
 
 output:
   type: kafka
@@ -42,7 +45,7 @@ output:
     - localhost:9092 # TODO
     client_id: benthos_firehose_bridge
     topic: twitter_firehose
-    max_msg_bytes: 10000000 # 10MB - The max supported message size
+    max_msg_bytes: 10_000_000 # 10MB - The max supported message size
 
 resources:
   caches:
@@ -51,4 +54,4 @@ resources:
       memcached:
         addresses:
         - localhost:11211 # TODO
-        ttl: 60
+        ttl: 604_800 # Keep Twitter IDs cached for a week

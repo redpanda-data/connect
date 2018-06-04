@@ -24,7 +24,7 @@ attached to the input is a `bounds_check` filter that removes any empty lines.
 
 It's worth noting that you can use the `backfillMinutes` URL parameter if you
 have the feature enabled. This means any connection recovery will always gain a
-small window of backfill.
+small window of automatic backfill.
 
 ## Buffer
 
@@ -32,7 +32,7 @@ small window of backfill.
 buffer:
   type: memory
   memory:
-    limit: 500000000
+    limit: 500_000_000
 ```
 
 We add a memory based buffer in this config which will help us keep up with the
@@ -45,31 +45,33 @@ layer of deduplication processors.
 pipeline:
   threads: 16 # Determines the max number of concurrent calls to dedupe cache
   processors:
-  - type: filter # Filter out error messages
+  - type: filter # Filter out non-json objects and error messages
     filter:
       type: jmespath
       jmespath:
-        query: "keys(@) | !contains(@, 'error')"
+        query: "keys(@) | length(@) > `0` && !contains(@, 'error')"
   - type: dedupe
     dedupe:
       cache: dedupe
       parts: [0]
-      hash: xxhash
+      drop_on_err: false # Prefer occasional duplicates over lost messages
+      json_paths:
+      - "id_str" # Dedupe based on the 'id_str' field of tweets
+      hash: none
 ```
 
 The pipeline section contains two processors.
 
 The first processor is a JMESPath query that checks whether the message object
-is a system error message from Twitter. We chose to remove these messages since
-client disconnects are handled automatically and it's possible to observe the
-reasons for a disconnection from the API dashboard.
+is an invalid JSON object or system error message from Twitter. We chose to
+remove these messages since client disconnects are handled automatically and
+it's possible to observe the reasons for a disconnection from the API dashboard.
 
-The second processor is a deduplication step which checks the `xxhash` of the
-message contents against a shared Memcached cluster (the cache details are
-configured later on in the resources section). This is likely to be the
-bottleneck of the system (mostly idle on network IO), therefore the `threads`
-field should be tweaked in order to tune the optimum number of concurrent
-Memcached requests.
+The second processor is a deduplication step which checks the `id_str` field of
+the tweet against a shared Memcached cluster (the cache details are configured
+later on in the resources section). This is likely to be the bottleneck of the
+system (mostly idle on network IO), therefore the `threads` field should be
+tweaked in order to tune the optimum number of concurrent Memcached requests.
 
 ## Output
 
@@ -85,7 +87,7 @@ resources:
       memcached:
         addresses:
         - localhost:11211 # TODO
-        ttl: 60
+        ttl: 604_800 # Keep Twitter IDs cached for a week
 ```
 
 The resources section contains the configuration of our deduplication cache. We
