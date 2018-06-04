@@ -45,8 +45,33 @@ func init() {
 	Constructors["broker"] = TypeSpec{
 		brokerConstructor: NewBroker,
 		description: `
-The broker output type allows you to configure multiple output targets following
-a broker pattern from this list:
+The broker output type allows you to configure multiple output targets by
+listing them:
+
+` + "``` yaml" + `
+output:
+  type: broker
+  broker:
+    pattern: fan_out
+    outputs:
+    - type: foo
+      foo:
+        foo_field_1: value1
+    - type: bar
+      bar:
+        bar_field_1: value2
+        bar_field_2: value3
+    - type: baz
+      baz:
+        baz_field_1: value4
+      processors:
+      - type: baz_processor
+  processors:
+  - type: some_processor
+` + "```" + `
+
+The broker pattern determines the way in which messages are allocated to outputs
+and can be chosen from the following:
 
 #### ` + "`fan_out`" + `
 

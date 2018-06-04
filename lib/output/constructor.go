@@ -212,86 +212,16 @@ var header = "This document was generated with `benthos --list-outputs`" + `
 An output is a sink where we wish to send our consumed data after applying an
 array of [processors](../processors). Only one output is configured at the root
 of a Benthos config. However, the output can be a [broker](#broker) which
-combines multiple outputs under a specific pattern. For example, if we wanted
-three outputs, a 'foo' a 'bar' and a 'baz', where each output received every
-message we could use the 'broker' output type at our root:
-
-` + "``` yaml" + `
-output:
-  type: broker
-  broker:
-    pattern: fan_out
-    outputs:
-    - type: foo
-      foo:
-        foo_field_1: value1
-    - type: bar
-      bar:
-        bar_field_1: value2
-        bar_field_2: value3
-    - type: baz
-      baz:
-        baz_field_1: value4
-      processors:
-      - type: baz_processor
-  processors:
-  - type: some_processor
-` + "```" + `
-
-Note that in this example we have specified a processor at the broker level
-which will be applied to messages sent to _all_ outputs, and we also have a
-processor at the baz level which is only applied to messages sent to the baz
-output.
-
-If we wanted each message to go to a single output then we could use the
-'round_robin' broker pattern, or the 'greedy' broker pattern if we wanted to
-maximize throughput. For more information regarding these patterns please read
-[the broker section](#broker).
+combines multiple outputs under a specific pattern.
 
 ### Multiplexing Outputs
 
-It is possible to perform content based multiplexing of messages to specific
-outputs using a broker with the 'fan_out' pattern and a
+It is possible to perform
+[content based multiplexing](../concepts.md#content-based-multiplexing) of
+messages to specific outputs using a broker with the 'fan_out' pattern and a
 [filter processor](../processors/README.md#filter) on each output, which
 is a processor that drops messages if the condition does not pass. Conditions
 are content aware logical operators that can be combined using boolean logic.
-
-For example, say we have an output 'foo' that we only want to receive messages
-that contain the word 'foo', and an output 'bar' that we wish to send everything
-that 'foo' doesn't receive, we can achieve that with this config:
-
-` + "``` yaml" + `
-output:
-  type: broker
-  broker:
-    pattern: fan_out
-    outputs:
-    - type: foo
-      foo:
-        foo_field_1: value1
-      processors:
-      - type: filter
-        filter:
-          type: content
-          content:
-            operator: contains
-            part: 0
-            arg: foo
-    - type: bar
-      bar:
-        bar_field_1: value2
-        bar_field_2: value3
-      processors:
-      - type: filter
-        filter:
-          type: not
-          not:
-            type: content
-            content:
-              operator: contains
-              part: 0
-              arg: foo
-` + "```" + `
 
 For more information regarding conditions, including a full list of available
 conditions please [read the docs here](../conditions/README.md)`

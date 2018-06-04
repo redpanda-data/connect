@@ -49,45 +49,11 @@ also either contains "foo" or does _not_ contain "bar"'.
 
 Conditions can be extremely useful for creating filters on an output. By using a
 fan out output broker with 'filter' processors on the brokered outputs it is
-possible to build curated data streams that filter on the content of each
-message.
+possible to build
+[curated data streams](../concepts.md#content-based-multiplexing) that filter on
+the content of each message.
 
-Here is an example config, where we have an output that receives only 'foo'
-messages, an output that receives only 'bar' messages, and a third output that
-receives everything:
-
-``` yaml
-output:
-  type: broker
-  broker:
-    pattern: fan_out
-    outputs:
-      - type: file
-        file:
-          path: ./foo.txt
-        processors:
-        - type: filter
-          filter:
-            type: content
-            content:
-              operator: contains
-              part: 0
-              arg: foo
-      - type: file
-        file:
-          path: ./bar.txt
-        processors:
-        - type: filter
-          filter:
-            type: content
-            content:
-              operator: contains
-              part: 0
-              arg: bar
-      - type: file
-        file:
-          path: ./everything.txt
-```
+### Reusing Conditions
 
 Sometimes large chunks of logic are reused across processors, or nested multiple
 times as branches of a larger condition. It is possible to avoid writing
