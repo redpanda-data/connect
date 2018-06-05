@@ -9,7 +9,8 @@ processor to mutate or drop messages depending on the content of the message.
 
 Processors are set via config, and depending on where in the config they are
 placed they will be run either immediately after a specific input (set in the
-input section) or before a specific output (set in the output section).
+input section), on all messages (set in the pipeline section) or before a
+specific output (set in the output section).
 
 By organising processors you can configure complex behaviours in your pipeline.
 You can [find some examples here][0].
