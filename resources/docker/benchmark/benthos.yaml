@@ -1,0 +1,43 @@
+http:
+  address: 0.0.0.0:4195
+  debug_endpoints: true
+
+input:
+  type: kafka
+  kafka:
+    addresses:
+    - kafka:9092
+    topic: data_source
+    target_version: 1.1.0
+  processors:
+  - type: combine
+    combine:
+      parts: 100
+
+buffer:
+  type: memory
+  memory:
+    limit: 5000000
+
+pipeline:
+  threads: 8
+  processors:
+  - type: jmespath
+    jmespath:
+      query: "{id_str: id_str, text: text, user_id: user.id, hashtags: join(', ', entities.hashtags)}"
+
+output:
+  type: kafka
+  kafka:
+    addresses:
+    - kafka:9092
+    topic: benthos_sink
+    target_version: 1.1.0
+
+logger:
+  prefix: service
+  log_level: INFO
+
+metrics:
+  type: prometheus
+  prefix: benthos

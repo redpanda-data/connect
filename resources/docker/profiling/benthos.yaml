@@ -1,0 +1,65 @@
+http:
+  address: 0.0.0.0:4195
+  debug_endpoints: true
+
+input:
+  type: broker
+  broker:
+    copies: 1
+    inputs:
+    - type: http_server
+    - type: read_until
+      read_until:
+        input:
+          type: file
+          file:
+            path: /sample_data.txt
+        restart_input: true
+        condition:
+          type: static
+          static: false
+
+buffer:
+  type: badger
+  badger:
+    directory: /data
+    max_bytes: 20_000_000_000
+    sync_writes: false
+    gc_interval_ms: 1_000
+    tuning:
+      max_table_size: 67_108_864
+      level_size_multiplier: 10
+      max_levels: 7
+      value_threshold: 32
+      num_memtables: 5
+      num_level_zero_tables: 5
+      num_level_zero_tables_stall: 10
+      level_one_size: 268_435_456
+      value_log_file_size: 1_073_741_824
+      value_log_max_entries: 1_000_000
+      num_compactors: 1
+
+pipeline:
+  threads: 1
+  processors:
+  - type: jmespath
+    jmespath:
+      query: content
+
+output:
+  type: broker
+  broker:
+    pattern: greedy
+    copies: 1
+    outputs:
+    - type: file
+      file:
+        path: /dev/null
+
+logger:
+  prefix: service
+  log_level: INFO
+
+metrics:
+  type: prometheus
+  prefix: benthos
