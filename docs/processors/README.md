@@ -215,7 +215,7 @@ xxhash (more will come soon).
 
 It's possible to dedupe based on JSON field data from message parts by setting
 the value of `json_paths`, which is an array of JSON dot paths that
-will be extracted from the message payload and concatinated. The result will
+will be extracted from the message payload and concatenated. The result will
 then be used to deduplicate. If the result is empty (i.e. none of the target
 paths were found in the data) then this is considered an error, and the message
 will be dropped or propagated based on the value of `drop_on_err`.
