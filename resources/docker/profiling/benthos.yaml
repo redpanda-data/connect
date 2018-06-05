@@ -20,24 +20,7 @@ input:
           static: false
 
 buffer:
-  type: badger
-  badger:
-    directory: /data
-    max_bytes: 20_000_000_000
-    sync_writes: false
-    gc_interval_ms: 1_000
-    tuning:
-      max_table_size: 67_108_864
-      level_size_multiplier: 10
-      max_levels: 7
-      value_threshold: 32
-      num_memtables: 5
-      num_level_zero_tables: 5
-      num_level_zero_tables_stall: 10
-      level_one_size: 268_435_456
-      value_log_file_size: 1_073_741_824
-      value_log_max_entries: 1_000_000
-      num_compactors: 1
+  type: none
 
 pipeline:
   threads: 1
