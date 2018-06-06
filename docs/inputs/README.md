@@ -259,7 +259,7 @@ exists it will be changed.
 type: file
 file:
   delimiter: ""
-  max_buffer: 65536
+  max_buffer: 1e+06
   multipart: false
   path: ""
 ```
@@ -294,7 +294,7 @@ http_client:
   stream:
     delimiter: ""
     enabled: false
-    max_buffer: 65536
+    max_buffer: 1e+06
     multipart: false
     reconnect: true
   timeout_ms: 5000
@@ -546,7 +546,7 @@ Currently only PULL and SUB sockets are supported.
 type: stdin
 stdin:
   delimiter: ""
-  max_buffer: 65536
+  max_buffer: 1e+06
   multipart: false
 ```
 

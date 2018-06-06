@@ -25,7 +25,7 @@ input:
     stream:
       delimiter: ""
       enabled: false
-      max_buffer: 65536
+      max_buffer: 1e+06
       multipart: false
       reconnect: true
     timeout_ms: 5000

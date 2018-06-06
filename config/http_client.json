@@ -28,7 +28,7 @@
 			"stream": {
 				"delimiter": "",
 				"enabled": false,
-				"max_buffer": 65536,
+				"max_buffer": 1000000,
 				"multipart": false,
 				"reconnect": true
 			},

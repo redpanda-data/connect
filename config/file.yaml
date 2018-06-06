@@ -7,7 +7,7 @@ input:
   type: file
   file:
     delimiter: ""
-    max_buffer: 65536
+    max_buffer: 1e+06
     multipart: false
     path: ""
 buffer:

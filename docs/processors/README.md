@@ -25,18 +25,19 @@ You can [find some examples here][0].
 6. [`conditional`](#conditional)
 7. [`decompress`](#decompress)
 8. [`dedupe`](#dedupe)
-9. [`filter`](#filter)
-10. [`hash_sample`](#hash_sample)
-11. [`insert_part`](#insert_part)
-12. [`jmespath`](#jmespath)
-13. [`merge_json`](#merge_json)
-14. [`noop`](#noop)
-15. [`sample`](#sample)
-16. [`select_json`](#select_json)
-17. [`select_parts`](#select_parts)
-18. [`set_json`](#set_json)
-19. [`split`](#split)
-20. [`unarchive`](#unarchive)
+9. [`delete_json`](#delete_json)
+10. [`filter`](#filter)
+11. [`hash_sample`](#hash_sample)
+12. [`insert_part`](#insert_part)
+13. [`jmespath`](#jmespath)
+14. [`merge_json`](#merge_json)
+15. [`noop`](#noop)
+16. [`sample`](#sample)
+17. [`select_json`](#select_json)
+18. [`select_parts`](#select_parts)
+19. [`set_json`](#set_json)
+20. [`split`](#split)
+21. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -167,13 +168,15 @@ conditional:
     static: true
     type: content
     xor: []
+  else_processors: []
   processors: []
 ```
 
-Conditional is a processor that has a list of child processors and a condition.
-For each message if the condition passes the child processors will be applied,
-otherwise the message is passed through directly. This processor is useful for
-applying processors such as 'dedupe' based on the content type of the message
+Conditional is a processor that has a list of child 'processors',
+'else_processors', and a condition. For each message if the condition passes the
+child 'processors' will be applied, otherwise the 'else_processors' are applied.
+This processor is useful for applying processors such as 'dedupe' based on the
+content type of the message.
 
 ## `decompress`
 
@@ -245,6 +248,24 @@ dedupe:
 
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).
+
+## `delete_json`
+
+``` yaml
+type: delete_json
+delete_json:
+  parts: []
+  path: ""
+```
+
+Parses a message part as a JSON blob, deletes a value at a given path (if it
+exists), and writes the modified JSON back to the message part.
+
+If the list of target parts is empty the processor will be applied to all
+message parts. Part indexes can be negative, and if so the part will be selected
+from the end counting backwards starting from -1. E.g. if part = -1 then the
+selected part will be the last part of the message, if part = -2 then the part
+before the last element with be selected, and so on.
 
 ## `filter`
 

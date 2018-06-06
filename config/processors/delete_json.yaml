@@ -14,11 +14,10 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: set_json
-    set_json:
+  - type: delete_json
+    delete_json:
       parts: []
       path: ""
-      value: ""
   threads: 1
 output:
   type: stdout

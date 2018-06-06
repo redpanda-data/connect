@@ -47,7 +47,7 @@ input:
   file:
     path: ""
     multipart: false
-    max_buffer: 65536
+    max_buffer: 1000000
     delimiter: ""
   http_client:
     url: http://localhost:4195/get/stream
@@ -58,7 +58,7 @@ input:
       enabled: false
       reconnect: true
       multipart: false
-      max_buffer: 65536
+      max_buffer: 1000000
       delimiter: ""
     timeout_ms: 5000
     retry_period_ms: 1000
@@ -166,7 +166,7 @@ input:
     reply_timeout_ms: 5000
   stdin:
     multipart: false
-    max_buffer: 65536
+    max_buffer: 1000000
     delimiter: ""
   websocket:
     url: ws://localhost:4195/get/ws
@@ -226,6 +226,7 @@ input:
         static: true
         xor: []
       processors: []
+      else_processors: []
     decompress:
       algorithm: gzip
       parts: []
@@ -236,6 +237,9 @@ input:
       - 0
       json_paths: []
       drop_on_err: true
+    delete_json:
+      parts: []
+      path: ""
     filter:
       type: content
       and: []

@@ -19,10 +19,10 @@
 	"pipeline": {
 		"processors": [
 			{
-				"type": "insert_part",
-				"insert_part": {
-					"content": "",
-					"index": -1
+				"type": "delete_json",
+				"delete_json": {
+					"parts": [],
+					"path": ""
 				}
 			}
 		],

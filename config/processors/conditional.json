@@ -8,7 +8,7 @@
 		"type": "stdin",
 		"stdin": {
 			"delimiter": "",
-			"max_buffer": 65536,
+			"max_buffer": 1000000,
 			"multipart": false
 		}
 	},
@@ -42,6 +42,7 @@
 						"type": "content",
 						"xor": []
 					},
+					"else_processors": [],
 					"processors": []
 				}
 			}
