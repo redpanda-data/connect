@@ -21,7 +21,6 @@
 package input
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/tls"
 	"io"
@@ -101,7 +100,7 @@ func NewHTTPClientConfig() HTTPClientConfig {
 			Enabled:   false,
 			Reconnect: true,
 			Multipart: false,
-			MaxBuffer: bufio.MaxScanTokenSize,
+			MaxBuffer: 1000000,
 			Delim:     "",
 		},
 		TimeoutMS:      5000,

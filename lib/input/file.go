@@ -21,7 +21,6 @@
 package input
 
 import (
-	"bufio"
 	"io"
 	"os"
 
@@ -60,7 +59,7 @@ func NewFileConfig() FileConfig {
 	return FileConfig{
 		Path:      "",
 		Multipart: false,
-		MaxBuffer: bufio.MaxScanTokenSize,
+		MaxBuffer: 1000000,
 		Delim:     "",
 	}
 }

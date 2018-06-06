@@ -21,7 +21,6 @@
 package input
 
 import (
-	"bufio"
 	"io"
 	"os"
 
@@ -59,7 +58,7 @@ type STDINConfig struct {
 func NewSTDINConfig() STDINConfig {
 	return STDINConfig{
 		Multipart: false,
-		MaxBuffer: bufio.MaxScanTokenSize,
+		MaxBuffer: 1000000,
 		Delim:     "",
 	}
 }

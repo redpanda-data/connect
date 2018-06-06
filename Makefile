@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker clean docs test fmt lint install docker-export vendor-branch release
+.PHONY: all deps rpm docker clean docs test fmt lint install docker-export
 
 BENTHOS_PATH = github.com/Jeffail/benthos
 
@@ -46,14 +46,6 @@ docker:
 deps:
 	@go get github.com/golang/dep/cmd/dep
 	@$$GOPATH/bin/dep ensure
-
-vendor-branch:
-	@git checkout master-vendored
-	@git rebase master
-	@make deps
-
-release:
-	@goreleaser
 
 fmt:
 	@go list ./... | xargs -I{} gofmt -w -s $$GOPATH/src/{}

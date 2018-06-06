@@ -35,7 +35,7 @@ func TestConfigSanitised(t *testing.T) {
 	c.Output.Processors = nil
 
 	exp := `{` +
-		`"input":{"type":"stdin","stdin":{"delimiter":"","max_buffer":65536,"multipart":false}},` +
+		`"input":{"type":"stdin","stdin":{"delimiter":"","max_buffer":1000000,"multipart":false}},` +
 		`"buffer":{"type":"none","none":{}},` +
 		`"pipeline":{"processors":[],"threads":1},` +
 		`"output":{"type":"stdout","stdout":{"delimiter":""}}` +
@@ -60,7 +60,7 @@ func TestConfigSanitised(t *testing.T) {
 	{
 	}
 	exp = `{` +
-		`"input":{"type":"file","file":{"delimiter":"","max_buffer":65536,"multipart":false,"path":""}},` +
+		`"input":{"type":"file","file":{"delimiter":"","max_buffer":1000000,"multipart":false,"path":""}},` +
 		`"buffer":{"type":"none","none":{}},` +
 		`"pipeline":{"processors":[],"threads":1},` +
 		`"output":{"type":"kafka","kafka":{"ack_replicas":false,"addresses":["localhost:9092"],"client_id":"benthos_kafka_output","compression":"none","key":"","max_msg_bytes":1000000,"round_robin_partitions":false,"target_version":"0.8.2.0","timeout_ms":5000,"topic":"benthos_stream"}}` +
