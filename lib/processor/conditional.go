@@ -33,10 +33,11 @@ func init() {
 	Constructors["conditional"] = TypeSpec{
 		constructor: NewConditional,
 		description: `
-Conditional is a processor that has a list of child processors and a condition.
-For each message if the condition passes the child processors will be applied,
-otherwise the message is passed through directly. This processor is useful for
-applying processors such as 'dedupe' based on the content type of the message`,
+Conditional is a processor that has a list of child 'processors',
+'else_processors', and a condition. For each message if the condition passes the
+child 'processors' will be applied, otherwise the 'else_processors' are applied.
+This processor is useful for applying processors such as 'dedupe' based on the
+content type of the message.`,
 	}
 }
 
@@ -45,15 +46,17 @@ applying processors such as 'dedupe' based on the content type of the message`,
 // ConditionalConfig is a config struct containing fields for the Conditional
 // processor.
 type ConditionalConfig struct {
-	Condition  condition.Config `json:"condition" yaml:"condition"`
-	Processors []Config         `json:"processors" yaml:"processors"`
+	Condition      condition.Config `json:"condition" yaml:"condition"`
+	Processors     []Config         `json:"processors" yaml:"processors"`
+	ElseProcessors []Config         `json:"else_processors" yaml:"else_processors"`
 }
 
 // NewConditionalConfig returns a default ConditionalConfig.
 func NewConditionalConfig() ConditionalConfig {
 	return ConditionalConfig{
-		Condition:  condition.NewConfig(),
-		Processors: []Config{},
+		Condition:      condition.NewConfig(),
+		Processors:     []Config{},
+		ElseProcessors: []Config{},
 	}
 }
 
@@ -62,8 +65,9 @@ func NewConditionalConfig() ConditionalConfig {
 // Conditional is a processor that only applies child processors under a certain
 // condition.
 type Conditional struct {
-	cond     condition.Type
-	children []Type
+	cond         condition.Type
+	children     []Type
+	elseChildren []Type
 
 	mCount      metrics.StatCounter
 	mCondPassed metrics.StatCounter
@@ -88,9 +92,18 @@ func NewConditional(
 		}
 		children = append(children, proc)
 	}
+	var elseChildren []Type
+	for _, pconf := range conf.Conditional.ElseProcessors {
+		var proc Type
+		if proc, err = New(pconf, mgr, log, stats); err != nil {
+			return nil, err
+		}
+		elseChildren = append(elseChildren, proc)
+	}
 	return &Conditional{
-		cond:     cond,
-		children: children,
+		cond:         cond,
+		children:     children,
+		elseChildren: elseChildren,
 
 		mCount:      stats.GetCounter("processor.conditional.count"),
 		mCondPassed: stats.GetCounter("processor.conditional.condition.passed"),
@@ -106,34 +119,37 @@ func NewConditional(
 func (c *Conditional) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
 	c.mCount.Incr(1)
 
+	var procs []Type
+
 	if c.cond.Check(msg) {
 		c.mCondPassed.Incr(1)
-
-		resultMsgs := []types.Message{msg}
-		var resultRes types.Response
-
-		for i := 0; len(resultMsgs) > 0 && i < len(c.children); i++ {
-			var nextResultMsgs []types.Message
-			for _, m := range resultMsgs {
-				var rMsgs []types.Message
-				rMsgs, resultRes = c.children[i].ProcessMessage(m)
-				nextResultMsgs = append(nextResultMsgs, rMsgs...)
-			}
-			resultMsgs = nextResultMsgs
-		}
-
-		if len(resultMsgs) == 0 {
-			c.mDropped.Incr(1)
-			res = resultRes
-		} else {
-			c.mSent.Incr(int64(len(resultMsgs)))
-			msgs = resultMsgs
-		}
+		procs = c.children
 	} else {
 		c.mCondFailed.Incr(1)
-		c.mSent.Incr(1)
-		msgs = append(msgs, msg)
+		procs = c.elseChildren
 	}
+
+	resultMsgs := []types.Message{msg}
+	var resultRes types.Response
+
+	for i := 0; len(resultMsgs) > 0 && i < len(procs); i++ {
+		var nextResultMsgs []types.Message
+		for _, m := range resultMsgs {
+			var rMsgs []types.Message
+			rMsgs, resultRes = procs[i].ProcessMessage(m)
+			nextResultMsgs = append(nextResultMsgs, rMsgs...)
+		}
+		resultMsgs = nextResultMsgs
+	}
+
+	if len(resultMsgs) == 0 {
+		c.mDropped.Incr(1)
+		res = resultRes
+	} else {
+		c.mSent.Incr(int64(len(resultMsgs)))
+		msgs = resultMsgs
+	}
+
 	return
 }
 

@@ -63,6 +63,7 @@ type Config struct {
 	Conditional ConditionalConfig `json:"conditional" yaml:"conditional"`
 	Decompress  DecompressConfig  `json:"decompress" yaml:"decompress"`
 	Dedupe      DedupeConfig      `json:"dedupe" yaml:"dedupe"`
+	DeleteJSON  DeleteJSONConfig  `json:"delete_json" yaml:"delete_json"`
 	Filter      FilterConfig      `json:"filter" yaml:"filter"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
@@ -88,6 +89,7 @@ func NewConfig() Config {
 		Conditional: NewConditionalConfig(),
 		Decompress:  NewDecompressConfig(),
 		Dedupe:      NewDedupeConfig(),
+		DeleteJSON:  NewDeleteJSONConfig(),
 		Filter:      NewFilterConfig(),
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),

@@ -44,7 +44,13 @@ func TestConditionalWithStaticFalse(t *testing.T) {
 	procConf.InsertPart.Content = "foo"
 	procConf.InsertPart.Index = 0
 
+	elseProcConf := NewConfig()
+	elseProcConf.Type = "insert_part"
+	elseProcConf.InsertPart.Content = "baz"
+	elseProcConf.InsertPart.Index = 0
+
 	conf.Conditional.Processors = append(conf.Conditional.Processors, procConf)
+	conf.Conditional.ElseProcessors = append(conf.Conditional.ElseProcessors, elseProcConf)
 
 	c, err := New(conf, nil, testLog, testMet)
 	if err != nil {
@@ -53,6 +59,7 @@ func TestConditionalWithStaticFalse(t *testing.T) {
 	}
 
 	exp := [][]byte{
+		[]byte(`baz`),
 		[]byte(`bar`),
 	}
 
@@ -79,7 +86,13 @@ func TestConditionalWithStaticTrue(t *testing.T) {
 	procConf.InsertPart.Content = "foo"
 	procConf.InsertPart.Index = 0
 
+	elseProcConf := NewConfig()
+	elseProcConf.Type = "insert_part"
+	elseProcConf.InsertPart.Content = "baz"
+	elseProcConf.InsertPart.Index = 0
+
 	conf.Conditional.Processors = append(conf.Conditional.Processors, procConf)
+	conf.Conditional.ElseProcessors = append(conf.Conditional.ElseProcessors, elseProcConf)
 
 	c, err := New(conf, nil, testLog, testMet)
 	if err != nil {

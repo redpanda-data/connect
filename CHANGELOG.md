@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.13.3 - 2018-06-06
+
+### Added
+
+- New metrics wrapper for more basic interface implementations.
+- New `delete_json` processor.
+- New field `else_processors` for `conditional` processor.
+
 ## 0.13.2 - 2018-06-03
 
 ### Added
