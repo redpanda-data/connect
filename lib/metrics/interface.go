@@ -57,6 +57,11 @@ type Type interface {
 	// GetGauge returns an editable gauge stat for a given path.
 	GetGauge(path ...string) StatGauge
 
+	Flat
+}
+
+// Flat is an interface for setting metrics via flat paths.
+type Flat interface {
 	// Incr increments a metric by an amount.
 	Incr(path string, count int64) error
 
@@ -69,7 +74,7 @@ type Type interface {
 	// Gauge sets a gauge metric.
 	Gauge(path string, value int64) error
 
-	// Close stops aggregating stats and clean up resources.
+	// Close stops aggregating stats and cleans up resources.
 	Close() error
 }
 
