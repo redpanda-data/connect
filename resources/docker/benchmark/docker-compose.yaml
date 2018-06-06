@@ -20,7 +20,7 @@ services:
     ports:
       - 9600:9600
     command:
-      - '--filterworkers=8'
+      - '-w 8'
 
   zookeeper:
     image: wurstmeister/zookeeper
@@ -59,6 +59,11 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
     ports:
       - 9090:9090
+
+  node-exporter:
+    image: prom/node-exporter
+    ports:
+      - 9100:9100
 
   grafana:
     image: grafana/grafana

@@ -12,7 +12,7 @@ input:
   processors:
   - type: combine
     combine:
-      parts: 100
+      parts: 200
 
 buffer:
   type: memory

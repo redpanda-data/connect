@@ -25,9 +25,7 @@ buffer:
 pipeline:
   threads: 1
   processors:
-  - type: jmespath
-    jmespath:
-      query: content
+  - type: compress
 
 output:
   type: broker
