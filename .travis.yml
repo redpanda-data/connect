@@ -1,10 +1,10 @@
 language: go
 go:
   - stable
-sudo: required
-services:
-  - docker
+#sudo: required
+#services:
+#  - docker
 script:
   - make deps
   - make
-  - make test-integration
+  - make test
