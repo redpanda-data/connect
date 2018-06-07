@@ -27,7 +27,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Jeffail/benthos/lib/buffer/parallel"
 	"github.com/Jeffail/benthos/lib/buffer/single"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
@@ -52,7 +51,6 @@ var Constructors = map[string]TypeSpec{}
 // Config is the all encompassing configuration struct for all input types.
 type Config struct {
 	Type   string                  `json:"type" yaml:"type"`
-	Badger parallel.BadgerConfig   `json:"badger" yaml:"badger"`
 	Memory single.MemoryConfig     `json:"memory" yaml:"memory"`
 	Mmap   single.MmapBufferConfig `json:"mmap_file" yaml:"mmap_file"`
 	None   struct{}                `json:"none" yaml:"none"`
@@ -62,7 +60,6 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Type:   "none",
-		Badger: parallel.NewBadgerConfig(),
 		Memory: single.NewMemoryConfig(),
 		Mmap:   single.NewMmapBufferConfig(),
 		None:   struct{}{},
@@ -115,20 +112,13 @@ different options and their qualities:
 | --------- | ---------- | --------- | -------- |
 | Memory    | Highest    | Parallel  | RAM      |
 | Mmap File | High       | Single    | Disk     |
-| Badger    | Medium     | Parallel  | Disk     |
 
 #### Delivery Guarantees
 
 | Type      | On Restart | On Crash  | On Disk Corruption |
 | --------- | ---------- | --------- | ------------------ |
 | Memory    | Lost       | Lost      | Lost               |
-| Mmap File | Persisted  | Lost      | Lost               |
-| Badger    | Persisted  | Persisted | Lost               |
-
-Please note that the badger buffer can be set to disable synchronous writes.
-This removes the guarantee of message persistence after a crash, but brings
-performance on par with the mmap file buffer. This can make it the faster
-overall disk persisted buffer when writing to multiple outputs.`
+| Mmap File | Persisted  | Lost      | Lost               |`
 
 // Descriptions returns a formatted string of collated descriptions of each type.
 func Descriptions() string {

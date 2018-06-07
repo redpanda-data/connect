@@ -25,7 +25,6 @@ different options and their qualities:
 | --------- | ---------- | --------- | -------- |
 | Memory    | Highest    | Parallel  | RAM      |
 | Mmap File | High       | Single    | Disk     |
-| Badger    | Medium     | Parallel  | Disk     |
 
 #### Delivery Guarantees
 
@@ -33,54 +32,12 @@ different options and their qualities:
 | --------- | ---------- | --------- | ------------------ |
 | Memory    | Lost       | Lost      | Lost               |
 | Mmap File | Persisted  | Lost      | Lost               |
-| Badger    | Persisted  | Persisted | Lost               |
-
-Please note that the badger buffer can be set to disable synchronous writes.
-This removes the guarantee of message persistence after a crash, but brings
-performance on par with the mmap file buffer. This can make it the faster
-overall disk persisted buffer when writing to multiple outputs.
 
 ### Contents
 
-1. [`badger`](#badger)
-2. [`memory`](#memory)
-3. [`mmap_file`](#mmap_file)
-4. [`none`](#none)
-
-## `badger`
-
-``` yaml
-type: badger
-badger:
-  directory: ""
-  gc_interval_ms: 1000
-  max_bytes: 2e+10
-  sync_writes: false
-  tuning:
-    level_one_size: 2.68435456e+08
-    level_size_multiplier: 10
-    max_levels: 7
-    max_table_size: 6.7108864e+07
-    num_compactors: 3
-    num_level_zero_tables: 5
-    num_level_zero_tables_stall: 10
-    num_memtables: 5
-    value_log_file_size: 1.073741824e+09
-    value_log_max_entries: 1e+06
-    value_threshold: 32
-```
-
-The badger buffer type uses a [badger](https://github.com/dgraph-io/badger) db
-in order to persist messages to disk as a key/value store. The benefit of this
-method is that unlike the mmap_file approach this buffer can be emptied by
-parallel consumers.
-
-Note that throughput can be significantly improved by disabling 'sync_writes',
-but this comes at the cost of delivery guarantees under crashes.
-
-This buffer has stronger delivery guarantees and higher throughput across
-brokered outputs (except for the fan_out pattern) at the cost of lower single
-output throughput.
+1. [`memory`](#memory)
+2. [`mmap_file`](#mmap_file)
+3. [`none`](#none)
 
 ## `memory`
 
