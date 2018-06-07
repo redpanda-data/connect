@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Increase default `max_buffer` for `stdin`, `file` and `http_client` inputs.
 
+### Removed
+
+- Badger based buffer option has been removed.
+
 ## 0.13.3 - 2018-06-06
 
 ### Added
