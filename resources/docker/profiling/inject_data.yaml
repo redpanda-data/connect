@@ -2,35 +2,46 @@ http:
   address: 0.0.0.0:4197
 
 input:
-  type: read_until
-  read_until:
-    input:
-      type: file
-      file:
-        path: ./sample_data.txt
-        max_buffer: 10000000
-    restart_input: true
-    condition:
-      type: static
-      static: false
-      not:
-        type: count
-        count:
-          arg: 1_000_000
+  type: broker
+  broker:
+    copies: 1
+    inputs:
+    - type: read_until
+      read_until:
+        input:
+          type: file
+          file:
+            path: ./sample_data.txt
+            max_buffer: 10000000
+        restart_input: true
+        condition:
+          type: static
+          static: false
+          not:
+            type: count
+            count:
+              arg: 1_000_000
 
 buffer:
-  type: none
+  type: memory
+  memory:
+    limit: 100_000_000
 
 pipeline:
   threads: 1
   processors: []
 
 output:
-  type: websocket
-  websocket:
-    url: ws://localhost:4195/post/ws
-  http_client:
-    url: http://localhost:4195/post
+  type: broker
+  broker:
+    copies: 4
+    pattern: greedy
+    outputs:
+      - type: websocket
+        websocket:
+          url: ws://localhost:4195/post/ws
+        http_client:
+          url: http://localhost:4195/post
 
 logger:
   prefix: service
