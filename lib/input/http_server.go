@@ -280,45 +280,44 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
+	resChan := make(chan types.Response)
+	throt := throttle.New(throttle.OptCloseChan(h.closeChan))
+
+	var message []byte
 	for atomic.LoadInt32(&h.running) == 1 {
-		_, message, wsErr := ws.ReadMessage()
-		if wsErr != nil {
-			return
+		if message == nil {
+			if _, message, err = ws.ReadMessage(); err != nil {
+				return
+			}
+			h.mWSCount.Incr(1)
+			h.mCountF.Incr(1)
 		}
 
-		h.mWSCount.Incr(1)
-		h.mCountF.Incr(1)
+		msg := types.NewMessage([][]byte{message})
 
-		go func(contents []byte) {
-			msg := types.NewMessage([][]byte{contents})
-			resChan := make(chan types.Response)
-			throt := throttle.New(throttle.OptCloseChan(h.closeChan))
-
-			for atomic.LoadInt32(&h.running) == 1 {
-				select {
-				case h.transactions <- types.NewTransaction(msg, resChan):
-				case <-h.closeChan:
-					return
-				}
-				select {
-				case res, open := <-resChan:
-					if !open {
-						return
-					}
-					if res.Error() != nil {
-						h.mWSErr.Incr(1)
-						h.mErrF.Incr(1)
-					} else {
-						h.mWSSucc.Incr(1)
-						h.mSuccF.Incr(1)
-						return
-					}
-				case <-h.closeChan:
-					return
-				}
-				throt.Retry()
+		select {
+		case h.transactions <- types.NewTransaction(msg, resChan):
+		case <-h.closeChan:
+			return
+		}
+		select {
+		case res, open := <-resChan:
+			if !open {
+				return
 			}
-		}(message)
+			if res.Error() != nil {
+				h.mWSErr.Incr(1)
+				h.mErrF.Incr(1)
+				throt.Retry()
+			} else {
+				h.mWSSucc.Incr(1)
+				h.mSuccF.Incr(1)
+				message = nil
+				throt.Reset()
+			}
+		case <-h.closeChan:
+			return
+		}
 	}
 }
 
