@@ -49,6 +49,8 @@ input:
     multipart: false
     max_buffer: 1000000
     delimiter: ""
+  files:
+    path: ""
   http_client:
     url: http://localhost:4195/get/stream
     verb: GET

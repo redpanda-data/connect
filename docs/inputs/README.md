@@ -42,21 +42,22 @@ level which is only applied to messages from the baz input.
 4. [`broker`](#broker)
 5. [`dynamic`](#dynamic)
 6. [`file`](#file)
-7. [`http_client`](#http_client)
-8. [`http_server`](#http_server)
-9. [`kafka`](#kafka)
-10. [`kafka_balanced`](#kafka_balanced)
-11. [`mqtt`](#mqtt)
-12. [`nats`](#nats)
-13. [`nats_stream`](#nats_stream)
-14. [`nsq`](#nsq)
-15. [`read_until`](#read_until)
-16. [`redis_list`](#redis_list)
-17. [`redis_pubsub`](#redis_pubsub)
-18. [`scalability_protocols`](#scalability_protocols)
-19. [`stdin`](#stdin)
-20. [`websocket`](#websocket)
-21. [`zmq4`](#zmq4)
+7. [`files`](#files)
+8. [`http_client`](#http_client)
+9. [`http_server`](#http_server)
+10. [`kafka`](#kafka)
+11. [`kafka_balanced`](#kafka_balanced)
+12. [`mqtt`](#mqtt)
+13. [`nats`](#nats)
+14. [`nats_stream`](#nats_stream)
+15. [`nsq`](#nsq)
+16. [`read_until`](#read_until)
+17. [`redis_list`](#redis_list)
+18. [`redis_pubsub`](#redis_pubsub)
+19. [`scalability_protocols`](#scalability_protocols)
+20. [`stdin`](#stdin)
+21. [`websocket`](#websocket)
+22. [`zmq4`](#zmq4)
 
 ## `amazon_s3`
 
@@ -269,6 +270,19 @@ is read as a separate message. If multipart is set to true each line is read as
 a message part, and an empty line indicates the end of a message.
 
 If the delimiter field is left empty then line feed (\n) is used.
+
+## `files`
+
+``` yaml
+type: files
+files:
+  path: ""
+```
+
+Reads files from a path, where each discrete file will be consumed as a single
+message payload. The path can either point to a single file (resulting in only a
+single message) or a directory, in which case the directory will be walked and
+each file found will become a message.
 
 ## `http_client`
 

@@ -22,6 +22,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"runtime/pprof"
 
@@ -44,8 +45,17 @@ import (
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
-	"github.com/Jeffail/benthos/lib/util/service"
+	"github.com/Jeffail/benthos/lib/util/config"
 	"github.com/Jeffail/benthos/lib/util/service/log"
+	yaml "gopkg.in/yaml.v2"
+)
+
+//------------------------------------------------------------------------------
+
+// Build stamps.
+var (
+	Version   string
+	DateBuilt string
 )
 
 //------------------------------------------------------------------------------
@@ -135,6 +145,28 @@ func (c Config) Sanitised() (interface{}, error) {
 
 // Extra flags
 var (
+	showVersion = flag.Bool(
+		"version", false, "Display version info, then exit",
+	)
+	showConfigJSON = flag.Bool(
+		"print-json", false, "Print loaded configuration as JSON, then exit",
+	)
+	showConfigYAML = flag.Bool(
+		"print-yaml", false, "Print loaded configuration as YAML, then exit",
+	)
+	showAll = flag.Bool(
+		"all", false,
+		"Set whether _all_ fields should be shown when printing configuration"+
+			" via --print-yaml or --print-json, otherwise only used values"+
+			" will be printed.",
+	)
+	configPath = flag.String(
+		"c", "", "Path to a configuration file",
+	)
+	swapEnvs = flag.Bool(
+		"swap-envs", true,
+		"Swap ${FOO} patterns in config file with environment variables",
+	)
 	printInputs = flag.Bool(
 		"list-inputs", false,
 		"Print a list of available input options, then exit",
@@ -181,7 +213,7 @@ var (
 // bootstrap reads cmd args and either parses and config file or prints helper
 // text and exits.
 func bootstrap() Config {
-	config := NewConfig()
+	conf := NewConfig()
 
 	// A list of default config paths to check for if not explicitly defined
 	defaultPaths := []string{
@@ -201,9 +233,59 @@ func bootstrap() Config {
 				"For a list of available buffer options use --list-buffers\n")
 	}
 
-	// Load configuration etc
-	if !service.Bootstrap(&config, defaultPaths...) {
+	flag.Parse()
+
+	// If the user wants the version we print it.
+	if *showVersion {
+		fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
 		os.Exit(0)
+	}
+
+	if len(*configPath) > 0 {
+		if err := config.Read(*configPath, *swapEnvs, &conf); err != nil {
+			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		// Iterate default config paths
+		for _, path := range defaultPaths {
+			if _, err := os.Stat(path); err == nil {
+				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
+
+				if err = config.Read(path, *swapEnvs, &conf); err != nil {
+					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+					os.Exit(1)
+				}
+				break
+			}
+		}
+	}
+
+	// If the user wants the configuration to be printed we do so and then exit.
+	if *showConfigJSON || *showConfigYAML {
+		var outConf interface{} = conf
+		var err error
+		if !*showAll {
+			if outConf, err = conf.Sanitised(); err != nil {
+				fmt.Fprintln(os.Stderr, fmt.Sprintf("Configuration sanitise error: %v", err))
+				os.Exit(1)
+			}
+		}
+		if *showConfigJSON {
+			if configJSON, err := json.Marshal(outConf); err == nil {
+				fmt.Println(string(configJSON))
+			} else {
+				fmt.Fprintln(os.Stderr, fmt.Sprintf("Configuration marshal error: %v", err))
+			}
+			os.Exit(0)
+		} else {
+			if configYAML, err := yaml.Marshal(outConf); err == nil {
+				fmt.Println(string(configYAML))
+			} else {
+				fmt.Fprintln(os.Stderr, fmt.Sprintf("Configuration marshal error: %v", err))
+			}
+			os.Exit(0)
+		}
 	}
 
 	// If we only want to print our inputs or outputs we should exit afterwards
@@ -226,10 +308,10 @@ func bootstrap() Config {
 		if *printCaches {
 			fmt.Println(cache.Descriptions())
 		}
-		os.Exit(1)
+		os.Exit(0)
 	}
 
-	return config
+	return conf
 }
 
 type stoppableStreams interface {
@@ -263,7 +345,7 @@ func main() {
 	if err != nil {
 		logger.Warnf("Failed to generate sanitised config: %v\n", err)
 	}
-	httpServer := api.New(service.Version, service.DateBuilt, config.HTTP, sanConf, logger, stats)
+	httpServer := api.New(Version, DateBuilt, config.HTTP, sanConf, logger, stats)
 
 	// Create resource manager.
 	manager, err := manager.New(config.Manager, httpServer, logger, stats)

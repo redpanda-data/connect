@@ -5,11 +5,9 @@
 		"debug_endpoints": false
 	},
 	"input": {
-		"type": "stdin",
-		"stdin": {
-			"delimiter": "",
-			"max_buffer": 1000000,
-			"multipart": false
+		"type": "files",
+		"files": {
+			"path": ""
 		}
 	},
 	"buffer": {

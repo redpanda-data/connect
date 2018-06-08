@@ -68,6 +68,7 @@ type Config struct {
 	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
 	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
 	File          FileConfig                 `json:"file" yaml:"file"`
+	Files         reader.FilesConfig         `json:"files" yaml:"files"`
 	HTTPClient    HTTPClientConfig           `json:"http_client" yaml:"http_client"`
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
 	Kafka         reader.KafkaConfig         `json:"kafka" yaml:"kafka"`
@@ -96,6 +97,7 @@ func NewConfig() Config {
 		Broker:        NewBrokerConfig(),
 		Dynamic:       NewDynamicConfig(),
 		File:          NewFileConfig(),
+		Files:         reader.NewFilesConfig(),
 		HTTPClient:    NewHTTPClientConfig(),
 		HTTPServer:    NewHTTPServerConfig(),
 		Kafka:         reader.NewKafkaConfig(),

@@ -5,9 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `files` input type for reading multiple files as discrete messages.
+
 ### Changed
 
 - Increase default `max_buffer` for `stdin`, `file` and `http_client` inputs.
+- Command flags `--print-yaml` and `--print-json` changed to provide sanitised
+  outputs unless accompanied by new `--all` flag.
 
 ### Removed
 

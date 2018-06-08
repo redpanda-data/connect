@@ -101,8 +101,8 @@ You can print a configuration file containing fields for all types with the
 following command:
 
 ``` shell
-benthos --print-yaml > config.yaml
-benthos --print-json | jq '.' > config.json
+benthos --print-yaml --all > config.yaml
+benthos --print-json --all | jq '.' > config.json
 ```
 
 There are also sections for setting logging, metrics and HTTP server options.
