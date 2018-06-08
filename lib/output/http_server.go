@@ -398,18 +398,21 @@ func (h *HTTPServer) StartReceiving(ts <-chan types.Transaction) error {
 		go func() {
 			h.stats.Incr("output.http_server.running", 1)
 
-			h.log.Infof(
-				"Serving messages through HTTP GET request at: %s\n",
-				h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
-			)
-
 			if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
+				h.log.Infof(
+					"Serving messages through HTTPS GET request at: https://%s\n",
+					h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
+				)
 				if err := h.server.ListenAndServeTLS(
 					h.conf.HTTPServer.CertFile, h.conf.HTTPServer.KeyFile,
 				); err != http.ErrServerClosed {
 					h.log.Errorf("Server error: %v\n", err)
 				}
 			} else {
+				h.log.Infof(
+					"Serving messages through HTTP GET request at: http://%s\n",
+					h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
+				)
 				if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
 					h.log.Errorf("Server error: %v\n", err)
 				}

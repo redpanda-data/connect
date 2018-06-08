@@ -341,19 +341,22 @@ func (h *HTTPServer) loop() {
 	mRunning.Incr(1)
 
 	if h.server != nil {
-		h.log.Infof(
-			"Receiving HTTP Post messages at: %s\n",
-			h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
-		)
-
 		go func() {
 			if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
+				h.log.Infof(
+					"Receiving HTTPS messages at: https://%s\n",
+					h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
+				)
 				if err := h.server.ListenAndServeTLS(
 					h.conf.HTTPServer.CertFile, h.conf.HTTPServer.KeyFile,
 				); err != http.ErrServerClosed {
 					h.log.Errorf("Server error: %v\n", err)
 				}
 			} else {
+				h.log.Infof(
+					"Receiving HTTP messages at: http://%s\n",
+					h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
+				)
 				if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
 					h.log.Errorf("Server error: %v\n", err)
 				}
