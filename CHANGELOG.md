@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.13.4 - 2018-06-08
+
 ### Added
 
 - New `files` input type for reading multiple files as discrete messages.
