@@ -259,6 +259,13 @@ input:
       resource: ""
       static: true
       xor: []
+    grok:
+      parts: []
+      patterns: []
+      remove_empty_values: true
+      named_captures_only: true
+      use_default_patterns: true
+      output_format: json
     hash_sample:
       retain_min: 0
       retain_max: 10

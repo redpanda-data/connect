@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `grok` processor for creating structured objects from unstructured data.
+
 ## 0.13.4 - 2018-06-08
 
 ### Added

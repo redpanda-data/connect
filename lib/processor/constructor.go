@@ -65,6 +65,7 @@ type Config struct {
 	Dedupe      DedupeConfig      `json:"dedupe" yaml:"dedupe"`
 	DeleteJSON  DeleteJSONConfig  `json:"delete_json" yaml:"delete_json"`
 	Filter      FilterConfig      `json:"filter" yaml:"filter"`
+	Grok        GrokConfig        `json:"grok" yaml:"grok"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
 	JMESPath    JMESPathConfig    `json:"jmespath" yaml:"jmespath"`
@@ -91,6 +92,7 @@ func NewConfig() Config {
 		Dedupe:      NewDedupeConfig(),
 		DeleteJSON:  NewDeleteJSONConfig(),
 		Filter:      NewFilterConfig(),
+		Grok:        NewGrokConfig(),
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),
 		JMESPath:    NewJMESPathConfig(),

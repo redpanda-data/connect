@@ -3,12 +3,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/AndreasBriese/bbloom"
-  packages = ["."]
-  revision = "28f7e881ca57bc00e028f9ede9f0d9104cfeef5e"
-
-[[projects]]
-  branch = "master"
   name = "github.com/Azure/go-ansiterm"
   packages = [
     ".",
@@ -121,25 +115,6 @@
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
   version = "v1.1.0"
-
-[[projects]]
-  name = "github.com/dgraph-io/badger"
-  packages = [
-    ".",
-    "options",
-    "protos",
-    "skl",
-    "table",
-    "y"
-  ]
-  revision = "690400e629977977ecddfa8ab3a7f9285e1041a8"
-  version = "v1.5.1"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/dgryski/go-farm"
-  packages = ["."]
-  revision = "2de33835d10275975374b37b2dcfd22c9020a1f5"
 
 [[projects]]
   name = "github.com/docker/go-connections"
@@ -465,6 +440,12 @@
   revision = "e5adc2ada8b8efff032bf61173a233d143e9318e"
 
 [[projects]]
+  name = "github.com/trivago/grok"
+  packages = ["."]
+  revision = "af18cdd9faf3e06aedce0974c7e4012efc87658e"
+  version = "v1.0.0"
+
+[[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
@@ -476,9 +457,7 @@
   packages = [
     "context",
     "internal/socks",
-    "internal/timeseries",
     "proxy",
-    "trace",
     "websocket"
   ]
   revision = "1e491301e022f8f977054da4c2d852decd59571f"
@@ -507,6 +486,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "614ad252403288da5d775584eaf3862a6d42ebdfd96a514ffbd149aee3571001"
+  inputs-digest = "9ddff074358e549db7f0e3f8e805bde751be1a094f81e9cb719229f81c6e7c0f"
   solver-name = "gps-cdcl"
   solver-version = 1
