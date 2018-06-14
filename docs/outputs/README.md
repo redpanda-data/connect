@@ -156,6 +156,17 @@ messages as soon as they are able to process them. This results in certain
 faster outputs potentially processing more messages at the cost of slower
 outputs.
 
+#### `try`
+
+The try pattern attempts to send each message to only one output, starting from
+the first output on the list. If an output attempt fails then the broker
+attempts to send to the next output in the list and so on.
+
+This pattern is useful for triggering events in the case where certain output
+targets have broken. For example, if you had an output type `http_client`
+but wished to reroute messages whenever the endpoint becomes unreachable you
+could use a try broker.
+
 ### Utilising More Outputs
 
 When using brokered outputs with patterns such as round robin or greedy it is

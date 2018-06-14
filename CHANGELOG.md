@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - More granular config options in the `http_client` output for controlling retry
   logic.
+- New `try` pattern for the output `broker` type, which can be used in order to
+  configure fallback outputs.
 
 ## 0.13.5 - 2018-06-10
 
