@@ -26,6 +26,10 @@ archive:
     - docs/*
     - docs/**/*
 dist: target/dist
+changelog:
+  filters:
+    exclude:
+      - .*
 release:
   github:
     owner: Jeffail

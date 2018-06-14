@@ -329,9 +329,6 @@ line delimited list of message parts. Each part is read as an individual message
 unless multipart is set to true, in which case an empty line indicates the end
 of a message.
 
-For more information about sending HTTP messages, including details on sending
-multipart, please read the 'docs/using_http.md' document.
-
 ## `http_server`
 
 ``` yaml

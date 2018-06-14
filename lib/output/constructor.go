@@ -70,7 +70,7 @@ type Config struct {
 	Elasticsearch writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
 	File          FileConfig                 `json:"file" yaml:"file"`
 	Files         writer.FilesConfig         `json:"files" yaml:"files"`
-	HTTPClient    HTTPClientConfig           `json:"http_client" yaml:"http_client"`
+	HTTPClient    writer.HTTPClientConfig    `json:"http_client" yaml:"http_client"`
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
 	Kafka         writer.KafkaConfig         `json:"kafka" yaml:"kafka"`
 	MQTT          writer.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
@@ -98,7 +98,7 @@ func NewConfig() Config {
 		Elasticsearch: writer.NewElasticsearchConfig(),
 		File:          NewFileConfig(),
 		Files:         writer.NewFilesConfig(),
-		HTTPClient:    NewHTTPClientConfig(),
+		HTTPClient:    writer.NewHTTPClientConfig(),
 		HTTPServer:    NewHTTPServerConfig(),
 		Kafka:         writer.NewKafkaConfig(),
 		MQTT:          writer.NewMQTTConfig(),

@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package output
+package writer
 
 import (
 	"fmt"
@@ -42,61 +42,22 @@ import (
 //------------------------------------------------------------------------------
 
 func TestHTTPClientRetries(t *testing.T) {
-	sendChan, resultChan := make(chan types.Transaction), make(chan types.Message, 1)
-	resChan := make(chan types.Response)
-
-	var allowReq, reqCount uint32
+	var reqCount uint32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddUint32(&reqCount, 1)
-		if atomic.LoadUint32(&allowReq) != 1 {
-			http.Error(w, "test error", http.StatusForbidden)
-			return
-		}
-
-		var msg types.Message
-		defer func() {
-			resultChan <- msg
-		}()
-
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		msg.SetAll([][]byte{b})
+		http.Error(w, "test error", http.StatusForbidden)
+		return
 	}))
 	defer ts.Close()
 
-	conf := NewConfig()
-	conf.HTTPClient.URL = ts.URL + "/testpost"
-	conf.HTTPClient.RetryMS = 1
-	conf.HTTPClient.NumRetries = 3
+	conf := NewHTTPClientConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.RetryMS = 1
+	conf.NumRetries = 3
 
-	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err = h.StartReceiving(sendChan); err != nil {
-		t.Error(err)
-		return
-	}
-
-	select {
-	case sendChan <- types.NewTransaction(types.NewMessage([][]byte{[]byte("test")}), resChan):
-	case <-time.After(time.Second):
-		t.Errorf("Action timed out")
-		return
-	}
-
-	select {
-	case res := <-resChan:
-		if res.Error() == nil {
-			t.Error("Expected error from end of retries")
-		}
-	case <-time.After(time.Second):
-		t.Errorf("Action timed out")
+	h := NewHTTPClient(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	if err := h.Write(types.NewMessage([][]byte{[]byte("test")})); err == nil {
+		t.Error("Expected error from end of retries")
 	}
 
 	if exp, act := uint32(4), atomic.LoadUint32(&reqCount); exp != act {
@@ -104,8 +65,6 @@ func TestHTTPClientRetries(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	close(sendChan)
-
 	if err := h.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
@@ -114,9 +73,7 @@ func TestHTTPClientRetries(t *testing.T) {
 func TestHTTPClientBasic(t *testing.T) {
 	nTestLoops := 1000
 
-	sendChan, resultChan := make(chan types.Transaction), make(chan types.Message, 1)
-	resChan := make(chan types.Response)
-
+	resultChan := make(chan types.Message, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		msg := types.NewMessage(nil)
 		defer func() {
@@ -132,32 +89,17 @@ func TestHTTPClientBasic(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewConfig()
-	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf := NewHTTPClientConfig()
+	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err = h.StartReceiving(sendChan); err != nil {
-		t.Error(err)
-		return
-	}
-	if err = h.StartReceiving(sendChan); err == nil {
-		t.Error("Expected error on duplicate receive call")
-	}
+	h := NewHTTPClient(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
 		testMsg := types.NewMessage([][]byte{[]byte(testStr)})
 
-		select {
-		case sendChan <- types.NewTransaction(testMsg, resChan):
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
+		if err := h.Write(testMsg); err != nil {
+			t.Error(err)
 		}
 
 		select {
@@ -174,22 +116,9 @@ func TestHTTPClientBasic(t *testing.T) {
 			t.Errorf("Action timed out")
 			return
 		}
-
-		select {
-		case res := <-resChan:
-			if res.Error() != nil {
-				t.Error(res.Error())
-				return
-			}
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
 	}
 
 	h.CloseAsync()
-	close(sendChan)
-
 	if err := h.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
@@ -198,9 +127,7 @@ func TestHTTPClientBasic(t *testing.T) {
 func TestHTTPClientMultipart(t *testing.T) {
 	nTestLoops := 1000
 
-	sendChan, resultChan := make(chan types.Transaction), make(chan types.Message, 1)
-	resChan := make(chan types.Response)
-
+	resultChan := make(chan types.Message, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		msg := types.NewMessage(nil)
 		defer func() {
@@ -243,19 +170,10 @@ func TestHTTPClientMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewConfig()
-	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf := NewHTTPClientConfig()
+	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err = h.StartReceiving(sendChan); err != nil {
-		t.Error(err)
-		return
-	}
+	h := NewHTTPClient(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
@@ -264,11 +182,8 @@ func TestHTTPClientMultipart(t *testing.T) {
 			[]byte(testStr + "PART-B"),
 		})
 
-		select {
-		case sendChan <- types.NewTransaction(testMsg, resChan):
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
+		if err := h.Write(testMsg); err != nil {
+			t.Error(err)
 		}
 
 		select {
@@ -289,22 +204,9 @@ func TestHTTPClientMultipart(t *testing.T) {
 			t.Errorf("Action timed out")
 			return
 		}
-
-		select {
-		case res := <-resChan:
-			if res.Error() != nil {
-				t.Error(res.Error())
-				return
-			}
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
 	}
 
 	h.CloseAsync()
-	close(sendChan)
-
 	if err := h.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}

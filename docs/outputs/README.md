@@ -252,11 +252,14 @@ using function interpolations on the 'path' field as described
 ``` yaml
 type: http_client
 http_client:
+  backoff_on:
+  - 429
   basic_auth:
     enabled: false
     password: ""
     username: ""
   content_type: application/octet-stream
+  drop_on: []
   max_retry_backoff_ms: 300000
   oauth:
     access_token: ""
@@ -273,12 +276,22 @@ http_client:
   verb: POST
 ```
 
-The HTTP client output type connects to a server and sends POST requests for
-each message. The body of the request is the raw message contents. The output
-will apply back pressure until a 2XX response has been returned from the server.
+Sends messages to an HTTP server. The request will be retried for each message
+whenever the response code is outside the range of 200 -> 299 inclusive. It is
+possible to list codes outside of this range in the `drop_on` field in
+order to prevent retry attempts.
 
-For more information about sending HTTP messages, including details on sending
-multipart, please read the 'docs/using_http.md' document.
+The period of time between retries is linear by default. Response codes that are
+within the `backoff_on` list will instead apply exponential backoff
+between retry attempts.
+
+When the number of retries expires the output will reject the message, the
+behaviour after this will depend on the pipeline but usually this simply means
+the send is attempted again until successful whilst applying back pressure.
+
+The body of the HTTP request is the raw contents of the message payload. If the
+message has multiple parts the request will be sent according to
+[RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html)
 
 ## `http_server`
 
