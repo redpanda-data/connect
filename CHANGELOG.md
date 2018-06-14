@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- More granular config options in the `http_client` output for controlling retry
+  logic.
+
 ## 0.13.5 - 2018-06-10
 
 ### Added
