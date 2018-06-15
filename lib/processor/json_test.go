@@ -131,6 +131,70 @@ func TestJSONPartBounds(t *testing.T) {
 	}
 }
 
+func TestJSONAppend(t *testing.T) {
+	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	type jTest struct {
+		name   string
+		path   string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "append 1",
+			path:   "foo.bar",
+			value:  `{"baz":1}`,
+			input:  `{"foo":{"bar":5}}`,
+			output: `{"foo":{"bar":[5,{"baz":1}]}}`,
+		},
+		{
+			name:   "append collision 1",
+			path:   "foo.bar",
+			value:  `{"baz":1}`,
+			input:  `{"foo":0}`,
+			output: `{"foo":0}`,
+		},
+		{
+			name:   "append array 1",
+			path:   "foo.bar",
+			value:  `[1,2,3]`,
+			input:  `{"foo":{"bar":[0]}}`,
+			output: `{"foo":{"bar":[0,[1,2,3]]}}`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.JSON.Operator = "append"
+		conf.JSON.Parts = []int{0}
+		conf.JSON.Path = test.path
+		conf.JSON.Value = []byte(test.value)
+
+		jSet, err := NewJSON(conf, nil, tLog, tStats)
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := types.NewMessage(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := jSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestJSONSet(t *testing.T) {
 	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
