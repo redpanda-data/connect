@@ -63,7 +63,6 @@ type Config struct {
 	Conditional ConditionalConfig `json:"conditional" yaml:"conditional"`
 	Decompress  DecompressConfig  `json:"decompress" yaml:"decompress"`
 	Dedupe      DedupeConfig      `json:"dedupe" yaml:"dedupe"`
-	DeleteJSON  DeleteJSONConfig  `json:"delete_json" yaml:"delete_json"`
 	Filter      FilterConfig      `json:"filter" yaml:"filter"`
 	Grok        GrokConfig        `json:"grok" yaml:"grok"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
@@ -72,9 +71,7 @@ type Config struct {
 	JSON        JSONConfig        `json:"json" yaml:"json"`
 	MergeJSON   MergeJSONConfig   `json:"merge_json" yaml:"merge_json"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
-	SelectJSON  SelectJSONConfig  `json:"select_json" yaml:"select_json"`
 	SelectParts SelectPartsConfig `json:"select_parts" yaml:"select_parts"`
-	SetJSON     SetJSONConfig     `json:"set_json" yaml:"set_json"`
 	Split       struct{}          `json:"split" yaml:"split"`
 	Unarchive   UnarchiveConfig   `json:"unarchive" yaml:"unarchive"`
 }
@@ -91,7 +88,6 @@ func NewConfig() Config {
 		Conditional: NewConditionalConfig(),
 		Decompress:  NewDecompressConfig(),
 		Dedupe:      NewDedupeConfig(),
-		DeleteJSON:  NewDeleteJSONConfig(),
 		Filter:      NewFilterConfig(),
 		Grok:        NewGrokConfig(),
 		HashSample:  NewHashSampleConfig(),
@@ -100,9 +96,7 @@ func NewConfig() Config {
 		JSON:        NewJSONConfig(),
 		MergeJSON:   NewMergeJSONConfig(),
 		Sample:      NewSampleConfig(),
-		SelectJSON:  NewSelectJSONConfig(),
 		SelectParts: NewSelectPartsConfig(),
-		SetJSON:     NewSetJSONConfig(),
 		Split:       struct{}{},
 		Unarchive:   NewUnarchiveConfig(),
 	}

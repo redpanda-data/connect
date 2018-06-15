@@ -25,21 +25,18 @@ You can [find some examples here][0].
 6. [`conditional`](#conditional)
 7. [`decompress`](#decompress)
 8. [`dedupe`](#dedupe)
-9. [`delete_json`](#delete_json)
-10. [`filter`](#filter)
-11. [`grok`](#grok)
-12. [`hash_sample`](#hash_sample)
-13. [`insert_part`](#insert_part)
-14. [`jmespath`](#jmespath)
-15. [`json`](#json)
-16. [`merge_json`](#merge_json)
-17. [`noop`](#noop)
-18. [`sample`](#sample)
-19. [`select_json`](#select_json)
-20. [`select_parts`](#select_parts)
-21. [`set_json`](#set_json)
-22. [`split`](#split)
-23. [`unarchive`](#unarchive)
+9. [`filter`](#filter)
+10. [`grok`](#grok)
+11. [`hash_sample`](#hash_sample)
+12. [`insert_part`](#insert_part)
+13. [`jmespath`](#jmespath)
+14. [`json`](#json)
+15. [`merge_json`](#merge_json)
+16. [`noop`](#noop)
+17. [`sample`](#sample)
+18. [`select_parts`](#select_parts)
+19. [`split`](#split)
+20. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -250,26 +247,6 @@ dedupe:
 
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).
-
-## `delete_json`
-
-``` yaml
-type: delete_json
-delete_json:
-  parts: []
-  path: ""
-```
-
-DEPRECATED: Use [`json`](#json) instead.
-
-Parses a message part as a JSON blob, deletes a value at a given path (if it
-exists), and writes the modified JSON back to the message part.
-
-If the list of target parts is empty the processor will be applied to all
-message parts. Part indexes can be negative, and if so the part will be selected
-from the end counting backwards starting from -1. E.g. if part = -1 then the
-selected part will be the last part of the message, if part = -2 then the part
-before the last element with be selected, and so on.
 
 ## `filter`
 
@@ -531,56 +508,6 @@ Passes on a randomly sampled percentage of messages. The random seed is static
 in order to sample deterministically, but can be set in config to allow parallel
 samples that are unique.
 
-## `select_json`
-
-``` yaml
-type: select_json
-select_json:
-  parts: []
-  path: ""
-```
-
-DEPRECATED: Use [`json`](#json) instead.
-
-Parses a message part as a JSON blob and attempts to obtain a field within the
-structure identified by a dot path. If found successfully the value will become
-the new contents of the target message part according to its type, meaning a
-string field will be unquoted, but an object/array will remain valid JSON.
-
-For example, with the following config:
-
-``` yaml
-select_json:
-  parts: [0]
-  path: foo.bar
-```
-
-If the initial contents of part 0 were:
-
-``` json
-{"foo":{"bar":"1", "baz":"2"}}
-```
-
-Then the resulting contents of part 0 would be: `1`. However, if the
-initial contents of part 0 were:
-
-``` json
-{"foo":{"bar":{"baz":"1"}}}
-```
-
-The resulting contents of part 0 would be: `{"baz":"1"}`
-
-Sometimes messages are received in an enveloped form, where the real payload is
-a field inside a larger JSON structure. The 'select_json' processor can extract
-the payload into the message contents as a valid JSON structure in this case
-even if the payload is an escaped string.
-
-If the list of target parts is empty the processor will be applied to all
-message parts. Part indexes can be negative, and if so the part will be selected
-from the end counting backwards starting from -1. E.g. if part = -1 then the
-selected part will be the last part of the message, if part = -2 then the part
-before the last element with be selected, and so on.
-
 ## `select_parts`
 
 ``` yaml
@@ -604,49 +531,6 @@ Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if index = -1 then the selected part
 will be the last part of the message, if index = -2 then the part before the
 last element with be selected, and so on.
-
-## `set_json`
-
-``` yaml
-type: set_json
-set_json:
-  parts: []
-  path: ""
-  value: ""
-```
-
-DEPRECATED: Use [`json`](#json) instead.
-
-Parses a message part as a JSON blob, sets a path to a value, and writes the
-modified JSON back to the message part.
-
-Values can be any value type, including objects and arrays. When using YAML
-configuration files a YAML object will be converted into a JSON object, i.e.
-with the config:
-
-``` yaml
-set_json:
-  parts: [0]
-  path: some.path
-  value:
-    foo:
-      bar: 5
-```
-
-The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
-contains keys that aren't strings those fields will be ignored.
-
-If the path is empty or "." the original contents of the target message part
-will be overridden entirely by the contents of 'value'.
-
-If the list of target parts is empty the processor will be applied to all
-message parts. Part indexes can be negative, and if so the part will be selected
-from the end counting backwards starting from -1. E.g. if part = -1 then the
-selected part will be the last part of the message, if part = -2 then the part
-before the last element with be selected, and so on.
-
-This processor will interpolate functions within the 'value' field, you can find
-a list of functions [here](../config_interpolation.md#functions).
 
 ## `split`
 

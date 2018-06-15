@@ -239,9 +239,6 @@ input:
       - 0
       json_paths: []
       drop_on_err: true
-    delete_json:
-      parts: []
-      path: ""
     filter:
       type: content
       and: []
@@ -288,16 +285,9 @@ input:
     sample:
       retain: 10
       seed: 0
-    select_json:
-      parts: []
-      path: ""
     select_parts:
       parts:
       - 0
-    set_json:
-      parts: []
-      path: ""
-      value: ""
     split: {}
     unarchive:
       format: binary

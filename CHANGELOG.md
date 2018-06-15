@@ -5,18 +5,21 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.14.0 - 2018-06-15
+
 ### Added
 
 - More granular config options in the `http_client` output for controlling retry
   logic.
 - New `try` pattern for the output `broker` type, which can be used in order to
   configure fallback outputs.
-- New `json` processor, this will eventually replace `delete_json`,
-  `select_json`, `set_json` etc.
+- New `json` processor, this replaces `delete_json`, `select_json`, `set_json`.
 
 ### Changed
 
 - The `streams` API endpoints have been changed to become more "RESTy".
+- Removed the `delete_json`, `select_json` and `set_json` processors, please use
+  the `json` processor instead.
 
 ## 0.13.5 - 2018-06-10
 
