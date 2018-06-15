@@ -15,7 +15,7 @@
   "/ping": "Ping Benthos.",
   "/post": "Post a message into Benthos.",
   "/stats": "Returns a JSON object of Benthos metrics.",
-  "/stream/{id}": "Perform CRUD operations on streams, supporting POST (Create), GET (Read), PUT (Update) and DELETE (Delete).",
+  "/streams/{id}": "Perform CRUD operations on streams, supporting POST (Create), GET (Read), PUT (Update) and DELETE (Delete).",
   "/streams": "List all streams along with their status and uptimes.",
   "/version": "Returns the Benthos version."
 }

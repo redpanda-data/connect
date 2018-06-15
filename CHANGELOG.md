@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
   logic.
 - New `try` pattern for the output `broker` type, which can be used in order to
   configure fallback outputs.
+- New `json` processor, this will eventually replace `delete_json`,
+  `select_json`, `set_json` etc.
+
+### Changed
+
+- The `streams` API endpoints have been changed to become more "RESTy".
 
 ## 0.13.5 - 2018-06-10
 

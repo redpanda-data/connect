@@ -37,6 +37,8 @@ func init() {
 	Constructors["select_json"] = TypeSpec{
 		constructor: NewSelectJSON,
 		description: `
+DEPRECATED: Use [` + "`json`" + `](#json) instead.
+
 Parses a message part as a JSON blob and attempts to obtain a field within the
 structure identified by a dot path. If found successfully the value will become
 the new contents of the target message part according to its type, meaning a

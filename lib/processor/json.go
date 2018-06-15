@@ -1,0 +1,391 @@
+// Copyright (c) 2018 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package processor
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/util/text"
+	"github.com/Jeffail/gabs"
+)
+
+//------------------------------------------------------------------------------
+
+func init() {
+	Constructors["json"] = TypeSpec{
+		constructor: NewJSON,
+		description: `
+Parses a message part as a JSON blob, performs a mutation on the data, and then
+overwrites the previous contents with the new value.
+
+If the path is empty or "." the root of the data will be targeted.
+
+If the list of target parts is empty the processor will be applied to all
+message parts. Part indexes can be negative, and if so the part will be selected
+from the end counting backwards starting from -1. E.g. if part = -1 then the
+selected part will be the last part of the message, if part = -2 then the part
+before the last element with be selected, and so on.
+
+This processor will interpolate functions within the 'value' field, you can find
+a list of functions [here](../config_interpolation.md#functions).
+
+### Operations
+
+#### ` + "`set`" + `
+
+Sets the value of a field at a dot path. If the path does not exist all objects
+in the path are created (unless there is a collision).
+
+The value can be any type, including objects and arrays. When using YAML
+configuration files a YAML object will be converted into a JSON object, i.e.
+with the config:
+
+` + "``` yaml" + `
+json:
+  parts: [0]
+  path: some.path
+  value:
+    foo:
+      bar: 5
+` + "```" + `
+
+The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
+contains keys that aren't strings those fields will be ignored.
+
+#### ` + "`append`" + `
+
+Appends a value to an array at a target dot path. If the path does not exist all
+objects in the path are created (unless there is a collision).
+
+If a non-array value already exists in the target path it will be replaced by an
+array containing the original value as well as the new value.
+
+#### ` + "`delete`" + `
+
+Removes a key identified by the dot path. If the path does not exist this is a
+no-op.
+
+#### ` + "`select`" + `
+
+Reads the value found at a dot path and replaced the original contents entirely
+by the new value.`,
+	}
+}
+
+//------------------------------------------------------------------------------
+
+type rawJSONValue []byte
+
+func (r *rawJSONValue) UnmarshalJSON(bytes []byte) error {
+	*r = append((*r)[0:0], bytes...)
+	return nil
+}
+
+func (r rawJSONValue) MarshalJSON() ([]byte, error) {
+	if r == nil {
+		return []byte("null"), nil
+	}
+	return r, nil
+}
+
+func (r *rawJSONValue) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var yamlObj interface{}
+	if err := unmarshal(&yamlObj); err != nil {
+		return err
+	}
+
+	var convertMap func(m map[interface{}]interface{}) map[string]interface{}
+	convertMap = func(m map[interface{}]interface{}) map[string]interface{} {
+		newMap := map[string]interface{}{}
+		for k, v := range m {
+			keyStr, ok := k.(string)
+			if !ok {
+				continue
+			}
+			newVal := v
+			if iMap, isIMap := v.(map[interface{}]interface{}); isIMap {
+				newVal = convertMap(iMap)
+			}
+			newMap[keyStr] = newVal
+		}
+		return newMap
+	}
+
+	if iMap, isIMap := yamlObj.(map[interface{}]interface{}); isIMap {
+		yamlObj = convertMap(iMap)
+	}
+
+	rawJSON, err := json.Marshal(yamlObj)
+	if err != nil {
+		return err
+	}
+
+	*r = append((*r)[0:0], rawJSON...)
+	return nil
+}
+
+func (r rawJSONValue) MarshalYAML() (interface{}, error) {
+	var val interface{}
+	if err := json.Unmarshal(r, &val); err != nil {
+		return nil, err
+	}
+	return val, nil
+}
+
+//------------------------------------------------------------------------------
+
+// JSONConfig contains any configuration for the JSON processor.
+type JSONConfig struct {
+	Parts    []int        `json:"parts" yaml:"parts"`
+	Operator string       `json:"operator" yaml:"operator"`
+	Path     string       `json:"path" yaml:"path"`
+	Value    rawJSONValue `json:"value" yaml:"value"`
+}
+
+// NewJSONConfig returns a JSONConfig with default values.
+func NewJSONConfig() JSONConfig {
+	return JSONConfig{
+		Parts:    []int{},
+		Operator: "get",
+		Path:     "",
+		Value:    rawJSONValue(`""`),
+	}
+}
+
+//------------------------------------------------------------------------------
+
+type jsonOperator func(body, value interface{}) (interface{}, error)
+
+func newSetOperator(path []string) jsonOperator {
+	return func(body, value interface{}) (interface{}, error) {
+		if len(path) == 0 {
+			return value, nil
+		}
+
+		gPart, err := gabs.Consume(body)
+		if err != nil {
+			return nil, err
+		}
+
+		gPart.Set(value, path...)
+		return gPart.Data(), nil
+	}
+}
+
+func newSelectOperator(path []string) jsonOperator {
+	return func(body, value interface{}) (interface{}, error) {
+		gPart, err := gabs.Consume(body)
+		if err != nil {
+			return nil, err
+		}
+
+		target := gPart
+		if len(path) > 0 {
+			target = gPart.Search(path...)
+		}
+
+		switch t := target.Data().(type) {
+		case string:
+			return rawJSONValue(t), nil
+		case json.Number:
+			return rawJSONValue(t.String()), nil
+		}
+
+		return target.Data(), nil
+	}
+}
+
+func newDeleteOperator(path []string) jsonOperator {
+	return func(body, value interface{}) (interface{}, error) {
+		if len(path) == 0 {
+			return nil, nil
+		}
+
+		gPart, err := gabs.Consume(body)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = gPart.Delete(path...); err != nil {
+			return nil, err
+		}
+		return gPart.Data(), nil
+	}
+}
+
+func newAppendOperator(path []string) jsonOperator {
+	return func(body, value interface{}) (interface{}, error) {
+		gPart, err := gabs.Consume(body)
+		if err != nil {
+			return nil, err
+		}
+
+		var array []interface{}
+
+		switch t := gPart.S(path...).Data().(type) {
+		case []interface{}:
+			t = append(t, value)
+			array = t
+		case nil:
+			array = []interface{}{value}
+		default:
+			array = []interface{}{t, value}
+		}
+		gPart.Set(array, path...)
+
+		return gPart.Data(), nil
+	}
+}
+
+func getOperator(opStr string, path []string) (jsonOperator, error) {
+	switch opStr {
+	case "set":
+		return newSetOperator(path), nil
+	case "select":
+		return newSelectOperator(path), nil
+	case "delete":
+		return newDeleteOperator(path), nil
+	case "append":
+		return newAppendOperator(path), nil
+	}
+	return nil, fmt.Errorf("operator not recognised: %v", opStr)
+}
+
+//------------------------------------------------------------------------------
+
+// JSON is a processor that performs an operation on a JSON payload.
+type JSON struct {
+	parts       []int
+	interpolate bool
+	valueBytes  rawJSONValue
+	operator    jsonOperator
+
+	conf  Config
+	log   log.Modular
+	stats metrics.Type
+
+	mCount    metrics.StatCounter
+	mErrJSONP metrics.StatCounter
+	mErrJSONS metrics.StatCounter
+	mErr      metrics.StatCounter
+	mSucc     metrics.StatCounter
+	mSent     metrics.StatCounter
+}
+
+// NewJSON returns a JSON processor.
+func NewJSON(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
+	j := &JSON{
+		conf:  conf,
+		log:   log.NewModule(".processor.json"),
+		stats: stats,
+
+		valueBytes: conf.JSON.Value,
+
+		mCount:    stats.GetCounter("processor.json.count"),
+		mErrJSONP: stats.GetCounter("processor.json.error.json_parse"),
+		mErrJSONS: stats.GetCounter("processor.json.error.json_set"),
+		mErr:      stats.GetCounter("processor.json.error"),
+		mSucc:     stats.GetCounter("processor.json.success"),
+		mSent:     stats.GetCounter("processor.json.sent"),
+	}
+
+	j.interpolate = text.ContainsFunctionVariables(j.valueBytes)
+
+	splitPath := strings.Split(conf.JSON.Path, ".")
+	if len(conf.JSON.Path) == 0 || conf.JSON.Path == "." {
+		splitPath = []string{}
+	}
+
+	var err error
+	if j.operator, err = getOperator(conf.JSON.Operator, splitPath); err != nil {
+		return nil, err
+	}
+	return j, nil
+}
+
+//------------------------------------------------------------------------------
+
+// ProcessMessage prepends a new message part to the message.
+func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+	p.mCount.Incr(1)
+
+	newMsg := msg.ShallowCopy()
+
+	valueBytes := p.valueBytes
+	if p.interpolate {
+		valueBytes = text.ReplaceFunctionVariables(valueBytes)
+	}
+
+	targetParts := p.parts
+	if len(targetParts) == 0 {
+		targetParts = make([]int, newMsg.Len())
+		for i := range targetParts {
+			targetParts[i] = i
+		}
+	}
+
+	for _, index := range targetParts {
+		var data interface{} = valueBytes
+
+		jsonPart, err := msg.GetJSON(index)
+		if err != nil {
+			p.mErrJSONP.Incr(1)
+			p.log.Debugf("Failed to parse part into json: %v\n", err)
+			continue
+		}
+
+		if data, err = p.operator(jsonPart, valueBytes); err != nil {
+			p.mErr.Incr(1)
+			p.log.Debugf("Failed to apply operator: %v\n", err)
+			continue
+		}
+
+		switch t := data.(type) {
+		case rawJSONValue:
+			newMsg.Set(index, []byte(t))
+		case []byte:
+			newMsg.Set(index, t)
+		default:
+			if err = newMsg.SetJSON(index, data); err != nil {
+				p.mErrJSONS.Incr(1)
+				p.log.Debugf("Failed to convert json into part: %v\n", err)
+			}
+		}
+
+		if err == nil {
+			p.mSucc.Incr(1)
+		}
+	}
+
+	msgs := [1]types.Message{newMsg}
+
+	p.mSent.Incr(1)
+	return msgs[:], nil
+}
+
+//------------------------------------------------------------------------------

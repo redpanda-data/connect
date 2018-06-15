@@ -46,7 +46,7 @@ func (m *Type) registerEndpoints() {
 		m.HandleStreamsCRUD,
 	)
 	m.manager.RegisterEndpoint(
-		"/stream/{id}",
+		"/streams/{id}",
 		"Perform CRUD operations on streams, supporting POST (Create),"+
 			" GET (Read), PUT (Update) and DELETE (Delete).",
 		m.HandleStreamCRUD,

@@ -44,7 +44,7 @@ request body are created.
 
 The streams were updated successfully.
 
-### POST `/stream/{id}`
+### POST `/streams/{id}`
 
 Create a new stream identified by `id` by posting a body containing the stream
 configuration in either JSON or YAML format. The configuration should be a
@@ -55,7 +55,7 @@ standard Benthos configuration containing the sections `input`, `buffer`,
 
 The stream was created successfully.
 
-### GET `/stream/{id}`
+### GET `/streams/{id}`
 
 Read the details of an existing stream identified by `id`.
 
@@ -70,7 +70,7 @@ Read the details of an existing stream identified by `id`.
 }
 ```
 
-### PUT `/stream/{id}`
+### PUT `/streams/{id}`
 
 Update an existing stream identified by `id` by posting a body containing the
 new stream configuration in either JSON or YAML format. The configuration should
@@ -84,7 +84,7 @@ place.
 
 The stream was updated successfully.
 
-### DELETE `/stream/{id}`
+### DELETE `/streams/{id}`
 
 Attempt to shut down and remove a stream identified by `id`.
 

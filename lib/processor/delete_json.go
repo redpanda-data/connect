@@ -36,6 +36,8 @@ func init() {
 	Constructors["delete_json"] = TypeSpec{
 		constructor: NewDeleteJSON,
 		description: `
+DEPRECATED: Use [` + "`json`" + `](#json) instead.
+
 Parses a message part as a JSON blob, deletes a value at a given path (if it
 exists), and writes the modified JSON back to the message part.
 

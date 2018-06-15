@@ -69,6 +69,7 @@ type Config struct {
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
 	JMESPath    JMESPathConfig    `json:"jmespath" yaml:"jmespath"`
+	JSON        JSONConfig        `json:"json" yaml:"json"`
 	MergeJSON   MergeJSONConfig   `json:"merge_json" yaml:"merge_json"`
 	Sample      SampleConfig      `json:"sample" yaml:"sample"`
 	SelectJSON  SelectJSONConfig  `json:"select_json" yaml:"select_json"`
@@ -96,6 +97,7 @@ func NewConfig() Config {
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),
 		JMESPath:    NewJMESPathConfig(),
+		JSON:        NewJSONConfig(),
 		MergeJSON:   NewMergeJSONConfig(),
 		Sample:      NewSampleConfig(),
 		SelectJSON:  NewSelectJSONConfig(),

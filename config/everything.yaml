@@ -277,6 +277,11 @@ input:
     jmespath:
       parts: []
       query: ""
+    json:
+      parts: []
+      operator: get
+      path: ""
+      value: ""
     merge_json:
       parts: []
       retain_parts: false

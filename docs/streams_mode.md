@@ -90,7 +90,7 @@ $ curl http://localhost:4195/streams | jq '.'
 And you can query the loaded configuration of a stream:
 
 ``` bash
-$ curl http://localhost:4195/stream/foo | jq '.'
+$ curl http://localhost:4195/streams/foo | jq '.'
 {
   "active": true,
   "uptime": 69.334717193,
