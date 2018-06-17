@@ -62,7 +62,7 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Type:       "http_server",
-		Prefix:     "service",
+		Prefix:     "benthos",
 		HTTP:       struct{}{},
 		Prometheus: struct{}{},
 		Statsd:     NewStatsdConfig(),

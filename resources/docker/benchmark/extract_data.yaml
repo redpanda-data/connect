@@ -5,7 +5,8 @@ input:
   type: kafka
   kafka:
     addresses:
-    - localhost:9092
+      - localhost:9092
+    consumer_group: sink_extractor
     topic: ${TARGET:logstash}_sink
 
 output:

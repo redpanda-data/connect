@@ -219,7 +219,16 @@
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
-      "seriesOverrides": [],
+      "seriesOverrides": [
+        {
+          "$$hashKey": "object:318",
+          "alias": "Average",
+          "color": "#6ed0e0",
+          "fill": 0,
+          "linewidth": 2,
+          "zindex": 1
+        }
+      ],
       "spaceLength": 10,
       "stack": false,
       "steppedLine": false,
@@ -231,6 +240,14 @@
           "intervalFactor": 1,
           "legendFormat": "{{cpu}}",
           "refId": "A"
+        },
+        {
+          "$$hashKey": "object:274",
+          "expr": "avg(rate(node_cpu_seconds_total{mode=\"user\"}[10s]))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "Average",
+          "refId": "B"
         }
       ],
       "thresholds": [],

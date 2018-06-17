@@ -103,7 +103,7 @@ type LoggerConfig struct {
 // each field.
 func NewLoggerConfig() LoggerConfig {
 	return LoggerConfig{
-		Prefix:       "service",
+		Prefix:       "benthos",
 		LogLevel:     "INFO",
 		AddTimeStamp: true,
 		JSONFormat:   true,

@@ -206,7 +206,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 		if requestErr != nil {
 			m.logger.Debugf("Streams request CRUD Error: %v\n", requestErr)
-			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadRequest)
+			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
 		}
 	}()
 
