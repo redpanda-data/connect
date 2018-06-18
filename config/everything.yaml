@@ -486,7 +486,7 @@ resources:
       static: true
       xor: []
 logger:
-  prefix: service
+  prefix: benthos
   log_level: INFO
   add_timestamp: true
   json_format: true
