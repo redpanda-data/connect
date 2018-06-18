@@ -262,14 +262,16 @@ func newAppendOperator(path []string) jsonOperator {
 			array = append(array, t)
 		}
 
-		switch t := gPart.S(path...).Data().(type) {
-		case []interface{}:
-			t = append(t, array...)
-			array = t
-		case nil:
-			array = append([]interface{}{t}, array...)
-		default:
-			array = append([]interface{}{t}, array...)
+		if gTarget := gPart.S(path...); gTarget != nil {
+			switch t := gTarget.Data().(type) {
+			case []interface{}:
+				t = append(t, array...)
+				array = t
+			case nil:
+				array = append([]interface{}{t}, array...)
+			default:
+				array = append([]interface{}{t}, array...)
+			}
 		}
 		gPart.Set(array, path...)
 

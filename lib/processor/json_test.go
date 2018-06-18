@@ -166,6 +166,13 @@ func TestJSONAppend(t *testing.T) {
 			output: `{"foo":{"bar":[null,{"baz":1}]}}`,
 		},
 		{
+			name:   "append empty 1",
+			path:   "foo.bar",
+			value:  `{"baz":1}`,
+			input:  `{"foo":{}}`,
+			output: `{"foo":{"bar":[{"baz":1}]}}`,
+		},
+		{
 			name:   "append collision 1",
 			path:   "foo.bar",
 			value:  `{"baz":1}`,
