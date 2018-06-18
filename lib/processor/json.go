@@ -65,6 +65,7 @@ with the config:
 
 ` + "``` yaml" + `
 json:
+  operator: set
   parts: [0]
   path: some.path
   value:
@@ -82,6 +83,11 @@ objects in the path are created (unless there is a collision).
 
 If a non-array value already exists in the target path it will be replaced by an
 array containing the original value as well as the new value.
+
+If the value is an array the elements of the array are expanded into the new
+array. E.g. if the target is an array ` + "`[0,1]`" + ` and the value is also an
+array ` + "`[2,3]`" + `, the result will be ` + "`[0,1,2,3]`" + ` as opposed to
+` + "`[0,1,[2,3]]`" + `.
 
 #### ` + "`delete`" + `
 
@@ -177,10 +183,10 @@ func NewJSONConfig() JSONConfig {
 
 //------------------------------------------------------------------------------
 
-type jsonOperator func(body, value interface{}) (interface{}, error)
+type jsonOperator func(body interface{}, value rawJSONValue) (interface{}, error)
 
 func newSetOperator(path []string) jsonOperator {
-	return func(body, value interface{}) (interface{}, error) {
+	return func(body interface{}, value rawJSONValue) (interface{}, error) {
 		if len(path) == 0 {
 			return value, nil
 		}
@@ -196,7 +202,7 @@ func newSetOperator(path []string) jsonOperator {
 }
 
 func newSelectOperator(path []string) jsonOperator {
-	return func(body, value interface{}) (interface{}, error) {
+	return func(body interface{}, value rawJSONValue) (interface{}, error) {
 		gPart, err := gabs.Consume(body)
 		if err != nil {
 			return nil, err
@@ -219,7 +225,7 @@ func newSelectOperator(path []string) jsonOperator {
 }
 
 func newDeleteOperator(path []string) jsonOperator {
-	return func(body, value interface{}) (interface{}, error) {
+	return func(body interface{}, value rawJSONValue) (interface{}, error) {
 		if len(path) == 0 {
 			return nil, nil
 		}
@@ -237,7 +243,7 @@ func newDeleteOperator(path []string) jsonOperator {
 }
 
 func newAppendOperator(path []string) jsonOperator {
-	return func(body, value interface{}) (interface{}, error) {
+	return func(body interface{}, value rawJSONValue) (interface{}, error) {
 		gPart, err := gabs.Consume(body)
 		if err != nil {
 			return nil, err
@@ -245,14 +251,25 @@ func newAppendOperator(path []string) jsonOperator {
 
 		var array []interface{}
 
+		var valueParsed interface{}
+		if err = json.Unmarshal(value, &valueParsed); err != nil {
+			return nil, err
+		}
+		switch t := valueParsed.(type) {
+		case []interface{}:
+			array = t
+		default:
+			array = append(array, t)
+		}
+
 		switch t := gPart.S(path...).Data().(type) {
 		case []interface{}:
-			t = append(t, value)
+			t = append(t, array...)
 			array = t
 		case nil:
-			array = []interface{}{value}
+			array = append([]interface{}{t}, array...)
 		default:
-			array = []interface{}{t, value}
+			array = append([]interface{}{t}, array...)
 		}
 		gPart.Set(array, path...)
 

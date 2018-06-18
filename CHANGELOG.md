@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.14.2 - 2018-06-18
+
+## Changed
+
+- The `json` processor will now `append` array values in expanded form.
+
 ## 0.14.0 - 2018-06-15
 
 ### Added

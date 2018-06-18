@@ -152,6 +152,20 @@ func TestJSONAppend(t *testing.T) {
 			output: `{"foo":{"bar":[5,{"baz":1}]}}`,
 		},
 		{
+			name:   "append nil 1",
+			path:   "foo.bar",
+			value:  `{"baz":1}`,
+			input:  `{"foo":{"bar":null}}`,
+			output: `{"foo":{"bar":[null,{"baz":1}]}}`,
+		},
+		{
+			name:   "append nil 2",
+			path:   "foo.bar",
+			value:  `{"baz":1}`,
+			input:  `{"foo":{"bar":[null]}}`,
+			output: `{"foo":{"bar":[null,{"baz":1}]}}`,
+		},
+		{
 			name:   "append collision 1",
 			path:   "foo.bar",
 			value:  `{"baz":1}`,
@@ -163,7 +177,14 @@ func TestJSONAppend(t *testing.T) {
 			path:   "foo.bar",
 			value:  `[1,2,3]`,
 			input:  `{"foo":{"bar":[0]}}`,
-			output: `{"foo":{"bar":[0,[1,2,3]]}}`,
+			output: `{"foo":{"bar":[0,1,2,3]}}`,
+		},
+		{
+			name:   "append array 2",
+			path:   "foo.bar",
+			value:  `[1,2,3]`,
+			input:  `{"foo":{"bar":0}}`,
+			output: `{"foo":{"bar":[0,1,2,3]}}`,
 		},
 	}
 
