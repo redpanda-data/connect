@@ -333,7 +333,7 @@ func main() {
 	}
 
 	// Create our metrics type.
-	stats, err := metrics.New(config.Metrics)
+	stats, err := metrics.New(config.Metrics, metrics.OptSetLogger(logger))
 	if err != nil {
 		logger.Errorf("Metrics error: %v\n", err)
 		os.Exit(1)

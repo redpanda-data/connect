@@ -22,6 +22,8 @@ package metrics
 
 import (
 	"strings"
+
+	"github.com/Jeffail/benthos/lib/util/service/log"
 )
 
 //------------------------------------------------------------------------------
@@ -115,6 +117,10 @@ func (h *WrappedFlat) Timing(stat string, delta int64) error {
 // Gauge sets a stat as a gauge value.
 func (h *WrappedFlat) Gauge(stat string, value int64) error {
 	return h.f.Gauge(stat, value)
+}
+
+// SetLogger does nothing.
+func (h *WrappedFlat) SetLogger(log log.Modular) {
 }
 
 // Close stops the WrappedFlat object from aggregating metrics and cleans up

@@ -20,7 +20,11 @@
 
 package metrics
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/Jeffail/benthos/lib/util/service/log"
+)
 
 // StatCounter is a representation of a single counter metric stat. Interactions
 // with this stat are thread safe.
@@ -56,6 +60,9 @@ type Type interface {
 
 	// GetGauge returns an editable gauge stat for a given path.
 	GetGauge(path ...string) StatGauge
+
+	// SetLogger sets the logging mechanism of the metrics type.
+	SetLogger(log log.Modular)
 
 	Flat
 }

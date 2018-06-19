@@ -22,9 +22,11 @@ package metrics
 
 import (
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/util/service/log"
 	"gopkg.in/alexcesaro/statsd.v2"
 )
 
@@ -97,28 +99,46 @@ func (s *StatsdStat) Gauge(value int64) error {
 type Statsd struct {
 	config Config
 	s      *statsd.Client
+	log    log.Modular
 }
 
 // NewStatsd creates and returns a new Statsd object.
-func NewStatsd(config Config) (Type, error) {
+func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 	flushPeriod, err := time.ParseDuration(config.Statsd.FlushPeriod)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse flush period: %s", err)
 	}
-	c, err := statsd.New(
-		statsd.Address(config.Statsd.Address),
-		statsd.FlushPeriod(flushPeriod),
-		statsd.MaxPacketSize(config.Statsd.MaxPacketSize),
-		statsd.Network(config.Statsd.Network),
-		statsd.Prefix(config.Prefix),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &Statsd{
+	s := &Statsd{
 		config: config,
-		s:      c,
-	}, nil
+		log:    log.NewLogger(ioutil.Discard, log.LoggerConfig{LogLevel: "OFF"}),
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	tErrReported := time.Now()
+
+	var c *statsd.Client
+	for c == nil || err != nil {
+		if c, err = statsd.New(
+			statsd.Address(config.Statsd.Address),
+			statsd.FlushPeriod(flushPeriod),
+			statsd.MaxPacketSize(config.Statsd.MaxPacketSize),
+			statsd.Network(config.Statsd.Network),
+			statsd.Prefix(config.Prefix),
+			statsd.ErrorHandler(func(err error) {
+				if time.Since(tErrReported) > time.Second {
+					s.log.Errorf("Failed to push metrics: %v\n", err)
+					tErrReported = time.Now()
+				}
+			}),
+		); err != nil {
+			s.log.Errorf("Failed to connect to statsd endpoint: %v\n", err)
+			<-time.After(time.Second)
+		}
+	}
+	s.s = c
+	return s, nil
 }
 
 //------------------------------------------------------------------------------
@@ -169,6 +189,11 @@ func (h *Statsd) Timing(stat string, delta int64) error {
 func (h *Statsd) Gauge(stat string, value int64) error {
 	h.s.Gauge(stat, value)
 	return nil
+}
+
+// SetLogger sets the logger used to print connection errors.
+func (h *Statsd) SetLogger(log log.Modular) {
+	h.log = log
 }
 
 // Close stops the Statsd object from aggregating metrics and cleans up

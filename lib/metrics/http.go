@@ -30,6 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/Jeffail/gabs"
 )
 
@@ -96,12 +97,16 @@ type HTTP struct {
 }
 
 // NewHTTP creates and returns a new HTTP object.
-func NewHTTP(config Config) (Type, error) {
+func NewHTTP(config Config, opts ...func(Type)) (Type, error) {
 	t := &HTTP{
 		flatCounters: map[string]*int64{},
 		flatTimings:  map[string]*int64{},
 		pathPrefix:   config.Prefix,
 		timestamp:    time.Now(),
+	}
+
+	for _, opt := range opts {
+		opt(t)
 	}
 
 	return t, nil
@@ -254,6 +259,9 @@ func (h *HTTP) Gauge(stat string, value int64) error {
 	h.Unlock()
 	return nil
 }
+
+// SetLogger does nothing.
+func (h *HTTP) SetLogger(log log.Modular) {}
 
 // Close stops the HTTP object from aggregating metrics and cleans up resources.
 func (h *HTTP) Close() error {

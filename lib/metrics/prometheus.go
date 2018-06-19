@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Jeffail/benthos/lib/util/service/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -104,13 +105,19 @@ type Prometheus struct {
 }
 
 // NewPrometheus creates and returns a new Prometheus object.
-func NewPrometheus(config Config) (Type, error) {
-	return &Prometheus{
+func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
+	p := &Prometheus{
 		config: config,
 		prefix: toPromName(config.Prefix),
 		gauges: map[string]prometheus.Gauge{},
 		timers: map[string]prometheus.Summary{},
-	}, nil
+	}
+
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p, nil
 }
 
 //------------------------------------------------------------------------------
@@ -279,6 +286,10 @@ func (p *Prometheus) Gauge(stat string, value int64) error {
 	}
 	p.Unlock()
 	return nil
+}
+
+// SetLogger does nothing.
+func (p *Prometheus) SetLogger(log log.Modular) {
 }
 
 // Close stops the Prometheus object from aggregating metrics and cleans up

@@ -20,6 +20,8 @@
 
 package metrics
 
+import "github.com/Jeffail/benthos/lib/util/service/log"
+
 //------------------------------------------------------------------------------
 
 // namespacedWrapper wraps an existing Type under a namespace. The full path of
@@ -68,6 +70,10 @@ func (d namespacedWrapper) Timing(path string, delta int64) error {
 
 func (d namespacedWrapper) Gauge(path string, value int64) error {
 	return d.t.Gauge(d.ns+"."+path, value)
+}
+
+func (d namespacedWrapper) SetLogger(log log.Modular) {
+	d.t.SetLogger(log.NewModule(d.ns))
 }
 
 func (d namespacedWrapper) Close() error {
