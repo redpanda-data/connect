@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.14.4 - 2018-06-19
+
+## Changed
+
+- The `statsd` metrics target will now periodically report connection errors.
+
 ## 0.14.2 - 2018-06-18
 
 ## Changed
