@@ -31,7 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -143,14 +143,14 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 		func() (pipeline.Type, error) {
 			proc, err := processor.New(
 				firstProc, nil,
-				log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+				log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 				metrics.DudType{},
 			)
 			if err != nil {
 				return nil, err
 			}
 			return pipeline.NewProcessor(
-				log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+				log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 				metrics.DudType{},
 				proc,
 			), nil
@@ -158,14 +158,14 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 		func() (pipeline.Type, error) {
 			proc, err := processor.New(
 				secondProc, nil,
-				log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+				log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 				metrics.DudType{},
 			)
 			if err != nil {
 				return nil, err
 			}
 			return pipeline.NewProcessor(
-				log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+				log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 				metrics.DudType{},
 				proc,
 			), nil

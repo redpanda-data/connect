@@ -27,7 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/ory/dockertest"
 )
 
@@ -52,7 +52,7 @@ func TestMemcachedIntegration(t *testing.T) {
 		conf := NewConfig()
 		conf.Memcached.Addresses = addrs
 
-		testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+		testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 		_, cErr := NewMemcached(conf, nil, testLog, metrics.DudType{})
 		return cErr
 	}); err != nil {
@@ -77,7 +77,7 @@ func testMemcachedAddDuplicate(addrs []string, t *testing.T) {
 	conf := NewConfig()
 	conf.Memcached.Addresses = addrs
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	c, err := NewMemcached(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +116,7 @@ func testMemcachedGetAndSet(addrs []string, t *testing.T) {
 	conf := NewConfig()
 	conf.Memcached.Addresses = addrs
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	c, err := NewMemcached(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)

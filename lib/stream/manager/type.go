@@ -36,7 +36,7 @@ import (
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -145,7 +145,7 @@ func New(opts ...func(*Type)) *Type {
 		manager:    types.DudMgr{},
 		stats:      metrics.DudType{},
 		apiTimeout: time.Second * 5,
-		logger:     log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		logger:     log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 	}
 	for _, opt := range opts {
 		opt(t)

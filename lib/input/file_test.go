@@ -28,7 +28,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestFileSinglePart(t *testing.T) {
@@ -53,7 +53,7 @@ func TestFileSinglePart(t *testing.T) {
 	conf := NewConfig()
 	conf.File.Path = tmpfile.Name()
 
-	f, err := NewFile(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	f, err := NewFile(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -133,7 +133,7 @@ func TestFileMultiPart(t *testing.T) {
 	conf.File.Path = tmpfile.Name()
 	conf.File.Multipart = true
 
-	f, err := NewFile(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	f, err := NewFile(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

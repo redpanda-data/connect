@@ -23,6 +23,7 @@ package log
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"strconv"
 	"strings"
 	"time"
@@ -91,18 +92,17 @@ func logLevelToInt(level string) int {
 
 //------------------------------------------------------------------------------
 
-// LoggerConfig holds configuration options for a logger object.
-type LoggerConfig struct {
+// Config holds configuration options for a logger object.
+type Config struct {
 	Prefix       string `json:"prefix" yaml:"prefix"`
 	LogLevel     string `json:"log_level" yaml:"log_level"`
 	AddTimeStamp bool   `json:"add_timestamp" yaml:"add_timestamp"`
 	JSONFormat   bool   `json:"json_format" yaml:"json_format"`
 }
 
-// NewLoggerConfig returns a logger configuration with the default values for
-// each field.
-func NewLoggerConfig() LoggerConfig {
-	return LoggerConfig{
+// NewConfig returns a config struct with the default values for each field.
+func NewConfig() Config {
+	return Config{
 		Prefix:       "benthos",
 		LogLevel:     "INFO",
 		AddTimeStamp: true,
@@ -115,18 +115,27 @@ func NewLoggerConfig() LoggerConfig {
 // Logger is an object with support for levelled logging and modular components.
 type Logger struct {
 	stream io.Writer
-	config LoggerConfig
+	config Config
 	level  int
 }
 
-// NewLogger creates and returns a new logger object.
-func NewLogger(stream io.Writer, config LoggerConfig) Modular {
+// New creates and returns a new logger object.
+func New(stream io.Writer, config Config) Modular {
 	logger := Logger{
 		stream: stream,
 		config: config,
 		level:  logLevelToInt(config.LogLevel),
 	}
 	return &logger
+}
+
+// Noop creates and returns a new logger object that writes nothing.
+func Noop() Modular {
+	return &Logger{
+		stream: ioutil.Discard,
+		config: NewConfig(),
+		level:  LogOff,
+	}
 }
 
 // NewModule creates a new logger object from the previous, using the same

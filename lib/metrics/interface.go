@@ -23,7 +23,7 @@ package metrics
 import (
 	"net/http"
 
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 // StatCounter is a representation of a single counter metric stat. Interactions

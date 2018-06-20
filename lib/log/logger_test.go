@@ -35,7 +35,7 @@ func (l *LogBuffer) Write(p []byte) (n int, err error) {
 }
 
 func TestModules(t *testing.T) {
-	loggerConfig := NewLoggerConfig()
+	loggerConfig := NewConfig()
 	loggerConfig.AddTimeStamp = false
 	loggerConfig.JSONFormat = false
 	loggerConfig.Prefix = "root"
@@ -43,7 +43,7 @@ func TestModules(t *testing.T) {
 
 	buf := LogBuffer{data: ""}
 
-	logger := NewLogger(&buf, loggerConfig)
+	logger := New(&buf, loggerConfig)
 	logger.Warnln("Warning message root module")
 
 	logger2 := logger.NewModule(".foo")
@@ -66,7 +66,7 @@ func TestModules(t *testing.T) {
 }
 
 func TestFormattedLogging(t *testing.T) {
-	loggerConfig := NewLoggerConfig()
+	loggerConfig := NewConfig()
 	loggerConfig.AddTimeStamp = false
 	loggerConfig.JSONFormat = false
 	loggerConfig.Prefix = "test"
@@ -74,7 +74,7 @@ func TestFormattedLogging(t *testing.T) {
 
 	buf := LogBuffer{data: ""}
 
-	logger := NewLogger(&buf, loggerConfig)
+	logger := New(&buf, loggerConfig)
 	logger.Fatalf("fatal test %v\n", 1)
 	logger.Errorf("error test %v\n", 2)
 	logger.Warnf("warn test %v\n", 3)
@@ -90,7 +90,7 @@ func TestFormattedLogging(t *testing.T) {
 }
 
 func TestLineLogging(t *testing.T) {
-	loggerConfig := NewLoggerConfig()
+	loggerConfig := NewConfig()
 	loggerConfig.AddTimeStamp = false
 	loggerConfig.JSONFormat = false
 	loggerConfig.Prefix = "test"
@@ -98,7 +98,7 @@ func TestLineLogging(t *testing.T) {
 
 	buf := LogBuffer{data: ""}
 
-	logger := NewLogger(&buf, loggerConfig)
+	logger := New(&buf, loggerConfig)
 	logger.Fatalln("fatal test")
 	logger.Errorln("error test")
 	logger.Warnln("warn test")
@@ -124,13 +124,13 @@ func (l *LogCounter) Write(p []byte) (n int, err error) {
 
 func TestLogLevels(t *testing.T) {
 	for i := 0; i < LogAll; i++ {
-		loggerConfig := NewLoggerConfig()
+		loggerConfig := NewConfig()
 		loggerConfig.JSONFormat = false
 		loggerConfig.LogLevel = intToLogLevel(i)
 
 		buf := LogCounter{count: 0}
 
-		logger := NewLogger(&buf, loggerConfig)
+		logger := New(&buf, loggerConfig)
 		logger.Fatalln("fatal test")
 		logger.Errorln("error test")
 		logger.Warnln("warn test")

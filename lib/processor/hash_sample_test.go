@@ -27,7 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestHashSample(t *testing.T) {
@@ -84,7 +84,7 @@ func TestHashSample(t *testing.T) {
 			conf.HashSample.RetainMax = tc.max
 			conf.HashSample.Parts = []int{0}
 
-			testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+			testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 			proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
 			if err != nil {
 				t.Error(err)
@@ -136,7 +136,7 @@ func TestHashSamplePartSelection(t *testing.T) {
 			conf.HashSample.RetainMax = 44.9
 			conf.HashSample.Parts = []int{tc.selectPart}
 
-			testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+			testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 			proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
 			if err != nil {
 				t.Error(err)
@@ -166,7 +166,7 @@ func TestHashSampleBoundsCheck(t *testing.T) {
 	conf := NewConfig()
 	conf.HashSample.Parts = []int{5}
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +187,7 @@ func TestHashSampleNegBoundsCheck(t *testing.T) {
 	conf := NewConfig()
 	conf.HashSample.Parts = []int{-5}
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)

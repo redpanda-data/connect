@@ -32,7 +32,7 @@ import (
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -62,7 +62,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	t := &Type{
 		conf:    conf,
 		stats:   metrics.DudType{},
-		logger:  log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		logger:  log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 		manager: types.DudMgr{},
 		onClose: func() {},
 	}

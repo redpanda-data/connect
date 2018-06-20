@@ -29,14 +29,14 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestCompressBadAlgo(t *testing.T) {
 	conf := NewConfig()
 	conf.Compress.Algorithm = "does not exist"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	_, err := NewCompress(conf, nil, testLog, metrics.DudType{})
 	if err == nil {
@@ -48,7 +48,7 @@ func TestCompressGZIP(t *testing.T) {
 	conf := NewConfig()
 	conf.Compress.Algorithm = "gzip"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -93,7 +93,7 @@ func TestCompressGZIP(t *testing.T) {
 func TestCompressIndexBounds(t *testing.T) {
 	conf := NewConfig()
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	input := [][]byte{
 		[]byte("0"),
@@ -151,7 +151,7 @@ func TestCompressEmpty(t *testing.T) {
 	conf := NewConfig()
 	conf.Compress.Parts = []int{0, 1}
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewCompress(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)

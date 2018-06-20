@@ -26,11 +26,11 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestAndCheck(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
 	testMsg := types.NewMessage(
@@ -118,7 +118,7 @@ func TestAndCheck(t *testing.T) {
 }
 
 func TestAndBadOperator(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
 	cConf := NewConfig()

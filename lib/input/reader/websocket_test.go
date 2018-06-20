@@ -31,7 +31,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/gorilla/websocket"
 )
 
@@ -68,7 +68,7 @@ func TestWebsocketBasic(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := NewWebsocket(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewWebsocket(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestWebsocketClose(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := NewWebsocket(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewWebsocket(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}

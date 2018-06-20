@@ -28,14 +28,14 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestCombineTwoParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Combine.Parts = 2
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
@@ -60,7 +60,7 @@ func BenchmarkCombineMultiMessagesSharedBuffer(b *testing.B) {
 	conf := NewConfig()
 	conf.Combine.Parts = 3
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		b.Fatal(err)
@@ -99,7 +99,7 @@ func TestCombineLotsOfParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Combine.Parts = 2
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
@@ -127,7 +127,7 @@ func TestCombineTwoSingleParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Combine.Parts = 2
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
@@ -181,7 +181,7 @@ func TestCombineTwoDiffParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Combine.Parts = 2
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)

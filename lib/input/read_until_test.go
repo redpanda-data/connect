@@ -30,7 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestReadUntilInput(t *testing.T) {
@@ -85,7 +85,7 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	in, err := New(rConf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	in, err := New(rConf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func testReadUntilEarlyClose(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	in, err := New(rConf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func testReadUntilInputClose(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	in, err := New(rConf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func testReadUntilInputCloseRestart(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Condition = cond
 	rConf.ReadUntil.Restart = true
 
-	in, err := New(rConf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	in, err := New(rConf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -26,11 +26,11 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestContentCheck(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
 	type fields struct {
@@ -368,6 +368,78 @@ func TestContentCheck(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "regexp_partial 1",
+			fields: fields{
+				operator: "regexp_partial",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: [][]byte{
+				[]byte("hello 1a2 world"),
+			},
+			want: true,
+		},
+		{
+			name: "regexp_partial 2",
+			fields: fields{
+				operator: "regexp_partial",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: [][]byte{
+				[]byte("1a2"),
+			},
+			want: true,
+		},
+		{
+			name: "regexp_partial 3",
+			fields: fields{
+				operator: "regexp_partial",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: [][]byte{
+				[]byte("hello 12 world"),
+			},
+			want: false,
+		},
+		{
+			name: "regexp_exact 1",
+			fields: fields{
+				operator: "regexp_exact",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: [][]byte{
+				[]byte("hello 1a2 world"),
+			},
+			want: false,
+		},
+		{
+			name: "regexp_exact 2",
+			fields: fields{
+				operator: "regexp_exact",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: [][]byte{
+				[]byte("1a2"),
+			},
+			want: true,
+		},
+		{
+			name: "regexp_exact 3",
+			fields: fields{
+				operator: "regexp_exact",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: [][]byte{
+				[]byte("12"),
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -390,7 +462,7 @@ func TestContentCheck(t *testing.T) {
 }
 
 func TestContentBadOperator(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
 	conf := NewConfig()

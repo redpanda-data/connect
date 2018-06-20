@@ -29,7 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -212,7 +212,7 @@ func (m mockProc) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 func TestBasicWrapProcessors(t *testing.T) {
 	mockIn := &mockInput{ts: make(chan types.Transaction)}
 
-	l := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	l := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	s := metrics.DudType{}
 
 	pipe1 := pipeline.NewProcessor(l, s, mockProc{value: "foo"})
@@ -352,7 +352,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 func TestBasicWrapDoubleProcessors(t *testing.T) {
 	mockIn := &mockInput{ts: make(chan types.Transaction)}
 
-	l := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	l := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	s := metrics.DudType{}
 
 	pipe1 := pipeline.NewProcessor(l, s, mockProc{value: "foo"}, mockProc{value: "bar"})

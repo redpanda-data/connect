@@ -30,14 +30,14 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestArchiveBadAlgo(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "does not exist"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	_, err := NewArchive(conf, nil, testLog, metrics.DudType{})
 	if err == nil {
@@ -49,7 +49,7 @@ func TestArchiveTar(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "tar"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	exp := [][]byte{
 		[]byte("hello world first part"),
@@ -105,7 +105,7 @@ func TestArchiveBinary(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "binary"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
@@ -130,7 +130,7 @@ func TestArchiveBinary(t *testing.T) {
 func TestArchiveEmpty(t *testing.T) {
 	conf := NewConfig()
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)

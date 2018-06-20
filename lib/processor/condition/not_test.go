@@ -29,7 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -149,7 +149,7 @@ func TestNotConfigDefaultsYAML(t *testing.T) {
 }
 
 func TestNotCheck(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
 	type fields struct {
@@ -369,7 +369,7 @@ func TestNotCheck(t *testing.T) {
 }
 
 func TestNotBadOperator(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
 	cConf := NewConfig()

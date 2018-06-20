@@ -29,7 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/ory/dockertest"
 )
@@ -105,7 +105,7 @@ func testMQTTConnect(urls []string, t *testing.T) {
 	conf.Topics = []string{"test_input_1"}
 	conf.URLs = urls
 
-	m, err := NewMQTT(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewMQTT(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func testMQTTDisconnect(urls []string, t *testing.T) {
 	conf.Topics = []string{"test_input_1"}
 	conf.URLs = urls
 
-	m, err := NewMQTT(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewMQTT(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -33,7 +33,7 @@ import (
 	"github.com/Jeffail/benthos/lib/cache"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func init() {
@@ -65,7 +65,7 @@ func TestDedupe(t *testing.T) {
 	doc2 := []byte(rndText1) // duplicate
 	doc3 := []byte(rndText2)
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
 	if cacheErr != nil {
@@ -121,7 +121,7 @@ func TestDedupeJSONPaths(t *testing.T) {
 	doc3 := []byte(fmt.Sprintf(`{"id":"%s","content":"foo"}`, rndText2))
 	doc4 := []byte(`{"content":"foo"}`)
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
 	if cacheErr != nil {
@@ -221,7 +221,7 @@ func TestDedupeJSONMultiPaths(t *testing.T) {
 		},
 	}
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
 	if cacheErr != nil {
@@ -266,7 +266,7 @@ func TestDedupeJSONObjPaths(t *testing.T) {
 	doc3 := []byte(fmt.Sprintf(`{"id":{"test":"obj","key":"%s"},"content":"baz"}`, rndText2))
 	doc4 := []byte(`{"content":"baz"}`)
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
 	if cacheErr != nil {
@@ -332,7 +332,7 @@ func TestDedupeXXHash(t *testing.T) {
 	doc2 := []byte(rndText1) // duplicate
 	doc3 := []byte(rndText2)
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
 	if cacheErr != nil {
@@ -389,7 +389,7 @@ func TestDedupePartSelection(t *testing.T) {
 	doc2 := []byte(rndText1) // duplicate
 	doc3 := []byte(rndText2)
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
 	if cacheErr != nil {
@@ -442,7 +442,7 @@ func TestDedupeBadCache(t *testing.T) {
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	mgr := &fakeMgr{
 		caches: map[string]types.Cache{},
@@ -471,7 +471,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	mgr := &fakeMgr{
 		caches: map[string]types.Cache{
@@ -507,7 +507,7 @@ func TestDedupeBadHash(t *testing.T) {
 	conf.Dedupe.Cache = "foocache"
 	conf.Dedupe.HashType = "notexist"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
 	if cacheErr != nil {
@@ -528,7 +528,7 @@ func TestDedupeBoundsCheck(t *testing.T) {
 	conf.Dedupe.Cache = "foocache"
 	conf.Dedupe.Parts = []int{5}
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
 	if cacheErr != nil {
@@ -561,7 +561,7 @@ func TestDedupeNegBoundsCheck(t *testing.T) {
 	conf.Dedupe.Cache = "foocache"
 	conf.Dedupe.Parts = []int{-5}
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
 	if cacheErr != nil {

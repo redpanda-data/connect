@@ -32,7 +32,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -63,7 +63,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
 	}
 
-	fanIn, err := NewDynamicFanIn(Inputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	fanIn, err := NewDynamicFanIn(Inputs, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -122,7 +122,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 		TChan: make(chan types.Transaction),
 	}
 
-	fanIn, err := NewDynamicFanIn(nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	fanIn, err := NewDynamicFanIn(nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -228,7 +228,7 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 	inputRemovedList := []string{}
 
 	fanIn, err := NewDynamicFanIn(
-		Inputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		Inputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 		OptDynamicFanInSetOnAdd(func(label string) {
 			mapMut.Lock()
 			inputAddedList = append(inputAddedList, label)
@@ -304,7 +304,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
 	}
 
-	fanIn, err := NewDynamicFanIn(Inputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	fanIn, err := NewDynamicFanIn(Inputs, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

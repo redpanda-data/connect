@@ -30,7 +30,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/olivere/elastic"
 	"github.com/ory/dockertest"
 )
@@ -115,7 +115,7 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 	conf.ID = "${!count:foo}"
 	conf.URLs = urls
 
-	m, err := NewElasticsearch(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewElasticsearch(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}

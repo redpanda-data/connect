@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	"gopkg.in/alexcesaro/statsd.v2"
 )
 
@@ -110,7 +110,7 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 	}
 	s := &Statsd{
 		config: config,
-		log:    log.NewLogger(ioutil.Discard, log.LoggerConfig{LogLevel: "OFF"}),
+		log:    log.New(ioutil.Discard, log.Config{LogLevel: "OFF"}),
 	}
 	for _, opt := range opts {
 		opt(s)

@@ -29,7 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/buffer/single"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -43,7 +43,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	conf := NewConfig()
 	b := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: int(incr+15) * int(total),
-	}), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	}), log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err := b.StartReceiving(tChan); err != nil {
 		t.Error(err)
 		return
@@ -217,7 +217,7 @@ func TestBufferClosing(t *testing.T) {
 	conf := NewConfig()
 	b := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: int(incr+15) * int(total),
-	}), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	}), log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err := b.StartReceiving(tChan); err != nil {
 		t.Error(err)
 		return
@@ -287,7 +287,7 @@ func BenchmarkSingleMem(b *testing.B) {
 	conf := NewConfig()
 	buffer := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: 50000000,
-	}), log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	}), log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err := buffer.StartReceiving(tChan); err != nil {
 		b.Error(err)
 		return
@@ -345,13 +345,13 @@ func BenchmarkSingleMmap(b *testing.B) {
 	mmapConf.FileSize = 50000000
 	mmapConf.Path = dir
 
-	mmap, err := single.NewMmapBuffer(mmapConf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	mmap, err := single.NewMmapBuffer(mmapConf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	conf := NewConfig()
-	buffer := NewSingleWrapper(conf, mmap, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	buffer := NewSingleWrapper(conf, mmap, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err := buffer.StartReceiving(tChan); err != nil {
 		b.Error(err)
 		return

@@ -20,7 +20,7 @@
 
 package metrics
 
-import "github.com/Jeffail/benthos/lib/util/service/log"
+import "github.com/Jeffail/benthos/lib/log"
 
 //------------------------------------------------------------------------------
 
@@ -45,6 +45,9 @@ func (d DudStat) Gauge(value int64) error { return nil }
 type DudType struct {
 	ID int
 }
+
+// Noop is an alias for DudType.
+type Noop DudType
 
 // GetCounter returns a DudStat.
 func (d DudType) GetCounter(path ...string) StatCounter { return DudStat{} }

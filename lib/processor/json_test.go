@@ -26,7 +26,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -37,7 +37,7 @@ func TestJSONValidation(t *testing.T) {
 	conf.JSON.Path = "foo.bar"
 	conf.JSON.Value = []byte(`this isnt valid json`)
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
 		t.Error("Expected error from bad operator")
@@ -87,7 +87,7 @@ func TestJSONValidation(t *testing.T) {
 }
 
 func TestJSONPartBounds(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	conf := NewConfig()
@@ -132,7 +132,7 @@ func TestJSONPartBounds(t *testing.T) {
 }
 
 func TestJSONAppend(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	type jTest struct {
@@ -224,7 +224,7 @@ func TestJSONAppend(t *testing.T) {
 }
 
 func TestJSONSet(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	type jTest struct {
@@ -325,7 +325,7 @@ func TestJSONSet(t *testing.T) {
 }
 
 func TestJSONConfigYAML(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	input := `{"foo":{"bar":5}}`
@@ -382,7 +382,7 @@ value:
 }
 
 func TestJSONConfigYAMLMarshal(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	tests := []string{
@@ -451,7 +451,7 @@ value:
 }
 
 func TestJSONSelect(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	type jTest struct {
@@ -534,7 +534,7 @@ func TestJSONSelect(t *testing.T) {
 }
 
 func TestJSONDeletePartBounds(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	conf := NewConfig()
@@ -578,7 +578,7 @@ func TestJSONDeletePartBounds(t *testing.T) {
 }
 
 func TestJSONDelete(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	type jTest struct {

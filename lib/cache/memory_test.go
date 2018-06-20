@@ -26,13 +26,13 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
 
 func TestMemoryCache(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	conf := NewConfig()
 	conf.Type = "memory"
@@ -95,7 +95,7 @@ func TestMemoryCache(t *testing.T) {
 }
 
 func TestMemoryCacheCompaction(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	conf := NewConfig()
 	conf.Type = "memory"

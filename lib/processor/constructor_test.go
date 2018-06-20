@@ -26,7 +26,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -40,10 +40,10 @@ func TestConstructorBadType(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "not_exist"
 
-	logConfig := log.NewLoggerConfig()
+	logConfig := log.NewConfig()
 	logConfig.LogLevel = "NONE"
 
-	if _, err := New(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{}); err == nil {
+	if _, err := New(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{}); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }

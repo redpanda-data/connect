@@ -28,7 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestTypeConstruction(t *testing.T) {
@@ -60,7 +60,7 @@ func TestTypeConstruction(t *testing.T) {
 	newStats := metrics.DudType{
 		ID: 1,
 	}
-	newLogger := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	newLogger := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	newMgr := types.DudMgr{
 		ID: 2,
 	}

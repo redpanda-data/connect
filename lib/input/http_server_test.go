@@ -30,7 +30,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestHTTPBasic(t *testing.T) {
@@ -42,7 +42,7 @@ func TestHTTPBasic(t *testing.T) {
 	conf.HTTPServer.Address = "localhost:1243"
 	conf.HTTPServer.Path = "/testpost"
 
-	h, err := NewHTTPServer(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPServer(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -151,7 +151,7 @@ func TestHTTPBadRequests(t *testing.T) {
 	conf.HTTPServer.Address = "localhost:1233"
 	conf.HTTPServer.Path = "/testpost"
 
-	h, err := NewHTTPServer(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPServer(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -182,7 +182,7 @@ func TestHTTPTimeout(t *testing.T) {
 	conf.HTTPServer.Path = "/testpost"
 	conf.HTTPServer.TimeoutMS = 1
 
-	h, err := NewHTTPServer(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPServer(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

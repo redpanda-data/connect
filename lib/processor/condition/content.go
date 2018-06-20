@@ -24,10 +24,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"regexp"
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -75,7 +76,17 @@ Checks whether the part ends with the argument (case sensitive.)
 ### ` + "`suffix`" + `
 
 Checks whether the part ends with the argument under unicode case-folding (case
-insensitive.)`,
+insensitive.)
+
+### ` + "`regexp_partial`" + `
+
+Checks whether any section of the message part matches a regular expression (RE2
+syntax).
+
+### ` + "`regexp_exact`" + `
+
+Checks whether the message part exactly matches a regular expression (RE2
+syntax).`,
 	}
 }
 
@@ -158,6 +169,26 @@ func contentSuffixFoldOperator(arg []byte) contentOperator {
 	}
 }
 
+func contentRegexpPartialOperator(arg []byte) (contentOperator, error) {
+	compiled, err := regexp.Compile(string(arg))
+	if err != nil {
+		return nil, err
+	}
+	return func(c []byte) bool {
+		return compiled.Match(c)
+	}, nil
+}
+
+func contentRegexpExactOperator(arg []byte) (contentOperator, error) {
+	compiled, err := regexp.Compile(string(arg))
+	if err != nil {
+		return nil, err
+	}
+	return func(c []byte) bool {
+		return len(compiled.Find(c)) == len(c)
+	}, nil
+}
+
 func strToContentOperator(str, arg string) (contentOperator, error) {
 	switch str {
 	case "equals_cs":
@@ -176,6 +207,10 @@ func strToContentOperator(str, arg string) (contentOperator, error) {
 		return contentSuffixOperator([]byte(arg)), nil
 	case "suffix":
 		return contentSuffixFoldOperator([]byte(arg)), nil
+	case "regexp_partial":
+		return contentRegexpPartialOperator([]byte(arg))
+	case "regexp_exact":
+		return contentRegexpExactOperator([]byte(arg))
 	}
 	return nil, ErrInvalidContentOperator
 }

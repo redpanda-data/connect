@@ -28,7 +28,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/go-mangos/mangos/protocol/pull"
 	"github.com/go-mangos/mangos/transport/tcp"
 )
@@ -48,7 +48,7 @@ func TestBrokerWithScaleProto(t *testing.T) {
 	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleOne)
 	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleTwo)
 
-	s, err := NewBroker(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewBroker(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -150,7 +150,7 @@ func TestRoundRobinWithScaleProto(t *testing.T) {
 	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleOne)
 	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleTwo)
 
-	s, err := NewBroker(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewBroker(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

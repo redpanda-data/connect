@@ -30,14 +30,14 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestUnarchiveBadAlgo(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "does not exist"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	_, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
 	if err == nil {
@@ -49,7 +49,7 @@ func TestUnarchiveTar(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "tar"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -110,7 +110,7 @@ func TestUnarchiveBinary(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "binary"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
@@ -144,7 +144,7 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "tar"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	input := [][]byte{
 		[]byte("0"),
@@ -249,7 +249,7 @@ func TestUnarchiveEmpty(t *testing.T) {
 	conf.Unarchive.Format = "tar"
 	conf.Unarchive.Parts = []int{0, 1}
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)

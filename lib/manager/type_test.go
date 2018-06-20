@@ -28,13 +28,13 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
 
 func TestManagerCache(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	conf := NewConfig()
 	conf.Caches["foo"] = cache.NewConfig()
@@ -57,7 +57,7 @@ func TestManagerCache(t *testing.T) {
 }
 
 func TestManagerBadCache(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	conf := NewConfig()
 	badConf := cache.NewConfig()
@@ -70,7 +70,7 @@ func TestManagerBadCache(t *testing.T) {
 }
 
 func TestManagerCondition(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	conf := NewConfig()
 	conf.Conditions["foo"] = condition.NewConfig()
@@ -95,7 +95,7 @@ func TestManagerCondition(t *testing.T) {
 func TestManagerConditionRecursion(t *testing.T) {
 	t.Skip("Not yet implemented")
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	conf := NewConfig()
 
@@ -115,7 +115,7 @@ func TestManagerConditionRecursion(t *testing.T) {
 }
 
 func TestManagerBadCondition(t *testing.T) {
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	conf := NewConfig()
 	badConf := condition.NewConfig()

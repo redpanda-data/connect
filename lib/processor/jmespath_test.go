@@ -27,7 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestJMESPathAllParts(t *testing.T) {
@@ -35,7 +35,7 @@ func TestJMESPathAllParts(t *testing.T) {
 	conf.JMESPath.Parts = []int{}
 	conf.JMESPath.Query = "foo.bar"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	jSet, err := NewJMESPath(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
@@ -66,7 +66,7 @@ func TestJMESPathValidation(t *testing.T) {
 	conf.JMESPath.Parts = []int{0}
 	conf.JMESPath.Query = "foo.bar"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	jSet, err := NewJMESPath(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
@@ -106,7 +106,7 @@ func TestJMESPathValidation(t *testing.T) {
 }
 
 func TestJMESPath(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	type jTest struct {

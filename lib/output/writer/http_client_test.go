@@ -36,7 +36,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -55,7 +55,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	conf.RetryMS = 1
 	conf.NumRetries = 3
 
-	h := NewHTTPClient(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	h := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err := h.Write(types.NewMessage([][]byte{[]byte("test")})); err == nil {
 		t.Error("Expected error from end of retries")
 	}
@@ -92,7 +92,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	conf := NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h := NewHTTPClient(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	h := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
@@ -173,7 +173,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 	conf := NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h := NewHTTPClient(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	h := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)

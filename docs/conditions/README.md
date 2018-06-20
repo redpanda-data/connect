@@ -131,6 +131,16 @@ Checks whether the part ends with the argument (case sensitive.)
 Checks whether the part ends with the argument under unicode case-folding (case
 insensitive.)
 
+### `regexp_partial`
+
+Checks whether any section of the message part matches a regular expression (RE2
+syntax).
+
+### `regexp_exact`
+
+Checks whether the message part exactly matches a regular expression (RE2
+syntax).
+
 ## `count`
 
 ``` yaml

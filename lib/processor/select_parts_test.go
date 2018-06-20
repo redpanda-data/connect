@@ -27,14 +27,14 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestSelectParts(t *testing.T) {
 	conf := NewConfig()
 	conf.SelectParts.Parts = []int{1, 3}
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewSelectParts(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
@@ -102,7 +102,7 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 	conf := NewConfig()
 	conf.SelectParts.Parts = []int{1, 3}
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	input := [][]byte{
 		[]byte("0"),
@@ -148,7 +148,7 @@ func TestSelectPartsEmpty(t *testing.T) {
 	conf := NewConfig()
 	conf.SelectParts.Parts = []int{3}
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewSelectParts(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)

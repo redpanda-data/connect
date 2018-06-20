@@ -28,14 +28,14 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestInsertBoundaries(t *testing.T) {
 	conf := NewConfig()
 	conf.InsertPart.Content = "hello world"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	for i := 0; i < 10; i++ {
 		for j := -5; j <= 5; j++ {
@@ -68,7 +68,7 @@ func TestInsertPart(t *testing.T) {
 	conf := NewConfig()
 	conf.InsertPart.Content = "hello world"
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
 	type test struct {
 		index int
@@ -208,7 +208,7 @@ func TestInsertPartInterpolation(t *testing.T) {
 
 	hostname, _ := os.Hostname()
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewInsertPart(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)

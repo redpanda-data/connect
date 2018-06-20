@@ -32,7 +32,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestScaleProtoBasic(t *testing.T) {
@@ -44,7 +44,7 @@ func TestScaleProtoBasic(t *testing.T) {
 	conf.SocketType = "PULL"
 	conf.PollTimeoutMS = 100
 
-	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	s, err := NewScaleProto(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestScaleProtoPubSub(t *testing.T) {
 	conf.SubFilters = []string{"testTopic"}
 	conf.PollTimeoutMS = 100
 
-	s, err := NewScaleProto(conf, log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}), metrics.DudType{})
+	s, err := NewScaleProto(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

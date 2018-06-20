@@ -29,7 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -79,7 +79,7 @@ func TestWriterCantConnect(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerCantConnect{},
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -125,7 +125,7 @@ func TestWriterCantSendClosed(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -151,7 +151,7 @@ func TestWriterCantSendClosedChan(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -179,7 +179,7 @@ func TestWriterStartClosed(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -210,7 +210,7 @@ func TestWriterClosesOnReconn(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -261,7 +261,7 @@ func TestWriterClosesOnResend(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -319,7 +319,7 @@ func TestWriterCanReconnect(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -388,7 +388,7 @@ func TestWriterCantReconnect(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -445,7 +445,7 @@ func TestWriterHappyPath(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -513,7 +513,7 @@ func TestWriterSadPath(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)

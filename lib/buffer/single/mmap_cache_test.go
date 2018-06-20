@@ -26,7 +26,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestMmapCacheTracker(t *testing.T) {
@@ -42,7 +42,7 @@ func TestMmapCacheTracker(t *testing.T) {
 	conf.FileSize = 1000
 	conf.Path = dir
 
-	cache, err := NewMmapCache(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	cache, err := NewMmapCache(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -84,7 +84,7 @@ func TestMmapCacheTracker(t *testing.T) {
 	}
 
 	cache.L.Unlock()
-	cache, err = NewMmapCache(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	cache, err = NewMmapCache(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -130,7 +130,7 @@ func TestMmapCacheIndexes(t *testing.T) {
 	conf.FileSize = 1000
 	conf.Path = dir
 
-	cache, err := NewMmapCache(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	cache, err := NewMmapCache(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -177,7 +177,7 @@ func TestMmapCacheIndexes(t *testing.T) {
 	}
 
 	cache.L.Unlock()
-	cache, err = NewMmapCache(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	cache, err = NewMmapCache(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -228,7 +228,7 @@ func TestMmapCacheRaces(t *testing.T) {
 	conf.FileSize = 10
 	conf.Path = dir
 
-	cache, err := NewMmapCache(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	cache, err := NewMmapCache(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

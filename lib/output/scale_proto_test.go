@@ -32,7 +32,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -49,7 +49,7 @@ func TestScaleProtoBasic(t *testing.T) {
 	conf.ScaleProto.PollTimeoutMS = 100
 	conf.ScaleProto.SocketType = "PUSH"
 
-	s, err := NewScaleProto(conf, nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewScaleProto(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

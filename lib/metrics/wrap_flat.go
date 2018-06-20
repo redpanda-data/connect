@@ -23,7 +23,7 @@ package metrics
 import (
 	"strings"
 
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------

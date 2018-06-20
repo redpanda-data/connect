@@ -34,7 +34,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -119,7 +119,7 @@ func parseGetBody(data *bytes.Buffer) getBody {
 
 func TestTypeAPIBadMethods(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
 		OptSetStats(metrics.DudType{}),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),
@@ -144,7 +144,7 @@ func TestTypeAPIBadMethods(t *testing.T) {
 
 func TestTypeAPIBasicOperations(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
 		OptSetStats(metrics.DudType{}),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),
@@ -241,7 +241,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 
 func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
 		OptSetStats(metrics.DudType{}),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),
@@ -338,7 +338,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 
 func TestTypeAPIList(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
 		OptSetStats(metrics.DudType{}),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),
@@ -375,7 +375,7 @@ func TestTypeAPIList(t *testing.T) {
 
 func TestTypeAPISetStreams(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
 		OptSetStats(metrics.DudType{}),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),
@@ -469,7 +469,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 
 func TestTypeAPIDefaultConf(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})),
+		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
 		OptSetStats(metrics.DudType{}),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),

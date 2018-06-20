@@ -37,6 +37,7 @@ import (
 	"github.com/Jeffail/benthos/lib/buffer"
 	"github.com/Jeffail/benthos/lib/cache"
 	"github.com/Jeffail/benthos/lib/input"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/manager"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output"
@@ -46,7 +47,6 @@ import (
 	"github.com/Jeffail/benthos/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
 	"github.com/Jeffail/benthos/lib/util/config"
-	"github.com/Jeffail/benthos/lib/util/service/log"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -64,10 +64,10 @@ var (
 type Config struct {
 	HTTP                 api.Config `json:"http" yaml:"http"`
 	stream.Config        `json:",inline" yaml:",inline"`
-	Manager              manager.Config   `json:"resources" yaml:"resources"`
-	Logger               log.LoggerConfig `json:"logger" yaml:"logger"`
-	Metrics              metrics.Config   `json:"metrics" yaml:"metrics"`
-	SystemCloseTimeoutMS int              `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
+	Manager              manager.Config `json:"resources" yaml:"resources"`
+	Logger               log.Config     `json:"logger" yaml:"logger"`
+	Metrics              metrics.Config `json:"metrics" yaml:"metrics"`
+	SystemCloseTimeoutMS int            `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
 }
 
 // NewConfig returns a new configuration with default values.
@@ -79,7 +79,7 @@ func NewConfig() Config {
 		HTTP:                 api.NewConfig(),
 		Config:               stream.NewConfig(),
 		Manager:              manager.NewConfig(),
-		Logger:               log.NewLoggerConfig(),
+		Logger:               log.NewConfig(),
 		Metrics:              metricsConf,
 		SystemCloseTimeoutMS: 20000,
 	}
@@ -327,9 +327,9 @@ func main() {
 
 	// Note: Only log to Stderr if one of our outputs is stdout.
 	if config.Output.Type == "stdout" {
-		logger = log.NewLogger(os.Stderr, config.Logger)
+		logger = log.New(os.Stderr, config.Logger)
 	} else {
-		logger = log.NewLogger(os.Stdout, config.Logger)
+		logger = log.New(os.Stdout, config.Logger)
 	}
 
 	// Create our metrics type.

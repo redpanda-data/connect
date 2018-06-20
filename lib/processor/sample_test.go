@@ -27,14 +27,14 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestSample10Percent(t *testing.T) {
 	conf := NewConfig()
 	conf.Sample.Retain = 10.0
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewSample(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
@@ -71,7 +71,7 @@ func TestSample24Percent(t *testing.T) {
 	conf := NewConfig()
 	conf.Sample.Retain = 24.0
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewSample(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)

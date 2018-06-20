@@ -31,7 +31,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -63,7 +63,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewDynamicFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -132,7 +132,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewDynamicFanOut(
-		nil, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		nil, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -270,7 +270,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewDynamicFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -372,7 +372,7 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 	outputRemovedList := []string{}
 
 	oTM, err := NewDynamicFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 		OptDynamicFanOutSetOnAdd(func(label string) {
 			outputAddedList = append(outputAddedList, label)
 		}), OptDynamicFanOutSetOnRemove(func(label string) {
@@ -442,7 +442,7 @@ func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewDynamicFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -492,7 +492,7 @@ func TestDynamicFanOutShutDownFromSend(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewDynamicFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)

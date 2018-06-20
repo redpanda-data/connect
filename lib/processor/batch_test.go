@@ -27,14 +27,14 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestBatchTwoParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Batch.ByteSize = 6
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
@@ -59,7 +59,7 @@ func TestBatchLotsOfParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Batch.ByteSize = 1
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
@@ -87,7 +87,7 @@ func TestBatchTwoSingleParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Batch.ByteSize = 5
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)
@@ -141,7 +141,7 @@ func TestBatchTwoDiffParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Batch.ByteSize = 5
 
-	testLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
 		t.Error(err)

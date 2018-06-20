@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `regexp_exact` and `regexp_partial` conditions.
+
 ## 0.14.4 - 2018-06-19
 
 ## Changed

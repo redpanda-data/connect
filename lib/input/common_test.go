@@ -20,8 +20,8 @@
 
 package input
 
-import "github.com/Jeffail/benthos/lib/util/service/log"
+import "github.com/Jeffail/benthos/lib/log"
 
-var logConfig = log.LoggerConfig{
+var logConfig = log.Config{
 	LogLevel: "NONE",
 }

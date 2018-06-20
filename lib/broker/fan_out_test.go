@@ -29,7 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ func TestBasicFanOut(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -129,7 +129,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -215,7 +215,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -272,7 +272,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -321,7 +321,7 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		t.Error(err)
@@ -370,7 +370,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
 		b.Error(err)

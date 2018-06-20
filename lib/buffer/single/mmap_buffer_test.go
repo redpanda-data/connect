@@ -29,10 +29,10 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
-var logConfig = log.LoggerConfig{
+var logConfig = log.Config{
 	LogLevel: "NONE",
 }
 
@@ -55,7 +55,7 @@ func TestMmapBufferBasic(t *testing.T) {
 	conf.FileSize = 100000
 	conf.Path = dir
 
-	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -107,7 +107,7 @@ func TestMmapBufferBacklogCounter(t *testing.T) {
 	conf.FileSize = 100000
 	conf.Path = dir
 
-	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -171,7 +171,7 @@ func TestMmapBufferLoopingRandom(t *testing.T) {
 	conf.FileSize = 8000
 	conf.Path = dir
 
-	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -231,7 +231,7 @@ func TestMmapBufferMultiFiles(t *testing.T) {
 	conf.FileSize = 1000
 	conf.Path = dir
 
-	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -286,7 +286,7 @@ func TestMmapBufferRecoverFiles(t *testing.T) {
 	conf.Path = dir
 
 	// Write a load of data
-	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -310,7 +310,7 @@ func TestMmapBufferRecoverFiles(t *testing.T) {
 	block.Close()
 
 	// Read the data back
-	block, err = NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err = NewMmapBuffer(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -353,7 +353,7 @@ func TestMmapBufferRejectLargeMessage(t *testing.T) {
 	conf.Path = dir
 
 	// Write a load of data
-	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -377,7 +377,7 @@ func BenchmarkMmapBufferBasic(b *testing.B) {
 	conf.FileSize = 1000
 	conf.Path = dir
 
-	block, err := NewMmapBuffer(conf, log.NewLogger(os.Stdout, logConfig), metrics.DudType{})
+	block, err := NewMmapBuffer(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		b.Error(err)
 		return

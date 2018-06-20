@@ -27,11 +27,11 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestMergeJSON(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	type jTest struct {
@@ -90,7 +90,7 @@ func TestMergeJSON(t *testing.T) {
 }
 
 func TestMergeJSONRetention(t *testing.T) {
-	tLog := log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"})
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
 
 	conf := NewConfig()

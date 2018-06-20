@@ -30,7 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestPoolBasic(t *testing.T) {
@@ -42,7 +42,7 @@ func TestPoolBasic(t *testing.T) {
 
 	constr := func() (Type, error) {
 		return NewProcessor(
-			log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+			log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 			metrics.DudType{},
 			mockProc,
 		), nil
@@ -50,7 +50,7 @@ func TestPoolBasic(t *testing.T) {
 
 	proc, err := NewPool(
 		constr, 1,
-		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 		metrics.DudType{},
 	)
 	if err != nil {
@@ -156,7 +156,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 
 	constr := func() (Type, error) {
 		return NewProcessor(
-			log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+			log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 			metrics.DudType{},
 			mockProc,
 		), nil
@@ -164,7 +164,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 
 	proc, err := NewPool(
 		constr, 1,
-		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 		metrics.DudType{},
 	)
 	if err != nil {
@@ -247,7 +247,7 @@ func TestPoolMultiThreads(t *testing.T) {
 
 	proc, err := New(
 		conf, nil,
-		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 		metrics.DudType{},
 	)
 	if err != nil {
@@ -322,7 +322,7 @@ func TestPoolMultiNaturalClose(t *testing.T) {
 
 	proc, err := New(
 		conf, nil,
-		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 		metrics.DudType{},
 	)
 	if err != nil {

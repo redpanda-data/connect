@@ -28,7 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/buffer/parallel"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ func TestParallelMemoryBuffer(t *testing.T) {
 	conf := NewConfig()
 	b := NewParallelWrapper(
 		conf, parallel.NewMemory(int(incr)*int(total)),
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err := b.StartReceiving(tChan); err != nil {
 		t.Error(err)
@@ -217,7 +217,7 @@ func TestParallelBufferClosing(t *testing.T) {
 	conf := NewConfig()
 	b := NewParallelWrapper(
 		conf, parallel.NewMemory(int(incr)*int(total)),
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err := b.StartReceiving(tChan); err != nil {
 		t.Error(err)
@@ -288,7 +288,7 @@ func BenchmarkParallelMem(b *testing.B) {
 	conf := NewConfig()
 	buffer := NewParallelWrapper(
 		conf, parallel.NewMemory(50000000),
-		log.NewLogger(os.Stdout, logConfig), metrics.DudType{},
+		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err := buffer.StartReceiving(tChan); err != nil {
 		b.Error(err)

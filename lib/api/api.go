@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v2"
 )

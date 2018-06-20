@@ -30,7 +30,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/service/log"
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 var errMockProc = errors.New("this is an error from mock processor")
@@ -60,7 +60,7 @@ func TestProcessorPipeline(t *testing.T) {
 	}()
 
 	proc := NewProcessor(
-		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 		metrics.DudType{},
 		mockProc,
 	)
@@ -266,7 +266,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
 	proc := NewProcessor(
-		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 		metrics.DudType{},
 		mockProc,
 	)
@@ -345,7 +345,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
 	proc := NewProcessor(
-		log.NewLogger(os.Stdout, log.LoggerConfig{LogLevel: "NONE"}),
+		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 		metrics.DudType{},
 		mockProc,
 	)
