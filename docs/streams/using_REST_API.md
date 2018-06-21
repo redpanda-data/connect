@@ -115,13 +115,13 @@ $ curl http://localhost:4195/streams/foo | jq '.'
         "timeout_ms": 5000
       }
     },
-	"buffer": {
+    "buffer": {
       "type": "memory",
       "memory": {
         "limit": 10000000
       }
     },
-	... etc ...
+    ... etc ...
   }
 }
 ```
@@ -166,10 +166,10 @@ $ curl http://localhost:4195/streams/foo | jq '.'
         "timeout_ms": 5000
       }
     },
-	"buffer": {
+    "buffer": {
       "type": "none"
     },
-	... etc ...
+    ... etc ...
   }
 }
 ```
@@ -206,8 +206,8 @@ $ curl http://localhost:4195/streams -X POST --data-binary @- <<EOF
 bar:
   input:
     type: http_client
-	http_client:
-	  url: http://localhost:4195/baz/get
+    http_client:
+      url: http://localhost:4195/baz/get
   output:
     type: stdout
 baz:
