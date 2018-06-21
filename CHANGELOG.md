@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.14.6 - 2018-06-21
+
+### Added
+
+- New `root_path` field for service wide `http` config.
+
 ## 0.14.5 - 2018-06-21
 
 ### Added
