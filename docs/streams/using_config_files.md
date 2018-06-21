@@ -1,24 +1,15 @@
-Streams Mode
-============
+Streams Via Config Files
+========================
 
-A Benthos stream consists of four components; an input, an optional buffer,
-processor pipelines and an output. Under normal use a Benthos instance is a
-single stream, and the components listed are configured within the service
-config file.
+When running Benthos in `--streams` mode it's possible to create streams with
+their own static configurations by setting the `--streams-dir` flag to a
+directory containing a config file for each stream (`/benthos/streams` by
+default).
 
-Alternatively, Benthos can be run in `--streams` mode, where a single running
-Benthos instance is able to run multiple entirely isolated streams. Streams can
-be configured by setting the `--streams-dir` flag to a directory containing a
-config file for each stream (`/benthos/streams` by default).
+Note that stream configs loaded in this way can benefit from
+[interpolation][interpolation].
 
-During runtime streams can also be added, updated, removed and monitored using
-[a REST HTTP interface][http-interface].
-
-Note that stream configs loaded from `--streams-dir` can benefit from
-[interpolation][interpolation] but configs loaded through the HTTP REST
-endpoints cannot.
-
-## Using directory of stream configs
+## Walkthrough
 
 Make a directory of stream configs:
 
@@ -87,7 +78,7 @@ $ curl http://localhost:4195/streams | jq '.'
 }
 ```
 
-And you can query the loaded configuration of a stream:
+You can also query a specific stream to see the loaded configuration:
 
 ``` bash
 $ curl http://localhost:4195/streams/foo | jq '.'
@@ -104,23 +95,12 @@ $ curl http://localhost:4195/streams/foo | jq '.'
         "key_file": "",
         "path": "/post",
         "timeout_ms": 5000
-      },
-      "processors": [
-        {
-          "type": "bounds_check",
-          "bounds_check": {
-            "max_part_size": 1073741824,
-            "max_parts": 100,
-            "min_part_size": 1,
-            "min_parts": 1
-          }
-        }
-      ]
+      }
     },
     "buffer": {
       "type": "memory",
       "memory": {
-        "limit": 0
+        "limit": 10000000
       }
     },
     "pipeline": {
@@ -150,8 +130,8 @@ $ curl http://localhost:4195/streams/foo | jq '.'
 }
 ```
 
-There are other endpoints [in the REST API][http-interface] for creating,
-updating and deleting streams.
+There are other endpoints [in the REST API][rest-api] for creating, updating and
+deleting streams.
 
-[http-interface]: api/streams.md
-[interpolation]: config_interpolation.md
+[rest-api]: using_REST_API.md
+[interpolation]: ../config_interpolation.md

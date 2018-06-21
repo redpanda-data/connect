@@ -8,6 +8,8 @@ stream.
 Each stream has its own input, buffer, pipeline and output sections which
 contains an isolated stream of data with its own lifetime.
 
+A walkthrough on using this API [can be found here][streams-api-walkthrough].
+
 ## API
 
 ### GET `/streams`
@@ -91,3 +93,5 @@ Attempt to shut down and remove a stream identified by `id`.
 #### Response 200
 
 The stream was found, shut down and removed successfully.
+
+[streams-api-walkthrough]: ../streams/using_REST_API.md

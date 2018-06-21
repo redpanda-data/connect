@@ -24,5 +24,5 @@ Send data to Amazon S3:
 curl http://localhost:4195/s3/send -d '{"foo":"hello world"}'
 ```
 
-[streams]: ../../../docs/streams_mode.md
+[streams]: ../../../docs/streams/README.md
 [http-streams]: ../../../docs/api/streams.md
