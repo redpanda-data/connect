@@ -16,7 +16,7 @@ streams in this mode can be done in two ways:
 2. An [HTTP REST API][rest-api] allows you to dynamically create, read the
    status of, update, and delete streams at runtime.
 
-These two methods can be use interchangably, i.e. it's possible to update and
+These two methods can be used in combination, i.e. it's possible to update and
 delete streams that were created with static files.
 
 [static-files]: using_config_files.md
