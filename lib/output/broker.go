@@ -25,10 +25,10 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/lib/broker"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------

@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/buffer/parallel"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 

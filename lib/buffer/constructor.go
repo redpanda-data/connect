@@ -28,10 +28,10 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/lib/buffer/single"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
-	"github.com/Jeffail/benthos/lib/log"
 	yaml "gopkg.in/yaml.v2"
 )
 

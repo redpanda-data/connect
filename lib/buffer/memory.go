@@ -22,8 +22,8 @@ package buffer
 
 import (
 	"github.com/Jeffail/benthos/lib/buffer/parallel"
-	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/metrics"
 )
 
 //------------------------------------------------------------------------------

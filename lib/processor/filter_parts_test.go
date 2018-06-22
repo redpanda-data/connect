@@ -18,10 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package condition
+package processor
 
 import (
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -29,110 +30,77 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 )
 
-func TestAndCheck(t *testing.T) {
+func TestFilterPartsContentCheck(t *testing.T) {
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
-	testMsg := types.NewMessage(
-		[][]byte{
-			[]byte("foo"),
-		},
-	)
-
-	passConf := NewConfig()
-	passConf.Content.Operator = "contains"
-	passConf.Content.Arg = "foo"
-
-	failConf := NewConfig()
-	failConf.Content.Operator = "contains"
-	failConf.Content.Arg = "bar"
-
 	tests := []struct {
 		name string
-		arg  []Config
-		want bool
+		arg  [][]byte
+		want [][]byte
 	}{
 		{
-			name: "one pass",
-			arg: []Config{
-				passConf,
+			name: "single part 1",
+			arg: [][]byte{
+				[]byte("foo"),
 			},
-			want: true,
+			want: nil,
 		},
 		{
-			name: "two pass",
-			arg: []Config{
-				passConf,
-				passConf,
+			name: "single part 2",
+			arg: [][]byte{
+				[]byte("bar"),
 			},
-			want: true,
+			want: [][]byte{
+				[]byte("bar"),
+			},
 		},
 		{
-			name: "one fail",
-			arg: []Config{
-				failConf,
+			name: "multi part 1",
+			arg: [][]byte{
+				[]byte("foo"),
+				[]byte("foo"),
+				[]byte("foo"),
+				[]byte("foo"),
 			},
-			want: false,
+			want: nil,
 		},
 		{
-			name: "two fail",
-			arg: []Config{
-				failConf,
-				failConf,
+			name: "multi part 2",
+			arg: [][]byte{
+				[]byte("bar"),
+				[]byte("foo"),
+				[]byte("baz"),
+				[]byte("foo"),
 			},
-			want: false,
-		},
-		{
-			name: "first fail",
-			arg: []Config{
-				failConf,
-				passConf,
+			want: [][]byte{
+				[]byte("bar"),
+				[]byte("baz"),
 			},
-			want: false,
-		},
-		{
-			name: "second fail",
-			arg: []Config{
-				passConf,
-				failConf,
-			},
-			want: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := NewConfig()
-			conf.Type = "and"
-			conf.And = tt.arg
+			conf.Type = "filter_parts"
+			conf.FilterParts.Type = "content"
+			conf.FilterParts.Content.Operator = "prefix"
+			conf.FilterParts.Content.Part = 0
+			conf.FilterParts.Content.Arg = "b"
 
 			c, err := New(conf, nil, testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
 			}
-			if got := c.Check(testMsg); got != tt.want {
-				t.Errorf("And.Check() = %v, want %v", got, tt.want)
+			got, res := c.ProcessMessage(types.NewMessage(tt.arg))
+			if tt.want == nil {
+				if !reflect.DeepEqual(res, types.NewSimpleResponse(nil)) {
+					t.Error("Filter.ProcessMessage() expected drop")
+				}
+			} else if !reflect.DeepEqual(got[0].GetAll(), tt.want) {
+				t.Errorf("Filter.ProcessMessage() = %s, want %s", got[0].GetAll(), tt.want)
 			}
 		})
-	}
-}
-
-func TestAndBadOperator(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
-
-	cConf := NewConfig()
-	cConf.Type = "content"
-	cConf.Content.Operator = "NOT_EXIST"
-
-	conf := NewConfig()
-	conf.Type = "and"
-	conf.And = []Config{
-		cConf,
-	}
-
-	_, err := NewAnd(conf, nil, testLog, testMet)
-	if err == nil {
-		t.Error("expected error from bad operator")
 	}
 }

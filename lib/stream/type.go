@@ -28,11 +28,11 @@ import (
 
 	"github.com/Jeffail/benthos/lib/buffer"
 	"github.com/Jeffail/benthos/lib/input"
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------

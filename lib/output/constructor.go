@@ -27,13 +27,13 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
-	"github.com/Jeffail/benthos/lib/log"
 	yaml "gopkg.in/yaml.v2"
 )
 

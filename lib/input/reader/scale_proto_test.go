@@ -30,9 +30,9 @@ import (
 	"github.com/go-mangos/mangos/protocol/push"
 	"github.com/go-mangos/mangos/transport/tcp"
 
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestScaleProtoBasic(t *testing.T) {

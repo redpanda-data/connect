@@ -27,10 +27,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
-	"github.com/Jeffail/benthos/lib/log"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -64,6 +64,7 @@ type Config struct {
 	Decompress  DecompressConfig  `json:"decompress" yaml:"decompress"`
 	Dedupe      DedupeConfig      `json:"dedupe" yaml:"dedupe"`
 	Filter      FilterConfig      `json:"filter" yaml:"filter"`
+	FilterParts FilterPartsConfig `json:"filter_parts" yaml:"filter_parts"`
 	Grok        GrokConfig        `json:"grok" yaml:"grok"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
@@ -89,6 +90,7 @@ func NewConfig() Config {
 		Decompress:  NewDecompressConfig(),
 		Dedupe:      NewDedupeConfig(),
 		Filter:      NewFilterConfig(),
+		FilterParts: NewFilterPartsConfig(),
 		Grok:        NewGrokConfig(),
 		HashSample:  NewHashSampleConfig(),
 		InsertPart:  NewInsertPartConfig(),

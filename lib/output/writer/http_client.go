@@ -29,10 +29,10 @@ import (
 	"net/textproto"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/http/auth"
-	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 

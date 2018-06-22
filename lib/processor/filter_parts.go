@@ -32,84 +32,98 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["filter"] = TypeSpec{
-		constructor: NewFilter,
+	Constructors["filter_parts"] = TypeSpec{
+		constructor: NewFilterParts,
 		description: `
-Tests each message against a condition, if the condition fails then the message
-is dropped. You can read a [full list of conditions here](../conditions).
+Tests each individual part of a message batch against a condition, if the
+condition fails then the part is dropped. If the resulting batch is empty it
+will be dropped. You can find a [full list of conditions here](../conditions),
+in this case each condition will be applied to a part as if it were a single
+part message.
 
-NOTE: If you are combining messages into batches using the
-` + "[`combine`](#combine) or [`batch`](#batch)" + ` processors this filter will
-apply to the _whole_ batch. If you instead wish to filter _individual_ parts of
-the batch use the ` + "[`filter_parts`](#filter_parts)" + ` processor.`,
+This processor is useful if you are combining messages into batches using the
+` + "[`combine`](#combine) or [`batch`](#batch)" + ` processors and wish to
+remove specific parts.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// FilterConfig contains configuration fields for the Filter processor.
-type FilterConfig struct {
+// FilterPartsConfig contains configuration fields for the FilterParts processor.
+type FilterPartsConfig struct {
 	condition.Config `json:",inline" yaml:",inline"`
 }
 
-// NewFilterConfig returns a FilterConfig with default values.
-func NewFilterConfig() FilterConfig {
-	return FilterConfig{
+// NewFilterPartsConfig returns a FilterPartsConfig with default values.
+func NewFilterPartsConfig() FilterPartsConfig {
+	return FilterPartsConfig{
 		Config: condition.NewConfig(),
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// Filter is a processor that checks each message against a condition and
+// FilterParts is a processor that checks each message against a condition and
 // rejects when the condition returns false.
-type Filter struct {
+type FilterParts struct {
 	log   log.Modular
 	stats metrics.Type
 
 	condition condition.Type
 
-	mCount   metrics.StatCounter
-	mDropped metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount       metrics.StatCounter
+	mPartDropped metrics.StatCounter
+	mDropped     metrics.StatCounter
+	mSent        metrics.StatCounter
 }
 
-// NewFilter returns a Filter processor.
-func NewFilter(
+// NewFilterParts returns a FilterParts processor.
+func NewFilterParts(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	cond, err := condition.New(conf.Filter.Config, mgr, log, stats)
+	cond, err := condition.New(conf.FilterParts.Config, mgr, log, stats)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to construct condition '%v': %v",
-			conf.Filter.Config.Type, err,
+			conf.FilterParts.Config.Type, err,
 		)
 	}
-	return &Filter{
-		log:       log.NewModule(".processor.filter"),
+	return &FilterParts{
+		log:       log.NewModule(".processor.filter_parts"),
 		stats:     stats,
 		condition: cond,
 
-		mCount:   stats.GetCounter("processor.filter.count"),
-		mDropped: stats.GetCounter("processor.filter.dropped"),
-		mSent:    stats.GetCounter("processor.filter.sent"),
+		mCount:       stats.GetCounter("processor.filter_parts.count"),
+		mPartDropped: stats.GetCounter("processor.filter_parts.part.dropped"),
+		mDropped:     stats.GetCounter("processor.filter_parts.dropped"),
+		mSent:        stats.GetCounter("processor.filter_parts.sent"),
 	}, nil
 }
 
 //------------------------------------------------------------------------------
 
 // ProcessMessage checks each message against a set of bounds.
-func (c *Filter) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 
-	if !c.condition.Check(msg) {
-		c.mDropped.Incr(1)
-		return nil, types.NewSimpleResponse(nil)
+	newMsg := types.NewMessage(nil)
+	msg.Iter(func(i int, b []byte) error {
+		if c.condition.Check(types.NewMessage([][]byte{b})) {
+			newMsg.Append(b)
+		} else {
+			c.mPartDropped.Incr(1)
+		}
+		return nil
+	})
+
+	if newMsg.Len() > 0 {
+		c.mSent.Incr(1)
+		msgs := [1]types.Message{newMsg}
+		return msgs[:], nil
 	}
 
-	c.mSent.Incr(1)
-	msgs := [1]types.Message{msg}
-	return msgs[:], nil
+	c.mDropped.Incr(1)
+	return nil, types.NewSimpleResponse(nil)
 }
 
 //------------------------------------------------------------------------------

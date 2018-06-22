@@ -26,17 +26,18 @@ You can [find some examples here][0].
 7. [`decompress`](#decompress)
 8. [`dedupe`](#dedupe)
 9. [`filter`](#filter)
-10. [`grok`](#grok)
-11. [`hash_sample`](#hash_sample)
-12. [`insert_part`](#insert_part)
-13. [`jmespath`](#jmespath)
-14. [`json`](#json)
-15. [`merge_json`](#merge_json)
-16. [`noop`](#noop)
-17. [`sample`](#sample)
-18. [`select_parts`](#select_parts)
-19. [`split`](#split)
-20. [`unarchive`](#unarchive)
+10. [`filter_parts`](#filter_parts)
+11. [`grok`](#grok)
+12. [`hash_sample`](#hash_sample)
+13. [`insert_part`](#insert_part)
+14. [`jmespath`](#jmespath)
+15. [`json`](#json)
+16. [`merge_json`](#merge_json)
+17. [`noop`](#noop)
+18. [`sample`](#sample)
+19. [`select_parts`](#select_parts)
+20. [`split`](#split)
+21. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -273,6 +274,44 @@ filter:
 
 Tests each message against a condition, if the condition fails then the message
 is dropped. You can read a [full list of conditions here](../conditions).
+
+NOTE: If you are combining messages into batches using the
+[`combine`](#combine) or [`batch`](#batch) processors this filter will
+apply to the _whole_ batch. If you instead wish to filter _individual_ parts of
+the batch use the [`filter_parts`](#filter_parts) processor.
+
+## `filter_parts`
+
+``` yaml
+type: filter_parts
+filter_parts:
+  and: []
+  content:
+    arg: ""
+    operator: equals_cs
+    part: 0
+  count:
+    arg: 100
+  jmespath:
+    part: 0
+    query: ""
+  not: {}
+  or: []
+  resource: ""
+  static: true
+  type: content
+  xor: []
+```
+
+Tests each individual part of a message batch against a condition, if the
+condition fails then the part is dropped. If the resulting batch is empty it
+will be dropped. You can find a [full list of conditions here](../conditions),
+in this case each condition will be applied to a part as if it were a single
+part message.
+
+This processor is useful if you are combining messages into batches using the
+[`combine`](#combine) or [`batch`](#batch) processors and wish to
+remove specific parts.
 
 ## `grok`
 

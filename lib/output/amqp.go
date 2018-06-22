@@ -25,9 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/log"
 	"github.com/streadway/amqp"
 )
 
