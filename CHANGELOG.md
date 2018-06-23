@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `filter_parts` processor for filtering individual parts of a message
   batch.
+- New field `open_message` for `websocket` input.
 
 ## 0.14.6 - 2018-06-21
 

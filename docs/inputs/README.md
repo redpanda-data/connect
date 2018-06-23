@@ -584,6 +584,7 @@ websocket:
     consumer_secret: ""
     enabled: false
     request_url: ""
+  open_message: ""
   url: ws://localhost:4195/get/ws
 ```
 

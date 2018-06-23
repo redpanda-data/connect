@@ -37,14 +37,16 @@ import (
 // WebsocketConfig is configuration for the Websocket input type.
 type WebsocketConfig struct {
 	URL         string `json:"url" yaml:"url"`
+	OpenMsg     string `json:"open_message" yaml:"open_message"`
 	auth.Config `json:",inline" yaml:",inline"`
 }
 
 // NewWebsocketConfig creates a new WebsocketConfig with default values.
 func NewWebsocketConfig() WebsocketConfig {
 	return WebsocketConfig{
-		URL:    "ws://localhost:4195/get/ws",
-		Config: auth.NewConfig(),
+		URL:     "ws://localhost:4195/get/ws",
+		OpenMsg: "",
+		Config:  auth.NewConfig(),
 	}
 }
 
@@ -107,6 +109,14 @@ func (w *Websocket) Connect() error {
 	client, _, err := websocket.DefaultDialer.Dial(w.conf.URL, headers)
 	if err != nil {
 		return err
+	}
+
+	if len(w.conf.OpenMsg) > 0 {
+		if err = client.WriteMessage(
+			websocket.BinaryMessage, []byte(w.conf.OpenMsg),
+		); err != nil {
+			return err
+		}
 	}
 
 	w.client = client

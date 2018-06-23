@@ -173,6 +173,7 @@ input:
     delimiter: ""
   websocket:
     url: ws://localhost:4195/get/ws
+    open_message: ""
     oauth:
       enabled: false
       consumer_key: ""
