@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
   batch.
 - New field `open_message` for `websocket` input.
 
+### Changed
+
+- No longer setting default input processor.
+
 ## 0.14.6 - 2018-06-21
 
 ### Added
