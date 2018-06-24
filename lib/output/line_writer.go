@@ -47,7 +47,8 @@ type LineWriter struct {
 
 	transactions <-chan types.Transaction
 
-	handle io.WriteCloser
+	handle      io.WriteCloser
+	closeOnExit bool
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -56,6 +57,7 @@ type LineWriter struct {
 // NewLineWriter creates a new LineWriter output type.
 func NewLineWriter(
 	handle io.WriteCloser,
+	closeOnExit bool,
 	customDelimiter []byte,
 	typeStr string,
 	log log.Modular,
@@ -68,6 +70,7 @@ func NewLineWriter(
 		stats:       stats,
 		customDelim: customDelimiter,
 		handle:      handle,
+		closeOnExit: closeOnExit,
 		closeChan:   make(chan struct{}),
 		closedChan:  make(chan struct{}),
 	}, nil
@@ -90,7 +93,9 @@ func (w *LineWriter) loop() {
 	)
 
 	defer func() {
-		w.handle.Close()
+		if w.closeOnExit {
+			w.handle.Close()
+		}
 		mRunning.Decr(1)
 		mRunningF.Decr(1)
 
