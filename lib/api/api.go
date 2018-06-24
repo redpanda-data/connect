@@ -64,6 +64,9 @@ type Type struct {
 	endpoints    map[string]string
 	endpointsMut sync.Mutex
 
+	handlers    map[string]http.HandlerFunc
+	handlersMut sync.RWMutex
+
 	mux    *mux.Router
 	server *http.Server
 }
@@ -87,6 +90,7 @@ func New(
 	t := &Type{
 		conf:      conf,
 		endpoints: map[string]string{},
+		handlers:  map[string]http.HandlerFunc{},
 		mux:       handler,
 		server:    server,
 	}
@@ -206,8 +210,20 @@ func (t *Type) RegisterEndpoint(path, desc string, handler http.HandlerFunc) {
 
 	t.endpoints[path] = desc
 
-	t.mux.HandleFunc(path, handler)
-	t.mux.HandleFunc(t.conf.RootPath+path, handler)
+	t.handlersMut.Lock()
+	defer t.handlersMut.Unlock()
+
+	if _, exists := t.handlers[path]; !exists {
+		wrapHandler := func(w http.ResponseWriter, r *http.Request) {
+			t.handlersMut.RLock()
+			h := t.handlers[path]
+			t.handlersMut.RUnlock()
+			h(w, r)
+		}
+		t.mux.HandleFunc(path, wrapHandler)
+		t.mux.HandleFunc(t.conf.RootPath+path, wrapHandler)
+	}
+	t.handlers[path] = handler
 }
 
 // ListenAndServe launches the API and blocks until the server closes or fails.
