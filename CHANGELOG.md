@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.14.7 - 2018-06-24
+
 ### Added
 
 - New `filter_parts` processor for filtering individual parts of a message
