@@ -34,6 +34,7 @@ import (
 func TestTypeConstruction(t *testing.T) {
 	conf := NewConfig()
 	conf.Input.Type = "scalability_protocols"
+	conf.Input.ScaleProto.PollTimeoutMS = 100
 	conf.Output.Type = "scalability_protocols"
 
 	strm, err := New(conf) // nanomsg => nanomsg
@@ -53,7 +54,7 @@ func TestTypeConstruction(t *testing.T) {
 		t.Error("nil manager")
 	}
 
-	if err = strm.Stop(time.Second); err != nil {
+	if err = strm.Stop(time.Second * 10); err != nil {
 		t.Error(err)
 	}
 

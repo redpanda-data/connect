@@ -113,7 +113,7 @@ func NewConfig() Config {
 		STDIN:         NewSTDINConfig(),
 		Websocket:     reader.NewWebsocketConfig(),
 		ZMQ4:          reader.NewZMQ4Config(),
-		Processors:    []processor.Config{processor.NewConfig()},
+		Processors:    []processor.Config{},
 	}
 }
 

@@ -263,6 +263,11 @@ func bootstrap() Config {
 
 	// If the user wants the configuration to be printed we do so and then exit.
 	if *showConfigJSON || *showConfigYAML {
+		if len(conf.Input.Processors) == 0 &&
+			len(conf.Pipeline.Processors) == 0 &&
+			len(conf.Output.Processors) == 0 {
+			conf.Pipeline.Processors = append(conf.Pipeline.Processors, processor.NewConfig())
+		}
 		var outConf interface{} = conf
 		var err error
 		if !*showAll {

@@ -193,6 +193,20 @@ input:
     sub_filters: []
     high_water_mark: 0
     poll_timeout_ms: 5000
+  processors: []
+buffer:
+  type: none
+  memory:
+    limit: 524288000
+  mmap_file:
+    directory: ""
+    file_size: 262144000
+    retry_period_ms: 1000
+    clean_up: true
+    reserved_disk_space: 104857600
+  none: {}
+pipeline:
+  threads: 1
   processors:
   - type: bounds_check
     archive:
@@ -311,20 +325,6 @@ input:
     unarchive:
       format: binary
       parts: []
-buffer:
-  type: none
-  memory:
-    limit: 524288000
-  mmap_file:
-    directory: ""
-    file_size: 262144000
-    retry_period_ms: 1000
-    clean_up: true
-    reserved_disk_space: 104857600
-  none: {}
-pipeline:
-  threads: 1
-  processors: []
 output:
   type: stdout
   amazon_s3:
