@@ -1,6 +1,4 @@
-.PHONY: all deps rpm docker clean docs test fmt lint install docker-export
-
-BENTHOS_PATH = github.com/Jeffail/benthos
+.PHONY: all deps rpm docker clean docs test fmt lint install
 
 TAGS =
 
@@ -20,22 +18,14 @@ LD_FLAGS =
 APPS = benthos
 all: $(APPS)
 
-$(PATHINSTBIN)/benthos: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/benthos/*.go)
+install: $(APPS)
+	@cp $(PATHINSTBIN)/* $(INSTALL_DIR)/
 
-install: $(PATHINSTBIN)/benthos
-	@cp $(PATHINSTBIN)/benthos $(INSTALL_DIR)/benthos
-
-$(PATHINSTBIN)/%:
+$(PATHINSTBIN)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/*/*.go)
 	@mkdir -p $(dir $@)
 	@go build -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
 $(APPS): %: $(PATHINSTBIN)/%
-
-$(PATHINSTDOCKER)/benthos.tar: docker
-	@mkdir -p $(dir $@)
-	@docker save jeffail/benthos:$(VERSION) > $@
-
-docker-export: $(PATHINSTDOCKER)/benthos.tar
 
 docker:
 	@docker rmi jeffail/benthos:$(VERSION); true
@@ -59,9 +49,6 @@ test:
 
 test-integration:
 	@go test -timeout 300s ./...
-
-rpm:
-	@rpmbuild --define "_version $(VERSION)" -bb ./resources/rpm/benthos.spec
 
 clean:
 	rm -rf $(PATHINSTBIN)
