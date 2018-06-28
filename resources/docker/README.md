@@ -7,10 +7,10 @@ bridges using [environment variables](../../config/env/README.md) like this:
 
 ``` sh
 docker run \
-	-e "BENTHOS_INPUT=kafka_balanced" \
-	-e "KAFKA_INPUT_BROKER_ADDRESSES=foo:6379" \
-	-e "BENTHOS_OUTPUT=nats" \
-	-e "NATS_OUTPUT_URLS=nats://bar:4222,nats://baz:4222" \
+	-e "INPUT_TYPE=kafka_balanced" \
+	-e "INPUT_KAFKA_ADDRESSES=foo:6379" \
+	-e "OUTPUT_TYPE=nats" \
+	-e "OUTPUT_NATS_URLS=nats://bar:4222,nats://baz:4222" \
 	benthos
 ```
 

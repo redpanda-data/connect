@@ -30,6 +30,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/buffer"
+	"github.com/Jeffail/benthos/lib/input"
+	"github.com/Jeffail/benthos/lib/output"
+	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v2"
@@ -48,7 +52,8 @@ func (m *Type) registerEndpoints() {
 	m.manager.RegisterEndpoint(
 		"/streams/{id}",
 		"Perform CRUD operations on streams, supporting POST (Create),"+
-			" GET (Read), PUT (Update) and DELETE (Delete).",
+			" GET (Read), PUT (Update), PATCH (Patch update)"+
+			" and DELETE (Delete).",
 		m.HandleStreamCRUD,
 	)
 }
@@ -216,14 +221,47 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	readConfig := func() (conf stream.Config, err error) {
+	readConfig := func() (confOut stream.Config, err error) {
 		var confBytes []byte
 		if confBytes, err = ioutil.ReadAll(r.Body); err != nil {
 			return
 		}
 
-		conf = stream.NewConfig()
-		err = yaml.Unmarshal(confBytes, &conf)
+		confOut = stream.NewConfig()
+		err = yaml.Unmarshal(confBytes, &confOut)
+		return
+	}
+	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {
+		var patchBytes []byte
+		if patchBytes, err = ioutil.ReadAll(r.Body); err != nil {
+			return
+		}
+
+		type aliasedIn input.Config
+		type aliasedBuf buffer.Config
+		type aliasedPipe pipeline.Config
+		type aliasedOut output.Config
+
+		aliasedConf := struct {
+			Input    aliasedIn   `json:"input"`
+			Buffer   aliasedBuf  `json:"buffer"`
+			Pipeline aliasedPipe `json:"pipeline"`
+			Output   aliasedOut  `json:"output"`
+		}{
+			Input:    aliasedIn(confIn.Input),
+			Buffer:   aliasedBuf(confIn.Buffer),
+			Pipeline: aliasedPipe(confIn.Pipeline),
+			Output:   aliasedOut(confIn.Output),
+		}
+		if err = json.Unmarshal(patchBytes, &aliasedConf); err != nil {
+			return
+		}
+		confOut = stream.Config{
+			Input:    input.Config(aliasedConf.Input),
+			Buffer:   buffer.Config(aliasedConf.Buffer),
+			Pipeline: pipeline.Config(aliasedConf.Pipeline),
+			Output:   output.Config(aliasedConf.Output),
+		}
 		return
 	}
 
@@ -268,6 +306,14 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		serverErr = m.Update(id, conf, time.Until(deadline))
 	case "DELETE":
 		serverErr = m.Delete(id, time.Until(deadline))
+	case "PATCH":
+		var info StreamStatus
+		if info, serverErr = m.Read(id); serverErr == nil {
+			if conf, requestErr = patchConfig(info.Config); requestErr != nil {
+				return
+			}
+			serverErr = m.Update(id, conf, time.Until(deadline))
+		}
 	default:
 		requestErr = fmt.Errorf("verb not supported: %v", r.Method)
 	}

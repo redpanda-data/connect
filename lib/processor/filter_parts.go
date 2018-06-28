@@ -107,15 +107,13 @@ func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 	c.mCount.Incr(1)
 
 	newMsg := types.NewMessage(nil)
-	msg.Iter(func(i int, b []byte) error {
-		if c.condition.Check(types.NewMessage([][]byte{b})) {
-			newMsg.Append(b)
+	for i := 0; i < msg.Len(); i++ {
+		if c.condition.Check(types.LockMessage(msg, i)) {
+			newMsg.Append(msg.Get(i))
 		} else {
 			c.mPartDropped.Incr(1)
 		}
-		return nil
-	})
-
+	}
 	if newMsg.Len() > 0 {
 		c.mSent.Incr(1)
 		msgs := [1]types.Message{newMsg}

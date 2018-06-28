@@ -239,6 +239,64 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	}
 }
 
+func TestTypeAPIPatch(t *testing.T) {
+	mgr := New(
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.DudType{}),
+		OptSetManager(types.DudMgr{}),
+		OptSetAPITimeout(time.Millisecond*100),
+	)
+
+	r := router(mgr)
+	conf := harmlessConf()
+
+	request := genRequest("PATCH", "/streams/foo", conf)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusNotFound, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genRequest("POST", "/streams/foo", conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	patchConf := map[string]interface{}{
+		"input": map[string]interface{}{
+			"http_server": map[string]interface{}{
+				"path": "/foobarbaz",
+			},
+		},
+	}
+	request = genRequest("PATCH", "/streams/foo", patchConf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	conf.Input.HTTPServer.Path = "/foobarbaz"
+	request = genRequest("GET", "/streams/foo", conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+	info := parseGetBody(response.Body)
+	if !info.Active {
+		t.Fatal("Stream not active")
+	}
+	if act, exp := info.Config.Input.HTTPServer.Path, conf.Input.HTTPServer.Path; exp != act {
+		t.Errorf("Unexpected config: %v != %v", act, exp)
+	}
+	if act, exp := info.Config.Input.Type, conf.Input.Type; exp != act {
+		t.Errorf("Unexpected config: %v != %v", act, exp)
+	}
+}
+
 func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	mgr := New(
 		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),

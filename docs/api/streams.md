@@ -86,6 +86,16 @@ place.
 
 The stream was updated successfully.
 
+### PATCH `/streams/{id}`
+
+Update an existing stream identified by `id` by posting a body containing only
+changes to be made to the existing configuration. The existing configuration
+will be patched with the new fields and the stream restarted with the result.
+
+#### Response 200
+
+The stream was patched successfully.
+
 ### DELETE `/streams/{id}`
 
 Attempt to shut down and remove a stream identified by `id`.

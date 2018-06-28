@@ -24,13 +24,11 @@ services:
   benthos-bridge:
     image: jeffail/benthos
     environment:
-      BENTHOS_INPUT: "kafka_balanced"
-      KAFKA_INPUT_BROKER_ADDRESSES: "kafka:9092"
-      KAFKA_INPUT_TOPIC: "benthos_topic"
-      BENTHOS_OUTPUT: "amqp"
-      AMQP_OUTPUT_URL: "amqp://guest:guest@rabbitmq:5672/"
-      AMQP_OUTPUT_EXCHANGE: "benthos-exchange"
-      AMQP_OUTPUT_EXCHANGE_TYPE: "direct"
-      AMQP_OUTPUT_QUEUE: "benthos-stream"
-      AMQP_OUTPUT_KEY: "benthos-key"
-      AMQP_OUTPUT_CONSUMER_TAG: "benthos-consumer"
+      INPUT_TYPE: "kafka_balanced"
+      INPUT_KAFKA_BALANCED_ADDRESSES: "kafka:9092"
+      INPUT_KAFKA_BALANCED_TOPICS: "benthos_topic"
+      OUTPUT_TYPE: "amqp"
+      OUTPUT_AMQP_URL: "amqp://guest:guest@rabbitmq:5672/"
+      OUTPUT_AMQP_EXCHANGE: "benthos-exchange"
+      OUTPUT_AMQP_EXCHANGE_TYPE: "direct"
+      OUTPUT_AMQP_KEY: "benthos-key"

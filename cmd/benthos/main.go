@@ -338,10 +338,13 @@ func main() {
 	}
 
 	// Create our metrics type.
-	stats, err := metrics.New(config.Metrics, metrics.OptSetLogger(logger))
-	if err != nil {
-		logger.Errorf("Metrics error: %v\n", err)
-		os.Exit(1)
+	var stats metrics.Type
+	var err error
+	stats, err = metrics.New(config.Metrics, metrics.OptSetLogger(logger))
+	for err != nil {
+		logger.Errorf("Failed to connect to metrics aggregator: %v\n", err)
+		<-time.After(time.Second)
+		stats, err = metrics.New(config.Metrics, metrics.OptSetLogger(logger))
 	}
 	defer stats.Close()
 

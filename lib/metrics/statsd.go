@@ -118,26 +118,21 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 
 	tErrReported := time.Now()
 
-	var c *statsd.Client
-	for c == nil || err != nil {
-		if c, err = statsd.New(
-			statsd.Address(config.Statsd.Address),
-			statsd.FlushPeriod(flushPeriod),
-			statsd.MaxPacketSize(config.Statsd.MaxPacketSize),
-			statsd.Network(config.Statsd.Network),
-			statsd.Prefix(config.Prefix),
-			statsd.ErrorHandler(func(err error) {
-				if time.Since(tErrReported) > time.Second {
-					s.log.Errorf("Failed to push metrics: %v\n", err)
-					tErrReported = time.Now()
-				}
-			}),
-		); err != nil {
-			s.log.Errorf("Failed to connect to statsd endpoint: %v\n", err)
-			<-time.After(time.Second)
-		}
+	if s.s, err = statsd.New(
+		statsd.Address(config.Statsd.Address),
+		statsd.FlushPeriod(flushPeriod),
+		statsd.MaxPacketSize(config.Statsd.MaxPacketSize),
+		statsd.Network(config.Statsd.Network),
+		statsd.Prefix(config.Prefix),
+		statsd.ErrorHandler(func(err error) {
+			if time.Since(tErrReported) > time.Second {
+				s.log.Errorf("Failed to push metrics: %v\n", err)
+				tErrReported = time.Now()
+			}
+		}),
+	); err != nil {
+		return nil, err
 	}
-	s.s = c
 	return s, nil
 }
 

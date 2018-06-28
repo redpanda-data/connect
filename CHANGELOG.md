@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.15.0 - 2018-06-28
+
+### Added
+
+- Support for PATCH verb on the streams mode `/streams/{id}` endpoint.
+
+### Changed
+
+- Sweeping changes were made to the environment variable configuration file.
+  This file is now auto generated along with its supporting document. This
+  change will impact the docker image.
+
 ## 0.14.7 - 2018-06-24
 
 ### Added

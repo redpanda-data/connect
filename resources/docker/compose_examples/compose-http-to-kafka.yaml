@@ -3,11 +3,11 @@ services:
   benthos-in:
     image: jeffail/benthos
     environment:
-      BENTHOS_INPUT: "http_server"
-      HTTP_SERVER_INPUT_ADDRESS: "0.0.0.0:8080"
-      BENTHOS_OUTPUT: "kafka"
-      KAFKA_OUTPUT_BROKER_ADDRESSES: "kafka:9092"
-      KAFKA_OUTPUT_TOPIC: "benthos_topic"
+      INPUT_TYPE: "http_server"
+      INPUT_HTTP_SERVER_ADDRESS: "0.0.0.0:8080"
+      OUTPUT_TYPE: "kafka"
+      OUTPUT_KAFKA_ADDRESSES: "kafka:9092"
+      OUTPUT_KAFKA_TOPIC: "benthos_topic"
     ports:
       - "8080:8080"
   zookeeper:
