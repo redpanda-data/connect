@@ -22,6 +22,7 @@ package reader
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -55,6 +56,8 @@ type NATS struct {
 	stats metrics.Type
 	log   log.Modular
 
+	cMut sync.Mutex
+
 	natsConn      *nats.Conn
 	natsSub       *nats.Subscription
 	natsChan      chan *nats.Msg
@@ -78,6 +81,9 @@ func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (Type, error)
 
 // Connect establishes a connection to a NATS server.
 func (n *NATS) Connect() error {
+	n.cMut.Lock()
+	defer n.cMut.Unlock()
+
 	if n.natsConn != nil {
 		return nil
 	}
@@ -103,6 +109,9 @@ func (n *NATS) Connect() error {
 }
 
 func (n *NATS) disconnect() {
+	n.cMut.Lock()
+	defer n.cMut.Unlock()
+
 	if n.natsSub != nil {
 		n.natsSub.Unsubscribe()
 		n.natsSub = nil
@@ -116,10 +125,14 @@ func (n *NATS) disconnect() {
 
 // Read attempts to read a new message from the NATS subject.
 func (n *NATS) Read() (types.Message, error) {
+	n.cMut.Lock()
+	natsChan := n.natsChan
+	n.cMut.Unlock()
+
 	var msg *nats.Msg
 	var open bool
 	select {
-	case msg, open = <-n.natsChan:
+	case msg, open = <-natsChan:
 	case _, open = <-n.interruptChan:
 	}
 	if !open {

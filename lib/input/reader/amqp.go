@@ -226,7 +226,7 @@ func (a *AMQP) Read() (types.Message, error) {
 func (a *AMQP) Acknowledge(err error) error {
 	a.m.RLock()
 	defer a.m.RUnlock()
-	if a.conn != nil {
+	if a.conn == nil {
 		return types.ErrNotConnected
 	}
 	if err != nil {

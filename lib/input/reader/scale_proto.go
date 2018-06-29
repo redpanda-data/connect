@@ -22,6 +22,7 @@ package reader
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"nanomsg.org/go-mangos"
@@ -64,6 +65,7 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 // ScaleProto is an input type that serves Scalability Protocols messages.
 type ScaleProto struct {
 	socket mangos.Socket
+	cMut   sync.Mutex
 
 	urls  []string
 	conf  ScaleProtoConfig
@@ -106,6 +108,9 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 
 // Connect establishes a nanomsg socket.
 func (s *ScaleProto) Connect() error {
+	s.cMut.Lock()
+	defer s.cMut.Unlock()
+
 	if s.socket != nil {
 		return nil
 	}
@@ -184,10 +189,14 @@ func (s *ScaleProto) Connect() error {
 
 // Read attempts to read a new message from the nanomsg socket.
 func (s *ScaleProto) Read() (types.Message, error) {
-	if s.socket == nil {
+	s.cMut.Lock()
+	socket := s.socket
+	s.cMut.Unlock()
+
+	if socket == nil {
 		return nil, types.ErrNotConnected
 	}
-	data, err := s.socket.Recv()
+	data, err := socket.Recv()
 	if err != nil {
 		if err == mangos.ErrRecvTimeout {
 			return nil, types.ErrTimeout
@@ -205,14 +214,16 @@ func (s *ScaleProto) Acknowledge(err error) error {
 
 // CloseAsync shuts down the ScaleProto input and stops processing requests.
 func (s *ScaleProto) CloseAsync() {
-}
-
-// WaitForClose blocks until the ScaleProto input has closed down.
-func (s *ScaleProto) WaitForClose(timeout time.Duration) error {
+	s.cMut.Lock()
 	if s.socket != nil {
 		s.socket.Close()
 		s.socket = nil
 	}
+	s.cMut.Unlock()
+}
+
+// WaitForClose blocks until the ScaleProto input has closed down.
+func (s *ScaleProto) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 

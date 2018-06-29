@@ -22,6 +22,7 @@ package writer
 
 import (
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -56,7 +57,8 @@ type RedisList struct {
 	url  *url.URL
 	conf RedisListConfig
 
-	client *redis.Client
+	client  *redis.Client
+	connMut sync.RWMutex
 }
 
 // NewRedisList creates a new RedisList output type.
@@ -85,6 +87,9 @@ func NewRedisList(
 
 // Connect establishes a connection to an RedisList server.
 func (r *RedisList) Connect() error {
+	r.connMut.Lock()
+	defer r.connMut.Unlock()
+
 	var pass string
 	if r.url.User != nil {
 		pass, _ = r.url.User.Password()
@@ -109,12 +114,16 @@ func (r *RedisList) Connect() error {
 
 // Write attempts to write a message by pushing it to the end of a Redis list.
 func (r *RedisList) Write(msg types.Message) error {
-	if r.client == nil {
+	r.connMut.RLock()
+	client := r.client
+	r.connMut.RUnlock()
+
+	if client == nil {
 		return types.ErrNotConnected
 	}
 
 	for _, part := range msg.GetAll() {
-		if err := r.client.RPush(r.conf.Key, part).Err(); err != nil {
+		if err := client.RPush(r.conf.Key, part).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return types.ErrNotConnected
@@ -126,6 +135,8 @@ func (r *RedisList) Write(msg types.Message) error {
 
 // disconnect safely closes a connection to an RedisList server.
 func (r *RedisList) disconnect() error {
+	r.connMut.Lock()
+	defer r.connMut.Unlock()
 	if r.client != nil {
 		err := r.client.Close()
 		r.client = nil

@@ -22,6 +22,7 @@ package writer
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -60,7 +61,8 @@ type MQTT struct {
 	urls []string
 	conf MQTTConfig
 
-	client mqtt.Client
+	client  mqtt.Client
+	connMut sync.RWMutex
 }
 
 // NewMQTT creates a new MQTT output type.
@@ -90,6 +92,9 @@ func NewMQTT(
 
 // Connect establishes a connection to an MQTT server.
 func (m *MQTT) Connect() error {
+	m.connMut.Lock()
+	defer m.connMut.Unlock()
+
 	if m.client != nil {
 		return nil
 	}
@@ -120,12 +125,16 @@ func (m *MQTT) Connect() error {
 
 // Write attempts to write a message by pushing it to an MQTT broker.
 func (m *MQTT) Write(msg types.Message) error {
-	if m.client == nil {
+	m.connMut.RLock()
+	client := m.client
+	m.connMut.RUnlock()
+
+	if client == nil {
 		return types.ErrNotConnected
 	}
 
 	for _, part := range msg.GetAll() {
-		mtok := m.client.Publish(m.conf.Topic, byte(m.conf.QoS), false, part)
+		mtok := client.Publish(m.conf.Topic, byte(m.conf.QoS), false, part)
 		mtok.Wait()
 		if err := mtok.Error(); err != nil {
 			return err
@@ -137,10 +146,12 @@ func (m *MQTT) Write(msg types.Message) error {
 
 // CloseAsync shuts down the MQTT output and stops processing messages.
 func (m *MQTT) CloseAsync() {
+	m.connMut.Lock()
 	if m.client != nil {
 		m.client.Disconnect(0)
 		m.client = nil
 	}
+	m.connMut.Unlock()
 }
 
 // WaitForClose blocks until the MQTT output has closed down.

@@ -23,6 +23,7 @@ package writer
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -80,6 +81,8 @@ type Kafka struct {
 
 	producer    sarama.SyncProducer
 	compression sarama.CompressionCodec
+
+	connMut sync.RWMutex
 }
 
 // NewKafka creates a new Kafka writer type.
@@ -136,6 +139,9 @@ func strToCompressionCodec(str string) (sarama.CompressionCodec, error) {
 
 // Connect attempts to establish a connection to a Kafka broker.
 func (k *Kafka) Connect() error {
+	k.connMut.Lock()
+	defer k.connMut.Unlock()
+
 	if k.producer != nil {
 		return nil
 	}
@@ -173,7 +179,11 @@ func (k *Kafka) Connect() error {
 // Write will attempt to write a message to Kafka, wait for acknowledgement, and
 // returns an error if applicable.
 func (k *Kafka) Write(msg types.Message) error {
-	if k.producer == nil {
+	k.connMut.RLock()
+	producer := k.producer
+	k.connMut.RUnlock()
+
+	if producer == nil {
 		return types.ErrNotConnected
 	}
 
@@ -198,7 +208,7 @@ func (k *Kafka) Write(msg types.Message) error {
 		msgs = append(msgs, nextMsg)
 	}
 
-	err := k.producer.SendMessages(msgs)
+	err := producer.SendMessages(msgs)
 	if err != nil {
 		if pErr, ok := err.(sarama.ProducerErrors); ok && len(pErr) > 0 {
 			err = fmt.Errorf("failed to send %v parts from message: %v", len(pErr), pErr[0].Err)
@@ -210,14 +220,16 @@ func (k *Kafka) Write(msg types.Message) error {
 
 // CloseAsync shuts down the Kafka writer and stops processing messages.
 func (k *Kafka) CloseAsync() {
-}
-
-// WaitForClose blocks until the Kafka writer has closed down.
-func (k *Kafka) WaitForClose(timeout time.Duration) error {
+	k.connMut.Lock()
 	if nil != k.producer {
 		k.producer.Close()
 		k.producer = nil
 	}
+	k.connMut.Unlock()
+}
+
+// WaitForClose blocks until the Kafka writer has closed down.
+func (k *Kafka) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
