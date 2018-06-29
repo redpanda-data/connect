@@ -168,20 +168,6 @@
   version = "v1.37.0"
 
 [[projects]]
-  name = "github.com/go-mangos/mangos"
-  packages = [
-    ".",
-    "protocol/pub",
-    "protocol/pull",
-    "protocol/push",
-    "protocol/sub",
-    "transport/ipc",
-    "transport/tcp"
-  ]
-  revision = "7e2b8010de3b57f5880ae5b8201067fd943e3202"
-  version = "v1.2.0"
-
-[[projects]]
   name = "github.com/go-redis/redis"
   packages = [
     ".",
@@ -483,9 +469,23 @@
   revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
   version = "v2.2.1"
 
+[[projects]]
+  name = "nanomsg.org/go-mangos"
+  packages = [
+    ".",
+    "protocol/pub",
+    "protocol/pull",
+    "protocol/push",
+    "protocol/sub",
+    "transport/ipc",
+    "transport/tcp"
+  ]
+  revision = "c289f0f3165d00720e9dcef856b52d799f0bb008"
+  version = "v1.4.0"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9ddff074358e549db7f0e3f8e805bde751be1a094f81e9cb719229f81c6e7c0f"
+  inputs-digest = "05ae9a9fb7359d68672ce15ca1366fcbe21932319f2fec91480a2438203db147"
   solver-name = "gps-cdcl"
   solver-version = 1

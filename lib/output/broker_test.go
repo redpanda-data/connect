@@ -29,8 +29,8 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/go-mangos/mangos/protocol/pull"
-	"github.com/go-mangos/mangos/transport/tcp"
+	"nanomsg.org/go-mangos/protocol/pull"
+	"nanomsg.org/go-mangos/transport/tcp"
 )
 
 func TestBrokerWithScaleProto(t *testing.T) {

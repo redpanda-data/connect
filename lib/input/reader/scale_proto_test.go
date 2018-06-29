@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-mangos/mangos/protocol/pub"
-	"github.com/go-mangos/mangos/protocol/push"
-	"github.com/go-mangos/mangos/transport/tcp"
+	"nanomsg.org/go-mangos/protocol/pub"
+	"nanomsg.org/go-mangos/protocol/push"
+	"nanomsg.org/go-mangos/transport/tcp"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
