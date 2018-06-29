@@ -359,7 +359,7 @@ kafka:
   consumer_group: benthos_consumer_group
   partition: 0
   start_from_oldest: true
-  target_version: 0.8.2.0
+  target_version: 0.10.0.0
   topic: benthos_stream
 ```
 

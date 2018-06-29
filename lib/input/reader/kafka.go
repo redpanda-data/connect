@@ -53,7 +53,7 @@ func NewKafkaConfig() KafkaConfig {
 		Topic:           "benthos_stream",
 		Partition:       0,
 		StartFromOldest: true,
-		TargetVersion:   sarama.V0_8_2_0.String(),
+		TargetVersion:   sarama.V0_10_0_0.String(),
 	}
 }
 

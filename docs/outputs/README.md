@@ -88,7 +88,10 @@ type: amqp
 amqp:
   exchange: benthos-exchange
   exchange_type: direct
+  immediate: false
   key: benthos-key
+  mandatory: false
+  persistent: false
   url: amqp://guest:guest@localhost:5672/
 ```
 
@@ -342,7 +345,7 @@ kafka:
   key: ""
   max_msg_bytes: 1e+06
   round_robin_partitions: false
-  target_version: 0.8.2.0
+  target_version: 0.10.0.0
   timeout_ms: 5000
   topic: benthos_stream
 ```

@@ -60,7 +60,7 @@ func NewKafkaConfig() KafkaConfig {
 		MaxMsgBytes:          1000000,
 		TimeoutMS:            5000,
 		AckReplicas:          false,
-		TargetVersion:        sarama.V0_8_2_0.String(),
+		TargetVersion:        sarama.V0_10_0_0.String(),
 	}
 }
 

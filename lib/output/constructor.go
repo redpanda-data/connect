@@ -64,7 +64,7 @@ type Config struct {
 	Type          string                     `json:"type" yaml:"type"`
 	AmazonS3      writer.AmazonS3Config      `json:"amazon_s3" yaml:"amazon_s3"`
 	AmazonSQS     writer.AmazonSQSConfig     `json:"amazon_sqs" yaml:"amazon_sqs"`
-	AMQP          AMQPConfig                 `json:"amqp" yaml:"amqp"`
+	AMQP          writer.AMQPConfig          `json:"amqp" yaml:"amqp"`
 	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
 	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
 	Elasticsearch writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
@@ -92,7 +92,7 @@ func NewConfig() Config {
 		Type:          "stdout",
 		AmazonS3:      writer.NewAmazonS3Config(),
 		AmazonSQS:     writer.NewAmazonSQSConfig(),
-		AMQP:          NewAMQPConfig(),
+		AMQP:          writer.NewAMQPConfig(),
 		Broker:        NewBrokerConfig(),
 		Dynamic:       NewDynamicConfig(),
 		Elasticsearch: writer.NewElasticsearchConfig(),

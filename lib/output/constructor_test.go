@@ -38,7 +38,10 @@ func TestSanitise(t *testing.T) {
 		`"amqp":{` +
 		`"exchange":"benthos-exchange",` +
 		`"exchange_type":"direct",` +
+		`"immediate":false,` +
 		`"key":"benthos-key",` +
+		`"mandatory":false,` +
+		`"persistent":false,` +
 		`"url":"amqp://guest:guest@localhost:5672/"` +
 		`}` +
 		`}`
@@ -62,7 +65,10 @@ func TestSanitise(t *testing.T) {
 		`"amqp":{` +
 		`"exchange":"benthos-exchange",` +
 		`"exchange_type":"direct",` +
+		`"immediate":false,` +
 		`"key":"benthos-key",` +
+		`"mandatory":false,` +
+		`"persistent":false,` +
 		`"url":"amqp://guest:guest@localhost:5672/"` +
 		`},` +
 		`"processors":[` +
