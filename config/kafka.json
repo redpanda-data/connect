@@ -15,7 +15,7 @@
 			"consumer_group": "benthos_consumer_group",
 			"partition": 0,
 			"start_from_oldest": true,
-			"target_version": "0.10.0.0",
+			"target_version": "1.0.0",
 			"topic": "benthos_stream"
 		}
 	},
@@ -49,7 +49,7 @@
 			"key": "",
 			"max_msg_bytes": 1000000,
 			"round_robin_partitions": false,
-			"target_version": "0.10.0.0",
+			"target_version": "1.0.0",
 			"timeout_ms": 5000,
 			"topic": "benthos_stream"
 		}

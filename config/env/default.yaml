@@ -91,7 +91,7 @@ input:
         consumer_group: ${INPUT_KAFKA_CONSUMER_GROUP:benthos_consumer_group}
         partition: ${INPUT_KAFKA_PARTITION:0}
         start_from_oldest: ${INPUT_KAFKA_START_FROM_OLDEST:true}
-        target_version: ${INPUT_KAFKA_TARGET_VERSION:0.10.0.0}
+        target_version: ${INPUT_KAFKA_TARGET_VERSION:1.0.0}
         topic: ${INPUT_KAFKA_TOPIC:benthos_stream}
       kafka_balanced:
         addresses:
@@ -312,7 +312,7 @@ output:
         key: ${OUTPUT_KAFKA_KEY}
         max_msg_bytes: ${OUTPUT_KAFKA_MAX_MSG_BYTES:1000000}
         round_robin_partitions: ${OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS:false}
-        target_version: ${OUTPUT_KAFKA_TARGET_VERSION:0.10.0.0}
+        target_version: ${OUTPUT_KAFKA_TARGET_VERSION:1.0.0}
         timeout_ms: ${OUTPUT_KAFKA_TIMEOUT_MS:5000}
         topic: ${OUTPUT_KAFKA_TOPIC:benthos_stream}
       mqtt:

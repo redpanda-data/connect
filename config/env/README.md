@@ -126,7 +126,7 @@ INPUT_KAFKA_CLIENT_ID                        = benthos_kafka_input
 INPUT_KAFKA_CONSUMER_GROUP                   = benthos_consumer_group
 INPUT_KAFKA_PARTITION                        = 0
 INPUT_KAFKA_START_FROM_OLDEST                = true
-INPUT_KAFKA_TARGET_VERSION                   = 0.10.0.0
+INPUT_KAFKA_TARGET_VERSION                   = 1.0.0
 INPUT_KAFKA_TOPIC                            = benthos_stream
 INPUT_MQTT_CLIENT_ID                         = benthos_input
 INPUT_MQTT_QOS                               = 1
@@ -292,7 +292,7 @@ OUTPUT_KAFKA_COMPRESSION                     = none
 OUTPUT_KAFKA_KEY
 OUTPUT_KAFKA_MAX_MSG_BYTES                   = 1000000
 OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS          = false
-OUTPUT_KAFKA_TARGET_VERSION                  = 0.10.0.0
+OUTPUT_KAFKA_TARGET_VERSION                  = 1.0.0
 OUTPUT_KAFKA_TIMEOUT_MS                      = 5000
 OUTPUT_KAFKA_TOPIC                           = benthos_stream
 OUTPUT_MQTT_CLIENT_ID                        = benthos_output
