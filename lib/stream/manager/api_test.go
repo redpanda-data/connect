@@ -35,6 +35,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/gabs"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -43,6 +44,7 @@ func router(m *Type) *mux.Router {
 	router := mux.NewRouter()
 	router.HandleFunc("/streams", m.HandleStreamsCRUD)
 	router.HandleFunc("/streams/{id}", m.HandleStreamCRUD)
+	router.HandleFunc("/streams/{id}/stats", m.HandleStreamStats)
 	return router
 }
 
@@ -552,5 +554,53 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+}
+
+func TestTypeAPIGetStats(t *testing.T) {
+	mgr := New(
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.Noop()),
+		OptSetManager(types.DudMgr{}),
+		OptSetAPITimeout(time.Millisecond*100),
+	)
+
+	r := router(mgr)
+
+	if err := mgr.Create("foo", harmlessConf()); err != nil {
+		t.Fatal(err)
+	}
+
+	<-time.After(time.Millisecond * 100)
+
+	request := genRequest("GET", "/streams/not_exist/stats", nil)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusNotFound, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genRequest("POST", "/streams/foo/stats", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusBadRequest, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genRequest("GET", "/streams/foo/stats", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	stats, err := gabs.ParseJSON(response.Body.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if exp, act := float64(1), stats.S("input", "http_server", "running").Data().(float64); exp != act {
+		t.Errorf("Wrong stat value: %v != %v", act, exp)
+		t.Logf("Metrics: %v", stats)
 	}
 }

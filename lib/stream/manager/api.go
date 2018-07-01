@@ -35,6 +35,7 @@ import (
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/stream"
+	"github.com/Jeffail/gabs"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -55,6 +56,11 @@ func (m *Type) registerEndpoints() {
 			" GET (Read), PUT (Update), PATCH (Patch update)"+
 			" and DELETE (Delete).",
 		m.HandleStreamCRUD,
+	)
+	m.manager.RegisterEndpoint(
+		"/streams/{id}/stats",
+		"GET a list of metrics for the stream.",
+		m.HandleStreamStats,
 	)
 }
 
@@ -278,9 +284,9 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 		serverErr = m.Create(id, conf)
 	case "GET":
-		var info StreamStatus
+		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
-			sanit, _ := info.Config.Sanitised()
+			sanit, _ := info.Config().Sanitised()
 
 			var bodyBytes []byte
 			if bodyBytes, serverErr = json.Marshal(struct {
@@ -289,9 +295,9 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 				UptimeStr string      `json:"uptime_str"`
 				Config    interface{} `json:"config"`
 			}{
-				Active:    info.Active,
-				Uptime:    info.Uptime.Seconds(),
-				UptimeStr: info.Uptime.String(),
+				Active:    info.IsRunning(),
+				Uptime:    info.Uptime().Seconds(),
+				UptimeStr: info.Uptime().String(),
 				Config:    sanit,
 			}); serverErr != nil {
 				return
@@ -307,9 +313,9 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 	case "DELETE":
 		serverErr = m.Delete(id, time.Until(deadline))
 	case "PATCH":
-		var info StreamStatus
+		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
-			if conf, requestErr = patchConfig(info.Config); requestErr != nil {
+			if conf, requestErr = patchConfig(info.Config()); requestErr != nil {
 				return
 			}
 			serverErr = m.Update(id, conf, time.Until(deadline))
@@ -325,6 +331,57 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 	if serverErr == ErrStreamExists {
 		serverErr = nil
 		http.Error(w, "Stream already exists", http.StatusBadRequest)
+	}
+}
+
+// HandleStreamStats is an http.HandleFunc for obtaining metrics for a stream.
+func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
+	var serverErr, requestErr error
+	defer func() {
+		if r.Body != nil {
+			r.Body.Close()
+		}
+		if serverErr != nil {
+			m.logger.Errorf("Stream stats Error: %v\n", serverErr)
+			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
+		}
+		if requestErr != nil {
+			m.logger.Debugf("Stream request stats Error: %v\n", requestErr)
+			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
+		}
+	}()
+
+	id := mux.Vars(r)["id"]
+	if len(id) == 0 {
+		http.Error(w, "Var `id` must be set", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		var info *StreamStatus
+		if info, serverErr = m.Read(id); serverErr == nil {
+			uptime := info.Uptime().String()
+			counters := info.Metrics().GetCounters()
+			timings := info.Metrics().GetTimings()
+
+			obj := gabs.New()
+			for k, v := range counters {
+				obj.SetP(v, k)
+			}
+			for k, v := range timings {
+				obj.SetP(v, k)
+				obj.SetP(time.Duration(v).String(), k+"_readable")
+			}
+			obj.SetP(fmt.Sprintf("%v", uptime), "uptime")
+			w.Write(obj.Bytes())
+		}
+	default:
+		requestErr = fmt.Errorf("verb not supported: %v", r.Method)
+	}
+	if serverErr == ErrStreamDoesNotExist {
+		serverErr = nil
+		http.Error(w, "Stream not found", http.StatusNotFound)
 	}
 }
 

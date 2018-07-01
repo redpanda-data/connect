@@ -41,42 +41,64 @@ import (
 
 //------------------------------------------------------------------------------
 
-// streamWrapper tracks a stream along with information regarding its internals.
-type streamWrapper struct {
-	strm         *stream.Type
+// StreamStatus tracks a stream along with information regarding its internals.
+type StreamStatus struct {
 	config       stream.Config
+	strm         *stream.Type
+	logger       log.Modular
+	metrics      *metrics.Local
 	createdAt    time.Time
 	stoppedAfter int64
 }
 
-func newStreamWrapper(conf stream.Config) *streamWrapper {
-	return &streamWrapper{
+// NewStreamStatus creates a new StreamStatus.
+func NewStreamStatus(
+	conf stream.Config,
+	strm *stream.Type,
+	logger log.Modular,
+	stats *metrics.Local,
+) *StreamStatus {
+	return &StreamStatus{
 		config:    conf,
+		strm:      strm,
+		logger:    logger,
+		metrics:   stats,
 		createdAt: time.Now(),
 	}
 }
 
-func (s *streamWrapper) IsRunning() bool {
+// IsRunning returns a boolean indicating whether the stream is currently
+// running.
+func (s *StreamStatus) IsRunning() bool {
 	return atomic.LoadInt64(&s.stoppedAfter) == 0
 }
 
-func (s *streamWrapper) Uptime() time.Duration {
+// Uptime returns a time.Duration indicating the current uptime of the stream.
+func (s *StreamStatus) Uptime() time.Duration {
 	if stoppedAfter := atomic.LoadInt64(&s.stoppedAfter); stoppedAfter > 0 {
 		return time.Duration(stoppedAfter)
 	}
 	return time.Since(s.createdAt)
 }
 
-func (s *streamWrapper) Config() stream.Config {
+// Config returns the configuration of the stream.
+func (s *StreamStatus) Config() stream.Config {
 	return s.config
 }
 
-func (s *streamWrapper) SetClosed() {
-	atomic.SwapInt64(&s.stoppedAfter, int64(time.Since(s.createdAt)))
+// Metrics returns a metrics aggregator of the stream.
+func (s *StreamStatus) Metrics() *metrics.Local {
+	return s.metrics
 }
 
-func (s *streamWrapper) SetStream(strm *stream.Type) {
-	s.strm = strm
+// Logger returns the logger of the stream.
+func (s *StreamStatus) Logger() log.Modular {
+	return s.logger
+}
+
+// setClosed sets the flag indicating that the stream is closed.
+func (s *StreamStatus) setClosed() {
+	atomic.SwapInt64(&s.stoppedAfter, int64(time.Since(s.createdAt)))
 }
 
 //------------------------------------------------------------------------------
@@ -124,7 +146,7 @@ type StreamPipeConstructorFunc func(streamID string) (pipeline.Type, error)
 // the streams.
 type Type struct {
 	closed  bool
-	streams map[string]*streamWrapper
+	streams map[string]*StreamStatus
 
 	manager    types.Manager
 	stats      metrics.Type
@@ -141,7 +163,7 @@ type Type struct {
 // New creates a new stream manager.Type.
 func New(opts ...func(*Type)) *Type {
 	t := &Type{
-		streams:    map[string]*streamWrapper{},
+		streams:    map[string]*StreamStatus{},
 		manager:    types.DudMgr{},
 		stats:      metrics.DudType{},
 		apiTimeout: time.Second * 5,
@@ -264,58 +286,47 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		}(ctor)
 	}
 
-	wrapper := newStreamWrapper(conf)
+	strmLogger := m.logger.NewModule("." + id)
+	strmFlatMetrics := metrics.NewLocal()
+
+	var wrapper *StreamStatus
 	strm, err := stream.New(
 		conf,
 		stream.OptAddInputPipelines(inputPipeCtors...),
 		stream.OptAddProcessors(procCtors...),
 		stream.OptAddOutputPipelines(outputPipeCtors...),
-		stream.OptSetLogger(m.logger.NewModule("."+id)),
-		stream.OptSetStats(metrics.Namespaced(m.stats, id)),
+		stream.OptSetLogger(strmLogger),
+		stream.OptSetStats(metrics.Combine(metrics.Namespaced(m.stats, id), strmFlatMetrics)),
 		stream.OptSetManager(namespacedMgr(id, m.manager)),
 		stream.OptOnClose(func() {
-			wrapper.SetClosed()
+			wrapper.setClosed()
 		}),
 	)
 	if err != nil {
 		return err
 	}
 
-	wrapper.SetStream(strm)
-
+	wrapper = NewStreamStatus(conf, strm, strmLogger, strmFlatMetrics)
 	m.streams[id] = wrapper
 	return nil
 }
 
-// StreamStatus contains fields used to describe the current status of a managed
-// stream.
-type StreamStatus struct {
-	Active bool
-	Uptime time.Duration
-	Config stream.Config
-}
-
 // Read attempts to obtain the status of a managed stream. Returns an error if
 // the stream does not exist.
-func (m *Type) Read(id string) (StreamStatus, error) {
+func (m *Type) Read(id string) (*StreamStatus, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	status := StreamStatus{}
 	if m.closed {
-		return status, types.ErrTypeClosed
+		return nil, types.ErrTypeClosed
 	}
 
 	wrapper, exists := m.streams[id]
 	if !exists {
-		return status, ErrStreamDoesNotExist
+		return nil, ErrStreamDoesNotExist
 	}
 
-	status.Active = wrapper.IsRunning()
-	status.Config = wrapper.Config()
-	status.Uptime = wrapper.Uptime()
-
-	return status, nil
+	return wrapper, nil
 }
 
 // Update attempts to stop an existing stream and replace it with a new version
@@ -381,7 +392,7 @@ func (m *Type) Stop(timeout time.Duration) error {
 	resultChan := make(chan string)
 
 	for k, v := range m.streams {
-		go func(id string, strm *streamWrapper) {
+		go func(id string, strm *StreamStatus) {
 			if err := strm.strm.Stop(timeout); err != nil {
 				resultChan <- id
 			} else {
@@ -397,7 +408,7 @@ func (m *Type) Stop(timeout time.Duration) error {
 		}
 	}
 
-	m.streams = map[string]*streamWrapper{}
+	m.streams = map[string]*StreamStatus{}
 	m.closed = true
 
 	if len(failedStreams) > 0 {

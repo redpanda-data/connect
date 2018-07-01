@@ -104,4 +104,12 @@ Attempt to shut down and remove a stream identified by `id`.
 
 The stream was found, shut down and removed successfully.
 
+### GET `/streams/{id}/stats`
+
+Read the metrics of an existing stream as a hierarchical JSON object.
+
+#### Response 200
+
+The stream was found.
+
 [streams-api-walkthrough]: ../streams/using_REST_API.md

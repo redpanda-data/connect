@@ -144,9 +144,9 @@ func TestTypeBasicOperations(t *testing.T) {
 
 	if info, err := mgr.Read("foo"); err != nil {
 		t.Error(err)
-	} else if !info.Active {
+	} else if !info.IsRunning() {
 		t.Error("Stream not active")
-	} else if act, exp := info.Config, harmlessConf(); !reflect.DeepEqual(act, exp) {
+	} else if act, exp := info.Config(), harmlessConf(); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Unexpected config: %v != %v", act, exp)
 	}
 
@@ -159,9 +159,9 @@ func TestTypeBasicOperations(t *testing.T) {
 
 	if info, err := mgr.Read("foo"); err != nil {
 		t.Error(err)
-	} else if !info.Active {
+	} else if !info.IsRunning() {
 		t.Error("Stream not active")
-	} else if act, exp := info.Config, newConf; !reflect.DeepEqual(act, exp) {
+	} else if act, exp := info.Config(), newConf; !reflect.DeepEqual(act, exp) {
 		t.Errorf("Unexpected config: %v != %v", act, exp)
 	}
 

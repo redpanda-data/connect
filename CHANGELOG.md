@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New streams endpoint `/streams/{id}/stats` for obtaining JSON metrics for a
+  stream.
+
 ## 0.15.0 - 2018-06-28
 
 ### Added
