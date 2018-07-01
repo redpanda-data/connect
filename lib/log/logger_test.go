@@ -143,3 +143,49 @@ func TestLogLevels(t *testing.T) {
 		}
 	}
 }
+
+func TestLoggerFanOut(t *testing.T) {
+	var bufMain, buf2, buf3 closeBuf
+
+	conf := NewConfig()
+	conf.AddTimeStamp = false
+	l := New(&bufMain, conf)
+
+	l.Infoln("Foo bar 1")
+
+	l.AddWriter(&buf2)
+	l.Infoln("Foo bar 2")
+
+	l.RemoveWriter(&buf2)
+	l.AddWriter(&buf3)
+	l.Infoln("Foo bar 3")
+
+	l.Close()
+
+	exp := `{"level":"INFO","@service":"benthos","message":"Foo bar 1"}
+{"level":"INFO","@service":"benthos","message":"Foo bar 2"}
+{"level":"INFO","@service":"benthos","message":"Foo bar 3"}` + "\n"
+	if act := bufMain.buf.String(); exp != act {
+		t.Errorf("Wrong logged output: %v != %v", act, exp)
+	}
+
+	exp = `{"level":"INFO","@service":"benthos","message":"Foo bar 2"}` + "\n"
+	if act := buf2.buf.String(); exp != act {
+		t.Errorf("Wrong logged output: %v != %v", act, exp)
+	}
+
+	exp = `{"level":"INFO","@service":"benthos","message":"Foo bar 3"}` + "\n"
+	if act := buf3.buf.String(); exp != act {
+		t.Errorf("Wrong logged output: %v != %v", act, exp)
+	}
+
+	if bufMain.hasClosed {
+		t.Error("bufMain was closed")
+	}
+	if !buf2.hasClosed {
+		t.Error("buf2 not closed")
+	}
+	if !buf3.hasClosed {
+		t.Error("buf3 not closed")
+	}
+}

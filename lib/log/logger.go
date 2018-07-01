@@ -114,9 +114,10 @@ func NewConfig() Config {
 
 // Logger is an object with support for levelled logging and modular components.
 type Logger struct {
-	stream io.Writer
-	config Config
-	level  int
+	stream    io.Writer
+	fannedOut bool
+	config    Config
+	level     int
 }
 
 // New creates and returns a new logger object.
@@ -149,6 +150,38 @@ func (l *Logger) NewModule(prefix string) Modular {
 		config: config,
 		level:  l.level,
 	}
+}
+
+// AddWriter adds a new writer to the logger which receives the same log data as
+// the primary writer. If this new writer returns an error it is removed. The
+// logger becomes the owner of this writer and under any circumstance whereby
+// the writer is removed it will also be closed by the logger.
+func (l *Logger) AddWriter(w io.Writer) {
+	if !l.fannedOut {
+		l.stream = NewFanOutWriter(l.stream)
+		l.fannedOut = true
+	}
+	if fo, ok := l.stream.(*FanOutWriter); ok {
+		fo.Add(w)
+	}
+}
+
+// RemoveWriter removes writer from the logger.
+func (l *Logger) RemoveWriter(w io.Writer) {
+	if fo, ok := l.stream.(*FanOutWriter); ok {
+		fo.Remove(w)
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// Close the logger, including the underlying io.Writer if it implements the
+// io.Closer interface.
+func (l *Logger) Close() error {
+	if c, ok := l.stream.(io.Closer); ok {
+		return c.Close()
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------

@@ -46,8 +46,10 @@ type DudType struct {
 	ID int
 }
 
-// Noop is an alias for DudType.
-type Noop DudType
+// Noop returns a DudType for discarding metrics.
+func Noop() DudType {
+	return DudType{}
+}
 
 // GetCounter returns a DudStat.
 func (d DudType) GetCounter(path ...string) StatCounter { return DudStat{} }
