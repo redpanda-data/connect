@@ -5,10 +5,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.15.3 - 2018-07-03
+
 ### Added
 
 - New streams endpoint `/streams/{id}/stats` for obtaining JSON metrics for a
   stream.
+
+### Changed
+
+- Allow comma separated topics for `kafka_balanced`.
 
 ## 0.15.0 - 2018-06-28
 
