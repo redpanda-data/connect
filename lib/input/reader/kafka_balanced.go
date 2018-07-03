@@ -62,6 +62,7 @@ type KafkaBalanced struct {
 	cMut     sync.Mutex
 
 	addresses []string
+	topics    []string
 	conf      KafkaBalancedConfig
 	stats     metrics.Type
 	log       log.Modular
@@ -80,6 +81,13 @@ func NewKafkaBalanced(
 		for _, splitAddr := range strings.Split(addr, ",") {
 			if len(splitAddr) > 0 {
 				k.addresses = append(k.addresses, splitAddr)
+			}
+		}
+	}
+	for _, t := range conf.Topics {
+		for _, splitTopics := range strings.Split(t, ",") {
+			if len(splitTopics) > 0 {
+				k.topics = append(k.topics, splitTopics)
 			}
 		}
 	}
@@ -134,7 +142,7 @@ func (k *KafkaBalanced) Connect() error {
 	if consumer, err = cluster.NewConsumer(
 		k.addresses,
 		k.conf.ConsumerGroup,
-		k.conf.Topics,
+		k.topics,
 		config,
 	); err != nil {
 		return err
