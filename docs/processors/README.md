@@ -29,15 +29,16 @@ You can [find some examples here][0].
 10. [`filter_parts`](#filter_parts)
 11. [`grok`](#grok)
 12. [`hash_sample`](#hash_sample)
-13. [`insert_part`](#insert_part)
-14. [`jmespath`](#jmespath)
-15. [`json`](#json)
-16. [`merge_json`](#merge_json)
-17. [`noop`](#noop)
-18. [`sample`](#sample)
-19. [`select_parts`](#select_parts)
-20. [`split`](#split)
-21. [`unarchive`](#unarchive)
+13. [`http`](#http)
+14. [`insert_part`](#insert_part)
+15. [`jmespath`](#jmespath)
+16. [`json`](#json)
+17. [`merge_json`](#merge_json)
+18. [`noop`](#noop)
+19. [`sample`](#sample)
+20. [`select_parts`](#select_parts)
+21. [`split`](#split)
+22. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -365,6 +366,60 @@ The part indexes can be negative, and if so the part will be selected from the
 end counting backwards starting from -1. E.g. if index = -1 then the selected
 part will be the last part of the message, if index = -2 then the part before
 the last element with be selected, and so on.
+
+## `http`
+
+``` yaml
+type: http
+http:
+  parts: []
+  request:
+    backoff_on:
+    - 429
+    basic_auth:
+      enabled: false
+      password: ""
+      username: ""
+    content_type: application/octet-stream
+    drop_on: []
+    max_retry_backoff_ms: 300000
+    oauth:
+      access_token: ""
+      access_token_secret: ""
+      consumer_key: ""
+      consumer_secret: ""
+      enabled: false
+      request_url: ""
+    retries: 3
+    retry_period_ms: 1000
+    skip_cert_verify: false
+    timeout_ms: 5000
+    url: http://localhost:4195/post
+    verb: POST
+  request_map: {}
+  response_map: {}
+  strict_request_map: true
+```
+
+Performs an HTTP request using a message part as the request body and either
+replaces or augments the original message part with the body of the response.
+
+By default the entire contents of the message part are sent and the response
+entirely replaces the original contents. Alternatively, populating the
+`request_map` and `response_map` fields with a map of destination to
+source dot paths allows you to specify how the request payload is constructed,
+and how the response is mapped to the original payload respectively.
+
+When `strict_request_map` is set to `true` the processor is
+skipped for any payloads where a map target is not found.
+
+If the list of target parts is empty the processor will be applied to all
+message parts.
+
+Part indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if part = -1 then the selected part
+will be the last part of the message, if part = -2 then the part before the
+last element with be selected, and so on.
 
 ## `insert_part`
 

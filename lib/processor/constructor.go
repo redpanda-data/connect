@@ -67,6 +67,7 @@ type Config struct {
 	FilterParts FilterPartsConfig `json:"filter_parts" yaml:"filter_parts"`
 	Grok        GrokConfig        `json:"grok" yaml:"grok"`
 	HashSample  HashSampleConfig  `json:"hash_sample" yaml:"hash_sample"`
+	HTTP        HTTPConfig        `json:"http" yaml:"http"`
 	InsertPart  InsertPartConfig  `json:"insert_part" yaml:"insert_part"`
 	JMESPath    JMESPathConfig    `json:"jmespath" yaml:"jmespath"`
 	JSON        JSONConfig        `json:"json" yaml:"json"`
@@ -93,6 +94,7 @@ func NewConfig() Config {
 		FilterParts: NewFilterPartsConfig(),
 		Grok:        NewGrokConfig(),
 		HashSample:  NewHashSampleConfig(),
+		HTTP:        NewHTTPConfig(),
 		InsertPart:  NewInsertPartConfig(),
 		JMESPath:    NewJMESPathConfig(),
 		JSON:        NewJSONConfig(),

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `http` processor, where payloads can be sent to arbitrary HTTP endpoints
+  and the result constructed into a new payload.
+
 ## 0.15.3 - 2018-07-03
 
 ### Added

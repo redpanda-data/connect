@@ -59,8 +59,8 @@ If the initial jmespaths of part 0 were:
 
 Then the condition would pass.
 
-JMESPath is traditionally used for mutating JSON jmespath, in order to do this
-please instead use the ` + "[`jmespath`](../processors/README.md#jmespath)" + `
+JMESPath is traditionally used for mutating JSON, in order to do this please
+instead use the ` + "[`jmespath`](../processors/README.md#jmespath)" + `
 processor.`,
 	}
 }

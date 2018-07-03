@@ -204,6 +204,30 @@ pipeline:
       - ${PROCESSOR_HASH_SAMPLE_PARTS:0}
       retain_max: ${PROCESSOR_HASH_SAMPLE_RETAIN_MAX:10}
       retain_min: ${PROCESSOR_HASH_SAMPLE_RETAIN_MIN:0}
+    http:
+      request:
+        backoff_on:
+        - ${PROCESSOR_HTTP_REQUEST_BACKOFF_ON:429}
+        basic_auth:
+          enabled: ${PROCESSOR_HTTP_REQUEST_BASIC_AUTH_ENABLED:false}
+          password: ${PROCESSOR_HTTP_REQUEST_BASIC_AUTH_PASSWORD}
+          username: ${PROCESSOR_HTTP_REQUEST_BASIC_AUTH_USERNAME}
+        content_type: ${PROCESSOR_HTTP_REQUEST_CONTENT_TYPE:application/octet-stream}
+        max_retry_backoff_ms: ${PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF_MS:300000}
+        oauth:
+          access_token: ${PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN}
+          access_token_secret: ${PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN_SECRET}
+          consumer_key: ${PROCESSOR_HTTP_REQUEST_OAUTH_CONSUMER_KEY}
+          consumer_secret: ${PROCESSOR_HTTP_REQUEST_OAUTH_CONSUMER_SECRET}
+          enabled: ${PROCESSOR_HTTP_REQUEST_OAUTH_ENABLED:false}
+          request_url: ${PROCESSOR_HTTP_REQUEST_OAUTH_REQUEST_URL}
+        retries: ${PROCESSOR_HTTP_REQUEST_RETRIES:3}
+        retry_period_ms: ${PROCESSOR_HTTP_REQUEST_RETRY_PERIOD_MS:1000}
+        skip_cert_verify: ${PROCESSOR_HTTP_REQUEST_SKIP_CERT_VERIFY:false}
+        timeout_ms: ${PROCESSOR_HTTP_REQUEST_TIMEOUT_MS:5000}
+        url: ${PROCESSOR_HTTP_REQUEST_URL:http://localhost:4195/post}
+        verb: ${PROCESSOR_HTTP_REQUEST_VERB:POST}
+      strict_request_map: ${PROCESSOR_HTTP_STRICT_REQUEST_MAP:true}
     insert_part:
       content: ${PROCESSOR_INSERT_PART_CONTENT}
       index: ${PROCESSOR_INSERT_PART_INDEX:-1}
