@@ -45,19 +45,20 @@ level which is only applied to messages from the baz input.
 7. [`files`](#files)
 8. [`http_client`](#http_client)
 9. [`http_server`](#http_server)
-10. [`kafka`](#kafka)
-11. [`kafka_balanced`](#kafka_balanced)
-12. [`mqtt`](#mqtt)
-13. [`nats`](#nats)
-14. [`nats_stream`](#nats_stream)
-15. [`nsq`](#nsq)
-16. [`read_until`](#read_until)
-17. [`redis_list`](#redis_list)
-18. [`redis_pubsub`](#redis_pubsub)
-19. [`scalability_protocols`](#scalability_protocols)
-20. [`stdin`](#stdin)
-21. [`websocket`](#websocket)
-22. [`zmq4`](#zmq4)
+10. [`inproc`](#inproc)
+11. [`kafka`](#kafka)
+12. [`kafka_balanced`](#kafka_balanced)
+13. [`mqtt`](#mqtt)
+14. [`nats`](#nats)
+15. [`nats_stream`](#nats_stream)
+16. [`nsq`](#nsq)
+17. [`read_until`](#read_until)
+18. [`redis_list`](#redis_list)
+19. [`redis_pubsub`](#redis_pubsub)
+20. [`scalability_protocols`](#scalability_protocols)
+21. [`stdin`](#stdin)
+22. [`websocket`](#websocket)
+23. [`zmq4`](#zmq4)
 
 ## `amazon_s3`
 
@@ -347,6 +348,23 @@ which is enabled when key and cert files are specified.
 
 You can leave the 'address' config field blank in order to use the instance wide
 HTTP server.
+
+## `inproc`
+
+``` yaml
+type: inproc
+inproc: ""
+```
+
+Directly connect to an output within a Benthos process by referencing it by a
+chosen ID. This allows you to hook up isolated streams whilst running Benthos in
+[`--streams` mode](../streams/README.md) mode, it is NOT recommended
+that you connect the inputs of a stream with an output of the same stream, as
+feedback loops can lead to deadlocks in your message flow.
+
+It is possible to connect multiple inputs to the same inproc ID, but only one
+output can connect to an inproc ID, and will replace existing outputs if a
+collision occurs.
 
 ## `kafka`
 

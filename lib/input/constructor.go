@@ -71,6 +71,7 @@ type Config struct {
 	Files         reader.FilesConfig         `json:"files" yaml:"files"`
 	HTTPClient    HTTPClientConfig           `json:"http_client" yaml:"http_client"`
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
+	Inproc        InprocConfig               `json:"inproc" yaml:"inproc"`
 	Kafka         reader.KafkaConfig         `json:"kafka" yaml:"kafka"`
 	KafkaBalanced reader.KafkaBalancedConfig `json:"kafka_balanced" yaml:"kafka_balanced"`
 	MQTT          reader.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
@@ -100,6 +101,7 @@ func NewConfig() Config {
 		Files:         reader.NewFilesConfig(),
 		HTTPClient:    NewHTTPClientConfig(),
 		HTTPServer:    NewHTTPServerConfig(),
+		Inproc:        NewInprocConfig(),
 		Kafka:         reader.NewKafkaConfig(),
 		KafkaBalanced: reader.NewKafkaBalancedConfig(),
 		MQTT:          reader.NewMQTTConfig(),

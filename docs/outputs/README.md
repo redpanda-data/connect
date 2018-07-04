@@ -32,17 +32,18 @@ conditions please [read the docs here](../conditions/README.md)
 8. [`files`](#files)
 9. [`http_client`](#http_client)
 10. [`http_server`](#http_server)
-11. [`kafka`](#kafka)
-12. [`mqtt`](#mqtt)
-13. [`nats`](#nats)
-14. [`nats_stream`](#nats_stream)
-15. [`nsq`](#nsq)
-16. [`redis_list`](#redis_list)
-17. [`redis_pubsub`](#redis_pubsub)
-18. [`scalability_protocols`](#scalability_protocols)
-19. [`stdout`](#stdout)
-20. [`websocket`](#websocket)
-21. [`zmq4`](#zmq4)
+11. [`inproc`](#inproc)
+12. [`kafka`](#kafka)
+13. [`mqtt`](#mqtt)
+14. [`nats`](#nats)
+15. [`nats_stream`](#nats_stream)
+16. [`nsq`](#nsq)
+17. [`redis_list`](#redis_list)
+18. [`redis_pubsub`](#redis_pubsub)
+19. [`scalability_protocols`](#scalability_protocols)
+20. [`stdout`](#stdout)
+21. [`websocket`](#websocket)
+22. [`zmq4`](#zmq4)
 
 ## `amazon_s3`
 
@@ -331,6 +332,23 @@ service, but this will ignore TLS options.
 You can receive a single, discrete message on the configured 'path' endpoint, or
 receive a constant stream of line delimited messages on the configured
 'stream_path' endpoint.
+
+## `inproc`
+
+``` yaml
+type: inproc
+inproc: ""
+```
+
+Sends data directly to inputs by connecting to a unique ID. This allows you to
+hook up isolated streams whilst running Benthos in
+[`--streams` mode](../streams/README.md) mode, it is NOT recommended
+that you connect the inputs of a stream with an output of the same stream, as
+feedback loops can lead to deadlocks in your message flow.
+
+It is possible to connect multiple inputs to the same inproc ID, but only one
+output can connect to an inproc ID, and will replace existing outputs if a
+collision occurs.
 
 ## `kafka`
 

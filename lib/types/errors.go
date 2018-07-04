@@ -64,6 +64,7 @@ var (
 	ErrConditionNotFound = errors.New("condition not found")
 	ErrKeyAlreadyExists  = errors.New("key already exists")
 	ErrKeyNotFound       = errors.New("key does not exist")
+	ErrPipeNotFound      = errors.New("pipe was not found")
 )
 
 //------------------------------------------------------------------------------

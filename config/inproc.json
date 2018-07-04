@@ -1,0 +1,42 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000,
+		"root_path": "/benthos",
+		"debug_endpoints": false
+	},
+	"input": {
+		"type": "inproc",
+		"inproc": ""
+	},
+	"buffer": {
+		"type": "none",
+		"none": {}
+	},
+	"pipeline": {
+		"processors": [],
+		"threads": 1
+	},
+	"output": {
+		"type": "inproc",
+		"inproc": ""
+	},
+	"logger": {
+		"prefix": "benthos",
+		"log_level": "INFO",
+		"add_timestamp": true,
+		"json_format": true
+	},
+	"metrics": {
+		"type": "http_server",
+		"prefix": "benthos",
+		"http_server": {},
+		"prometheus": {},
+		"statsd": {
+			"address": "localhost:4040",
+			"flush_period": "100ms",
+			"max_packet_size": 1440,
+			"network": "udp"
+		}
+	}
+}

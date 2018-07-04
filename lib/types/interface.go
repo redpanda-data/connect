@@ -69,6 +69,15 @@ type Manager interface {
 
 	// GetCondition attempts to find a service wide condition by its name.
 	GetCondition(name string) (Condition, error)
+
+	// GetPipe attempts to find a service wide transaction chan by its name.
+	GetPipe(name string) (<-chan Transaction, error)
+
+	// SetPipe registers a transaction chan under a name.
+	SetPipe(name string, t <-chan Transaction)
+
+	// UnsetPipe removes a named transaction chan.
+	UnsetPipe(name string, t <-chan Transaction)
 }
 
 //------------------------------------------------------------------------------

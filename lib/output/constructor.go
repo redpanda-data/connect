@@ -72,6 +72,7 @@ type Config struct {
 	Files         writer.FilesConfig         `json:"files" yaml:"files"`
 	HTTPClient    writer.HTTPClientConfig    `json:"http_client" yaml:"http_client"`
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
+	Inproc        InprocConfig               `json:"inproc" yaml:"inproc"`
 	Kafka         writer.KafkaConfig         `json:"kafka" yaml:"kafka"`
 	MQTT          writer.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
 	NATS          NATSConfig                 `json:"nats" yaml:"nats"`
@@ -100,6 +101,7 @@ func NewConfig() Config {
 		Files:         writer.NewFilesConfig(),
 		HTTPClient:    writer.NewHTTPClientConfig(),
 		HTTPServer:    NewHTTPServerConfig(),
+		Inproc:        NewInprocConfig(),
 		Kafka:         writer.NewKafkaConfig(),
 		MQTT:          writer.NewMQTTConfig(),
 		NATS:          NewNATSConfig(),

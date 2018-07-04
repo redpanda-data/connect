@@ -116,6 +116,7 @@ INPUT_HTTP_SERVER_KEY_FILE
 INPUT_HTTP_SERVER_PATH                       = /post
 INPUT_HTTP_SERVER_TIMEOUT_MS                 = 5000
 INPUT_HTTP_SERVER_WS_PATH                    = /post/ws
+INPUT_INPROC
 INPUT_KAFKA_ADDRESSES                        = localhost:9092
 INPUT_KAFKA_BALANCED_ADDRESSES               = localhost:9092
 INPUT_KAFKA_BALANCED_CLIENT_ID               = benthos_kafka_input
@@ -304,6 +305,7 @@ OUTPUT_HTTP_SERVER_PATH                      = /get
 OUTPUT_HTTP_SERVER_STREAM_PATH               = /get/stream
 OUTPUT_HTTP_SERVER_TIMEOUT_MS                = 5000
 OUTPUT_HTTP_SERVER_WS_PATH                   = /get/ws
+OUTPUT_INPROC
 OUTPUT_KAFKA_ACK_REPLICAS                    = false
 OUTPUT_KAFKA_ADDRESSES                       = localhost:9092
 OUTPUT_KAFKA_CLIENT_ID                       = benthos_kafka_output

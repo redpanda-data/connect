@@ -57,6 +57,11 @@ func (f *fakeMgr) GetCache(name string) (types.Cache, error) {
 func (f *fakeMgr) GetCondition(name string) (types.Condition, error) {
 	return nil, types.ErrConditionNotFound
 }
+func (f *fakeMgr) GetPipe(name string) (<-chan types.Transaction, error) {
+	return nil, types.ErrPipeNotFound
+}
+func (f *fakeMgr) SetPipe(name string, prod <-chan types.Transaction)   {}
+func (f *fakeMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}
 
 func TestDedupe(t *testing.T) {
 	rndText1 := randStringRunes(20)

@@ -22,7 +22,6 @@ package stream
 
 import (
 	"bytes"
-	"os"
 	"runtime/pprof"
 	"time"
 
@@ -61,9 +60,9 @@ type Type struct {
 func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	t := &Type{
 		conf:    conf,
-		stats:   metrics.DudType{},
-		logger:  log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-		manager: types.DudMgr{},
+		stats:   metrics.Noop(),
+		logger:  log.Noop(),
+		manager: types.NoopMgr(),
 		onClose: func() {},
 	}
 	for _, opt := range opts {

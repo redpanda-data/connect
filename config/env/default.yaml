@@ -84,6 +84,7 @@ input:
         path: ${INPUT_HTTP_SERVER_PATH:/post}
         timeout_ms: ${INPUT_HTTP_SERVER_TIMEOUT_MS:5000}
         ws_path: ${INPUT_HTTP_SERVER_WS_PATH:/post/ws}
+      inproc: ${INPUT_INPROC}
       kafka:
         addresses:
         - ${INPUT_KAFKA_ADDRESSES:localhost:9092}
@@ -327,6 +328,7 @@ output:
         stream_path: ${OUTPUT_HTTP_SERVER_STREAM_PATH:/get/stream}
         timeout_ms: ${OUTPUT_HTTP_SERVER_TIMEOUT_MS:5000}
         ws_path: ${OUTPUT_HTTP_SERVER_WS_PATH:/get/ws}
+      inproc: ${OUTPUT_INPROC}
       kafka:
         ack_replicas: ${OUTPUT_KAFKA_ACK_REPLICAS:false}
         addresses:

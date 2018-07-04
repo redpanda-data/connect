@@ -42,3 +42,19 @@ func (f DudMgr) GetCache(name string) (Cache, error) {
 func (f DudMgr) GetCondition(name string) (Condition, error) {
 	return nil, ErrConditionNotFound
 }
+
+// GetPipe attempts to find a service wide message producer by its name.
+func (f DudMgr) GetPipe(name string) (<-chan Transaction, error) {
+	return nil, ErrPipeNotFound
+}
+
+// SetPipe registers a message producer under a name.
+func (f DudMgr) SetPipe(name string, t <-chan Transaction) {}
+
+// UnsetPipe removes a named pipe.
+func (f DudMgr) UnsetPipe(name string, t <-chan Transaction) {}
+
+// NoopMgr returns a Manager implementation that does nothing.
+func NoopMgr() Manager {
+	return DudMgr{}
+}

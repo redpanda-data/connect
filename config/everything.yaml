@@ -85,6 +85,7 @@ input:
     timeout_ms: 5000
     cert_file: ""
     key_file: ""
+  inproc: ""
   kafka:
     addresses:
     - localhost:9092
@@ -435,6 +436,7 @@ output:
     timeout_ms: 5000
     cert_file: ""
     key_file: ""
+  inproc: ""
   kafka:
     addresses:
     - localhost:9092

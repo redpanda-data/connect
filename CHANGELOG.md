@@ -5,10 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.15.4 - 2018-07-04
+
 ### Added
 
 - New `http` processor, where payloads can be sent to arbitrary HTTP endpoints
   and the result constructed into a new payload.
+- New `inproc` inputs and outputs for linking streams together.
 
 ## 0.15.3 - 2018-07-03
 

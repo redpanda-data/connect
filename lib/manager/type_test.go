@@ -127,4 +127,83 @@ func TestManagerBadCondition(t *testing.T) {
 	}
 }
 
+func TestManagerPipeErrors(t *testing.T) {
+	conf := NewConfig()
+	mgr, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err = mgr.GetPipe("does not exist"); err != types.ErrPipeNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, types.ErrPipeNotFound)
+	}
+}
+
+func TestManagerPipeGetSet(t *testing.T) {
+	conf := NewConfig()
+	mgr, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t1 := make(chan types.Transaction)
+	t2 := make(chan types.Transaction)
+	t3 := make(chan types.Transaction)
+
+	mgr.SetPipe("foo", t1)
+	mgr.SetPipe("bar", t3)
+
+	var p <-chan types.Transaction
+	if p, err = mgr.GetPipe("foo"); err != nil {
+		t.Fatal(err)
+	}
+	if p != t1 {
+		t.Error("Wrong transaction chan returned")
+	}
+
+	// Should be a noop
+	mgr.UnsetPipe("foo", t2)
+	if p, err = mgr.GetPipe("foo"); err != nil {
+		t.Fatal(err)
+	}
+	if p != t1 {
+		t.Error("Wrong transaction chan returned")
+	}
+	if p, err = mgr.GetPipe("bar"); err != nil {
+		t.Fatal(err)
+	}
+	if p != t3 {
+		t.Error("Wrong transaction chan returned")
+	}
+
+	mgr.UnsetPipe("foo", t1)
+	if _, err = mgr.GetPipe("foo"); err != types.ErrPipeNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, types.ErrPipeNotFound)
+	}
+
+	// Back to before
+	mgr.SetPipe("foo", t1)
+	if p, err = mgr.GetPipe("foo"); err != nil {
+		t.Fatal(err)
+	}
+	if p != t1 {
+		t.Error("Wrong transaction chan returned")
+	}
+
+	// Now replace pipe
+	mgr.SetPipe("foo", t2)
+	if p, err = mgr.GetPipe("foo"); err != nil {
+		t.Fatal(err)
+	}
+	if p != t2 {
+		t.Error("Wrong transaction chan returned")
+	}
+	if p, err = mgr.GetPipe("bar"); err != nil {
+		t.Fatal(err)
+	}
+	if p != t3 {
+		t.Error("Wrong transaction chan returned")
+	}
+}
+
 //------------------------------------------------------------------------------

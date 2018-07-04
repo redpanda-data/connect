@@ -23,6 +23,7 @@ package manager
 import (
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/Jeffail/benthos/lib/cache"
 	"github.com/Jeffail/benthos/lib/log"
@@ -68,6 +69,9 @@ type Type struct {
 	apiReg     APIReg
 	caches     map[string]types.Cache
 	conditions map[string]types.Condition
+
+	pipes    map[string]<-chan types.Transaction
+	pipeLock sync.RWMutex
 }
 
 // New returns an instance of manager.Type, which can be shared amongst
@@ -82,6 +86,7 @@ func New(
 		apiReg:     apiReg,
 		caches:     map[string]types.Cache{},
 		conditions: map[string]types.Condition{},
+		pipes:      map[string]<-chan types.Transaction{},
 	}
 
 	for k, conf := range conf.Caches {
@@ -136,6 +141,33 @@ func (t *Type) GetCache(name string) (types.Cache, error) {
 		return c, nil
 	}
 	return nil, types.ErrCacheNotFound
+}
+
+// GetPipe attempts to obtain and return a named output Pipe
+func (t *Type) GetPipe(name string) (<-chan types.Transaction, error) {
+	t.pipeLock.RLock()
+	pipe, exists := t.pipes[name]
+	t.pipeLock.RUnlock()
+	if exists {
+		return pipe, nil
+	}
+	return nil, types.ErrPipeNotFound
+}
+
+// SetPipe registers a new transaction chan to a named pipe.
+func (t *Type) SetPipe(name string, tran <-chan types.Transaction) {
+	t.pipeLock.Lock()
+	t.pipes[name] = tran
+	t.pipeLock.Unlock()
+}
+
+// UnsetPipe removes a named pipe transaction chan.
+func (t *Type) UnsetPipe(name string, tran <-chan types.Transaction) {
+	t.pipeLock.Lock()
+	if otran, exists := t.pipes[name]; exists && otran == tran {
+		delete(t.pipes, name)
+	}
+	t.pipeLock.Unlock()
 }
 
 // GetCondition attempts to find a service wide condition by its name.

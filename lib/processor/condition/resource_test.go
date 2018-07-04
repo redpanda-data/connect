@@ -45,6 +45,11 @@ func (f *fakeMgr) GetCondition(name string) (types.Condition, error) {
 	}
 	return nil, types.ErrConditionNotFound
 }
+func (f *fakeMgr) GetPipe(name string) (<-chan types.Transaction, error) {
+	return nil, types.ErrPipeNotFound
+}
+func (f *fakeMgr) SetPipe(name string, prod <-chan types.Transaction)   {}
+func (f *fakeMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}
 
 func TestResourceCheck(t *testing.T) {
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})

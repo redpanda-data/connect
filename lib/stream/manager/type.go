@@ -130,6 +130,24 @@ func (n *nsMgr) GetCondition(name string) (types.Condition, error) {
 	return n.mgr.GetCondition(name)
 }
 
+// GetPipe returns a named pipe transaction channel.
+func (n *nsMgr) GetPipe(name string) (<-chan types.Transaction, error) {
+	// Pipes are always absolute.
+	return n.mgr.GetPipe(name)
+}
+
+// SetPipe sets a named pipe.
+func (n *nsMgr) SetPipe(name string, t <-chan types.Transaction) {
+	// Pipes are always absolute.
+	n.mgr.SetPipe(name, t)
+}
+
+// UnsetPipe unsets a named pipe.
+func (n *nsMgr) UnsetPipe(name string, t <-chan types.Transaction) {
+	// Pipes are always absolute.
+	n.mgr.UnsetPipe(name, t)
+}
+
 //------------------------------------------------------------------------------
 
 // StreamProcConstructorFunc is a closure type that constructs a processor type
