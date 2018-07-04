@@ -14,16 +14,25 @@ buffer:
   type: none
   none: {}
 pipeline:
-  processors:
-  - type: bounds_check
-    bounds_check:
-      max_part_size: 1.073741824e+09
-      max_parts: 100
-      min_part_size: 1
-      min_parts: 1
+  processors: []
   threads: 1
 output:
   type: redis_list
   redis_list:
     key: benthos_list
     url: tcp://localhost:6379
+logger:
+  prefix: benthos
+  log_level: INFO
+  add_timestamp: true
+  json_format: true
+metrics:
+  type: http_server
+  prefix: benthos
+  http_server: {}
+  prometheus: {}
+  statsd:
+    address: localhost:4040
+    flush_period: 100ms
+    max_packet_size: 1440
+    network: udp

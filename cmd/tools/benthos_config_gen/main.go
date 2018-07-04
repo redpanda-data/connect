@@ -50,6 +50,8 @@ type Config struct {
 	Buffer   buffer.Config   `json:"buffer" yaml:"buffer"`
 	Pipeline pipeline.Config `json:"pipeline" yaml:"pipeline"`
 	Output   output.Config   `json:"output" yaml:"output"`
+	Logger   log.Config      `json:"logger" yaml:"logger"`
+	Metrics  metrics.Config  `json:"metrics" yaml:"metrics"`
 }
 
 // NewConfig returns a new configuration with default values.
@@ -60,6 +62,8 @@ func NewConfig() Config {
 		Buffer:   buffer.NewConfig(),
 		Pipeline: pipeline.NewConfig(),
 		Output:   output.NewConfig(),
+		Logger:   log.NewConfig(),
+		Metrics:  metrics.NewConfig(),
 	}
 }
 
@@ -104,12 +108,16 @@ func (c Config) Sanitised(sanitBuffer, sanitPipe bool) (interface{}, error) {
 		Buffer   interface{} `json:"buffer" yaml:"buffer"`
 		Pipeline interface{} `json:"pipeline" yaml:"pipeline"`
 		Output   interface{} `json:"output" yaml:"output"`
+		Logger   interface{} `json:"logger" yaml:"logger"`
+		Metrics  interface{} `json:"metrics" yaml:"metrics"`
 	}{
 		HTTP:     c.HTTP,
 		Input:    inConf,
 		Buffer:   bufConf,
 		Pipeline: pipeConf,
 		Output:   outConf,
+		Logger:   c.Logger,
+		Metrics:  c.Metrics,
 	}, nil
 }
 
@@ -463,7 +471,7 @@ func main() {
 		conf := NewConfig()
 		conf.Input.Processors = nil
 		conf.Output.Processors = nil
-		conf.Pipeline.Processors = append(conf.Pipeline.Processors, processor.NewConfig())
+		conf.Pipeline.Processors = nil
 
 		if _, exists := input.Constructors[t]; exists {
 			conf.Input.Type = t

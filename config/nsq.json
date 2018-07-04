@@ -25,17 +25,7 @@
 		"none": {}
 	},
 	"pipeline": {
-		"processors": [
-			{
-				"type": "bounds_check",
-				"bounds_check": {
-					"max_part_size": 1073741824,
-					"max_parts": 100,
-					"min_part_size": 1,
-					"min_parts": 1
-				}
-			}
-		],
+		"processors": [],
 		"threads": 1
 	},
 	"output": {
@@ -45,6 +35,24 @@
 			"nsqd_tcp_address": "localhost:4150",
 			"topic": "benthos_messages",
 			"user_agent": "benthos_producer"
+		}
+	},
+	"logger": {
+		"prefix": "benthos",
+		"log_level": "INFO",
+		"add_timestamp": true,
+		"json_format": true
+	},
+	"metrics": {
+		"type": "http_server",
+		"prefix": "benthos",
+		"http_server": {},
+		"prometheus": {},
+		"statsd": {
+			"address": "localhost:4040",
+			"flush_period": "100ms",
+			"max_packet_size": 1440,
+			"network": "udp"
 		}
 	}
 }
