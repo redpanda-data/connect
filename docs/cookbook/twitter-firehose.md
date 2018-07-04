@@ -2,9 +2,10 @@ Twitter Firehose
 ================
 
 This example demonstrates how Benthos can be used to stream the Twitter firehose
-into a Kafka topic. The example includes deduplication, which means multiple
-instances can be run for redundancy without swamping the Kafka cluster with
-duplicates. Deduplication is performed via a shared Memcached cluster.
+into a Kafka topic. The output section could be changed to target any of the
+[supported output types][outputs]. This example includes deduplication, which
+means multiple instances can be run for redundancy without swamping the data
+sink with duplicates. Deduplication is performed via a shared Memcached cluster.
 
 [As of the time of writing this example][stream-docs] there are three streaming
 APIs for Twitter: PowerTrack, Firehose and Replay. All three provide an HTTP
@@ -22,7 +23,27 @@ The input of this example is fairly standard. We initiate an HTTP stream which
 is automatically recovered if a disconnection occurs. The only processor
 attached to the input is a `bounds_check` filter that removes any empty lines.
 
-It's worth noting that you can use the `backfillMinutes` URL parameter if you
+``` yaml
+input:
+  type: http_client
+  http_client:
+    url: https://gnip-stream.twitter.com/stream/firehose/accounts/foo/publishers/twitter/prod.json?partition=1
+    verb: GET
+    content_type: application/json
+    basic_auth:
+      enabled: true
+      password: "" # TODO
+      username: "" # TODO
+    stream:
+      enabled: true
+      max_buffer: 10_000_000 # 10MB - The max supported length of a single line
+  processors:
+  - type: bounds_check # Filter out keep alives (empty message)
+    bounds_check:
+      min_part_size: 2
+```
+
+It's worth noting that you can add the `backfillMinutes` URL parameter if you
 have the feature enabled. This means any connection recovery will always gain a
 small window of automatic backfill.
 
@@ -62,10 +83,11 @@ pipeline:
 
 The pipeline section contains two processors.
 
-The first processor is a JMESPath query that checks whether the message object
-is an invalid JSON object or system error message from Twitter. We chose to
-remove these messages since client disconnects are handled automatically and
-it's possible to observe the reasons for a disconnection from the API dashboard.
+The first processor is a [JMESPath][jmespath] query which checks whether the
+message object is an invalid JSON object or system error message from Twitter.
+We chose to remove these messages since client disconnects are handled
+automatically and it's possible to observe the reasons for a disconnection from
+the API dashboard.
 
 The second processor is a deduplication step which checks the `id_str` field of
 the tweet against a shared Memcached cluster (the cache details are configured
@@ -76,6 +98,20 @@ tweaked in order to tune the optimum number of concurrent Memcached requests.
 ## Output
 
 The output section is a standard Kafka connection.
+
+``` yaml
+output:
+  type: kafka
+  kafka:
+    addresses:
+    - localhost:9092 # TODO
+    client_id: benthos_firehose_bridge
+    topic: twitter_firehose
+    max_msg_bytes: 10_000_000 # 10MB - The max supported message size
+```
+
+This can be changed to any other output type without impacting the rest of the
+pipeline.
 
 ## Resources
 
@@ -94,7 +130,9 @@ The resources section contains the configuration of our deduplication cache. We
 are using Memcached which allows us share the dedupe cache across multiple
 redundant Benthos instances. If you aren't using redundant instances or wish to
 deduplicate elsewhere then you can simply remove this section as well as the
-`dedupe` processor in the pipeline section, this should improve throughput.
+`dedupe` processor in the pipeline section, this should also improve throughput.
 
 [stream-docs]: http://support.gnip.com/apis/consuming_streaming_data.html
 [example]: ./twitter-firehose.yaml
+[outputs]: ../outputs/README.md
+[jmespath]: http://jmespath.org/
