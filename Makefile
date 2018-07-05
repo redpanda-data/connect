@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker clean docs test fmt lint install
+.PHONY: all deps rpm docker clean docs test fmt lint install docker-zmq
 
 TAGS =
 
@@ -29,9 +29,13 @@ $(APPS): %: $(PATHINSTBIN)/%
 
 docker:
 	@docker rmi jeffail/benthos:$(VERSION); true
-	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VERSION)
+	@docker build -f ./resources/docker/Dockerfile.zmq . -t jeffail/benthos:$(VERSION)
 	@docker rmi jeffail/benthos:latest; true
 	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:latest
+
+docker-zmq:
+	@docker rmi jeffail/benthos:$(VERSION)-zmq; true
+	@docker build -f ./resources/docker/Dockerfile.zmq . -t jeffail/benthos:$(VERSION)-zmq
 
 deps:
 	@go get github.com/golang/dep/cmd/dep
