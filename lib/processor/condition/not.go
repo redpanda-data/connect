@@ -63,6 +63,12 @@ Or, the same example as JSON:
 	}
 }
 ` + "```",
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			if conf.Not.Config == nil {
+				return struct{}{}, nil
+			}
+			return SanitiseConfig(*conf.Not.Config)
+		},
 	}
 }
 

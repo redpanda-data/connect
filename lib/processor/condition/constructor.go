@@ -44,7 +44,8 @@ type TypeSpec struct {
 		log log.Modular,
 		stats metrics.Type,
 	) (Type, error)
-	description string
+	description        string
+	sanitiseConfigFunc func(conf Config) (interface{}, error)
 }
 
 // Constructors is a map of all condition types with their specs.
@@ -96,8 +97,14 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	}
 
 	outputMap := config.Sanitised{}
-	outputMap["type"] = hashMap["type"]
-	outputMap[conf.Type] = hashMap[conf.Type]
+	outputMap["type"] = conf.Type
+	if sfunc := Constructors[conf.Type].sanitiseConfigFunc; sfunc != nil {
+		if outputMap[conf.Type], err = sfunc(conf); err != nil {
+			return nil, err
+		}
+	} else {
+		outputMap[conf.Type] = hashMap[conf.Type]
+	}
 
 	return outputMap, nil
 }

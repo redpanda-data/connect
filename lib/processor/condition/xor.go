@@ -37,6 +37,16 @@ func init() {
 Xor is a condition that returns the logical XOR of its children conditions,
 meaning it only resolves to true if _exactly_ one of its children conditions
 resolves to true.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			var err error
+			condConfs := make([]interface{}, len(conf.Xor))
+			for i, cConf := range conf.Xor {
+				if condConfs[i], err = SanitiseConfig(cConf); err != nil {
+					return nil, err
+				}
+			}
+			return condConfs, nil
+		},
 	}
 }
 

@@ -77,10 +77,9 @@ type Batch struct {
 	sizeTally int
 	parts     [][]byte
 
-	mCount     metrics.StatCounter
-	mWarnParts metrics.StatCounter
-	mSent      metrics.StatCounter
-	mDropped   metrics.StatCounter
+	mCount   metrics.StatCounter
+	mSent    metrics.StatCounter
+	mDropped metrics.StatCounter
 }
 
 // NewBatch returns a Batch processor.
@@ -92,10 +91,9 @@ func NewBatch(
 		stats: stats,
 		n:     conf.Batch.ByteSize,
 
-		mCount:     stats.GetCounter("processor.batch.count"),
-		mWarnParts: stats.GetCounter("processor.batch.warning.too_many_parts"),
-		mSent:      stats.GetCounter("processor.batch.sent"),
-		mDropped:   stats.GetCounter("processor.batch.dropped"),
+		mCount:   stats.GetCounter("processor.batch.count"),
+		mSent:    stats.GetCounter("processor.batch.sent"),
+		mDropped: stats.GetCounter("processor.batch.dropped"),
 	}, nil
 }
 

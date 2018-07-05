@@ -48,8 +48,9 @@ type TypeSpec struct {
 		stats metrics.Type,
 		pipelineConstructors ...pipeline.ConstructorFunc,
 	) (Type, error)
-	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
-	description string
+	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
+	description        string
+	sanitiseConfigFunc func(conf Config) (interface{}, error)
 }
 
 // Constructors is a map of all input types with their specs.
@@ -136,18 +137,9 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 
 	t := conf.Type
 	outputMap["type"] = t
-	if t == "broker" {
-		inSlice := []interface{}{}
-		for _, input := range conf.Broker.Inputs {
-			var sanInput interface{}
-			if sanInput, err = SanitiseConfig(input); err != nil {
-				return nil, err
-			}
-			inSlice = append(inSlice, sanInput)
-		}
-		outputMap["broker"] = map[string]interface{}{
-			"copies": conf.Broker.Copies,
-			"inputs": inSlice,
+	if sfunc := Constructors[t].sanitiseConfigFunc; sfunc != nil {
+		if outputMap[t], err = sfunc(conf); err != nil {
+			return nil, err
 		}
 	} else {
 		outputMap[t] = hashMap[t]

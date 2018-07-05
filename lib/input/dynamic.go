@@ -51,6 +51,22 @@ To perform CRUD actions on the inputs themselves use POST, DELETE, and GET
 methods on the '/input/{input_id}' endpoint. When using POST the body of the
 request should be a JSON configuration for the input, if the input already
 exists it will be changed.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			nestedInputs := conf.Dynamic.Inputs
+			inMap := map[string]interface{}{}
+			for k, input := range nestedInputs {
+				sanInput, err := SanitiseConfig(input)
+				if err != nil {
+					return nil, err
+				}
+				inMap[k] = sanInput
+			}
+			return map[string]interface{}{
+				"inputs":     inMap,
+				"prefix":     conf.Dynamic.Prefix,
+				"timeout_ms": conf.Dynamic.TimeoutMS,
+			}, nil
+		},
 	}
 }
 

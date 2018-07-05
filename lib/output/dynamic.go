@@ -51,6 +51,22 @@ To perform CRUD actions on the outputs themselves use POST, DELETE, and GET
 methods on the '/output/{output_id}' endpoint. When using POST the body of the
 request should be a JSON configuration for the output, if the output already
 exists it will be changed.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			nestedOutputs := conf.Dynamic.Outputs
+			outMap := map[string]interface{}{}
+			for k, output := range nestedOutputs {
+				sanOutput, err := SanitiseConfig(output)
+				if err != nil {
+					return nil, err
+				}
+				outMap[k] = sanOutput
+			}
+			return map[string]interface{}{
+				"outputs":    outMap,
+				"prefix":     conf.Dynamic.Prefix,
+				"timeout_ms": conf.Dynamic.TimeoutMS,
+			}, nil
+		},
 	}
 }
 

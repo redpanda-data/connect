@@ -38,6 +38,29 @@ Conditional is a processor that has a list of child 'processors',
 child 'processors' will be applied, otherwise the 'else_processors' are applied.
 This processor is useful for applying processors such as 'dedupe' based on the
 content type of the message.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			condSanit, err := condition.SanitiseConfig(conf.Conditional.Condition)
+			if err != nil {
+				return nil, err
+			}
+			procConfs := make([]interface{}, len(conf.Conditional.Processors))
+			for i, pConf := range conf.Conditional.Processors {
+				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
+					return nil, err
+				}
+			}
+			elseProcConfs := make([]interface{}, len(conf.Conditional.ElseProcessors))
+			for i, pConf := range conf.Conditional.ElseProcessors {
+				if elseProcConfs[i], err = SanitiseConfig(pConf); err != nil {
+					return nil, err
+				}
+			}
+			return map[string]interface{}{
+				"condition":       condSanit,
+				"processors":      procConfs,
+				"else_processors": elseProcConfs,
+			}, nil
+		},
 	}
 }
 

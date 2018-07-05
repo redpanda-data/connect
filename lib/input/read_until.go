@@ -47,6 +47,23 @@ Sometimes inputs close themselves. For example, when the ` + "`file`" + ` input
 type reaches the end of a file it will shut down. By default this type will also
 shut down. If you wish for the input type to be restarted every time it shuts
 down until the condition is met then set ` + "`restart_input` to `true`.",
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			condSanit, err := condition.SanitiseConfig(conf.ReadUntil.Condition)
+			if err != nil {
+				return nil, err
+			}
+			var inputSanit interface{} = struct{}{}
+			if conf.ReadUntil.Input != nil {
+				if inputSanit, err = SanitiseConfig(*conf.ReadUntil.Input); err != nil {
+					return nil, err
+				}
+			}
+			return map[string]interface{}{
+				"input":         inputSanit,
+				"restart_input": conf.ReadUntil.Restart,
+				"condition":     condSanit,
+			}, nil
+		},
 	}
 }
 

@@ -42,6 +42,9 @@ NOTE: If you are combining messages into batches using the
 ` + "[`combine`](#combine) or [`batch`](#batch)" + ` processors this filter will
 apply to the _whole_ batch. If you instead wish to filter _individual_ parts of
 the batch use the ` + "[`filter_parts`](#filter_parts)" + ` processor.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return condition.SanitiseConfig(conf.Filter.Config)
+		},
 	}
 }
 

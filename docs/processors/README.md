@@ -153,22 +153,11 @@ last element with be selected, and so on.
 type: conditional
 conditional:
   condition:
-    and: []
+    type: content
     content:
       arg: ""
       operator: equals_cs
       part: 0
-    count:
-      arg: 100
-    jmespath:
-      part: 0
-      query: ""
-    not: {}
-    or: []
-    resource: ""
-    static: true
-    type: content
-    xor: []
   else_processors: []
   processors: []
 ```
@@ -255,22 +244,11 @@ Caches should be configured as a resource, for more information check out the
 ``` yaml
 type: filter
 filter:
-  and: []
+  type: content
   content:
     arg: ""
     operator: equals_cs
     part: 0
-  count:
-    arg: 100
-  jmespath:
-    part: 0
-    query: ""
-  not: {}
-  or: []
-  resource: ""
-  static: true
-  type: content
-  xor: []
 ```
 
 Tests each message against a condition, if the condition fails then the message

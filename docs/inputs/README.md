@@ -486,22 +486,11 @@ Subscribe to an NSQ instance topic and channel.
 type: read_until
 read_until:
   condition:
-    and: []
+    type: content
     content:
       arg: ""
       operator: equals_cs
       part: 0
-    count:
-      arg: 100
-    jmespath:
-      part: 0
-      query: ""
-    not: {}
-    or: []
-    resource: ""
-    static: true
-    type: content
-    xor: []
   input: {}
   restart_input: false
 ```

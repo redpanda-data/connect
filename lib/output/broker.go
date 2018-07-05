@@ -121,6 +121,22 @@ level, where they will be applied to _all_ child outputs, as well as on the
 individual child outputs. If you have processors at both the broker level _and_
 on child outputs then the broker processors will be applied _after_ the child
 nodes processors.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			nestedOutputs := conf.Broker.Outputs
+			outSlice := []interface{}{}
+			for _, output := range nestedOutputs {
+				sanOutput, err := SanitiseConfig(output)
+				if err != nil {
+					return nil, err
+				}
+				outSlice = append(outSlice, sanOutput)
+			}
+			return map[string]interface{}{
+				"copies":  conf.Broker.Copies,
+				"pattern": conf.Broker.Pattern,
+				"outputs": outSlice,
+			}, nil
+		},
 	}
 }
 
