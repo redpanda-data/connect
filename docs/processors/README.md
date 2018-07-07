@@ -137,7 +137,7 @@ compress:
 ```
 
 Compresses parts of a message according to the selected algorithm. Supported
-compression types are: gzip (I'll add more later). If the list of target parts
+available compression types are: gzip, zlib, flate. If the list of target parts
 is empty the compression will be applied to all message parts.
 
 The 'level' field might not apply to all algorithms.
@@ -178,7 +178,7 @@ decompress:
 ```
 
 Decompresses the parts of a message according to the selected algorithm.
-Supported decompression types are: gzip (I'll add more later). If the list of
+Supported decompression types are: gzip, zlib, bzip2, flate. If the list of
 target parts is empty the decompression will be applied to all message parts.
 
 Part indexes can be negative, and if so the part will be selected from the end

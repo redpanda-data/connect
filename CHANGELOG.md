@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- More compression and decompression targets.
+
 ## 0.15.4 - 2018-07-04
 
 ### Added

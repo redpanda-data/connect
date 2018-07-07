@@ -22,7 +22,9 @@ package processor
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"fmt"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -37,7 +39,7 @@ func init() {
 		constructor: NewCompress,
 		description: `
 Compresses parts of a message according to the selected algorithm. Supported
-compression types are: gzip (I'll add more later). If the list of target parts
+available compression types are: gzip, zlib, flate. If the list of target parts
 is empty the compression will be applied to all message parts.
 
 The 'level' field might not apply to all algorithms.
@@ -85,10 +87,42 @@ func gzipCompress(level int, b []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func zlibCompress(level int, b []byte) ([]byte, error) {
+	buf := &bytes.Buffer{}
+	zw, err := zlib.NewWriterLevel(buf, level)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = zw.Write(b); err != nil {
+		return nil, err
+	}
+	zw.Close()
+	return buf.Bytes(), nil
+}
+
+func flateCompress(level int, b []byte) ([]byte, error) {
+	buf := &bytes.Buffer{}
+	zw, err := flate.NewWriter(buf, level)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = zw.Write(b); err != nil {
+		return nil, err
+	}
+	zw.Close()
+	return buf.Bytes(), nil
+}
+
 func strToCompressor(str string) (compressFunc, error) {
 	switch str {
 	case "gzip":
 		return gzipCompress, nil
+	case "zlib":
+		return zlibCompress, nil
+	case "flate":
+		return flateCompress, nil
 	}
 	return nil, fmt.Errorf("compression type not recognised: %v", str)
 }

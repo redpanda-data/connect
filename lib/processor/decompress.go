@@ -22,7 +22,10 @@ package processor
 
 import (
 	"bytes"
+	"compress/bzip2"
+	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"fmt"
 	"io"
 
@@ -38,7 +41,7 @@ func init() {
 		constructor: NewDecompress,
 		description: `
 Decompresses the parts of a message according to the selected algorithm.
-Supported decompression types are: gzip (I'll add more later). If the list of
+Supported decompression types are: gzip, zlib, bzip2, flate. If the list of
 target parts is empty the decompression will be applied to all message parts.
 
 Part indexes can be negative, and if so the part will be selected from the end
@@ -86,10 +89,54 @@ func gzipDecompress(b []byte) ([]byte, error) {
 	return outBuf.Bytes(), nil
 }
 
+func zlibDecompress(b []byte) ([]byte, error) {
+	buf := bytes.NewBuffer(b)
+	zr, err := zlib.NewReader(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	outBuf := bytes.Buffer{}
+	if _, err = outBuf.ReadFrom(zr); err != nil && err != io.EOF {
+		return nil, err
+	}
+	zr.Close()
+	return outBuf.Bytes(), nil
+}
+
+func flateDecompress(b []byte) ([]byte, error) {
+	buf := bytes.NewBuffer(b)
+	zr := flate.NewReader(buf)
+
+	outBuf := bytes.Buffer{}
+	if _, err := outBuf.ReadFrom(zr); err != nil && err != io.EOF {
+		return nil, err
+	}
+	zr.Close()
+	return outBuf.Bytes(), nil
+}
+
+func bzip2Decompress(b []byte) ([]byte, error) {
+	buf := bytes.NewBuffer(b)
+	zr := bzip2.NewReader(buf)
+
+	outBuf := bytes.Buffer{}
+	if _, err := outBuf.ReadFrom(zr); err != nil && err != io.EOF {
+		return nil, err
+	}
+	return outBuf.Bytes(), nil
+}
+
 func strToDecompressor(str string) (decompressFunc, error) {
 	switch str {
 	case "gzip":
 		return gzipDecompress, nil
+	case "zlib":
+		return zlibDecompress, nil
+	case "flate":
+		return flateDecompress, nil
+	case "bzip2":
+		return bzip2Decompress, nil
 	}
 	return nil, fmt.Errorf("decompression type not recognised: %v", str)
 }

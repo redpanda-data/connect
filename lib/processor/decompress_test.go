@@ -22,7 +22,9 @@ package processor
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"os"
 	"reflect"
 	"testing"
@@ -66,6 +68,105 @@ func TestDecompressGZIP(t *testing.T) {
 		var buf bytes.Buffer
 
 		zw := gzip.NewWriter(&buf)
+		zw.Write(input[i])
+		zw.Close()
+
+		input[i] = buf.Bytes()
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewDecompress(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(types.NewMessage(input))
+	if len(msgs) != 1 {
+		t.Error("Decompress failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestDecompressZLIB(t *testing.T) {
+	conf := NewConfig()
+	conf.Decompress.Algorithm = "zlib"
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		exp = append(exp, input[i])
+
+		var buf bytes.Buffer
+
+		zw := zlib.NewWriter(&buf)
+		zw.Write(input[i])
+		zw.Close()
+
+		input[i] = buf.Bytes()
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewDecompress(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(types.NewMessage(input))
+	if len(msgs) != 1 {
+		t.Error("Decompress failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestDecompressFlate(t *testing.T) {
+	conf := NewConfig()
+	conf.Decompress.Algorithm = "flate"
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		exp = append(exp, input[i])
+
+		var buf bytes.Buffer
+
+		zw, err := flate.NewWriter(&buf, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
 		zw.Write(input[i])
 		zw.Close()
 
