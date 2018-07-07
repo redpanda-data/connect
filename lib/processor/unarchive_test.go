@@ -106,6 +106,42 @@ func TestUnarchiveTar(t *testing.T) {
 	}
 }
 
+func TestUnarchiveLines(t *testing.T) {
+	conf := NewConfig()
+	conf.Unarchive.Format = "lines"
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+
+	exp := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{
+		[]byte(`hello world first part
+hello world second part
+third part
+fourth
+5`),
+	}))
+	if len(msgs) != 1 {
+		t.Error("Unarchive failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
 func TestUnarchiveBinary(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "binary"

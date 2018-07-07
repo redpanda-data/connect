@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - More compression and decompression targets.
+- New `lines` option for archive/unarchive processors.
 
 ## 0.15.4 - 2018-07-04
 

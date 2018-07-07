@@ -38,8 +38,8 @@ func init() {
 		constructor: NewUnarchive,
 		description: `
 Unarchives parts of a message according to the selected archive type into
-multiple parts. Supported archive types are: tar, binary. If the list of target
-parts is empty the unarchive will be applied to all message parts.
+multiple parts. Supported archive types are: tar, binary, lines. If the list of
+target parts is empty the unarchive will be applied to all message parts.
 
 When a part is unarchived it is split into more message parts that replace the
 original part. If you wish to split the archive into one message per file then
@@ -112,12 +112,18 @@ func binaryUnarchive(b []byte) ([][]byte, error) {
 	return msg.GetAll(), nil
 }
 
+func linesUnarchive(b []byte) ([][]byte, error) {
+	return bytes.Split(b, []byte("\n")), nil
+}
+
 func strToUnarchiver(str string) (unarchiveFunc, error) {
 	switch str {
 	case "tar":
 		return tarUnarchive, nil
 	case "binary":
 		return binaryUnarchive, nil
+	case "lines":
+		return linesUnarchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }

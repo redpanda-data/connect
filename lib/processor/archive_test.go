@@ -101,6 +101,45 @@ func TestArchiveTar(t *testing.T) {
 	}
 }
 
+func TestArchiveLines(t *testing.T) {
+	conf := NewConfig()
+	conf.Archive.Format = "lines"
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+
+	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}))
+	if len(msgs) != 1 {
+		t.Error("Archive failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if msgs[0].Len() != 1 {
+		t.Fatal("More parts than expected")
+	}
+
+	exp := [][]byte{
+		[]byte(`hello world first part
+hello world second part
+third part
+fourth
+5`),
+	}
+	if act := msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
 func TestArchiveBinary(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "binary"

@@ -50,7 +50,7 @@ archive:
 ```
 
 Archives all the parts of a message into a single part according to the selected
-archive type. Supported archive types are: tar, binary (I'll add more later).
+archive type. Supported archive types are: tar, binary, lines.
 
 Some archive types (such as tar) treat each archive item (message part) as a
 file with a path. Since message parts only contain raw data a unique path must
@@ -644,8 +644,8 @@ unarchive:
 ```
 
 Unarchives parts of a message according to the selected archive type into
-multiple parts. Supported archive types are: tar, binary. If the list of target
-parts is empty the unarchive will be applied to all message parts.
+multiple parts. Supported archive types are: tar, binary, lines. If the list of
+target parts is empty the unarchive will be applied to all message parts.
 
 When a part is unarchived it is split into more message parts that replace the
 original part. If you wish to split the archive into one message per file then

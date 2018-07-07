@@ -40,7 +40,7 @@ func init() {
 		constructor: NewArchive,
 		description: `
 Archives all the parts of a message into a single part according to the selected
-archive type. Supported archive types are: tar, binary (I'll add more later).
+archive type. Supported archive types are: tar, binary, lines.
 
 Some archive types (such as tar) treat each archive item (message part) as a
 file with a path. Since message parts only contain raw data a unique path must
@@ -98,12 +98,18 @@ func binaryArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
 	return types.NewMessage(parts).Bytes(), nil
 }
 
+func linesArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
+	return bytes.Join(parts, []byte("\n")), nil
+}
+
 func strToArchiver(str string) (archiveFunc, error) {
 	switch str {
 	case "tar":
 		return tarArchive, nil
 	case "binary":
 		return binaryArchive, nil
+	case "lines":
+		return linesArchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }
