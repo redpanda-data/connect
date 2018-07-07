@@ -22,7 +22,8 @@
 			{
 				"type": "batch",
 				"batch": {
-					"byte_size": 10000
+					"byte_size": 10000,
+					"period_ms": 0
 				}
 			}
 		],

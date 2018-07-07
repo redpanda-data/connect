@@ -21,6 +21,8 @@
 package processor
 
 import (
+	"time"
+
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
@@ -38,6 +40,12 @@ configured byte size. Once the limit is reached the parts are combined into a
 single batch of messages and sent through the pipeline. Once the combined batch
 has reached a destination the acknowledgment is sent out for all messages inside
 the batch, preserving at-least-once delivery guarantees.
+
+The ` + "`period_ms`" + ` field is optional, and when greater than zero defines
+a period in milliseconds whereby a batch is sent even if the ` + "`byte_size`" + `
+has not yet been reached. Batch parameters are only triggered when a message is
+added, meaning a pending batch can last beyond this period if no messages are
+added since the period was reached.
 
 When a batch is sent to an output the behaviour will differ depending on the
 protocol. If the output type supports multipart messages then the batch is sent
@@ -57,12 +65,14 @@ unexpected behaviour and message ordering.`,
 // BatchConfig contains configuration for the Batch processor.
 type BatchConfig struct {
 	ByteSize int `json:"byte_size" yaml:"byte_size"`
+	PeriodMS int `json:"period_ms" yaml:"period_ms"`
 }
 
 // NewBatchConfig returns a BatchConfig with default values.
 func NewBatchConfig() BatchConfig {
 	return BatchConfig{
 		ByteSize: 10000,
+		PeriodMS: 0,
 	}
 }
 
@@ -74,8 +84,11 @@ type Batch struct {
 	log       log.Modular
 	stats     metrics.Type
 	n         int
+	period    time.Duration
 	sizeTally int
 	parts     [][]byte
+
+	lastBatch time.Time
 
 	mCount   metrics.StatCounter
 	mSent    metrics.StatCounter
@@ -87,9 +100,12 @@ func NewBatch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	return &Batch{
-		log:   log.NewModule(".processor.batch"),
-		stats: stats,
-		n:     conf.Batch.ByteSize,
+		log:    log.NewModule(".processor.batch"),
+		stats:  stats,
+		n:      conf.Batch.ByteSize,
+		period: time.Duration(conf.Batch.PeriodMS) * time.Millisecond,
+
+		lastBatch: time.Now(),
 
 		mCount:   stats.GetCounter("processor.batch.count"),
 		mSent:    stats.GetCounter("processor.batch.sent"),
@@ -112,10 +128,12 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	}
 
 	// If we have reached our target count of parts in the buffer.
-	if c.sizeTally >= c.n {
+	if c.sizeTally >= c.n ||
+		(c.period > 0 && time.Since(c.lastBatch) > c.period) {
 		newMsg := types.NewMessage(c.parts)
 		c.parts = nil
 		c.sizeTally = 0
+		c.lastBatch = time.Now()
 
 		c.mSent.Incr(1)
 		msgs := [1]types.Message{newMsg}

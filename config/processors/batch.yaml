@@ -18,6 +18,7 @@ pipeline:
   - type: batch
     batch:
       byte_size: 10000
+      period_ms: 0
   threads: 1
 output:
   type: stdout

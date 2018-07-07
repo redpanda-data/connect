@@ -9,12 +9,12 @@ various sources and sinks and perform arbitrary
 [actions, transformations and filters][processors] on payloads. It is ready to
 drop into your pipeline either as a static binary or a docker image.
 
-A Benthos instance (stream) consists of four components; [inputs][inputs],
-optional [buffer][buffers], [processor][processors] workers and
-[outputs][outputs]. Inputs and outputs can be combined in a range of broker
-patterns. It is possible to run multiple isolated streams within a single
-Benthos instance using [`--streams` mode][streams-mode], and perform CRUD
-operations on them via [REST endpoints][streams-api].
+A Benthos pipeline consists of four components; [inputs][inputs], optional
+[buffer][buffers], [processor][processors] workers and [outputs][outputs].
+Inputs and outputs can be combined in a range of broker patterns. It is possible
+to run multiple isolated pipelines within a single Benthos instance using
+[`--streams` mode][streams-mode], and perform CRUD operations on the running
+pipelines via [REST endpoints][streams-api].
 
 ### Delivery Guarantees
 

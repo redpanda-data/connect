@@ -194,6 +194,7 @@ PROCESSOR_TYPE                                   = noop
 PROCESSOR_ARCHIVE_FORMAT                         = binary
 PROCESSOR_ARCHIVE_PATH                           = ${!count:files}-${!timestamp_unix_nano}.txt
 PROCESSOR_BATCH_BYTE_SIZE                        = 10000
+PROCESSOR_BATCH_PERIOD_MS                        = 0
 PROCESSOR_BOUNDS_CHECK_MAX_PARTS                 = 100
 PROCESSOR_BOUNDS_CHECK_MAX_PART_SIZE             = 1073741824
 PROCESSOR_BOUNDS_CHECK_MIN_PARTS                 = 1

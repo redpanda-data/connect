@@ -215,6 +215,7 @@ pipeline:
       path: ${!count:files}-${!timestamp_unix_nano}.txt
     batch:
       byte_size: 10000
+      period_ms: 0
     bounds_check:
       max_parts: 100
       min_parts: 1
