@@ -193,8 +193,12 @@ pipeline:
     compress:
       algorithm: ${PROCESSOR_COMPRESS_ALGORITHM:gzip}
       level: ${PROCESSOR_COMPRESS_LEVEL:-1}
+    decode:
+      scheme: ${PROCESSOR_DECODE_SCHEME:base64}
     decompress:
       algorithm: ${PROCESSOR_DECOMPRESS_ALGORITHM:gzip}
+    encode:
+      scheme: ${PROCESSOR_ENCODE_SCHEME:base64}
     grok:
       named_captures_only: ${PROCESSOR_GROK_NAMED_CAPTURES_ONLY:true}
       output_format: ${PROCESSOR_GROK_OUTPUT_FORMAT:json}

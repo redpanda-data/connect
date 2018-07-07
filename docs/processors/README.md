@@ -23,22 +23,24 @@ You can [find some examples here][0].
 4. [`combine`](#combine)
 5. [`compress`](#compress)
 6. [`conditional`](#conditional)
-7. [`decompress`](#decompress)
-8. [`dedupe`](#dedupe)
-9. [`filter`](#filter)
-10. [`filter_parts`](#filter_parts)
-11. [`grok`](#grok)
-12. [`hash_sample`](#hash_sample)
-13. [`http`](#http)
-14. [`insert_part`](#insert_part)
-15. [`jmespath`](#jmespath)
-16. [`json`](#json)
-17. [`merge_json`](#merge_json)
-18. [`noop`](#noop)
-19. [`sample`](#sample)
-20. [`select_parts`](#select_parts)
-21. [`split`](#split)
-22. [`unarchive`](#unarchive)
+7. [`decode`](#decode)
+8. [`decompress`](#decompress)
+9. [`dedupe`](#dedupe)
+10. [`encode`](#encode)
+11. [`filter`](#filter)
+12. [`filter_parts`](#filter_parts)
+13. [`grok`](#grok)
+14. [`hash_sample`](#hash_sample)
+15. [`http`](#http)
+16. [`insert_part`](#insert_part)
+17. [`jmespath`](#jmespath)
+18. [`json`](#json)
+19. [`merge_json`](#merge_json)
+20. [`noop`](#noop)
+21. [`sample`](#sample)
+22. [`select_parts`](#select_parts)
+23. [`split`](#split)
+24. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -168,6 +170,24 @@ child 'processors' will be applied, otherwise the 'else_processors' are applied.
 This processor is useful for applying processors such as 'dedupe' based on the
 content type of the message.
 
+## `decode`
+
+``` yaml
+type: decode
+decode:
+  parts: []
+  scheme: base64
+```
+
+Decodes parts of a message according to the selected scheme. Supported available
+schemes are: base64. If the list of target parts is empty the decoding will be
+applied to all message parts.
+
+Part indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if index = -1 then the selected part
+will be the last part of the message, if index = -2 then the part before the
+last element with be selected, and so on.
+
 ## `decompress`
 
 ``` yaml
@@ -238,6 +258,24 @@ dedupe:
 
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).
+
+## `encode`
+
+``` yaml
+type: encode
+encode:
+  parts: []
+  scheme: base64
+```
+
+Encodes parts of a message according to the selected scheme. Supported available
+schemes are: base64. If the list of target parts is empty the encoding will be
+applied to all message parts.
+
+Part indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if index = -1 then the selected part
+will be the last part of the message, if index = -2 then the part before the
+last element with be selected, and so on.
 
 ## `filter`
 

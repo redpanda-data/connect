@@ -246,6 +246,9 @@ pipeline:
         xor: []
       processors: []
       else_processors: []
+    decode:
+      scheme: base64
+      parts: []
     decompress:
       algorithm: gzip
       parts: []
@@ -256,6 +259,9 @@ pipeline:
       - 0
       json_paths: []
       drop_on_err: true
+    encode:
+      scheme: base64
+      parts: []
     filter:
       type: content
       and: []

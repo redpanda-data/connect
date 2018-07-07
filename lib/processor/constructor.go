@@ -62,8 +62,10 @@ type Config struct {
 	Combine     CombineConfig     `json:"combine" yaml:"combine"`
 	Compress    CompressConfig    `json:"compress" yaml:"compress"`
 	Conditional ConditionalConfig `json:"conditional" yaml:"conditional"`
+	Decode      DecodeConfig      `json:"decode" yaml:"decode"`
 	Decompress  DecompressConfig  `json:"decompress" yaml:"decompress"`
 	Dedupe      DedupeConfig      `json:"dedupe" yaml:"dedupe"`
+	Encode      EncodeConfig      `json:"encode" yaml:"encode"`
 	Filter      FilterConfig      `json:"filter" yaml:"filter"`
 	FilterParts FilterPartsConfig `json:"filter_parts" yaml:"filter_parts"`
 	Grok        GrokConfig        `json:"grok" yaml:"grok"`
@@ -89,8 +91,10 @@ func NewConfig() Config {
 		Combine:     NewCombineConfig(),
 		Compress:    NewCompressConfig(),
 		Conditional: NewConditionalConfig(),
+		Decode:      NewDecodeConfig(),
 		Decompress:  NewDecompressConfig(),
 		Dedupe:      NewDedupeConfig(),
+		Encode:      NewEncodeConfig(),
 		Filter:      NewFilterConfig(),
 		FilterParts: NewFilterPartsConfig(),
 		Grok:        NewGrokConfig(),
