@@ -97,7 +97,16 @@ no-op.
 #### ` + "`select`" + `
 
 Reads the value found at a dot path and replaced the original contents entirely
-by the new value.`,
+by the new value.
+
+#### ` + "`clean`" + `
+
+Walks the JSON structure and deletes any fields where the value is:
+
+- An empty array
+- An empty object
+- An empty string
+- null`,
 	}
 }
 
@@ -242,6 +251,76 @@ func newDeleteOperator(path []string) jsonOperator {
 	}
 }
 
+func newCleanOperator(path []string) jsonOperator {
+	return func(body interface{}, value rawJSONValue) (interface{}, error) {
+		gRoot, err := gabs.Consume(body)
+		if err != nil {
+			return nil, err
+		}
+
+		var cleanValueFn func(g interface{}) interface{}
+		var cleanArrayFn func(g []interface{}) []interface{}
+		var cleanObjectFn func(g map[string]interface{}) map[string]interface{}
+		cleanValueFn = func(g interface{}) interface{} {
+			if g == nil {
+				return nil
+			}
+			switch t := g.(type) {
+			case map[string]interface{}:
+				if nv := cleanObjectFn(t); len(nv) > 0 {
+					return nv
+				}
+				return nil
+			case []interface{}:
+				if na := cleanArrayFn(t); len(na) > 0 {
+					return na
+				}
+				return nil
+			case string:
+				if len(t) > 0 {
+					return t
+				}
+				return nil
+			}
+			return g
+		}
+		cleanArrayFn = func(g []interface{}) []interface{} {
+			newArray := []interface{}{}
+			for _, v := range g {
+				if nv := cleanValueFn(v); nv != nil {
+					newArray = append(newArray, nv)
+				}
+			}
+			return newArray
+		}
+		cleanObjectFn = func(g map[string]interface{}) map[string]interface{} {
+			newObject := map[string]interface{}{}
+			for k, v := range g {
+				if nv := cleanValueFn(v); nv != nil {
+					newObject[k] = nv
+				}
+			}
+			return newObject
+		}
+		if val := cleanValueFn(gRoot.S(path...).Data()); val == nil {
+			if len(path) == 0 {
+				switch gRoot.Data().(type) {
+				case []interface{}:
+					return []interface{}{}, nil
+				case map[string]interface{}:
+					return map[string]interface{}{}, nil
+				}
+				return nil, nil
+			}
+			gRoot.Delete(path...)
+		} else {
+			gRoot.Set(val, path...)
+		}
+
+		return gRoot.Data(), nil
+	}
+}
+
 func newAppendOperator(path []string) jsonOperator {
 	return func(body interface{}, value rawJSONValue) (interface{}, error) {
 		gPart, err := gabs.Consume(body)
@@ -289,6 +368,8 @@ func getOperator(opStr string, path []string) (jsonOperator, error) {
 		return newDeleteOperator(path), nil
 	case "append":
 		return newAppendOperator(path), nil
+	case "clean":
+		return newCleanOperator(path), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }

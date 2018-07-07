@@ -223,6 +223,125 @@ func TestJSONAppend(t *testing.T) {
 	}
 }
 
+func TestJSONClean(t *testing.T) {
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	type jTest struct {
+		name   string
+		path   string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "clean nothing",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":5}}`,
+			output: `{"foo":{"bar":5}}`,
+		},
+		{
+			name:   "clean array",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":[]}}`,
+			output: `{"foo":{}}`,
+		},
+		{
+			name:   "clean array 2",
+			path:   "foo.bar",
+			input:  `{"foo":{"b":[1],"bar":[]}}`,
+			output: `{"foo":{"b":[1]}}`,
+		},
+		{
+			name:   "clean array 3",
+			path:   "foo",
+			input:  `{"foo":{"b":[1],"bar":[]}}`,
+			output: `{"foo":{"b":[1]}}`,
+		},
+		{
+			name:   "clean object",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":{}}}`,
+			output: `{"foo":{}}`,
+		},
+		{
+			name:   "clean object 2",
+			path:   "foo.bar",
+			input:  `{"foo":{"b":{"1":1},"bar":{}}}`,
+			output: `{"foo":{"b":{"1":1}}}`,
+		},
+		{
+			name:   "clean object 3",
+			path:   "foo",
+			input:  `{"foo":{"b":{"1":1},"bar":{}}}`,
+			output: `{"foo":{"b":{"1":1}}}`,
+		},
+		{
+			name:   "clean array from root",
+			path:   "",
+			input:  `{"foo":{"b":"b","bar":[]}}`,
+			output: `{"foo":{"b":"b"}}`,
+		},
+		{
+			name:   "clean object from root",
+			path:   "",
+			input:  `{"foo":{"b":"b","bar":{}}}`,
+			output: `{"foo":{"b":"b"}}`,
+		},
+		{
+			name:   "clean everything object",
+			path:   "",
+			input:  `{"foo":{"bar":{}}}`,
+			output: `{}`,
+		},
+		{
+			name:   "clean everything array",
+			path:   "",
+			input:  `[{"foo":{"bar":{}}},[]]`,
+			output: `[]`,
+		},
+		{
+			name:   "clean everything string",
+			path:   "",
+			input:  `""`,
+			output: `null`,
+		},
+		{
+			name:   "clean arrays",
+			path:   "",
+			input:  `[[],1,"",2,{},"test",{"foo":{}}]`,
+			output: `[1,2,"test"]`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.JSON.Operator = "clean"
+		conf.JSON.Parts = []int{0}
+		conf.JSON.Path = test.path
+
+		jSet, err := NewJSON(conf, nil, tLog, tStats)
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := types.NewMessage(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := jSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestJSONSet(t *testing.T) {
 	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}

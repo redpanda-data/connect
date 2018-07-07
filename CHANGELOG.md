@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New `lines` option for archive/unarchive processors.
 - New `encode` and `decode` processors.
 - New `period_ms` field for the `batch` processor.
+- New `clean` operator for the `json` processor.
 
 ## 0.15.4 - 2018-07-04
 
