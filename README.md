@@ -74,6 +74,11 @@ docker run --rm \
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 ```
 
+### Metrics
+
+Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for
+debugging purposes an HTTP endpoint that returns a JSON formatted object.
+
 ## Configuration
 
 The configuration file for a Benthos stream is made up of four main sections;
@@ -162,6 +167,7 @@ go install -tags "ZMQ4" ./cmd/...
 [processors]: docs/processors/README.md
 [outputs]: docs/outputs/README.md
 
+[metrics]: docs/metrics.md
 [config-interp]: docs/config_interpolation.md
 [compose-examples]: resources/docker/compose_examples
 [streams-api]: docs/api/streams.md
