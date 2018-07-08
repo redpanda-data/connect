@@ -11,20 +11,25 @@ are lots of more granular metrics available that may not appear here.
 
 ## Input
 
-- `input.count`
+- `input.count`: Measures the number of messages read by the input.
 - `input.connection.up`
 - `input.connection.failed`
 - `input.connection.lost`
-- `input.latency`
+- `input.latency`: Measures the roundtrip latency from the point at which a
+  message is read up to the moment the message has either been acknowledged by
+  an output or has been stored within an external buffer.
 
 ## Buffer
 
-- `buffer.backlog`
+- `buffer.backlog`: The (sometimes estimated) size of the buffer backlog in
+  bytes.
 - `buffer.write.count`
 - `buffer.write.error`
 - `buffer.read.count`
 - `buffer.read.error`
-- `buffer.latency`
+- `buffer.latency`: Measures the roundtrip latency from the point at which a
+  message is read from the buffer up to the moment it has been acknowledged by
+  the output.
 
 ## Processors
 
