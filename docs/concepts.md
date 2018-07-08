@@ -12,44 +12,6 @@ Benthos Concepts
 
 ## Configuration
 
-Sections of a Benthos configuration take the form of an object with a `type` and
-`type` specific fields under the same field namespace as the content of the
-`type` field.
-
-In order to illustrate let's imagine a hypothetical config section `foo`. We
-want our `foo` to have the `type` of `bar`. Our `bar` type has its own specific
-fields `size` and `should_block` which will also be set:
-
-``` yaml
-foo:
-  type: bar
-  bar:
-    size: 5
-    should_block: true
-```
-
-This format means that when we print a default Benthos configuration the
-potential types of our `foo` are listed as fields of its object along with their
-own config fields, making it easier to discover types. For example, if we were
-to print a default config for `foo` it might look like this:
-
-``` yaml
-foo:
-  type: bar
-  bar:
-    size: 5
-    should_block: true
-  baz:
-    sample: 0.1
-  qux:
-    delete_objects: false
-```
-
-Allowing us to infer that `foo` can have one of the following types: `bar`,
-`baz` and `qux`. We can also see the specific config fields relevant to those
-types. The full default config for Benthos can [be found here][default-conf]
-and, although long, shows you every type and field available to you.
-
 A Benthos configuration consists of a number of root sections, the key parts
 being:
 
@@ -58,7 +20,12 @@ being:
 - [`pipeline`](./pipeline.md)
 - [`output`](./outputs)
 
-Please refer to those links for more information.
+There are also sections for `metrics`, `logging` and `http` server options.
+Config examples for every input, output and processor type can be found
+[here](../config).
+
+Benthos provides lots of tooling to try and make writing configuration easier,
+you can read about them as well as best practices [here](./configuration.md).
 
 ## Mutating And Filtering Content
 

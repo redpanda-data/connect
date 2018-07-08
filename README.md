@@ -4,17 +4,17 @@
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
 [![Build Status][travis-badge]][travis-url]
 
-Benthos is a generic and high performance streaming service, able to connect
+Benthos is a generic and high performance log streaming service, able to connect
 various sources and sinks and perform arbitrary
 [actions, transformations and filters][processors] on payloads. It is ready to
 drop into your pipeline either as a static binary or a docker image.
 
-A Benthos pipeline consists of four components; [inputs][inputs], optional
+A Benthos stream consists of four components; [inputs][inputs], optional
 [buffer][buffers], [processor][processors] workers and [outputs][outputs].
 Inputs and outputs can be combined in a range of broker patterns. It is possible
-to run multiple isolated pipelines within a single Benthos instance using
+to run multiple isolated streams within a single Benthos instance using
 [`--streams` mode][streams-mode], and perform CRUD operations on the running
-pipelines via [REST endpoints][streams-api].
+streams via [REST endpoints][streams-api].
 
 ### Delivery Guarantees
 
@@ -95,18 +95,13 @@ output:
     topic: benthos_stream
 ```
 
-There are example configs demonstrating each input, output, buffer and processor
-option which [can be found here](config).
-
-You can print a configuration file containing fields for all types with the
-following command:
-
-``` shell
-benthos --print-yaml --all > config.yaml
-benthos --print-json --all | jq '.' > config.json
-```
-
 There are also sections for setting logging, metrics and HTTP server options.
+
+Benthos provides lots of tools for making configuration discovery and debugging
+easy. You can read about them [here](config-doc).
+
+You can also find runnable example configs demonstrating each input, output,
+buffer and processor option [here](config).
 
 ### Environment Variables
 
@@ -173,6 +168,7 @@ go install -tags "ZMQ4" ./cmd/...
 [general-docs]: docs/README.md
 [cookbook-docs]: docs/cookbook/README.md
 [env-config]: config/env/default.yaml
+[config-doc]: docs/configuration.md
 
 [releases]: https://github.com/Jeffail/benthos/releases
 
