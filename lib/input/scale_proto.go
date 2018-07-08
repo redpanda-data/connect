@@ -33,18 +33,8 @@ func init() {
 	Constructors["scalability_protocols"] = TypeSpec{
 		constructor: NewScaleProto,
 		description: `
-The scalability protocols are common communication patterns which will be
-familiar to anyone accustomed to service messaging protocols.
-
-This input type should be compatible with any implementation of these protocols,
-but nanomsg (http://nanomsg.org/index.html) is the specific target of this type.
-
-Since scale proto messages are only single part we would need a binary format
-for interpretting multi part messages. If the input is receiving messages from a
-benthos output you can set both to use the benthos binary multipart format with
-the 'benthos_multi' flag. Note, however, that this format may appear to be
-gibberish to other services, and the input will be unable to read normal
-messages with this setting.
+The scalability protocols are common communication patterns. This input should
+be compatible with any implementation, but specifically targets Nanomsg.
 
 Currently only PULL and SUB sockets are supported.`,
 	}
