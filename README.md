@@ -98,7 +98,7 @@ output:
 There are also sections for setting logging, metrics and HTTP server options.
 
 Benthos provides lots of tools for making configuration discovery and debugging
-easy. You can read about them [here](config-doc).
+easy. You can read about them [here][config-doc].
 
 You can also find runnable example configs demonstrating each input, output,
 buffer and processor option [here](config).

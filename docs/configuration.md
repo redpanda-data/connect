@@ -10,9 +10,9 @@ input:
   type: kafka
   kafka:
     topic: foo
-	partition: 0
-	addresses:
-	  - localhost:9092
+    partition: 0
+    addresses:
+      - localhost:9092
 output:
   type: file
   file:
@@ -29,15 +29,15 @@ input:
     ...
   processors:
     - type: conditional
-	  conditional:
-	    condition:
-		  type: jmespath
-		  jmespath:
-		    query: contains(foo.bar, "compress me")
-	    processors:
-		  - type: compress
-		    compress:
-			  algorithm: gzip
+      conditional:
+        condition:
+          type: jmespath
+          jmespath:
+            query: contains(foo.bar, "compress me")
+        processors:
+          - type: compress
+            compress:
+              algorithm: gzip
 ```
 
 The above example reads messages from Kafka and, if the JSON path `foo.bar`
@@ -62,7 +62,7 @@ The discoverability of configuration fields is a common headache with any
 configuration driven application. The classic solution is to provide curated
 documentation that is often hosted on a dedicated site. Benthos does this by
 generating a markdown document
-[per configuration section](./README.md#core-concepts).
+[per configuration section](./README.md#core-components).
 
 However, a user often only needs to get their hands on a short, runnable example
 config file for their use case. The fields themselves are usually self
@@ -109,7 +109,7 @@ foo:
   type: bar
   bar:
     field1: default_value
-	field2: 2
+    field2: 2
   baz:
     field3: another_default_value
   qux:
