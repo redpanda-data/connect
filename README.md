@@ -4,12 +4,13 @@
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
 [![Build Status][travis-badge]][travis-url]
 
-Benthos is a generic and high performance log streaming service, able to connect
-various sources and sinks and perform arbitrary
-[actions, transformations and filters][processors] on payloads. It is ready to
-drop into your pipeline either as a static binary or a docker image.
+Benthos is a high performance log streaming service, able to connect various
+sources and sinks and perform arbitrary
+[actions, transformations and filters][processors] on payloads. It is easy to
+deploy and monitor, and ready to drop into your pipeline either as a static
+binary or a docker image.
 
-A Benthos stream consists of four components; [inputs][inputs], optional
+A Benthos stream consists of four layers: [inputs][inputs], optional
 [buffer][buffers], [processor][processors] workers and [outputs][outputs].
 Inputs and outputs can be combined in a range of broker patterns. It is possible
 to run multiple isolated streams within a single Benthos instance using

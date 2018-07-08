@@ -77,8 +77,8 @@
     "service/sqs",
     "service/sts"
   ]
-  revision = "8f7d1442888a1f96115869cec4af9855018ece98"
-  version = "v1.14.18"
+  revision = "16cb9f62f8a8b7af4f38725567f5ce762e1d562b"
+  version = "v1.14.21"
 
 [[projects]]
   branch = "master"
@@ -138,7 +138,7 @@
   branch = "master"
   name = "github.com/eapache/go-xerial-snappy"
   packages = ["."]
-  revision = "bb955e01b9346ac19dc29eb16586c90ded99a98c"
+  revision = "040cc1a32f578808623071247fdbd5cc43f37f5f"
 
 [[projects]]
   name = "github.com/eapache/queue"
@@ -396,7 +396,7 @@
     "nfs",
     "xfs"
   ]
-  revision = "40f013a808ec4fa79def444a1a56de4d1727efcb"
+  revision = "ae68e2d4c00fed4943b5f6698d504a5fe083da8a"
 
 [[projects]]
   branch = "master"
@@ -443,7 +443,7 @@
     "proxy",
     "websocket"
   ]
-  revision = "ed29d75add3d7c4bf7ca65aac0c6df3d1420216f"
+  revision = "32a936f46389aa10549d60bd7833e54b01685d09"
 
 [[projects]]
   branch = "master"
@@ -452,7 +452,7 @@
     "unix",
     "windows"
   ]
-  revision = "7138fd3d9dc8335c567ca206f4333fb75eb05d56"
+  revision = "3c6ecd8f22c6f40fbeec94c000a069d7d87c7624"
 
 [[projects]]
   name = "gopkg.in/alexcesaro/statsd.v2"
