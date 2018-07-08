@@ -25,7 +25,7 @@ Config examples for every input, output and processor type can be found
 [here](../config).
 
 Benthos provides lots of tooling to try and make writing configuration easier,
-you can read about them as well as best practices [here](./configuration.md).
+you can read about them [here](./configuration.md).
 
 ## Mutating And Filtering Content
 

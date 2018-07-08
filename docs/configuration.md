@@ -47,14 +47,12 @@ there are many ways in which this configuration could be broken, both during
 conception and when being modified at a later date.
 
 This document outlines tooling provided by Benthos to help with writing and
-managing these more complex configuration files, as well as some generally good
-practices to follow.
+managing these more complex configuration files.
 
 ## Contents
 
 - [Helping With Discovery](#helping-with-discovery)
 - [Helping With Debugging](#helping-with-debugging)
-- [Good Practices](#good-practices)
 
 ## Helping With Discovery
 
@@ -132,15 +130,22 @@ benthos --print-yaml --all > conf.yaml
 ```
 
 And simply delete all lines for sections you aren't interested in, then you are
-left with the full set of fields you want. Alternatively, using tools such as
-`jq` you can extract specific type fields:
+left with the full set of fields you want.
+
+Alternatively, using tools such as `jq` you can extract specific type fields:
 
 ``` sh
+# Get a list of all input types:
+benthos --print-json --all | jq '.input | keys'
+
 # Get all Kafka input fields:
 benthos --print-json --all | jq '.input.kafka'
 
 # Get all AMQP output fields:
 benthos --print-json --all | jq '.output.amqp'
+
+# Get a list of all processor types:
+benthos --print-json --all | jq '.pipeline.processors[0] | keys'
 
 # Get all JSON processor fields:
 benthos --print-json --all | jq '.pipeline.processors[0].json'
@@ -155,20 +160,21 @@ error messages.
 
 However, with validation it can be hard to capture all problems, and the user
 usually understands their intentions better than the service. In order to help
-expose and diagnose config errors Benthos has two ways of echoing back your
-configuration _after_ it has been parsed.
+expose and diagnose config errors Benthos can echo back your configuration
+_after_ it has been parsed.
 
-The first is with the `--print-yaml` and `--print-json` commands, which print
-the Benthos configuration in YAML and JSON format respectively, this is done
-_after_ parsing and applying your config. The result is that Benthos can show
-you exactly how your config was interpretted:
+Echoing is done with the `--print-yaml` and `--print-json` commands, which print
+the Benthos configuration in YAML and JSON format respectively. Since this is
+done _after_ parsing and applying your config it is able to show you exactly how
+your config was interpretted:
 
 ``` sh
 benthos -c ./your-config.yaml --print-yaml
 ```
 
-You can check the output of the above command to see if sections are missing or
-fields are incorrect, which allows you to pinpoint typos in the config.
+You can check the output of the above command to see if certain sections are
+missing or fields are incorrect, which allows you to pinpoint typos in the
+config.
 
 If your configuration is complex, and the behaviour that you notice implies a
 certain section is at fault, then you can drill down into that section by using
@@ -181,7 +187,3 @@ benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[1]'
 # Check the condition of a filter processor
 benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[0].filter'
 ```
-
-## Good Practices
-
-TODO
