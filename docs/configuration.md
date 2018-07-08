@@ -2,8 +2,8 @@ Configuration
 =============
 
 A Benthos stream is configured either in a YAML or JSON file using a
-hierarchical format. For a basic stream pipeline that means the configuration
-is very simple:
+hierarchical format. For a basic stream pipeline that means the section for,
+say, an input is very simple:
 
 ``` yaml
 input:
@@ -13,14 +13,10 @@ input:
     partition: 0
     addresses:
       - localhost:9092
-output:
-  type: file
-  file:
-    path: ./foo.txt
 ```
 
-However, as configurations become more complex and hierarchical this format can
-sometimes be difficult to read and manage:
+However, as configurations become more complex this format can sometimes be
+difficult to read and manage:
 
 ``` yaml
 input:
@@ -42,19 +38,21 @@ input:
 
 The above example reads messages from Kafka and, if the JSON path `foo.bar`
 contains the phrase "compress me" the entire message will be compressed with
-`gzip`, otherwise it passes unchanged. This isn't complicated behaviour but
-there are many ways in which this configuration could be broken, both during
-conception and when being modified at a later date.
+`gzip`, otherwise it passes unchanged.
+
+Allowing arbitrary hierarchies of [processors][processors] and
+[conditions][conditions] like this is powerful, but increases the likelihood of
+issues being introduced by typos.
 
 This document outlines tooling provided by Benthos to help with writing and
 managing these more complex configuration files.
 
 ## Contents
 
-- [Helping With Discovery](#helping-with-discovery)
-- [Helping With Debugging](#helping-with-debugging)
+- [Enabling Discovery](#enabling-discovery)
+- [Help With Debugging](#help-with-debugging)
 
-## Helping With Discovery
+## Enabling Discovery
 
 The discoverability of configuration fields is a common headache with any
 configuration driven application. The classic solution is to provide curated
@@ -63,10 +61,10 @@ generating a markdown document
 [per configuration section](./README.md#core-components).
 
 However, a user often only needs to get their hands on a short, runnable example
-config file for their use case. The fields themselves are usually self
-explanatory, they just need to see the format and field names. Forcing such a
-user to navigate a website, scrolling through paragraphs of text, seems
-inefficient when all they actually needed to see was something like:
+config file for their use case. They just need to see the format and field names
+as the fields themselves are usually self explanatory. Forcing such a user to
+navigate a website, scrolling through paragraphs of text, seems inefficient when
+all they actually needed to see was something like:
 
 ``` yaml
 input:
@@ -151,7 +149,7 @@ benthos --print-json --all | jq '.pipeline.processors[0] | keys'
 benthos --print-json --all | jq '.pipeline.processors[0].json'
 ```
 
-## Helping With Debugging
+## Help With Debugging
 
 Once you have a config written you now move onto the next headache of proving
 that it works, and understanding why it doesn't. Benthos, like most good config
@@ -187,3 +185,6 @@ benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[1]'
 # Check the condition of a filter processor
 benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[0].filter'
 ```
+
+[processors]: ./processors/README.md
+[conditions]: ./conditions/README.md
