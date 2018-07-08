@@ -177,6 +177,8 @@ child 'processors' will be applied, otherwise the 'else_processors' are applied.
 This processor is useful for applying processors such as 'dedupe' based on the
 content type of the message.
 
+You can find a [full list of conditions here](../conditions).
+
 ## `decode`
 
 ``` yaml
@@ -297,7 +299,7 @@ filter:
 ```
 
 Tests each message against a condition, if the condition fails then the message
-is dropped. You can read a [full list of conditions here](../conditions).
+is dropped. You can find a [full list of conditions here](../conditions).
 
 NOTE: If you are combining messages into batches using the
 [`combine`](#combine) or [`batch`](#batch) processors this filter will
@@ -587,6 +589,15 @@ no-op.
 
 Reads the value found at a dot path and replaced the original contents entirely
 by the new value.
+
+#### `clean`
+
+Walks the JSON structure and deletes any fields where the value is:
+
+- An empty array
+- An empty object
+- An empty string
+- null
 
 ## `merge_json`
 

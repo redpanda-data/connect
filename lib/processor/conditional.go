@@ -37,7 +37,9 @@ Conditional is a processor that has a list of child 'processors',
 'else_processors', and a condition. For each message if the condition passes the
 child 'processors' will be applied, otherwise the 'else_processors' are applied.
 This processor is useful for applying processors such as 'dedupe' based on the
-content type of the message.`,
+content type of the message.
+
+You can find a [full list of conditions here](../conditions).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			condSanit, err := condition.SanitiseConfig(conf.Conditional.Condition)
 			if err != nil {

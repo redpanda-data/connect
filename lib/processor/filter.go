@@ -36,7 +36,7 @@ func init() {
 		constructor: NewFilter,
 		description: `
 Tests each message against a condition, if the condition fails then the message
-is dropped. You can read a [full list of conditions here](../conditions).
+is dropped. You can find a [full list of conditions here](../conditions).
 
 NOTE: If you are combining messages into batches using the
 ` + "[`combine`](#combine) or [`batch`](#batch)" + ` processors this filter will
