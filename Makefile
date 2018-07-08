@@ -29,7 +29,7 @@ $(APPS): %: $(PATHINSTBIN)/%
 
 docker:
 	@docker rmi jeffail/benthos:$(VERSION); true
-	@docker build -f ./resources/docker/Dockerfile.zmq . -t jeffail/benthos:$(VERSION)
+	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VERSION)
 	@docker rmi jeffail/benthos:latest; true
 	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:latest
 
