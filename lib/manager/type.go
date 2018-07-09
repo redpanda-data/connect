@@ -50,13 +50,46 @@ type Config struct {
 // NewConfig returns a Config with default values.
 func NewConfig() Config {
 	return Config{
-		Caches: map[string]cache.Config{
-			"example": cache.NewConfig(),
-		},
-		Conditions: map[string]condition.Config{
-			"example": condition.NewConfig(),
-		},
+		Caches:     map[string]cache.Config{},
+		Conditions: map[string]condition.Config{},
 	}
+}
+
+// AddExamples inserts example caches and conditions if none exist in the
+// config.
+func AddExamples(c *Config) {
+	if len(c.Caches) == 0 {
+		c.Caches["example"] = cache.NewConfig()
+	}
+	if len(c.Conditions) == 0 {
+		c.Conditions["example"] = condition.NewConfig()
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// SanitiseConfig creates a sanitised version of a manager config.
+func SanitiseConfig(conf Config) (interface{}, error) {
+	var err error
+
+	caches := map[string]interface{}{}
+	for k, v := range conf.Caches {
+		if caches[k], err = cache.SanitiseConfig(v); err != nil {
+			return nil, err
+		}
+	}
+
+	conditions := map[string]interface{}{}
+	for k, v := range conf.Conditions {
+		if conditions[k], err = condition.SanitiseConfig(v); err != nil {
+			return nil, err
+		}
+	}
+
+	return map[string]interface{}{
+		"caches":     caches,
+		"conditions": conditions,
+	}, nil
 }
 
 //------------------------------------------------------------------------------

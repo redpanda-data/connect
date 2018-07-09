@@ -263,19 +263,23 @@ func bootstrap() Config {
 
 	// If the user wants the configuration to be printed we do so and then exit.
 	if *showConfigJSON || *showConfigYAML {
-		if len(conf.Input.Processors) == 0 &&
-			len(conf.Pipeline.Processors) == 0 &&
-			len(conf.Output.Processors) == 0 {
-			conf.Pipeline.Processors = append(conf.Pipeline.Processors, processor.NewConfig())
-		}
-		var outConf interface{} = conf
+		var outConf interface{}
 		var err error
 		if !*showAll {
 			if outConf, err = conf.Sanitised(); err != nil {
 				fmt.Fprintln(os.Stderr, fmt.Sprintf("Configuration sanitise error: %v", err))
 				os.Exit(1)
 			}
+		} else {
+			if len(conf.Input.Processors) == 0 &&
+				len(conf.Pipeline.Processors) == 0 &&
+				len(conf.Output.Processors) == 0 {
+				conf.Pipeline.Processors = append(conf.Pipeline.Processors, processor.NewConfig())
+			}
+			manager.AddExamples(&conf.Manager)
+			outConf = conf
 		}
+
 		if *showConfigJSON {
 			if configJSON, err := json.Marshal(outConf); err == nil {
 				fmt.Println(string(configJSON))

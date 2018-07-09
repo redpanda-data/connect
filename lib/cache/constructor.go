@@ -30,6 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/config"
 )
 
 //------------------------------------------------------------------------------
@@ -59,6 +60,28 @@ func NewConfig() Config {
 		Memcached: NewMemcachedConfig(),
 		Memory:    NewMemoryConfig(),
 	}
+}
+
+//------------------------------------------------------------------------------
+
+// SanitiseConfig creates a sanitised version of a config.
+func SanitiseConfig(conf Config) (interface{}, error) {
+	cBytes, err := json.Marshal(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	hashMap := map[string]interface{}{}
+	if err = json.Unmarshal(cBytes, &hashMap); err != nil {
+		return nil, err
+	}
+
+	outputMap := config.Sanitised{}
+
+	outputMap["type"] = conf.Type
+	outputMap[conf.Type] = hashMap[conf.Type]
+
+	return outputMap, nil
 }
 
 //------------------------------------------------------------------------------
