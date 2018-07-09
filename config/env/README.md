@@ -31,13 +31,13 @@ All variables within the config are listed in this document.
 
 ## Contents
 
-- [HTTP](#HTTP)
-- [INPUT](#INPUT)
-- [BUFFER](#BUFFER)
-- [PROCESSOR](#PROCESSOR)
-- [OUTPUT](#OUTPUT)
-- [LOGGER](#LOGGER)
-- [METRICS](#METRICS)
+- [HTTP](#http)
+- [INPUT](#input)
+- [BUFFER](#buffer)
+- [PROCESSOR](#processor)
+- [OUTPUT](#output)
+- [LOGGER](#logger)
+- [METRICS](#metrics)
 
 ## HTTP
 

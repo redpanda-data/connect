@@ -324,7 +324,7 @@ All variables within the config are listed in this document.
 
 	for _, section := range categories {
 		buf.WriteByte('\n')
-		buf.WriteString("- [" + section + "](#" + section + ")")
+		buf.WriteString("- [" + section + "](#" + strings.ToLower(section) + ")")
 	}
 	buf.WriteByte('\n')
 
