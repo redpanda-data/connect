@@ -40,25 +40,27 @@ import (
 
 // Config is a configuration struct for an HTTP client.
 type Config struct {
-	URL            string `json:"url" yaml:"url"`
-	Verb           string `json:"verb" yaml:"verb"`
-	ContentType    string `json:"content_type" yaml:"content_type"`
-	TimeoutMS      int64  `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS        int64  `json:"retry_period_ms" yaml:"retry_period_ms"`
-	MaxBackoffMS   int64  `json:"max_retry_backoff_ms" yaml:"max_retry_backoff_ms"`
-	NumRetries     int    `json:"retries" yaml:"retries"`
-	BackoffOn      []int  `json:"backoff_on" yaml:"backoff_on"`
-	DropOn         []int  `json:"drop_on" yaml:"drop_on"`
-	SkipCertVerify bool   `json:"skip_cert_verify" yaml:"skip_cert_verify"`
+	URL            string            `json:"url" yaml:"url"`
+	Verb           string            `json:"verb" yaml:"verb"`
+	Headers        map[string]string `json:"headers" yaml:"headers"`
+	TimeoutMS      int64             `json:"timeout_ms" yaml:"timeout_ms"`
+	RetryMS        int64             `json:"retry_period_ms" yaml:"retry_period_ms"`
+	MaxBackoffMS   int64             `json:"max_retry_backoff_ms" yaml:"max_retry_backoff_ms"`
+	NumRetries     int               `json:"retries" yaml:"retries"`
+	BackoffOn      []int             `json:"backoff_on" yaml:"backoff_on"`
+	DropOn         []int             `json:"drop_on" yaml:"drop_on"`
+	SkipCertVerify bool              `json:"skip_cert_verify" yaml:"skip_cert_verify"`
 	auth.Config    `json:",inline" yaml:",inline"`
 }
 
 // NewConfig creates a new Config with default values.
 func NewConfig() Config {
 	return Config{
-		URL:            "http://localhost:4195/post",
-		Verb:           "POST",
-		ContentType:    "application/octet-stream",
+		URL:  "http://localhost:4195/post",
+		Verb: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/octet-stream",
+		},
 		TimeoutMS:      5000,
 		RetryMS:        1000,
 		MaxBackoffMS:   300000,
@@ -131,15 +133,17 @@ func OptSetCloseChan(c <-chan struct{}) func(*Type) {
 
 //------------------------------------------------------------------------------
 
-// createRequest creates an HTTP request out of a single message.
-func (h *Type) createRequest(msg types.Message) (req *http.Request, err error) {
+// CreateRequest creates an HTTP request out of a single message.
+func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 	if msg == nil || msg.Len() == 0 {
 		if req, err = http.NewRequest(
 			h.conf.Verb,
 			h.conf.URL,
 			nil,
 		); err == nil {
-			req.Header.Add("Content-Type", h.conf.ContentType)
+			for k, v := range h.conf.Headers {
+				req.Header.Add(k, v)
+			}
 		}
 	} else if msg.Len() == 1 {
 		body := bytes.NewBuffer(msg.GetAll()[0])
@@ -148,16 +152,22 @@ func (h *Type) createRequest(msg types.Message) (req *http.Request, err error) {
 			h.conf.URL,
 			body,
 		); err == nil {
-			req.Header.Add("Content-Type", h.conf.ContentType)
+			for k, v := range h.conf.Headers {
+				req.Header.Add(k, v)
+			}
 		}
 	} else {
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 
 		for i := 0; i < msg.Len() && err == nil; i++ {
+			contentType := "application/octet-stream"
+			if v, exists := h.conf.Headers["Content-Type"]; exists {
+				contentType = v
+			}
 			var part io.Writer
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
-				"Content-Type": []string{h.conf.ContentType},
+				"Content-Type": []string{contentType},
 			}); err == nil {
 				_, err = io.Copy(part, bytes.NewReader(msg.Get(i)))
 			}
@@ -169,6 +179,10 @@ func (h *Type) createRequest(msg types.Message) (req *http.Request, err error) {
 			h.conf.URL,
 			body,
 		); err == nil {
+			for k, v := range h.conf.Headers {
+				req.Header.Add(k, v)
+			}
+			req.Header.Del("Content-Type")
 			req.Header.Add("Content-Type", writer.FormDataContentType())
 		}
 	}
@@ -176,8 +190,8 @@ func (h *Type) createRequest(msg types.Message) (req *http.Request, err error) {
 	return
 }
 
-// parseResponse into a 2D slice of bytes.
-func (h *Type) parseResponse(res *http.Response) (resMsg types.Message, err error) {
+// ParseResponse attempts to parse an HTTP response into a 2D slice of bytes.
+func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err error) {
 	if res.Body == nil {
 		return nil, nil
 	}
@@ -245,18 +259,12 @@ func (h *Type) checkStatus(code int) (resolved bool, linearRetry bool) {
 	return true, false
 }
 
-// Send attempts to send a message to an HTTP server, this attempt may include
-// retries, and if all retries fail an error is returned. The message payload
-// can be nil, in which case an empty body is sent. The response will be parsed
-// back into a message, meaning mulitpart content handling is done for you.
-//
-// If the response body is empty the message returned is nil.
-func (h *Type) Send(msg types.Message) (types.Message, error) {
+// Do attempts to create and perform an HTTP request from a message payload.
+// This attempt may include retries, and if all retries fail an error is
+// returned.
+func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 	var req *http.Request
-	var res *http.Response
-	var err error
-
-	if req, err = h.createRequest(msg); err != nil {
+	if req, err = h.CreateRequest(msg); err != nil {
 		return nil, err
 	}
 
@@ -265,15 +273,15 @@ func (h *Type) Send(msg types.Message) (types.Message, error) {
 		if resolved, linear := h.checkStatus(res.StatusCode); !resolved {
 			rateLimited = !linear
 			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+			if res.Body != nil {
+				res.Body.Close()
+			}
 		}
-	}
-	if err != nil {
-		res.Body.Close()
 	}
 
 	i, j := 0, h.conf.NumRetries
 	for i < j && err != nil {
-		req, err = h.createRequest(msg)
+		req, err = h.CreateRequest(msg)
 		if err != nil {
 			continue
 		}
@@ -291,10 +299,10 @@ func (h *Type) Send(msg types.Message) (types.Message, error) {
 			if resolved, linear := h.checkStatus(res.StatusCode); !resolved {
 				rateLimited = !linear
 				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+				if res.Body != nil {
+					res.Body.Close()
+				}
 			}
-		}
-		if err != nil {
-			res.Body.Close()
 		}
 		i++
 	}
@@ -304,7 +312,21 @@ func (h *Type) Send(msg types.Message) (types.Message, error) {
 	}
 
 	h.retryThrottle.Reset()
-	return h.parseResponse(res)
+	return res, nil
+}
+
+// Send attempts to send a message to an HTTP server, this attempt may include
+// retries, and if all retries fail an error is returned. The message payload
+// can be nil, in which case an empty body is sent. The response will be parsed
+// back into a message, meaning mulitpart content handling is done for you.
+//
+// If the response body is empty the message returned is nil.
+func (h *Type) Send(msg types.Message) (types.Message, error) {
+	res, err := h.Do(msg)
+	if err != nil {
+		return nil, err
+	}
+	return h.ParseResponse(res)
 }
 
 //------------------------------------------------------------------------------

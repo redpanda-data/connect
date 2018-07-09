@@ -273,8 +273,9 @@ http_client:
     enabled: false
     password: ""
     username: ""
-  content_type: application/octet-stream
   drop_on: []
+  headers:
+    Content-Type: application/octet-stream
   max_retry_backoff_ms: 300000
   oauth:
     access_token: ""

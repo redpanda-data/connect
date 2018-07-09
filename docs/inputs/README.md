@@ -290,11 +290,15 @@ each file found will become a message.
 ``` yaml
 type: http_client
 http_client:
+  backoff_on:
+  - 429
   basic_auth:
     enabled: false
     password: ""
     username: ""
-  content_type: application/octet-stream
+  drop_on: []
+  headers:
+    Content-Type: application/octet-stream
   max_retry_backoff_ms: 300000
   oauth:
     access_token: ""
@@ -304,6 +308,7 @@ http_client:
     enabled: false
     request_url: ""
   payload: ""
+  retries: 3
   retry_period_ms: 1000
   skip_cert_verify: false
   stream:
@@ -313,7 +318,7 @@ http_client:
     multipart: false
     reconnect: true
   timeout_ms: 5000
-  url: http://localhost:4195/get/stream
+  url: http://localhost:4195/get
   verb: GET
 ```
 

@@ -22,10 +22,7 @@ package input
 
 import (
 	"bytes"
-	"crypto/tls"
 	"io"
-	"mime"
-	"mime/multipart"
 	"net/http"
 	"strings"
 	"sync"
@@ -36,8 +33,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/http/auth"
-	"github.com/Jeffail/benthos/lib/util/throttle"
+	"github.com/Jeffail/benthos/lib/util/http/client"
 )
 
 //------------------------------------------------------------------------------
@@ -74,25 +70,19 @@ type StreamConfig struct {
 
 // HTTPClientConfig is configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	URL            string       `json:"url" yaml:"url"`
-	Verb           string       `json:"verb" yaml:"verb"`
-	Payload        string       `json:"payload" yaml:"payload"`
-	ContentType    string       `json:"content_type" yaml:"content_type"`
-	Stream         StreamConfig `json:"stream" yaml:"stream"`
-	TimeoutMS      int64        `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS        int64        `json:"retry_period_ms" yaml:"retry_period_ms"`
-	MaxBackoffMS   int64        `json:"max_retry_backoff_ms" yaml:"max_retry_backoff_ms"`
-	SkipCertVerify bool         `json:"skip_cert_verify" yaml:"skip_cert_verify"`
-	auth.Config    `json:",inline" yaml:",inline"`
+	client.Config `json:",inline" yaml:",inline"`
+	Payload       string       `json:"payload" yaml:"payload"`
+	Stream        StreamConfig `json:"stream" yaml:"stream"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
+	cConf := client.NewConfig()
+	cConf.Verb = "GET"
+	cConf.URL = "http://localhost:4195/get"
 	return HTTPClientConfig{
-		URL:         "http://localhost:4195/get/stream",
-		Verb:        "GET",
-		Payload:     "",
-		ContentType: "application/octet-stream",
+		Config:  cConf,
+		Payload: "",
 		Stream: StreamConfig{
 			Enabled:   false,
 			Reconnect: true,
@@ -100,11 +90,6 @@ func NewHTTPClientConfig() HTTPClientConfig {
 			MaxBuffer: 1000000,
 			Delim:     "",
 		},
-		TimeoutMS:      5000,
-		RetryMS:        1000,
-		MaxBackoffMS:   300000,
-		SkipCertVerify: false,
-		Config:         auth.NewConfig(),
 	}
 }
 
@@ -120,10 +105,11 @@ type HTTPClient struct {
 	conf Config
 
 	buffer *bytes.Buffer
-	client http.Client
+	client *client.Type
 
-	retryThrottle *throttle.Type
-	transactions  chan types.Transaction
+	payload types.Message
+
+	transactions chan types.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -142,22 +128,20 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 		closedChan:   make(chan struct{}),
 	}
 
-	h.retryThrottle = throttle.New(
-		throttle.OptMaxUnthrottledRetries(0),
-		throttle.OptCloseChan(h.closeChan),
-		throttle.OptThrottlePeriod(time.Millisecond*time.Duration(conf.HTTPClient.RetryMS)),
-		throttle.OptMaxExponentPeriod(time.Millisecond*time.Duration(conf.HTTPClient.MaxBackoffMS)),
-	)
-
-	if h.conf.HTTPClient.SkipCertVerify {
-		h.client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
+	if h.conf.HTTPClient.Stream.Enabled {
+		// Timeout should be left at zero if we are streaming.
+		h.conf.HTTPClient.TimeoutMS = 0
+	}
+	if len(h.conf.HTTPClient.Payload) > 0 {
+		h.payload = types.NewMessage([][]byte{[]byte(h.conf.HTTPClient.Payload)})
 	}
 
+	h.client = client.New(
+		h.conf.HTTPClient.Config,
+		client.OptSetCloseChan(h.closeChan),
+	)
+
 	if !h.conf.HTTPClient.Stream.Enabled {
-		// Timeout should be left at zero if we are streaming.
-		h.client.Timeout = time.Duration(h.conf.HTTPClient.TimeoutMS) * time.Millisecond
 		go h.loop()
 		return &h, nil
 	}
@@ -246,104 +230,16 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 //------------------------------------------------------------------------------
 
-// createRequest creates an HTTP request out of a single message.
-func (h *HTTPClient) createRequest() (req *http.Request, err error) {
-	var body io.Reader
-	if len(h.conf.HTTPClient.Payload) > 0 {
-		body = bytes.NewBufferString(h.conf.HTTPClient.Payload)
-	}
-
-	req, err = http.NewRequest(
-		h.conf.HTTPClient.Verb,
-		h.conf.HTTPClient.URL,
-		body,
-	)
-	if err != nil {
-		return
-	}
-
-	if contentType := h.conf.HTTPClient.ContentType; len(contentType) > 0 {
-		req.Header.Add("Content-Type", contentType)
-	}
-
-	err = h.conf.HTTPClient.Config.Sign(req)
-	return
-}
-
 func (h *HTTPClient) doRequest() (*http.Response, error) {
-	var req *http.Request
-	var res *http.Response
-	var err error
-
-	if req, err = h.createRequest(); err != nil {
-		return nil, err
-	}
-
-	rateLimited := false
-	if res, err = h.client.Do(req); err == nil {
-		if res.StatusCode < 200 || res.StatusCode > 299 {
-			if res.StatusCode == 429 {
-				rateLimited = true
-			}
-			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
-			res.Body.Close()
-		}
-	}
-
-	if err != nil {
-		if rateLimited {
-			h.retryThrottle.ExponentialRetry()
-		} else {
-			h.retryThrottle.Retry()
-		}
-		return nil, err
-	}
-	h.retryThrottle.Reset()
-
-	return res, nil
+	return h.client.Do(h.payload)
 }
 
-func (h *HTTPClient) parseResponse(res *http.Response) (parts [][]byte, err error) {
-	var mediaType string
-	var params map[string]string
-	if mediaType, params, err = mime.ParseMediaType(res.Header.Get("Content-Type")); err != nil {
-		return
+func (h *HTTPClient) parseResponse(res *http.Response) ([][]byte, error) {
+	msg, err := h.client.ParseResponse(res)
+	if err != nil {
+		return nil, err
 	}
-
-	// Caveat: We assume this is only ever called after we have received
-	// acknowledgement from any prior messages. Otherwise we would need a second
-	// buffer that we rotate.
-	h.buffer.Reset()
-
-	if strings.HasPrefix(mediaType, "multipart/") {
-		mr := multipart.NewReader(res.Body, params["boundary"])
-		var bufferIndex int64
-		for {
-			var p *multipart.Part
-			if p, err = mr.NextPart(); err != nil {
-				if err == io.EOF {
-					err = nil
-					break
-				}
-				return
-			}
-
-			var bytesRead int64
-			if bytesRead, err = h.buffer.ReadFrom(p); err != nil {
-				return
-			}
-			parts = append(parts, h.buffer.Bytes()[bufferIndex:bufferIndex+bytesRead])
-			bufferIndex += bytesRead
-		}
-	} else {
-		var bytesRead int64
-		if bytesRead, err = h.buffer.ReadFrom(res.Body); err != nil {
-			return
-		}
-		parts = [][]byte{h.buffer.Bytes()[:bytesRead]}
-	}
-
-	return
+	return msg.GetAll(), nil
 }
 
 //------------------------------------------------------------------------------

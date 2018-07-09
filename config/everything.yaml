@@ -53,19 +53,17 @@ input:
   files:
     path: ""
   http_client:
-    url: http://localhost:4195/get/stream
+    url: http://localhost:4195/get
     verb: GET
-    payload: ""
-    content_type: application/octet-stream
-    stream:
-      enabled: false
-      reconnect: true
-      multipart: false
-      max_buffer: 1000000
-      delimiter: ""
+    headers:
+      Content-Type: application/octet-stream
     timeout_ms: 5000
     retry_period_ms: 1000
     max_retry_backoff_ms: 300000
+    retries: 3
+    backoff_on:
+    - 429
+    drop_on: []
     skip_cert_verify: false
     oauth:
       enabled: false
@@ -78,6 +76,13 @@ input:
       enabled: false
       username: ""
       password: ""
+    payload: ""
+    stream:
+      enabled: false
+      reconnect: true
+      multipart: false
+      max_buffer: 1000000
+      delimiter: ""
   http_server:
     address: ""
     path: /post
@@ -314,7 +319,8 @@ pipeline:
       request:
         url: http://localhost:4195/post
         verb: POST
-        content_type: application/octet-stream
+        headers:
+          Content-Type: application/octet-stream
         timeout_ms: 5000
         retry_period_ms: 1000
         max_retry_backoff_ms: 300000
@@ -415,7 +421,8 @@ output:
   http_client:
     url: http://localhost:4195/post
     verb: POST
-    content_type: application/octet-stream
+    headers:
+      Content-Type: application/octet-stream
     timeout_ms: 5000
     retry_period_ms: 1000
     max_retry_backoff_ms: 300000

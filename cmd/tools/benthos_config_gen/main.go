@@ -199,7 +199,7 @@ func envify(rootPath string, conf interface{}, paths map[string]string) (newConf
 			newMap := map[string]interface{}{}
 		keyIter:
 			for k, v := range obj {
-				newPath := path + "_" + strings.ToUpper(k)
+				newPath := path + "_" + strings.Replace(strings.ToUpper(k), "-", "_", -1)
 				for _, b := range staticlist {
 					if strings.Contains(newPath, b) {
 						// Preserve values that hit our staticlist.
