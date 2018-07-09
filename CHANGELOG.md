@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.16.0 - 2018-07-09
+
+### Changed
+
+- Improved and rearranged fields for `http_client` input and output.
+
 ## 0.15.5 - 2018-07-08
 
 ### Added
