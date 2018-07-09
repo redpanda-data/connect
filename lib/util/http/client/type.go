@@ -81,6 +81,7 @@ type Type struct {
 	backoffOn map[int]struct{}
 	dropOn    map[int]struct{}
 
+	URL           string
 	conf          Config
 	retryThrottle *throttle.Type
 
@@ -90,6 +91,7 @@ type Type struct {
 // New creates a new Type.
 func New(conf Config, opts ...func(*Type)) *Type {
 	h := Type{
+		URL:       conf.URL,
 		conf:      conf,
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
@@ -138,7 +140,7 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 	if msg == nil || msg.Len() == 0 {
 		if req, err = http.NewRequest(
 			h.conf.Verb,
-			h.conf.URL,
+			h.URL,
 			nil,
 		); err == nil {
 			for k, v := range h.conf.Headers {
@@ -149,7 +151,7 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 		body := bytes.NewBuffer(msg.GetAll()[0])
 		if req, err = http.NewRequest(
 			h.conf.Verb,
-			h.conf.URL,
+			h.URL,
 			body,
 		); err == nil {
 			for k, v := range h.conf.Headers {
@@ -176,7 +178,7 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 		writer.Close()
 		if req, err = http.NewRequest(
 			h.conf.Verb,
-			h.conf.URL,
+			h.URL,
 			body,
 		); err == nil {
 			for k, v := range h.conf.Headers {
