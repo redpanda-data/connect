@@ -139,6 +139,8 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	h.client = client.New(
 		h.conf.HTTPClient.Config,
 		client.OptSetCloseChan(h.closeChan),
+		client.OptSetLogger(h.log),
+		client.OptSetStats(metrics.Namespaced(h.stats, "input.http_client")),
 	)
 
 	if !h.conf.HTTPClient.Stream.Enabled {

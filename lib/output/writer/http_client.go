@@ -60,11 +60,16 @@ type HTTPClient struct {
 func NewHTTPClient(conf HTTPClientConfig, log log.Modular, stats metrics.Type) *HTTPClient {
 	h := HTTPClient{
 		stats:     stats,
-		log:       log.NewModule(".output.http"),
+		log:       log.NewModule(".output.http_client"),
 		conf:      conf,
 		closeChan: make(chan struct{}),
 	}
-	h.client = client.New(conf.Config, client.OptSetCloseChan(h.closeChan))
+	h.client = client.New(
+		conf.Config,
+		client.OptSetCloseChan(h.closeChan),
+		client.OptSetLogger(h.log),
+		client.OptSetStats(metrics.Namespaced(h.stats, "output.http_client")),
+	)
 	return &h
 }
 

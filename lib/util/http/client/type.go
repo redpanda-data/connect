@@ -23,6 +23,7 @@ package client
 import (
 	"bytes"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -31,6 +32,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/http/auth"
 	"github.com/Jeffail/benthos/lib/util/throttle"
@@ -85,6 +88,16 @@ type Type struct {
 	conf          Config
 	retryThrottle *throttle.Type
 
+	log   log.Modular
+	stats metrics.Type
+
+	mCount  metrics.StatCounter
+	mErr    metrics.StatCounter
+	mErrReq metrics.StatCounter
+	mErrRes metrics.StatCounter
+	mSucc   metrics.StatCounter
+	mCodes  map[int]metrics.StatCounter
+
 	closeChan <-chan struct{}
 }
 
@@ -93,6 +106,8 @@ func New(conf Config, opts ...func(*Type)) *Type {
 	h := Type{
 		URL:       conf.URL,
 		conf:      conf,
+		log:       log.Noop(),
+		stats:     metrics.Noop(),
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
 	}
@@ -115,6 +130,13 @@ func New(conf Config, opts ...func(*Type)) *Type {
 		opt(&h)
 	}
 
+	h.mCount = h.stats.GetCounter("client.http.count")
+	h.mErr = h.stats.GetCounter("client.http.error")
+	h.mErrReq = h.stats.GetCounter("client.http.error.request")
+	h.mErrRes = h.stats.GetCounter("client.http.error.response")
+	h.mSucc = h.stats.GetCounter("client.http.success")
+	h.mCodes = map[int]metrics.StatCounter{}
+
 	h.retryThrottle = throttle.New(
 		throttle.OptMaxUnthrottledRetries(0),
 		throttle.OptCloseChan(h.closeChan),
@@ -125,6 +147,8 @@ func New(conf Config, opts ...func(*Type)) *Type {
 	return &h
 }
 
+//------------------------------------------------------------------------------
+
 // OptSetCloseChan sets a channel that when closed will interrupt any blocking
 // calls within the client.
 func OptSetCloseChan(c <-chan struct{}) func(*Type) {
@@ -133,7 +157,31 @@ func OptSetCloseChan(c <-chan struct{}) func(*Type) {
 	}
 }
 
+// OptSetLogger sets the logger to use.
+func OptSetLogger(log log.Modular) func(*Type) {
+	return func(t *Type) {
+		t.log = log.NewModule(".client.http")
+	}
+}
+
+// OptSetStats sets the metrics aggregator to use.
+func OptSetStats(stats metrics.Type) func(*Type) {
+	return func(t *Type) {
+		t.stats = stats
+	}
+}
+
 //------------------------------------------------------------------------------
+
+func (h *Type) incrCode(code int) {
+	if ctr, exists := h.mCodes[code]; exists {
+		ctr.Incr(1)
+		return
+	}
+	ctr := h.stats.GetCounter(fmt.Sprintf("client.http.code.%v", code))
+	ctr.Incr(1)
+	h.mCodes[code] = ctr
+}
 
 // CreateRequest creates an HTTP request out of a single message.
 func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
@@ -203,6 +251,9 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 	var params map[string]string
 	if len(contentType) > 0 {
 		if mediaType, params, err = mime.ParseMediaType(res.Header.Get("Content-Type")); err != nil {
+			h.mErrRes.Incr(1)
+			h.mErr.Incr(1)
+			h.log.Errorf("Failed to parse media type: %v\n", err)
 			return
 		}
 	}
@@ -225,6 +276,9 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 
 			var bytesRead int64
 			if bytesRead, err = buffer.ReadFrom(p); err != nil {
+				h.mErrRes.Incr(1)
+				h.mErr.Incr(1)
+				h.log.Errorf("Failed to read response: %v\n", err)
 				return
 			}
 
@@ -234,6 +288,9 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 	} else {
 		var bytesRead int64
 		if bytesRead, err = buffer.ReadFrom(res.Body); err != nil {
+			h.mErrRes.Incr(1)
+			h.mErr.Incr(1)
+			h.log.Errorf("Failed to read response: %v\n", err)
 			return
 		}
 		if bytesRead > 0 {
@@ -265,13 +322,18 @@ func (h *Type) checkStatus(code int) (resolved bool, linearRetry bool) {
 // This attempt may include retries, and if all retries fail an error is
 // returned.
 func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
+	h.mCount.Incr(1)
+
 	var req *http.Request
 	if req, err = h.CreateRequest(msg); err != nil {
+		h.mErrReq.Incr(1)
+		h.mErr.Incr(1)
 		return nil, err
 	}
 
 	rateLimited := false
 	if res, err = h.client.Do(req); err == nil {
+		h.incrCode(res.StatusCode)
 		if resolved, linear := h.checkStatus(res.StatusCode); !resolved {
 			rateLimited = !linear
 			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
@@ -283,8 +345,12 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 
 	i, j := 0, h.conf.NumRetries
 	for i < j && err != nil {
+		h.mErr.Incr(1)
+
 		req, err = h.CreateRequest(msg)
 		if err != nil {
+			h.mErrReq.Incr(1)
+			h.mErr.Incr(1)
 			continue
 		}
 		if rateLimited {
@@ -298,6 +364,7 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 		}
 		rateLimited = false
 		if res, err = h.client.Do(req); err == nil {
+			h.incrCode(res.StatusCode)
 			if resolved, linear := h.checkStatus(res.StatusCode); !resolved {
 				rateLimited = !linear
 				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
@@ -310,9 +377,11 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 	}
 
 	if err != nil {
+		h.mErr.Incr(1)
 		return nil, err
 	}
 
+	h.mSucc.Incr(1)
 	h.retryThrottle.Reset()
 	return res, nil
 }

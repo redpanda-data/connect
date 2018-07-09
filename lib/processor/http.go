@@ -112,8 +112,7 @@ func NewHTTP(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	g := &HTTP{
-		parts:  conf.HTTP.Parts,
-		client: client.New(conf.HTTP.Client),
+		parts: conf.HTTP.Parts,
 
 		reqMap: conf.HTTP.RequestMap,
 		resMap: conf.HTTP.ResponseMap,
@@ -133,6 +132,11 @@ func NewHTTP(
 		mSucc:        stats.GetCounter("processor.http.success"),
 		mSent:        stats.GetCounter("processor.http.sent"),
 	}
+	g.client = client.New(
+		conf.HTTP.Client,
+		client.OptSetLogger(g.log),
+		client.OptSetStats(metrics.Namespaced(g.stats, "processor.http")),
+	)
 	return g, nil
 }
 
