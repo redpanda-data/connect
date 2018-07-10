@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -96,7 +97,9 @@ type Type struct {
 	mErrReq metrics.StatCounter
 	mErrRes metrics.StatCounter
 	mSucc   metrics.StatCounter
-	mCodes  map[int]metrics.StatCounter
+
+	mCodes   map[int]metrics.StatCounter
+	codesMut sync.RWMutex
 
 	closeChan <-chan struct{}
 }
@@ -174,34 +177,39 @@ func OptSetStats(stats metrics.Type) func(*Type) {
 //------------------------------------------------------------------------------
 
 func (h *Type) incrCode(code int) {
-	if ctr, exists := h.mCodes[code]; exists {
+	h.codesMut.RLock()
+	ctr, exists := h.mCodes[code]
+	h.codesMut.RUnlock()
+
+	if exists {
 		ctr.Incr(1)
 		return
 	}
-	ctr := h.stats.GetCounter(fmt.Sprintf("client.http.code.%v", code))
+
+	ctr = h.stats.GetCounter(fmt.Sprintf("client.http.code.%v", code))
 	ctr.Incr(1)
+
+	h.codesMut.Lock()
 	h.mCodes[code] = ctr
+	h.codesMut.Unlock()
 }
 
 // CreateRequest creates an HTTP request out of a single message.
 func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
+	return h.CreateRequestWithURL(h.URL, msg)
+}
+
+// CreateRequestWithURL creates an HTTP request out of a single message.
+func (h *Type) CreateRequestWithURL(url string, msg types.Message) (req *http.Request, err error) {
 	if msg == nil || msg.Len() == 0 {
-		if req, err = http.NewRequest(
-			h.conf.Verb,
-			h.URL,
-			nil,
-		); err == nil {
+		if req, err = http.NewRequest(h.conf.Verb, url, nil); err == nil {
 			for k, v := range h.conf.Headers {
 				req.Header.Add(k, v)
 			}
 		}
 	} else if msg.Len() == 1 {
 		body := bytes.NewBuffer(msg.GetAll()[0])
-		if req, err = http.NewRequest(
-			h.conf.Verb,
-			h.URL,
-			body,
-		); err == nil {
+		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
 			for k, v := range h.conf.Headers {
 				req.Header.Add(k, v)
 			}
@@ -224,11 +232,7 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 		}
 
 		writer.Close()
-		if req, err = http.NewRequest(
-			h.conf.Verb,
-			h.URL,
-			body,
-		); err == nil {
+		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
 			for k, v := range h.conf.Headers {
 				req.Header.Add(k, v)
 			}
@@ -322,10 +326,17 @@ func (h *Type) checkStatus(code int) (resolved bool, linearRetry bool) {
 // This attempt may include retries, and if all retries fail an error is
 // returned.
 func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
+	return h.DoWithURL(h.URL, msg)
+}
+
+// DoWithURL attempts to create and perform an HTTP request from a message
+// payload. This attempt may include retries, and if all retries fail an error
+// is returned.
+func (h *Type) DoWithURL(url string, msg types.Message) (res *http.Response, err error) {
 	h.mCount.Incr(1)
 
 	var req *http.Request
-	if req, err = h.CreateRequest(msg); err != nil {
+	if req, err = h.CreateRequestWithURL(url, msg); err != nil {
 		h.mErrReq.Incr(1)
 		h.mErr.Incr(1)
 		return nil, err
@@ -347,7 +358,7 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 	for i < j && err != nil {
 		h.mErr.Incr(1)
 
-		req, err = h.CreateRequest(msg)
+		req, err = h.CreateRequestWithURL(url, msg)
 		if err != nil {
 			h.mErrReq.Incr(1)
 			h.mErr.Incr(1)
@@ -393,7 +404,18 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 //
 // If the response body is empty the message returned is nil.
 func (h *Type) Send(msg types.Message) (types.Message, error) {
-	res, err := h.Do(msg)
+	return h.SendWithURL(h.URL, msg)
+}
+
+// SendWithURL attempts to send a message to an HTTP server with a specific URL,
+// this attempt may include retries, and if all retries fail an error is
+// returned. The message payload can be nil, in which case an empty body is
+// sent. The response will be parsed back into a message, meaning mulitpart
+// content handling is done for you.
+//
+// If the response body is empty the message returned is nil.
+func (h *Type) SendWithURL(url string, msg types.Message) (types.Message, error) {
+	res, err := h.DoWithURL(url, msg)
 	if err != nil {
 		return nil, err
 	}

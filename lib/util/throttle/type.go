@@ -8,9 +8,7 @@ import (
 //------------------------------------------------------------------------------
 
 // Type is a throttle of retries to avoid endless busy loops when a message
-// fails to reach its destination. This isn't intended to be used for hitting
-// load balanced resources and therefore doesn't implement anything clever like
-// exponential backoff.
+// fails to reach its destination.
 type Type struct {
 	// unthrottledRetries is the number of concecutive retries we are
 	// comfortable attempting before throttling begins.
@@ -95,7 +93,7 @@ func (t *Type) Retry() bool {
 		return true
 	}
 	select {
-	case <-time.After(time.Duration(t.throttlePeriod)):
+	case <-time.After(time.Duration(atomic.LoadInt64(&t.throttlePeriod))):
 	case <-t.closeChan:
 		return false
 	}
@@ -120,8 +118,8 @@ func (t *Type) ExponentialRetry() bool {
 // Reset clears the count of consecutive retries and resets the exponential
 // backoff.
 func (t *Type) Reset() {
-	t.consecutiveRetries = 0
-	t.throttlePeriod = t.baseThrottlePeriod
+	atomic.StoreInt64(&t.consecutiveRetries, 0)
+	atomic.StoreInt64(&t.throttlePeriod, t.baseThrottlePeriod)
 }
 
 //------------------------------------------------------------------------------

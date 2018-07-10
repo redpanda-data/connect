@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker clean docs test fmt lint install docker-zmq
+.PHONY: all deps rpm docker clean docs test test-race test-integration fmt lint install docker-zmq
 
 TAGS =
 
@@ -50,6 +50,9 @@ lint:
 
 test:
 	@go test -short ./...
+
+test-race:
+	@go test -short -race ./...
 
 test-integration:
 	@go test -timeout 300s ./...
