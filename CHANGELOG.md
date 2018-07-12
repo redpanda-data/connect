@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.16.1 - 2018-07-09
+
+### Added
+
+- Metrics for recording `http` request latencies.
+
 ## 0.16.0 - 2018-07-09
 
 ### Changed

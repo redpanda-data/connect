@@ -92,11 +92,12 @@ type Type struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount  metrics.StatCounter
-	mErr    metrics.StatCounter
-	mErrReq metrics.StatCounter
-	mErrRes metrics.StatCounter
-	mSucc   metrics.StatCounter
+	mCount   metrics.StatCounter
+	mErr     metrics.StatCounter
+	mErrReq  metrics.StatCounter
+	mErrRes  metrics.StatCounter
+	mSucc    metrics.StatCounter
+	mLatency metrics.StatTimer
 
 	mCodes   map[int]metrics.StatCounter
 	codesMut sync.RWMutex
@@ -137,6 +138,7 @@ func New(conf Config, opts ...func(*Type)) *Type {
 	h.mErr = h.stats.GetCounter("client.http.error")
 	h.mErrReq = h.stats.GetCounter("client.http.error.request")
 	h.mErrRes = h.stats.GetCounter("client.http.error.response")
+	h.mLatency = h.stats.GetTimer("client.http.latency")
 	h.mSucc = h.stats.GetCounter("client.http.success")
 	h.mCodes = map[int]metrics.StatCounter{}
 
@@ -342,6 +344,8 @@ func (h *Type) DoWithURL(url string, msg types.Message) (res *http.Response, err
 		return nil, err
 	}
 
+	startedAt := time.Now()
+
 	rateLimited := false
 	if res, err = h.client.Do(req); err == nil {
 		h.incrCode(res.StatusCode)
@@ -392,6 +396,7 @@ func (h *Type) DoWithURL(url string, msg types.Message) (res *http.Response, err
 		return nil, err
 	}
 
+	h.mLatency.Timing(int64(time.Since(startedAt)))
 	h.mSucc.Incr(1)
 	h.retryThrottle.Reset()
 	return res, nil
