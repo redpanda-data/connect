@@ -360,6 +360,7 @@ func (h *Type) DoWithURL(url string, msg types.Message) (res *http.Response, err
 
 	i, j := 0, h.conf.NumRetries
 	for i < j && err != nil {
+		h.mErrRes.Incr(1)
 		h.mErr.Incr(1)
 
 		req, err = h.CreateRequestWithURL(url, msg)
@@ -392,6 +393,7 @@ func (h *Type) DoWithURL(url string, msg types.Message) (res *http.Response, err
 	}
 
 	if err != nil {
+		h.mErrRes.Incr(1)
 		h.mErr.Incr(1)
 		return nil, err
 	}
