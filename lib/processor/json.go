@@ -22,6 +22,7 @@ package processor
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -54,6 +55,52 @@ a list of functions [here](../config_interpolation.md#functions).
 
 ### Operations
 
+#### ` + "`append`" + `
+
+Appends a value to an array at a target dot path. If the path does not exist all
+objects in the path are created (unless there is a collision).
+
+If a non-array value already exists in the target path it will be replaced by an
+array containing the original value as well as the new value.
+
+If the value is an array the elements of the array are expanded into the new
+array. E.g. if the target is an array ` + "`[0,1]`" + ` and the value is also an
+array ` + "`[2,3]`" + `, the result will be ` + "`[0,1,2,3]`" + ` as opposed to
+` + "`[0,1,[2,3]]`" + `.
+
+#### ` + "`clean`" + `
+
+Walks the JSON structure and deletes any fields where the value is:
+
+- An empty array
+- An empty object
+- An empty string
+- null
+
+#### ` + "`copy`" + `
+
+Copies the value of a target dot path (if it exists) to a location. The
+destination path is specified in the ` + "`value`" + ` field. If the destination
+path does not exist all objects in the path are created (unless there is a
+collision).
+
+#### ` + "`delete`" + `
+
+Removes a key identified by the dot path. If the path does not exist this is a
+no-op.
+
+#### ` + "`move`" + `
+
+Moves the value of a target dot path (if it exists) to a new location. The
+destination path is specified in the ` + "`value`" + ` field. If the destination
+path does not exist all objects in the path are created (unless there is a
+collision).
+
+#### ` + "`select`" + `
+
+Reads the value found at a dot path and replaced the original contents entirely
+by the new value.
+
 #### ` + "`set`" + `
 
 Sets the value of a field at a dot path. If the path does not exist all objects
@@ -74,39 +121,7 @@ json:
 ` + "```" + `
 
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
-contains keys that aren't strings those fields will be ignored.
-
-#### ` + "`append`" + `
-
-Appends a value to an array at a target dot path. If the path does not exist all
-objects in the path are created (unless there is a collision).
-
-If a non-array value already exists in the target path it will be replaced by an
-array containing the original value as well as the new value.
-
-If the value is an array the elements of the array are expanded into the new
-array. E.g. if the target is an array ` + "`[0,1]`" + ` and the value is also an
-array ` + "`[2,3]`" + `, the result will be ` + "`[0,1,2,3]`" + ` as opposed to
-` + "`[0,1,[2,3]]`" + `.
-
-#### ` + "`delete`" + `
-
-Removes a key identified by the dot path. If the path does not exist this is a
-no-op.
-
-#### ` + "`select`" + `
-
-Reads the value found at a dot path and replaced the original contents entirely
-by the new value.
-
-#### ` + "`clean`" + `
-
-Walks the JSON structure and deletes any fields where the value is:
-
-- An empty array
-- An empty object
-- An empty string
-- null`,
+contains keys that aren't strings those fields will be ignored.`,
 	}
 }
 
@@ -208,6 +223,57 @@ func newSetOperator(path []string) jsonOperator {
 		gPart.Set(value, path...)
 		return gPart.Data(), nil
 	}
+}
+
+func newMoveOperator(srcPath, destPath []string) (jsonOperator, error) {
+	if len(srcPath) == 0 {
+		return nil, errors.New("an empty source path is not valid for the move operator")
+	}
+	if len(destPath) == 0 {
+		return nil, errors.New("an empty destination path is not valid for the move operator")
+	}
+	return func(body interface{}, value rawJSONValue) (interface{}, error) {
+		gPart, err := gabs.Consume(body)
+		if err != nil {
+			return nil, err
+		}
+
+		gSrc := gPart.S(srcPath...).Data()
+		if gSrc == nil {
+			return nil, fmt.Errorf("item not found at path '%v'", strings.Join(srcPath, "."))
+		}
+
+		if _, err = gPart.Set(gSrc, destPath...); err != nil {
+			return nil, fmt.Errorf("failed to set destination path '%v': %v", strings.Join(destPath, "."), err)
+		}
+		gPart.Delete(srcPath...)
+		return gPart.Data(), nil
+	}, nil
+}
+
+func newCopyOperator(srcPath, destPath []string) (jsonOperator, error) {
+	if len(srcPath) == 0 {
+		return nil, errors.New("an empty source path is not valid for the copy operator")
+	}
+	if len(destPath) == 0 {
+		return nil, errors.New("an empty destination path is not valid for the copy operator")
+	}
+	return func(body interface{}, value rawJSONValue) (interface{}, error) {
+		gPart, err := gabs.Consume(body)
+		if err != nil {
+			return nil, err
+		}
+
+		gSrc := gPart.S(srcPath...).Data()
+		if gSrc == nil {
+			return nil, fmt.Errorf("item not found at path '%v'", strings.Join(srcPath, "."))
+		}
+
+		if _, err = gPart.Set(gSrc, destPath...); err != nil {
+			return nil, fmt.Errorf("failed to set destination path '%v': %v", strings.Join(destPath, "."), err)
+		}
+		return gPart.Data(), nil
+	}, nil
 }
 
 func newSelectOperator(path []string) jsonOperator {
@@ -358,12 +424,26 @@ func newAppendOperator(path []string) jsonOperator {
 	}
 }
 
-func getOperator(opStr string, path []string) (jsonOperator, error) {
+func getOperator(opStr string, path []string, value rawJSONValue) (jsonOperator, error) {
+	var destPath []string
+	if opStr == "move" || opStr == "copy" {
+		var destDotPath string
+		if err := json.Unmarshal(value, &destDotPath); err != nil {
+			return nil, fmt.Errorf("failed to parse destination path from value: %v", err)
+		}
+		if len(destDotPath) > 0 {
+			destPath = strings.Split(destDotPath, ".")
+		}
+	}
 	switch opStr {
 	case "set":
 		return newSetOperator(path), nil
 	case "select":
 		return newSelectOperator(path), nil
+	case "copy":
+		return newCopyOperator(path, destPath)
+	case "move":
+		return newMoveOperator(path, destPath)
 	case "delete":
 		return newDeleteOperator(path), nil
 	case "append":
@@ -422,7 +502,7 @@ func NewJSON(
 	}
 
 	var err error
-	if j.operator, err = getOperator(conf.JSON.Operator, splitPath); err != nil {
+	if j.operator, err = getOperator(conf.JSON.Operator, splitPath, j.valueBytes); err != nil {
 		return nil, err
 	}
 	return j, nil

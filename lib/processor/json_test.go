@@ -44,6 +44,56 @@ func TestJSONValidation(t *testing.T) {
 	}
 
 	conf = NewConfig()
+	conf.JSON.Operator = "move"
+	conf.JSON.Parts = []int{0}
+	conf.JSON.Path = "foo.bar"
+	conf.JSON.Value = []byte(`#%#@$his isnt valid json`)
+
+	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
+		t.Error("Expected error from bad value")
+	}
+
+	conf = NewConfig()
+	conf.JSON.Operator = "move"
+	conf.JSON.Parts = []int{0}
+	conf.JSON.Path = ""
+	conf.JSON.Value = []byte(`"foo.bar"`)
+
+	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
+		t.Error("Expected error from empty move path")
+	}
+
+	conf = NewConfig()
+	conf.JSON.Operator = "move"
+	conf.JSON.Parts = []int{0}
+	conf.JSON.Path = "foo.bar"
+	conf.JSON.Value = []byte(`""`)
+
+	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
+		t.Error("Expected error from empty move destination")
+	}
+
+	conf = NewConfig()
+	conf.JSON.Operator = "copy"
+	conf.JSON.Parts = []int{0}
+	conf.JSON.Path = ""
+	conf.JSON.Value = []byte(`"foo.bar"`)
+
+	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
+		t.Error("Expected error from empty copy path")
+	}
+
+	conf = NewConfig()
+	conf.JSON.Operator = "copy"
+	conf.JSON.Parts = []int{0}
+	conf.JSON.Path = "foo.bar"
+	conf.JSON.Value = []byte(`""`)
+
+	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
+		t.Error("Expected error from empty copy destination")
+	}
+
+	conf = NewConfig()
 	conf.JSON.Operator = "set"
 	conf.JSON.Parts = []int{0}
 	conf.JSON.Path = "foo.bar"
@@ -198,6 +248,120 @@ func TestJSONAppend(t *testing.T) {
 	for _, test := range tests {
 		conf := NewConfig()
 		conf.JSON.Operator = "append"
+		conf.JSON.Parts = []int{0}
+		conf.JSON.Path = test.path
+		conf.JSON.Value = []byte(test.value)
+
+		jSet, err := NewJSON(conf, nil, tLog, tStats)
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := types.NewMessage(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := jSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
+func TestJSONMove(t *testing.T) {
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	type jTest struct {
+		name   string
+		path   string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "move 1",
+			path:   "foo.bar",
+			value:  `"bar.baz"`,
+			input:  `{"foo":{"bar":5}}`,
+			output: `{"bar":{"baz":5},"foo":{}}`,
+		},
+		{
+			name:   "move 2",
+			path:   "foo.bar",
+			value:  `"bar.baz"`,
+			input:  `{"foo":{"bar":5},"bar":{"qux":6}}`,
+			output: `{"bar":{"baz":5,"qux":6},"foo":{}}`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.JSON.Operator = "move"
+		conf.JSON.Parts = []int{0}
+		conf.JSON.Path = test.path
+		conf.JSON.Value = []byte(test.value)
+
+		jSet, err := NewJSON(conf, nil, tLog, tStats)
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := types.NewMessage(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := jSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
+func TestJSONCopy(t *testing.T) {
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	type jTest struct {
+		name   string
+		path   string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "copy 1",
+			path:   "foo.bar",
+			value:  `"bar.baz"`,
+			input:  `{"foo":{"bar":5}}`,
+			output: `{"bar":{"baz":5},"foo":{"bar":5}}`,
+		},
+		{
+			name:   "copy 2",
+			path:   "foo.bar",
+			value:  `"bar.baz"`,
+			input:  `{"foo":{"bar":5},"bar":{"qux":6}}`,
+			output: `{"bar":{"baz":5,"qux":6},"foo":{"bar":5}}`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.JSON.Operator = "copy"
 		conf.JSON.Parts = []int{0}
 		conf.JSON.Path = test.path
 		conf.JSON.Value = []byte(test.value)

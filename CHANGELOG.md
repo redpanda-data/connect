@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.16.3 - 2018-07-16
+
+### Added
+
+- New `copy` and `move` operators for the `json` processor.
+
 ## 0.16.2 - 2018-07-12
 
 ### Added
