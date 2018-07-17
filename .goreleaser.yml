@@ -44,7 +44,7 @@ dockers:
     skip_push: false
     dockerfile: ./resources/docker/Dockerfile
     tag_templates:
-      - "{{ .Version }}"
+      - "v{{ .Version }}"
       - "v{{ .Major }}"
       - "v{{ .Major }}.{{ .Minor }}"
       - latest
