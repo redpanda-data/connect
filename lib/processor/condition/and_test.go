@@ -40,12 +40,12 @@ func TestAndCheck(t *testing.T) {
 	)
 
 	passConf := NewConfig()
-	passConf.Content.Operator = "contains"
-	passConf.Content.Arg = "foo"
+	passConf.Text.Operator = "contains"
+	passConf.Text.Arg = "foo"
 
 	failConf := NewConfig()
-	failConf.Content.Operator = "contains"
-	failConf.Content.Arg = "bar"
+	failConf.Text.Operator = "contains"
+	failConf.Text.Arg = "bar"
 
 	tests := []struct {
 		name string
@@ -122,8 +122,8 @@ func TestAndBadOperator(t *testing.T) {
 	testMet := metrics.DudType{}
 
 	cConf := NewConfig()
-	cConf.Type = "content"
-	cConf.Content.Operator = "NOT_EXIST"
+	cConf.Type = "text"
+	cConf.Text.Operator = "NOT_EXIST"
 
 	conf := NewConfig()
 	conf.Type = "and"

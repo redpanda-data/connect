@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Renamed `content` condition type to `text` in order to clarify its purpose.
+
 ## 0.16.4 - 2018-07-17
 
 ### Added

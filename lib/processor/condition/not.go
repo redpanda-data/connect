@@ -41,8 +41,8 @@ NOT equal to "foo"' you could have the following YAML config:
 ` + "``` yaml" + `
 type: not
 not:
-  type: content
-  content:
+  type: text
+  text:
     operator: equal
     part: 0
     arg: foo
@@ -54,8 +54,8 @@ Or, the same example as JSON:
 {
 	"type": "not",
 	"not": {
-		"type": "content",
-		"content": {
+		"type": "text",
+		"text": {
 			"operator": "equal",
 			"part": 0,
 			"arg": "foo"

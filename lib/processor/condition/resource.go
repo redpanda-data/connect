@@ -68,8 +68,8 @@ output:
 resources:
   conditions:
     foobar:
-      type: content
-      content:
+      type: text
+      text:
         operator: equals_cs
         part: 1
         arg: filter me please

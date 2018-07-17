@@ -17,8 +17,8 @@ pipeline:
   processors:
   - type: filter
     filter:
-      type: content
-      content:
+      type: text
+      text:
         arg: ""
         operator: equals_cs
         part: 0

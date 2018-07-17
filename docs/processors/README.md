@@ -162,8 +162,8 @@ last element with be selected, and so on.
 type: conditional
 conditional:
   condition:
-    type: content
-    content:
+    type: text
+    text:
       arg: ""
       operator: equals_cs
       part: 0
@@ -291,8 +291,8 @@ last element with be selected, and so on.
 ``` yaml
 type: filter
 filter:
-  type: content
-  content:
+  type: text
+  text:
     arg: ""
     operator: equals_cs
     part: 0
@@ -312,10 +312,6 @@ the batch use the [`filter_parts`](#filter_parts) processor.
 type: filter_parts
 filter_parts:
   and: []
-  content:
-    arg: ""
-    operator: equals_cs
-    part: 0
   count:
     arg: 100
   jmespath:
@@ -325,7 +321,11 @@ filter_parts:
   or: []
   resource: ""
   static: true
-  type: content
+  text:
+    arg: ""
+    operator: equals_cs
+    part: 0
+  type: text
   xor: []
 ```
 

@@ -145,12 +145,8 @@ input:
     input: {}
     restart_input: false
     condition:
-      type: content
+      type: text
       and: []
-      content:
-        operator: equals_cs
-        part: 0
-        arg: ""
       count:
         arg: 100
       jmespath:
@@ -160,6 +156,10 @@ input:
       or: []
       resource: ""
       static: true
+      text:
+        operator: equals_cs
+        part: 0
+        arg: ""
       xor: []
   redis_list:
     url: tcp://localhost:6379
@@ -238,12 +238,8 @@ pipeline:
       parts: []
     conditional:
       condition:
-        type: content
+        type: text
         and: []
-        content:
-          operator: equals_cs
-          part: 0
-          arg: ""
         count:
           arg: 100
         jmespath:
@@ -253,6 +249,10 @@ pipeline:
         or: []
         resource: ""
         static: true
+        text:
+          operator: equals_cs
+          part: 0
+          arg: ""
         xor: []
       processors: []
       else_processors: []
@@ -273,12 +273,8 @@ pipeline:
       scheme: base64
       parts: []
     filter:
-      type: content
+      type: text
       and: []
-      content:
-        operator: equals_cs
-        part: 0
-        arg: ""
       count:
         arg: 100
       jmespath:
@@ -288,14 +284,14 @@ pipeline:
       or: []
       resource: ""
       static: true
+      text:
+        operator: equals_cs
+        part: 0
+        arg: ""
       xor: []
     filter_parts:
-      type: content
+      type: text
       and: []
-      content:
-        operator: equals_cs
-        part: 0
-        arg: ""
       count:
         arg: 100
       jmespath:
@@ -305,6 +301,10 @@ pipeline:
       or: []
       resource: ""
       static: true
+      text:
+        operator: equals_cs
+        part: 0
+        arg: ""
       xor: []
     grok:
       parts: []
@@ -541,12 +541,8 @@ resources:
         compaction_interval_s: 60
   conditions:
     example:
-      type: content
+      type: text
       and: []
-      content:
-        operator: equals_cs
-        part: 0
-        arg: ""
       count:
         arg: 100
       jmespath:
@@ -556,6 +552,10 @@ resources:
       or: []
       resource: ""
       static: true
+      text:
+        operator: equals_cs
+        part: 0
+        arg: ""
       xor: []
 logger:
   prefix: benthos

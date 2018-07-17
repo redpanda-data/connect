@@ -18,10 +18,6 @@ pipeline:
   - type: filter_parts
     filter_parts:
       and: []
-      content:
-        arg: ""
-        operator: equals_cs
-        part: 0
       count:
         arg: 100
       jmespath:
@@ -31,7 +27,11 @@ pipeline:
       or: []
       resource: ""
       static: true
-      type: content
+      text:
+        arg: ""
+        operator: equals_cs
+        part: 0
+      type: text
       xor: []
   threads: 1
 output:

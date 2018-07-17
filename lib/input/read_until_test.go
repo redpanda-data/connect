@@ -76,9 +76,9 @@ baz`)
 
 func testReadUntilBasic(inConf Config, t *testing.T) {
 	cond := condition.NewConfig()
-	cond.Type = "content"
-	cond.Content.Operator = "equals"
-	cond.Content.Arg = "bar"
+	cond.Type = "text"
+	cond.Text.Operator = "equals"
+	cond.Text.Arg = "bar"
 
 	rConf := NewConfig()
 	rConf.Type = "read_until"
@@ -135,9 +135,9 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 
 func testReadUntilRetry(inConf Config, t *testing.T) {
 	cond := condition.NewConfig()
-	cond.Type = "content"
-	cond.Content.Operator = "equals"
-	cond.Content.Arg = "bar"
+	cond.Type = "text"
+	cond.Text.Operator = "equals"
+	cond.Text.Arg = "bar"
 
 	rConf := NewConfig()
 	rConf.Type = "read_until"
@@ -216,9 +216,9 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 
 func testReadUntilEarlyClose(inConf Config, t *testing.T) {
 	cond := condition.NewConfig()
-	cond.Type = "content"
-	cond.Content.Operator = "equals"
-	cond.Content.Arg = "bar"
+	cond.Type = "text"
+	cond.Text.Operator = "equals"
+	cond.Text.Arg = "bar"
 
 	rConf := NewConfig()
 	rConf.Type = "read_until"
@@ -260,9 +260,9 @@ func testReadUntilEarlyClose(inConf Config, t *testing.T) {
 
 func testReadUntilInputClose(inConf Config, t *testing.T) {
 	cond := condition.NewConfig()
-	cond.Type = "content"
-	cond.Content.Operator = "equals"
-	cond.Content.Arg = "this never resolves"
+	cond.Type = "text"
+	cond.Text.Operator = "equals"
+	cond.Text.Arg = "this never resolves"
 
 	rConf := NewConfig()
 	rConf.Type = "read_until"

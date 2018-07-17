@@ -29,7 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 )
 
-func TestContentCheck(t *testing.T) {
+func TestTextCheck(t *testing.T) {
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
@@ -444,32 +444,32 @@ func TestContentCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := NewConfig()
-			conf.Type = "content"
-			conf.Content.Operator = tt.fields.operator
-			conf.Content.Part = tt.fields.part
-			conf.Content.Arg = tt.fields.arg
+			conf.Type = "text"
+			conf.Text.Operator = tt.fields.operator
+			conf.Text.Part = tt.fields.part
+			conf.Text.Arg = tt.fields.arg
 
-			c, err := NewContent(conf, nil, testLog, testMet)
+			c, err := NewText(conf, nil, testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
 			}
 			if got := c.Check(types.NewMessage(tt.arg)); got != tt.want {
-				t.Errorf("Content.Check() = %v, want %v", got, tt.want)
+				t.Errorf("Text.Check() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestContentBadOperator(t *testing.T) {
+func TestTextBadOperator(t *testing.T) {
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
 	conf := NewConfig()
-	conf.Type = "content"
-	conf.Content.Operator = "NOT_EXIST"
+	conf.Type = "text"
+	conf.Text.Operator = "NOT_EXIST"
 
-	_, err := NewContent(conf, nil, testLog, testMet)
+	_, err := NewText(conf, nil, testLog, testMet)
 	if err == nil {
 		t.Error("expected error from bad operator")
 	}

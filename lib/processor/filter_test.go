@@ -30,7 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 )
 
-func TestFilterContentCheck(t *testing.T) {
+func TestFilterTextCheck(t *testing.T) {
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
@@ -230,10 +230,10 @@ func TestFilterContentCheck(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := NewConfig()
 			conf.Type = "filter"
-			conf.Filter.Type = "content"
-			conf.Filter.Content.Operator = tt.fields.operator
-			conf.Filter.Content.Part = tt.fields.part
-			conf.Filter.Content.Arg = tt.fields.arg
+			conf.Filter.Type = "text"
+			conf.Filter.Text.Operator = tt.fields.operator
+			conf.Filter.Text.Part = tt.fields.part
+			conf.Filter.Text.Arg = tt.fields.arg
 
 			c, err := New(conf, nil, testLog, testMet)
 			if err != nil {

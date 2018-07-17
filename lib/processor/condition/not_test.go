@@ -91,8 +91,8 @@ func TestNotConfigDefaultsJSON(t *testing.T) {
 		{
 			"type": "not",
 			"not": {
-				"type": "content",
-				"content": {
+				"type": "text",
+				"text": {
 					"part": 1
 				}
 			}
@@ -105,13 +105,13 @@ func TestNotConfigDefaultsJSON(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := "content", conf[0].Not.Type; exp != act {
+	if exp, act := "text", conf[0].Not.Type; exp != act {
 		t.Errorf("Wrong type: %v != %v", act, exp)
 	}
-	if exp, act := "equals_cs", conf[0].Not.Content.Operator; exp != act {
+	if exp, act := "equals_cs", conf[0].Not.Text.Operator; exp != act {
 		t.Errorf("Wrong default operator: %v != %v", act, exp)
 	}
-	if exp, act := 1, conf[0].Not.Content.Part; exp != act {
+	if exp, act := 1, conf[0].Not.Text.Part; exp != act {
 		t.Errorf("Wrong default part: %v != %v", act, exp)
 	}
 }
@@ -123,8 +123,8 @@ func TestNotConfigDefaultsYAML(t *testing.T) {
 		{
 			"type": "not",
 			"not": {
-				"type": "content",
-				"content": {
+				"type": "text",
+				"text": {
 					"part": 1
 				}
 			}
@@ -137,13 +137,13 @@ func TestNotConfigDefaultsYAML(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := "content", conf[0].Not.Type; exp != act {
+	if exp, act := "text", conf[0].Not.Type; exp != act {
 		t.Errorf("Wrong type: %v != %v", act, exp)
 	}
-	if exp, act := "equals_cs", conf[0].Not.Content.Operator; exp != act {
+	if exp, act := "equals_cs", conf[0].Not.Text.Operator; exp != act {
 		t.Errorf("Wrong default operator: %v != %v", act, exp)
 	}
-	if exp, act := 1, conf[0].Not.Content.Part; exp != act {
+	if exp, act := 1, conf[0].Not.Text.Part; exp != act {
 		t.Errorf("Wrong default part: %v != %v", act, exp)
 	}
 }
@@ -347,10 +347,10 @@ func TestNotCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := NewConfig()
-			conf.Type = "content"
-			conf.Content.Operator = tt.fields.operator
-			conf.Content.Part = tt.fields.part
-			conf.Content.Arg = tt.fields.arg
+			conf.Type = "text"
+			conf.Text.Operator = tt.fields.operator
+			conf.Text.Part = tt.fields.part
+			conf.Text.Arg = tt.fields.arg
 
 			nConf := NewConfig()
 			nConf.Type = "not"
@@ -362,7 +362,7 @@ func TestNotCheck(t *testing.T) {
 				return
 			}
 			if got := c.Check(types.NewMessage(tt.arg)); got == tt.want {
-				t.Errorf("Content.Check() = %v, want %v", got, !tt.want)
+				t.Errorf("Text.Check() = %v, want %v", got, !tt.want)
 			}
 		})
 	}
@@ -373,8 +373,8 @@ func TestNotBadOperator(t *testing.T) {
 	testMet := metrics.DudType{}
 
 	cConf := NewConfig()
-	cConf.Type = "content"
-	cConf.Content.Operator = "NOT_EXIST"
+	cConf.Type = "text"
+	cConf.Text.Operator = "NOT_EXIST"
 
 	conf := NewConfig()
 	conf.Type = "not"

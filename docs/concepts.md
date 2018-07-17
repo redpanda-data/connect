@@ -64,8 +64,8 @@ output:
       processors:
       - type: filter
         filter:
-          type: content
-          content:
+          type: text
+          text:
             operator: contains
             part: 0
             arg: foo
@@ -78,8 +78,8 @@ output:
         filter:
           type: not
           not:
-            type: content
-            content:
+            type: text
+            text:
               operator: contains
               part: 0
               arg: foo
@@ -154,8 +154,8 @@ resources:
         ttl: 60
   conditions:
     foobarcondition:
-      type: content
-      content:
+      type: text
+      text:
         operator: equals_cs
         part: 1
         arg: filter me please

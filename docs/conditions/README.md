@@ -13,8 +13,8 @@ The format of a condition is similar to other Benthos types:
 
 ``` yaml
 condition:
-  type: content
-  content:
+  type: text
+  text:
     operator: equals
     part: 0
     arg: hello world
@@ -26,26 +26,26 @@ And using boolean condition types we can combine multiple conditions together:
 condition:
   type: and
   and:
-  - type: content
-    content:
+  - type: text
+    text:
       operator: contains
       arg: hello world
   - type: or
     or:
-    - type: content
-      content:
+    - type: text
+      text:
         operator: contains
         arg: foo
     - type: not
       not:
-        type: content
-        content:
+        type: text
+        text:
           operator: contains
           arg: bar
 ```
 
-The above example could be summarised as 'content contains "hello world" and
-also either contains "foo" or does _not_ contain "bar"'.
+The above example could be summarised as 'text contains "hello world" and also
+either contains "foo" or does _not_ contain "bar"'.
 
 Conditions can be extremely useful for creating filters on an output. By using a
 fan out output broker with 'filter' processors on the brokered outputs it is
@@ -62,13 +62,13 @@ duplicate condition configs by using the [resource condition][2].
 ### Contents
 
 1. [`and`](#and)
-2. [`content`](#content)
-3. [`count`](#count)
-4. [`jmespath`](#jmespath)
-5. [`not`](#not)
-6. [`or`](#or)
-7. [`resource`](#resource)
-8. [`static`](#static)
+2. [`count`](#count)
+3. [`jmespath`](#jmespath)
+4. [`not`](#not)
+5. [`or`](#or)
+6. [`resource`](#resource)
+7. [`static`](#static)
+8. [`text`](#text)
 9. [`xor`](#xor)
 
 ## `and`
@@ -79,67 +79,6 @@ and: []
 ```
 
 And is a condition that returns the logical AND of its children conditions.
-
-## `content`
-
-``` yaml
-type: content
-content:
-  arg: ""
-  operator: equals_cs
-  part: 0
-```
-
-Content is a condition that checks the content of a message part against a
-logical operator and an argument.
-
-Available logical operators are:
-
-### `equals_cs`
-
-Checks whether the part equals the argument (case sensitive.)
-
-### `equals`
-
-Checks whether the part equals the argument under unicode case-folding (case
-insensitive.)
-
-### `contains_cs`
-
-Checks whether the part contains the argument (case sensitive.)
-
-### `contains`
-
-Checks whether the part contains the argument under unicode case-folding (case
-insensitive.)
-
-### `prefix_cs`
-
-Checks whether the part begins with the argument (case sensitive.)
-
-### `prefix`
-
-Checks whether the part begins with the argument under unicode case-folding
-(case insensitive.)
-
-### `suffix_cs`
-
-Checks whether the part ends with the argument (case sensitive.)
-
-### `suffix`
-
-Checks whether the part ends with the argument under unicode case-folding (case
-insensitive.)
-
-### `regexp_partial`
-
-Checks whether any section of the message part matches a regular expression (RE2
-syntax).
-
-### `regexp_exact`
-
-Checks whether the message part exactly matches a regular expression (RE2
-syntax).
 
 ## `count`
 
@@ -211,8 +150,8 @@ NOT equal to "foo"' you could have the following YAML config:
 ``` yaml
 type: not
 not:
-  type: content
-  content:
+  type: text
+  text:
     operator: equal
     part: 0
     arg: foo
@@ -224,8 +163,8 @@ Or, the same example as JSON:
 {
 	"type": "not",
 	"not": {
-		"type": "content",
-		"content": {
+		"type": "text",
+		"text": {
 			"operator": "equal",
 			"part": 0,
 			"arg": "foo"
@@ -284,8 +223,8 @@ output:
 resources:
   conditions:
     foobar:
-      type: content
-      content:
+      type: text
+      text:
         operator: equals_cs
         part: 1
         arg: filter me please
@@ -304,6 +243,67 @@ static: true
 ```
 
 Static is a condition that always resolves to the same static boolean value.
+
+## `text`
+
+``` yaml
+type: text
+text:
+  arg: ""
+  operator: equals_cs
+  part: 0
+```
+
+Text is a condition that checks the contents of a message part as plain text
+against a logical operator and an argument.
+
+Available logical operators are:
+
+### `equals_cs`
+
+Checks whether the part equals the argument (case sensitive.)
+
+### `equals`
+
+Checks whether the part equals the argument under unicode case-folding (case
+insensitive.)
+
+### `contains_cs`
+
+Checks whether the part contains the argument (case sensitive.)
+
+### `contains`
+
+Checks whether the part contains the argument under unicode case-folding (case
+insensitive.)
+
+### `prefix_cs`
+
+Checks whether the part begins with the argument (case sensitive.)
+
+### `prefix`
+
+Checks whether the part begins with the argument under unicode case-folding
+(case insensitive.)
+
+### `suffix_cs`
+
+Checks whether the part ends with the argument (case sensitive.)
+
+### `suffix`
+
+Checks whether the part ends with the argument under unicode case-folding (case
+insensitive.)
+
+### `regexp_partial`
+
+Checks whether any section of the message part matches a regular expression (RE2
+syntax).
+
+### `regexp_exact`
+
+Checks whether the message part exactly matches a regular expression (RE2
+syntax).
 
 ## `xor`
 

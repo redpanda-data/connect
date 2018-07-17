@@ -250,10 +250,10 @@ func TestResourceCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := NewConfig()
-			conf.Type = "content"
-			conf.Content.Operator = tt.fields.operator
-			conf.Content.Part = tt.fields.part
-			conf.Content.Arg = tt.fields.arg
+			conf.Type = "text"
+			conf.Text.Operator = tt.fields.operator
+			conf.Text.Part = tt.fields.part
+			conf.Text.Arg = tt.fields.arg
 
 			resCond, err := New(conf, nil, testLog, testMet)
 			if err != nil {
@@ -276,7 +276,7 @@ func TestResourceCheck(t *testing.T) {
 				return
 			}
 			if got := c.Check(types.NewMessage(tt.arg)); got != tt.want {
-				t.Errorf("Content.Check() = %v, want %v", got, tt.want)
+				t.Errorf("Text.Check() = %v, want %v", got, tt.want)
 			}
 		})
 	}

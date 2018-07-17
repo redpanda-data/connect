@@ -23,8 +23,8 @@
 				"type": "conditional",
 				"conditional": {
 					"condition": {
-						"type": "content",
-						"content": {
+						"type": "text",
+						"text": {
 							"arg": "",
 							"operator": "equals_cs",
 							"part": 0

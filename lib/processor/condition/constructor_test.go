@@ -53,8 +53,8 @@ func TestConstructorConfigDefaults(t *testing.T) {
 
 	if err := json.Unmarshal([]byte(`[
 		{
-			"type": "content",
-			"content": {
+			"type": "text",
+			"text": {
 				"part": 1
 			}
 		}
@@ -66,10 +66,10 @@ func TestConstructorConfigDefaults(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := "equals_cs", conf[0].Content.Operator; exp != act {
+	if exp, act := "equals_cs", conf[0].Text.Operator; exp != act {
 		t.Errorf("Wrong default operator: %v != %v", act, exp)
 	}
-	if exp, act := 1, conf[0].Content.Part; exp != act {
+	if exp, act := 1, conf[0].Text.Part; exp != act {
 		t.Errorf("Wrong default part: %v != %v", act, exp)
 	}
 }
@@ -79,8 +79,8 @@ func TestConstructorConfigDefaultsYAML(t *testing.T) {
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
-			"type": "content",
-			"content": {
+			"type": "text",
+			"text": {
 				"part": 1
 			}
 		}
@@ -92,10 +92,10 @@ func TestConstructorConfigDefaultsYAML(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := "equals_cs", conf[0].Content.Operator; exp != act {
+	if exp, act := "equals_cs", conf[0].Text.Operator; exp != act {
 		t.Errorf("Wrong default operator: %v != %v", act, exp)
 	}
-	if exp, act := 1, conf[0].Content.Part; exp != act {
+	if exp, act := 1, conf[0].Text.Part; exp != act {
 		t.Errorf("Wrong default part: %v != %v", act, exp)
 	}
 }
@@ -106,8 +106,8 @@ func TestSanitise(t *testing.T) {
 	var err error
 
 	exp := `{` +
-		`"type":"content",` +
-		`"content":{` +
+		`"type":"text",` +
+		`"text":{` +
 		`"arg":"foo",` +
 		`"operator":"equals_cs",` +
 		`"part":1` +
@@ -115,9 +115,9 @@ func TestSanitise(t *testing.T) {
 		`}`
 
 	conf := NewConfig()
-	conf.Type = "content"
-	conf.Content.Part = 1
-	conf.Content.Arg = "foo"
+	conf.Type = "text"
+	conf.Text.Part = 1
+	conf.Text.Arg = "foo"
 
 	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)

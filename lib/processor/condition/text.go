@@ -34,11 +34,11 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["content"] = TypeSpec{
-		constructor: NewContent,
+	Constructors["text"] = TypeSpec{
+		constructor: NewText,
 		description: `
-Content is a condition that checks the content of a message part against a
-logical operator and an argument.
+Text is a condition that checks the contents of a message part as plain text
+against a logical operator and an argument.
 
 Available logical operators are:
 
@@ -92,22 +92,22 @@ syntax).`,
 
 //------------------------------------------------------------------------------
 
-// Errors for the content condition.
+// Errors for the text condition.
 var (
-	ErrInvalidContentOperator = errors.New("invalid content operator type")
+	ErrInvalidTextOperator = errors.New("invalid text operator type")
 )
 
-// ContentConfig is a configuration struct containing fields for the content
+// TextConfig is a configuration struct containing fields for the text
 // condition.
-type ContentConfig struct {
+type TextConfig struct {
 	Operator string `json:"operator" yaml:"operator"`
 	Part     int    `json:"part" yaml:"part"`
 	Arg      string `json:"arg" yaml:"arg"`
 }
 
-// NewContentConfig returns a ContentConfig with default values.
-func NewContentConfig() ContentConfig {
-	return ContentConfig{
+// NewTextConfig returns a TextConfig with default values.
+func NewTextConfig() TextConfig {
+	return TextConfig{
 		Operator: "equals_cs",
 		Part:     0,
 		Arg:      "",
@@ -116,60 +116,60 @@ func NewContentConfig() ContentConfig {
 
 //------------------------------------------------------------------------------
 
-type contentOperator func(c []byte) bool
+type textOperator func(c []byte) bool
 
-func contentEqualsOperator(arg []byte) contentOperator {
+func textEqualsOperator(arg []byte) textOperator {
 	return func(c []byte) bool {
 		return bytes.Equal(c, arg)
 	}
 }
 
-func contentEqualsFoldOperator(arg []byte) contentOperator {
+func textEqualsFoldOperator(arg []byte) textOperator {
 	return func(c []byte) bool {
 		return bytes.EqualFold(c, arg)
 	}
 }
 
-func contentContainsOperator(arg []byte) contentOperator {
+func textContainsOperator(arg []byte) textOperator {
 	return func(c []byte) bool {
 		return bytes.Contains(c, arg)
 	}
 }
 
-func contentContainsFoldOperator(arg []byte) contentOperator {
+func textContainsFoldOperator(arg []byte) textOperator {
 	argLower := bytes.ToLower(arg)
 	return func(c []byte) bool {
 		return bytes.Contains(bytes.ToLower(c), argLower)
 	}
 }
 
-func contentPrefixOperator(arg []byte) contentOperator {
+func textPrefixOperator(arg []byte) textOperator {
 	return func(c []byte) bool {
 		return bytes.HasPrefix(c, arg)
 	}
 }
 
-func contentPrefixFoldOperator(arg []byte) contentOperator {
+func textPrefixFoldOperator(arg []byte) textOperator {
 	argLower := bytes.ToLower(arg)
 	return func(c []byte) bool {
 		return bytes.HasPrefix(bytes.ToLower(c), argLower)
 	}
 }
 
-func contentSuffixOperator(arg []byte) contentOperator {
+func textSuffixOperator(arg []byte) textOperator {
 	return func(c []byte) bool {
 		return bytes.HasSuffix(c, arg)
 	}
 }
 
-func contentSuffixFoldOperator(arg []byte) contentOperator {
+func textSuffixFoldOperator(arg []byte) textOperator {
 	argLower := bytes.ToLower(arg)
 	return func(c []byte) bool {
 		return bytes.HasSuffix(bytes.ToLower(c), argLower)
 	}
 }
 
-func contentRegexpPartialOperator(arg []byte) (contentOperator, error) {
+func textRegexpPartialOperator(arg []byte) (textOperator, error) {
 	compiled, err := regexp.Compile(string(arg))
 	if err != nil {
 		return nil, err
@@ -179,7 +179,7 @@ func contentRegexpPartialOperator(arg []byte) (contentOperator, error) {
 	}, nil
 }
 
-func contentRegexpExactOperator(arg []byte) (contentOperator, error) {
+func textRegexpExactOperator(arg []byte) (textOperator, error) {
 	compiled, err := regexp.Compile(string(arg))
 	if err != nil {
 		return nil, err
@@ -189,38 +189,38 @@ func contentRegexpExactOperator(arg []byte) (contentOperator, error) {
 	}, nil
 }
 
-func strToContentOperator(str, arg string) (contentOperator, error) {
+func strToTextOperator(str, arg string) (textOperator, error) {
 	switch str {
 	case "equals_cs":
-		return contentEqualsOperator([]byte(arg)), nil
+		return textEqualsOperator([]byte(arg)), nil
 	case "equals":
-		return contentEqualsFoldOperator([]byte(arg)), nil
+		return textEqualsFoldOperator([]byte(arg)), nil
 	case "contains_cs":
-		return contentContainsOperator([]byte(arg)), nil
+		return textContainsOperator([]byte(arg)), nil
 	case "contains":
-		return contentContainsFoldOperator([]byte(arg)), nil
+		return textContainsFoldOperator([]byte(arg)), nil
 	case "prefix_cs":
-		return contentPrefixOperator([]byte(arg)), nil
+		return textPrefixOperator([]byte(arg)), nil
 	case "prefix":
-		return contentPrefixFoldOperator([]byte(arg)), nil
+		return textPrefixFoldOperator([]byte(arg)), nil
 	case "suffix_cs":
-		return contentSuffixOperator([]byte(arg)), nil
+		return textSuffixOperator([]byte(arg)), nil
 	case "suffix":
-		return contentSuffixFoldOperator([]byte(arg)), nil
+		return textSuffixFoldOperator([]byte(arg)), nil
 	case "regexp_partial":
-		return contentRegexpPartialOperator([]byte(arg))
+		return textRegexpPartialOperator([]byte(arg))
 	case "regexp_exact":
-		return contentRegexpExactOperator([]byte(arg))
+		return textRegexpExactOperator([]byte(arg))
 	}
-	return nil, ErrInvalidContentOperator
+	return nil, ErrInvalidTextOperator
 }
 
 //------------------------------------------------------------------------------
 
-// Content is a condition that checks message content against logical operators.
-type Content struct {
+// Text is a condition that checks message text against logical operators.
+type Text struct {
 	stats    metrics.Type
-	operator contentOperator
+	operator textOperator
 	part     int
 
 	mSkippedEmpty metrics.StatCounter
@@ -229,30 +229,30 @@ type Content struct {
 	mApplied      metrics.StatCounter
 }
 
-// NewContent returns a Content processor.
-func NewContent(
+// NewText returns a Text processor.
+func NewText(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	op, err := strToContentOperator(conf.Content.Operator, conf.Content.Arg)
+	op, err := strToTextOperator(conf.Text.Operator, conf.Text.Arg)
 	if err != nil {
-		return nil, fmt.Errorf("operator '%v': %v", conf.Content.Operator, err)
+		return nil, fmt.Errorf("operator '%v': %v", conf.Text.Operator, err)
 	}
-	return &Content{
+	return &Text{
 		stats:    stats,
 		operator: op,
-		part:     conf.Content.Part,
+		part:     conf.Text.Part,
 
-		mSkippedEmpty: stats.GetCounter("condition.content.skipped.empty_message"),
-		mSkipped:      stats.GetCounter("condition.content.skipped"),
-		mSkippedOOB:   stats.GetCounter("condition.content.skipped.out_of_bounds"),
-		mApplied:      stats.GetCounter("condition.content.applied"),
+		mSkippedEmpty: stats.GetCounter("condition.text.skipped.empty_message"),
+		mSkipped:      stats.GetCounter("condition.text.skipped"),
+		mSkippedOOB:   stats.GetCounter("condition.text.skipped.out_of_bounds"),
+		mApplied:      stats.GetCounter("condition.text.applied"),
 	}, nil
 }
 
 //------------------------------------------------------------------------------
 
 // Check attempts to check a message part against a configured condition.
-func (c *Content) Check(msg types.Message) bool {
+func (c *Text) Check(msg types.Message) bool {
 	index := c.part
 	lParts := msg.Len()
 	if lParts == 0 {

@@ -495,8 +495,8 @@ Subscribe to an NSQ instance topic and channel.
 type: read_until
 read_until:
   condition:
-    type: content
-    content:
+    type: text
+    text:
       arg: ""
       operator: equals_cs
       part: 0
