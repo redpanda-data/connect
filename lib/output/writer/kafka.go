@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"crypto/tls"
 	"fmt"
 	"strings"
 	"sync"
@@ -41,6 +42,8 @@ type KafkaConfig struct {
 	ClientID             string   `json:"client_id" yaml:"client_id"`
 	Key                  string   `json:"key" yaml:"key"`
 	RoundRobinPartitions bool     `json:"round_robin_partitions" yaml:"round_robin_partitions"`
+	TLSEnable            bool     `json:"tls_enable" yaml:"tls_enable"`
+	SkipCertVerify       bool     `json:"skip_cert_verify" yaml:"skip_cert_verify"`
 	Topic                string   `json:"topic" yaml:"topic"`
 	Compression          string   `json:"compression" yaml:"compression"`
 	MaxMsgBytes          int      `json:"max_msg_bytes" yaml:"max_msg_bytes"`
@@ -56,6 +59,8 @@ func NewKafkaConfig() KafkaConfig {
 		ClientID:             "benthos_kafka_output",
 		Key:                  "",
 		RoundRobinPartitions: false,
+		TLSEnable:            false,
+		SkipCertVerify:       false,
 		Topic:                "benthos_stream",
 		Compression:          "none",
 		MaxMsgBytes:          1000000,
@@ -156,6 +161,10 @@ func (k *Kafka) Connect() error {
 	config.Producer.Timeout = time.Duration(k.conf.TimeoutMS) * time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
+	config.Net.TLS.Enable = k.conf.TLSEnable
+	if k.conf.SkipCertVerify {
+		config.Net.TLS.Config = &tls.Config{InsecureSkipVerify: true}
+	}
 
 	if k.conf.RoundRobinPartitions {
 		config.Producer.Partitioner = sarama.NewRoundRobinPartitioner

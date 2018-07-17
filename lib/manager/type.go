@@ -123,7 +123,7 @@ func New(
 	}
 
 	for k, conf := range conf.Caches {
-		newCache, err := cache.New(conf, t, log, stats)
+		newCache, err := cache.New(conf, t, log.NewModule(".resource."+k), metrics.Namespaced(stats, "resource."+k))
 		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to create cache resource '%v' of type '%v': %v",
@@ -144,7 +144,7 @@ func New(
 
 	// TODO: Prevent recursive conditions.
 	for k, newConf := range conf.Conditions {
-		newCond, err := condition.New(newConf, t, log, stats)
+		newCond, err := condition.New(newConf, t, log.NewModule(".resource."+k), metrics.Namespaced(stats, "resource."+k))
 		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to create condition resource '%v' of type '%v': %v",

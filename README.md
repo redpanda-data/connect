@@ -4,7 +4,7 @@
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
 [![Build Status][travis-badge]][travis-url]
 
-Benthos is a high performance log streaming service, able to connect various
+Benthos is a high performance message streaming service, able to connect various
 sources and sinks and perform arbitrary
 [actions, transformations and filters][processors] on payloads. It is easy to
 deploy and monitor, and ready to drop into your pipeline either as a static
@@ -29,7 +29,7 @@ for choosing a level of resiliency that meets your needs.
 ## Supported Sources & Sinks
 
 - [Amazon (S3, SQS)][amazons3]
-- [Elasticsearch][elasticsearch]
+- [Elasticsearch][elasticsearch] (output only)
 - File
 - HTTP(S)
 - [Kafka][kafka]
@@ -120,7 +120,8 @@ with [a config file][env-config] where _all_ common fields can be set this way.
 Build with Go:
 
 ``` shell
-go get github.com/Jeffail/benthos/cmd/benthos
+make deps
+make
 ```
 
 Or, pull the docker image:
@@ -159,7 +160,7 @@ Benthos supports ZMQ4 for both data input and output. To add this you need to
 install libzmq4 and use the compile time flag when building Benthos:
 
 ``` shell
-go install -tags "ZMQ4" ./cmd/...
+make TAGS=ZMQ4
 ```
 
 [inputs]: docs/inputs/README.md

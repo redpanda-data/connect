@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Latency metrics for caches.
+- TLS options for `kafka` and `kafka_partitions` inputs and outputs.
+
+### Changed
+
+- Metrics for items configured within the `resources` section are now namespaced
+  under their identifier.
+
 ## 0.16.3 - 2018-07-16
 
 ### Added

@@ -72,24 +72,29 @@ type Memcached struct {
 	log   log.Modular
 	stats metrics.Type
 
+	mLatency       metrics.StatTimer
 	mGetCount      metrics.StatCounter
 	mGetRetry      metrics.StatCounter
 	mGetFailed     metrics.StatCounter
 	mGetSuccess    metrics.StatCounter
+	mGetLatency    metrics.StatTimer
 	mSetCount      metrics.StatCounter
 	mSetRetry      metrics.StatCounter
 	mSetFailed     metrics.StatCounter
 	mSetSuccess    metrics.StatCounter
+	mSetLatency    metrics.StatTimer
 	mAddCount      metrics.StatCounter
 	mAddDupe       metrics.StatCounter
 	mAddRetry      metrics.StatCounter
 	mAddFailedDupe metrics.StatCounter
 	mAddFailedErr  metrics.StatCounter
 	mAddSuccess    metrics.StatCounter
+	mAddLatency    metrics.StatTimer
 	mDelCount      metrics.StatCounter
 	mDelRetry      metrics.StatCounter
 	mDelFailedErr  metrics.StatCounter
 	mDelSuccess    metrics.StatCounter
+	mDelLatency    metrics.StatTimer
 
 	mc          *memcache.Client
 	retryPeriod time.Duration
@@ -112,24 +117,29 @@ func NewMemcached(
 		log:   log.NewModule(".cache.memcached"),
 		stats: stats,
 
+		mLatency:       stats.GetTimer("cache.memcached.latency"),
 		mGetCount:      stats.GetCounter("cache.memcached.get.count"),
 		mGetRetry:      stats.GetCounter("cache.memcached.get.retry"),
 		mGetFailed:     stats.GetCounter("cache.memcached.get.failed.error"),
 		mGetSuccess:    stats.GetCounter("cache.memcached.get.success"),
+		mGetLatency:    stats.GetTimer("cache.memcached.get.latency"),
 		mSetCount:      stats.GetCounter("cache.memcached.set.count"),
 		mSetRetry:      stats.GetCounter("cache.memcached.set.retry"),
 		mSetFailed:     stats.GetCounter("cache.memcached.set.failed.error"),
 		mSetSuccess:    stats.GetCounter("cache.memcached.set.success"),
+		mSetLatency:    stats.GetTimer("cache.memcached.set.latency"),
 		mAddCount:      stats.GetCounter("cache.memcached.add.count"),
 		mAddDupe:       stats.GetCounter("cache.memcached.add.failed.duplicate"),
 		mAddRetry:      stats.GetCounter("cache.memcached.add.retry"),
 		mAddFailedDupe: stats.GetCounter("cache.memcached.add.failed.duplicate"),
 		mAddFailedErr:  stats.GetCounter("cache.memcached.add.failed.error"),
 		mAddSuccess:    stats.GetCounter("cache.memcached.add.success"),
+		mAddLatency:    stats.GetTimer("cache.memcached.add.latency"),
 		mDelCount:      stats.GetCounter("cache.memcached.delete.count"),
 		mDelRetry:      stats.GetCounter("cache.memcached.delete.retry"),
 		mDelFailedErr:  stats.GetCounter("cache.memcached.delete.failed.error"),
 		mDelSuccess:    stats.GetCounter("cache.memcached.delete.success"),
+		mDelLatency:    stats.GetTimer("cache.memcached.del.latency"),
 
 		retryPeriod: time.Duration(conf.Memcached.RetryPeriodMS) * time.Millisecond,
 		mc:          memcache.New(addresses...),
@@ -151,6 +161,7 @@ func (m *Memcached) getItemFor(key string, value []byte) *memcache.Item {
 // if the key does not exist or if the operation failed.
 func (m *Memcached) Get(key string) ([]byte, error) {
 	m.mGetCount.Incr(1)
+	tStarted := time.Now()
 
 	item, err := m.mc.Get(m.conf.Memcached.Prefix + key)
 	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
@@ -158,6 +169,11 @@ func (m *Memcached) Get(key string) ([]byte, error) {
 		m.mGetRetry.Incr(1)
 		item, err = m.mc.Get(m.conf.Memcached.Prefix + key)
 	}
+
+	latency := int64(time.Since(tStarted))
+	m.mGetLatency.Timing(latency)
+	m.mLatency.Timing(latency)
+
 	if err != nil {
 		m.mGetFailed.Incr(1)
 		return nil, err
@@ -170,6 +186,7 @@ func (m *Memcached) Get(key string) ([]byte, error) {
 // Set attempts to set the value of a key.
 func (m *Memcached) Set(key string, value []byte) error {
 	m.mSetCount.Incr(1)
+	tStarted := time.Now()
 
 	err := m.mc.Set(m.getItemFor(key, value))
 	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
@@ -183,6 +200,10 @@ func (m *Memcached) Set(key string, value []byte) error {
 		m.mSetSuccess.Incr(1)
 	}
 
+	latency := int64(time.Since(tStarted))
+	m.mSetLatency.Timing(latency)
+	m.mLatency.Timing(latency)
+
 	return err
 }
 
@@ -190,10 +211,16 @@ func (m *Memcached) Set(key string, value []byte) error {
 // and returns an error if the key already exists or if the operation fails.
 func (m *Memcached) Add(key string, value []byte) error {
 	m.mAddCount.Incr(1)
+	tStarted := time.Now()
 
 	err := m.mc.Add(m.getItemFor(key, value))
 	if memcache.ErrNotStored == err {
 		m.mAddFailedDupe.Incr(1)
+
+		latency := int64(time.Since(tStarted))
+		m.mAddLatency.Timing(latency)
+		m.mLatency.Timing(latency)
+
 		return types.ErrKeyAlreadyExists
 	}
 	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
@@ -201,6 +228,11 @@ func (m *Memcached) Add(key string, value []byte) error {
 		m.mAddRetry.Incr(1)
 		if err := m.mc.Add(m.getItemFor(key, value)); memcache.ErrNotStored == err {
 			m.mAddFailedDupe.Incr(1)
+
+			latency := int64(time.Since(tStarted))
+			m.mAddLatency.Timing(latency)
+			m.mLatency.Timing(latency)
+
 			return types.ErrKeyAlreadyExists
 		}
 	}
@@ -209,12 +241,18 @@ func (m *Memcached) Add(key string, value []byte) error {
 	} else {
 		m.mAddSuccess.Incr(1)
 	}
+
+	latency := int64(time.Since(tStarted))
+	m.mAddLatency.Timing(latency)
+	m.mLatency.Timing(latency)
+
 	return err
 }
 
 // Delete attempts to remove a key.
 func (m *Memcached) Delete(key string) error {
 	m.mDelCount.Incr(1)
+	tStarted := time.Now()
 
 	err := m.mc.Delete(m.conf.Memcached.Prefix + key)
 	if err == memcache.ErrCacheMiss {
@@ -232,6 +270,11 @@ func (m *Memcached) Delete(key string) error {
 	} else {
 		m.mDelSuccess.Incr(1)
 	}
+
+	latency := int64(time.Since(tStarted))
+	m.mDelLatency.Timing(latency)
+	m.mLatency.Timing(latency)
+
 	return err
 }
 

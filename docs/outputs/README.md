@@ -364,8 +364,10 @@ kafka:
   key: ""
   max_msg_bytes: 1e+06
   round_robin_partitions: false
+  skip_cert_verify: false
   target_version: 1.0.0
   timeout_ms: 5000
+  tls_enable: false
   topic: benthos_stream
 ```
 

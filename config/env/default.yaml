@@ -95,15 +95,19 @@ input:
         client_id: ${INPUT_KAFKA_CLIENT_ID:benthos_kafka_input}
         consumer_group: ${INPUT_KAFKA_CONSUMER_GROUP:benthos_consumer_group}
         partition: ${INPUT_KAFKA_PARTITION:0}
+        skip_cert_verify: ${INPUT_KAFKA_SKIP_CERT_VERIFY:false}
         start_from_oldest: ${INPUT_KAFKA_START_FROM_OLDEST:true}
         target_version: ${INPUT_KAFKA_TARGET_VERSION:1.0.0}
+        tls_enable: ${INPUT_KAFKA_TLS_ENABLE:false}
         topic: ${INPUT_KAFKA_TOPIC:benthos_stream}
       kafka_balanced:
         addresses:
         - ${INPUT_KAFKA_BALANCED_ADDRESSES:localhost:9092}
         client_id: ${INPUT_KAFKA_BALANCED_CLIENT_ID:benthos_kafka_input}
         consumer_group: ${INPUT_KAFKA_BALANCED_CONSUMER_GROUP:benthos_consumer_group}
+        skip_cert_verify: ${INPUT_KAFKA_BALANCED_SKIP_CERT_VERIFY:false}
         start_from_oldest: ${INPUT_KAFKA_BALANCED_START_FROM_OLDEST:true}
+        tls_enable: ${INPUT_KAFKA_BALANCED_TLS_ENABLE:false}
         topics:
         - ${INPUT_KAFKA_BALANCED_TOPICS:benthos_stream}
       mqtt:
@@ -349,8 +353,10 @@ output:
         key: ${OUTPUT_KAFKA_KEY}
         max_msg_bytes: ${OUTPUT_KAFKA_MAX_MSG_BYTES:1000000}
         round_robin_partitions: ${OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS:false}
+        skip_cert_verify: ${OUTPUT_KAFKA_SKIP_CERT_VERIFY:false}
         target_version: ${OUTPUT_KAFKA_TARGET_VERSION:1.0.0}
         timeout_ms: ${OUTPUT_KAFKA_TIMEOUT_MS:5000}
+        tls_enable: ${OUTPUT_KAFKA_TLS_ENABLE:false}
         topic: ${OUTPUT_KAFKA_TOPIC:benthos_stream}
       mqtt:
         client_id: ${OUTPUT_MQTT_CLIENT_ID:benthos_output}

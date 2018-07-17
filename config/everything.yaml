@@ -96,8 +96,10 @@ input:
     - localhost:9092
     client_id: benthos_kafka_input
     consumer_group: benthos_consumer_group
+    tls_enable: false
     topic: benthos_stream
     partition: 0
+    skip_cert_verify: false
     start_from_oldest: true
     target_version: 1.0.0
   kafka_balanced:
@@ -105,8 +107,10 @@ input:
     - localhost:9092
     client_id: benthos_kafka_input
     consumer_group: benthos_consumer_group
+    tls_enable: false
     topics:
     - benthos_stream
+    skip_cert_verify: false
     start_from_oldest: true
   mqtt:
     urls:
@@ -457,6 +461,8 @@ output:
     client_id: benthos_kafka_output
     key: ""
     round_robin_partitions: false
+    tls_enable: false
+    skip_cert_verify: false
     topic: benthos_stream
     compression: none
     max_msg_bytes: 1000000

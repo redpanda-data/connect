@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"crypto/tls"
 	"strings"
 	"sync"
 	"time"
@@ -38,8 +39,10 @@ type KafkaConfig struct {
 	Addresses       []string `json:"addresses" yaml:"addresses"`
 	ClientID        string   `json:"client_id" yaml:"client_id"`
 	ConsumerGroup   string   `json:"consumer_group" yaml:"consumer_group"`
+	TLSEnable       bool     `json:"tls_enable" yaml:"tls_enable"`
 	Topic           string   `json:"topic" yaml:"topic"`
 	Partition       int32    `json:"partition" yaml:"partition"`
+	SkipCertVerify  bool     `json:"skip_cert_verify" yaml:"skip_cert_verify"`
 	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion   string   `json:"target_version" yaml:"target_version"`
 }
@@ -50,8 +53,10 @@ func NewKafkaConfig() KafkaConfig {
 		Addresses:       []string{"localhost:9092"},
 		ClientID:        "benthos_kafka_input",
 		ConsumerGroup:   "benthos_consumer_group",
+		TLSEnable:       false,
 		Topic:           "benthos_stream",
 		Partition:       0,
+		SkipCertVerify:  false,
 		StartFromOldest: true,
 		TargetVersion:   sarama.V1_0_0_0.String(),
 	}
@@ -156,6 +161,10 @@ func (k *Kafka) Connect() error {
 	config.ClientID = k.conf.ClientID
 	config.Net.DialTimeout = time.Second
 	config.Consumer.Return.Errors = true
+	config.Net.TLS.Enable = k.conf.TLSEnable
+	if k.conf.SkipCertVerify {
+		config.Net.TLS.Config = &tls.Config{InsecureSkipVerify: true}
+	}
 
 	k.client, err = sarama.NewClient(k.addresses, config)
 	if err != nil {

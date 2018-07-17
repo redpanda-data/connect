@@ -11,7 +11,9 @@ input:
     - localhost:9092
     client_id: benthos_kafka_input
     consumer_group: benthos_consumer_group
+    skip_cert_verify: false
     start_from_oldest: true
+    tls_enable: false
     topics:
     - benthos_stream
 buffer:

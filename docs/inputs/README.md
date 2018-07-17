@@ -381,8 +381,10 @@ kafka:
   client_id: benthos_kafka_input
   consumer_group: benthos_consumer_group
   partition: 0
+  skip_cert_verify: false
   start_from_oldest: true
   target_version: 1.0.0
+  tls_enable: false
   topic: benthos_stream
 ```
 
@@ -405,7 +407,9 @@ kafka_balanced:
   - localhost:9092
   client_id: benthos_kafka_input
   consumer_group: benthos_consumer_group
+  skip_cert_verify: false
   start_from_oldest: true
+  tls_enable: false
   topics:
   - benthos_stream
 ```
