@@ -123,6 +123,15 @@ func NewJMESPath(
 
 //------------------------------------------------------------------------------
 
+func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("jmespath panic: %v", r)
+		}
+	}()
+	return j.Search(part)
+}
+
 // Check attempts to check a message part against a configured condition.
 func (c *JMESPath) Check(msg types.Message) bool {
 	index := c.part
@@ -144,7 +153,7 @@ func (c *JMESPath) Check(msg types.Message) bool {
 	}
 
 	var result interface{}
-	if result, err = c.query.Search(jsonPart); err != nil {
+	if result, err = safeSearch(jsonPart, c.query); err != nil {
 		c.mErrJMES.Incr(1)
 		c.mDropped.Incr(1)
 		c.log.Debugf("Failed to search json: %v\n", err)

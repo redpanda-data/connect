@@ -142,6 +142,15 @@ func NewJMESPath(
 
 //------------------------------------------------------------------------------
 
+func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("jmespath panic: %v", r)
+		}
+	}()
+	return j.Search(part)
+}
+
 // ProcessMessage prepends a new message part to the message.
 func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
@@ -165,7 +174,7 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		}
 
 		var result interface{}
-		if result, err = p.query.Search(jsonPart); err != nil {
+		if result, err = safeSearch(jsonPart, p.query); err != nil {
 			p.mErrJMES.Incr(1)
 			p.log.Debugf("Failed to search json: %v\n", err)
 			continue
