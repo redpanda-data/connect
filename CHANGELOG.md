@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.16.4 - 2018-07-17
+
 ### Added
 
 - Latency metrics for caches.
