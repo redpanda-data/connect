@@ -37,13 +37,7 @@ func init() {
 		constructor: NewEncode,
 		description: `
 Encodes parts of a message according to the selected scheme. Supported available
-schemes are: base64. If the list of target parts is empty the encoding will be
-applied to all message parts.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if index = -1 then the selected part
-will be the last part of the message, if index = -2 then the part before the
-last element with be selected, and so on.`,
+schemes are: base64.`,
 	}
 }
 

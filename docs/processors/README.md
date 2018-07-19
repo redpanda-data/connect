@@ -3,9 +3,9 @@ Processors
 
 This document was generated with `benthos --list-processors`.
 
-Benthos has a concept of processors, these are functions that will be applied to
-each message passing through a pipeline. The function signature allows a
-processor to mutate or drop messages depending on the content of the message.
+Benthos processors are functions that will be applied to each message passing
+through a pipeline. The function signature allows a processor to mutate or drop
+messages depending on the content of the message.
 
 Processors are set via config, and depending on where in the config they are
 placed they will be run either immediately after a specific input (set in the
@@ -14,6 +14,22 @@ specific output (set in the output section).
 
 By organising processors you can configure complex behaviours in your pipeline.
 You can [find some examples here][0].
+
+### Batching and Multiple Part Messages
+
+All Benthos processors support mulitple part messages, which are synonymous with
+batches. Some processors such as [combine](#combine), [batch](#batch) and
+[split](#split) are able to create, expand and break down batches.
+
+Many processors are able to perform their behaviours on specific parts of a
+message batch, or on all parts, and have a field `parts` for
+specifying and array of part indexes they should apply to. If the list of target
+parts is empty these processors will be applied to all message parts.
+
+Part indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if part = -1 then the selected part
+will be the last part of the message, if part = -2 then the part before the last
+element with be selected, and so on.
 
 ### Contents
 
@@ -37,10 +53,11 @@ You can [find some examples here][0].
 18. [`json`](#json)
 19. [`merge_json`](#merge_json)
 20. [`noop`](#noop)
-21. [`sample`](#sample)
-22. [`select_parts`](#select_parts)
-23. [`split`](#split)
-24. [`unarchive`](#unarchive)
+21. [`process_field`](#process_field)
+22. [`sample`](#sample)
+23. [`select_parts`](#select_parts)
+24. [`split`](#split)
+25. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -146,15 +163,9 @@ compress:
 ```
 
 Compresses parts of a message according to the selected algorithm. Supported
-available compression types are: gzip, zlib, flate. If the list of target parts
-is empty the compression will be applied to all message parts.
+available compression types are: gzip, zlib, flate.
 
 The 'level' field might not apply to all algorithms.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if index = -1 then the selected part
-will be the last part of the message, if index = -2 then the part before the
-last element with be selected, and so on.
 
 ## `conditional`
 
@@ -189,13 +200,7 @@ decode:
 ```
 
 Decodes parts of a message according to the selected scheme. Supported available
-schemes are: base64. If the list of target parts is empty the decoding will be
-applied to all message parts.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if index = -1 then the selected part
-will be the last part of the message, if index = -2 then the part before the
-last element with be selected, and so on.
+schemes are: base64.
 
 ## `decompress`
 
@@ -207,13 +212,7 @@ decompress:
 ```
 
 Decompresses the parts of a message according to the selected algorithm.
-Supported decompression types are: gzip, zlib, bzip2, flate. If the list of
-target parts is empty the decompression will be applied to all message parts.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if index = -1 then the selected part
-will be the last part of the message, if index = -2 then the part before the
-last element with be selected, and so on.
+Supported decompression types are: gzip, zlib, bzip2, flate.
 
 Parts that fail to decompress (invalid format) will be removed from the message.
 If the message results in zero parts it is skipped entirely.
@@ -278,13 +277,7 @@ encode:
 ```
 
 Encodes parts of a message according to the selected scheme. Supported available
-schemes are: base64. If the list of target parts is empty the encoding will be
-applied to all message parts.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if index = -1 then the selected part
-will be the last part of the message, if index = -2 then the part before the
-last element with be selected, and so on.
+schemes are: base64.
 
 ## `filter`
 
@@ -361,14 +354,6 @@ This processor respects type hints in the grok patterns, therefore with the
 pattern `%{WORD:first},%{INT:second:int}` and a payload of `foo,1`
 the resulting payload would be `{"first":"foo","second":1}`.
 
-If the list of target parts is empty the query will be applied to all message
-parts.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if part = -1 then the selected part
-will be the last part of the message, if part = -2 then the part before the
-last element with be selected, and so on.
-
 ## `hash_sample`
 
 ``` yaml
@@ -439,14 +424,6 @@ and how the response is mapped to the original payload respectively.
 When `strict_request_map` is set to `true` the processor is
 skipped for any payloads where a map target is not found.
 
-If the list of target parts is empty the processor will be applied to all
-message parts.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if part = -1 then the selected part
-will be the last part of the message, if part = -2 then the part before the
-last element with be selected, and so on.
-
 ## `insert_part`
 
 ``` yaml
@@ -480,8 +457,7 @@ jmespath:
 Parses a message part as a JSON blob and attempts to apply a JMESPath expression
 to it, replacing the contents of the part with the result. Please refer to the
 [JMESPath website](http://jmespath.org/) for information and tutorials regarding
-the syntax of expressions. If the list of target parts is empty the query will
-be applied to all message parts.
+the syntax of expressions.
 
 For example, with the following config:
 
@@ -514,11 +490,6 @@ It is possible to create boolean queries with JMESPath, in order to filter
 messages with boolean queries please instead use the
 [`jmespath`](../conditions/README.md#jmespath) condition.
 
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if part = -1 then the selected part
-will be the last part of the message, if part = -2 then the part before the
-last element with be selected, and so on.
-
 ## `json`
 
 ``` yaml
@@ -534,12 +505,6 @@ Parses a message part as a JSON blob, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
 If the path is empty or "." the root of the data will be targeted.
-
-If the list of target parts is empty the processor will be applied to all
-message parts. Part indexes can be negative, and if so the part will be selected
-from the end counting backwards starting from -1. E.g. if part = -1 then the
-selected part will be the last part of the message, if part = -2 then the part
-before the last element with be selected, and so on.
 
 This processor will interpolate functions within the 'value' field, you can find
 a list of functions [here](../config_interpolation.md#functions).
@@ -628,12 +593,6 @@ single JSON value and then writes it to a new message part at the end of the
 message. Merged parts are removed unless `retain_parts` is set to
 true.
 
-If the list of target parts is empty the processor will be applied to all
-message parts. Part indexes can be negative, and if so the part will be selected
-from the end counting backwards starting from -1. E.g. if part = -1 then the
-selected part will be the last part of the message, if part = -2 then the part
-before the last element with be selected, and so on.
-
 ## `noop`
 
 ``` yaml
@@ -643,6 +602,26 @@ noop: null
 
 Noop is a no-op processor that does nothing, the message passes through
 unchanged.
+
+## `process_field`
+
+``` yaml
+type: process_field
+process_field:
+  parts: []
+  path: ""
+  processors: []
+```
+
+A processor that extracts the value of a field within payloads as a string
+(currently only JSON format is supported) then applies a list of processors to
+the extracted value, and finally sets the field within the original payloads to
+the processed result as a string.
+
+If the number of messages resulting from the processing steps does not match the
+original count then this processor fails and the messages continue unchanged.
+Therefore, you should avoid using batch, filter and archive type processors in
+this list.
 
 ## `sample`
 
@@ -715,17 +694,11 @@ unarchive:
 ```
 
 Unarchives parts of a message according to the selected archive type into
-multiple parts. Supported archive types are: tar, binary, lines. If the list of
-target parts is empty the unarchive will be applied to all message parts.
+multiple parts. Supported archive types are: tar, binary, lines.
 
 When a part is unarchived it is split into more message parts that replace the
 original part. If you wish to split the archive into one message per file then
 follow this with the 'split' processor.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if index = -1 then the selected part
-will be the last part of the message, if index = -2 then the part before the
-last element with be selected, and so on.
 
 Parts that are selected but fail to unarchive (invalid format) will be removed
 from the message. If the message results in zero parts it is skipped entirely.

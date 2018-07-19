@@ -38,17 +38,11 @@ func init() {
 		constructor: NewUnarchive,
 		description: `
 Unarchives parts of a message according to the selected archive type into
-multiple parts. Supported archive types are: tar, binary, lines. If the list of
-target parts is empty the unarchive will be applied to all message parts.
+multiple parts. Supported archive types are: tar, binary, lines.
 
 When a part is unarchived it is split into more message parts that replace the
 original part. If you wish to split the archive into one message per file then
 follow this with the 'split' processor.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if index = -1 then the selected part
-will be the last part of the message, if index = -2 then the part before the
-last element with be selected, and so on.
 
 Parts that are selected but fail to unarchive (invalid format) will be removed
 from the message. If the message results in zero parts it is skipped entirely.`,

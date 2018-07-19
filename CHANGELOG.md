@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `process_field` processor.
+
 ## 0.17.0 - 2018-07-17
 
 ### Changed

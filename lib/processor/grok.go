@@ -42,15 +42,7 @@ valid output format.
 
 This processor respects type hints in the grok patterns, therefore with the
 pattern ` + "`%{WORD:first},%{INT:second:int}`" + ` and a payload of ` + "`foo,1`" + `
-the resulting payload would be ` + "`{\"first\":\"foo\",\"second\":1}`" + `.
-
-If the list of target parts is empty the query will be applied to all message
-parts.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if part = -1 then the selected part
-will be the last part of the message, if part = -2 then the part before the
-last element with be selected, and so on.`,
+the resulting payload would be ` + "`{\"first\":\"foo\",\"second\":1}`" + `.`,
 	}
 }
 

@@ -178,6 +178,7 @@ func envify(rootPath string, conf interface{}, paths map[string]string) (newConf
 	blacklist := []string{
 		"READ_UNTIL",
 		"CONDITIONAL",
+		"PROCESS_FIELD",
 		"FILTER",
 		"DEDUPE",
 		"INPUT_BROKER_INPUTS_BROKER",

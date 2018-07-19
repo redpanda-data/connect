@@ -38,8 +38,7 @@ func init() {
 Parses a message part as a JSON blob and attempts to apply a JMESPath expression
 to it, replacing the contents of the part with the result. Please refer to the
 [JMESPath website](http://jmespath.org/) for information and tutorials regarding
-the syntax of expressions. If the list of target parts is empty the query will
-be applied to all message parts.
+the syntax of expressions.
 
 For example, with the following config:
 
@@ -70,12 +69,7 @@ Then the resulting contents of part 0 would be:
 
 It is possible to create boolean queries with JMESPath, in order to filter
 messages with boolean queries please instead use the
-` + "[`jmespath`](../conditions/README.md#jmespath)" + ` condition.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if part = -1 then the selected part
-will be the last part of the message, if part = -2 then the part before the
-last element with be selected, and so on.`,
+` + "[`jmespath`](../conditions/README.md#jmespath)" + ` condition.`,
 	}
 }
 

@@ -3,11 +3,13 @@ Conditions
 
 This document was generated with `benthos --list-conditions`
 
-Within the list of Benthos [processors][0] you will find the [filter][1]
-processor, which applies a condition to every message and only propagates them
-if the condition passes. Conditions themselves can modify ('not') and combine
-('and', 'or') other conditions, and can therefore be used to create complex
-filters.
+Conditions are boolean queries that can be executed based on the contents of a
+message. Some [processors][processors] such as [`filter`][filter] use
+conditions for expressing their logic.
+
+Conditions themselves can modify (`not`) and combine (`and`, `or`)
+other conditions, and can therefore be used to create complex boolean
+expressions.
 
 The format of a condition is similar to other Benthos types:
 
@@ -53,11 +55,28 @@ possible to build
 [curated data streams](../concepts.md#content-based-multiplexing) that filter on
 the content of each message.
 
+### Batching and Multipart Messages
+
+All conditions can be applied to a multipart message, which is synonymous with a
+batch. Some conditions target a specific part of a message batch, and require
+you specify the target index with the field `part`.
+
+Some processors such as [`filter`][filter] apply its conditions across
+the whole batch. Whereas other processors such as
+ [`filter_parts`][filter_parts] will apply its conditions on each part
+of a batch individually, in which case the condition acts as if it were
+referencing a single message batch.
+
+Part indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1. E.g. if part = -1 then the selected part
+will be the last part of the message, if part = -2 then the part before the last
+element with be selected, and so on.
+
 ### Reusing Conditions
 
 Sometimes large chunks of logic are reused across processors, or nested multiple
 times as branches of a larger condition. It is possible to avoid writing
-duplicate condition configs by using the [resource condition][2].
+duplicate condition configs by using the [resource condition][resource].
 
 ### Contents
 
@@ -207,15 +226,15 @@ output:
     - type: foo
       foo:
         processors:
-        - type: condition
-          condition:
+        - type: filter
+          filter:
             type: resource
             resource: foobar
     - type: bar
       bar:
         processors:
-        - type: condition
-          condition:
+        - type: filter
+		  filter:
             type: not
             not:
               type: resource
@@ -316,6 +335,7 @@ Xor is a condition that returns the logical XOR of its children conditions,
 meaning it only resolves to true if _exactly_ one of its children conditions
 resolves to true.
 
-[0]: ../processors/README.md
-[1]: ../processors/README.md#filter
-[2]: #resource
+[processors]: ../processors/README.md
+[filter]: ../processors/README.md#filter
+[filter_parts]: ../processors/README.md#filter_parts
+[resource]: #resource

@@ -23,9 +23,9 @@ Documentation
   - Sharing Resources Across Processors
   - Maximising IO Throughput
   - Maximising CPU Utilisation
+- [Message Batching](./batching.md) explains how multiple part messages and
+  message batching works within Benthos.
 - [Making Configuration Easier](./configuration.md) explains some of the tools
   provided by Benthos that help make writing configs easier.
 - [Config Interpolation](./config_interpolation.md) explains how to incorporate
   environment variables and dynamic values into your config files.
-- [Working with Multipart Messages](./multipart.md) explains how to mix and
-  match queues and protocols using multipart messages.

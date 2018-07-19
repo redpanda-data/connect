@@ -52,15 +52,15 @@ output:
     - type: foo
       foo:
         processors:
-        - type: condition
-          condition:
+        - type: filter
+          filter:
             type: resource
             resource: foobar
     - type: bar
       bar:
         processors:
-        - type: condition
-          condition:
+        - type: filter
+		  filter:
             type: not
             not:
               type: resource

@@ -361,6 +361,10 @@ pipeline:
     merge_json:
       parts: []
       retain_parts: false
+    process_field:
+      parts: []
+      path: ""
+      processors: []
     sample:
       retain: 10
       seed: 0

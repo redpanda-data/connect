@@ -46,15 +46,7 @@ source dot paths allows you to specify how the request payload is constructed,
 and how the response is mapped to the original payload respectively.
 
 When ` + "`strict_request_map`" + ` is set to ` + "`true`" + ` the processor is
-skipped for any payloads where a map target is not found.
-
-If the list of target parts is empty the processor will be applied to all
-message parts.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if part = -1 then the selected part
-will be the last part of the message, if part = -2 then the part before the
-last element with be selected, and so on.`,
+skipped for any payloads where a map target is not found.`,
 	}
 }
 
