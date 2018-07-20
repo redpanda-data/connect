@@ -80,6 +80,7 @@ type Config struct {
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Split        struct{}           `json:"split" yaml:"split"`
+	Text         TextConfig         `json:"text" yaml:"text"`
 	Unarchive    UnarchiveConfig    `json:"unarchive" yaml:"unarchive"`
 }
 
@@ -111,6 +112,7 @@ func NewConfig() Config {
 		Sample:       NewSampleConfig(),
 		SelectParts:  NewSelectPartsConfig(),
 		Split:        struct{}{},
+		Text:         NewTextConfig(),
 		Unarchive:    NewUnarchiveConfig(),
 	}
 }

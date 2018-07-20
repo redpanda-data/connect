@@ -374,6 +374,11 @@ pipeline:
       parts:
       - 0
     split: {}
+    text:
+      parts: []
+      operator: trim_space
+      arg: ""
+      value: ""
     unarchive:
       format: binary
       parts: []

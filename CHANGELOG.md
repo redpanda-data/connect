@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `text` processor.
+
 ## 0.18.0 - 2018-07-20
 
 ### Added

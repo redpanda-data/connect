@@ -58,7 +58,8 @@ element with be selected, and so on.
 23. [`sample`](#sample)
 24. [`select_parts`](#select_parts)
 25. [`split`](#split)
-26. [`unarchive`](#unarchive)
+26. [`text`](#text)
+27. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -747,6 +748,40 @@ number of parts into smaller batches by using the split processor followed by
 the combine processor. For example:
 
 1 Message of 1000 parts -> Split -> Combine 10 -> 100 Messages of 10 parts.
+
+## `text`
+
+``` yaml
+type: text
+text:
+  arg: ""
+  operator: trim_space
+  parts: []
+  value: ""
+```
+
+Performs text based mutations on payloads.
+
+This processor will interpolate functions within the 'value' field, you can find
+a list of functions [here](../config_interpolation.md#functions).
+
+### Operations
+
+#### `append`
+
+Appends text to the end of the payload.
+
+#### `prepend`
+
+Prepends text to the beginning of the payload.
+
+#### `trim_space`
+
+Removes all leading and trailing whitespace from the payload.
+
+#### `trim`
+
+Removes all leading and trailing occurrences of characters within the arg field.
 
 ## `unarchive`
 
