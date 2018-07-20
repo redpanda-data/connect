@@ -42,8 +42,15 @@ the processed result as a string.
 
 If the number of messages resulting from the processing steps does not match the
 original count then this processor fails and the messages continue unchanged.
-Therefore, you should avoid using batch, filter and archive type processors in
-this list.`,
+Therefore, you should avoid using batch and filter type processors in this list.
+
+### Batch Ordering
+
+This processor supports batch messages. When processing results are mapped back
+into the original payload they will be correctly aligned with the original
+batch. However, the ordering of field extracted message parts as they are sent
+through processors are not guaranteed to match the ordering of the original
+batch.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
 			procConfs := make([]interface{}, len(conf.ProcessField.Processors))
@@ -104,9 +111,12 @@ type ProcessField struct {
 func NewProcessField(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	nsStats := metrics.Namespaced(stats, "processor.process_field")
+	nsLog := log.NewModule(".process_field")
+
 	var children []Type
 	for _, pconf := range conf.ProcessField.Processors {
-		proc, err := New(pconf, mgr, log, stats)
+		proc, err := New(pconf, mgr, nsLog, nsStats)
 		if err != nil {
 			return nil, err
 		}
@@ -134,12 +144,13 @@ func NewProcessField(
 // ProcessMessage does nothing and returns the message unchanged.
 func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
 	p.mCount.Incr(1)
-	resMsgs := [1]types.Message{msg}
+	payload := msg.ShallowCopy()
+	resMsgs := [1]types.Message{payload}
 	msgs = resMsgs[:]
 
 	targetParts := p.parts
 	if len(targetParts) == 0 {
-		targetParts = make([]int, msg.Len())
+		targetParts = make([]int, payload.Len())
 		for i := range targetParts {
 			targetParts[i] = i
 		}
@@ -152,7 +163,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		reqMsg.Set(i, []byte("nil"))
 		var err error
 		var jObj interface{}
-		if jObj, err = msg.GetJSON(index); err != nil {
+		if jObj, err = payload.GetJSON(index); err != nil {
 			p.mErrJSONParse.Incr(1)
 			p.log.Errorf("Failed to decode part: %v\n", err)
 		}
@@ -180,15 +191,14 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		resultMsgs = nextResultMsgs
 	}
 
-	if len(resultMsgs) != 1 {
-		p.mSent.Incr(1)
-		p.mErr.Incr(1)
-		p.mErrMisaligned.Incr(1)
-		p.log.Errorf("Misaligned processor result. Expected single batch, received: %v\n", len(resultMsgs))
-		return
+	resMsg := types.NewMessage(nil)
+	for _, rMsg := range resultMsgs {
+		for _, part := range rMsg.GetAll() {
+			resMsg.Append(part)
+		}
 	}
 
-	if exp, act := len(targetParts), resultMsgs[0].Len(); exp != act {
+	if exp, act := len(targetParts), resMsg.Len(); exp != act {
 		p.mSent.Incr(1)
 		p.mErr.Incr(1)
 		p.mErrMisalignedBatch.Incr(1)
@@ -196,15 +206,12 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		return
 	}
 
-	resMsg := msg.ShallowCopy()
 	for i, index := range targetParts {
-		gParts[i].Set(string(resultMsgs[0].Get(i)), p.path...)
-		resMsg.SetJSON(index, gParts[i].Data())
+		gParts[i].Set(string(resMsg.Get(i)), p.path...)
+		payload.SetJSON(index, gParts[i].Data())
 	}
 
 	p.mSent.Incr(1)
-	resMsgs = [1]types.Message{resMsg}
-	msgs = resMsgs[:]
 	return
 }
 

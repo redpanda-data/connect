@@ -242,7 +242,6 @@ pipeline:
         timeout_ms: ${PROCESSOR_HTTP_REQUEST_TIMEOUT_MS:5000}
         url: ${PROCESSOR_HTTP_REQUEST_URL:http://localhost:4195/post}
         verb: ${PROCESSOR_HTTP_REQUEST_VERB:POST}
-      strict_request_map: ${PROCESSOR_HTTP_STRICT_REQUEST_MAP:true}
     insert_part:
       content: ${PROCESSOR_INSERT_PART_CONTENT}
       index: ${PROCESSOR_INSERT_PART_INDEX:-1}

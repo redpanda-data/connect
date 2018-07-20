@@ -5,9 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.18.0 - 2018-07-20
+
 ### Added
 
 - New `process_field` processor.
+- New `process_map` processor.
+
+### Changed
+
+- Removed mapping fields from the `http` processor, this behaviour has been put
+  into the new `process_map` processor instead.
 
 ## 0.17.0 - 2018-07-17
 

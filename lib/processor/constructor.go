@@ -76,6 +76,7 @@ type Config struct {
 	JSON         JSONConfig         `json:"json" yaml:"json"`
 	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
+	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Split        struct{}           `json:"split" yaml:"split"`
@@ -106,6 +107,7 @@ func NewConfig() Config {
 		JSON:         NewJSONConfig(),
 		MergeJSON:    NewMergeJSONConfig(),
 		ProcessField: NewProcessFieldConfig(),
+		ProcessMap:   NewProcessMapConfig(),
 		Sample:       NewSampleConfig(),
 		SelectParts:  NewSelectPartsConfig(),
 		Split:        struct{}{},

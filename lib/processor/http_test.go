@@ -93,180 +93,21 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	msgs, res = h.ProcessMessage(types.NewMessage([][]byte{[]byte("bar"), []byte("baz")}))
+	msgs, res = h.ProcessMessage(types.NewMessage([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res.Error())
-	} else if expC, actC := 2, msgs[0].Len(); actC != expC {
+	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "foobar", string(msgs[0].GetAll()[1]); act != exp {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-}
-
-func TestHTTPReqMap(t *testing.T) {
-	i := 0
-	expPayloads := []string{`{"foo":1,"ns":{"bar":2}}`}
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqBytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if exp, act := expPayloads[i], string(reqBytes); exp != act {
-			t.Errorf("Wrong payload value: %v != %v", act, exp)
-		}
-		i++
-		w.Write([]byte("foobar"))
-	}))
-	defer ts.Close()
-
-	conf := NewConfig()
-	conf.HTTP.Client.URL = ts.URL + "/testpost"
-	conf.HTTP.RequestMap = map[string]string{
-		"foo":    "ns.foo",
-		"ns.bar": "bar",
 	}
 
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	msgs, res := h.ProcessMessage(types.NewMessage([][]byte{[]byte("foo, not json")}))
+	msgs, res = h.ProcessMessage(types.NewMessage([][]byte{[]byte("baz")}))
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := "foo, not json", string(msgs[0].GetAll()[0]); act != exp {
+	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-
-	msgs, res = h.ProcessMessage(types.NewMessage([][]byte{[]byte(`{"bar":"this exists but foo dont"}`)}))
-	if res != nil {
-		t.Error(res.Error())
-	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
-		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := `{"bar":"this exists but foo dont"}`, string(msgs[0].GetAll()[0]); act != exp {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-
-	msgs, res = h.ProcessMessage(types.NewMessage([][]byte{[]byte(`{"bar":2,"ns":{"foo":1}}`)}))
-	if res != nil {
-		t.Error(res.Error())
-	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
-		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := `foobar`, string(msgs[0].GetAll()[0]); act != exp {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-}
-
-func TestHTTPReqMapRelaxed(t *testing.T) {
-	i := 0
-	expPayloads := []string{
-		`{"foo":1}`,
-		`{"foo":1,"ns":{"bar":2}}`,
-	}
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqBytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if exp, act := expPayloads[i], string(reqBytes); exp != act {
-			t.Errorf("Wrong payload value: %v != %v", act, exp)
-		}
-		i++
-		w.Write([]byte("foobar"))
-	}))
-	defer ts.Close()
-
-	conf := NewConfig()
-	conf.HTTP.Client.URL = ts.URL + "/testpost"
-	conf.HTTP.StrictReqMapping = false
-	conf.HTTP.RequestMap = map[string]string{
-		"foo":    "ns.foo",
-		"ns.bar": "bar",
-	}
-
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	msgs, res := h.ProcessMessage(types.NewMessage([][]byte{[]byte("foo, not json")}))
-	if res != nil {
-		t.Error(res.Error())
-	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
-		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := "foo, not json", string(msgs[0].GetAll()[0]); act != exp {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-
-	msgs, res = h.ProcessMessage(types.NewMessage([][]byte{[]byte(`{"ns":{"foo":1}}`)}))
-	if res != nil {
-		t.Error(res.Error())
-	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
-		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := `foobar`, string(msgs[0].GetAll()[0]); act != exp {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-
-	msgs, res = h.ProcessMessage(types.NewMessage([][]byte{[]byte(`{"bar":2,"ns":{"foo":1}}`)}))
-	if res != nil {
-		t.Error(res.Error())
-	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
-		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := `foobar`, string(msgs[0].GetAll()[0]); act != exp {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-}
-
-func TestHTTPResMap(t *testing.T) {
-	i := 0
-	resPayloads := []string{
-		`{"foo":1}`,
-		`{"ns":{"bar":2}}`,
-		`{"foo":1,"ns":{"bar":2}}`,
-	}
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqBytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if exp, act := `{"baz":3}`, string(reqBytes); exp != act {
-			t.Errorf("Wrong payload value: %v != %v", act, exp)
-		}
-		w.Write([]byte(resPayloads[i]))
-		i++
-	}))
-	defer ts.Close()
-
-	conf := NewConfig()
-	conf.HTTP.Client.URL = ts.URL + "/testpost"
-	conf.HTTP.ResponseMap = map[string]string{
-		"ns.foo": "foo",
-		"bar":    "ns.bar",
-	}
-
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expResults := []string{
-		`{"baz":3,"ns":{"foo":1}}`,
-		`{"bar":2,"baz":3}`,
-		`{"bar":2,"baz":3,"ns":{"foo":1}}`,
-	}
-
-	for _, exp := range expResults {
-		msgs, res := h.ProcessMessage(types.NewMessage([][]byte{[]byte(`{"baz":3}`)}))
-		if res != nil {
-			t.Error(res.Error())
-		} else if expC, actC := 1, msgs[0].Len(); actC != expC {
-			t.Errorf("Wrong result count: %v != %v", actC, expC)
-		} else if act := string(msgs[0].GetAll()[0]); act != exp {
-			t.Errorf("Wrong result: %v != %v", act, exp)
-		}
 	}
 }

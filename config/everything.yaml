@@ -344,9 +344,6 @@ pipeline:
           enabled: false
           username: ""
           password: ""
-      request_map: {}
-      response_map: {}
-      strict_request_map: true
     insert_part:
       index: -1
       content: ""
@@ -364,6 +361,12 @@ pipeline:
     process_field:
       parts: []
       path: ""
+      processors: []
+    process_map:
+      parts: []
+      strict_premap: false
+      premap: {}
+      postmap: {}
       processors: []
     sample:
       retain: 10

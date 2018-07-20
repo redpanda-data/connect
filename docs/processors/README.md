@@ -54,10 +54,11 @@ element with be selected, and so on.
 19. [`merge_json`](#merge_json)
 20. [`noop`](#noop)
 21. [`process_field`](#process_field)
-22. [`sample`](#sample)
-23. [`select_parts`](#select_parts)
-24. [`split`](#split)
-25. [`unarchive`](#unarchive)
+22. [`process_map`](#process_map)
+23. [`sample`](#sample)
+24. [`select_parts`](#select_parts)
+25. [`split`](#split)
+26. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -407,22 +408,25 @@ http:
     timeout_ms: 5000
     url: http://localhost:4195/post
     verb: POST
-  request_map: {}
-  response_map: {}
-  strict_request_map: true
 ```
 
-Performs an HTTP request using a message part as the request body and either
-replaces or augments the original message part with the body of the response.
+Performs an HTTP request using a message batch as the request body, and replaces
+the original message parts with the body of the response.
 
-By default the entire contents of the message part are sent and the response
-entirely replaces the original contents. Alternatively, populating the
-`request_map` and `response_map` fields with a map of destination to
-source dot paths allows you to specify how the request payload is constructed,
-and how the response is mapped to the original payload respectively.
+If the batch contains only a single message part then it will be sent as the
+body of the request. If the batch contains multiple messages then they will be
+sent as a multipart HTTP request using the `Content-Type: multipart`
+header.
 
-When `strict_request_map` is set to `true` the processor is
-skipped for any payloads where a map target is not found.
+If you wish to avoid this behaviour then you can either use the
+ [`archive`](#archive) processor to create a single message from a
+batch, or use the [`split`](#split) processor to break down the batch
+into individual message parts.
+
+In order to map or encode the payload to a specific request body, and map the
+response back into the original payload instead of replacing it entirely, you
+can use the [`process_map`](#process_map) or
+ [`process_field`](#process_field) processors.
 
 ## `insert_part`
 
@@ -620,8 +624,69 @@ the processed result as a string.
 
 If the number of messages resulting from the processing steps does not match the
 original count then this processor fails and the messages continue unchanged.
-Therefore, you should avoid using batch, filter and archive type processors in
+Therefore, you should avoid using batch and filter type processors in this list.
+
+### Batch Ordering
+
+This processor supports batch messages. When processing results are mapped back
+into the original payload they will be correctly aligned with the original
+batch. However, the ordering of field extracted message parts as they are sent
+through processors are not guaranteed to match the ordering of the original
+batch.
+
+## `process_map`
+
+``` yaml
+type: process_map
+process_map:
+  parts: []
+  postmap: {}
+  premap: {}
+  processors: []
+```
+
+A processor that extracts and maps fields from the original payload into new
+objects, applies a list of processors to the newly constructed objects, and
+finally maps the result back into the original payload.
+
+Map paths are arbitrary dot paths, target path hierarchies are constructed if
+they do not yet exist. If `strict_premap` is set to true then
+processing is skipped for message parts where the premap targets aren't found.
+
+If the pre-map is empty then the full payload is sent to the processors. The
+post-map should not be left empty, if you intend to replace the full payload
+with the result then this processor is redundant. Currently only JSON format is
+supported for mapping fields from and back to the original payload.
+
+Maps can reference the root of objects either with an empty string or '.', for
+example the maps:
+
+``` yaml
+premap:
+  .: foo.bar
+postmap:
+  foo.bar: .
+```
+
+Would create a new object where the root is the value of `foo.bar` and
+would map the full contents of the result back into `foo.bar`.
+
+This processor is useful for performing processors on subsections of a payload.
+For example, you could extract sections of a JSON object in order to construct
+a request object for an `http` processor, then map the result back
+into a field within the original object.
+
+If the number of total message parts resulting from the processing steps does
+not match the original count then this processor fails and the messages continue
+unchanged. Therefore, you should avoid using batch and filter type processors in
 this list.
+
+### Batch Ordering
+
+This processor supports batch messages. When message parts are post-mapped after
+processing they will be correctly aligned with the original batch. However, the
+ordering of premapped message parts as they are sent through processors are not
+guaranteed to match the ordering of the original batch.
 
 ## `sample`
 

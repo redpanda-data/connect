@@ -105,14 +105,16 @@ type Conditional struct {
 func NewConditional(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	cond, err := condition.New(conf.Conditional.Condition, mgr, log, stats)
+	nsStats := metrics.Namespaced(stats, "processor.conditional")
+	nsLog := log.NewModule(".conditional")
+	cond, err := condition.New(conf.Conditional.Condition, mgr, nsLog, nsStats)
 	if err != nil {
 		return nil, err
 	}
 	var children []Type
 	for _, pconf := range conf.Conditional.Processors {
 		var proc Type
-		if proc, err = New(pconf, mgr, log, stats); err != nil {
+		if proc, err = New(pconf, mgr, nsLog, nsStats); err != nil {
 			return nil, err
 		}
 		children = append(children, proc)
@@ -120,7 +122,7 @@ func NewConditional(
 	var elseChildren []Type
 	for _, pconf := range conf.Conditional.ElseProcessors {
 		var proc Type
-		if proc, err = New(pconf, mgr, log, stats); err != nil {
+		if proc, err = New(pconf, mgr, nsLog, nsStats); err != nil {
 			return nil, err
 		}
 		elseChildren = append(elseChildren, proc)
@@ -131,8 +133,8 @@ func NewConditional(
 		elseChildren: elseChildren,
 
 		mCount:      stats.GetCounter("processor.conditional.count"),
-		mCondPassed: stats.GetCounter("processor.conditional.condition.passed"),
-		mCondFailed: stats.GetCounter("processor.conditional.condition.failed"),
+		mCondPassed: stats.GetCounter("processor.conditional.passed"),
+		mCondFailed: stats.GetCounter("processor.conditional.failed"),
 		mSent:       stats.GetCounter("processor.conditional.sent"),
 		mDropped:    stats.GetCounter("processor.conditional.dropped"),
 	}, nil

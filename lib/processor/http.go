@@ -27,7 +27,6 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/http/client"
-	"github.com/Jeffail/gabs"
 )
 
 //------------------------------------------------------------------------------
@@ -36,17 +35,23 @@ func init() {
 	Constructors["http"] = TypeSpec{
 		constructor: NewHTTP,
 		description: `
-Performs an HTTP request using a message part as the request body and either
-replaces or augments the original message part with the body of the response.
+Performs an HTTP request using a message batch as the request body, and replaces
+the original message parts with the body of the response.
 
-By default the entire contents of the message part are sent and the response
-entirely replaces the original contents. Alternatively, populating the
-` + "`request_map` and `response_map`" + ` fields with a map of destination to
-source dot paths allows you to specify how the request payload is constructed,
-and how the response is mapped to the original payload respectively.
+If the batch contains only a single message part then it will be sent as the
+body of the request. If the batch contains multiple messages then they will be
+sent as a multipart HTTP request using the ` + "`Content-Type: multipart`" + `
+header.
 
-When ` + "`strict_request_map`" + ` is set to ` + "`true`" + ` the processor is
-skipped for any payloads where a map target is not found.`,
+If you wish to avoid this behaviour then you can either use the
+ ` + "[`archive`](#archive)" + ` processor to create a single message from a
+batch, or use the ` + "[`split`](#split)" + ` processor to break down the batch
+into individual message parts.
+
+In order to map or encode the payload to a specific request body, and map the
+response back into the original payload instead of replacing it entirely, you
+can use the ` + "[`process_map`](#process_map)" + ` or
+ ` + "[`process_field`](#process_field)" + ` processors.`,
 	}
 }
 
@@ -54,21 +59,15 @@ skipped for any payloads where a map target is not found.`,
 
 // HTTPConfig contains any configuration for the HTTP processor.
 type HTTPConfig struct {
-	Parts            []int             `json:"parts" yaml:"parts"`
-	Client           client.Config     `json:"request" yaml:"request"`
-	RequestMap       map[string]string `json:"request_map" yaml:"request_map"`
-	ResponseMap      map[string]string `json:"response_map" yaml:"response_map"`
-	StrictReqMapping bool              `json:"strict_request_map" yaml:"strict_request_map"`
+	Parts  []int         `json:"parts" yaml:"parts"`
+	Client client.Config `json:"request" yaml:"request"`
 }
 
 // NewHTTPConfig returns a HTTPConfig with default values.
 func NewHTTPConfig() HTTPConfig {
 	return HTTPConfig{
-		Parts:            []int{},
-		Client:           client.NewConfig(),
-		RequestMap:       map[string]string{},
-		ResponseMap:      map[string]string{},
-		StrictReqMapping: true,
+		Parts:  []int{},
+		Client: client.NewConfig(),
 	}
 }
 
@@ -80,23 +79,15 @@ type HTTP struct {
 	parts  []int
 	client *client.Type
 
-	reqMap map[string]string
-	resMap map[string]string
-
 	conf  Config
 	log   log.Modular
 	stats metrics.Type
 
-	mCount       metrics.StatCounter
-	mErrJSONS    metrics.StatCounter
-	mErrJSONP    metrics.StatCounter
-	mErrJSONPReq metrics.StatCounter
-	mErrHTTP     metrics.StatCounter
-	mErrReq      metrics.StatCounter
-	mReqSkipped  metrics.StatCounter
-	mErrRes      metrics.StatCounter
-	mSucc        metrics.StatCounter
-	mSent        metrics.StatCounter
+	mCount   metrics.StatCounter
+	mErrHTTP metrics.StatCounter
+	mErr     metrics.StatCounter
+	mSucc    metrics.StatCounter
+	mSent    metrics.StatCounter
 }
 
 // NewHTTP returns a HTTP processor.
@@ -106,23 +97,15 @@ func NewHTTP(
 	g := &HTTP{
 		parts: conf.HTTP.Parts,
 
-		reqMap: conf.HTTP.RequestMap,
-		resMap: conf.HTTP.ResponseMap,
-
 		conf:  conf,
 		log:   log.NewModule(".processor.http"),
 		stats: stats,
 
-		mCount:       stats.GetCounter("processor.http.count"),
-		mErrHTTP:     stats.GetCounter("processor.http.error.request"),
-		mErrJSONS:    stats.GetCounter("processor.http.error.json_set"),
-		mErrJSONP:    stats.GetCounter("processor.http.error.json_parse"),
-		mErrJSONPReq: stats.GetCounter("processor.http.error.json_parse_request"),
-		mErrReq:      stats.GetCounter("processor.http.error.request_map"),
-		mReqSkipped:  stats.GetCounter("processor.http.skipped.request_map"),
-		mErrRes:      stats.GetCounter("processor.http.error.response_map"),
-		mSucc:        stats.GetCounter("processor.http.success"),
-		mSent:        stats.GetCounter("processor.http.sent"),
+		mCount:   stats.GetCounter("processor.http.count"),
+		mSucc:    stats.GetCounter("processor.http.success"),
+		mErr:     stats.GetCounter("processor.http.error"),
+		mErrHTTP: stats.GetCounter("processor.http.error.http"),
+		mSent:    stats.GetCounter("processor.http.sent"),
 	}
 	g.client = client.New(
 		conf.HTTP.Client,
@@ -148,86 +131,25 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		}
 	}
 
-partIter:
-	for _, index := range targetParts {
-		var requestBytes []byte
-		if len(h.reqMap) > 0 {
-			gReq := gabs.New()
-			partJSON, err := msg.GetJSON(index)
-			if err == nil {
-				var gPayload *gabs.Container
-				if gPayload, err = gabs.Consume(partJSON); err == nil {
-					for k, v := range h.reqMap {
-						if val := gPayload.Path(v).Data(); val != nil {
-							gReq.SetP(val, k)
-						} else if h.conf.HTTP.StrictReqMapping {
-							h.mReqSkipped.Incr(1)
-							h.log.Debugf("Request map target not found: %v\n", v)
-							continue partIter
-						}
-					}
-				}
-			}
-			if err != nil {
-				h.mErrJSONP.Incr(1)
-				h.log.Debugf("Failed to parse body: %v\n", err)
-				continue partIter
-			}
-			requestBytes = gReq.Bytes()
-		} else {
-			requestBytes = msg.Get(index)
-		}
-
-		responseMsg, err := h.client.Send(types.NewMessage([][]byte{requestBytes}))
-		if err != nil {
-			h.mErrHTTP.Incr(1)
-			return nil, types.NewSimpleResponse(fmt.Errorf(
-				"HTTP request '%v' failed: %v", h.conf.HTTP.Client.URL, err,
-			))
-		}
-
-		if responseMsg.Len() < 1 {
-			h.mErrHTTP.Incr(1)
-			return nil, types.NewSimpleResponse(fmt.Errorf(
-				"HTTP response from '%v' was empty", h.conf.HTTP.Client.URL,
-			))
-		}
-
-		if len(h.resMap) > 0 {
-			var gResult, gResponse *gabs.Container
-
-			var partJSON, responseJSON interface{}
-			if partJSON, err = msg.GetJSON(index); err == nil {
-				if gResult, err = gabs.Consume(partJSON); err == nil {
-					if responseJSON, err = responseMsg.GetJSON(0); err == nil {
-						gResponse, err = gabs.Consume(responseJSON)
-					}
-				}
-			}
-			if err != nil {
-				h.mErrJSONPReq.Incr(1)
-				h.log.Debugf("Failed to parse response body: %v\n", err)
-				continue partIter
-			}
-
-			for k, v := range h.resMap {
-				if val := gResponse.Path(v).Data(); val != nil {
-					gResult.SetP(val, k)
-				}
-			}
-
-			if err = newMsg.SetJSON(index, gResult.Data()); err != nil {
-				h.mErrJSONS.Incr(1)
-				h.log.Debugf("Failed to convert result into json: %v\n", err)
-				continue partIter
-			}
-		} else {
-			newMsg.Set(index, responseMsg.Get(0))
-		}
-		h.mSucc.Incr(1)
+	responseMsg, err := h.client.Send(msg)
+	if err != nil {
+		h.mErr.Incr(1)
+		h.mErrHTTP.Incr(1)
+		return nil, types.NewSimpleResponse(fmt.Errorf(
+			"HTTP request '%v' failed: %v", h.conf.HTTP.Client.URL, err,
+		))
 	}
 
-	msgs := [1]types.Message{newMsg}
+	if responseMsg.Len() < 1 {
+		h.mErr.Incr(1)
+		h.mErrHTTP.Incr(1)
+		return nil, types.NewSimpleResponse(fmt.Errorf(
+			"HTTP response from '%v' was empty", h.conf.HTTP.Client.URL,
+		))
+	}
+
+	h.mSucc.Incr(1)
+	msgs := [1]types.Message{responseMsg}
 
 	h.mSent.Incr(1)
 	return msgs[:], nil
