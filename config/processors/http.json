@@ -22,7 +22,6 @@
 			{
 				"type": "http",
 				"http": {
-					"parts": [],
 					"request": {
 						"backoff_on": [
 							429

@@ -319,7 +319,6 @@ pipeline:
       parts:
       - 0
     http:
-      parts: []
       request:
         url: http://localhost:4195/post
         verb: POST

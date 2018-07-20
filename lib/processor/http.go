@@ -59,14 +59,12 @@ can use the ` + "[`process_map`](#process_map)" + ` or
 
 // HTTPConfig contains any configuration for the HTTP processor.
 type HTTPConfig struct {
-	Parts  []int         `json:"parts" yaml:"parts"`
 	Client client.Config `json:"request" yaml:"request"`
 }
 
 // NewHTTPConfig returns a HTTPConfig with default values.
 func NewHTTPConfig() HTTPConfig {
 	return HTTPConfig{
-		Parts:  []int{},
 		Client: client.NewConfig(),
 	}
 }
@@ -76,7 +74,6 @@ func NewHTTPConfig() HTTPConfig {
 // HTTP is a processor that executes HTTP queries on a message part and
 // replaces the contents with the result.
 type HTTP struct {
-	parts  []int
 	client *client.Type
 
 	conf  Config
@@ -95,7 +92,6 @@ func NewHTTP(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	g := &HTTP{
-		parts: conf.HTTP.Parts,
 
 		conf:  conf,
 		log:   log.NewModule(".processor.http"),
@@ -120,16 +116,6 @@ func NewHTTP(
 // ProcessMessage parses message parts as grok patterns.
 func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	h.mCount.Incr(1)
-
-	newMsg := msg.ShallowCopy()
-
-	targetParts := h.parts
-	if len(targetParts) == 0 {
-		targetParts = make([]int, newMsg.Len())
-		for i := range targetParts {
-			targetParts[i] = i
-		}
-	}
 
 	responseMsg, err := h.client.Send(msg)
 	if err != nil {

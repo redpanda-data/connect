@@ -383,7 +383,6 @@ the last element with be selected, and so on.
 ``` yaml
 type: http
 http:
-  parts: []
   request:
     backoff_on:
     - 429
