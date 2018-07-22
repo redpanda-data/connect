@@ -198,8 +198,8 @@ func (p *Processor) loop() {
 
 //------------------------------------------------------------------------------
 
-// StartReceiving assigns a messages channel for the pipeline to read.
-func (p *Processor) StartReceiving(msgs <-chan types.Transaction) error {
+// Consume assigns a messages channel for the pipeline to read.
+func (p *Processor) Consume(msgs <-chan types.Transaction) error {
 	if p.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}

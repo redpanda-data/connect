@@ -75,8 +75,8 @@ type MockOutputType struct {
 	TChan <-chan types.Transaction
 }
 
-// StartReceiving sets the read channel. This implementation is NOT thread safe.
-func (m *MockOutputType) StartReceiving(msgs <-chan types.Transaction) error {
+// Consume sets the read channel. This implementation is NOT thread safe.
+func (m *MockOutputType) Consume(msgs <-chan types.Transaction) error {
 	m.TChan = msgs
 	return nil
 }

@@ -45,7 +45,7 @@ func WrapWithPipeline(in Type, pipeConstructor pipeline.ConstructorFunc) (*WithP
 		return nil, err
 	}
 
-	if err = pipe.StartReceiving(in.TransactionChan()); err != nil {
+	if err = pipe.Consume(in.TransactionChan()); err != nil {
 		return nil, err
 	}
 	return &WithPipeline{

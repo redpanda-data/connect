@@ -216,8 +216,8 @@ func (r *RedisPubSub) loop() {
 	}
 }
 
-// StartReceiving assigns a messages channel for the output to read.
-func (r *RedisPubSub) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (r *RedisPubSub) Consume(ts <-chan types.Transaction) error {
 	if r.transactions != nil {
 		return types.ErrAlreadyStarted
 	}

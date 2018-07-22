@@ -40,7 +40,7 @@ type mockOutput struct {
 	ts <-chan types.Transaction
 }
 
-func (m *mockOutput) StartReceiving(ts <-chan types.Transaction) error {
+func (m *mockOutput) Consume(ts <-chan types.Transaction) error {
 	m.ts = ts
 	return nil
 }
@@ -68,7 +68,7 @@ type mockPipe struct {
 	ts   chan types.Transaction
 }
 
-func (m *mockPipe) StartReceiving(ts <-chan types.Transaction) error {
+func (m *mockPipe) Consume(ts <-chan types.Transaction) error {
 	m.tsIn = ts
 	return nil
 }
@@ -106,7 +106,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 	})
 
 	dudMsgChan := make(chan types.Transaction)
-	if err = newOutput.StartReceiving(dudMsgChan); err != nil {
+	if err = newOutput.Consume(dudMsgChan); err != nil {
 		t.Error(err)
 	}
 
@@ -174,7 +174,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 
 	tChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
-	if err = newOutput.StartReceiving(tChan); err != nil {
+	if err = newOutput.Consume(tChan); err != nil {
 		t.Error(err)
 	}
 

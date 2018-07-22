@@ -128,7 +128,7 @@ func TestProcCtor(t *testing.T) {
 	tChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	if err = pipe.StartReceiving(tChan); err != nil {
+	if err = pipe.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
 

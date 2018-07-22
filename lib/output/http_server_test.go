@@ -48,11 +48,11 @@ func TestHTTPBasic(t *testing.T) {
 	msgChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	if err = h.StartReceiving(msgChan); err != nil {
+	if err = h.Consume(msgChan); err != nil {
 		t.Error(err)
 		return
 	}
-	if err = h.StartReceiving(msgChan); err == nil {
+	if err = h.Consume(msgChan); err == nil {
 		t.Error("Expected error from double listen")
 	}
 
@@ -108,7 +108,7 @@ func TestHTTPBadRequests(t *testing.T) {
 
 	msgChan := make(chan types.Transaction)
 
-	if err = h.StartReceiving(msgChan); err != nil {
+	if err = h.Consume(msgChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -140,7 +140,7 @@ func TestHTTPTimeout(t *testing.T) {
 
 	msgChan := make(chan types.Transaction)
 
-	if err = h.StartReceiving(msgChan); err != nil {
+	if err = h.Consume(msgChan); err != nil {
 		t.Error(err)
 		return
 	}

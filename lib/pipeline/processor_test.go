@@ -67,10 +67,10 @@ func TestProcessorPipeline(t *testing.T) {
 
 	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
 
-	if err := proc.StartReceiving(tChan); err != nil {
+	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
 	}
-	if err := proc.StartReceiving(tChan); err == nil {
+	if err := proc.Consume(tChan); err == nil {
 		t.Error("Expected error from dupe listening")
 	}
 
@@ -273,7 +273,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 
 	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
 
-	if err := proc.StartReceiving(tChan); err != nil {
+	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
 	}
 
@@ -352,7 +352,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 
 	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
 
-	if err := proc.StartReceiving(tChan); err != nil {
+	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
 	}
 

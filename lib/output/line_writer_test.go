@@ -54,10 +54,10 @@ func TestLineWriterBasic(t *testing.T) {
 		return
 	}
 
-	if err = writer.StartReceiving(msgChan); err != nil {
+	if err = writer.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
-	if err = writer.StartReceiving(msgChan); err == nil {
+	if err = writer.Consume(msgChan); err == nil {
 		t.Error("Expected error from duplicate receiver call")
 	}
 
@@ -128,10 +128,10 @@ func TestLineWriterCustomDelim(t *testing.T) {
 		return
 	}
 
-	if err = writer.StartReceiving(msgChan); err != nil {
+	if err = writer.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
-	if err = writer.StartReceiving(msgChan); err == nil {
+	if err = writer.Consume(msgChan); err == nil {
 		t.Error("Expected error from duplicate receiver call")
 	}
 

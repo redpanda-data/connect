@@ -137,8 +137,8 @@ func (i *Inproc) loop() {
 	}
 }
 
-// StartReceiving assigns a messages channel for the output to read.
-func (i *Inproc) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (i *Inproc) Consume(ts <-chan types.Transaction) error {
 	if i.transactionsIn != nil {
 		return types.ErrAlreadyStarted
 	}

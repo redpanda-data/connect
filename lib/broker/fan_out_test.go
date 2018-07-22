@@ -67,7 +67,7 @@ func TestBasicFanOut(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -135,11 +135,11 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err == nil {
+	if err = oTM.Consume(readChan); err == nil {
 		t.Error("Expected error on duplicate receive call")
 	}
 
@@ -221,7 +221,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -278,7 +278,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -327,7 +327,7 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -376,7 +376,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 		b.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		b.Error(err)
 		return
 	}

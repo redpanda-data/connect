@@ -86,10 +86,10 @@ func TestWriterCantConnect(t *testing.T) {
 		return
 	}
 
-	if err = w.StartReceiving(make(chan types.Transaction)); err != nil {
+	if err = w.Consume(make(chan types.Transaction)); err != nil {
 		t.Error(err)
 	}
-	if err = w.StartReceiving(nil); err == nil {
+	if err = w.Consume(nil); err == nil {
 		t.Error("Expected error from duplicate receiver call")
 	}
 
@@ -134,7 +134,7 @@ func TestWriterCantSendClosed(t *testing.T) {
 
 	msgChan := make(chan types.Transaction)
 
-	if err = w.StartReceiving(msgChan); err != nil {
+	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
 
@@ -160,7 +160,7 @@ func TestWriterCantSendClosedChan(t *testing.T) {
 
 	msgChan := make(chan types.Transaction)
 
-	if err = w.StartReceiving(msgChan); err != nil {
+	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
 
@@ -188,7 +188,7 @@ func TestWriterStartClosed(t *testing.T) {
 
 	msgChan := make(chan types.Transaction)
 
-	if err = w.StartReceiving(msgChan); err != nil {
+	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
 
@@ -220,7 +220,7 @@ func TestWriterClosesOnReconn(t *testing.T) {
 	msgChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	if err = w.StartReceiving(msgChan); err != nil {
+	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
 
@@ -271,7 +271,7 @@ func TestWriterClosesOnResend(t *testing.T) {
 	msgChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	if err = w.StartReceiving(msgChan); err != nil {
+	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
 
@@ -329,7 +329,7 @@ func TestWriterCanReconnect(t *testing.T) {
 	msgChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	if err = w.StartReceiving(msgChan); err != nil {
+	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
 
@@ -398,7 +398,7 @@ func TestWriterCantReconnect(t *testing.T) {
 	msgChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	if err = w.StartReceiving(msgChan); err != nil {
+	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
 
@@ -455,7 +455,7 @@ func TestWriterHappyPath(t *testing.T) {
 	msgChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	if err = w.StartReceiving(msgChan); err != nil {
+	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
 
@@ -523,7 +523,7 @@ func TestWriterSadPath(t *testing.T) {
 	msgChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	if err = w.StartReceiving(msgChan); err != nil {
+	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
 	}
 

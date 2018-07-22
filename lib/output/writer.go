@@ -188,8 +188,8 @@ func (w *Writer) loop() {
 	}
 }
 
-// StartReceiving assigns a messages channel for the output to read.
-func (w *Writer) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (w *Writer) Consume(ts <-chan types.Transaction) error {
 	if w.transactions != nil {
 		return types.ErrAlreadyStarted
 	}

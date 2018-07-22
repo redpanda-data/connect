@@ -214,8 +214,8 @@ func (m *SingleWrapper) outputLoop() {
 	}
 }
 
-// StartReceiving assigns a messages channel for the output to read.
-func (m *SingleWrapper) StartReceiving(msgs <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (m *SingleWrapper) Consume(msgs <-chan types.Transaction) error {
 	if m.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}

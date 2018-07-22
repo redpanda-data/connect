@@ -64,7 +64,7 @@ func TestBrokerWithScaleProto(t *testing.T) {
 	sendChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	if err = s.StartReceiving(sendChan); err != nil {
+	if err = s.Consume(sendChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -159,7 +159,7 @@ func TestRoundRobinWithScaleProto(t *testing.T) {
 	sendChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	if err = s.StartReceiving(sendChan); err != nil {
+	if err = s.Consume(sendChan); err != nil {
 		t.Error(err)
 		return
 	}

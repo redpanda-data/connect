@@ -223,8 +223,8 @@ func (s *ScaleProto) loop() {
 	}
 }
 
-// StartReceiving assigns a messages channel for the output to read.
-func (s *ScaleProto) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (s *ScaleProto) Consume(ts <-chan types.Transaction) error {
 	if s.transactions != nil {
 		return types.ErrAlreadyStarted
 	}

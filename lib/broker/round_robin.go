@@ -60,7 +60,7 @@ func NewRoundRobin(outputs []types.Output, stats metrics.Type) (*RoundRobin, err
 	o.outputTsChans = make([]chan types.Transaction, len(o.outputs))
 	for i := range o.outputTsChans {
 		o.outputTsChans[i] = make(chan types.Transaction)
-		if err := o.outputs[i].StartReceiving(o.outputTsChans[i]); err != nil {
+		if err := o.outputs[i].Consume(o.outputTsChans[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -69,8 +69,8 @@ func NewRoundRobin(outputs []types.Output, stats metrics.Type) (*RoundRobin, err
 
 //------------------------------------------------------------------------------
 
-// StartReceiving assigns a new messages channel for the broker to read.
-func (o *RoundRobin) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a new messages channel for the broker to read.
+func (o *RoundRobin) Consume(ts <-chan types.Transaction) error {
 	if o.transactions != nil {
 		return types.ErrAlreadyStarted
 	}

@@ -85,7 +85,7 @@ func (p *Pool) loop() {
 	remainingWorkers := int64(len(p.workers))
 
 	for _, worker := range p.workers {
-		if err := worker.StartReceiving(p.messagesIn); err != nil {
+		if err := worker.Consume(p.messagesIn); err != nil {
 			p.log.Errorf("Failed to start pipeline worker: %v\n", err)
 			atomic.AddInt64(&remainingWorkers, -1)
 			continue
@@ -129,8 +129,8 @@ func (p *Pool) loop() {
 
 //------------------------------------------------------------------------------
 
-// StartReceiving assigns a messages channel for the pipeline to read.
-func (p *Pool) StartReceiving(msgs <-chan types.Transaction) error {
+// Consume assigns a messages channel for the pipeline to read.
+func (p *Pool) Consume(msgs <-chan types.Transaction) error {
 	if p.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}

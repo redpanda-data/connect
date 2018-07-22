@@ -52,7 +52,7 @@ func TestInproc(t *testing.T) {
 	}
 
 	tinchan := make(chan types.Transaction)
-	if err = ip.StartReceiving(tinchan); err != nil {
+	if err = ip.Consume(tinchan); err != nil {
 		t.Fatal(err)
 	}
 

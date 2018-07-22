@@ -165,18 +165,18 @@ func (t *Type) start() (err error) {
 
 	nextTranChan = t.inputLayer.TransactionChan()
 	if t.bufferLayer != nil {
-		if err = t.bufferLayer.StartReceiving(nextTranChan); err != nil {
+		if err = t.bufferLayer.Consume(nextTranChan); err != nil {
 			return
 		}
 		nextTranChan = t.bufferLayer.TransactionChan()
 	}
 	if t.pipelineLayer != nil {
-		if err = t.pipelineLayer.StartReceiving(nextTranChan); err != nil {
+		if err = t.pipelineLayer.Consume(nextTranChan); err != nil {
 			return
 		}
 		nextTranChan = t.pipelineLayer.TransactionChan()
 	}
-	if err = t.outputLayer.StartReceiving(nextTranChan); err != nil {
+	if err = t.outputLayer.Consume(nextTranChan); err != nil {
 		return
 	}
 

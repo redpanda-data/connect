@@ -75,7 +75,7 @@ func NewFanOut(
 		o.outputNs = append(o.outputNs, i)
 		o.outputTsChans[i] = make(chan types.Transaction)
 		o.outputResChans[i] = make(chan types.Response)
-		if err := o.outputs[i].StartReceiving(o.outputTsChans[i]); err != nil {
+		if err := o.outputs[i].Consume(o.outputTsChans[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -84,8 +84,8 @@ func NewFanOut(
 
 //------------------------------------------------------------------------------
 
-// StartReceiving assigns a new transactions channel for the broker to read.
-func (o *FanOut) StartReceiving(transactions <-chan types.Transaction) error {
+// Consume assigns a new transactions channel for the broker to read.
+func (o *FanOut) Consume(transactions <-chan types.Transaction) error {
 	if o.transactions != nil {
 		return types.ErrAlreadyStarted
 	}

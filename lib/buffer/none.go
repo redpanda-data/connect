@@ -97,8 +97,8 @@ func (e *Empty) loop() {
 
 //------------------------------------------------------------------------------
 
-// StartReceiving assigns a messages channel for the output to read.
-func (e *Empty) StartReceiving(msgs <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (e *Empty) Consume(msgs <-chan types.Transaction) error {
 	if e.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}

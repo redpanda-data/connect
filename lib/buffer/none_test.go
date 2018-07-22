@@ -41,11 +41,11 @@ func TestNoneBufferClose(t *testing.T) {
 
 	tChan := make(chan types.Transaction)
 
-	if err = empty.StartReceiving(tChan); err != nil {
+	if err = empty.Consume(tChan); err != nil {
 		t.Error(err)
 		return
 	}
-	if err = empty.StartReceiving(tChan); err == nil {
+	if err = empty.Consume(tChan); err == nil {
 		t.Error("received nil, expected error from double msg assignment")
 		return
 	}
@@ -68,7 +68,7 @@ func TestNoneBufferBasic(t *testing.T) {
 
 	tChan := make(chan types.Transaction)
 
-	if err = empty.StartReceiving(tChan); err != nil {
+	if err = empty.Consume(tChan); err != nil {
 		t.Error(err)
 		return
 	}

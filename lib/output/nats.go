@@ -164,8 +164,8 @@ func (n *NATS) loop() {
 	}
 }
 
-// StartReceiving assigns a messages channel for the output to read.
-func (n *NATS) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (n *NATS) Consume(ts <-chan types.Transaction) error {
 	if n.transactions != nil {
 		return types.ErrAlreadyStarted
 	}

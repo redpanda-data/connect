@@ -207,8 +207,8 @@ func (m *ParallelWrapper) outputLoop() {
 	}
 }
 
-// StartReceiving assigns a messages channel for the output to read.
-func (m *ParallelWrapper) StartReceiving(msgs <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (m *ParallelWrapper) Consume(msgs <-chan types.Transaction) error {
 	if m.messagesIn != nil {
 		return types.ErrAlreadyStarted
 	}

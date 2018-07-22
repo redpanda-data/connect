@@ -95,32 +95,20 @@ type Closable interface {
 
 //------------------------------------------------------------------------------
 
-// Transactor is a type that sends messages and waits for a response back, the
-// response indicates whether the message was successfully propagated to a new
-// destination (and can be discarded from the source.)
-type Transactor interface {
+// Producer is a type that sends messages as transactions and waits for a
+// response back, the response indicates whether the message was successfully
+// propagated to a new destination (and can be discarded from the source.)
+type Producer interface {
 	// TransactionChan returns a channel used for consuming transactions from
 	// this type. Every transaction received must be resolved before another
 	// transaction will be sent.
 	TransactionChan() <-chan Transaction
 }
 
-// TransactionReceiver is a type that receives transactions from a Transactor.
-type TransactionReceiver interface {
-	// StartReceiving starts the type receiving transactions from a Transactor.
-	StartReceiving(<-chan Transaction) error
-}
-
-//------------------------------------------------------------------------------
-
-// Producer is the higher level producer type.
-type Producer interface {
-	Transactor
-}
-
 // Consumer is the higher level consumer type.
 type Consumer interface {
-	TransactionReceiver
+	// Consume starts the type receiving transactions from a Transactor.
+	Consume(<-chan Transaction) error
 }
 
 //------------------------------------------------------------------------------

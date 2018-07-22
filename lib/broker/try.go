@@ -61,7 +61,7 @@ func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
 	t.outputTsChans = make([]chan types.Transaction, len(t.outputs))
 	for i := range t.outputTsChans {
 		t.outputTsChans[i] = make(chan types.Transaction)
-		if err := t.outputs[i].StartReceiving(t.outputTsChans[i]); err != nil {
+		if err := t.outputs[i].Consume(t.outputTsChans[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -70,8 +70,8 @@ func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
 
 //------------------------------------------------------------------------------
 
-// StartReceiving assigns a new messages channel for the broker to read.
-func (t *Try) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a new messages channel for the broker to read.
+func (t *Try) Consume(ts <-chan types.Transaction) error {
 	if t.transactions != nil {
 		return types.ErrAlreadyStarted
 	}

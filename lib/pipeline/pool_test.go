@@ -59,10 +59,10 @@ func TestPoolBasic(t *testing.T) {
 
 	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
 
-	if err := proc.StartReceiving(tChan); err != nil {
+	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
-	if err := proc.StartReceiving(tChan); err == nil {
+	if err := proc.Consume(tChan); err == nil {
 		t.Error("Expected error from dupe receiving")
 	}
 
@@ -172,7 +172,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 	}
 
 	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
-	if err := proc.StartReceiving(tChan); err != nil {
+	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
 
@@ -255,7 +255,7 @@ func TestPoolMultiThreads(t *testing.T) {
 	}
 
 	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
-	if err := proc.StartReceiving(tChan); err != nil {
+	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
 
@@ -330,7 +330,7 @@ func TestPoolMultiNaturalClose(t *testing.T) {
 	}
 
 	tChan := make(chan types.Transaction)
-	if err := proc.StartReceiving(tChan); err != nil {
+	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
 

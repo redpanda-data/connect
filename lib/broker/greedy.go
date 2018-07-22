@@ -44,10 +44,10 @@ func NewGreedy(outputs []types.Output) (*Greedy, error) {
 
 //------------------------------------------------------------------------------
 
-// StartReceiving assigns a new messages channel for the broker to read.
-func (g *Greedy) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a new messages channel for the broker to read.
+func (g *Greedy) Consume(ts <-chan types.Transaction) error {
 	for _, out := range g.outputs {
-		if err := out.StartReceiving(ts); err != nil {
+		if err := out.Consume(ts); err != nil {
 			return err
 		}
 	}

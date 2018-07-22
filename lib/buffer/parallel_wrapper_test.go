@@ -44,7 +44,7 @@ func TestParallelMemoryBuffer(t *testing.T) {
 		conf, parallel.NewMemory(int(incr)*int(total)),
 		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
-	if err := b.StartReceiving(tChan); err != nil {
+	if err := b.Consume(tChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -219,7 +219,7 @@ func TestParallelBufferClosing(t *testing.T) {
 		conf, parallel.NewMemory(int(incr)*int(total)),
 		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
-	if err := b.StartReceiving(tChan); err != nil {
+	if err := b.Consume(tChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -290,7 +290,7 @@ func BenchmarkParallelMem(b *testing.B) {
 		conf, parallel.NewMemory(50000000),
 		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
-	if err := buffer.StartReceiving(tChan); err != nil {
+	if err := buffer.Consume(tChan); err != nil {
 		b.Error(err)
 		return
 	}

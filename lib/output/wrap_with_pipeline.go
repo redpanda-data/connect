@@ -45,7 +45,7 @@ func WrapWithPipeline(out Type, pipeConstructor pipeline.ConstructorFunc) (*With
 		return nil, err
 	}
 
-	if err = out.StartReceiving(pipe.TransactionChan()); err != nil {
+	if err = out.Consume(pipe.TransactionChan()); err != nil {
 		return nil, err
 	}
 	return &WithPipeline{
@@ -67,10 +67,10 @@ func WrapWithPipelines(out Type, pipeConstructors ...pipeline.ConstructorFunc) (
 
 //------------------------------------------------------------------------------
 
-// StartReceiving starts the type listening to a message channel from a
+// Consume starts the type listening to a message channel from a
 // producer.
-func (i *WithPipeline) StartReceiving(tsChan <-chan types.Transaction) error {
-	return i.pipe.StartReceiving(tsChan)
+func (i *WithPipeline) Consume(tsChan <-chan types.Transaction) error {
+	return i.pipe.Consume(tsChan)
 }
 
 //------------------------------------------------------------------------------

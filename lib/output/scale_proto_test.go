@@ -62,7 +62,7 @@ func TestScaleProtoBasic(t *testing.T) {
 		}
 	}()
 
-	if err = s.StartReceiving(sendChan); err != nil {
+	if err = s.Consume(sendChan); err != nil {
 		t.Error(err)
 		return
 	}

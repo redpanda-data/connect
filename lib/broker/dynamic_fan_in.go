@@ -33,7 +33,7 @@ import (
 
 // DynamicInput is an interface of input types that must be closable.
 type DynamicInput interface {
-	types.Transactor
+	types.Producer
 	types.Closable
 }
 

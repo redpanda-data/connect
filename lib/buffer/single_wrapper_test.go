@@ -44,7 +44,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	b := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), log.New(os.Stdout, logConfig), metrics.DudType{})
-	if err := b.StartReceiving(tChan); err != nil {
+	if err := b.Consume(tChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -218,7 +218,7 @@ func TestBufferClosing(t *testing.T) {
 	b := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: int(incr+15) * int(total),
 	}), log.New(os.Stdout, logConfig), metrics.DudType{})
-	if err := b.StartReceiving(tChan); err != nil {
+	if err := b.Consume(tChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -288,7 +288,7 @@ func BenchmarkSingleMem(b *testing.B) {
 	buffer := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: 50000000,
 	}), log.New(os.Stdout, logConfig), metrics.DudType{})
-	if err := buffer.StartReceiving(tChan); err != nil {
+	if err := buffer.Consume(tChan); err != nil {
 		b.Error(err)
 		return
 	}
@@ -352,7 +352,7 @@ func BenchmarkSingleMmap(b *testing.B) {
 
 	conf := NewConfig()
 	buffer := NewSingleWrapper(conf, mmap, log.New(os.Stdout, logConfig), metrics.DudType{})
-	if err := buffer.StartReceiving(tChan); err != nil {
+	if err := buffer.Consume(tChan); err != nil {
 		b.Error(err)
 		return
 	}

@@ -35,7 +35,7 @@ import (
 
 // DynamicOutput is an interface of output types that must be closable.
 type DynamicOutput interface {
-	types.TransactionReceiver
+	types.Consumer
 	types.Closable
 }
 
@@ -160,8 +160,8 @@ func OptDynamicFanOutSetOnRemove(onRemoveFunc func(label string)) func(*DynamicF
 
 //------------------------------------------------------------------------------
 
-// StartReceiving assigns a new transactions channel for the broker to read.
-func (d *DynamicFanOut) StartReceiving(transactions <-chan types.Transaction) error {
+// Consume assigns a new transactions channel for the broker to read.
+func (d *DynamicFanOut) Consume(transactions <-chan types.Transaction) error {
 	if d.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
@@ -184,7 +184,7 @@ func (d *DynamicFanOut) addOutput(ident string, output DynamicOutput) error {
 		output:  output,
 	}
 
-	if err := output.StartReceiving(ow.tsChan); err != nil {
+	if err := output.Consume(ow.tsChan); err != nil {
 		output.CloseAsync()
 		return err
 	}

@@ -77,7 +77,7 @@ func TestBasicRoundRobin(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -155,7 +155,7 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 		b.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		b.Error(err)
 		return
 	}

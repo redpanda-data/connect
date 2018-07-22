@@ -57,7 +57,7 @@ type mockPipe struct {
 	ts   chan types.Transaction
 }
 
-func (m *mockPipe) StartReceiving(ts <-chan types.Transaction) error {
+func (m *mockPipe) Consume(ts <-chan types.Transaction) error {
 	m.tsIn = ts
 	return nil
 }

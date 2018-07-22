@@ -111,8 +111,8 @@ func (o *BenchOutput) loop() {
 	}
 }
 
-// StartReceiving assigns a messages channel for the output to read.
-func (o *BenchOutput) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (o *BenchOutput) Consume(ts <-chan types.Transaction) error {
 	if o.transactions != nil {
 		return types.ErrAlreadyStarted
 	}

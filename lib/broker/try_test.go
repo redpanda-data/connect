@@ -76,7 +76,7 @@ func TestTryHappyPath(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -153,7 +153,7 @@ func TestTryHappyishPath(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -253,7 +253,7 @@ func TestTryAllFail(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if err = oTM.StartReceiving(readChan); err != nil {
+	if err = oTM.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}

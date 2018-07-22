@@ -387,8 +387,8 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 //------------------------------------------------------------------------------
 
-// StartReceiving assigns a messages channel for the output to read.
-func (h *HTTPServer) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (h *HTTPServer) Consume(ts <-chan types.Transaction) error {
 	if h.transactions != nil {
 		return types.ErrAlreadyStarted
 	}

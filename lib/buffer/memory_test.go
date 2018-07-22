@@ -42,7 +42,7 @@ func TestMemoryBuffer(t *testing.T) {
 
 	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
 
-	if err = buf.StartReceiving(tChan); err != nil {
+	if err = buf.Consume(tChan); err != nil {
 		t.Error(err)
 	}
 

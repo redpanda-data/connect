@@ -186,8 +186,8 @@ func (n *NATSStream) loop() {
 	}
 }
 
-// StartReceiving assigns a messages channel for the output to read.
-func (n *NATSStream) StartReceiving(ts <-chan types.Transaction) error {
+// Consume assigns a messages channel for the output to read.
+func (n *NATSStream) Consume(ts <-chan types.Transaction) error {
 	if n.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
