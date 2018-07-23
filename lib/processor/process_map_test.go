@@ -112,7 +112,6 @@ func TestProcessMapStrict(t *testing.T) {
 	conf.ProcessMap.Premap["bar2"] = "foo.bar2"
 	conf.ProcessMap.Postmap["foo.baz"] = "baz"
 	conf.ProcessMap.Postmap["foo.baz2"] = "baz2"
-	conf.ProcessMap.StrictPremap = true
 	conf.ProcessMap.Parts = []int{}
 
 	procConf := NewConfig()
@@ -131,6 +130,45 @@ func TestProcessMapStrict(t *testing.T) {
 	exp := [][]byte{
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"},"bar2":{"baz":"put me at the root"},"baz":"put me at the root"}}`),
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
+	}
+
+	msg, res := c.ProcessMessage(types.NewMessage([][]byte{
+		[]byte(`{"foo":{"bar":{"baz":"put me at the root"},"bar2":{"baz":"put me at the root"}}}`),
+		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
+func TestProcessMapOptional(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_map"
+	conf.ProcessMap.Premap["bar"] = "foo.bar"
+	conf.ProcessMap.PremapOptional["bar2"] = "foo.bar2"
+	conf.ProcessMap.Postmap["foo.baz"] = "baz"
+	conf.ProcessMap.Postmap["foo.baz2"] = "baz2"
+	conf.ProcessMap.Parts = []int{}
+
+	procConf := NewConfig()
+	procConf.Type = "json"
+	procConf.JSON.Operator = "select"
+	procConf.JSON.Path = "bar"
+
+	conf.ProcessMap.Processors = append(conf.ProcessMap.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	exp := [][]byte{
+		[]byte(`{"foo":{"bar":{"baz":"put me at the root"},"bar2":{"baz":"put me at the root"},"baz":"put me at the root"}}`),
+		[]byte(`{"foo":{"bar":{"baz":"put me at the root"},"baz":"put me at the root"}}`),
 	}
 
 	msg, res := c.ProcessMessage(types.NewMessage([][]byte{

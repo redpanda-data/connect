@@ -642,6 +642,7 @@ process_map:
   parts: []
   postmap: {}
   premap: {}
+  premap_optional: {}
   processors: []
 ```
 
@@ -650,8 +651,8 @@ objects, applies a list of processors to the newly constructed objects, and
 finally maps the result back into the original payload.
 
 Map paths are arbitrary dot paths, target path hierarchies are constructed if
-they do not yet exist. If `strict_premap` is set to true then
-processing is skipped for message parts where the premap targets aren't found.
+they do not yet exist. Processing is skipped for message parts where the premap
+targets aren't found, for optional premap targets use `premap_optional`.
 
 If the pre-map is empty then the full payload is sent to the processors. The
 post-map should not be left empty, if you intend to replace the full payload
@@ -774,6 +775,19 @@ Appends text to the end of the payload.
 #### `prepend`
 
 Prepends text to the beginning of the payload.
+
+#### `replace`
+
+Replaces all occurrences of the argument in a message with a value.
+
+#### `replace_regexp`
+
+Replaces all occurrences of the argument regular expression in a message with a
+value.
+
+#### `strip_html`
+
+Removes all HTML tags from a message.
 
 #### `trim_space`
 

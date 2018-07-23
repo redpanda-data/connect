@@ -20,6 +20,7 @@ pipeline:
       parts: []
       postmap: {}
       premap: {}
+      premap_optional: {}
       processors: []
   threads: 1
 output:

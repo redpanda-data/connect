@@ -5,9 +5,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.19.0 - 2018-07-23
+
 ### Added
 
 - New `text` processor.
+
+### Changed
+
+- Processor `process_map` replaced field `strict_premapping` with
+  `premap_optional`.
 
 ## 0.18.0 - 2018-07-20
 

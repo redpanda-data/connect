@@ -42,8 +42,8 @@ objects, applies a list of processors to the newly constructed objects, and
 finally maps the result back into the original payload.
 
 Map paths are arbitrary dot paths, target path hierarchies are constructed if
-they do not yet exist. If ` + "`strict_premap`" + ` is set to true then
-processing is skipped for message parts where the premap targets aren't found.
+they do not yet exist. Processing is skipped for message parts where the premap
+targets aren't found, for optional premap targets use ` + "`premap_optional`" + `.
 
 If the pre-map is empty then the full payload is sent to the processors. The
 post-map should not be left empty, if you intend to replace the full payload
@@ -88,10 +88,11 @@ guaranteed to match the ordering of the original batch.`,
 				}
 			}
 			return map[string]interface{}{
-				"parts":      conf.ProcessMap.Parts,
-				"premap":     conf.ProcessMap.Premap,
-				"postmap":    conf.ProcessMap.Postmap,
-				"processors": procConfs,
+				"parts":           conf.ProcessMap.Parts,
+				"premap":          conf.ProcessMap.Premap,
+				"premap_optional": conf.ProcessMap.PremapOptional,
+				"postmap":         conf.ProcessMap.Postmap,
+				"processors":      procConfs,
 			}, nil
 		},
 	}
@@ -102,21 +103,21 @@ guaranteed to match the ordering of the original batch.`,
 // ProcessMapConfig is a config struct containing fields for the
 // ProcessMap processor.
 type ProcessMapConfig struct {
-	Parts        []int             `json:"parts" yaml:"parts"`
-	StrictPremap bool              `json:"strict_premap" yaml:"strict_premap"`
-	Premap       map[string]string `json:"premap" yaml:"premap"`
-	Postmap      map[string]string `json:"postmap" yaml:"postmap"`
-	Processors   []Config          `json:"processors" yaml:"processors"`
+	Parts          []int             `json:"parts" yaml:"parts"`
+	Premap         map[string]string `json:"premap" yaml:"premap"`
+	PremapOptional map[string]string `json:"premap_optional" yaml:"premap_optional"`
+	Postmap        map[string]string `json:"postmap" yaml:"postmap"`
+	Processors     []Config          `json:"processors" yaml:"processors"`
 }
 
 // NewProcessMapConfig returns a default ProcessMapConfig.
 func NewProcessMapConfig() ProcessMapConfig {
 	return ProcessMapConfig{
-		Parts:        []int{},
-		StrictPremap: false,
-		Premap:       map[string]string{},
-		Postmap:      map[string]string{},
-		Processors:   []Config{},
+		Parts:          []int{},
+		Premap:         map[string]string{},
+		PremapOptional: map[string]string{},
+		Postmap:        map[string]string{},
+		Processors:     []Config{},
 	}
 }
 
@@ -125,11 +126,11 @@ func NewProcessMapConfig() ProcessMapConfig {
 // ProcessMap is a processor that applies a list of child processors to a
 // field extracted from the original payload.
 type ProcessMap struct {
-	parts        []int
-	strictPremap bool
-	premap       map[string]string
-	postmap      map[string]string
-	children     []Type
+	parts          []int
+	premap         map[string]string
+	premapOptional map[string]string
+	postmap        map[string]string
+	children       []Type
 
 	log log.Modular
 
@@ -161,11 +162,11 @@ func NewProcessMap(
 	}
 
 	p := &ProcessMap{
-		parts:        conf.ProcessMap.Parts,
-		strictPremap: conf.ProcessMap.StrictPremap,
-		premap:       conf.ProcessMap.Premap,
-		postmap:      conf.ProcessMap.Postmap,
-		children:     children,
+		parts:          conf.ProcessMap.Parts,
+		premap:         conf.ProcessMap.Premap,
+		premapOptional: conf.ProcessMap.PremapOptional,
+		postmap:        conf.ProcessMap.Postmap,
+		children:       children,
 
 		log: log.NewModule(".process_map"),
 
@@ -183,6 +184,9 @@ func NewProcessMap(
 	var err error
 	if p.premap, err = validateMap(conf.ProcessMap.Premap); err != nil {
 		return nil, fmt.Errorf("premap was not valid: %v", err)
+	}
+	if p.premapOptional, err = validateMap(conf.ProcessMap.PremapOptional); err != nil {
+		return nil, fmt.Errorf("optional premap was not valid: %v", err)
 	}
 	if p.postmap, err = validateMap(conf.ProcessMap.Postmap); err != nil {
 		return nil, fmt.Errorf("postmap was not valid: %v", err)
@@ -317,7 +321,7 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) (msgs []types.Message, re
 	// Map the original payloads into premapped message parts.
 premapLoop:
 	for i, gObj := range targetObjs {
-		if len(p.premap) == 0 {
+		if len(p.premap) == 0 && len(p.premapOptional) == 0 {
 			reqParts = append(reqParts, i)
 			reqMsg.Append(payload.Get(i))
 			continue
@@ -326,10 +330,24 @@ premapLoop:
 		gReq := gabs.New()
 		for k, v := range p.premap {
 			gTarget := gObj.Path(v)
-			if gTarget.Data() == nil && p.strictPremap {
+			if gTarget.Data() == nil {
 				p.mSkipped.Incr(1)
 				p.mSkippedMap.Incr(1)
 				continue premapLoop
+			}
+			if len(k) == 0 {
+				reqMsg.Append([]byte("{}"))
+				reqParts = append(reqParts, i)
+				reqMsg.SetJSON(-1, gTarget.Data())
+				continue premapLoop
+			} else {
+				gReq.SetP(gTarget.Data(), k)
+			}
+		}
+		for k, v := range p.premapOptional {
+			gTarget := gObj.Path(v)
+			if gTarget.Data() == nil {
+				continue
 			}
 			if len(k) == 0 {
 				reqMsg.Append([]byte("{}"))

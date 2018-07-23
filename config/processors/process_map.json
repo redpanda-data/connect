@@ -25,6 +25,7 @@
 					"parts": [],
 					"postmap": {},
 					"premap": {},
+					"premap_optional": {},
 					"processors": []
 				}
 			}

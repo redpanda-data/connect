@@ -363,8 +363,8 @@ pipeline:
       processors: []
     process_map:
       parts: []
-      strict_premap: false
       premap: {}
+      premap_optional: {}
       postmap: {}
       processors: []
     sample:
