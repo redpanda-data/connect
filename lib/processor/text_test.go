@@ -453,3 +453,62 @@ func TestTextReplaceRegexp(t *testing.T) {
 		}
 	}
 }
+
+func TestTextStripHTML(t *testing.T) {
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	type jTest struct {
+		name   string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "strip html 1",
+			input:  `foo <a>bar</a>`,
+			output: `foo bar`,
+		},
+		{
+			name:   "strip html 2",
+			input:  `<div>foo <a>bar</a></div>`,
+			output: `foo bar`,
+		},
+		{
+			name:   "strip html 3",
+			input:  `<div field="bar">foo <a>bar</a></div>`,
+			output: `foo bar`,
+		},
+		{
+			name:   "strip html 4",
+			input:  `<div field="bar">foo<broken <a>bar</a>`,
+			output: `foobar`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Text.Operator = "strip_html"
+		conf.Text.Parts = []int{0}
+
+		tp, err := NewText(conf, nil, tLog, tStats)
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := types.NewMessage(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := tp.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}

@@ -29,6 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
+	"github.com/microcosm-cc/bluemonday"
 )
 
 //------------------------------------------------------------------------------
@@ -60,6 +61,10 @@ Replaces all occurrences of the argument in a message with a value.
 
 Replaces all occurrences of the argument regular expression in a message with a
 value.
+
+#### ` + "`strip_html`" + `
+
+Removes all HTML tags from a message.
 
 #### ` + "`trim_space`" + `
 
@@ -125,14 +130,14 @@ func newTextTrimOperator(arg string) textOperator {
 	}
 }
 
-func newReplaceOperator(arg string) textOperator {
+func newTextReplaceOperator(arg string) textOperator {
 	replaceArg := []byte(arg)
 	return func(body []byte, value []byte) ([]byte, error) {
 		return bytes.Replace(body, replaceArg, value, -1), nil
 	}
 }
 
-func newReplaceRegexpOperator(arg string) (textOperator, error) {
+func newTextReplaceRegexpOperator(arg string) (textOperator, error) {
 	rp, err := regexp.Compile(arg)
 	if err != nil {
 		return nil, err
@@ -140,6 +145,13 @@ func newReplaceRegexpOperator(arg string) (textOperator, error) {
 	return func(body []byte, value []byte) ([]byte, error) {
 		return rp.ReplaceAll(body, value), nil
 	}, nil
+}
+
+func newTextStripHTMLOperator(arg string) textOperator {
+	p := bluemonday.NewPolicy()
+	return func(body []byte, value []byte) ([]byte, error) {
+		return p.SanitizeBytes(body), nil
+	}
 }
 
 func getTextOperator(opStr string, arg string) (textOperator, error) {
@@ -153,9 +165,11 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 	case "trim":
 		return newTextTrimOperator(arg), nil
 	case "replace":
-		return newReplaceOperator(arg), nil
+		return newTextReplaceOperator(arg), nil
 	case "replace_regexp":
-		return newReplaceRegexpOperator(arg)
+		return newTextReplaceRegexpOperator(arg)
+	case "strip_html":
+		return newTextStripHTMLOperator(arg), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }

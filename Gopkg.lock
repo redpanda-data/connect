@@ -245,6 +245,12 @@
   version = "v1.0.1"
 
 [[projects]]
+  name = "github.com/microcosm-cc/bluemonday"
+  packages = ["."]
+  revision = "dafebb5b6ff2861a0d69af64991e10866c19be85"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/nats-io/go-nats"
   packages = [
     ".",
@@ -439,6 +445,8 @@
   name = "golang.org/x/net"
   packages = [
     "context",
+    "html",
+    "html/atom",
     "internal/socks",
     "proxy",
     "websocket"
@@ -483,6 +491,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "05ae9a9fb7359d68672ce15ca1366fcbe21932319f2fec91480a2438203db147"
+  inputs-digest = "f4698bba5a46948c812eb71d3d2254cff4d8a91359974d7dc8f58527528bfecc"
   solver-name = "gps-cdcl"
   solver-version = 1
