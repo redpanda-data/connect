@@ -318,3 +318,138 @@ func TestTextTrim(t *testing.T) {
 		}
 	}
 }
+
+func TestTextReplace(t *testing.T) {
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	type jTest struct {
+		name   string
+		arg    string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "replace 1",
+			arg:    "foo",
+			value:  "bar",
+			input:  `foo bar`,
+			output: `bar bar`,
+		},
+		{
+			name:   "replace 2",
+			arg:    "foo",
+			value:  "bar",
+			input:  `baz foo bar foo`,
+			output: `baz bar bar bar`,
+		},
+		{
+			name:   "replace 3",
+			arg:    "foo",
+			value:  "bar",
+			input:  `baz baz baz baz`,
+			output: `baz baz baz baz`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Text.Operator = "replace"
+		conf.Text.Arg = test.arg
+		conf.Text.Value = test.value
+		conf.Text.Parts = []int{0}
+
+		tp, err := NewText(conf, nil, tLog, tStats)
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := types.NewMessage(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := tp.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
+func TestTextReplaceRegexp(t *testing.T) {
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	type jTest struct {
+		name   string
+		arg    string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "replace regexp 1",
+			arg:    "foo?",
+			value:  "bar",
+			input:  `foo bar`,
+			output: `bar bar`,
+		},
+		{
+			name:   "replace regexp 2",
+			arg:    "foo?",
+			value:  "bar",
+			input:  `fo bar`,
+			output: `bar bar`,
+		},
+		{
+			name:   "replace regexp 3",
+			arg:    "foo?",
+			value:  "bar",
+			input:  `fooo bar`,
+			output: `baro bar`,
+		},
+		{
+			name:   "replace regexp 4",
+			arg:    "foo?",
+			value:  "bar",
+			input:  `baz bar`,
+			output: `baz bar`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Text.Operator = "replace_regexp"
+		conf.Text.Arg = test.arg
+		conf.Text.Value = test.value
+		conf.Text.Parts = []int{0}
+
+		tp, err := NewText(conf, nil, tLog, tStats)
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := types.NewMessage(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := tp.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}

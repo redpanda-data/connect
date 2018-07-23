@@ -23,6 +23,7 @@ package processor
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -50,6 +51,15 @@ Appends text to the end of the payload.
 #### ` + "`prepend`" + `
 
 Prepends text to the beginning of the payload.
+
+#### ` + "`replace`" + `
+
+Replaces all occurrences of the argument in a message with a value.
+
+#### ` + "`replace_regexp`" + `
+
+Replaces all occurrences of the argument regular expression in a message with a
+value.
 
 #### ` + "`trim_space`" + `
 
@@ -115,6 +125,23 @@ func newTextTrimOperator(arg string) textOperator {
 	}
 }
 
+func newReplaceOperator(arg string) textOperator {
+	replaceArg := []byte(arg)
+	return func(body []byte, value []byte) ([]byte, error) {
+		return bytes.Replace(body, replaceArg, value, -1), nil
+	}
+}
+
+func newReplaceRegexpOperator(arg string) (textOperator, error) {
+	rp, err := regexp.Compile(arg)
+	if err != nil {
+		return nil, err
+	}
+	return func(body []byte, value []byte) ([]byte, error) {
+		return rp.ReplaceAll(body, value), nil
+	}, nil
+}
+
 func getTextOperator(opStr string, arg string) (textOperator, error) {
 	switch opStr {
 	case "append":
@@ -125,6 +152,10 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 		return newTextTrimSpaceOperator(), nil
 	case "trim":
 		return newTextTrimOperator(arg), nil
+	case "replace":
+		return newReplaceOperator(arg), nil
+	case "replace_regexp":
+		return newReplaceRegexpOperator(arg)
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
