@@ -75,13 +75,16 @@ type FilterParts struct {
 	mPartDropped metrics.StatCounter
 	mDropped     metrics.StatCounter
 	mSent        metrics.StatCounter
+	mSentParts   metrics.StatCounter
 }
 
 // NewFilterParts returns a FilterParts processor.
 func NewFilterParts(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	cond, err := condition.New(conf.FilterParts.Config, mgr, log, stats)
+	nsLog := log.NewModule(".processor.filter_parts")
+	nsStats := metrics.Namespaced(stats, "processor.filter_parts")
+	cond, err := condition.New(conf.FilterParts.Config, mgr, nsLog, nsStats)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to construct condition '%v': %v",
@@ -89,7 +92,7 @@ func NewFilterParts(
 		)
 	}
 	return &FilterParts{
-		log:       log.NewModule(".processor.filter_parts"),
+		log:       nsLog,
 		stats:     stats,
 		condition: cond,
 
@@ -97,6 +100,7 @@ func NewFilterParts(
 		mPartDropped: stats.GetCounter("processor.filter_parts.part.dropped"),
 		mDropped:     stats.GetCounter("processor.filter_parts.dropped"),
 		mSent:        stats.GetCounter("processor.filter_parts.sent"),
+		mSentParts:   stats.GetCounter("processor.filter_parts.parts.sent"),
 	}, nil
 }
 
@@ -116,6 +120,7 @@ func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 	}
 	if newMsg.Len() > 0 {
 		c.mSent.Incr(1)
+		c.mSentParts.Incr(int64(newMsg.Len()))
 		msgs := [1]types.Message{newMsg}
 		return msgs[:], nil
 	}

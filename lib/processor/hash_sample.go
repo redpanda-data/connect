@@ -87,11 +87,12 @@ type HashSample struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount   metrics.StatCounter
-	mDropOOB metrics.StatCounter
-	mDropped metrics.StatCounter
-	mErrHash metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mDropOOB   metrics.StatCounter
+	mDropped   metrics.StatCounter
+	mErrHash   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewHashSample returns a HashSample processor.
@@ -103,11 +104,12 @@ func NewHashSample(
 		log:   log.NewModule(".processor.hash_sample"),
 		stats: stats,
 
-		mCount:   stats.GetCounter("processor.hash_sample.count"),
-		mDropOOB: stats.GetCounter("processor.hash_sample.dropped_part_out_of_bounds"),
-		mDropped: stats.GetCounter("processor.hash_sample.dropped"),
-		mErrHash: stats.GetCounter("processor.hash_sample.hashing_error"),
-		mSent:    stats.GetCounter("processor.hash_sample.sent"),
+		mCount:     stats.GetCounter("processor.hash_sample.count"),
+		mDropOOB:   stats.GetCounter("processor.hash_sample.dropped_part_out_of_bounds"),
+		mDropped:   stats.GetCounter("processor.hash_sample.dropped"),
+		mErrHash:   stats.GetCounter("processor.hash_sample.hashing_error"),
+		mSent:      stats.GetCounter("processor.hash_sample.sent"),
+		mSentParts: stats.GetCounter("processor.hash_sample.parts.sent"),
 	}, nil
 }
 
@@ -145,6 +147,7 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	rate := scaleNum(hash.Sum64())
 	if rate >= s.conf.HashSample.RetainMin && rate < s.conf.HashSample.RetainMax {
 		s.mSent.Incr(1)
+		s.mSentParts.Incr(int64(msg.Len()))
 		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}

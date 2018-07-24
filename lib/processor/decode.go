@@ -86,11 +86,12 @@ type Decode struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount   metrics.StatCounter
-	mSucc    metrics.StatCounter
-	mErr     metrics.StatCounter
-	mSkipped metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSkipped   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewDecode returns a Decode processor.
@@ -107,11 +108,12 @@ func NewDecode(
 		log:   log.NewModule(".processor.decode"),
 		stats: stats,
 
-		mCount:   stats.GetCounter("processor.decode.count"),
-		mSucc:    stats.GetCounter("processor.decode.success"),
-		mErr:     stats.GetCounter("processor.decode.error"),
-		mSkipped: stats.GetCounter("processor.decode.skipped"),
-		mSent:    stats.GetCounter("processor.decode.sent"),
+		mCount:     stats.GetCounter("processor.decode.count"),
+		mSucc:      stats.GetCounter("processor.decode.success"),
+		mErr:       stats.GetCounter("processor.decode.error"),
+		mSkipped:   stats.GetCounter("processor.decode.skipped"),
+		mSent:      stats.GetCounter("processor.decode.sent"),
+		mSentParts: stats.GetCounter("processor.decode.parts.sent"),
 	}, nil
 }
 
@@ -146,7 +148,7 @@ func (c *Decode) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			c.mSucc.Incr(1)
 			newMsg.Append(newPart)
 		} else {
-			c.log.Debugf("Failed to decode message part: %v\n", err)
+			c.log.Errorf("Failed to decode message part: %v\n", err)
 			c.mErr.Incr(1)
 		}
 	}
@@ -157,6 +159,7 @@ func (c *Decode) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	}
 
 	c.mSent.Incr(1)
+	c.mSentParts.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

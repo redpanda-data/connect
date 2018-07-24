@@ -25,6 +25,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -35,11 +36,17 @@ func init() {
 		constructor: NewBatch,
 		description: `
 Reads a number of discrete messages, buffering (but not acknowledging) the
-message parts until the total size of the batch in bytes matches or exceeds the
-configured byte size. Once the limit is reached the parts are combined into a
-single batch of messages and sent through the pipeline. Once the combined batch
-has reached a destination the acknowledgment is sent out for all messages inside
-the batch, preserving at-least-once delivery guarantees.
+message parts until either:
+
+- The total size of the batch in bytes matches or exceeds ` + "`byte_size`" + `.
+- A message added to the batch causes the condition to resolve ` + "`true`" + `.
+- The ` + "`period_ms`" + ` field is non-zero and the time since the last batch
+  exceeds its value.
+
+Once one of these events trigger the parts are combined into a single batch of
+messages and sent through the pipeline. After reaching a destination the
+acknowledgment is sent out for all messages inside the batch at the same time,
+preserving at-least-once delivery guarantees.
 
 The ` + "`period_ms`" + ` field is optional, and when greater than zero defines
 a period in milliseconds whereby a batch is sent even if the ` + "`byte_size`" + `
@@ -57,6 +64,17 @@ to sending them individually.
 If a Benthos stream contains multiple brokered inputs or outputs then the batch
 operator should *always* be applied directly after an input in order to avoid
 unexpected behaviour and message ordering.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			condSanit, err := condition.SanitiseConfig(conf.Batch.Condition)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]interface{}{
+				"byte_size": conf.Batch.ByteSize,
+				"condition": condSanit,
+				"period_ms": conf.Batch.PeriodMS,
+			}, nil
+		},
 	}
 }
 
@@ -64,15 +82,20 @@ unexpected behaviour and message ordering.`,
 
 // BatchConfig contains configuration for the Batch processor.
 type BatchConfig struct {
-	ByteSize int `json:"byte_size" yaml:"byte_size"`
-	PeriodMS int `json:"period_ms" yaml:"period_ms"`
+	ByteSize  int              `json:"byte_size" yaml:"byte_size"`
+	Condition condition.Config `json:"condition" yaml:"condition"`
+	PeriodMS  int              `json:"period_ms" yaml:"period_ms"`
 }
 
 // NewBatchConfig returns a BatchConfig with default values.
 func NewBatchConfig() BatchConfig {
+	cond := condition.NewConfig()
+	cond.Type = "static"
+	cond.Static = false
 	return BatchConfig{
-		ByteSize: 10000,
-		PeriodMS: 0,
+		ByteSize:  10000,
+		Condition: cond,
+		PeriodMS:  0,
 	}
 }
 
@@ -81,35 +104,51 @@ func NewBatchConfig() BatchConfig {
 // Batch is a processor that combines messages into a batch until a size limit
 // is reached, at which point the batch is sent out.
 type Batch struct {
-	log       log.Modular
-	stats     metrics.Type
+	log   log.Modular
+	stats metrics.Type
+
 	n         int
 	period    time.Duration
+	cond      condition.Type
 	sizeTally int
 	parts     [][]byte
 
 	lastBatch time.Time
 
-	mCount   metrics.StatCounter
-	mSent    metrics.StatCounter
-	mDropped metrics.StatCounter
+	mCount       metrics.StatCounter
+	mSent        metrics.StatCounter
+	mSentParts   metrics.StatCounter
+	mSizeBatch   metrics.StatCounter
+	mPeriodBatch metrics.StatCounter
+	mCondBatch   metrics.StatCounter
+	mDropped     metrics.StatCounter
 }
 
 // NewBatch returns a Batch processor.
 func NewBatch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	logger := log.NewModule(".processor.batch")
+	cond, err := condition.New(conf.Batch.Condition, mgr, logger, metrics.Namespaced(stats, "processor.batch"))
+	if err != nil {
+		return nil, err
+	}
 	return &Batch{
-		log:    log.NewModule(".processor.batch"),
+		log:    logger,
 		stats:  stats,
 		n:      conf.Batch.ByteSize,
 		period: time.Duration(conf.Batch.PeriodMS) * time.Millisecond,
+		cond:   cond,
 
 		lastBatch: time.Now(),
 
-		mCount:   stats.GetCounter("processor.batch.count"),
-		mSent:    stats.GetCounter("processor.batch.sent"),
-		mDropped: stats.GetCounter("processor.batch.dropped"),
+		mCount:       stats.GetCounter("processor.batch.count"),
+		mSizeBatch:   stats.GetCounter("processor.batch.on_size"),
+		mPeriodBatch: stats.GetCounter("processor.batch.on_period"),
+		mCondBatch:   stats.GetCounter("processor.batch.on_condition"),
+		mSent:        stats.GetCounter("processor.batch.sent"),
+		mSentParts:   stats.GetCounter("processor.batch.parts.sent"),
+		mDropped:     stats.GetCounter("processor.batch.dropped"),
 	}, nil
 }
 
@@ -127,19 +166,37 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		c.parts = append(c.parts, part)
 	}
 
+	batch := false
+	if !batch && c.sizeTally >= c.n {
+		batch = true
+		c.mSizeBatch.Incr(1)
+		c.log.Traceln("Batching based on byte_size")
+	}
+	if !batch && c.period > 0 && time.Since(c.lastBatch) > c.period {
+		batch = true
+		c.mPeriodBatch.Incr(1)
+		c.log.Traceln("Batching based on period_ms")
+	}
+	if !batch && c.cond.Check(msg) {
+		batch = true
+		c.mCondBatch.Incr(1)
+		c.log.Traceln("Batching based on condition")
+	}
+
 	// If we have reached our target count of parts in the buffer.
-	if c.sizeTally >= c.n ||
-		(c.period > 0 && time.Since(c.lastBatch) > c.period) {
+	if batch {
 		newMsg := types.NewMessage(c.parts)
 		c.parts = nil
 		c.sizeTally = 0
 		c.lastBatch = time.Now()
 
+		c.mSentParts.Incr(int64(newMsg.Len()))
 		c.mSent.Incr(1)
 		msgs := [1]types.Message{newMsg}
 		return msgs[:], nil
 	}
 
+	c.log.Traceln("Added message to pending batch")
 	c.mDropped.Incr(1)
 	return nil, types.NewUnacknowledgedResponse()
 }

@@ -132,11 +132,12 @@ type Compress struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount   metrics.StatCounter
-	mSucc    metrics.StatCounter
-	mErr     metrics.StatCounter
-	mSkipped metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSkipped   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewCompress returns a Compress processor.
@@ -153,11 +154,12 @@ func NewCompress(
 		log:   log.NewModule(".processor.compress"),
 		stats: stats,
 
-		mCount:   stats.GetCounter("processor.compress.count"),
-		mSucc:    stats.GetCounter("processor.compress.success"),
-		mErr:     stats.GetCounter("processor.compress.error"),
-		mSkipped: stats.GetCounter("processor.compress.skipped"),
-		mSent:    stats.GetCounter("processor.compress.sent"),
+		mCount:     stats.GetCounter("processor.compress.count"),
+		mSucc:      stats.GetCounter("processor.compress.success"),
+		mErr:       stats.GetCounter("processor.compress.error"),
+		mSkipped:   stats.GetCounter("processor.compress.skipped"),
+		mSent:      stats.GetCounter("processor.compress.sent"),
+		mSentParts: stats.GetCounter("processor.compress.parts.sent"),
 	}, nil
 }
 
@@ -192,7 +194,7 @@ func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			c.mSucc.Incr(1)
 			newMsg.Append(newPart)
 		} else {
-			c.log.Debugf("Failed to compress message part: %v\n", err)
+			c.log.Errorf("Failed to compress message part: %v\n", err)
 			c.mErr.Incr(1)
 		}
 	}
@@ -203,6 +205,7 @@ func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	}
 
 	c.mSent.Incr(1)
+	c.mSentParts.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

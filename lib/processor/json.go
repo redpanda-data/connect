@@ -461,12 +461,13 @@ type JSON struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount    metrics.StatCounter
-	mErrJSONP metrics.StatCounter
-	mErrJSONS metrics.StatCounter
-	mErr      metrics.StatCounter
-	mSucc     metrics.StatCounter
-	mSent     metrics.StatCounter
+	mCount     metrics.StatCounter
+	mErrJSONP  metrics.StatCounter
+	mErrJSONS  metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewJSON returns a JSON processor.
@@ -480,12 +481,13 @@ func NewJSON(
 
 		valueBytes: conf.JSON.Value,
 
-		mCount:    stats.GetCounter("processor.json.count"),
-		mErrJSONP: stats.GetCounter("processor.json.error.json_parse"),
-		mErrJSONS: stats.GetCounter("processor.json.error.json_set"),
-		mErr:      stats.GetCounter("processor.json.error"),
-		mSucc:     stats.GetCounter("processor.json.success"),
-		mSent:     stats.GetCounter("processor.json.sent"),
+		mCount:     stats.GetCounter("processor.json.count"),
+		mErrJSONP:  stats.GetCounter("processor.json.error.json_parse"),
+		mErrJSONS:  stats.GetCounter("processor.json.error.json_set"),
+		mErr:       stats.GetCounter("processor.json.error"),
+		mSucc:      stats.GetCounter("processor.json.success"),
+		mSent:      stats.GetCounter("processor.json.sent"),
+		mSentParts: stats.GetCounter("processor.json.parts.sent"),
 	}
 
 	j.interpolate = text.ContainsFunctionVariables(j.valueBytes)
@@ -559,6 +561,7 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	msgs := [1]types.Message{newMsg}
 
 	p.mSent.Incr(1)
+	p.mSentParts.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

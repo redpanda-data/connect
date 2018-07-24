@@ -82,6 +82,7 @@ type Combine struct {
 	mCount     metrics.StatCounter
 	mWarnParts metrics.StatCounter
 	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 	mDropped   metrics.StatCounter
 }
 
@@ -97,6 +98,7 @@ func NewCombine(
 		mCount:     stats.GetCounter("processor.combine.count"),
 		mWarnParts: stats.GetCounter("processor.combine.warning.too_many_parts"),
 		mSent:      stats.GetCounter("processor.combine.sent"),
+		mSentParts: stats.GetCounter("processor.combine.parts.sent"),
 		mDropped:   stats.GetCounter("processor.combine.dropped"),
 	}, nil
 }
@@ -111,6 +113,8 @@ func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 
 	if msg.Len() > c.n {
 		c.mWarnParts.Incr(1)
+		c.mSent.Incr(1)
+		c.mSentParts.Incr(int64(msg.Len()))
 		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}
@@ -126,10 +130,13 @@ func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		c.parts = nil
 
 		c.mSent.Incr(1)
+		c.mSentParts.Incr(int64(newMsg.Len()))
+		c.log.Traceln("Batching based on parts")
 		msgs := [1]types.Message{newMsg}
 		return msgs[:], nil
 	}
 
+	c.log.Traceln("Added message to pending batch")
 	c.mDropped.Incr(1)
 	return nil, types.NewUnacknowledgedResponse()
 }

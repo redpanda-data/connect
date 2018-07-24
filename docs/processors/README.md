@@ -85,15 +85,24 @@ types that aren't file based (such as binary) the file field is ignored.
 type: batch
 batch:
   byte_size: 10000
+  condition:
+    type: static
+    static: false
   period_ms: 0
 ```
 
 Reads a number of discrete messages, buffering (but not acknowledging) the
-message parts until the total size of the batch in bytes matches or exceeds the
-configured byte size. Once the limit is reached the parts are combined into a
-single batch of messages and sent through the pipeline. Once the combined batch
-has reached a destination the acknowledgment is sent out for all messages inside
-the batch, preserving at-least-once delivery guarantees.
+message parts until either:
+
+- The total size of the batch in bytes matches or exceeds `byte_size`.
+- A message added to the batch causes the condition to resolve `true`.
+- The `period_ms` field is non-zero and the time since the last batch
+  exceeds its value.
+
+Once one of these events trigger the parts are combined into a single batch of
+messages and sent through the pipeline. After reaching a destination the
+acknowledgment is sent out for all messages inside the batch at the same time,
+preserving at-least-once delivery guarantees.
 
 The `period_ms` field is optional, and when greater than zero defines
 a period in milliseconds whereby a batch is sent even if the `byte_size`

@@ -67,11 +67,12 @@ type MergeJSON struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount    metrics.StatCounter
-	mErrJSONP metrics.StatCounter
-	mErrJSONS metrics.StatCounter
-	mSucc     metrics.StatCounter
-	mSent     metrics.StatCounter
+	mCount     metrics.StatCounter
+	mErrJSONP  metrics.StatCounter
+	mErrJSONS  metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewMergeJSON returns a MergeJSON processor.
@@ -84,11 +85,12 @@ func NewMergeJSON(
 		log:    log.NewModule(".processor.merge_json"),
 		stats:  stats,
 
-		mCount:    stats.GetCounter("processor.merge_json.count"),
-		mErrJSONP: stats.GetCounter("processor.merge_json.error.json_parse"),
-		mErrJSONS: stats.GetCounter("processor.merge_json.error.json_set"),
-		mSucc:     stats.GetCounter("processor.merge_json.success"),
-		mSent:     stats.GetCounter("processor.merge_json.sent"),
+		mCount:     stats.GetCounter("processor.merge_json.count"),
+		mErrJSONP:  stats.GetCounter("processor.merge_json.error.json_parse"),
+		mErrJSONS:  stats.GetCounter("processor.merge_json.error.json_set"),
+		mSucc:      stats.GetCounter("processor.merge_json.success"),
+		mSent:      stats.GetCounter("processor.merge_json.sent"),
+		mSentParts: stats.GetCounter("processor.merge_json.parts.sent"),
 	}
 	return j, nil
 }
@@ -162,6 +164,7 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	msgs := [1]types.Message{newMsg}
 
 	p.mSent.Incr(1)
+	p.mSentParts.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

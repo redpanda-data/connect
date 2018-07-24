@@ -94,10 +94,13 @@ type Conditional struct {
 	children     []Type
 	elseChildren []Type
 
+	log log.Modular
+
 	mCount      metrics.StatCounter
 	mCondPassed metrics.StatCounter
 	mCondFailed metrics.StatCounter
 	mSent       metrics.StatCounter
+	mSentParts  metrics.StatCounter
 	mDropped    metrics.StatCounter
 }
 
@@ -106,11 +109,14 @@ func NewConditional(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	nsStats := metrics.Namespaced(stats, "processor.conditional")
-	nsLog := log.NewModule(".conditional")
+	nsLog := log.NewModule(".processor.conditional")
 	cond, err := condition.New(conf.Conditional.Condition, mgr, nsLog, nsStats)
 	if err != nil {
 		return nil, err
 	}
+
+	nsStats = metrics.Namespaced(stats, "processor.conditional.if")
+	nsLog = log.NewModule(".processor.conditional.if")
 	var children []Type
 	for _, pconf := range conf.Conditional.Processors {
 		var proc Type
@@ -119,6 +125,9 @@ func NewConditional(
 		}
 		children = append(children, proc)
 	}
+
+	nsStats = metrics.Namespaced(stats, "processor.conditional.else")
+	nsLog = log.NewModule(".processor.conditional.else")
 	var elseChildren []Type
 	for _, pconf := range conf.Conditional.ElseProcessors {
 		var proc Type
@@ -127,15 +136,19 @@ func NewConditional(
 		}
 		elseChildren = append(elseChildren, proc)
 	}
+
 	return &Conditional{
 		cond:         cond,
 		children:     children,
 		elseChildren: elseChildren,
 
+		log: log.NewModule(".processor.conditional"),
+
 		mCount:      stats.GetCounter("processor.conditional.count"),
 		mCondPassed: stats.GetCounter("processor.conditional.passed"),
 		mCondFailed: stats.GetCounter("processor.conditional.failed"),
 		mSent:       stats.GetCounter("processor.conditional.sent"),
+		mSentParts:  stats.GetCounter("processor.conditional.parts.sent"),
 		mDropped:    stats.GetCounter("processor.conditional.dropped"),
 	}, nil
 }
@@ -150,9 +163,11 @@ func (c *Conditional) ProcessMessage(msg types.Message) (msgs []types.Message, r
 
 	if c.cond.Check(msg) {
 		c.mCondPassed.Incr(1)
+		c.log.Traceln("Condition passed")
 		procs = c.children
 	} else {
 		c.mCondFailed.Incr(1)
+		c.log.Traceln("Condition failed")
 		procs = c.elseChildren
 	}
 
@@ -174,6 +189,11 @@ func (c *Conditional) ProcessMessage(msg types.Message) (msgs []types.Message, r
 		res = resultRes
 	} else {
 		c.mSent.Incr(int64(len(resultMsgs)))
+		totalParts := 0
+		for _, msg := range resultMsgs {
+			totalParts += msg.Len()
+		}
+		c.mSentParts.Incr(int64(totalParts))
 		msgs = resultMsgs
 	}
 

@@ -75,8 +75,9 @@ type InsertPart struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount metrics.StatCounter
-	mSent  metrics.StatCounter
+	mCount     metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewInsertPart returns a InsertPart processor.
@@ -92,8 +93,9 @@ func NewInsertPart(
 		log:         log.NewModule(".processor.insert_part"),
 		stats:       stats,
 
-		mCount: stats.GetCounter("processor.insert_part.count"),
-		mSent:  stats.GetCounter("processor.insert_part.sent"),
+		mCount:     stats.GetCounter("processor.insert_part.count"),
+		mSent:      stats.GetCounter("processor.insert_part.sent"),
+		mSentParts: stats.GetCounter("processor.insert_part.parts.sent"),
 	}, nil
 }
 
@@ -138,6 +140,7 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	newMsg := types.NewMessage(newParts)
 
 	p.mSent.Incr(1)
+	p.mSentParts.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

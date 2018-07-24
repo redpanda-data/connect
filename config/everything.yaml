@@ -224,6 +224,23 @@ pipeline:
       path: ${!count:files}-${!timestamp_unix_nano}.txt
     batch:
       byte_size: 10000
+      condition:
+        type: static
+        and: []
+        count:
+          arg: 100
+        jmespath:
+          part: 0
+          query: ""
+        not: {}
+        or: []
+        resource: ""
+        static: false
+        text:
+          operator: equals_cs
+          part: 0
+          arg: ""
+        xor: []
       period_ms: 0
     bounds_check:
       max_parts: 100

@@ -80,11 +80,12 @@ type HTTP struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount   metrics.StatCounter
-	mErrHTTP metrics.StatCounter
-	mErr     metrics.StatCounter
-	mSucc    metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mErrHTTP   metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewHTTP returns a HTTP processor.
@@ -97,11 +98,12 @@ func NewHTTP(
 		log:   log.NewModule(".processor.http"),
 		stats: stats,
 
-		mCount:   stats.GetCounter("processor.http.count"),
-		mSucc:    stats.GetCounter("processor.http.success"),
-		mErr:     stats.GetCounter("processor.http.error"),
-		mErrHTTP: stats.GetCounter("processor.http.error.http"),
-		mSent:    stats.GetCounter("processor.http.sent"),
+		mCount:     stats.GetCounter("processor.http.count"),
+		mSucc:      stats.GetCounter("processor.http.success"),
+		mErr:       stats.GetCounter("processor.http.error"),
+		mErrHTTP:   stats.GetCounter("processor.http.error.http"),
+		mSent:      stats.GetCounter("processor.http.sent"),
+		mSentParts: stats.GetCounter("processor.http.parts.sent"),
 	}
 	g.client = client.New(
 		conf.HTTP.Client,
@@ -138,6 +140,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	msgs := [1]types.Message{responseMsg}
 
 	h.mSent.Incr(1)
+	h.mSentParts.Incr(int64(responseMsg.Len()))
 	return msgs[:], nil
 }
 

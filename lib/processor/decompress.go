@@ -146,11 +146,12 @@ type Decompress struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount   metrics.StatCounter
-	mSucc    metrics.StatCounter
-	mErr     metrics.StatCounter
-	mSkipped metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSkipped   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewDecompress returns a Decompress processor.
@@ -167,11 +168,12 @@ func NewDecompress(
 		log:    log.NewModule(".processor.decompress"),
 		stats:  stats,
 
-		mCount:   stats.GetCounter("processor.decompress.count"),
-		mSucc:    stats.GetCounter("processor.decompress.success"),
-		mErr:     stats.GetCounter("processor.decompress.error"),
-		mSkipped: stats.GetCounter("processor.decompress.skipped"),
-		mSent:    stats.GetCounter("processor.decompress.sent"),
+		mCount:     stats.GetCounter("processor.decompress.count"),
+		mSucc:      stats.GetCounter("processor.decompress.success"),
+		mErr:       stats.GetCounter("processor.decompress.error"),
+		mSkipped:   stats.GetCounter("processor.decompress.skipped"),
+		mSent:      stats.GetCounter("processor.decompress.sent"),
+		mSentParts: stats.GetCounter("processor.decompress.parts.sent"),
 	}, nil
 }
 
@@ -216,6 +218,7 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	}
 
 	d.mSent.Incr(1)
+	d.mSentParts.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

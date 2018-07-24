@@ -101,12 +101,13 @@ type JMESPath struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount    metrics.StatCounter
-	mErrJSONP metrics.StatCounter
-	mErrJMES  metrics.StatCounter
-	mErrJSONS metrics.StatCounter
-	mSucc     metrics.StatCounter
-	mSent     metrics.StatCounter
+	mCount     metrics.StatCounter
+	mErrJSONP  metrics.StatCounter
+	mErrJMES   metrics.StatCounter
+	mErrJSONS  metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewJMESPath returns a JMESPath processor.
@@ -124,12 +125,13 @@ func NewJMESPath(
 		log:   log.NewModule(".processor.jmespath"),
 		stats: stats,
 
-		mCount:    stats.GetCounter("processor.jmespath.count"),
-		mErrJSONP: stats.GetCounter("processor.jmespath.error.json_parse"),
-		mErrJMES:  stats.GetCounter("processor.jmespath.error.jmespath_search"),
-		mErrJSONS: stats.GetCounter("processor.jmespath.error.json_set"),
-		mSucc:     stats.GetCounter("processor.jmespath.success"),
-		mSent:     stats.GetCounter("processor.jmespath.sent"),
+		mCount:     stats.GetCounter("processor.jmespath.count"),
+		mErrJSONP:  stats.GetCounter("processor.jmespath.error.json_parse"),
+		mErrJMES:   stats.GetCounter("processor.jmespath.error.jmespath_search"),
+		mErrJSONS:  stats.GetCounter("processor.jmespath.error.json_set"),
+		mSucc:      stats.GetCounter("processor.jmespath.success"),
+		mSent:      stats.GetCounter("processor.jmespath.sent"),
+		mSentParts: stats.GetCounter("processor.jmespath.parts.sent"),
 	}
 	return j, nil
 }
@@ -185,6 +187,7 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	msgs := [1]types.Message{newMsg}
 
 	p.mSent.Incr(1)
+	p.mSentParts.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

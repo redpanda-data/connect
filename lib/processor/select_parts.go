@@ -72,11 +72,12 @@ type SelectParts struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount    metrics.StatCounter
-	mSkipped  metrics.StatCounter
-	mSelected metrics.StatCounter
-	mDropped  metrics.StatCounter
-	mSent     metrics.StatCounter
+	mCount     metrics.StatCounter
+	mSkipped   metrics.StatCounter
+	mSelected  metrics.StatCounter
+	mDropped   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewSelectParts returns a SelectParts processor.
@@ -88,11 +89,12 @@ func NewSelectParts(
 		log:   log.NewModule(".processor.select_parts"),
 		stats: stats,
 
-		mCount:    stats.GetCounter("processor.select_parts.count"),
-		mSkipped:  stats.GetCounter("processor.select_parts.skipped"),
-		mSelected: stats.GetCounter("processor.select_parts.selected"),
-		mDropped:  stats.GetCounter("processor.select_parts.dropped"),
-		mSent:     stats.GetCounter("processor.select_parts.sent"),
+		mCount:     stats.GetCounter("processor.select_parts.count"),
+		mSkipped:   stats.GetCounter("processor.select_parts.skipped"),
+		mSelected:  stats.GetCounter("processor.select_parts.selected"),
+		mDropped:   stats.GetCounter("processor.select_parts.dropped"),
+		mSent:      stats.GetCounter("processor.select_parts.sent"),
+		mSentParts: stats.GetCounter("processor.select_parts.parts.sent"),
 	}, nil
 }
 
@@ -125,6 +127,7 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 	}
 
 	m.mSent.Incr(1)
+	m.mSentParts.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

@@ -104,6 +104,7 @@ type ProcessField struct {
 	mErrMisaligned      metrics.StatCounter
 	mErrMisalignedBatch metrics.StatCounter
 	mSent               metrics.StatCounter
+	mSentParts          metrics.StatCounter
 	mDropped            metrics.StatCounter
 }
 
@@ -112,7 +113,7 @@ func NewProcessField(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	nsStats := metrics.Namespaced(stats, "processor.process_field")
-	nsLog := log.NewModule(".process_field")
+	nsLog := log.NewModule(".processor.process_field")
 
 	var children []Type
 	for _, pconf := range conf.ProcessField.Processors {
@@ -127,7 +128,7 @@ func NewProcessField(
 		path:     strings.Split(conf.ProcessField.Path, "."),
 		children: children,
 
-		log: log.NewModule(".process_field"),
+		log: nsLog,
 
 		mCount:              stats.GetCounter("processor.process_field.count"),
 		mErr:                stats.GetCounter("processor.process_field.error"),
@@ -135,6 +136,7 @@ func NewProcessField(
 		mErrMisaligned:      stats.GetCounter("processor.process_field.error.misaligned"),
 		mErrMisalignedBatch: stats.GetCounter("processor.process_field.error.misaligned_messages"),
 		mSent:               stats.GetCounter("processor.process_field.sent"),
+		mSentParts:          stats.GetCounter("processor.process_field.parts.sent"),
 		mDropped:            stats.GetCounter("processor.process_field.dropped"),
 	}, nil
 }
@@ -200,6 +202,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 
 	if exp, act := len(targetParts), resMsg.Len(); exp != act {
 		p.mSent.Incr(1)
+		p.mSentParts.Incr(int64(payload.Len()))
 		p.mErr.Incr(1)
 		p.mErrMisalignedBatch.Incr(1)
 		p.log.Errorf("Misaligned processor result batch. Expected %v messages, received %v\n", exp, act)
@@ -212,6 +215,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	}
 
 	p.mSent.Incr(1)
+	p.mSentParts.Incr(int64(payload.Len()))
 	return
 }
 

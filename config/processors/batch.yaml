@@ -18,6 +18,9 @@ pipeline:
   - type: batch
     batch:
       byte_size: 10000
+      condition:
+        type: static
+        static: false
       period_ms: 0
   threads: 1
 output:

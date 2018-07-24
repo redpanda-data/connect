@@ -90,11 +90,12 @@ type Encode struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount   metrics.StatCounter
-	mSucc    metrics.StatCounter
-	mErr     metrics.StatCounter
-	mSkipped metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSkipped   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewEncode returns a Encode processor.
@@ -111,11 +112,12 @@ func NewEncode(
 		log:   log.NewModule(".processor.encode"),
 		stats: stats,
 
-		mCount:   stats.GetCounter("processor.encode.count"),
-		mSucc:    stats.GetCounter("processor.encode.success"),
-		mErr:     stats.GetCounter("processor.encode.error"),
-		mSkipped: stats.GetCounter("processor.encode.skipped"),
-		mSent:    stats.GetCounter("processor.encode.sent"),
+		mCount:     stats.GetCounter("processor.encode.count"),
+		mSucc:      stats.GetCounter("processor.encode.success"),
+		mErr:       stats.GetCounter("processor.encode.error"),
+		mSkipped:   stats.GetCounter("processor.encode.skipped"),
+		mSent:      stats.GetCounter("processor.encode.sent"),
+		mSentParts: stats.GetCounter("processor.encode.parts.sent"),
 	}, nil
 }
 
@@ -161,6 +163,7 @@ func (c *Encode) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	}
 
 	c.mSent.Incr(1)
+	c.mSentParts.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

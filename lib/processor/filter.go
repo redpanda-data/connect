@@ -72,16 +72,19 @@ type Filter struct {
 
 	condition condition.Type
 
-	mCount   metrics.StatCounter
-	mDropped metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mDropped   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewFilter returns a Filter processor.
 func NewFilter(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	cond, err := condition.New(conf.Filter.Config, mgr, log, stats)
+	nsLog := log.NewModule(".processor.filter")
+	nsStats := metrics.Namespaced(stats, "processor.filter")
+	cond, err := condition.New(conf.Filter.Config, mgr, nsLog, nsStats)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to construct condition '%v': %v",
@@ -89,13 +92,14 @@ func NewFilter(
 		)
 	}
 	return &Filter{
-		log:       log.NewModule(".processor.filter"),
+		log:       nsLog,
 		stats:     stats,
 		condition: cond,
 
-		mCount:   stats.GetCounter("processor.filter.count"),
-		mDropped: stats.GetCounter("processor.filter.dropped"),
-		mSent:    stats.GetCounter("processor.filter.sent"),
+		mCount:     stats.GetCounter("processor.filter.count"),
+		mDropped:   stats.GetCounter("processor.filter.dropped"),
+		mSent:      stats.GetCounter("processor.filter.sent"),
+		mSentParts: stats.GetCounter("processor.filter.parts.sent"),
 	}, nil
 }
 
@@ -111,6 +115,7 @@ func (c *Filter) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	}
 
 	c.mSent.Incr(1)
+	c.mSentParts.Incr(int64(msg.Len()))
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

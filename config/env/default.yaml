@@ -191,6 +191,19 @@ pipeline:
       path: ${PROCESSOR_ARCHIVE_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
     batch:
       byte_size: ${PROCESSOR_BATCH_BYTE_SIZE:10000}
+      condition:
+        count:
+          arg: ${PROCESSOR_BATCH_CONDITION_COUNT_ARG:100}
+        jmespath:
+          part: ${PROCESSOR_BATCH_CONDITION_JMESPATH_PART:0}
+          query: ${PROCESSOR_BATCH_CONDITION_JMESPATH_QUERY}
+        resource: ${PROCESSOR_BATCH_CONDITION_RESOURCE}
+        static: ${PROCESSOR_BATCH_CONDITION_STATIC:false}
+        text:
+          arg: ${PROCESSOR_BATCH_CONDITION_TEXT_ARG}
+          operator: ${PROCESSOR_BATCH_CONDITION_TEXT_OPERATOR:equals_cs}
+          part: ${PROCESSOR_BATCH_CONDITION_TEXT_PART:0}
+        type: ${PROCESSOR_BATCH_CONDITION_TYPE:static}
       period_ms: ${PROCESSOR_BATCH_PERIOD_MS:0}
     bounds_check:
       max_part_size: ${PROCESSOR_BOUNDS_CHECK_MAX_PART_SIZE:1073741824}

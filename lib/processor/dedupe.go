@@ -154,12 +154,13 @@ type Dedupe struct {
 	hasherFunc hasherFunc
 	jPaths     []string
 
-	mCount    metrics.StatCounter
-	mErrJSON  metrics.StatCounter
-	mDropped  metrics.StatCounter
-	mErrHash  metrics.StatCounter
-	mErrCache metrics.StatCounter
-	mSent     metrics.StatCounter
+	mCount     metrics.StatCounter
+	mErrJSON   metrics.StatCounter
+	mDropped   metrics.StatCounter
+	mErrHash   metrics.StatCounter
+	mErrCache  metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewDedupe returns a Dedupe processor.
@@ -183,12 +184,13 @@ func NewDedupe(
 		hasherFunc: hFunc,
 		jPaths:     conf.Dedupe.JSONPaths,
 
-		mCount:    stats.GetCounter("processor.dedupe.count"),
-		mErrJSON:  stats.GetCounter("processor.dedupe.error.json_parse"),
-		mDropped:  stats.GetCounter("processor.dedupe.dropped"),
-		mErrHash:  stats.GetCounter("processor.dedupe.error.hash"),
-		mErrCache: stats.GetCounter("processor.dedupe.error.cache"),
-		mSent:     stats.GetCounter("processor.dedupe.sent"),
+		mCount:     stats.GetCounter("processor.dedupe.count"),
+		mErrJSON:   stats.GetCounter("processor.dedupe.error.json_parse"),
+		mDropped:   stats.GetCounter("processor.dedupe.dropped"),
+		mErrHash:   stats.GetCounter("processor.dedupe.error.hash"),
+		mErrCache:  stats.GetCounter("processor.dedupe.error.cache"),
+		mSent:      stats.GetCounter("processor.dedupe.sent"),
+		mSentParts: stats.GetCounter("processor.dedupe.parts.sent"),
 	}, nil
 }
 
@@ -208,7 +210,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			if err != nil {
 				d.mErrJSON.Incr(1)
 				d.mDropped.Incr(1)
-				d.log.Debugf("JSON Parse error: %v\n", err)
+				d.log.Errorf("JSON Parse error: %v\n", err)
 				continue
 			}
 
@@ -216,7 +218,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			if gPart, err = gabs.Consume(jPart); err != nil {
 				d.mErrJSON.Incr(1)
 				d.mDropped.Incr(1)
-				d.log.Debugf("JSON Parse error: %v\n", err)
+				d.log.Errorf("JSON Parse error: %v\n", err)
 				continue
 			}
 
@@ -237,7 +239,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 				if _, err := hasher.Write(hashBytes); nil != err {
 					d.mErrHash.Incr(1)
 					d.mDropped.Incr(1)
-					d.log.Debugf("Hash error: %v\n", err)
+					d.log.Errorf("Hash error: %v\n", err)
 				} else {
 					extractedHash = true
 				}
@@ -248,7 +250,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 				if _, err := hasher.Write(msg.Get(index)); nil != err {
 					d.mErrHash.Incr(1)
 					d.mDropped.Incr(1)
-					d.log.Debugf("Hash error: %v\n", err)
+					d.log.Errorf("Hash error: %v\n", err)
 				} else {
 					extractedHash = true
 				}
@@ -276,6 +278,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	}
 
 	d.mSent.Incr(1)
+	d.mSentParts.Incr(int64(msg.Len()))
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

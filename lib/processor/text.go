@@ -187,10 +187,11 @@ type Text struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount metrics.StatCounter
-	mSucc  metrics.StatCounter
-	mErr   metrics.StatCounter
-	mSent  metrics.StatCounter
+	mCount     metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewText returns a Text processor.
@@ -204,10 +205,11 @@ func NewText(
 
 		valueBytes: []byte(conf.Text.Value),
 
-		mCount: stats.GetCounter("processor.text.count"),
-		mSucc:  stats.GetCounter("processor.text.success"),
-		mErr:   stats.GetCounter("processor.text.error"),
-		mSent:  stats.GetCounter("processor.text.sent"),
+		mCount:     stats.GetCounter("processor.text.count"),
+		mSucc:      stats.GetCounter("processor.text.success"),
+		mErr:       stats.GetCounter("processor.text.error"),
+		mSent:      stats.GetCounter("processor.text.sent"),
+		mSentParts: stats.GetCounter("processor.text.parts.sent"),
 	}
 
 	t.interpolate = text.ContainsFunctionVariables(t.valueBytes)
@@ -256,6 +258,7 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	msgs := [1]types.Message{newMsg}
 
 	t.mSent.Incr(1)
+	t.mSentParts.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

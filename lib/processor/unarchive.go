@@ -133,12 +133,13 @@ type Unarchive struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount   metrics.StatCounter
-	mSucc    metrics.StatCounter
-	mErr     metrics.StatCounter
-	mSkipped metrics.StatCounter
-	mDropped metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSkipped   metrics.StatCounter
+	mDropped   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewUnarchive returns a Unarchive processor.
@@ -155,12 +156,13 @@ func NewUnarchive(
 		log:       log.NewModule(".processor.unarchive"),
 		stats:     stats,
 
-		mCount:   stats.GetCounter("processor.unarchive.count"),
-		mSucc:    stats.GetCounter("processor.unarchive.success"),
-		mErr:     stats.GetCounter("processor.unarchive.error"),
-		mSkipped: stats.GetCounter("processor.unarchive.skipped"),
-		mDropped: stats.GetCounter("processor.unarchive.dropped"),
-		mSent:    stats.GetCounter("processor.unarchive.sent"),
+		mCount:     stats.GetCounter("processor.unarchive.count"),
+		mSucc:      stats.GetCounter("processor.unarchive.success"),
+		mErr:       stats.GetCounter("processor.unarchive.error"),
+		mSkipped:   stats.GetCounter("processor.unarchive.skipped"),
+		mDropped:   stats.GetCounter("processor.unarchive.dropped"),
+		mSent:      stats.GetCounter("processor.unarchive.sent"),
+		mSentParts: stats.GetCounter("processor.unarchive.parts.sent"),
 	}, nil
 }
 
@@ -206,6 +208,7 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	}
 
 	d.mSent.Incr(1)
+	d.mSentParts.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

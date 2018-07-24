@@ -82,11 +82,12 @@ type Grok struct {
 	log   log.Modular
 	stats metrics.Type
 
-	mCount    metrics.StatCounter
-	mErrGrok  metrics.StatCounter
-	mErrJSONS metrics.StatCounter
-	mSucc     metrics.StatCounter
-	mSent     metrics.StatCounter
+	mCount     metrics.StatCounter
+	mErrGrok   metrics.StatCounter
+	mErrJSONS  metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewGrok returns a Grok processor.
@@ -118,11 +119,12 @@ func NewGrok(
 		log:      log.NewModule(".processor.grok"),
 		stats:    stats,
 
-		mCount:    stats.GetCounter("processor.grok.count"),
-		mErrGrok:  stats.GetCounter("processor.grok.error.grok_no_matches"),
-		mErrJSONS: stats.GetCounter("processor.grok.error.json_set"),
-		mSucc:     stats.GetCounter("processor.grok.success"),
-		mSent:     stats.GetCounter("processor.grok.sent"),
+		mCount:     stats.GetCounter("processor.grok.count"),
+		mErrGrok:   stats.GetCounter("processor.grok.error.grok_no_matches"),
+		mErrJSONS:  stats.GetCounter("processor.grok.error.json_set"),
+		mSucc:      stats.GetCounter("processor.grok.success"),
+		mSent:      stats.GetCounter("processor.grok.sent"),
+		mSentParts: stats.GetCounter("processor.grok.parts.sent"),
 	}
 	return g, nil
 }
@@ -175,6 +177,7 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	msgs := [1]types.Message{newMsg}
 
 	g.mSent.Incr(1)
+	g.mSentParts.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

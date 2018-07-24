@@ -27,6 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -194,5 +195,53 @@ func TestBatchTwoDiffParts(t *testing.T) {
 	}
 	if res != nil {
 		t.Error("Expected nil res")
+	}
+}
+
+func TestBatchCondition(t *testing.T) {
+	condConf := condition.NewConfig()
+	condConf.Type = "text"
+	condConf.Text.Operator = "contains"
+	condConf.Text.Arg = "end_batch"
+
+	conf := NewConfig()
+	conf.Batch.ByteSize = 1000
+	conf.Batch.Condition = condConf
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{[]byte("foo")}))
+	if len(msgs) != 0 {
+		t.Error("Expected no batch")
+	}
+	if !res.SkipAck() {
+		t.Error("Expected skip ack")
+	}
+
+	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{[]byte("bar")}))
+	if len(msgs) != 0 {
+		t.Error("Expected no batch")
+	}
+	if !res.SkipAck() {
+		t.Error("Expected skip ack")
+	}
+
+	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{[]byte("baz: end_batch")}))
+	if len(msgs) != 1 {
+		t.Fatal("Expected batch")
+	}
+
+	exp := [][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz: end_batch"),
+	}
+	if act := msgs[0].GetAll(); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong batch contents: %s != %s", act, exp)
 	}
 }

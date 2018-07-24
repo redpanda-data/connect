@@ -142,6 +142,7 @@ type ProcessMap struct {
 	mErrMisaligned      metrics.StatCounter
 	mErrMisalignedBatch metrics.StatCounter
 	mSent               metrics.StatCounter
+	mSentParts          metrics.StatCounter
 	mDropped            metrics.StatCounter
 }
 
@@ -150,7 +151,7 @@ func NewProcessMap(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	nsStats := metrics.Namespaced(stats, "processor.process_map")
-	nsLog := log.NewModule(".process_map")
+	nsLog := log.NewModule(".processor.process_map")
 
 	var children []Type
 	for _, pconf := range conf.ProcessMap.Processors {
@@ -168,7 +169,7 @@ func NewProcessMap(
 		postmap:        conf.ProcessMap.Postmap,
 		children:       children,
 
-		log: log.NewModule(".process_map"),
+		log: nsLog,
 
 		mCount:              stats.GetCounter("processor.process_map.count"),
 		mSkipped:            stats.GetCounter("processor.process_map.skipped"),
@@ -178,6 +179,7 @@ func NewProcessMap(
 		mErrMisaligned:      stats.GetCounter("processor.process_map.error.misaligned"),
 		mErrMisalignedBatch: stats.GetCounter("processor.process_map.error.misaligned_messages"),
 		mSent:               stats.GetCounter("processor.process_map.sent"),
+		mSentParts:          stats.GetCounter("processor.process_map.parts.sent"),
 		mDropped:            stats.GetCounter("processor.process_map.dropped"),
 	}
 
@@ -384,6 +386,7 @@ premapLoop:
 
 	if exp, act := len(reqParts), resMsg.Len(); exp != act {
 		p.mSent.Incr(1)
+		p.mSentParts.Incr(int64(payload.Len()))
 		p.mErr.Incr(1)
 		p.mErrMisalignedBatch.Incr(1)
 		p.log.Errorf("Misaligned processor result batch. Expected %v messages, received %v\n", exp, act)
@@ -420,6 +423,7 @@ premapLoop:
 	}
 
 	p.mSent.Incr(1)
+	p.mSentParts.Incr(int64(payload.Len()))
 	return
 }
 

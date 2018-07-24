@@ -68,9 +68,10 @@ type Sample struct {
 	retain float64
 	gen    *rand.Rand
 
-	mCount   metrics.StatCounter
-	mDropped metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mDropped   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
 }
 
 // NewSample returns a Sample processor.
@@ -85,9 +86,10 @@ func NewSample(
 		retain: conf.Sample.Retain / 100.0,
 		gen:    gen,
 
-		mCount:   stats.GetCounter("processor.sample.count"),
-		mDropped: stats.GetCounter("processor.sample.dropped"),
-		mSent:    stats.GetCounter("processor.sample.sent"),
+		mCount:     stats.GetCounter("processor.sample.count"),
+		mDropped:   stats.GetCounter("processor.sample.dropped"),
+		mSent:      stats.GetCounter("processor.sample.sent"),
+		mSentParts: stats.GetCounter("processor.sample.parts.sent"),
 	}, nil
 }
 
@@ -101,6 +103,7 @@ func (s *Sample) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		return nil, types.NewSimpleResponse(nil)
 	}
 	s.mSent.Incr(1)
+	s.mSentParts.Incr(int64(msg.Len()))
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }
