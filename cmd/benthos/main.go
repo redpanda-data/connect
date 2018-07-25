@@ -221,7 +221,8 @@ var (
 //------------------------------------------------------------------------------
 
 func addExamples(examples string, conf *Config) {
-	var inputType, bufferType, processorType, conditionType, outputType string
+	var inputType, bufferType, conditionType, outputType string
+	var processorTypes []string
 	for _, e := range strings.Split(examples, ",") {
 		if _, exists := input.Constructors[e]; exists && len(inputType) == 0 {
 			inputType = e
@@ -230,7 +231,7 @@ func addExamples(examples string, conf *Config) {
 			bufferType = e
 		}
 		if _, exists := processor.Constructors[e]; exists {
-			processorType = e
+			processorTypes = append(processorTypes, e)
 		}
 		if _, exists := condition.Constructors[e]; exists {
 			conditionType = e
@@ -245,10 +246,12 @@ func addExamples(examples string, conf *Config) {
 	if len(bufferType) > 0 {
 		conf.Buffer.Type = bufferType
 	}
-	if len(processorType) > 0 {
-		procConf := processor.NewConfig()
-		procConf.Type = processorType
-		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
+	if len(processorTypes) > 0 {
+		for _, procType := range processorTypes {
+			procConf := processor.NewConfig()
+			procConf.Type = procType
+			conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
+		}
 	}
 	if len(conditionType) > 0 {
 		condConf := condition.NewConfig()
