@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.19.1 - 2018-07-25
+
 ### Added
 
 - Ability to create batches via conditions on message payloads in the `batch`
