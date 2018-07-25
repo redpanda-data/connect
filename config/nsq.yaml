@@ -28,6 +28,9 @@ output:
     nsqd_tcp_address: localhost:4150
     topic: benthos_messages
     user_agent: benthos_producer
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

@@ -41,6 +41,9 @@ output:
       enabled: false
       request_url: ""
     url: ws://localhost:4195/post/ws
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

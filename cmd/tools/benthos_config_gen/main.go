@@ -34,6 +34,7 @@ import (
 	"github.com/Jeffail/benthos/lib/buffer"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/manager"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
@@ -50,6 +51,7 @@ type Config struct {
 	Buffer   buffer.Config   `json:"buffer" yaml:"buffer"`
 	Pipeline pipeline.Config `json:"pipeline" yaml:"pipeline"`
 	Output   output.Config   `json:"output" yaml:"output"`
+	Manager  manager.Config  `json:"resources" yaml:"resources"`
 	Logger   log.Config      `json:"logger" yaml:"logger"`
 	Metrics  metrics.Config  `json:"metrics" yaml:"metrics"`
 }
@@ -62,6 +64,7 @@ func NewConfig() Config {
 		Buffer:   buffer.NewConfig(),
 		Pipeline: pipeline.NewConfig(),
 		Output:   output.NewConfig(),
+		Manager:  manager.NewConfig(),
 		Logger:   log.NewConfig(),
 		Metrics:  metrics.NewConfig(),
 	}
@@ -102,12 +105,19 @@ func (c Config) Sanitised(sanitBuffer, sanitPipe bool) (interface{}, error) {
 		return nil, err
 	}
 
+	var mgrConf interface{}
+	mgrConf, err = manager.SanitiseConfig(c.Manager)
+	if err != nil {
+		return nil, err
+	}
+
 	return struct {
 		HTTP     interface{} `json:"http" yaml:"http"`
 		Input    interface{} `json:"input" yaml:"input"`
 		Buffer   interface{} `json:"buffer" yaml:"buffer"`
 		Pipeline interface{} `json:"pipeline" yaml:"pipeline"`
 		Output   interface{} `json:"output" yaml:"output"`
+		Manager  interface{} `json:"resources" yaml:"resources"`
 		Logger   interface{} `json:"logger" yaml:"logger"`
 		Metrics  interface{} `json:"metrics" yaml:"metrics"`
 	}{
@@ -116,6 +126,7 @@ func (c Config) Sanitised(sanitBuffer, sanitPipe bool) (interface{}, error) {
 		Buffer:   bufConf,
 		Pipeline: pipeConf,
 		Output:   outConf,
+		Manager:  mgrConf,
 		Logger:   c.Logger,
 		Metrics:  c.Metrics,
 	}, nil

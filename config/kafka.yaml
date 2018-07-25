@@ -39,6 +39,9 @@ output:
     timeout_ms: 5000
     tls_enable: false
     topic: benthos_stream
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

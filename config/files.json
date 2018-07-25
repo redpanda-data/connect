@@ -25,6 +25,10 @@
 			"path": "${!count:files}-${!timestamp_unix_nano}.txt"
 		}
 	},
+	"resources": {
+		"caches": {},
+		"conditions": {}
+	},
 	"logger": {
 		"prefix": "benthos",
 		"log_level": "INFO",

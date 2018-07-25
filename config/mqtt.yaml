@@ -27,6 +27,9 @@ output:
     topic: benthos_topic
     urls:
     - tcp://localhost:1883
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

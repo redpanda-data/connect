@@ -39,6 +39,9 @@ output:
     path: ${!count:files}-${!timestamp_unix_nano}.txt
     region: eu-west-1
     timeout_s: 5
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

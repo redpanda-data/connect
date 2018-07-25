@@ -38,6 +38,10 @@
 			"url": "amqp://guest:guest@localhost:5672/"
 		}
 	},
+	"resources": {
+		"caches": {},
+		"conditions": {}
+	},
 	"logger": {
 		"prefix": "benthos",
 		"log_level": "INFO",

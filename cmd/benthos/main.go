@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime/pprof"
+	"strings"
 
 	"flag"
 	"net/http"
@@ -167,6 +168,15 @@ var (
 		"swap-envs", true,
 		"Swap ${FOO} patterns in config file with environment variables",
 	)
+	examples = flag.String(
+		"examples", "",
+		"Add specific examples when printing a configuration file with"+
+			" `--print-yaml` or `--print-json` by listing comma separated"+
+			" types. Types can be any input, buffer, processor or output. For"+
+			" example: `benthos --print-yaml --examples websocket,jmespath`"+
+			" would print a config with a websocket input and output and a"+
+			" jmespath processor.",
+	)
 	printInputs = flag.Bool(
 		"list-inputs", false,
 		"Print a list of available input options, then exit",
@@ -209,6 +219,49 @@ var (
 )
 
 //------------------------------------------------------------------------------
+
+func addExamples(examples string, conf *Config) {
+	var inputType, bufferType, processorType, conditionType, outputType string
+	for _, e := range strings.Split(examples, ",") {
+		if _, exists := input.Constructors[e]; exists && len(inputType) == 0 {
+			inputType = e
+		}
+		if _, exists := buffer.Constructors[e]; exists {
+			bufferType = e
+		}
+		if _, exists := processor.Constructors[e]; exists {
+			processorType = e
+		}
+		if _, exists := condition.Constructors[e]; exists {
+			conditionType = e
+		}
+		if _, exists := output.Constructors[e]; exists {
+			outputType = e
+		}
+	}
+	if len(inputType) > 0 {
+		conf.Input.Type = inputType
+	}
+	if len(bufferType) > 0 {
+		conf.Buffer.Type = bufferType
+	}
+	if len(processorType) > 0 {
+		procConf := processor.NewConfig()
+		procConf.Type = processorType
+		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
+	}
+	if len(conditionType) > 0 {
+		condConf := condition.NewConfig()
+		condConf.Type = conditionType
+		procConf := processor.NewConfig()
+		procConf.Type = "filter"
+		procConf.Filter.Config = condConf
+		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
+	}
+	if len(outputType) > 0 {
+		conf.Output.Type = outputType
+	}
+}
 
 // bootstrap reads cmd args and either parses and config file or prints helper
 // text and exits.
@@ -265,6 +318,11 @@ func bootstrap() Config {
 	if *showConfigJSON || *showConfigYAML {
 		var outConf interface{}
 		var err error
+
+		if len(*examples) > 0 {
+			addExamples(*examples, &conf)
+		}
+
 		if !*showAll {
 			if outConf, err = conf.Sanitised(); err != nil {
 				fmt.Fprintln(os.Stderr, fmt.Sprintf("Configuration sanitise error: %v", err))

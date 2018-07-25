@@ -29,6 +29,9 @@ output:
     stream_path: /get/stream
     timeout_ms: 5000
     ws_path: /get/ws
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

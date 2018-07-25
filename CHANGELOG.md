@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Ability to create batches via conditions on message payloads in the `batch`
   processor.
+- New `--examples` flag for generating specific examples from Benthos.
 
 ## 0.19.0 - 2018-07-23
 

@@ -21,6 +21,9 @@ output:
   redis_list:
     key: benthos_list
     url: tcp://localhost:6379
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

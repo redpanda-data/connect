@@ -16,6 +16,9 @@ pipeline:
 output:
   type: inproc
   inproc: ""
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

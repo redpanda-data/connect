@@ -69,6 +69,9 @@ output:
     timeout_ms: 5000
     url: http://localhost:4195/post
     verb: POST
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

@@ -37,6 +37,10 @@
 			]
 		}
 	},
+	"resources": {
+		"caches": {},
+		"conditions": {}
+	},
 	"logger": {
 		"prefix": "benthos",
 		"log_level": "INFO",

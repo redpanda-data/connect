@@ -48,6 +48,10 @@
 			"timeout_s": 5
 		}
 	},
+	"resources": {
+		"caches": {},
+		"conditions": {}
+	},
 	"logger": {
 		"prefix": "benthos",
 		"log_level": "INFO",

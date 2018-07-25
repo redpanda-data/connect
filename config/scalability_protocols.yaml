@@ -28,6 +28,9 @@ output:
     socket_type: PUSH
     urls:
     - tcp://localhost:5556
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

@@ -22,6 +22,9 @@ output:
     outputs: {}
     prefix: ""
     timeout_ms: 5000
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

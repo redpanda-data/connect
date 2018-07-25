@@ -28,6 +28,9 @@ output:
     timeout_ms: 5000
     urls:
     - http://localhost:9200
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

@@ -22,6 +22,9 @@ output:
     subject: benthos_messages
     urls:
     - nats://localhost:4222
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

@@ -48,6 +48,10 @@
 			"topic": "benthos_stream"
 		}
 	},
+	"resources": {
+		"caches": {},
+		"conditions": {}
+	},
 	"logger": {
 		"prefix": "benthos",
 		"log_level": "INFO",

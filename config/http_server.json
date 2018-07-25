@@ -36,6 +36,10 @@
 			"ws_path": "/get/ws"
 		}
 	},
+	"resources": {
+		"caches": {},
+		"conditions": {}
+	},
 	"logger": {
 		"prefix": "benthos",
 		"log_level": "INFO",

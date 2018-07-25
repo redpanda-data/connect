@@ -38,6 +38,9 @@ output:
   type: stdout
   stdout:
     delimiter: ""
+resources:
+  caches: {}
+  conditions: {}
 logger:
   prefix: benthos
   log_level: INFO

@@ -82,14 +82,23 @@ output:
   type: stdout
 ```
 
-In order to make this process easier Benthos generates usable configuration
-examples in the [config directory](../config). There is a config file for each
-input and output type, and inside the [processors](../config/processors) sub
-directory there is a file showing each processor type, and so on.
+In order to make this process easier Benthos is able to generate usable
+configuration examples for any types, and you can do this from the binary using
+the `--examples` flag in combination with `--print-yaml` or `--print-json`. If,
+for example, we wanted to generate a config with a websocket input, a Kafka
+output and a JMESPath processor in the middle, we could do it with the following
+command:
 
-If you are a user interested in sending MQTT messages to Kafka you need only
-make a copy of `config/kafka.yaml`, copy some lines from `config/mqtt.yaml`, and
-you have a runnable config file. The file will also include other useful config
+``` yaml
+benthos --print-yaml --examples websocket,kafka,jmespath
+```
+
+There are also examples within the [config directory](../config), where there is
+a config file for each input and output type, and inside the
+[processors](../config/processors) subdirectory there is a file showing each
+processor type, and so on.
+
+All of these generated configuration examples also include other useful config
 sections such as `metrics`, `logging`, etc with sensible defaults.
 
 ### Printing Every Field
