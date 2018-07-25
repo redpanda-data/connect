@@ -22,6 +22,7 @@ package reader
 
 import (
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -100,14 +101,20 @@ func (w *Websocket) Connect() error {
 
 	headers := http.Header{}
 
-	if err := w.conf.Sign(&http.Request{
+	purl, err := url.Parse(w.conf.URL)
+	if err != nil {
+		return err
+	}
+
+	if err = w.conf.Sign(&http.Request{
+		URL:    purl,
 		Header: headers,
 	}); err != nil {
 		return err
 	}
 
-	client, _, err := websocket.DefaultDialer.Dial(w.conf.URL, headers)
-	if err != nil {
+	var client *websocket.Conn
+	if client, _, err = websocket.DefaultDialer.Dial(w.conf.URL, headers); err != nil {
 		return err
 	}
 
