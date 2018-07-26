@@ -84,13 +84,13 @@ output:
 
 In order to make this process easier Benthos is able to generate usable
 configuration examples for any types, and you can do this from the binary using
-the `--examples` flag in combination with `--print-yaml` or `--print-json`. If,
+the `--example` flag in combination with `--print-yaml` or `--print-json`. If,
 for example, we wanted to generate a config with a websocket input, a Kafka
 output and a JMESPath processor in the middle, we could do it with the following
 command:
 
 ``` yaml
-benthos --print-yaml --examples websocket,kafka,jmespath
+benthos --print-yaml --example websocket,kafka,jmespath
 ```
 
 There are also examples within the [config directory](../config), where there is

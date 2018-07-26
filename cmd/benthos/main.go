@@ -169,11 +169,11 @@ var (
 		"Swap ${FOO} patterns in config file with environment variables",
 	)
 	examples = flag.String(
-		"examples", "",
+		"example", "",
 		"Add specific examples when printing a configuration file with"+
 			" `--print-yaml` or `--print-json` by listing comma separated"+
 			" types. Types can be any input, buffer, processor or output. For"+
-			" example: `benthos --print-yaml --examples websocket,jmespath`"+
+			" example: `benthos --print-yaml --example websocket,jmespath`"+
 			" would print a config with a websocket input and output and a"+
 			" jmespath processor.",
 	)
