@@ -266,6 +266,10 @@ pipeline:
       value: ${PROCESSOR_JSON_VALUE}
     merge_json:
       retain_parts: ${PROCESSOR_MERGE_JSON_RETAIN_PARTS:false}
+    metadata:
+      key: ${PROCESSOR_METADATA_KEY:example}
+      operator: ${PROCESSOR_METADATA_OPERATOR:set}
+      value: ${PROCESSOR_METADATA_VALUE:${!hostname}}
     sample:
       retain: ${PROCESSOR_SAMPLE_RETAIN:10}
       seed: ${PROCESSOR_SAMPLE_SEED:0}

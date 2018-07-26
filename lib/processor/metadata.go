@@ -36,7 +36,7 @@ func init() {
 		constructor: NewMetadata,
 		description: `
 Performs operations on the metadata of a message. Metadata are key/value pairs
-that are associated to a message within a Benthos pipeline. Message batches
+that are associated with a message within a Benthos pipeline. Message batches
 usually carry the metadata of the last message to be added. Metadata values can
 be referred to using configuration
 [interpolation functions](../config_interpolation.md#metadata),
@@ -61,7 +61,7 @@ Sets the value of a metadata key.`,
 type MetadataConfig struct {
 	Operator string `json:"operator" yaml:"operator"`
 	Key      string `json:"key" yaml:"key"`
-	Value    []byte `json:"value" yaml:"value"`
+	Value    string `json:"value" yaml:"value"`
 }
 
 // NewMetadataConfig returns a MetadataConfig with default values.
@@ -69,7 +69,7 @@ func NewMetadataConfig() MetadataConfig {
 	return MetadataConfig{
 		Operator: "set",
 		Key:      "example",
-		Value:    []byte(`${!hostname}`),
+		Value:    `${!hostname}`,
 	}
 }
 
@@ -120,7 +120,7 @@ func NewMetadata(
 		log:   log.NewModule(".processor.metadata"),
 		stats: stats,
 
-		valueBytes: conf.Metadata.Value,
+		valueBytes: []byte(conf.Metadata.Value),
 
 		mCount:     stats.GetCounter("processor.metadata.count"),
 		mErr:       stats.GetCounter("processor.metadata.error"),

@@ -374,6 +374,10 @@ pipeline:
     merge_json:
       parts: []
       retain_parts: false
+    metadata:
+      operator: set
+      key: example
+      value: ${!hostname}
     process_field:
       parts: []
       path: ""

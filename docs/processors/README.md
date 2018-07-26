@@ -52,14 +52,15 @@ element with be selected, and so on.
 17. [`jmespath`](#jmespath)
 18. [`json`](#json)
 19. [`merge_json`](#merge_json)
-20. [`noop`](#noop)
-21. [`process_field`](#process_field)
-22. [`process_map`](#process_map)
-23. [`sample`](#sample)
-24. [`select_parts`](#select_parts)
-25. [`split`](#split)
-26. [`text`](#text)
-27. [`unarchive`](#unarchive)
+20. [`metadata`](#metadata)
+21. [`noop`](#noop)
+22. [`process_field`](#process_field)
+23. [`process_map`](#process_map)
+24. [`sample`](#sample)
+25. [`select_parts`](#select_parts)
+26. [`split`](#split)
+27. [`text`](#text)
+28. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -110,6 +111,9 @@ has not yet been reached. Batch parameters are only triggered when a message is
 added, meaning a pending batch can last beyond this period if no messages are
 added since the period was reached.
 
+The metadata of the resulting batch will exactly match the metadata of the last
+message to enter the batch.
+
 When a batch is sent to an output the behaviour will differ depending on the
 protocol. If the output type supports multipart messages then the batch is sent
 as a single message with multiple parts. If the output only supports single part
@@ -151,6 +155,9 @@ For example, if we started with N messages each containing M parts, pushed those
 messages into Kafka by splitting the parts. We could now consume our N*M
 messages from Kafka and squash them back into M part messages with the combine
 processor, and then subsequently push them into something like ZMQ.
+
+The metadata of the resulting batch will exactly match the metadata of the last
+message to enter the batch.
 
 If a message received has more parts than the 'combine' amount it will be sent
 unchanged with its original parts. This occurs even if there are cached parts
@@ -605,6 +612,34 @@ Parses selected message parts as JSON blobs, attempts to merge them into one
 single JSON value and then writes it to a new message part at the end of the
 message. Merged parts are removed unless `retain_parts` is set to
 true.
+
+## `metadata`
+
+``` yaml
+type: metadata
+metadata:
+  key: example
+  operator: set
+  value: ${!hostname}
+```
+
+Performs operations on the metadata of a message. Metadata are key/value pairs
+that are associated to a message within a Benthos pipeline. Message batches
+usually carry the metadata of the last message to be added. Metadata values can
+be referred to using configuration
+[interpolation functions](../config_interpolation.md#metadata),
+which allow you to set fields in certain outputs using these dynamic values.
+
+This processor will interpolate functions within the 'value' field, you can find
+a list of functions [here](../config_interpolation.md#functions). This allows
+you to set the contents of a metadata field using values taken from the message
+payload.
+
+### Operations
+
+#### `set`
+
+Sets the value of a metadata key.
 
 ## `noop`
 

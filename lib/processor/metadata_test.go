@@ -65,7 +65,7 @@ func TestMetadataSet(t *testing.T) {
 		conf := NewConfig()
 		conf.Metadata.Operator = "set"
 		conf.Metadata.Key = test.key
-		conf.Metadata.Value = []byte(test.value)
+		conf.Metadata.Value = test.value
 
 		mSet, err := NewMetadata(conf, nil, log.Noop(), metrics.Noop())
 		if err != nil {
