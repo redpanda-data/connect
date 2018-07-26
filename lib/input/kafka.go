@@ -47,10 +47,10 @@ server.
 
 This input adds the following metadata fields to each message:
 
-- Key
-- Topic
-- Partition
-- Offset
+- key
+- topic
+- partition
+- offset
 - All headers (version 0.11+)
 
 You can access these metadata fields using
