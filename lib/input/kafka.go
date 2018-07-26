@@ -41,7 +41,20 @@ you wish to balance partitions across a consumer group look at the
 The target version by default will be the oldest supported, as it is expected
 that the server will be backwards compatible. In order to support newer client
 features you should increase this version up to the known version of the target
-server.`,
+server.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+- Key
+- Topic
+- Partition
+- Offset
+- All headers (version 0.11+)
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).`,
 	}
 }
 

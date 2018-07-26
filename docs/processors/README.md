@@ -624,7 +624,7 @@ metadata:
 ```
 
 Performs operations on the metadata of a message. Metadata are key/value pairs
-that are associated to a message within a Benthos pipeline. Message batches
+that are associated with a message within a Benthos pipeline. Message batches
 usually carry the metadata of the last message to be added. Metadata values can
 be referred to using configuration
 [interpolation functions](../config_interpolation.md#metadata),

@@ -398,6 +398,19 @@ that the server will be backwards compatible. In order to support newer client
 features you should increase this version up to the known version of the target
 server.
 
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+- Key
+- Topic
+- Partition
+- Offset
+- All headers (version 0.11+)
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
+
 ## `kafka_balanced`
 
 ``` yaml
@@ -417,6 +430,19 @@ kafka_balanced:
 Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+- key
+- topic
+- partition
+- offset
+- All headers (version 0.11+)
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
 
 ## `mqtt`
 

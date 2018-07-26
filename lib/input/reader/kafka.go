@@ -22,6 +22,7 @@ package reader
 
 import (
 	"crypto/tls"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -256,7 +257,17 @@ func (k *Kafka) Read() (types.Message, error) {
 		return nil, types.ErrTypeClosed
 	}
 	k.offset = data.Offset + 1
-	return types.NewMessage([][]byte{data.Value}), nil
+	msg := types.NewMessage([][]byte{data.Value})
+
+	msg.SetMetadata("key", string(data.Key))
+	msg.SetMetadata("partition", strconv.Itoa(int(data.Partition)))
+	msg.SetMetadata("topic", data.Topic)
+	msg.SetMetadata("offset", strconv.Itoa(int(data.Offset)))
+	for _, hdr := range data.Headers {
+		msg.SetMetadata(string(hdr.Key), string(hdr.Value))
+	}
+
+	return msg, nil
 }
 
 // Acknowledge instructs whether the current offset should be committed.
