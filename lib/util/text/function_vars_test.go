@@ -22,6 +22,7 @@ package text
 
 import (
 	"fmt"
+	"github.com/Jeffail/benthos/lib/types"
 	"os"
 	"strconv"
 	"testing"
@@ -51,29 +52,112 @@ func TestFunctionVarDetection(t *testing.T) {
 	}
 }
 
+func TestJSONFunction(t *testing.T) {
+	type testCase struct {
+		name   string
+		input  []string
+		arg    string
+		result string
+	}
+
+	tests := []testCase{
+		{
+			name: "json func 1",
+			input: []string{
+				`{"foo":{"bar":"baz"}}`,
+			},
+			arg:    "foo ${!json_field:foo.bar,0} baz",
+			result: "foo baz baz",
+		},
+		{
+			name: "json func 2",
+			input: []string{
+				`{"foo":{"bar":"baz"}}`,
+			},
+			arg:    "foo ${!json_field:foo.bar,1} baz",
+			result: "foo null baz",
+		},
+		{
+			name: "json func 3",
+			input: []string{
+				`{"foo":{"bar":"baz"}}`,
+			},
+			arg:    "foo ${!json_field:foo.baz,0} baz",
+			result: "foo null baz",
+		},
+		{
+			name: "json func 4",
+			input: []string{
+				`{"foo":{"bar":{"baz":1}}}`,
+			},
+			arg:    "foo ${!json_field:foo.bar,0} baz",
+			result: `foo {"baz":1} baz`,
+		},
+		{
+			name: "json func 5",
+			input: []string{
+				`{"foo":{"bar":{"baz":1}}}`,
+			},
+			arg:    "foo ${!json_field:foo.bar,0} baz",
+			result: `foo {"baz":1} baz`,
+		},
+		{
+			name: "json func 6",
+			input: []string{
+				`{"foo":{"bar":5}}`,
+			},
+			arg:    "foo ${!json_field:foo.bar} baz",
+			result: `foo 5 baz`,
+		},
+		{
+			name: "json func 7",
+			input: []string{
+				`{"foo":{"bar":false}}`,
+			},
+			arg:    "foo ${!json_field:foo.bar} baz",
+			result: `foo false baz`,
+		},
+	}
+
+	for _, test := range tests {
+		exp := test.result
+		parts := [][]byte{}
+		for _, input := range test.input {
+			parts = append(parts, []byte(input))
+		}
+		act := string(ReplaceFunctionVariables(
+			types.NewMessage(parts),
+			[]byte(test.arg),
+		))
+		if act != exp {
+			t.Errorf("Wrong result for test '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestFunctionSwapping(t *testing.T) {
 	hostname, _ := os.Hostname()
 
 	exp := fmt.Sprintf("foo %v baz", hostname)
-	act := string(ReplaceFunctionVariables([]byte("foo ${!hostname} baz")))
+	act := string(ReplaceFunctionVariables(nil, []byte("foo ${!hostname} baz")))
 	if act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
 	exp = "foo ${!} baz"
-	act = string(ReplaceFunctionVariables([]byte("foo ${!} baz")))
+	act = string(ReplaceFunctionVariables(nil, []byte("foo ${!} baz")))
 	if act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
 	exp = "foo ${!does_not_exist} baz"
-	act = string(ReplaceFunctionVariables([]byte("foo ${!does_not_exist} baz")))
+	act = string(ReplaceFunctionVariables(nil, []byte("foo ${!does_not_exist} baz")))
 	if act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
 	now := time.Now()
-	tStamp := string(ReplaceFunctionVariables([]byte("${!timestamp_unix_nano}")))
+	tStamp := string(ReplaceFunctionVariables(nil, []byte("${!timestamp_unix_nano}")))
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -86,7 +170,7 @@ func TestFunctionSwapping(t *testing.T) {
 	}
 
 	now = time.Now()
-	tStamp = string(ReplaceFunctionVariables([]byte("${!timestamp_unix}")))
+	tStamp = string(ReplaceFunctionVariables(nil, []byte("${!timestamp_unix}")))
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -99,7 +183,7 @@ func TestFunctionSwapping(t *testing.T) {
 	}
 
 	now = time.Now()
-	tStamp = string(ReplaceFunctionVariables([]byte("${!timestamp_unix:10}")))
+	tStamp = string(ReplaceFunctionVariables(nil, []byte("${!timestamp_unix:10}")))
 
 	var secondsF float64
 	secondsF, err = strconv.ParseFloat(tStamp, 64)
@@ -113,7 +197,7 @@ func TestFunctionSwapping(t *testing.T) {
 	}
 
 	now = time.Now()
-	tStamp = string(ReplaceFunctionVariables([]byte("${!timestamp}")))
+	tStamp = string(ReplaceFunctionVariables(nil, []byte("${!timestamp}")))
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {
@@ -133,7 +217,7 @@ func TestEchoFunction(t *testing.T) {
 	}
 
 	for input, exp := range tests {
-		act := string(ReplaceFunctionVariables([]byte(input)))
+		act := string(ReplaceFunctionVariables(nil, []byte(input)))
 		if exp != act {
 			t.Errorf("Wrong results for input (%v): %v != %v", input, act, exp)
 		}
@@ -153,7 +237,7 @@ func TestCountersFunction(t *testing.T) {
 	for _, test := range tests {
 		input := test[0]
 		exp := test[1]
-		act := string(ReplaceFunctionVariables([]byte(input)))
+		act := string(ReplaceFunctionVariables(nil, []byte(input)))
 		if exp != act {
 			t.Errorf("Wrong results for input (%v): %v != %v", input, act, exp)
 		}

@@ -33,7 +33,7 @@
 	},
 	"logger": {
 		"prefix": "benthos",
-		"log_level": "INFO",
+		"level": "INFO",
 		"add_timestamp": true,
 		"json_format": true
 	},

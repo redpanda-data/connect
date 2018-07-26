@@ -280,29 +280,8 @@ func TestDecompressIndexBounds(t *testing.T) {
 		if exp, act := result.value, string(msgs[0].GetAll()[result.index]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
-	}
-}
-
-func TestDecompressEmpty(t *testing.T) {
-	conf := NewConfig()
-	conf.Decompress.Parts = []int{0, 1}
-
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewDecompress(conf, nil, testLog, metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{}))
-	if len(msgs) > 0 {
-		t.Error("Expected failure with zero part message")
-	}
-
-	msgs, _ = proc.ProcessMessage(types.NewMessage(
-		[][]byte{[]byte("first"), []byte("second")},
-	))
-	if len(msgs) > 0 {
-		t.Error("Expected failure with bad data")
+		if exp, act := result.value, string(msgs[0].GetAll()[(result.index+1)%5]); exp == act {
+			t.Errorf("Processor was applied to wrong index %v: %v != %v", (result.index+1)%5, act, exp)
+		}
 	}
 }

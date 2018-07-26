@@ -8,8 +8,8 @@ Environment variables are resolved and interpolated into the config only once at
 start up.
 
 Functions are resolved each time they are used. However, only certain fields in
-a config will actually support and interpolate these expressions (
-`insert_part.contents`, for example). If you aren't sure that a field in a
+a config will actually support and interpolate these expressions
+(`insert_part.contents`, for example). If you aren't sure that a field in a
 config section supports functions you should read its respective documentation.
 
 ## Environment Variables
@@ -22,31 +22,11 @@ single-in-single-out bridge config.
 
 ## Example
 
-Let's say you plan to bridge a Kafka deployment to a RabbitMQ exchange. You are
-able to write a short config for this:
-
-``` yaml
-input:
-  type: kafka_balanced
-  kafka_balanced:
-    addresses:
-    - localhost:9092
-    consumer_group: benthos_bridge_consumer
-    topics:
-    - haha_business
-output:
-  type: amqp
-  amqp:
-    url: amqp://localhost:5672/
-    exchange: kafka_bridge
-    exchange_type: direct
-    key: benthos-key
-```
-
-But we might not know the addresses of our Kafka brokers until deployment, and
-our deployment method makes it much easier to specify them through environment
-variables than by generating config files. Let's replace the broker list with
-an environment variable, and do the same with the RabbitMQ URL:
+Let's say you plan to bridge a Kafka deployment to a RabbitMQ exchange but we
+want to resolve the addresses of these respective services after deployment
+using environment variables. In this case we can replace the broker list in a
+Kafka config section with an environment variable, and do the same with the
+RabbitMQ URL:
 
 ``` yaml
 input:
@@ -76,51 +56,42 @@ KAFKA_BROKERS="foo:9092,bar:9092" \
 	benthos -c ./our_config.yaml
 ```
 
-Which would run with a configuration equivalent to:
-
-``` yaml
-input:
-  type: kafka_balanced
-  kafka_balanced:
-    addresses:
-    - "foo:9092,bar:9092"
-    consumer_group: benthos_bridge_consumer
-    topics:
-    - haha_business
-output:
-  type: amqp
-  amqp:
-    url: amqp://baz:5672/
-    exchange: kafka_bridge
-    exchange_type: direct
-    key: benthos-key
-```
-
 ## Functions
 
 The syntax for functions is `${!function-name}`, or `${!function-name:arg}` if
 the function takes an argument, where `function-name` should be replaced with
 one of the following function names:
 
+### `json_field`
+
+Resolves to the value of a JSON field within the message payload located by a
+dot-path specified as an argument. The message referred to will depend on the
+context of where the function is called. With a message containing
+`{"foo":{"bar":"hello world"}}` the function `${!json_field:foo.bar}` would
+resolve to `hello world`.
+
+When applied to a batch of message parts this function targets the first message
+part by default. It is possible to specify a target part by following the path
+with a comma and part number, e.g. `${!json_field:foo.bar,2}` would target the
+field `foo.bar` within the third message part in the batch.
+
 ### `timestamp_unix_nano`
 
-The `timestamp_unix_nano` function resolves to the current unix timestamp in
-nanoseconds. E.g. `foo ${!timestamp_unix_nano} bar` might resolve to
-`foo 1517412152475689615 bar`.
+Resolves to the current unix timestamp in nanoseconds. E.g.
+`foo ${!timestamp_unix_nano} bar` prints `foo 1517412152475689615 bar`.
 
 ### `timestamp_unix`
 
-The `timestamp_unix` function resolves to the current unix timestamp in seconds.
-E.g. `foo ${!timestamp_unix} bar` might resolve to `foo 1517412152 bar`. You can
-add fractional precision up to the nanosecond by specifying the precision as an
-argument, e.g. `${!timestamp_unix:3}` for millisecond precision.
+Resolves to the current unix timestamp in seconds. E.g.
+`foo ${!timestamp_unix} bar` prints `foo 1517412152 bar`. You can add fractional
+precision up to the nanosecond by specifying the precision as an argument, e.g.
+`${!timestamp_unix:3}` for millisecond precision.
 
 ### `timestamp`
 
-The `timestamp` function will print the current time in a custom format
-specified by the argument. The format is defined by showing how the reference
-time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it
-were the value.
+Prints the current time in a custom format specified by the argument. The format
+is defined by showing how the reference time, defined to be
+`Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.
 
 A fractional second is represented by adding a period and zeros to the end of
 the seconds section of layout string, as in `15:04:05.000` to format a time
@@ -134,5 +105,5 @@ allowing you to specify multiple unique counters in your configuration.
 
 ### `hostname`
 
-The `hostname` function resolves to the hostname of the machine running Benthos.
-E.g. `foo ${!hostname} bar` might resolve to `foo glados bar`.
+Resolves to the hostname of the machine running Benthos. E.g.
+`foo ${!hostname} bar` might resolve to `foo glados bar`.

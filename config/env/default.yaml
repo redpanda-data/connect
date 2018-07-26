@@ -428,7 +428,7 @@ output:
 logger:
   add_timestamp: ${LOGGER_ADD_TIMESTAMP:true}
   json_format: ${LOGGER_JSON_FORMAT:true}
-  log_level: ${LOGGER_LOG_LEVEL:INFO}
+  level: ${LOGGER_LEVEL:INFO}
   prefix: ${LOGGER_PREFIX:benthos}
 metrics:
   prefix: ${METRICS_PREFIX:benthos}

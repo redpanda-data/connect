@@ -190,15 +190,17 @@ func (f fakeInfo) Sys() interface{} {
 	return nil
 }
 
-func (d *Archive) createHeader(body []byte) os.FileInfo {
-	path := d.conf.Path
-	if d.interpolatePath {
-		path = string(text.ReplaceFunctionVariables(d.pathBytes))
-	}
-	return fakeInfo{
-		name: path,
-		size: int64(len(body)),
-		mode: 0666,
+func (d *Archive) createHeaderFunc(msg types.Message) func([]byte) os.FileInfo {
+	return func(body []byte) os.FileInfo {
+		path := d.conf.Path
+		if d.interpolatePath {
+			path = string(text.ReplaceFunctionVariables(msg, d.pathBytes))
+		}
+		return fakeInfo{
+			name: path,
+			size: int64(len(body)),
+			mode: 0666,
+		}
 	}
 }
 
@@ -214,7 +216,7 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		return nil, types.NewSimpleResponse(nil)
 	}
 
-	newPart, err := d.archive(d.createHeader, msg.GetAll())
+	newPart, err := d.archive(d.createHeaderFunc(msg), msg.GetAll())
 	if err != nil {
 		d.log.Errorf("Failed to create archive: %v\n", err)
 		d.mErr.Incr(1)

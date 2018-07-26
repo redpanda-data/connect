@@ -124,29 +124,22 @@ func NewDecode(
 func (c *Decode) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 
-	newMsg := types.NewMessage(nil)
-	lParts := msg.Len()
+	newMsg := msg.ShallowCopy()
 
-	noParts := len(c.conf.Parts) == 0
-	for i, part := range msg.GetAll() {
-		isTarget := noParts
-		if !isTarget {
-			nI := i - lParts
-			for _, t := range c.conf.Parts {
-				if t == nI || t == i {
-					isTarget = true
-					break
-				}
-			}
+	targetParts := c.conf.Parts
+	if len(targetParts) == 0 {
+		targetParts = make([]int, newMsg.Len())
+		for i := range targetParts {
+			targetParts[i] = i
 		}
-		if !isTarget {
-			newMsg.Append(part)
-			continue
-		}
+	}
+
+	for _, index := range targetParts {
+		part := msg.Get(index)
 		newPart, err := c.fn(part)
 		if err == nil {
 			c.mSucc.Incr(1)
-			newMsg.Append(newPart)
+			newMsg.Set(index, newPart)
 		} else {
 			c.log.Errorf("Failed to decode message part: %v\n", err)
 			c.mErr.Incr(1)

@@ -25,9 +25,50 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/Jeffail/gabs"
 )
+
+//------------------------------------------------------------------------------
+
+// Message is an interface type to be given to a function interpolator, it
+// allows the function to resolve fields and metadata from a message.
+type Message interface {
+	Get(p int) []byte
+	GetJSON(p int) (interface{}, error)
+	Len() int
+}
+
+//------------------------------------------------------------------------------
+
+func jsonFieldFunction(msg Message, arg string) []byte {
+	args := strings.Split(arg, ",")
+	part := 0
+	if len(args) == 2 {
+		partB, err := strconv.ParseInt(args[1], 10, 64)
+		if err == nil {
+			part = int(partB)
+		}
+	}
+	jPart, err := msg.GetJSON(part)
+	if err != nil {
+		return []byte("null")
+	}
+	gPart, _ := gabs.Consume(jPart)
+	if len(args) > 0 {
+		gPart = gPart.Path(args[0])
+	}
+	switch t := gPart.Data().(type) {
+	case string:
+		return []byte(t)
+	case nil:
+		return []byte(`null`)
+	}
+	return gPart.Bytes()
+}
 
 //------------------------------------------------------------------------------
 
@@ -44,11 +85,11 @@ func init() {
 var counters = map[string]uint64{}
 var countersMux = &sync.Mutex{}
 
-var functionVars = map[string]func(arg string) []byte{
-	"timestamp_unix_nano": func(arg string) []byte {
+var functionVars = map[string]func(msg Message, arg string) []byte{
+	"timestamp_unix_nano": func(_ Message, arg string) []byte {
 		return []byte(strconv.FormatInt(time.Now().UnixNano(), 10))
 	},
-	"timestamp_unix": func(arg string) []byte {
+	"timestamp_unix": func(_ Message, arg string) []byte {
 		tNow := time.Now()
 		precision, _ := strconv.ParseInt(arg, 10, 64)
 		tStr := strconv.FormatInt(tNow.Unix(), 10)
@@ -61,20 +102,20 @@ var functionVars = map[string]func(arg string) []byte{
 		}
 		return []byte(tStr)
 	},
-	"timestamp": func(arg string) []byte {
+	"timestamp": func(_ Message, arg string) []byte {
 		if len(arg) == 0 {
 			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
 		}
 		return []byte(time.Now().Format(arg))
 	},
-	"hostname": func(arg string) []byte {
+	"hostname": func(_ Message, arg string) []byte {
 		hn, _ := os.Hostname()
 		return []byte(hn)
 	},
-	"echo": func(arg string) []byte {
+	"echo": func(_ Message, arg string) []byte {
 		return []byte(arg)
 	},
-	"count": func(arg string) []byte {
+	"count": func(_ Message, arg string) []byte {
 		countersMux.Lock()
 		defer countersMux.Unlock()
 
@@ -90,6 +131,7 @@ var functionVars = map[string]func(arg string) []byte{
 
 		return []byte(strconv.FormatUint(count, 10))
 	},
+	"json_field": jsonFieldFunction,
 }
 
 // ContainsFunctionVariables returns true if inBytes contains function variable
@@ -103,19 +145,22 @@ func ContainsFunctionVariables(inBytes []byte) bool {
 //
 // For each aforementioned pattern found in the blob the contents of the
 // respective function will be run and will replace the pattern.
-func ReplaceFunctionVariables(inBytes []byte) []byte {
+//
+// Some functions are able to extract contents and metadata from a message, and
+// so a message must be supplied.
+func ReplaceFunctionVariables(msg Message, inBytes []byte) []byte {
 	return functionRegex.ReplaceAllFunc(inBytes, func(content []byte) []byte {
 		if len(content) > 4 {
 			if colonIndex := bytes.IndexByte(content, ':'); colonIndex == -1 {
 				targetFunc := string(content[3 : len(content)-1])
 				if ftor, exists := functionVars[targetFunc]; exists {
-					return ftor("")
+					return ftor(msg, "")
 				}
 			} else {
 				targetFunc := string(content[3:colonIndex])
 				argVal := string(content[colonIndex+1 : len(content)-1])
 				if ftor, exists := functionVars[targetFunc]; exists {
-					return ftor(argVal)
+					return ftor(msg, argVal)
 				}
 			}
 		}

@@ -88,7 +88,7 @@ func (f *Files) Write(msg types.Message) error {
 	for _, part := range msg.GetAll() {
 		path := f.conf.Path
 		if f.interpolatePath {
-			path = string(text.ReplaceFunctionVariables(f.pathBytes))
+			path = string(text.ReplaceFunctionVariables(msg, f.pathBytes))
 		}
 
 		err := os.MkdirAll(filepath.Dir(path), os.FileMode(0777))

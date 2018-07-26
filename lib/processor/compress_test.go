@@ -241,6 +241,9 @@ func TestCompressIndexBounds(t *testing.T) {
 		if exp, act := string(compressed[expIndex]), string(msgs[0].GetAll()[expIndex]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
+		if exp, act := string(compressed[expIndex]), string(msgs[0].GetAll()[(expIndex+1)%5]); exp == act {
+			t.Errorf("Processor was applied to wrong index %v: %v != %v", (expIndex+1)%5, act, exp)
+		}
 	}
 }
 

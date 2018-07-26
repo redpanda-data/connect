@@ -147,7 +147,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 	return msg.Iter(func(i int, part []byte) error {
 		id := e.idBytes
 		if e.interpolateID {
-			id = text.ReplaceFunctionVariables(id)
+			id = text.ReplaceFunctionVariables(msg, id)
 		}
 
 		_, err := e.client.Index().

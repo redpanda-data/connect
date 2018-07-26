@@ -149,7 +149,7 @@ func (a *AmazonS3) Write(msg types.Message) error {
 	for _, part := range msg.GetAll() {
 		path := a.conf.Path
 		if a.interpolatePath {
-			path = string(text.ReplaceFunctionVariables(a.pathBytes))
+			path = string(text.ReplaceFunctionVariables(msg, a.pathBytes))
 		}
 
 		if _, err := a.uploader.Upload(&s3manager.UploadInput{

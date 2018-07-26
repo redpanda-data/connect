@@ -475,6 +475,7 @@ func NewJSON(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	j := &JSON{
+		parts: conf.JSON.Parts,
 		conf:  conf,
 		log:   log.NewModule(".processor.json"),
 		stats: stats,
@@ -514,7 +515,7 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	valueBytes := p.valueBytes
 	if p.interpolate {
-		valueBytes = text.ReplaceFunctionVariables(valueBytes)
+		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
 	}
 
 	targetParts := p.parts

@@ -378,7 +378,7 @@ OUTPUT_WEBSOCKET_URL                         = ws://localhost:4195/post/ws
 ```
 LOGGER_ADD_TIMESTAMP = true
 LOGGER_JSON_FORMAT   = true
-LOGGER_LOG_LEVEL     = INFO
+LOGGER_LEVEL         = INFO
 LOGGER_PREFIX        = benthos
 ```
 

@@ -277,6 +277,9 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 		if exp, act := result.value, string(msgs[0].GetAll()[result.index]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
+		if exp, act := result.value, string(msgs[0].GetAll()[(result.index+1)%5]); exp == act {
+			t.Errorf("Processor was applied to wrong index %v: %v != %v", (result.index+1)%5, act, exp)
+		}
 	}
 }
 

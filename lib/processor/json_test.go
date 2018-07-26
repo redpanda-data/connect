@@ -178,6 +178,9 @@ func TestJSONPartBounds(t *testing.T) {
 		if act := string(msgs[0].GetAll()[j]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
+		if act := string(msgs[0].GetAll()[(j+1)%3]); exp == act {
+			t.Errorf("Processor was applied to wrong index %v: %v != %v", j+1%3, act, exp)
+		}
 	}
 }
 

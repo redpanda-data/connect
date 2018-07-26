@@ -107,7 +107,7 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	var newPart []byte
 	if p.interpolate {
-		newPart = text.ReplaceFunctionVariables(p.part)
+		newPart = text.ReplaceFunctionVariables(msg, p.part)
 	} else {
 		newPart = p.part
 	}

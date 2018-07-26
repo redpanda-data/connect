@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New config interpolator function `json_field` for extracting parts of a JSON
+  message into a config value.
+
+### Changed
+
+- Log level config field no longer stutters, `logger.log_level` is now
+  `logger.level`.
+
 ## 0.19.1 - 2018-07-25
 
 ### Added

@@ -199,6 +199,7 @@ func NewText(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	t := &Text{
+		parts: conf.Text.Parts,
 		conf:  conf,
 		log:   log.NewModule(".processor.text"),
 		stats: stats,
@@ -231,7 +232,7 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	valueBytes := t.valueBytes
 	if t.interpolate {
-		valueBytes = text.ReplaceFunctionVariables(valueBytes)
+		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
 	}
 
 	targetParts := t.parts

@@ -205,7 +205,7 @@ func (k *Kafka) Write(msg types.Message) error {
 
 		key := k.keyBytes
 		if k.interpolateKey {
-			key = text.ReplaceFunctionVariables(k.keyBytes)
+			key = text.ReplaceFunctionVariables(msg, k.keyBytes)
 		}
 		nextMsg := &sarama.ProducerMessage{
 			Topic: k.conf.Topic,
