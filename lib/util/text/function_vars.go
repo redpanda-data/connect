@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,6 +41,7 @@ type Message interface {
 	Get(p int) []byte
 	GetJSON(p int) (interface{}, error)
 	GetMetadata(key string) string
+	IterMetadata(func(k, v string) error) error
 	Len() int
 }
 
@@ -134,6 +136,19 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 	},
 	"json_field": jsonFieldFunction,
 	"metadata": func(m Message, arg string) []byte {
+		if len(arg) == 0 {
+			keys := []string{}
+			m.IterMetadata(func(k, _ string) error {
+				keys = append(keys, k)
+				return nil
+			})
+			sort.Strings(keys)
+			kvs := []string{}
+			for _, k := range keys {
+				kvs = append(kvs, k+":"+m.GetMetadata(k))
+			}
+			return []byte(strings.Join(kvs, ","))
+		}
 		return []byte(m.GetMetadata(arg))
 	},
 }

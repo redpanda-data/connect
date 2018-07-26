@@ -55,6 +55,7 @@ func TestFunctionVarDetection(t *testing.T) {
 func TestMetadataFunction(t *testing.T) {
 	msg := types.NewMessage(nil)
 	msg.SetMetadata("foo", "bar")
+	msg.SetMetadata("baz", "qux")
 
 	act := string(ReplaceFunctionVariables(
 		msg, []byte(`foo ${!metadata:foo} baz`),
@@ -67,6 +68,13 @@ func TestMetadataFunction(t *testing.T) {
 		msg, []byte(`foo ${!metadata:bar} baz`),
 	))
 	if exp := "foo  baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		msg, []byte(`${!metadata}`),
+	))
+	if exp := "baz:qux,foo:bar"; act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
