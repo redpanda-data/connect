@@ -74,6 +74,10 @@ When files are fully read from they will be deleted. You can disable this
 feature if you wish to preserve the data indefinitely, but the directory will
 fill up as fast as data passes through.
 
+WARNING: This buffer currently wipes all metadata from message payloads. If you
+are using metadata in your pipeline you should avoid using this buffer, or
+preferably all buffers altogether.
+
 ## `none`
 
 ``` yaml
