@@ -83,7 +83,7 @@ If a message contains the metadata key/value pair `foo: bar` the function
 `${!metadata:foo}` would resolve to `bar`.
 
 If the argument is ommited then all key/value pairs within the metadata will be
-printed in the following comma-separated format: `key1:value1,key2:value2,...`.
+printed as a JSON object.
 
 Message metadata can be modified using the
 [metadata processor](./processors/README.md#metadata).

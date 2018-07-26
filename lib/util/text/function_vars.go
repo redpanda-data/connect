@@ -22,9 +22,9 @@ package text
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,17 +137,16 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 	"json_field": jsonFieldFunction,
 	"metadata": func(m Message, arg string) []byte {
 		if len(arg) == 0 {
-			keys := []string{}
-			m.IterMetadata(func(k, _ string) error {
-				keys = append(keys, k)
+			kvs := map[string]string{}
+			m.IterMetadata(func(k, v string) error {
+				kvs[k] = v
 				return nil
 			})
-			sort.Strings(keys)
-			kvs := []string{}
-			for _, k := range keys {
-				kvs = append(kvs, k+":"+m.GetMetadata(k))
+			result, err := json.Marshal(kvs)
+			if err != nil {
+				return []byte("")
 			}
-			return []byte(strings.Join(kvs, ","))
+			return result
 		}
 		return []byte(m.GetMetadata(arg))
 	},

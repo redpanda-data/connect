@@ -74,7 +74,7 @@ func TestMetadataFunction(t *testing.T) {
 	act = string(ReplaceFunctionVariables(
 		msg, []byte(`${!metadata}`),
 	))
-	if exp := "baz:qux,foo:bar"; act != exp {
+	if exp := `{"baz":"qux","foo":"bar"}`; act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
