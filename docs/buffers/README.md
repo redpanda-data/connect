@@ -85,6 +85,12 @@ type: none
 none: {}
 ```
 
-Selecting no buffer (default) is the lowest latency option since no extra work
-is done to messages that pass through. With this option back pressure from the
-output will be directly applied down the pipeline.
+Selecting no buffer (default) means the output layer is directly coupled with
+the input layer. This is the safest and lowest latency option since
+acknowledgements from at-least-once protocols can be propagated all the way from
+the output protocol to the input protocol.
+
+If the output layer is hit with back pressure it will propagate all the way to
+the input layer, and further up the data stream. If you need to relieve your
+pipeline of this back pressure consider using a more robust buffering solution
+such as Kafka before resorting to alternatives.
