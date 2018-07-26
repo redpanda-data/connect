@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.20.0
+
 ### Added
 
 - New config interpolator function `json_field` for extracting parts of a JSON
