@@ -75,6 +75,16 @@ part by default. It is possible to specify a target part by following the path
 with a comma and part number, e.g. `${!json_field:foo.bar,2}` would target the
 field `foo.bar` within the third message part in the batch.
 
+### `metadata`
+
+Resolves to the value of a metadata key within the message payload. The message
+referred to will depend on the context of where the function is called.
+If a message contains the metadata key/value pair `foo: bar` the function
+`${!metadata:foo}` would resolve to `bar`.
+
+Message metadata can be modified using the
+[metadata processor](./processors/README.md#metadata).
+
 ### `timestamp_unix_nano`
 
 Resolves to the current unix timestamp in nanoseconds. E.g.

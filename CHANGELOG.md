@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `metadata` processor and configuration interpolation function.
+
 ## 0.20.0
 
 ### Added

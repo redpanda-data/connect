@@ -105,6 +105,11 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 	m.mCount.Incr(1)
 
 	newMsg := types.NewMessage(nil)
+	msg.IterMetadata(func(k, v string) error {
+		newMsg.SetMetadata(k, v)
+		return nil
+	})
+
 	lParts := msg.Len()
 	for _, index := range m.conf.SelectParts.Parts {
 		if index < 0 {

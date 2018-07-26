@@ -75,6 +75,7 @@ type Config struct {
 	JMESPath     JMESPathConfig     `json:"jmespath" yaml:"jmespath"`
 	JSON         JSONConfig         `json:"json" yaml:"json"`
 	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`
+	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
@@ -107,6 +108,7 @@ func NewConfig() Config {
 		JMESPath:     NewJMESPathConfig(),
 		JSON:         NewJSONConfig(),
 		MergeJSON:    NewMergeJSONConfig(),
+		Metadata:     NewMetadataConfig(),
 		ProcessField: NewProcessFieldConfig(),
 		ProcessMap:   NewProcessMapConfig(),
 		Sample:       NewSampleConfig(),

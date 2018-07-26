@@ -111,6 +111,11 @@ func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 	c.mCount.Incr(1)
 
 	newMsg := types.NewMessage(nil)
+	msg.IterMetadata(func(k, v string) error {
+		newMsg.SetMetadata(k, v)
+		return nil
+	})
+
 	for i := 0; i < msg.Len(); i++ {
 		if c.condition.Check(types.LockMessage(msg, i)) {
 			newMsg.Append(msg.Get(i))

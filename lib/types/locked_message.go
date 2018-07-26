@@ -71,6 +71,17 @@ func (m *lockedMessage) GetAll() [][]byte {
 	return [][]byte{m.m.Get(m.part)}
 }
 
+func (m *lockedMessage) GetMetadata(key string) string {
+	return m.m.GetMetadata(key)
+}
+
+func (m *lockedMessage) SetMetadata(key, value string) {
+}
+
+func (m *lockedMessage) IterMetadata(f func(k, v string) error) error {
+	return m.m.IterMetadata(f)
+}
+
 func (m *lockedMessage) Set(index int, b []byte) {
 }
 

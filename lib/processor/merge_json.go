@@ -126,6 +126,10 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		newMsg = msg.ShallowCopy()
 	} else {
 		newMsg = types.NewMessage(nil)
+		msg.IterMetadata(func(k, v string) error {
+			newMsg.SetMetadata(k, v)
+			return nil
+		})
 	}
 
 	if len(p.parts) == 0 {

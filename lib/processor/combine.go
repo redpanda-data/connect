@@ -41,6 +41,9 @@ messages into Kafka by splitting the parts. We could now consume our N*M
 messages from Kafka and squash them back into M part messages with the combine
 processor, and then subsequently push them into something like ZMQ.
 
+The metadata of the resulting batch will exactly match the metadata of the last
+message to enter the batch.
+
 If a message received has more parts than the 'combine' amount it will be sent
 unchanged with its original parts. This occurs even if there are cached parts
 waiting to be combined, which will change the ordering of message parts through
@@ -127,6 +130,11 @@ func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	// If we have reached our target count of parts in the buffer.
 	if len(c.parts) >= c.n {
 		newMsg := types.NewMessage(c.parts)
+		msg.IterMetadata(func(k, v string) error {
+			newMsg.SetMetadata(k, v)
+			return nil
+		})
+
 		c.parts = nil
 
 		c.mSent.Incr(1)

@@ -39,6 +39,7 @@ import (
 type Message interface {
 	Get(p int) []byte
 	GetJSON(p int) (interface{}, error)
+	GetMetadata(key string) string
 	Len() int
 }
 
@@ -132,6 +133,9 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 		return []byte(strconv.FormatUint(count, 10))
 	},
 	"json_field": jsonFieldFunction,
+	"metadata": func(m Message, arg string) []byte {
+		return []byte(m.GetMetadata(arg))
+	},
 }
 
 // ContainsFunctionVariables returns true if inBytes contains function variable

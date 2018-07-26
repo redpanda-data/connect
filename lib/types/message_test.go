@@ -156,6 +156,99 @@ func TestMessageJSONSet(t *testing.T) {
 	}
 }
 
+func TestMessageMetadata(t *testing.T) {
+	m := NewMessage(nil)
+
+	m.SetMetadata("foo", "bar")
+	if exp, act := "bar", m.GetMetadata("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	m.SetMetadata("foo", "bar2")
+	if exp, act := "bar2", m.GetMetadata("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	m.SetMetadata("bar", "baz")
+	m.SetMetadata("baz", "qux")
+
+	exp := map[string]string{
+		"foo": "bar2",
+		"bar": "baz",
+		"baz": "qux",
+	}
+	act := map[string]string{}
+	m.IterMetadata(func(k, v string) error {
+		act[k] = v
+		return nil
+	})
+	if !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
+func TestMessageShallowCopy(t *testing.T) {
+	m := NewMessage([][]byte{
+		[]byte(`foo`),
+		[]byte(`bar`),
+	})
+	m.SetMetadata("foo", "bar")
+
+	m2 := m.ShallowCopy()
+	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "bar", m2.GetMetadata("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	m2.SetMetadata("foo", "bar2")
+	m2.Set(0, []byte(`baz`))
+	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "bar2", m2.GetMetadata("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m.GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "bar", m.GetMetadata("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
+func TestMessageDeepCopy(t *testing.T) {
+	m := NewMessage([][]byte{
+		[]byte(`foo`),
+		[]byte(`bar`),
+	})
+	m.SetMetadata("foo", "bar")
+
+	m2 := m.DeepCopy()
+	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "bar", m2.GetMetadata("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	m2.SetMetadata("foo", "bar2")
+	m2.Set(0, []byte(`baz`))
+	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "bar2", m2.GetMetadata("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m.GetAll(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "bar", m.GetMetadata("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
 func TestMessageJSONSetGet(t *testing.T) {
 	msg := messageImpl{
 		parts: [][]byte{[]byte(`hello world`)},

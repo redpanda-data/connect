@@ -54,6 +54,9 @@ has not yet been reached. Batch parameters are only triggered when a message is
 added, meaning a pending batch can last beyond this period if no messages are
 added since the period was reached.
 
+The metadata of the resulting batch will exactly match the metadata of the last
+message to enter the batch.
+
 When a batch is sent to an output the behaviour will differ depending on the
 protocol. If the output type supports multipart messages then the batch is sent
 as a single message with multiple parts. If the output only supports single part
@@ -186,6 +189,11 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	// If we have reached our target count of parts in the buffer.
 	if batch {
 		newMsg := types.NewMessage(c.parts)
+		msg.IterMetadata(func(k, v string) error {
+			newMsg.SetMetadata(k, v)
+			return nil
+		})
+
 		c.parts = nil
 		c.sizeTally = 0
 		c.lastBatch = time.Now()

@@ -225,7 +225,14 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 
 	d.mSucc.Incr(1)
 	d.mSent.Incr(1)
-	msgs := [1]types.Message{types.NewMessage([][]byte{newPart})}
+
+	newMsg := types.NewMessage([][]byte{newPart})
+	msg.IterMetadata(func(k, v string) error {
+		newMsg.SetMetadata(k, v)
+		return nil
+	})
+
+	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }
 

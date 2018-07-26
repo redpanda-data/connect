@@ -174,6 +174,10 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	d.mCount.Incr(1)
 
 	newMsg := types.NewMessage(nil)
+	msg.IterMetadata(func(k, v string) error {
+		newMsg.SetMetadata(k, v)
+		return nil
+	})
 	lParts := msg.Len()
 
 	noParts := len(d.conf.Parts) == 0

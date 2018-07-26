@@ -83,6 +83,7 @@ type messageImpl struct {
 	parts       [][]byte
 	partCaches  []*partCache
 	resultCache map[string]bool
+	metadata    map[string]string
 }
 
 //------------------------------------------------------------------------------
@@ -154,16 +155,31 @@ func (m *messageImpl) ShallowCopy() Message {
 	// NOTE: JSON parts are not copied here, as even though we can safely copy
 	// the hash and len fields we cannot safely copy the content as it may
 	// contain pointers or ref types.
+	var metadata map[string]string
+	if m.metadata != nil {
+		metadata = make(map[string]string, len(m.metadata))
+		for k, v := range m.metadata {
+			metadata[k] = v
+		}
+	}
 	return &messageImpl{
 		createdAt:   m.createdAt,
 		parts:       append([][]byte(nil), m.parts...),
 		resultCache: m.resultCache,
+		metadata:    metadata,
 	}
 }
 
 // DeepCopy creates a new deep copy of the message. This can be considered an
 // entirely new object that is safe to use anywhere.
 func (m *messageImpl) DeepCopy() Message {
+	var metadata map[string]string
+	if m.metadata != nil {
+		metadata = make(map[string]string, len(m.metadata))
+		for k, v := range m.metadata {
+			metadata[k] = v
+		}
+	}
 	newParts := make([][]byte, len(m.parts))
 	for i, p := range m.parts {
 		np := make([]byte, len(p))
@@ -173,6 +189,7 @@ func (m *messageImpl) DeepCopy() Message {
 	return &messageImpl{
 		createdAt: m.createdAt,
 		parts:     newParts,
+		metadata:  metadata,
 	}
 }
 
@@ -190,6 +207,32 @@ func (m *messageImpl) Get(index int) []byte {
 
 func (m *messageImpl) GetAll() [][]byte {
 	return m.parts
+}
+
+func (m *messageImpl) GetMetadata(key string) string {
+	if m.metadata == nil {
+		return ""
+	}
+	return m.metadata[key]
+}
+
+func (m *messageImpl) SetMetadata(key, value string) {
+	if m.metadata == nil {
+		m.metadata = map[string]string{
+			key: value,
+		}
+		return
+	}
+	m.metadata[key] = value
+}
+
+func (m *messageImpl) IterMetadata(f func(k, v string) error) error {
+	for k, v := range m.metadata {
+		if err := f(k, v); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *messageImpl) Set(index int, b []byte) {

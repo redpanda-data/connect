@@ -150,6 +150,16 @@ type Message interface {
 	// SetAll replaces all parts of a message with a new set.
 	SetAll(p [][]byte)
 
+	// GetMetadata returns a metadata value if the key exists.
+	GetMetadata(key string) string
+
+	// SetMetadata sets the value of a metadata key.
+	SetMetadata(key, value string)
+
+	// IterMetadata iterates the message metadata, calling func on each
+	// key/value pair.
+	IterMetadata(f func(k, v string) error) error
+
 	// GetJSON returns a message part parsed as JSON into an `interface{}` type.
 	// This is lazily evaluated and the result is cached. If multiple layers of
 	// a pipeline extract the same part as JSON it will only be unmarshalled

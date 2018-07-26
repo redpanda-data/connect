@@ -52,6 +52,25 @@ func TestFunctionVarDetection(t *testing.T) {
 	}
 }
 
+func TestMetadataFunction(t *testing.T) {
+	msg := types.NewMessage(nil)
+	msg.SetMetadata("foo", "bar")
+
+	act := string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!metadata:foo} baz`),
+	))
+	if exp := "foo bar baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!metadata:bar} baz`),
+	))
+	if exp := "foo  baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
 func TestJSONFunction(t *testing.T) {
 	type testCase struct {
 		name   string
