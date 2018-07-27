@@ -41,11 +41,13 @@ across any members of the consumer group.
 
 This input adds the following metadata fields to each message:
 
-- key
-- topic
-- partition
-- offset
-- All headers (version 0.11+)
+` + "```" + `
+- kafka_key
+- kafka_topic
+- kafka_partition
+- kafka_offset
+- All existing message headers (version 0.11+)
+` + "```" + `
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).`,

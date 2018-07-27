@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.20.7 - 2018-07-27
+
+### Added
+
+- New `key` field added to the `dedupe` processor, allowing you to deduplicate
+  using function interpolation. This deprecates the `json_paths` array field.
+
+## 0.20.6 - 2018-07-27
+
+- New `s3` and `sqs` input and output types, these replace the now deprecated
+  `amazon_s3` and `amazon_sqs` types respectively, which will eventually be
+  removed.
+- New `nanomsg` input and output types, these replace the now deprecated
+  `scalability_protocols` types, which will eventually be removed.
+
+## 0.20.5 - 2018-07-27
+
+### Added
+
+- Metadata fields are now collected from MQTT input.
+- AMQP output writes all metadata as headers.
+- AMQP output field `key` now supports function interpolation.
+
 ## 0.20.1 - 2018-07-26
 
 ### Added

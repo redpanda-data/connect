@@ -150,7 +150,7 @@ func (m *MQTT) Read() (types.Message, error) {
 		message.SetMetadata("mqtt_qos", strconv.Itoa(int(msg.Qos())))
 		message.SetMetadata("mqtt_retained", strconv.FormatBool(bool(msg.Retained())))
 		message.SetMetadata("mqtt_topic", string(msg.Topic()))
-		message.SetMetadata("mqtt_messageid", strconv.Itoa(int(msg.MessageID())))
+		message.SetMetadata("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
 
 		return message, nil
 	case <-m.interruptChan:

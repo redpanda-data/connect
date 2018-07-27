@@ -34,7 +34,11 @@ func init() {
 		constructor: NewAMQP,
 		description: `
 AMQP (0.91) is the underlying messaging protocol that is used by various message
-brokers, including RabbitMQ.`,
+brokers, including RabbitMQ. The metadata from each message are delivered as
+headers.
+
+The field 'key' can be dynamically set using function interpolations described
+[here](../config_interpolation.md#functions).`,
 	}
 }
 

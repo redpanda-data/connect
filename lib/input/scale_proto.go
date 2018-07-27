@@ -31,19 +31,17 @@ import (
 
 func init() {
 	Constructors["scalability_protocols"] = TypeSpec{
-		constructor: NewScaleProto,
+		constructor: NewScaleProtoDEPRECATED,
 		description: `
-The scalability protocols are common communication patterns. This input should
-be compatible with any implementation, but specifically targets Nanomsg.
-
-Currently only PULL and SUB sockets are supported.`,
+DEPRECATED: Use ` + "`nanomsg`" + ` instead.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewScaleProto creates a new ScaleProto input type.
-func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+// NewScaleProtoDEPRECATED is deprecated
+func NewScaleProtoDEPRECATED(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	log.Warnln("WARNING: Type 'scalability_protocols' is deprecated, please use 'nanomsg' instead.")
 	s, err := reader.NewScaleProto(conf.ScaleProto, log, stats)
 	if err != nil {
 		return nil, err

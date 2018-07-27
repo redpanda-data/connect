@@ -49,16 +49,19 @@ level which is only applied to messages from the baz input.
 11. [`kafka`](#kafka)
 12. [`kafka_balanced`](#kafka_balanced)
 13. [`mqtt`](#mqtt)
-14. [`nats`](#nats)
-15. [`nats_stream`](#nats_stream)
-16. [`nsq`](#nsq)
-17. [`read_until`](#read_until)
-18. [`redis_list`](#redis_list)
-19. [`redis_pubsub`](#redis_pubsub)
-20. [`scalability_protocols`](#scalability_protocols)
-21. [`stdin`](#stdin)
-22. [`websocket`](#websocket)
-23. [`zmq4`](#zmq4)
+14. [`nanomsg`](#nanomsg)
+15. [`nats`](#nats)
+16. [`nats_stream`](#nats_stream)
+17. [`nsq`](#nsq)
+18. [`read_until`](#read_until)
+19. [`redis_list`](#redis_list)
+20. [`redis_pubsub`](#redis_pubsub)
+21. [`s3`](#s3)
+22. [`scalability_protocols`](#scalability_protocols)
+23. [`sqs`](#sqs)
+24. [`stdin`](#stdin)
+25. [`websocket`](#websocket)
+26. [`zmq4`](#zmq4)
 
 ## `amazon_s3`
 
@@ -81,22 +84,7 @@ amazon_s3:
   timeout_s: 5
 ```
 
-Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
-SQS queue has been configured then only object keys read from the queue will be
-downloaded. Otherwise, the entire list of objects found when this input is
-created will be downloaded. Note that the prefix configuration is only used when
-downloading objects without SQS configured.
-
-If your bucket is configured to send events directly to an SQS queue then you
-need to set the 'sqs_body_path' field to where the object key is found in the
-payload. However, it is also common practice to send bucket events to an SNS
-topic which sends enveloped events to SQS, in which case you must also set the
-'sqs_envelope_path' field to where the payload can be found.
-
-Here is a guide for setting up an SQS queue that receives events for new S3
-bucket objects:
-
-https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html
+DEPRECATED: Use `s3` instead.
 
 ## `amazon_sqs`
 
@@ -113,8 +101,7 @@ amazon_sqs:
   url: ""
 ```
 
-Receive messages from an Amazon SQS URL, only the body is extracted into
-messages.
+DEPRECATED: Use `sqs` instead.
 
 ## `amqp`
 
@@ -411,11 +398,13 @@ server.
 
 This input adds the following metadata fields to each message:
 
-- key
-- topic
-- partition
-- offset
-- All headers (version 0.11+)
+```
+- kafka_key
+- kafka_topic
+- kafka_partition
+- kafka_offset
+- All existing message headers (version 0.11+)
+```
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
@@ -444,11 +433,13 @@ across any members of the consumer group.
 
 This input adds the following metadata fields to each message:
 
-- key
-- topic
-- partition
-- offset
-- All headers (version 0.11+)
+```
+- kafka_key
+- kafka_topic
+- kafka_partition
+- kafka_offset
+- All existing message headers (version 0.11+)
+```
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
@@ -466,7 +457,41 @@ mqtt:
   - tcp://localhost:1883
 ```
 
-Subscribe to topics on MQTT brokers
+Subscribe to topics on MQTT brokers.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```
+- mqtt_duplicate
+- mqtt_qos
+- mqtt_retained
+- mqtt_topic
+- mqtt_message_id
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
+
+## `nanomsg`
+
+``` yaml
+type: nanomsg
+nanomsg:
+  bind: true
+  poll_timeout_ms: 5000
+  reply_timeout_ms: 5000
+  socket_type: PULL
+  sub_filters: []
+  urls:
+  - tcp://*:5555
+```
+
+The scalability protocols are common communication patterns. This input should
+be compatible with any implementation, but specifically targets Nanomsg.
+
+Currently only PULL and SUB sockets are supported.
 
 ## `nats`
 
@@ -573,6 +598,44 @@ redis_pubsub:
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple
 channels using this input.
 
+## `s3`
+
+``` yaml
+type: s3
+s3:
+  bucket: ""
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  delete_objects: false
+  prefix: ""
+  region: eu-west-1
+  sqs_body_path: Records.s3.object.key
+  sqs_envelope_path: ""
+  sqs_max_messages: 10
+  sqs_url: ""
+  timeout_s: 5
+```
+
+Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
+SQS queue has been configured then only object keys read from the queue will be
+downloaded. Otherwise, the entire list of objects found when this input is
+created will be downloaded. Note that the prefix configuration is only used when
+downloading objects without SQS configured.
+
+If your bucket is configured to send events directly to an SQS queue then you
+need to set the 'sqs_body_path' field to where the object key is found in the
+payload. However, it is also common practice to send bucket events to an SNS
+topic which sends enveloped events to SQS, in which case you must also set the
+'sqs_envelope_path' field to where the payload can be found.
+
+Here is a guide for setting up an SQS queue that receives events for new S3
+bucket objects:
+
+https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html
+
 ## `scalability_protocols`
 
 ``` yaml
@@ -587,10 +650,25 @@ scalability_protocols:
   - tcp://*:5555
 ```
 
-The scalability protocols are common communication patterns. This input should
-be compatible with any implementation, but specifically targets Nanomsg.
+DEPRECATED: Use `nanomsg` instead.
 
-Currently only PULL and SUB sockets are supported.
+## `sqs`
+
+``` yaml
+type: sqs
+sqs:
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  region: eu-west-1
+  timeout_s: 5
+  url: ""
+```
+
+Receive messages from an Amazon SQS URL, only the body is extracted into
+messages.
 
 ## `stdin`
 

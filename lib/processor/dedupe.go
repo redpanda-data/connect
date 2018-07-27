@@ -30,6 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Jeffail/gabs"
 )
 
@@ -39,39 +40,27 @@ func init() {
 	Constructors["dedupe"] = TypeSpec{
 		constructor: NewDedupe,
 		description: `
-Dedupes messages by caching selected (and optionally hashed) parts, dropping
-messages that are already cached. The hash type can be chosen from: none or
-xxhash (more will come soon).
+Dedupes messages by caching selected (and optionally hashed) message parts,
+dropping messages that are already cached. The hash type can be chosen from:
+none or xxhash (more will come soon).
 
-It's possible to dedupe based on JSON field data from message parts by setting
-the value of ` + "`json_paths`" + `, which is an array of JSON dot paths that
-will be extracted from the message payload and concatenated. The result will
-then be used to deduplicate. If the result is empty (i.e. none of the target
-paths were found in the data) then this is considered an error, and the message
-will be dropped or propagated based on the value of ` + "`drop_on_err`." + `
+Optionally, the ` + "`key`" + ` field can be populated in order to hash on a
+function interpolated string rather than the full contents of message parts.
+This allows you to deduplicate based on dynamic fields within a message, such as
+its metadata, JSON fields, etc. A full list of interpolation functions can be
+found [here](../config_interpolation.md#functions).
 
-For example, if each message is a single part containing a JSON blob of the
-following format:
+For example, the following config would deduplicate based on the concatenated
+values of the metadata field ` + "`kafka_key`" + ` and the value of the JSON
+path ` + "`id`" + ` within the message contents:
 
-` + "``` json" + `
-{
-	"id": "3274892374892374",
-	"content": "hello world"
-}
-` + "```" + `
-
-Then you could deduplicate using the raw contents of the 'id' field instead of
-the whole body with the following config:
-
-` + "``` json" + `
-type: dedupe
+` + "``` yaml" + `
 dedupe:
-  cache: foo_cache
-  parts: [0]
-  json_paths:
-    - id
-  hash: none
+  cache: foocache
+  key: ${!metadata:kafka_key}-${!json_field:id}
 ` + "```" + `
+
+The ` + "`json_paths`" + ` field is deprecated.
 
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).`,
@@ -85,6 +74,7 @@ type DedupeConfig struct {
 	Cache          string   `json:"cache" yaml:"cache"`
 	HashType       string   `json:"hash" yaml:"hash"`
 	Parts          []int    `json:"parts" yaml:"parts"` // message parts to hash
+	Key            string   `json:"key" yaml:"key"`
 	JSONPaths      []string `json:"json_paths" yaml:"json_paths"`
 	DropOnCacheErr bool     `json:"drop_on_err" yaml:"drop_on_err"`
 }
@@ -95,6 +85,7 @@ func NewDedupeConfig() DedupeConfig {
 		Cache:          "",
 		HashType:       "none",
 		Parts:          []int{0}, // only consider the 1st part
+		Key:            "",
 		JSONPaths:      []string{},
 		DropOnCacheErr: true,
 	}
@@ -150,6 +141,9 @@ type Dedupe struct {
 	log   log.Modular
 	stats metrics.Type
 
+	keyBytes       []byte
+	interpolateKey bool
+
 	cache      types.Cache
 	hasherFunc hasherFunc
 	jPaths     []string
@@ -167,18 +161,34 @@ type Dedupe struct {
 func NewDedupe(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	if len(conf.Dedupe.JSONPaths) > 0 {
+		log.Warnln(
+			"WARNING: The 'json_paths' field of the 'dedupe' processor is" +
+				" deprecated, instead use the 'key' field with function" +
+				" interpolation, e.g. '${!json_field:foo.bar}'",
+		)
+	}
+
 	c, err := mgr.GetCache(conf.Dedupe.Cache)
 	if err != nil {
 		return nil, err
 	}
+
 	hFunc, err := strToHasher(conf.Dedupe.HashType)
 	if err != nil {
 		return nil, err
 	}
+
+	keyBytes := []byte(conf.Dedupe.Key)
+	interpolateKey := text.ContainsFunctionVariables(keyBytes)
+
 	return &Dedupe{
 		conf:  conf,
 		log:   log.NewModule(".processor.dedupe"),
 		stats: stats,
+
+		keyBytes:       keyBytes,
+		interpolateKey: interpolateKey,
 
 		cache:      c,
 		hasherFunc: hFunc,
@@ -202,6 +212,15 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 
 	extractedHash := false
 	hasher := d.hasherFunc()
+
+	key := d.keyBytes
+	if len(key) > 0 && d.interpolateKey {
+		key = text.ReplaceFunctionVariables(msg, key)
+	}
+	if len(key) > 0 {
+		hasher.Write(key)
+		extractedHash = true
+	}
 
 	for _, index := range d.conf.Dedupe.Parts {
 		if len(d.jPaths) > 0 {
@@ -244,7 +263,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 					extractedHash = true
 				}
 			}
-		} else {
+		} else if len(key) == 0 {
 			// Attempt to add whole part to hash.
 			if partBytes := msg.Get(index); partBytes != nil {
 				if _, err := hasher.Write(msg.Get(index)); nil != err {

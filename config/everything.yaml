@@ -119,6 +119,14 @@ input:
     topics:
     - benthos_topic
     client_id: benthos_input
+  nanomsg:
+    urls:
+    - tcp://*:5555
+    bind: true
+    socket_type: PULL
+    sub_filters: []
+    poll_timeout_ms: 5000
+    reply_timeout_ms: 5000
   nats:
     urls:
     - nats://localhost:4222
@@ -169,6 +177,21 @@ input:
     url: tcp://localhost:6379
     channels:
     - benthos_chan
+  s3:
+    region: eu-west-1
+    bucket: ""
+    prefix: ""
+    delete_objects: false
+    sqs_url: ""
+    sqs_body_path: Records.s3.object.key
+    sqs_envelope_path: ""
+    sqs_max_messages: 10
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
+    timeout_s: 5
   scalability_protocols:
     urls:
     - tcp://*:5555
@@ -177,6 +200,15 @@ input:
     sub_filters: []
     poll_timeout_ms: 5000
     reply_timeout_ms: 5000
+  sqs:
+    region: eu-west-1
+    url: ""
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
+    timeout_s: 5
   stdin:
     multipart: false
     max_buffer: 1000000
@@ -284,6 +316,7 @@ pipeline:
       hash: none
       parts:
       - 0
+      key: ""
       json_paths: []
       drop_on_err: true
     encode:
@@ -507,6 +540,12 @@ output:
     qos: 1
     topic: benthos_topic
     client_id: benthos_output
+  nanomsg:
+    urls:
+    - tcp://localhost:5556
+    bind: false
+    socket_type: PUSH
+    poll_timeout_ms: 5000
   nats:
     urls:
     - nats://localhost:4222
@@ -528,12 +567,30 @@ output:
   redis_pubsub:
     url: tcp://localhost:6379
     channel: benthos_chan
+  s3:
+    region: eu-west-1
+    bucket: ""
+    path: ${!count:files}-${!timestamp_unix_nano}.txt
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
+    timeout_s: 5
   scalability_protocols:
     urls:
     - tcp://localhost:5556
     bind: false
     socket_type: PUSH
     poll_timeout_ms: 5000
+  sqs:
+    region: eu-west-1
+    url: ""
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
   stdout:
     delimiter: ""
   websocket:

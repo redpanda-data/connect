@@ -74,10 +74,8 @@ pipeline:
   - type: dedupe
     dedupe:
       cache: dedupe
-      parts: [0]
       drop_on_err: false # Prefer occasional duplicates over lost messages
-      json_paths:
-      - "id_str" # Dedupe based on the 'id_str' field of tweets
+      key: "${!json_field:id_str}" # Dedupe based on 'id_str' field of tweets
       hash: none
 ```
 

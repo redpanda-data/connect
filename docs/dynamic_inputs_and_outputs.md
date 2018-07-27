@@ -86,11 +86,11 @@ curl http://localhost:4195/input/read_sample -d @- << EOF
 EOF
 ```
 
-Some inputs have a finite lifetime, e.g. `amazon_s3` without an SQS queue
-configured will close once the whole bucket has been read. When a dynamic types
-lifetime ends the `uptime` field of an input listing will be set to `stopped`.
-You can use this to write tools that trigger new inputs (to move onto the next
-bucket, for example).
+Some inputs have a finite lifetime, e.g. `s3` without an SQS queue configured
+will close once the whole bucket has been read. When a dynamic types lifetime
+ends the `uptime` field of an input listing will be set to `stopped`. You can
+use this to write tools that trigger new inputs (to move onto the next bucket,
+for example).
 
 [dynamic_inputs]: ./inputs/README.md#dynamic
 [dynamic_outputs]: ./outputs/README.md#dynamic

@@ -18,49 +18,35 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package input
+package output
 
 import (
-	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["mqtt"] = TypeSpec{
-		constructor: NewMQTT,
+	Constructors["s3"] = TypeSpec{
+		constructor: NewAmazonS3,
 		description: `
-Subscribe to topics on MQTT brokers.
-
-### Metadata
-
-This input adds the following metadata fields to each message:
-
-` + "```" + `
-- mqtt_duplicate
-- mqtt_qos
-- mqtt_retained
-- mqtt_topic
-- mqtt_message_id
-` + "```" + `
-
-You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
+with the path specified with the 'path' field, in order to have a different path
+for each object you should use function interpolations described
+[here](../config_interpolation.md#functions).`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewMQTT create a new MQTT input type.
-func NewMQTT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	m, err := reader.NewMQTT(conf.MQTT, log, stats)
-	if err != nil {
-		return nil, err
-	}
-	return NewReader("mqtt", reader.NewPreserver(m), log, stats)
+// NewAmazonS3 creates a new AmazonS3 output type.
+func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	return NewWriter(
+		"s3", writer.NewAmazonS3(conf.S3, log, stats), log, stats,
+	)
 }
 
 //------------------------------------------------------------------------------
