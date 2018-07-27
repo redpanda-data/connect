@@ -31,18 +31,19 @@ import (
 
 func init() {
 	Constructors["amazon_sqs"] = TypeSpec{
-		constructor: NewAmazonSQS,
+		constructor: NewAmazonSQSDEPRECATED,
 		description: `
-Sends messages to an SQS queue.`,
+DEPRECATED: Use ` + "`sqs`" + ` instead.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewAmazonSQS creates a new AmazonSQS output type.
-func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+// NewAmazonSQSDEPRECATED is deprecated
+func NewAmazonSQSDEPRECATED(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	log.Warnln("WARNING: The 'amazon_sqs' type is deprecated, use 'sqs' instead.")
 	return NewWriter(
-		"amazon_sqs", writer.NewAmazonSQS(conf.AmazonSQS, log, stats), log, stats,
+		"amazon_sqs", writer.NewAmazonSQS(conf.AmazonSQSDEPRECATED, log, stats), log, stats,
 	)
 }
 

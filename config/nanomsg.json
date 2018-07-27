@@ -6,11 +6,16 @@
 		"debug_endpoints": false
 	},
 	"input": {
-		"type": "stdin",
-		"stdin": {
-			"delimiter": "",
-			"max_buffer": 1000000,
-			"multipart": false
+		"type": "nanomsg",
+		"nanomsg": {
+			"bind": true,
+			"poll_timeout_ms": 5000,
+			"reply_timeout_ms": 5000,
+			"socket_type": "PULL",
+			"sub_filters": [],
+			"urls": [
+				"tcp://*:5555"
+			]
 		}
 	},
 	"buffer": {
@@ -18,27 +23,18 @@
 		"none": {}
 	},
 	"pipeline": {
-		"processors": [
-			{
-				"type": "dedupe",
-				"dedupe": {
-					"cache": "",
-					"drop_on_err": true,
-					"hash": "none",
-					"json_paths": [],
-					"key": "",
-					"parts": [
-						0
-					]
-				}
-			}
-		],
+		"processors": [],
 		"threads": 1
 	},
 	"output": {
-		"type": "stdout",
-		"stdout": {
-			"delimiter": ""
+		"type": "nanomsg",
+		"nanomsg": {
+			"bind": false,
+			"poll_timeout_ms": 5000,
+			"socket_type": "PUSH",
+			"urls": [
+				"tcp://localhost:5556"
+			]
 		}
 	},
 	"resources": {

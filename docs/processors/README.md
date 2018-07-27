@@ -244,43 +244,32 @@ dedupe:
   drop_on_err: true
   hash: none
   json_paths: []
+  key: ""
   parts:
   - 0
 ```
 
-Dedupes messages by caching selected (and optionally hashed) parts, dropping
-messages that are already cached. The hash type can be chosen from: none or
-xxhash (more will come soon).
+Dedupes messages by caching selected (and optionally hashed) message parts,
+dropping messages that are already cached. The hash type can be chosen from:
+none or xxhash (more will come soon).
 
-It's possible to dedupe based on JSON field data from message parts by setting
-the value of `json_paths`, which is an array of JSON dot paths that
-will be extracted from the message payload and concatenated. The result will
-then be used to deduplicate. If the result is empty (i.e. none of the target
-paths were found in the data) then this is considered an error, and the message
-will be dropped or propagated based on the value of `drop_on_err`.
+Optionally, the `key` field can be populated in order to hash on a
+function interpolated string rather than the full contents of message parts.
+This allows you to deduplicate based on dynamic fields within a message, such as
+its metadata, JSON fields, etc. A full list of interpolation functions can be
+found [here](../config_interpolation.md#functions).
 
-For example, if each message is a single part containing a JSON blob of the
-following format:
+For example, the following config would deduplicate based on the concatenated
+values of the metadata field `kafka_key` and the value of the JSON
+path `id` within the message contents:
 
-``` json
-{
-	"id": "3274892374892374",
-	"content": "hello world"
-}
-```
-
-Then you could deduplicate using the raw contents of the 'id' field instead of
-the whole body with the following config:
-
-``` json
-type: dedupe
+``` yaml
 dedupe:
-  cache: foo_cache
-  parts: [0]
-  json_paths:
-    - id
-  hash: none
+  cache: foocache
+  key: ${!metadata:kafka_key}-${!json_field:id}
 ```
+
+The `json_paths` field is deprecated.
 
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).

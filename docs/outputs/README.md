@@ -35,15 +35,18 @@ conditions please [read the docs here](../conditions/README.md)
 11. [`inproc`](#inproc)
 12. [`kafka`](#kafka)
 13. [`mqtt`](#mqtt)
-14. [`nats`](#nats)
-15. [`nats_stream`](#nats_stream)
-16. [`nsq`](#nsq)
-17. [`redis_list`](#redis_list)
-18. [`redis_pubsub`](#redis_pubsub)
-19. [`scalability_protocols`](#scalability_protocols)
-20. [`stdout`](#stdout)
-21. [`websocket`](#websocket)
-22. [`zmq4`](#zmq4)
+14. [`nanomsg`](#nanomsg)
+15. [`nats`](#nats)
+16. [`nats_stream`](#nats_stream)
+17. [`nsq`](#nsq)
+18. [`redis_list`](#redis_list)
+19. [`redis_pubsub`](#redis_pubsub)
+20. [`s3`](#s3)
+21. [`scalability_protocols`](#scalability_protocols)
+22. [`sqs`](#sqs)
+23. [`stdout`](#stdout)
+24. [`websocket`](#websocket)
+25. [`zmq4`](#zmq4)
 
 ## `amazon_s3`
 
@@ -61,10 +64,7 @@ amazon_s3:
   timeout_s: 5
 ```
 
-Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
-with the path specified with the 'path' field, in order to have a different path
-for each object you should use function interpolations described
-[here](../config_interpolation.md#functions).
+DEPRECATED: Use `s3` instead.
 
 ## `amazon_sqs`
 
@@ -80,7 +80,7 @@ amazon_sqs:
   url: ""
 ```
 
-Sends messages to an SQS queue.
+DEPRECATED: Use `sqs` instead.
 
 ## `amqp`
 
@@ -97,7 +97,11 @@ amqp:
 ```
 
 AMQP (0.91) is the underlying messaging protocol that is used by various message
-brokers, including RabbitMQ.
+brokers, including RabbitMQ. The metadata from each message are delivered as
+headers.
+
+The field 'key' can be dynamically set using function interpolations described
+[here](../config_interpolation.md#functions).
 
 ## `broker`
 
@@ -407,6 +411,23 @@ mqtt:
 
 Pushes messages to an MQTT broker.
 
+## `nanomsg`
+
+``` yaml
+type: nanomsg
+nanomsg:
+  bind: false
+  poll_timeout_ms: 5000
+  socket_type: PUSH
+  urls:
+  - tcp://localhost:5556
+```
+
+The scalability protocols are common communication patterns. This output should
+be compatible with any implementation, but specifically targets Nanomsg.
+
+Currently only PUSH and PUB sockets are supported.
+
 ## `nats`
 
 ``` yaml
@@ -472,6 +493,27 @@ redis_pubsub:
 Publishes messages through the Redis PubSub model. It is not possible to
 guarantee that messages have been received.
 
+## `s3`
+
+``` yaml
+type: s3
+s3:
+  bucket: ""
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  path: ${!count:files}-${!timestamp_unix_nano}.txt
+  region: eu-west-1
+  timeout_s: 5
+```
+
+Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
+with the path specified with the 'path' field, in order to have a different path
+for each object you should use function interpolations described
+[here](../config_interpolation.md#functions).
+
 ## `scalability_protocols`
 
 ``` yaml
@@ -484,10 +526,23 @@ scalability_protocols:
   - tcp://localhost:5556
 ```
 
-The scalability protocols are common communication patterns. This output should
-be compatible with any implementation, but specifically targets Nanomsg.
+DEPRECATED: Use `nanomsg` instead.
 
-Currently only PUSH and PUB sockets are supported.
+## `sqs`
+
+``` yaml
+type: sqs
+sqs:
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  region: eu-west-1
+  url: ""
+```
+
+Sends messages to an SQS queue.
 
 ## `stdout`
 

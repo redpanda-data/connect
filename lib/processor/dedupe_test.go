@@ -185,6 +185,71 @@ func TestDedupeJSONPaths(t *testing.T) {
 	}
 }
 
+func TestDedupeInterpolation(t *testing.T) {
+	rndText1 := randStringRunes(20)
+	rndText2 := randStringRunes(15)
+	doc1 := []byte(fmt.Sprintf(`{"id":"%s","content":"foo"}`, rndText1))
+	doc2 := []byte(fmt.Sprintf(`{"id":"%s","content":"bar"}`, rndText1)) // duplicate
+	doc3 := []byte(fmt.Sprintf(`{"id":"%s","content":"foo"}`, rndText2))
+	doc4 := []byte(`{"content":"foo"}`)
+
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
+	if cacheErr != nil {
+		t.Fatal(cacheErr)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+
+	conf := NewConfig()
+	conf.Dedupe.Cache = "foocache"
+	conf.Dedupe.Key = "${!json_field:id}${!json_field:never.exists}"
+	conf.Dedupe.DropOnCacheErr = false
+	proc, err1 := NewDedupe(conf, mgr, log.Noop(), metrics.Noop())
+	if err1 != nil {
+		t.Error(err1)
+		return
+	}
+
+	msgIn := types.NewMessage([][]byte{doc1})
+	msgOut, err := proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
+	}
+	if nil == msgOut {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate")
+	}
+
+	msgIn = types.NewMessage([][]byte{doc2})
+	msgOut, err = proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 3 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
+	}
+	if nil != msgOut {
+		t.Error("Message 2 told to propagate even if it was expected not to propagate")
+	}
+
+	msgIn = types.NewMessage([][]byte{doc3})
+	msgOut, err = proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 3 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
+	}
+	if nil == msgOut {
+		t.Error("Message 3 told not to propagate even if it was expected to propagate")
+	}
+
+	msgIn = types.NewMessage([][]byte{doc4})
+	msgOut, err = proc.ProcessMessage(msgIn)
+	if nil != err && nil != err.Error() {
+		t.Error("Message 4 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
+	}
+	if nil == msgOut {
+		t.Error("Message 4 told not to propagate even if it was expected to propagate")
+	}
+}
+
 func TestDedupeJSONMultiPaths(t *testing.T) {
 
 	type testCase struct {

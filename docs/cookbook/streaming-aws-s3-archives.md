@@ -19,8 +19,8 @@ The full config for this [example can be found here][example].
 
 ``` yaml
 input:
-  type: amazon_s3
-  amazon_s3:
+  type: s3
+  s3:
     region: eu-west-1 # TODO
     bucket: TODO
     delete_objects: false
@@ -57,8 +57,8 @@ input:
   broker:
     copies: 8 # Increase this to gain more parallel consumers
     inputs:
-    - type: amazon_s3
-      amazon_s3:
+    - type: s3
+      s3:
       ... etc
 ```
 

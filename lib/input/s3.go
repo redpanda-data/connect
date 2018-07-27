@@ -21,6 +21,8 @@
 package input
 
 import (
+	"errors"
+
 	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -30,37 +32,42 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["mqtt"] = TypeSpec{
-		constructor: NewMQTT,
+	Constructors["s3"] = TypeSpec{
+		constructor: NewAmazonS3,
 		description: `
-Subscribe to topics on MQTT brokers.
+Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
+SQS queue has been configured then only object keys read from the queue will be
+downloaded. Otherwise, the entire list of objects found when this input is
+created will be downloaded. Note that the prefix configuration is only used when
+downloading objects without SQS configured.
 
-### Metadata
+If your bucket is configured to send events directly to an SQS queue then you
+need to set the 'sqs_body_path' field to where the object key is found in the
+payload. However, it is also common practice to send bucket events to an SNS
+topic which sends enveloped events to SQS, in which case you must also set the
+'sqs_envelope_path' field to where the payload can be found.
 
-This input adds the following metadata fields to each message:
+Here is a guide for setting up an SQS queue that receives events for new S3
+bucket objects:
 
-` + "```" + `
-- mqtt_duplicate
-- mqtt_qos
-- mqtt_retained
-- mqtt_topic
-- mqtt_message_id
-` + "```" + `
-
-You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewMQTT create a new MQTT input type.
-func NewMQTT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	m, err := reader.NewMQTT(conf.MQTT, log, stats)
-	if err != nil {
-		return nil, err
+// NewAmazonS3 creates a new amazon S3 input type.
+func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	if len(conf.S3.Bucket) == 0 {
+		return nil, errors.New("invalid bucket (cannot be empty)")
 	}
-	return NewReader("mqtt", reader.NewPreserver(m), log, stats)
+	return NewReader(
+		"s3",
+		reader.NewPreserver(
+			reader.NewAmazonS3(conf.S3, log, stats),
+		),
+		log, stats,
+	)
 }
 
 //------------------------------------------------------------------------------

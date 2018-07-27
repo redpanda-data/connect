@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ashley Jeffs
+// Copyright (c) 2014 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,37 +30,25 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["mqtt"] = TypeSpec{
-		constructor: NewMQTT,
+	Constructors["nanomsg"] = TypeSpec{
+		constructor: NewScaleProto,
 		description: `
-Subscribe to topics on MQTT brokers.
+The scalability protocols are common communication patterns. This input should
+be compatible with any implementation, but specifically targets Nanomsg.
 
-### Metadata
-
-This input adds the following metadata fields to each message:
-
-` + "```" + `
-- mqtt_duplicate
-- mqtt_qos
-- mqtt_retained
-- mqtt_topic
-- mqtt_message_id
-` + "```" + `
-
-You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+Currently only PULL and SUB sockets are supported.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewMQTT create a new MQTT input type.
-func NewMQTT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	m, err := reader.NewMQTT(conf.MQTT, log, stats)
+// NewScaleProto creates a new ScaleProto input type.
+func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	s, err := reader.NewScaleProto(conf.Nanomsg, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return NewReader("mqtt", reader.NewPreserver(m), log, stats)
+	return NewReader("nanomsg", reader.NewPreserver(s), log, stats)
 }
 
 //------------------------------------------------------------------------------

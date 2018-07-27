@@ -6,8 +6,8 @@ pipeline:
   threads: 1
   processors: []
 output:
-  type: amazon_s3
-  amazon_s3:
+  type: s3
+  s3:
     bucket: ${AWS_BUCKET}
     credentials:
       id: ${AWS_ID}

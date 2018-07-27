@@ -205,10 +205,10 @@ func (k *KafkaBalanced) Read() (types.Message, error) {
 
 	msg := types.NewMessage([][]byte{data.Value})
 
-	msg.SetMetadata("key", string(data.Key))
-	msg.SetMetadata("partition", strconv.Itoa(int(data.Partition)))
-	msg.SetMetadata("topic", data.Topic)
-	msg.SetMetadata("offset", strconv.Itoa(int(data.Offset)))
+	msg.SetMetadata("kafka_key", string(data.Key))
+	msg.SetMetadata("kafka_partition", strconv.Itoa(int(data.Partition)))
+	msg.SetMetadata("kafka_topic", data.Topic)
+	msg.SetMetadata("kafka_offset", strconv.Itoa(int(data.Offset)))
 	for _, hdr := range data.Headers {
 		msg.SetMetadata(string(hdr.Key), string(hdr.Value))
 	}
