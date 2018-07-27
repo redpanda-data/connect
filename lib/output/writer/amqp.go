@@ -22,12 +22,14 @@ package writer
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/streadway/amqp"
 )
 
@@ -61,6 +63,9 @@ func NewAMQPConfig() AMQPConfig {
 
 // AMQP is an output type that serves AMQP messages.
 type AMQP struct {
+	keyBytes       []byte
+	interpolateKey bool
+
 	log   log.Modular
 	stats metrics.Type
 
@@ -78,11 +83,16 @@ type AMQP struct {
 
 // NewAMQP creates a new AMQP writer type.
 func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
+	keyBytes := []byte(conf.BindingKey)
+	interpolateKey := text.ContainsFunctionVariables(keyBytes)
+
 	a := AMQP{
-		log:          log.NewModule(".output.amqp"),
-		stats:        stats,
-		conf:         conf,
-		deliveryMode: amqp.Transient,
+		keyBytes:       keyBytes,
+		interpolateKey: interpolateKey,
+		log:            log.NewModule(".output.amqp"),
+		stats:          stats,
+		conf:           conf,
+		deliveryMode:   amqp.Transient,
 	}
 	if conf.Persistent {
 		a.deliveryMode = amqp.Persistent
@@ -171,13 +181,25 @@ func (a *AMQP) Write(msg types.Message) error {
 	}
 
 	for _, part := range msg.GetAll() {
+		bindingKey := a.conf.BindingKey
+		if a.interpolateKey {
+			bindingKey = strings.Replace(string(text.ReplaceFunctionVariables(msg, a.keyBytes)), "/", ".", -1)
+		}
+
+		headers := amqp.Table{}
+
+		msg.IterMetadata(func(k, v string) error {
+			headers[strings.Replace(k, "_", "-", -1)] = v
+			return nil
+		})
+
 		err := amqpChan.Publish(
-			a.conf.Exchange,   // publish to an exchange
-			a.conf.BindingKey, // routing to 0 or more queues
-			a.conf.Mandatory,  // mandatory
-			a.conf.Immediate,  // immediate
+			a.conf.Exchange,  // publish to an exchange
+			bindingKey,       // routing to 0 or more queues
+			a.conf.Mandatory, // mandatory
+			a.conf.Immediate, // immediate
 			amqp.Publishing{
-				Headers:         amqp.Table{},
+				Headers:         headers,
 				ContentType:     "application/octet-stream",
 				ContentEncoding: "",
 				Body:            part,
