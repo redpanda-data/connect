@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -143,7 +144,15 @@ func (m *MQTT) msgHandler(c mqtt.Client, msg mqtt.Message) {
 func (m *MQTT) Read() (types.Message, error) {
 	select {
 	case msg := <-m.msgChan:
-		return types.NewMessage([][]byte{[]byte(msg.Payload())}), nil
+		message := types.NewMessage([][]byte{[]byte(msg.Payload())})
+
+		message.SetMetadata("mqtt_duplicate", strconv.FormatBool(bool(msg.Duplicate())))
+		message.SetMetadata("mqtt_qos", strconv.Itoa(int(msg.Qos())))
+		message.SetMetadata("mqtt_retained", strconv.FormatBool(bool(msg.Retained())))
+		message.SetMetadata("mqtt_topic", string(msg.Topic()))
+		message.SetMetadata("mqtt_messageid", strconv.Itoa(int(msg.MessageID())))
+
+		return message, nil
 	case <-m.interruptChan:
 	}
 	return nil, types.ErrTypeClosed
