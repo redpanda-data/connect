@@ -51,7 +51,11 @@ payload.
 
 #### ` + "`set`" + `
 
-Sets the value of a metadata key.`,
+Sets the value of a metadata key.
+
+#### ` + "`delete_all`" + `
+
+Removes all metadata values from the message.`,
 	}
 }
 
@@ -84,10 +88,22 @@ func newMetadataSetOperator(key string) metadataOperator {
 	}
 }
 
+func newMetadataDeleteAllOperator(key string) metadataOperator {
+	return func(msg types.Message, value []byte) error {
+		msg.IterMetadata(func(k, _ string) error {
+			msg.DeleteMetadata(k)
+			return nil
+		})
+		return nil
+	}
+}
+
 func getMetadataOperator(opStr string, key string) (metadataOperator, error) {
 	switch opStr {
 	case "set":
 		return newMetadataSetOperator(key), nil
+	case "delete_all":
+		return newMetadataDeleteAllOperator(key), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
@@ -144,20 +160,22 @@ func NewMetadata(
 func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
+	newMsg := msg.ShallowCopy()
+
 	valueBytes := p.valueBytes
 	if p.interpolate {
 		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
 	}
 
-	if err := p.operator(msg, valueBytes); err != nil {
+	if err := p.operator(newMsg, valueBytes); err != nil {
 		p.mErr.Incr(1)
 		p.log.Debugf("Failed to apply operator: %v\n", err)
 	}
 
-	msgs := [1]types.Message{msg}
+	msgs := [1]types.Message{newMsg}
 
 	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(msg.Len()))
+	p.mSentParts.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

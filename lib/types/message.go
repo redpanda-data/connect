@@ -226,6 +226,12 @@ func (m *messageImpl) SetMetadata(key, value string) {
 	m.metadata[key] = value
 }
 
+func (m *messageImpl) DeleteMetadata(key string) {
+	if m.metadata != nil {
+		delete(m.metadata, key)
+	}
+}
+
 func (m *messageImpl) IterMetadata(f func(k, v string) error) error {
 	for k, v := range m.metadata {
 		if err := f(k, v); err != nil {

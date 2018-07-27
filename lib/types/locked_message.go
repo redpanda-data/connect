@@ -75,6 +75,9 @@ func (m *lockedMessage) GetMetadata(key string) string {
 	return m.m.GetMetadata(key)
 }
 
+func (m *lockedMessage) DeleteMetadata(key string) {
+}
+
 func (m *lockedMessage) SetMetadata(key, value string) {
 }
 

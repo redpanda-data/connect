@@ -630,6 +630,10 @@ payload.
 
 Sets the value of a metadata key.
 
+#### `delete_all`
+
+Removes all metadata values from the message.
+
 ## `noop`
 
 ``` yaml

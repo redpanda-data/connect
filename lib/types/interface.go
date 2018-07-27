@@ -156,6 +156,9 @@ type Message interface {
 	// SetMetadata sets the value of a metadata key.
 	SetMetadata(key, value string)
 
+	// DeleteMetadata removes the value of a metadata key.
+	DeleteMetadata(key string)
+
 	// IterMetadata iterates the message metadata, calling func on each
 	// key/value pair.
 	IterMetadata(f func(k, v string) error) error
