@@ -50,7 +50,18 @@ topic which sends enveloped events to SQS, in which case you must also set the
 Here is a guide for setting up an SQS queue that receives events for new S3
 bucket objects:
 
-https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html`,
+https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "```" + `
+- s3_key
+` + "```" + `
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).`,
 	}
 }
 

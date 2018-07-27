@@ -36,7 +36,23 @@ func init() {
 AMQP (0.91) is the underlying messaging protocol that is used by various message
 brokers, including RabbitMQ.
 
-Exchange type options are: direct|fanout|topic|x-custom`,
+Exchange type options are: direct|fanout|topic|x-custom
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "```" + `
+- amqp_app_id
+- amqp_consumer_tag
+- amqp_exchange
+- amqp_message_id
+- amqp_routing_key
+- All headers with string values
+` + "```" + `
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).`,
 	}
 }
 

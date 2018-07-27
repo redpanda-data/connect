@@ -37,7 +37,18 @@ Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
 behaviour then look at NATS Stream.
 
 The urls can contain username/password semantics. e.g.
-nats://derek:pass@localhost:4222`,
+nats://derek:pass@localhost:4222
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "```" + `
+- nats_subject
+` + "```" + `
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).`,
 	}
 }
 

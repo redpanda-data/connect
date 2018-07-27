@@ -42,7 +42,9 @@ each file found will become a message.
 
 This input adds the following metadata fields to each message:
 
+` + "```" + `
 - path
+` + "```" + `
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).`,

@@ -123,6 +123,22 @@ brokers, including RabbitMQ.
 
 Exchange type options are: direct|fanout|topic|x-custom
 
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```
+- amqp_app_id
+- amqp_consumer_tag
+- amqp_exchange
+- amqp_message_id
+- amqp_routing_key
+- All headers with string values
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
+
 ## `broker`
 
 ``` yaml
@@ -276,7 +292,9 @@ each file found will become a message.
 
 This input adds the following metadata fields to each message:
 
+```
 - path
+```
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
@@ -349,6 +367,19 @@ which is enabled when key and cert files are specified.
 
 You can leave the 'address' config field blank in order to use the instance wide
 HTTP server.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```
+- http_server_user_agent
+- All headers (only first values are taken)
+- All cookies
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
 
 ## `inproc`
 
@@ -509,6 +540,17 @@ behaviour then look at NATS Stream.
 The urls can contain username/password semantics. e.g.
 nats://derek:pass@localhost:4222
 
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```
+- nats_subject
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
+
 ## `nats_stream`
 
 ``` yaml
@@ -531,6 +573,17 @@ semantics.
 Tracking and persisting offsets through a durable name is also optional and
 works with or without a queue. If a durable name is not provided then subjects
 are consumed from the most recently published message.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```
+- nats_stream_subject
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
 
 ## `nsq`
 
@@ -635,6 +688,17 @@ Here is a guide for setting up an SQS queue that receives events for new S3
 bucket objects:
 
 https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```
+- s3_key
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
 
 ## `scalability_protocols`
 
