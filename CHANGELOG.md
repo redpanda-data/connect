@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.20.7 - 2018-07-27
+
 ### Added
 
 - New `key` field added to the `dedupe` processor, allowing you to deduplicate
