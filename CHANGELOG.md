@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.20.5 - 2018-07-27
+
+### Added
+
+- Metadata fields are now collected from MQTT input.
+- AMQP output writes all metadata as headers.
+- AMQP output field `key` now supports function interpolation.
+
 ## 0.20.1 - 2018-07-26
 
 ### Added
