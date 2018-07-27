@@ -316,6 +316,7 @@ pipeline:
       hash: none
       parts:
       - 0
+      key: ""
       json_paths: []
       drop_on_err: true
     encode:

@@ -26,6 +26,7 @@
 					"drop_on_err": true,
 					"hash": "none",
 					"json_paths": [],
+					"key": "",
 					"parts": [
 						0
 					]

@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- New `key` field added to the `dedupe` processor, allowing you to deduplicate
+  using function interpolation. This deprecates the `json_paths` array field.
+
 ## 0.20.6 - 2018-07-27
 
 - New `s3` and `sqs` input and output types, these replace the now deprecated
