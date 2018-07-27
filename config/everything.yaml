@@ -178,20 +178,20 @@ input:
     channels:
     - benthos_chan
   s3:
-    region: ""
+    region: eu-west-1
     bucket: ""
     prefix: ""
     delete_objects: false
     sqs_url: ""
-    sqs_body_path: ""
+    sqs_body_path: Records.s3.object.key
     sqs_envelope_path: ""
-    sqs_max_messages: 0
+    sqs_max_messages: 10
     credentials:
       id: ""
       secret: ""
       token: ""
       role: ""
-    timeout_s: 0
+    timeout_s: 5
   scalability_protocols:
     urls:
     - tcp://*:5555
@@ -201,14 +201,14 @@ input:
     poll_timeout_ms: 5000
     reply_timeout_ms: 5000
   sqs:
-    region: ""
+    region: eu-west-1
     url: ""
     credentials:
       id: ""
       secret: ""
       token: ""
       role: ""
-    timeout_s: 0
+    timeout_s: 5
   stdin:
     multipart: false
     max_buffer: 1000000

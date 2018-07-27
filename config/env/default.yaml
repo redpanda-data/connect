@@ -163,12 +163,12 @@ input:
           token: ${INPUT_S3_CREDENTIALS_TOKEN}
         delete_objects: ${INPUT_S3_DELETE_OBJECTS:false}
         prefix: ${INPUT_S3_PREFIX}
-        region: ${INPUT_S3_REGION}
-        sqs_body_path: ${INPUT_S3_SQS_BODY_PATH}
+        region: ${INPUT_S3_REGION:eu-west-1}
+        sqs_body_path: ${INPUT_S3_SQS_BODY_PATH:Records.s3.object.key}
         sqs_envelope_path: ${INPUT_S3_SQS_ENVELOPE_PATH}
-        sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:0}
+        sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:10}
         sqs_url: ${INPUT_S3_SQS_URL}
-        timeout_s: ${INPUT_S3_TIMEOUT_S:0}
+        timeout_s: ${INPUT_S3_TIMEOUT_S:5}
       scalability_protocols:
         bind: ${INPUT_SCALABILITY_PROTOCOLS_BIND:true}
         poll_timeout_ms: ${INPUT_SCALABILITY_PROTOCOLS_POLL_TIMEOUT_MS:5000}
@@ -182,8 +182,8 @@ input:
           role: ${INPUT_SQS_CREDENTIALS_ROLE}
           secret: ${INPUT_SQS_CREDENTIALS_SECRET}
           token: ${INPUT_SQS_CREDENTIALS_TOKEN}
-        region: ${INPUT_SQS_REGION}
-        timeout_s: ${INPUT_SQS_TIMEOUT_S:0}
+        region: ${INPUT_SQS_REGION:eu-west-1}
+        timeout_s: ${INPUT_SQS_TIMEOUT_S:5}
         url: ${INPUT_SQS_URL}
       stdin:
         delimiter: ${INPUT_STDIN_DELIMITER}

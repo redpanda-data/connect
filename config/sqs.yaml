@@ -12,8 +12,8 @@ input:
       role: ""
       secret: ""
       token: ""
-    region: ""
-    timeout_s: 0
+    region: eu-west-1
+    timeout_s: 5
     url: ""
 buffer:
   type: none

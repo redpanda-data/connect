@@ -611,12 +611,12 @@ s3:
     token: ""
   delete_objects: false
   prefix: ""
-  region: ""
-  sqs_body_path: ""
+  region: eu-west-1
+  sqs_body_path: Records.s3.object.key
   sqs_envelope_path: ""
-  sqs_max_messages: 0
+  sqs_max_messages: 10
   sqs_url: ""
-  timeout_s: 0
+  timeout_s: 5
 ```
 
 Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
@@ -662,8 +662,8 @@ sqs:
     role: ""
     secret: ""
     token: ""
-  region: ""
-  timeout_s: 0
+  region: eu-west-1
+  timeout_s: 5
   url: ""
 ```
 
