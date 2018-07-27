@@ -33,7 +33,22 @@ func init() {
 	Constructors["mqtt"] = TypeSpec{
 		constructor: NewMQTT,
 		description: `
-Subscribe to topics on MQTT brokers`,
+Subscribe to topics on MQTT brokers.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "```" + `
+- mqtt_duplicate
+- mqtt_qos
+- mqtt_retained
+- mqtt_topic
+- mqtt_message_id
+` + "```" + `
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).`,
 	}
 }
 

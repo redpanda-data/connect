@@ -411,11 +411,13 @@ server.
 
 This input adds the following metadata fields to each message:
 
-- key
-- topic
-- partition
-- offset
-- All headers (version 0.11+)
+```
+- kafka_key
+- kafka_topic
+- kafka_partition
+- kafka_offset
+- All existing message headers (version 0.11+)
+```
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
@@ -466,7 +468,22 @@ mqtt:
   - tcp://localhost:1883
 ```
 
-Subscribe to topics on MQTT brokers
+Subscribe to topics on MQTT brokers.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```
+- mqtt_duplicate
+- mqtt_qos
+- mqtt_retained
+- mqtt_topic
+- mqtt_message_id
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
 
 ## `nats`
 
