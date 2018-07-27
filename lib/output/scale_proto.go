@@ -40,6 +40,12 @@ import (
 
 func init() {
 	Constructors["scalability_protocols"] = TypeSpec{
+		constructor: NewScaleProtoDEPRECATED,
+		description: `
+DEPRECATED: Use ` + "`nanomsg`" + ` instead.`,
+	}
+
+	Constructors["nanomsg"] = TypeSpec{
 		constructor: NewScaleProto,
 		description: `
 The scalability protocols are common communication patterns. This output should
@@ -71,6 +77,14 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 
 //------------------------------------------------------------------------------
 
+// NewScaleProtoDEPRECATED is deprecated
+func NewScaleProtoDEPRECATED(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	log.Warnln("WARNING: Type 'scalability_protocols' is deprecated, please use 'nanomsg' instead.")
+	return NewScaleProto(conf, mgr, log, stats)
+}
+
+//------------------------------------------------------------------------------
+
 // ScaleProto is an output type that serves ScaleProto messages.
 type ScaleProto struct {
 	running int32
@@ -93,7 +107,7 @@ type ScaleProto struct {
 func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	s := ScaleProto{
 		running:    1,
-		log:        log.NewModule(".output.scale_proto"),
+		log:        log.NewModule(".output.nanomsg"),
 		stats:      stats,
 		conf:       conf,
 		closedChan: make(chan struct{}),
@@ -164,10 +178,10 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 // not use select.
 func (s *ScaleProto) loop() {
 	var (
-		mRunning  = s.stats.GetCounter("output.scale_proto.running")
-		mCount    = s.stats.GetCounter("output.scale_proto.count")
-		mSendErr  = s.stats.GetCounter("output.scale_proto.send.error")
-		mSendSucc = s.stats.GetCounter("output.scale_proto.send.success")
+		mRunning  = s.stats.GetCounter("output.nanomsg.running")
+		mCount    = s.stats.GetCounter("output.nanomsg.count")
+		mSendErr  = s.stats.GetCounter("output.nanomsg.send.error")
+		mSendSucc = s.stats.GetCounter("output.nanomsg.send.success")
 	)
 
 	defer func() {
@@ -182,12 +196,12 @@ func (s *ScaleProto) loop() {
 
 	if s.conf.ScaleProto.Bind {
 		s.log.Infof(
-			"Sending Scalability Protocols messages to bound URLs: %s\n",
+			"Sending nanomsg messages to bound URLs: %s\n",
 			s.urls,
 		)
 	} else {
 		s.log.Infof(
-			"Sending Scalability Protocols messages to connected URLs: %s\n",
+			"Sending nanomsg messages to connected URLs: %s\n",
 			s.urls,
 		)
 	}

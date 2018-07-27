@@ -31,21 +31,19 @@ import (
 
 func init() {
 	Constructors["amazon_s3"] = TypeSpec{
-		constructor: NewAmazonS3,
+		constructor: NewAmazonS3DEPRECATED,
 		description: `
-Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
-with the path specified with the 'path' field, in order to have a different path
-for each object you should use function interpolations described
-[here](../config_interpolation.md#functions).`,
+DEPRECATED: Use ` + "`s3`" + ` instead.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewAmazonS3 creates a new AmazonS3 output type.
-func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+// NewAmazonS3DEPRECATED is deprecated
+func NewAmazonS3DEPRECATED(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	log.Warnln("WARNING: The 'amazon_s3' type is deprecated, use 's3' instead.")
 	return NewWriter(
-		"amazon_s3", writer.NewAmazonS3(conf.AmazonS3, log, stats), log, stats,
+		"amazon_s3", writer.NewAmazonS3(conf.AmazonS3DEPRECATED, log, stats), log, stats,
 	)
 }
 

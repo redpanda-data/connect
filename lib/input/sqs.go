@@ -30,22 +30,22 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["amazon_sqs"] = TypeSpec{
-		constructor: NewAmazonSQSDEPRECATED,
+	Constructors["sqs"] = TypeSpec{
+		constructor: NewAmazonSQS,
 		description: `
-DEPRECATED: Use ` + "`sqs`" + ` instead.`,
+Receive messages from an Amazon SQS URL, only the body is extracted into
+messages.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewAmazonSQSDEPRECATED is deprecated
-func NewAmazonSQSDEPRECATED(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	log.Warnf("WARNING: The 'amazon_sqs' type is deprecated, please use 'sqs' instead.")
+// NewAmazonSQS creates a new Amazon SQS input type.
+func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	return NewReader(
-		"amazon_sqs",
+		"sqs",
 		reader.NewPreserver(
-			reader.NewAmazonSQS(conf.AmazonSQSDEPRECATED, log, stats),
+			reader.NewAmazonSQS(conf.SQS, log, stats),
 		),
 		log, stats,
 	)

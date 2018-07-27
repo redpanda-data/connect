@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ashley Jeffs
+// Copyright (c) 2014 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,25 +30,25 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["amazon_sqs"] = TypeSpec{
-		constructor: NewAmazonSQSDEPRECATED,
+	Constructors["nanomsg"] = TypeSpec{
+		constructor: NewScaleProto,
 		description: `
-DEPRECATED: Use ` + "`sqs`" + ` instead.`,
+The scalability protocols are common communication patterns. This input should
+be compatible with any implementation, but specifically targets Nanomsg.
+
+Currently only PULL and SUB sockets are supported.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewAmazonSQSDEPRECATED is deprecated
-func NewAmazonSQSDEPRECATED(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	log.Warnf("WARNING: The 'amazon_sqs' type is deprecated, please use 'sqs' instead.")
-	return NewReader(
-		"amazon_sqs",
-		reader.NewPreserver(
-			reader.NewAmazonSQS(conf.AmazonSQSDEPRECATED, log, stats),
-		),
-		log, stats,
-	)
+// NewScaleProto creates a new ScaleProto input type.
+func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	s, err := reader.NewScaleProto(conf.Nanomsg, log, stats)
+	if err != nil {
+		return nil, err
+	}
+	return NewReader("nanomsg", reader.NewPreserver(s), log, stats)
 }
 
 //------------------------------------------------------------------------------

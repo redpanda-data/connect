@@ -117,6 +117,13 @@ input:
         - ${INPUT_MQTT_TOPICS:benthos_topic}
         urls:
         - ${INPUT_MQTT_URLS:tcp://localhost:1883}
+      nanomsg:
+        bind: ${INPUT_NANOMSG_BIND:true}
+        poll_timeout_ms: ${INPUT_NANOMSG_POLL_TIMEOUT_MS:5000}
+        reply_timeout_ms: ${INPUT_NANOMSG_REPLY_TIMEOUT_MS:5000}
+        socket_type: ${INPUT_NANOMSG_SOCKET_TYPE:PULL}
+        urls:
+        - ${INPUT_NANOMSG_URLS:tcp://*:5555}
       nats:
         subject: ${INPUT_NATS_SUBJECT:benthos_messages}
         urls:
@@ -147,6 +154,21 @@ input:
         channels:
         - ${INPUT_REDIS_PUBSUB_CHANNELS:benthos_chan}
         url: ${INPUT_REDIS_PUBSUB_URL:tcp://localhost:6379}
+      s3:
+        bucket: ${INPUT_S3_BUCKET}
+        credentials:
+          id: ${INPUT_S3_CREDENTIALS_ID}
+          role: ${INPUT_S3_CREDENTIALS_ROLE}
+          secret: ${INPUT_S3_CREDENTIALS_SECRET}
+          token: ${INPUT_S3_CREDENTIALS_TOKEN}
+        delete_objects: ${INPUT_S3_DELETE_OBJECTS:false}
+        prefix: ${INPUT_S3_PREFIX}
+        region: ${INPUT_S3_REGION}
+        sqs_body_path: ${INPUT_S3_SQS_BODY_PATH}
+        sqs_envelope_path: ${INPUT_S3_SQS_ENVELOPE_PATH}
+        sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:0}
+        sqs_url: ${INPUT_S3_SQS_URL}
+        timeout_s: ${INPUT_S3_TIMEOUT_S:0}
       scalability_protocols:
         bind: ${INPUT_SCALABILITY_PROTOCOLS_BIND:true}
         poll_timeout_ms: ${INPUT_SCALABILITY_PROTOCOLS_POLL_TIMEOUT_MS:5000}
@@ -154,6 +176,15 @@ input:
         socket_type: ${INPUT_SCALABILITY_PROTOCOLS_SOCKET_TYPE:PULL}
         urls:
         - ${INPUT_SCALABILITY_PROTOCOLS_URLS:tcp://*:5555}
+      sqs:
+        credentials:
+          id: ${INPUT_SQS_CREDENTIALS_ID}
+          role: ${INPUT_SQS_CREDENTIALS_ROLE}
+          secret: ${INPUT_SQS_CREDENTIALS_SECRET}
+          token: ${INPUT_SQS_CREDENTIALS_TOKEN}
+        region: ${INPUT_SQS_REGION}
+        timeout_s: ${INPUT_SQS_TIMEOUT_S:0}
+        url: ${INPUT_SQS_URL}
       stdin:
         delimiter: ${INPUT_STDIN_DELIMITER}
         max_buffer: ${INPUT_STDIN_MAX_BUFFER:1000000}
@@ -384,6 +415,12 @@ output:
         topic: ${OUTPUT_MQTT_TOPIC:benthos_topic}
         urls:
         - ${OUTPUT_MQTT_URLS:tcp://localhost:1883}
+      nanomsg:
+        bind: ${OUTPUT_NANOMSG_BIND:false}
+        poll_timeout_ms: ${OUTPUT_NANOMSG_POLL_TIMEOUT_MS:5000}
+        socket_type: ${OUTPUT_NANOMSG_SOCKET_TYPE:PUSH}
+        urls:
+        - ${OUTPUT_NANOMSG_URLS:tcp://localhost:5556}
       nats:
         subject: ${OUTPUT_NATS_SUBJECT:benthos_messages}
         urls:
@@ -405,12 +442,30 @@ output:
       redis_pubsub:
         channel: ${OUTPUT_REDIS_PUBSUB_CHANNEL:benthos_chan}
         url: ${OUTPUT_REDIS_PUBSUB_URL:tcp://localhost:6379}
+      s3:
+        bucket: ${OUTPUT_S3_BUCKET}
+        credentials:
+          id: ${OUTPUT_S3_CREDENTIALS_ID}
+          role: ${OUTPUT_S3_CREDENTIALS_ROLE}
+          secret: ${OUTPUT_S3_CREDENTIALS_SECRET}
+          token: ${OUTPUT_S3_CREDENTIALS_TOKEN}
+        path: ${OUTPUT_S3_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+        region: ${OUTPUT_S3_REGION:eu-west-1}
+        timeout_s: ${OUTPUT_S3_TIMEOUT_S:5}
       scalability_protocols:
         bind: ${OUTPUT_SCALABILITY_PROTOCOLS_BIND:false}
         poll_timeout_ms: ${OUTPUT_SCALABILITY_PROTOCOLS_POLL_TIMEOUT_MS:5000}
         socket_type: ${OUTPUT_SCALABILITY_PROTOCOLS_SOCKET_TYPE:PUSH}
         urls:
         - ${OUTPUT_SCALABILITY_PROTOCOLS_URLS:tcp://localhost:5556}
+      sqs:
+        credentials:
+          id: ${OUTPUT_SQS_CREDENTIALS_ID}
+          role: ${OUTPUT_SQS_CREDENTIALS_ROLE}
+          secret: ${OUTPUT_SQS_CREDENTIALS_SECRET}
+          token: ${OUTPUT_SQS_CREDENTIALS_TOKEN}
+        region: ${OUTPUT_SQS_REGION:eu-west-1}
+        url: ${OUTPUT_SQS_URL}
       stdout:
         delimiter: ${OUTPUT_STDOUT_DELIMITER}
       type: ${OUTPUT_TYPE:dynamic}

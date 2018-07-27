@@ -33,38 +33,24 @@ import (
 
 func init() {
 	Constructors["amazon_s3"] = TypeSpec{
-		constructor: NewAmazonS3,
+		constructor: NewAmazonS3DEPRECATED,
 		description: `
-Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
-SQS queue has been configured then only object keys read from the queue will be
-downloaded. Otherwise, the entire list of objects found when this input is
-created will be downloaded. Note that the prefix configuration is only used when
-downloading objects without SQS configured.
-
-If your bucket is configured to send events directly to an SQS queue then you
-need to set the 'sqs_body_path' field to where the object key is found in the
-payload. However, it is also common practice to send bucket events to an SNS
-topic which sends enveloped events to SQS, in which case you must also set the
-'sqs_envelope_path' field to where the payload can be found.
-
-Here is a guide for setting up an SQS queue that receives events for new S3
-bucket objects:
-
-https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html`,
+DEPRECATED: Use ` + "`s3`" + ` instead.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewAmazonS3 creates a new amazon S3 input type.
-func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	if len(conf.AmazonS3.Bucket) == 0 {
+// NewAmazonS3DEPRECATED is deprecated
+func NewAmazonS3DEPRECATED(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	log.Warnf("WARNING: The 'amazon_s3' type is deprecated, please use 's3' instead.")
+	if len(conf.AmazonS3DEPRECATED.Bucket) == 0 {
 		return nil, errors.New("invalid bucket (cannot be empty)")
 	}
 	return NewReader(
 		"amazon_s3",
 		reader.NewPreserver(
-			reader.NewAmazonS3(conf.AmazonS3, log, stats),
+			reader.NewAmazonS3(conf.AmazonS3DEPRECATED, log, stats),
 		),
 		log, stats,
 	)

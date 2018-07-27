@@ -62,61 +62,65 @@ var Constructors = map[string]TypeSpec{}
 // that some configs are empty structs, as the type has no optional values but
 // we want to list it as an option.
 type Config struct {
-	Type          string                     `json:"type" yaml:"type"`
-	AmazonS3      reader.AmazonS3Config      `json:"amazon_s3" yaml:"amazon_s3"`
-	AmazonSQS     reader.AmazonSQSConfig     `json:"amazon_sqs" yaml:"amazon_sqs"`
-	AMQP          reader.AMQPConfig          `json:"amqp" yaml:"amqp"`
-	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
-	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
-	File          FileConfig                 `json:"file" yaml:"file"`
-	Files         reader.FilesConfig         `json:"files" yaml:"files"`
-	HTTPClient    HTTPClientConfig           `json:"http_client" yaml:"http_client"`
-	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
-	Inproc        InprocConfig               `json:"inproc" yaml:"inproc"`
-	Kafka         reader.KafkaConfig         `json:"kafka" yaml:"kafka"`
-	KafkaBalanced reader.KafkaBalancedConfig `json:"kafka_balanced" yaml:"kafka_balanced"`
-	MQTT          reader.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
-	NATS          reader.NATSConfig          `json:"nats" yaml:"nats"`
-	NATSStream    reader.NATSStreamConfig    `json:"nats_stream" yaml:"nats_stream"`
-	NSQ           reader.NSQConfig           `json:"nsq" yaml:"nsq"`
-	ReadUntil     ReadUntilConfig            `json:"read_until" yaml:"read_until"`
-	RedisList     reader.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub   reader.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
-	ScaleProto    reader.ScaleProtoConfig    `json:"scalability_protocols" yaml:"scalability_protocols"`
-	STDIN         STDINConfig                `json:"stdin" yaml:"stdin"`
-	Websocket     reader.WebsocketConfig     `json:"websocket" yaml:"websocket"`
-	ZMQ4          *reader.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	Processors    []processor.Config         `json:"processors" yaml:"processors"`
+	Type                string                     `json:"type" yaml:"type"`
+	AmazonS3DEPRECATED  reader.AmazonS3Config      `json:"amazon_s3" yaml:"amazon_s3"`
+	AmazonSQSDEPRECATED reader.AmazonSQSConfig     `json:"amazon_sqs" yaml:"amazon_sqs"`
+	AMQP                reader.AMQPConfig          `json:"amqp" yaml:"amqp"`
+	Broker              BrokerConfig               `json:"broker" yaml:"broker"`
+	Dynamic             DynamicConfig              `json:"dynamic" yaml:"dynamic"`
+	File                FileConfig                 `json:"file" yaml:"file"`
+	Files               reader.FilesConfig         `json:"files" yaml:"files"`
+	HTTPClient          HTTPClientConfig           `json:"http_client" yaml:"http_client"`
+	HTTPServer          HTTPServerConfig           `json:"http_server" yaml:"http_server"`
+	Inproc              InprocConfig               `json:"inproc" yaml:"inproc"`
+	Kafka               reader.KafkaConfig         `json:"kafka" yaml:"kafka"`
+	KafkaBalanced       reader.KafkaBalancedConfig `json:"kafka_balanced" yaml:"kafka_balanced"`
+	MQTT                reader.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
+	Nanomsg             reader.ScaleProtoConfig    `json:"nanomsg" yaml:"nanomsg"`
+	NATS                reader.NATSConfig          `json:"nats" yaml:"nats"`
+	NATSStream          reader.NATSStreamConfig    `json:"nats_stream" yaml:"nats_stream"`
+	NSQ                 reader.NSQConfig           `json:"nsq" yaml:"nsq"`
+	ReadUntil           ReadUntilConfig            `json:"read_until" yaml:"read_until"`
+	RedisList           reader.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
+	RedisPubSub         reader.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
+	S3                  reader.AmazonS3Config      `json:"s3" yaml:"s3"`
+	ScaleProto          reader.ScaleProtoConfig    `json:"scalability_protocols" yaml:"scalability_protocols"`
+	SQS                 reader.AmazonSQSConfig     `json:"sqs" yaml:"sqs"`
+	STDIN               STDINConfig                `json:"stdin" yaml:"stdin"`
+	Websocket           reader.WebsocketConfig     `json:"websocket" yaml:"websocket"`
+	ZMQ4                *reader.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Processors          []processor.Config         `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:          "stdin",
-		AmazonS3:      reader.NewAmazonS3Config(),
-		AmazonSQS:     reader.NewAmazonSQSConfig(),
-		AMQP:          reader.NewAMQPConfig(),
-		Broker:        NewBrokerConfig(),
-		Dynamic:       NewDynamicConfig(),
-		File:          NewFileConfig(),
-		Files:         reader.NewFilesConfig(),
-		HTTPClient:    NewHTTPClientConfig(),
-		HTTPServer:    NewHTTPServerConfig(),
-		Inproc:        NewInprocConfig(),
-		Kafka:         reader.NewKafkaConfig(),
-		KafkaBalanced: reader.NewKafkaBalancedConfig(),
-		MQTT:          reader.NewMQTTConfig(),
-		NATS:          reader.NewNATSConfig(),
-		NATSStream:    reader.NewNATSStreamConfig(),
-		NSQ:           reader.NewNSQConfig(),
-		ReadUntil:     NewReadUntilConfig(),
-		RedisList:     reader.NewRedisListConfig(),
-		RedisPubSub:   reader.NewRedisPubSubConfig(),
-		ScaleProto:    reader.NewScaleProtoConfig(),
-		STDIN:         NewSTDINConfig(),
-		Websocket:     reader.NewWebsocketConfig(),
-		ZMQ4:          reader.NewZMQ4Config(),
-		Processors:    []processor.Config{},
+		Type:                "stdin",
+		AmazonS3DEPRECATED:  reader.NewAmazonS3Config(),
+		AmazonSQSDEPRECATED: reader.NewAmazonSQSConfig(),
+		AMQP:                reader.NewAMQPConfig(),
+		Broker:              NewBrokerConfig(),
+		Dynamic:             NewDynamicConfig(),
+		File:                NewFileConfig(),
+		Files:               reader.NewFilesConfig(),
+		HTTPClient:          NewHTTPClientConfig(),
+		HTTPServer:          NewHTTPServerConfig(),
+		Inproc:              NewInprocConfig(),
+		Kafka:               reader.NewKafkaConfig(),
+		KafkaBalanced:       reader.NewKafkaBalancedConfig(),
+		MQTT:                reader.NewMQTTConfig(),
+		Nanomsg:             reader.NewScaleProtoConfig(),
+		NATS:                reader.NewNATSConfig(),
+		NATSStream:          reader.NewNATSStreamConfig(),
+		NSQ:                 reader.NewNSQConfig(),
+		ReadUntil:           NewReadUntilConfig(),
+		RedisList:           reader.NewRedisListConfig(),
+		RedisPubSub:         reader.NewRedisPubSubConfig(),
+		ScaleProto:          reader.NewScaleProtoConfig(),
+		STDIN:               NewSTDINConfig(),
+		Websocket:           reader.NewWebsocketConfig(),
+		ZMQ4:                reader.NewZMQ4Config(),
+		Processors:          []processor.Config{},
 	}
 }
 

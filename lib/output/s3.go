@@ -18,36 +18,34 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package input
+package output
 
 import (
-	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["amazon_sqs"] = TypeSpec{
-		constructor: NewAmazonSQSDEPRECATED,
+	Constructors["s3"] = TypeSpec{
+		constructor: NewAmazonS3,
 		description: `
-DEPRECATED: Use ` + "`sqs`" + ` instead.`,
+Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
+with the path specified with the 'path' field, in order to have a different path
+for each object you should use function interpolations described
+[here](../config_interpolation.md#functions).`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewAmazonSQSDEPRECATED is deprecated
-func NewAmazonSQSDEPRECATED(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	log.Warnf("WARNING: The 'amazon_sqs' type is deprecated, please use 'sqs' instead.")
-	return NewReader(
-		"amazon_sqs",
-		reader.NewPreserver(
-			reader.NewAmazonSQS(conf.AmazonSQSDEPRECATED, log, stats),
-		),
-		log, stats,
+// NewAmazonS3 creates a new AmazonS3 output type.
+func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	return NewWriter(
+		"s3", writer.NewAmazonS3(conf.S3, log, stats), log, stats,
 	)
 }
 

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `s3` and `sqs` input and output types, these replace the now deprecated
+  `amazon_s3` and `amazon_sqs` types respectively, which will eventually be
+  removed.
+- New `nanomsg` input and output types, these replace the now deprecated
+  `scalability_protocols` types, which will eventually be removed.
+
 ## 0.20.5 - 2018-07-27
 
 ### Added

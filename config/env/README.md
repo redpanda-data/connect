@@ -139,6 +139,11 @@ INPUT_MQTT_CLIENT_ID                         = benthos_input
 INPUT_MQTT_QOS                               = 1
 INPUT_MQTT_TOPICS                            = benthos_topic
 INPUT_MQTT_URLS                              = tcp://localhost:1883
+INPUT_NANOMSG_BIND                           = true
+INPUT_NANOMSG_POLL_TIMEOUT_MS                = 5000
+INPUT_NANOMSG_REPLY_TIMEOUT_MS               = 5000
+INPUT_NANOMSG_SOCKET_TYPE                    = PULL
+INPUT_NANOMSG_URLS                           = tcp://*:5555
 INPUT_NATS_STREAM_CLIENT_ID                  = benthos_client
 INPUT_NATS_STREAM_CLUSTER_ID                 = test-cluster
 INPUT_NATS_STREAM_DURABLE_NAME               = benthos_offset
@@ -159,11 +164,31 @@ INPUT_REDIS_LIST_TIMEOUT_MS                  = 5000
 INPUT_REDIS_LIST_URL                         = tcp://localhost:6379
 INPUT_REDIS_PUBSUB_CHANNELS                  = benthos_chan
 INPUT_REDIS_PUBSUB_URL                       = tcp://localhost:6379
+INPUT_S3_BUCKET
+INPUT_S3_CREDENTIALS_ID
+INPUT_S3_CREDENTIALS_ROLE
+INPUT_S3_CREDENTIALS_SECRET
+INPUT_S3_CREDENTIALS_TOKEN
+INPUT_S3_DELETE_OBJECTS                      = false
+INPUT_S3_PREFIX
+INPUT_S3_REGION
+INPUT_S3_SQS_BODY_PATH
+INPUT_S3_SQS_ENVELOPE_PATH
+INPUT_S3_SQS_MAX_MESSAGES                    = 0
+INPUT_S3_SQS_URL
+INPUT_S3_TIMEOUT_S                           = 0
 INPUT_SCALABILITY_PROTOCOLS_BIND             = true
 INPUT_SCALABILITY_PROTOCOLS_POLL_TIMEOUT_MS  = 5000
 INPUT_SCALABILITY_PROTOCOLS_REPLY_TIMEOUT_MS = 5000
 INPUT_SCALABILITY_PROTOCOLS_SOCKET_TYPE      = PULL
 INPUT_SCALABILITY_PROTOCOLS_URLS             = tcp://*:5555
+INPUT_SQS_CREDENTIALS_ID
+INPUT_SQS_CREDENTIALS_ROLE
+INPUT_SQS_CREDENTIALS_SECRET
+INPUT_SQS_CREDENTIALS_TOKEN
+INPUT_SQS_REGION
+INPUT_SQS_TIMEOUT_S                          = 0
+INPUT_SQS_URL
 INPUT_STDIN_DELIMITER
 INPUT_STDIN_MAX_BUFFER                       = 1000000
 INPUT_STDIN_MULTIPART                        = false
@@ -345,6 +370,10 @@ OUTPUT_MQTT_CLIENT_ID                        = benthos_output
 OUTPUT_MQTT_QOS                              = 1
 OUTPUT_MQTT_TOPIC                            = benthos_topic
 OUTPUT_MQTT_URLS                             = tcp://localhost:1883
+OUTPUT_NANOMSG_BIND                          = false
+OUTPUT_NANOMSG_POLL_TIMEOUT_MS               = 5000
+OUTPUT_NANOMSG_SOCKET_TYPE                   = PUSH
+OUTPUT_NANOMSG_URLS                          = tcp://localhost:5556
 OUTPUT_NATS_STREAM_CLIENT_ID                 = benthos_client
 OUTPUT_NATS_STREAM_CLUSTER_ID                = test-cluster
 OUTPUT_NATS_STREAM_SUBJECT                   = benthos_messages
@@ -359,10 +388,24 @@ OUTPUT_REDIS_LIST_KEY                        = benthos_list
 OUTPUT_REDIS_LIST_URL                        = tcp://localhost:6379
 OUTPUT_REDIS_PUBSUB_CHANNEL                  = benthos_chan
 OUTPUT_REDIS_PUBSUB_URL                      = tcp://localhost:6379
+OUTPUT_S3_BUCKET
+OUTPUT_S3_CREDENTIALS_ID
+OUTPUT_S3_CREDENTIALS_ROLE
+OUTPUT_S3_CREDENTIALS_SECRET
+OUTPUT_S3_CREDENTIALS_TOKEN
+OUTPUT_S3_PATH                               = ${!count:files}-${!timestamp_unix_nano}.txt
+OUTPUT_S3_REGION                             = eu-west-1
+OUTPUT_S3_TIMEOUT_S                          = 5
 OUTPUT_SCALABILITY_PROTOCOLS_BIND            = false
 OUTPUT_SCALABILITY_PROTOCOLS_POLL_TIMEOUT_MS = 5000
 OUTPUT_SCALABILITY_PROTOCOLS_SOCKET_TYPE     = PUSH
 OUTPUT_SCALABILITY_PROTOCOLS_URLS            = tcp://localhost:5556
+OUTPUT_SQS_CREDENTIALS_ID
+OUTPUT_SQS_CREDENTIALS_ROLE
+OUTPUT_SQS_CREDENTIALS_SECRET
+OUTPUT_SQS_CREDENTIALS_TOKEN
+OUTPUT_SQS_REGION                            = eu-west-1
+OUTPUT_SQS_URL
 OUTPUT_STDOUT_DELIMITER
 OUTPUT_WEBSOCKET_BASIC_AUTH_ENABLED          = false
 OUTPUT_WEBSOCKET_BASIC_AUTH_PASSWORD

@@ -18,36 +18,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package input
+package output
 
 import (
-	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["amazon_sqs"] = TypeSpec{
-		constructor: NewAmazonSQSDEPRECATED,
+	Constructors["sqs"] = TypeSpec{
+		constructor: NewAmazonSQS,
 		description: `
-DEPRECATED: Use ` + "`sqs`" + ` instead.`,
+Sends messages to an SQS queue.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewAmazonSQSDEPRECATED is deprecated
-func NewAmazonSQSDEPRECATED(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	log.Warnf("WARNING: The 'amazon_sqs' type is deprecated, please use 'sqs' instead.")
-	return NewReader(
-		"amazon_sqs",
-		reader.NewPreserver(
-			reader.NewAmazonSQS(conf.AmazonSQSDEPRECATED, log, stats),
-		),
-		log, stats,
+// NewAmazonSQS creates a new AmazonSQS output type.
+func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	return NewWriter(
+		"sqs", writer.NewAmazonSQS(conf.SQS, log, stats), log, stats,
 	)
 }
 
