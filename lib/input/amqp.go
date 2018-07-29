@@ -43,13 +43,27 @@ Exchange type options are: direct|fanout|topic|x-custom
 This input adds the following metadata fields to each message:
 
 ` + "```" + `
+- amqp_content_type
+- amqp_content_encoding
+- amqp_delivery_mode
+- amqp_priority
+- amqp_correlation_id
+- amqp_reply_to
+- amqp_expiration
+- amqp_message_id
+- amqp_timestamp
+- amqp_type
+- amqp_user_id
 - amqp_app_id
 - amqp_consumer_tag
+- amqp_delivery_tag
+- amqp_redelivered
 - amqp_exchange
-- amqp_message_id
 - amqp_routing_key
-- All headers with string values
+- All headers (prefixed with amqp_headers_) with types supported by [amqp.Table](https://godoc.org/github.com/streadway/amqp#Table)
 ` + "```" + `
+
+The metadata supports nested amqp.Table types. The keys of nested tables are prefixed with the key of the parent table.
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).`,
