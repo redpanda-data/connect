@@ -124,6 +124,9 @@ func testAMQPConnect(url string, t *testing.T) {
 			if pErr := mChan.Publish(conf.Exchange, conf.BindingKey, false, false, amqp.Publishing{
 				Headers: amqp.Table{
 					"foo": "bar",
+					"root": amqp.Table{
+						"foo": "bar2",
+					},
 				},
 				ContentType:     "application/octet-stream",
 				ContentEncoding: "",
@@ -151,6 +154,9 @@ func testAMQPConnect(url string, t *testing.T) {
 			delete(testMsgs, act)
 			if act = actM.GetMetadata("foo"); act != "bar" {
 				t.Errorf("Wrong metadata returned: %v != bar", act)
+			}
+			if act = actM.GetMetadata("root_foo"); act != "bar2" {
+				t.Errorf("Wrong metadata returned: %v != bar2", act)
 			}
 		}
 		if err = m.Acknowledge(nil); err != nil {

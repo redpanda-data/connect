@@ -22,6 +22,8 @@ package reader
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -195,6 +197,54 @@ func (a *AMQP) disconnect() error {
 
 //------------------------------------------------------------------------------
 
+// Determine the type of the value and set the metadata.
+func setMetadata(m types.Message, k string, v interface{}) {
+	var metaValue string
+	var metaKey = strings.Replace(k, "-", "_", -1)
+
+	switch v := v.(type) {
+	case bool:
+		metaValue = strconv.FormatBool(bool(v))
+	case float32:
+		metaValue = strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		metaValue = strconv.FormatFloat(v, 'f', -1, 64)
+	case byte:
+		metaValue = strconv.Itoa(int(v))
+	case int16:
+		metaValue = strconv.Itoa(int(v))
+	case int32:
+		metaValue = strconv.Itoa(int(v))
+	case int64:
+		metaValue = strconv.Itoa(int(v))
+	case nil:
+		metaValue = ""
+	case string:
+		metaValue = v
+	case []byte:
+		metaValue = string(v[:])
+	case time.Time:
+		metaValue = v.Format(time.RFC3339)
+	case amqp.Decimal:
+		dec := strconv.Itoa(int(v.Value))
+		index := len(dec) - int(v.Scale)
+		metaValue = dec[:index] + "." + dec[index:]
+	case amqp.Table:
+		for key, value := range v {
+			setMetadata(m, metaKey+"_"+key, value)
+		}
+		return
+	default:
+		metaValue = ""
+	}
+
+	if metaValue != "" {
+		m.SetMetadata(metaKey, metaValue)
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // Read a new AMQP message.
 func (a *AMQP) Read() (types.Message, error) {
 	var c <-chan amqp.Delivery
@@ -220,16 +270,35 @@ func (a *AMQP) Read() (types.Message, error) {
 
 	msg := types.NewMessage([][]byte{data.Body})
 
-	msg.SetMetadata("amqp_app_id", data.AppId)
-	msg.SetMetadata("amqp_consumer_tag", data.ConsumerTag)
-	msg.SetMetadata("amqp_exchange", data.Exchange)
-	msg.SetMetadata("amqp_message_id", data.MessageId)
-	msg.SetMetadata("amqp_routing_key", data.RoutingKey)
 	for k, v := range data.Headers {
-		if str, ok := v.(string); ok {
-			msg.SetMetadata(k, str)
-		}
+		setMetadata(msg, k, v)
 	}
+
+	setMetadata(msg, "amqp_content_type", data.ContentType)
+	setMetadata(msg, "amqp_content_encoding", data.ContentEncoding)
+
+	if data.DeliveryMode != 0 {
+		setMetadata(msg, "amqp_delivery_mode", data.DeliveryMode)
+	}
+
+	setMetadata(msg, "amqp_priority", data.Priority)
+	setMetadata(msg, "amqp_correlation_id", data.CorrelationId)
+	setMetadata(msg, "amqp_reply_to", data.ReplyTo)
+	setMetadata(msg, "amqp_expiration", data.Expiration)
+	setMetadata(msg, "amqp_message_id", data.MessageId)
+
+	if !data.Timestamp.IsZero() {
+		setMetadata(msg, "amqp_timestamp", data.Timestamp.Unix())
+	}
+
+	setMetadata(msg, "amqp_type", data.Type)
+	setMetadata(msg, "amqp_user_id", data.UserId)
+	setMetadata(msg, "amqp_app_id", data.AppId)
+	setMetadata(msg, "amqp_consumer_tag", data.ConsumerTag)
+	setMetadata(msg, "amqp_delivery_tag", data.DeliveryTag)
+	setMetadata(msg, "amqp_redelivered", data.Redelivered)
+	setMetadata(msg, "amqp_exchange", data.Exchange)
+	setMetadata(msg, "amqp_routing_key", data.RoutingKey)
 
 	return msg, nil
 }

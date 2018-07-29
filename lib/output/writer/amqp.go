@@ -180,19 +180,19 @@ func (a *AMQP) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
+	bindingKey := a.conf.BindingKey
+	if a.interpolateKey {
+		bindingKey = strings.Replace(string(text.ReplaceFunctionVariables(msg, a.keyBytes)), "/", ".", -1)
+	}
+
+	headers := amqp.Table{}
+
+	msg.IterMetadata(func(k, v string) error {
+		headers[strings.Replace(k, "_", "-", -1)] = v
+		return nil
+	})
+
 	for _, part := range msg.GetAll() {
-		bindingKey := a.conf.BindingKey
-		if a.interpolateKey {
-			bindingKey = strings.Replace(string(text.ReplaceFunctionVariables(msg, a.keyBytes)), "/", ".", -1)
-		}
-
-		headers := amqp.Table{}
-
-		msg.IterMetadata(func(k, v string) error {
-			headers[strings.Replace(k, "_", "-", -1)] = v
-			return nil
-		})
-
 		err := amqpChan.Publish(
 			a.conf.Exchange,  // publish to an exchange
 			bindingKey,       // routing to 0 or more queues

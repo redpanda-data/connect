@@ -128,12 +128,25 @@ Exchange type options are: direct|fanout|topic|x-custom
 This input adds the following metadata fields to each message:
 
 ```
+- amqp_content_type
+- amqp_content_encoding
+- amqp_delivery_mode
+- amqp_priority
+- amqp_correlation_id
+- amqp_reply_to
+- amqp_expiration
+- amqp_message_id
+- amqp_timestamp
+- amqp_type
+- amqp_user_id
 - amqp_app_id
 - amqp_consumer_tag
+- amqp_delivery_tag
+- amqp_redelivered
 - amqp_exchange
-- amqp_message_id
 - amqp_routing_key
-- All headers with string values
+- All existing message headers, including nested headers prefixed with the key
+  of their respective parent.
 ```
 
 You can access these metadata fields using
