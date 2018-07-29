@@ -218,7 +218,20 @@ func (a *AMQP) Read() (types.Message, error) {
 	// Only store the latest delivery tag, but always Ack multiple.
 	a.ackTag = data.DeliveryTag
 
-	return types.NewMessage([][]byte{data.Body}), nil
+	msg := types.NewMessage([][]byte{data.Body})
+
+	msg.SetMetadata("amqp_app_id", data.AppId)
+	msg.SetMetadata("amqp_consumer_tag", data.ConsumerTag)
+	msg.SetMetadata("amqp_exchange", data.Exchange)
+	msg.SetMetadata("amqp_message_id", data.MessageId)
+	msg.SetMetadata("amqp_routing_key", data.RoutingKey)
+	for k, v := range data.Headers {
+		if str, ok := v.(string); ok {
+			msg.SetMetadata(k, str)
+		}
+	}
+
+	return msg, nil
 }
 
 // Acknowledge instructs whether unacknowledged messages have been successfully

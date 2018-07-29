@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `delete_all` operator for `metadata` processor.
+
 ### 0.20.7 - 2018-07-27
 
 ### Added

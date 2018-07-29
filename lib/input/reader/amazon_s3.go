@@ -317,7 +317,10 @@ func (a *AmazonS3) Read() (types.Message, error) {
 	}
 	a.readKeys = append(a.readKeys, target)
 
-	return types.NewMessage([][]byte{buff.Bytes()}), nil
+	msg := types.NewMessage([][]byte{buff.Bytes()})
+	msg.SetMetadata("s3_key", target.s3Key)
+
+	return msg, nil
 }
 
 // Acknowledge confirms whether or not our unacknowledged messages have been

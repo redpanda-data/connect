@@ -122,7 +122,9 @@ func testAMQPConnect(url string, t *testing.T) {
 		testMsgs[str] = struct{}{}
 		go func(testStr string) {
 			if pErr := mChan.Publish(conf.Exchange, conf.BindingKey, false, false, amqp.Publishing{
-				Headers:         amqp.Table{},
+				Headers: amqp.Table{
+					"foo": "bar",
+				},
 				ContentType:     "application/octet-stream",
 				ContentEncoding: "",
 				Body:            []byte(testStr),
@@ -147,6 +149,9 @@ func testAMQPConnect(url string, t *testing.T) {
 				t.Errorf("Unexpected message: %v", act)
 			}
 			delete(testMsgs, act)
+			if act = actM.GetMetadata("foo"); act != "bar" {
+				t.Errorf("Wrong metadata returned: %v != bar", act)
+			}
 		}
 		if err = m.Acknowledge(nil); err != nil {
 			t.Error(err)

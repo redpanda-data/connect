@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -85,5 +86,30 @@ func TestMetadataSet(t *testing.T) {
 		if exp, act := test.output, msgs[0].GetMetadata(test.key); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
+	}
+}
+
+func TestMetadataDeleteAll(t *testing.T) {
+	conf := NewConfig()
+	conf.Metadata.Operator = "delete_all"
+
+	mDel, err := NewMetadata(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inMsg := types.NewMessage(nil)
+	inMsg.SetMetadata("foo", "bar")
+	inMsg.SetMetadata("bar", "baz")
+
+	msgs, _ := mDel.ProcessMessage(inMsg)
+	if len(msgs) != 1 {
+		t.Fatalf("Wrong count of messages: %v", len(msgs))
+	}
+
+	if err = msgs[0].IterMetadata(func(k, v string) error {
+		return fmt.Errorf("Key found: %v", k)
+	}); err != nil {
+		t.Error(err)
 	}
 }

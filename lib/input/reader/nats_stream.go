@@ -184,7 +184,10 @@ func (n *NATSStream) Read() (types.Message, error) {
 		n.disconnect()
 		return nil, types.ErrTypeClosed
 	}
-	return types.NewMessage([][]byte{msg.Data}), nil
+	bmsg := types.NewMessage([][]byte{msg.Data})
+	bmsg.SetMetadata("nats_stream_subject", msg.Subject)
+
+	return bmsg, nil
 }
 
 // Acknowledge instructs whether unacknowledged messages have been successfully

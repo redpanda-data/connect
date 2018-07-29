@@ -39,7 +39,18 @@ semantics.
 
 Tracking and persisting offsets through a durable name is also optional and
 works with or without a queue. If a durable name is not provided then subjects
-are consumed from the most recently published message.`,
+are consumed from the most recently published message.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "```" + `
+- nats_stream_subject
+` + "```" + `
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).`,
 	}
 }
 

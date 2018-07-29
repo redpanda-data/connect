@@ -139,7 +139,11 @@ func (n *NATS) Read() (types.Message, error) {
 		n.disconnect()
 		return nil, types.ErrNotConnected
 	}
-	return types.NewMessage([][]byte{msg.Data}), nil
+
+	bmsg := types.NewMessage([][]byte{msg.Data})
+	bmsg.SetMetadata("nats_subject", msg.Subject)
+
+	return bmsg, nil
 }
 
 // Acknowledge instructs whether read messages have been successfully
