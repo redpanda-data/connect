@@ -145,10 +145,9 @@ This input adds the following metadata fields to each message:
 - amqp_redelivered
 - amqp_exchange
 - amqp_routing_key
-- All headers (prefixed with amqp_headers_) with types supported by [amqp.Table](https://godoc.org/github.com/streadway/amqp#Table)
+- All existing message headers, including nested headers prefixed with the key
+  of their respective parent.
 ```
-
-The metadata supports nested amqp.Table types. The keys of nested tables are prefixed with the key of the parent table.
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).

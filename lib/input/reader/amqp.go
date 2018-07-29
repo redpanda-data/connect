@@ -197,13 +197,8 @@ func (a *AMQP) disconnect() error {
 
 //------------------------------------------------------------------------------
 
-// Message is a wrapper for types.Message so we can dynamically add metadata.
-type Message struct {
-	m types.Message
-}
-
 // Determine the type of the value and set the metadata.
-func (m *Message) setMetadata(k string, v interface{}) {
+func setMetadata(m types.Message, k string, v interface{}) {
 	var metaValue string
 	var metaKey = strings.Replace(k, "-", "_", -1)
 
@@ -236,7 +231,7 @@ func (m *Message) setMetadata(k string, v interface{}) {
 		metaValue = dec[:index] + "." + dec[index:]
 	case amqp.Table:
 		for key, value := range v {
-			m.setMetadata(metaKey+"_"+key, value)
+			setMetadata(m, metaKey+"_"+key, value)
 		}
 		return
 	default:
@@ -244,14 +239,7 @@ func (m *Message) setMetadata(k string, v interface{}) {
 	}
 
 	if metaValue != "" {
-		m.m.SetMetadata(metaKey, metaValue)
-	}
-}
-
-// Add metadata from the AMQP headers.
-func (m *Message) amqpHeaders(t amqp.Table) {
-	for k, v := range t {
-		m.setMetadata("amqp_headers_"+k, v)
+		m.SetMetadata(metaKey, metaValue)
 	}
 }
 
@@ -280,38 +268,39 @@ func (a *AMQP) Read() (types.Message, error) {
 	// Only store the latest delivery tag, but always Ack multiple.
 	a.ackTag = data.DeliveryTag
 
-	msg := Message{}
-	msg.m = types.NewMessage([][]byte{data.Body})
+	msg := types.NewMessage([][]byte{data.Body})
 
-	msg.amqpHeaders(data.Headers)
+	for k, v := range data.Headers {
+		setMetadata(msg, k, v)
+	}
 
-	msg.setMetadata("amqp_content_type", data.ContentType)
-	msg.setMetadata("amqp_content_encoding", data.ContentEncoding)
+	setMetadata(msg, "amqp_content_type", data.ContentType)
+	setMetadata(msg, "amqp_content_encoding", data.ContentEncoding)
 
 	if data.DeliveryMode != 0 {
-		msg.setMetadata("amqp_delivery_mode", data.DeliveryMode)
+		setMetadata(msg, "amqp_delivery_mode", data.DeliveryMode)
 	}
 
-	msg.setMetadata("amqp_priority", data.Priority)
-	msg.setMetadata("amqp_correlation_id", data.CorrelationId)
-	msg.setMetadata("amqp_reply_to", data.ReplyTo)
-	msg.setMetadata("amqp_expiration", data.Expiration)
-	msg.setMetadata("amqp_message_id", data.MessageId)
+	setMetadata(msg, "amqp_priority", data.Priority)
+	setMetadata(msg, "amqp_correlation_id", data.CorrelationId)
+	setMetadata(msg, "amqp_reply_to", data.ReplyTo)
+	setMetadata(msg, "amqp_expiration", data.Expiration)
+	setMetadata(msg, "amqp_message_id", data.MessageId)
 
 	if !data.Timestamp.IsZero() {
-		msg.setMetadata("amqp_timestamp", data.Timestamp.Unix())
+		setMetadata(msg, "amqp_timestamp", data.Timestamp.Unix())
 	}
 
-	msg.setMetadata("amqp_type", data.Type)
-	msg.setMetadata("amqp_user_id", data.UserId)
-	msg.setMetadata("amqp_app_id", data.AppId)
-	msg.setMetadata("amqp_consumer_tag", data.ConsumerTag)
-	msg.setMetadata("amqp_delivery_tag", data.DeliveryTag)
-	msg.setMetadata("amqp_redelivered", data.Redelivered)
-	msg.setMetadata("amqp_exchange", data.Exchange)
-	msg.setMetadata("amqp_routing_key", data.RoutingKey)
+	setMetadata(msg, "amqp_type", data.Type)
+	setMetadata(msg, "amqp_user_id", data.UserId)
+	setMetadata(msg, "amqp_app_id", data.AppId)
+	setMetadata(msg, "amqp_consumer_tag", data.ConsumerTag)
+	setMetadata(msg, "amqp_delivery_tag", data.DeliveryTag)
+	setMetadata(msg, "amqp_redelivered", data.Redelivered)
+	setMetadata(msg, "amqp_exchange", data.Exchange)
+	setMetadata(msg, "amqp_routing_key", data.RoutingKey)
 
-	return msg.m, nil
+	return msg, nil
 }
 
 // Acknowledge instructs whether unacknowledged messages have been successfully
