@@ -634,6 +634,11 @@ Sets the value of a metadata key.
 
 Removes all metadata values from the message.
 
+#### `delete_prefix`
+
+Removes all metadata values from the message where the key is prefixed with the
+value provided.
+
 ## `noop`
 
 ``` yaml

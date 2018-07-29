@@ -22,6 +22,7 @@ package processor
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -55,7 +56,12 @@ Sets the value of a metadata key.
 
 #### ` + "`delete_all`" + `
 
-Removes all metadata values from the message.`,
+Removes all metadata values from the message.
+
+#### ` + "`delete_prefix`" + `
+
+Removes all metadata values from the message where the key is prefixed with the
+value provided.`,
 	}
 }
 
@@ -98,12 +104,27 @@ func newMetadataDeleteAllOperator(key string) metadataOperator {
 	}
 }
 
+func newMetadataDeletePrefixOperator(key string) metadataOperator {
+	return func(msg types.Message, value []byte) error {
+		prefix := string(value)
+		msg.IterMetadata(func(k, _ string) error {
+			if strings.HasPrefix(k, prefix) {
+				msg.DeleteMetadata(k)
+			}
+			return nil
+		})
+		return nil
+	}
+}
+
 func getMetadataOperator(opStr string, key string) (metadataOperator, error) {
 	switch opStr {
 	case "set":
 		return newMetadataSetOperator(key), nil
 	case "delete_all":
 		return newMetadataDeleteAllOperator(key), nil
+	case "delete_prefix":
+		return newMetadataDeletePrefixOperator(key), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }

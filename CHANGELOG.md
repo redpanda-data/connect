@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- New `delete_all` operator for `metadata` processor.
+- New `delete_all` and `delete_prefix` operators for `metadata` processor.
+- More metadata fields extracted from the AMQP input.
 
 ### 0.20.7 - 2018-07-27
 
