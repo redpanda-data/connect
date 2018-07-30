@@ -165,6 +165,7 @@ func (m *Memcached) Get(key string) ([]byte, error) {
 
 	item, err := m.mc.Get(m.conf.Memcached.Prefix + key)
 	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
+		m.log.Errorf("Get command failed: %v\n", err)
 		<-time.After(m.retryPeriod)
 		m.mGetRetry.Incr(1)
 		item, err = m.mc.Get(m.conf.Memcached.Prefix + key)
@@ -190,6 +191,7 @@ func (m *Memcached) Set(key string, value []byte) error {
 
 	err := m.mc.Set(m.getItemFor(key, value))
 	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
+		m.log.Errorf("Set command failed: %v\n", err)
 		<-time.After(m.retryPeriod)
 		m.mSetRetry.Incr(1)
 		err = m.mc.Set(m.getItemFor(key, value))
@@ -224,6 +226,7 @@ func (m *Memcached) Add(key string, value []byte) error {
 		return types.ErrKeyAlreadyExists
 	}
 	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
+		m.log.Errorf("Add command failed: %v\n", err)
 		<-time.After(m.retryPeriod)
 		m.mAddRetry.Incr(1)
 		if err := m.mc.Add(m.getItemFor(key, value)); memcache.ErrNotStored == err {
@@ -259,6 +262,7 @@ func (m *Memcached) Delete(key string) error {
 		err = nil
 	}
 	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
+		m.log.Errorf("Delete command failed: %v\n", err)
 		<-time.After(m.retryPeriod)
 		m.mDelRetry.Incr(1)
 		if err = m.mc.Delete(m.conf.Memcached.Prefix + key); err == memcache.ErrCacheMiss {
