@@ -61,7 +61,7 @@ func TestConfigSanitised(t *testing.T) {
 		`"input":{"type":"file","file":{"delimiter":"","max_buffer":1000000,"multipart":false,"path":""}},` +
 		`"buffer":{"type":"none","none":{}},` +
 		`"pipeline":{"processors":[],"threads":1},` +
-		`"output":{"type":"kafka","kafka":{"ack_replicas":false,"addresses":["localhost:9092"],"client_id":"benthos_kafka_output","compression":"none","key":"","max_msg_bytes":1000000,"round_robin_partitions":false,"skip_cert_verify":false,"target_version":"1.0.0","timeout_ms":5000,"tls_enable":false,"topic":"benthos_stream"}}` +
+		`"output":{"type":"kafka","kafka":{"ack_replicas":false,"addresses":["localhost:9092"],"client_id":"benthos_kafka_output","compression":"none","key":"","max_msg_bytes":1000000,"round_robin_partitions":false,"target_version":"1.0.0","timeout_ms":5000,"tls":{"cas_file":"","enabled":false,"skip_cert_verify":false},"topic":"benthos_stream"}}` +
 		`}`
 
 	if dat, err = c.Sanitised(); err != nil {

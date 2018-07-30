@@ -14,10 +14,13 @@
 			"client_id": "benthos_kafka_input",
 			"consumer_group": "benthos_consumer_group",
 			"partition": 0,
-			"skip_cert_verify": false,
 			"start_from_oldest": true,
 			"target_version": "1.0.0",
-			"tls_enable": false,
+			"tls": {
+				"cas_file": "",
+				"enabled": false,
+				"skip_cert_verify": false
+			},
 			"topic": "benthos_stream"
 		}
 	},
@@ -41,10 +44,13 @@
 			"key": "",
 			"max_msg_bytes": 1000000,
 			"round_robin_partitions": false,
-			"skip_cert_verify": false,
 			"target_version": "1.0.0",
 			"timeout_ms": 5000,
-			"tls_enable": false,
+			"tls": {
+				"cas_file": "",
+				"enabled": false,
+				"skip_cert_verify": false
+			},
 			"topic": "benthos_stream"
 		}
 	},

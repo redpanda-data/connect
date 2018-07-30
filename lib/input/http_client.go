@@ -139,12 +139,15 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 		h.payload = types.NewMessage([][]byte{[]byte(h.conf.HTTPClient.Payload)})
 	}
 
-	h.client = client.New(
+	var err error
+	if h.client, err = client.New(
 		h.conf.HTTPClient.Config,
 		client.OptSetCloseChan(h.closeChan),
 		client.OptSetLogger(h.log),
 		client.OptSetStats(metrics.Namespaced(h.stats, "input.http_client")),
-	)
+	); err != nil {
+		return nil, err
+	}
 
 	if !h.conf.HTTPClient.Stream.Enabled {
 		go h.loop()

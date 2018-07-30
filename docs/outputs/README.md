@@ -290,8 +290,11 @@ http_client:
     request_url: ""
   retries: 3
   retry_period_ms: 1000
-  skip_cert_verify: false
   timeout_ms: 5000
+  tls:
+    cas_file: ""
+    enabled: false
+    skip_cert_verify: false
   url: http://localhost:4195/post
   verb: POST
 ```
@@ -371,10 +374,12 @@ kafka:
   key: ""
   max_msg_bytes: 1e+06
   round_robin_partitions: false
-  skip_cert_verify: false
   target_version: 1.0.0
   timeout_ms: 5000
-  tls_enable: false
+  tls:
+    cas_file: ""
+    enabled: false
+    skip_cert_verify: false
   topic: benthos_stream
 ```
 

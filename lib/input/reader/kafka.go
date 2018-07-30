@@ -30,6 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	btls "github.com/Jeffail/benthos/lib/util/tls"
 	"github.com/Shopify/sarama"
 )
 
@@ -37,15 +38,14 @@ import (
 
 // KafkaConfig is configuration for the Kafka input type.
 type KafkaConfig struct {
-	Addresses       []string `json:"addresses" yaml:"addresses"`
-	ClientID        string   `json:"client_id" yaml:"client_id"`
-	ConsumerGroup   string   `json:"consumer_group" yaml:"consumer_group"`
-	TLSEnable       bool     `json:"tls_enable" yaml:"tls_enable"`
-	Topic           string   `json:"topic" yaml:"topic"`
-	Partition       int32    `json:"partition" yaml:"partition"`
-	SkipCertVerify  bool     `json:"skip_cert_verify" yaml:"skip_cert_verify"`
-	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
-	TargetVersion   string   `json:"target_version" yaml:"target_version"`
+	Addresses       []string    `json:"addresses" yaml:"addresses"`
+	ClientID        string      `json:"client_id" yaml:"client_id"`
+	ConsumerGroup   string      `json:"consumer_group" yaml:"consumer_group"`
+	Topic           string      `json:"topic" yaml:"topic"`
+	Partition       int32       `json:"partition" yaml:"partition"`
+	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TargetVersion   string      `json:"target_version" yaml:"target_version"`
+	TLS             btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -54,12 +54,11 @@ func NewKafkaConfig() KafkaConfig {
 		Addresses:       []string{"localhost:9092"},
 		ClientID:        "benthos_kafka_input",
 		ConsumerGroup:   "benthos_consumer_group",
-		TLSEnable:       false,
 		Topic:           "benthos_stream",
 		Partition:       0,
-		SkipCertVerify:  false,
 		StartFromOldest: true,
 		TargetVersion:   sarama.V1_0_0_0.String(),
+		TLS:             btls.NewConfig(),
 	}
 }
 
@@ -71,6 +70,8 @@ type Kafka struct {
 	coordinator  *sarama.Broker
 	partConsumer sarama.PartitionConsumer
 	version      sarama.KafkaVersion
+
+	tlsConf *tls.Config
 
 	sMut sync.Mutex
 
@@ -91,6 +92,13 @@ func NewKafka(
 		conf:   conf,
 		stats:  stats,
 		log:    log.NewModule(".input.kafka"),
+	}
+
+	if conf.TLS.Enabled {
+		var err error
+		if k.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
 	}
 
 	var err error
@@ -162,9 +170,9 @@ func (k *Kafka) Connect() error {
 	config.ClientID = k.conf.ClientID
 	config.Net.DialTimeout = time.Second
 	config.Consumer.Return.Errors = true
-	config.Net.TLS.Enable = k.conf.TLSEnable
-	if k.conf.SkipCertVerify {
-		config.Net.TLS.Config = &tls.Config{InsecureSkipVerify: true}
+	config.Net.TLS.Enable = k.conf.TLS.Enabled
+	if k.conf.TLS.Enabled {
+		config.Net.TLS.Config = k.tlsConf
 	}
 
 	k.client, err = sarama.NewClient(k.addresses, config)

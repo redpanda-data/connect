@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- TLS config fields have been cleaned up for multiple types. This affects
+  the `kafka`, `kafka_balanced` and `http_client` input and output types, as
+  well as the `http` processor type.
+
 ### 0.20.8 - 2018-07-30
 
 ### Added

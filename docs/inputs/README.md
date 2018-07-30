@@ -337,7 +337,6 @@ http_client:
   payload: ""
   retries: 3
   retry_period_ms: 1000
-  skip_cert_verify: false
   stream:
     delimiter: ""
     enabled: false
@@ -345,6 +344,10 @@ http_client:
     multipart: false
     reconnect: true
   timeout_ms: 5000
+  tls:
+    cas_file: ""
+    enabled: false
+    skip_cert_verify: false
   url: http://localhost:4195/get
   verb: GET
 ```
@@ -424,10 +427,12 @@ kafka:
   client_id: benthos_kafka_input
   consumer_group: benthos_consumer_group
   partition: 0
-  skip_cert_verify: false
   start_from_oldest: true
   target_version: 1.0.0
-  tls_enable: false
+  tls:
+    cas_file: ""
+    enabled: false
+    skip_cert_verify: false
   topic: benthos_stream
 ```
 
@@ -465,9 +470,11 @@ kafka_balanced:
   - localhost:9092
   client_id: benthos_kafka_input
   consumer_group: benthos_consumer_group
-  skip_cert_verify: false
   start_from_oldest: true
-  tls_enable: false
+  tls:
+    cas_file: ""
+    enabled: false
+    skip_cert_verify: false
   topics:
   - benthos_stream
 ```

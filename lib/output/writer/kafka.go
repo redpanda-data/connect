@@ -31,6 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
+	btls "github.com/Jeffail/benthos/lib/util/tls"
 	"github.com/Shopify/sarama"
 )
 
@@ -38,18 +39,17 @@ import (
 
 // KafkaConfig is configuration for the Kafka output type.
 type KafkaConfig struct {
-	Addresses            []string `json:"addresses" yaml:"addresses"`
-	ClientID             string   `json:"client_id" yaml:"client_id"`
-	Key                  string   `json:"key" yaml:"key"`
-	RoundRobinPartitions bool     `json:"round_robin_partitions" yaml:"round_robin_partitions"`
-	TLSEnable            bool     `json:"tls_enable" yaml:"tls_enable"`
-	SkipCertVerify       bool     `json:"skip_cert_verify" yaml:"skip_cert_verify"`
-	Topic                string   `json:"topic" yaml:"topic"`
-	Compression          string   `json:"compression" yaml:"compression"`
-	MaxMsgBytes          int      `json:"max_msg_bytes" yaml:"max_msg_bytes"`
-	TimeoutMS            int      `json:"timeout_ms" yaml:"timeout_ms"`
-	AckReplicas          bool     `json:"ack_replicas" yaml:"ack_replicas"`
-	TargetVersion        string   `json:"target_version" yaml:"target_version"`
+	Addresses            []string    `json:"addresses" yaml:"addresses"`
+	ClientID             string      `json:"client_id" yaml:"client_id"`
+	Key                  string      `json:"key" yaml:"key"`
+	RoundRobinPartitions bool        `json:"round_robin_partitions" yaml:"round_robin_partitions"`
+	Topic                string      `json:"topic" yaml:"topic"`
+	Compression          string      `json:"compression" yaml:"compression"`
+	MaxMsgBytes          int         `json:"max_msg_bytes" yaml:"max_msg_bytes"`
+	TimeoutMS            int         `json:"timeout_ms" yaml:"timeout_ms"`
+	AckReplicas          bool        `json:"ack_replicas" yaml:"ack_replicas"`
+	TargetVersion        string      `json:"target_version" yaml:"target_version"`
+	TLS                  btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -59,14 +59,13 @@ func NewKafkaConfig() KafkaConfig {
 		ClientID:             "benthos_kafka_output",
 		Key:                  "",
 		RoundRobinPartitions: false,
-		TLSEnable:            false,
-		SkipCertVerify:       false,
 		Topic:                "benthos_stream",
 		Compression:          "none",
 		MaxMsgBytes:          1000000,
 		TimeoutMS:            5000,
 		AckReplicas:          false,
 		TargetVersion:        sarama.V1_0_0_0.String(),
+		TLS:                  btls.NewConfig(),
 	}
 }
 
@@ -76,6 +75,8 @@ func NewKafkaConfig() KafkaConfig {
 type Kafka struct {
 	log   log.Modular
 	stats metrics.Type
+
+	tlsConf *tls.Config
 
 	addresses []string
 	version   sarama.KafkaVersion
@@ -102,6 +103,13 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 		conf:        conf,
 		key:         text.NewInterpolatedBytes([]byte(conf.Key)),
 		compression: compression,
+	}
+
+	if conf.TLS.Enabled {
+		var err error
+		if k.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
 	}
 
 	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
@@ -156,9 +164,9 @@ func (k *Kafka) Connect() error {
 	config.Producer.Timeout = time.Duration(k.conf.TimeoutMS) * time.Millisecond
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
-	config.Net.TLS.Enable = k.conf.TLSEnable
-	if k.conf.SkipCertVerify {
-		config.Net.TLS.Config = &tls.Config{InsecureSkipVerify: true}
+	config.Net.TLS.Enable = k.conf.TLS.Enabled
+	if k.conf.TLS.Enabled {
+		config.Net.TLS.Config = k.tlsConf
 	}
 
 	if k.conf.RoundRobinPartitions {

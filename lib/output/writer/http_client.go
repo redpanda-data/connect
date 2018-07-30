@@ -57,20 +57,23 @@ type HTTPClient struct {
 }
 
 // NewHTTPClient creates a new HTTPClient writer type.
-func NewHTTPClient(conf HTTPClientConfig, log log.Modular, stats metrics.Type) *HTTPClient {
+func NewHTTPClient(conf HTTPClientConfig, log log.Modular, stats metrics.Type) (*HTTPClient, error) {
 	h := HTTPClient{
 		stats:     stats,
 		log:       log.NewModule(".output.http_client"),
 		conf:      conf,
 		closeChan: make(chan struct{}),
 	}
-	h.client = client.New(
+	var err error
+	if h.client, err = client.New(
 		conf.Config,
 		client.OptSetCloseChan(h.closeChan),
 		client.OptSetLogger(h.log),
 		client.OptSetStats(metrics.Namespaced(h.stats, "output.http_client")),
-	)
-	return &h
+	); err != nil {
+		return nil, err
+	}
+	return &h, nil
 }
 
 //------------------------------------------------------------------------------

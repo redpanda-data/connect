@@ -55,8 +55,12 @@ func TestHTTPClientRetries(t *testing.T) {
 	conf.RetryMS = 1
 	conf.NumRetries = 3
 
-	h := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
-	if err := h.Write(types.NewMessage([][]byte{[]byte("test")})); err == nil {
+	h, err := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = h.Write(types.NewMessage([][]byte{[]byte("test")})); err == nil {
 		t.Error("Expected error from end of retries")
 	}
 
@@ -65,7 +69,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	if err = h.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
 }
@@ -92,13 +96,16 @@ func TestHTTPClientBasic(t *testing.T) {
 	conf := NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	h, err := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
 		testMsg := types.NewMessage([][]byte{[]byte(testStr)})
 
-		if err := h.Write(testMsg); err != nil {
+		if err = h.Write(testMsg); err != nil {
 			t.Error(err)
 		}
 
@@ -119,7 +126,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	if err = h.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
 }
@@ -173,7 +180,10 @@ func TestHTTPClientMultipart(t *testing.T) {
 	conf := NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	h, err := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
@@ -182,7 +192,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 			[]byte(testStr + "PART-B"),
 		})
 
-		if err := h.Write(testMsg); err != nil {
+		if err = h.Write(testMsg); err != nil {
 			t.Error(err)
 		}
 
@@ -207,7 +217,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	if err = h.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
 }

@@ -96,7 +96,6 @@ func NewHTTP(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	g := &HTTP{
-
 		conf:  conf,
 		log:   log.NewModule(".processor.http"),
 		stats: stats,
@@ -108,11 +107,14 @@ func NewHTTP(
 		mSent:      stats.GetCounter("processor.http.sent"),
 		mSentParts: stats.GetCounter("processor.http.parts.sent"),
 	}
-	g.client = client.New(
+	var err error
+	if g.client, err = client.New(
 		conf.HTTP.Client,
 		client.OptSetLogger(g.log),
 		client.OptSetStats(metrics.Namespaced(g.stats, "processor.http")),
-	)
+	); err != nil {
+		return nil, err
+	}
 	return g, nil
 }
 

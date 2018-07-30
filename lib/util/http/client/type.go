@@ -22,7 +22,6 @@ package client
 
 import (
 	"bytes"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"mime"
@@ -39,23 +38,24 @@ import (
 	"github.com/Jeffail/benthos/lib/util/http/auth"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Jeffail/benthos/lib/util/throttle"
+	"github.com/Jeffail/benthos/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
 
 // Config is a configuration struct for an HTTP client.
 type Config struct {
-	URL            string            `json:"url" yaml:"url"`
-	Verb           string            `json:"verb" yaml:"verb"`
-	Headers        map[string]string `json:"headers" yaml:"headers"`
-	TimeoutMS      int64             `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS        int64             `json:"retry_period_ms" yaml:"retry_period_ms"`
-	MaxBackoffMS   int64             `json:"max_retry_backoff_ms" yaml:"max_retry_backoff_ms"`
-	NumRetries     int               `json:"retries" yaml:"retries"`
-	BackoffOn      []int             `json:"backoff_on" yaml:"backoff_on"`
-	DropOn         []int             `json:"drop_on" yaml:"drop_on"`
-	SkipCertVerify bool              `json:"skip_cert_verify" yaml:"skip_cert_verify"`
-	auth.Config    `json:",inline" yaml:",inline"`
+	URL          string            `json:"url" yaml:"url"`
+	Verb         string            `json:"verb" yaml:"verb"`
+	Headers      map[string]string `json:"headers" yaml:"headers"`
+	TimeoutMS    int64             `json:"timeout_ms" yaml:"timeout_ms"`
+	RetryMS      int64             `json:"retry_period_ms" yaml:"retry_period_ms"`
+	MaxBackoffMS int64             `json:"max_retry_backoff_ms" yaml:"max_retry_backoff_ms"`
+	NumRetries   int               `json:"retries" yaml:"retries"`
+	BackoffOn    []int             `json:"backoff_on" yaml:"backoff_on"`
+	DropOn       []int             `json:"drop_on" yaml:"drop_on"`
+	TLS          tls.Config        `json:"tls" yaml:"tls"`
+	auth.Config  `json:",inline" yaml:",inline"`
 }
 
 // NewConfig creates a new Config with default values.
@@ -66,14 +66,14 @@ func NewConfig() Config {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
-		TimeoutMS:      5000,
-		RetryMS:        1000,
-		MaxBackoffMS:   300000,
-		NumRetries:     3,
-		BackoffOn:      []int{429},
-		DropOn:         []int{},
-		SkipCertVerify: false,
-		Config:         auth.NewConfig(),
+		TimeoutMS:    5000,
+		RetryMS:      1000,
+		MaxBackoffMS: 300000,
+		NumRetries:   3,
+		BackoffOn:    []int{429},
+		DropOn:       []int{},
+		TLS:          tls.NewConfig(),
+		Config:       auth.NewConfig(),
 	}
 }
 
@@ -109,7 +109,7 @@ type Type struct {
 }
 
 // New creates a new Type.
-func New(conf Config, opts ...func(*Type)) *Type {
+func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	h := Type{
 		url:       text.NewInterpolatedString(conf.URL),
 		conf:      conf,
@@ -121,9 +121,13 @@ func New(conf Config, opts ...func(*Type)) *Type {
 	}
 
 	h.client.Timeout = time.Duration(h.conf.TimeoutMS) * time.Millisecond
-	if h.conf.SkipCertVerify {
+	if h.conf.TLS.Enabled {
+		tlsConf, err := h.conf.TLS.Get()
+		if err != nil {
+			return nil, err
+		}
 		h.client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: tlsConf,
 		}
 	}
 
@@ -157,7 +161,7 @@ func New(conf Config, opts ...func(*Type)) *Type {
 		throttle.OptMaxExponentPeriod(time.Millisecond*time.Duration(conf.MaxBackoffMS)),
 	)
 
-	return &h
+	return &h, nil
 }
 
 //------------------------------------------------------------------------------

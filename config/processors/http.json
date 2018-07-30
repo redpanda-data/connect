@@ -46,8 +46,12 @@
 						},
 						"retries": 3,
 						"retry_period_ms": 1000,
-						"skip_cert_verify": false,
 						"timeout_ms": 5000,
+						"tls": {
+							"cas_file": "",
+							"enabled": false,
+							"skip_cert_verify": false
+						},
 						"url": "http://localhost:4195/post",
 						"verb": "POST"
 					}

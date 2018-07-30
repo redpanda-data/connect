@@ -56,7 +56,11 @@ func TestHTTPClientRetries(t *testing.T) {
 	conf.RetryMS = 1
 	conf.NumRetries = 3
 
-	h := New(conf)
+	h, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if _, err := h.Send(types.NewMessage([][]byte{[]byte("test")})); err == nil {
 		t.Error("Expected error from end of retries")
 	}
@@ -88,7 +92,10 @@ func TestHTTPClientSendBasic(t *testing.T) {
 	conf := NewConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h := New(conf)
+	h, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
@@ -149,12 +156,15 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 	conf.Headers["static"] = "foo"
 	conf.Headers["dynamic"] = "hdr-${!json_field:foo.baz}"
 
-	h := New(
+	h, err := New(
 		conf,
 		OptSetCloseChan(make(chan struct{})),
 		OptSetLogger(log.Noop()),
 		OptSetStats(metrics.Noop()),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf(`{"test":%v,"foo":{"bar":"firstvar","baz":"secondvar"}}`, i)
@@ -230,7 +240,10 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 	conf := NewConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h := New(conf)
+	h, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
@@ -301,7 +314,10 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 	conf := NewConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h := New(conf)
+	h, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", j)

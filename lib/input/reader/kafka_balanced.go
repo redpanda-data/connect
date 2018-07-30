@@ -30,6 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	btls "github.com/Jeffail/benthos/lib/util/tls"
 	"github.com/Shopify/sarama"
 	cluster "github.com/bsm/sarama-cluster"
 )
@@ -38,13 +39,12 @@ import (
 
 // KafkaBalancedConfig is configuration for the KafkaBalanced input type.
 type KafkaBalancedConfig struct {
-	Addresses       []string `json:"addresses" yaml:"addresses"`
-	ClientID        string   `json:"client_id" yaml:"client_id"`
-	ConsumerGroup   string   `json:"consumer_group" yaml:"consumer_group"`
-	TLSEnable       bool     `json:"tls_enable" yaml:"tls_enable"`
-	Topics          []string `json:"topics" yaml:"topics"`
-	SkipCertVerify  bool     `json:"skip_cert_verify" yaml:"skip_cert_verify"`
-	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	Addresses       []string    `json:"addresses" yaml:"addresses"`
+	ClientID        string      `json:"client_id" yaml:"client_id"`
+	ConsumerGroup   string      `json:"consumer_group" yaml:"consumer_group"`
+	Topics          []string    `json:"topics" yaml:"topics"`
+	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TLS             btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
@@ -53,10 +53,9 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Addresses:       []string{"localhost:9092"},
 		ClientID:        "benthos_kafka_input",
 		ConsumerGroup:   "benthos_consumer_group",
-		TLSEnable:       false,
 		Topics:          []string{"benthos_stream"},
-		SkipCertVerify:  false,
 		StartFromOldest: true,
+		TLS:             btls.NewConfig(),
 	}
 }
 
@@ -66,6 +65,8 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 type KafkaBalanced struct {
 	consumer *cluster.Consumer
 	cMut     sync.Mutex
+
+	tlsConf *tls.Config
 
 	addresses []string
 	topics    []string
@@ -82,6 +83,12 @@ func NewKafkaBalanced(
 		conf:  conf,
 		stats: stats,
 		log:   log.NewModule(".input.kafka_balanced"),
+	}
+	if conf.TLS.Enabled {
+		var err error
+		if k.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
 	}
 	for _, addr := range conf.Addresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
@@ -137,9 +144,9 @@ func (k *KafkaBalanced) Connect() error {
 	config.Net.DialTimeout = time.Second
 	config.Consumer.Return.Errors = true
 	config.Group.Return.Notifications = true
-	config.Net.TLS.Enable = k.conf.TLSEnable
-	if k.conf.SkipCertVerify {
-		config.Net.TLS.Config = &tls.Config{InsecureSkipVerify: true}
+	config.Net.TLS.Enable = k.conf.TLS.Enabled
+	if k.conf.TLS.Enabled {
+		config.Net.TLS.Config = k.tlsConf
 	}
 
 	if k.conf.StartFromOldest {
