@@ -46,6 +46,9 @@ When the number of retries expires the output will reject the message, the
 behaviour after this will depend on the pipeline but usually this simply means
 the send is attempted again until successful whilst applying back pressure.
 
+The URL and header values of this type can be dynamically set using function
+interpolations described [here](../config_interpolation.md#functions).
+
 The body of the HTTP request is the raw contents of the message payload. If the
 message has multiple parts the request will be sent according to
 [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html)`,

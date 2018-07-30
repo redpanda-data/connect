@@ -48,6 +48,9 @@ requests for a single message.
 You should set a sensible retry period and max backoff so as to not flood your
 target server.
 
+The URL and header values of this type can be dynamically set using function
+interpolations described [here](../config_interpolation.md#functions).
+
 ### Streaming
 
 If you enable streaming then Benthos will consume the body of the response as a

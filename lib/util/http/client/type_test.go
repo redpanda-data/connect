@@ -35,6 +35,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -90,6 +92,72 @@ func TestHTTPClientSendBasic(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
+		testMsg := types.NewMessage([][]byte{[]byte(testStr)})
+
+		if _, err := h.Send(testMsg); err != nil {
+			t.Error(err)
+		}
+
+		select {
+		case resMsg := <-resultChan:
+			if resMsg.Len() != 1 {
+				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 1)
+				return
+			}
+			if exp, actual := testStr, string(resMsg.Get(0)); exp != actual {
+				t.Errorf("Wrong result, %v != %v", exp, actual)
+				return
+			}
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+	}
+}
+
+func TestHTTPClientSendInterpolate(t *testing.T) {
+	nTestLoops := 1000
+
+	resultChan := make(chan types.Message, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if exp, act := "/firstvar", r.URL.Path; exp != act {
+			t.Errorf("Wrong path: %v != %v", act, exp)
+		}
+		if exp, act := "hdr-secondvar", r.Header.Get("dynamic"); exp != act {
+			t.Errorf("Wrong path: %v != %v", act, exp)
+		}
+		if exp, act := "foo", r.Header.Get("static"); exp != act {
+			t.Errorf("Wrong header value: %v != %v", act, exp)
+		}
+
+		msg := types.NewMessage(nil)
+		defer func() {
+			resultChan <- msg
+		}()
+
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		msg.SetAll([][]byte{b})
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.URL = ts.URL + "/${!json_field:foo.bar}"
+	conf.Headers["static"] = "foo"
+	conf.Headers["dynamic"] = "hdr-${!json_field:foo.baz}"
+
+	h := New(
+		conf,
+		OptSetCloseChan(make(chan struct{})),
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.Noop()),
+	)
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf(`{"test":%v,"foo":{"bar":"firstvar","baz":"secondvar"}}`, i)
 		testMsg := types.NewMessage([][]byte{[]byte(testStr)})
 
 		if _, err := h.Send(testMsg); err != nil {

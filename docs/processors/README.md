@@ -423,6 +423,9 @@ body of the request. If the batch contains multiple messages then they will be
 sent as a multipart HTTP request using the `Content-Type: multipart`
 header.
 
+The URL and header values of this type can be dynamically set using function
+interpolations described [here](../config_interpolation.md#functions).
+
 If you wish to avoid this behaviour then you can either use the
  [`archive`](#archive) processor to create a single message from a
 batch, or use the [`split`](#split) processor to break down the batch

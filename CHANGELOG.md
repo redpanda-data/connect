@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 
 - New `delete_all` and `delete_prefix` operators for `metadata` processor.
 - More metadata fields extracted from the AMQP input.
+- HTTP clients now support function interpolation on the URL and header values,
+  this includes the `http_client` input and output as well as the `http`
+  processor.
 
 ### 0.20.7 - 2018-07-27
 
@@ -18,6 +21,8 @@ All notable changes to this project will be documented in this file.
   using function interpolation. This deprecates the `json_paths` array field.
 
 ## 0.20.6 - 2018-07-27
+
+### Added
 
 - New `s3` and `sqs` input and output types, these replace the now deprecated
   `amazon_s3` and `amazon_sqs` types respectively, which will eventually be

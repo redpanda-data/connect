@@ -37,6 +37,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/http/auth"
+	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
@@ -85,7 +86,9 @@ type Type struct {
 	backoffOn map[int]struct{}
 	dropOn    map[int]struct{}
 
-	URL           string
+	url     *text.InterpolatedString
+	headers map[string]*text.InterpolatedString
+
 	conf          Config
 	retryThrottle *throttle.Type
 
@@ -108,12 +111,13 @@ type Type struct {
 // New creates a new Type.
 func New(conf Config, opts ...func(*Type)) *Type {
 	h := Type{
-		URL:       conf.URL,
+		url:       text.NewInterpolatedString(conf.URL),
 		conf:      conf,
 		log:       log.Noop(),
 		stats:     metrics.Noop(),
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
+		headers:   map[string]*text.InterpolatedString{},
 	}
 
 	h.client.Timeout = time.Duration(h.conf.TimeoutMS) * time.Millisecond
@@ -128,6 +132,10 @@ func New(conf Config, opts ...func(*Type)) *Type {
 	}
 	for _, c := range conf.DropOn {
 		h.dropOn[c] = struct{}{}
+	}
+
+	for k, v := range conf.Headers {
+		h.headers[k] = text.NewInterpolatedString(v)
 	}
 
 	for _, opt := range opts {
@@ -198,22 +206,19 @@ func (h *Type) incrCode(code int) {
 
 // CreateRequest creates an HTTP request out of a single message.
 func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
-	return h.CreateRequestWithURL(h.URL, msg)
-}
+	url := h.url.Get(msg)
 
-// CreateRequestWithURL creates an HTTP request out of a single message.
-func (h *Type) CreateRequestWithURL(url string, msg types.Message) (req *http.Request, err error) {
 	if msg == nil || msg.Len() == 0 {
 		if req, err = http.NewRequest(h.conf.Verb, url, nil); err == nil {
-			for k, v := range h.conf.Headers {
-				req.Header.Add(k, v)
+			for k, v := range h.headers {
+				req.Header.Add(k, v.Get(msg))
 			}
 		}
 	} else if msg.Len() == 1 {
 		body := bytes.NewBuffer(msg.GetAll()[0])
 		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
-			for k, v := range h.conf.Headers {
-				req.Header.Add(k, v)
+			for k, v := range h.headers {
+				req.Header.Add(k, v.Get(msg))
 			}
 		}
 	} else {
@@ -222,8 +227,8 @@ func (h *Type) CreateRequestWithURL(url string, msg types.Message) (req *http.Re
 
 		for i := 0; i < msg.Len() && err == nil; i++ {
 			contentType := "application/octet-stream"
-			if v, exists := h.conf.Headers["Content-Type"]; exists {
-				contentType = v
+			if v, exists := h.headers["Content-Type"]; exists {
+				contentType = v.Get(msg)
 			}
 			var part io.Writer
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
@@ -235,13 +240,14 @@ func (h *Type) CreateRequestWithURL(url string, msg types.Message) (req *http.Re
 
 		writer.Close()
 		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
-			for k, v := range h.conf.Headers {
-				req.Header.Add(k, v)
+			for k, v := range h.headers {
+				req.Header.Add(k, v.Get(msg))
 			}
 			req.Header.Del("Content-Type")
 			req.Header.Add("Content-Type", writer.FormDataContentType())
 		}
 	}
+
 	err = h.conf.Config.Sign(req)
 	return
 }
@@ -328,17 +334,10 @@ func (h *Type) checkStatus(code int) (resolved bool, linearRetry bool) {
 // This attempt may include retries, and if all retries fail an error is
 // returned.
 func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
-	return h.DoWithURL(h.URL, msg)
-}
-
-// DoWithURL attempts to create and perform an HTTP request from a message
-// payload. This attempt may include retries, and if all retries fail an error
-// is returned.
-func (h *Type) DoWithURL(url string, msg types.Message) (res *http.Response, err error) {
 	h.mCount.Incr(1)
 
 	var req *http.Request
-	if req, err = h.CreateRequestWithURL(url, msg); err != nil {
+	if req, err = h.CreateRequest(msg); err != nil {
 		h.mErrReq.Incr(1)
 		h.mErr.Incr(1)
 		return nil, err
@@ -363,7 +362,7 @@ func (h *Type) DoWithURL(url string, msg types.Message) (res *http.Response, err
 		h.mErrRes.Incr(1)
 		h.mErr.Incr(1)
 
-		req, err = h.CreateRequestWithURL(url, msg)
+		req, err = h.CreateRequest(msg)
 		if err != nil {
 			h.mErrReq.Incr(1)
 			h.mErr.Incr(1)
@@ -411,18 +410,7 @@ func (h *Type) DoWithURL(url string, msg types.Message) (res *http.Response, err
 //
 // If the response body is empty the message returned is nil.
 func (h *Type) Send(msg types.Message) (types.Message, error) {
-	return h.SendWithURL(h.URL, msg)
-}
-
-// SendWithURL attempts to send a message to an HTTP server with a specific URL,
-// this attempt may include retries, and if all retries fail an error is
-// returned. The message payload can be nil, in which case an empty body is
-// sent. The response will be parsed back into a message, meaning mulitpart
-// content handling is done for you.
-//
-// If the response body is empty the message returned is nil.
-func (h *Type) SendWithURL(url string, msg types.Message) (types.Message, error) {
-	res, err := h.DoWithURL(url, msg)
+	res, err := h.Do(msg)
 	if err != nil {
 		return nil, err
 	}

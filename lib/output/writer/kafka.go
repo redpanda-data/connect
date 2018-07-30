@@ -81,8 +81,7 @@ type Kafka struct {
 	version   sarama.KafkaVersion
 	conf      KafkaConfig
 
-	keyBytes       []byte
-	interpolateKey bool
+	key *text.InterpolatedBytes
 
 	producer    sarama.SyncProducer
 	compression sarama.CompressionCodec
@@ -92,21 +91,17 @@ type Kafka struct {
 
 // NewKafka creates a new Kafka writer type.
 func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, error) {
-	keyBytes := []byte(conf.Key)
-	interpolateKey := text.ContainsFunctionVariables(keyBytes)
-
 	compression, err := strToCompressionCodec(conf.Compression)
 	if err != nil {
 		return nil, err
 	}
 
 	k := Kafka{
-		log:            log.NewModule(".output.kafka"),
-		stats:          stats,
-		conf:           conf,
-		keyBytes:       keyBytes,
-		interpolateKey: interpolateKey,
-		compression:    compression,
+		log:         log.NewModule(".output.kafka"),
+		stats:       stats,
+		conf:        conf,
+		key:         text.NewInterpolatedBytes([]byte(conf.Key)),
+		compression: compression,
 	}
 
 	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
@@ -203,10 +198,7 @@ func (k *Kafka) Write(msg types.Message) error {
 			continue
 		}
 
-		key := k.keyBytes
-		if k.interpolateKey {
-			key = text.ReplaceFunctionVariables(msg, k.keyBytes)
-		}
+		key := k.key.Get(msg)
 		nextMsg := &sarama.ProducerMessage{
 			Topic: k.conf.Topic,
 			Value: sarama.ByteEncoder(part),

@@ -63,8 +63,7 @@ func NewAMQPConfig() AMQPConfig {
 
 // AMQP is an output type that serves AMQP messages.
 type AMQP struct {
-	keyBytes       []byte
-	interpolateKey bool
+	key *text.InterpolatedString
 
 	log   log.Modular
 	stats metrics.Type
@@ -83,16 +82,12 @@ type AMQP struct {
 
 // NewAMQP creates a new AMQP writer type.
 func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
-	keyBytes := []byte(conf.BindingKey)
-	interpolateKey := text.ContainsFunctionVariables(keyBytes)
-
 	a := AMQP{
-		keyBytes:       keyBytes,
-		interpolateKey: interpolateKey,
-		log:            log.NewModule(".output.amqp"),
-		stats:          stats,
-		conf:           conf,
-		deliveryMode:   amqp.Transient,
+		key:          text.NewInterpolatedString(conf.BindingKey),
+		log:          log.NewModule(".output.amqp"),
+		stats:        stats,
+		conf:         conf,
+		deliveryMode: amqp.Transient,
 	}
 	if conf.Persistent {
 		a.deliveryMode = amqp.Persistent
@@ -180,13 +175,9 @@ func (a *AMQP) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	bindingKey := a.conf.BindingKey
-	if a.interpolateKey {
-		bindingKey = strings.Replace(string(text.ReplaceFunctionVariables(msg, a.keyBytes)), "/", ".", -1)
-	}
+	bindingKey := strings.Replace(a.key.Get(msg), "/", ".", -1)
 
 	headers := amqp.Table{}
-
 	msg.IterMetadata(func(k, v string) error {
 		headers[strings.Replace(k, "_", "-", -1)] = v
 		return nil
