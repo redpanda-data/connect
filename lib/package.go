@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,13 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package pipeline
-
-import (
-	"github.com/Jeffail/benthos/lib/types"
-)
-
-// Type is implemented by all pipeline implementations.
-type Type interface {
-	types.Pipeline
-}
+// Package lib contains a collection of packages used to create a Benthos stream
+// pipeline. These packages can be used by third parties in order to easily
+// orchestrate stream processing applications using Benthos as a foundation.
+//
+// Please refer to the examples package for examples of how to create Benthos
+// streams with your own custom processor implementations.
+package lib

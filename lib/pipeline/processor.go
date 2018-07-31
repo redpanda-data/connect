@@ -27,7 +27,6 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
@@ -44,7 +43,7 @@ type Processor struct {
 	log   log.Modular
 	stats metrics.Type
 
-	msgProcessors []processor.Type
+	msgProcessors []types.Processor
 
 	messagesOut chan types.Transaction
 	responsesIn chan types.Response
@@ -59,7 +58,7 @@ type Processor struct {
 func NewProcessor(
 	log log.Modular,
 	stats metrics.Type,
-	msgProcessors ...processor.Type,
+	msgProcessors ...types.Processor,
 ) *Processor {
 	return &Processor{
 		running:       1,

@@ -23,7 +23,6 @@ package input
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -34,12 +33,12 @@ import (
 // interface in order to act like an ordinary input.
 type WithPipeline struct {
 	in   Type
-	pipe pipeline.Type
+	pipe types.Pipeline
 }
 
 // WrapWithPipeline routes an input directly into a processing pipeline and
 // returns a type that manages both and acts like an ordinary input.
-func WrapWithPipeline(in Type, pipeConstructor pipeline.ConstructorFunc) (*WithPipeline, error) {
+func WrapWithPipeline(in Type, pipeConstructor types.PipelineConstructorFunc) (*WithPipeline, error) {
 	pipe, err := pipeConstructor()
 	if err != nil {
 		return nil, err
@@ -55,7 +54,7 @@ func WrapWithPipeline(in Type, pipeConstructor pipeline.ConstructorFunc) (*WithP
 }
 
 // WrapWithPipelines wraps an input with a variadic number of pipelines.
-func WrapWithPipelines(in Type, pipeConstructors ...pipeline.ConstructorFunc) (Type, error) {
+func WrapWithPipelines(in Type, pipeConstructors ...types.PipelineConstructorFunc) (Type, error) {
 	var err error
 	for _, ctor := range pipeConstructors {
 		if in, err = WrapWithPipeline(in, ctor); err != nil {

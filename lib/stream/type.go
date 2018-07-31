@@ -45,9 +45,9 @@ type Type struct {
 	pipelineLayer pipeline.Type
 	outputLayer   output.Type
 
-	complementaryInputPipes  []pipeline.ConstructorFunc
-	complementaryProcs       []pipeline.ProcConstructorFunc
-	complementaryOutputPipes []pipeline.ConstructorFunc
+	complementaryInputPipes  []types.PipelineConstructorFunc
+	complementaryProcs       []types.ProcessorConstructorFunc
+	complementaryOutputPipes []types.PipelineConstructorFunc
 
 	manager types.Manager
 	stats   metrics.Type
@@ -78,7 +78,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 
 // OptAddInputPipelines adds additional pipelines that will be constructed for
 // each input of the Benthos stream.
-func OptAddInputPipelines(pipes ...pipeline.ConstructorFunc) func(*Type) {
+func OptAddInputPipelines(pipes ...types.PipelineConstructorFunc) func(*Type) {
 	return func(t *Type) {
 		t.complementaryInputPipes = append(t.complementaryInputPipes, pipes...)
 	}
@@ -86,7 +86,7 @@ func OptAddInputPipelines(pipes ...pipeline.ConstructorFunc) func(*Type) {
 
 // OptAddProcessors adds additional processors that will be constructed for each
 // logical thread of the processing pipeline layer of the Benthos stream.
-func OptAddProcessors(procs ...pipeline.ProcConstructorFunc) func(*Type) {
+func OptAddProcessors(procs ...types.ProcessorConstructorFunc) func(*Type) {
 	return func(t *Type) {
 		t.complementaryProcs = append(t.complementaryProcs, procs...)
 	}
@@ -94,7 +94,7 @@ func OptAddProcessors(procs ...pipeline.ProcConstructorFunc) func(*Type) {
 
 // OptAddOutputPipelines adds additional pipelines that will be constructed for
 // each output of the Benthos stream.
-func OptAddOutputPipelines(pipes ...pipeline.ConstructorFunc) func(*Type) {
+func OptAddOutputPipelines(pipes ...types.PipelineConstructorFunc) func(*Type) {
 	return func(t *Type) {
 		t.complementaryOutputPipes = append(t.complementaryOutputPipes, pipes...)
 	}

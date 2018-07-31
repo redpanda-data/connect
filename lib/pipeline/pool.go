@@ -17,7 +17,7 @@ import (
 type Pool struct {
 	running uint32
 
-	workers []Type
+	workers []types.Pipeline
 
 	log   log.Modular
 	stats metrics.Type
@@ -31,14 +31,14 @@ type Pool struct {
 
 // NewPool returns a new pipeline pool that utilises multiple processor threads.
 func NewPool(
-	constructor ConstructorFunc,
+	constructor types.PipelineConstructorFunc,
 	threads int,
 	log log.Modular,
 	stats metrics.Type,
 ) (*Pool, error) {
 	p := &Pool{
 		running:     1,
-		workers:     make([]Type, threads),
+		workers:     make([]types.Pipeline, threads),
 		log:         log,
 		stats:       stats,
 		messagesOut: make(chan types.Transaction),
@@ -90,7 +90,7 @@ func (p *Pool) loop() {
 			atomic.AddInt64(&remainingWorkers, -1)
 			continue
 		}
-		go func(w Type) {
+		go func(w types.Pipeline) {
 			defer func() {
 				if atomic.AddInt64(&remainingWorkers, -1) == 0 {
 					close(internalMessages)

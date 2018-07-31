@@ -33,8 +33,6 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/pipeline"
-	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -152,11 +150,11 @@ func (n *nsMgr) UnsetPipe(name string, t <-chan types.Transaction) {
 
 // StreamProcConstructorFunc is a closure type that constructs a processor type
 // for new streams, where the id of the stream is provided as an argument.
-type StreamProcConstructorFunc func(streamID string) (processor.Type, error)
+type StreamProcConstructorFunc func(streamID string) (types.Processor, error)
 
 // StreamPipeConstructorFunc is a closure type that constructs a pipeline type
 // for new streams, where the id of the stream is provided as an argument.
-type StreamPipeConstructorFunc func(streamID string) (pipeline.Type, error)
+type StreamPipeConstructorFunc func(streamID string) (types.Pipeline, error)
 
 //------------------------------------------------------------------------------
 
@@ -278,27 +276,27 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		return ErrStreamExists
 	}
 
-	var inputPipeCtors []pipeline.ConstructorFunc
-	var procCtors []pipeline.ProcConstructorFunc
-	var outputPipeCtors []pipeline.ConstructorFunc
+	var inputPipeCtors []types.PipelineConstructorFunc
+	var procCtors []types.ProcessorConstructorFunc
+	var outputPipeCtors []types.PipelineConstructorFunc
 
 	for _, ctor := range m.inputPipeCtors {
 		func(c StreamPipeConstructorFunc) {
-			inputPipeCtors = append(inputPipeCtors, func() (pipeline.Type, error) {
+			inputPipeCtors = append(inputPipeCtors, func() (types.Pipeline, error) {
 				return c(id)
 			})
 		}(ctor)
 	}
 	for _, ctor := range m.pipelineProcCtors {
 		func(c StreamProcConstructorFunc) {
-			procCtors = append(procCtors, func() (processor.Type, error) {
+			procCtors = append(procCtors, func() (types.Processor, error) {
 				return c(id)
 			})
 		}(ctor)
 	}
 	for _, ctor := range m.outputPipeCtors {
 		func(c StreamPipeConstructorFunc) {
-			outputPipeCtors = append(outputPipeCtors, func() (pipeline.Type, error) {
+			outputPipeCtors = append(outputPipeCtors, func() (types.Pipeline, error) {
 				return c(id)
 			})
 		}(ctor)

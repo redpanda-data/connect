@@ -46,7 +46,7 @@ type TypeSpec struct {
 		mgr types.Manager,
 		log log.Modular,
 		stats metrics.Type,
-		pipelineConstructors ...pipeline.ConstructorFunc,
+		pipelineConstructors ...types.PipelineConstructorFunc,
 	) (Type, error)
 	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 	description        string
@@ -275,11 +275,11 @@ func New(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...pipeline.ConstructorFunc,
+	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
 	if len(conf.Processors) > 0 {
-		pipelines = append([]pipeline.ConstructorFunc{func() (pipeline.Type, error) {
-			processors := make([]processor.Type, len(conf.Processors))
+		pipelines = append([]types.PipelineConstructorFunc{func() (types.Pipeline, error) {
+			processors := make([]types.Processor, len(conf.Processors))
 			for i, procConf := range conf.Processors {
 				var err error
 				processors[i], err = processor.New(procConf, mgr, log.NewModule("."+conf.Type), stats)

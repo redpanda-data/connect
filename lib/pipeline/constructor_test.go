@@ -115,7 +115,7 @@ func TestProcCtor(t *testing.T) {
 		conf, nil,
 		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 		metrics.DudType{},
-		func() (processor.Type, error) {
+		func() (types.Processor, error) {
 			return processor.New(
 				secondProc, nil,
 				log.New(os.Stdout, log.Config{LogLevel: "NONE"}),

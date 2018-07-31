@@ -29,7 +29,6 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/pipeline"
-	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -65,34 +64,34 @@ func TestTypeProcsAndPipes(t *testing.T) {
 		OptSetLogger(logger),
 		OptSetStats(stats),
 		OptSetManager(types.DudMgr{}),
-		OptAddInputPipelines(func(id string) (pipeline.Type, error) {
+		OptAddInputPipelines(func(id string) (types.Pipeline, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}
 			return pipeline.NewProcessor(logger, stats, mockProcs[0]), nil
-		}, func(id string) (pipeline.Type, error) {
+		}, func(id string) (types.Pipeline, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}
 			return pipeline.NewProcessor(logger, stats, mockProcs[1]), nil
 		}),
-		OptAddProcessors(func(id string) (processor.Type, error) {
+		OptAddProcessors(func(id string) (types.Processor, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}
 			return mockProcs[2], nil
-		}, func(id string) (processor.Type, error) {
+		}, func(id string) (types.Processor, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}
 			return mockProcs[3], nil
 		}),
-		OptAddOutputPipelines(func(id string) (pipeline.Type, error) {
+		OptAddOutputPipelines(func(id string) (types.Pipeline, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}
 			return pipeline.NewProcessor(logger, stats, mockProcs[4]), nil
-		}, func(id string) (pipeline.Type, error) {
+		}, func(id string) (types.Pipeline, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}

@@ -23,7 +23,6 @@ package output
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -34,12 +33,12 @@ import (
 // interface in order to act like an ordinary output.
 type WithPipeline struct {
 	out  Type
-	pipe pipeline.Type
+	pipe types.Pipeline
 }
 
 // WrapWithPipeline routes a processing pipeline directly into an output and
 // returns a type that manages both and acts like an ordinary output.
-func WrapWithPipeline(out Type, pipeConstructor pipeline.ConstructorFunc) (*WithPipeline, error) {
+func WrapWithPipeline(out Type, pipeConstructor types.PipelineConstructorFunc) (*WithPipeline, error) {
 	pipe, err := pipeConstructor()
 	if err != nil {
 		return nil, err
@@ -55,7 +54,7 @@ func WrapWithPipeline(out Type, pipeConstructor pipeline.ConstructorFunc) (*With
 }
 
 // WrapWithPipelines wraps an output with a variadic number of pipelines.
-func WrapWithPipelines(out Type, pipeConstructors ...pipeline.ConstructorFunc) (Type, error) {
+func WrapWithPipelines(out Type, pipeConstructors ...types.PipelineConstructorFunc) (Type, error) {
 	var err error
 	for i := len(pipeConstructors) - 1; i >= 0; i-- {
 		if out, err = WrapWithPipeline(out, pipeConstructors[i]); err != nil {

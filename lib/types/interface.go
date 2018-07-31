@@ -57,6 +57,19 @@ type Condition interface {
 
 //------------------------------------------------------------------------------
 
+// Processor reads a message, performs some form of data processing to the
+// message, and returns either a slice of >= 1 resulting messages or a response
+// to return to the message origin.
+type Processor interface {
+	// ProcessMessage attempts to process a message. Since processing can fail
+	// this call returns both a slice of messages in case of success or a
+	// response in case of failure. If the slice of messages is empty the
+	// response will be returned to the source.
+	ProcessMessage(Message) ([]Message, Response)
+}
+
+//------------------------------------------------------------------------------
+
 // Manager is an interface expected by Benthos components that allows them to
 // register their service wide behaviours such as HTTP endpoints and event
 // listeners, and obtain service wide shared resources such as caches.
@@ -113,17 +126,38 @@ type Consumer interface {
 
 //------------------------------------------------------------------------------
 
-// Output is a closable consumer.
+// Output is a closable Consumer.
 type Output interface {
 	Consumer
 	Closable
 }
 
-// Input is a closable producer.
+// Input is a closable Producer.
 type Input interface {
 	Producer
 	Closable
 }
+
+// Pipeline is an interface that implements both the Consumer and Producer
+// interfaces, and can therefore be used to pipe messages from Producer to a
+// Consumer.
+type Pipeline interface {
+	Producer
+	Consumer
+	Closable
+}
+
+//------------------------------------------------------------------------------
+
+// ProcessorConstructorFunc is a constructor to be called for each parallel
+// stream pipeline thread in order to construct a custom processor
+// implementation.
+type ProcessorConstructorFunc func() (Processor, error)
+
+// PipelineConstructorFunc is a constructor to be called for each parallel
+// stream pipeline thread in order to construct a custom pipeline
+// implementation.
+type PipelineConstructorFunc func() (Pipeline, error)
 
 //------------------------------------------------------------------------------
 

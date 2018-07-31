@@ -81,10 +81,10 @@ func New(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	processorCtors ...ProcConstructorFunc,
+	processorCtors ...types.ProcessorConstructorFunc,
 ) (Type, error) {
-	procCtor := func() (Type, error) {
-		processors := make([]processor.Type, len(conf.Processors)+len(processorCtors))
+	procCtor := func() (types.Pipeline, error) {
+		processors := make([]types.Processor, len(conf.Processors)+len(processorCtors))
 		for i, procConf := range conf.Processors {
 			var err error
 			processors[i], err = processor.New(procConf, mgr, log, stats)

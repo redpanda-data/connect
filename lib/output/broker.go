@@ -27,7 +27,6 @@ import (
 	"github.com/Jeffail/benthos/lib/broker"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -167,7 +166,7 @@ func NewBroker(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...pipeline.ConstructorFunc,
+	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
 	outputConfs := conf.Broker.Outputs
 
