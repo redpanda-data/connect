@@ -25,8 +25,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestTextCheck(t *testing.T) {
@@ -454,7 +454,7 @@ func TestTextCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if got := c.Check(types.NewMessage(tt.arg)); got != tt.want {
+			if got := c.Check(message.New(tt.arg)); got != tt.want {
 				t.Errorf("Text.Check() = %v, want %v", got, tt.want)
 			}
 		})

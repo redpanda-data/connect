@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -63,7 +64,7 @@ func TestHTTPBasic(t *testing.T) {
 		testStr := fmt.Sprintf("test%v", i)
 
 		go func() {
-			testMsg := types.NewMessage([][]byte{[]byte(testStr)})
+			testMsg := message.New([][]byte{[]byte(testStr)})
 			select {
 			case msgChan <- types.NewTransaction(testMsg, resChan):
 			case <-time.After(time.Second):

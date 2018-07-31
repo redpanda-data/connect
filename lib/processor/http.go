@@ -25,6 +25,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/http/client"
 )
@@ -128,7 +129,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	if err != nil {
 		h.mErr.Incr(1)
 		h.mErrHTTP.Incr(1)
-		return nil, types.NewSimpleResponse(fmt.Errorf(
+		return nil, response.NewError(fmt.Errorf(
 			"HTTP request '%v' failed: %v", h.conf.HTTP.Client.URL, err,
 		))
 	}
@@ -136,7 +137,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	if responseMsg.Len() < 1 {
 		h.mErr.Incr(1)
 		h.mErrHTTP.Incr(1)
-		return nil, types.NewSimpleResponse(fmt.Errorf(
+		return nil, response.NewError(fmt.Errorf(
 			"HTTP response from '%v' was empty", h.conf.HTTP.Client.URL,
 		))
 	}

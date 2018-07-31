@@ -269,6 +269,9 @@ runLoop:
 		var res types.Response
 		select {
 		case res, open = <-tmpRes:
+			if !open {
+				return
+			}
 			streamEnds := res.Error() == nil
 			select {
 			case tran.ResponseChan <- res:

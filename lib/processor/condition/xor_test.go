@@ -25,15 +25,15 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestXorCheck(t *testing.T) {
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}
 
-	testMsg := types.NewMessage([][]byte{
+	testMsg := message.New([][]byte{
 		[]byte("foo"),
 	})
 

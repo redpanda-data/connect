@@ -100,7 +100,7 @@ func (t *Try) loop() {
 		mErrs = append(mErrs, t.stats.GetCounter(fmt.Sprintf("broker.try.%v.failed", i)))
 	}
 
-	open := false
+	var open bool
 	resChan := make(chan types.Response)
 	for atomic.LoadInt32(&t.running) == 1 {
 		var ts types.Transaction

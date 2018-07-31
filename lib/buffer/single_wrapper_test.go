@@ -28,7 +28,9 @@ import (
 
 	"github.com/Jeffail/benthos/lib/buffer/single"
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -59,7 +61,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 
 		select {
 		// Send to buffer
-		case tChan <- types.NewTransaction(types.NewMessage(msgBytes), resChan):
+		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered message %v send", i)
 			return
@@ -90,7 +92,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 
 		// Response from output
 		select {
-		case outTr.ResponseChan <- types.NewSimpleResponse(nil):
+		case outTr.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for unbuffered response send back %v", i)
 			return
@@ -103,7 +105,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 		msgBytes[0][0] = byte(i)
 
 		select {
-		case tChan <- types.NewTransaction(types.NewMessage(msgBytes), resChan):
+		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered message %v send", i)
 			return
@@ -124,7 +126,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	msgBytes[0] = make([]byte, int(incr))
 
 	select {
-	case tChan <- types.NewTransaction(types.NewMessage(msgBytes), resChan):
+	case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for final buffered message send")
 		return
@@ -150,7 +152,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 		if actual := uint8(outTr.Payload.Get(0)[0]); actual != 0 {
 			t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, 0)
 		}
-		outTr.ResponseChan <- types.NewSimpleResponse(nil)
+		outTr.ResponseChan <- response.NewAck()
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for final buffered message read")
 		return
@@ -179,7 +181,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 		}
 
 		select {
-		case outTr.ResponseChan <- types.NewSimpleResponse(nil):
+		case outTr.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered response send back %v", i)
 			return
@@ -195,7 +197,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	}
 
 	select {
-	case outTr.ResponseChan <- types.NewSimpleResponse(nil):
+	case outTr.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for buffered response send back %v", i)
 		return
@@ -232,7 +234,7 @@ func TestBufferClosing(t *testing.T) {
 		msgBytes[0][0] = byte(i)
 
 		select {
-		case tChan <- types.NewTransaction(types.NewMessage(msgBytes), resChan):
+		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for buffered message %v send", i)
 			return
@@ -258,7 +260,7 @@ func TestBufferClosing(t *testing.T) {
 			if actual := uint8(val.Payload.Get(0)[0]); actual != i {
 				t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, i)
 			}
-			val.ResponseChan <- types.NewSimpleResponse(nil)
+			val.ResponseChan <- response.NewAck()
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for final buffered message read")
 			return
@@ -301,7 +303,7 @@ func BenchmarkSingleMem(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		select {
-		case tChan <- types.NewTransaction(types.NewMessage(contents), resChan):
+		case tChan <- types.NewTransaction(message.New(contents), resChan):
 		case <-time.After(time.Second):
 			b.Errorf("Timed out waiting for buffered message %v send", i)
 			return
@@ -318,7 +320,7 @@ func BenchmarkSingleMem(b *testing.B) {
 
 		select {
 		case val := <-buffer.TransactionChan():
-			val.ResponseChan <- types.NewSimpleResponse(nil)
+			val.ResponseChan <- response.NewAck()
 		case <-time.After(time.Second):
 			b.Errorf("Timed out waiting for final buffered message read")
 			return
@@ -365,7 +367,7 @@ func BenchmarkSingleMmap(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		select {
-		case tChan <- types.NewTransaction(types.NewMessage(contents), resChan):
+		case tChan <- types.NewTransaction(message.New(contents), resChan):
 		case <-time.After(time.Second):
 			b.Errorf("Timed out waiting for buffered message %v send", i)
 			return
@@ -382,7 +384,7 @@ func BenchmarkSingleMmap(b *testing.B) {
 
 		select {
 		case val := <-buffer.TransactionChan():
-			val.ResponseChan <- types.NewSimpleResponse(nil)
+			val.ResponseChan <- response.NewAck()
 		case <-time.After(time.Second):
 			b.Errorf("Timed out waiting for final buffered message read")
 			return

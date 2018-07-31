@@ -29,8 +29,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 	"github.com/olivere/elastic"
 	"github.com/ory/dockertest"
 )
@@ -140,7 +140,7 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 		})
 	}
 	for i := 0; i < N; i++ {
-		if err = m.Write(types.NewMessage(testMsgs[i])); err != nil {
+		if err = m.Write(message.New(testMsgs[i])); err != nil {
 			t.Fatal(err)
 		}
 	}

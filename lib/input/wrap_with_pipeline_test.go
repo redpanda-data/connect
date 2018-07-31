@@ -27,8 +27,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/pipeline"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -83,7 +85,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 	}
 
 	newInput, err := WrapWithPipeline(mockIn, func() (pipeline.Type, error) {
-		return nil, errors.New("Nope")
+		return nil, errors.New("nope")
 	})
 
 	if err == nil {
@@ -93,6 +95,9 @@ func TestBasicWrapPipeline(t *testing.T) {
 	newInput, err = WrapWithPipeline(mockIn, func() (pipeline.Type, error) {
 		return mockPi, nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if newInput.TransactionChan() != mockPi.ts {
 		t.Error("Wrong transaction chan in new input type")
@@ -143,9 +148,8 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 	}
 
 	newInput, err := WrapWithPipelines(mockIn, func() (pipeline.Type, error) {
-		return nil, errors.New("Nope")
+		return nil, errors.New("nope")
 	})
-
 	if err == nil {
 		t.Error("Expected error from back constructor")
 	}
@@ -155,6 +159,9 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 	}, func() (pipeline.Type, error) {
 		return mockPi2, nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if newInput.TransactionChan() != mockPi2.ts {
 		t.Error("Wrong message chan in new input type")
@@ -201,7 +208,7 @@ type mockProc struct {
 
 func (m mockProc) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	if string(msg.Get(0)) == m.value {
-		return nil, types.NewUnacknowledgedResponse()
+		return nil, response.NewUnack()
 	}
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
@@ -229,7 +236,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 
 	resChan := make(chan types.Response)
 
-	msg := types.NewMessage([][]byte{[]byte("foo")})
+	msg := message.New([][]byte{[]byte("foo")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -250,7 +257,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	msg = types.NewMessage([][]byte{[]byte("bar")})
+	msg = message.New([][]byte{[]byte("bar")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -271,7 +278,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	msg = types.NewMessage([][]byte{[]byte("baz")})
+	msg = message.New([][]byte{[]byte("baz")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -301,7 +308,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 	// Send error
 	errFailed := errors.New("derp, failed")
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(errFailed):
+	case ts.ResponseChan <- response.NewError(errFailed):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
@@ -325,7 +332,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 
 	// Send non-error
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(nil):
+	case ts.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
@@ -366,7 +373,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 
 	resChan := make(chan types.Response)
 
-	msg := types.NewMessage([][]byte{[]byte("foo")})
+	msg := message.New([][]byte{[]byte("foo")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -387,7 +394,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	msg = types.NewMessage([][]byte{[]byte("bar")})
+	msg = message.New([][]byte{[]byte("bar")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -408,7 +415,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	msg = types.NewMessage([][]byte{[]byte("baz")})
+	msg = message.New([][]byte{[]byte("baz")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -438,7 +445,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 	// Send error
 	errFailed := errors.New("derp, failed")
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(errFailed):
+	case ts.ResponseChan <- response.NewError(errFailed):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
@@ -462,7 +469,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 
 	// Send non-error
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(nil):
+	case ts.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}

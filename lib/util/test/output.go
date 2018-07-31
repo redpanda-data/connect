@@ -27,6 +27,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -104,7 +105,7 @@ func (o *BenchOutput) loop() {
 
 		o.stats.Incr("output.bench.success", 1)
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-o.closeChan:
 			return
 		}

@@ -23,6 +23,7 @@ package processor
 import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -109,7 +110,7 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 		)
 		m.mDropped.Incr(1)
 		m.mDroppedEmpty.Incr(1)
-		return nil, types.NewSimpleResponse(nil)
+		return nil, response.NewAck()
 	} else if lParts > m.conf.BoundsCheck.MaxParts {
 		m.log.Debugf(
 			"Rejecting message due to message parts exceeding limit (%v): %v\n",
@@ -117,7 +118,7 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 		)
 		m.mDropped.Incr(1)
 		m.mDroppedNumParts.Incr(1)
-		return nil, types.NewSimpleResponse(nil)
+		return nil, response.NewAck()
 	}
 
 	for _, part := range msg.GetAll() {
@@ -131,7 +132,7 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 			)
 			m.mDropped.Incr(1)
 			m.mDroppedPartSize.Incr(1)
-			return nil, types.NewSimpleResponse(nil)
+			return nil, response.NewAck()
 		}
 	}
 

@@ -26,8 +26,9 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/response"
 )
 
 func TestHashSample(t *testing.T) {
@@ -91,7 +92,7 @@ func TestHashSample(t *testing.T) {
 				return
 			}
 
-			msgIn := types.NewMessage([][]byte{tc.input})
+			msgIn := message.New([][]byte{tc.input})
 			msgs, _ := proc.ProcessMessage(msgIn)
 
 			if nil != tc.expected && len(msgs) == 0 {
@@ -149,7 +150,7 @@ func TestHashSamplePartSelection(t *testing.T) {
 			}
 			parts[tc.insertPart] = doc1
 
-			msgIn := types.NewMessage(parts)
+			msgIn := message.New(parts)
 			msgs, _ := proc.ProcessMessage(msgIn)
 			if len(msgs) > 0 {
 				if !reflect.DeepEqual(msgIn, msgs[0]) {
@@ -172,13 +173,13 @@ func TestHashSampleBoundsCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := types.NewMessage([][]byte{})
+	msgIn := message.New([][]byte{})
 	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")
 	}
 
-	if exp, act := types.NewSimpleResponse(nil), res; !reflect.DeepEqual(exp, act) {
+	if exp, act := response.NewAck(), res; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong response returned: %v != %v", act, exp)
 	}
 }
@@ -193,13 +194,13 @@ func TestHashSampleNegBoundsCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := types.NewMessage([][]byte{})
+	msgIn := message.New([][]byte{})
 	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")
 	}
 
-	if exp, act := types.NewSimpleResponse(nil), res; !reflect.DeepEqual(exp, act) {
+	if exp, act := response.NewAck(), res; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong response returned: %v != %v", act, exp)
 	}
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -112,7 +113,7 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 		}
 
 		select {
-		case tran.ResponseChan <- types.NewSimpleResponse(nil):
+		case tran.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -173,7 +174,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 		}
 
 		select {
-		case tran.ResponseChan <- types.NewSimpleResponse(errors.New("failed")):
+		case tran.ResponseChan <- response.NewError(errors.New("failed")):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -193,7 +194,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 		}
 
 		select {
-		case tran.ResponseChan <- types.NewSimpleResponse(nil):
+		case tran.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -247,7 +248,7 @@ func testReadUntilEarlyClose(inConf Config, t *testing.T) {
 	}
 
 	select {
-	case tran.ResponseChan <- types.NewSimpleResponse(nil):
+	case tran.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -297,7 +298,7 @@ func testReadUntilInputClose(inConf Config, t *testing.T) {
 		}
 
 		select {
-		case tran.ResponseChan <- types.NewSimpleResponse(nil):
+		case tran.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -359,7 +360,7 @@ func testReadUntilInputCloseRestart(inConf Config, t *testing.T) {
 			}
 
 			select {
-			case tran.ResponseChan <- types.NewSimpleResponse(nil):
+			case tran.ResponseChan <- response.NewAck():
 			case <-time.After(time.Second):
 				t.Fatal("timed out")
 			}

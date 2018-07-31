@@ -17,7 +17,7 @@ You can [find some examples here][0].
 
 ### Batching and Multiple Part Messages
 
-All Benthos processors support mulitple part messages, which are synonymous with
+All Benthos processors support multiple part messages, which are synonymous with
 batches. Some processors such as [combine](#combine), [batch](#batch) and
 [split](#split) are able to create, expand and break down batches.
 
@@ -687,8 +687,10 @@ batch.
 ``` yaml
 type: process_map
 process_map:
+  conditions: []
   parts: []
   postmap: {}
+  postmap_optional: {}
   premap: {}
   premap_optional: {}
   processors: []
@@ -698,14 +700,38 @@ A processor that extracts and maps fields from the original payload into new
 objects, applies a list of processors to the newly constructed objects, and
 finally maps the result back into the original payload.
 
+This processor is useful for performing processors on subsections of a payload.
+For example, you could extract sections of a JSON object in order to construct
+a request object for an `http` processor, then map the result back
+into a field within the original object.
+
+The order of stages of this processor are as follows:
+
+- Conditions are applied to each _individual_ message part in the batch,
+  determining whether the part will be mapped. If the conditions are empty all
+  message parts will be mapped. If the field `parts` is populated the
+  message parts not in this list are also excluded from mapping.
+- Message parts that are flagged for mapping are mapped according to the premap
+  fields, creating a new object. If the premap stage fails (targets are not
+  found) the message part will not be processed.
+- Message parts that are mapped are processed as a batch. You may safely break
+  the batch into individual parts during processing with the `split`
+  processor.
+- After all child processors are applied to the mapped messages they are mapped
+  back into the original message parts they originated from as per your postmap.
+  If the postmap stage fails the mapping is skipped and the message payload
+  remains as it started.
+
 Map paths are arbitrary dot paths, target path hierarchies are constructed if
 they do not yet exist. Processing is skipped for message parts where the premap
 targets aren't found, for optional premap targets use `premap_optional`.
 
-If the pre-map is empty then the full payload is sent to the processors. The
-post-map should not be left empty, if you intend to replace the full payload
-with the result then this processor is redundant. Currently only JSON format is
-supported for mapping fields from and back to the original payload.
+If postmap targets are not found the merge is abandoned, for optional postmap
+targets use `postmap_optional`.
+
+If the premap is empty then the full payload is sent to the processors, if the
+postmap is empty then the processed result replaces the original contents
+entirely.
 
 Maps can reference the root of objects either with an empty string or '.', for
 example the maps:
@@ -719,11 +745,6 @@ postmap:
 
 Would create a new object where the root is the value of `foo.bar` and
 would map the full contents of the result back into `foo.bar`.
-
-This processor is useful for performing processors on subsections of a payload.
-For example, you could extract sections of a JSON object in order to construct
-a request object for an `http` processor, then map the result back
-into a field within the original object.
 
 If the number of total message parts resulting from the processing steps does
 not match the original count then this processor fails and the messages continue

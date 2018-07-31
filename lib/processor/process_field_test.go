@@ -25,8 +25,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestProcessFieldParts(t *testing.T) {
@@ -54,7 +54,7 @@ func TestProcessFieldParts(t *testing.T) {
 		[]byte(`{"foo":{"bar":{"baz":"original"}}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage([][]byte{
+	msg, res := c.ProcessMessage(message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"baz":"original"}}}`),
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
 		[]byte(`{"foo":{"bar":{"baz":"original"}}}`),
@@ -91,7 +91,7 @@ func TestProcessFieldAllParts(t *testing.T) {
 		[]byte(`{"foo":{"bar":"put me at the root"}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage([][]byte{
+	msg, res := c.ProcessMessage(message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
 	}))
@@ -125,7 +125,7 @@ func TestProcessFieldString(t *testing.T) {
 		[]byte(`{"foo":{"bar":"ZW5jb2RlIG1lIHRvbw=="}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage([][]byte{
+	msg, res := c.ProcessMessage(message.New([][]byte{
 		[]byte(`{"foo":{"bar":"encode me"}}`),
 		[]byte(`{"foo":{"bar":"encode me too"}}`),
 	}))
@@ -159,7 +159,7 @@ func TestProcessFieldBadProc(t *testing.T) {
 		[]byte(`{"foo":{"bar":"encode me too"}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage(exp))
+	msg, res := c.ProcessMessage(message.New(exp))
 	if res != nil {
 		t.Error(res.Error())
 	}
@@ -192,7 +192,7 @@ func TestProcessFieldBadProcTwo(t *testing.T) {
 		[]byte(`{"foo":{"bar":"encode me too"}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage(exp))
+	msg, res := c.ProcessMessage(message.New(exp))
 	if res != nil {
 		t.Error(res.Error())
 	}

@@ -28,8 +28,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -136,7 +138,7 @@ func TestProcCtor(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	case tChan <- types.NewTransaction(
-		types.NewMessage([][]byte{[]byte("foo bar baz")}), resChan,
+		message.New([][]byte{[]byte("foo bar baz")}), resChan,
 	):
 	}
 
@@ -158,7 +160,7 @@ func TestProcCtor(t *testing.T) {
 	select {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
-	case tran.ResponseChan <- types.NewSimpleResponse(nil):
+	case tran.ResponseChan <- response.NewAck():
 	}
 
 	select {

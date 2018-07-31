@@ -29,8 +29,9 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/response"
 )
 
 func TestUnarchiveBadAlgo(t *testing.T) {
@@ -95,7 +96,7 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage(input))
+	msgs, res := proc.ProcessMessage(message.New(input))
 	if len(msgs) != 1 {
 		t.Error("Unarchive failed")
 	} else if res != nil {
@@ -125,7 +126,7 @@ func TestUnarchiveLines(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{
+	msgs, res := proc.ProcessMessage(message.New([][]byte{
 		[]byte(`hello world first part
 hello world second part
 third part
@@ -153,21 +154,21 @@ func TestUnarchiveBinary(t *testing.T) {
 		return
 	}
 
-	if msgs, res := proc.ProcessMessage(types.NewMessage(nil)); len(msgs) > 0 {
+	if msgs, res := proc.ProcessMessage(message.New(nil)); len(msgs) > 0 {
 		t.Error("Expected fail on bad message")
-	} else if _, ok := res.(types.SimpleResponse); !ok {
+	} else if _, ok := res.(response.Ack); !ok {
 		t.Error("Expected simple response from bad message")
 	}
 	if msgs, _ := proc.ProcessMessage(
-		types.NewMessage([][]byte{[]byte("wat this isnt good")}),
+		message.New([][]byte{[]byte("wat this isnt good")}),
 	); len(msgs) > 0 {
 		t.Error("Expected fail on bad message")
 	}
 
-	testMsg := types.NewMessage([][]byte{[]byte("hello"), []byte("world")})
+	testMsg := message.New([][]byte{[]byte("hello"), []byte("world")})
 	testMsgBlob := testMsg.Bytes()
 
-	if msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{testMsgBlob})); len(msgs) == 1 {
+	if msgs, _ := proc.ProcessMessage(message.New([][]byte{testMsgBlob})); len(msgs) == 1 {
 		if !reflect.DeepEqual(testMsg.GetAll(), msgs[0].GetAll()) {
 			t.Errorf("Returned message did not match: %v != %v", msgs, testMsg)
 		}
@@ -268,7 +269,7 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(types.NewMessage(input))
+		msgs, res := proc.ProcessMessage(message.New(input))
 		if len(msgs) != 1 {
 			t.Errorf("Unarchive failed on index: %v", i)
 		} else if res != nil {
@@ -295,12 +296,12 @@ func TestUnarchiveEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{}))
+	msgs, _ := proc.ProcessMessage(message.New([][]byte{}))
 	if len(msgs) != 0 {
 		t.Error("Expected failure with zero part message")
 	}
 
-	msgs, _ = proc.ProcessMessage(types.NewMessage(
+	msgs, _ = proc.ProcessMessage(message.New(
 		[][]byte{[]byte("first"), []byte("second")},
 	))
 	if len(msgs) != 0 {

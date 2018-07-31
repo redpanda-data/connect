@@ -26,8 +26,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestConditionalWithStaticFalse(t *testing.T) {
@@ -63,7 +63,7 @@ func TestConditionalWithStaticFalse(t *testing.T) {
 		[]byte(`bar`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage([][]byte{[]byte("bar")}))
+	msg, res := c.ProcessMessage(message.New([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res.Error())
 	}
@@ -105,7 +105,7 @@ func TestConditionalWithStaticTrue(t *testing.T) {
 		[]byte(`bar`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage([][]byte{[]byte("bar")}))
+	msg, res := c.ProcessMessage(message.New([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res.Error())
 	}

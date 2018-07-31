@@ -27,6 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 )
@@ -333,7 +334,7 @@ func (d *DynamicFanOut) loop() {
 			}
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-d.closeChan:
 			return
 		}

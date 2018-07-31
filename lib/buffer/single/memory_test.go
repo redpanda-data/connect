@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -36,7 +37,7 @@ func TestMemoryBasic(t *testing.T) {
 	block := NewMemory(MemoryConfig{Limit: 100000})
 
 	for i := 0; i < n; i++ {
-		if _, err := block.PushMessage(types.NewMessage(
+		if _, err := block.PushMessage(message.New(
 			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),
@@ -68,7 +69,7 @@ func TestMemoryBasic(t *testing.T) {
 func TestMemoryBacklogCounter(t *testing.T) {
 	block := NewMemory(MemoryConfig{Limit: 100000})
 
-	if _, err := block.PushMessage(types.NewMessage(
+	if _, err := block.PushMessage(message.New(
 		[][]byte{[]byte("1234")}, // 4 bytes + 4 bytes
 	)); err != nil {
 		t.Error(err)
@@ -79,7 +80,7 @@ func TestMemoryBacklogCounter(t *testing.T) {
 		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
 	}
 
-	if _, err := block.PushMessage(types.NewMessage(
+	if _, err := block.PushMessage(message.New(
 		[][]byte{
 			[]byte("1234"),
 			[]byte("1234"),
@@ -117,7 +118,7 @@ func TestMemoryNearLimit(t *testing.T) {
 
 	for j := 0; j < iter; j++ {
 		for i := 0; i < n; i++ {
-			if _, err := block.PushMessage(types.NewMessage(
+			if _, err := block.PushMessage(message.New(
 				[][]byte{
 					[]byte("hello"),
 					[]byte("world"),
@@ -159,7 +160,7 @@ func TestMemoryLoopingRandom(t *testing.T) {
 			for k := range b {
 				b[k] = '0'
 			}
-			if _, err := block.PushMessage(types.NewMessage(
+			if _, err := block.PushMessage(message.New(
 				[][]byte{
 					b,
 					[]byte(fmt.Sprintf("test%v", i)),
@@ -219,7 +220,7 @@ func TestMemoryLockStep(t *testing.T) {
 
 	go func() {
 		for i := 0; i < n; i++ {
-			if _, err := block.PushMessage(types.NewMessage(
+			if _, err := block.PushMessage(message.New(
 				[][]byte{
 					[]byte("hello"),
 					[]byte("world"),
@@ -265,7 +266,7 @@ func TestMemoryClose(t *testing.T) {
 
 	go func() {
 		for i := 0; i < 100; i++ {
-			if _, err := block.PushMessage(types.NewMessage(
+			if _, err := block.PushMessage(message.New(
 				[][]byte{
 					[]byte("hello"),
 					[]byte("world"),
@@ -304,7 +305,7 @@ func TestMemoryClose(t *testing.T) {
 }
 
 func TestMemoryRejectLargeMessage(t *testing.T) {
-	tMsg := types.NewMessage(make([][]byte, 1))
+	tMsg := message.New(make([][]byte, 1))
 	tMsg.Set(0, []byte("hello world this message is too long!"))
 
 	block := NewMemory(MemoryConfig{Limit: 10})

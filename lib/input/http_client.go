@@ -31,6 +31,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/http/client"
@@ -62,7 +63,7 @@ of a message.`,
 
 //------------------------------------------------------------------------------
 
-// StreamConfig contains fields for specifiying stream consumption behaviour.
+// StreamConfig contains fields for specifying stream consumption behaviour.
 type StreamConfig struct {
 	Enabled   bool   `json:"enabled" yaml:"enabled"`
 	Reconnect bool   `json:"reconnect" yaml:"reconnect"`
@@ -136,7 +137,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 		h.conf.HTTPClient.TimeoutMS = 0
 	}
 	if len(h.conf.HTTPClient.Payload) > 0 {
-		h.payload = types.NewMessage([][]byte{[]byte(h.conf.HTTPClient.Payload)})
+		h.payload = message.New([][]byte{[]byte(h.conf.HTTPClient.Payload)})
 	}
 
 	var err error
@@ -300,7 +301,7 @@ func (h *HTTPClient) loop() {
 					h.log.Errorf("Failed to decode response: %v\n", err)
 				} else {
 					mReqSucc.Incr(1)
-					msgOut = types.NewMessage(parts)
+					msgOut = message.New(parts)
 				}
 				res.Body.Close()
 			}

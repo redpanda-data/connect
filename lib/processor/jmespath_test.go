@@ -26,8 +26,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestJMESPathAllParts(t *testing.T) {
@@ -42,7 +42,7 @@ func TestJMESPathAllParts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := types.NewMessage([][]byte{
+	msgIn := message.New([][]byte{
 		[]byte(`{"foo":{"bar":0}}`),
 		[]byte(`{"foo":{"bar":1}}`),
 		[]byte(`{"foo":{"bar":2}}`),
@@ -73,7 +73,7 @@ func TestJMESPathValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := types.NewMessage([][]byte{[]byte("this is bad json")})
+	msgIn := message.New([][]byte{[]byte("this is bad json")})
 	msgs, res := jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
@@ -92,7 +92,7 @@ func TestJMESPathValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn = types.NewMessage([][]byte{[]byte("{}")})
+	msgIn = message.New([][]byte{[]byte("{}")})
 	msgs, res = jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad index")
@@ -171,7 +171,7 @@ func TestJMESPath(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},

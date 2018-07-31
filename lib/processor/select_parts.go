@@ -22,7 +22,9 @@ package processor
 
 import (
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -104,7 +106,7 @@ func NewSelectParts(
 func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	m.mCount.Incr(1)
 
-	newMsg := types.NewMessage(nil)
+	newMsg := message.New(nil)
 	msg.IterMetadata(func(k, v string) error {
 		newMsg.SetMetadata(k, v)
 		return nil
@@ -128,7 +130,7 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 
 	if newMsg.Len() == 0 {
 		m.mDropped.Incr(1)
-		return nil, types.NewSimpleResponse(nil)
+		return nil, response.NewAck()
 	}
 
 	m.mSent.Incr(1)

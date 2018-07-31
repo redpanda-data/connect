@@ -24,8 +24,10 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -110,14 +112,14 @@ func NewFilterParts(
 func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 
-	newMsg := types.NewMessage(nil)
+	newMsg := message.New(nil)
 	msg.IterMetadata(func(k, v string) error {
 		newMsg.SetMetadata(k, v)
 		return nil
 	})
 
 	for i := 0; i < msg.Len(); i++ {
-		if c.condition.Check(types.LockMessage(msg, i)) {
+		if c.condition.Check(message.Lock(msg, i)) {
 			newMsg.Append(msg.Get(i))
 		} else {
 			c.mPartDropped.Incr(1)
@@ -131,7 +133,7 @@ func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 	}
 
 	c.mDropped.Incr(1)
-	return nil, types.NewSimpleResponse(nil)
+	return nil, response.NewAck()
 }
 
 //------------------------------------------------------------------------------

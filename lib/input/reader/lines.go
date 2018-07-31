@@ -26,6 +26,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -166,7 +167,7 @@ func (r *Lines) Read() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
-	msg := types.NewMessage(nil)
+	msg := message.New(nil)
 
 	for r.scanner.Scan() {
 		partSize, err := r.messageBuffer.Write(r.scanner.Bytes())

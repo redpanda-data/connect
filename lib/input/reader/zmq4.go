@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/pebbe/zmq4"
@@ -186,7 +187,7 @@ func (z *ZMQ4) Read() (types.Message, error) {
 		return nil, err
 	}
 
-	return types.NewMessage(data), nil
+	return message.New(data), nil
 }
 
 // Acknowledge instructs whether the pending messages were propagated

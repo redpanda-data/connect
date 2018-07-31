@@ -32,6 +32,7 @@ import (
 	"nanomsg.org/go-mangos/transport/tcp"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -203,7 +204,7 @@ func (s *ScaleProto) Read() (types.Message, error) {
 		}
 		return nil, err
 	}
-	return types.NewMessage([][]byte{data}), nil
+	return message.New([][]byte{data}), nil
 }
 
 // Acknowledge instructs whether the pending messages were propagated

@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 )
@@ -183,9 +184,9 @@ func (p *Processor) loop() {
 
 		var res types.Response
 		if skipAcks == int64(len(resultMsgs)) {
-			res = types.NewUnacknowledgedResponse()
+			res = response.NewUnack()
 		} else {
-			res = types.NewSimpleResponse(nil)
+			res = response.NewAck()
 		}
 
 		select {

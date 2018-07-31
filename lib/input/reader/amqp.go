@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/streadway/amqp"
@@ -122,7 +123,7 @@ func (a *AMQP) Connect() (err error) {
 		false,               // noWait
 		nil,                 // arguments
 	); err != nil {
-		return fmt.Errorf("Exchange Declare: %s", err)
+		return fmt.Errorf("exchange Declare: %s", err)
 	}
 
 	if _, err = amqpChan.QueueDeclare(
@@ -133,7 +134,7 @@ func (a *AMQP) Connect() (err error) {
 		false,        // noWait
 		nil,          // arguments
 	); err != nil {
-		return fmt.Errorf("Queue Declare: %s", err)
+		return fmt.Errorf("queue Declare: %s", err)
 	}
 
 	if err = amqpChan.QueueBind(
@@ -143,13 +144,13 @@ func (a *AMQP) Connect() (err error) {
 		false,             // noWait
 		nil,               // arguments
 	); err != nil {
-		return fmt.Errorf("Queue Bind: %s", err)
+		return fmt.Errorf("queue Bind: %s", err)
 	}
 
 	if err = amqpChan.Qos(
 		a.conf.PrefetchCount, a.conf.PrefetchSize, false,
 	); err != nil {
-		return fmt.Errorf("Qos: %s", err)
+		return fmt.Errorf("qos: %s", err)
 	}
 
 	if consumerChan, err = amqpChan.Consume(
@@ -161,7 +162,7 @@ func (a *AMQP) Connect() (err error) {
 		false,              // noWait
 		nil,                // arguments
 	); err != nil {
-		return fmt.Errorf("Queue Consume: %s", err)
+		return fmt.Errorf("queue Consume: %s", err)
 	}
 
 	a.conn = conn
@@ -181,7 +182,7 @@ func (a *AMQP) disconnect() error {
 		err := a.amqpChan.Cancel(a.conf.ConsumerTag, true)
 		a.amqpChan = nil
 		if err != nil {
-			return fmt.Errorf("Consumer cancel failed: %s", err)
+			return fmt.Errorf("consumer cancel failed: %s", err)
 		}
 	}
 	if a.conn != nil {
@@ -268,7 +269,7 @@ func (a *AMQP) Read() (types.Message, error) {
 	// Only store the latest delivery tag, but always Ack multiple.
 	a.ackTag = data.DeliveryTag
 
-	msg := types.NewMessage([][]byte{data.Body})
+	msg := message.New([][]byte{data.Body})
 
 	for k, v := range data.Headers {
 		setMetadata(msg, k, v)

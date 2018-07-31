@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -105,7 +106,7 @@ func (f *Files) Read() (types.Message, error) {
 		return nil, readerr
 	}
 
-	msg := types.NewMessage([][]byte{msgBytes})
+	msg := message.New([][]byte{msgBytes})
 	msg.SetMetadata("path", path)
 	return msg, nil
 }

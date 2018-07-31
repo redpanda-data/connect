@@ -28,8 +28,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestDecodeBadAlgo(t *testing.T) {
@@ -79,7 +79,7 @@ func TestDecodeBase64(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage(input))
+	msgs, res := proc.ProcessMessage(message.New(input))
 	if len(msgs) != 1 {
 		t.Error("Decode failed")
 	} else if res != nil {
@@ -135,7 +135,7 @@ func TestDecodeIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(types.NewMessage(input))
+		msgs, res := proc.ProcessMessage(message.New(input))
 		if len(msgs) != 1 {
 			t.Errorf("Decode failed on index: %v", i)
 		} else if res != nil {
@@ -161,7 +161,7 @@ func TestDecodeEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{}))
+	msgs, _ := proc.ProcessMessage(message.New([][]byte{}))
 	if len(msgs) > 0 {
 		t.Error("Expected failure with zero part message")
 	}

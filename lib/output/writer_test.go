@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -244,7 +245,7 @@ func TestWriterClosesOnReconn(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case msgChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -300,7 +301,7 @@ func TestWriterClosesOnResend(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case msgChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -358,7 +359,7 @@ func TestWriterCanReconnect(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case msgChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -404,7 +405,7 @@ func TestWriterCantReconnect(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+		case msgChan <- types.NewTransaction(message.New(nil), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -461,7 +462,7 @@ func TestWriterHappyPath(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(types.NewMessage(exp), resChan):
+		case msgChan <- types.NewTransaction(message.New(exp), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -529,7 +530,7 @@ func TestWriterSadPath(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(types.NewMessage(exp), resChan):
+		case msgChan <- types.NewTransaction(message.New(exp), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}

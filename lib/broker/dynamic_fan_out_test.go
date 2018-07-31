@@ -30,7 +30,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -92,7 +94,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 					return
 				}
 				select {
-				case ts.ResponseChan <- types.NewSimpleResponse(nil):
+				case ts.ResponseChan <- response.NewAck():
 				case <-time.After(time.Second):
 					t.Errorf("Timed out responding to broker")
 					return
@@ -100,7 +102,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 			}(j)
 		}
 		select {
-		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
+		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -170,7 +172,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 					return
 				}
 				select {
-				case ts.ResponseChan <- types.NewSimpleResponse(nil):
+				case ts.ResponseChan <- response.NewAck():
 				case <-time.After(time.Second):
 					t.Errorf("Timed out responding to broker")
 					return
@@ -179,7 +181,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		}
 
 		select {
-		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
+		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -217,7 +219,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 					return
 				}
 				select {
-				case ts.ResponseChan <- types.NewSimpleResponse(nil):
+				case ts.ResponseChan <- response.NewAck():
 				case <-time.After(time.Second):
 					t.Errorf("Timed out responding to broker")
 					return
@@ -226,7 +228,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		}
 
 		select {
-		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
+		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -297,7 +299,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-mockOne.TChan:
 			t.Error("Received duplicate message to mockOne")
 		case <-time.After(time.Second):
@@ -315,7 +317,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(errors.New("this is a test")):
+		case ts.ResponseChan <- response.NewError(errors.New("this is a test")):
 		case <-time.After(time.Second):
 			t.Error("Timed out responding to broker")
 			return
@@ -327,7 +329,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Error("Timed out responding to broker")
 			return
@@ -335,7 +337,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 	}()
 
 	select {
-	case readChan <- types.NewTransaction(types.NewMessage([][]byte{[]byte("hello world")}), resChan):
+	case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for broker send")
 		return
@@ -389,7 +391,7 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case readChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -406,7 +408,7 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(errors.New("test")):
+	case ts.ResponseChan <- response.NewError(errors.New("test")):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for res send")
 	}
@@ -454,7 +456,7 @@ func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case readChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -504,7 +506,7 @@ func TestDynamicFanOutShutDownFromSend(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case readChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}

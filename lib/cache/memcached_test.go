@@ -148,8 +148,6 @@ func testMemcachedGetAndSet(addrs []string, t *testing.T) {
 	}
 
 	exp = "baz"
-	act = nil
-
 	if act, err = c.Get("benthos_test_foo"); err != nil {
 		t.Error(err)
 	} else if string(act) != exp {

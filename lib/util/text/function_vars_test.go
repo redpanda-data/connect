@@ -22,11 +22,12 @@ package text
 
 import (
 	"fmt"
-	"github.com/Jeffail/benthos/lib/types"
 	"os"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/Jeffail/benthos/lib/message"
 )
 
 func TestFunctionVarDetection(t *testing.T) {
@@ -53,7 +54,7 @@ func TestFunctionVarDetection(t *testing.T) {
 }
 
 func TestMetadataFunction(t *testing.T) {
-	msg := types.NewMessage(nil)
+	msg := message.New(nil)
 	msg.SetMetadata("foo", "bar")
 	msg.SetMetadata("baz", "qux")
 
@@ -153,7 +154,7 @@ func TestJSONFunction(t *testing.T) {
 			parts = append(parts, []byte(input))
 		}
 		act := string(ReplaceFunctionVariables(
-			types.NewMessage(parts),
+			message.New(parts),
 			[]byte(test.arg),
 		))
 		if act != exp {

@@ -28,7 +28,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -45,7 +47,7 @@ type mockReader struct {
 
 func newMockReader() *mockReader {
 	return &mockReader{
-		msgToSnd: types.NewMessage(nil),
+		msgToSnd: message.New(nil),
 		connChan: make(chan error),
 		readChan: make(chan error),
 		ackChan:  make(chan error),
@@ -315,7 +317,7 @@ func TestReaderCanReconnect(t *testing.T) {
 	}
 
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(nil):
+	case ts.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -394,7 +396,7 @@ func TestReaderFailsReconnect(t *testing.T) {
 	}
 
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(nil):
+	case ts.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -460,7 +462,7 @@ func TestReaderHappyPath(t *testing.T) {
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 
 	readerImpl := newMockReader()
-	readerImpl.msgToSnd = types.NewMessage(exp)
+	readerImpl.msgToSnd = message.New(exp)
 	readerImpl.ackRcvd = errors.New("ack not received")
 
 	r, err := NewReader(
@@ -507,7 +509,7 @@ func TestReaderHappyPath(t *testing.T) {
 	}
 
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(nil):
+	case ts.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -531,7 +533,7 @@ func TestReaderSadPath(t *testing.T) {
 	expErr := errors.New("test error")
 
 	readerImpl := newMockReader()
-	readerImpl.msgToSnd = types.NewMessage(exp)
+	readerImpl.msgToSnd = message.New(exp)
 	readerImpl.ackRcvd = errors.New("ack not received")
 
 	r, err := NewReader(
@@ -578,7 +580,7 @@ func TestReaderSadPath(t *testing.T) {
 	}
 
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(expErr):
+	case ts.ResponseChan <- response.NewError(expErr):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -602,7 +604,7 @@ func TestReaderSkipAcks(t *testing.T) {
 	expErr := errors.New("ack not received")
 
 	readerImpl := newMockReader()
-	readerImpl.msgToSnd = types.NewMessage(exp)
+	readerImpl.msgToSnd = message.New(exp)
 	readerImpl.ackRcvd = expErr
 
 	r, err := NewReader(
@@ -644,7 +646,7 @@ func TestReaderSkipAcks(t *testing.T) {
 		}
 
 		select {
-		case ts.ResponseChan <- types.NewUnacknowledgedResponse():
+		case ts.ResponseChan <- response.NewUnack():
 		case <-time.After(time.Second):
 			t.Fatal("Timed out")
 		}

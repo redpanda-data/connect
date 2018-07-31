@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -76,7 +77,7 @@ func TestLineWriterBasic(t *testing.T) {
 	}
 
 	for _, c := range testCases {
-		msg := types.NewMessage(nil)
+		msg := message.New(nil)
 		for _, part := range c.message {
 			msg.Append([]byte(part))
 		}
@@ -150,7 +151,7 @@ func TestLineWriterCustomDelim(t *testing.T) {
 	}
 
 	for _, c := range testCases {
-		msg := types.NewMessage(nil)
+		msg := message.New(nil)
 		for _, part := range c.message {
 			msg.Append([]byte(part))
 		}

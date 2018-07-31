@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/gabs"
@@ -158,7 +159,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		}
 	}
 
-	reqMsg := types.NewMessage(make([][]byte, len(targetParts)))
+	reqMsg := message.New(make([][]byte, len(targetParts)))
 	gParts := make([]*gabs.Container, len(targetParts))
 
 	for i, index := range targetParts {
@@ -193,7 +194,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		resultMsgs = nextResultMsgs
 	}
 
-	resMsg := types.NewMessage(nil)
+	resMsg := message.New(nil)
 	for _, rMsg := range resultMsgs {
 		for _, part := range rMsg.GetAll() {
 			resMsg.Append(part)

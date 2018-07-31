@@ -26,8 +26,9 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/response"
 )
 
 func TestFilterPartsTextCheck(t *testing.T) {
@@ -93,9 +94,9 @@ func TestFilterPartsTextCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			got, res := c.ProcessMessage(types.NewMessage(tt.arg))
+			got, res := c.ProcessMessage(message.New(tt.arg))
 			if tt.want == nil {
-				if !reflect.DeepEqual(res, types.NewSimpleResponse(nil)) {
+				if !reflect.DeepEqual(res, response.NewAck()) {
 					t.Error("Filter.ProcessMessage() expected drop")
 				}
 			} else if !reflect.DeepEqual(got[0].GetAll(), tt.want) {

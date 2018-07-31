@@ -16,6 +16,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -78,7 +79,7 @@ func TestHTTPClientGET(t *testing.T) {
 
 		reqMut.Lock()
 		select {
-		case tr.ResponseChan <- types.NewSimpleResponse(nil):
+		case tr.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
@@ -289,7 +290,7 @@ func TestHTTPClientPOST(t *testing.T) {
 
 		reqMut.Lock()
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
@@ -387,7 +388,7 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 
 	reqMut.Lock()
 	select {
-	case tr.ResponseChan <- types.NewSimpleResponse(nil):
+	case tr.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 	}
@@ -501,7 +502,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 
 		reqMut.Lock()
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
@@ -598,7 +599,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 		}
 
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
@@ -669,7 +670,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- types.NewSimpleResponse(nil):
+			case ts.ResponseChan <- response.NewAck():
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
@@ -733,7 +734,7 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- types.NewSimpleResponse(nil):
+			case ts.ResponseChan <- response.NewAck():
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
@@ -806,7 +807,7 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 				b.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		}
-		ts.ResponseChan <- types.NewSimpleResponse(nil)
+		ts.ResponseChan <- response.NewAck()
 	}
 
 	b.StopTimer()

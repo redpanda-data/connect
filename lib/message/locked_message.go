@@ -18,17 +18,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package types
+package message
 
 import (
 	"time"
+
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
-// LockMessage wraps a message into a read only type that restricts access to
-// only a single message part, accessible either by index 0 or -1.
-func LockMessage(msg Message, part int) Message {
+// Lock wraps a message into a read only type that restricts access to only a
+// single message part, accessible either by index 0 or -1.
+func Lock(msg types.Message, part int) types.Message {
 	return &lockedMessage{
 		m:    msg,
 		part: part,
@@ -39,7 +41,7 @@ func LockMessage(msg Message, part int) Message {
 
 // lockedMessage wraps a message in a read only restricted type.
 type lockedMessage struct {
-	m    Message
+	m    types.Message
 	part int
 }
 
@@ -50,13 +52,13 @@ func (m *lockedMessage) Bytes() []byte {
 
 // ShallowCopy simply returns the same type, it's read only and therefore
 // doesn't need copying.
-func (m *lockedMessage) ShallowCopy() Message {
+func (m *lockedMessage) ShallowCopy() types.Message {
 	return m
 }
 
 // DeepCopy simply returns the same type, it's read only and therefore doesn't
 // need copying.
-func (m *lockedMessage) DeepCopy() Message {
+func (m *lockedMessage) DeepCopy() types.Message {
 	return m
 }
 
@@ -117,7 +119,7 @@ func (m *lockedMessage) SetJSON(part int, jObj interface{}) error {
 	return nil
 }
 
-func (m *lockedMessage) LazyCondition(label string, cond Condition) bool {
+func (m *lockedMessage) LazyCondition(label string, cond types.Condition) bool {
 	return m.m.LazyCondition(label, cond)
 }
 

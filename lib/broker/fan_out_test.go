@@ -28,7 +28,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -75,7 +77,7 @@ func TestBasicFanOut(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
+		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -96,7 +98,7 @@ func TestBasicFanOut(t *testing.T) {
 		}
 		for j := 0; j < nOutputs; j++ {
 			select {
-			case resChanSlice[j] <- types.NewSimpleResponse(nil):
+			case resChanSlice[j] <- response.NewAck():
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -144,7 +146,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.NewMessage([][]byte{[]byte("hello world")}), resChan):
+	case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for broker send")
 		return
@@ -163,13 +165,13 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts1.ResponseChan <- types.NewSimpleResponse(nil):
+	case ts1.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 		return
 	}
 	select {
-	case ts2.ResponseChan <- types.NewSimpleResponse(errors.New("this is a test")):
+	case ts2.ResponseChan <- response.NewError(errors.New("this is a test")):
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 		return
@@ -185,7 +187,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts2.ResponseChan <- types.NewSimpleResponse(nil):
+	case ts2.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 		return
@@ -227,7 +229,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case readChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -244,7 +246,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(errors.New("test")):
+	case ts.ResponseChan <- response.NewError(errors.New("test")):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for res send")
 	}
@@ -284,7 +286,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case readChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -333,7 +335,7 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case readChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -387,13 +389,13 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < nMsgs; i++ {
-		readChan <- types.NewTransaction(types.NewMessage(content), resChan)
+		readChan <- types.NewTransaction(message.New(content), resChan)
 		for j := 0; j < nOutputs; j++ {
 			ts := <-mockOutputs[j].TChan
 			rChanSlice[i] = ts.ResponseChan
 		}
 		for j := 0; j < nOutputs; j++ {
-			rChanSlice[j] <- types.NewSimpleResponse(nil)
+			rChanSlice[j] <- response.NewAck()
 		}
 		res := <-resChan
 		if res.Error() != nil {

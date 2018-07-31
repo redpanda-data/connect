@@ -26,8 +26,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestSplitParts(t *testing.T) {
@@ -57,7 +57,7 @@ func TestSplitParts(t *testing.T) {
 	}
 
 	for _, tIn := range tests {
-		msgs, _ := proc.ProcessMessage(types.NewMessage(tIn))
+		msgs, _ := proc.ProcessMessage(message.New(tIn))
 		if exp, act := len(tIn), len(msgs); exp != act {
 			t.Errorf("Wrong count of messages: %v != %v", act, exp)
 			continue

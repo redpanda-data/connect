@@ -18,15 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package types
+package message
 
 import (
 	"reflect"
 	"testing"
+
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestLockedMessageGet(t *testing.T) {
-	m := LockMessage(NewMessage([][]byte{
+	m := Lock(New([][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 		[]byte("12345"),
@@ -37,7 +39,7 @@ func TestLockedMessageGet(t *testing.T) {
 		t.Errorf("Messages not equal: %s != %s", exp, act)
 	}
 
-	m = LockMessage(NewMessage([][]byte{
+	m = Lock(New([][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 		[]byte("12345"),
@@ -50,12 +52,12 @@ func TestLockedMessageGet(t *testing.T) {
 }
 
 func TestLockedMessageSerialisation(t *testing.T) {
-	m := LockMessage(NewMessage([][]byte{
+	m := Lock(New([][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 		[]byte("12345"),
 	}), 0)
-	m2 := NewMessage([][]byte{
+	m2 := New([][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 		[]byte("12345"),
@@ -67,7 +69,7 @@ func TestLockedMessageSerialisation(t *testing.T) {
 }
 
 func TestLockedMessageGetAll(t *testing.T) {
-	m := LockMessage(NewMessage([][]byte{
+	m := Lock(New([][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 		[]byte("12345"),
@@ -80,7 +82,7 @@ func TestLockedMessageGetAll(t *testing.T) {
 		t.Errorf("Messages not equal: %s != %s", exp, act)
 	}
 
-	m = LockMessage(NewMessage([][]byte{
+	m = Lock(New([][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 		[]byte("12345"),
@@ -94,15 +96,15 @@ func TestLockedMessageGetAll(t *testing.T) {
 	}
 }
 
-func TestLockNewMessage(t *testing.T) {
-	m := LockMessage(NewMessage(nil), 0)
+func TestLockNew(t *testing.T) {
+	m := Lock(New(nil), 0)
 	if act := m.Len(); act > 0 {
-		t.Errorf("NewMessage returned more than zero message parts: %v", act)
+		t.Errorf("New returned more than zero message parts: %v", act)
 	}
 }
 
 func TestLockedMessageJSONGet(t *testing.T) {
-	msg := LockMessage(NewMessage(
+	msg := Lock(New(
 		[][]byte{[]byte(`{"foo":{"bar":"baz"}}`)},
 	), 0)
 
@@ -136,19 +138,19 @@ func TestLockedMessageJSONGet(t *testing.T) {
 }
 
 func TestLockedMessageConditionCaching(t *testing.T) {
-	msg := LockMessage(&messageImpl{
+	msg := Lock(&Type{
 		parts: [][]byte{
 			[]byte(`foo`),
 		},
 	}, 0)
 
 	dummyCond1 := &dummyCond{
-		call: func(m Message) bool {
+		call: func(m types.Message) bool {
 			return string(m.Get(0)) == "foo"
 		},
 	}
 	dummyCond2 := &dummyCond{
-		call: func(m Message) bool {
+		call: func(m types.Message) bool {
 			return string(m.Get(0)) == "bar"
 		},
 	}

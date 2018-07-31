@@ -26,7 +26,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -46,7 +48,7 @@ func TestMemoryBuffer(t *testing.T) {
 		t.Error(err)
 	}
 
-	msg := types.NewMessage([][]byte{
+	msg := message.New([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
 	})
@@ -89,7 +91,7 @@ func TestMemoryBuffer(t *testing.T) {
 		t.Error("Timed out")
 	}
 	select {
-	case outTr.ResponseChan <- types.NewSimpleResponse(nil):
+	case outTr.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}

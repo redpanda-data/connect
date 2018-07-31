@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/buffer/parallel"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 )
@@ -135,7 +136,7 @@ func (m *ParallelWrapper) inputLoop() {
 			mWriteErr.Incr(1)
 		}
 		select {
-		case tr.ResponseChan <- types.NewSimpleResponse(err):
+		case tr.ResponseChan <- response.NewError(err):
 		case <-m.stopConsumingChan:
 			return
 		}

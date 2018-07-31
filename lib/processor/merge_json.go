@@ -22,6 +22,7 @@ package processor
 
 import (
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/gabs"
@@ -125,7 +126,7 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	if p.retain {
 		newMsg = msg.ShallowCopy()
 	} else {
-		newMsg = types.NewMessage(nil)
+		newMsg = message.New(nil)
 		msg.IterMetadata(func(k, v string) error {
 			newMsg.SetMetadata(k, v)
 			return nil

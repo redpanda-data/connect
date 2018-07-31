@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/gabs"
@@ -317,7 +318,7 @@ func (a *AmazonS3) Read() (types.Message, error) {
 	}
 	a.readKeys = append(a.readKeys, target)
 
-	msg := types.NewMessage([][]byte{buff.Bytes()})
+	msg := message.New([][]byte{buff.Bytes()})
 	msg.SetMetadata("s3_key", target.s3Key)
 
 	return msg, nil

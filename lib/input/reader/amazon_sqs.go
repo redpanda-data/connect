@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/aws/aws-sdk-go/aws"
@@ -138,7 +139,7 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 		return nil, err
 	}
 
-	msg := types.NewMessage(nil)
+	msg := message.New(nil)
 
 	if len(output.Messages) == 0 {
 		return nil, types.ErrTimeout

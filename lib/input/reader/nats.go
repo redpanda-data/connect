@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	nats "github.com/nats-io/go-nats"
@@ -140,7 +141,7 @@ func (n *NATS) Read() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
-	bmsg := types.NewMessage([][]byte{msg.Data})
+	bmsg := message.New([][]byte{msg.Data})
 	bmsg.SetMetadata("nats_subject", msg.Subject)
 
 	return bmsg, nil

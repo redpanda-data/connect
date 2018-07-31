@@ -32,7 +32,9 @@ import (
 
 	"github.com/Jeffail/benthos/lib/cache"
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -90,7 +92,7 @@ func TestDedupe(t *testing.T) {
 		return
 	}
 
-	msgIn := types.NewMessage([][]byte{doc1})
+	msgIn := message.New([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -99,7 +101,7 @@ func TestDedupe(t *testing.T) {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc2})
+	msgIn = message.New([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -108,7 +110,7 @@ func TestDedupe(t *testing.T) {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc3})
+	msgIn = message.New([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -148,7 +150,7 @@ func TestDedupeJSONPaths(t *testing.T) {
 		return
 	}
 
-	msgIn := types.NewMessage([][]byte{doc1})
+	msgIn := message.New([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -157,7 +159,7 @@ func TestDedupeJSONPaths(t *testing.T) {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc2})
+	msgIn = message.New([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 3 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -166,7 +168,7 @@ func TestDedupeJSONPaths(t *testing.T) {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc3})
+	msgIn = message.New([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -175,7 +177,7 @@ func TestDedupeJSONPaths(t *testing.T) {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc4})
+	msgIn = message.New([][]byte{doc4})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 4 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -213,7 +215,7 @@ func TestDedupeInterpolation(t *testing.T) {
 		return
 	}
 
-	msgIn := types.NewMessage([][]byte{doc1})
+	msgIn := message.New([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -222,7 +224,7 @@ func TestDedupeInterpolation(t *testing.T) {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc2})
+	msgIn = message.New([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 3 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -231,7 +233,7 @@ func TestDedupeInterpolation(t *testing.T) {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc3})
+	msgIn = message.New([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -240,7 +242,7 @@ func TestDedupeInterpolation(t *testing.T) {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc4})
+	msgIn = message.New([][]byte{doc4})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 4 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -313,7 +315,7 @@ func TestDedupeJSONMultiPaths(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		msgIn := types.NewMessage([][]byte{[]byte(test.doc)})
+		msgIn := message.New([][]byte{[]byte(test.doc)})
 		msgOut, res := proc.ProcessMessage(msgIn)
 		if nil != res && nil != res.Error() {
 			t.Error(res.Error())
@@ -358,7 +360,7 @@ func TestDedupeJSONObjPaths(t *testing.T) {
 		return
 	}
 
-	msgIn := types.NewMessage([][]byte{doc1})
+	msgIn := message.New([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -367,7 +369,7 @@ func TestDedupeJSONObjPaths(t *testing.T) {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc2})
+	msgIn = message.New([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -376,7 +378,7 @@ func TestDedupeJSONObjPaths(t *testing.T) {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc3})
+	msgIn = message.New([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -385,7 +387,7 @@ func TestDedupeJSONObjPaths(t *testing.T) {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc4})
+	msgIn = message.New([][]byte{doc4})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 4 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -423,7 +425,7 @@ func TestDedupeXXHash(t *testing.T) {
 		return
 	}
 
-	msgIn := types.NewMessage([][]byte{doc1})
+	msgIn := message.New([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -432,7 +434,7 @@ func TestDedupeXXHash(t *testing.T) {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc2})
+	msgIn = message.New([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -441,7 +443,7 @@ func TestDedupeXXHash(t *testing.T) {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{doc3})
+	msgIn = message.New([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -480,7 +482,7 @@ func TestDedupePartSelection(t *testing.T) {
 		return
 	}
 
-	msgIn := types.NewMessage([][]byte{hdr, doc1})
+	msgIn := message.New([][]byte{hdr, doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -489,7 +491,7 @@ func TestDedupePartSelection(t *testing.T) {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{hdr, doc2})
+	msgIn = message.New([][]byte{hdr, doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -498,7 +500,7 @@ func TestDedupePartSelection(t *testing.T) {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
 	}
 
-	msgIn = types.NewMessage([][]byte{hdr, doc3})
+	msgIn = message.New([][]byte{hdr, doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if nil != err && nil != err.Error() {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -554,8 +556,8 @@ func TestDedupeCacheErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{[]byte("foo"), []byte("bar")}))
-	if exp := types.NewSimpleResponse(nil); !reflect.DeepEqual(exp, res) || len(msgs) > 0 {
+	msgs, res := proc.ProcessMessage(message.New([][]byte{[]byte("foo"), []byte("bar")}))
+	if exp := response.NewAck(); !reflect.DeepEqual(exp, res) || len(msgs) > 0 {
 		t.Errorf("Expected message drop on error: %v - %v", res, len(msgs))
 	}
 
@@ -566,7 +568,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{[]byte("foo"), []byte("bar")}))
+	msgs, res = proc.ProcessMessage(message.New([][]byte{[]byte("foo"), []byte("bar")}))
 	if res != nil || len(msgs) != 1 {
 		t.Errorf("Expected message propagate on error: %v - %v", res, len(msgs))
 	}
@@ -615,13 +617,13 @@ func TestDedupeBoundsCheck(t *testing.T) {
 		t.Fatal(err1)
 	}
 
-	msgIn := types.NewMessage([][]byte{})
+	msgIn := message.New([][]byte{})
 	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")
 	}
 
-	if exp, act := types.NewSimpleResponse(nil), res; !reflect.DeepEqual(exp, act) {
+	if exp, act := response.NewAck(), res; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong response returned: %v != %v", act, exp)
 	}
 }
@@ -648,13 +650,13 @@ func TestDedupeNegBoundsCheck(t *testing.T) {
 		t.Fatal(err1)
 	}
 
-	msgIn := types.NewMessage([][]byte{})
+	msgIn := message.New([][]byte{})
 	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")
 	}
 
-	if exp, act := types.NewSimpleResponse(nil), res; !reflect.DeepEqual(exp, act) {
+	if exp, act := response.NewAck(), res; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong response returned: %v != %v", act, exp)
 	}
 }

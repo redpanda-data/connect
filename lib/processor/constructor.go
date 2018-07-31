@@ -193,7 +193,7 @@ You can [find some examples here][0].
 
 ### Batching and Multiple Part Messages
 
-All Benthos processors support mulitple part messages, which are synonymous with
+All Benthos processors support multiple part messages, which are synonymous with
 batches. Some processors such as [combine](#combine), [batch](#batch) and
 [split](#split) are able to create, expand and break down batches.
 

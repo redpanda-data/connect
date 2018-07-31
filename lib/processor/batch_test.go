@@ -26,9 +26,9 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestBatchTwoParts(t *testing.T) {
@@ -44,7 +44,7 @@ func TestBatchTwoParts(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage(exp))
+	msgs, res := proc.ProcessMessage(message.New(exp))
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -72,7 +72,7 @@ func TestBatchLotsOfParts(t *testing.T) {
 		[]byte("bar3"), []byte("bar4"), []byte("bar5"),
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage(input))
+	msgs, res := proc.ProcessMessage(message.New(input))
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -97,7 +97,7 @@ func TestBatchTwoSingleParts(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo1"), []byte("bar1")}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{exp[0]}))
+	msgs, res := proc.ProcessMessage(message.New([][]byte{exp[0]}))
 	if len(msgs) != 0 {
 		t.Error("Expected fail on one part")
 	}
@@ -105,7 +105,7 @@ func TestBatchTwoSingleParts(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{exp[1]}))
+	msgs, res = proc.ProcessMessage(message.New([][]byte{exp[1]}))
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -118,7 +118,7 @@ func TestBatchTwoSingleParts(t *testing.T) {
 
 	exp = [][]byte{[]byte("foo2"), []byte("bar2")}
 
-	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{exp[0]}))
+	msgs, res = proc.ProcessMessage(message.New([][]byte{exp[0]}))
 	if len(msgs) != 0 {
 		t.Error("Expected fail on one part")
 	}
@@ -126,7 +126,7 @@ func TestBatchTwoSingleParts(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{exp[1]}))
+	msgs, res = proc.ProcessMessage(message.New([][]byte{exp[1]}))
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -152,7 +152,7 @@ func TestBatchTwoDiffParts(t *testing.T) {
 	input := [][]byte{[]byte("foo1"), []byte("bar1")}
 	exp := [][]byte{[]byte("foo1"), []byte("bar1"), []byte("foo1")}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{input[0]}))
+	msgs, res := proc.ProcessMessage(message.New([][]byte{input[0]}))
 	if len(msgs) != 0 {
 		t.Error("Expected fail on one part")
 	}
@@ -160,7 +160,7 @@ func TestBatchTwoDiffParts(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{input[1], input[0]}))
+	msgs, res = proc.ProcessMessage(message.New([][]byte{input[1], input[0]}))
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -173,7 +173,7 @@ func TestBatchTwoDiffParts(t *testing.T) {
 
 	exp = [][]byte{[]byte("bar1"), []byte("foo1")}
 
-	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{input[1], input[0]}))
+	msgs, res = proc.ProcessMessage(message.New([][]byte{input[1], input[0]}))
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -186,7 +186,7 @@ func TestBatchTwoDiffParts(t *testing.T) {
 
 	exp = [][]byte{[]byte("bar1"), []byte("foo1"), []byte("bar1")}
 
-	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{input[1], input[0], input[1]}))
+	msgs, res = proc.ProcessMessage(message.New([][]byte{input[1], input[0], input[1]}))
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
@@ -215,7 +215,7 @@ func TestBatchCondition(t *testing.T) {
 		return
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{[]byte("foo")}))
+	msgs, res := proc.ProcessMessage(message.New([][]byte{[]byte("foo")}))
 	if len(msgs) != 0 {
 		t.Error("Expected no batch")
 	}
@@ -223,7 +223,7 @@ func TestBatchCondition(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{[]byte("bar")}))
+	msgs, res = proc.ProcessMessage(message.New([][]byte{[]byte("bar")}))
 	if len(msgs) != 0 {
 		t.Error("Expected no batch")
 	}
@@ -231,7 +231,7 @@ func TestBatchCondition(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(types.NewMessage([][]byte{[]byte("baz: end_batch")}))
+	msgs, res = proc.ProcessMessage(message.New([][]byte{[]byte("baz: end_batch")}))
 	if len(msgs) != 1 {
 		t.Fatal("Expected batch")
 	}

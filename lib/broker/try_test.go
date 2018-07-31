@@ -26,7 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -84,7 +86,7 @@ func TestTryHappyPath(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
+		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -109,7 +111,7 @@ func TestTryHappyPath(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- types.NewSimpleResponse(nil):
+			case ts.ResponseChan <- response.NewAck():
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -161,7 +163,7 @@ func TestTryHappyishPath(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
+		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -186,7 +188,7 @@ func TestTryHappyishPath(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- types.NewSimpleResponse(errors.New("test err")):
+			case ts.ResponseChan <- response.NewError(errors.New("test err")):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -209,7 +211,7 @@ func TestTryHappyishPath(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- types.NewSimpleResponse(nil):
+			case ts.ResponseChan <- response.NewAck():
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -261,7 +263,7 @@ func TestTryAllFail(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
+		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -288,7 +290,7 @@ func TestTryAllFail(t *testing.T) {
 				}
 
 				select {
-				case ts.ResponseChan <- types.NewSimpleResponse(testErr):
+				case ts.ResponseChan <- response.NewError(testErr):
 				case <-time.After(time.Second):
 					t.Errorf("Timed out responding to broker")
 					return

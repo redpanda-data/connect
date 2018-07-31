@@ -25,6 +25,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -100,7 +101,7 @@ func (s *Sample) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	s.mCount.Incr(1)
 	if s.gen.Float64() > s.retain {
 		s.mDropped.Incr(1)
-		return nil, types.NewSimpleResponse(nil)
+		return nil, response.NewAck()
 	}
 	s.mSent.Incr(1)
 	s.mSentParts.Incr(int64(msg.Len()))

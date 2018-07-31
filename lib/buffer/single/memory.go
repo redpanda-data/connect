@@ -23,6 +23,7 @@ package single
 import (
 	"sync"
 
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -184,7 +185,7 @@ func (m *Memory) NextMessage() (types.Message, error) {
 		return nil, types.ErrBlockCorrupted
 	}
 
-	return types.FromBytes(m.block[index : index+int(msgSize)])
+	return message.FromBytes(m.block[index : index+int(msgSize)])
 }
 
 // PushMessage pushes a new message onto the block, returns the backlog count.

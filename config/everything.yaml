@@ -427,9 +427,11 @@ pipeline:
       processors: []
     process_map:
       parts: []
+      conditions: []
       premap: {}
       premap_optional: {}
       postmap: {}
+      postmap_optional: {}
       processors: []
     sample:
       retain: 10

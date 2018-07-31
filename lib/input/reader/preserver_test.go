@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -135,7 +136,7 @@ func TestPreserverHappy(t *testing.T) {
 			t.Error("Timed out")
 		}
 		for _, p := range expParts {
-			readerImpl.msgToSnd = types.NewMessage([][]byte{p})
+			readerImpl.msgToSnd = message.New([][]byte{p})
 			select {
 			case readerImpl.readChan <- nil:
 			case <-time.After(time.Second):
@@ -213,7 +214,7 @@ func TestPreserverBuffer(t *testing.T) {
 	pres := NewPreserver(readerImpl)
 
 	sendMsg := func(content string) {
-		readerImpl.msgToSnd = types.NewMessage(
+		readerImpl.msgToSnd = message.New(
 			[][]byte{[]byte(content)},
 		)
 		select {
@@ -308,7 +309,7 @@ func TestPreserverBufferBatchedAcks(t *testing.T) {
 	pres := NewPreserver(readerImpl)
 
 	sendMsg := func(content string) {
-		readerImpl.msgToSnd = types.NewMessage(
+		readerImpl.msgToSnd = message.New(
 			[][]byte{[]byte(content)},
 		)
 		select {

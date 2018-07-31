@@ -28,6 +28,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -148,7 +149,7 @@ func (c *Decode) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 
 	if newMsg.Len() == 0 {
 		c.mSkipped.Incr(1)
-		return nil, types.NewSimpleResponse(nil)
+		return nil, response.NewAck()
 	}
 
 	c.mSent.Incr(1)

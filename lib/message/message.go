@@ -18,25 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package types
+package message
 
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
-// NewMessage initializes a new message.
-func NewMessage(parts [][]byte) Message {
-	return &messageImpl{
+// New initializes a new message.
+func New(parts [][]byte) *Type {
+	return &Type{
 		createdAt: time.Now(),
 		parts:     parts,
 	}
 }
 
 // FromBytes deserialises a Message from a byte array.
-func FromBytes(b []byte) (Message, error) {
+func FromBytes(b []byte) (*Type, error) {
 	if len(b) < 4 {
 		return nil, ErrBadMessageBytes
 	}
@@ -48,7 +50,7 @@ func FromBytes(b []byte) (Message, error) {
 
 	b = b[4:]
 
-	m := NewMessage(nil)
+	m := New(nil)
 	for i := uint32(0); i < numParts; i++ {
 		if len(b) < 4 {
 			return nil, ErrBadMessageBytes
@@ -75,10 +77,9 @@ type partCache struct {
 
 //------------------------------------------------------------------------------
 
-// messageImpl is a struct containing any relevant fields of a benthos message
-// and
-// helper functions.
-type messageImpl struct {
+// Type is the standard implementation of types.Message, containing a multiple
+// part message.
+type Type struct {
 	createdAt   time.Time
 	parts       [][]byte
 	partCaches  []*partCache
@@ -114,7 +115,7 @@ v                                        v           v
 var intLen uint32 = 4
 
 // Bytes serialises the message into a single byte array.
-func (m *messageImpl) Bytes() []byte {
+func (m *Type) Bytes() []byte {
 	lenParts := uint32(len(m.parts))
 
 	l := (lenParts + 1) * intLen
@@ -151,7 +152,7 @@ func (m *messageImpl) Bytes() []byte {
 // re-arranged in the new copy and JSON parts can be get/set without impacting
 // other message copies. However, it is still unsafe to edit the content of
 // parts.
-func (m *messageImpl) ShallowCopy() Message {
+func (m *Type) ShallowCopy() types.Message {
 	// NOTE: JSON parts are not copied here, as even though we can safely copy
 	// the hash and len fields we cannot safely copy the content as it may
 	// contain pointers or ref types.
@@ -162,7 +163,7 @@ func (m *messageImpl) ShallowCopy() Message {
 			metadata[k] = v
 		}
 	}
-	return &messageImpl{
+	return &Type{
 		createdAt:   m.createdAt,
 		parts:       append([][]byte(nil), m.parts...),
 		resultCache: m.resultCache,
@@ -172,7 +173,7 @@ func (m *messageImpl) ShallowCopy() Message {
 
 // DeepCopy creates a new deep copy of the message. This can be considered an
 // entirely new object that is safe to use anywhere.
-func (m *messageImpl) DeepCopy() Message {
+func (m *Type) DeepCopy() types.Message {
 	var metadata map[string]string
 	if m.metadata != nil {
 		metadata = make(map[string]string, len(m.metadata))
@@ -186,7 +187,7 @@ func (m *messageImpl) DeepCopy() Message {
 		copy(np, p)
 		newParts[i] = np
 	}
-	return &messageImpl{
+	return &Type{
 		createdAt: m.createdAt,
 		parts:     newParts,
 		metadata:  metadata,
@@ -195,7 +196,8 @@ func (m *messageImpl) DeepCopy() Message {
 
 //------------------------------------------------------------------------------
 
-func (m *messageImpl) Get(index int) []byte {
+// Get returns a message part at a particular index, indexes can be negative.
+func (m *Type) Get(index int) []byte {
 	if index < 0 {
 		index = len(m.parts) + index
 	}
@@ -205,18 +207,22 @@ func (m *messageImpl) Get(index int) []byte {
 	return m.parts[index]
 }
 
-func (m *messageImpl) GetAll() [][]byte {
+// GetAll returns all message parts as a 2D byte slice, the contents of this
+// slice should NOT be modified.
+func (m *Type) GetAll() [][]byte {
 	return m.parts
 }
 
-func (m *messageImpl) GetMetadata(key string) string {
+// GetMetadata returns a metadata field from its key.
+func (m *Type) GetMetadata(key string) string {
 	if m.metadata == nil {
 		return ""
 	}
 	return m.metadata[key]
 }
 
-func (m *messageImpl) SetMetadata(key, value string) {
+// SetMetadata sets the value of a metadata key.
+func (m *Type) SetMetadata(key, value string) {
 	if m.metadata == nil {
 		m.metadata = map[string]string{
 			key: value,
@@ -226,13 +232,15 @@ func (m *messageImpl) SetMetadata(key, value string) {
 	m.metadata[key] = value
 }
 
-func (m *messageImpl) DeleteMetadata(key string) {
+// DeleteMetadata removes a metadata key from the message.
+func (m *Type) DeleteMetadata(key string) {
 	if m.metadata != nil {
 		delete(m.metadata, key)
 	}
 }
 
-func (m *messageImpl) IterMetadata(f func(k, v string) error) error {
+// IterMetadata iterates each metadata key/value pair, calling f for each pair.
+func (m *Type) IterMetadata(f func(k, v string) error) error {
 	for k, v := range m.metadata {
 		if err := f(k, v); err != nil {
 			return err
@@ -241,7 +249,8 @@ func (m *messageImpl) IterMetadata(f func(k, v string) error) error {
 	return nil
 }
 
-func (m *messageImpl) Set(index int, b []byte) {
+// Set the value of a message part by its index. Indexes can be negative.
+func (m *Type) Set(index int, b []byte) {
 	if index < 0 {
 		index = len(m.parts) + index
 	}
@@ -256,12 +265,14 @@ func (m *messageImpl) Set(index int, b []byte) {
 	m.parts[index] = b
 }
 
-func (m *messageImpl) SetAll(p [][]byte) {
+// SetAll changes the entire set of message parts.
+func (m *Type) SetAll(p [][]byte) {
 	m.parts = p
 	m.clearAllCaches()
 }
 
-func (m *messageImpl) Append(b ...[]byte) int {
+// Append adds a new message part to the message.
+func (m *Type) Append(b ...[]byte) int {
 	for _, p := range b {
 		m.parts = append(m.parts, p)
 	}
@@ -269,11 +280,13 @@ func (m *messageImpl) Append(b ...[]byte) int {
 	return len(m.parts) - 1
 }
 
-func (m *messageImpl) Len() int {
+// Len returns the length of the message in parts.
+func (m *Type) Len() int {
 	return len(m.parts)
 }
 
-func (m *messageImpl) Iter(f func(i int, b []byte) error) error {
+// Iter will iterate all parts of the message, calling f for each.
+func (m *Type) Iter(f func(i int, b []byte) error) error {
 	for i, p := range m.parts {
 		if err := f(i, p); err != nil {
 			return err
@@ -282,7 +295,7 @@ func (m *messageImpl) Iter(f func(i int, b []byte) error) error {
 	return nil
 }
 
-func (m *messageImpl) expandCache(index int) {
+func (m *Type) expandCache(index int) {
 	if len(m.partCaches) > index {
 		return
 	}
@@ -291,16 +304,17 @@ func (m *messageImpl) expandCache(index int) {
 	m.partCaches = cParts
 }
 
-func (m *messageImpl) clearGeneralCaches() {
+func (m *Type) clearGeneralCaches() {
 	m.resultCache = nil
 }
 
-func (m *messageImpl) clearAllCaches() {
+func (m *Type) clearAllCaches() {
 	m.resultCache = nil
 	m.partCaches = nil
 }
 
-func (m *messageImpl) GetJSON(part int) (interface{}, error) {
+// GetJSON attempts to parse a message part as JSON and returns the result.
+func (m *Type) GetJSON(part int) (interface{}, error) {
 	if part < 0 {
 		part = len(m.parts) + part
 	}
@@ -319,7 +333,9 @@ func (m *messageImpl) GetJSON(part int) (interface{}, error) {
 	return cPart.json, nil
 }
 
-func (m *messageImpl) SetJSON(part int, jObj interface{}) error {
+// SetJSON attempts to marshal an object into a JSON string and sets a message
+// part to the result.
+func (m *Type) SetJSON(part int, jObj interface{}) error {
 	if part < 0 {
 		part = len(m.parts) + part
 	}
@@ -341,7 +357,11 @@ func (m *messageImpl) SetJSON(part int, jObj interface{}) error {
 	return nil
 }
 
-func (m *messageImpl) LazyCondition(label string, cond Condition) bool {
+// LazyCondition resolves a particular condition on the message, if the
+// condition has already been applied to this message the cached result is
+// returned instead. When a message is altered in any way the conditions cache
+// is cleared.
+func (m *Type) LazyCondition(label string, cond types.Condition) bool {
 	if m.resultCache == nil {
 		m.resultCache = map[string]bool{}
 	} else if res, exists := m.resultCache[label]; exists {
@@ -353,7 +373,8 @@ func (m *messageImpl) LazyCondition(label string, cond Condition) bool {
 	return res
 }
 
-func (m *messageImpl) CreatedAt() time.Time {
+// CreatedAt returns a timestamp whereby the message was created.
+func (m *Type) CreatedAt() time.Time {
 	return m.createdAt
 }
 

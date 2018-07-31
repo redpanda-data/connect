@@ -28,8 +28,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestHTTPClientRetries(t *testing.T) {
@@ -51,7 +51,7 @@ func TestHTTPClientRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, res := h.ProcessMessage(types.NewMessage([][]byte{[]byte("test")})); res == nil || res.Error() == nil {
+	if _, res := h.ProcessMessage(message.New([][]byte{[]byte("test")})); res == nil || res.Error() == nil {
 		t.Error("Expected error from end of retries")
 	}
 
@@ -84,7 +84,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(types.NewMessage([][]byte{[]byte("foo")}))
+	msgs, res := h.ProcessMessage(message.New([][]byte{[]byte("foo")}))
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
@@ -93,7 +93,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	msgs, res = h.ProcessMessage(types.NewMessage([][]byte{[]byte("bar")}))
+	msgs, res = h.ProcessMessage(message.New([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
@@ -102,7 +102,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	msgs, res = h.ProcessMessage(types.NewMessage([][]byte{[]byte("baz")}))
+	msgs, res = h.ProcessMessage(message.New([][]byte{[]byte("baz")}))
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {

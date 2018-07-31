@@ -21,14 +21,14 @@
 package processor
 
 import (
-	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/mapper"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/gabs"
 )
 
 //------------------------------------------------------------------------------
@@ -41,14 +41,38 @@ A processor that extracts and maps fields from the original payload into new
 objects, applies a list of processors to the newly constructed objects, and
 finally maps the result back into the original payload.
 
+This processor is useful for performing processors on subsections of a payload.
+For example, you could extract sections of a JSON object in order to construct
+a request object for an ` + "`http`" + ` processor, then map the result back
+into a field within the original object.
+
+The order of stages of this processor are as follows:
+
+- Conditions are applied to each _individual_ message part in the batch,
+  determining whether the part will be mapped. If the conditions are empty all
+  message parts will be mapped. If the field ` + "`parts`" + ` is populated the
+  message parts not in this list are also excluded from mapping.
+- Message parts that are flagged for mapping are mapped according to the premap
+  fields, creating a new object. If the premap stage fails (targets are not
+  found) the message part will not be processed.
+- Message parts that are mapped are processed as a batch. You may safely break
+  the batch into individual parts during processing with the ` + "`split`" + `
+  processor.
+- After all child processors are applied to the mapped messages they are mapped
+  back into the original message parts they originated from as per your postmap.
+  If the postmap stage fails the mapping is skipped and the message payload
+  remains as it started.
+
 Map paths are arbitrary dot paths, target path hierarchies are constructed if
 they do not yet exist. Processing is skipped for message parts where the premap
 targets aren't found, for optional premap targets use ` + "`premap_optional`" + `.
 
-If the pre-map is empty then the full payload is sent to the processors. The
-post-map should not be left empty, if you intend to replace the full payload
-with the result then this processor is redundant. Currently only JSON format is
-supported for mapping fields from and back to the original payload.
+If postmap targets are not found the merge is abandoned, for optional postmap
+targets use ` + "`postmap_optional`" + `.
+
+If the premap is empty then the full payload is sent to the processors, if the
+postmap is empty then the processed result replaces the original contents
+entirely.
 
 Maps can reference the root of objects either with an empty string or '.', for
 example the maps:
@@ -63,11 +87,6 @@ postmap:
 Would create a new object where the root is the value of ` + "`foo.bar`" + ` and
 would map the full contents of the result back into ` + "`foo.bar`" + `.
 
-This processor is useful for performing processors on subsections of a payload.
-For example, you could extract sections of a JSON object in order to construct
-a request object for an ` + "`http`" + ` processor, then map the result back
-into a field within the original object.
-
 If the number of total message parts resulting from the processing steps does
 not match the original count then this processor fails and the messages continue
 unchanged. Therefore, you should avoid using batch and filter type processors in
@@ -81,6 +100,12 @@ ordering of premapped message parts as they are sent through processors are not
 guaranteed to match the ordering of the original batch.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
+			condConfs := make([]interface{}, len(conf.ProcessMap.Conditions))
+			for i, cConf := range conf.ProcessMap.Conditions {
+				if condConfs[i], err = condition.SanitiseConfig(cConf); err != nil {
+					return nil, err
+				}
+			}
 			procConfs := make([]interface{}, len(conf.ProcessMap.Processors))
 			for i, pConf := range conf.ProcessMap.Processors {
 				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
@@ -88,11 +113,13 @@ guaranteed to match the ordering of the original batch.`,
 				}
 			}
 			return map[string]interface{}{
-				"parts":           conf.ProcessMap.Parts,
-				"premap":          conf.ProcessMap.Premap,
-				"premap_optional": conf.ProcessMap.PremapOptional,
-				"postmap":         conf.ProcessMap.Postmap,
-				"processors":      procConfs,
+				"parts":            conf.ProcessMap.Parts,
+				"conditions":       condConfs,
+				"premap":           conf.ProcessMap.Premap,
+				"premap_optional":  conf.ProcessMap.PremapOptional,
+				"postmap":          conf.ProcessMap.Postmap,
+				"postmap_optional": conf.ProcessMap.PostmapOptional,
+				"processors":       procConfs,
 			}, nil
 		},
 	}
@@ -103,21 +130,25 @@ guaranteed to match the ordering of the original batch.`,
 // ProcessMapConfig is a config struct containing fields for the
 // ProcessMap processor.
 type ProcessMapConfig struct {
-	Parts          []int             `json:"parts" yaml:"parts"`
-	Premap         map[string]string `json:"premap" yaml:"premap"`
-	PremapOptional map[string]string `json:"premap_optional" yaml:"premap_optional"`
-	Postmap        map[string]string `json:"postmap" yaml:"postmap"`
-	Processors     []Config          `json:"processors" yaml:"processors"`
+	Parts           []int              `json:"parts" yaml:"parts"`
+	Conditions      []condition.Config `json:"conditions" yaml:"conditions"`
+	Premap          map[string]string  `json:"premap" yaml:"premap"`
+	PremapOptional  map[string]string  `json:"premap_optional" yaml:"premap_optional"`
+	Postmap         map[string]string  `json:"postmap" yaml:"postmap"`
+	PostmapOptional map[string]string  `json:"postmap_optional" yaml:"postmap_optional"`
+	Processors      []Config           `json:"processors" yaml:"processors"`
 }
 
 // NewProcessMapConfig returns a default ProcessMapConfig.
 func NewProcessMapConfig() ProcessMapConfig {
 	return ProcessMapConfig{
-		Parts:          []int{},
-		Premap:         map[string]string{},
-		PremapOptional: map[string]string{},
-		Postmap:        map[string]string{},
-		Processors:     []Config{},
+		Parts:           []int{},
+		Conditions:      []condition.Config{},
+		Premap:          map[string]string{},
+		PremapOptional:  map[string]string{},
+		Postmap:         map[string]string{},
+		PostmapOptional: map[string]string{},
+		Processors:      []Config{},
 	}
 }
 
@@ -126,24 +157,23 @@ func NewProcessMapConfig() ProcessMapConfig {
 // ProcessMap is a processor that applies a list of child processors to a
 // field extracted from the original payload.
 type ProcessMap struct {
-	parts          []int
-	premap         map[string]string
-	premapOptional map[string]string
-	postmap        map[string]string
-	children       []Type
+	parts []int
+
+	mapper   *mapper.Type
+	children []Type
 
 	log log.Modular
 
-	mCount              metrics.StatCounter
-	mSkipped            metrics.StatCounter
-	mSkippedMap         metrics.StatCounter
-	mErr                metrics.StatCounter
-	mErrJSONParse       metrics.StatCounter
-	mErrMisaligned      metrics.StatCounter
-	mErrMisalignedBatch metrics.StatCounter
-	mSent               metrics.StatCounter
-	mSentParts          metrics.StatCounter
-	mDropped            metrics.StatCounter
+	mCount        metrics.StatCounter
+	mCountParts   metrics.StatCounter
+	mSkipped      metrics.StatCounter
+	mSkippedParts metrics.StatCounter
+	mErr          metrics.StatCounter
+	mErrPre       metrics.StatCounter
+	mErrProc      metrics.StatCounter
+	mErrPost      metrics.StatCounter
+	mSent         metrics.StatCounter
+	mSentParts    metrics.StatCounter
 }
 
 // NewProcessMap returns a ProcessField processor.
@@ -162,45 +192,45 @@ func NewProcessMap(
 		children = append(children, proc)
 	}
 
+	var conditions []types.Condition
+	for _, cconf := range conf.ProcessMap.Conditions {
+		cond, err := condition.New(cconf, mgr, nsLog, nsStats)
+		if err != nil {
+			return nil, err
+		}
+		conditions = append(conditions, cond)
+	}
+
 	p := &ProcessMap{
-		parts:          conf.ProcessMap.Parts,
-		premap:         conf.ProcessMap.Premap,
-		premapOptional: conf.ProcessMap.PremapOptional,
-		postmap:        conf.ProcessMap.Postmap,
-		children:       children,
+		parts: conf.ProcessMap.Parts,
+
+		children: children,
 
 		log: nsLog,
 
-		mCount:              stats.GetCounter("processor.process_map.count"),
-		mSkipped:            stats.GetCounter("processor.process_map.skipped"),
-		mSkippedMap:         stats.GetCounter("processor.process_map.skipped.premap_target_missing"),
-		mErr:                stats.GetCounter("processor.process_map.error"),
-		mErrJSONParse:       stats.GetCounter("processor.process_map.error.json_parse"),
-		mErrMisaligned:      stats.GetCounter("processor.process_map.error.misaligned"),
-		mErrMisalignedBatch: stats.GetCounter("processor.process_map.error.misaligned_messages"),
-		mSent:               stats.GetCounter("processor.process_map.sent"),
-		mSentParts:          stats.GetCounter("processor.process_map.parts.sent"),
-		mDropped:            stats.GetCounter("processor.process_map.dropped"),
+		mCount:        stats.GetCounter("processor.process_map.count"),
+		mCountParts:   stats.GetCounter("processor.process_map.parts.count"),
+		mSkipped:      stats.GetCounter("processor.process_map.skipped"),
+		mSkippedParts: stats.GetCounter("processor.process_map.parts.skipped"),
+		mErr:          stats.GetCounter("processor.process_map.error"),
+		mErrPre:       stats.GetCounter("processor.process_map.error.premap"),
+		mErrProc:      stats.GetCounter("processor.process_map.error.processors"),
+		mErrPost:      stats.GetCounter("processor.process_map.error.postmap"),
+		mSent:         stats.GetCounter("processor.process_map.sent"),
+		mSentParts:    stats.GetCounter("processor.process_map.parts.sent"),
 	}
 
 	var err error
-	if p.premap, err = validateMap(conf.ProcessMap.Premap); err != nil {
-		return nil, fmt.Errorf("premap was not valid: %v", err)
-	}
-	if p.premapOptional, err = validateMap(conf.ProcessMap.PremapOptional); err != nil {
-		return nil, fmt.Errorf("optional premap was not valid: %v", err)
-	}
-	if p.postmap, err = validateMap(conf.ProcessMap.Postmap); err != nil {
-		return nil, fmt.Errorf("postmap was not valid: %v", err)
-	}
-
-	if len(p.postmap) == 0 {
-		return nil, errors.New("postmap replaces the root of the original payload, this processor is redundant")
-	}
-	for k := range p.postmap {
-		if len(k) == 0 {
-			return nil, errors.New("postmap replaces the root of the original payload, this processor is redundant")
-		}
+	if p.mapper, err = mapper.New(
+		mapper.OptSetLogger(nsLog),
+		mapper.OptSetStats(nsStats),
+		mapper.OptSetConditions(conditions),
+		mapper.OptSetReqMap(conf.ProcessMap.Premap),
+		mapper.OptSetOptReqMap(conf.ProcessMap.PremapOptional),
+		mapper.OptSetResMap(conf.ProcessMap.Postmap),
+		mapper.OptSetOptResMap(conf.ProcessMap.PostmapOptional),
+	); err != nil {
+		return nil, err
 	}
 
 	return p, nil
@@ -208,223 +238,124 @@ func NewProcessMap(
 
 //------------------------------------------------------------------------------
 
-func validateMap(m map[string]string) (map[string]string, error) {
-	newMap := map[string]string{}
-	for k, v := range m {
-		if k == "." {
-			k = ""
-		}
-		if v == "." {
-			v = ""
-		}
-		if _, exists := newMap[k]; exists {
-			return nil, errors.New("root object mapped twice")
-		}
-		newMap[k] = v
-	}
-
-	targets := []string{}
-	for k := range newMap {
-		targets = append(targets, k)
-	}
-
-	for i, trgt1 := range targets {
-		if trgt1 == "" && len(targets) > 1 {
-			return nil, errors.New("root map target collides with other targets")
-		}
-		for j, trgt2 := range targets {
-			if j == i {
-				continue
-			}
-			t1Split, t2Split := strings.Split(trgt1, "."), strings.Split(trgt2, ".")
-			if len(t1Split) == len(t2Split) {
-				// Siblings can't collide
-				continue
-			}
-			if len(t1Split) >= len(t2Split) {
-				continue
-			}
-			matchedSubpaths := true
-			for k, t1p := range t1Split {
-				if t1p != t2Split[k] {
-					matchedSubpaths = false
-					break
-				}
-			}
-			if matchedSubpaths {
-				return nil, fmt.Errorf("map targets '%v' and '%v' collide", trgt1, trgt2)
-			}
-		}
-	}
-
-	if len(newMap) == 1 {
-		if v, exists := newMap[""]; exists {
-			if v == "" {
-				newMap = map[string]string{}
-			}
-		}
-	}
-
-	return newMap, nil
-}
-
-//------------------------------------------------------------------------------
-
 // ProcessMessage applies child processors to a mapped subset of payloads and
 // maps the result back into the original payload.
-func (p *ProcessMap) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
+func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
+	p.mCountParts.Incr(int64(msg.Len()))
 
-	payload := msg.ShallowCopy()
-	resMsgs := [1]types.Message{payload}
-	msgs = resMsgs[:]
-
-	var targetObjs map[int]*gabs.Container
+	mapMsg := msg
 	if len(p.parts) > 0 {
-		targetObjs = make(map[int]*gabs.Container, len(p.parts))
-		for _, i := range p.parts {
-			if i < 0 {
-				i = payload.Len() + i
-			}
-			if i < 0 || i >= payload.Len() {
-				continue
-			}
-			targetObjs[i] = nil
-		}
-	} else {
-		targetObjs = make(map[int]*gabs.Container, payload.Len())
-		for i := 0; i < payload.Len(); i++ {
-			targetObjs[i] = nil
+		mapMsg = message.New(make([][]byte, msg.Len()))
+		for _, sel := range p.parts {
+			mapMsg.Set(sel, msg.Get(sel))
 		}
 	}
 
-	// Parse original payloads. If the payload is invalid we skip it.
-	for i := range targetObjs {
-		var err error
-		var jObj interface{}
-		var gObj *gabs.Container
-		if jObj, err = payload.GetJSON(i); err == nil {
-			gObj, err = gabs.Consume(jObj)
-		}
-		if err != nil {
-			p.mErrJSONParse.Incr(1)
-			p.log.Errorf("Failed to parse message part '%v': %v\n", i, err)
-			p.log.Debugf("Message part '%v' contents: %q\n", i, payload.Get(i))
-			delete(targetObjs, i)
-			continue
-		}
-		targetObjs[i] = gObj
-	}
-
-	// Maps request message parts back into the original alignment.
-	reqParts := []int{}
-	reqMsg := types.NewMessage(nil)
-
-	// Map the original payloads into premapped message parts.
-premapLoop:
-	for i, gObj := range targetObjs {
-		if len(p.premap) == 0 && len(p.premapOptional) == 0 {
-			reqParts = append(reqParts, i)
-			reqMsg.Append(payload.Get(i))
-			continue
-		}
-
-		gReq := gabs.New()
-		for k, v := range p.premap {
-			gTarget := gObj.Path(v)
-			if gTarget.Data() == nil {
-				p.mSkipped.Incr(1)
-				p.mSkippedMap.Incr(1)
-				continue premapLoop
-			}
-			if len(k) == 0 {
-				reqMsg.Append([]byte("{}"))
-				reqParts = append(reqParts, i)
-				reqMsg.SetJSON(-1, gTarget.Data())
-				continue premapLoop
-			} else {
-				gReq.SetP(gTarget.Data(), k)
-			}
-		}
-		for k, v := range p.premapOptional {
-			gTarget := gObj.Path(v)
-			if gTarget.Data() == nil {
-				continue
-			}
-			if len(k) == 0 {
-				reqMsg.Append([]byte("{}"))
-				reqParts = append(reqParts, i)
-				reqMsg.SetJSON(-1, gTarget.Data())
-				continue premapLoop
-			} else {
-				gReq.SetP(gTarget.Data(), k)
-			}
-		}
-
-		reqMsg.Append([]byte("{}"))
-		reqParts = append(reqParts, i)
-		reqMsg.SetJSON(reqMsg.Len()-1, gReq.Data())
-	}
-
-	resultMsgs := []types.Message{reqMsg}
-	for i := 0; len(resultMsgs) > 0 && i < len(p.children); i++ {
-		var nextResultMsgs []types.Message
-		for _, m := range resultMsgs {
-			var rMsgs []types.Message
-			rMsgs, _ = p.children[i].ProcessMessage(m)
-			nextResultMsgs = append(nextResultMsgs, rMsgs...)
-		}
-		resultMsgs = nextResultMsgs
-	}
-
-	resMsg := types.NewMessage(nil)
-	for _, rMsg := range resultMsgs {
-		for _, part := range rMsg.GetAll() {
-			resMsg.Append(part)
-		}
-	}
-
-	if exp, act := len(reqParts), resMsg.Len(); exp != act {
-		p.mSent.Incr(1)
-		p.mSentParts.Incr(int64(payload.Len()))
+	mappedMsg, skipped, err := p.mapper.MapRequests(mapMsg)
+	if err != nil {
 		p.mErr.Incr(1)
-		p.mErrMisalignedBatch.Incr(1)
-		p.log.Errorf("Misaligned processor result batch. Expected %v messages, received %v\n", exp, act)
-		return
+		p.mErrPre.Incr(1)
+		p.log.Errorf("Failed to map request: %v\n", err)
+		msgs := [1]types.Message{msg}
+		return msgs[:], nil
 	}
 
-	for i, j := range reqParts {
-		ogObj := targetObjs[j]
+	if mappedMsg.Len() == 0 {
+		p.mSkipped.Incr(1)
+		p.mSkippedParts.Incr(int64(msg.Len()))
+		msgs := [1]types.Message{msg}
+		return msgs[:], nil
+	}
 
-		var err error
-		var jObj interface{}
-		var gObj *gabs.Container
-		if jObj, err = resMsg.GetJSON(i); err == nil {
-			gObj, err = gabs.Consume(jObj)
-		}
-		if err != nil {
-			p.mErrJSONParse.Incr(1)
-			p.log.Errorf("Failed to parse result part '%v': %v\n", j, err)
-			p.log.Debugf("Result part '%v' contents: %q\n", j, resMsg.Get(i))
-			continue
-		}
+	var procResults []types.Message
+	if procResults, err = processMap(mappedMsg, p.children); err != nil {
+		p.mErrProc.Incr(1)
+		p.mErr.Incr(1)
+		p.log.Errorf("Processors failed: %v\n", err)
+		msgs := [1]types.Message{msg}
+		return msgs[:], nil
+	}
 
-		for k, v := range p.postmap {
-			gTarget := gObj
-			if len(v) > 0 {
-				gTarget = gTarget.Path(v)
-			}
-			if gTarget.Data() != nil {
-				ogObj.SetP(gTarget.Data(), k)
-			}
+	i := 0
+	for _, m := range procResults {
+		for _, b := range m.GetAll() {
+			p.log.Tracef("Processed request part '%v': %q\n", i, b)
+			i++
 		}
+	}
 
-		payload.SetJSON(j, ogObj.Data())
+	var alignedResult types.Message
+	if alignedResult, err = alignResult(msg.Len(), skipped, procResults); err != nil {
+		p.mErrPost.Incr(1)
+		p.mErr.Incr(1)
+		p.log.Errorf("Postmap failed: %v\n", err)
+		msgs := [1]types.Message{msg}
+		return msgs[:], nil
+	}
+
+	result := msg.ShallowCopy()
+	if err = p.mapper.MapResponses(result, alignedResult); err != nil {
+		p.mErrPost.Incr(1)
+		p.mErr.Incr(1)
+		p.log.Errorf("Postmap failed: %v\n", err)
+		msgs := [1]types.Message{msg}
+		return msgs[:], nil
 	}
 
 	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(payload.Len()))
-	return
+	p.mSentParts.Incr(int64(result.Len()))
+
+	msgs := [1]types.Message{result}
+	return msgs[:], nil
 }
 
-//------------------------------------------------------------------------------
+func processMap(mappedMsg types.Message, processors []Type) ([]types.Message, error) {
+	requestMsgs := []types.Message{mappedMsg}
+	i := 0
+	for ; len(requestMsgs) > 0 && i < len(processors); i++ {
+		var nextRequestMsgs []types.Message
+		for _, m := range requestMsgs {
+			rMsgs, _ := processors[i].ProcessMessage(m)
+			nextRequestMsgs = append(nextRequestMsgs, rMsgs...)
+		}
+		requestMsgs = nextRequestMsgs
+	}
+
+	if len(requestMsgs) == 0 {
+		return nil, fmt.Errorf("processor index '%v' returned zero messages", i)
+	}
+
+	return requestMsgs, nil
+}
+
+func alignResult(length int, skippedParts []int, result []types.Message) (types.Message, error) {
+	resMsgParts := [][]byte{}
+	for _, m := range result {
+		resMsgParts = append(resMsgParts, m.GetAll()...)
+	}
+
+	// Check that size of response is aligned with payload.
+	if rLen, pLen := len(resMsgParts)+len(skippedParts), length; rLen != pLen {
+		return nil, fmt.Errorf("parts returned from enrichment do not match payload: %v != %v", rLen, pLen)
+	}
+
+	var responseParts [][]byte
+	if len(skippedParts) == 0 {
+		responseParts = resMsgParts
+	} else {
+		// Remember to insert nil for each skipped part at the correct index.
+		responseParts = make([][]byte, length)
+		sIndex := 0
+		rOffset := 0
+		for i := 0; i < len(resMsgParts); i++ {
+			if sIndex < len(skippedParts) && skippedParts[sIndex] == i {
+				sIndex++
+				rOffset++
+			}
+			responseParts[i+rOffset] = resMsgParts[i]
+		}
+	}
+
+	return message.New(responseParts), nil
+}

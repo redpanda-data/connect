@@ -28,9 +28,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -53,7 +55,7 @@ func (m *mockOutput) WaitForClose(dur time.Duration) error {
 	select {
 	case _, open := <-m.ts:
 		if open {
-			return errors.New("Messages chan still open")
+			return errors.New("messages chan still open")
 		}
 	case <-time.After(dur):
 		return errors.New("timed out")
@@ -82,7 +84,7 @@ func (m *mockPipe) CloseAsync() {
 }
 
 func (m *mockPipe) WaitForClose(time.Duration) error {
-	return errors.New("Not expecting to see this")
+	return errors.New("not expecting to see this")
 }
 
 //------------------------------------------------------------------------------
@@ -94,16 +96,18 @@ func TestBasicWrapPipeline(t *testing.T) {
 	}
 
 	newOutput, err := WrapWithPipeline(mockOut, func() (pipeline.Type, error) {
-		return nil, errors.New("Nope")
+		return nil, errors.New("nope")
 	})
-
 	if err == nil {
-		t.Error("Expected error from back constructor")
+		t.Error("expected error from back constructor")
 	}
 
 	newOutput, err = WrapWithPipeline(mockOut, func() (pipeline.Type, error) {
 		return mockPi, nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	dudMsgChan := make(chan types.Transaction)
 	if err = newOutput.Consume(dudMsgChan); err != nil {
@@ -171,6 +175,9 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 			), nil
 		},
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
@@ -182,7 +189,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	case tChan <- types.NewTransaction(
-		types.NewMessage([][]byte{[]byte("bar")}), resChan,
+		message.New([][]byte{[]byte("bar")}), resChan,
 	):
 	}
 
@@ -203,7 +210,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 	select {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
-	case tran.ResponseChan <- types.NewSimpleResponse(nil):
+	case tran.ResponseChan <- response.NewAck():
 	}
 
 	select {

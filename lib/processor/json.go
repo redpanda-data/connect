@@ -527,8 +527,6 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	}
 
 	for _, index := range targetParts {
-		var data interface{} = valueBytes
-
 		jsonPart, err := msg.GetJSON(index)
 		if err != nil {
 			p.mErrJSONP.Incr(1)
@@ -536,6 +534,7 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			continue
 		}
 
+		var data interface{}
 		if data, err = p.operator(jsonPart, valueBytes); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)

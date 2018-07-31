@@ -26,8 +26,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestSample10Percent(t *testing.T) {
@@ -45,7 +45,7 @@ func TestSample10Percent(t *testing.T) {
 	totalSampled := 0
 	margin := 0.01
 	for i := 0; i < total; i++ {
-		msgIn := types.NewMessage(nil)
+		msgIn := message.New(nil)
 		msgs, _ := proc.ProcessMessage(msgIn)
 		if len(msgs) > 0 {
 			if !reflect.DeepEqual(msgIn, msgs[0]) {
@@ -82,7 +82,7 @@ func TestSample24Percent(t *testing.T) {
 	totalSampled := 0
 	margin := 0.01
 	for i := 0; i < total; i++ {
-		msgIn := types.NewMessage(nil)
+		msgIn := message.New(nil)
 		msgs, _ := proc.ProcessMessage(msgIn)
 		if len(msgs) == 1 {
 			if !reflect.DeepEqual(msgIn, msgs[0]) {

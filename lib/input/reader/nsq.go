@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	nsq "github.com/nsqio/go-nsq"
@@ -183,7 +184,7 @@ func (n *NSQ) Read() (types.Message, error) {
 		n.disconnect()
 		return nil, types.ErrTypeClosed
 	}
-	return types.NewMessage([][]byte{msg.Body}), nil
+	return message.New([][]byte{msg.Body}), nil
 }
 
 // Acknowledge instructs whether unacknowledged messages have been successfully

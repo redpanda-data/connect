@@ -30,6 +30,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -78,7 +79,7 @@ func TestHTTPBasic(t *testing.T) {
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}
@@ -128,7 +129,7 @@ func TestHTTPBasic(t *testing.T) {
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}

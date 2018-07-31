@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -60,7 +61,7 @@ func TestHTTPClientRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = h.Write(types.NewMessage([][]byte{[]byte("test")})); err == nil {
+	if err = h.Write(message.New([][]byte{[]byte("test")})); err == nil {
 		t.Error("Expected error from end of retries")
 	}
 
@@ -79,7 +80,7 @@ func TestHTTPClientBasic(t *testing.T) {
 
 	resultChan := make(chan types.Message, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		msg := types.NewMessage(nil)
+		msg := message.New(nil)
 		defer func() {
 			resultChan <- msg
 		}()
@@ -103,7 +104,7 @@ func TestHTTPClientBasic(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := types.NewMessage([][]byte{[]byte(testStr)})
+		testMsg := message.New([][]byte{[]byte(testStr)})
 
 		if err = h.Write(testMsg); err != nil {
 			t.Error(err)
@@ -136,7 +137,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 
 	resultChan := make(chan types.Message, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		msg := types.NewMessage(nil)
+		msg := message.New(nil)
 		defer func() {
 			resultChan <- msg
 		}()
@@ -187,7 +188,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := types.NewMessage([][]byte{
+		testMsg := message.New([][]byte{
 			[]byte(testStr + "PART-A"),
 			[]byte(testStr + "PART-B"),
 		})

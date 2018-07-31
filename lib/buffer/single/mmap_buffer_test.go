@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -63,7 +64,7 @@ func TestMmapBufferBasic(t *testing.T) {
 	defer block.Close()
 
 	for i := 0; i < n; i++ {
-		if _, err := block.PushMessage(types.NewMessage(
+		if _, err := block.PushMessage(message.New(
 			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),
@@ -114,7 +115,7 @@ func TestMmapBufferBacklogCounter(t *testing.T) {
 	}
 	defer block.Close()
 
-	if _, err := block.PushMessage(types.NewMessage(
+	if _, err := block.PushMessage(message.New(
 		[][]byte{[]byte("1234")}, // 4 bytes + 4 bytes
 	)); err != nil {
 		t.Error(err)
@@ -125,7 +126,7 @@ func TestMmapBufferBacklogCounter(t *testing.T) {
 		t.Errorf("Wrong backlog count: %v != %v", expected, actual)
 	}
 
-	if _, err := block.PushMessage(types.NewMessage(
+	if _, err := block.PushMessage(message.New(
 		[][]byte{
 			[]byte("1234"),
 			[]byte("1234"),
@@ -186,7 +187,7 @@ func TestMmapBufferLoopingRandom(t *testing.T) {
 			for k := range b {
 				b[k] = '0'
 			}
-			if _, err := block.PushMessage(types.NewMessage(
+			if _, err := block.PushMessage(message.New(
 				[][]byte{
 					b,
 					[]byte(fmt.Sprintf("test%v", i)),
@@ -239,7 +240,7 @@ func TestMmapBufferMultiFiles(t *testing.T) {
 	defer block.Close()
 
 	for i := 0; i < n; i++ {
-		if _, err := block.PushMessage(types.NewMessage(
+		if _, err := block.PushMessage(message.New(
 			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),
@@ -293,7 +294,7 @@ func TestMmapBufferRecoverFiles(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if _, err := block.PushMessage(types.NewMessage(
+		if _, err := block.PushMessage(message.New(
 			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),
@@ -345,7 +346,7 @@ func TestMmapBufferRejectLargeMessage(t *testing.T) {
 
 	defer cleanUpMmapDir(dir)
 
-	tMsg := types.NewMessage(make([][]byte, 1))
+	tMsg := message.New(make([][]byte, 1))
 	tMsg.Set(0, []byte("hello world this message is too long!"))
 
 	conf := NewMmapBufferConfig()
@@ -387,7 +388,7 @@ func BenchmarkMmapBufferBasic(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if _, err := block.PushMessage(types.NewMessage(
+		if _, err := block.PushMessage(message.New(
 			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),

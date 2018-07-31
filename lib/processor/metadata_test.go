@@ -25,8 +25,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestMetadataSet(t *testing.T) {
@@ -73,7 +73,7 @@ func TestMetadataSet(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -98,7 +98,7 @@ func TestMetadataDeleteAll(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inMsg := types.NewMessage(nil)
+	inMsg := message.New(nil)
 	inMsg.SetMetadata("foo", "bar")
 	inMsg.SetMetadata("bar", "baz")
 
@@ -108,7 +108,7 @@ func TestMetadataDeleteAll(t *testing.T) {
 	}
 
 	if err = msgs[0].IterMetadata(func(k, v string) error {
-		return fmt.Errorf("Key found: %v", k)
+		return fmt.Errorf("key found: %v", k)
 	}); err != nil {
 		t.Error(err)
 	}
@@ -124,7 +124,7 @@ func TestMetadataDeletePrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inMsg := types.NewMessage(nil)
+	inMsg := message.New(nil)
 	inMsg.SetMetadata("del_foo", "bar")
 	inMsg.SetMetadata("foo", "bar2")
 	inMsg.SetMetadata("delfoo", "bar3")

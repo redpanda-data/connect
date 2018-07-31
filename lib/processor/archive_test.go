@@ -29,8 +29,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestArchiveBadAlgo(t *testing.T) {
@@ -64,7 +64,7 @@ func TestArchiveTar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage(exp))
+	msgs, res := proc.ProcessMessage(message.New(exp))
 	if len(msgs) != 1 {
 		t.Error("Archive failed")
 	} else if res != nil {
@@ -112,7 +112,7 @@ func TestArchiveLines(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage([][]byte{
+	msgs, res := proc.ProcessMessage(message.New([][]byte{
 		[]byte("hello world first part"),
 		[]byte("hello world second part"),
 		[]byte("third part"),
@@ -151,7 +151,7 @@ func TestArchiveBinary(t *testing.T) {
 		return
 	}
 
-	testMsg := types.NewMessage([][]byte{[]byte("hello"), []byte("world")})
+	testMsg := message.New([][]byte{[]byte("hello"), []byte("world")})
 	testMsgBlob := testMsg.Bytes()
 
 	if msgs, _ := proc.ProcessMessage(testMsg); len(msgs) == 1 {
@@ -176,7 +176,7 @@ func TestArchiveEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{}))
+	msgs, _ := proc.ProcessMessage(message.New([][]byte{}))
 	if len(msgs) != 0 {
 		t.Error("Expected failure with zero part message")
 	}

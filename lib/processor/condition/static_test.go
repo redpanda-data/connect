@@ -25,8 +25,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestStatic(t *testing.T) {
@@ -42,7 +42,7 @@ func TestStatic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if c.Check(types.NewMessage(nil)) {
+	if c.Check(message.New(nil)) {
 		t.Error("True on static false")
 	}
 
@@ -55,7 +55,7 @@ func TestStatic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !c.Check(types.NewMessage(nil)) {
+	if !c.Check(message.New(nil)) {
 		t.Error("False on static true")
 	}
 }

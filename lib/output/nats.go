@@ -27,6 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	nats "github.com/nats-io/go-nats"
 )
@@ -157,7 +158,7 @@ func (n *NATS) loop() {
 			}
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- response.NewError(err):
 		case <-n.closeChan:
 			return
 		}

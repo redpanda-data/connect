@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	btls "github.com/Jeffail/benthos/lib/util/tls"
@@ -265,7 +266,7 @@ func (k *Kafka) Read() (types.Message, error) {
 		return nil, types.ErrTypeClosed
 	}
 	k.offset = data.Offset + 1
-	msg := types.NewMessage([][]byte{data.Value})
+	msg := message.New([][]byte{data.Value})
 
 	msg.SetMetadata("kafka_key", string(data.Key))
 	msg.SetMetadata("kafka_partition", strconv.Itoa(int(data.Partition)))

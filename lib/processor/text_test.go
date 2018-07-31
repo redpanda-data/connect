@@ -25,8 +25,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestTextValidation(t *testing.T) {
@@ -74,7 +74,7 @@ func TestTextPartBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(types.NewMessage(input))
+		msgs, res := proc.ProcessMessage(message.New(input))
 		if len(msgs) != 1 {
 			t.Errorf("Select Parts failed on index: %v", i)
 		} else if res != nil {
@@ -132,7 +132,7 @@ func TestTextAppend(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -191,7 +191,7 @@ func TestTextPrepend(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -247,7 +247,7 @@ func TestTextTrimSpace(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -306,7 +306,7 @@ func TestTextTrim(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -370,7 +370,7 @@ func TestTextReplace(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -441,7 +441,7 @@ func TestTextReplaceRegexp(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -500,7 +500,7 @@ func TestTextStripHTML(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},

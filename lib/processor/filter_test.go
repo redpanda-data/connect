@@ -26,7 +26,9 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -67,7 +69,7 @@ func TestFilterTextCheck(t *testing.T) {
 			arg: [][]byte{
 				[]byte("not foo"),
 			},
-			want: types.NewSimpleResponse(nil),
+			want: response.NewAck(),
 		},
 		{
 			name: "equals foo pos",
@@ -103,7 +105,7 @@ func TestFilterTextCheck(t *testing.T) {
 			arg: [][]byte{
 				[]byte("f0o"),
 			},
-			want: types.NewSimpleResponse(nil),
+			want: response.NewAck(),
 		},
 		{
 			name: "contains_cs foo pos",
@@ -127,7 +129,7 @@ func TestFilterTextCheck(t *testing.T) {
 			arg: [][]byte{
 				[]byte("hello fOo world"),
 			},
-			want: types.NewSimpleResponse(nil),
+			want: response.NewAck(),
 		},
 		{
 			name: "contains foo pos",
@@ -163,7 +165,7 @@ func TestFilterTextCheck(t *testing.T) {
 			arg: [][]byte{
 				[]byte("hello f0o world"),
 			},
-			want: types.NewSimpleResponse(nil),
+			want: response.NewAck(),
 		},
 		{
 			name: "equals_cs foo pos from neg index",
@@ -189,7 +191,7 @@ func TestFilterTextCheck(t *testing.T) {
 				[]byte("bar"),
 				[]byte("foo"),
 			},
-			want: types.NewSimpleResponse(nil),
+			want: response.NewAck(),
 		},
 		{
 			name: "equals_cs neg empty msg",
@@ -199,7 +201,7 @@ func TestFilterTextCheck(t *testing.T) {
 				arg:      "foo",
 			},
 			arg:  [][]byte{},
-			want: types.NewSimpleResponse(nil),
+			want: response.NewAck(),
 		},
 		{
 			name: "equals_cs neg oob",
@@ -211,7 +213,7 @@ func TestFilterTextCheck(t *testing.T) {
 			arg: [][]byte{
 				[]byte("foo"),
 			},
-			want: types.NewSimpleResponse(nil),
+			want: response.NewAck(),
 		},
 		{
 			name: "equals_cs neg oob neg index",
@@ -223,7 +225,7 @@ func TestFilterTextCheck(t *testing.T) {
 			arg: [][]byte{
 				[]byte("foo"),
 			},
-			want: types.NewSimpleResponse(nil),
+			want: response.NewAck(),
 		},
 	}
 	for _, tt := range tests {
@@ -240,7 +242,7 @@ func TestFilterTextCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			_, got := c.ProcessMessage(types.NewMessage(tt.arg))
+			_, got := c.ProcessMessage(message.New(tt.arg))
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Filter.ProcessMessage() = %v, want %v", got, tt.want)
 			}

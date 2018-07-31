@@ -27,6 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -133,14 +134,14 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 			s.mDropOOB.Incr(1)
 			s.mDropped.Incr(1)
 			s.log.Debugf("Cannot sample message part %v for parts count: %v\n", index, lParts)
-			return nil, types.NewSimpleResponse(nil)
+			return nil, response.NewAck()
 		}
 
 		// Attempt to add part to hash.
 		if _, err := hash.Write(msg.Get(index)); nil != err {
 			s.mErrHash.Incr(1)
 			s.log.Debugf("Cannot hash message part for sampling: %v\n", err)
-			return nil, types.NewSimpleResponse(nil)
+			return nil, response.NewAck()
 		}
 	}
 
@@ -153,7 +154,7 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	}
 
 	s.mDropped.Incr(1)
-	return nil, types.NewSimpleResponse(nil)
+	return nil, response.NewAck()
 }
 
 //------------------------------------------------------------------------------

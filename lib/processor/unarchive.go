@@ -27,7 +27,9 @@ import (
 	"io"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -98,7 +100,7 @@ func tarUnarchive(b []byte) ([][]byte, error) {
 }
 
 func binaryUnarchive(b []byte) ([][]byte, error) {
-	msg, err := types.FromBytes(b)
+	msg, err := message.FromBytes(b)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +175,7 @@ func NewUnarchive(
 func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.mCount.Incr(1)
 
-	newMsg := types.NewMessage(nil)
+	newMsg := message.New(nil)
 	msg.IterMetadata(func(k, v string) error {
 		newMsg.SetMetadata(k, v)
 		return nil
@@ -208,7 +210,7 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	if newMsg.Len() == 0 {
 		d.mSkipped.Incr(1)
 		d.mDropped.Incr(1)
-		return nil, types.NewSimpleResponse(nil)
+		return nil, response.NewAck()
 	}
 
 	d.mSent.Incr(1)

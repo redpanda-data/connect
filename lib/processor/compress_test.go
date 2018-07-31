@@ -30,8 +30,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestCompressBadAlgo(t *testing.T) {
@@ -81,7 +81,7 @@ func TestCompressGZIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage(input))
+	msgs, res := proc.ProcessMessage(message.New(input))
 	if len(msgs) != 1 {
 		t.Error("Compress failed")
 	} else if res != nil {
@@ -127,7 +127,7 @@ func TestCompressZLIB(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage(input))
+	msgs, res := proc.ProcessMessage(message.New(input))
 	if len(msgs) != 1 {
 		t.Error("Compress failed")
 	} else if res != nil {
@@ -176,7 +176,7 @@ func TestCompressFlate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(types.NewMessage(input))
+	msgs, res := proc.ProcessMessage(message.New(input))
 	if len(msgs) != 1 {
 		t.Error("Compress failed")
 	} else if res != nil {
@@ -232,7 +232,7 @@ func TestCompressIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(types.NewMessage(input))
+		msgs, res := proc.ProcessMessage(message.New(input))
 		if len(msgs) != 1 {
 			t.Errorf("Compress failed on index: %v", i)
 		} else if res != nil {
@@ -258,7 +258,7 @@ func TestCompressEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(types.NewMessage([][]byte{}))
+	msgs, _ := proc.ProcessMessage(message.New([][]byte{}))
 	if len(msgs) > 0 {
 		t.Error("Expected failure with zero part message")
 	}

@@ -46,8 +46,7 @@ func TestInproc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var toutchan <-chan types.Transaction
-	if toutchan, err = mgr.GetPipe("foo"); err != types.ErrPipeNotFound {
+	if _, err = mgr.GetPipe("foo"); err != types.ErrPipeNotFound {
 		t.Errorf("Wrong error returned: %v != %v", err, types.ErrPipeNotFound)
 	}
 
@@ -62,6 +61,7 @@ func TestInproc(t *testing.T) {
 		t.Error("Timed out")
 	}
 
+	var toutchan <-chan types.Transaction
 	if toutchan, err = mgr.GetPipe("foo"); err != nil {
 		t.Error(err)
 	}
@@ -85,7 +85,7 @@ func TestInproc(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
-	if toutchan, err = mgr.GetPipe("foo"); err != types.ErrPipeNotFound {
+	if _, err = mgr.GetPipe("foo"); err != types.ErrPipeNotFound {
 		t.Errorf("Wrong error returned: %v != %v", err, types.ErrPipeNotFound)
 	}
 }

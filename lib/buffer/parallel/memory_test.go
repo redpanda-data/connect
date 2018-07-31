@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -36,7 +37,7 @@ func TestMemoryBasic(t *testing.T) {
 	block := NewMemory(100000)
 
 	for i := 0; i < n; i++ {
-		if _, err := block.PushMessage(types.NewMessage(
+		if _, err := block.PushMessage(message.New(
 			[][]byte{
 				[]byte("hello"),
 				[]byte("world"),
@@ -72,7 +73,7 @@ func TestMemoryNearLimit(t *testing.T) {
 
 	for j := 0; j < iter; j++ {
 		for i := 0; i < n; i++ {
-			if _, err := block.PushMessage(types.NewMessage(
+			if _, err := block.PushMessage(message.New(
 				[][]byte{
 					[]byte("hello"),
 					[]byte("world"),
@@ -114,7 +115,7 @@ func TestMemoryLoopingRandom(t *testing.T) {
 			for k := range b {
 				b[k] = '0'
 			}
-			if _, err := block.PushMessage(types.NewMessage(
+			if _, err := block.PushMessage(message.New(
 				[][]byte{
 					b,
 					[]byte(fmt.Sprintf("test%v", i)),
@@ -174,7 +175,7 @@ func TestMemoryLockStep(t *testing.T) {
 
 	go func() {
 		for i := 0; i < n; i++ {
-			if _, err := block.PushMessage(types.NewMessage(
+			if _, err := block.PushMessage(message.New(
 				[][]byte{
 					[]byte("hello"),
 					[]byte("world"),
@@ -193,10 +194,10 @@ func TestMemoryLockStep(t *testing.T) {
 func TestMemoryAck(t *testing.T) {
 	block := NewMemory(1000)
 
-	block.PushMessage(types.NewMessage([][]byte{
+	block.PushMessage(message.New([][]byte{
 		[]byte("1"),
 	}))
-	block.PushMessage(types.NewMessage([][]byte{
+	block.PushMessage(message.New([][]byte{
 		[]byte("2"),
 	}))
 
@@ -238,7 +239,7 @@ func TestMemoryAck(t *testing.T) {
 
 	block.Close()
 
-	if _, err = block.PushMessage(types.NewMessage(nil)); err != types.ErrTypeClosed {
+	if _, err = block.PushMessage(message.New(nil)); err != types.ErrTypeClosed {
 		t.Errorf("Wrong error returned: %v != %v", err, types.ErrTypeClosed)
 	}
 	if _, _, err = block.NextMessage(); err != types.ErrTypeClosed {
@@ -250,7 +251,7 @@ func TestMemoryClose(t *testing.T) {
 	block := NewMemory(1000)
 
 	for i := 0; i < 10; i++ {
-		block.PushMessage(types.NewMessage([][]byte{
+		block.PushMessage(message.New([][]byte{
 			[]byte("hello world"),
 		}))
 	}
@@ -286,7 +287,7 @@ func TestMemoryClose(t *testing.T) {
 }
 
 func TestMemoryRejectLargeMessage(t *testing.T) {
-	tMsg := types.NewMessage(make([][]byte, 1))
+	tMsg := message.New(make([][]byte, 1))
 	tMsg.Set(0, []byte("hello world this message is too long!"))
 
 	block := NewMemory(10)

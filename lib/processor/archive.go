@@ -28,7 +28,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
 )
@@ -95,7 +97,7 @@ func tarArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
 }
 
 func binaryArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
-	return types.NewMessage(parts).Bytes(), nil
+	return message.New(parts).Bytes(), nil
 }
 
 func linesArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
@@ -213,20 +215,20 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 
 	if msg.Len() == 0 {
 		d.mSkipped.Incr(1)
-		return nil, types.NewSimpleResponse(nil)
+		return nil, response.NewAck()
 	}
 
 	newPart, err := d.archive(d.createHeaderFunc(msg), msg.GetAll())
 	if err != nil {
 		d.log.Errorf("Failed to create archive: %v\n", err)
 		d.mErr.Incr(1)
-		return nil, types.NewSimpleResponse(nil)
+		return nil, response.NewAck()
 	}
 
 	d.mSucc.Incr(1)
 	d.mSent.Incr(1)
 
-	newMsg := types.NewMessage([][]byte{newPart})
+	newMsg := message.New([][]byte{newPart})
 	msg.IterMetadata(func(k, v string) error {
 		newMsg.SetMetadata(k, v)
 		return nil

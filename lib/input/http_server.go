@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
@@ -190,7 +191,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := types.NewMessage(nil)
+	msg := message.New(nil)
 	var err error
 
 	defer func() {
@@ -308,17 +309,17 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	resChan := make(chan types.Response)
 	throt := throttle.New(throttle.OptCloseChan(h.closeChan))
 
-	var message []byte
+	var msgBytes []byte
 	for atomic.LoadInt32(&h.running) == 1 {
-		if message == nil {
-			if _, message, err = ws.ReadMessage(); err != nil {
+		if msgBytes == nil {
+			if _, msgBytes, err = ws.ReadMessage(); err != nil {
 				return
 			}
 			h.mWSCount.Incr(1)
 			h.mCountF.Incr(1)
 		}
 
-		msg := types.NewMessage([][]byte{message})
+		msg := message.New([][]byte{msgBytes})
 		msg.SetMetadata("http_server_user_agent", r.UserAgent())
 
 		for k, v := range r.Header {
@@ -348,7 +349,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				h.mWSSucc.Incr(1)
 				h.mSuccF.Incr(1)
-				message = nil
+				msgBytes = nil
 				throt.Reset()
 			}
 		case <-h.closeChan:

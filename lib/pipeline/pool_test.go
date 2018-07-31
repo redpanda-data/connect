@@ -28,8 +28,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -66,7 +68,7 @@ func TestPoolBasic(t *testing.T) {
 		t.Error("Expected error from dupe receiving")
 	}
 
-	msg := types.NewMessage([][]byte{
+	msg := message.New([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
 	})
@@ -126,7 +128,7 @@ func TestPoolBasic(t *testing.T) {
 	// Respond without error
 	go func() {
 		select {
-		case procT.ResponseChan <- types.NewSimpleResponse(nil):
+		case procT.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
 		}
@@ -184,7 +186,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 
 		// Send message
 		select {
-		case tChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+		case tChan <- types.NewTransaction(message.New(nil), resChan):
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
 		}
@@ -210,7 +212,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 
 			// Respond with no error
 			select {
-			case procT.ResponseChan <- types.NewSimpleResponse(nil):
+			case procT.ResponseChan <- response.NewAck():
 			case <-time.After(time.Second * 5):
 				t.Fatal("Timed out")
 			}
@@ -259,7 +261,7 @@ func TestPoolMultiThreads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := types.NewMessage([][]byte{
+	msg := message.New([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
 	})
@@ -290,7 +292,7 @@ func TestPoolMultiThreads(t *testing.T) {
 
 		// Respond with no error
 		select {
-		case procT.ResponseChan <- types.NewSimpleResponse(nil):
+		case procT.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
 		}

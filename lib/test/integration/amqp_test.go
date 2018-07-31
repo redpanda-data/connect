@@ -28,6 +28,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/types"
@@ -132,7 +133,7 @@ func testAMQPSinglePart(url string, t *testing.T) {
 		str := fmt.Sprintf("hello world: %v", i)
 		testMsgs[str] = struct{}{}
 		go func(testStr string) {
-			msg := types.NewMessage([][]byte{
+			msg := message.New([][]byte{
 				[]byte(testStr),
 			})
 			msg.SetMetadata("foo", "bar")
@@ -208,7 +209,7 @@ func testAMQPMultiplePart(url string, t *testing.T) {
 		testMsgs[str2] = struct{}{}
 		testMsgs[str3] = struct{}{}
 		go func(testStr1, testStr2, testStr3 string) {
-			msg := types.NewMessage([][]byte{
+			msg := message.New([][]byte{
 				[]byte(testStr1),
 				[]byte(testStr2),
 				[]byte(testStr3),

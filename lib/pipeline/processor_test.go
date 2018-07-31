@@ -29,7 +29,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -41,9 +43,9 @@ type mockMsgProcessor struct {
 
 func (m *mockMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	if drop := <-m.dropChan; drop {
-		return nil, types.NewSimpleResponse(errMockProc)
+		return nil, response.NewError(errMockProc)
 	}
-	newMsg := types.NewMessage([][]byte{
+	newMsg := message.New([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 	})
@@ -74,7 +76,7 @@ func TestProcessorPipeline(t *testing.T) {
 		t.Error("Expected error from dupe listening")
 	}
 
-	msg := types.NewMessage([][]byte{
+	msg := message.New([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
 	})
@@ -139,9 +141,9 @@ func TestProcessorPipeline(t *testing.T) {
 	}
 
 	// Respond with error
-	errTest := errors.New("This is a test")
+	errTest := errors.New("this is a test")
 	select {
-	case procT.ResponseChan <- types.NewSimpleResponse(errTest):
+	case procT.ResponseChan <- response.NewError(errTest):
 	case _, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
@@ -176,7 +178,7 @@ func TestProcessorPipeline(t *testing.T) {
 
 	// Respond without error
 	select {
-	case procT.ResponseChan <- types.NewSimpleResponse(nil):
+	case procT.ResponseChan <- response.NewAck():
 	case _, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
@@ -224,7 +226,7 @@ func TestProcessorPipeline(t *testing.T) {
 
 	// Respond without error
 	select {
-	case procT.ResponseChan <- types.NewSimpleResponse(nil):
+	case procT.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -254,7 +256,7 @@ type mockMultiMsgProcessor struct {
 func (m *mockMultiMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	var msgs []types.Message
 	for i := 0; i < m.N; i++ {
-		newMsg := types.NewMessage([][]byte{
+		newMsg := message.New([][]byte{
 			[]byte(fmt.Sprintf("test%v", i)),
 		})
 		msgs = append(msgs, newMsg)
@@ -279,7 +281,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case tChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -317,7 +319,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 	// Respond without error N times
 	for i := 0; i < mockProc.N; i++ {
 		select {
-		case resChans[i] <- types.NewSimpleResponse(nil):
+		case resChans[i] <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -363,7 +365,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(types.NewMessage(nil), resChan):
+	case tChan <- types.NewTransaction(message.New(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -387,7 +389,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 
 	// Respond with 1 error
 	select {
-	case errResChan <- types.NewSimpleResponse(errors.New("foo")):
+	case errResChan <- response.NewError(errors.New("foo")):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -420,7 +422,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	// Respond without error N times
 	for i := 0; i < mockProc.N; i++ {
 		select {
-		case resChans[i] <- types.NewSimpleResponse(nil):
+		case resChans[i] <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}

@@ -32,6 +32,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/gorilla/websocket"
 )
@@ -256,7 +257,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	h.mGetSendSucc.Incr(1)
 
 	select {
-	case ts.ResponseChan <- types.NewSimpleResponse(nil):
+	case ts.ResponseChan <- response.NewAck():
 	case <-h.closeChan:
 		return
 	}
@@ -308,7 +309,7 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 
 		_, err := w.Write(data)
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- response.NewError(err):
 		case <-h.closeChan:
 			return
 		}
@@ -378,7 +379,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			h.mWSSendErr.Incr(1)
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(werr):
+		case ts.ResponseChan <- response.NewError(werr):
 		case <-h.closeChan:
 			return
 		}

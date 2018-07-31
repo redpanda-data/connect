@@ -29,6 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -136,7 +137,7 @@ func (w *LineWriter) loop() {
 			mSuccessF.Incr(1)
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- response.NewError(err):
 		case <-w.closeChan:
 			return
 		}

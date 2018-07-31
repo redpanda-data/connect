@@ -22,7 +22,9 @@ package processor
 
 import (
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -88,12 +90,12 @@ func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 
 	if msg.Len() == 0 {
 		s.mDropped.Incr(1)
-		return nil, types.NewSimpleResponse(nil)
+		return nil, response.NewAck()
 	}
 
 	msgs := make([]types.Message, msg.Len())
 	for i, part := range msg.GetAll() {
-		msgs[i] = types.NewMessage([][]byte{part})
+		msgs[i] = message.New([][]byte{part})
 	}
 	msg.IterMetadata(func(k, v string) error {
 		for _, m := range msgs {

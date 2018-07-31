@@ -17,8 +17,10 @@ pipeline:
   processors:
   - type: process_map
     process_map:
+      conditions: []
       parts: []
       postmap: {}
+      postmap_optional: {}
       premap: {}
       premap_optional: {}
       processors: []

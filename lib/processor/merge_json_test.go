@@ -26,8 +26,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestMergeJSON(t *testing.T) {
@@ -72,7 +72,7 @@ func TestMergeJSON(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.first),
 				[]byte(test.second),
@@ -102,7 +102,7 @@ func TestMergeJSONRetention(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	input := types.NewMessage(
+	input := message.New(
 		[][]byte{
 			[]byte(`{"foo":1}`),
 			[]byte(`{"foo":2}`),
@@ -121,7 +121,7 @@ func TestMergeJSONRetention(t *testing.T) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 
-	input = types.NewMessage(
+	input = message.New(
 		[][]byte{
 			[]byte(`{"foo":1}`),
 		},
@@ -148,7 +148,7 @@ func TestMergeJSONRetention(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	input = types.NewMessage(
+	input = message.New(
 		[][]byte{
 			[]byte(`{"foo":1}`),
 			[]byte(`not related`),
@@ -168,7 +168,7 @@ func TestMergeJSONRetention(t *testing.T) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 
-	input = types.NewMessage(
+	input = message.New(
 		[][]byte{
 			[]byte(`{"foo":1}`),
 		},

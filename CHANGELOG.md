@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.21.0 - 2018-07-31
+
+### Added
+
+- Add conditions to `process_map` processor.
+
 ### Changed
 
 - TLS config fields have been cleaned up for multiple types. This affects

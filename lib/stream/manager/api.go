@@ -109,7 +109,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		return
 	case "POST":
 	default:
-		requestErr = errors.New("Method not supported")
+		requestErr = errors.New("method not supported")
 		return
 	}
 

@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -97,7 +99,7 @@ func TestBasicGreedy(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- types.NewSimpleResponse(nil):
+			case ts.ResponseChan <- response.NewAck():
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -105,7 +107,7 @@ func TestBasicGreedy(t *testing.T) {
 		}()
 
 		select {
-		case readChan <- types.NewTransaction(types.NewMessage(content), resChan):
+		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return

@@ -29,6 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Jeffail/gabs"
@@ -280,7 +281,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	if !extractedHash {
 		if d.conf.Dedupe.DropOnCacheErr {
 			d.mDropped.Incr(1)
-			return nil, types.NewSimpleResponse(nil)
+			return nil, response.NewAck()
 		}
 	} else if err := d.cache.Add(string(hasher.Bytes()), []byte{'t'}); err != nil {
 		if err != types.ErrKeyAlreadyExists {
@@ -288,11 +289,11 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			d.log.Errorf("Cache error: %v\n", err)
 			if d.conf.Dedupe.DropOnCacheErr {
 				d.mDropped.Incr(1)
-				return nil, types.NewSimpleResponse(nil)
+				return nil, response.NewAck()
 			}
 		} else {
 			d.mDropped.Incr(1)
-			return nil, types.NewSimpleResponse(nil)
+			return nil, response.NewAck()
 		}
 	}
 

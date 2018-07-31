@@ -18,15 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package types
+package message
 
 import (
 	"reflect"
 	"testing"
+
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestMessageSerialization(t *testing.T) {
-	m := NewMessage([][]byte{
+	m := New([][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 		[]byte("12345"),
@@ -46,10 +48,30 @@ func TestMessageSerialization(t *testing.T) {
 	}
 }
 
-func TestNewMessage(t *testing.T) {
-	m := NewMessage(nil)
+func TestNew(t *testing.T) {
+	m := New(nil)
 	if act := m.Len(); act > 0 {
-		t.Errorf("NewMessage returned more than zero message parts: %v", act)
+		t.Errorf("New returned more than zero message parts: %v", act)
+	}
+}
+
+func TestIter(t *testing.T) {
+	parts := [][]byte{
+		[]byte(`foo`),
+		[]byte(`bar`),
+		[]byte(`baz`),
+	}
+	m := New(parts)
+	iters := 0
+	m.Iter(func(index int, b []byte) error {
+		if exp, act := string(parts[index]), string(b); exp != act {
+			t.Errorf("Unexpected part: %v != %v", act, exp)
+		}
+		iters++
+		return nil
+	})
+	if exp, act := 3, iters; exp != act {
+		t.Errorf("Wrong count of iterations: %v != %v", act, exp)
 	}
 }
 
@@ -72,7 +94,7 @@ func TestMessageInvalidBytesFormat(t *testing.T) {
 }
 
 func TestMessageJSONGet(t *testing.T) {
-	msg := NewMessage(
+	msg := New(
 		[][]byte{[]byte(`{"foo":{"bar":"baz"}}`)},
 	)
 
@@ -112,7 +134,7 @@ func TestMessageJSONGet(t *testing.T) {
 }
 
 func TestMessageJSONSet(t *testing.T) {
-	msg := messageImpl{
+	msg := &Type{
 		parts: [][]byte{[]byte(`hello world`)},
 	}
 
@@ -157,7 +179,7 @@ func TestMessageJSONSet(t *testing.T) {
 }
 
 func TestMessageMetadata(t *testing.T) {
-	m := NewMessage(nil)
+	m := New(nil)
 
 	m.SetMetadata("foo", "bar")
 	if exp, act := "bar", m.GetMetadata("foo"); exp != act {
@@ -188,7 +210,7 @@ func TestMessageMetadata(t *testing.T) {
 }
 
 func TestMessageShallowCopy(t *testing.T) {
-	m := NewMessage([][]byte{
+	m := New([][]byte{
 		[]byte(`foo`),
 		[]byte(`bar`),
 	})
@@ -219,7 +241,7 @@ func TestMessageShallowCopy(t *testing.T) {
 }
 
 func TestMessageDeepCopy(t *testing.T) {
-	m := NewMessage([][]byte{
+	m := New([][]byte{
 		[]byte(`foo`),
 		[]byte(`bar`),
 	})
@@ -250,7 +272,7 @@ func TestMessageDeepCopy(t *testing.T) {
 }
 
 func TestMessageJSONSetGet(t *testing.T) {
-	msg := messageImpl{
+	msg := &Type{
 		parts: [][]byte{[]byte(`hello world`)},
 	}
 
@@ -312,7 +334,7 @@ func TestMessageJSONSetGet(t *testing.T) {
 }
 
 func TestMessageSplitJSON(t *testing.T) {
-	msg1 := messageImpl{
+	msg1 := &Type{
 		parts: [][]byte{
 			[]byte("Foo plain text"),
 			[]byte(`nothing here`),
@@ -393,29 +415,29 @@ func TestMessageSplitJSON(t *testing.T) {
 }
 
 type dummyCond struct {
-	call  func(m Message) bool
+	call  func(m types.Message) bool
 	calls int
 }
 
-func (d *dummyCond) Check(m Message) bool {
+func (d *dummyCond) Check(m types.Message) bool {
 	d.calls++
 	return d.call(m)
 }
 
 func TestMessageConditionCaching(t *testing.T) {
-	msg := messageImpl{
+	msg := &Type{
 		parts: [][]byte{
 			[]byte(`foo`),
 		},
 	}
 
 	dummyCond1 := &dummyCond{
-		call: func(m Message) bool {
+		call: func(m types.Message) bool {
 			return string(m.Get(0)) == "foo"
 		},
 	}
 	dummyCond2 := &dummyCond{
-		call: func(m Message) bool {
+		call: func(m types.Message) bool {
 			return string(m.Get(0)) == "bar"
 		},
 	}
@@ -472,7 +494,7 @@ func TestMessageConditionCaching(t *testing.T) {
 }
 
 func TestMessageCrossContaminateJSON(t *testing.T) {
-	msg1 := messageImpl{
+	msg1 := &Type{
 		parts: [][]byte{
 			[]byte(`{"foo":"bar"}`),
 		},
@@ -559,7 +581,7 @@ func BenchmarkJSONGet(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		msg := messageImpl{
+		msg := &Type{
 			parts: [][]byte{sample1},
 		}
 

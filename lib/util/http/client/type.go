@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/http/auth"
@@ -276,7 +277,7 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 
 	var buffer bytes.Buffer
 	if strings.HasPrefix(mediaType, "multipart/") {
-		resMsg = types.NewMessage(nil)
+		resMsg = message.New(nil)
 
 		mr := multipart.NewReader(res.Body, params["boundary"])
 		var bufferIndex int64
@@ -310,7 +311,7 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 			return
 		}
 		if bytesRead > 0 {
-			resMsg = types.NewMessage([][]byte{buffer.Bytes()[:bytesRead]})
+			resMsg = message.New([][]byte{buffer.Bytes()[:bytesRead]})
 		}
 	}
 

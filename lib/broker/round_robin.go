@@ -96,7 +96,7 @@ func (o *RoundRobin) loop() {
 	)
 
 	i := 0
-	open := false
+	var open bool
 	for atomic.LoadInt32(&o.running) == 1 {
 		var ts types.Transaction
 		select {

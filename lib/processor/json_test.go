@@ -25,8 +25,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -104,7 +104,7 @@ func TestJSONValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := types.NewMessage([][]byte{[]byte("this is bad json")})
+	msgIn := message.New([][]byte{[]byte("this is bad json")})
 	msgs, res := jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
@@ -123,7 +123,7 @@ func TestJSONValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn = types.NewMessage([][]byte{[]byte("{}")})
+	msgIn = message.New([][]byte{[]byte("{}")})
 	msgs, res = jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad index")
@@ -169,7 +169,7 @@ func TestJSONPartBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(types.NewMessage(input))
+		msgs, res := proc.ProcessMessage(message.New(input))
 		if len(msgs) != 1 {
 			t.Errorf("Select Parts failed on index: %v", i)
 		} else if res != nil {
@@ -260,7 +260,7 @@ func TestJSONAppend(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -317,7 +317,7 @@ func TestJSONMove(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -374,7 +374,7 @@ func TestJSONCopy(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -493,7 +493,7 @@ func TestJSONClean(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -594,7 +594,7 @@ func TestJSONSet(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -651,7 +651,7 @@ value:
 			t.Fatalf("Error creating proc '%v': %v", config, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(input),
 			},
@@ -803,7 +803,7 @@ func TestJSONSelect(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},
@@ -851,7 +851,7 @@ func TestJSONDeletePartBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(types.NewMessage(input))
+		msgs, res := proc.ProcessMessage(message.New(input))
 		if len(msgs) != 1 {
 			t.Errorf("Select Parts failed on index: %v", i)
 		} else if res != nil {
@@ -906,7 +906,7 @@ func TestJSONDelete(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},

@@ -26,8 +26,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestGrokAllParts(t *testing.T) {
@@ -44,7 +44,7 @@ func TestGrokAllParts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := types.NewMessage([][]byte{
+	msgIn := message.New([][]byte{
 		[]byte(`foo,0`),
 		[]byte(`foo,1`),
 		[]byte(`foo,2`),
@@ -98,7 +98,7 @@ func TestGrok(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := types.NewMessage(
+		inMsg := message.New(
 			[][]byte{
 				[]byte(test.input),
 			},

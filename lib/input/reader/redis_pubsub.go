@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/go-redis/redis"
@@ -131,7 +132,7 @@ func (r *RedisPubSub) Read() (types.Message, error) {
 		return nil, types.ErrTypeClosed
 	}
 
-	return types.NewMessage([][]byte{[]byte(rMsg.Payload)}), nil
+	return message.New([][]byte{[]byte(rMsg.Payload)}), nil
 }
 
 // Acknowledge instructs whether messages have been successfully propagated.

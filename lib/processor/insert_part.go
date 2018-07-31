@@ -22,6 +22,7 @@ package processor
 
 import (
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
@@ -137,7 +138,7 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	copy(newParts, pre)
 	copy(newParts[index+1:], post)
 
-	newMsg := types.NewMessage(newParts)
+	newMsg := message.New(newParts)
 	msg.IterMetadata(func(k, v string) error {
 		newMsg.SetMetadata(k, v)
 		return nil

@@ -30,8 +30,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 	"github.com/gorilla/websocket"
 )
 
@@ -81,7 +81,7 @@ func TestWebsocketBasic(t *testing.T) {
 	}
 
 	for _, msg := range expMsgs {
-		if err = m.Write(types.NewMessage([][]byte{[]byte(msg)})); err != nil {
+		if err = m.Write(message.New([][]byte{[]byte(msg)})); err != nil {
 			t.Error(err)
 		}
 	}

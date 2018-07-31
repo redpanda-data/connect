@@ -106,7 +106,7 @@ type Statsd struct {
 func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 	flushPeriod, err := time.ParseDuration(config.Statsd.FlushPeriod)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse flush period: %s", err)
+		return nil, fmt.Errorf("failed to parse flush period: %s", err)
 	}
 	s := &Statsd{
 		config: config,

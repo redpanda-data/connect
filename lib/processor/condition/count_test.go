@@ -25,8 +25,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestCountCheck(t *testing.T) {
@@ -44,11 +44,11 @@ func TestCountCheck(t *testing.T) {
 
 	for j := 0; j < 10; j++ {
 		for i := 0; i < conf.Count.Arg-1; i++ {
-			if !c.Check(types.NewMessage(nil)) {
+			if !c.Check(message.New(nil)) {
 				t.Error("Expected true result during count")
 			}
 		}
-		if c.Check(types.NewMessage(nil)) {
+		if c.Check(message.New(nil)) {
 			t.Error("Expected false result at end of count")
 		}
 	}

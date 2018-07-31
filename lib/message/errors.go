@@ -18,32 +18,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package types
+package message
 
 import (
 	"errors"
-	"testing"
 )
 
-func TestSimpleResponse(t *testing.T) {
-	err := errors.New("test error")
-	res := NewSimpleResponse(err)
-
-	if exp, act := err, res.Error(); exp != act {
-		t.Errorf("Wrong error: %v != %v", exp, act)
-	}
-	if res.SkipAck() {
-		t.Error("Should not received skip ack on simple response")
-	}
-}
-
-func TestUnackResponse(t *testing.T) {
-	res := NewUnacknowledgedResponse()
-
-	if res.Error() != nil {
-		t.Error(res.Error())
-	}
-	if !res.SkipAck() {
-		t.Error("Should have received skip ack on unack response")
-	}
-}
+// Errors returned by the message type.
+var (
+	ErrMessagePartNotExist = errors.New("target message part does not exist")
+	ErrBadMessageBytes     = errors.New("serialised message bytes were in unexpected format")
+	ErrBlockCorrupted      = errors.New("serialised messages block was in unexpected format")
+)

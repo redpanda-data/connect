@@ -27,6 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/go-redis/redis"
 )
@@ -209,7 +210,7 @@ func (r *RedisPubSub) loop() {
 		}
 
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(err):
+		case ts.ResponseChan <- response.NewError(err):
 		case <-r.closeChan:
 			return
 		}

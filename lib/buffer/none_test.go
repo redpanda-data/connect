@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -75,7 +77,7 @@ func TestNoneBufferBasic(t *testing.T) {
 
 	go func() {
 		for tr := range empty.TransactionChan() {
-			tr.ResponseChan <- types.NewSimpleResponse(errors.New(string(tr.Payload.Get(0))))
+			tr.ResponseChan <- response.NewError(errors.New(string(tr.Payload.Get(0))))
 		}
 	}()
 
@@ -87,7 +89,7 @@ func TestNoneBufferBasic(t *testing.T) {
 			for j := 0; j < nMessages; j++ {
 				resChan := make(chan types.Response)
 				msg := fmt.Sprintf("Hello World %v %v", nThread, j)
-				tChan <- types.NewTransaction(types.NewMessage(
+				tChan <- types.NewTransaction(message.New(
 					[][]byte{[]byte(msg)},
 				), resChan)
 				select {

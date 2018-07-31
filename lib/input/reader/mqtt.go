@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -144,7 +145,7 @@ func (m *MQTT) msgHandler(c mqtt.Client, msg mqtt.Message) {
 func (m *MQTT) Read() (types.Message, error) {
 	select {
 	case msg := <-m.msgChan:
-		message := types.NewMessage([][]byte{[]byte(msg.Payload())})
+		message := message.New([][]byte{[]byte(msg.Payload())})
 
 		message.SetMetadata("mqtt_duplicate", strconv.FormatBool(bool(msg.Duplicate())))
 		message.SetMetadata("mqtt_qos", strconv.Itoa(int(msg.Qos())))

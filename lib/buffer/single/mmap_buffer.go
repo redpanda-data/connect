@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -294,7 +295,7 @@ func (f *MmapBuffer) NextMessage() (types.Message, error) {
 		return nil, types.ErrBlockCorrupted
 	}
 
-	return types.FromBytes(block[index : index+int(msgSize)])
+	return message.FromBytes(block[index : index+int(msgSize)])
 }
 
 // PushMessage pushes a new message, returns the backlog count.

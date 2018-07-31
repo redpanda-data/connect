@@ -31,7 +31,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -73,7 +75,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 		for j := 0; j < nInputs; j++ {
 			content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 			select {
-			case mockInputs[j].TChan <- types.NewTransaction(types.NewMessage(content), resChan):
+			case mockInputs[j].TChan <- types.NewTransaction(message.New(content), resChan):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for broker send: %v, %v", i, j)
 				return
@@ -90,7 +92,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 					return
 				}
 				select {
-				case ts.ResponseChan <- types.NewSimpleResponse(nil):
+				case ts.ResponseChan <- response.NewAck():
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
 					return
@@ -137,7 +139,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 		rChan := make(chan types.Response)
 		for i := 0; i < nMsgs; i++ {
 			content := [][]byte{[]byte(fmt.Sprintf("%v-%v", label, i))}
-			input.TChan <- types.NewTransaction(types.NewMessage(content), rChan)
+			input.TChan <- types.NewTransaction(message.New(content), rChan)
 			select {
 			case <-rChan:
 			case <-time.After(time.Second):
@@ -165,7 +167,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return
@@ -189,7 +191,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(nil):
+		case ts.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return
@@ -319,7 +321,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 			for i := 0; i < nMsgs; i++ {
 				content := [][]byte{[]byte(fmt.Sprintf("hello world %v %v", i, index))}
 				select {
-				case mockInputs[index].TChan <- types.NewTransaction(types.NewMessage(content), rChan):
+				case mockInputs[index].TChan <- types.NewTransaction(message.New(content), rChan):
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for broker send: %v, %v", i, index)
 					return
@@ -347,7 +349,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- types.NewSimpleResponse(errors.New(string(ts.Payload.Get(0)))):
+		case ts.ResponseChan <- response.NewError(errors.New(string(ts.Payload.Get(0)))):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return

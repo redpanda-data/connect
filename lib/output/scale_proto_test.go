@@ -31,6 +31,7 @@ import (
 	"nanomsg.org/go-mangos/transport/tcp"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -84,7 +85,7 @@ func TestScaleProtoBasic(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := types.NewMessage([][]byte{[]byte(testStr)})
+		testMsg := message.New([][]byte{[]byte(testStr)})
 
 		select {
 		case sendChan <- types.NewTransaction(testMsg, resChan):

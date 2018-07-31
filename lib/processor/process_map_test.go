@@ -25,8 +25,9 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/processor/condition"
 )
 
 func TestProcessMapParts(t *testing.T) {
@@ -55,9 +56,54 @@ func TestProcessMapParts(t *testing.T) {
 		[]byte(`{"foo":{"bar":{"baz":"original"}}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage([][]byte{
+	msg, res := c.ProcessMessage(message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"baz":"original"}}}`),
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
+		[]byte(`{"foo":{"bar":{"baz":"original"}}}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
+func TestProcessMapConditions(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_map"
+	conf.ProcessMap.Premap["."] = "foo"
+	conf.ProcessMap.Postmap["foo.baz"] = "baz"
+
+	condConf := condition.NewConfig()
+	condConf.Type = "text"
+	condConf.Text.Operator = "contains"
+	condConf.Text.Arg = "select"
+
+	conf.ProcessMap.Conditions = append(conf.ProcessMap.Conditions, condConf)
+
+	procConf := NewConfig()
+	procConf.Type = "json"
+	procConf.JSON.Operator = "select"
+	procConf.JSON.Path = "bar"
+
+	conf.ProcessMap.Processors = append(conf.ProcessMap.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	exp := [][]byte{
+		[]byte(`{"foo":{"bar":{"baz":"original"}}}`),
+		[]byte(`{"a":"select","foo":{"bar":{"baz":"put me at the root"},"baz":"put me at the root"}}`),
+		[]byte(`{"foo":{"bar":{"baz":"original"}}}`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{
+		[]byte(`{"foo":{"bar":{"baz":"original"}}}`),
+		[]byte(`{"a":"select","foo":{"bar":{"baz":"put me at the root"}}}`),
 		[]byte(`{"foo":{"bar":{"baz":"original"}}}`),
 	}))
 	if res != nil {
@@ -93,7 +139,7 @@ func TestProcessMapAllParts(t *testing.T) {
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"},"baz":"put me at the root"}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage([][]byte{
+	msg, res := c.ProcessMessage(message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
 	}))
@@ -110,8 +156,8 @@ func TestProcessMapStrict(t *testing.T) {
 	conf.Type = "process_map"
 	conf.ProcessMap.Premap["bar"] = "foo.bar"
 	conf.ProcessMap.Premap["bar2"] = "foo.bar2"
-	conf.ProcessMap.Postmap["foo.baz"] = "baz"
-	conf.ProcessMap.Postmap["foo.baz2"] = "baz2"
+	conf.ProcessMap.PostmapOptional["foo.baz"] = "baz"
+	conf.ProcessMap.PostmapOptional["foo.baz2"] = "baz2"
 	conf.ProcessMap.Parts = []int{}
 
 	procConf := NewConfig()
@@ -132,7 +178,7 @@ func TestProcessMapStrict(t *testing.T) {
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage([][]byte{
+	msg, res := c.ProcessMessage(message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"},"bar2":{"baz":"put me at the root"}}}`),
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
 	}))
@@ -149,8 +195,8 @@ func TestProcessMapOptional(t *testing.T) {
 	conf.Type = "process_map"
 	conf.ProcessMap.Premap["bar"] = "foo.bar"
 	conf.ProcessMap.PremapOptional["bar2"] = "foo.bar2"
-	conf.ProcessMap.Postmap["foo.baz"] = "baz"
-	conf.ProcessMap.Postmap["foo.baz2"] = "baz2"
+	conf.ProcessMap.PostmapOptional["foo.baz"] = "baz"
+	conf.ProcessMap.PostmapOptional["foo.baz2"] = "baz2"
 	conf.ProcessMap.Parts = []int{}
 
 	procConf := NewConfig()
@@ -171,7 +217,7 @@ func TestProcessMapOptional(t *testing.T) {
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"},"baz":"put me at the root"}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage([][]byte{
+	msg, res := c.ProcessMessage(message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"},"bar2":{"baz":"put me at the root"}}}`),
 		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
 	}))
@@ -206,7 +252,7 @@ func TestProcessMapBadProc(t *testing.T) {
 		[]byte(`{"foo":{"bar":"encode me too"}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage(exp))
+	msg, res := c.ProcessMessage(message.New(exp))
 	if res != nil {
 		t.Error(res.Error())
 	}
@@ -240,7 +286,7 @@ func TestProcessMapBadProcTwo(t *testing.T) {
 		[]byte(`{"foo":{"bar":"encode me too"}}`),
 	}
 
-	msg, res := c.ProcessMessage(types.NewMessage(exp))
+	msg, res := c.ProcessMessage(message.New(exp))
 	if res != nil {
 		t.Error(res.Error())
 	}

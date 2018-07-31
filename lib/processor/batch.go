@@ -24,8 +24,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -188,7 +190,7 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 
 	// If we have reached our target count of parts in the buffer.
 	if batch {
-		newMsg := types.NewMessage(c.parts)
+		newMsg := message.New(c.parts)
 		msg.IterMetadata(func(k, v string) error {
 			newMsg.SetMetadata(k, v)
 			return nil
@@ -206,7 +208,7 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 
 	c.log.Traceln("Added message to pending batch")
 	c.mDropped.Incr(1)
-	return nil, types.NewUnacknowledgedResponse()
+	return nil, response.NewUnack()
 }
 
 //------------------------------------------------------------------------------
