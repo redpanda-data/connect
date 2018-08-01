@@ -49,10 +49,10 @@ func (p SplitToBatch) ProcessMessage(m types.Message) ([]types.Message, types.Re
 	return []types.Message{message.New(splitParts)}, nil
 }
 
-func Example_SplitToBatch() {
-	// Demonstrates running a Kafka to Kafka stream where each incoming message
-	// is parsed as a line delimited blob of payloads and the payloads are sent
-	// on as a batch of messages.
+// ExampleSplitToBatch Demonstrates running a Kafka to Kafka stream where each
+// incoming message is parsed as a line delimited blob of payloads and the
+// payloads are sent on as a single batch of messages.
+func Example_splitToBatch() {
 	conf := NewConfig()
 
 	conf.Input.Type = "kafka"

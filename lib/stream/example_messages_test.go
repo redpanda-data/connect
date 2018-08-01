@@ -53,10 +53,10 @@ func (p SplitToMessages) ProcessMessage(m types.Message) ([]types.Message, types
 	return messages, nil
 }
 
-func Example_SplitToMessages() {
-	// Demonstrates running a Kafka to Kafka stream where each incoming message
-	// is parsed as a line delimited blob of payloads and the payloads are sent
-	// on as a single message per payload.
+// ExampleSplitToMessages demonstrates running a Kafka to Kafka stream where
+// each incoming message is parsed as a line delimited blob of payloads and the
+// payloads are sent on as a single message per payload.
+func Example_splitToMessages() {
 	conf := NewConfig()
 
 	conf.Input.Type = "kafka"
