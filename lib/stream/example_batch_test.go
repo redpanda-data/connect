@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package examples
+package stream
 
 import (
 	"bytes"
@@ -29,36 +29,31 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
-// SplitToMessages is a types.Processor implementation that reads a single
-// message containing line delimited payloads and splits the payloads into a
-// single message per line.
-type SplitToMessages struct{}
+// SplitToBatch is a types.Processor implementation that reads a single message
+// containing line delimited payloads and splits the payloads into a single
+// batch of messages per line.
+type SplitToBatch struct{}
 
 // ProcessMessage splits messages of a batch by lines and sends them onwards as
-// an individual message per payload.
-func (p SplitToMessages) ProcessMessage(m types.Message) ([]types.Message, types.Response) {
+// a batch of messages.
+func (p SplitToBatch) ProcessMessage(m types.Message) ([]types.Message, types.Response) {
 	var splitParts [][]byte
 	m.Iter(func(i int, b []byte) error {
 		splitParts = append(splitParts, bytes.Split(b, []byte("\n"))...)
 		return nil
 	})
 
-	messages := make([]types.Message, len(splitParts))
-	for i, part := range splitParts {
-		messages[i] = message.New([][]byte{part})
-	}
-	return messages, nil
+	return []types.Message{message.New(splitParts)}, nil
 }
 
-// ExampleSplitToMessages demonstrates running a Kafka to Kafka stream where
-// each incoming message is parsed as a line delimited blob of payloads and the
-// payloads are sent on as a single message per payload.
-func ExampleSplitToMessages() {
-	conf := stream.NewConfig()
+func Example_SplitToBatch() {
+	// Demonstrates running a Kafka to Kafka stream where each incoming message
+	// is parsed as a line delimited blob of payloads and the payloads are sent
+	// on as a batch of messages.
+	conf := NewConfig()
 
 	conf.Input.Type = "kafka"
 	conf.Input.Kafka.Addresses = []string{
@@ -72,8 +67,8 @@ func ExampleSplitToMessages() {
 	}
 	conf.Output.Kafka.Topic = "example_topic_two"
 
-	s, err := stream.New(conf, stream.OptAddProcessors(func() (types.Processor, error) {
-		return SplitToMessages{}, nil
+	s, err := New(conf, OptAddProcessors(func() (types.Processor, error) {
+		return SplitToBatch{}, nil
 	}))
 	if err != nil {
 		panic(err)
