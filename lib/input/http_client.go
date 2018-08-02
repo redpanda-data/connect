@@ -100,7 +100,7 @@ func NewHTTPClientConfig() HTTPClientConfig {
 
 //------------------------------------------------------------------------------
 
-// HTTPClient is an input type that continously makes HTTP requests and reads
+// HTTPClient is an input type that continuously makes HTTP requests and reads
 // the response bodies as message payloads.
 type HTTPClient struct {
 	running int32

@@ -40,7 +40,7 @@ func init() {
 		constructor: NewReadUntil,
 		description: `
 Reads from an input and tests a condition on each message. Messages are read
-continously while the condition returns false, when the condition returns true
+continuously while the condition returns false, when the condition returns true
 the message that triggered the condition is sent out and the input is closed.
 Use this type to define inputs where the stream should end once a certain
 message appears.
@@ -123,7 +123,7 @@ func (r ReadUntilConfig) MarshalYAML() (interface{}, error) {
 
 //------------------------------------------------------------------------------
 
-// ReadUntil is an input type that continously reads another input type until a
+// ReadUntil is an input type that continuously reads another input type until a
 // condition returns true on a message consumed.
 type ReadUntil struct {
 	running int32
