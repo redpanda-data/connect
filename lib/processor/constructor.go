@@ -54,7 +54,7 @@ var Constructors = map[string]TypeSpec{}
 //------------------------------------------------------------------------------
 
 // String constants representing each processor type.
-var (
+const (
 	TypeArchive      = "archive"
 	TypeBatch        = "batch"
 	TypeBoundsCheck  = "bounds_check"

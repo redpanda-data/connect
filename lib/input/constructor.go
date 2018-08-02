@@ -60,7 +60,7 @@ var Constructors = map[string]TypeSpec{}
 //------------------------------------------------------------------------------
 
 // String constants representing each input type.
-var (
+const (
 	TypeAMQP          = "amqp"
 	TypeBroker        = "broker"
 	TypeDynamic       = "dynamic"

@@ -47,7 +47,7 @@ var Constructors = map[string]TypeSpec{}
 //------------------------------------------------------------------------------
 
 // String constants representing each cache type.
-var (
+const (
 	TypeMemcached = "memcached"
 	TypeMemory    = "memory"
 )

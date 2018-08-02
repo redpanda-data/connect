@@ -51,7 +51,7 @@ var constructors = map[string]typeSpec{}
 //------------------------------------------------------------------------------
 
 // String constants representing each metric type.
-var (
+const (
 	TypeHTTPServer = "http_server"
 	TypePrometheus = "prometheus"
 	TypeStatsd     = "statsd"

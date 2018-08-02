@@ -49,7 +49,7 @@ var Constructors = map[string]TypeSpec{}
 //------------------------------------------------------------------------------
 
 // String constants representing each buffer type.
-var (
+const (
 	TypeMemory = "memory"
 	TypeMMAP   = "mmap_file"
 	TypeNone   = "none"
