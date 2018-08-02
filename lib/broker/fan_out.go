@@ -130,11 +130,8 @@ func (o *FanOut) loop() {
 		outputTargets := o.outputNs
 		for len(outputTargets) > 0 {
 			for _, i := range outputTargets {
-				// Perform a copy here as it could be dangerous to release the
-				// same message to parallel processor pipelines.
-				msgCopy := ts.Payload.ShallowCopy()
 				select {
-				case o.outputTsChans[i] <- types.NewTransaction(msgCopy, o.outputResChans[i]):
+				case o.outputTsChans[i] <- types.NewTransaction(ts.Payload, o.outputResChans[i]):
 				case <-o.closeChan:
 					return
 				}
