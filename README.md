@@ -49,6 +49,9 @@ for choosing a level of resiliency that meets your needs.
 Documentation for Benthos components, concepts and recommendations can be found
 in the [docs directory.][general-docs]
 
+For building your own stream processors, using Benthos components as a library,
+check out the [examples on godoc.][godoc-url]
+
 For some applied examples of Benthos such as streaming and deduplicating the
 Twitter firehose to Kafka [check out the cookbook section][cookbook-docs].
 
@@ -180,8 +183,8 @@ make TAGS=ZMQ4
 
 [releases]: https://github.com/Jeffail/benthos/releases
 
-[godoc-badge]: https://godoc.org/github.com/Jeffail/benthos?status.svg
-[godoc-url]: https://godoc.org/github.com/Jeffail/benthos
+[godoc-badge]: https://godoc.org/github.com/Jeffail/benthos/lib/stream?status.svg
+[godoc-url]: https://godoc.org/github.com/Jeffail/benthos/lib/stream
 [goreport-badge]: https://goreportcard.com/badge/github.com/Jeffail/benthos
 [goreport-url]: https://goreportcard.com/report/Jeffail/benthos
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
