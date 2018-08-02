@@ -527,7 +527,7 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	}
 
 	for _, index := range targetParts {
-		jsonPart, err := msg.GetJSON(index)
+		jsonPart, err := newMsg.GetJSON(index)
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)

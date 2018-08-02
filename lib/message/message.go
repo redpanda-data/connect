@@ -75,6 +75,18 @@ type partCache struct {
 	json interface{}
 }
 
+// Clone a partCache, the cloned result can be edited without changing the
+// original.
+func (p *partCache) Clone() (*partCache, error) {
+	cloned, err := CloneGeneric(p.json)
+	if err != nil {
+		return nil, err
+	}
+	return &partCache{
+		json: cloned,
+	}, nil
+}
+
 //------------------------------------------------------------------------------
 
 // Type is the standard implementation of types.Message, containing a multiple
@@ -153,9 +165,6 @@ func (m *Type) Bytes() []byte {
 // other message copies. However, it is still unsafe to edit the content of
 // parts.
 func (m *Type) ShallowCopy() types.Message {
-	// NOTE: JSON parts are not copied here, as even though we can safely copy
-	// the hash and len fields we cannot safely copy the content as it may
-	// contain pointers or ref types.
 	var metadata map[string]string
 	if m.metadata != nil {
 		metadata = make(map[string]string, len(m.metadata))
@@ -163,10 +172,18 @@ func (m *Type) ShallowCopy() types.Message {
 			metadata[k] = v
 		}
 	}
+	newPartCaches := make([]*partCache, len(m.partCaches))
+	for i, c := range m.partCaches {
+		if c == nil {
+			continue
+		}
+		newPartCaches[i], _ = c.Clone()
+	}
 	return &Type{
 		createdAt:   m.createdAt,
 		parts:       append([][]byte(nil), m.parts...),
 		resultCache: m.resultCache,
+		partCaches:  newPartCaches,
 		metadata:    metadata,
 	}
 }

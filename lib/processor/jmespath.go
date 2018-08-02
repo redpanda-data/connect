@@ -162,7 +162,7 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	}
 
 	for _, index := range targetParts {
-		jsonPart, err := msg.GetJSON(index)
+		jsonPart, err := newMsg.GetJSON(index)
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
