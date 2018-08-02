@@ -35,7 +35,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// AmazonSQSConfig is configuration values for the input type.
+// AmazonSQSConfig contains configuration fields for the output AmazonSQS type.
 type AmazonSQSConfig struct {
 	Region      string                     `json:"region" yaml:"region"`
 	URL         string                     `json:"url" yaml:"url"`
@@ -58,7 +58,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 //------------------------------------------------------------------------------
 
 // AmazonSQS is a benthos writer.Type implementation that writes messages to an
-// Amazon S3 bucket.
+// Amazon SQS queue.
 type AmazonSQS struct {
 	conf AmazonSQSConfig
 
@@ -69,7 +69,7 @@ type AmazonSQS struct {
 	stats metrics.Type
 }
 
-// NewAmazonSQS creates a new Amazon S3 bucket writer.Type.
+// NewAmazonSQS creates a new Amazon SQS writer.Type.
 func NewAmazonSQS(
 	conf AmazonSQSConfig,
 	log log.Modular,
@@ -77,13 +77,12 @@ func NewAmazonSQS(
 ) *AmazonSQS {
 	return &AmazonSQS{
 		conf:  conf,
-		log:   log.NewModule(".output.amazon_sqs"),
+		log:   log.NewModule(".output.sqs"),
 		stats: stats,
 	}
 }
 
-// Connect attempts to establish a connection to the target S3 bucket and any
-// relevant queues used to traverse the objects (SQS, etc).
+// Connect attempts to establish a connection to the target SQS queue.
 func (a *AmazonSQS) Connect() error {
 	if a.session != nil {
 		return nil
@@ -119,7 +118,7 @@ func (a *AmazonSQS) Connect() error {
 	return nil
 }
 
-// Write attempts to write message contents to a target S3 bucket as files.
+// Write attempts to write message contents to a target SQS.
 func (a *AmazonSQS) Write(msg types.Message) error {
 	if a.session == nil {
 		return types.ErrNotConnected

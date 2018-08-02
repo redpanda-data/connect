@@ -21,10 +21,7 @@
 // Package input defines consumers for aggregating data from a variety of
 // sources. All consumer types must implement interface input.Type.
 //
-// If the source of a consumer is given assurances of message receipt then the
-// consumer must ensure that all messages read from a source are propagated to a
-// reader before shutting down gracefully. For example, a ZMQ subscriber model
-// based consumer would not need to provide such ensurance, a HTTP POST based
-// consumer, however, would be expected to propagate any requests where a 200 OK
-// message has been returned.
+// If the source of an input consumer supports acknowledgements then the
+// implementation of the input will wait for each message to reach a permanent
+// destination before acknowledging it.
 package input

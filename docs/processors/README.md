@@ -137,7 +137,8 @@ bounds_check:
 ```
 
 Checks whether each message fits within certain boundaries, and drops messages
-that do not (log warning message and a metric).
+that do not. A metric is incremented for each dropped message and debug logs
+are also provided if enabled.
 
 ## `combine`
 
@@ -181,7 +182,7 @@ compress:
 ```
 
 Compresses parts of a message according to the selected algorithm. Supported
-available compression types are: gzip, zlib, flate.
+compression types are: gzip, zlib, flate.
 
 The 'level' field might not apply to all algorithms.
 
@@ -200,11 +201,11 @@ conditional:
   processors: []
 ```
 
-Conditional is a processor that has a list of child 'processors',
-'else_processors', and a condition. For each message if the condition passes the
-child 'processors' will be applied, otherwise the 'else_processors' are applied.
-This processor is useful for applying processors such as 'dedupe' based on the
-content type of the message.
+Conditional is a processor that has a list of child `processors`,
+`else_processors`, and a condition. For each message, if the condition
+passes, the child `processors` will be applied, otherwise the
+`else_processors` are applied. This processor is useful for applying
+processors based on the content type of the message.
 
 You can find a [full list of conditions here](../conditions).
 
@@ -229,8 +230,8 @@ decompress:
   parts: []
 ```
 
-Decompresses the parts of a message according to the selected algorithm.
-Supported decompression types are: gzip, zlib, bzip2, flate.
+Decompresses message parts according to the selected algorithm. Supported
+decompression types are: gzip, zlib, bzip2, flate.
 
 Parts that fail to decompress (invalid format) will be removed from the message.
 If the message results in zero parts it is skipped entirely.
@@ -283,8 +284,8 @@ encode:
   scheme: base64
 ```
 
-Encodes parts of a message according to the selected scheme. Supported available
-schemes are: base64.
+Encodes parts of a message according to the selected scheme. Supported schemes
+are: base64.
 
 ## `filter`
 
@@ -372,17 +373,12 @@ hash_sample:
   retain_min: 0
 ```
 
-Passes on a percentage of messages deterministically by hashing selected parts
-of the message and checking the hash against a valid range, dropping all others.
+Retains a percentage of messages deterministically by hashing selected parts of
+the message and checking the hash against a valid range, dropping all others.
 
-For example, a 'hash_sample' with 'retain_min' of 0.0 and 'remain_max' of 50.0
-will receive half of the input stream, and a 'hash_sample' with 'retain_min' of
-50.0 and 'retain_max' of 100.1 will receive the other half.
-
-The part indexes can be negative, and if so the part will be selected from the
-end counting backwards starting from -1. E.g. if index = -1 then the selected
-part will be the last part of the message, if index = -2 then the part before
-the last element with be selected, and so on.
+For example, setting `retain_min` to `0.0` and `remain_max` to `50.0`
+results in dropping half of the input stream, and setting `retain_min`
+to `50.0` and `retain_max` to `100.1` will drop the _other_ half.
 
 ## `http`
 
@@ -423,16 +419,16 @@ the original message parts with the body of the response.
 
 If the batch contains only a single message part then it will be sent as the
 body of the request. If the batch contains multiple messages then they will be
-sent as a multipart HTTP request using the `Content-Type: multipart`
+sent as a multipart HTTP request using a `Content-Type: multipart`
 header.
-
-The URL and header values of this type can be dynamically set using function
-interpolations described [here](../config_interpolation.md#functions).
 
 If you wish to avoid this behaviour then you can either use the
  [`archive`](#archive) processor to create a single message from a
 batch, or use the [`split`](#split) processor to break down the batch
 into individual message parts.
+
+The URL and header values of this type can be dynamically set using function
+interpolations described [here](../config_interpolation.md#functions).
 
 In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
@@ -516,8 +512,8 @@ json:
   value: ""
 ```
 
-Parses a message part as a JSON blob, performs a mutation on the data, and then
-overwrites the previous contents with the new value.
+Parses a message part as a JSON document, performs a mutation on the data, and
+then overwrites the previous contents with the new value.
 
 If the path is empty or "." the root of the data will be targeted.
 
@@ -603,8 +599,8 @@ merge_json:
   retain_parts: false
 ```
 
-Parses selected message parts as JSON blobs, attempts to merge them into one
-single JSON value and then writes it to a new message part at the end of the
+Parses selected message parts as JSON documents, attempts to merge them into one
+single JSON document and then writes it to a new message part at the end of the
 message. Merged parts are removed unless `retain_parts` is set to
 true.
 
@@ -767,9 +763,9 @@ sample:
   seed: 0
 ```
 
-Passes on a randomly sampled percentage of messages. The random seed is static
-in order to sample deterministically, but can be set in config to allow parallel
-samples that are unique.
+Retains a randomly sampled percentage of messages (0 to 100) and drops all
+others. The random seed is static in order to sample deterministically, but can
+be set in config to allow parallel samples that are unique.
 
 ## `select_parts`
 
@@ -811,7 +807,7 @@ Please note that when you split a message you will lose the coupling between the
 acknowledgement from the output destination to the origin message at the input
 source. If all but one part of a split message is successfully propagated to the
 destination the source will still see an error and may attempt to resend the
-entire message again.
+entire message batch again.
 
 The split operator is useful for breaking down messages containing a large
 number of parts into smaller batches by using the split processor followed by

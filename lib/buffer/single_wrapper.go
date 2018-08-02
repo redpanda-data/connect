@@ -35,7 +35,7 @@ import (
 //------------------------------------------------------------------------------
 
 // Single represents a method of buffering sequential messages, supporting
-// only a single consumer.
+// only a single, sequential consumer.
 type Single interface {
 	// ShiftMessage removes the oldest message from the stack. Returns the
 	// backlog in bytes.

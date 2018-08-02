@@ -38,7 +38,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["dedupe"] = TypeSpec{
+	Constructors[TypeDedupe] = TypeSpec{
 		constructor: NewDedupe,
 		description: `
 Dedupes messages by caching selected (and optionally hashed) message parts,
@@ -70,7 +70,7 @@ Caches should be configured as a resource, for more information check out the
 
 //------------------------------------------------------------------------------
 
-// DedupeConfig contains any configuration for the Dedupe processor.
+// DedupeConfig contains configuration fields for the Dedupe processor.
 type DedupeConfig struct {
 	Cache          string   `json:"cache" yaml:"cache"`
 	HashType       string   `json:"hash" yaml:"hash"`
@@ -135,8 +135,8 @@ func strToHasher(str string) (hasherFunc, error) {
 
 //------------------------------------------------------------------------------
 
-// Dedupe is a processor that hashes each message and checks if the has is already
-// present in the cache
+// Dedupe is a processor that deduplicates messages either by hashing the full
+// contents of message parts or by hashing the value of an interpolated string.
 type Dedupe struct {
 	conf  Config
 	log   log.Modular
@@ -207,7 +207,8 @@ func NewDedupe(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage checks each message against a set of bounds.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.mCount.Incr(1)
 

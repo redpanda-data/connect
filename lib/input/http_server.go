@@ -42,7 +42,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["http_server"] = TypeSpec{
+	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: NewHTTPServer,
 		description: `
 Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
@@ -68,7 +68,7 @@ You can access these metadata fields using
 
 //------------------------------------------------------------------------------
 
-// HTTPServerConfig is configuration for the HTTPServer input type.
+// HTTPServerConfig contains configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
 	Address   string `json:"address" yaml:"address"`
 	Path      string `json:"path" yaml:"path"`
@@ -92,7 +92,11 @@ func NewHTTPServerConfig() HTTPServerConfig {
 
 //------------------------------------------------------------------------------
 
-// HTTPServer is an input type that serves HTTPServer POST requests.
+// HTTPServer is an input type that registers a range of HTTP endpoints where
+// requests can send messages through Benthos. The endpoints are registered on
+// the general Benthos HTTP server by default. It is also possible to specify a
+// custom address to bind a new server to which the endpoints will be registered
+// on instead.
 type HTTPServer struct {
 	running int32
 
@@ -404,7 +408,8 @@ func (h *HTTPServer) loop() {
 	<-h.closeChan
 }
 
-// TransactionChan returns the transactions channel.
+// TransactionChan returns a transactions channel for consuming messages from
+// this input.
 func (h *HTTPServer) TransactionChan() <-chan types.Transaction {
 	return h.transactions
 }

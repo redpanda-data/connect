@@ -30,21 +30,21 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["files"] = TypeSpec{
+	Constructors[TypeFiles] = TypeSpec{
 		constructor: NewFiles,
 		description: `
 Writes each individual part of each message to a new file.
 
 Message parts only contain raw data, and therefore in order to create a unique
 file for each part you need to generate unique file names. This can be done by
-using function interpolations on the 'path' field as described
+using function interpolations on the ` + "`path`" + ` field as described
 [here](../config_interpolation.md#functions).`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewFiles creates a new File output type.
+// NewFiles creates a new Files output type.
 func NewFiles(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	return NewWriter(
 		"files", writer.NewFiles(conf.Files, log, stats), log, stats,

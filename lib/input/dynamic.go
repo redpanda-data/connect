@@ -36,7 +36,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["dynamic"] = TypeSpec{
+	Constructors[TypeDynamic] = TypeSpec{
 		brokerConstructor: NewDynamic,
 		description: `
 The dynamic type is a special broker type where the inputs are identified by
@@ -44,12 +44,12 @@ unique labels and can be created, changed and removed during runtime via a REST
 HTTP interface.
 
 To GET a JSON map of input identifiers with their current uptimes use the
-'/inputs' endpoint.
+` + "`/inputs`" + ` endpoint.
 
 To perform CRUD actions on the inputs themselves use POST, DELETE, and GET
-methods on the '/input/{input_id}' endpoint. When using POST the body of the
-request should be a JSON configuration for the input, if the input already
-exists it will be changed.`,
+methods on the ` + "`/inputs/{input_id}`" + ` endpoint. When using POST the body
+of the request should be a JSON configuration for the input, if the input
+already exists it will be changed.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			nestedInputs := conf.Dynamic.Inputs
 			inMap := map[string]interface{}{}
@@ -71,7 +71,7 @@ exists it will be changed.`,
 
 //------------------------------------------------------------------------------
 
-// DynamicConfig is configuration for the Dynamic input type.
+// DynamicConfig contains configuration for the Dynamic input type.
 type DynamicConfig struct {
 	Inputs    map[string]Config `json:"inputs" yaml:"inputs"`
 	Prefix    string            `json:"prefix" yaml:"prefix"`
@@ -166,7 +166,7 @@ func NewDynamic(
 	})
 
 	mgr.RegisterEndpoint(
-		path.Join(conf.Dynamic.Prefix, "/input/{id}"),
+		path.Join(conf.Dynamic.Prefix, "/inputs/{id}"),
 		"Perform CRUD operations on the configuration of dynamic inputs. For"+
 			" more information read the `dynamic` input type documentation.",
 		dynAPI.HandleCRUD,

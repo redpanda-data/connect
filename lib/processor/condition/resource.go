@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["resource"] = TypeSpec{
+	Constructors[TypeResource] = TypeSpec{
 		constructor: NewResource,
 		description: `
 Resource is a condition type that runs a condition resource by its name. This
@@ -91,7 +91,7 @@ type Resource struct {
 	log  log.Modular
 }
 
-// NewResource returns a resource processor.
+// NewResource returns a resource condition.
 func NewResource(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {

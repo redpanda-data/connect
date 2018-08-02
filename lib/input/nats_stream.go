@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["nats_stream"] = TypeSpec{
+	Constructors[TypeNATSStream] = TypeSpec{
 		constructor: NewNATSStream,
 		description: `
 Subscribe to a NATS Stream subject, which is at-least-once. Joining a queue is

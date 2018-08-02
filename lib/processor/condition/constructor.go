@@ -53,6 +53,21 @@ var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
+// String constants representing each condition type.
+var (
+	TypeAnd      = "and"
+	TypeCount    = "count"
+	TypeJMESPath = "jmespath"
+	TypeNot      = "not"
+	TypeOr       = "or"
+	TypeResource = "resource"
+	TypeStatic   = "static"
+	TypeText     = "text"
+	TypeXor      = "xor"
+)
+
+//------------------------------------------------------------------------------
+
 // Config is the all encompassing configuration struct for all condition types.
 type Config struct {
 	Type     string         `json:"type" yaml:"type"`

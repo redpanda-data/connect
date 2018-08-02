@@ -35,7 +35,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["text"] = TypeSpec{
+	Constructors[TypeText] = TypeSpec{
 		constructor: NewText,
 		description: `
 Performs text based mutations on payloads.
@@ -78,7 +78,7 @@ Removes all leading and trailing occurrences of characters within the arg field.
 
 //------------------------------------------------------------------------------
 
-// TextConfig contains any configuration for the Text processor.
+// TextConfig contains configuration fields for the Text processor.
 type TextConfig struct {
 	Parts    []int  `json:"parts" yaml:"parts"`
 	Operator string `json:"operator" yaml:"operator"`
@@ -176,7 +176,7 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 
 //------------------------------------------------------------------------------
 
-// Text is a processor that performs an operation on a Text payload.
+// Text is a processor that performs a text based operation on a payload.
 type Text struct {
 	parts       []int
 	interpolate bool
@@ -224,7 +224,8 @@ func NewText(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage prepends a new message part to the message.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	t.mCount.Incr(1)
 

@@ -36,11 +36,11 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["json"] = TypeSpec{
+	Constructors[TypeJSON] = TypeSpec{
 		constructor: NewJSON,
 		description: `
-Parses a message part as a JSON blob, performs a mutation on the data, and then
-overwrites the previous contents with the new value.
+Parses a message part as a JSON document, performs a mutation on the data, and
+then overwrites the previous contents with the new value.
 
 If the path is empty or "." the root of the data will be targeted.
 
@@ -181,7 +181,7 @@ func (r rawJSONValue) MarshalYAML() (interface{}, error) {
 
 //------------------------------------------------------------------------------
 
-// JSONConfig contains any configuration for the JSON processor.
+// JSONConfig contains configuration fields for the JSON processor.
 type JSONConfig struct {
 	Parts    []int        `json:"parts" yaml:"parts"`
 	Operator string       `json:"operator" yaml:"operator"`
@@ -507,7 +507,8 @@ func NewJSON(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage prepends a new message part to the message.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 

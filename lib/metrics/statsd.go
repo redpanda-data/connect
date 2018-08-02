@@ -33,7 +33,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["statsd"] = typeSpec{
+	constructors[TypeStatsd] = typeSpec{
 		constructor: NewStatsd,
 		description: `Use the statsd protocol.`,
 	}

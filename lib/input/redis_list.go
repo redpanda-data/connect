@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["redis_list"] = TypeSpec{
+	Constructors[TypeRedisList] = TypeSpec{
 		constructor: NewRedisList,
 		description: `
 Pops messages from the beginning of a Redis list using the BLPop command.`,

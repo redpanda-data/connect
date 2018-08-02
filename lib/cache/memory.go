@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["memory"] = TypeSpec{
+	Constructors[TypeMemory] = TypeSpec{
 		constructor: NewMemory,
 		description: `
 The memory cache simply stores key/value pairs in a map held in memory. This

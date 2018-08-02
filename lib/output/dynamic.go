@@ -36,21 +36,21 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["dynamic"] = TypeSpec{
+	Constructors[TypeDynamic] = TypeSpec{
 		constructor: NewDynamic,
 		description: `
 The dynamic type is a special broker type where the outputs are identified by
 unique labels and can be created, changed and removed during runtime via a REST
-HTTP interface. The broker pattern used is 'fan_out', meaning each message will
-be delivered to each dynamic output.
+HTTP interface. The broker pattern used is always ` + "`fan_out`" + `, meaning
+each message will be delivered to each dynamic output.
 
 To GET a JSON map of output identifiers with their current uptimes use the
 '/outputs' endpoint.
 
 To perform CRUD actions on the outputs themselves use POST, DELETE, and GET
-methods on the '/output/{output_id}' endpoint. When using POST the body of the
-request should be a JSON configuration for the output, if the output already
-exists it will be changed.`,
+methods on the ` + "`/outputs/{output_id}`" + ` endpoint. When using POST the
+body of the request should be a JSON configuration for the output, if the output
+already exists it will be changed.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			nestedOutputs := conf.Dynamic.Outputs
 			outMap := map[string]interface{}{}
@@ -72,7 +72,7 @@ exists it will be changed.`,
 
 //------------------------------------------------------------------------------
 
-// DynamicConfig is configuration for the Dynamic input type.
+// DynamicConfig contains configuration fields for the Dynamic output type.
 type DynamicConfig struct {
 	Outputs   map[string]Config `json:"outputs" yaml:"outputs"`
 	Prefix    string            `json:"prefix" yaml:"prefix"`
@@ -164,7 +164,7 @@ func NewDynamic(
 	})
 
 	mgr.RegisterEndpoint(
-		path.Join(conf.Dynamic.Prefix, "/output/{id}"),
+		path.Join(conf.Dynamic.Prefix, "/outputs/{id}"),
 		"Perform CRUD operations on the configuration of dynamic outputs. For"+
 			" more information read the `dynamic` output type documentation.",
 		dynAPI.HandleCRUD,

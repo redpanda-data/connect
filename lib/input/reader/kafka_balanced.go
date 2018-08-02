@@ -38,7 +38,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// KafkaBalancedConfig is configuration for the KafkaBalanced input type.
+// KafkaBalancedConfig contains configuration for the KafkaBalanced input type.
 type KafkaBalancedConfig struct {
 	Addresses       []string    `json:"addresses" yaml:"addresses"`
 	ClientID        string      `json:"client_id" yaml:"client_id"`
@@ -62,7 +62,8 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 
 //------------------------------------------------------------------------------
 
-// KafkaBalanced is an input type that reads from a KafkaBalanced instance.
+// KafkaBalanced is an input type that reads from a Kafka cluster by balancing
+// partitions across other consumers of the same consumer group.
 type KafkaBalanced struct {
 	consumer *cluster.Consumer
 	cMut     sync.Mutex

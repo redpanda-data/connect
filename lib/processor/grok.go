@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["grok"] = TypeSpec{
+	Constructors[TypeGrok] = TypeSpec{
 		constructor: NewGrok,
 		description: `
 Parses a payload by attempting to apply a list of Grok patterns, if a pattern
@@ -48,7 +48,7 @@ the resulting payload would be ` + "`{\"first\":\"foo\",\"second\":1}`" + `.`,
 
 //------------------------------------------------------------------------------
 
-// GrokConfig contains any configuration for the Grok processor.
+// GrokConfig contains configuration fields for the Grok processor.
 type GrokConfig struct {
 	Parts       []int    `json:"parts" yaml:"parts"`
 	Patterns    []string `json:"patterns" yaml:"patterns"`
@@ -72,8 +72,8 @@ func NewGrokConfig() GrokConfig {
 
 //------------------------------------------------------------------------------
 
-// Grok is a processor that executes Grok queries on a message part and
-// replaces the contents with the result.
+// Grok is a processor that executes Grok queries on a message part and replaces
+// the contents with the result.
 type Grok struct {
 	parts    []int
 	gparsers []*grok.CompiledGrok
@@ -131,7 +131,8 @@ func NewGrok(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage parses message parts as grok patterns.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	g.mCount.Incr(1)
 

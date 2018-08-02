@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["jmespath"] = TypeSpec{
+	Constructors[TypeJMESPath] = TypeSpec{
 		constructor: NewJMESPath,
 		description: `
 Parses a message part as a JSON blob and attempts to apply a JMESPath expression
@@ -75,7 +75,7 @@ messages with boolean queries please instead use the
 
 //------------------------------------------------------------------------------
 
-// JMESPathConfig contains any configuration for the JMESPath processor.
+// JMESPathConfig contains configuration fields for the JMESPath processor.
 type JMESPathConfig struct {
 	Parts []int  `json:"parts" yaml:"parts"`
 	Query string `json:"query" yaml:"query"`
@@ -147,7 +147,8 @@ func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err er
 	return j.Search(part)
 }
 
-// ProcessMessage prepends a new message part to the message.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 

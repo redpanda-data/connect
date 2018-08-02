@@ -34,7 +34,8 @@ import (
 
 //------------------------------------------------------------------------------
 
-// RedisPubSubConfig is configuration for the RedisPubSub input type.
+// RedisPubSubConfig contains configuration fields for the RedisPubSub input
+// type.
 type RedisPubSubConfig struct {
 	URL      string   `json:"url" yaml:"url"`
 	Channels []string `json:"channels" yaml:"channels"`
@@ -114,7 +115,7 @@ func (r *RedisPubSub) Connect() error {
 	return nil
 }
 
-// Read attempts to pop a message from a redis list.
+// Read attempts to pop a message from a redis pubsub channel.
 func (r *RedisPubSub) Read() (types.Message, error) {
 	var pubsub *redis.PubSub
 
@@ -135,7 +136,8 @@ func (r *RedisPubSub) Read() (types.Message, error) {
 	return message.New([][]byte{[]byte(rMsg.Payload)}), nil
 }
 
-// Acknowledge instructs whether messages have been successfully propagated.
+// Acknowledge is a noop since Redis pub/sub channels do not support
+// acknowledgements.
 func (r *RedisPubSub) Acknowledge(err error) error {
 	return nil
 }

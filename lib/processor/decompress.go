@@ -38,11 +38,11 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["decompress"] = TypeSpec{
+	Constructors[TypeDecompress] = TypeSpec{
 		constructor: NewDecompress,
 		description: `
-Decompresses the parts of a message according to the selected algorithm.
-Supported decompression types are: gzip, zlib, bzip2, flate.
+Decompresses message parts according to the selected algorithm. Supported
+decompression types are: gzip, zlib, bzip2, flate.
 
 Parts that fail to decompress (invalid format) will be removed from the message.
 If the message results in zero parts it is skipped entirely.`,
@@ -51,7 +51,7 @@ If the message results in zero parts it is skipped entirely.`,
 
 //------------------------------------------------------------------------------
 
-// DecompressConfig contains any configuration for the Decompress processor.
+// DecompressConfig contains configuration fields for the Decompress processor.
 type DecompressConfig struct {
 	Algorithm string `json:"algorithm" yaml:"algorithm"`
 	Parts     []int  `json:"parts" yaml:"parts"`
@@ -138,8 +138,8 @@ func strToDecompressor(str string) (decompressFunc, error) {
 
 //------------------------------------------------------------------------------
 
-// Decompress is a processor that can selectively decompress parts of a message
-// as a chosen compression algorithm.
+// Decompress is a processor that can decompress parts of a message following a
+// chosen compression algorithm.
 type Decompress struct {
 	conf   DecompressConfig
 	decomp decompressFunc
@@ -180,8 +180,8 @@ func NewDecompress(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage takes a message, attempts to decompress parts of the message,
-// and returns the result.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.mCount.Incr(1)
 

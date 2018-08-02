@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["split"] = TypeSpec{
+	Constructors[TypeSplit] = TypeSpec{
 		constructor: NewSplit,
 		description: `
 Extracts the individual parts of a multipart message and turns them each into a
@@ -43,7 +43,7 @@ Please note that when you split a message you will lose the coupling between the
 acknowledgement from the output destination to the origin message at the input
 source. If all but one part of a split message is successfully propagated to the
 destination the source will still see an error and may attempt to resend the
-entire message again.
+entire message batch again.
 
 The split operator is useful for breaking down messages containing a large
 number of parts into smaller batches by using the split processor followed by
@@ -83,8 +83,8 @@ func NewSplit(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage takes a single message and returns a slice of messages,
-// containing a message per part.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.mCount.Incr(1)
 

@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["batch"] = TypeSpec{
+	Constructors[TypeBatch] = TypeSpec{
 		constructor: NewBatch,
 		description: `
 Reads a number of discrete messages, buffering (but not acknowledging) the
@@ -85,7 +85,7 @@ unexpected behaviour and message ordering.`,
 
 //------------------------------------------------------------------------------
 
-// BatchConfig contains configuration for the Batch processor.
+// BatchConfig contains configuration fields for the Batch processor.
 type BatchConfig struct {
 	ByteSize  int              `json:"byte_size" yaml:"byte_size"`
 	Condition condition.Config `json:"condition" yaml:"condition"`
@@ -107,7 +107,14 @@ func NewBatchConfig() BatchConfig {
 //------------------------------------------------------------------------------
 
 // Batch is a processor that combines messages into a batch until a size limit
-// is reached, at which point the batch is sent out.
+// or other condition is reached, at which point the batch is sent out. When a
+// message is combined without yet producing a batch a NoAck response is
+// returned, which is interpretted as source types as an instruction to send
+// another message through but hold off on acknowledging this one.
+//
+// Eventually, when the batch reaches its target size, the batch is sent through
+// the pipeline as a single message and an acknowledgement for that message
+// determines whether the whole batch of messages are acknowledged.
 type Batch struct {
 	log   log.Modular
 	stats metrics.Type
@@ -159,9 +166,8 @@ func NewBatch(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage takes a single message and buffers it, drops it, returning a
-// NoAck response, until eventually it reaches a size limit, at which point it
-// batches those messages into one multiple part message which is sent on.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 

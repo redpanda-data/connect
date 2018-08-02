@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["stdout"] = TypeSpec{
+	Constructors[TypeSTDOUT] = TypeSpec{
 		constructor: NewSTDOUT,
 		description: `
 The stdout output type prints messages to stdout. Single part messages are
@@ -48,7 +48,7 @@ baz\n\n`,
 
 //------------------------------------------------------------------------------
 
-// STDOUTConfig is configuration values for the stdout based output type.
+// STDOUTConfig contains configuration fields for the stdout based output type.
 type STDOUTConfig struct {
 	Delim string `json:"delimiter" yaml:"delimiter"`
 }

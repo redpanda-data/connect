@@ -33,7 +33,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["process_field"] = TypeSpec{
+	Constructors[TypeProcessField] = TypeSpec{
 		constructor: NewProcessField,
 		description: `
 A processor that extracts the value of a field within payloads as a string
@@ -144,7 +144,8 @@ func NewProcessField(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage does nothing and returns the message unchanged.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
 	p.mCount.Incr(1)
 	payload := msg.ShallowCopy()

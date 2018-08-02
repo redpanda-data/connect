@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["xor"] = TypeSpec{
+	Constructors[TypeXor] = TypeSpec{
 		constructor: NewXor,
 		description: `
 Xor is a condition that returns the logical XOR of its children conditions,

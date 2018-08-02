@@ -35,7 +35,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// NATSStreamConfig is configuration for the NATSStream input type.
+// NATSStreamConfig contains configuration fields for the NATSStream input type.
 type NATSStreamConfig struct {
 	URLs            []string `json:"urls" yaml:"urls"`
 	ClusterID       string   `json:"cluster_id" yaml:"cluster_id"`

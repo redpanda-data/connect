@@ -41,7 +41,7 @@ var (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["broker"] = TypeSpec{
+	Constructors[TypeBroker] = TypeSpec{
 		brokerConstructor: NewBroker,
 		description: `
 The broker output type allows you to configure multiple output targets by
@@ -118,7 +118,7 @@ output sources [or use a buffer](../buffers/README.md).
 It is possible to configure [processors](../processors/README.md) at the broker
 level, where they will be applied to _all_ child outputs, as well as on the
 individual child outputs. If you have processors at both the broker level _and_
-on child outputs then the broker processors will be applied _after_ the child
+on child outputs then the broker processors will be applied _before_ the child
 nodes processors.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			nestedOutputs := conf.Broker.Outputs
@@ -141,7 +141,7 @@ nodes processors.`,
 
 //------------------------------------------------------------------------------
 
-// BrokerConfig is configuration for the Broker output type.
+// BrokerConfig contains configuration fields for the Broker output type.
 type BrokerConfig struct {
 	Copies  int              `json:"copies" yaml:"copies"`
 	Pattern string           `json:"pattern" yaml:"pattern"`

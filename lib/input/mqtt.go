@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["mqtt"] = TypeSpec{
+	Constructors[TypeMQTT] = TypeSpec{
 		constructor: NewMQTT,
 		description: `
 Subscribe to topics on MQTT brokers.
@@ -54,7 +54,7 @@ You can access these metadata fields using
 
 //------------------------------------------------------------------------------
 
-// NewMQTT create a new MQTT input type.
+// NewMQTT creates a new MQTT input type.
 func NewMQTT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	m, err := reader.NewMQTT(conf.MQTT, log, stats)
 	if err != nil {

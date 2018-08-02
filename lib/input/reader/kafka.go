@@ -37,7 +37,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// KafkaConfig is configuration for the Kafka input type.
+// KafkaConfig contains configuration fields for the Kafka input type.
 type KafkaConfig struct {
 	Addresses       []string    `json:"addresses" yaml:"addresses"`
 	ClientID        string      `json:"client_id" yaml:"client_id"`

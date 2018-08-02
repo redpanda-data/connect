@@ -36,7 +36,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// NSQConfig is configuration for the NSQ input type.
+// NSQConfig contains configuration fields for the NSQ input type.
 type NSQConfig struct {
 	Addresses       []string `json:"nsqd_tcp_addresses" yaml:"nsqd_tcp_addresses"`
 	LookupAddresses []string `json:"lookupd_http_addresses" yaml:"lookupd_http_addresses"`
@@ -77,7 +77,7 @@ type NSQ struct {
 	interruptChan    chan struct{}
 }
 
-// NewNSQ create a new NSQ input type.
+// NewNSQ creates a new NSQ input type.
 func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (Type, error) {
 	n := NSQ{
 		conf:             conf,

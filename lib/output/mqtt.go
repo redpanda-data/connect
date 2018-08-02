@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["mqtt"] = TypeSpec{
+	Constructors[TypeMQTT] = TypeSpec{
 		constructor: NewMQTT,
 		description: `
 Pushes messages to an MQTT broker.`,

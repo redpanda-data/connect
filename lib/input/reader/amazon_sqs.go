@@ -36,7 +36,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// AmazonSQSConfig is configuration values for the input type.
+// AmazonSQSConfig contains configuration values for the input type.
 type AmazonSQSConfig struct {
 	Region      string                     `json:"region" yaml:"region"`
 	URL         string                     `json:"url" yaml:"url"`
@@ -62,7 +62,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 //------------------------------------------------------------------------------
 
 // AmazonSQS is a benthos reader.Type implementation that reads messages from an
-// Amazon S3 bucket.
+// Amazon SQS queue.
 type AmazonSQS struct {
 	conf AmazonSQSConfig
 
@@ -75,7 +75,7 @@ type AmazonSQS struct {
 	stats metrics.Type
 }
 
-// NewAmazonSQS creates a new Amazon S3 bucket reader.Type.
+// NewAmazonSQS creates a new Amazon SQS reader.Type.
 func NewAmazonSQS(
 	conf AmazonSQSConfig,
 	log log.Modular,

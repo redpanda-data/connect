@@ -33,7 +33,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["metadata"] = TypeSpec{
+	Constructors[TypeMetadata] = TypeSpec{
 		constructor: NewMetadata,
 		description: `
 Performs operations on the metadata of a message. Metadata are key/value pairs
@@ -67,7 +67,7 @@ value provided.`,
 
 //------------------------------------------------------------------------------
 
-// MetadataConfig contains any configuration for the Metadata processor.
+// MetadataConfig contains configuration fields for the Metadata processor.
 type MetadataConfig struct {
 	Operator string `json:"operator" yaml:"operator"`
 	Key      string `json:"key" yaml:"key"`
@@ -131,7 +131,8 @@ func getMetadataOperator(opStr string, key string) (metadataOperator, error) {
 
 //------------------------------------------------------------------------------
 
-// Metadata is a processor that performs an operation on a Metadata payload.
+// Metadata is a processor that performs an operation on the Metadata of a
+// message.
 type Metadata struct {
 	interpolate bool
 	valueBytes  []byte
@@ -177,7 +178,8 @@ func NewMetadata(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage performs a metadata operation on a message.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 

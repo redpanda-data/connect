@@ -36,7 +36,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["nsq"] = TypeSpec{
+	Constructors[TypeNSQ] = TypeSpec{
 		constructor: NewNSQ,
 		description: `
 Publish to an NSQ topic.`,
@@ -45,7 +45,7 @@ Publish to an NSQ topic.`,
 
 //------------------------------------------------------------------------------
 
-// NSQConfig is configuration for the NSQ output type.
+// NSQConfig contains configuration fields for the NSQ output type.
 type NSQConfig struct {
 	Address     string `json:"nsqd_tcp_address" yaml:"nsqd_tcp_address"`
 	Topic       string `json:"topic" yaml:"topic"`

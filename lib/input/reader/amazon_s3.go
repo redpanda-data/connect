@@ -49,7 +49,7 @@ type AmazonAWSCredentialsConfig struct {
 	Role   string `json:"role" yaml:"role"`
 }
 
-// AmazonS3Config is configuration values for the input type.
+// AmazonS3Config contains configuration values for the AmazonS3 input type.
 type AmazonS3Config struct {
 	Region          string                     `json:"region" yaml:"region"`
 	Bucket          string                     `json:"bucket" yaml:"bucket"`
@@ -63,7 +63,7 @@ type AmazonS3Config struct {
 	TimeoutS        int64                      `json:"timeout_s" yaml:"timeout_s"`
 }
 
-// NewAmazonS3Config creates a new Config with default values.
+// NewAmazonS3Config creates a new AmazonS3Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
 	return AmazonS3Config{
 		Region:          "eu-west-1",

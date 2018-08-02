@@ -39,7 +39,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// ScaleProtoConfig is configuration for the ScaleProto input type.
+// ScaleProtoConfig contains configuration fields for the ScaleProto input type.
 type ScaleProtoConfig struct {
 	URLs          []string `json:"urls" yaml:"urls"`
 	Bind          bool     `json:"bind" yaml:"bind"`
@@ -63,7 +63,7 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 
 //------------------------------------------------------------------------------
 
-// ScaleProto is an input type that serves Scalability Protocols messages.
+// ScaleProto is an input type that contains Scalability Protocols messages.
 type ScaleProto struct {
 	socket mangos.Socket
 	cMut   sync.Mutex

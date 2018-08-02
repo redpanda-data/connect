@@ -53,6 +53,40 @@ var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
+// String constants representing each processor type.
+var (
+	TypeArchive      = "archive"
+	TypeBatch        = "batch"
+	TypeBoundsCheck  = "bounds_check"
+	TypeCombine      = "combine"
+	TypeCompress     = "compress"
+	TypeConditional  = "conditional"
+	TypeDecode       = "decode"
+	TypeDecompress   = "decompress"
+	TypeDedupe       = "dedupe"
+	TypeEncode       = "encode"
+	TypeFilter       = "filter"
+	TypeFilterParts  = "filter_parts"
+	TypeGrok         = "grok"
+	TypeHashSample   = "hash_sample"
+	TypeHTTP         = "http"
+	TypeInsertPart   = "insert_part"
+	TypeJMESPath     = "jmespath"
+	TypeJSON         = "json"
+	TypeMergeJSON    = "merge_json"
+	TypeMetadata     = "metadata"
+	TypeNoop         = "noop"
+	TypeProcessField = "process_field"
+	TypeProcessMap   = "process_map"
+	TypeSample       = "sample"
+	TypeSelectParts  = "select_parts"
+	TypeSplit        = "split"
+	TypeText         = "text"
+	TypeUnarchive    = "unarchive"
+)
+
+//------------------------------------------------------------------------------
+
 // Config is the all encompassing configuration struct for all processor types.
 type Config struct {
 	Type         string             `json:"type" yaml:"type"`

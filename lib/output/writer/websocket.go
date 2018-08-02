@@ -35,7 +35,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// WebsocketConfig is configuration for the Websocket output type.
+// WebsocketConfig contains configuration fields for the Websocket output type.
 type WebsocketConfig struct {
 	URL         string `json:"url" yaml:"url"`
 	auth.Config `json:",inline" yaml:",inline"`

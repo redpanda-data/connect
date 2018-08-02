@@ -33,7 +33,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["http"] = TypeSpec{
+	Constructors[TypeHTTP] = TypeSpec{
 		constructor: NewHTTP,
 		description: `
 Performs an HTTP request using a message batch as the request body, and replaces
@@ -41,16 +41,16 @@ the original message parts with the body of the response.
 
 If the batch contains only a single message part then it will be sent as the
 body of the request. If the batch contains multiple messages then they will be
-sent as a multipart HTTP request using the ` + "`Content-Type: multipart`" + `
+sent as a multipart HTTP request using a ` + "`Content-Type: multipart`" + `
 header.
-
-The URL and header values of this type can be dynamically set using function
-interpolations described [here](../config_interpolation.md#functions).
 
 If you wish to avoid this behaviour then you can either use the
  ` + "[`archive`](#archive)" + ` processor to create a single message from a
 batch, or use the ` + "[`split`](#split)" + ` processor to break down the batch
 into individual message parts.
+
+The URL and header values of this type can be dynamically set using function
+interpolations described [here](../config_interpolation.md#functions).
 
 In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
@@ -61,7 +61,7 @@ can use the ` + "[`process_map`](#process_map)" + ` or
 
 //------------------------------------------------------------------------------
 
-// HTTPConfig contains any configuration for the HTTP processor.
+// HTTPConfig contains configuration fields for the HTTP processor.
 type HTTPConfig struct {
 	Client client.Config `json:"request" yaml:"request"`
 }
@@ -75,8 +75,8 @@ func NewHTTPConfig() HTTPConfig {
 
 //------------------------------------------------------------------------------
 
-// HTTP is a processor that executes HTTP queries on a message part and
-// replaces the contents with the result.
+// HTTP is a processor that performs an HTTP request using the message as the
+// request body, and returns the response.
 type HTTP struct {
 	client *client.Type
 
@@ -121,7 +121,8 @@ func NewHTTP(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage parses message parts as grok patterns.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	h.mCount.Incr(1)
 

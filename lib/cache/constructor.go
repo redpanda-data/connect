@@ -46,6 +46,14 @@ var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
+// String constants representing each cache type.
+var (
+	TypeMemcached = "memcached"
+	TypeMemory    = "memory"
+)
+
+//------------------------------------------------------------------------------
+
 // Config is the all encompassing configuration struct for all cache types.
 type Config struct {
 	Type      string          `json:"type" yaml:"type"`

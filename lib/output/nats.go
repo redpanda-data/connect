@@ -35,7 +35,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["nats"] = TypeSpec{
+	Constructors[TypeNATS] = TypeSpec{
 		constructor: NewNATS,
 		description: `
 Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.
@@ -45,7 +45,7 @@ For at-least-once behaviour with NATS look at NATS Stream.`,
 
 //------------------------------------------------------------------------------
 
-// NATSConfig is configuration for the NATS output type.
+// NATSConfig contains configuration fields for the NATS output type.
 type NATSConfig struct {
 	URLs    []string `json:"urls" yaml:"urls"`
 	Subject string   `json:"subject" yaml:"subject"`

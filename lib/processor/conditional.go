@@ -30,14 +30,14 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["conditional"] = TypeSpec{
+	Constructors[TypeConditional] = TypeSpec{
 		constructor: NewConditional,
 		description: `
-Conditional is a processor that has a list of child 'processors',
-'else_processors', and a condition. For each message if the condition passes the
-child 'processors' will be applied, otherwise the 'else_processors' are applied.
-This processor is useful for applying processors such as 'dedupe' based on the
-content type of the message.
+Conditional is a processor that has a list of child ` + "`processors`," + `
+` + "`else_processors`" + `, and a condition. For each message, if the condition
+passes, the child ` + "`processors`" + ` will be applied, otherwise the
+` + "`else_processors`" + ` are applied. This processor is useful for applying
+processors based on the content type of the message.
 
 You can find a [full list of conditions here](../conditions).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
@@ -155,7 +155,8 @@ func NewConditional(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage does nothing and returns the message unchanged.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (c *Conditional) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
 	c.mCount.Incr(1)
 

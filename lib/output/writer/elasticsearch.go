@@ -37,7 +37,8 @@ import (
 
 //------------------------------------------------------------------------------
 
-// ElasticsearchConfig is configuration for the Elasticsearch output type.
+// ElasticsearchConfig contains configuration fields for the Elasticsearch
+// output type.
 type ElasticsearchConfig struct {
 	URLs      []string             `json:"urls" yaml:"urls"`
 	ID        string               `json:"id" yaml:"id"`
@@ -137,8 +138,8 @@ func (e *Elasticsearch) Connect() error {
 	return err
 }
 
-// Write will attempt to write a message to Elasticsearch, wait for acknowledgement, and
-// returns an error if applicable.
+// Write will attempt to write a message to Elasticsearch, wait for
+// acknowledgement, and returns an error if applicable.
 func (e *Elasticsearch) Write(msg types.Message) error {
 	if e.client == nil {
 		return types.ErrNotConnected

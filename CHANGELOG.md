@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Broker level output processors are now applied _before_ the individual output
+  processors.
+- The `dynamic` input and output HTTP paths for CRUD operations are now
+  `/inputs/{input_id}` and `/outputs/{output_id}` respectively.
+
 ### 0.21.0 - 2018-07-31
 
 ### Added

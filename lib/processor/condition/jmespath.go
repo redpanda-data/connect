@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["jmespath"] = TypeSpec{
+	Constructors[TypeJMESPath] = TypeSpec{
 		constructor: NewJMESPath,
 		description: `
 Parses a message part as a JSON blob and attempts to apply a JMESPath expression
@@ -98,7 +98,7 @@ type JMESPath struct {
 	mApplied  metrics.StatCounter
 }
 
-// NewJMESPath returns a JMESPath processor.
+// NewJMESPath returns a JMESPath condition.
 func NewJMESPath(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {

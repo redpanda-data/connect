@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["combine"] = TypeSpec{
+	Constructors[TypeCombine] = TypeSpec{
 		constructor: NewCombine,
 		description: `
 If a message queue contains multiple part messages as individual parts it can
@@ -61,7 +61,7 @@ parts.`,
 
 //------------------------------------------------------------------------------
 
-// CombineConfig contains configuration for the Combine processor.
+// CombineConfig contains configuration fields for the Combine processor.
 type CombineConfig struct {
 	Parts int `json:"parts" yaml:"parts"`
 }
@@ -75,9 +75,15 @@ func NewCombineConfig() CombineConfig {
 
 //------------------------------------------------------------------------------
 
-// Combine is a processor that takes messages with a single part in a
-// benthos multiple part blob format and decodes them into multiple part
-// messages.
+// Combine is a processor that combines messages into a batch until a target
+// number of message parts is reached, at which point the batch is sent out.
+// When a message is combined without yet producing a batch a NoAck response is
+// returned, which is interpretted as source types as an instruction to send
+// another message through but hold off on acknowledging this one.
+//
+// Eventually, when the batch reaches its target size, the batch is sent through
+// the pipeline as a single message and an acknowledgement for that message
+// determines whether the whole batch of messages are acknowledged.
 type Combine struct {
 	log   log.Modular
 	stats metrics.Type
@@ -110,9 +116,8 @@ func NewCombine(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage takes a single message and buffers it, drops it, returning a
-// NoAck response, until eventually it has N buffered messages, at which point
-// it combines those messages into one multiple part message which is sent on.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 

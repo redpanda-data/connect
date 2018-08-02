@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["file"] = TypeSpec{
+	Constructors[TypeFile] = TypeSpec{
 		constructor: NewFile,
 		description: `
 The file output type simply appends all messages to an output file. Single part
@@ -48,7 +48,7 @@ baz\n\n`,
 
 //------------------------------------------------------------------------------
 
-// FileConfig is configuration values for the file based output type.
+// FileConfig contains configuration fields for the file based output type.
 type FileConfig struct {
 	Path  string `json:"path" yaml:"path"`
 	Delim string `json:"delimiter" yaml:"delimiter"`

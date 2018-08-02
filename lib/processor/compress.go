@@ -36,11 +36,11 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["compress"] = TypeSpec{
+	Constructors[TypeCompress] = TypeSpec{
 		constructor: NewCompress,
 		description: `
 Compresses parts of a message according to the selected algorithm. Supported
-available compression types are: gzip, zlib, flate.
+compression types are: gzip, zlib, flate.
 
 The 'level' field might not apply to all algorithms.`,
 	}
@@ -48,7 +48,7 @@ The 'level' field might not apply to all algorithms.`,
 
 //------------------------------------------------------------------------------
 
-// CompressConfig contains any configuration for the Compress processor.
+// CompressConfig contains configuration fields for the Compress processor.
 type CompressConfig struct {
 	Algorithm string `json:"algorithm" yaml:"algorithm"`
 	Level     int    `json:"level" yaml:"level"`
@@ -166,8 +166,8 @@ func NewCompress(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage takes a message, attempts to compress parts of the message and
-// returns the result.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 

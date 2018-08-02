@@ -34,17 +34,17 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["encode"] = TypeSpec{
+	Constructors[TypeEncode] = TypeSpec{
 		constructor: NewEncode,
 		description: `
-Encodes parts of a message according to the selected scheme. Supported available
-schemes are: base64.`,
+Encodes parts of a message according to the selected scheme. Supported schemes
+are: base64.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// EncodeConfig contains any configuration for the Encode processor.
+// EncodeConfig contains configuration fields for the Encode processor.
 type EncodeConfig struct {
 	Scheme string `json:"scheme" yaml:"scheme"`
 	Parts  []int  `json:"parts" yaml:"parts"`
@@ -82,8 +82,8 @@ func strToEncoder(str string) (encodeFunc, error) {
 
 //------------------------------------------------------------------------------
 
-// Encode is a processor that can selectively encodes parts of a message as a
-// chosen scheme.
+// Encode is a processor that can selectively encode parts of a message
+// following a chosen scheme.
 type Encode struct {
 	conf EncodeConfig
 	fn   encodeFunc
@@ -124,8 +124,8 @@ func NewEncode(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage takes a message, attempts to encode parts of the message and
-// returns the result.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (c *Encode) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 

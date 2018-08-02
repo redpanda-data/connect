@@ -32,18 +32,18 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["sample"] = TypeSpec{
+	Constructors[TypeSample] = TypeSpec{
 		constructor: NewSample,
 		description: `
-Passes on a randomly sampled percentage of messages. The random seed is static
-in order to sample deterministically, but can be set in config to allow parallel
-samples that are unique.`,
+Retains a randomly sampled percentage of messages (0 to 100) and drops all
+others. The random seed is static in order to sample deterministically, but can
+be set in config to allow parallel samples that are unique.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// SampleConfig contains any configuration for the Sample processor.
+// SampleConfig contains configuration fields for the Sample processor.
 type SampleConfig struct {
 	Retain     float64 `json:"retain" yaml:"retain"`
 	RandomSeed int64   `json:"seed" yaml:"seed"`
@@ -59,8 +59,7 @@ func NewSampleConfig() SampleConfig {
 
 //------------------------------------------------------------------------------
 
-// Sample is a processor that checks each message against a set of bounds
-// and rejects messages if they aren't within them.
+// Sample is a processor that drops messages based on a random sample.
 type Sample struct {
 	conf  Config
 	log   log.Modular
@@ -96,7 +95,8 @@ func NewSample(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage checks each message against a set of bounds.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (s *Sample) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.mCount.Incr(1)
 	if s.gen.Float64() > s.retain {

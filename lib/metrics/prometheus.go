@@ -33,7 +33,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["prometheus"] = typeSpec{
+	constructors[TypePrometheus] = typeSpec{
 		constructor: NewPrometheus,
 		description: `Host endpoints for Prometheus scraping.`,
 	}

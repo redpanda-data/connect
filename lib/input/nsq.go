@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["nsq"] = TypeSpec{
+	Constructors[TypeNSQ] = TypeSpec{
 		constructor: NewNSQ,
 		description: `
 Subscribe to an NSQ instance topic and channel.`,
@@ -39,7 +39,7 @@ Subscribe to an NSQ instance topic and channel.`,
 
 //------------------------------------------------------------------------------
 
-// NewNSQ create a new NSQ input type.
+// NewNSQ creates a new NSQ input type.
 func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	n, err := reader.NewNSQ(conf.NSQ, log, stats)
 	if err != nil {

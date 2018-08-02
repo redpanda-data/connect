@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["filter_parts"] = TypeSpec{
+	Constructors[TypeFilterParts] = TypeSpec{
 		constructor: NewFilterParts,
 		description: `
 Tests each individual part of a message batch against a condition, if the
@@ -51,7 +51,8 @@ remove specific parts.`,
 
 //------------------------------------------------------------------------------
 
-// FilterPartsConfig contains configuration fields for the FilterParts processor.
+// FilterPartsConfig contains configuration fields for the FilterParts
+// processor.
 type FilterPartsConfig struct {
 	condition.Config `json:",inline" yaml:",inline"`
 }
@@ -65,8 +66,8 @@ func NewFilterPartsConfig() FilterPartsConfig {
 
 //------------------------------------------------------------------------------
 
-// FilterParts is a processor that checks each message against a condition and
-// rejects when the condition returns false.
+// FilterParts is a processor that checks each part from a message against a
+// condition and removes the part if the condition returns false.
 type FilterParts struct {
 	log   log.Modular
 	stats metrics.Type
@@ -108,7 +109,8 @@ func NewFilterParts(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage checks each message against a set of bounds.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 

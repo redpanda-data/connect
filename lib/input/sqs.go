@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["sqs"] = TypeSpec{
+	Constructors[TypeSQS] = TypeSpec{
 		constructor: NewAmazonSQS,
 		description: `
 Receive messages from an Amazon SQS URL, only the body is extracted into
@@ -40,7 +40,7 @@ messages.`,
 
 //------------------------------------------------------------------------------
 
-// NewAmazonSQS creates a new Amazon SQS input type.
+// NewAmazonSQS creates a new AWS SQS input type.
 func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	return NewReader(
 		"sqs",

@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["insert_part"] = TypeSpec{
+	Constructors[TypeInsertPart] = TypeSpec{
 		constructor: NewInsertPart,
 		description: `
 Insert a new message part at an index. If the specified index is greater than
@@ -50,7 +50,7 @@ find a list of functions [here](../config_interpolation.md#functions).`,
 
 //------------------------------------------------------------------------------
 
-// InsertPartConfig contains any configuration for the InsertPart processor.
+// InsertPartConfig contains configuration fields for the InsertPart processor.
 type InsertPartConfig struct {
 	Index   int    `json:"index" yaml:"index"`
 	Content string `json:"content" yaml:"content"`
@@ -102,7 +102,8 @@ func NewInsertPart(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage prepends a new message part to the message.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 

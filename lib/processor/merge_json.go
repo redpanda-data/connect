@@ -31,11 +31,11 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["merge_json"] = TypeSpec{
+	Constructors[TypeMergeJSON] = TypeSpec{
 		constructor: NewMergeJSON,
 		description: `
-Parses selected message parts as JSON blobs, attempts to merge them into one
-single JSON value and then writes it to a new message part at the end of the
+Parses selected message parts as JSON documents, attempts to merge them into one
+single JSON document and then writes it to a new message part at the end of the
 message. Merged parts are removed unless ` + "`retain_parts`" + ` is set to
 true.`,
 	}
@@ -43,7 +43,7 @@ true.`,
 
 //------------------------------------------------------------------------------
 
-// MergeJSONConfig contains any configuration for the MergeJSON processor.
+// MergeJSONConfig contains configuration fields for the MergeJSON processor.
 type MergeJSONConfig struct {
 	Parts       []int `json:"parts" yaml:"parts"`
 	RetainParts bool  `json:"retain_parts" yaml:"retain_parts"`
@@ -98,8 +98,8 @@ func NewMergeJSON(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies the processor to a message, returning one or more
-// resulting messages or a response.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 

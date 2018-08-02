@@ -34,7 +34,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// FilesConfig is configuration values for the input type.
+// FilesConfig contains configuration fields for the files output type.
 type FilesConfig struct {
 	Path string `json:"path" yaml:"path"`
 }
@@ -48,7 +48,7 @@ func NewFilesConfig() FilesConfig {
 
 //------------------------------------------------------------------------------
 
-// Files is a benthos writer.Type implementation that writes messages parts each
+// Files is a benthos writer.Type implementation that writes message parts each
 // to their own file.
 type Files struct {
 	conf FilesConfig

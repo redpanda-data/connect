@@ -33,7 +33,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["file"] = TypeSpec{
+	Constructors[TypeFile] = TypeSpec{
 		constructor: NewFile,
 		description: `
 The file type reads input from a file. If multipart is set to false each line
@@ -46,7 +46,7 @@ If the delimiter field is left empty then line feed (\n) is used.`,
 
 //------------------------------------------------------------------------------
 
-// FileConfig is configuration values for the File input type.
+// FileConfig contains configuration values for the File input type.
 type FileConfig struct {
 	Path      string `json:"path" yaml:"path"`
 	Multipart bool   `json:"multipart" yaml:"multipart"`

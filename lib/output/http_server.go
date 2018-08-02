@@ -40,7 +40,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["http_server"] = TypeSpec{
+	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: NewHTTPServer,
 		description: `
 Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
@@ -58,7 +58,8 @@ receive a constant stream of line delimited messages on the configured
 
 //------------------------------------------------------------------------------
 
-// HTTPServerConfig is configuration for the HTTPServer input type.
+// HTTPServerConfig contains configuration fields for the HTTPServer output
+// type.
 type HTTPServerConfig struct {
 	Address    string `json:"address" yaml:"address"`
 	Path       string `json:"path" yaml:"path"`
@@ -84,7 +85,7 @@ func NewHTTPServerConfig() HTTPServerConfig {
 
 //------------------------------------------------------------------------------
 
-// HTTPServer is an input type that serves HTTPServer POST requests.
+// HTTPServer is an output type that serves HTTPServer GET requests.
 type HTTPServer struct {
 	running int32
 
@@ -121,7 +122,7 @@ type HTTPServer struct {
 	mStrmSndSucc  metrics.StatCounter
 }
 
-// NewHTTPServer creates a new HTTPServer input type.
+// NewHTTPServer creates a new HTTPServer output type.
 func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	var mux *http.ServeMux
 	var server *http.Server
@@ -429,7 +430,7 @@ func (h *HTTPServer) Consume(ts <-chan types.Transaction) error {
 	return nil
 }
 
-// CloseAsync shuts down the HTTPServer input and stops processing requests.
+// CloseAsync shuts down the HTTPServer output and stops processing requests.
 func (h *HTTPServer) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {
 		if h.server != nil {

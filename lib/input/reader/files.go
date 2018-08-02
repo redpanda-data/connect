@@ -33,7 +33,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// FilesConfig is configuration for the Files input type.
+// FilesConfig contains configuration for the Files input type.
 type FilesConfig struct {
 	Path string `json:"path" yaml:"path"`
 }

@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["inproc"] = TypeSpec{
+	Constructors[TypeInproc] = TypeSpec{
 		constructor: NewInproc,
 		description: `
 Directly connect to an output within a Benthos process by referencing it by a
@@ -59,7 +59,8 @@ func NewInprocConfig() InprocConfig {
 
 //------------------------------------------------------------------------------
 
-// Inproc is an input type that reads from a named pipe.
+// Inproc is an input type that reads from a named pipe, which could be the
+// output of a separate Benthos stream of the same process.
 type Inproc struct {
 	running int32
 
@@ -167,7 +168,8 @@ messageLoop:
 	}
 }
 
-// TransactionChan returns the transactions channel.
+// TransactionChan returns a transactions channel for consuming messages from
+// this input type.
 func (i *Inproc) TransactionChan() <-chan types.Transaction {
 	return i.transactions
 }

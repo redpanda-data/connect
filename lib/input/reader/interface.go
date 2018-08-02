@@ -24,7 +24,10 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 )
 
-// Type is a type that writes Benthos messages to a third party sink.
+// Type is a type that reads Benthos messages from an external source. If the
+// source supports acknowledgements then it is the responsibility of Type
+// implementations to ensure acknowledgements are not sent for consumed messages
+// until a subsequent Acknowledge call contains a nil error.
 type Type interface {
 	// Connect attempts to establish a connection to the source, if unsuccessful
 	// returns an error. If the attempt is successful (or not necessary) returns

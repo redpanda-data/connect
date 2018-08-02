@@ -39,7 +39,8 @@ import (
 
 //------------------------------------------------------------------------------
 
-// TypeSpec is a constructor and a usage description for each input type.
+// TypeSpec is a struct containing constructors, markdown descriptions and an
+// optional sanitisation function for each input type.
 type TypeSpec struct {
 	brokerConstructor func(
 		conf Config,
@@ -55,6 +56,35 @@ type TypeSpec struct {
 
 // Constructors is a map of all input types with their specs.
 var Constructors = map[string]TypeSpec{}
+
+//------------------------------------------------------------------------------
+
+// String constants representing each input type.
+var (
+	TypeAMQP          = "amqp"
+	TypeBroker        = "broker"
+	TypeDynamic       = "dynamic"
+	TypeFile          = "file"
+	TypeFiles         = "files"
+	TypeHTTPClient    = "http_client"
+	TypeHTTPServer    = "http_server"
+	TypeInproc        = "inproc"
+	TypeKafka         = "kafka"
+	TypeKafkaBalanced = "kafka_balanced"
+	TypeMQTT          = "mqtt"
+	TypeNanomsg       = "nanomsg"
+	TypeNATS          = "nats"
+	TypeNATSStream    = "nats_stream"
+	TypeNSQ           = "nsq"
+	TypeReadUntil     = "read_until"
+	TypeRedisList     = "redis_list"
+	TypeRedisPubSub   = "redis_pubsub"
+	TypeS3            = "s3"
+	TypeSQS           = "sqs"
+	TypeSTDIN         = "stdin"
+	TypeWebsocket     = "websocket"
+	TypeZMQ4          = "zmq4"
+)
 
 //------------------------------------------------------------------------------
 

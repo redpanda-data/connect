@@ -35,7 +35,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["decode"] = TypeSpec{
+	Constructors[TypeDecode] = TypeSpec{
 		constructor: NewDecode,
 		description: `
 Decodes parts of a message according to the selected scheme. Supported available
@@ -45,7 +45,7 @@ schemes are: base64.`,
 
 //------------------------------------------------------------------------------
 
-// DecodeConfig contains any configuration for the Decode processor.
+// DecodeConfig contains configuration fields for the Decode processor.
 type DecodeConfig struct {
 	Scheme string `json:"scheme" yaml:"scheme"`
 	Parts  []int  `json:"parts" yaml:"parts"`
@@ -78,8 +78,8 @@ func strToDecoder(str string) (decodeFunc, error) {
 
 //------------------------------------------------------------------------------
 
-// Decode is a processor that can selectively decodes parts of a message as a
-// chosen scheme.
+// Decode is a processor that can selectively decode parts of a message
+// following a chosen scheme.
 type Decode struct {
 	conf DecodeConfig
 	fn   decodeFunc
@@ -120,8 +120,8 @@ func NewDecode(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage takes a message, attempts to decode parts of the message and
-// returns the result.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (c *Decode) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 

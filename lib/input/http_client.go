@@ -40,7 +40,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["http_client"] = TypeSpec{
+	Constructors[TypeHTTPClient] = TypeSpec{
 		constructor: NewHTTPClient,
 		description: `
 The HTTP client input type connects to a server and continuously performs
@@ -63,7 +63,8 @@ of a message.`,
 
 //------------------------------------------------------------------------------
 
-// StreamConfig contains fields for specifying stream consumption behaviour.
+// StreamConfig contains fields for specifying consumption behaviour when the
+// body of a request is a constant stream of bytes.
 type StreamConfig struct {
 	Enabled   bool   `json:"enabled" yaml:"enabled"`
 	Reconnect bool   `json:"reconnect" yaml:"reconnect"`
@@ -72,7 +73,7 @@ type StreamConfig struct {
 	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
-// HTTPClientConfig is configuration for the HTTPClient output type.
+// HTTPClientConfig contains configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
 	client.Config `json:",inline" yaml:",inline"`
 	Payload       string       `json:"payload" yaml:"payload"`
@@ -99,7 +100,8 @@ func NewHTTPClientConfig() HTTPClientConfig {
 
 //------------------------------------------------------------------------------
 
-// HTTPClient is an output type that pushes messages to HTTPClient.
+// HTTPClient is an input type that continously makes HTTP requests and reads
+// the response bodies as message payloads.
 type HTTPClient struct {
 	running int32
 
@@ -119,7 +121,7 @@ type HTTPClient struct {
 	closedChan chan struct{}
 }
 
-// NewHTTPClient creates a new HTTPClient output type.
+// NewHTTPClient creates a new HTTPClient input type.
 func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	h := HTTPClient{
 		running:      1,
@@ -332,19 +334,20 @@ func (h *HTTPClient) loop() {
 	}
 }
 
-// TransactionChan returns the transactions channel.
+// TransactionChan returns a transactions channel for consuming messages from
+// this input type.
 func (h *HTTPClient) TransactionChan() <-chan types.Transaction {
 	return h.transactions
 }
 
-// CloseAsync shuts down the HTTPClient output and stops processing messages.
+// CloseAsync shuts down the HTTPClient input.
 func (h *HTTPClient) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {
 		close(h.closeChan)
 	}
 }
 
-// WaitForClose blocks until the HTTPClient output has closed down.
+// WaitForClose blocks until the HTTPClient input has closed down.
 func (h *HTTPClient) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-h.closedChan:

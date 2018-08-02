@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors["http_server"] = typeSpec{
+	constructors[TypeHTTPServer] = typeSpec{
 		constructor: NewHTTP,
 		description: `
 Benthos can host its own stats endpoint, where a GET request will receive a JSON

@@ -36,7 +36,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// WebsocketConfig is configuration for the Websocket input type.
+// WebsocketConfig contains configuration fields for the Websocket input type.
 type WebsocketConfig struct {
 	URL         string `json:"url" yaml:"url"`
 	OpenMsg     string `json:"open_message" yaml:"open_message"`
@@ -91,7 +91,7 @@ func (w *Websocket) getWS() *websocket.Conn {
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to an Websocket server.
+// Connect establishes a connection to a Websocket server.
 func (w *Websocket) Connect() error {
 	w.lock.Lock()
 	defer w.lock.Unlock()

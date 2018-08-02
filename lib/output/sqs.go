@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["sqs"] = TypeSpec{
+	Constructors[TypeSQS] = TypeSpec{
 		constructor: NewAmazonSQS,
 		description: `
 Sends messages to an SQS queue.`,

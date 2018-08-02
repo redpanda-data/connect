@@ -33,7 +33,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["filter"] = TypeSpec{
+	Constructors[TypeFilter] = TypeSpec{
 		constructor: NewFilter,
 		description: `
 Tests each message against a condition, if the condition fails then the message
@@ -66,7 +66,7 @@ func NewFilterConfig() FilterConfig {
 //------------------------------------------------------------------------------
 
 // Filter is a processor that checks each message against a condition and
-// rejects when the condition returns false.
+// rejects the message if a condition returns false.
 type Filter struct {
 	log   log.Modular
 	stats metrics.Type
@@ -106,7 +106,8 @@ func NewFilter(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage checks each message against a set of bounds.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (c *Filter) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 

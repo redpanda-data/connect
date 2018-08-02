@@ -21,7 +21,6 @@
 package input
 
 import (
-	"os"
 	"testing"
 	"time"
 
@@ -30,7 +29,7 @@ import (
 )
 
 func TestSTDINClose(t *testing.T) {
-	s, err := NewSTDIN(NewConfig(), nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewSTDIN(NewConfig(), nil, log.Noop(), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

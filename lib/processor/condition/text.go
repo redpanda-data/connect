@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["text"] = TypeSpec{
+	Constructors[TypeText] = TypeSpec{
 		constructor: NewText,
 		description: `
 Text is a condition that checks the contents of a message part as plain text
@@ -229,7 +229,7 @@ type Text struct {
 	mApplied      metrics.StatCounter
 }
 
-// NewText returns a Text processor.
+// NewText returns a Text condition.
 func NewText(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {

@@ -35,8 +35,9 @@ import (
 
 //------------------------------------------------------------------------------
 
-// Parallel represents a method of buffering sequential messages, supporting
-// only a single consumer.
+// Parallel represents a method of buffering messages such that they can be
+// consumed by any number of parallel consumers, and can be acknowledged in any
+// order.
 type Parallel interface {
 	// NextMessage reads the next oldest message, the message is preserved until
 	// the returned AckFunc is called.

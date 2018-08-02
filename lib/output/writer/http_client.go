@@ -31,7 +31,8 @@ import (
 
 //------------------------------------------------------------------------------
 
-// HTTPClientConfig is configuration for the HTTPClient output type.
+// HTTPClientConfig contains configuration fields for the HTTPClient output
+// type.
 type HTTPClientConfig struct {
 	client.Config `json:",inline" yaml:",inline"`
 }
@@ -45,7 +46,8 @@ func NewHTTPClientConfig() HTTPClientConfig {
 
 //------------------------------------------------------------------------------
 
-// HTTPClient is an output type that pushes messages to HTTPClient.
+// HTTPClient is an output type that sends messages as HTTP requests to a target
+// server endpoint.
 type HTTPClient struct {
 	client *client.Type
 

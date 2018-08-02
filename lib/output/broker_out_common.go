@@ -41,12 +41,12 @@ func (b *brokerOutputList) UnmarshalJSON(bytes []byte) error {
 		return err
 	}
 
-	inputConfs, err := parseOutputConfsWithDefaults(genericOutputs)
+	outputConfs, err := parseOutputConfsWithDefaults(genericOutputs)
 	if err != nil {
 		return err
 	}
 
-	*b = inputConfs
+	*b = outputConfs
 	return nil
 }
 
@@ -58,12 +58,12 @@ func (b *brokerOutputList) UnmarshalYAML(unmarshal func(interface{}) error) erro
 		return err
 	}
 
-	inputConfs, err := parseOutputConfsWithDefaults(genericOutputs)
+	outputConfs, err := parseOutputConfsWithDefaults(genericOutputs)
 	if err != nil {
 		return err
 	}
 
-	*b = inputConfs
+	*b = outputConfs
 	return nil
 }
 

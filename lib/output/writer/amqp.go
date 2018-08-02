@@ -35,7 +35,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// AMQPConfig is configuration for the AMQP output type.
+// AMQPConfig contains configuration fields for the AMQP output type.
 type AMQPConfig struct {
 	URL          string `json:"url" yaml:"url"`
 	Exchange     string `json:"exchange" yaml:"exchange"`

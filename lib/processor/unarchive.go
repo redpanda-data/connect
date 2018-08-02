@@ -36,7 +36,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["unarchive"] = TypeSpec{
+	Constructors[TypeUnarchive] = TypeSpec{
 		constructor: NewUnarchive,
 		description: `
 Unarchives parts of a message according to the selected archive type into
@@ -53,7 +53,7 @@ from the message. If the message results in zero parts it is skipped entirely.`,
 
 //------------------------------------------------------------------------------
 
-// UnarchiveConfig contains any configuration for the Unarchive processor.
+// UnarchiveConfig contains configuration fields for the Unarchive processor.
 type UnarchiveConfig struct {
 	Format string `json:"format" yaml:"format"`
 	Parts  []int  `json:"parts" yaml:"parts"`
@@ -126,8 +126,8 @@ func strToUnarchiver(str string) (unarchiveFunc, error) {
 
 //------------------------------------------------------------------------------
 
-// Unarchive is a processor that can selectively unarchive parts of a message as a
-// chosen archive type.
+// Unarchive is a processor that can selectively unarchive parts of a message
+// following a chosen archive type.
 type Unarchive struct {
 	conf      UnarchiveConfig
 	unarchive unarchiveFunc
@@ -170,8 +170,8 @@ func NewUnarchive(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage takes a message, attempts to unarchive parts of the message,
-// and returns the result.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.mCount.Incr(1)
 

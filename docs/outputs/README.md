@@ -187,7 +187,7 @@ output sources [or use a buffer](../buffers/README.md).
 It is possible to configure [processors](../processors/README.md) at the broker
 level, where they will be applied to _all_ child outputs, as well as on the
 individual child outputs. If you have processors at both the broker level _and_
-on child outputs then the broker processors will be applied _after_ the child
+on child outputs then the broker processors will be applied _before_ the child
 nodes processors.
 
 ## `dynamic`
@@ -202,16 +202,16 @@ dynamic:
 
 The dynamic type is a special broker type where the outputs are identified by
 unique labels and can be created, changed and removed during runtime via a REST
-HTTP interface. The broker pattern used is 'fan_out', meaning each message will
-be delivered to each dynamic output.
+HTTP interface. The broker pattern used is always `fan_out`, meaning
+each message will be delivered to each dynamic output.
 
 To GET a JSON map of output identifiers with their current uptimes use the
 '/outputs' endpoint.
 
 To perform CRUD actions on the outputs themselves use POST, DELETE, and GET
-methods on the '/output/{output_id}' endpoint. When using POST the body of the
-request should be a JSON configuration for the output, if the output already
-exists it will be changed.
+methods on the `/outputs/{output_id}` endpoint. When using POST the
+body of the request should be a JSON configuration for the output, if the output
+already exists it will be changed.
 
 ## `elasticsearch`
 
@@ -263,7 +263,7 @@ Writes each individual part of each message to a new file.
 
 Message parts only contain raw data, and therefore in order to create a unique
 file for each part you need to generate unique file names. This can be done by
-using function interpolations on the 'path' field as described
+using function interpolations on the `path` field as described
 [here](../config_interpolation.md#functions).
 
 ## `http_client`
@@ -351,8 +351,8 @@ type: inproc
 inproc: ""
 ```
 
-Sends data directly to inputs by connecting to a unique ID. This allows you to
-hook up isolated streams whilst running Benthos in
+Sends data directly to Benthos inputs by connecting to a unique ID. This allows
+you to hook up isolated streams whilst running Benthos in
 [`--streams` mode](../streams/README.md) mode, it is NOT recommended
 that you connect the inputs of a stream with an output of the same stream, as
 feedback loops can lead to deadlocks in your message flow.
@@ -385,8 +385,8 @@ kafka:
 
 The kafka output type writes messages to a kafka broker, these messages are
 acknowledged, which is propagated back to the input. The config field
-'ack_replicas' determines whether we wait for acknowledgement from all replicas
-or just a single broker.
+`ack_replicas` determines whether we wait for acknowledgement from all
+replicas or just a single broker.
 
 It is possible to specify a compression codec to use out of the following
 options: none, snappy, lz4 and gzip.
@@ -398,12 +398,7 @@ a key. This field can be dynamically set using function interpolations described
 By default the paritioner will select partitions based on a hash of the key
 value. If the key is empty then a partition is chosen at random. You can
 alternatively force the partitioner to round-robin partitions with the field
-'round_robin_partitions'.
-
-The target version by default will be the oldest supported, as it is expected
-that the server will be backwards compatible. In order to support newer client
-features you should increase this version up to the known version of the target
-server.
+`round_robin_partitions`.
 
 ## `mqtt`
 
@@ -461,8 +456,7 @@ nats_stream:
   - nats://localhost:4222
 ```
 
-Publish to a NATS Stream subject. NATS Streaming is at-least-once and therefore
-this output is able to guarantee delivery on success.
+Publish to a NATS Stream subject.
 
 ## `nsq`
 

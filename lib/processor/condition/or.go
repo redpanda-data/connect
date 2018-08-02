@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["or"] = TypeSpec{
+	Constructors[TypeOr] = TypeSpec{
 		constructor: NewOr,
 		description: `
 Or is a condition that returns the logical OR of its children conditions.`,

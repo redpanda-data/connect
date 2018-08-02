@@ -34,7 +34,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// RedisListConfig is configuration for the RedisList input type.
+// RedisListConfig contains configuration fields for the RedisList input type.
 type RedisListConfig struct {
 	URL       string `json:"url" yaml:"url"`
 	Key       string `json:"key" yaml:"key"`
@@ -52,7 +52,7 @@ func NewRedisListConfig() RedisListConfig {
 
 //------------------------------------------------------------------------------
 
-// RedisList is an input type that reads Redis Pub/Sub messages.
+// RedisList is an input type that reads Redis List messages.
 type RedisList struct {
 	client *redis.Client
 	cMut   sync.Mutex
@@ -85,7 +85,7 @@ func NewRedisList(
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to an RedisList server.
+// Connect establishes a connection to a Redis server.
 func (r *RedisList) Connect() error {
 	r.cMut.Lock()
 	defer r.cMut.Unlock()
@@ -114,7 +114,7 @@ func (r *RedisList) Connect() error {
 	return nil
 }
 
-// Read attempts to pop a message from a redis list.
+// Read attempts to pop a message from a Redis list.
 func (r *RedisList) Read() (types.Message, error) {
 	var client *redis.Client
 
@@ -144,7 +144,7 @@ func (r *RedisList) Read() (types.Message, error) {
 	return message.New([][]byte{[]byte(res[1])}), nil
 }
 
-// Acknowledge instructs whether messages have been successfully propagated.
+// Acknowledge is a noop since Redis Lists do not support acknowledgements.
 func (r *RedisList) Acknowledge(err error) error {
 	return nil
 }

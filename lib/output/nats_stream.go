@@ -37,17 +37,17 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["nats_stream"] = TypeSpec{
+	Constructors[TypeNATSStream] = TypeSpec{
 		constructor: NewNATSStream,
 		description: `
-Publish to a NATS Stream subject. NATS Streaming is at-least-once and therefore
-this output is able to guarantee delivery on success.`,
+Publish to a NATS Stream subject.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NATSStreamConfig is configuration for the NATSStream output type.
+// NATSStreamConfig contains configuration fields for the NATSStream output
+// type.
 type NATSStreamConfig struct {
 	URLs      []string `json:"urls" yaml:"urls"`
 	ClusterID string   `json:"cluster_id" yaml:"cluster_id"`

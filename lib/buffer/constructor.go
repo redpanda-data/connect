@@ -48,7 +48,16 @@ var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
-// Config is the all encompassing configuration struct for all input types.
+// String constants representing each buffer type.
+var (
+	TypeMemory = "memory"
+	TypeMMAP   = "mmap_file"
+	TypeNone   = "none"
+)
+
+//------------------------------------------------------------------------------
+
+// Config is the all encompassing configuration struct for all buffer types.
 type Config struct {
 	Type   string                  `json:"type" yaml:"type"`
 	Memory single.MemoryConfig     `json:"memory" yaml:"memory"`
@@ -168,7 +177,7 @@ func Descriptions() string {
 	return buf.String()
 }
 
-// New creates an input type based on an input configuration.
+// New creates a buffer type based on a buffer configuration.
 func New(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, log, stats)

@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["select_parts"] = TypeSpec{
+	Constructors[TypeSelectParts] = TypeSpec{
 		constructor: NewSelectParts,
 		description: `
 Cherry pick a set of parts from messages by their index. Indexes larger than the
@@ -53,7 +53,8 @@ last element with be selected, and so on.`,
 
 //------------------------------------------------------------------------------
 
-// SelectPartsConfig contains any configuration for the SelectParts processor.
+// SelectPartsConfig contains configuration fields for the SelectParts
+// processor.
 type SelectPartsConfig struct {
 	Parts []int `json:"parts" yaml:"parts"`
 }
@@ -67,8 +68,8 @@ func NewSelectPartsConfig() SelectPartsConfig {
 
 //------------------------------------------------------------------------------
 
-// SelectParts is a processor that checks each message against a set of bounds
-// and rejects messages if they aren't within them.
+// SelectParts is a processor that selects parts from a message to append to a
+// new message.
 type SelectParts struct {
 	conf  Config
 	log   log.Modular
@@ -102,7 +103,8 @@ func NewSelectParts(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage extracts a set of parts from each message.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	m.mCount.Incr(1)
 

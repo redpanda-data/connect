@@ -34,20 +34,15 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["hash_sample"] = TypeSpec{
+	Constructors[TypeHashSample] = TypeSpec{
 		constructor: NewHashSample,
 		description: `
-Passes on a percentage of messages deterministically by hashing selected parts
-of the message and checking the hash against a valid range, dropping all others.
+Retains a percentage of messages deterministically by hashing selected parts of
+the message and checking the hash against a valid range, dropping all others.
 
-For example, a 'hash_sample' with 'retain_min' of 0.0 and 'remain_max' of 50.0
-will receive half of the input stream, and a 'hash_sample' with 'retain_min' of
-50.0 and 'retain_max' of 100.1 will receive the other half.
-
-The part indexes can be negative, and if so the part will be selected from the
-end counting backwards starting from -1. E.g. if index = -1 then the selected
-part will be the last part of the message, if index = -2 then the part before
-the last element with be selected, and so on.`,
+For example, setting ` + "`retain_min` to `0.0` and `remain_max` to `50.0`" + `
+results in dropping half of the input stream, and setting ` + "`retain_min`" + `
+to ` + "`50.0` and `retain_max` to `100.1`" + ` will drop the _other_ half.`,
 	}
 }
 
@@ -63,7 +58,7 @@ func scaleNum(n uint64) float64 {
 
 //------------------------------------------------------------------------------
 
-// HashSampleConfig contains any configuration for the HashSample processor.
+// HashSampleConfig contains configuration fields for the HashSample processor.
 type HashSampleConfig struct {
 	RetainMin float64 `json:"retain_min" yaml:"retain_min"`
 	RetainMax float64 `json:"retain_max" yaml:"retain_max"`
@@ -81,8 +76,8 @@ func NewHashSampleConfig() HashSampleConfig {
 
 //------------------------------------------------------------------------------
 
-// HashSample is a processor that checks each message against a set of bounds
-// and rejects messages if they aren't within them.
+// HashSample is a processor that removes messages based on a sample factor by
+// hashing its contents.
 type HashSample struct {
 	conf  Config
 	log   log.Modular
@@ -116,7 +111,8 @@ func NewHashSample(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage checks each message against a set of bounds.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.mCount.Incr(1)
 

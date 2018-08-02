@@ -33,7 +33,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// MQTTConfig is configuration for the MQTT output type.
+// MQTTConfig contains configuration fields for the MQTT output type.
 type MQTTConfig struct {
 	URLs     []string `json:"urls" yaml:"urls"`
 	QoS      uint8    `json:"qos" yaml:"qos"`

@@ -58,7 +58,7 @@ Currently only PUSH and PUB sockets are supported.`,
 
 //------------------------------------------------------------------------------
 
-// ScaleProtoConfig is configuration for the ScaleProto output type.
+// ScaleProtoConfig contains configuration fields for the ScaleProto output type.
 type ScaleProtoConfig struct {
 	URLs          []string `json:"urls" yaml:"urls"`
 	Bind          bool     `json:"bind" yaml:"bind"`
@@ -175,8 +175,6 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 
 //------------------------------------------------------------------------------
 
-// loop is an internal loop that brokers incoming messages to output pipe, does
-// not use select.
 func (s *ScaleProto) loop() {
 	var (
 		mRunning  = s.stats.GetCounter("output.nanomsg.running")

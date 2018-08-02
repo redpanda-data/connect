@@ -50,6 +50,15 @@ var constructors = map[string]typeSpec{}
 
 //------------------------------------------------------------------------------
 
+// String constants representing each metric type.
+var (
+	TypeHTTPServer = "http_server"
+	TypePrometheus = "prometheus"
+	TypeStatsd     = "statsd"
+)
+
+//------------------------------------------------------------------------------
+
 // Config is the all encompassing configuration struct for all metric output
 // types.
 type Config struct {

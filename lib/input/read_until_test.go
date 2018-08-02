@@ -86,7 +86,7 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func testReadUntilEarlyClose(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func testReadUntilInputClose(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +330,7 @@ func testReadUntilInputCloseRestart(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Condition = cond
 	rConf.ReadUntil.Restart = true
 
-	in, err := New(rConf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
 	if err != nil {
 		t.Fatal(err)
 	}

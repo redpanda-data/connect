@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["http_client"] = TypeSpec{
+	Constructors[TypeHTTPClient] = TypeSpec{
 		constructor: NewHTTPClient,
 		description: `
 Sends messages to an HTTP server. The request will be retried for each message

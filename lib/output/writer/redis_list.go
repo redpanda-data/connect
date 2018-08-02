@@ -33,7 +33,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// RedisListConfig is configuration for the RedisList output type.
+// RedisListConfig contains configuration fields for the RedisList output type.
 type RedisListConfig struct {
 	URL string `json:"url" yaml:"url"`
 	Key string `json:"key" yaml:"key"`

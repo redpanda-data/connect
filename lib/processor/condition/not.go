@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["not"] = TypeSpec{
+	Constructors[TypeNot] = TypeSpec{
 		constructor: NewNot,
 		description: `
 Not is a condition that returns the opposite (NOT) of its child condition. The
@@ -128,7 +128,7 @@ func (m *NotConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 //------------------------------------------------------------------------------
 
-// Not is a condition that returns the opposite of another condition.
+// Not is a condition that returns the opposite of a child condition.
 type Not struct {
 	child Type
 }

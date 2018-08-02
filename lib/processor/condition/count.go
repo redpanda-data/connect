@@ -29,7 +29,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["count"] = TypeSpec{
+	Constructors[TypeCount] = TypeSpec{
 		constructor: NewCount,
 		description: `
 Counts messages starting from one, returning true until the counter reaches its
@@ -62,13 +62,15 @@ func NewCountConfig() CountConfig {
 
 //------------------------------------------------------------------------------
 
-// Count is a condition that returns the logical or of all children.
+// Count is a condition that counts each message and returns false once a target
+// count has been reached, at which point it resets the counter and starts
+// again.
 type Count struct {
 	arg int
 	ctr int
 }
 
-// NewCount returns an Count processor.
+// NewCount returns a Count processor.
 func NewCount(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {

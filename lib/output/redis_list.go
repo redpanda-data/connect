@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["redis_list"] = TypeSpec{
+	Constructors[TypeRedisList] = TypeSpec{
 		constructor: NewRedisList,
 		description: `
 Pushes messages onto the end of a Redis list (which is created if it doesn't

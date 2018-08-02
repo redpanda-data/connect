@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["elasticsearch"] = TypeSpec{
+	Constructors[TypeElasticsearch] = TypeSpec{
 		constructor: NewElasticsearch,
 		description: `
 Publishes messages into an Elasticsearch index as documents. This output

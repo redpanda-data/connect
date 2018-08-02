@@ -34,7 +34,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// NATSConfig is configuration for the NATS input type.
+// NATSConfig contains configuration fields for the NATS input type.
 type NATSConfig struct {
 	URLs    []string `json:"urls" yaml:"urls"`
 	Subject string   `json:"subject" yaml:"subject"`
@@ -147,8 +147,7 @@ func (n *NATS) Read() (types.Message, error) {
 	return bmsg, nil
 }
 
-// Acknowledge instructs whether read messages have been successfully
-// propagated.
+// Acknowledge is a noop since NATS messages do not support acknowledgments.
 func (n *NATS) Acknowledge(err error) error {
 	return nil
 }

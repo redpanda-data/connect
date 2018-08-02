@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["none"] = TypeSpec{
+	Constructors[TypeNone] = TypeSpec{
 		constructor: NewEmpty,
 		description: `
 Selecting no buffer (default) means the output layer is directly coupled with

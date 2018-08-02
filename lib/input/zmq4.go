@@ -32,14 +32,14 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["zmq4"] = TypeSpec{
+	Constructors[TypeZMQ4] = TypeSpec{
 		constructor: NewZMQ4,
 		description: `
 ZMQ4 is supported but currently depends on C bindings. Since this is an
 annoyance when building or using Benthos it is not compiled by default.
 
-Build it into your project by getting CZMQ installed on your machine, then build
-with the tag: 'go install -tags "ZMQ4" github.com/Jeffail/benthos/cmd/...'
+Build it into your project by getting libzmq installed on your machine, then
+build with the tag: 'go install -tags "ZMQ4" github.com/Jeffail/benthos/cmd/...'
 
 ZMQ4 input supports PULL and SUB sockets only. If there is demand for other
 socket types then they can be added easily.`,
@@ -48,7 +48,7 @@ socket types then they can be added easily.`,
 
 //------------------------------------------------------------------------------
 
-// NewZMQ4 creates a new Kafka input type.
+// NewZMQ4 creates a new ZMQ input type.
 func NewZMQ4(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	z, err := reader.NewZMQ4(conf.ZMQ4, log, stats)
 	if err != nil {

@@ -38,7 +38,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["archive"] = TypeSpec{
+	Constructors[TypeArchive] = TypeSpec{
 		constructor: NewArchive,
 		description: `
 Archives all the parts of a message into a single part according to the selected
@@ -54,7 +54,7 @@ types that aren't file based (such as binary) the file field is ignored.`,
 
 //------------------------------------------------------------------------------
 
-// ArchiveConfig contains any configuration for the Archive processor.
+// ArchiveConfig contains configuration fields for the Archive processor.
 type ArchiveConfig struct {
 	Format string `json:"format" yaml:"format"`
 	Path   string `json:"path" yaml:"path"`
@@ -118,8 +118,8 @@ func strToArchiver(str string) (archiveFunc, error) {
 
 //------------------------------------------------------------------------------
 
-// Archive is a processor that can selectively archive parts of a message as a
-// chosen archive type.
+// Archive is a processor that can selectively archive parts of a message into a
+// single part using a chosen archive type.
 type Archive struct {
 	conf    ArchiveConfig
 	archive archiveFunc
@@ -208,8 +208,8 @@ func (d *Archive) createHeaderFunc(msg types.Message) func([]byte) os.FileInfo {
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage takes a message, attempts to archive the parts of the message,
-// and returns the result as a single part message.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.mCount.Incr(1)
 

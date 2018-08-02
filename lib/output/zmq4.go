@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["zmq4"] = TypeSpec{
+	Constructors[TypeZMQ4] = TypeSpec{
 		constructor: NewZMQ4,
 		description: `
 The zmq4 output type attempts to send messages to a ZMQ4 port, currently only

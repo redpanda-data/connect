@@ -33,7 +33,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["stdin"] = TypeSpec{
+	Constructors[TypeSTDIN] = TypeSpec{
 		constructor: NewSTDIN,
 		description: `
 The stdin input simply reads any data piped to stdin as messages. By default the

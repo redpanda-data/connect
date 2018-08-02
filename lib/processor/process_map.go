@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["process_map"] = TypeSpec{
+	Constructors[TypeProcessMap] = TypeSpec{
 		constructor: NewProcessMap,
 		description: `
 A processor that extracts and maps fields from the original payload into new
@@ -154,8 +154,9 @@ func NewProcessMapConfig() ProcessMapConfig {
 
 //------------------------------------------------------------------------------
 
-// ProcessMap is a processor that applies a list of child processors to a
-// field extracted from the original payload.
+// ProcessMap is a processor that applies a list of child processors to a new
+// payload mapped from the original, and after processing attempts to overlay
+// the results back onto the original payloads according to more mappings.
 type ProcessMap struct {
 	parts []int
 
@@ -238,8 +239,8 @@ func NewProcessMap(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies child processors to a mapped subset of payloads and
-// maps the result back into the original payload.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 	p.mCountParts.Incr(int64(msg.Len()))

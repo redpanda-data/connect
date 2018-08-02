@@ -27,7 +27,7 @@ import (
 //------------------------------------------------------------------------------
 
 // Type reads a message, performs a processing operation, and returns either a
-// slice of messages resulting from the process to be propagated through the,
+// slice of messages resulting from the process to be propagated through the
 // pipeline, or a response that should be sent back to the source instead.
 type Type interface {
 	// ProcessMessage attempts to process a message. Since processing can fail

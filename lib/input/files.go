@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["files"] = TypeSpec{
+	Constructors[TypeFiles] = TypeSpec{
 		constructor: NewFiles,
 		description: `
 Reads files from a path, where each discrete file will be consumed as a single

@@ -30,17 +30,18 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["bounds_check"] = TypeSpec{
+	Constructors[TypeBoundsCheck] = TypeSpec{
 		constructor: NewBoundsCheck,
 		description: `
 Checks whether each message fits within certain boundaries, and drops messages
-that do not (log warning message and a metric).`,
+that do not. A metric is incremented for each dropped message and debug logs
+are also provided if enabled.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// BoundsCheckConfig contains any bounds configuration for the BoundsCheck
+// BoundsCheckConfig contains configuration fields for the BoundsCheck
 // processor.
 type BoundsCheckConfig struct {
 	MaxParts    int `json:"max_parts" yaml:"max_parts"`
@@ -98,7 +99,8 @@ func NewBoundsCheck(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage checks each message against a set of bounds.
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
 func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	m.mCount.Incr(1)
 

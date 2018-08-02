@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["amqp"] = TypeSpec{
+	Constructors[TypeAMQP] = TypeSpec{
 		constructor: NewAMQP,
 		description: `
 AMQP (0.91) is the underlying messaging protocol that is used by various message

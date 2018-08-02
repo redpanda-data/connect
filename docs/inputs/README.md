@@ -197,50 +197,6 @@ If the number of copies is greater than zero the list will be copied that number
 of times. For example, if your inputs were of type foo and bar, with 'copies'
 set to '2', you would end up with two 'foo' inputs and two 'bar' inputs.
 
-Sometimes you will want several inputs of similar configuration. For this
-purpose you can use the special type 'ditto', which duplicates the previous
-config and applies selective changes.
-
-For example, if combining two Kafka inputs with mostly the same set up but
-reading different partitions you can use this shortcut:
-
-``` yaml
-inputs:
-- type: kafka
-  kafka:
-    addresses:
-      - localhost:9092
-    client_id: benthos_kafka_input
-    consumer_group: benthos_consumer_group
-    topic: benthos_stream
-    partition: 0
-- type: ditto
-  kafka:
-    partition: 1
-```
-
-Which will result in two inputs targeting the same Kafka brokers, on the same
-consumer group etc, but consuming their own partitions.
-
-Ditto can also be specified with a multiplier, which is useful if you want
-multiple inputs that do not differ in config, like this:
-
-``` yaml
-inputs:
-- type: kafka_balanced
-  kafka:
-    addresses:
-      - localhost:9092
-    client_id: benthos_kafka_input
-    consumer_group: benthos_consumer_group
-    topic: benthos_stream
-- type: ditto_3
-```
-
-Which results in a total of four kafka_balanced inputs. Note that ditto_0 will
-result in no duplicate configs, this might be useful if the config is generated
-and there's a chance you won't want any duplicates.
-
 ### Processors
 
 It is possible to configure [processors](../processors/README.md) at the broker
@@ -264,12 +220,12 @@ unique labels and can be created, changed and removed during runtime via a REST
 HTTP interface.
 
 To GET a JSON map of input identifiers with their current uptimes use the
-'/inputs' endpoint.
+`/inputs` endpoint.
 
 To perform CRUD actions on the inputs themselves use POST, DELETE, and GET
-methods on the '/input/{input_id}' endpoint. When using POST the body of the
-request should be a JSON configuration for the input, if the input already
-exists it will be changed.
+methods on the `/inputs/{input_id}` endpoint. When using POST the body
+of the request should be a JSON configuration for the input, if the input
+already exists it will be changed.
 
 ## `file`
 
@@ -640,9 +596,11 @@ read_until:
   restart_input: false
 ```
 
-Reads from an input and tests a condition on each message. When the condition
-returns true the message is sent out and the input is closed. Use this type to
-define inputs where the stream should end once a certain message appears.
+Reads from an input and tests a condition on each message. Messages are read
+continously while the condition returns false, when the condition returns true
+the message that triggered the condition is sent out and the input is closed.
+Use this type to define inputs where the stream should end once a certain
+message appears.
 
 Sometimes inputs close themselves. For example, when the `file` input
 type reaches the end of a file it will shut down. By default this type will also
@@ -813,8 +771,8 @@ zmq4:
 ZMQ4 is supported but currently depends on C bindings. Since this is an
 annoyance when building or using Benthos it is not compiled by default.
 
-Build it into your project by getting CZMQ installed on your machine, then build
-with the tag: 'go install -tags "ZMQ4" github.com/Jeffail/benthos/cmd/...'
+Build it into your project by getting libzmq installed on your machine, then
+build with the tag: 'go install -tags "ZMQ4" github.com/Jeffail/benthos/cmd/...'
 
 ZMQ4 input supports PULL and SUB sockets only. If there is demand for other
 socket types then they can be added easily.

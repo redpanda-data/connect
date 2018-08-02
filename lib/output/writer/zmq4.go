@@ -34,7 +34,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// ZMQ4Config is configuration for the ZMQ4 output type.
+// ZMQ4Config contains configuration fields for the ZMQ4 output type.
 type ZMQ4Config struct {
 	URLs          []string `json:"urls" yaml:"urls"`
 	Bind          bool     `json:"bind" yaml:"bind"`

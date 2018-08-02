@@ -35,7 +35,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["redis_pubsub"] = TypeSpec{
+	Constructors[TypeRedisPubSub] = TypeSpec{
 		constructor: NewRedisPubSub,
 		description: `
 Publishes messages through the Redis PubSub model. It is not possible to
@@ -45,7 +45,8 @@ guarantee that messages have been received.`,
 
 //------------------------------------------------------------------------------
 
-// RedisPubSubConfig is configuration for the RedisPubSub output type.
+// RedisPubSubConfig contains configuration fields for the RedisPubSub output
+// type.
 type RedisPubSubConfig struct {
 	URL     string `json:"url" yaml:"url"`
 	Channel string `json:"channel" yaml:"channel"`

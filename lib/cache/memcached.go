@@ -34,7 +34,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["memcached"] = TypeSpec{
+	Constructors[TypeMemcached] = TypeSpec{
 		constructor: NewMemcached,
 		description: `
 Connects to a cluster of memcached services, a prefix can be specified to allow

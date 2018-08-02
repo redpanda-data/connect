@@ -32,11 +32,11 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["inproc"] = TypeSpec{
+	Constructors[TypeInproc] = TypeSpec{
 		constructor: NewInproc,
 		description: `
-Sends data directly to inputs by connecting to a unique ID. This allows you to
-hook up isolated streams whilst running Benthos in
+Sends data directly to Benthos inputs by connecting to a unique ID. This allows
+you to hook up isolated streams whilst running Benthos in
 ` + "[`--streams` mode](../streams/README.md) mode" + `, it is NOT recommended
 that you connect the inputs of a stream with an output of the same stream, as
 feedback loops can lead to deadlocks in your message flow.
@@ -49,7 +49,7 @@ collision occurs.`,
 
 //------------------------------------------------------------------------------
 
-// InprocConfig is configuration for the Inproc output type.
+// InprocConfig contains configuration fields for the Inproc output type.
 type InprocConfig string
 
 // NewInprocConfig creates a new InprocConfig with default values.

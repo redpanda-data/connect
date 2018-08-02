@@ -45,7 +45,7 @@ type AmazonAWSCredentialsConfig struct {
 	Role   string `json:"role" yaml:"role"`
 }
 
-// AmazonS3Config is configuration values for the input type.
+// AmazonS3Config contains configuration fields for the AmazonS3 output type.
 type AmazonS3Config struct {
 	Region      string                     `json:"region" yaml:"region"`
 	Bucket      string                     `json:"bucket" yaml:"bucket"`
@@ -103,8 +103,7 @@ func NewAmazonS3(
 	}
 }
 
-// Connect attempts to establish a connection to the target S3 bucket and any
-// relevant queues used to traverse the objects (SQS, etc).
+// Connect attempts to establish a connection to the target S3 bucket.
 func (a *AmazonS3) Connect() error {
 	if a.session != nil {
 		return nil

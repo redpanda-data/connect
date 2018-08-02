@@ -29,7 +29,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["static"] = TypeSpec{
+	Constructors[TypeStatic] = TypeSpec{
 		constructor: NewStatic,
 		description: `
 Static is a condition that always resolves to the same static boolean value.`,
@@ -43,7 +43,7 @@ type Static struct {
 	value bool
 }
 
-// NewStatic returns a Static processor.
+// NewStatic returns a Static condition.
 func NewStatic(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {

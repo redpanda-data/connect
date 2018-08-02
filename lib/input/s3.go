@@ -32,7 +32,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["s3"] = TypeSpec{
+	Constructors[TypeS3] = TypeSpec{
 		constructor: NewAmazonS3,
 		description: `
 Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
@@ -67,7 +67,7 @@ You can access these metadata fields using
 
 //------------------------------------------------------------------------------
 
-// NewAmazonS3 creates a new amazon S3 input type.
+// NewAmazonS3 creates a new AWS S3 input type.
 func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	if len(conf.S3.Bucket) == 0 {
 		return nil, errors.New("invalid bucket (cannot be empty)")

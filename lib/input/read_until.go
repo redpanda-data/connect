@@ -36,12 +36,14 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["read_until"] = TypeSpec{
+	Constructors[TypeReadUntil] = TypeSpec{
 		constructor: NewReadUntil,
 		description: `
-Reads from an input and tests a condition on each message. When the condition
-returns true the message is sent out and the input is closed. Use this type to
-define inputs where the stream should end once a certain message appears.
+Reads from an input and tests a condition on each message. Messages are read
+continously while the condition returns false, when the condition returns true
+the message that triggered the condition is sent out and the input is closed.
+Use this type to define inputs where the stream should end once a certain
+message appears.
 
 Sometimes inputs close themselves. For example, when the ` + "`file`" + ` input
 type reaches the end of a file it will shut down. By default this type will also
@@ -69,7 +71,7 @@ down until the condition is met then set ` + "`restart_input` to `true`.",
 
 //------------------------------------------------------------------------------
 
-// ReadUntilConfig is configuration values for the ReadUntil input type.
+// ReadUntilConfig contains configuration values for the ReadUntil input type.
 type ReadUntilConfig struct {
 	Input     *Config          `json:"input" yaml:"input"`
 	Restart   bool             `json:"restart_input" yaml:"restart_input"`
@@ -121,7 +123,8 @@ func (r ReadUntilConfig) MarshalYAML() (interface{}, error) {
 
 //------------------------------------------------------------------------------
 
-// ReadUntil is an input type that reads from a ReadUntil instance.
+// ReadUntil is an input type that continously reads another input type until a
+// condition returns true on a message consumed.
 type ReadUntil struct {
 	running int32
 	conf    ReadUntilConfig
@@ -290,7 +293,8 @@ runLoop:
 	}
 }
 
-// TransactionChan returns the transactions channel.
+// TransactionChan returns a transactions channel for consuming messages from
+// this input type.
 func (r *ReadUntil) TransactionChan() <-chan types.Transaction {
 	return r.transactions
 }

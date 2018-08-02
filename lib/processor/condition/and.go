@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["and"] = TypeSpec{
+	Constructors[TypeAnd] = TypeSpec{
 		constructor: NewAnd,
 		description: `
 And is a condition that returns the logical AND of its children conditions.`,
@@ -65,7 +65,7 @@ type And struct {
 	children []Type
 }
 
-// NewAnd returns an And processor.
+// NewAnd returns an And condition.
 func NewAnd(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {

@@ -35,7 +35,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// ZMQ4Config is configuration for the ZMQ4 input type.
+// ZMQ4Config contains configuration fields for the ZMQ4 input type.
 type ZMQ4Config struct {
 	URLs          []string `json:"urls" yaml:"urls"`
 	Bind          bool     `json:"bind" yaml:"bind"`
@@ -59,7 +59,7 @@ func NewZMQ4Config() *ZMQ4Config {
 
 //------------------------------------------------------------------------------
 
-// ZMQ4 is an input type that serves ZMQ4 POST requests.
+// ZMQ4 is an input type that consumes ZMQ messages.
 type ZMQ4 struct {
 	urls  []string
 	conf  *ZMQ4Config
@@ -168,7 +168,7 @@ func (z *ZMQ4) Connect() error {
 	return nil
 }
 
-// Read attempts to read a new message from the nanomsg socket.
+// Read attempts to read a new message from the ZMQ socket.
 func (z *ZMQ4) Read() (types.Message, error) {
 	if z.socket == nil {
 		return nil, types.ErrNotConnected

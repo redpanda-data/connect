@@ -32,7 +32,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// Reader is an input type that reads from a Reader instance.
+// Reader is an input implementation that reads messages from a reader.Type.
 type Reader struct {
 	running int32
 
@@ -223,7 +223,8 @@ func (r *Reader) loop() {
 	}
 }
 
-// TransactionChan returns the transactions channel.
+// TransactionChan returns a transactions channel for consuming messages from
+// this input type.
 func (r *Reader) TransactionChan() <-chan types.Transaction {
 	return r.transactions
 }

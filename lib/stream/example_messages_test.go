@@ -28,7 +28,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -59,13 +61,13 @@ func (p SplitToMessages) ProcessMessage(m types.Message) ([]types.Message, types
 func Example_splitToMessages() {
 	conf := NewConfig()
 
-	conf.Input.Type = "kafka"
+	conf.Input.Type = input.TypeKafka
 	conf.Input.Kafka.Addresses = []string{
 		"localhost:9092",
 	}
 	conf.Input.Kafka.Topic = "example_topic_one"
 
-	conf.Output.Type = "kafka"
+	conf.Output.Type = output.TypeKafka
 	conf.Output.Kafka.Addresses = []string{
 		"localhost:9092",
 	}

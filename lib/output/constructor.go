@@ -58,6 +58,34 @@ var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
+// String constants representing each output type.
+var (
+	TypeAMQP          = "amqp"
+	TypeBroker        = "broker"
+	TypeDynamic       = "dynamic"
+	TypeElasticsearch = "elasticsearch"
+	TypeFile          = "file"
+	TypeFiles         = "files"
+	TypeHTTPClient    = "http_client"
+	TypeHTTPServer    = "http_server"
+	TypeInproc        = "inproc"
+	TypeKafka         = "kafka"
+	TypeMQTT          = "mqtt"
+	TypeNanomsg       = "nanomsg"
+	TypeNATS          = "nats"
+	TypeNATSStream    = "nats_stream"
+	TypeNSQ           = "nsq"
+	TypeRedisList     = "redis_list"
+	TypeRedisPubSub   = "redis_pubsub"
+	TypeS3            = "s3"
+	TypeSQS           = "sqs"
+	TypeSTDOUT        = "stdout"
+	TypeWebsocket     = "websocket"
+	TypeZMQ4          = "zmq4"
+)
+
+//------------------------------------------------------------------------------
+
 // Config is the all encompassing configuration struct for all output types.
 // Note that some configs are empty structs, as the type has no optional values
 // but we want to list it as an option.
@@ -269,7 +297,7 @@ func Descriptions() string {
 	return buf.String()
 }
 
-// New creates an input type based on an input configuration.
+// New creates an output type based on an output configuration.
 func New(
 	conf Config,
 	mgr types.Manager,
@@ -278,7 +306,7 @@ func New(
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
 	if len(conf.Processors) > 0 {
-		pipelines = append([]types.PipelineConstructorFunc{func() (types.Pipeline, error) {
+		pipelines = append(pipelines, []types.PipelineConstructorFunc{func() (types.Pipeline, error) {
 			processors := make([]types.Processor, len(conf.Processors))
 			for i, procConf := range conf.Processors {
 				var err error
@@ -288,7 +316,7 @@ func New(
 				}
 			}
 			return pipeline.NewProcessor(log, stats, processors...), nil
-		}}, pipelines...)
+		}}...)
 	}
 	if c, ok := Constructors[conf.Type]; ok {
 		if c.brokerConstructor != nil {
