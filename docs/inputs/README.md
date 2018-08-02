@@ -597,7 +597,7 @@ read_until:
 ```
 
 Reads from an input and tests a condition on each message. Messages are read
-continously while the condition returns false, when the condition returns true
+continuously while the condition returns false, when the condition returns true
 the message that triggered the condition is sent out and the input is closed.
 Use this type to define inputs where the stream should end once a certain
 message appears.

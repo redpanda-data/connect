@@ -175,7 +175,7 @@ make TAGS=ZMQ4
 [streams-mode]: docs/streams/README.md
 [general-docs]: docs/README.md
 [cookbook-docs]: docs/cookbook/README.md
-[env-config]: config/env/default.yaml
+[env-config]: config/env/README.md
 [config-doc]: docs/configuration.md
 
 [releases]: https://github.com/Jeffail/benthos/releases
