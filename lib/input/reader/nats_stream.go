@@ -29,8 +29,8 @@ import (
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/gofrs/uuid"
 	"github.com/nats-io/go-nats-streaming"
-	uuid "github.com/satori/go.uuid"
 )
 
 //------------------------------------------------------------------------------

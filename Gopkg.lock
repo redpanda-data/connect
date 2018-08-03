@@ -21,7 +21,7 @@
   version = "1.1"
 
 [[projects]]
-  digest = "1:b3c77c2fbbd0b3cb8308c698e0bba22cdc7c07b38992315d85e3a7dc75a19487"
+  digest = "1:52200fa7808b1ee999b1f5a8daf19a6c79b6e2077956125f55c100e633d8bde3"
   name = "github.com/Microsoft/go-winio"
   packages = ["."]
   pruneopts = "NUT"
@@ -53,7 +53,7 @@
   version = "v1.17.0"
 
 [[projects]]
-  digest = "1:264b2c8b7b243741a03d3134e898ff2e942aeec47a9a3eddb28d30be5c7c77d7"
+  digest = "1:f2187d31af299f94635b2c92f9e8b3cdeacf742dbf27e8d15f495438f7a50c71"
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
@@ -183,7 +183,7 @@
   version = "v1.1.0"
 
 [[projects]]
-  digest = "1:c8763c19d97a782fcd2ed46e0f5eae9383b2bff93bc18816e039d9f32d4c2efd"
+  digest = "1:aba48b6c6600a43db48da14ae43338220b2cfc262a0e064b29085fbf75ed5b68"
   name = "github.com/eclipse/paho.mqtt.golang"
   packages = [
     ".",
@@ -210,7 +210,7 @@
   version = "v1.37.0"
 
 [[projects]]
-  digest = "1:9b6a920124f9fe9bbe5d502bea41dd54fb86d0c127fef703e97c555295c1a666"
+  digest = "1:b7a9e5c379358a8016a62df223d60e80387855e00996db5e6131ce032c4dcc16"
   name = "github.com/go-redis/redis"
   packages = [
     ".",
@@ -227,7 +227,15 @@
   version = "v6.12.0"
 
 [[projects]]
-  digest = "1:739a97b2ce3d1f6d5342b77027ffffdc028bc801a437e8033e01c39aadb4fd7a"
+  digest = "1:c85dc5b247d8d2646a3061054820e20195530690c8dfbca620db3e0ec58ba236"
+  name = "github.com/gofrs/uuid"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "c52a24014454cb81a53adfe807a68f6a20b49d74"
+  version = "v3.0.0"
+
+[[projects]]
+  digest = "1:2e15dd2dcea234f9f10e96041a3862830d10feadf8fd9c3795ca71fcb4cf2a3d"
   name = "github.com/gogo/protobuf"
   packages = [
     "gogoproto",
@@ -287,7 +295,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:31f5a6f269d478f3deb8f6b64aa407a34d72f9f27ee1e05d18d4863a32d596f4"
+  digest = "1:92b635b2786bcc08f53d2efc953ef32ef695e028aceb03d157ce2a6d468bec2a"
   name = "github.com/mailru/easyjson"
   packages = [
     ".",
@@ -315,7 +323,7 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:236d133407e3762736324542e7d7a1ab61e9057ae6bc1b834ab1598fca7a1ee4"
+  digest = "1:7384857e3cd6009fa5ee212e3518773cdf222fe44aab9c3095a92b7a73f7612c"
   name = "github.com/nats-io/go-nats"
   packages = [
     ".",
@@ -327,7 +335,7 @@
   version = "v1.5.0"
 
 [[projects]]
-  digest = "1:2e008b860f793f2940a548a5c20570d9aad3dd4f736a3f98f6d6eb1578b7e98f"
+  digest = "1:2b28a7a408f27fd163e2c661cece969efa3ee8f5331343586fce3d11d2d27d77"
   name = "github.com/nats-io/go-nats-streaming"
   packages = [
     ".",
@@ -354,7 +362,7 @@
   version = "v1.0.7"
 
 [[projects]]
-  digest = "1:6a588aacca2e22f1ac8db5749968b7ac0d1074742016a3885481d1c052ed9ce4"
+  digest = "1:c1fb4d13fa81e38a25546467b26c8b1e731e579ce2ff6b60b99e8ac117726da7"
   name = "github.com/olivere/elastic"
   packages = [
     ".",
@@ -374,7 +382,7 @@
   version = "v1.0.0-rc1"
 
 [[projects]]
-  digest = "1:7c5c09ec84d18b0dc5ec0de36c1b8d12d3bf1815d04b90dc50ab082f3b8f13f1"
+  digest = "1:11db38d694c130c800d0aefb502fb02519e514dc53d9804ce51d1ad25ec27db6"
   name = "github.com/opencontainers/image-spec"
   packages = [
     "specs-go",
@@ -385,7 +393,7 @@
   version = "v1.0.1"
 
 [[projects]]
-  digest = "1:c5a5a1953c1f70bab6e3e82880af4f8752aeace36a37612e4b718403e43ace1b"
+  digest = "1:ea8780346eba74e5eb3e8b6bded2ec46c1c81cd745bc00e9964b730955bf4252"
   name = "github.com/opencontainers/runc"
   packages = [
     "libcontainer/system",
@@ -396,7 +404,7 @@
   version = "v0.1.1"
 
 [[projects]]
-  digest = "1:27ebde0026eb9b4619b19bdb0407bd53363af482173b46af55fd513c1051fbf2"
+  digest = "1:d3e110343f9e4401963c13ab3755697f6be111f52fc41fdaf7e0a49ecac517a3"
   name = "github.com/ory/dockertest"
   packages = [
     ".",
@@ -438,7 +446,7 @@
   revision = "5b443b6471cea4b4f9f85025530c04c93233f76a"
 
 [[projects]]
-  digest = "1:735823e049aa6a5990c4df0c04166413e48218f72bded19b556d2386ac9845c2"
+  digest = "1:bf8b95442fa2d448bde39997d6fde56de40344b422d93cea4deead8de699e190"
   name = "github.com/pierrec/lz4"
   packages = [
     ".",
@@ -457,7 +465,7 @@
   version = "v0.8.0"
 
 [[projects]]
-  digest = "1:43b2d599cf31e3998d0ecac54fc45c0c0c2a2c363b62aaad9b664f01b3a84ac7"
+  digest = "1:03bca087b180bf24c4f9060775f137775550a0834e18f0bca0520a868679dbd7"
   name = "github.com/prometheus/client_golang"
   packages = [
     "prometheus",
@@ -469,7 +477,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:53a76eb11bdc815fcf0c757a9648fda0ab6887da13f07587181ff2223b67956c"
+  digest = "1:32d10bdfa8f09ecf13598324dba86ab891f11db3c538b6a34d1c3b5b99d7c36b"
   name = "github.com/prometheus/client_model"
   packages = ["go"]
   pruneopts = "NUT"
@@ -477,7 +485,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:3bbebf77a04cda10bd07834d1686141608aca01c1aeb400d504d8aa026793b5a"
+  digest = "1:768b555b86742de2f28beb37f1dedce9a75f91f871d75b5717c96399c1a78c08"
   name = "github.com/prometheus/common"
   packages = [
     "expfmt",
@@ -489,7 +497,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:37e418257b05a9e9fabbf836df2d8f3613313e80a909da6b9597b759ebca61cd"
+  digest = "1:6621142cd60b7150ab66f38ff36303ca55843dc5a635c1f9a28f95ecddab72b4"
   name = "github.com/prometheus/procfs"
   packages = [
     ".",
@@ -507,14 +515,6 @@
   packages = ["."]
   pruneopts = "NUT"
   revision = "e2704e165165ec55d062f5919b4b29494e9fa790"
-
-[[projects]]
-  digest = "1:6bc0652ea6e39e22ccd522458b8bdd8665bf23bdc5a20eec90056e4dc7e273ca"
-  name = "github.com/satori/go.uuid"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
-  version = "v1.2.0"
 
 [[projects]]
   digest = "1:6989062eb7ccf25cf38bf4fe3dba097ee209f896cda42cefdca3927047bef7b6"
@@ -550,7 +550,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:9a2f0df469fef05e318de01dd6ffa5cd6f140b749d39ad5a654b314b3f009acf"
+  digest = "1:22ca9a0fd2c94f1ff1f9e2498d4a2c27ff11881d62ba8372b03f45de1d4b63bc"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -565,7 +565,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:296f508626c3c28aa81fd9e689f3e9e258bf6c5a680e84b073947c585c89edc0"
+  digest = "1:424324ccca2da38f7e3ae67b38e73391501db72aae6f6184cfc1ffe8fe3efeec"
   name = "golang.org/x/sys"
   packages = [
     "unix",
@@ -591,7 +591,7 @@
   version = "v2.2.1"
 
 [[projects]]
-  digest = "1:ed111f15af99df8de9cae588ab2bc2d62403b0bdba21f2bec848deaa5da68691"
+  digest = "1:bb0d11f660f1b33a7b6e93af50db3d2975243d6a1056e6e575131259eca3310e"
   name = "nanomsg.org/go-mangos"
   packages = [
     ".",
@@ -625,6 +625,7 @@
     "github.com/eclipse/paho.mqtt.golang",
     "github.com/edsrzf/mmap-go",
     "github.com/go-redis/redis",
+    "github.com/gofrs/uuid",
     "github.com/gorilla/mux",
     "github.com/gorilla/websocket",
     "github.com/jmespath/go-jmespath",
@@ -637,7 +638,6 @@
     "github.com/pebbe/zmq4",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",
-    "github.com/satori/go.uuid",
     "github.com/streadway/amqp",
     "github.com/trivago/grok",
     "gopkg.in/alexcesaro/statsd.v2",
