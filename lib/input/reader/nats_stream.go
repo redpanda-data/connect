@@ -81,7 +81,11 @@ type NATSStream struct {
 // NewNATSStream creates a new NATSStream input type.
 func NewNATSStream(conf NATSStreamConfig, log log.Modular, stats metrics.Type) (Type, error) {
 	if len(conf.ClientID) == 0 {
-		conf.ClientID = uuid.NewV4().String()
+		u4, err := uuid.NewV4()
+		if err != nil {
+			return nil, err
+		}
+		conf.ClientID = u4.String()
 	}
 	n := NATSStream{
 		conf:          conf,
