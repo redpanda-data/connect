@@ -159,7 +159,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		reqChan, resChan := make(chan int), make(chan error)
 
 		max := h.max
-		if max == 0 {
+		if max == 0 || msg.Len() < max {
 			max = msg.Len()
 		}
 
