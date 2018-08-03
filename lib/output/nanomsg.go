@@ -40,14 +40,8 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors["scalability_protocols"] = TypeSpec{
-		constructor: NewScaleProtoDEPRECATED,
-		description: `
-DEPRECATED: Use ` + "`nanomsg`" + ` instead.`,
-	}
-
 	Constructors["nanomsg"] = TypeSpec{
-		constructor: NewScaleProto,
+		constructor: NewNanomsg,
 		description: `
 The scalability protocols are common communication patterns. This output should
 be compatible with any implementation, but specifically targets Nanomsg.
@@ -58,17 +52,17 @@ Currently only PUSH and PUB sockets are supported.`,
 
 //------------------------------------------------------------------------------
 
-// ScaleProtoConfig contains configuration fields for the ScaleProto output type.
-type ScaleProtoConfig struct {
+// NanomsgConfig contains configuration fields for the Nanomsg output type.
+type NanomsgConfig struct {
 	URLs          []string `json:"urls" yaml:"urls"`
 	Bind          bool     `json:"bind" yaml:"bind"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
 	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
 }
 
-// NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
-func NewScaleProtoConfig() ScaleProtoConfig {
-	return ScaleProtoConfig{
+// NewNanomsgConfig creates a new NanomsgConfig with default values.
+func NewNanomsgConfig() NanomsgConfig {
+	return NanomsgConfig{
 		URLs:          []string{"tcp://localhost:5556"},
 		Bind:          false,
 		SocketType:    "PUSH",
@@ -78,16 +72,8 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 
 //------------------------------------------------------------------------------
 
-// NewScaleProtoDEPRECATED is deprecated
-func NewScaleProtoDEPRECATED(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	log.Warnln("WARNING: Type 'scalability_protocols' is deprecated, please use 'nanomsg' instead.")
-	return NewScaleProto(conf, mgr, log, stats)
-}
-
-//------------------------------------------------------------------------------
-
-// ScaleProto is an output type that serves ScaleProto messages.
-type ScaleProto struct {
+// Nanomsg is an output type that serves Nanomsg messages.
+type Nanomsg struct {
 	running int32
 
 	log   log.Modular
@@ -104,9 +90,9 @@ type ScaleProto struct {
 	closeChan  chan struct{}
 }
 
-// NewScaleProto creates a new ScaleProto output type.
-func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	s := ScaleProto{
+// NewNanomsg creates a new Nanomsg output type.
+func NewNanomsg(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	s := Nanomsg{
 		running:    1,
 		log:        log.NewModule(".output.nanomsg"),
 		stats:      stats,
@@ -114,7 +100,7 @@ func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metric
 		closedChan: make(chan struct{}),
 		closeChan:  make(chan struct{}),
 	}
-	for _, u := range conf.ScaleProto.URLs {
+	for _, u := range conf.Nanomsg.URLs {
 		for _, splitU := range strings.Split(u, ",") {
 			if len(splitU) > 0 {
 				s.urls = append(s.urls, splitU)
@@ -123,7 +109,7 @@ func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	var err error
-	s.socket, err = getSocketFromType(conf.ScaleProto.SocketType)
+	s.socket, err = getSocketFromType(conf.Nanomsg.SocketType)
 	if nil != err {
 		return nil, err
 	}
@@ -131,7 +117,7 @@ func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metric
 	// Set timeout to prevent endless lock.
 	err = s.socket.SetOption(
 		mangos.OptionRecvDeadline,
-		time.Millisecond*time.Duration(s.conf.ScaleProto.PollTimeoutMS),
+		time.Millisecond*time.Duration(s.conf.Nanomsg.PollTimeoutMS),
 	)
 	if nil != err {
 		return nil, err
@@ -140,7 +126,7 @@ func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metric
 	s.socket.AddTransport(ipc.NewTransport())
 	s.socket.AddTransport(tcp.NewTransport())
 
-	if s.conf.ScaleProto.Bind {
+	if s.conf.Nanomsg.Bind {
 		for _, addr := range s.urls {
 			if err = s.socket.Listen(addr); err != nil {
 				break
@@ -175,7 +161,7 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 
 //------------------------------------------------------------------------------
 
-func (s *ScaleProto) loop() {
+func (s *Nanomsg) loop() {
 	var (
 		mRunning  = s.stats.GetCounter("output.nanomsg.running")
 		mCount    = s.stats.GetCounter("output.nanomsg.count")
@@ -193,7 +179,7 @@ func (s *ScaleProto) loop() {
 	}()
 	mRunning.Incr(1)
 
-	if s.conf.ScaleProto.Bind {
+	if s.conf.Nanomsg.Bind {
 		s.log.Infof(
 			"Sending nanomsg messages to bound URLs: %s\n",
 			s.urls,
@@ -237,7 +223,7 @@ func (s *ScaleProto) loop() {
 }
 
 // Consume assigns a messages channel for the output to read.
-func (s *ScaleProto) Consume(ts <-chan types.Transaction) error {
+func (s *Nanomsg) Consume(ts <-chan types.Transaction) error {
 	if s.transactions != nil {
 		return types.ErrAlreadyStarted
 	}
@@ -246,15 +232,15 @@ func (s *ScaleProto) Consume(ts <-chan types.Transaction) error {
 	return nil
 }
 
-// CloseAsync shuts down the ScaleProto output and stops processing messages.
-func (s *ScaleProto) CloseAsync() {
+// CloseAsync shuts down the Nanomsg output and stops processing messages.
+func (s *Nanomsg) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&s.running, 1, 0) {
 		close(s.closeChan)
 	}
 }
 
-// WaitForClose blocks until the ScaleProto output has closed down.
-func (s *ScaleProto) WaitForClose(timeout time.Duration) error {
+// WaitForClose blocks until the Nanomsg output has closed down.
+func (s *Nanomsg) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-s.closedChan:
 	case <-time.After(timeout):

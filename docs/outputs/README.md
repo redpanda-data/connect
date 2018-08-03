@@ -22,65 +22,28 @@ conditions please [read the docs here](../conditions/README.md)
 
 ### Contents
 
-1. [`amazon_s3`](#amazon_s3)
-2. [`amazon_sqs`](#amazon_sqs)
-3. [`amqp`](#amqp)
-4. [`broker`](#broker)
-5. [`dynamic`](#dynamic)
-6. [`elasticsearch`](#elasticsearch)
-7. [`file`](#file)
-8. [`files`](#files)
-9. [`http_client`](#http_client)
-10. [`http_server`](#http_server)
-11. [`inproc`](#inproc)
-12. [`kafka`](#kafka)
-13. [`mqtt`](#mqtt)
-14. [`nanomsg`](#nanomsg)
-15. [`nats`](#nats)
-16. [`nats_stream`](#nats_stream)
-17. [`nsq`](#nsq)
-18. [`redis_list`](#redis_list)
-19. [`redis_pubsub`](#redis_pubsub)
-20. [`s3`](#s3)
-21. [`scalability_protocols`](#scalability_protocols)
-22. [`sqs`](#sqs)
-23. [`stdout`](#stdout)
-24. [`websocket`](#websocket)
-25. [`zmq4`](#zmq4)
-
-## `amazon_s3`
-
-``` yaml
-type: amazon_s3
-amazon_s3:
-  bucket: ""
-  credentials:
-    id: ""
-    role: ""
-    secret: ""
-    token: ""
-  path: ${!count:files}-${!timestamp_unix_nano}.txt
-  region: eu-west-1
-  timeout_s: 5
-```
-
-DEPRECATED: Use `s3` instead.
-
-## `amazon_sqs`
-
-``` yaml
-type: amazon_sqs
-amazon_sqs:
-  credentials:
-    id: ""
-    role: ""
-    secret: ""
-    token: ""
-  region: eu-west-1
-  url: ""
-```
-
-DEPRECATED: Use `sqs` instead.
+1. [`amqp`](#amqp)
+2. [`broker`](#broker)
+3. [`dynamic`](#dynamic)
+4. [`elasticsearch`](#elasticsearch)
+5. [`file`](#file)
+6. [`files`](#files)
+7. [`http_client`](#http_client)
+8. [`http_server`](#http_server)
+9. [`inproc`](#inproc)
+10. [`kafka`](#kafka)
+11. [`mqtt`](#mqtt)
+12. [`nanomsg`](#nanomsg)
+13. [`nats`](#nats)
+14. [`nats_stream`](#nats_stream)
+15. [`nsq`](#nsq)
+16. [`redis_list`](#redis_list)
+17. [`redis_pubsub`](#redis_pubsub)
+18. [`s3`](#s3)
+19. [`sqs`](#sqs)
+20. [`stdout`](#stdout)
+21. [`websocket`](#websocket)
+22. [`zmq4`](#zmq4)
 
 ## `amqp`
 
@@ -515,20 +478,6 @@ Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
 with the path specified with the 'path' field, in order to have a different path
 for each object you should use function interpolations described
 [here](../config_interpolation.md#functions).
-
-## `scalability_protocols`
-
-``` yaml
-type: scalability_protocols
-scalability_protocols:
-  bind: false
-  poll_timeout_ms: 5000
-  socket_type: PUSH
-  urls:
-  - tcp://localhost:5556
-```
-
-DEPRECATED: Use `nanomsg` instead.
 
 ## `sqs`
 

@@ -25,17 +25,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestTypeConstruction(t *testing.T) {
 	conf := NewConfig()
-	conf.Input.Type = "scalability_protocols"
-	conf.Input.ScaleProto.PollTimeoutMS = 100
-	conf.Output.Type = "scalability_protocols"
+	conf.Input.Type = input.TypeNanomsg
+	conf.Input.Nanomsg.PollTimeoutMS = 100
+	conf.Output.Type = output.TypeNanomsg
 
 	strm, err := New(conf) // nanomsg => nanomsg
 	if err != nil {
@@ -86,8 +88,8 @@ func TestTypeConstruction(t *testing.T) {
 
 func TestTypeCloseGracefully(t *testing.T) {
 	conf := NewConfig()
-	conf.Input.Type = "scalability_protocols"
-	conf.Output.Type = "scalability_protocols"
+	conf.Input.Type = input.TypeNanomsg
+	conf.Output.Type = output.TypeNanomsg
 
 	strm, err := New(conf)
 	if err != nil {
@@ -125,8 +127,8 @@ func TestTypeCloseGracefully(t *testing.T) {
 
 func TestTypeCloseOrdered(t *testing.T) {
 	conf := NewConfig()
-	conf.Input.Type = "scalability_protocols"
-	conf.Output.Type = "scalability_protocols"
+	conf.Input.Type = input.TypeNanomsg
+	conf.Output.Type = output.TypeNanomsg
 
 	strm, err := New(conf)
 	if err != nil {
@@ -164,8 +166,8 @@ func TestTypeCloseOrdered(t *testing.T) {
 
 func TestTypeCloseUnordered(t *testing.T) {
 	conf := NewConfig()
-	conf.Input.Type = "scalability_protocols"
-	conf.Output.Type = "scalability_protocols"
+	conf.Input.Type = input.TypeNanomsg
+	conf.Output.Type = input.TypeNanomsg
 
 	strm, err := New(conf)
 	if err != nil {

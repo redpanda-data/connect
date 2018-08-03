@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.22.0 - 2018-08-03
+
 ### Added
 
 - Fields for the `http` processor to enable parallel requests from message
@@ -16,6 +18,9 @@ All notable changes to this project will be documented in this file.
   processors.
 - The `dynamic` input and output HTTP paths for CRUD operations are now
   `/inputs/{input_id}` and `/outputs/{output_id}` respectively.
+- Removed deprecated `amazon_s3`, `amazon_sqs` and `scalability_protocols` input
+  and output types.
+- Removed deprecated `json_fields` field from the `dedupe` processor.
 
 ### 0.21.0 - 2018-07-31
 

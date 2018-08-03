@@ -38,19 +38,19 @@ import (
 
 //------------------------------------------------------------------------------
 
-func TestScaleProtoBasic(t *testing.T) {
+func TestNanomsgBasic(t *testing.T) {
 	nTestLoops := 1000
 
 	sendChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
 	conf := NewConfig()
-	conf.ScaleProto.URLs = []string{"tcp://localhost:1324"}
-	conf.ScaleProto.Bind = true
-	conf.ScaleProto.PollTimeoutMS = 100
-	conf.ScaleProto.SocketType = "PUSH"
+	conf.Nanomsg.URLs = []string{"tcp://localhost:1324"}
+	conf.Nanomsg.Bind = true
+	conf.Nanomsg.PollTimeoutMS = 100
+	conf.Nanomsg.SocketType = "PUSH"
 
-	s, err := NewScaleProto(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	s, err := NewNanomsg(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
 	if err != nil {
 		t.Error(err)
 		return

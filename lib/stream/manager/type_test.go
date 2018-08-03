@@ -28,6 +28,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/types"
@@ -188,7 +189,7 @@ func TestTypeBasicClose(t *testing.T) {
 	)
 
 	conf := harmlessConf()
-	conf.Output.Type = "scalability_protocols"
+	conf.Output.Type = output.TypeNanomsg
 
 	if err := mgr.Create("foo", conf); err != nil {
 		t.Fatal(err)

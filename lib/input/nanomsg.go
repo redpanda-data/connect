@@ -31,7 +31,7 @@ import (
 
 func init() {
 	Constructors[TypeNanomsg] = TypeSpec{
-		constructor: NewScaleProto,
+		constructor: NewNanomsg,
 		description: `
 The scalability protocols are common communication patterns. This input should
 be compatible with any implementation, but specifically targets Nanomsg.
@@ -42,8 +42,8 @@ Currently only PULL and SUB sockets are supported.`,
 
 //------------------------------------------------------------------------------
 
-// NewScaleProto creates a new ScaleProto input type.
-func NewScaleProto(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+// NewNanomsg creates a new Nanomsg input type.
+func NewNanomsg(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	s, err := reader.NewScaleProto(conf.Nanomsg, log, stats)
 	if err != nil {
 		return nil, err

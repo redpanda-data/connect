@@ -539,10 +539,10 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 
 	body := []byte(`{
 	"input": {
-		"type": "scalability_protocols"
+		"type": "nanomsg"
 	},
 	"output": {
-		"type": "scalability_protocols"
+		"type": "nanomsg"
 	}
 }`)
 

@@ -5,30 +5,6 @@ http:
   debug_endpoints: false
 input:
   type: stdin
-  amazon_s3:
-    region: eu-west-1
-    bucket: ""
-    prefix: ""
-    delete_objects: false
-    sqs_url: ""
-    sqs_body_path: Records.s3.object.key
-    sqs_envelope_path: ""
-    sqs_max_messages: 10
-    credentials:
-      id: ""
-      secret: ""
-      token: ""
-      role: ""
-    timeout_s: 5
-  amazon_sqs:
-    region: eu-west-1
-    url: ""
-    credentials:
-      id: ""
-      secret: ""
-      token: ""
-      role: ""
-    timeout_s: 5
   amqp:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
@@ -199,14 +175,6 @@ input:
       token: ""
       role: ""
     timeout_s: 5
-  scalability_protocols:
-    urls:
-    - tcp://*:5555
-    bind: true
-    socket_type: PULL
-    sub_filters: []
-    poll_timeout_ms: 5000
-    reply_timeout_ms: 5000
   sqs:
     region: eu-west-1
     url: ""
@@ -324,7 +292,6 @@ pipeline:
       parts:
       - 0
       key: ""
-      json_paths: []
       drop_on_err: true
     encode:
       scheme: base64
@@ -452,24 +419,6 @@ pipeline:
       parts: []
 output:
   type: stdout
-  amazon_s3:
-    region: eu-west-1
-    bucket: ""
-    path: ${!count:files}-${!timestamp_unix_nano}.txt
-    credentials:
-      id: ""
-      secret: ""
-      token: ""
-      role: ""
-    timeout_s: 5
-  amazon_sqs:
-    region: eu-west-1
-    url: ""
-    credentials:
-      id: ""
-      secret: ""
-      token: ""
-      role: ""
   amqp:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
@@ -596,12 +545,6 @@ output:
       token: ""
       role: ""
     timeout_s: 5
-  scalability_protocols:
-    urls:
-    - tcp://localhost:5556
-    bind: false
-    socket_type: PUSH
-    poll_timeout_ms: 5000
   sqs:
     region: eu-west-1
     url: ""

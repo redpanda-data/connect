@@ -8,31 +8,7 @@ input:
   broker:
     copies: ${INPUTS:1}
     inputs:
-    - amazon_s3:
-        bucket: ${INPUT_AMAZON_S3_BUCKET}
-        credentials:
-          id: ${INPUT_AMAZON_S3_CREDENTIALS_ID}
-          role: ${INPUT_AMAZON_S3_CREDENTIALS_ROLE}
-          secret: ${INPUT_AMAZON_S3_CREDENTIALS_SECRET}
-          token: ${INPUT_AMAZON_S3_CREDENTIALS_TOKEN}
-        delete_objects: ${INPUT_AMAZON_S3_DELETE_OBJECTS:false}
-        prefix: ${INPUT_AMAZON_S3_PREFIX}
-        region: ${INPUT_AMAZON_S3_REGION:eu-west-1}
-        sqs_body_path: ${INPUT_AMAZON_S3_SQS_BODY_PATH:Records.s3.object.key}
-        sqs_envelope_path: ${INPUT_AMAZON_S3_SQS_ENVELOPE_PATH}
-        sqs_max_messages: ${INPUT_AMAZON_S3_SQS_MAX_MESSAGES:10}
-        sqs_url: ${INPUT_AMAZON_S3_SQS_URL}
-        timeout_s: ${INPUT_AMAZON_S3_TIMEOUT_S:5}
-      amazon_sqs:
-        credentials:
-          id: ${INPUT_AMAZON_SQS_CREDENTIALS_ID}
-          role: ${INPUT_AMAZON_SQS_CREDENTIALS_ROLE}
-          secret: ${INPUT_AMAZON_SQS_CREDENTIALS_SECRET}
-          token: ${INPUT_AMAZON_SQS_CREDENTIALS_TOKEN}
-        region: ${INPUT_AMAZON_SQS_REGION:eu-west-1}
-        timeout_s: ${INPUT_AMAZON_SQS_TIMEOUT_S:5}
-        url: ${INPUT_AMAZON_SQS_URL}
-      amqp:
+    - amqp:
         consumer_tag: ${INPUT_AMQP_CONSUMER_TAG:benthos-consumer}
         exchange: ${INPUT_AMQP_EXCHANGE:benthos-exchange}
         exchange_type: ${INPUT_AMQP_EXCHANGE_TYPE:direct}
@@ -176,13 +152,6 @@ input:
         sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:10}
         sqs_url: ${INPUT_S3_SQS_URL}
         timeout_s: ${INPUT_S3_TIMEOUT_S:5}
-      scalability_protocols:
-        bind: ${INPUT_SCALABILITY_PROTOCOLS_BIND:true}
-        poll_timeout_ms: ${INPUT_SCALABILITY_PROTOCOLS_POLL_TIMEOUT_MS:5000}
-        reply_timeout_ms: ${INPUT_SCALABILITY_PROTOCOLS_REPLY_TIMEOUT_MS:5000}
-        socket_type: ${INPUT_SCALABILITY_PROTOCOLS_SOCKET_TYPE:PULL}
-        urls:
-        - ${INPUT_SCALABILITY_PROTOCOLS_URLS:tcp://*:5555}
       sqs:
         credentials:
           id: ${INPUT_SQS_CREDENTIALS_ID}
@@ -331,25 +300,7 @@ output:
   broker:
     copies: ${OUTPUTS:1}
     outputs:
-    - amazon_s3:
-        bucket: ${OUTPUT_AMAZON_S3_BUCKET}
-        credentials:
-          id: ${OUTPUT_AMAZON_S3_CREDENTIALS_ID}
-          role: ${OUTPUT_AMAZON_S3_CREDENTIALS_ROLE}
-          secret: ${OUTPUT_AMAZON_S3_CREDENTIALS_SECRET}
-          token: ${OUTPUT_AMAZON_S3_CREDENTIALS_TOKEN}
-        path: ${OUTPUT_AMAZON_S3_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
-        region: ${OUTPUT_AMAZON_S3_REGION:eu-west-1}
-        timeout_s: ${OUTPUT_AMAZON_S3_TIMEOUT_S:5}
-      amazon_sqs:
-        credentials:
-          id: ${OUTPUT_AMAZON_SQS_CREDENTIALS_ID}
-          role: ${OUTPUT_AMAZON_SQS_CREDENTIALS_ROLE}
-          secret: ${OUTPUT_AMAZON_SQS_CREDENTIALS_SECRET}
-          token: ${OUTPUT_AMAZON_SQS_CREDENTIALS_TOKEN}
-        region: ${OUTPUT_AMAZON_SQS_REGION:eu-west-1}
-        url: ${OUTPUT_AMAZON_SQS_URL}
-      amqp:
+    - amqp:
         exchange: ${OUTPUT_AMQP_EXCHANGE:benthos-exchange}
         exchange_type: ${OUTPUT_AMQP_EXCHANGE_TYPE:direct}
         immediate: ${OUTPUT_AMQP_IMMEDIATE:false}
@@ -469,12 +420,6 @@ output:
         path: ${OUTPUT_S3_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
         region: ${OUTPUT_S3_REGION:eu-west-1}
         timeout_s: ${OUTPUT_S3_TIMEOUT_S:5}
-      scalability_protocols:
-        bind: ${OUTPUT_SCALABILITY_PROTOCOLS_BIND:false}
-        poll_timeout_ms: ${OUTPUT_SCALABILITY_PROTOCOLS_POLL_TIMEOUT_MS:5000}
-        socket_type: ${OUTPUT_SCALABILITY_PROTOCOLS_SOCKET_TYPE:PUSH}
-        urls:
-        - ${OUTPUT_SCALABILITY_PROTOCOLS_URLS:tcp://localhost:5556}
       sqs:
         credentials:
           id: ${OUTPUT_SQS_CREDENTIALS_ID}

@@ -36,72 +36,29 @@ level which is only applied to messages from the baz input.
 
 ### Contents
 
-1. [`amazon_s3`](#amazon_s3)
-2. [`amazon_sqs`](#amazon_sqs)
-3. [`amqp`](#amqp)
-4. [`broker`](#broker)
-5. [`dynamic`](#dynamic)
-6. [`file`](#file)
-7. [`files`](#files)
-8. [`http_client`](#http_client)
-9. [`http_server`](#http_server)
-10. [`inproc`](#inproc)
-11. [`kafka`](#kafka)
-12. [`kafka_balanced`](#kafka_balanced)
-13. [`mqtt`](#mqtt)
-14. [`nanomsg`](#nanomsg)
-15. [`nats`](#nats)
-16. [`nats_stream`](#nats_stream)
-17. [`nsq`](#nsq)
-18. [`read_until`](#read_until)
-19. [`redis_list`](#redis_list)
-20. [`redis_pubsub`](#redis_pubsub)
-21. [`s3`](#s3)
-22. [`scalability_protocols`](#scalability_protocols)
-23. [`sqs`](#sqs)
-24. [`stdin`](#stdin)
-25. [`websocket`](#websocket)
-26. [`zmq4`](#zmq4)
-
-## `amazon_s3`
-
-``` yaml
-type: amazon_s3
-amazon_s3:
-  bucket: ""
-  credentials:
-    id: ""
-    role: ""
-    secret: ""
-    token: ""
-  delete_objects: false
-  prefix: ""
-  region: eu-west-1
-  sqs_body_path: Records.s3.object.key
-  sqs_envelope_path: ""
-  sqs_max_messages: 10
-  sqs_url: ""
-  timeout_s: 5
-```
-
-DEPRECATED: Use `s3` instead.
-
-## `amazon_sqs`
-
-``` yaml
-type: amazon_sqs
-amazon_sqs:
-  credentials:
-    id: ""
-    role: ""
-    secret: ""
-    token: ""
-  region: eu-west-1
-  timeout_s: 5
-  url: ""
-```
-
-DEPRECATED: Use `sqs` instead.
+1. [`amqp`](#amqp)
+2. [`broker`](#broker)
+3. [`dynamic`](#dynamic)
+4. [`file`](#file)
+5. [`files`](#files)
+6. [`http_client`](#http_client)
+7. [`http_server`](#http_server)
+8. [`inproc`](#inproc)
+9. [`kafka`](#kafka)
+10. [`kafka_balanced`](#kafka_balanced)
+11. [`mqtt`](#mqtt)
+12. [`nanomsg`](#nanomsg)
+13. [`nats`](#nats)
+14. [`nats_stream`](#nats_stream)
+15. [`nsq`](#nsq)
+16. [`read_until`](#read_until)
+17. [`redis_list`](#redis_list)
+18. [`redis_pubsub`](#redis_pubsub)
+19. [`s3`](#s3)
+20. [`sqs`](#sqs)
+21. [`stdin`](#stdin)
+22. [`websocket`](#websocket)
+23. [`zmq4`](#zmq4)
 
 ## `amqp`
 
@@ -680,22 +637,6 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
-
-## `scalability_protocols`
-
-``` yaml
-type: scalability_protocols
-scalability_protocols:
-  bind: true
-  poll_timeout_ms: 5000
-  reply_timeout_ms: 5000
-  socket_type: PULL
-  sub_filters: []
-  urls:
-  - tcp://*:5555
-```
-
-DEPRECATED: Use `nanomsg` instead.
 
 ## `sqs`
 

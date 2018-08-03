@@ -244,7 +244,6 @@ dedupe:
   cache: ""
   drop_on_err: true
   hash: none
-  json_paths: []
   key: ""
   parts:
   - 0
@@ -269,8 +268,6 @@ dedupe:
   cache: foocache
   key: ${!metadata:kafka_key}-${!json_field:id}
 ```
-
-The `json_paths` field is deprecated.
 
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).

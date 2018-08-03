@@ -34,17 +34,17 @@ import (
 	"nanomsg.org/go-mangos/transport/tcp"
 )
 
-func TestBrokerWithScaleProto(t *testing.T) {
+func TestBrokerWithNanomsg(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
 
 	scaleOne, scaleTwo := NewConfig(), NewConfig()
-	scaleOne.Type, scaleTwo.Type = "scalability_protocols", "scalability_protocols"
-	scaleOne.ScaleProto.Bind, scaleTwo.ScaleProto.Bind = true, true
-	scaleOne.ScaleProto.URLs = []string{"tcp://localhost:1241"}
-	scaleTwo.ScaleProto.URLs = []string{"tcp://localhost:1242"}
-	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PUSH", "PUSH"
+	scaleOne.Type, scaleTwo.Type = TypeNanomsg, TypeNanomsg
+	scaleOne.Nanomsg.Bind, scaleTwo.Nanomsg.Bind = true, true
+	scaleOne.Nanomsg.URLs = []string{"tcp://localhost:1241"}
+	scaleTwo.Nanomsg.URLs = []string{"tcp://localhost:1242"}
+	scaleOne.Nanomsg.SocketType, scaleTwo.Nanomsg.SocketType = "PUSH", "PUSH"
 
 	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleOne)
 	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleTwo)
@@ -135,18 +135,18 @@ func TestBrokerWithScaleProto(t *testing.T) {
 	}
 }
 
-func TestRoundRobinWithScaleProto(t *testing.T) {
+func TestRoundRobinWithNanomsg(t *testing.T) {
 	nTestLoops := 1000
 
 	conf := NewConfig()
 	conf.Broker.Pattern = "round_robin"
 
 	scaleOne, scaleTwo := NewConfig(), NewConfig()
-	scaleOne.Type, scaleTwo.Type = "scalability_protocols", "scalability_protocols"
-	scaleOne.ScaleProto.Bind, scaleTwo.ScaleProto.Bind = true, true
-	scaleOne.ScaleProto.URLs = []string{"tcp://localhost:1245"}
-	scaleTwo.ScaleProto.URLs = []string{"tcp://localhost:1246"}
-	scaleOne.ScaleProto.SocketType, scaleTwo.ScaleProto.SocketType = "PUSH", "PUSH"
+	scaleOne.Type, scaleTwo.Type = TypeNanomsg, TypeNanomsg
+	scaleOne.Nanomsg.Bind, scaleTwo.Nanomsg.Bind = true, true
+	scaleOne.Nanomsg.URLs = []string{"tcp://localhost:1245"}
+	scaleTwo.Nanomsg.URLs = []string{"tcp://localhost:1246"}
+	scaleOne.Nanomsg.SocketType, scaleTwo.Nanomsg.SocketType = "PUSH", "PUSH"
 
 	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleOne)
 	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleTwo)

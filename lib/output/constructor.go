@@ -90,65 +90,59 @@ const (
 // Note that some configs are empty structs, as the type has no optional values
 // but we want to list it as an option.
 type Config struct {
-	Type                string                     `json:"type" yaml:"type"`
-	AmazonS3DEPRECATED  writer.AmazonS3Config      `json:"amazon_s3" yaml:"amazon_s3"`
-	AmazonSQSDEPRECATED writer.AmazonSQSConfig     `json:"amazon_sqs" yaml:"amazon_sqs"`
-	AMQP                writer.AMQPConfig          `json:"amqp" yaml:"amqp"`
-	Broker              BrokerConfig               `json:"broker" yaml:"broker"`
-	Dynamic             DynamicConfig              `json:"dynamic" yaml:"dynamic"`
-	Elasticsearch       writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
-	File                FileConfig                 `json:"file" yaml:"file"`
-	Files               writer.FilesConfig         `json:"files" yaml:"files"`
-	HTTPClient          writer.HTTPClientConfig    `json:"http_client" yaml:"http_client"`
-	HTTPServer          HTTPServerConfig           `json:"http_server" yaml:"http_server"`
-	Inproc              InprocConfig               `json:"inproc" yaml:"inproc"`
-	Kafka               writer.KafkaConfig         `json:"kafka" yaml:"kafka"`
-	MQTT                writer.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
-	Nanomsg             ScaleProtoConfig           `json:"nanomsg" yaml:"nanomsg"`
-	NATS                NATSConfig                 `json:"nats" yaml:"nats"`
-	NATSStream          NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
-	NSQ                 NSQConfig                  `json:"nsq" yaml:"nsq"`
-	RedisList           writer.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub         RedisPubSubConfig          `json:"redis_pubsub" yaml:"redis_pubsub"`
-	S3                  writer.AmazonS3Config      `json:"s3" yaml:"s3"`
-	ScaleProto          ScaleProtoConfig           `json:"scalability_protocols" yaml:"scalability_protocols"`
-	SQS                 writer.AmazonSQSConfig     `json:"sqs" yaml:"sqs"`
-	STDOUT              STDOUTConfig               `json:"stdout" yaml:"stdout"`
-	Websocket           writer.WebsocketConfig     `json:"websocket" yaml:"websocket"`
-	ZMQ4                *writer.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	Processors          []processor.Config         `json:"processors" yaml:"processors"`
+	Type          string                     `json:"type" yaml:"type"`
+	AMQP          writer.AMQPConfig          `json:"amqp" yaml:"amqp"`
+	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
+	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
+	Elasticsearch writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
+	File          FileConfig                 `json:"file" yaml:"file"`
+	Files         writer.FilesConfig         `json:"files" yaml:"files"`
+	HTTPClient    writer.HTTPClientConfig    `json:"http_client" yaml:"http_client"`
+	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
+	Inproc        InprocConfig               `json:"inproc" yaml:"inproc"`
+	Kafka         writer.KafkaConfig         `json:"kafka" yaml:"kafka"`
+	MQTT          writer.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
+	Nanomsg       NanomsgConfig              `json:"nanomsg" yaml:"nanomsg"`
+	NATS          NATSConfig                 `json:"nats" yaml:"nats"`
+	NATSStream    NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
+	NSQ           NSQConfig                  `json:"nsq" yaml:"nsq"`
+	RedisList     writer.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
+	RedisPubSub   RedisPubSubConfig          `json:"redis_pubsub" yaml:"redis_pubsub"`
+	S3            writer.AmazonS3Config      `json:"s3" yaml:"s3"`
+	SQS           writer.AmazonSQSConfig     `json:"sqs" yaml:"sqs"`
+	STDOUT        STDOUTConfig               `json:"stdout" yaml:"stdout"`
+	Websocket     writer.WebsocketConfig     `json:"websocket" yaml:"websocket"`
+	ZMQ4          *writer.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Processors    []processor.Config         `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:                "stdout",
-		AmazonS3DEPRECATED:  writer.NewAmazonS3Config(),
-		AmazonSQSDEPRECATED: writer.NewAmazonSQSConfig(),
-		AMQP:                writer.NewAMQPConfig(),
-		Broker:              NewBrokerConfig(),
-		Dynamic:             NewDynamicConfig(),
-		Elasticsearch:       writer.NewElasticsearchConfig(),
-		File:                NewFileConfig(),
-		Files:               writer.NewFilesConfig(),
-		HTTPClient:          writer.NewHTTPClientConfig(),
-		HTTPServer:          NewHTTPServerConfig(),
-		Inproc:              NewInprocConfig(),
-		Kafka:               writer.NewKafkaConfig(),
-		MQTT:                writer.NewMQTTConfig(),
-		Nanomsg:             NewScaleProtoConfig(),
-		NATS:                NewNATSConfig(),
-		NATSStream:          NewNATSStreamConfig(),
-		NSQ:                 NewNSQConfig(),
-		RedisList:           writer.NewRedisListConfig(),
-		RedisPubSub:         NewRedisPubSubConfig(),
-		S3:                  writer.NewAmazonS3Config(),
-		ScaleProto:          NewScaleProtoConfig(),
-		SQS:                 writer.NewAmazonSQSConfig(),
-		STDOUT:              NewSTDOUTConfig(),
-		Websocket:           writer.NewWebsocketConfig(),
-		ZMQ4:                writer.NewZMQ4Config(),
-		Processors:          []processor.Config{},
+		Type:          "stdout",
+		AMQP:          writer.NewAMQPConfig(),
+		Broker:        NewBrokerConfig(),
+		Dynamic:       NewDynamicConfig(),
+		Elasticsearch: writer.NewElasticsearchConfig(),
+		File:          NewFileConfig(),
+		Files:         writer.NewFilesConfig(),
+		HTTPClient:    writer.NewHTTPClientConfig(),
+		HTTPServer:    NewHTTPServerConfig(),
+		Inproc:        NewInprocConfig(),
+		Kafka:         writer.NewKafkaConfig(),
+		MQTT:          writer.NewMQTTConfig(),
+		Nanomsg:       NewNanomsgConfig(),
+		NATS:          NewNATSConfig(),
+		NATSStream:    NewNATSStreamConfig(),
+		NSQ:           NewNSQConfig(),
+		RedisList:     writer.NewRedisListConfig(),
+		RedisPubSub:   NewRedisPubSubConfig(),
+		S3:            writer.NewAmazonS3Config(),
+		SQS:           writer.NewAmazonSQSConfig(),
+		STDOUT:        NewSTDOUTConfig(),
+		Websocket:     writer.NewWebsocketConfig(),
+		ZMQ4:          writer.NewZMQ4Config(),
+		Processors:    []processor.Config{},
 	}
 }
 

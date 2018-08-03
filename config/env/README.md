@@ -51,162 +51,137 @@ HTTP_ROOT_PATH       = /benthos
 ## INPUT
 
 ```
-INPUTS                                       = 1
-INPUT_TYPE                                   = dynamic
-INPUT_AMAZON_S3_BUCKET
-INPUT_AMAZON_S3_CREDENTIALS_ID
-INPUT_AMAZON_S3_CREDENTIALS_ROLE
-INPUT_AMAZON_S3_CREDENTIALS_SECRET
-INPUT_AMAZON_S3_CREDENTIALS_TOKEN
-INPUT_AMAZON_S3_DELETE_OBJECTS               = false
-INPUT_AMAZON_S3_PREFIX
-INPUT_AMAZON_S3_REGION                       = eu-west-1
-INPUT_AMAZON_S3_SQS_BODY_PATH                = Records.s3.object.key
-INPUT_AMAZON_S3_SQS_ENVELOPE_PATH
-INPUT_AMAZON_S3_SQS_MAX_MESSAGES             = 10
-INPUT_AMAZON_S3_SQS_URL
-INPUT_AMAZON_S3_TIMEOUT_S                    = 5
-INPUT_AMAZON_SQS_CREDENTIALS_ID
-INPUT_AMAZON_SQS_CREDENTIALS_ROLE
-INPUT_AMAZON_SQS_CREDENTIALS_SECRET
-INPUT_AMAZON_SQS_CREDENTIALS_TOKEN
-INPUT_AMAZON_SQS_REGION                      = eu-west-1
-INPUT_AMAZON_SQS_TIMEOUT_S                   = 5
-INPUT_AMAZON_SQS_URL
-INPUT_AMQP_CONSUMER_TAG                      = benthos-consumer
-INPUT_AMQP_EXCHANGE                          = benthos-exchange
-INPUT_AMQP_EXCHANGE_TYPE                     = direct
-INPUT_AMQP_KEY                               = benthos-key
-INPUT_AMQP_PREFETCH_COUNT                    = 10
-INPUT_AMQP_PREFETCH_SIZE                     = 0
-INPUT_AMQP_QUEUE                             = benthos-queue
-INPUT_AMQP_URL                               = amqp://guest:guest@localhost:5672/
+INPUTS                                      = 1
+INPUT_TYPE                                  = dynamic
+INPUT_AMQP_CONSUMER_TAG                     = benthos-consumer
+INPUT_AMQP_EXCHANGE                         = benthos-exchange
+INPUT_AMQP_EXCHANGE_TYPE                    = direct
+INPUT_AMQP_KEY                              = benthos-key
+INPUT_AMQP_PREFETCH_COUNT                   = 10
+INPUT_AMQP_PREFETCH_SIZE                    = 0
+INPUT_AMQP_QUEUE                            = benthos-queue
+INPUT_AMQP_URL                              = amqp://guest:guest@localhost:5672/
 INPUT_DYNAMIC_PREFIX
-INPUT_DYNAMIC_TIMEOUT_MS                     = 5000
+INPUT_DYNAMIC_TIMEOUT_MS                    = 5000
 INPUT_FILES_PATH
 INPUT_FILE_DELIMITER
-INPUT_FILE_MAX_BUFFER                        = 1000000
-INPUT_FILE_MULTIPART                         = false
+INPUT_FILE_MAX_BUFFER                       = 1000000
+INPUT_FILE_MULTIPART                        = false
 INPUT_FILE_PATH
-INPUT_HTTP_CLIENT_BACKOFF_ON                 = 429
-INPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED         = false
+INPUT_HTTP_CLIENT_BACKOFF_ON                = 429
+INPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED        = false
 INPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
 INPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME
-INPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE       = application/octet-stream
-INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF_MS       = 300000
+INPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE      = application/octet-stream
+INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF_MS      = 300000
 INPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN
 INPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN_SECRET
 INPUT_HTTP_CLIENT_OAUTH_CONSUMER_KEY
 INPUT_HTTP_CLIENT_OAUTH_CONSUMER_SECRET
-INPUT_HTTP_CLIENT_OAUTH_ENABLED              = false
+INPUT_HTTP_CLIENT_OAUTH_ENABLED             = false
 INPUT_HTTP_CLIENT_OAUTH_REQUEST_URL
 INPUT_HTTP_CLIENT_PAYLOAD
-INPUT_HTTP_CLIENT_RETRIES                    = 3
-INPUT_HTTP_CLIENT_RETRY_PERIOD_MS            = 1000
+INPUT_HTTP_CLIENT_RETRIES                   = 3
+INPUT_HTTP_CLIENT_RETRY_PERIOD_MS           = 1000
 INPUT_HTTP_CLIENT_STREAM_DELIMITER
-INPUT_HTTP_CLIENT_STREAM_ENABLED             = false
-INPUT_HTTP_CLIENT_STREAM_MAX_BUFFER          = 1000000
-INPUT_HTTP_CLIENT_STREAM_MULTIPART           = false
-INPUT_HTTP_CLIENT_STREAM_RECONNECT           = true
-INPUT_HTTP_CLIENT_TIMEOUT_MS                 = 5000
+INPUT_HTTP_CLIENT_STREAM_ENABLED            = false
+INPUT_HTTP_CLIENT_STREAM_MAX_BUFFER         = 1000000
+INPUT_HTTP_CLIENT_STREAM_MULTIPART          = false
+INPUT_HTTP_CLIENT_STREAM_RECONNECT          = true
+INPUT_HTTP_CLIENT_TIMEOUT_MS                = 5000
 INPUT_HTTP_CLIENT_TLS_CAS_FILE
-INPUT_HTTP_CLIENT_TLS_ENABLED                = false
-INPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY       = false
-INPUT_HTTP_CLIENT_URL                        = http://localhost:4195/get
-INPUT_HTTP_CLIENT_VERB                       = GET
+INPUT_HTTP_CLIENT_TLS_ENABLED               = false
+INPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY      = false
+INPUT_HTTP_CLIENT_URL                       = http://localhost:4195/get
+INPUT_HTTP_CLIENT_VERB                      = GET
 INPUT_HTTP_SERVER_ADDRESS
 INPUT_HTTP_SERVER_CERT_FILE
 INPUT_HTTP_SERVER_KEY_FILE
-INPUT_HTTP_SERVER_PATH                       = /post
-INPUT_HTTP_SERVER_TIMEOUT_MS                 = 5000
-INPUT_HTTP_SERVER_WS_PATH                    = /post/ws
+INPUT_HTTP_SERVER_PATH                      = /post
+INPUT_HTTP_SERVER_TIMEOUT_MS                = 5000
+INPUT_HTTP_SERVER_WS_PATH                   = /post/ws
 INPUT_INPROC
-INPUT_KAFKA_ADDRESSES                        = localhost:9092
-INPUT_KAFKA_BALANCED_ADDRESSES               = localhost:9092
-INPUT_KAFKA_BALANCED_CLIENT_ID               = benthos_kafka_input
-INPUT_KAFKA_BALANCED_CONSUMER_GROUP          = benthos_consumer_group
-INPUT_KAFKA_BALANCED_START_FROM_OLDEST       = true
+INPUT_KAFKA_ADDRESSES                       = localhost:9092
+INPUT_KAFKA_BALANCED_ADDRESSES              = localhost:9092
+INPUT_KAFKA_BALANCED_CLIENT_ID              = benthos_kafka_input
+INPUT_KAFKA_BALANCED_CONSUMER_GROUP         = benthos_consumer_group
+INPUT_KAFKA_BALANCED_START_FROM_OLDEST      = true
 INPUT_KAFKA_BALANCED_TLS_CAS_FILE
-INPUT_KAFKA_BALANCED_TLS_ENABLED             = false
-INPUT_KAFKA_BALANCED_TLS_SKIP_CERT_VERIFY    = false
-INPUT_KAFKA_BALANCED_TOPICS                  = benthos_stream
-INPUT_KAFKA_CLIENT_ID                        = benthos_kafka_input
-INPUT_KAFKA_CONSUMER_GROUP                   = benthos_consumer_group
-INPUT_KAFKA_PARTITION                        = 0
-INPUT_KAFKA_START_FROM_OLDEST                = true
-INPUT_KAFKA_TARGET_VERSION                   = 1.0.0
+INPUT_KAFKA_BALANCED_TLS_ENABLED            = false
+INPUT_KAFKA_BALANCED_TLS_SKIP_CERT_VERIFY   = false
+INPUT_KAFKA_BALANCED_TOPICS                 = benthos_stream
+INPUT_KAFKA_CLIENT_ID                       = benthos_kafka_input
+INPUT_KAFKA_CONSUMER_GROUP                  = benthos_consumer_group
+INPUT_KAFKA_PARTITION                       = 0
+INPUT_KAFKA_START_FROM_OLDEST               = true
+INPUT_KAFKA_TARGET_VERSION                  = 1.0.0
 INPUT_KAFKA_TLS_CAS_FILE
-INPUT_KAFKA_TLS_ENABLED                      = false
-INPUT_KAFKA_TLS_SKIP_CERT_VERIFY             = false
-INPUT_KAFKA_TOPIC                            = benthos_stream
-INPUT_MQTT_CLIENT_ID                         = benthos_input
-INPUT_MQTT_QOS                               = 1
-INPUT_MQTT_TOPICS                            = benthos_topic
-INPUT_MQTT_URLS                              = tcp://localhost:1883
-INPUT_NANOMSG_BIND                           = true
-INPUT_NANOMSG_POLL_TIMEOUT_MS                = 5000
-INPUT_NANOMSG_REPLY_TIMEOUT_MS               = 5000
-INPUT_NANOMSG_SOCKET_TYPE                    = PULL
-INPUT_NANOMSG_URLS                           = tcp://*:5555
-INPUT_NATS_STREAM_CLIENT_ID                  = benthos_client
-INPUT_NATS_STREAM_CLUSTER_ID                 = test-cluster
-INPUT_NATS_STREAM_DURABLE_NAME               = benthos_offset
-INPUT_NATS_STREAM_QUEUE                      = benthos_queue
-INPUT_NATS_STREAM_START_FROM_OLDEST          = true
-INPUT_NATS_STREAM_SUBJECT                    = benthos_messages
-INPUT_NATS_STREAM_URLS                       = nats://localhost:4222
-INPUT_NATS_SUBJECT                           = benthos_messages
-INPUT_NATS_URLS                              = nats://localhost:4222
-INPUT_NSQ_CHANNEL                            = benthos_stream
-INPUT_NSQ_LOOKUPD_HTTP_ADDRESSES             = localhost:4161
-INPUT_NSQ_MAX_IN_FLIGHT                      = 100
-INPUT_NSQ_NSQD_TCP_ADDRESSES                 = localhost:4150
-INPUT_NSQ_TOPIC                              = benthos_messages
-INPUT_NSQ_USER_AGENT                         = benthos_consumer
-INPUT_REDIS_LIST_KEY                         = benthos_list
-INPUT_REDIS_LIST_TIMEOUT_MS                  = 5000
-INPUT_REDIS_LIST_URL                         = tcp://localhost:6379
-INPUT_REDIS_PUBSUB_CHANNELS                  = benthos_chan
-INPUT_REDIS_PUBSUB_URL                       = tcp://localhost:6379
+INPUT_KAFKA_TLS_ENABLED                     = false
+INPUT_KAFKA_TLS_SKIP_CERT_VERIFY            = false
+INPUT_KAFKA_TOPIC                           = benthos_stream
+INPUT_MQTT_CLIENT_ID                        = benthos_input
+INPUT_MQTT_QOS                              = 1
+INPUT_MQTT_TOPICS                           = benthos_topic
+INPUT_MQTT_URLS                             = tcp://localhost:1883
+INPUT_NANOMSG_BIND                          = true
+INPUT_NANOMSG_POLL_TIMEOUT_MS               = 5000
+INPUT_NANOMSG_REPLY_TIMEOUT_MS              = 5000
+INPUT_NANOMSG_SOCKET_TYPE                   = PULL
+INPUT_NANOMSG_URLS                          = tcp://*:5555
+INPUT_NATS_STREAM_CLIENT_ID                 = benthos_client
+INPUT_NATS_STREAM_CLUSTER_ID                = test-cluster
+INPUT_NATS_STREAM_DURABLE_NAME              = benthos_offset
+INPUT_NATS_STREAM_QUEUE                     = benthos_queue
+INPUT_NATS_STREAM_START_FROM_OLDEST         = true
+INPUT_NATS_STREAM_SUBJECT                   = benthos_messages
+INPUT_NATS_STREAM_URLS                      = nats://localhost:4222
+INPUT_NATS_SUBJECT                          = benthos_messages
+INPUT_NATS_URLS                             = nats://localhost:4222
+INPUT_NSQ_CHANNEL                           = benthos_stream
+INPUT_NSQ_LOOKUPD_HTTP_ADDRESSES            = localhost:4161
+INPUT_NSQ_MAX_IN_FLIGHT                     = 100
+INPUT_NSQ_NSQD_TCP_ADDRESSES                = localhost:4150
+INPUT_NSQ_TOPIC                             = benthos_messages
+INPUT_NSQ_USER_AGENT                        = benthos_consumer
+INPUT_REDIS_LIST_KEY                        = benthos_list
+INPUT_REDIS_LIST_TIMEOUT_MS                 = 5000
+INPUT_REDIS_LIST_URL                        = tcp://localhost:6379
+INPUT_REDIS_PUBSUB_CHANNELS                 = benthos_chan
+INPUT_REDIS_PUBSUB_URL                      = tcp://localhost:6379
 INPUT_S3_BUCKET
 INPUT_S3_CREDENTIALS_ID
 INPUT_S3_CREDENTIALS_ROLE
 INPUT_S3_CREDENTIALS_SECRET
 INPUT_S3_CREDENTIALS_TOKEN
-INPUT_S3_DELETE_OBJECTS                      = false
+INPUT_S3_DELETE_OBJECTS                     = false
 INPUT_S3_PREFIX
-INPUT_S3_REGION                              = eu-west-1
-INPUT_S3_SQS_BODY_PATH                       = Records.s3.object.key
+INPUT_S3_REGION                             = eu-west-1
+INPUT_S3_SQS_BODY_PATH                      = Records.s3.object.key
 INPUT_S3_SQS_ENVELOPE_PATH
-INPUT_S3_SQS_MAX_MESSAGES                    = 10
+INPUT_S3_SQS_MAX_MESSAGES                   = 10
 INPUT_S3_SQS_URL
-INPUT_S3_TIMEOUT_S                           = 5
-INPUT_SCALABILITY_PROTOCOLS_BIND             = true
-INPUT_SCALABILITY_PROTOCOLS_POLL_TIMEOUT_MS  = 5000
-INPUT_SCALABILITY_PROTOCOLS_REPLY_TIMEOUT_MS = 5000
-INPUT_SCALABILITY_PROTOCOLS_SOCKET_TYPE      = PULL
-INPUT_SCALABILITY_PROTOCOLS_URLS             = tcp://*:5555
+INPUT_S3_TIMEOUT_S                          = 5
 INPUT_SQS_CREDENTIALS_ID
 INPUT_SQS_CREDENTIALS_ROLE
 INPUT_SQS_CREDENTIALS_SECRET
 INPUT_SQS_CREDENTIALS_TOKEN
-INPUT_SQS_REGION                             = eu-west-1
-INPUT_SQS_TIMEOUT_S                          = 5
+INPUT_SQS_REGION                            = eu-west-1
+INPUT_SQS_TIMEOUT_S                         = 5
 INPUT_SQS_URL
 INPUT_STDIN_DELIMITER
-INPUT_STDIN_MAX_BUFFER                       = 1000000
-INPUT_STDIN_MULTIPART                        = false
-INPUT_WEBSOCKET_BASIC_AUTH_ENABLED           = false
+INPUT_STDIN_MAX_BUFFER                      = 1000000
+INPUT_STDIN_MULTIPART                       = false
+INPUT_WEBSOCKET_BASIC_AUTH_ENABLED          = false
 INPUT_WEBSOCKET_BASIC_AUTH_PASSWORD
 INPUT_WEBSOCKET_BASIC_AUTH_USERNAME
 INPUT_WEBSOCKET_OAUTH_ACCESS_TOKEN
 INPUT_WEBSOCKET_OAUTH_ACCESS_TOKEN_SECRET
 INPUT_WEBSOCKET_OAUTH_CONSUMER_KEY
 INPUT_WEBSOCKET_OAUTH_CONSUMER_SECRET
-INPUT_WEBSOCKET_OAUTH_ENABLED                = false
+INPUT_WEBSOCKET_OAUTH_ENABLED               = false
 INPUT_WEBSOCKET_OAUTH_REQUEST_URL
 INPUT_WEBSOCKET_OPEN_MESSAGE
-INPUT_WEBSOCKET_URL                          = ws://localhost:4195/get/ws
+INPUT_WEBSOCKET_URL                         = ws://localhost:4195/get/ws
 ```
 
 ## BUFFER
@@ -303,20 +278,6 @@ PROCESSOR_UNARCHIVE_FORMAT                       = binary
 OUTPUTS                                      = 1
 OUTPUTS_PATTERN                              = greedy
 OUTPUT_TYPE                                  = dynamic
-OUTPUT_AMAZON_S3_BUCKET
-OUTPUT_AMAZON_S3_CREDENTIALS_ID
-OUTPUT_AMAZON_S3_CREDENTIALS_ROLE
-OUTPUT_AMAZON_S3_CREDENTIALS_SECRET
-OUTPUT_AMAZON_S3_CREDENTIALS_TOKEN
-OUTPUT_AMAZON_S3_PATH                        = ${!count:files}-${!timestamp_unix_nano}.txt
-OUTPUT_AMAZON_S3_REGION                      = eu-west-1
-OUTPUT_AMAZON_S3_TIMEOUT_S                   = 5
-OUTPUT_AMAZON_SQS_CREDENTIALS_ID
-OUTPUT_AMAZON_SQS_CREDENTIALS_ROLE
-OUTPUT_AMAZON_SQS_CREDENTIALS_SECRET
-OUTPUT_AMAZON_SQS_CREDENTIALS_TOKEN
-OUTPUT_AMAZON_SQS_REGION                     = eu-west-1
-OUTPUT_AMAZON_SQS_URL
 OUTPUT_AMQP_EXCHANGE                         = benthos-exchange
 OUTPUT_AMQP_EXCHANGE_TYPE                    = direct
 OUTPUT_AMQP_IMMEDIATE                        = false
@@ -407,10 +368,6 @@ OUTPUT_S3_CREDENTIALS_TOKEN
 OUTPUT_S3_PATH                               = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_S3_REGION                             = eu-west-1
 OUTPUT_S3_TIMEOUT_S                          = 5
-OUTPUT_SCALABILITY_PROTOCOLS_BIND            = false
-OUTPUT_SCALABILITY_PROTOCOLS_POLL_TIMEOUT_MS = 5000
-OUTPUT_SCALABILITY_PROTOCOLS_SOCKET_TYPE     = PUSH
-OUTPUT_SCALABILITY_PROTOCOLS_URLS            = tcp://localhost:5556
 OUTPUT_SQS_CREDENTIALS_ID
 OUTPUT_SQS_CREDENTIALS_ROLE
 OUTPUT_SQS_CREDENTIALS_SECRET
