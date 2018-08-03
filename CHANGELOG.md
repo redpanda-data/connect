@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Fields for the `http` processor to enable parallel requests from message
+  batches.
+
 ### Changed
 
 - Broker level output processors are now applied _before_ the individual output

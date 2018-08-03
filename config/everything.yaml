@@ -403,6 +403,8 @@ pipeline:
           enabled: false
           username: ""
           password: ""
+      parallel: false
+      max_parallel: 0
     insert_part:
       index: -1
       content: ""

@@ -17,6 +17,8 @@ pipeline:
   processors:
   - type: http
     http:
+      max_parallel: 0
+      parallel: false
       request:
         backoff_on:
         - 429

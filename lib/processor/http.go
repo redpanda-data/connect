@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -44,10 +45,12 @@ body of the request. If the batch contains multiple messages then they will be
 sent as a multipart HTTP request using a ` + "`Content-Type: multipart`" + `
 header.
 
-If you wish to avoid this behaviour then you can either use the
- ` + "[`archive`](#archive)" + ` processor to create a single message from a
-batch, or use the ` + "[`split`](#split)" + ` processor to break down the batch
-into individual message parts.
+If you are sending batches and wish to avoid this behaviour then you can set the
+` + "`parallel`" + ` flag to ` + "`true`" + ` and the messages of a batch will
+be sent as individual requests in parallel. You can also cap the max number of
+parallel requests with ` + "`max_parallel`" + `. Alternatively, you can use the
+` + "[`archive`](#archive)" + ` processor to create a single message
+from the batch.
 
 The URL and header values of this type can be dynamically set using function
 interpolations described [here](../config_interpolation.md#functions).
@@ -63,13 +66,17 @@ can use the ` + "[`process_map`](#process_map)" + ` or
 
 // HTTPConfig contains configuration fields for the HTTP processor.
 type HTTPConfig struct {
-	Client client.Config `json:"request" yaml:"request"`
+	Client      client.Config `json:"request" yaml:"request"`
+	Parallel    bool          `json:"parallel" yaml:"parallel"`
+	MaxParallel int           `json:"max_parallel" yaml:"max_parallel"`
 }
 
 // NewHTTPConfig returns a HTTPConfig with default values.
 func NewHTTPConfig() HTTPConfig {
 	return HTTPConfig{
-		Client: client.NewConfig(),
+		Client:      client.NewConfig(),
+		Parallel:    false,
+		MaxParallel: 0,
 	}
 }
 
@@ -79,6 +86,9 @@ func NewHTTPConfig() HTTPConfig {
 // request body, and returns the response.
 type HTTP struct {
 	client *client.Type
+
+	parallel bool
+	max      int
 
 	conf  Config
 	log   log.Modular
@@ -100,6 +110,9 @@ func NewHTTP(
 		conf:  conf,
 		log:   log.NewModule(".processor.http"),
 		stats: stats,
+
+		parallel: conf.HTTP.Parallel,
+		max:      conf.HTTP.MaxParallel,
 
 		mCount:     stats.GetCounter("processor.http.count"),
 		mSucc:      stats.GetCounter("processor.http.success"),
@@ -125,14 +138,59 @@ func NewHTTP(
 // resulting messages or a response to be sent back to the message source.
 func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	h.mCount.Incr(1)
+	var responseMsg types.Message
 
-	responseMsg, err := h.client.Send(msg)
-	if err != nil {
-		h.mErr.Incr(1)
-		h.mErrHTTP.Incr(1)
-		return nil, response.NewError(fmt.Errorf(
-			"HTTP request '%v' failed: %v", h.conf.HTTP.Client.URL, err,
-		))
+	if !h.parallel || msg.Len() == 1 {
+		// Easy, just do a single request.
+		var err error
+		if responseMsg, err = h.client.Send(msg); err != nil {
+			if err != nil {
+				h.mErr.Incr(1)
+				h.mErrHTTP.Incr(1)
+				return nil, response.NewError(fmt.Errorf(
+					"HTTP request '%v' failed: %v", h.conf.HTTP.Client.URL, err,
+				))
+			}
+		}
+	} else {
+		// Hard, need to do parallel requests limited by max parallelism.
+		responseMsg = msg.ShallowCopy()
+		results := responseMsg.GetAll()
+		reqChan, resChan := make(chan int), make(chan error)
+
+		max := h.max
+		if max == 0 {
+			max = msg.Len()
+		}
+
+		for i := 0; i < max; i++ {
+			go func() {
+				for index := range reqChan {
+					result, err := h.client.Send(message.Lock(msg, index))
+					if err == nil && result.Len() != 1 {
+						err = fmt.Errorf("unexpected response size: %v", result.Len())
+					}
+					if err == nil {
+						results[index] = result.Get(0)
+					}
+					resChan <- err
+				}
+			}()
+		}
+		go func() {
+			for i := 0; i < msg.Len(); i++ {
+				reqChan <- i
+			}
+		}()
+		for i := 0; i < msg.Len(); i++ {
+			if err := <-resChan; err != nil {
+				h.mErrHTTP.Incr(1)
+				h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.Client.URL, err)
+			}
+		}
+
+		close(reqChan)
+		responseMsg = message.New(results)
 	}
 
 	if responseMsg.Len() < 1 {

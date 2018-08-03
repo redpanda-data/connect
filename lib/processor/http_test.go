@@ -24,8 +24,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -106,6 +108,130 @@ func TestHTTPClientBasic(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
+		t.Errorf("Wrong result count: %v != %v", actC, expC)
+	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
+func TestHTTPClientParallel(t *testing.T) {
+	wg := sync.WaitGroup{}
+	wg.Add(5)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wg.Done()
+		wg.Wait()
+		w.Write([]byte("foobar"))
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
+	conf.HTTP.Parallel = true
+
+	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := h.ProcessMessage(message.New([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+		[]byte("qux"),
+		[]byte("quz"),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	} else if expC, actC := 5, msgs[0].Len(); actC != expC {
+		t.Errorf("Wrong result count: %v != %v", actC, expC)
+	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
+func TestHTTPClientParallelError(t *testing.T) {
+	wg := sync.WaitGroup{}
+	wg.Add(5)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wg.Done()
+		wg.Wait()
+		reqBytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(reqBytes) == "baz" {
+			http.Error(w, "test error", http.StatusForbidden)
+			return
+		}
+		w.Write([]byte("foobar"))
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
+	conf.HTTP.Parallel = true
+	conf.HTTP.Client.NumRetries = 0
+
+	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := h.ProcessMessage(message.New([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+		[]byte("qux"),
+		[]byte("quz"),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	} else if expC, actC := 5, msgs[0].Len(); actC != expC {
+		t.Errorf("Wrong result count: %v != %v", actC, expC)
+	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	} else if exp, act := "baz", string(msgs[0].GetAll()[2]); act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
+func TestHTTPClientParallelCapped(t *testing.T) {
+	var reqs int64
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if req := atomic.AddInt64(&reqs, 1); req > 5 {
+			t.Errorf("Beyond parallelism cap: %v", req)
+		}
+		<-time.After(time.Millisecond * 10)
+		w.Write([]byte("foobar"))
+		atomic.AddInt64(&reqs, -1)
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
+	conf.HTTP.Parallel = true
+	conf.HTTP.MaxParallel = 5
+
+	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := h.ProcessMessage(message.New([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+		[]byte("qux"),
+		[]byte("quz"),
+		[]byte("foo2"),
+		[]byte("bar2"),
+		[]byte("baz2"),
+		[]byte("qux2"),
+		[]byte("quz2"),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	} else if expC, actC := 10, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)

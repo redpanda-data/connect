@@ -270,6 +270,8 @@ pipeline:
       retain_max: ${PROCESSOR_HASH_SAMPLE_RETAIN_MAX:10}
       retain_min: ${PROCESSOR_HASH_SAMPLE_RETAIN_MIN:0}
     http:
+      max_parallel: ${PROCESSOR_HTTP_MAX_PARALLEL:0}
+      parallel: ${PROCESSOR_HTTP_PARALLEL:false}
       request:
         backoff_on:
         - ${PROCESSOR_HTTP_REQUEST_BACKOFF_ON:429}

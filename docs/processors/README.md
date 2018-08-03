@@ -385,6 +385,8 @@ to `50.0` and `retain_max` to `100.1` will drop the _other_ half.
 ``` yaml
 type: http
 http:
+  max_parallel: 0
+  parallel: false
   request:
     backoff_on:
     - 429
@@ -422,10 +424,12 @@ body of the request. If the batch contains multiple messages then they will be
 sent as a multipart HTTP request using a `Content-Type: multipart`
 header.
 
-If you wish to avoid this behaviour then you can either use the
- [`archive`](#archive) processor to create a single message from a
-batch, or use the [`split`](#split) processor to break down the batch
-into individual message parts.
+If you are sending batches and wish to avoid this behaviour then you can set the
+`parallel` flag to `true` and the messages of a batch will
+be sent as individual requests in parallel. You can also cap the max number of
+parallel requests with `max_parallel`. Alternatively, you can use the
+[`archive`](#archive) processor to create a single message
+from the batch.
 
 The URL and header values of this type can be dynamically set using function
 interpolations described [here](../config_interpolation.md#functions).
