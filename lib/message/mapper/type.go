@@ -255,9 +255,11 @@ func getGabs(msg types.Message, index int) (*gabs.Container, error) {
 // parts can potentially be nil) and attempts to create a new payload of mapped
 // messages. Also returns an array of message part indexes that were skipped due
 // to either failed conditions or being empty.
-func (t *Type) MapRequests(msg types.Message) (types.Message, []int, error) {
+func (t *Type) MapRequests(payload types.Message) (types.Message, []int, error) {
 	mappedMsg := message.New(nil)
 	skipped := []int{}
+
+	msg := payload.ShallowCopy()
 
 partLoop:
 	for i := 0; i < msg.Len(); i++ {
