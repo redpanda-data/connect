@@ -22,6 +22,7 @@ package processor
 
 import (
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -123,7 +124,7 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 		return nil, response.NewAck()
 	}
 
-	for _, part := range msg.GetAll() {
+	for _, part := range message.GetAllBytes(msg) {
 		if size := len(part); size > m.conf.BoundsCheck.MaxPartSize ||
 			size < m.conf.BoundsCheck.MinPartSize {
 			m.log.Debugf(

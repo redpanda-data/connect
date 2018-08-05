@@ -512,7 +512,7 @@ func NewJSON(
 func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
-	newMsg := msg.ShallowCopy()
+	newMsg := msg.Copy()
 
 	valueBytes := p.valueBytes
 	if p.interpolate {
@@ -528,7 +528,7 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	}
 
 	for _, index := range targetParts {
-		jsonPart, err := newMsg.GetJSON(index)
+		jsonPart, err := newMsg.Get(index).JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
@@ -544,11 +544,11 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 		switch t := data.(type) {
 		case rawJSONValue:
-			newMsg.Set(index, []byte(t))
+			newMsg.Get(index).Set([]byte(t))
 		case []byte:
-			newMsg.Set(index, t)
+			newMsg.Get(index).Set(t)
 		default:
-			if err = newMsg.SetJSON(index, data); err != nil {
+			if err = newMsg.Get(index).SetJSON(data); err != nil {
 				p.mErrJSONS.Incr(1)
 				p.log.Debugf("Failed to convert json into part: %v\n", err)
 			}

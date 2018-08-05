@@ -84,7 +84,7 @@ func TestScaleProtoBasic(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if exp, act := testStr, string(resMsg.Get(0)); exp != act {
+		if exp, act := testStr, string(resMsg.Get(0).Get()); exp != act {
 			t.Errorf("Wrong result, %v != %v", act, exp)
 		}
 
@@ -115,7 +115,7 @@ func TestScaleProtoBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := "second sock", string(resMsg.Get(0)); exp != act {
+	if exp, act := "second sock", string(resMsg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result, %v != %v", act, exp)
 	}
 
@@ -186,7 +186,7 @@ func TestScaleProtoPubSub(t *testing.T) {
 		if resMsg, err = s.Read(); err != nil {
 			t.Fatal(err)
 		}
-		if res := string(resMsg.Get(0)[9:]); res != testStr {
+		if res := string(resMsg.Get(0).Get()[9:]); res != testStr {
 			t.Errorf("Wrong result, %v != %v", res, testStr)
 		}
 

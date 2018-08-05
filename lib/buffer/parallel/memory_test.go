@@ -57,7 +57,7 @@ func TestMemoryBasic(t *testing.T) {
 		}
 		if m.Len() != 4 {
 			t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3).Get()); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := ackFunc(true); err != nil {
@@ -94,7 +94,7 @@ func TestMemoryNearLimit(t *testing.T) {
 			}
 			if m.Len() != 4 {
 				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3).Get()); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 			}
 			if _, err := ackFunc(true); err != nil {
@@ -134,7 +134,7 @@ func TestMemoryLoopingRandom(t *testing.T) {
 			if m.Len() != 2 {
 				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
 				return
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(1)); expected != actual {
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(1).Get()); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 				return
 			}
@@ -163,7 +163,7 @@ func TestMemoryLockStep(t *testing.T) {
 			if m.Len() != 4 {
 				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
 				return
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3).Get()); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 				return
 			}
@@ -205,7 +205,7 @@ func TestMemoryAck(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	} else {
-		if expected, actual := "1", string(m.Get(0)); expected != actual {
+		if expected, actual := "1", string(m.Get(0).Get()); expected != actual {
 			t.Fatalf("Wrong message contents, %v != %v", expected, actual)
 		}
 		if _, err := ackFunc(false); err != nil {
@@ -217,7 +217,7 @@ func TestMemoryAck(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	} else {
-		if expected, actual := "1", string(m.Get(0)); expected != actual {
+		if expected, actual := "1", string(m.Get(0).Get()); expected != actual {
 			t.Fatalf("Wrong message contents, %v != %v", expected, actual)
 		}
 		if _, err := ackFunc(true); err != nil {
@@ -229,7 +229,7 @@ func TestMemoryAck(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	} else {
-		if expected, actual := "2", string(m.Get(0)); expected != actual {
+		if expected, actual := "2", string(m.Get(0).Get()); expected != actual {
 			t.Fatalf("Wrong message contents, %v != %v", expected, actual)
 		}
 		if _, err := ackFunc(true); err != nil {
@@ -270,7 +270,7 @@ func TestMemoryClose(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else {
-			if expected, actual := "hello world", string(m.Get(0)); expected != actual {
+			if expected, actual := "hello world", string(m.Get(0).Get()); expected != actual {
 				t.Errorf("Wrong message contents, %v != %v", expected, actual)
 			}
 			if _, err := ackFunc(true); err != nil {
@@ -288,7 +288,7 @@ func TestMemoryClose(t *testing.T) {
 
 func TestMemoryRejectLargeMessage(t *testing.T) {
 	tMsg := message.New(make([][]byte, 1))
-	tMsg.Set(0, []byte("hello world this message is too long!"))
+	tMsg.Get(0).Set([]byte("hello world this message is too long!"))
 
 	block := NewMemory(10)
 

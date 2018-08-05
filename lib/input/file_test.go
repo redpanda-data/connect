@@ -74,7 +74,7 @@ func TestFileSinglePart(t *testing.T) {
 		case ts, open = <-f.TransactionChan():
 			if !open {
 				t.Error("channel closed early")
-			} else if res := string(ts.Payload.Get(0)); res != msg {
+			} else if res := string(ts.Payload.Get(0).Get()); res != msg {
 				t.Errorf("Wrong result, %v != %v", res, msg)
 			}
 		case <-time.After(time.Second):
@@ -156,7 +156,7 @@ func TestFileMultiPart(t *testing.T) {
 				t.Error("channel closed early")
 			} else {
 				for i, part := range msg {
-					if res := string(ts.Payload.Get(i)); res != part {
+					if res := string(ts.Payload.Get(i).Get()); res != part {
 						t.Errorf("Wrong result, %v != %v", res, part)
 					}
 				}

@@ -86,7 +86,7 @@ func TestFilesDirectory(t *testing.T) {
 	if msg, err = f.Read(); err != nil {
 		t.Error(err)
 	} else {
-		resStr := string(msg.Get(0))
+		resStr := string(msg.Get(0).Get())
 		if _, exists := act[resStr]; exists {
 			t.Errorf("Received duplicate message: %v", resStr)
 		}
@@ -95,7 +95,7 @@ func TestFilesDirectory(t *testing.T) {
 	if msg, err = f.Read(); err != nil {
 		t.Error(err)
 	} else {
-		resStr := string(msg.Get(0))
+		resStr := string(msg.Get(0).Get())
 		if _, exists := act[resStr]; exists {
 			t.Errorf("Received duplicate message: %v", resStr)
 		}
@@ -144,7 +144,7 @@ func TestFilesFile(t *testing.T) {
 	if msg, err = f.Read(); err != nil {
 		t.Error(err)
 	} else {
-		resStr := string(msg.Get(0))
+		resStr := string(msg.Get(0).Get())
 		if _, exists := act[resStr]; exists {
 			t.Errorf("Received duplicate message: %v", resStr)
 		}

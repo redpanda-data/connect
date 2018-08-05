@@ -58,15 +58,17 @@ func (l *lazyCopy) Get(key string) string {
 }
 
 // Set sets the value of a metadata key.
-func (l *lazyCopy) Set(key, value string) {
+func (l *lazyCopy) Set(key, value string) types.Metadata {
 	l.ensureCopied()
 	l.m.Set(key, value)
+	return l
 }
 
 // Delete removes the value of a metadata key.
-func (l *lazyCopy) Delete(key string) {
+func (l *lazyCopy) Delete(key string) types.Metadata {
 	l.ensureCopied()
 	l.m.Delete(key)
+	return l
 }
 
 // Iter iterates each metadata key/value pair.

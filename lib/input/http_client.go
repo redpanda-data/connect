@@ -250,7 +250,7 @@ func (h *HTTPClient) parseResponse(res *http.Response) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return msg.GetAll(), nil
+	return message.GetAllBytes(msg), nil
 }
 
 //------------------------------------------------------------------------------

@@ -154,7 +154,7 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 		}
 
 		if sqsMsg.Body != nil {
-			msg.Append([]byte(*sqsMsg.Body))
+			msg.Append(message.NewPart([]byte(*sqsMsg.Body)))
 		}
 	}
 

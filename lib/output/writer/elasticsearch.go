@@ -145,7 +145,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, part []byte) error {
+	return msg.Iter(func(i int, part types.Part) error {
 		id := e.idBytes
 		if e.interpolateID {
 			id = text.ReplaceFunctionVariables(msg, id)
@@ -155,7 +155,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			Index(e.conf.Index).
 			Type("doc").
 			Id(string(id)).
-			BodyString(string(part)).
+			BodyString(string(part.Get())).
 			Do(context.Background())
 
 		return err

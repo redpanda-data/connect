@@ -500,7 +500,7 @@ func TestReaderHappyPath(t *testing.T) {
 		if !open {
 			t.Fatal("Chan closed")
 		}
-		if act := ts.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
+		if act := message.GetAllBytes(ts.Payload); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -571,7 +571,7 @@ func TestReaderSadPath(t *testing.T) {
 		if !open {
 			t.Fatal("Chan closed")
 		}
-		if act := ts.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
+		if act := message.GetAllBytes(ts.Payload); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -637,7 +637,7 @@ func TestReaderSkipAcks(t *testing.T) {
 			if !open {
 				t.Fatal("Chan closed")
 			}
-			if act := ts.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
+			if act := message.GetAllBytes(ts.Payload); !reflect.DeepEqual(exp, act) {
 				t.Errorf("Wrong message returned: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):

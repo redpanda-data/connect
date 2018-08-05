@@ -240,7 +240,7 @@ func setMetadata(m types.Message, k string, v interface{}) {
 	}
 
 	if metaValue != "" {
-		m.GetMetadata(0).Set(metaKey, metaValue)
+		m.Get(0).Metadata().Set(metaKey, metaValue)
 	}
 }
 

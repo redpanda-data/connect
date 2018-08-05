@@ -136,8 +136,8 @@ func testAMQPSinglePart(url string, t *testing.T) {
 			msg := message.New([][]byte{
 				[]byte(testStr),
 			})
-			msg.GetMetadata(0).Set("foo", "bar")
-			msg.GetMetadata(0).Set("root_foo", "bar2")
+			msg.Get(0).Metadata().Set("foo", "bar")
+			msg.Get(0).Metadata().Set("root_foo", "bar2")
 			if err = mOutput.Write(msg); err != nil {
 				t.Fatal(err)
 			}
@@ -152,15 +152,15 @@ func testAMQPSinglePart(url string, t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else {
-			act := string(actM.Get(0))
+			act := string(actM.Get(0).Get())
 			if _, exists := testMsgs[act]; !exists {
 				t.Errorf("Unexpected message: %v", act)
 			}
 			delete(testMsgs, act)
-			if act = actM.GetMetadata(0).Get("foo"); act != "bar" {
+			if act = actM.Get(0).Metadata().Get("foo"); act != "bar" {
 				t.Errorf("Wrong metadata returned: %v != bar", act)
 			}
-			if act = actM.GetMetadata(0).Get("root_foo"); act != "bar2" {
+			if act = actM.Get(0).Metadata().Get("root_foo"); act != "bar2" {
 				t.Errorf("Wrong metadata returned: %v != bar2", act)
 			}
 		}
@@ -214,8 +214,8 @@ func testAMQPMultiplePart(url string, t *testing.T) {
 				[]byte(testStr2),
 				[]byte(testStr3),
 			})
-			msg.GetMetadata(0).Set("foo", "bar")
-			msg.GetMetadata(1).Set("root_foo", "bar2")
+			msg.Get(0).Metadata().Set("foo", "bar")
+			msg.Get(1).Metadata().Set("root_foo", "bar2")
 			if err = mOutput.Write(msg); err != nil {
 				t.Fatal(err)
 			}
@@ -230,21 +230,21 @@ func testAMQPMultiplePart(url string, t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else {
-			act := string(actM.Get(0))
+			act := string(actM.Get(0).Get())
 			if _, exists := testMsgs[act]; !exists {
 				t.Errorf("Unexpected message: %v", act)
 			}
 			delete(testMsgs, act)
-			if act = actM.GetMetadata(0).Get("foo"); act != "bar" {
+			if act = actM.Get(0).Metadata().Get("foo"); act != "bar" {
 				t.Errorf("Wrong metadata returned: %v != bar", act)
 			}
-			if act = actM.GetMetadata(1).Get("foo"); act != "" {
+			if act = actM.Get(1).Metadata().Get("foo"); act != "" {
 				t.Errorf("Wrong metadata returned: %v != ''", act)
 			}
-			if act = actM.GetMetadata(1).Get("root_foo"); act != "bar2" {
+			if act = actM.Get(1).Metadata().Get("root_foo"); act != "bar2" {
 				t.Errorf("Wrong metadata returned: %v != bar2", act)
 			}
-			if act = actM.GetMetadata(0).Get("root_foo"); act != "" {
+			if act = actM.Get(0).Metadata().Get("root_foo"); act != "" {
 				t.Errorf("Wrong metadata returned: %v != ''", act)
 			}
 		}

@@ -64,22 +64,24 @@ func (m *Type) Get(key string) string {
 }
 
 // Set sets the value of a metadata key.
-func (m *Type) Set(key, value string) {
+func (m *Type) Set(key, value string) types.Metadata {
 	if m.m == nil {
 		m.m = map[string]string{
 			key: value,
 		}
-		return
+		return m
 	}
 	m.m[key] = value
+	return m
 }
 
 // Delete removes the value of a metadata key.
-func (m *Type) Delete(key string) {
+func (m *Type) Delete(key string) types.Metadata {
 	if m.m == nil {
-		return
+		return m
 	}
 	delete(m.m, key)
+	return m
 }
 
 // Iter iterates each metadata key/value pair.

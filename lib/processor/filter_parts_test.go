@@ -99,8 +99,8 @@ func TestFilterPartsTextCheck(t *testing.T) {
 				if !reflect.DeepEqual(res, response.NewAck()) {
 					t.Error("Filter.ProcessMessage() expected drop")
 				}
-			} else if !reflect.DeepEqual(got[0].GetAll(), tt.want) {
-				t.Errorf("Filter.ProcessMessage() = %s, want %s", got[0].GetAll(), tt.want)
+			} else if !reflect.DeepEqual(message.GetAllBytes(got[0]), tt.want) {
+				t.Errorf("Filter.ProcessMessage() = %s, want %s", message.GetAllBytes(got[0]), tt.want)
 			}
 		})
 	}

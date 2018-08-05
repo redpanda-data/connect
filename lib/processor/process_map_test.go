@@ -64,7 +64,7 @@ func TestProcessMapParts(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -109,7 +109,7 @@ func TestProcessMapConditions(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -146,7 +146,7 @@ func TestProcessMapAllParts(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -185,7 +185,7 @@ func TestProcessMapStrict(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -224,7 +224,7 @@ func TestProcessMapOptional(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -256,7 +256,7 @@ func TestProcessMapBadProc(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -290,7 +290,7 @@ func TestProcessMapBadProcTwo(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }

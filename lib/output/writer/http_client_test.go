@@ -90,7 +90,7 @@ func TestHTTPClientBasic(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		msg.SetAll([][]byte{b})
+		msg.Append(message.NewPart(b))
 	}))
 	defer ts.Close()
 
@@ -116,7 +116,7 @@ func TestHTTPClientBasic(t *testing.T) {
 				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 1)
 				return
 			}
-			if exp, actual := testStr, string(resMsg.Get(0)); exp != actual {
+			if exp, actual := testStr, string(resMsg.Get(0).Get()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}
@@ -149,7 +149,6 @@ func TestHTTPClientMultipart(t *testing.T) {
 		}
 
 		if strings.HasPrefix(mediaType, "multipart/") {
-			msg.SetAll([][]byte{})
 			mr := multipart.NewReader(r.Body, params["boundary"])
 			for {
 				p, err := mr.NextPart()
@@ -165,7 +164,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				msg.Append(msgBytes)
+				msg.Append(message.NewPart(msgBytes))
 			}
 		} else {
 			b, err := ioutil.ReadAll(r.Body)
@@ -173,7 +172,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			msg.SetAll([][]byte{b})
+			msg.Append(message.NewPart(b))
 		}
 	}))
 	defer ts.Close()
@@ -203,11 +202,11 @@ func TestHTTPClientMultipart(t *testing.T) {
 				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 2)
 				return
 			}
-			if exp, actual := testStr+"PART-A", string(resMsg.Get(0)); exp != actual {
+			if exp, actual := testStr+"PART-A", string(resMsg.Get(0).Get()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}
-			if exp, actual := testStr+"PART-B", string(resMsg.Get(1)); exp != actual {
+			if exp, actual := testStr+"PART-B", string(resMsg.Get(1).Get()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}

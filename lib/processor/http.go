@@ -154,8 +154,8 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		}
 	} else {
 		// Hard, need to do parallel requests limited by max parallelism.
-		responseMsg = msg.ShallowCopy()
-		results := responseMsg.GetAll()
+		responseMsg = msg.Copy()
+		results := message.GetAllBytes(responseMsg)
 		reqChan, resChan := make(chan int), make(chan error)
 
 		max := h.max
@@ -171,7 +171,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 						err = fmt.Errorf("unexpected response size: %v", result.Len())
 					}
 					if err == nil {
-						results[index] = result.Get(0)
+						results[index] = result.Get(0).Get()
 					}
 					resChan <- err
 				}

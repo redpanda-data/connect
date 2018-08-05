@@ -130,7 +130,7 @@ func (o *FanOut) loop() {
 		outputTargets := o.outputNs
 		for len(outputTargets) > 0 {
 			for _, i := range outputTargets {
-				msgCopy := ts.Payload.ShallowCopy()
+				msgCopy := ts.Payload.Copy()
 				select {
 				case o.outputTsChans[i] <- types.NewTransaction(msgCopy, o.outputResChans[i]):
 				case <-o.closeChan:

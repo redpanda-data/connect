@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/aws/aws-sdk-go/aws"
@@ -126,7 +127,7 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 
 	/*
 		msgs := []*sqs.SendMessageBatchRequestEntry{}
-		for _, part := range msg.GetAll() {
+		for _, part := range message.GetAllBytes(msg) {
 			msgs = append(msgs, &sqs.SendMessageBatchRequestEntry{
 				MessageBody: aws.String(string(part)),
 			})
@@ -144,7 +145,7 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 		}
 	*/
 
-	for _, part := range msg.GetAll() {
+	for _, part := range message.GetAllBytes(msg) {
 		if _, err := a.sqs.SendMessage(&sqs.SendMessageInput{
 			QueueUrl:    aws.String(a.conf.URL),
 			MessageBody: aws.String(string(part)),

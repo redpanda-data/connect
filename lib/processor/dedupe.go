@@ -210,8 +210,8 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	} else {
 		for _, index := range d.conf.Dedupe.Parts {
 			// Attempt to add whole part to hash.
-			if partBytes := msg.Get(index); partBytes != nil {
-				if _, err := hasher.Write(msg.Get(index)); nil != err {
+			if partBytes := msg.Get(index).Get(); partBytes != nil {
+				if _, err := hasher.Write(msg.Get(index).Get()); nil != err {
 					d.mErrHash.Incr(1)
 					d.mDropped.Incr(1)
 					d.log.Errorf("Hash error: %v\n", err)

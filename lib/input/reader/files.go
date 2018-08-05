@@ -107,7 +107,7 @@ func (f *Files) Read() (types.Message, error) {
 	}
 
 	msg := message.New([][]byte{msgBytes})
-	msg.GetMetadata(0).Set("path", path)
+	msg.Get(0).Metadata().Set("path", path)
 	return msg, nil
 }
 

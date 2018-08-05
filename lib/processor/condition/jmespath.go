@@ -144,7 +144,7 @@ func (c *JMESPath) Check(msg types.Message) bool {
 		return false
 	}
 
-	jsonPart, err := msg.GetJSON(index)
+	jsonPart, err := msg.Get(index).JSON()
 	if err != nil {
 		c.mErrJSONP.Incr(1)
 		c.mDropped.Incr(1)

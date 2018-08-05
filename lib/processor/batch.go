@@ -103,11 +103,6 @@ func NewBatchConfig() BatchConfig {
 
 //------------------------------------------------------------------------------
 
-type part struct {
-	payload  []byte
-	metadata types.Metadata
-}
-
 // Batch is a processor that combines messages into a batch until a size limit
 // or other condition is reached, at which point the batch is sent out. When a
 // message is combined without yet producing a batch a NoAck response is
@@ -125,7 +120,7 @@ type Batch struct {
 	period    time.Duration
 	cond      condition.Type
 	sizeTally int
-	parts     []part
+	parts     []types.Part
 
 	lastBatch time.Time
 
@@ -174,12 +169,9 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	c.mCount.Incr(1)
 
 	// Add new parts to the buffer.
-	msg.Iter(func(i int, b []byte) error {
-		c.sizeTally += len(b)
-		c.parts = append(c.parts, part{
-			payload:  b,
-			metadata: msg.GetMetadata(i),
-		})
+	msg.Iter(func(i int, b types.Part) error {
+		c.sizeTally += len(b.Get())
+		c.parts = append(c.parts, b.Copy())
 		return nil
 	})
 
@@ -202,11 +194,8 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 
 	// If we have reached our target count of parts in the buffer.
 	if batch {
-		newMsg := message.New(make([][]byte, len(c.parts)))
-		for i, p := range c.parts {
-			newMsg.Set(i, p.payload)
-			newMsg.SetMetadata(p.metadata, i)
-		}
+		newMsg := message.New(nil)
+		newMsg.Append(c.parts...)
 
 		c.parts = nil
 		c.sizeTally = 0

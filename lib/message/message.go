@@ -21,10 +21,8 @@
 package message
 
 import (
-	"encoding/json"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/message/metadata"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -34,14 +32,16 @@ import (
 // part message.
 type Type struct {
 	createdAt   time.Time
-	parts       [][]byte
-	metadata    []types.Metadata
-	partCaches  []*partCache
+	parts       []types.Part
 	resultCache map[string]bool
 }
 
-// New initializes a new message.
-func New(parts [][]byte) *Type {
+// New initializes a new message from a 2D byte slice, the slice can be nil.
+func New(bslice [][]byte) *Type {
+	parts := make([]types.Part, len(bslice))
+	for i, v := range bslice {
+		parts[i] = NewPart(v)
+	}
 	return &Type{
 		createdAt: time.Now(),
 		parts:     parts,
@@ -50,50 +50,10 @@ func New(parts [][]byte) *Type {
 
 //------------------------------------------------------------------------------
 
-// partCache is a cache of operations performed on message parts, a part cache
-// becomes invalid when the contents of a part is changed.
-type partCache struct {
-	json interface{}
-}
-
-// Clone a partCache, the cloned result can be edited without changing the
-// original.
-func (p *partCache) Clone() (*partCache, error) {
-	cloned, err := cloneGeneric(p.json)
-	if err != nil {
-		return nil, err
-	}
-	return &partCache{
-		json: cloned,
-	}, nil
-}
-
-//------------------------------------------------------------------------------
-
-// ShallowCopy creates a new shallow copy of the message. Parts can be
-// re-arranged in the new copy and JSON parts can be get/set without impacting
-// other message copies. However, it is still unsafe to edit the raw content of
-// message parts.
-func (m *Type) ShallowCopy() types.Message {
-	var metadata []types.Metadata
-	if len(m.metadata) > 0 {
-		metadata = make([]types.Metadata, len(m.metadata))
-		for i, md := range m.metadata {
-			if md != nil {
-				metadata[i] = md.Copy()
-			}
-		}
-	}
-	var newPartCaches []*partCache
-	if len(m.partCaches) > 0 {
-		newPartCaches = make([]*partCache, len(m.partCaches))
-		for i, c := range m.partCaches {
-			if c == nil {
-				continue
-			}
-			newPartCaches[i], _ = c.Clone()
-		}
-	}
+// Copy creates a new shallow copy of the message. Parts can be re-arranged in
+// the new copy and JSON parts can be get/set without impacting other message
+// copies. However, it is still unsafe to edit the raw content of message parts.
+func (m *Type) Copy() types.Message {
 	var newResultCache map[string]bool
 	if len(m.resultCache) > 0 {
 		newResultCache = make(map[string]bool, len(m.resultCache))
@@ -101,11 +61,13 @@ func (m *Type) ShallowCopy() types.Message {
 			newResultCache[k] = v
 		}
 	}
+	parts := make([]types.Part, len(m.parts))
+	for i, v := range m.parts {
+		parts[i] = v.Copy()
+	}
 	return &Type{
 		createdAt:   m.createdAt,
-		parts:       append([][]byte(nil), m.parts...),
-		metadata:    metadata,
-		partCaches:  newPartCaches,
+		parts:       parts,
 		resultCache: newResultCache,
 	}
 }
@@ -113,31 +75,6 @@ func (m *Type) ShallowCopy() types.Message {
 // DeepCopy creates a new deep copy of the message. This can be considered an
 // entirely new object that is safe to use anywhere.
 func (m *Type) DeepCopy() types.Message {
-	var metadata []types.Metadata
-	if len(m.metadata) > 0 {
-		metadata = make([]types.Metadata, len(m.metadata))
-		for i, md := range m.metadata {
-			if md != nil {
-				metadata[i] = md.Copy()
-			}
-		}
-	}
-	var newPartCaches []*partCache
-	if len(m.partCaches) > 0 {
-		newPartCaches = make([]*partCache, len(m.partCaches))
-		for i, c := range m.partCaches {
-			if c == nil {
-				continue
-			}
-			newPartCaches[i], _ = c.Clone()
-		}
-	}
-	newParts := make([][]byte, len(m.parts))
-	for i, p := range m.parts {
-		np := make([]byte, len(p))
-		copy(np, p)
-		newParts[i] = np
-	}
 	var newResultCache map[string]bool
 	if len(m.resultCache) > 0 {
 		newResultCache = make(map[string]bool, len(m.resultCache))
@@ -145,11 +82,13 @@ func (m *Type) DeepCopy() types.Message {
 			newResultCache[k] = v
 		}
 	}
+	parts := make([]types.Part, len(m.parts))
+	for i, v := range m.parts {
+		parts[i] = v.DeepCopy()
+	}
 	return &Type{
 		createdAt:   m.createdAt,
-		parts:       newParts,
-		metadata:    metadata,
-		partCaches:  newPartCaches,
+		parts:       parts,
 		resultCache: newResultCache,
 	}
 }
@@ -157,99 +96,28 @@ func (m *Type) DeepCopy() types.Message {
 //------------------------------------------------------------------------------
 
 // Get returns a message part at a particular index, indexes can be negative.
-func (m *Type) Get(index int) []byte {
+func (m *Type) Get(index int) types.Part {
 	if index < 0 {
 		index = len(m.parts) + index
 	}
 	if index < 0 || index >= len(m.parts) {
-		return nil
+		return NewPart(nil)
 	}
-	return m.parts[index]
-}
-
-// GetAll returns all message parts as a 2D byte slice, the contents of this
-// slice should NOT be modified.
-func (m *Type) GetAll() [][]byte {
-	return m.parts
-}
-
-// GetMetadata returns the metadata of a message part. If the index is negative
-// then the part is found by counting backwards from the last part starting at
-// -1. If the index is out of bounds then a no-op metadata object is returned.
-func (m *Type) GetMetadata(index int) types.Metadata {
-	if index < 0 {
-		index = len(m.parts) + index
-	}
-	if index < 0 || index >= len(m.parts) {
-		return metadata.New(nil)
-	}
-	m.expandMetadata()
-	if m.metadata[index] == nil {
-		m.metadata[index] = metadata.New(nil)
-	}
-	return m.metadata[index]
-}
-
-// SetMetadata sets the metadata of message parts by their index. Multiple
-// indexes can be specified in order to set the same metadata values to each
-// part. If zero indexes are specified the metadata is set for all message
-// parts. If an index is negative then the part is found by counting backwards
-// from the last part starting at -1. If an index is out of bounds then nothing
-// is done.
-func (m *Type) SetMetadata(meta types.Metadata, indexes ...int) {
-	m.expandMetadata()
-	if len(indexes) == 0 {
-		for i := range m.metadata {
-			m.metadata[i] = metadata.LazyCopy(meta)
-		}
-		return
-	}
-	for _, index := range indexes {
-		if index < 0 {
-			index = len(m.parts) + index
-		}
-		if index < 0 || index >= len(m.parts) {
-			continue
-		}
-		if len(indexes) > 1 {
-			m.metadata[index] = metadata.LazyCopy(meta)
-		} else {
-			m.metadata[index] = meta
-		}
-	}
-}
-
-// Set the value of a message part by its index. Indexes can be negative.
-func (m *Type) Set(index int, b []byte) {
-	if index < 0 {
-		index = len(m.parts) + index
-	}
-	if index < 0 || index >= len(m.parts) {
-		return
-	}
-	if len(m.partCaches) > index {
-		// Remove now invalid part cache.
-		m.partCaches[index] = nil
-	}
-	m.clearGeneralCaches()
-	m.parts[index] = b
+	return onChangePart(m.parts[index], func() {
+		m.resultCache = nil
+	})
 }
 
 // SetAll changes the entire set of message parts.
-func (m *Type) SetAll(p [][]byte) {
-	m.parts = p
-	m.clearAllCaches()
+func (m *Type) SetAll(parts []types.Part) {
+	m.parts = parts
+	m.resultCache = nil
 }
 
 // Append adds a new message part to the message.
-func (m *Type) Append(b ...[]byte) int {
-	if len(m.metadata) > 0 {
-		m.metadata = append(m.metadata, make([]types.Metadata, len(b))...)
-	}
-	for _, p := range b {
-		m.parts = append(m.parts, p)
-	}
-	m.clearGeneralCaches()
+func (m *Type) Append(b ...types.Part) int {
+	m.parts = append(m.parts, b...)
+	m.resultCache = nil
 	return len(m.parts) - 1
 }
 
@@ -259,82 +127,15 @@ func (m *Type) Len() int {
 }
 
 // Iter will iterate all parts of the message, calling f for each.
-func (m *Type) Iter(f func(i int, b []byte) error) error {
+func (m *Type) Iter(f func(i int, p types.Part) error) error {
 	for i, p := range m.parts {
-		if err := f(i, p); err != nil {
+		part := onChangePart(p, func() {
+			m.resultCache = nil
+		})
+		if err := f(i, part); err != nil {
 			return err
 		}
 	}
-	return nil
-}
-
-func (m *Type) expandMetadata() {
-	if len(m.metadata) < len(m.parts) {
-		mParts := make([]types.Metadata, len(m.parts))
-		copy(mParts, m.metadata)
-		m.metadata = mParts
-	}
-}
-
-func (m *Type) expandCache(index int) {
-	if len(m.partCaches) > index {
-		return
-	}
-	cParts := make([]*partCache, index+1)
-	copy(cParts, m.partCaches)
-	m.partCaches = cParts
-}
-
-func (m *Type) clearGeneralCaches() {
-	m.resultCache = nil
-}
-
-func (m *Type) clearAllCaches() {
-	m.resultCache = nil
-	m.partCaches = nil
-}
-
-// GetJSON attempts to parse a message part as JSON and returns the result.
-func (m *Type) GetJSON(part int) (interface{}, error) {
-	if part < 0 {
-		part = len(m.parts) + part
-	}
-	if part < 0 || part >= len(m.parts) {
-		return nil, ErrMessagePartNotExist
-	}
-	m.expandCache(part)
-	cPart := m.partCaches[part]
-	if cPart == nil {
-		cPart = &partCache{}
-		m.partCaches[part] = cPart
-	}
-	if err := json.Unmarshal(m.Get(part), &cPart.json); err != nil {
-		return nil, err
-	}
-	return cPart.json, nil
-}
-
-// SetJSON attempts to marshal an object into a JSON string and sets a message
-// part to the result.
-func (m *Type) SetJSON(part int, jObj interface{}) error {
-	if part < 0 {
-		part = len(m.parts) + part
-	}
-	if part < 0 || part >= len(m.parts) {
-		return ErrMessagePartNotExist
-	}
-	m.expandCache(part)
-
-	partBytes, err := json.Marshal(jObj)
-	if err != nil {
-		return err
-	}
-
-	m.Set(part, partBytes)
-	m.partCaches[part] = &partCache{
-		json: jObj,
-	}
-	m.clearGeneralCaches()
 	return nil
 }
 
@@ -392,7 +193,7 @@ func (m *Type) Bytes() []byte {
 
 	l := (lenParts + 1) * intLen
 	for i := range m.parts {
-		l += uint32(len(m.parts[i]))
+		l += uint32(len(m.parts[i].Get()))
 	}
 	b := make([]byte, l)
 
@@ -403,7 +204,7 @@ func (m *Type) Bytes() []byte {
 
 	b2 := b[intLen:]
 	for i := range m.parts {
-		le := uint32(len(m.parts[i]))
+		le := uint32(len(m.parts[i].Get()))
 
 		b2[0] = byte(le >> 24)
 		b2[1] = byte(le >> 16)
@@ -412,8 +213,8 @@ func (m *Type) Bytes() []byte {
 
 		b2 = b2[intLen:]
 
-		copy(b2, m.parts[i])
-		b2 = b2[len(m.parts[i]):]
+		copy(b2, m.parts[i].Get())
+		b2 = b2[len(m.parts[i].Get()):]
 	}
 	return b
 }
@@ -442,7 +243,7 @@ func FromBytes(b []byte) (*Type, error) {
 		if uint32(len(b)) < partSize {
 			return nil, ErrBadMessageBytes
 		}
-		m.Append(b[:partSize])
+		m.Append(NewPart(b[:partSize]))
 		b = b[partSize:]
 	}
 	return m, nil

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/http/auth"
@@ -138,7 +139,7 @@ func (w *Websocket) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	for _, part := range msg.GetAll() {
+	for _, part := range message.GetAllBytes(msg) {
 		if err := client.WriteMessage(websocket.BinaryMessage, part); err != nil {
 			w.lock.Lock()
 			w.client = nil

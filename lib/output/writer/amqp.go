@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
@@ -177,9 +178,9 @@ func (a *AMQP) Write(msg types.Message) error {
 
 	bindingKey := strings.Replace(a.key.Get(msg), "/", ".", -1)
 
-	for i, part := range msg.GetAll() {
+	for i, part := range message.GetAllBytes(msg) {
 		headers := amqp.Table{}
-		msg.GetMetadata(i).Iter(func(k, v string) error {
+		msg.Get(i).Metadata().Iter(func(k, v string) error {
 			headers[strings.Replace(k, "_", "-", -1)] = v
 			return nil
 		})

@@ -24,6 +24,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -36,9 +38,10 @@ func TestMetadataBasic(t *testing.T) {
 		"foo4": "bar4",
 		"foo5": "bar5",
 	}
-	m := New(nil)
+	var m types.Metadata = New(nil)
 	for k, v := range expMap {
-		m.Set(k, v)
+		// Carry reference over just to test it.
+		m = m.Set(k, v)
 	}
 	if exp, act := "bar", m.Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -56,7 +59,7 @@ func TestMetadataBasic(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m.Delete("foo")
+	m = m.Delete("foo")
 	if exp, act := "", m.Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}

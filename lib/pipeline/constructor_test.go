@@ -153,7 +153,7 @@ func TestProcCtor(t *testing.T) {
 		[]byte("1"),
 		[]byte("foo bar baz"),
 	}
-	if act := tran.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(tran.Payload); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong contents: %s != %s", act, exp)
 	}
 

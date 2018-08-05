@@ -319,7 +319,7 @@ func (a *AmazonS3) Read() (types.Message, error) {
 	a.readKeys = append(a.readKeys, target)
 
 	msg := message.New([][]byte{buff.Bytes()})
-	msg.GetMetadata(0).Set("s3_key", target.s3Key)
+	msg.Get(0).Metadata().Set("s3_key", target.s3Key)
 
 	return msg, nil
 }

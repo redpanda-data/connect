@@ -249,7 +249,7 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	if len(p.parts) > 0 {
 		mapMsg = message.New(make([][]byte, msg.Len()))
 		for _, sel := range p.parts {
-			mapMsg.Set(sel, msg.Get(sel))
+			mapMsg.Get(sel).Set(msg.Get(sel).Get())
 		}
 	}
 
@@ -280,7 +280,7 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	i := 0
 	for _, m := range procResults {
-		for _, b := range m.GetAll() {
+		for _, b := range message.GetAllBytes(m) {
 			p.log.Tracef("Processed request part '%v': %q\n", i, b)
 			i++
 		}
@@ -295,7 +295,7 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		return msgs[:], nil
 	}
 
-	result := msg.ShallowCopy()
+	result := msg.Copy()
 	if err = p.mapper.MapResponses(result, alignedResult); err != nil {
 		p.mErrPost.Incr(1)
 		p.mErr.Incr(1)
@@ -333,7 +333,7 @@ func processMap(mappedMsg types.Message, processors []Type) ([]types.Message, er
 func alignResult(length int, skippedParts []int, result []types.Message) (types.Message, error) {
 	resMsgParts := [][]byte{}
 	for _, m := range result {
-		resMsgParts = append(resMsgParts, m.GetAll()...)
+		resMsgParts = append(resMsgParts, message.GetAllBytes(m)...)
 	}
 
 	// Check that size of response is aligned with payload.

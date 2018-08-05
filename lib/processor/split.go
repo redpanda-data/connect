@@ -94,10 +94,12 @@ func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	}
 
 	msgs := make([]types.Message, msg.Len())
-	for i, part := range msg.GetAll() {
-		msgs[i] = message.New([][]byte{part})
-		msgs[i].SetMetadata(msg.GetMetadata(i).Copy())
-	}
+	msg.Iter(func(i int, p types.Part) error {
+		nextMsg := message.New(nil)
+		nextMsg.Append(p.Copy())
+		msgs[i] = nextMsg
+		return nil
+	})
 
 	s.mSent.Incr(int64(len(msgs)))
 	s.mSentParts.Incr(int64(len(msgs)))

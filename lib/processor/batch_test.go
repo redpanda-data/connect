@@ -48,8 +48,8 @@ func TestBatchTwoParts(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
-	if !reflect.DeepEqual(exp, msgs[0].GetAll()) {
-		t.Errorf("Wrong result: %s != %s", msgs[0].GetAll(), exp)
+	if !reflect.DeepEqual(exp, message.GetAllBytes(msgs[0])) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msgs[0]), exp)
 	}
 	if res != nil {
 		t.Error("Expected nil res")
@@ -76,8 +76,8 @@ func TestBatchLotsOfParts(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
-	if !reflect.DeepEqual(input, msgs[0].GetAll()) {
-		t.Errorf("Wrong result: %s != %s", msgs[0].GetAll(), input)
+	if !reflect.DeepEqual(input, message.GetAllBytes(msgs[0])) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msgs[0]), input)
 	}
 	if res != nil {
 		t.Error("Expected nil res")
@@ -98,7 +98,7 @@ func TestBatchTwoSingleParts(t *testing.T) {
 	exp := [][]byte{[]byte("foo1"), []byte("bar1")}
 
 	inMsg := message.New([][]byte{exp[0]})
-	inMsg.GetMetadata(0).Set("foo", "bar1")
+	inMsg.Get(0).Metadata().Set("foo", "bar1")
 
 	msgs, res := proc.ProcessMessage(inMsg)
 	if len(msgs) != 0 {
@@ -109,19 +109,19 @@ func TestBatchTwoSingleParts(t *testing.T) {
 	}
 
 	inMsg = message.New([][]byte{exp[1]})
-	inMsg.GetMetadata(0).Set("foo", "bar2")
+	inMsg.Get(0).Metadata().Set("foo", "bar2")
 
 	msgs, res = proc.ProcessMessage(inMsg)
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
-	if !reflect.DeepEqual(exp, msgs[0].GetAll()) {
-		t.Errorf("Wrong result: %s != %s", msgs[0].GetAll(), exp)
+	if !reflect.DeepEqual(exp, message.GetAllBytes(msgs[0])) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msgs[0]), exp)
 	}
-	if exp, act := "bar1", msgs[0].GetMetadata(0).Get("foo"); exp != act {
+	if exp, act := "bar1", msgs[0].Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong metadata: %v != %v", act, exp)
 	}
-	if exp, act := "bar2", msgs[0].GetMetadata(1).Get("foo"); exp != act {
+	if exp, act := "bar2", msgs[0].Get(1).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong metadata: %v != %v", act, exp)
 	}
 	if res != nil {
@@ -142,8 +142,8 @@ func TestBatchTwoSingleParts(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
-	if !reflect.DeepEqual(exp, msgs[0].GetAll()) {
-		t.Errorf("Wrong result: %s != %s", msgs[0].GetAll(), exp)
+	if !reflect.DeepEqual(exp, message.GetAllBytes(msgs[0])) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msgs[0]), exp)
 	}
 	if res != nil {
 		t.Error("Expected nil res")
@@ -176,8 +176,8 @@ func TestBatchTwoDiffParts(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
-	if !reflect.DeepEqual(exp, msgs[0].GetAll()) {
-		t.Errorf("Wrong result: %s != %s", msgs[0].GetAll(), exp)
+	if !reflect.DeepEqual(exp, message.GetAllBytes(msgs[0])) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msgs[0]), exp)
 	}
 	if res != nil {
 		t.Error("Expected nil res")
@@ -189,8 +189,8 @@ func TestBatchTwoDiffParts(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
-	if !reflect.DeepEqual(exp, msgs[0].GetAll()) {
-		t.Errorf("Wrong result: %s != %s", msgs[0].GetAll(), exp)
+	if !reflect.DeepEqual(exp, message.GetAllBytes(msgs[0])) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msgs[0]), exp)
 	}
 	if res != nil {
 		t.Error("Expected nil res")
@@ -202,8 +202,8 @@ func TestBatchTwoDiffParts(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
-	if !reflect.DeepEqual(exp, msgs[0].GetAll()) {
-		t.Errorf("Wrong result: %s != %s", msgs[0].GetAll(), exp)
+	if !reflect.DeepEqual(exp, message.GetAllBytes(msgs[0])) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msgs[0]), exp)
 	}
 	if res != nil {
 		t.Error("Expected nil res")
@@ -253,7 +253,7 @@ func TestBatchCondition(t *testing.T) {
 		[]byte("bar"),
 		[]byte("baz: end_batch"),
 	}
-	if act := msgs[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong batch contents: %s != %s", act, exp)
 	}
 }

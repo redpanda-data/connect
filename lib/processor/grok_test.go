@@ -62,7 +62,7 @@ func TestGrokAllParts(t *testing.T) {
 		[]byte(`{"first":"foo","second":1}`),
 		[]byte(`{"first":"foo","second":2}`),
 	}
-	act := msgs[0].GetAll()
+	act := message.GetAllBytes(msgs[0])
 	if !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong output from grok: %s != %s", act, exp)
 	}
@@ -108,7 +108,7 @@ func TestGrok(t *testing.T) {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
 	}

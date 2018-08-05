@@ -152,7 +152,7 @@ func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err er
 func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
-	newMsg := msg.ShallowCopy()
+	newMsg := msg.Copy()
 
 	targetParts := p.parts
 	if len(targetParts) == 0 {
@@ -163,7 +163,7 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	}
 
 	for _, index := range targetParts {
-		jsonPart, err := newMsg.GetJSON(index)
+		jsonPart, err := newMsg.Get(index).JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
@@ -177,7 +177,7 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			continue
 		}
 
-		if err = newMsg.SetJSON(index, result); err != nil {
+		if err = newMsg.Get(index).SetJSON(result); err != nil {
 			p.mErrJSONS.Incr(1)
 			p.log.Debugf("Failed to convert jmespath result into part: %v\n", err)
 		} else {

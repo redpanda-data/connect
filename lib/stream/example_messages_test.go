@@ -43,8 +43,8 @@ type SplitToMessages struct{}
 // an individual message per payload.
 func (p SplitToMessages) ProcessMessage(m types.Message) ([]types.Message, types.Response) {
 	var splitParts [][]byte
-	m.Iter(func(i int, b []byte) error {
-		splitParts = append(splitParts, bytes.Split(b, []byte("\n"))...)
+	m.Iter(func(i int, b types.Part) error {
+		splitParts = append(splitParts, bytes.Split(b.Get(), []byte("\n"))...)
 		return nil
 	})
 

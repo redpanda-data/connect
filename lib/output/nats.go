@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -148,7 +149,7 @@ func (n *NATS) loop() {
 		}
 		mCount.Incr(1)
 		var err error
-		for _, part := range ts.Payload.GetAll() {
+		for _, part := range message.GetAllBytes(ts.Payload) {
 			err = n.natsConn.Publish(n.conf.NATS.Subject, part)
 			if err != nil {
 				mErr.Incr(1)

@@ -223,7 +223,7 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		return nil, response.NewAck()
 	}
 
-	newPart, err := d.archive(d.createHeaderFunc(msg), msg.GetAll())
+	newPart, err := d.archive(d.createHeaderFunc(msg), message.GetAllBytes(msg))
 	if err != nil {
 		d.log.Errorf("Failed to create archive: %v\n", err)
 		d.mErr.Incr(1)
@@ -234,7 +234,7 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	d.mSent.Incr(1)
 
 	newMsg := message.New([][]byte{newPart})
-	newMsg.SetMetadata(msg.GetMetadata(0).Copy())
+	message.SetAllMetadata(newMsg, msg.Get(0).Metadata().Copy())
 
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil

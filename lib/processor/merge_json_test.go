@@ -83,7 +83,7 @@ func TestMergeJSON(t *testing.T) {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
 	}
@@ -108,15 +108,15 @@ func TestMergeJSONRetention(t *testing.T) {
 			[]byte(`{"foo":2}`),
 		},
 	)
-	expOutput := input.ShallowCopy()
-	expOutput.Append([]byte(`{"foo":[1,2]}`))
-	exp := expOutput.GetAll()
+	expOutput := input.Copy()
+	expOutput.Append(message.NewPart([]byte(`{"foo":[1,2]}`)))
+	exp := message.GetAllBytes(expOutput)
 
 	msgs, _ := jMrg.ProcessMessage(input)
 	if len(msgs) != 1 {
 		t.Errorf("Wrong output count")
 	}
-	act := msgs[0].GetAll()
+	act := message.GetAllBytes(msgs[0])
 	if !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
@@ -126,15 +126,15 @@ func TestMergeJSONRetention(t *testing.T) {
 			[]byte(`{"foo":1}`),
 		},
 	)
-	expOutput = input.ShallowCopy()
-	expOutput.Append([]byte(`{"foo":1}`))
-	exp = expOutput.GetAll()
+	expOutput = input.Copy()
+	expOutput.Append(message.NewPart([]byte(`{"foo":1}`)))
+	exp = message.GetAllBytes(expOutput)
 
 	msgs, _ = jMrg.ProcessMessage(input)
 	if len(msgs) != 1 {
 		t.Errorf("Wrong output count")
 	}
-	act = msgs[0].GetAll()
+	act = message.GetAllBytes(msgs[0])
 	if !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
@@ -155,15 +155,15 @@ func TestMergeJSONRetention(t *testing.T) {
 			[]byte(`{"foo":2}`),
 		},
 	)
-	expOutput = input.ShallowCopy()
-	expOutput.Append([]byte(`{"foo":[1,2]}`))
-	exp = expOutput.GetAll()
+	expOutput = input.Copy()
+	expOutput.Append(message.NewPart([]byte(`{"foo":[1,2]}`)))
+	exp = message.GetAllBytes(expOutput)
 
 	msgs, _ = jMrg.ProcessMessage(input)
 	if len(msgs) != 1 {
 		t.Errorf("Wrong output count")
 	}
-	act = msgs[0].GetAll()
+	act = message.GetAllBytes(msgs[0])
 	if !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
@@ -173,15 +173,15 @@ func TestMergeJSONRetention(t *testing.T) {
 			[]byte(`{"foo":1}`),
 		},
 	)
-	expOutput = input.ShallowCopy()
-	expOutput.Append([]byte(`{"foo":1}`))
-	exp = expOutput.GetAll()
+	expOutput = input.Copy()
+	expOutput.Append(message.NewPart([]byte(`{"foo":1}`)))
+	exp = message.GetAllBytes(expOutput)
 
 	msgs, _ = jMrg.ProcessMessage(input)
 	if len(msgs) != 1 {
 		t.Errorf("Wrong output count")
 	}
-	act = msgs[0].GetAll()
+	act = message.GetAllBytes(msgs[0])
 	if !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
@@ -207,9 +207,9 @@ func TestMergeJSONNoRetention(t *testing.T) {
 			[]byte(`{"foo":2}`),
 		},
 	)
-	input.GetMetadata(0).Set("foo", "1")
-	input.GetMetadata(1).Set("foo", "2")
-	input.GetMetadata(2).Set("foo", "3")
+	input.Get(0).Metadata().Set("foo", "1")
+	input.Get(1).Metadata().Set("foo", "2")
+	input.Get(2).Metadata().Set("foo", "3")
 
 	expParts := [][]byte{
 		[]byte(`not related`),
@@ -220,13 +220,13 @@ func TestMergeJSONNoRetention(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Errorf("Wrong output count")
 	}
-	if act, exp := msgs[0].GetAll(), expParts; !reflect.DeepEqual(exp, act) {
+	if act, exp := message.GetAllBytes(msgs[0]), expParts; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "2", msgs[0].GetMetadata(0).Get("foo"); exp != act {
+	if exp, act := "2", msgs[0].Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong metadata: %v != %v", act, exp)
 	}
-	if exp, act := "1", msgs[0].GetMetadata(1).Get("foo"); exp != act {
+	if exp, act := "1", msgs[0].Get(1).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong metadata: %v != %v", act, exp)
 	}
 }

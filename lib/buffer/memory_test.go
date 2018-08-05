@@ -80,10 +80,10 @@ func TestMemoryBuffer(t *testing.T) {
 		if exp, act := 2, outTr.Payload.Len(); exp != act {
 			t.Errorf("Wrong message length: %v != %v", exp, act)
 		} else {
-			if exp, act := `one`, string(outTr.Payload.Get(0)); exp != act {
+			if exp, act := `one`, string(outTr.Payload.Get(0).Get()); exp != act {
 				t.Errorf("Wrong message length: %s != %s", exp, act)
 			}
-			if exp, act := `two`, string(outTr.Payload.Get(1)); exp != act {
+			if exp, act := `two`, string(outTr.Payload.Get(1).Get()); exp != act {
 				t.Errorf("Wrong message length: %s != %s", exp, act)
 			}
 		}

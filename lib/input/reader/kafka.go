@@ -268,7 +268,7 @@ func (k *Kafka) Read() (types.Message, error) {
 	k.offset = data.Offset + 1
 	msg := message.New([][]byte{data.Value})
 
-	meta := msg.GetMetadata(0)
+	meta := msg.Get(0).Metadata()
 	meta.Set("kafka_key", string(data.Key))
 	meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
 	meta.Set("kafka_topic", data.Topic)

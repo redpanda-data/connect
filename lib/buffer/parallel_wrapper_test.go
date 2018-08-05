@@ -82,7 +82,7 @@ func TestParallelMemoryBuffer(t *testing.T) {
 		var outTr types.Transaction
 		select {
 		case outTr = <-b.TransactionChan():
-			if actual := uint8(outTr.Payload.Get(0)[0]); actual != i {
+			if actual := uint8(outTr.Payload.Get(0).Get()[0]); actual != i {
 				t.Errorf("Wrong order receipt of unbuffered message receive: %v != %v", actual, i)
 			}
 		case <-time.After(time.Second):
@@ -149,7 +149,7 @@ func TestParallelMemoryBuffer(t *testing.T) {
 	// Extract last message
 	select {
 	case outTr = <-b.TransactionChan():
-		if actual := uint8(outTr.Payload.Get(0)[0]); actual != 0 {
+		if actual := uint8(outTr.Payload.Get(0).Get()[0]); actual != 0 {
 			t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, 0)
 		}
 		outTr.ResponseChan <- response.NewAck()
@@ -172,7 +172,7 @@ func TestParallelMemoryBuffer(t *testing.T) {
 	for i = 1; i < total; i++ {
 		select {
 		case outTr = <-b.TransactionChan():
-			if actual := uint8(outTr.Payload.Get(0)[0]); actual != i {
+			if actual := uint8(outTr.Payload.Get(0).Get()[0]); actual != i {
 				t.Errorf("Wrong order receipt of buffered message: %v != %v", actual, i)
 			}
 		case <-time.After(time.Second):
@@ -258,7 +258,7 @@ func TestParallelBufferClosing(t *testing.T) {
 	for i = 0; i < total; i++ {
 		select {
 		case val := <-b.TransactionChan():
-			if actual := uint8(val.Payload.Get(0)[0]); actual != i {
+			if actual := uint8(val.Payload.Get(0).Get()[0]); actual != i {
 				t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, i)
 			}
 			val.ResponseChan <- response.NewAck()

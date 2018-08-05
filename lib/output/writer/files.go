@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
@@ -85,7 +86,7 @@ func (f *Files) Connect() error {
 
 // Write attempts to write message contents to a directory as files.
 func (f *Files) Write(msg types.Message) error {
-	for _, part := range msg.GetAll() {
+	for _, part := range message.GetAllBytes(msg) {
 		path := f.conf.Path
 		if f.interpolatePath {
 			path = string(text.ReplaceFunctionVariables(msg, f.pathBytes))

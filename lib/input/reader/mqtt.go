@@ -147,7 +147,7 @@ func (m *MQTT) Read() (types.Message, error) {
 	case msg := <-m.msgChan:
 		message := message.New([][]byte{[]byte(msg.Payload())})
 
-		meta := message.GetMetadata(0)
+		meta := message.Get(0).Metadata()
 		meta.Set("mqtt_duplicate", strconv.FormatBool(bool(msg.Duplicate())))
 		meta.Set("mqtt_qos", strconv.Itoa(int(msg.Qos())))
 		meta.Set("mqtt_retained", strconv.FormatBool(bool(msg.Retained())))

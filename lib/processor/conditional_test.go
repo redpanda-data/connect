@@ -67,7 +67,7 @@ func TestConditionalWithStaticFalse(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -109,7 +109,7 @@ func TestConditionalWithStaticTrue(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }

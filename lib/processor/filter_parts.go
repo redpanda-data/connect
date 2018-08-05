@@ -118,8 +118,7 @@ func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 
 	for i := 0; i < msg.Len(); i++ {
 		if c.condition.Check(message.Lock(msg, i)) {
-			index := newMsg.Append(msg.Get(i))
-			newMsg.SetMetadata(msg.GetMetadata(i), index)
+			newMsg.Append(msg.Get(i).Copy())
 		} else {
 			c.mPartDropped.Incr(1)
 		}

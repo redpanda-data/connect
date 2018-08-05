@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -242,7 +243,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
 				"Content-Type": []string{"application/octet-stream"},
 			}); err == nil {
-				_, err = io.Copy(part, bytes.NewReader(ts.Payload.Get(i)))
+				_, err = io.Copy(part, bytes.NewReader(ts.Payload.Get(i).Get()))
 			}
 		}
 
@@ -251,7 +252,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(body.Bytes())
 	} else {
 		w.Header().Add("Content-Type", "application/octet-stream")
-		w.Write(ts.Payload.Get(0))
+		w.Write(ts.Payload.Get(0).Get())
 	}
 
 	h.mSendSucc.Incr(1)
@@ -303,9 +304,9 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 
 		var data []byte
 		if ts.Payload.Len() == 1 {
-			data = ts.Payload.Get(0)
+			data = ts.Payload.Get(0).Get()
 		} else {
-			data = append(bytes.Join(ts.Payload.GetAll(), []byte("\n")), byte('\n'))
+			data = append(bytes.Join(message.GetAllBytes(ts.Payload), []byte("\n")), byte('\n'))
 		}
 
 		_, err := w.Write(data)
@@ -368,7 +369,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		h.mCount.Incr(1)
 
 		var werr error
-		for _, msg := range ts.Payload.GetAll() {
+		for _, msg := range message.GetAllBytes(ts.Payload) {
 			if werr = ws.WriteMessage(websocket.BinaryMessage, msg); werr != nil {
 				break
 			}

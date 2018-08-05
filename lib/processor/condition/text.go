@@ -261,7 +261,7 @@ func (c *Text) Check(msg types.Message) bool {
 		return false
 	}
 
-	msgPart := msg.Get(index)
+	msgPart := msg.Get(index).Get()
 	if msgPart == nil {
 		c.mSkippedOOB.Incr(1)
 		c.mSkipped.Incr(1)

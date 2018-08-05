@@ -85,7 +85,7 @@ func TestEncodeBase64(t *testing.T) {
 	} else if res != nil {
 		t.Errorf("Expected nil response: %v", res)
 	}
-	if act := msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 }
@@ -141,10 +141,10 @@ func TestEncodeIndexBounds(t *testing.T) {
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := string(encoded[expIndex]), string(msgs[0].GetAll()[expIndex]); exp != act {
+		if exp, act := string(encoded[expIndex]), string(message.GetAllBytes(msgs[0])[expIndex]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
-		if exp, act := string(encoded[expIndex]), string(msgs[0].GetAll()[(expIndex+1)%5]); exp == act {
+		if exp, act := string(encoded[expIndex]), string(message.GetAllBytes(msgs[0])[(expIndex+1)%5]); exp == act {
 			t.Errorf("Processor was applied to wrong index %v: %v != %v", (expIndex+1)%5, act, exp)
 		}
 	}

@@ -92,7 +92,7 @@ func TestSelectParts(t *testing.T) {
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := test.out, msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+		if exp, act := test.out, message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Unexpected output: %s != %s", act, exp)
 		}
 	}
@@ -138,7 +138,7 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if act := string(msgs[0].GetAll()[0]); exp != act {
+		if act := string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
 	}

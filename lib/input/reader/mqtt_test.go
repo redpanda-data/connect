@@ -152,7 +152,7 @@ func testMQTTConnect(urls []string, t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else {
-			act := string(actM.Get(0))
+			act := string(actM.Get(0).Get())
 			if _, exists := testMsgs[act]; !exists {
 				t.Errorf("Unexpected message: %v", act)
 			}

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/pebbe/zmq4"
@@ -161,11 +162,11 @@ func (z *ZMQ4) Write(msg types.Message) error {
 	if z.socket == nil {
 		return types.ErrNotConnected
 	}
-	_, err := z.socket.SendMessageDontwait(msg.GetAll())
+	_, err := z.socket.SendMessageDontwait(message.GetAllBytes(msg))
 	if err != nil {
 		var polled []zmq4.Polled
 		if polled, err = z.poller.Poll(z.pollTimeout); len(polled) == 1 {
-			_, err = z.socket.SendMessage(msg.GetAll())
+			_, err = z.socket.SendMessage(message.GetAllBytes(msg))
 		} else if err == nil {
 			return types.ErrTimeout
 		}

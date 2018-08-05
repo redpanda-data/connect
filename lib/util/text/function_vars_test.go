@@ -55,8 +55,8 @@ func TestFunctionVarDetection(t *testing.T) {
 
 func TestMetadataFunction(t *testing.T) {
 	msg := message.New([][]byte{[]byte("foo")})
-	msg.GetMetadata(0).Set("foo", "bar")
-	msg.GetMetadata(0).Set("baz", "qux")
+	msg.Get(0).Metadata().Set("foo", "bar")
+	msg.Get(0).Metadata().Set("baz", "qux")
 
 	act := string(ReplaceFunctionVariables(
 		msg, []byte(`foo ${!metadata:foo} baz`),
@@ -85,8 +85,8 @@ func TestMetadataFunctionIndex(t *testing.T) {
 		[]byte("foo"),
 		[]byte("bar"),
 	})
-	msg.GetMetadata(0).Set("foo", "bar")
-	msg.GetMetadata(1).Set("foo", "bar2")
+	msg.Get(0).Metadata().Set("foo", "bar")
+	msg.Get(1).Metadata().Set("foo", "bar2")
 
 	act := string(ReplaceFunctionVariables(
 		msg, []byte(`foo ${!metadata:foo,0} baz`),
@@ -108,9 +108,9 @@ func TestMetadataMapFunction(t *testing.T) {
 		[]byte("foo"),
 		[]byte("bar"),
 	})
-	msg.GetMetadata(0).Set("foo", "bar")
-	msg.GetMetadata(0).Set("bar", "baz")
-	msg.GetMetadata(1).Set("foo", "bar2")
+	msg.Get(0).Metadata().Set("foo", "bar")
+	msg.Get(0).Metadata().Set("bar", "baz")
+	msg.Get(1).Metadata().Set("foo", "bar2")
 
 	act := string(ReplaceFunctionVariables(
 		msg, []byte(`foo ${!metadata_json_object} baz`),

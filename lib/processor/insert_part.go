@@ -127,10 +127,10 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	var pre, post [][]byte
 	if index > 0 {
-		pre = msg.GetAll()[:index]
+		pre = message.GetAllBytes(msg)[:index]
 	}
 	if index < msgLen {
-		post = msg.GetAll()[index:]
+		post = message.GetAllBytes(msg)[index:]
 	}
 
 	newParts := make([][]byte, msgLen+1)
@@ -142,9 +142,9 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	newMsg := message.New(newParts)
 	for i := 0; i < msg.Len(); i++ {
 		if i < index {
-			newMsg.SetMetadata(msg.GetMetadata(i).Copy(), i)
+			newMsg.Get(i).SetMetadata(msg.Get(i).Metadata().Copy())
 		} else if i > index {
-			newMsg.SetMetadata(msg.GetMetadata(i).Copy(), i+1)
+			newMsg.Get(i + 1).SetMetadata(msg.Get(i).Metadata().Copy())
 		}
 	}
 

@@ -240,7 +240,7 @@ func (t *Type) test(msg types.Message) bool {
 }
 
 func getGabs(msg types.Message, index int) (*gabs.Container, error) {
-	payloadObj, err := msg.GetJSON(index)
+	payloadObj, err := msg.Get(index).JSON()
 	if err != nil {
 		return nil, err
 	}
@@ -259,12 +259,12 @@ func (t *Type) MapRequests(payload types.Message) (types.Message, []int, error) 
 	mappedMsg := message.New(nil)
 	skipped := []int{}
 
-	msg := payload.ShallowCopy()
+	msg := payload.Copy()
 
 partLoop:
 	for i := 0; i < msg.Len(); i++ {
 		// Skip if message part is empty.
-		if p := msg.Get(i); p == nil || len(p) == 0 {
+		if p := msg.Get(i).Get(); p == nil || len(p) == 0 {
 			skipped = append(skipped, i)
 			continue partLoop
 		}
@@ -326,8 +326,8 @@ partLoop:
 			}
 		}
 
-		mappedMsg.Append([]byte("{}"))
-		if err = mappedMsg.SetJSON(-1, destObj.Data()); err != nil {
+		mappedMsg.Append(message.NewPart([]byte("{}")))
+		if err = mappedMsg.Get(-1).SetJSON(destObj.Data()); err != nil {
 			t.mReqErr.Incr(1)
 			t.mReqErrJSON.Incr(1)
 			t.log.Debugf("Failed to marshal request map result in message part '%v'. Map contents: '%v'\n", i, destObj.String())
@@ -417,7 +417,7 @@ partLoop:
 			}
 		}
 
-		if err = payload.SetJSON(i, destObj.Data()); err != nil {
+		if err = payload.Get(i).SetJSON(destObj.Data()); err != nil {
 			t.mResErr.Incr(1)
 			t.mResErrJSON.Incr(1)
 			t.log.Debugf("Failed to marshal response map result in message part '%v'. Map contents: '%v'\n", i, destObj.String())

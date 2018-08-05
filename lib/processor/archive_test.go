@@ -76,7 +76,7 @@ func TestArchiveTar(t *testing.T) {
 
 	act := [][]byte{}
 
-	buf := bytes.NewBuffer(msgs[0].Get(0))
+	buf := bytes.NewBuffer(msgs[0].Get(0).Get())
 	tr := tar.NewReader(buf)
 	for {
 		_, err = tr.Next()
@@ -135,7 +135,7 @@ third part
 fourth
 5`),
 	}
-	if act := msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 }
@@ -158,8 +158,8 @@ func TestArchiveBinary(t *testing.T) {
 		if lParts := msgs[0].Len(); lParts != 1 {
 			t.Errorf("Wrong number of parts returned: %v != %v", lParts, 1)
 		}
-		if !reflect.DeepEqual(testMsgBlob, msgs[0].Get(0)) {
-			t.Errorf("Returned message did not match: %s != %s", msgs[0].Get(0), testMsgBlob)
+		if !reflect.DeepEqual(testMsgBlob, msgs[0].Get(0).Get()) {
+			t.Errorf("Returned message did not match: %s != %s", msgs[0].Get(0).Get(), testMsgBlob)
 		}
 	} else {
 		t.Error("Failed on good message")

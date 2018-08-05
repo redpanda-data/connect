@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -200,7 +201,7 @@ func (r *RedisPubSub) loop() {
 
 		mCount.Incr(1)
 		var err error
-		for _, part := range ts.Payload.GetAll() {
+		for _, part := range message.GetAllBytes(ts.Payload) {
 			if _, err = r.client.Publish(r.conf.RedisPubSub.Channel, part).Result(); err == nil {
 				mSucc.Incr(1)
 			} else {

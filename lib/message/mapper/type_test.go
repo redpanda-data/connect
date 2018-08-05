@@ -284,7 +284,7 @@ func TestTypeDo(t *testing.T) {
 		if act, exp := skipped, test.skipped; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong skipped slice for test '%v': %v != %v", test.name, act, exp)
 		}
-		if act, exp := res.GetAll(), test.output; !reflect.DeepEqual(exp, act) {
+		if act, exp := message.GetAllBytes(res), test.output; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong output for test '%v': %s != %s", test.name, act, exp)
 		}
 	}
@@ -303,7 +303,7 @@ func TestTypeMapRequest(t *testing.T) {
 	if res, _, err = e.MapRequests(msg); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"foo":{"bar":1},"zip":"old"}`, string(res.Get(0)); exp != act {
+	if exp, act := `{"foo":{"bar":1},"zip":"old"}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -320,7 +320,7 @@ func TestTypeMapRequest(t *testing.T) {
 	if res, _, err = e.MapRequests(msg); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"bar":1}`, string(res.Get(0)); exp != act {
+	if exp, act := `{"bar":1}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -351,7 +351,7 @@ func TestTypeMapOptRequest(t *testing.T) {
 	if res, _, err = e.MapRequests(msg); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"bar":1}`, string(res.Get(0)); exp != act {
+	if exp, act := `{"bar":1}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -361,7 +361,7 @@ func TestTypeMapOptRequest(t *testing.T) {
 	if res, _, err = e.MapRequests(msg); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{}`, string(res.Get(0)); exp != act {
+	if exp, act := `{}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -378,7 +378,7 @@ func TestTypeMapOptRequest(t *testing.T) {
 	if res, _, err = e.MapRequests(msg); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"foo":{"bar":1}}`, string(res.Get(0)); exp != act {
+	if exp, act := `{"foo":{"bar":1}}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -402,7 +402,7 @@ func TestTypeOverlayResult(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"bar":1,"baz":2}`, string(msg.Get(0)); exp != act {
+	if exp, act := `{"bar":1,"baz":2}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -416,10 +416,10 @@ func TestTypeOverlayResult(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"bar":1,"baz":2}`, string(msg.Get(0)); exp != act {
+	if exp, act := `{"bar":1,"baz":2}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := `{"bar":3,"baz":4,"qux":5}`, string(msg.Get(1)); exp != act {
+	if exp, act := `{"bar":3,"baz":4,"qux":5}`, string(msg.Get(1).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -431,7 +431,7 @@ func TestTypeOverlayResult(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{}`, string(msg.Get(0)); exp != act {
+	if exp, act := `{}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -443,7 +443,7 @@ func TestTypeOverlayResult(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `not valid json`, string(msg.Get(0)); exp != act {
+	if exp, act := `not valid json`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -459,13 +459,13 @@ func TestTypeOverlayResult(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"bar":1,"baz":2}`, string(msg.Get(0)); exp != act {
+	if exp, act := `{"bar":1,"baz":2}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := `{}`, string(msg.Get(1)); exp != act {
+	if exp, act := `{}`, string(msg.Get(1).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := `{"bar":3,"baz":4}`, string(msg.Get(2)); exp != act {
+	if exp, act := `{"bar":3,"baz":4}`, string(msg.Get(2).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -477,7 +477,7 @@ func TestTypeOverlayResult(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"bar":"old"}`, string(msg.Get(0)); exp != act {
+	if exp, act := `{"bar":"old"}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -498,7 +498,7 @@ func TestTypeOverlayResultRoot(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"new":"root"}`, string(msg.Get(0)); exp != act {
+	if exp, act := `{"new":"root"}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -517,7 +517,7 @@ func TestTypeOverlayResultRoot(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"new":"root"}`, string(msg.Get(0)); exp != act {
+	if exp, act := `{"new":"root"}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -534,7 +534,7 @@ func TestTypeOverlayResultRoot(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"bar":{"baz":2},"foo":{"bar":{"new":"root"}}}`, string(msg.Get(0)); exp != act {
+	if exp, act := `{"bar":{"baz":2},"foo":{"bar":{"new":"root"}}}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }

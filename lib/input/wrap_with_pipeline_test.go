@@ -207,7 +207,7 @@ type mockProc struct {
 }
 
 func (m mockProc) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	if string(msg.Get(0)) == m.value {
+	if string(msg.Get(0).Get()) == m.value {
 		return nil, response.NewUnack()
 	}
 	msgs := [1]types.Message{msg}
@@ -298,7 +298,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
-		} else if exp, act := "baz", string(ts.Payload.Get(0)); exp != act {
+		} else if exp, act := "baz", string(ts.Payload.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message received: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -323,7 +323,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
-		} else if exp, act := "baz", string(ts.Payload.Get(0)); exp != act {
+		} else if exp, act := "baz", string(ts.Payload.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message received: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -435,7 +435,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
-		} else if exp, act := "baz", string(ts.Payload.Get(0)); exp != act {
+		} else if exp, act := "baz", string(ts.Payload.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message received: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -460,7 +460,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
-		} else if exp, act := "baz", string(ts.Payload.Get(0)); exp != act {
+		} else if exp, act := "baz", string(ts.Payload.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message received: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
