@@ -59,7 +59,7 @@ type partCache struct {
 // Clone a partCache, the cloned result can be edited without changing the
 // original.
 func (p *partCache) Clone() (*partCache, error) {
-	cloned, err := CloneGeneric(p.json)
+	cloned, err := cloneGeneric(p.json)
 	if err != nil {
 		return nil, err
 	}

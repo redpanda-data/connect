@@ -31,7 +31,7 @@ func cloneMap(oldMap map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	newMap := make(map[string]interface{}, len(oldMap))
 	for k, v := range oldMap {
-		if newMap[k], err = CloneGeneric(v); err != nil {
+		if newMap[k], err = cloneGeneric(v); err != nil {
 			return nil, err
 		}
 	}
@@ -42,7 +42,7 @@ func cloneCheekyMap(oldMap map[interface{}]interface{}) (map[interface{}]interfa
 	var err error
 	newMap := make(map[interface{}]interface{}, len(oldMap))
 	for k, v := range oldMap {
-		if newMap[k], err = CloneGeneric(v); err != nil {
+		if newMap[k], err = cloneGeneric(v); err != nil {
 			return nil, err
 		}
 	}
@@ -53,16 +53,16 @@ func cloneSlice(oldSlice []interface{}) ([]interface{}, error) {
 	var err error
 	newSlice := make([]interface{}, len(oldSlice))
 	for i, v := range oldSlice {
-		if newSlice[i], err = CloneGeneric(v); err != nil {
+		if newSlice[i], err = cloneGeneric(v); err != nil {
 			return nil, err
 		}
 	}
 	return newSlice, nil
 }
 
-// CloneGeneric is a utility function that recursively copies a generic
+// cloneGeneric is a utility function that recursively copies a generic
 // structure usually resulting from a JSON parse.
-func CloneGeneric(root interface{}) (interface{}, error) {
+func cloneGeneric(root interface{}) (interface{}, error) {
 	switch t := root.(type) {
 	case map[string]interface{}:
 		return cloneMap(t)

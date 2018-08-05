@@ -54,7 +54,7 @@ func TestCloneGeneric(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if cloned, err = CloneGeneric(original); err != nil {
+	if cloned, err = cloneGeneric(original); err != nil {
 		t.Fatal(err)
 	}
 
@@ -99,7 +99,7 @@ func TestCloneGenericYAML(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if cloned, err = CloneGeneric(original); err != nil {
+	if cloned, err = cloneGeneric(original); err != nil {
 		t.Fatal(err)
 	}
 
@@ -149,7 +149,7 @@ func BenchmarkCloneGeneric(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if cloned, err = CloneGeneric(generic); err != nil {
+		if cloned, err = cloneGeneric(generic); err != nil {
 			b.Fatal(err)
 		}
 	}
