@@ -37,16 +37,15 @@ func init() {
 		constructor: NewMetadata,
 		description: `
 Performs operations on the metadata of a message. Metadata are key/value pairs
-that are associated with a message within a Benthos pipeline. Message batches
-usually carry the metadata of the last message to be added. Metadata values can
-be referred to using configuration
+that are associated with message parts of a batch. Metadata values can be
+referred to using configuration
 [interpolation functions](../config_interpolation.md#metadata),
 which allow you to set fields in certain outputs using these dynamic values.
 
-This processor will interpolate functions within the 'value' field, you can find
-a list of functions [here](../config_interpolation.md#functions). This allows
-you to set the contents of a metadata field using values taken from the message
-payload.
+This processor will interpolate functions within the ` + "`value`" + ` field,
+you can find a list of functions [here](../config_interpolation.md#functions).
+This allows you to set the contents of a metadata field using values taken from
+the message payload.
 
 ### Operations
 
@@ -69,6 +68,7 @@ value provided.`,
 
 // MetadataConfig contains configuration fields for the Metadata processor.
 type MetadataConfig struct {
+	Parts    []int  `json:"parts" yaml:"parts"`
 	Operator string `json:"operator" yaml:"operator"`
 	Key      string `json:"key" yaml:"key"`
 	Value    string `json:"value" yaml:"value"`
@@ -77,6 +77,7 @@ type MetadataConfig struct {
 // NewMetadataConfig returns a MetadataConfig with default values.
 func NewMetadataConfig() MetadataConfig {
 	return MetadataConfig{
+		Parts:    []int{},
 		Operator: "set",
 		Key:      "example",
 		Value:    `${!hostname}`,
@@ -85,19 +86,19 @@ func NewMetadataConfig() MetadataConfig {
 
 //------------------------------------------------------------------------------
 
-type metadataOperator func(msg types.Message, value []byte) error
+type metadataOperator func(m types.Metadata, value []byte) error
 
 func newMetadataSetOperator(key string) metadataOperator {
-	return func(msg types.Message, value []byte) error {
-		msg.SetMetadata(key, string(value))
+	return func(m types.Metadata, value []byte) error {
+		m.Set(key, string(value))
 		return nil
 	}
 }
 
 func newMetadataDeleteAllOperator(key string) metadataOperator {
-	return func(msg types.Message, value []byte) error {
-		msg.IterMetadata(func(k, _ string) error {
-			msg.DeleteMetadata(k)
+	return func(m types.Metadata, value []byte) error {
+		m.Iter(func(k, _ string) error {
+			m.Delete(k)
 			return nil
 		})
 		return nil
@@ -105,11 +106,11 @@ func newMetadataDeleteAllOperator(key string) metadataOperator {
 }
 
 func newMetadataDeletePrefixOperator(key string) metadataOperator {
-	return func(msg types.Message, value []byte) error {
+	return func(m types.Metadata, value []byte) error {
 		prefix := string(value)
-		msg.IterMetadata(func(k, _ string) error {
+		m.Iter(func(k, _ string) error {
 			if strings.HasPrefix(k, prefix) {
-				msg.DeleteMetadata(k)
+				m.Delete(k)
 			}
 			return nil
 		})
@@ -138,6 +139,8 @@ type Metadata struct {
 	valueBytes  []byte
 	operator    metadataOperator
 
+	parts []int
+
 	conf  Config
 	log   log.Modular
 	stats metrics.Type
@@ -157,6 +160,8 @@ func NewMetadata(
 		conf:  conf,
 		log:   log.NewModule(".processor.metadata"),
 		stats: stats,
+
+		parts: conf.Metadata.Parts,
 
 		valueBytes: []byte(conf.Metadata.Value),
 
@@ -190,9 +195,19 @@ func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
 	}
 
-	if err := p.operator(newMsg, valueBytes); err != nil {
-		p.mErr.Incr(1)
-		p.log.Debugf("Failed to apply operator: %v\n", err)
+	targetParts := p.parts
+	if len(targetParts) == 0 {
+		targetParts = make([]int, newMsg.Len())
+		for i := range targetParts {
+			targetParts[i] = i
+		}
+	}
+
+	for _, index := range targetParts {
+		if err := p.operator(newMsg.GetMetadata(index), valueBytes); err != nil {
+			p.mErr.Incr(1)
+			p.log.Debugf("Failed to apply operator: %v\n", err)
+		}
 	}
 
 	msgs := [1]types.Message{newMsg}

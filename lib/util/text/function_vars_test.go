@@ -54,9 +54,9 @@ func TestFunctionVarDetection(t *testing.T) {
 }
 
 func TestMetadataFunction(t *testing.T) {
-	msg := message.New(nil)
-	msg.SetMetadata("foo", "bar")
-	msg.SetMetadata("baz", "qux")
+	msg := message.New([][]byte{[]byte("foo")})
+	msg.GetMetadata(0).Set("foo", "bar")
+	msg.GetMetadata(0).Set("baz", "qux")
 
 	act := string(ReplaceFunctionVariables(
 		msg, []byte(`foo ${!metadata:foo} baz`),
@@ -73,9 +73,63 @@ func TestMetadataFunction(t *testing.T) {
 	}
 
 	act = string(ReplaceFunctionVariables(
-		msg, []byte(`${!metadata}`),
+		msg, []byte(`foo ${!metadata} bar`),
 	))
-	if exp := `{"baz":"qux","foo":"bar"}`; act != exp {
+	if exp := `foo  bar`; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
+func TestMetadataFunctionIndex(t *testing.T) {
+	msg := message.New([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+	})
+	msg.GetMetadata(0).Set("foo", "bar")
+	msg.GetMetadata(1).Set("foo", "bar2")
+
+	act := string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!metadata:foo,0} baz`),
+	))
+	if exp := "foo bar baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!metadata:foo,1} baz`),
+	))
+	if exp := "foo bar2 baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
+func TestMetadataMapFunction(t *testing.T) {
+	msg := message.New([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+	})
+	msg.GetMetadata(0).Set("foo", "bar")
+	msg.GetMetadata(0).Set("bar", "baz")
+	msg.GetMetadata(1).Set("foo", "bar2")
+
+	act := string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!metadata_json_object} baz`),
+	))
+	if exp := `foo {"bar":"baz","foo":"bar"} baz`; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!metadata_json_object:0} baz`),
+	))
+	if exp := `foo {"bar":"baz","foo":"bar"} baz`; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!metadata_json_object:1} baz`),
+	))
+	if exp := `foo {"foo":"bar2"} baz`; act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }

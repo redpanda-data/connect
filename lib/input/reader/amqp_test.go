@@ -152,10 +152,10 @@ func testAMQPConnect(url string, t *testing.T) {
 				t.Errorf("Unexpected message: %v", act)
 			}
 			delete(testMsgs, act)
-			if act = actM.GetMetadata("foo"); act != "bar" {
+			if act = actM.GetMetadata(0).Get("foo"); act != "bar" {
 				t.Errorf("Wrong metadata returned: %v != bar", act)
 			}
-			if act = actM.GetMetadata("root_foo"); act != "bar2" {
+			if act = actM.GetMetadata(0).Get("root_foo"); act != "bar2" {
 				t.Errorf("Wrong metadata returned: %v != bar2", act)
 			}
 		}

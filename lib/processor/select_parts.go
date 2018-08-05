@@ -109,10 +109,6 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 	m.mCount.Incr(1)
 
 	newMsg := message.New(nil)
-	msg.IterMetadata(func(k, v string) error {
-		newMsg.SetMetadata(k, v)
-		return nil
-	})
 
 	lParts := msg.Len()
 	for _, index := range m.conf.SelectParts.Parts {
@@ -126,7 +122,8 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 			m.mSkipped.Incr(1)
 		} else {
 			m.mSelected.Incr(1)
-			newMsg.Append(msg.Get(index))
+			newIndex := newMsg.Append(msg.Get(index))
+			newMsg.SetMetadata(msg.GetMetadata(index).Copy(), newIndex)
 		}
 	}
 

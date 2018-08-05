@@ -186,3 +186,47 @@ func TestMergeJSONRetention(t *testing.T) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
+
+func TestMergeJSONNoRetention(t *testing.T) {
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	conf := NewConfig()
+	conf.MergeJSON.Parts = []int{0, -1}
+	conf.MergeJSON.RetainParts = false
+
+	jMrg, err := NewMergeJSON(conf, nil, tLog, tStats)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	input := message.New(
+		[][]byte{
+			[]byte(`{"foo":1}`),
+			[]byte(`not related`),
+			[]byte(`{"foo":2}`),
+		},
+	)
+	input.GetMetadata(0).Set("foo", "1")
+	input.GetMetadata(1).Set("foo", "2")
+	input.GetMetadata(2).Set("foo", "3")
+
+	expParts := [][]byte{
+		[]byte(`not related`),
+		[]byte(`{"foo":[1,2]}`),
+	}
+
+	msgs, _ := jMrg.ProcessMessage(input)
+	if len(msgs) != 1 {
+		t.Errorf("Wrong output count")
+	}
+	if act, exp := msgs[0].GetAll(), expParts; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "2", msgs[0].GetMetadata(0).Get("foo"); exp != act {
+		t.Errorf("Wrong metadata: %v != %v", act, exp)
+	}
+	if exp, act := "1", msgs[0].GetMetadata(1).Get("foo"); exp != act {
+		t.Errorf("Wrong metadata: %v != %v", act, exp)
+	}
+}

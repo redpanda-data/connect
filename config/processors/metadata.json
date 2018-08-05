@@ -24,6 +24,7 @@
 				"metadata": {
 					"key": "example",
 					"operator": "set",
+					"parts": [],
 					"value": "${!hostname}"
 				}
 			}

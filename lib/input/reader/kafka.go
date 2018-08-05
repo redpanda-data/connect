@@ -268,12 +268,13 @@ func (k *Kafka) Read() (types.Message, error) {
 	k.offset = data.Offset + 1
 	msg := message.New([][]byte{data.Value})
 
-	msg.SetMetadata("kafka_key", string(data.Key))
-	msg.SetMetadata("kafka_partition", strconv.Itoa(int(data.Partition)))
-	msg.SetMetadata("kafka_topic", data.Topic)
-	msg.SetMetadata("kafka_offset", strconv.Itoa(int(data.Offset)))
+	meta := msg.GetMetadata(0)
+	meta.Set("kafka_key", string(data.Key))
+	meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
+	meta.Set("kafka_topic", data.Topic)
+	meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
 	for _, hdr := range data.Headers {
-		msg.SetMetadata(string(hdr.Key), string(hdr.Value))
+		meta.Set(string(hdr.Key), string(hdr.Value))
 	}
 
 	return msg, nil

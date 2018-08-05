@@ -83,9 +83,46 @@ func TestMetadataSet(t *testing.T) {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, msgs[0].GetMetadata(test.key); exp != act {
+		if exp, act := test.output, msgs[0].GetMetadata(0).Get(test.key); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
+	}
+}
+
+func TestMetadataSetParts(t *testing.T) {
+	conf := NewConfig()
+	conf.Metadata.Parts = []int{1}
+	conf.Metadata.Operator = "set"
+	conf.Metadata.Key = "foo"
+	conf.Metadata.Value = "changed"
+
+	mSet, err := NewMetadata(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inMsg := message.New([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+	})
+	inMsg.GetMetadata(0).Set("foo", "1")
+	inMsg.GetMetadata(1).Set("foo", "2")
+	inMsg.GetMetadata(2).Set("foo", "3")
+
+	msgs, _ := mSet.ProcessMessage(inMsg)
+	if len(msgs) != 1 {
+		t.Fatalf("Wrong count of messages: %v", len(msgs))
+	}
+
+	if exp, act := "1", msgs[0].GetMetadata(0).Get("foo"); exp != act {
+		t.Errorf("Unexpected value: %v != %v", act, exp)
+	}
+	if exp, act := "changed", msgs[0].GetMetadata(1).Get("foo"); exp != act {
+		t.Errorf("Unexpected value: %v != %v", act, exp)
+	}
+	if exp, act := "3", msgs[0].GetMetadata(2).Get("foo"); exp != act {
+		t.Errorf("Unexpected value: %v != %v", act, exp)
 	}
 }
 
@@ -98,16 +135,16 @@ func TestMetadataDeleteAll(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inMsg := message.New(nil)
-	inMsg.SetMetadata("foo", "bar")
-	inMsg.SetMetadata("bar", "baz")
+	inMsg := message.New([][]byte{[]byte("")})
+	inMsg.GetMetadata(0).Set("bar", "baz")
+	inMsg.GetMetadata(0).Set("foo", "bar")
 
 	msgs, _ := mDel.ProcessMessage(inMsg)
 	if len(msgs) != 1 {
 		t.Fatalf("Wrong count of messages: %v", len(msgs))
 	}
 
-	if err = msgs[0].IterMetadata(func(k, v string) error {
+	if err = msgs[0].GetMetadata(0).Iter(func(k, v string) error {
 		return fmt.Errorf("key found: %v", k)
 	}); err != nil {
 		t.Error(err)
@@ -124,13 +161,13 @@ func TestMetadataDeletePrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inMsg := message.New(nil)
-	inMsg.SetMetadata("del_foo", "bar")
-	inMsg.SetMetadata("foo", "bar2")
-	inMsg.SetMetadata("delfoo", "bar3")
-	inMsg.SetMetadata("del_bar", "bar4")
-	inMsg.SetMetadata("bar", "bar5")
-	inMsg.SetMetadata("delbar", "bar6")
+	inMsg := message.New([][]byte{[]byte("")})
+	inMsg.GetMetadata(0).Set("del_foo", "bar")
+	inMsg.GetMetadata(0).Set("foo", "bar2")
+	inMsg.GetMetadata(0).Set("delfoo", "bar3")
+	inMsg.GetMetadata(0).Set("del_bar", "bar4")
+	inMsg.GetMetadata(0).Set("bar", "bar5")
+	inMsg.GetMetadata(0).Set("delbar", "bar6")
 
 	msgs, _ := mDel.ProcessMessage(inMsg)
 	if len(msgs) != 1 {
@@ -144,7 +181,7 @@ func TestMetadataDeletePrefix(t *testing.T) {
 		"delbar": "bar6",
 	}
 
-	if err = msgs[0].IterMetadata(func(k, v string) error {
+	if err = msgs[0].GetMetadata(0).Iter(func(k, v string) error {
 		if _, exists := expMap[k]; !exists {
 			return fmt.Errorf("unexpected key: %v", k)
 		}

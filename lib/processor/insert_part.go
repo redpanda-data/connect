@@ -140,10 +140,13 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	copy(newParts[index+1:], post)
 
 	newMsg := message.New(newParts)
-	msg.IterMetadata(func(k, v string) error {
-		newMsg.SetMetadata(k, v)
-		return nil
-	})
+	for i := 0; i < msg.Len(); i++ {
+		if i < index {
+			newMsg.SetMetadata(msg.GetMetadata(i).Copy(), i)
+		} else if i > index {
+			newMsg.SetMetadata(msg.GetMetadata(i).Copy(), i+1)
+		}
+	}
 
 	p.mSent.Incr(1)
 	p.mSentParts.Incr(int64(newMsg.Len()))

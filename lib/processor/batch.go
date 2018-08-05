@@ -56,9 +56,6 @@ has not yet been reached. Batch parameters are only triggered when a message is
 added, meaning a pending batch can last beyond this period if no messages are
 added since the period was reached.
 
-The metadata of the resulting batch will exactly match the metadata of the last
-message to enter the batch.
-
 When a batch is sent to an output the behaviour will differ depending on the
 protocol. If the output type supports multipart messages then the batch is sent
 as a single message with multiple parts. If the output only supports single part
@@ -106,6 +103,11 @@ func NewBatchConfig() BatchConfig {
 
 //------------------------------------------------------------------------------
 
+type part struct {
+	payload  []byte
+	metadata types.Metadata
+}
+
 // Batch is a processor that combines messages into a batch until a size limit
 // or other condition is reached, at which point the batch is sent out. When a
 // message is combined without yet producing a batch a NoAck response is
@@ -123,7 +125,7 @@ type Batch struct {
 	period    time.Duration
 	cond      condition.Type
 	sizeTally int
-	parts     [][]byte
+	parts     []part
 
 	lastBatch time.Time
 
@@ -172,10 +174,14 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	c.mCount.Incr(1)
 
 	// Add new parts to the buffer.
-	for _, part := range msg.GetAll() {
-		c.sizeTally += len(part)
-		c.parts = append(c.parts, part)
-	}
+	msg.Iter(func(i int, b []byte) error {
+		c.sizeTally += len(b)
+		c.parts = append(c.parts, part{
+			payload:  b,
+			metadata: msg.GetMetadata(i),
+		})
+		return nil
+	})
 
 	batch := false
 	if !batch && c.sizeTally >= c.n {
@@ -196,11 +202,11 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 
 	// If we have reached our target count of parts in the buffer.
 	if batch {
-		newMsg := message.New(c.parts)
-		msg.IterMetadata(func(k, v string) error {
-			newMsg.SetMetadata(k, v)
-			return nil
-		})
+		newMsg := message.New(make([][]byte, len(c.parts)))
+		for i, p := range c.parts {
+			newMsg.Set(i, p.payload)
+			newMsg.SetMetadata(p.metadata, i)
+		}
 
 		c.parts = nil
 		c.sizeTally = 0

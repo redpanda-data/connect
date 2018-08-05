@@ -33,6 +33,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/metadata"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
@@ -237,17 +238,17 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		msg.Append(msgBytes)
 	}
 
-	msg.SetMetadata("http_server_user_agent", r.UserAgent())
-
+	meta := metadata.New(nil)
+	meta.Set("http_server_user_agent", r.UserAgent())
 	for k, v := range r.Header {
 		if len(v) > 0 {
-			msg.SetMetadata(k, v[0])
+			meta.Set(k, v[0])
 		}
 	}
-
 	for _, c := range r.Cookies() {
-		msg.SetMetadata(c.Name, c.Value)
+		meta.Set(c.Name, c.Value)
 	}
+	msg.SetMetadata(meta)
 
 	resChan := make(chan types.Response)
 	select {
@@ -324,16 +325,16 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		msg := message.New([][]byte{msgBytes})
-		msg.SetMetadata("http_server_user_agent", r.UserAgent())
 
+		meta := msg.GetMetadata(0)
+		meta.Set("http_server_user_agent", r.UserAgent())
 		for k, v := range r.Header {
 			if len(v) > 0 {
-				msg.SetMetadata(k, v[0])
+				meta.Set(k, v[0])
 			}
 		}
-
 		for _, c := range r.Cookies() {
-			msg.SetMetadata(c.Name, c.Value)
+			meta.Set(c.Name, c.Value)
 		}
 
 		select {

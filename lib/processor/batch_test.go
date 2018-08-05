@@ -97,7 +97,10 @@ func TestBatchTwoSingleParts(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo1"), []byte("bar1")}
 
-	msgs, res := proc.ProcessMessage(message.New([][]byte{exp[0]}))
+	inMsg := message.New([][]byte{exp[0]})
+	inMsg.GetMetadata(0).Set("foo", "bar1")
+
+	msgs, res := proc.ProcessMessage(inMsg)
 	if len(msgs) != 0 {
 		t.Error("Expected fail on one part")
 	}
@@ -105,12 +108,21 @@ func TestBatchTwoSingleParts(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(message.New([][]byte{exp[1]}))
+	inMsg = message.New([][]byte{exp[1]})
+	inMsg.GetMetadata(0).Set("foo", "bar2")
+
+	msgs, res = proc.ProcessMessage(inMsg)
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
 	if !reflect.DeepEqual(exp, msgs[0].GetAll()) {
 		t.Errorf("Wrong result: %s != %s", msgs[0].GetAll(), exp)
+	}
+	if exp, act := "bar1", msgs[0].GetMetadata(0).Get("foo"); exp != act {
+		t.Errorf("Wrong metadata: %v != %v", act, exp)
+	}
+	if exp, act := "bar2", msgs[0].GetMetadata(1).Get("foo"); exp != act {
+		t.Errorf("Wrong metadata: %v != %v", act, exp)
 	}
 	if res != nil {
 		t.Error("Expected nil res")

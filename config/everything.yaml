@@ -387,6 +387,7 @@ pipeline:
       parts: []
       retain_parts: false
     metadata:
+      parts: []
       operator: set
       key: example
       value: ${!hostname}

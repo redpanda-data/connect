@@ -37,7 +37,8 @@ func init() {
 Parses selected message parts as JSON documents, attempts to merge them into one
 single JSON document and then writes it to a new message part at the end of the
 message. Merged parts are removed unless ` + "`retain_parts`" + ` is set to
-true.`,
+true. The new merged message part will contain the metadata of the first part to
+be merged.`,
 	}
 }
 
@@ -127,16 +128,14 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		newMsg = msg.ShallowCopy()
 	} else {
 		newMsg = message.New(nil)
-		msg.IterMetadata(func(k, v string) error {
-			newMsg.SetMetadata(k, v)
-			return nil
-		})
 	}
 
+	var firstMetadata types.Metadata
 	if len(p.parts) == 0 {
 		for i := 0; i < msg.Len(); i++ {
 			mergeFunc(i)
 		}
+		firstMetadata = msg.GetMetadata(0)
 	} else {
 		targetParts := make(map[int]struct{}, len(p.parts))
 		for _, part := range p.parts {
@@ -152,10 +151,12 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			if _, isTarget := targetParts[i]; isTarget {
 				mergeFunc(i)
 			} else if !p.retain {
-				msg.Append(b)
+				index := newMsg.Append(b)
+				newMsg.SetMetadata(msg.GetMetadata(i), index)
 			}
 			return nil
 		})
+		firstMetadata = msg.GetMetadata(p.parts[0])
 	}
 
 	i := newMsg.Append([]byte{})
@@ -165,6 +166,7 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	} else {
 		p.mSucc.Incr(1)
 	}
+	newMsg.SetMetadata(firstMetadata, i)
 
 	msgs := [1]types.Message{newMsg}
 

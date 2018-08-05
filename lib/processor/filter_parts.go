@@ -115,14 +115,11 @@ func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 	c.mCount.Incr(1)
 
 	newMsg := message.New(nil)
-	msg.IterMetadata(func(k, v string) error {
-		newMsg.SetMetadata(k, v)
-		return nil
-	})
 
 	for i := 0; i < msg.Len(); i++ {
 		if c.condition.Check(message.Lock(msg, i)) {
-			newMsg.Append(msg.Get(i))
+			index := newMsg.Append(msg.Get(i))
+			newMsg.SetMetadata(msg.GetMetadata(i), index)
 		} else {
 			c.mPartDropped.Incr(1)
 		}

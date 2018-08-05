@@ -177,13 +177,12 @@ func (a *AMQP) Write(msg types.Message) error {
 
 	bindingKey := strings.Replace(a.key.Get(msg), "/", ".", -1)
 
-	headers := amqp.Table{}
-	msg.IterMetadata(func(k, v string) error {
-		headers[strings.Replace(k, "_", "-", -1)] = v
-		return nil
-	})
-
-	for _, part := range msg.GetAll() {
+	for i, part := range msg.GetAll() {
+		headers := amqp.Table{}
+		msg.GetMetadata(i).Iter(func(k, v string) error {
+			headers[strings.Replace(k, "_", "-", -1)] = v
+			return nil
+		})
 		err := amqpChan.Publish(
 			a.conf.Exchange,  // publish to an exchange
 			bindingKey,       // routing to 0 or more queues

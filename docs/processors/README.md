@@ -80,6 +80,11 @@ be generated for each part. This can be done by using function interpolations on
 the 'path' field as described [here](../config_interpolation.md#functions). For
 types that aren't file based (such as binary) the file field is ignored.
 
+### Metadata
+
+The resulting archived message adopts the metadata of the _first_ message part
+of the batch.
+
 ## `batch`
 
 ``` yaml
@@ -110,9 +115,6 @@ a period in milliseconds whereby a batch is sent even if the `byte_size`
 has not yet been reached. Batch parameters are only triggered when a message is
 added, meaning a pending batch can last beyond this period if no messages are
 added since the period was reached.
-
-The metadata of the resulting batch will exactly match the metadata of the last
-message to enter the batch.
 
 When a batch is sent to an output the behaviour will differ depending on the
 protocol. If the output type supports multipart messages then the batch is sent
@@ -603,7 +605,8 @@ merge_json:
 Parses selected message parts as JSON documents, attempts to merge them into one
 single JSON document and then writes it to a new message part at the end of the
 message. Merged parts are removed unless `retain_parts` is set to
-true.
+true. The new merged message part will contain the metadata of the first part to
+be merged.
 
 ## `metadata`
 
@@ -612,20 +615,20 @@ type: metadata
 metadata:
   key: example
   operator: set
+  parts: []
   value: ${!hostname}
 ```
 
 Performs operations on the metadata of a message. Metadata are key/value pairs
-that are associated with a message within a Benthos pipeline. Message batches
-usually carry the metadata of the last message to be added. Metadata values can
-be referred to using configuration
+that are associated with message parts of a batch. Metadata values can be
+referred to using configuration
 [interpolation functions](../config_interpolation.md#metadata),
 which allow you to set fields in certain outputs using these dynamic values.
 
-This processor will interpolate functions within the 'value' field, you can find
-a list of functions [here](../config_interpolation.md#functions). This allows
-you to set the contents of a metadata field using values taken from the message
-payload.
+This processor will interpolate functions within the `value` field,
+you can find a list of functions [here](../config_interpolation.md#functions).
+This allows you to set the contents of a metadata field using values taken from
+the message payload.
 
 ### Operations
 

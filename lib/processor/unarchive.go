@@ -176,10 +176,6 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	d.mCount.Incr(1)
 
 	newMsg := message.New(nil)
-	msg.IterMetadata(func(k, v string) error {
-		newMsg.SetMetadata(k, v)
-		return nil
-	})
 	lParts := msg.Len()
 
 	noParts := len(d.conf.Parts) == 0
@@ -206,6 +202,7 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			d.mErr.Incr(1)
 		}
 	}
+	newMsg.SetMetadata(msg.GetMetadata(0).Copy())
 
 	if newMsg.Len() == 0 {
 		d.mSkipped.Incr(1)

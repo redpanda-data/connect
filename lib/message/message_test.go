@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/lib/message/metadata"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -179,20 +180,23 @@ func TestMessageJSONSet(t *testing.T) {
 }
 
 func TestMessageMetadata(t *testing.T) {
-	m := New(nil)
+	m := New([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+	})
 
-	m.SetMetadata("foo", "bar")
-	if exp, act := "bar", m.GetMetadata("foo"); exp != act {
+	m.GetMetadata(0).Set("foo", "bar")
+	if exp, act := "bar", m.GetMetadata(0).Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m.SetMetadata("foo", "bar2")
-	if exp, act := "bar2", m.GetMetadata("foo"); exp != act {
+	m.GetMetadata(0).Set("foo", "bar2")
+	if exp, act := "bar2", m.GetMetadata(0).Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m.SetMetadata("bar", "baz")
-	m.SetMetadata("baz", "qux")
+	m.GetMetadata(0).Set("bar", "baz")
+	m.GetMetadata(0).Set("baz", "qux")
 
 	exp := map[string]string{
 		"foo": "bar2",
@@ -200,12 +204,50 @@ func TestMessageMetadata(t *testing.T) {
 		"baz": "qux",
 	}
 	act := map[string]string{}
-	m.IterMetadata(func(k, v string) error {
+	m.GetMetadata(0).Iter(func(k, v string) error {
 		act[k] = v
 		return nil
 	})
 	if !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+
+	newMetadata := metadata.New(map[string]string{
+		"foo": "new1",
+		"bar": "new2",
+		"baz": "new3",
+	})
+	m.SetMetadata(newMetadata, 0)
+	if exp, act := "new1", m.GetMetadata(0).Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := "new2", m.GetMetadata(0).Get("bar"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := "", m.GetMetadata(-1).Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := "", m.GetMetadata(100).Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	m.SetMetadata(newMetadata, 0, 1)
+	if exp, act := "new1", m.GetMetadata(0).Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := "new1", m.GetMetadata(1).Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	newMetadata = metadata.New(map[string]string{
+		"foo": "more_new",
+	})
+	m.SetMetadata(newMetadata)
+	if exp, act := "more_new", m.GetMetadata(0).Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := "more_new", m.GetMetadata(1).Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
 
@@ -214,28 +256,28 @@ func TestMessageShallowCopy(t *testing.T) {
 		[]byte(`foo`),
 		[]byte(`bar`),
 	})
-	m.SetMetadata("foo", "bar")
+	m.GetMetadata(0).Set("foo", "bar")
 
 	m2 := m.ShallowCopy()
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m2.GetMetadata("foo"); exp != act {
+	if exp, act := "bar", m2.GetMetadata(0).Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m2.SetMetadata("foo", "bar2")
+	m2.GetMetadata(0).Set("foo", "bar2")
 	m2.Set(0, []byte(`baz`))
 	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar2", m2.GetMetadata("foo"); exp != act {
+	if exp, act := "bar2", m2.GetMetadata(0).Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m.GetAll(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m.GetMetadata("foo"); exp != act {
+	if exp, act := "bar", m.GetMetadata(0).Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -245,28 +287,28 @@ func TestMessageDeepCopy(t *testing.T) {
 		[]byte(`foo`),
 		[]byte(`bar`),
 	})
-	m.SetMetadata("foo", "bar")
+	m.GetMetadata(0).Set("foo", "bar")
 
 	m2 := m.DeepCopy()
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m2.GetMetadata("foo"); exp != act {
+	if exp, act := "bar", m2.GetMetadata(0).Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m2.SetMetadata("foo", "bar2")
+	m2.GetMetadata(0).Set("foo", "bar2")
 	m2.Set(0, []byte(`baz`))
 	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar2", m2.GetMetadata("foo"); exp != act {
+	if exp, act := "bar2", m2.GetMetadata(0).Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m.GetAll(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m.GetMetadata("foo"); exp != act {
+	if exp, act := "bar", m.GetMetadata(0).Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }

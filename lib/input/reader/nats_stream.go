@@ -190,7 +190,7 @@ func (n *NATSStream) Read() (types.Message, error) {
 		return nil, types.ErrTypeClosed
 	}
 	bmsg := message.New([][]byte{msg.Data})
-	bmsg.SetMetadata("nats_stream_subject", msg.Subject)
+	bmsg.GetMetadata(0).Set("nats_stream_subject", msg.Subject)
 
 	return bmsg, nil
 }

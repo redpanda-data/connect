@@ -147,11 +147,12 @@ func (m *MQTT) Read() (types.Message, error) {
 	case msg := <-m.msgChan:
 		message := message.New([][]byte{[]byte(msg.Payload())})
 
-		message.SetMetadata("mqtt_duplicate", strconv.FormatBool(bool(msg.Duplicate())))
-		message.SetMetadata("mqtt_qos", strconv.Itoa(int(msg.Qos())))
-		message.SetMetadata("mqtt_retained", strconv.FormatBool(bool(msg.Retained())))
-		message.SetMetadata("mqtt_topic", string(msg.Topic()))
-		message.SetMetadata("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
+		meta := message.GetMetadata(0)
+		meta.Set("mqtt_duplicate", strconv.FormatBool(bool(msg.Duplicate())))
+		meta.Set("mqtt_qos", strconv.Itoa(int(msg.Qos())))
+		meta.Set("mqtt_retained", strconv.FormatBool(bool(msg.Retained())))
+		meta.Set("mqtt_topic", string(msg.Topic()))
+		meta.Set("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
 
 		return message, nil
 	case <-m.interruptChan:

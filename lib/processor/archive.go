@@ -48,7 +48,12 @@ Some archive types (such as tar) treat each archive item (message part) as a
 file with a path. Since message parts only contain raw data a unique path must
 be generated for each part. This can be done by using function interpolations on
 the 'path' field as described [here](../config_interpolation.md#functions). For
-types that aren't file based (such as binary) the file field is ignored.`,
+types that aren't file based (such as binary) the file field is ignored.
+
+### Metadata
+
+The resulting archived message adopts the metadata of the _first_ message part
+of the batch.`,
 	}
 }
 
@@ -229,10 +234,7 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	d.mSent.Incr(1)
 
 	newMsg := message.New([][]byte{newPart})
-	msg.IterMetadata(func(k, v string) error {
-		newMsg.SetMetadata(k, v)
-		return nil
-	})
+	newMsg.SetMetadata(msg.GetMetadata(0).Copy())
 
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil

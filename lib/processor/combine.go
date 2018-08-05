@@ -88,7 +88,7 @@ type Combine struct {
 	log   log.Modular
 	stats metrics.Type
 	n     int
-	parts [][]byte
+	parts []part
 
 	mCount     metrics.StatCounter
 	mWarnParts metrics.StatCounter
@@ -130,17 +130,21 @@ func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	}
 
 	// Add new parts to the buffer.
-	for _, part := range msg.GetAll() {
-		c.parts = append(c.parts, part)
-	}
+	msg.Iter(func(i int, b []byte) error {
+		c.parts = append(c.parts, part{
+			payload:  b,
+			metadata: msg.GetMetadata(i),
+		})
+		return nil
+	})
 
 	// If we have reached our target count of parts in the buffer.
 	if len(c.parts) >= c.n {
-		newMsg := message.New(c.parts)
-		msg.IterMetadata(func(k, v string) error {
-			newMsg.SetMetadata(k, v)
-			return nil
-		})
+		newMsg := message.New(make([][]byte, len(c.parts)))
+		for i, p := range c.parts {
+			newMsg.Set(i, p.payload)
+			newMsg.SetMetadata(p.metadata, i)
+		}
 
 		c.parts = nil
 

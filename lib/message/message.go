@@ -24,10 +24,21 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/message/metadata"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------
+
+// Type is the standard implementation of types.Message, containing a multiple
+// part message.
+type Type struct {
+	createdAt   time.Time
+	parts       [][]byte
+	metadata    []types.Metadata
+	partCaches  []*partCache
+	resultCache map[string]bool
+}
 
 // New initializes a new message.
 func New(parts [][]byte) *Type {
@@ -35,36 +46,6 @@ func New(parts [][]byte) *Type {
 		createdAt: time.Now(),
 		parts:     parts,
 	}
-}
-
-// FromBytes deserialises a Message from a byte array.
-func FromBytes(b []byte) (*Type, error) {
-	if len(b) < 4 {
-		return nil, ErrBadMessageBytes
-	}
-
-	numParts := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
-	if numParts >= uint32(len(b)) {
-		return nil, ErrBadMessageBytes
-	}
-
-	b = b[4:]
-
-	m := New(nil)
-	for i := uint32(0); i < numParts; i++ {
-		if len(b) < 4 {
-			return nil, ErrBadMessageBytes
-		}
-		partSize := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
-		b = b[4:]
-
-		if uint32(len(b)) < partSize {
-			return nil, ErrBadMessageBytes
-		}
-		m.Append(b[:partSize])
-		b = b[partSize:]
-	}
-	return m, nil
 }
 
 //------------------------------------------------------------------------------
@@ -89,113 +70,66 @@ func (p *partCache) Clone() (*partCache, error) {
 
 //------------------------------------------------------------------------------
 
-// Type is the standard implementation of types.Message, containing a multiple
-// part message.
-type Type struct {
-	createdAt   time.Time
-	parts       [][]byte
-	partCaches  []*partCache
-	resultCache map[string]bool
-	metadata    map[string]string
-}
-
-//------------------------------------------------------------------------------
-
-/*
-Internal message blob format:
-
-- Four bytes containing number of message parts in big endian
-- For each message part:
-    + Four bytes containing length of message part in big endian
-    + Content of message part
-
-                                         # Of bytes in message part 2
-                                         |
-# Of message parts (u32 big endian)      |           Content of message part 2
-|                                        |           |
-v                                        v           v
-| 0| 0| 0| 2| 0| 0| 0| 5| h| e| l| l| o| 0| 0| 0| 5| w| o| r| l| d|
-  0  1  2  3  4  5  6  7  8  9 10 11 13 14 15 16 17 18 19 20 21 22
-              ^           ^
-              |           |
-              |           Content of message part 1
-              |
-              # Of bytes in message part 1 (u32 big endian)
-*/
-
-// Reserve bytes for our length counter (4 * 8 = 32 bit)
-var intLen uint32 = 4
-
-// Bytes serialises the message into a single byte array.
-func (m *Type) Bytes() []byte {
-	lenParts := uint32(len(m.parts))
-
-	l := (lenParts + 1) * intLen
-	for i := range m.parts {
-		l += uint32(len(m.parts[i]))
-	}
-	b := make([]byte, l)
-
-	b[0] = byte(lenParts >> 24)
-	b[1] = byte(lenParts >> 16)
-	b[2] = byte(lenParts >> 8)
-	b[3] = byte(lenParts)
-
-	b2 := b[intLen:]
-	for i := range m.parts {
-		le := uint32(len(m.parts[i]))
-
-		b2[0] = byte(le >> 24)
-		b2[1] = byte(le >> 16)
-		b2[2] = byte(le >> 8)
-		b2[3] = byte(le)
-
-		b2 = b2[intLen:]
-
-		copy(b2, m.parts[i])
-		b2 = b2[len(m.parts[i]):]
-	}
-	return b
-}
-
-//------------------------------------------------------------------------------
-
 // ShallowCopy creates a new shallow copy of the message. Parts can be
 // re-arranged in the new copy and JSON parts can be get/set without impacting
-// other message copies. However, it is still unsafe to edit the content of
-// parts.
+// other message copies. However, it is still unsafe to edit the raw content of
+// message parts.
 func (m *Type) ShallowCopy() types.Message {
-	var metadata map[string]string
-	if m.metadata != nil {
-		metadata = make(map[string]string, len(m.metadata))
-		for k, v := range m.metadata {
-			metadata[k] = v
+	var metadata []types.Metadata
+	if len(m.metadata) > 0 {
+		metadata = make([]types.Metadata, len(m.metadata))
+		for i, md := range m.metadata {
+			if md != nil {
+				metadata[i] = md.Copy()
+			}
 		}
 	}
-	newPartCaches := make([]*partCache, len(m.partCaches))
-	for i, c := range m.partCaches {
-		if c == nil {
-			continue
+	var newPartCaches []*partCache
+	if len(m.partCaches) > 0 {
+		newPartCaches = make([]*partCache, len(m.partCaches))
+		for i, c := range m.partCaches {
+			if c == nil {
+				continue
+			}
+			newPartCaches[i], _ = c.Clone()
 		}
-		newPartCaches[i], _ = c.Clone()
+	}
+	var newResultCache map[string]bool
+	if len(m.resultCache) > 0 {
+		newResultCache = make(map[string]bool, len(m.resultCache))
+		for k, v := range m.resultCache {
+			newResultCache[k] = v
+		}
 	}
 	return &Type{
 		createdAt:   m.createdAt,
 		parts:       append([][]byte(nil), m.parts...),
-		resultCache: m.resultCache,
-		partCaches:  newPartCaches,
 		metadata:    metadata,
+		partCaches:  newPartCaches,
+		resultCache: newResultCache,
 	}
 }
 
 // DeepCopy creates a new deep copy of the message. This can be considered an
 // entirely new object that is safe to use anywhere.
 func (m *Type) DeepCopy() types.Message {
-	var metadata map[string]string
-	if m.metadata != nil {
-		metadata = make(map[string]string, len(m.metadata))
-		for k, v := range m.metadata {
-			metadata[k] = v
+	var metadata []types.Metadata
+	if len(m.metadata) > 0 {
+		metadata = make([]types.Metadata, len(m.metadata))
+		for i, md := range m.metadata {
+			if md != nil {
+				metadata[i] = md.Copy()
+			}
+		}
+	}
+	var newPartCaches []*partCache
+	if len(m.partCaches) > 0 {
+		newPartCaches = make([]*partCache, len(m.partCaches))
+		for i, c := range m.partCaches {
+			if c == nil {
+				continue
+			}
+			newPartCaches[i], _ = c.Clone()
 		}
 	}
 	newParts := make([][]byte, len(m.parts))
@@ -204,10 +138,19 @@ func (m *Type) DeepCopy() types.Message {
 		copy(np, p)
 		newParts[i] = np
 	}
+	var newResultCache map[string]bool
+	if len(m.resultCache) > 0 {
+		newResultCache = make(map[string]bool, len(m.resultCache))
+		for k, v := range m.resultCache {
+			newResultCache[k] = v
+		}
+	}
 	return &Type{
-		createdAt: m.createdAt,
-		parts:     newParts,
-		metadata:  metadata,
+		createdAt:   m.createdAt,
+		parts:       newParts,
+		metadata:    metadata,
+		partCaches:  newPartCaches,
+		resultCache: newResultCache,
 	}
 }
 
@@ -230,40 +173,50 @@ func (m *Type) GetAll() [][]byte {
 	return m.parts
 }
 
-// GetMetadata returns a metadata field from its key.
-func (m *Type) GetMetadata(key string) string {
-	if m.metadata == nil {
-		return ""
+// GetMetadata returns the metadata of a message part. If the index is negative
+// then the part is found by counting backwards from the last part starting at
+// -1. If the index is out of bounds then a no-op metadata object is returned.
+func (m *Type) GetMetadata(index int) types.Metadata {
+	if index < 0 {
+		index = len(m.parts) + index
 	}
-	return m.metadata[key]
+	if index < 0 || index >= len(m.parts) {
+		return metadata.New(nil)
+	}
+	m.expandMetadata()
+	if m.metadata[index] == nil {
+		m.metadata[index] = metadata.New(nil)
+	}
+	return m.metadata[index]
 }
 
-// SetMetadata sets the value of a metadata key.
-func (m *Type) SetMetadata(key, value string) {
-	if m.metadata == nil {
-		m.metadata = map[string]string{
-			key: value,
+// SetMetadata sets the metadata of message parts by their index. Multiple
+// indexes can be specified in order to set the same metadata values to each
+// part. If zero indexes are specified the metadata is set for all message
+// parts. If an index is negative then the part is found by counting backwards
+// from the last part starting at -1. If an index is out of bounds then nothing
+// is done.
+func (m *Type) SetMetadata(meta types.Metadata, indexes ...int) {
+	m.expandMetadata()
+	if len(indexes) == 0 {
+		for i := range m.metadata {
+			m.metadata[i] = metadata.LazyCopy(meta)
 		}
 		return
 	}
-	m.metadata[key] = value
-}
-
-// DeleteMetadata removes a metadata key from the message.
-func (m *Type) DeleteMetadata(key string) {
-	if m.metadata != nil {
-		delete(m.metadata, key)
-	}
-}
-
-// IterMetadata iterates each metadata key/value pair, calling f for each pair.
-func (m *Type) IterMetadata(f func(k, v string) error) error {
-	for k, v := range m.metadata {
-		if err := f(k, v); err != nil {
-			return err
+	for _, index := range indexes {
+		if index < 0 {
+			index = len(m.parts) + index
+		}
+		if index < 0 || index >= len(m.parts) {
+			continue
+		}
+		if len(indexes) > 1 {
+			m.metadata[index] = metadata.LazyCopy(meta)
+		} else {
+			m.metadata[index] = meta
 		}
 	}
-	return nil
 }
 
 // Set the value of a message part by its index. Indexes can be negative.
@@ -290,6 +243,9 @@ func (m *Type) SetAll(p [][]byte) {
 
 // Append adds a new message part to the message.
 func (m *Type) Append(b ...[]byte) int {
+	if len(m.metadata) > 0 {
+		m.metadata = append(m.metadata, make([]types.Metadata, len(b))...)
+	}
 	for _, p := range b {
 		m.parts = append(m.parts, p)
 	}
@@ -310,6 +266,14 @@ func (m *Type) Iter(f func(i int, b []byte) error) error {
 		}
 	}
 	return nil
+}
+
+func (m *Type) expandMetadata() {
+	if len(m.metadata) < len(m.parts) {
+		mParts := make([]types.Metadata, len(m.parts))
+		copy(mParts, m.metadata)
+		m.metadata = mParts
+	}
 }
 
 func (m *Type) expandCache(index int) {
@@ -393,6 +357,95 @@ func (m *Type) LazyCondition(label string, cond types.Condition) bool {
 // CreatedAt returns a timestamp whereby the message was created.
 func (m *Type) CreatedAt() time.Time {
 	return m.createdAt
+}
+
+//------------------------------------------------------------------------------
+
+/*
+Internal message blob format:
+
+- Four bytes containing number of message parts in big endian
+- For each message part:
+    + Four bytes containing length of message part in big endian
+    + Content of message part
+
+                                         # Of bytes in message part 2
+                                         |
+# Of message parts (u32 big endian)      |           Content of message part 2
+|                                        |           |
+v                                        v           v
+| 0| 0| 0| 2| 0| 0| 0| 5| h| e| l| l| o| 0| 0| 0| 5| w| o| r| l| d|
+  0  1  2  3  4  5  6  7  8  9 10 11 13 14 15 16 17 18 19 20 21 22
+              ^           ^
+              |           |
+              |           Content of message part 1
+              |
+              # Of bytes in message part 1 (u32 big endian)
+*/
+
+// Reserve bytes for our length counter (4 * 8 = 32 bit)
+var intLen uint32 = 4
+
+// Bytes serialises the message into a single byte array.
+func (m *Type) Bytes() []byte {
+	lenParts := uint32(len(m.parts))
+
+	l := (lenParts + 1) * intLen
+	for i := range m.parts {
+		l += uint32(len(m.parts[i]))
+	}
+	b := make([]byte, l)
+
+	b[0] = byte(lenParts >> 24)
+	b[1] = byte(lenParts >> 16)
+	b[2] = byte(lenParts >> 8)
+	b[3] = byte(lenParts)
+
+	b2 := b[intLen:]
+	for i := range m.parts {
+		le := uint32(len(m.parts[i]))
+
+		b2[0] = byte(le >> 24)
+		b2[1] = byte(le >> 16)
+		b2[2] = byte(le >> 8)
+		b2[3] = byte(le)
+
+		b2 = b2[intLen:]
+
+		copy(b2, m.parts[i])
+		b2 = b2[len(m.parts[i]):]
+	}
+	return b
+}
+
+// FromBytes deserialises a Message from a byte array.
+func FromBytes(b []byte) (*Type, error) {
+	if len(b) < 4 {
+		return nil, ErrBadMessageBytes
+	}
+
+	numParts := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+	if numParts >= uint32(len(b)) {
+		return nil, ErrBadMessageBytes
+	}
+
+	b = b[4:]
+
+	m := New(nil)
+	for i := uint32(0); i < numParts; i++ {
+		if len(b) < 4 {
+			return nil, ErrBadMessageBytes
+		}
+		partSize := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+		b = b[4:]
+
+		if uint32(len(b)) < partSize {
+			return nil, ErrBadMessageBytes
+		}
+		m.Append(b[:partSize])
+		b = b[partSize:]
+	}
+	return m, nil
 }
 
 //------------------------------------------------------------------------------

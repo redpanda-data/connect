@@ -82,8 +82,23 @@ referred to will depend on the context of where the function is called.
 If a message contains the metadata key/value pair `foo: bar` the function
 `${!metadata:foo}` would resolve to `bar`.
 
-If the argument is ommited then all key/value pairs within the metadata will be
-printed as a JSON object.
+When applied to a batch of message parts this function targets the first message
+part by default. It is possible to specify a target part by following the key
+with a comma and part number, e.g. `${!metadata:foo,2}` would target the
+key `foo` within the third message part in the batch.
+
+Message metadata can be modified using the
+[metadata processor](./processors/README.md#metadata).
+
+### `metadata_json_object`
+
+Resolves to all metadata key/value pairs of a payload as a JSON object. The
+message referred to will depend on the context of where the function is called.
+
+When applied to a batch of message parts this function targets the first message
+part by default. It is possible to specify a target part with an integer
+argument e.g. `${!metadata_json_object:2}` would target the metadata of the
+third message part in the batch.
 
 Message metadata can be modified using the
 [metadata processor](./processors/README.md#metadata).

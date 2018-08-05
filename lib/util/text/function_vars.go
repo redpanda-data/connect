@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/gabs"
 )
 
@@ -40,8 +41,7 @@ import (
 type Message interface {
 	Get(p int) []byte
 	GetJSON(p int) (interface{}, error)
-	GetMetadata(key string) string
-	IterMetadata(func(k, v string) error) error
+	GetMetadata(index int) types.Metadata
 	Len() int
 }
 
@@ -71,6 +71,42 @@ func jsonFieldFunction(msg Message, arg string) []byte {
 		return []byte(`null`)
 	}
 	return gPart.Bytes()
+}
+
+func metadataFunction(msg Message, arg string) []byte {
+	if len(arg) == 0 {
+		return []byte("")
+	}
+	args := strings.Split(arg, ",")
+	part := 0
+	if len(args) == 2 {
+		partB, err := strconv.ParseInt(args[1], 10, 64)
+		if err == nil {
+			part = int(partB)
+		}
+	}
+	meta := msg.GetMetadata(part)
+	return []byte(meta.Get(args[0]))
+}
+
+func metadataMapFunction(msg Message, arg string) []byte {
+	part := 0
+	if len(arg) > 0 {
+		partB, err := strconv.ParseInt(arg, 10, 64)
+		if err == nil {
+			part = int(partB)
+		}
+	}
+	kvs := map[string]string{}
+	msg.GetMetadata(part).Iter(func(k, v string) error {
+		kvs[k] = v
+		return nil
+	})
+	result, err := json.Marshal(kvs)
+	if err != nil {
+		return []byte("")
+	}
+	return result
 }
 
 //------------------------------------------------------------------------------
@@ -134,22 +170,9 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 
 		return []byte(strconv.FormatUint(count, 10))
 	},
-	"json_field": jsonFieldFunction,
-	"metadata": func(m Message, arg string) []byte {
-		if len(arg) == 0 {
-			kvs := map[string]string{}
-			m.IterMetadata(func(k, v string) error {
-				kvs[k] = v
-				return nil
-			})
-			result, err := json.Marshal(kvs)
-			if err != nil {
-				return []byte("")
-			}
-			return result
-		}
-		return []byte(m.GetMetadata(arg))
-	},
+	"json_field":           jsonFieldFunction,
+	"metadata":             metadataFunction,
+	"metadata_json_object": metadataMapFunction,
 }
 
 // ContainsFunctionVariables returns true if inBytes contains function variable
