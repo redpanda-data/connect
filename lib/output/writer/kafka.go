@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
@@ -201,22 +200,23 @@ func (k *Kafka) Write(msg types.Message) error {
 	}
 
 	msgs := []*sarama.ProducerMessage{}
-	for _, part := range message.GetAllBytes(msg) {
-		if len(part) > k.conf.MaxMsgBytes {
+	msg.Iter(func(i int, p types.Part) error {
+		if len(p.Get()) > k.conf.MaxMsgBytes {
 			k.stats.Incr("output.kafka.send.dropped.max_msg_bytes", 1)
-			continue
+			return nil
 		}
 
 		key := k.key.Get(msg)
 		nextMsg := &sarama.ProducerMessage{
 			Topic: k.conf.Topic,
-			Value: sarama.ByteEncoder(part),
+			Value: sarama.ByteEncoder(p.Get()),
 		}
 		if len(key) > 0 {
 			nextMsg.Key = sarama.ByteEncoder(key)
 		}
 		msgs = append(msgs, nextMsg)
-	}
+		return nil
+	})
 
 	err := producer.SendMessages(msgs)
 	if err != nil {

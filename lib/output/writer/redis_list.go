@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/go-redis/redis"
@@ -123,13 +122,14 @@ func (r *RedisList) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	for _, part := range message.GetAllBytes(msg) {
-		if err := client.RPush(r.conf.Key, part).Err(); err != nil {
+	return msg.Iter(func(i int, p types.Part) error {
+		if err := client.RPush(r.conf.Key, p.Get()).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return types.ErrNotConnected
 		}
-	}
+		return nil
+	})
 
 	return nil
 }

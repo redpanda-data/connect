@@ -245,12 +245,12 @@ func (h *HTTPClient) doRequest() (*http.Response, error) {
 	return h.client.Do(h.payload)
 }
 
-func (h *HTTPClient) parseResponse(res *http.Response) ([][]byte, error) {
+func (h *HTTPClient) parseResponse(res *http.Response) (types.Message, error) {
 	msg, err := h.client.ParseResponse(res)
 	if err != nil {
 		return nil, err
 	}
-	return message.GetAllBytes(msg), nil
+	return msg, nil
 }
 
 //------------------------------------------------------------------------------
@@ -297,13 +297,11 @@ func (h *HTTPClient) loop() {
 					mReqErr.Incr(1)
 				}
 			} else {
-				var parts [][]byte
-				if parts, err = h.parseResponse(res); err != nil {
+				if msgOut, err = h.parseResponse(res); err != nil {
 					mReqParseErr.Incr(1)
 					h.log.Errorf("Failed to decode response: %v\n", err)
 				} else {
 					mReqSucc.Incr(1)
-					msgOut = message.New(parts)
 				}
 				res.Body.Close()
 			}

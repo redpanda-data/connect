@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -134,15 +133,14 @@ func (m *MQTT) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	for _, part := range message.GetAllBytes(msg) {
-		mtok := client.Publish(m.conf.Topic, byte(m.conf.QoS), false, part)
+	return msg.Iter(func(i int, p types.Part) error {
+		mtok := client.Publish(m.conf.Topic, byte(m.conf.QoS), false, p.Get())
 		mtok.Wait()
 		if err := mtok.Error(); err != nil {
 			return err
 		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // CloseAsync shuts down the MQTT output and stops processing messages.

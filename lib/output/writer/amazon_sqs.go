@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/aws/aws-sdk-go/aws"
@@ -145,15 +144,15 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 		}
 	*/
 
-	for _, part := range message.GetAllBytes(msg) {
+	return msg.Iter(func(i int, p types.Part) error {
 		if _, err := a.sqs.SendMessage(&sqs.SendMessageInput{
 			QueueUrl:    aws.String(a.conf.URL),
-			MessageBody: aws.String(string(part)),
+			MessageBody: aws.String(string(p.Get())),
 		}); err != nil {
 			return err
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

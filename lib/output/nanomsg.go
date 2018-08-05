@@ -32,7 +32,6 @@ import (
 	"nanomsg.org/go-mangos/transport/tcp"
 
 	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -204,12 +203,9 @@ func (s *Nanomsg) loop() {
 			return
 		}
 		mCount.Incr(1)
-		var err error
-		for _, part := range message.GetAllBytes(ts.Payload) {
-			if err = s.socket.Send(part); err != nil {
-				break
-			}
-		}
+		err := ts.Payload.Iter(func(i int, p types.Part) error {
+			return s.socket.Send(p.Get())
+		})
 		if err != nil {
 			mSendErr.Incr(1)
 		} else {
