@@ -354,7 +354,7 @@ func (t *Type) MapResponses(payload, response types.Message) error {
 
 partLoop:
 	for i := 0; i < response.Len(); i++ {
-		if response.Get(i) == nil {
+		if response.Get(i).Get() == nil {
 			// Parts that are nil are skipped.
 			continue partLoop
 		}

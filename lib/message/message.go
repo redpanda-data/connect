@@ -103,6 +103,9 @@ func (m *Type) Get(index int) types.Part {
 	if index < 0 || index >= len(m.parts) {
 		return NewPart(nil)
 	}
+	if m.parts[index] == nil {
+		m.parts[index] = NewPart(nil)
+	}
 	return onChangePart(m.parts[index], func() {
 		m.resultCache = nil
 	})
@@ -129,6 +132,10 @@ func (m *Type) Len() int {
 // Iter will iterate all parts of the message, calling f for each.
 func (m *Type) Iter(f func(i int, p types.Part) error) error {
 	for i, p := range m.parts {
+		if p == nil {
+			p = NewPart(nil)
+			m.parts[i] = p
+		}
 		part := onChangePart(p, func() {
 			m.resultCache = nil
 		})

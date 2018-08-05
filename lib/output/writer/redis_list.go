@@ -130,8 +130,6 @@ func (r *RedisList) Write(msg types.Message) error {
 		}
 		return nil
 	})
-
-	return nil
 }
 
 // disconnect safely closes a connection to an RedisList server.

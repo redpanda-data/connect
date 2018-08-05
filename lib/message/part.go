@@ -22,6 +22,7 @@ package message
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/Jeffail/benthos/lib/message/metadata"
 	"github.com/Jeffail/benthos/lib/types"
@@ -102,6 +103,9 @@ func (p *Part) Metadata() types.Metadata {
 func (p *Part) JSON() (interface{}, error) {
 	if p.jsonCache != nil {
 		return p.jsonCache, nil
+	}
+	if p.data == nil {
+		return nil, errors.New("part is nil")
 	}
 	if err := json.Unmarshal(p.data, &p.jsonCache); err != nil {
 		return nil, err
