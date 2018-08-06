@@ -803,20 +803,14 @@ split:
   size: 1
 ```
 
-Breaks messages batches (synonymous with multiple part messages) into smaller
+Breaks message batches (synonymous with multiple part messages) into smaller
 batches, targeting a specific batch size of discrete message parts (default size
 is 1 message.)
 
-It is NOT necessary to use the split processor just because your output doesn't
-support batches or multiple part messages, since those outputs will
-automatically send batched messages individually.
-
-### Remainders
-
-For each batch, if there is a remainder of message parts after splitting to a
-target size then the remainder is also sent as a single batch. For example, if
-your target size was 10, and the processor received a batch of 95 message parts,
-the result would be 9 batches of 10 messages followed by a batch of 5 messages.
+For each batch, if there is a remainder of parts after splitting a batch, the
+remainder is also sent as a single batch. For example, if your target size was
+10, and the processor received a batch of 95 message parts, the result would be
+9 batches of 10 messages followed by a batch of 5 messages.
 
 ## `text`
 
