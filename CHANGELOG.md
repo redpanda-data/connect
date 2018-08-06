@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.23.0 - 2018-08-06
+
+### Added
+
+- Metadata fields are now per message part within a batch.
+- New `metadata_json_object` function interpolation to return a JSON object of
+  metadata key/value pairs.
+
+### Changed
+
+- The `metadata` function interpolation now allows part indexing and no longer
+  returns a JSON object when no key is specified, this behaviour can now be done
+  using the `metadata_json_object` function.
+
 ### 0.22.0 - 2018-08-03
 
 ### Added

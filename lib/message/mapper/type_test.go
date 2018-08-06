@@ -174,7 +174,7 @@ func TestTypeMapValidation(t *testing.T) {
 	}
 }
 
-func TestTypeDo(t *testing.T) {
+func TestTypeMapRequests(t *testing.T) {
 	type testCase struct {
 		name    string
 		input   [][]byte
@@ -397,6 +397,7 @@ func TestTypeOverlayResult(t *testing.T) {
 	msg := message.New([][]byte{
 		[]byte(`{}`),
 	})
+	msg.Get(0).Metadata().Set("foo", "bar")
 	if err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"bar":{"baz":2}}`),
 	})); err != nil {
@@ -405,11 +406,16 @@ func TestTypeOverlayResult(t *testing.T) {
 	if exp, act := `{"bar":1,"baz":2}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
+	if exp, act := `bar`, msg.Get(0).Metadata().Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
 
 	msg = message.New([][]byte{
 		[]byte(`{}`),
 		[]byte(`{}`),
 	})
+	msg.Get(0).Metadata().Set("foo", "bar1")
+	msg.Get(1).Metadata().Set("foo", "bar2")
 	if err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"bar":{"baz":2}}`),
 		[]byte(`{"foo":{"bar":3},"bar":{"baz":4},"baz":{"qux":5}}`),
@@ -420,6 +426,12 @@ func TestTypeOverlayResult(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{"bar":3,"baz":4,"qux":5}`, string(msg.Get(1).Get()); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := `bar1`, msg.Get(0).Metadata().Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := `bar2`, msg.Get(1).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -493,12 +505,16 @@ func TestTypeOverlayResultRoot(t *testing.T) {
 	msg := message.New([][]byte{
 		[]byte(`{"this":"should be removed"}`),
 	})
+	msg.Get(0).Metadata().Set("foo", "bar1")
 	if err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"new":"root"}},"bar":{"baz":2}}`),
 	})); err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := `{"new":"root"}`, string(msg.Get(0).Get()); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := `bar1`, msg.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
