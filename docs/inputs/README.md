@@ -603,6 +603,7 @@ s3:
   delete_objects: false
   prefix: ""
   region: eu-west-1
+  retries: 3
   sqs_body_path: Records.s3.object.key
   sqs_envelope_path: ""
   sqs_max_messages: 10

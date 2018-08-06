@@ -54,6 +54,7 @@ type AmazonS3Config struct {
 	Region          string                     `json:"region" yaml:"region"`
 	Bucket          string                     `json:"bucket" yaml:"bucket"`
 	Prefix          string                     `json:"prefix" yaml:"prefix"`
+	Retries         int                        `json:"retries" yaml:"retries"`
 	DeleteObjects   bool                       `json:"delete_objects" yaml:"delete_objects"`
 	SQSURL          string                     `json:"sqs_url" yaml:"sqs_url"`
 	SQSBodyPath     string                     `json:"sqs_body_path" yaml:"sqs_body_path"`
@@ -69,6 +70,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		Region:          "eu-west-1",
 		Bucket:          "",
 		Prefix:          "",
+		Retries:         3,
 		DeleteObjects:   false,
 		SQSURL:          "",
 		SQSBodyPath:     "Records.s3.object.key",
@@ -88,6 +90,7 @@ func NewAmazonS3Config() AmazonS3Config {
 
 type objKey struct {
 	s3Key     string
+	attempts  int
 	sqsHandle *sqs.DeleteMessageBatchRequestEntry
 }
 
@@ -180,7 +183,8 @@ func (a *AmazonS3) Connect() error {
 		}
 		for _, obj := range objList.Contents {
 			a.targetKeys = append(a.targetKeys, objKey{
-				s3Key: *obj.Key,
+				s3Key:    *obj.Key,
+				attempts: a.conf.Retries,
 			})
 		}
 	} else {
@@ -246,6 +250,7 @@ messageLoop:
 			if strings.HasPrefix(t, a.conf.Prefix) {
 				a.targetKeys = append(a.targetKeys, objKey{
 					s3Key:     t,
+					attempts:  a.conf.Retries,
 					sqsHandle: msgHandle,
 				})
 			}
@@ -263,7 +268,8 @@ messageLoop:
 			} else {
 				for _, target := range newTargets {
 					a.targetKeys = append(a.targetKeys, objKey{
-						s3Key: target,
+						s3Key:    target,
+						attempts: a.conf.Retries,
 					})
 				}
 				a.targetKeys[len(a.targetKeys)-1].sqsHandle = msgHandle
@@ -277,6 +283,19 @@ messageLoop:
 		Entries:  dudMessageHandles,
 	})
 	return types.ErrTimeout
+}
+
+func (a *AmazonS3) popTargetKey() {
+	if len(a.targetKeys) == 0 {
+		return
+	}
+	target := a.targetKeys[0]
+	if len(a.targetKeys) > 1 {
+		a.targetKeys = a.targetKeys[1:]
+	} else {
+		a.targetKeys = nil
+	}
+	a.readKeys = append(a.readKeys, target)
 }
 
 // Read attempts to read a new message from the target S3 bucket.
@@ -308,15 +327,16 @@ func (a *AmazonS3) Read() (types.Message, error) {
 		Bucket: aws.String(a.conf.Bucket),
 		Key:    aws.String(target.s3Key),
 	}); err != nil {
+		target.attempts--
+		if target.attempts == 0 {
+			a.popTargetKey()
+		} else {
+			a.targetKeys[0] = target
+		}
 		return nil, fmt.Errorf("failed to download file, %v", err)
 	}
 
-	if len(a.targetKeys) > 1 {
-		a.targetKeys = a.targetKeys[1:]
-	} else {
-		a.targetKeys = nil
-	}
-	a.readKeys = append(a.readKeys, target)
+	a.popTargetKey()
 
 	msg := message.New([][]byte{buff.Bytes()})
 	msg.Get(0).Metadata().Set("s3_key", target.s3Key)

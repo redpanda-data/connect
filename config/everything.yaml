@@ -164,6 +164,7 @@ input:
     region: eu-west-1
     bucket: ""
     prefix: ""
+    retries: 3
     delete_objects: false
     sqs_url: ""
     sqs_body_path: Records.s3.object.key

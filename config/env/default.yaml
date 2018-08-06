@@ -147,6 +147,7 @@ input:
         delete_objects: ${INPUT_S3_DELETE_OBJECTS:false}
         prefix: ${INPUT_S3_PREFIX}
         region: ${INPUT_S3_REGION:eu-west-1}
+        retries: ${INPUT_S3_RETRIES:3}
         sqs_body_path: ${INPUT_S3_SQS_BODY_PATH:Records.s3.object.key}
         sqs_envelope_path: ${INPUT_S3_SQS_ENVELOPE_PATH}
         sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:10}

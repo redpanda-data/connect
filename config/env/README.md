@@ -156,6 +156,7 @@ INPUT_S3_CREDENTIALS_TOKEN
 INPUT_S3_DELETE_OBJECTS                     = false
 INPUT_S3_PREFIX
 INPUT_S3_REGION                             = eu-west-1
+INPUT_S3_RETRIES                            = 3
 INPUT_S3_SQS_BODY_PATH                      = Records.s3.object.key
 INPUT_S3_SQS_ENVELOPE_PATH
 INPUT_S3_SQS_MAX_MESSAGES                   = 10
