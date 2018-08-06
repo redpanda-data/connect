@@ -45,11 +45,6 @@ type lockedMessage struct {
 	part int
 }
 
-// Bytes serialises the message into a single byte array.
-func (m *lockedMessage) Bytes() []byte {
-	return m.m.Bytes()
-}
-
 // Copy simply returns the same type, it's read only and therefore doesn't need
 // copying.
 func (m *lockedMessage) Copy() types.Message {

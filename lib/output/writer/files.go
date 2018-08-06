@@ -95,10 +95,8 @@ func (f *Files) Write(msg types.Message) error {
 		if err != nil {
 			return err
 		}
-		if err = ioutil.WriteFile(path, p.Get(), os.FileMode(0666)); err != nil {
-			return err
-		}
-		return nil
+
+		return ioutil.WriteFile(path, p.Get(), os.FileMode(0666))
 	})
 }
 

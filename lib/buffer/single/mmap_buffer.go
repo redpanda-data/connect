@@ -307,7 +307,7 @@ func (f *MmapBuffer) PushMessage(msg types.Message) (int, error) {
 		f.cache.L.Unlock()
 	}()
 
-	blob := msg.Bytes()
+	blob := message.ToBytes(msg)
 	index := f.writtenTo
 
 	if len(blob)+4 > f.config.FileSize {

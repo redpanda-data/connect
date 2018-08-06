@@ -166,7 +166,7 @@ func TestUnarchiveBinary(t *testing.T) {
 	}
 
 	testMsg := message.New([][]byte{[]byte("hello"), []byte("world")})
-	testMsgBlob := testMsg.Bytes()
+	testMsgBlob := message.ToBytes(testMsg)
 
 	if msgs, _ := proc.ProcessMessage(message.New([][]byte{testMsgBlob})); len(msgs) == 1 {
 		if !reflect.DeepEqual(message.GetAllBytes(testMsg), message.GetAllBytes(msgs[0])) {

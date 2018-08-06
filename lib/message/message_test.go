@@ -35,7 +35,7 @@ func TestMessageSerialization(t *testing.T) {
 		[]byte("12345"),
 	})
 
-	b := m.Bytes()
+	b := ToBytes(m)
 
 	m2, err := FromBytes(b)
 

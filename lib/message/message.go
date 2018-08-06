@@ -194,14 +194,15 @@ v                                        v           v
 // Reserve bytes for our length counter (4 * 8 = 32 bit)
 var intLen uint32 = 4
 
-// Bytes serialises the message into a single byte array.
-func (m *Type) Bytes() []byte {
-	lenParts := uint32(len(m.parts))
+// ToBytes serialises a message into a single byte array.
+func ToBytes(m types.Message) []byte {
+	lenParts := uint32(m.Len())
 
 	l := (lenParts + 1) * intLen
-	for i := range m.parts {
-		l += uint32(len(m.parts[i].Get()))
-	}
+	m.Iter(func(i int, p types.Part) error {
+		l += uint32(len(p.Get()))
+		return nil
+	})
 	b := make([]byte, l)
 
 	b[0] = byte(lenParts >> 24)
@@ -210,8 +211,9 @@ func (m *Type) Bytes() []byte {
 	b[3] = byte(lenParts)
 
 	b2 := b[intLen:]
-	for i := range m.parts {
-		le := uint32(len(m.parts[i].Get()))
+
+	m.Iter(func(i int, p types.Part) error {
+		le := uint32(len(p.Get()))
 
 		b2[0] = byte(le >> 24)
 		b2[1] = byte(le >> 16)
@@ -220,9 +222,11 @@ func (m *Type) Bytes() []byte {
 
 		b2 = b2[intLen:]
 
-		copy(b2, m.parts[i].Get())
-		b2 = b2[len(m.parts[i].Get()):]
-	}
+		copy(b2, p.Get())
+		b2 = b2[len(p.Get()):]
+		return nil
+	})
+
 	return b
 }
 

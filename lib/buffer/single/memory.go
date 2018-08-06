@@ -196,7 +196,7 @@ func (m *Memory) PushMessage(msg types.Message) (int, error) {
 		m.cond.L.Unlock()
 	}()
 
-	block := msg.Bytes()
+	block := message.ToBytes(msg)
 	index := m.writtenTo
 
 	if len(block)+4 > m.config.Limit {

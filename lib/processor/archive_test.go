@@ -152,7 +152,7 @@ func TestArchiveBinary(t *testing.T) {
 	}
 
 	testMsg := message.New([][]byte{[]byte("hello"), []byte("world")})
-	testMsgBlob := testMsg.Bytes()
+	testMsgBlob := message.ToBytes(testMsg)
 
 	if msgs, _ := proc.ProcessMessage(testMsg); len(msgs) == 1 {
 		if lParts := msgs[0].Len(); lParts != 1 {

@@ -120,13 +120,6 @@ type Message interface {
 	// argument with the index and contents of the message part.
 	Iter(f func(i int, part Part) error) error
 
-	// Bytes returns a binary representation of the message, which can be later
-	// parsed back into a multipart message with `FromBytes`. The result of this
-	// call can itself be the part of a new message, which is a useful way of
-	// transporting multiple part messages across protocols that only support
-	// single parts.
-	Bytes() []byte
-
 	// LazyCondition lazily evaluates conditions on the message by caching the
 	// results as per a label to identify the condition. The cache of results is
 	// cleared whenever the contents of the message is changed.

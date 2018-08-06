@@ -107,7 +107,7 @@ func tarArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 }
 
 func binaryArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
-	return message.NewPart(msg.Bytes()).
+	return message.NewPart(message.ToBytes(msg)).
 		SetMetadata(msg.Get(0).Metadata().Copy()), nil
 }
 

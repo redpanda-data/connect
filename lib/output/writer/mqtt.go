@@ -136,10 +136,7 @@ func (m *MQTT) Write(msg types.Message) error {
 	return msg.Iter(func(i int, p types.Part) error {
 		mtok := client.Publish(m.conf.Topic, byte(m.conf.QoS), false, p.Get())
 		mtok.Wait()
-		if err := mtok.Error(); err != nil {
-			return err
-		}
-		return nil
+		return mtok.Error()
 	})
 }
 
