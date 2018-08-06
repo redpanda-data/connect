@@ -48,7 +48,12 @@ message appears.
 Sometimes inputs close themselves. For example, when the ` + "`file`" + ` input
 type reaches the end of a file it will shut down. By default this type will also
 shut down. If you wish for the input type to be restarted every time it shuts
-down until the condition is met then set ` + "`restart_input` to `true`.",
+down until the condition is met then set ` + "`restart_input` to `true`." + `
+
+### Metadata
+
+A metadata key ` + "`benthos_read_until` containing the value `final`" + ` is
+added to the first part of the message that triggers to input to stop.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			condSanit, err := condition.SanitiseConfig(conf.ReadUntil.Condition)
 			if err != nil {
@@ -259,6 +264,8 @@ runLoop:
 			}
 			continue
 		}
+
+		tran.Payload.Get(0).Metadata().Set("benthos_read_until", "final")
 
 		// If this transaction succeeds we shut down.
 		tmpRes := make(chan types.Response)

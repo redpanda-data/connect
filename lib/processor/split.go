@@ -34,22 +34,35 @@ func init() {
 	Constructors[TypeSplit] = TypeSpec{
 		constructor: NewSplit,
 		description: `
-Extracts the individual parts of a multipart message and turns them each into a
-unique message. It is NOT necessary to use the split processor when your output
-only supports single part messages, since those message parts will automatically
-be sent as individual messages.
+Breaks messages batches (synonymous with multiple part messages) into smaller
+batches, targeting a specific batch size of discrete message parts (default size
+is 1 message.)
 
-Please note that when you split a message you will lose the coupling between the
-acknowledgement from the output destination to the origin message at the input
-source. If all but one part of a split message is successfully propagated to the
-destination the source will still see an error and may attempt to resend the
-entire message batch again.
+It is NOT necessary to use the split processor just because your output doesn't
+support batches or multiple part messages, since those outputs will
+automatically send batched messages individually.
 
-The split operator is useful for breaking down messages containing a large
-number of parts into smaller batches by using the split processor followed by
-the combine processor. For example:
+### Remainders
 
-1 Message of 1000 parts -> Split -> Combine 10 -> 100 Messages of 10 parts.`,
+For each batch, if there is a remainder of message parts after splitting to a
+target size then the remainder is also sent as a single batch. For example, if
+your target size was 10, and the processor received a batch of 95 message parts,
+the result would be 9 batches of 10 messages followed by a batch of 5 messages.`,
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// SplitConfig is a configuration struct containing fields for the Split
+// processor, which breaks message batches down into batches of a smaller size.
+type SplitConfig struct {
+	Size int `json:"size" yaml:"size"`
+}
+
+// NewSplitConfig returns a SplitConfig with default values.
+func NewSplitConfig() SplitConfig {
+	return SplitConfig{
+		Size: 1,
 	}
 }
 
@@ -59,6 +72,8 @@ the combine processor. For example:
 type Split struct {
 	log   log.Modular
 	stats metrics.Type
+
+	size int
 
 	mCount     metrics.StatCounter
 	mDropped   metrics.StatCounter
@@ -73,6 +88,8 @@ func NewSplit(
 	return &Split{
 		log:   log.NewModule(".processor.split"),
 		stats: stats,
+
+		size: conf.Split.Size,
 
 		mCount:     stats.GetCounter("processor.split.count"),
 		mDropped:   stats.GetCounter("processor.split.dropped"),
@@ -93,16 +110,24 @@ func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		return nil, response.NewAck()
 	}
 
-	msgs := make([]types.Message, msg.Len())
-	msg.Iter(func(i int, p types.Part) error {
-		nextMsg := message.New(nil)
-		nextMsg.Append(p.Copy())
-		msgs[i] = nextMsg
-		return nil
-	})
+	msgs := []types.Message{}
+
+	for i := 0; i < msg.Len(); i += s.size {
+		batchSize := s.size
+		if msg.Len() < (i + batchSize) {
+			batchSize = msg.Len() - i
+		}
+		parts := make([]types.Part, batchSize)
+		for j := range parts {
+			parts[j] = msg.Get(i + j).Copy()
+		}
+		newMsg := message.New(nil)
+		newMsg.SetAll(parts)
+		msgs = append(msgs, newMsg)
+	}
 
 	s.mSent.Incr(int64(len(msgs)))
-	s.mSentParts.Incr(int64(len(msgs)))
+	s.mSentParts.Incr(int64(msg.Len()))
 	return msgs, nil
 }
 

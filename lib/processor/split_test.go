@@ -22,15 +22,15 @@ package processor
 
 import (
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/types"
 )
 
-func TestSplitParts(t *testing.T) {
+func TestSplitToSingleParts(t *testing.T) {
 	conf := NewConfig()
 
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
@@ -57,15 +57,60 @@ func TestSplitParts(t *testing.T) {
 	}
 
 	for _, tIn := range tests {
-		msgs, _ := proc.ProcessMessage(message.New(tIn))
+		inMsg := message.New(tIn)
+		inMsg.Iter(func(i int, p types.Part) error {
+			p.Metadata().Set("foo", "bar")
+			return nil
+		})
+		msgs, _ := proc.ProcessMessage(inMsg)
 		if exp, act := len(tIn), len(msgs); exp != act {
 			t.Errorf("Wrong count of messages: %v != %v", act, exp)
 			continue
 		}
-		for i, exp := range tIn {
-			if act := msgs[i].Get(0).Get(); !reflect.DeepEqual(exp, act) {
-				t.Errorf("Wrong contents: %s != %s", act, exp)
+		for i, expBytes := range tIn {
+			if act, exp := string(msgs[i].Get(0).Get()), string(expBytes); act != exp {
+				t.Errorf("Wrong contents: %v != %v", act, exp)
+			}
+			if act, exp := msgs[i].Get(0).Metadata().Get("foo"), "bar"; act != exp {
+				t.Errorf("Wrong metadata: %v != %v", act, exp)
 			}
 		}
+	}
+}
+
+func TestSplitToMultipleParts(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = TypeSplit
+	conf.Split.Size = 2
+
+	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	inMsg := message.New([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+	})
+	msgs, _ := proc.ProcessMessage(inMsg)
+	if exp, act := 2, len(msgs); exp != act {
+		t.Fatalf("Wrong message count: %v != %v", act, exp)
+	}
+	if exp, act := 2, msgs[0].Len(); exp != act {
+		t.Fatalf("Wrong message count: %v != %v", act, exp)
+	}
+	if exp, act := 1, msgs[1].Len(); exp != act {
+		t.Fatalf("Wrong message count: %v != %v", act, exp)
+	}
+	if exp, act := "foo", string(msgs[0].Get(0).Get()); act != exp {
+		t.Errorf("Wrong contents: %v != %v", act, exp)
+	}
+	if exp, act := "bar", string(msgs[0].Get(1).Get()); act != exp {
+		t.Errorf("Wrong contents: %v != %v", act, exp)
+	}
+	if exp, act := "baz", string(msgs[1].Get(0).Get()); act != exp {
+		t.Errorf("Wrong contents: %v != %v", act, exp)
 	}
 }

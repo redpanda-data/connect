@@ -114,7 +114,7 @@ type Config struct {
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
-	Split        struct{}           `json:"split" yaml:"split"`
+	Split        SplitConfig        `json:"split" yaml:"split"`
 	Text         TextConfig         `json:"text" yaml:"text"`
 	Unarchive    UnarchiveConfig    `json:"unarchive" yaml:"unarchive"`
 }
@@ -147,7 +147,7 @@ func NewConfig() Config {
 		ProcessMap:   NewProcessMapConfig(),
 		Sample:       NewSampleConfig(),
 		SelectParts:  NewSelectPartsConfig(),
-		Split:        struct{}{},
+		Split:        NewSplitConfig(),
 		Text:         NewTextConfig(),
 		Unarchive:    NewUnarchiveConfig(),
 	}
@@ -233,13 +233,13 @@ batches. Some processors such as [combine](#combine), [batch](#batch) and
 
 Many processors are able to perform their behaviours on specific parts of a
 message batch, or on all parts, and have a field ` + "`parts`" + ` for
-specifying and array of part indexes they should apply to. If the list of target
+specifying an array of part indexes they should apply to. If the list of target
 parts is empty these processors will be applied to all message parts.
 
 Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the last
-element with be selected, and so on.`
+element will be selected, and so on.`
 
 var footer = `
 [0]: ./examples.md`

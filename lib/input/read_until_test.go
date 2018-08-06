@@ -96,7 +96,7 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 		"bar",
 	}
 
-	for _, exp := range expMsgs {
+	for i, expMsg := range expMsgs {
 		var tran types.Transaction
 		var open bool
 		select {
@@ -108,8 +108,15 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		if act := string(tran.Payload.Get(0).Get()); exp != act {
+		if exp, act := expMsg, string(tran.Payload.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message contents: %v != %v", act, exp)
+		}
+		if i == len(expMsgs)-1 {
+			if exp, act := "final", tran.Payload.Get(0).Metadata().Get("benthos_read_until"); exp != act {
+				t.Errorf("Metadata missing from final message: %v != %v", act, exp)
+			}
+		} else if exp, act := "", tran.Payload.Get(0).Metadata().Get("benthos_read_until"); exp != act {
+			t.Errorf("Metadata final message metadata added to non-final message: %v", act)
 		}
 
 		select {

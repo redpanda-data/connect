@@ -564,6 +564,11 @@ type reaches the end of a file it will shut down. By default this type will also
 shut down. If you wish for the input type to be restarted every time it shuts
 down until the condition is met then set `restart_input` to `true`.
 
+### Metadata
+
+A metadata key `benthos_read_until` containing the value `final` is
+added to the first part of the message that triggers to input to stop.
+
 ## `redis_list`
 
 ``` yaml

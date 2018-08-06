@@ -410,7 +410,8 @@ pipeline:
     select_parts:
       parts:
       - 0
-    split: {}
+    split:
+      size: 1
     text:
       parts: []
       operator: trim_space

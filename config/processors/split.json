@@ -21,7 +21,9 @@
 		"processors": [
 			{
 				"type": "split",
-				"split": {}
+				"split": {
+					"size": 1
+				}
 			}
 		],
 		"threads": 1

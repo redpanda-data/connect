@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 
 - New `retries` field to `s3` input, to cap the number of download attempts made
   on the same bucket item.
+- Added metadata based mechanism to detect final message from a `read_until`
+  input.
+- Added field to `split` processor for specifying target batch sizes.
 
 ### 0.23.0 - 2018-08-06
 
