@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.23.1 - 2018-08-06
+
 ### Added
 
 - New `retries` field to `s3` input, to cap the number of download attempts made
