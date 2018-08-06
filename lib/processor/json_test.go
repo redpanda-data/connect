@@ -610,6 +610,35 @@ func TestJSONSet(t *testing.T) {
 	}
 }
 
+func TestJSONSetEdge(t *testing.T) {
+	conf := NewConfig()
+	conf.JSON.Operator = "set"
+	conf.JSON.Path = "foo"
+	conf.JSON.Value = []byte(`"bar"`)
+
+	jSet, err := NewJSON(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inMsg := message.New([][]byte{[]byte(`{}`)})
+	msgs, _ := jSet.ProcessMessage(inMsg)
+	if len(msgs) != 1 {
+		t.Fatalf("Wrong count of result messages: %v", len(msgs))
+	}
+	if exp, act := `{"foo":"bar"}`, string(msgs[0].Get(0).Get()); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	msgs, _ = jSet.ProcessMessage(msgs[0])
+	if len(msgs) != 1 {
+		t.Fatalf("Wrong count of result messages: %v", len(msgs))
+	}
+	if exp, act := `{"foo":"bar"}`, string(msgs[0].Get(0).Get()); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
 func TestJSONConfigYAML(t *testing.T) {
 	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}

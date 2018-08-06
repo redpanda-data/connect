@@ -102,7 +102,7 @@ func cloneGeneric(root interface{}) (interface{}, error) {
 	case string, json.Number, int, int64, float64, bool, json.RawMessage:
 		return t, nil
 	default:
-		return nil, fmt.Errorf("unrecognised generic type: %T", t)
+		return nil, fmt.Errorf("unrecognised type: %T", t)
 	}
 }
 

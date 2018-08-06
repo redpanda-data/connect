@@ -201,10 +201,10 @@ func NewJSONConfig() JSONConfig {
 
 //------------------------------------------------------------------------------
 
-type jsonOperator func(body interface{}, value rawJSONValue) (interface{}, error)
+type jsonOperator func(body interface{}, value json.RawMessage) (interface{}, error)
 
 func newSetOperator(path []string) jsonOperator {
-	return func(body interface{}, value rawJSONValue) (interface{}, error) {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		if len(path) == 0 {
 			return value, nil
 		}
@@ -226,7 +226,7 @@ func newMoveOperator(srcPath, destPath []string) (jsonOperator, error) {
 	if len(destPath) == 0 {
 		return nil, errors.New("an empty destination path is not valid for the move operator")
 	}
-	return func(body interface{}, value rawJSONValue) (interface{}, error) {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		gPart, err := gabs.Consume(body)
 		if err != nil {
 			return nil, err
@@ -252,7 +252,7 @@ func newCopyOperator(srcPath, destPath []string) (jsonOperator, error) {
 	if len(destPath) == 0 {
 		return nil, errors.New("an empty destination path is not valid for the copy operator")
 	}
-	return func(body interface{}, value rawJSONValue) (interface{}, error) {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		gPart, err := gabs.Consume(body)
 		if err != nil {
 			return nil, err
@@ -271,7 +271,7 @@ func newCopyOperator(srcPath, destPath []string) (jsonOperator, error) {
 }
 
 func newSelectOperator(path []string) jsonOperator {
-	return func(body interface{}, value rawJSONValue) (interface{}, error) {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		gPart, err := gabs.Consume(body)
 		if err != nil {
 			return nil, err
@@ -294,7 +294,7 @@ func newSelectOperator(path []string) jsonOperator {
 }
 
 func newDeleteOperator(path []string) jsonOperator {
-	return func(body interface{}, value rawJSONValue) (interface{}, error) {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		if len(path) == 0 {
 			return nil, nil
 		}
@@ -312,7 +312,7 @@ func newDeleteOperator(path []string) jsonOperator {
 }
 
 func newCleanOperator(path []string) jsonOperator {
-	return func(body interface{}, value rawJSONValue) (interface{}, error) {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		gRoot, err := gabs.Consume(body)
 		if err != nil {
 			return nil, err
@@ -382,7 +382,7 @@ func newCleanOperator(path []string) jsonOperator {
 }
 
 func newAppendOperator(path []string) jsonOperator {
-	return func(body interface{}, value rawJSONValue) (interface{}, error) {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		gPart, err := gabs.Consume(body)
 		if err != nil {
 			return nil, err
@@ -418,7 +418,7 @@ func newAppendOperator(path []string) jsonOperator {
 	}
 }
 
-func getOperator(opStr string, path []string, value rawJSONValue) (jsonOperator, error) {
+func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperator, error) {
 	var destPath []string
 	if opStr == "move" || opStr == "copy" {
 		var destDotPath string
@@ -499,7 +499,7 @@ func NewJSON(
 	}
 
 	var err error
-	if j.operator, err = getOperator(conf.JSON.Operator, splitPath, j.valueBytes); err != nil {
+	if j.operator, err = getOperator(conf.JSON.Operator, splitPath, json.RawMessage(j.valueBytes)); err != nil {
 		return nil, err
 	}
 	return j, nil
@@ -536,7 +536,7 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		}
 
 		var data interface{}
-		if data, err = p.operator(jsonPart, valueBytes); err != nil {
+		if data, err = p.operator(jsonPart, json.RawMessage(valueBytes)); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)
 			continue

@@ -55,7 +55,10 @@ func (p *Part) Copy() types.Part {
 	}
 	var clonedJSON interface{}
 	if p.jsonCache != nil {
-		clonedJSON, _ = cloneGeneric(p.jsonCache)
+		var err error
+		if clonedJSON, err = cloneGeneric(p.jsonCache); err != nil {
+			clonedJSON = nil
+		}
 	}
 	return &Part{
 		data:      p.data,
@@ -72,7 +75,10 @@ func (p *Part) DeepCopy() types.Part {
 	}
 	var clonedJSON interface{}
 	if p.jsonCache != nil {
-		clonedJSON, _ = cloneGeneric(p.jsonCache)
+		var err error
+		if clonedJSON, err = cloneGeneric(p.jsonCache); err != nil {
+			clonedJSON = nil
+		}
 	}
 	np := make([]byte, len(p.data))
 	copy(np, p.data)
