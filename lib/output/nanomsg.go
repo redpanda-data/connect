@@ -203,12 +203,9 @@ func (s *Nanomsg) loop() {
 			return
 		}
 		mCount.Incr(1)
-		var err error
-		for _, part := range ts.Payload.GetAll() {
-			if err = s.socket.Send(part); err != nil {
-				break
-			}
-		}
+		err := ts.Payload.Iter(func(i int, p types.Part) error {
+			return s.socket.Send(p.Get())
+		})
 		if err != nil {
 			mSendErr.Incr(1)
 		} else {

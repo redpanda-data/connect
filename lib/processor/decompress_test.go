@@ -89,7 +89,7 @@ func TestDecompressGZIP(t *testing.T) {
 	} else if res != nil {
 		t.Errorf("Expected nil response: %v", res)
 	}
-	if act := msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 }
@@ -137,7 +137,7 @@ func TestDecompressZLIB(t *testing.T) {
 	} else if res != nil {
 		t.Errorf("Expected nil response: %v", res)
 	}
-	if act := msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 }
@@ -188,7 +188,7 @@ func TestDecompressFlate(t *testing.T) {
 	} else if res != nil {
 		t.Errorf("Expected nil response: %v", res)
 	}
-	if act := msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 }
@@ -277,10 +277,10 @@ func TestDecompressIndexBounds(t *testing.T) {
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := result.value, string(msgs[0].GetAll()[result.index]); exp != act {
+		if exp, act := result.value, string(message.GetAllBytes(msgs[0])[result.index]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
-		if exp, act := result.value, string(msgs[0].GetAll()[(result.index+1)%5]); exp == act {
+		if exp, act := result.value, string(message.GetAllBytes(msgs[0])[(result.index+1)%5]); exp == act {
 			t.Errorf("Processor was applied to wrong index %v: %v != %v", (result.index+1)%5, act, exp)
 		}
 	}

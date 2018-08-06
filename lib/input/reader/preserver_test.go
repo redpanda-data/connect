@@ -154,7 +154,7 @@ func TestPreserverHappy(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if act := msg.Get(0); !reflect.DeepEqual(act, exp) {
+		if act := msg.Get(0).Get(); !reflect.DeepEqual(act, exp) {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	}
@@ -241,7 +241,7 @@ func TestPreserverBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0)); exp != act {
+	if act := string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp)
 	}
 
@@ -254,7 +254,7 @@ func TestPreserverBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0)); exp != act {
+	if act := string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp)
 	}
 
@@ -263,7 +263,7 @@ func TestPreserverBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0)); exp2 != act {
+	if act := string(msg.Get(0).Get()); exp2 != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp2)
 	}
 
@@ -275,14 +275,14 @@ func TestPreserverBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0)); exp != act {
+	if act := string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp)
 	}
 	msg, err = pres.Read()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0)); exp2 != act {
+	if act := string(msg.Get(0).Get()); exp2 != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp2)
 	}
 
@@ -297,7 +297,7 @@ func TestPreserverBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0)); exp3 != act {
+	if act := string(msg.Get(0).Get()); exp3 != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp3)
 	}
 }
@@ -338,7 +338,7 @@ func TestPreserverBufferBatchedAcks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if act := string(msg.Get(0)); exp != act {
+		if act := string(msg.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	}
@@ -355,7 +355,7 @@ func TestPreserverBufferBatchedAcks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if act := string(msg.Get(0)); exp != act {
+		if act := string(msg.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	}

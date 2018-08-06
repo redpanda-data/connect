@@ -199,15 +199,15 @@ func (r *RedisPubSub) loop() {
 		}
 
 		mCount.Incr(1)
-		var err error
-		for _, part := range ts.Payload.GetAll() {
-			if _, err = r.client.Publish(r.conf.RedisPubSub.Channel, part).Result(); err == nil {
-				mSucc.Incr(1)
-			} else {
-				r.disconnect()
-				mErr.Incr(1)
-				break
-			}
+		err := ts.Payload.Iter(func(i int, p types.Part) error {
+			_, perr := r.client.Publish(r.conf.RedisPubSub.Channel, p.Get()).Result()
+			return perr
+		})
+		if err == nil {
+			mSucc.Incr(1)
+		} else {
+			r.disconnect()
+			mErr.Incr(1)
 		}
 
 		select {

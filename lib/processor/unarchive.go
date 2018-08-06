@@ -69,13 +69,13 @@ func NewUnarchiveConfig() UnarchiveConfig {
 
 //------------------------------------------------------------------------------
 
-type unarchiveFunc func(bytes []byte) ([][]byte, error)
+type unarchiveFunc func(part types.Part) ([]types.Part, error)
 
-func tarUnarchive(b []byte) ([][]byte, error) {
-	buf := bytes.NewBuffer(b)
+func tarUnarchive(part types.Part) ([]types.Part, error) {
+	buf := bytes.NewBuffer(part.Get())
 	tr := tar.NewReader(buf)
 
-	var newParts [][]byte
+	var newParts []types.Part
 
 	// Iterate through the files in the archive.
 	for {
@@ -93,23 +93,35 @@ func tarUnarchive(b []byte) ([][]byte, error) {
 			return nil, err
 		}
 
-		newParts = append(newParts, newPartBuf.Bytes())
+		newParts = append(newParts,
+			message.NewPart(newPartBuf.Bytes()).
+				SetMetadata(part.Metadata().Copy()))
 	}
 
 	return newParts, nil
 }
 
-func binaryUnarchive(b []byte) ([][]byte, error) {
-	msg, err := message.FromBytes(b)
+func binaryUnarchive(part types.Part) ([]types.Part, error) {
+	msg, err := message.FromBytes(part.Get())
 	if err != nil {
 		return nil, err
 	}
+	parts := make([]types.Part, msg.Len())
+	msg.Iter(func(i int, p types.Part) error {
+		parts[i] = p.SetMetadata(part.Metadata().Copy())
+		return nil
+	})
 
-	return msg.GetAll(), nil
+	return parts, nil
 }
 
-func linesUnarchive(b []byte) ([][]byte, error) {
-	return bytes.Split(b, []byte("\n")), nil
+func linesUnarchive(part types.Part) ([]types.Part, error) {
+	lines := bytes.Split(part.Get(), []byte("\n"))
+	parts := make([]types.Part, len(lines))
+	for i, l := range lines {
+		parts[i] = message.NewPart(l).SetMetadata(part.Metadata().Copy())
+	}
+	return parts, nil
 }
 
 func strToUnarchiver(str string) (unarchiveFunc, error) {
@@ -179,7 +191,7 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	lParts := msg.Len()
 
 	noParts := len(d.conf.Parts) == 0
-	for i, part := range msg.GetAll() {
+	msg.Iter(func(i int, part types.Part) error {
 		isTarget := noParts
 		if !isTarget {
 			nI := i - lParts
@@ -191,8 +203,8 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			}
 		}
 		if !isTarget {
-			newMsg.Append(part)
-			continue
+			newMsg.Append(msg.Get(i).Copy())
+			return nil
 		}
 		newParts, err := d.unarchive(part)
 		if err == nil {
@@ -201,8 +213,8 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		} else {
 			d.mErr.Incr(1)
 		}
-	}
-	newMsg.SetMetadata(msg.GetMetadata(0).Copy())
+		return nil
+	})
 
 	if newMsg.Len() == 0 {
 		d.mSkipped.Incr(1)

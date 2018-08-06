@@ -23,7 +23,36 @@ package message
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/Jeffail/benthos/lib/message/metadata"
+	"github.com/Jeffail/benthos/lib/types"
 )
+
+//------------------------------------------------------------------------------
+
+// SetAllMetadata sets the metadata of all message parts to match a provided
+// metadata implementation.
+func SetAllMetadata(m types.Message, meta types.Metadata) {
+	lazy := metadata.LazyCopy(meta)
+	m.Iter(func(i int, p types.Part) error {
+		p.SetMetadata(lazy)
+		return nil
+	})
+}
+
+// GetAllBytes returns a 2D byte slice representing the raw byte content of the
+// parts of a message.
+func GetAllBytes(m types.Message) [][]byte {
+	if m.Len() == 0 {
+		return nil
+	}
+	parts := make([][]byte, m.Len())
+	m.Iter(func(i int, p types.Part) error {
+		parts[i] = p.Get()
+		return nil
+	})
+	return parts
+}
 
 //------------------------------------------------------------------------------
 

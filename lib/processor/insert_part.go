@@ -125,27 +125,16 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		index = msgLen
 	}
 
-	var pre, post [][]byte
-	if index > 0 {
-		pre = msg.GetAll()[:index]
-	}
-	if index < msgLen {
-		post = msg.GetAll()[index:]
-	}
-
-	newParts := make([][]byte, msgLen+1)
-	newParts[index] = newPart
-
-	copy(newParts, pre)
-	copy(newParts[index+1:], post)
-
-	newMsg := message.New(newParts)
-	for i := 0; i < msg.Len(); i++ {
-		if i < index {
-			newMsg.SetMetadata(msg.GetMetadata(i).Copy(), i)
-		} else if i > index {
-			newMsg.SetMetadata(msg.GetMetadata(i).Copy(), i+1)
+	newMsg := message.New(nil)
+	msg.Iter(func(i int, p types.Part) error {
+		if i == index {
+			newMsg.Append(message.NewPart(newPart))
 		}
+		newMsg.Append(p.Copy())
+		return nil
+	})
+	if index == msg.Len() {
+		newMsg.Append(message.NewPart(newPart))
 	}
 
 	p.mSent.Incr(1)

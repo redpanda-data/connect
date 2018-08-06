@@ -178,7 +178,7 @@ func (r *Lines) Read() (types.Message, error) {
 		}
 
 		if partSize > 0 {
-			msg.Append(r.messageBuffer.Bytes()[rIndex : rIndex+partSize])
+			msg.Append(message.NewPart(r.messageBuffer.Bytes()[rIndex : rIndex+partSize]))
 			if !r.multipart {
 				return msg, nil
 			}

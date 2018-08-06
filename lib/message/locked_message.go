@@ -23,7 +23,6 @@ package message
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/lib/message/metadata"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -51,9 +50,9 @@ func (m *lockedMessage) Bytes() []byte {
 	return m.m.Bytes()
 }
 
-// ShallowCopy simply returns the same type, it's read only and therefore
-// doesn't need copying.
-func (m *lockedMessage) ShallowCopy() types.Message {
+// Copy simply returns the same type, it's read only and therefore doesn't need
+// copying.
+func (m *lockedMessage) Copy() types.Message {
 	return m
 }
 
@@ -63,31 +62,17 @@ func (m *lockedMessage) DeepCopy() types.Message {
 	return m
 }
 
-func (m *lockedMessage) Get(index int) []byte {
+func (m *lockedMessage) Get(index int) types.Part {
 	if index != 0 && index != -1 {
 		return nil
 	}
 	return m.m.Get(m.part)
 }
 
-func (m *lockedMessage) GetAll() [][]byte {
-	return [][]byte{m.m.Get(m.part)}
+func (m *lockedMessage) SetAll(p []types.Part) {
 }
 
-func (m *lockedMessage) GetMetadata(index int) types.Metadata {
-	return metadata.LazyCopy(m.GetMetadata(index))
-}
-
-func (m *lockedMessage) SetMetadata(meta types.Metadata, indexes ...int) {
-}
-
-func (m *lockedMessage) Set(index int, b []byte) {
-}
-
-func (m *lockedMessage) SetAll(p [][]byte) {
-}
-
-func (m *lockedMessage) Append(b ...[]byte) int {
+func (m *lockedMessage) Append(b ...types.Part) int {
 	return 0
 }
 
@@ -98,23 +83,12 @@ func (m *lockedMessage) Len() int {
 	return 1
 }
 
-func (m *lockedMessage) Iter(f func(i int, b []byte) error) error {
+func (m *lockedMessage) Iter(f func(i int, b types.Part) error) error {
 	return f(0, m.m.Get(m.part))
 }
 
-func (m *lockedMessage) GetJSON(part int) (interface{}, error) {
-	if part != 0 && part != -1 {
-		return nil, ErrMessagePartNotExist
-	}
-	return m.m.GetJSON(m.part)
-}
-
-func (m *lockedMessage) SetJSON(part int, jObj interface{}) error {
-	return nil
-}
-
 func (m *lockedMessage) LazyCondition(label string, cond types.Condition) bool {
-	return m.m.LazyCondition(label, cond)
+	return cond.Check(m)
 }
 
 func (m *lockedMessage) CreatedAt() time.Time {

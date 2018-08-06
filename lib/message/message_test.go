@@ -44,7 +44,7 @@ func TestMessageSerialization(t *testing.T) {
 		return
 	}
 
-	if !reflect.DeepEqual(m.GetAll(), m2.GetAll()) {
+	if !reflect.DeepEqual(GetAllBytes(m), GetAllBytes(m2)) {
 		t.Errorf("Messages not equal: %v != %v", m, m2)
 	}
 }
@@ -64,8 +64,8 @@ func TestIter(t *testing.T) {
 	}
 	m := New(parts)
 	iters := 0
-	m.Iter(func(index int, b []byte) error {
-		if exp, act := string(parts[index]), string(b); exp != act {
+	m.Iter(func(index int, b types.Part) error {
+		if exp, act := string(parts[index]), string(b.Get()); exp != act {
 			t.Errorf("Unexpected part: %v != %v", act, exp)
 		}
 		iters++
@@ -99,11 +99,11 @@ func TestMessageJSONGet(t *testing.T) {
 		[][]byte{[]byte(`{"foo":{"bar":"baz"}}`)},
 	)
 
-	if _, err := msg.GetJSON(1); err != ErrMessagePartNotExist {
-		t.Errorf("Wrong error returned on bad part: %v != %v", err, ErrMessagePartNotExist)
+	if _, err := msg.Get(1).JSON(); err == nil {
+		t.Error("Error not returned on bad part")
 	}
 
-	jObj, err := msg.GetJSON(0)
+	jObj, err := msg.Get(0).JSON()
 	if err != nil {
 		t.Error(err)
 	}
@@ -117,9 +117,9 @@ func TestMessageJSONGet(t *testing.T) {
 		t.Errorf("Wrong output from jsonGet: %v != %v", act, exp)
 	}
 
-	msg.Set(0, []byte(`{"foo":{"bar":"baz2"}}`))
+	msg.Get(0).Set([]byte(`{"foo":{"bar":"baz2"}}`))
 
-	jObj, err = msg.GetJSON(0)
+	jObj, err = msg.Get(0).JSON()
 	if err != nil {
 		t.Error(err)
 	}
@@ -135,13 +135,9 @@ func TestMessageJSONGet(t *testing.T) {
 }
 
 func TestMessageJSONSet(t *testing.T) {
-	msg := &Type{
-		parts: [][]byte{[]byte(`hello world`)},
-	}
+	msg := New([][]byte{[]byte(`hello world`)})
 
-	if err := msg.SetJSON(1, nil); err != ErrMessagePartNotExist {
-		t.Errorf("Wrong error returned on bad part: %v != %v", err, ErrMessagePartNotExist)
-	}
+	msg.Get(1).SetJSON(nil)
 
 	p1Obj := map[string]interface{}{
 		"foo": map[string]interface{}{
@@ -157,24 +153,24 @@ func TestMessageJSONSet(t *testing.T) {
 	}
 	p2Str := `{"baz":{"bar":"foo"}}`
 
-	if err := msg.SetJSON(0, p1Obj); err != nil {
+	if err := msg.Get(0).SetJSON(p1Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p1Str, string(msg.parts[0]); exp != act {
+	if exp, act := p1Str, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
 
-	if err := msg.SetJSON(0, p2Obj); err != nil {
+	if err := msg.Get(0).SetJSON(p2Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p2Str, string(msg.parts[0]); exp != act {
+	if exp, act := p2Str, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
 
-	if err := msg.SetJSON(0, p1Obj); err != nil {
+	if err := msg.Get(0).SetJSON(p1Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p1Str, string(msg.parts[0]); exp != act {
+	if exp, act := p1Str, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
 }
@@ -185,18 +181,18 @@ func TestMessageMetadata(t *testing.T) {
 		[]byte("bar"),
 	})
 
-	m.GetMetadata(0).Set("foo", "bar")
-	if exp, act := "bar", m.GetMetadata(0).Get("foo"); exp != act {
+	m.Get(0).Metadata().Set("foo", "bar")
+	if exp, act := "bar", m.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m.GetMetadata(0).Set("foo", "bar2")
-	if exp, act := "bar2", m.GetMetadata(0).Get("foo"); exp != act {
+	m.Get(0).Metadata().Set("foo", "bar2")
+	if exp, act := "bar2", m.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m.GetMetadata(0).Set("bar", "baz")
-	m.GetMetadata(0).Set("baz", "qux")
+	m.Get(0).Metadata().Set("bar", "baz")
+	m.Get(0).Metadata().Set("baz", "qux")
 
 	exp := map[string]string{
 		"foo": "bar2",
@@ -204,7 +200,7 @@ func TestMessageMetadata(t *testing.T) {
 		"baz": "qux",
 	}
 	act := map[string]string{}
-	m.GetMetadata(0).Iter(func(k, v string) error {
+	m.Get(0).Metadata().Iter(func(k, v string) error {
 		act[k] = v
 		return nil
 	})
@@ -217,67 +213,71 @@ func TestMessageMetadata(t *testing.T) {
 		"bar": "new2",
 		"baz": "new3",
 	})
-	m.SetMetadata(newMetadata, 0)
-	if exp, act := "new1", m.GetMetadata(0).Get("foo"); exp != act {
+	m.Get(0).SetMetadata(newMetadata)
+	if exp, act := "new1", m.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := "new2", m.GetMetadata(0).Get("bar"); exp != act {
+	if exp, act := "new2", m.Get(0).Metadata().Get("bar"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := "", m.GetMetadata(-1).Get("foo"); exp != act {
+	if exp, act := "", m.Get(-1).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := "", m.GetMetadata(100).Get("foo"); exp != act {
+	if exp, act := "", m.Get(100).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m.SetMetadata(newMetadata, 0, 1)
-	if exp, act := "new1", m.GetMetadata(0).Get("foo"); exp != act {
+	m.Get(0).SetMetadata(newMetadata)
+	m.Get(1).SetMetadata(newMetadata)
+	if exp, act := "new1", m.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := "new1", m.GetMetadata(1).Get("foo"); exp != act {
+	if exp, act := "new1", m.Get(1).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
 	newMetadata = metadata.New(map[string]string{
 		"foo": "more_new",
 	})
-	m.SetMetadata(newMetadata)
-	if exp, act := "more_new", m.GetMetadata(0).Get("foo"); exp != act {
+	m.Iter(func(i int, p types.Part) error {
+		p.SetMetadata(newMetadata)
+		return nil
+	})
+	if exp, act := "more_new", m.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := "more_new", m.GetMetadata(1).Get("foo"); exp != act {
+	if exp, act := "more_new", m.Get(1).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
 
-func TestMessageShallowCopy(t *testing.T) {
+func TestMessageCopy(t *testing.T) {
 	m := New([][]byte{
 		[]byte(`foo`),
 		[]byte(`bar`),
 	})
-	m.GetMetadata(0).Set("foo", "bar")
+	m.Get(0).Metadata().Set("foo", "bar")
 
-	m2 := m.ShallowCopy()
-	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
+	m2 := m.Copy()
+	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m2.GetMetadata(0).Get("foo"); exp != act {
+	if exp, act := "bar", m2.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m2.GetMetadata(0).Set("foo", "bar2")
-	m2.Set(0, []byte(`baz`))
-	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
+	m2.Get(0).Metadata().Set("foo", "bar2")
+	m2.Get(0).Set([]byte(`baz`))
+	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar2", m2.GetMetadata(0).Get("foo"); exp != act {
+	if exp, act := "bar2", m2.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m.GetAll(); !reflect.DeepEqual(exp, act) {
+	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m.GetMetadata(0).Get("foo"); exp != act {
+	if exp, act := "bar", m.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -287,36 +287,34 @@ func TestMessageDeepCopy(t *testing.T) {
 		[]byte(`foo`),
 		[]byte(`bar`),
 	})
-	m.GetMetadata(0).Set("foo", "bar")
+	m.Get(0).Metadata().Set("foo", "bar")
 
 	m2 := m.DeepCopy()
-	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
+	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m2.GetMetadata(0).Get("foo"); exp != act {
+	if exp, act := "bar", m2.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m2.GetMetadata(0).Set("foo", "bar2")
-	m2.Set(0, []byte(`baz`))
-	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, m2.GetAll(); !reflect.DeepEqual(exp, act) {
+	m2.Get(0).Metadata().Set("foo", "bar2")
+	m2.Get(0).Set([]byte(`baz`))
+	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar2", m2.GetMetadata(0).Get("foo"); exp != act {
+	if exp, act := "bar2", m2.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, m.GetAll(); !reflect.DeepEqual(exp, act) {
+	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m.GetMetadata(0).Get("foo"); exp != act {
+	if exp, act := "bar", m.Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
 
 func TestMessageJSONSetGet(t *testing.T) {
-	msg := &Type{
-		parts: [][]byte{[]byte(`hello world`)},
-	}
+	msg := New([][]byte{[]byte(`hello world`)})
 
 	p1Obj := map[string]interface{}{
 		"foo": map[string]interface{}{
@@ -335,39 +333,39 @@ func TestMessageJSONSetGet(t *testing.T) {
 	var err error
 	var jObj interface{}
 
-	if err = msg.SetJSON(0, p1Obj); err != nil {
+	if err = msg.Get(0).SetJSON(p1Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p1Str, string(msg.parts[0]); exp != act {
+	if exp, act := p1Str, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
-	if jObj, err = msg.GetJSON(0); err != nil {
+	if jObj, err = msg.Get(0).JSON(); err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := p1Obj, jObj; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong json obj: %v != %v", act, exp)
 	}
 
-	if err := msg.SetJSON(0, p2Obj); err != nil {
+	if err := msg.Get(0).SetJSON(p2Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p2Str, string(msg.parts[0]); exp != act {
+	if exp, act := p2Str, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
-	if jObj, err = msg.GetJSON(0); err != nil {
+	if jObj, err = msg.Get(0).JSON(); err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := p2Obj, jObj; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong json obj: %v != %v", act, exp)
 	}
 
-	if err := msg.SetJSON(0, p1Obj); err != nil {
+	if err := msg.Get(0).SetJSON(p1Obj); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := p1Str, string(msg.parts[0]); exp != act {
+	if exp, act := p1Str, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong json blob: %v != %v", act, exp)
 	}
-	if jObj, err = msg.GetJSON(0); err != nil {
+	if jObj, err = msg.Get(0).JSON(); err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := p1Obj, jObj; !reflect.DeepEqual(exp, act) {
@@ -376,82 +374,80 @@ func TestMessageJSONSetGet(t *testing.T) {
 }
 
 func TestMessageSplitJSON(t *testing.T) {
-	msg1 := &Type{
-		parts: [][]byte{
-			[]byte("Foo plain text"),
-			[]byte(`nothing here`),
-		},
-	}
+	msg1 := New([][]byte{
+		[]byte("Foo plain text"),
+		[]byte(`nothing here`),
+	})
 
-	if err := msg1.SetJSON(1, map[string]interface{}{"foo": "bar"}); err != nil {
+	if err := msg1.Get(1).SetJSON(map[string]interface{}{"foo": "bar"}); err != nil {
 		t.Fatal(err)
 	}
 
-	msg2 := msg1.ShallowCopy()
+	msg2 := msg1.Copy()
 
-	if exp, act := msg1.parts, msg2.GetAll(); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Parts unmatched from shallow copy: %v != %v", act, exp)
+	if exp, act := GetAllBytes(msg1), GetAllBytes(msg2); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Parts unmatched from shallow copy: %s != %s", act, exp)
 	}
 
-	msg2.Set(0, []byte("Bar different text"))
+	msg2.Get(0).Set([]byte("Bar different text"))
 
-	if exp, act := "Foo plain text", string(msg1.parts[0]); exp != act {
+	if exp, act := "Foo plain text", string(msg1.Get(0).Get()); exp != act {
 		t.Errorf("Original content was changed from shallow copy: %v != %v", act, exp)
 	}
 
 	//------------------
 
-	if err := msg1.SetJSON(1, map[string]interface{}{"foo": "baz"}); err != nil {
+	if err := msg1.Get(1).SetJSON(map[string]interface{}{"foo": "baz"}); err != nil {
 		t.Fatal(err)
 	}
 
-	jCont, err := msg1.GetJSON(1)
+	jCont, err := msg1.Get(1).JSON()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := map[string]interface{}{"foo": "baz"}, jCont; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"baz"}`, string(msg1.parts[1]); exp != act {
+	if exp, act := `{"foo":"baz"}`, string(msg1.Get(1).Get()); exp != act {
 		t.Errorf("Unexpected original content: %v != %v", act, exp)
 	}
 
-	jCont, err = msg2.GetJSON(1)
+	jCont, err = msg2.Get(1).JSON()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := map[string]interface{}{"foo": "bar"}, jCont; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"bar"}`, string(msg2.Get(1)); exp != act {
+	if exp, act := `{"foo":"bar"}`, string(msg2.Get(1).Get()); exp != act {
 		t.Errorf("Unexpected shallow content: %v != %v", act, exp)
 	}
 
 	//------------------
 
-	if err = msg2.SetJSON(1, map[string]interface{}{"foo": "baz2"}); err != nil {
+	if err = msg2.Get(1).SetJSON(map[string]interface{}{"foo": "baz2"}); err != nil {
 		t.Fatal(err)
 	}
 
-	jCont, err = msg2.GetJSON(1)
+	jCont, err = msg2.Get(1).JSON()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := map[string]interface{}{"foo": "baz2"}, jCont; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"baz2"}`, string(msg2.Get(1)); exp != act {
+	if exp, act := `{"foo":"baz2"}`, string(msg2.Get(1).Get()); exp != act {
 		t.Errorf("Unexpected shallow copy content: %v != %v", act, exp)
 	}
 
-	jCont, err = msg1.GetJSON(1)
+	jCont, err = msg1.Get(1).JSON()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := map[string]interface{}{"foo": "baz"}, jCont; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected original json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"baz"}`, string(msg1.parts[1]); exp != act {
+	if exp, act := `{"foo":"baz"}`, string(msg1.Get(1).Get()); exp != act {
 		t.Errorf("Unexpected original content: %v != %v", act, exp)
 	}
 }
@@ -467,20 +463,18 @@ func (d *dummyCond) Check(m types.Message) bool {
 }
 
 func TestMessageConditionCaching(t *testing.T) {
-	msg := &Type{
-		parts: [][]byte{
-			[]byte(`foo`),
-		},
-	}
+	msg := New([][]byte{
+		[]byte(`foo`),
+	})
 
 	dummyCond1 := &dummyCond{
 		call: func(m types.Message) bool {
-			return string(m.Get(0)) == "foo"
+			return string(m.Get(0).Get()) == "foo"
 		},
 	}
 	dummyCond2 := &dummyCond{
 		call: func(m types.Message) bool {
-			return string(m.Get(0)) == "bar"
+			return string(m.Get(0).Get()) == "bar"
 		},
 	}
 
@@ -508,7 +502,7 @@ func TestMessageConditionCaching(t *testing.T) {
 		t.Errorf("Wrong count of calls for cond 2: %v != %v", act, exp)
 	}
 
-	msg.Set(0, []byte("bar"))
+	msg.Get(0).Set([]byte("bar"))
 
 	if msg.LazyCondition("1", dummyCond1) {
 		t.Error("Wrong result from cond 1")
@@ -536,20 +530,18 @@ func TestMessageConditionCaching(t *testing.T) {
 }
 
 func TestMessageCrossContaminateJSON(t *testing.T) {
-	msg1 := &Type{
-		parts: [][]byte{
-			[]byte(`{"foo":"bar"}`),
-		},
-	}
+	msg1 := New([][]byte{
+		[]byte(`{"foo":"bar"}`),
+	})
 
 	var jCont1, jCont2 interface{}
 	var err error
 
-	if jCont1, err = msg1.GetJSON(0); err != nil {
+	if jCont1, err = msg1.Get(0).JSON(); err != nil {
 		t.Fatal(err)
 	}
 
-	msg2 := msg1.ShallowCopy()
+	msg2 := msg1.Copy()
 
 	jMap1, ok := jCont1.(map[string]interface{})
 	if !ok {
@@ -557,27 +549,27 @@ func TestMessageCrossContaminateJSON(t *testing.T) {
 	}
 	jMap1["foo"] = "baz"
 
-	if err = msg1.SetJSON(0, jMap1); err != nil {
+	if err = msg1.Get(0).SetJSON(jMap1); err != nil {
 		t.Fatal(err)
 	}
 
-	if jCont1, err = msg1.GetJSON(0); err != nil {
+	if jCont1, err = msg1.Get(0).JSON(); err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := map[string]interface{}{"foo": "baz"}, jCont1; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"baz"}`, string(msg1.parts[0]); exp != act {
+	if exp, act := `{"foo":"baz"}`, string(msg1.Get(0).Get()); exp != act {
 		t.Errorf("Unexpected raw content: %v != %v", exp, act)
 	}
 
-	if jCont2, err = msg2.GetJSON(0); err != nil {
+	if jCont2, err = msg2.Get(0).JSON(); err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := map[string]interface{}{"foo": "bar"}, jCont2; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected json content: %v != %v", exp, act)
 	}
-	if exp, act := `{"foo":"bar"}`, string(msg2.Get(0)); exp != act {
+	if exp, act := `{"foo":"bar"}`, string(msg2.Get(0).Get()); exp != act {
 		t.Errorf("Unexpected raw content: %v != %v", exp, act)
 	}
 }
@@ -623,11 +615,9 @@ func BenchmarkJSONGet(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		msg := &Type{
-			parts: [][]byte{sample1},
-		}
+		msg := New([][]byte{sample1})
 
-		jObj, err := msg.GetJSON(0)
+		jObj, err := msg.Get(0).JSON()
 		if err != nil {
 			b.Error(err)
 		}
@@ -635,7 +625,7 @@ func BenchmarkJSONGet(b *testing.B) {
 			b.Error("Couldn't cast to map")
 		}
 
-		jObj, err = msg.GetJSON(0)
+		jObj, err = msg.Get(0).JSON()
 		if err != nil {
 			b.Error(err)
 		}
@@ -643,9 +633,9 @@ func BenchmarkJSONGet(b *testing.B) {
 			b.Error("Couldn't cast to map")
 		}
 
-		msg.parts[0] = sample2
+		msg.Get(0).Set(sample2)
 
-		jObj, err = msg.GetJSON(0)
+		jObj, err = msg.Get(0).JSON()
 		if err != nil {
 			b.Error(err)
 		}

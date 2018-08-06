@@ -145,22 +145,21 @@ func (a *AmazonS3) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	for _, part := range msg.GetAll() {
+	return msg.Iter(func(i int, p types.Part) error {
 		path := a.conf.Path
 		if a.interpolatePath {
 			path = string(text.ReplaceFunctionVariables(msg, a.pathBytes))
 		}
 
 		if _, err := a.uploader.Upload(&s3manager.UploadInput{
-			Body:   bytes.NewReader(part),
+			Body:   bytes.NewReader(p.Get()),
 			Bucket: aws.String(a.conf.Bucket),
 			Key:    aws.String(path),
 		}); err != nil {
 			return err
 		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

@@ -497,7 +497,7 @@ func TestWriterHappyPath(t *testing.T) {
 		t.Error(err)
 	}
 
-	if act := writerImpl.msgRcvd.GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(writerImpl.msgRcvd); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }
@@ -565,7 +565,7 @@ func TestWriterSadPath(t *testing.T) {
 		t.Error(err)
 	}
 
-	if act := writerImpl.msgRcvd.GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(writerImpl.msgRcvd); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }

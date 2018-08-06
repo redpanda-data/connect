@@ -70,8 +70,8 @@ func (m *Memory) NextMessage() (types.Message, AckFunc, error) {
 	m.messages = m.messages[1:]
 
 	messageSize := 0
-	msg.Iter(func(i int, b []byte) error {
-		messageSize += len(b)
+	msg.Iter(func(i int, b types.Part) error {
+		messageSize += len(b.Get())
 		return nil
 	})
 
@@ -100,8 +100,8 @@ func (m *Memory) NextMessage() (types.Message, AckFunc, error) {
 // PushMessage adds a new message to the stack. Returns the backlog in bytes.
 func (m *Memory) PushMessage(msg types.Message) (int, error) {
 	extraBytes := 0
-	msg.Iter(func(i int, b []byte) error {
-		extraBytes += len(b)
+	msg.Iter(func(i int, b types.Part) error {
+		extraBytes += len(b.Get())
 		return nil
 	})
 

@@ -91,7 +91,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
+	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -100,7 +100,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
+	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -109,7 +109,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
+	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -144,7 +144,7 @@ func TestHTTPClientParallel(t *testing.T) {
 		t.Error(res.Error())
 	} else if expC, actC := 5, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
+	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -188,9 +188,9 @@ func TestHTTPClientParallelError(t *testing.T) {
 		t.Error(res.Error())
 	} else if expC, actC := 5, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
+	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "baz", string(msgs[0].GetAll()[2]); act != exp {
+	} else if exp, act := "baz", string(message.GetAllBytes(msgs[0])[2]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -233,7 +233,7 @@ func TestHTTPClientParallelCapped(t *testing.T) {
 		t.Error(res.Error())
 	} else if expC, actC := 10, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := "foobar", string(msgs[0].GetAll()[0]); act != exp {
+	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }

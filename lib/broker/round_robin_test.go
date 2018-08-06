@@ -97,8 +97,8 @@ func TestBasicRoundRobin(t *testing.T) {
 			var ts types.Transaction
 			select {
 			case ts = <-mockOutputs[i%3].TChan:
-				if string(ts.Payload.Get(0)) != string(content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0), content[0])
+				if string(ts.Payload.Get(0).Get()) != string(content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
 			case <-mockOutputs[(i+1)%3].TChan:
 				t.Errorf("Received message in wrong order: %v != %v", i%3, (i+1)%3)

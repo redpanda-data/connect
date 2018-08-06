@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -125,9 +126,9 @@ func (w *LineWriter) loop() {
 		}
 		var err error
 		if ts.Payload.Len() == 1 {
-			_, err = fmt.Fprintf(w.handle, "%s%s", ts.Payload.Get(0), delim)
+			_, err = fmt.Fprintf(w.handle, "%s%s", ts.Payload.Get(0).Get(), delim)
 		} else {
-			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(ts.Payload.GetAll(), delim), delim, delim)
+			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(message.GetAllBytes(ts.Payload), delim), delim, delim)
 		}
 		if err != nil {
 			mError.Incr(1)

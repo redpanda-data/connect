@@ -138,18 +138,18 @@ func (w *Websocket) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	for _, part := range msg.GetAll() {
-		if err := client.WriteMessage(websocket.BinaryMessage, part); err != nil {
-			w.lock.Lock()
-			w.client = nil
-			w.lock.Unlock()
-			if err == websocket.ErrCloseSent {
-				return types.ErrNotConnected
-			}
-			return err
+	err := msg.Iter(func(i int, p types.Part) error {
+		return client.WriteMessage(websocket.BinaryMessage, p.Get())
+	})
+	if err != nil {
+		w.lock.Lock()
+		w.client = nil
+		w.lock.Unlock()
+		if err == websocket.ErrCloseSent {
+			return types.ErrNotConnected
 		}
+		return err
 	}
-
 	return nil
 }
 

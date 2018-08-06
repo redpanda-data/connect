@@ -126,7 +126,7 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 
 	/*
 		msgs := []*sqs.SendMessageBatchRequestEntry{}
-		for _, part := range msg.GetAll() {
+		for _, part := range message.GetAllBytes(msg) {
 			msgs = append(msgs, &sqs.SendMessageBatchRequestEntry{
 				MessageBody: aws.String(string(part)),
 			})
@@ -144,15 +144,15 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 		}
 	*/
 
-	for _, part := range msg.GetAll() {
+	return msg.Iter(func(i int, p types.Part) error {
 		if _, err := a.sqs.SendMessage(&sqs.SendMessageInput{
 			QueueUrl:    aws.String(a.conf.URL),
-			MessageBody: aws.String(string(part)),
+			MessageBody: aws.String(string(p.Get())),
 		}); err != nil {
 			return err
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

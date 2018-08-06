@@ -62,7 +62,7 @@ func TestProcessFieldParts(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -98,7 +98,7 @@ func TestProcessFieldAllParts(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -132,7 +132,7 @@ func TestProcessFieldString(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -163,7 +163,7 @@ func TestProcessFieldBadProc(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }
@@ -196,7 +196,7 @@ func TestProcessFieldBadProcTwo(t *testing.T) {
 	if res != nil {
 		t.Error(res.Error())
 	}
-	if act := msg[0].GetAll(); !reflect.DeepEqual(act, exp) {
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
 }

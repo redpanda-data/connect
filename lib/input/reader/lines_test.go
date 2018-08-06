@@ -74,7 +74,7 @@ func TestReaderSinglePart(t *testing.T) {
 		var resMsg types.Message
 		if resMsg, err = f.Read(); err != nil {
 			t.Error(err)
-		} else if res := string(resMsg.Get(0)); res != msg {
+		} else if res := string(resMsg.Get(0).Get()); res != msg {
 			t.Errorf("Wrong result, %v != %v", res, msg)
 		}
 		if err = f.Acknowledge(nil); err != nil {
@@ -141,7 +141,7 @@ func TestReaderSinglePartMultiReaders(t *testing.T) {
 		var resMsg types.Message
 		if resMsg, err = f.Read(); err != nil {
 			t.Error(err)
-		} else if res := string(resMsg.Get(0)); res != msg {
+		} else if res := string(resMsg.Get(0).Get()); res != msg {
 			t.Errorf("Wrong result, %v != %v", res, msg)
 		}
 		if err = f.Acknowledge(nil); err != nil {
@@ -161,7 +161,7 @@ func TestReaderSinglePartMultiReaders(t *testing.T) {
 		var resMsg types.Message
 		if resMsg, err = f.Read(); err != nil {
 			t.Error(err)
-		} else if res := string(resMsg.Get(0)); res != msg {
+		} else if res := string(resMsg.Get(0).Get()); res != msg {
 			t.Errorf("Wrong result, %v != %v", res, msg)
 		}
 		if err = f.Acknowledge(nil); err != nil {
@@ -224,7 +224,7 @@ func TestReaderSinglePartCustomDelim(t *testing.T) {
 		var resMsg types.Message
 		if resMsg, err = f.Read(); err != nil {
 			t.Error(err)
-		} else if res := string(resMsg.Get(0)); res != msg {
+		} else if res := string(resMsg.Get(0).Get()); res != msg {
 			t.Errorf("Wrong result, %v != %v", res, msg)
 		}
 		if err = f.Acknowledge(nil); err != nil {
@@ -303,7 +303,7 @@ func TestReaderMultiPart(t *testing.T) {
 			t.Error(err)
 		} else {
 			for i, part := range msg {
-				if res := string(resMsg.Get(i)); res != part {
+				if res := string(resMsg.Get(i).Get()); res != part {
 					t.Errorf("Wrong result, %v != %v", res, part)
 				}
 			}
@@ -385,7 +385,7 @@ func TestReaderMultiPartCustomDelim(t *testing.T) {
 			t.Error(err)
 		} else {
 			for i, part := range msg {
-				if res := string(resMsg.Get(i)); res != part {
+				if res := string(resMsg.Get(i).Get()); res != part {
 					t.Errorf("Wrong result, %v != %v", res, part)
 				}
 			}

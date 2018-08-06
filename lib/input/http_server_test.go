@@ -71,7 +71,7 @@ func TestHTTPBasic(t *testing.T) {
 		var ts types.Transaction
 		select {
 		case ts = <-h.TransactionChan():
-			if res := string(ts.Payload.Get(0)); res != testStr {
+			if res := string(ts.Payload.Get(0).Get()); res != testStr {
 				t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 			}
 		case <-time.After(time.Second):
@@ -119,9 +119,9 @@ func TestHTTPBasic(t *testing.T) {
 		case ts = <-h.TransactionChan():
 			if exp, actual := 2, ts.Payload.Len(); exp != actual {
 				t.Errorf("Wrong number of parts: %v != %v", actual, exp)
-			} else if exp, actual := partOne, string(ts.Payload.Get(0)); exp != actual {
+			} else if exp, actual := partOne, string(ts.Payload.Get(0).Get()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", actual, exp)
-			} else if exp, actual := partTwo, string(ts.Payload.Get(1)); exp != actual {
+			} else if exp, actual := partTwo, string(ts.Payload.Get(1).Get()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", actual, exp)
 			}
 		case <-time.After(time.Second):

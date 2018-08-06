@@ -177,9 +177,9 @@ func (a *AMQP) Write(msg types.Message) error {
 
 	bindingKey := strings.Replace(a.key.Get(msg), "/", ".", -1)
 
-	for i, part := range msg.GetAll() {
+	return msg.Iter(func(i int, p types.Part) error {
 		headers := amqp.Table{}
-		msg.GetMetadata(i).Iter(func(k, v string) error {
+		p.Metadata().Iter(func(k, v string) error {
 			headers[strings.Replace(k, "_", "-", -1)] = v
 			return nil
 		})
@@ -192,7 +192,7 @@ func (a *AMQP) Write(msg types.Message) error {
 				Headers:         headers,
 				ContentType:     "application/octet-stream",
 				ContentEncoding: "",
-				Body:            part,
+				Body:            p.Get(),
 				DeliveryMode:    a.deliveryMode, // 1=non-persistent, 2=persistent
 				Priority:        0,              // 0-9
 				// a bunch of application/implementation-specific fields
@@ -216,9 +216,8 @@ func (a *AMQP) Write(msg types.Message) error {
 			}
 			return types.ErrNoAck
 		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // CloseAsync shuts down the AMQP output and stops processing messages.

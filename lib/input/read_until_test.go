@@ -108,7 +108,7 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		if act := string(tran.Payload.Get(0)); exp != act {
+		if act := string(tran.Payload.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message contents: %v != %v", act, exp)
 		}
 
@@ -169,7 +169,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		if act := string(tran.Payload.Get(0)); exp != act {
+		if act := string(tran.Payload.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message contents: %v != %v", act, exp)
 		}
 
@@ -189,7 +189,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		if act := string(tran.Payload.Get(0)); exp != act {
+		if act := string(tran.Payload.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message contents: %v != %v", act, exp)
 		}
 
@@ -243,7 +243,7 @@ func testReadUntilEarlyClose(inConf Config, t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	if act, exp := string(tran.Payload.Get(0)), "foo"; exp != act {
+	if act, exp := string(tran.Payload.Get(0).Get()), "foo"; exp != act {
 		t.Errorf("Wrong message contents: %v != %v", act, exp)
 	}
 
@@ -293,7 +293,7 @@ func testReadUntilInputClose(inConf Config, t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		if act := string(tran.Payload.Get(0)); exp != act {
+		if act := string(tran.Payload.Get(0).Get()); exp != act {
 			t.Errorf("Wrong message contents: %v != %v", act, exp)
 		}
 
@@ -355,7 +355,7 @@ func testReadUntilInputCloseRestart(inConf Config, t *testing.T) {
 				t.Fatal("timed out")
 			}
 
-			if act := string(tran.Payload.Get(0)); exp != act {
+			if act := string(tran.Payload.Get(0).Get()); exp != act {
 				t.Errorf("Wrong message contents: %v != %v", act, exp)
 			}
 

@@ -33,10 +33,10 @@ type Metadata interface {
 	Get(key string) string
 
 	// Set sets the value of a metadata key.
-	Set(key, value string)
+	Set(key, value string) Metadata
 
 	// Delete removes the value of a metadata key.
-	Delete(key string)
+	Delete(key string) Metadata
 
 	// Iter iterates each metadata key/value pair.
 	Iter(f func(k, v string) error) error
@@ -48,68 +48,77 @@ type Metadata interface {
 
 //------------------------------------------------------------------------------
 
+// Part is an interface representing a message part. It contains a byte array
+// of raw data, metadata, and lazily parsed formats of the payload such as JSON.
+type Part interface {
+	// Get returns a slice of bytes which is the underlying data of the part.
+	// It is not safe to edit the contents of this slice directly, to make
+	// changes to the contents of a part the data should be copied and set using
+	// SetData.
+	Get() []byte
+
+	// Metadata returns the metadata of a part.
+	Metadata() Metadata
+
+	// JSON attempts to parse the part as a JSON document and either returns the
+	// result or an error. The resulting document is also cached such that
+	// subsequent calls do not reparse the same data. If changes are made to the
+	// document it must be set using SetJSON, otherwise the underlying byte
+	// representation will not reflect the changes.
+	JSON() (interface{}, error)
+
+	// Set changes the underlying byte slice.
+	Set(d []byte) Part
+
+	// SetMetadata changes the underlying metadata to a new object.
+	SetMetadata(m Metadata) Part
+
+	// SetJSON attempts to marshal a JSON document into a byte slice and stores
+	// the result as the new contents of the part. The document is cached such
+	// that subsequent calls to JSON() receive it rather than reparsing the
+	// resulting byte slice.
+	SetJSON(doc interface{}) error
+
+	// Copy creates a shallow copy of the message, where values and metadata can
+	// be edited independently from the original version. However, editing the
+	// byte slice contents will alter the contents of the original, and if
+	// another process edits the bytes of the original it will also affect the
+	// contents of this message.
+	Copy() Part
+
+	// DeepCopy creates a deep copy of the message part, where the contents are
+	// copied and are therefore safe to edit without altering the original.
+	DeepCopy() Part
+}
+
+//------------------------------------------------------------------------------
+
 // Message is an interface representing a payload of data that was received from
 // an input. Messages contain multiple parts, where each part is a byte array.
 // If an input supports only single part messages they will still be read as
-// multipart messages with one part.
+// multipart messages with one part. Multiple part messages are synonymous with
+// batches, and it is up to each component within Benthos to work with a batch
+// appropriately.
 type Message interface {
 	// Get attempts to access a message part from an index. If the index is
 	// negative then the part is found by counting backwards from the last part
-	// starting at -1. If the index is out of bounds then nil is returned. It is
-	// not safe to edit the contents of a message directly.
-	Get(p int) []byte
+	// starting at -1. If the index is out of bounds then an empty part is
+	// returned.
+	Get(p int) Part
 
-	// GetAll returns all message parts as a two-dimensional byte array. It is
-	// NOT safe to edit the contents of the result.
-	GetAll() [][]byte
-
-	// Set edits the contents of an existing message part. If the index is
-	// negative then the part is found by counting backwards from the last part
-	// starting at -1. If the index is out of bounds then nothing is done.
-	Set(p int, b []byte)
-
-	// SetAll replaces all parts of a message with a new set of payloads.
-	SetAll(p [][]byte)
-
-	// GetMetadata returns the metadata of a message part. If the index is
-	// negative then the part is found by counting backwards from the last part
-	// starting at -1. If the index is out of bounds then an empty metadata
-	// object is returned.
-	GetMetadata(p int) Metadata
-
-	// SetMetadata sets the metadata of message parts by their index. Multiple
-	// indexes can be specified in order to set the same metadata values to each
-	// part. If zero indexes are specified the metadata is set for all message
-	// parts. If an index is negative then the part is found by counting
-	// backwards from the last part starting at -1. If an index is out of bounds
-	// then nothing is done.
-	SetMetadata(m Metadata, p ...int)
-
-	// GetJSON returns a message part parsed as JSON into an `interface{}` type.
-	// This is lazily evaluated and the result is cached. If multiple layers of
-	// a pipeline extract the same part as JSON it will only be unmarshalled
-	// once, unless the content of the part has changed. If the index is
-	// negative then the part is found by counting backwards from the last part
-	// starting at -1.
-	GetJSON(p int) (interface{}, error)
-
-	// SetJSON sets a message part to the marshalled bytes of a JSON object, but
-	// also caches the object itself. If the JSON contents of a part is
-	// subsequently queried it will receive the cached version as long as the
-	// raw content has not changed. If the index is negative then the part is
-	// found by counting backwards from the last part starting at -1.
-	SetJSON(p int, jObj interface{}) error
+	// SetAll replaces all parts of a message with a new set.
+	SetAll(parts []Part)
 
 	// Append appends new message parts to the message and returns the index of
 	// last part to be added.
-	Append(b ...[]byte) int
+	Append(part ...Part) int
 
 	// Len returns the number of parts this message contains.
 	Len() int
 
 	// Iter will iterate each message part in order, calling the closure
 	// argument with the index and contents of the message part.
-	Iter(f func(i int, b []byte) error) error
+	Iter(f func(i int, part Part) error) error
 
 	// Bytes returns a binary representation of the message, which can be later
 	// parsed back into a multipart message with `FromBytes`. The result of this
@@ -123,12 +132,12 @@ type Message interface {
 	// cleared whenever the contents of the message is changed.
 	LazyCondition(label string, cond Condition) bool
 
-	// ShallowCopy creates a shallow copy of the message, where the list of
-	// message parts can be edited independently from the original version.
-	// However, editing the byte array contents of a message part will alter the
-	// contents of the original, and if another process edits the bytes of the
-	// original it will also affect the contents of this message.
-	ShallowCopy() Message
+	// Copy creates a shallow copy of the message, where the list of message
+	// parts can be edited independently from the original version. However,
+	// editing the byte array contents of a message part will alter the contents
+	// of the original, and if another process edits the bytes of the original
+	// it will also affect the contents of this message.
+	Copy() Message
 
 	// DeepCopy creates a deep copy of the message, where the message part
 	// contents are entirely copied and are therefore safe to edit without

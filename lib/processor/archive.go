@@ -75,38 +75,50 @@ func NewArchiveConfig() ArchiveConfig {
 
 //------------------------------------------------------------------------------
 
-type archiveFunc func(hFunc headerFunc, parts [][]byte) ([]byte, error)
+type archiveFunc func(hFunc headerFunc, msg types.Message) (types.Part, error)
 
-type headerFunc func(body []byte) os.FileInfo
+type headerFunc func(body types.Part) os.FileInfo
 
-func tarArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
+func tarArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 	buf := &bytes.Buffer{}
 	tw := tar.NewWriter(buf)
 
 	// Iterate through the parts of the message.
-	for _, part := range parts {
+	err := msg.Iter(func(i int, part types.Part) error {
 		hdr, err := tar.FileInfoHeader(hFunc(part), "")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if err = tw.WriteHeader(hdr); err != nil {
-			return nil, err
+			return err
 		}
-		if _, err = tw.Write(part); err != nil {
-			return nil, err
+		if _, err = tw.Write(part.Get()); err != nil {
+			return err
 		}
-	}
+		return nil
+	})
 	tw.Close()
 
-	return buf.Bytes(), nil
+	if err != nil {
+		return nil, err
+	}
+	return message.NewPart(buf.Bytes()).
+		SetMetadata(msg.Get(0).Metadata().Copy()), nil
 }
 
-func binaryArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
-	return message.New(parts).Bytes(), nil
+func binaryArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+	return message.NewPart(msg.Bytes()).
+		SetMetadata(msg.Get(0).Metadata().Copy()), nil
 }
 
-func linesArchive(hFunc headerFunc, parts [][]byte) ([]byte, error) {
-	return bytes.Join(parts, []byte("\n")), nil
+func linesArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+	tmpParts := make([][]byte, msg.Len())
+	msg.Iter(func(i int, part types.Part) error {
+		tmpParts[i] = part.Get()
+		return nil
+	})
+	return message.NewPart(bytes.Join(tmpParts, []byte("\n"))).
+		SetMetadata(msg.Get(0).Metadata().Copy()), nil
 }
 
 func strToArchiver(str string) (archiveFunc, error) {
@@ -197,15 +209,15 @@ func (f fakeInfo) Sys() interface{} {
 	return nil
 }
 
-func (d *Archive) createHeaderFunc(msg types.Message) func([]byte) os.FileInfo {
-	return func(body []byte) os.FileInfo {
+func (d *Archive) createHeaderFunc(msg types.Message) func(types.Part) os.FileInfo {
+	return func(body types.Part) os.FileInfo {
 		path := d.conf.Path
 		if d.interpolatePath {
 			path = string(text.ReplaceFunctionVariables(msg, d.pathBytes))
 		}
 		return fakeInfo{
 			name: path,
-			size: int64(len(body)),
+			size: int64(len(body.Get())),
 			mode: 0666,
 		}
 	}
@@ -223,7 +235,7 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		return nil, response.NewAck()
 	}
 
-	newPart, err := d.archive(d.createHeaderFunc(msg), msg.GetAll())
+	newPart, err := d.archive(d.createHeaderFunc(msg), msg)
 	if err != nil {
 		d.log.Errorf("Failed to create archive: %v\n", err)
 		d.mErr.Incr(1)
@@ -233,8 +245,8 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	d.mSucc.Incr(1)
 	d.mSent.Incr(1)
 
-	newMsg := message.New([][]byte{newPart})
-	newMsg.SetMetadata(msg.GetMetadata(0).Copy())
+	newMsg := message.New(nil)
+	newMsg.Append(newPart)
 
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil

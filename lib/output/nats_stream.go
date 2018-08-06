@@ -169,15 +169,13 @@ func (n *NATSStream) loop() {
 			return
 		}
 		mCount.Incr(1)
-		var err error
-		for _, part := range ts.Payload.GetAll() {
-			err = n.natsConn.Publish(n.conf.NATSStream.Subject, part)
-			if err != nil {
-				mErr.Incr(1)
-				break
-			} else {
-				mSucc.Incr(1)
-			}
+		err := ts.Payload.Iter(func(i int, p types.Part) error {
+			return n.natsConn.Publish(n.conf.NATSStream.Subject, p.Get())
+		})
+		if err != nil {
+			mErr.Incr(1)
+		} else {
+			mSucc.Incr(1)
 		}
 		select {
 		case ts.ResponseChan <- response.NewError(err):

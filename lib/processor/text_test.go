@@ -80,10 +80,10 @@ func TestTextPartBounds(t *testing.T) {
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if act := string(msgs[0].GetAll()[j]); exp != act {
+		if act := string(message.GetAllBytes(msgs[0])[j]); exp != act {
 			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
 		}
-		if act := string(msgs[0].GetAll()[(j+1)%3]); exp == act {
+		if act := string(message.GetAllBytes(msgs[0])[(j+1)%3]); exp == act {
 			t.Errorf("Processor was applied to wrong index %v: %v != %v", (j+1)%3, act, exp)
 		}
 	}
@@ -142,7 +142,7 @@ func TestTextAppend(t *testing.T) {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
 	}
@@ -201,7 +201,7 @@ func TestTextPrepend(t *testing.T) {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
 	}
@@ -257,7 +257,7 @@ func TestTextTrimSpace(t *testing.T) {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
 	}
@@ -316,7 +316,7 @@ func TestTextTrim(t *testing.T) {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
 	}
@@ -380,7 +380,7 @@ func TestTextReplace(t *testing.T) {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
 	}
@@ -451,7 +451,7 @@ func TestTextReplaceRegexp(t *testing.T) {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
 	}
@@ -510,7 +510,7 @@ func TestTextStripHTML(t *testing.T) {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}
 
-		if exp, act := test.output, string(msgs[0].GetAll()[0]); exp != act {
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}
 	}

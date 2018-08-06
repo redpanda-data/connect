@@ -228,14 +228,14 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			if msgBytes, err = ioutil.ReadAll(p); err != nil {
 				return
 			}
-			msg.Append(msgBytes)
+			msg.Append(message.NewPart(msgBytes))
 		}
 	} else {
 		var msgBytes []byte
 		if msgBytes, err = ioutil.ReadAll(r.Body); err != nil {
 			return
 		}
-		msg.Append(msgBytes)
+		msg.Append(message.NewPart(msgBytes))
 	}
 
 	meta := metadata.New(nil)
@@ -248,7 +248,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	for _, c := range r.Cookies() {
 		meta.Set(c.Name, c.Value)
 	}
-	msg.SetMetadata(meta)
+	message.SetAllMetadata(msg, meta)
 
 	resChan := make(chan types.Response)
 	select {
@@ -326,7 +326,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 		msg := message.New([][]byte{msgBytes})
 
-		meta := msg.GetMetadata(0)
+		meta := msg.Get(0).Metadata()
 		meta.Set("http_server_user_agent", r.UserAgent())
 		for k, v := range r.Header {
 			if len(v) > 0 {

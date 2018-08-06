@@ -129,7 +129,7 @@ func NewEncode(
 func (c *Encode) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 
-	newMsg := msg.ShallowCopy()
+	newMsg := msg.Copy()
 
 	targetParts := c.conf.Parts
 	if len(targetParts) == 0 {
@@ -140,11 +140,11 @@ func (c *Encode) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	}
 
 	for _, index := range targetParts {
-		part := msg.Get(index)
+		part := msg.Get(index).Get()
 		newPart, err := c.fn(part)
 		if err == nil {
 			c.mSucc.Incr(1)
-			newMsg.Set(index, newPart)
+			newMsg.Get(index).Set(newPart)
 		} else {
 			c.log.Debugf("Failed to encode message part: %v\n", err)
 			c.mErr.Incr(1)

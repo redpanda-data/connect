@@ -133,15 +133,14 @@ func (m *MQTT) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	for _, part := range msg.GetAll() {
-		mtok := client.Publish(m.conf.Topic, byte(m.conf.QoS), false, part)
+	return msg.Iter(func(i int, p types.Part) error {
+		mtok := client.Publish(m.conf.Topic, byte(m.conf.QoS), false, p.Get())
 		mtok.Wait()
 		if err := mtok.Error(); err != nil {
 			return err
 		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // CloseAsync shuts down the MQTT output and stops processing messages.

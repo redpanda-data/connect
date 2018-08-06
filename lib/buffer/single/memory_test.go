@@ -57,7 +57,7 @@ func TestMemoryBasic(t *testing.T) {
 		}
 		if m.Len() != 4 {
 			t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3).Get()); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := block.ShiftMessage(); err != nil {
@@ -139,7 +139,7 @@ func TestMemoryNearLimit(t *testing.T) {
 			}
 			if m.Len() != 4 {
 				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3).Get()); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 			}
 			if _, err := block.ShiftMessage(); err != nil {
@@ -179,7 +179,7 @@ func TestMemoryLoopingRandom(t *testing.T) {
 			if m.Len() != 2 {
 				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
 				return
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(1)); expected != actual {
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(1).Get()); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 				return
 			}
@@ -208,7 +208,7 @@ func TestMemoryLockStep(t *testing.T) {
 			if m.Len() != 4 {
 				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
 				return
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3).Get()); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 				return
 			}
@@ -306,7 +306,7 @@ func TestMemoryClose(t *testing.T) {
 
 func TestMemoryRejectLargeMessage(t *testing.T) {
 	tMsg := message.New(make([][]byte, 1))
-	tMsg.Set(0, []byte("hello world this message is too long!"))
+	tMsg.Get(0).Set([]byte("hello world this message is too long!"))
 
 	block := NewMemory(MemoryConfig{Limit: 10})
 

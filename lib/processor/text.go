@@ -229,7 +229,7 @@ func NewText(
 func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	t.mCount.Incr(1)
 
-	newMsg := msg.ShallowCopy()
+	newMsg := msg.Copy()
 
 	valueBytes := t.valueBytes
 	if t.interpolate {
@@ -245,7 +245,7 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	}
 
 	for _, index := range targetParts {
-		data := newMsg.Get(index)
+		data := newMsg.Get(index).Get()
 		var err error
 		if data, err = t.operator(data, valueBytes); err != nil {
 			t.mErr.Incr(1)
@@ -253,7 +253,7 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			continue
 		}
 
-		newMsg.Set(index, data)
+		newMsg.Get(index).Set(data)
 		t.mSucc.Incr(1)
 	}
 

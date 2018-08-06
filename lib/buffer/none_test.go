@@ -77,7 +77,7 @@ func TestNoneBufferBasic(t *testing.T) {
 
 	go func() {
 		for tr := range empty.TransactionChan() {
-			tr.ResponseChan <- response.NewError(errors.New(string(tr.Payload.Get(0))))
+			tr.ResponseChan <- response.NewError(errors.New(string(tr.Payload.Get(0).Get())))
 		}
 	}()
 

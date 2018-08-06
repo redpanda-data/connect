@@ -142,7 +142,7 @@ func (n *NATS) Read() (types.Message, error) {
 	}
 
 	bmsg := message.New([][]byte{msg.Data})
-	bmsg.GetMetadata(0).Set("nats_subject", msg.Subject)
+	bmsg.Get(0).Metadata().Set("nats_subject", msg.Subject)
 
 	return bmsg, nil
 }

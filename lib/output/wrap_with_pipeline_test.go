@@ -203,7 +203,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 	exp := [][]byte{
 		[]byte("foo"),
 	}
-	if act := tran.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(tran.Payload); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong contents: %s != %s", act, exp)
 	}
 

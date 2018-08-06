@@ -25,10 +25,44 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/lib/message/metadata"
 	yaml "gopkg.in/yaml.v2"
 )
 
 //------------------------------------------------------------------------------
+
+func TestGetAllBytes(t *testing.T) {
+	rawBytes := [][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+	}
+	m := New(rawBytes)
+	if exp, act := rawBytes, GetAllBytes(m); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
+func TestSetAllMetadata(t *testing.T) {
+	meta := metadata.New(map[string]string{
+		"foo": "bar",
+	})
+	m := New([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+	})
+	SetAllMetadata(m, meta)
+	if exp, act := "bar", m.Get(0).Metadata().Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := "bar", m.Get(1).Metadata().Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := "bar", m.Get(2).Metadata().Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
 
 func TestCloneGeneric(t *testing.T) {
 	var original interface{}

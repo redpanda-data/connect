@@ -220,7 +220,7 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 			}
 		}
 	} else if msg.Len() == 1 {
-		body := bytes.NewBuffer(msg.GetAll()[0])
+		body := bytes.NewBuffer(msg.Get(0).Get())
 		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
 			for k, v := range h.headers {
 				req.Header.Add(k, v.Get(msg))
@@ -239,7 +239,7 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
 				"Content-Type": []string{contentType},
 			}); err == nil {
-				_, err = io.Copy(part, bytes.NewReader(msg.Get(i)))
+				_, err = io.Copy(part, bytes.NewReader(msg.Get(i).Get()))
 			}
 		}
 
@@ -299,7 +299,7 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 				return
 			}
 
-			resMsg.Append(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead])
+			resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
 			bufferIndex += bytesRead
 		}
 	} else {

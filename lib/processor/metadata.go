@@ -188,7 +188,7 @@ func NewMetadata(
 func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
-	newMsg := msg.ShallowCopy()
+	newMsg := msg.Copy()
 
 	valueBytes := p.valueBytes
 	if p.interpolate {
@@ -204,7 +204,7 @@ func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	}
 
 	for _, index := range targetParts {
-		if err := p.operator(newMsg.GetMetadata(index), valueBytes); err != nil {
+		if err := p.operator(newMsg.Get(index).Metadata(), valueBytes); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)
 		}

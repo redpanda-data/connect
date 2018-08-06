@@ -39,9 +39,7 @@ import (
 // Message is an interface type to be given to a function interpolator, it
 // allows the function to resolve fields and metadata from a message.
 type Message interface {
-	Get(p int) []byte
-	GetJSON(p int) (interface{}, error)
-	GetMetadata(index int) types.Metadata
+	Get(p int) types.Part
 	Len() int
 }
 
@@ -56,7 +54,7 @@ func jsonFieldFunction(msg Message, arg string) []byte {
 			part = int(partB)
 		}
 	}
-	jPart, err := msg.GetJSON(part)
+	jPart, err := msg.Get(part).JSON()
 	if err != nil {
 		return []byte("null")
 	}
@@ -85,7 +83,7 @@ func metadataFunction(msg Message, arg string) []byte {
 			part = int(partB)
 		}
 	}
-	meta := msg.GetMetadata(part)
+	meta := msg.Get(part).Metadata()
 	return []byte(meta.Get(args[0]))
 }
 
@@ -98,7 +96,7 @@ func metadataMapFunction(msg Message, arg string) []byte {
 		}
 	}
 	kvs := map[string]string{}
-	msg.GetMetadata(part).Iter(func(k, v string) error {
+	msg.Get(part).Metadata().Iter(func(k, v string) error {
 		kvs[k] = v
 		return nil
 	})

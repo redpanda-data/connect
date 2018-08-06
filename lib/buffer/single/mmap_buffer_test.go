@@ -85,7 +85,7 @@ func TestMmapBufferBasic(t *testing.T) {
 		}
 		if m.Len() != 4 {
 			t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3).Get()); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := block.ShiftMessage(); err != nil {
@@ -206,7 +206,7 @@ func TestMmapBufferLoopingRandom(t *testing.T) {
 			}
 			if m.Len() != 2 {
 				t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
-			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(1)); expected != actual {
+			} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(1).Get()); expected != actual {
 				t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 			}
 			if _, err := block.ShiftMessage(); err != nil {
@@ -261,7 +261,7 @@ func TestMmapBufferMultiFiles(t *testing.T) {
 		}
 		if m.Len() != 4 {
 			t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3).Get()); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := block.ShiftMessage(); err != nil {
@@ -325,7 +325,7 @@ func TestMmapBufferRecoverFiles(t *testing.T) {
 		}
 		if m.Len() != 4 {
 			t.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3).Get()); expected != actual {
 			t.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := block.ShiftMessage(); err != nil {
@@ -347,7 +347,7 @@ func TestMmapBufferRejectLargeMessage(t *testing.T) {
 	defer cleanUpMmapDir(dir)
 
 	tMsg := message.New(make([][]byte, 1))
-	tMsg.Set(0, []byte("hello world this message is too long!"))
+	tMsg.Get(0).Set([]byte("hello world this message is too long!"))
 
 	conf := NewMmapBufferConfig()
 	conf.FileSize = 10
@@ -409,7 +409,7 @@ func BenchmarkMmapBufferBasic(b *testing.B) {
 		}
 		if m.Len() != 4 {
 			b.Errorf("Wrong # parts, %v != %v", m.Len(), 4)
-		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3)); expected != actual {
+		} else if expected, actual := fmt.Sprintf("test%v", i), string(m.Get(3).Get()); expected != actual {
 			b.Errorf("Wrong order of messages, %v != %v", expected, actual)
 		}
 		if _, err := block.ShiftMessage(); err != nil {

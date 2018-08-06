@@ -63,7 +63,7 @@ func TestSplitParts(t *testing.T) {
 			continue
 		}
 		for i, exp := range tIn {
-			if act := msgs[i].GetAll()[0]; !reflect.DeepEqual(exp, act) {
+			if act := msgs[i].Get(0).Get(); !reflect.DeepEqual(exp, act) {
 				t.Errorf("Wrong contents: %s != %s", act, exp)
 			}
 		}

@@ -148,7 +148,7 @@ func NewProcessField(
 // resulting messages or a response to be sent back to the message source.
 func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
 	p.mCount.Incr(1)
-	payload := msg.ShallowCopy()
+	payload := msg.Copy()
 	resMsgs := [1]types.Message{payload}
 	msgs = resMsgs[:]
 
@@ -164,10 +164,10 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	gParts := make([]*gabs.Container, len(targetParts))
 
 	for i, index := range targetParts {
-		reqMsg.Set(i, []byte("nil"))
+		reqMsg.Get(i).Set([]byte("nil"))
 		var err error
 		var jObj interface{}
-		if jObj, err = payload.GetJSON(index); err != nil {
+		if jObj, err = payload.Get(index).JSON(); err != nil {
 			p.mErrJSONParse.Incr(1)
 			p.log.Errorf("Failed to decode part: %v\n", err)
 		}
@@ -178,9 +178,9 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		gTarget := gParts[i].S(p.path...)
 		switch t := gTarget.Data().(type) {
 		case string:
-			reqMsg.Set(i, []byte(t))
+			reqMsg.Get(i).Set([]byte(t))
 		default:
-			reqMsg.Set(i, []byte(gTarget.String()))
+			reqMsg.Get(i).Set([]byte(gTarget.String()))
 		}
 	}
 
@@ -197,9 +197,10 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 
 	resMsg := message.New(nil)
 	for _, rMsg := range resultMsgs {
-		for _, part := range rMsg.GetAll() {
-			resMsg.Append(part)
-		}
+		rMsg.Iter(func(i int, p types.Part) error {
+			resMsg.Append(p.Copy())
+			return nil
+		})
 	}
 
 	if exp, act := len(targetParts), resMsg.Len(); exp != act {
@@ -212,8 +213,8 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	}
 
 	for i, index := range targetParts {
-		gParts[i].Set(string(resMsg.Get(i)), p.path...)
-		payload.SetJSON(index, gParts[i].Data())
+		gParts[i].Set(string(resMsg.Get(i).Get()), p.path...)
+		payload.Get(index).SetJSON(gParts[i].Data())
 	}
 
 	p.mSent.Incr(1)

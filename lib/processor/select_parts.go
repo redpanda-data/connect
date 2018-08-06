@@ -122,8 +122,7 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 			m.mSkipped.Incr(1)
 		} else {
 			m.mSelected.Incr(1)
-			newIndex := newMsg.Append(msg.Get(index))
-			newMsg.SetMetadata(msg.GetMetadata(index).Copy(), newIndex)
+			newMsg.Append(msg.Get(index).Copy())
 		}
 	}
 

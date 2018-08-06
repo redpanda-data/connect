@@ -154,8 +154,11 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		}
 	} else {
 		// Hard, need to do parallel requests limited by max parallelism.
-		responseMsg = msg.ShallowCopy()
-		results := responseMsg.GetAll()
+		results := make([]types.Part, msg.Len())
+		msg.Iter(func(i int, p types.Part) error {
+			results[i] = p.Copy()
+			return nil
+		})
 		reqChan, resChan := make(chan int), make(chan error)
 
 		max := h.max
@@ -190,7 +193,8 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		}
 
 		close(reqChan)
-		responseMsg = message.New(results)
+		responseMsg = message.New(nil)
+		responseMsg.Append(results...)
 	}
 
 	if responseMsg.Len() < 1 {

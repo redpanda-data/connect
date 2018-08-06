@@ -185,7 +185,7 @@ func NewDecompress(
 func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.mCount.Incr(1)
 
-	newMsg := msg.ShallowCopy()
+	newMsg := msg.Copy()
 
 	targetParts := d.conf.Parts
 	if len(targetParts) == 0 {
@@ -196,11 +196,11 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	}
 
 	for _, index := range targetParts {
-		part := msg.Get(index)
+		part := msg.Get(index).Get()
 		newPart, err := d.decomp(part)
 		if err == nil {
 			d.mSucc.Incr(1)
-			newMsg.Set(index, newPart)
+			newMsg.Get(index).Set(newPart)
 		} else {
 			d.mErr.Incr(1)
 		}

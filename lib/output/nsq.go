@@ -168,15 +168,13 @@ func (n *NSQ) loop() {
 			return
 		}
 		mCount.Incr(1)
-		var err error
-		for _, part := range ts.Payload.GetAll() {
-			err = n.producer.Publish(n.conf.NSQ.Topic, part)
-			if err != nil {
-				mSendErr.Incr(1)
-				break
-			} else {
-				mSendSucc.Incr(1)
-			}
+		err := ts.Payload.Iter(func(i int, p types.Part) error {
+			return n.producer.Publish(n.conf.NSQ.Topic, p.Get())
+		})
+		if err != nil {
+			mSendErr.Incr(1)
+		} else {
+			mSendSucc.Incr(1)
 		}
 		select {
 		case ts.ResponseChan <- response.NewError(err):

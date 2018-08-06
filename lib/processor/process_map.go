@@ -249,7 +249,7 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	if len(p.parts) > 0 {
 		mapMsg = message.New(make([][]byte, msg.Len()))
 		for _, sel := range p.parts {
-			mapMsg.Set(sel, msg.Get(sel))
+			mapMsg.Get(sel).Set(msg.Get(sel).Get())
 		}
 	}
 
@@ -280,10 +280,11 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	i := 0
 	for _, m := range procResults {
-		for _, b := range m.GetAll() {
-			p.log.Tracef("Processed request part '%v': %q\n", i, b)
+		m.Iter(func(_ int, part types.Part) error {
+			p.log.Tracef("Processed request part '%v': %q\n", i, part.Get())
 			i++
-		}
+			return nil
+		})
 	}
 
 	var alignedResult types.Message
@@ -295,7 +296,7 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		return msgs[:], nil
 	}
 
-	result := msg.ShallowCopy()
+	result := msg.Copy()
 	if err = p.mapper.MapResponses(result, alignedResult); err != nil {
 		p.mErrPost.Incr(1)
 		p.mErr.Incr(1)
@@ -331,9 +332,12 @@ func processMap(mappedMsg types.Message, processors []Type) ([]types.Message, er
 }
 
 func alignResult(length int, skippedParts []int, result []types.Message) (types.Message, error) {
-	resMsgParts := [][]byte{}
+	resMsgParts := []types.Part{}
 	for _, m := range result {
-		resMsgParts = append(resMsgParts, m.GetAll()...)
+		m.Iter(func(i int, p types.Part) error {
+			resMsgParts = append(resMsgParts, p)
+			return nil
+		})
 	}
 
 	// Check that size of response is aligned with payload.
@@ -341,12 +345,12 @@ func alignResult(length int, skippedParts []int, result []types.Message) (types.
 		return nil, fmt.Errorf("parts returned from enrichment do not match payload: %v != %v", rLen, pLen)
 	}
 
-	var responseParts [][]byte
+	var responseParts []types.Part
 	if len(skippedParts) == 0 {
 		responseParts = resMsgParts
 	} else {
 		// Remember to insert nil for each skipped part at the correct index.
-		responseParts = make([][]byte, length)
+		responseParts = make([]types.Part, length)
 		sIndex := 0
 		rOffset := 0
 		for i := 0; i < len(resMsgParts); i++ {
@@ -358,5 +362,7 @@ func alignResult(length int, skippedParts []int, result []types.Message) (types.
 		}
 	}
 
-	return message.New(responseParts), nil
+	newMsg := message.New(nil)
+	newMsg.Append(responseParts...)
+	return newMsg, nil
 }

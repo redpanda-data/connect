@@ -136,7 +136,7 @@ func NewGrok(
 func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	g.mCount.Incr(1)
 
-	newMsg := msg.ShallowCopy()
+	newMsg := msg.Copy()
 
 	targetParts := g.parts
 	if len(targetParts) == 0 {
@@ -147,7 +147,7 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	}
 
 	for _, index := range targetParts {
-		body := msg.Get(index)
+		body := msg.Get(index).Get()
 
 		var values map[string]interface{}
 		for _, compiler := range g.gparsers {
@@ -167,7 +167,7 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			continue
 		}
 
-		if err := newMsg.SetJSON(index, values); err != nil {
+		if err := newMsg.Get(index).SetJSON(values); err != nil {
 			g.mErrJSONS.Incr(1)
 			g.log.Debugf("Failed to convert grok result into json: %v\n", err)
 		} else {

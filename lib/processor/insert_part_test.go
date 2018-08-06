@@ -57,7 +57,7 @@ func TestInsertBoundaries(t *testing.T) {
 			} else if res != nil {
 				t.Errorf("Expected nil response: %v", res)
 			}
-			if exp, act := i+1, len(msgs[0].GetAll()); exp != act {
+			if exp, act := i+1, len(message.GetAllBytes(msgs[0])); exp != act {
 				t.Errorf("Wrong count of result parts: %v != %v", act, exp)
 			}
 		}
@@ -196,7 +196,7 @@ func TestInsertPart(t *testing.T) {
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := test.out, msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+		if exp, act := test.out, message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Unexpected output for %s at index %v: %s != %s", test.in, test.index, act, exp)
 		}
 	}
@@ -247,7 +247,7 @@ func TestInsertPartInterpolation(t *testing.T) {
 		} else if res != nil {
 			t.Errorf("Expected nil response: %v", res)
 		}
-		if exp, act := test.out, msgs[0].GetAll(); !reflect.DeepEqual(exp, act) {
+		if exp, act := test.out, message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Unexpected output for %s: %s != %s", test.in, act, exp)
 		}
 	}

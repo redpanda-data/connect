@@ -84,8 +84,8 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 				var ts types.Transaction
 				select {
 				case ts = <-fanIn.TransactionChan():
-					if string(ts.Payload.Get(0)) != string(content[0]) {
-						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0), content[0])
+					if string(ts.Payload.Get(0).Get()) != string(content[0]) {
+						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 					}
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
@@ -159,8 +159,8 @@ func TestBasicDynamicFanIn(t *testing.T) {
 		expContent := fmt.Sprintf("inputOne-%v", i)
 		select {
 		case ts = <-fanIn.TransactionChan():
-			if string(ts.Payload.Get(0)) != expContent {
-				t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0), expContent)
+			if string(ts.Payload.Get(0).Get()) != expContent {
+				t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), expContent)
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
@@ -183,8 +183,8 @@ func TestBasicDynamicFanIn(t *testing.T) {
 		expContent := fmt.Sprintf("inputTwo-%v", i)
 		select {
 		case ts = <-fanIn.TransactionChan():
-			if string(ts.Payload.Get(0)) != expContent {
-				t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0), expContent)
+			if string(ts.Payload.Get(0).Get()) != expContent {
+				t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), expContent)
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
@@ -349,7 +349,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- response.NewError(errors.New(string(ts.Payload.Get(0)))):
+		case ts.ResponseChan <- response.NewError(errors.New(string(ts.Payload.Get(0).Get()))):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return

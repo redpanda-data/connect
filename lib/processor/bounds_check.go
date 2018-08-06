@@ -21,6 +21,8 @@
 package processor
 
 import (
+	"errors"
+
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
@@ -123,8 +125,9 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 		return nil, response.NewAck()
 	}
 
-	for _, part := range msg.GetAll() {
-		if size := len(part); size > m.conf.BoundsCheck.MaxPartSize ||
+	var reject bool
+	msg.Iter(func(i int, p types.Part) error {
+		if size := len(p.Get()); size > m.conf.BoundsCheck.MaxPartSize ||
 			size < m.conf.BoundsCheck.MinPartSize {
 			m.log.Debugf(
 				"Rejecting message due to message part size (%v -> %v): %v\n",
@@ -132,10 +135,16 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 				m.conf.BoundsCheck.MaxPartSize,
 				size,
 			)
-			m.mDropped.Incr(1)
-			m.mDroppedPartSize.Incr(1)
-			return nil, response.NewAck()
+			reject = true
+			return errors.New("exit")
 		}
+		return nil
+	})
+
+	if reject {
+		m.mDropped.Incr(1)
+		m.mDroppedPartSize.Incr(1)
+		return nil, response.NewAck()
 	}
 
 	m.mSent.Incr(1)

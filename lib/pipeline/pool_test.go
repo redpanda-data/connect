@@ -118,7 +118,7 @@ func TestPoolBasic(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
+		if exp, act := [][]byte{[]byte("foo"), []byte("bar")}, message.GetAllBytes(procT.Payload); !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong message received: %s != %s", act, exp)
 		}
 	case <-time.After(time.Second * 5):
@@ -200,7 +200,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 				if !open {
 					t.Error("Closed early")
 				}
-				act := string(procT.Payload.Get(0))
+				act := string(procT.Payload.Get(0).Get())
 				if _, exists := expMsgs[act]; !exists {
 					t.Errorf("Unexpected result: %v", act)
 				} else {
@@ -283,7 +283,7 @@ func TestPoolMultiThreads(t *testing.T) {
 			if !open {
 				t.Error("Closed early")
 			}
-			if exp, act := [][]byte{[]byte("one"), []byte("two")}, procT.Payload.GetAll(); !reflect.DeepEqual(exp, act) {
+			if exp, act := [][]byte{[]byte("one"), []byte("two")}, message.GetAllBytes(procT.Payload); !reflect.DeepEqual(exp, act) {
 				t.Errorf("Wrong message received: %s != %s", act, exp)
 			}
 		case <-time.After(time.Second * 5):

@@ -214,7 +214,7 @@ func (k *KafkaBalanced) Read() (types.Message, error) {
 
 	msg := message.New([][]byte{data.Value})
 
-	meta := msg.GetMetadata(0)
+	meta := msg.Get(0).Metadata()
 	meta.Set("kafka_key", string(data.Key))
 	meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
 	meta.Set("kafka_topic", data.Topic)

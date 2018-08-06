@@ -302,7 +302,7 @@ func (d *DynamicFanOut) loop() {
 			for _, v := range remainingTargets {
 				// Perform a copy here as it could be dangerous to release the
 				// same message to parallel processor pipelines.
-				msgCopy := ts.Payload.ShallowCopy()
+				msgCopy := ts.Payload.Copy()
 				select {
 				case v.tsChan <- types.NewTransaction(msgCopy, v.resChan):
 				case <-d.closeChan:

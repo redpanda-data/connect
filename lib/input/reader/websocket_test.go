@@ -81,7 +81,7 @@ func TestWebsocketBasic(t *testing.T) {
 		var actMsg types.Message
 		if actMsg, err = m.Read(); err != nil {
 			t.Error(err)
-		} else if act := string(actMsg.Get(0)); act != exp {
+		} else if act := string(actMsg.Get(0).Get()); act != exp {
 			t.Errorf("Wrong result: %v != %v", act, exp)
 		}
 		if err = m.Acknowledge(nil); err != nil {
@@ -150,7 +150,7 @@ func TestWebsocketOpenMsg(t *testing.T) {
 		var actMsg types.Message
 		if actMsg, err = m.Read(); err != nil {
 			t.Error(err)
-		} else if act := string(actMsg.Get(0)); act != exp {
+		} else if act := string(actMsg.Get(0).Get()); act != exp {
 			t.Errorf("Wrong result: %v != %v", act, exp)
 		}
 		if err = m.Acknowledge(nil); err != nil {

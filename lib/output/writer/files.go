@@ -85,7 +85,7 @@ func (f *Files) Connect() error {
 
 // Write attempts to write message contents to a directory as files.
 func (f *Files) Write(msg types.Message) error {
-	for _, part := range msg.GetAll() {
+	return msg.Iter(func(i int, p types.Part) error {
 		path := f.conf.Path
 		if f.interpolatePath {
 			path = string(text.ReplaceFunctionVariables(msg, f.pathBytes))
@@ -95,11 +95,11 @@ func (f *Files) Write(msg types.Message) error {
 		if err != nil {
 			return err
 		}
-		if err = ioutil.WriteFile(path, part, os.FileMode(0666)); err != nil {
+		if err = ioutil.WriteFile(path, p.Get(), os.FileMode(0666)); err != nil {
 			return err
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
