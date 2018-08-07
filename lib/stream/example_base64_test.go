@@ -22,6 +22,7 @@ package stream
 
 import (
 	"bytes"
+	"encoding/base64"
 	"log"
 	"os"
 	"os/signal"
@@ -29,32 +30,38 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/input"
-	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
-// SplitToBatch is a types.Processor implementation that reads a single message
-// containing line delimited payloads and splits the payloads into a single
-// batch of messages per line.
-type SplitToBatch struct{}
+// Base64Encoder is a types.Processor implementation that base64 encodes
+// all messages travelling through a Benthos stream.
+type Base64Encoder struct{}
 
-// ProcessMessage splits messages of a batch by lines and sends them onwards as
-// a batch of messages.
-func (p SplitToBatch) ProcessMessage(m types.Message) ([]types.Message, types.Response) {
-	var splitParts [][]byte
-	m.Iter(func(i int, b types.Part) error {
-		splitParts = append(splitParts, bytes.Split(b.Get(), []byte("\n"))...)
+// ProcessMessage base64 encodes all messages.
+func (p Base64Encoder) ProcessMessage(m types.Message) ([]types.Message, types.Response) {
+	// Create a copy of the original message
+	result := m.Copy()
+
+	// For each message part replace its contents with the base64 encoded
+	// version.
+	result.Iter(func(i int, part types.Part) error {
+		var buf bytes.Buffer
+
+		e := base64.NewEncoder(base64.StdEncoding, &buf)
+		e.Write(part.Get())
+		e.Close()
+
+		part.Set(buf.Bytes())
 		return nil
 	})
 
-	return []types.Message{message.New(splitParts)}, nil
+	return []types.Message{result}, nil
 }
 
-// ExampleSplitToBatch Demonstrates running a Kafka to Kafka stream where each
-// incoming message is parsed as a line delimited blob of payloads and the
-// payloads are sent on as a single batch of messages.
-func Example_splitToBatch() {
+// ExampleBase64Encoder demonstrates running a Kafka to Kafka stream where each
+// incoming message is encoded with base64.
+func Example_base64Encoder() {
 	conf := NewConfig()
 
 	conf.Input.Type = input.TypeKafka
@@ -70,7 +77,7 @@ func Example_splitToBatch() {
 	conf.Output.Kafka.Topic = "example_topic_two"
 
 	s, err := New(conf, OptAddProcessors(func() (types.Processor, error) {
-		return SplitToBatch{}, nil
+		return Base64Encoder{}, nil
 	}))
 	if err != nil {
 		panic(err)
