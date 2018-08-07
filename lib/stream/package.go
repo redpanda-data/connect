@@ -51,9 +51,9 @@ including your custom implementations, support batches.
 
 Sometimes your custom processors will require batches of a certain size in order
 to function. It is recommended that you perform message batching using the
-standard Benthos batch or combine processors to do this, as it will ensure
-resiliency through the stream pipeline. For example, you can add a batch
-processor to your input layer:
+standard Benthos batch or combine processors, as it will ensure resiliency
+throughout the stream pipeline. For example, you can add a batch processor to
+your input layer:
 
 	conf := NewConfig()
 
@@ -108,7 +108,7 @@ four threads with eight parallel consumers:
 	processorConf := processor.NewConfig()
 	processorConf.Type = processor.TypeDecompress
 
-	// Create a stream with four parallel inputs and four processing threads
+	// Create a stream with eight parallel consumers and four processing threads
 	conf := NewConfig()
 
 	conf.Input.Type = input.TypeBroker
