@@ -29,7 +29,8 @@ import (
 
 //------------------------------------------------------------------------------
 
-// Config is a configuration struct for a Benthos stream.
+// Config is a configuration struct representing all four layers of a Benthos
+// stream.
 type Config struct {
 	Input    input.Config    `json:"input" yaml:"input"`
 	Buffer   buffer.Config   `json:"buffer" yaml:"buffer"`

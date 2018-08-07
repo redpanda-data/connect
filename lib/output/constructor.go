@@ -87,8 +87,6 @@ const (
 //------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all output types.
-// Note that some configs are empty structs, as the type has no optional values
-// but we want to list it as an option.
 type Config struct {
 	Type          string                     `json:"type" yaml:"type"`
 	AMQP          writer.AMQPConfig          `json:"amqp" yaml:"amqp"`

@@ -32,7 +32,14 @@ import (
 
 //------------------------------------------------------------------------------
 
-// Config is a configuration struct for a pipeline.
+// Config is a configuration struct for creating parallel processing pipelines.
+// The number of resuling parallel processing pipelines will match the number of
+// threads specified. Processors are executed on each message in the order that
+// they are written.
+//
+// In order to fully utilise each processing thread you must either have a
+// number of parallel inputs that matches or surpasses the number of pipeline
+// threads, or use a memory buffer.
 type Config struct {
 	Threads    int                `json:"threads" yaml:"threads"`
 	Processors []processor.Config `json:"processors" yaml:"processors"`

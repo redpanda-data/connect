@@ -88,9 +88,7 @@ const (
 
 //------------------------------------------------------------------------------
 
-// Config is the all encompassing configuration struct for all input types. Note
-// that some configs are empty structs, as the type has no optional values but
-// we want to list it as an option.
+// Config is the all encompassing configuration struct for all input types.
 type Config struct {
 	Type          string                     `json:"type" yaml:"type"`
 	AMQP          reader.AMQPConfig          `json:"amqp" yaml:"amqp"`
