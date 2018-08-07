@@ -275,12 +275,12 @@ partLoop:
 			continue partLoop
 		}
 
-		t.log.Tracef("Unmapped message part '%v': %q\n", i, msg.Get(i))
+		t.log.Tracef("Unmapped message part '%v': %q\n", i, msg.Get(i).Get())
 		sourceObj, err := getGabs(msg, i)
 		if err != nil {
 			t.mReqErr.Incr(1)
 			t.mReqErrJSON.Incr(1)
-			t.log.Debugf("Failed to parse message part '%v': %v. Failed part: %q\n", i, err, msg.Get(i))
+			t.log.Debugf("Failed to parse message part '%v': %v. Failed part: %q\n", i, err, msg.Get(i).Get())
 
 			// Skip if message part fails JSON parse.
 			skipped = append(skipped, i)
@@ -298,7 +298,7 @@ partLoop:
 				if src.Data() == nil {
 					t.mReqErr.Incr(1)
 					t.mReqErrMap.Incr(1)
-					t.log.Debugf("Failed to find request map target '%v' in message part '%v'. Message contents: %q\n", v, i, msg.Get(i))
+					t.log.Debugf("Failed to find request map target '%v' in message part '%v'. Message contents: %q\n", v, i, msg.Get(i).Get())
 
 					// Skip if message part fails mapping.
 					skipped = append(skipped, i)
@@ -332,7 +332,7 @@ partLoop:
 			t.mReqErrJSON.Incr(1)
 			t.log.Debugf("Failed to marshal request map result in message part '%v'. Map contents: '%v'\n", i, destObj.String())
 		}
-		t.log.Tracef("Mapped request part '%v': %q\n", i, mappedMsg.Get(-1))
+		t.log.Tracef("Mapped request part '%v': %q\n", i, mappedMsg.Get(-1).Get())
 	}
 
 	return mappedMsg, skipped, nil
@@ -358,13 +358,13 @@ partLoop:
 			// Parts that are nil are skipped.
 			continue partLoop
 		}
-		t.log.Tracef("Premapped response part '%v': %q\n", i, response.Get(i))
+		t.log.Tracef("Premapped response part '%v': %q\n", i, response.Get(i).Get())
 
 		sourceObj, err := getGabs(response, i)
 		if err != nil {
 			t.mResErr.Incr(1)
 			t.mResErrJSON.Incr(1)
-			t.log.Debugf("Failed to parse response part '%v': %v. Failed part: '%s'\n", i, err, response.Get(i))
+			t.log.Debugf("Failed to parse response part '%v': %v. Failed part: '%s'\n", i, err, response.Get(i).Get())
 
 			// Skip parts that fail JSON parse.
 			continue partLoop
@@ -374,7 +374,7 @@ partLoop:
 		if destObj, err = getGabs(payload, i); err != nil {
 			t.mResErr.Incr(1)
 			t.mResErrJSON.Incr(1)
-			t.log.Debugf("Failed to parse payload part '%v': %v. Failed part: '%s'\n", i, err, response.Get(i))
+			t.log.Debugf("Failed to parse payload part '%v': %v. Failed part: '%s'\n", i, err, response.Get(i).Get())
 
 			// Skip parts that fail JSON parse.
 			continue partLoop
@@ -390,7 +390,7 @@ partLoop:
 				if src.Data() == nil {
 					t.mResErr.Incr(1)
 					t.mResErrMap.Incr(1)
-					t.log.Debugf("Failed to find map target '%v' in response part '%v'. Response contents: %q\n", v, i, response.Get(i))
+					t.log.Debugf("Failed to find map target '%v' in response part '%v'. Response contents: %q\n", v, i, response.Get(i).Get())
 
 					// Skip parts that fail mapping.
 					continue partLoop
@@ -426,7 +426,7 @@ partLoop:
 			continue partLoop
 		}
 
-		t.log.Tracef("Mapped message part '%v': %q\n", i, payload.Get(i))
+		t.log.Tracef("Mapped message part '%v': %q\n", i, payload.Get(i).Get())
 	}
 
 	return nil
