@@ -338,6 +338,44 @@ partLoop:
 	return mappedMsg, skipped, nil
 }
 
+// AlignResult takes the original length of a mapped payload, a slice of skipped
+// message part indexes, and a post-mapped, post-processed slice of resuling
+// messages, and attempts to create a new payload where the results are
+// realigned and ready to map back into the original.
+func (t *Type) AlignResult(length int, skippedParts []int, result []types.Message) (types.Message, error) {
+	resMsgParts := []types.Part{}
+	for _, m := range result {
+		m.Iter(func(i int, p types.Part) error {
+			resMsgParts = append(resMsgParts, p)
+			return nil
+		})
+	}
+
+	// Check that size of response is aligned with payload.
+	if rLen, pLen := len(resMsgParts)+len(skippedParts), length; rLen != pLen {
+		return nil, fmt.Errorf("parts returned from enrichment do not match payload: %v != %v", rLen, pLen)
+	}
+
+	var responseParts []types.Part
+	if len(skippedParts) == 0 {
+		responseParts = resMsgParts
+	} else {
+		// Remember to insert nil for each skipped part at the correct index.
+		responseParts = make([]types.Part, length)
+		sIndex := 0
+		for i := 0; i < len(resMsgParts); i++ {
+			for sIndex < len(skippedParts) && skippedParts[sIndex] == (i+sIndex) {
+				sIndex++
+			}
+			responseParts[i+sIndex] = resMsgParts[i]
+		}
+	}
+
+	newMsg := message.New(nil)
+	newMsg.SetAll(responseParts)
+	return newMsg, nil
+}
+
 // MapResponses attempts to merge a batch of responses with original payloads as
 // per the response map.
 //

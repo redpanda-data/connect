@@ -288,7 +288,7 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	}
 
 	var alignedResult types.Message
-	if alignedResult, err = alignResult(msg.Len(), skipped, procResults); err != nil {
+	if alignedResult, err = p.mapper.AlignResult(msg.Len(), skipped, procResults); err != nil {
 		p.mErrPost.Incr(1)
 		p.mErr.Incr(1)
 		p.log.Errorf("Postmap failed: %v\n", err)
@@ -329,40 +329,4 @@ func processMap(mappedMsg types.Message, processors []Type) ([]types.Message, er
 	}
 
 	return requestMsgs, nil
-}
-
-func alignResult(length int, skippedParts []int, result []types.Message) (types.Message, error) {
-	resMsgParts := []types.Part{}
-	for _, m := range result {
-		m.Iter(func(i int, p types.Part) error {
-			resMsgParts = append(resMsgParts, p)
-			return nil
-		})
-	}
-
-	// Check that size of response is aligned with payload.
-	if rLen, pLen := len(resMsgParts)+len(skippedParts), length; rLen != pLen {
-		return nil, fmt.Errorf("parts returned from enrichment do not match payload: %v != %v", rLen, pLen)
-	}
-
-	var responseParts []types.Part
-	if len(skippedParts) == 0 {
-		responseParts = resMsgParts
-	} else {
-		// Remember to insert nil for each skipped part at the correct index.
-		responseParts = make([]types.Part, length)
-		sIndex := 0
-		rOffset := 0
-		for i := 0; i < len(resMsgParts); i++ {
-			if sIndex < len(skippedParts) && skippedParts[sIndex] == i {
-				sIndex++
-				rOffset++
-			}
-			responseParts[i+rOffset] = resMsgParts[i]
-		}
-	}
-
-	newMsg := message.New(nil)
-	newMsg.Append(responseParts...)
-	return newMsg, nil
 }

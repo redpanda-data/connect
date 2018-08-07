@@ -247,6 +247,20 @@ func TestTypeMapRequests(t *testing.T) {
 			skipped: []int{1},
 		},
 		{
+			name: "Multi parts some skipped some nil",
+			input: [][]byte{
+				[]byte(`{"bar":{"baz":1},"ignored":"keep me"}`),
+				[]byte(`{"bar":{"baz":2},"ignored":"drop me"}`),
+				[]byte(`{"bar":{"baz":3},"ignored":"keep me"}`),
+				nil,
+			},
+			output: [][]byte{
+				[]byte(`{"foo":{"bar":1}}`),
+				[]byte(`{"foo":{"bar":3}}`),
+			},
+			skipped: []int{1, 3},
+		},
+		{
 			name: "Multi parts all skipped",
 			input: [][]byte{
 				[]byte(`{"bar":{"baz":1},"ignored":"drop me"}`),
@@ -285,6 +299,133 @@ func TestTypeMapRequests(t *testing.T) {
 			t.Errorf("Wrong skipped slice for test '%v': %v != %v", test.name, act, exp)
 		}
 		if act, exp := message.GetAllBytes(res), test.output; !reflect.DeepEqual(exp, act) {
+			t.Errorf("Wrong output for test '%v': %s != %s", test.name, act, exp)
+		}
+	}
+}
+
+func TestTypeAlignResult(t *testing.T) {
+	type testCase struct {
+		name    string
+		length  int
+		skipped []int
+		input   [][][]byte
+		output  [][]byte
+	}
+
+	tests := []testCase{
+		{
+			name:    "single message no skipped",
+			length:  3,
+			skipped: nil,
+			input: [][][]byte{
+				[][]byte{
+					[]byte(`foo`),
+					[]byte(`bar`),
+					[]byte(`baz`),
+				},
+			},
+			output: [][]byte{
+				[]byte(`foo`),
+				[]byte(`bar`),
+				[]byte(`baz`),
+			},
+		},
+		{
+			name:    "single message skipped",
+			length:  3,
+			skipped: []int{1},
+			input: [][][]byte{
+				[][]byte{
+					[]byte(`foo`),
+					[]byte(`baz`),
+				},
+			},
+			output: [][]byte{
+				[]byte(`foo`),
+				nil,
+				[]byte(`baz`),
+			},
+		},
+		{
+			name:    "single message lots skipped",
+			length:  8,
+			skipped: []int{0, 1, 2, 4, 5, 7},
+			input: [][][]byte{
+				[][]byte{
+					[]byte(`foo`),
+					[]byte(`baz`),
+				},
+			},
+			output: [][]byte{
+				nil, nil, nil,
+				[]byte(`foo`),
+				nil, nil,
+				[]byte(`baz`),
+				nil,
+			},
+		},
+		{
+			name:    "multi message skipped",
+			length:  6,
+			skipped: []int{1, 4},
+			input: [][][]byte{
+				[][]byte{
+					[]byte(`foo`),
+					[]byte(`baz`),
+				},
+				[][]byte{
+					[]byte(`foo2`),
+					[]byte(`baz2`),
+				},
+			},
+			output: [][]byte{
+				[]byte(`foo`),
+				nil,
+				[]byte(`baz`),
+				[]byte(`foo2`),
+				nil,
+				[]byte(`baz2`),
+			},
+		},
+		{
+			name:    "multi message lots skipped",
+			length:  8,
+			skipped: []int{0, 1, 2, 4, 6, 7},
+			input: [][][]byte{
+				[][]byte{
+					[]byte(`foo`),
+				},
+				[][]byte{
+					[]byte(`baz`),
+				},
+			},
+			output: [][]byte{
+				nil, nil, nil,
+				[]byte(`foo`),
+				nil,
+				[]byte(`baz`),
+				nil, nil,
+			},
+		},
+	}
+
+	e, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range tests {
+		var input []types.Message
+		for _, p := range test.input {
+			input = append(input, message.New(p))
+		}
+		msg, err := e.AlignResult(test.length, test.skipped, input)
+		if err != nil {
+			t.Errorf("Error '%v': %v", test.name, err)
+			continue
+		}
+		if act, exp := message.GetAllBytes(msg), test.output; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong output for test '%v': %s != %s", test.name, act, exp)
 		}
 	}
