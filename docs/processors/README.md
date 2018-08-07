@@ -317,6 +317,11 @@ filter_parts:
   jmespath:
     part: 0
     query: ""
+  metadata:
+    arg: ""
+    key: ""
+    operator: equals_cs
+    part: 0
   not: {}
   or: []
   resource: ""

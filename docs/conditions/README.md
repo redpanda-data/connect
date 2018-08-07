@@ -83,12 +83,13 @@ duplicate condition configs by using the [resource condition][resource].
 1. [`and`](#and)
 2. [`count`](#count)
 3. [`jmespath`](#jmespath)
-4. [`not`](#not)
-5. [`or`](#or)
-6. [`resource`](#resource)
-7. [`static`](#static)
-8. [`text`](#text)
-9. [`xor`](#xor)
+4. [`metadata`](#metadata)
+5. [`not`](#not)
+6. [`or`](#or)
+7. [`resource`](#resource)
+8. [`static`](#static)
+9. [`text`](#text)
+10. [`xor`](#xor)
 
 ## `and`
 
@@ -154,6 +155,34 @@ Then the condition would pass.
 JMESPath is traditionally used for mutating JSON, in order to do this please
 instead use the [`jmespath`](../processors/README.md#jmespath)
 processor.
+
+## `metadata`
+
+``` yaml
+type: metadata
+metadata:
+  arg: ""
+  key: ""
+  operator: equals_cs
+  part: 0
+```
+
+Metadata is a condition that checks metadata keys of a message part against an
+operator from the following list:
+
+### `exists`
+
+Checks whether a metadata key exists.
+
+### `equals`
+
+Checks whether the contents of a metadata key matches an argument. This operator
+is case insensitive.
+
+### `equals_cs`
+
+Checks whether the contents of a metadata key matches an argument. This operator
+is case sensitive.
 
 ## `not`
 

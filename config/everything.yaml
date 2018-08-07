@@ -144,6 +144,11 @@ input:
         part: 0
         query: ""
       not: {}
+      metadata:
+        operator: equals_cs
+        part: 0
+        key: ""
+        arg: ""
       or: []
       resource: ""
       static: true
@@ -241,6 +246,11 @@ pipeline:
           part: 0
           query: ""
         not: {}
+        metadata:
+          operator: equals_cs
+          part: 0
+          key: ""
+          arg: ""
         or: []
         resource: ""
         static: false
@@ -271,6 +281,11 @@ pipeline:
           part: 0
           query: ""
         not: {}
+        metadata:
+          operator: equals_cs
+          part: 0
+          key: ""
+          arg: ""
         or: []
         resource: ""
         static: true
@@ -306,6 +321,11 @@ pipeline:
         part: 0
         query: ""
       not: {}
+      metadata:
+        operator: equals_cs
+        part: 0
+        key: ""
+        arg: ""
       or: []
       resource: ""
       static: true
@@ -323,6 +343,11 @@ pipeline:
         part: 0
         query: ""
       not: {}
+      metadata:
+        operator: equals_cs
+        part: 0
+        key: ""
+        arg: ""
       or: []
       resource: ""
       static: true
@@ -603,6 +628,11 @@ resources:
         part: 0
         query: ""
       not: {}
+      metadata:
+        operator: equals_cs
+        part: 0
+        key: ""
+        arg: ""
       or: []
       resource: ""
       static: true

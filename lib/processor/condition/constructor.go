@@ -59,6 +59,7 @@ var (
 	TypeCount    = "count"
 	TypeJMESPath = "jmespath"
 	TypeNot      = "not"
+	TypeMetadata = "metadata"
 	TypeOr       = "or"
 	TypeResource = "resource"
 	TypeStatic   = "static"
@@ -75,6 +76,7 @@ type Config struct {
 	Count    CountConfig    `json:"count" yaml:"count"`
 	JMESPath JMESPathConfig `json:"jmespath" yaml:"jmespath"`
 	Not      NotConfig      `json:"not" yaml:"not"`
+	Metadata MetadataConfig `json:"metadata" yaml:"metadata"`
 	Or       OrConfig       `json:"or" yaml:"or"`
 	Resource string         `json:"resource" yaml:"resource"`
 	Static   bool           `json:"static" yaml:"static"`
@@ -90,6 +92,7 @@ func NewConfig() Config {
 		Count:    NewCountConfig(),
 		JMESPath: NewJMESPathConfig(),
 		Not:      NewNotConfig(),
+		Metadata: NewMetadataConfig(),
 		Or:       NewOrConfig(),
 		Resource: "",
 		Static:   true,
