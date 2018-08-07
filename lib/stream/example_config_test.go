@@ -35,7 +35,7 @@ import (
 // CustomProcessor is a types.Processor implementation that does nothing.
 type CustomProcessor struct{}
 
-// ProcessMessage base64 encodes all messages.
+// ProcessMessage does nothing.
 func (p CustomProcessor) ProcessMessage(m types.Message) ([]types.Message, types.Response) {
 	return []types.Message{m}, nil
 }
