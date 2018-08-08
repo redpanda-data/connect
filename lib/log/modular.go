@@ -114,10 +114,9 @@ func NewConfig() Config {
 
 // Logger is an object with support for levelled logging and modular components.
 type Logger struct {
-	stream    io.Writer
-	fannedOut bool
-	config    Config
-	level     int
+	stream io.Writer
+	config Config
+	level  int
 }
 
 // New creates and returns a new logger object.
@@ -152,42 +151,10 @@ func (l *Logger) NewModule(prefix string) Modular {
 	}
 }
 
-// AddWriter adds a new writer to the logger which receives the same log data as
-// the primary writer. If this new writer returns an error it is removed. The
-// logger becomes the owner of this writer and under any circumstance whereby
-// the writer is removed it will also be closed by the logger.
-func (l *Logger) AddWriter(w io.Writer) {
-	if !l.fannedOut {
-		l.stream = NewFanOutWriter(l.stream)
-		l.fannedOut = true
-	}
-	if fo, ok := l.stream.(*FanOutWriter); ok {
-		fo.Add(w)
-	}
-}
-
-// RemoveWriter removes writer from the logger.
-func (l *Logger) RemoveWriter(w io.Writer) {
-	if fo, ok := l.stream.(*FanOutWriter); ok {
-		fo.Remove(w)
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// Close the logger, including the underlying io.Writer if it implements the
-// io.Closer interface.
-func (l *Logger) Close() error {
-	if c, ok := l.stream.(io.Closer); ok {
-		return c.Close()
-	}
-	return nil
-}
-
 //------------------------------------------------------------------------------
 
 // writeFormatted prints a log message with any configured extras prepended.
-func (l *Logger) writeFormatted(message, level string, other ...interface{}) {
+func (l *Logger) writeFormatted(message string, level string, other ...interface{}) {
 	if l.config.JSONFormat {
 		if l.config.AddTimeStamp {
 			fmt.Fprintf(l.stream, fmt.Sprintf(
@@ -217,7 +184,7 @@ func (l *Logger) writeFormatted(message, level string, other ...interface{}) {
 }
 
 // writeLine prints a log message with any configured extras prepended.
-func (l *Logger) writeLine(message, level string) {
+func (l *Logger) writeLine(message string, level string) {
 	if l.config.JSONFormat {
 		if l.config.AddTimeStamp {
 			fmt.Fprintf(l.stream,
@@ -247,44 +214,44 @@ func (l *Logger) writeLine(message, level string) {
 //------------------------------------------------------------------------------
 
 // Fatalf prints a fatal message to the console. Does NOT cause panic.
-func (l *Logger) Fatalf(message string, other ...interface{}) {
+func (l *Logger) Fatalf(format string, v ...interface{}) {
 	if LogFatal <= l.level {
-		l.writeFormatted(message, "FATAL", other...)
+		l.writeFormatted(format, "FATAL", v...)
 	}
 }
 
 // Errorf prints an error message to the console.
-func (l *Logger) Errorf(message string, other ...interface{}) {
+func (l *Logger) Errorf(format string, v ...interface{}) {
 	if LogError <= l.level {
-		l.writeFormatted(message, "ERROR", other...)
+		l.writeFormatted(format, "ERROR", v...)
 	}
 }
 
 // Warnf prints a warning message to the console.
-func (l *Logger) Warnf(message string, other ...interface{}) {
+func (l *Logger) Warnf(format string, v ...interface{}) {
 	if LogWarn <= l.level {
-		l.writeFormatted(message, "WARN", other...)
+		l.writeFormatted(format, "WARN", v...)
 	}
 }
 
 // Infof prints an information message to the console.
-func (l *Logger) Infof(message string, other ...interface{}) {
+func (l *Logger) Infof(format string, v ...interface{}) {
 	if LogInfo <= l.level {
-		l.writeFormatted(message, "INFO", other...)
+		l.writeFormatted(format, "INFO", v...)
 	}
 }
 
 // Debugf prints a debug message to the console.
-func (l *Logger) Debugf(message string, other ...interface{}) {
+func (l *Logger) Debugf(format string, v ...interface{}) {
 	if LogDebug <= l.level {
-		l.writeFormatted(message, "DEBUG", other...)
+		l.writeFormatted(format, "DEBUG", v...)
 	}
 }
 
 // Tracef prints a trace message to the console.
-func (l *Logger) Tracef(message string, other ...interface{}) {
+func (l *Logger) Tracef(format string, v ...interface{}) {
 	if LogTrace <= l.level {
-		l.writeFormatted(message, "TRACE", other...)
+		l.writeFormatted(format, "TRACE", v...)
 	}
 }
 
@@ -330,14 +297,6 @@ func (l *Logger) Traceln(message string) {
 	if LogTrace <= l.level {
 		l.writeLine(message, "TRACE")
 	}
-}
-
-//------------------------------------------------------------------------------
-
-// Output prints s to our output. Calldepth is ignored.
-func (l *Logger) Output(calldepth int, s string) error {
-	io.WriteString(l.stream, s)
-	return nil
 }
 
 //------------------------------------------------------------------------------

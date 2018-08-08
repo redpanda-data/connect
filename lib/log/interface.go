@@ -20,30 +20,18 @@
 
 package log
 
-import "io"
-
 //------------------------------------------------------------------------------
 
 // Modular is a log printer that allows you to branch new modules.
 type Modular interface {
 	NewModule(prefix string) Modular
 
-	// AddWriter adds a new writer to the logger which receives the same log
-	// data as the primary writer. If this new writer returns an error it is
-	// removed. The logger becomes the owner of this writer and under any
-	// circumstance whereby the writer is removed it will also be closed by the
-	// logger.
-	AddWriter(w io.Writer)
-
-	// RemoveWriter removes writer from the logger.
-	RemoveWriter(w io.Writer)
-
-	Fatalf(message string, other ...interface{})
-	Errorf(message string, other ...interface{})
-	Warnf(message string, other ...interface{})
-	Infof(message string, other ...interface{})
-	Debugf(message string, other ...interface{})
-	Tracef(message string, other ...interface{})
+	Fatalf(format string, v ...interface{})
+	Errorf(format string, v ...interface{})
+	Warnf(format string, v ...interface{})
+	Infof(format string, v ...interface{})
+	Debugf(format string, v ...interface{})
+	Tracef(format string, v ...interface{})
 
 	Fatalln(message string)
 	Errorln(message string)
@@ -51,12 +39,6 @@ type Modular interface {
 	Infoln(message string)
 	Debugln(message string)
 	Traceln(message string)
-
-	Output(calldepth int, s string) error
-
-	// Close the logger, including the underlying io.Writer if it implements the
-	// io.Closer interface.
-	Close() error
 }
 
 //------------------------------------------------------------------------------
