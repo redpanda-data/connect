@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -41,6 +42,8 @@ type Reader struct {
 
 	stats metrics.Type
 	log   log.Modular
+
+	connThrot *throttle.Type
 
 	transactions chan types.Transaction
 	responses    chan types.Response
@@ -67,6 +70,8 @@ func NewReader(
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
+
+	rdr.connThrot = throttle.New(throttle.OptCloseChan(rdr.closeChan))
 
 	go rdr.loop()
 	return rdr, nil
@@ -124,12 +129,11 @@ func (r *Reader) loop() {
 			r.log.Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
 			mFailedConn.Incr(1)
 			mFailedConnF.Incr(1)
-			select {
-			case <-time.After(time.Second):
-			case <-r.closeChan:
+			if !r.connThrot.Retry() {
 				return
 			}
 		} else {
+			r.connThrot.Reset()
 			break
 		}
 	}
@@ -155,11 +159,6 @@ func (r *Reader) loop() {
 					r.log.Errorf("Failed to reconnect to %v: %v\n", r.typeStr, err)
 					mFailedConn.Incr(1)
 					mFailedConnF.Incr(1)
-					select {
-					case <-time.After(time.Second):
-					case <-r.closeChan:
-						return
-					}
 				} else if msg, err = r.reader.Read(); err != types.ErrNotConnected {
 					mConn.Incr(1)
 					mConnF.Incr(1)
@@ -179,8 +178,12 @@ func (r *Reader) loop() {
 				mReadErrorF.Incr(1)
 				r.log.Errorf("Failed to read message: %v\n", err)
 			}
+			if !r.connThrot.Retry() {
+				return
+			}
 			continue
 		} else {
+			r.connThrot.Reset()
 			mCount.Incr(1)
 			mCountF.Incr(1)
 			mReadSuccess.Incr(1)
