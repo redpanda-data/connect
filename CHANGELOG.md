@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.23.6 - 2018-08-09
+
 ### Added
 
 - New `less_than` and `greater_than` operators for `metadata` condition.
