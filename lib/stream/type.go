@@ -109,10 +109,19 @@ func OptSetStats(stats metrics.Type) func(*Type) {
 }
 
 // OptSetLogger sets the logging output to be used by all components of the
-// stream.
-func OptSetLogger(log log.Modular) func(*Type) {
+// stream. To avoid implementing the log.Modular interface with a custom logger
+// consider using OptSetLogSimple instead.
+func OptSetLogger(l log.Modular) func(*Type) {
 	return func(t *Type) {
-		t.logger = log
+		t.logger = l
+	}
+}
+
+// OptSetLogSimple sets the logging output to a simpler log interface
+// (implemented by the standard *log.Logger.)
+func OptSetLogSimple(l log.PrintFormatter) func(*Type) {
+	return func(t *Type) {
+		t.logger = log.Wrap(l)
 	}
 }
 
