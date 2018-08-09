@@ -211,10 +211,15 @@ func newSetOperator(path []string) jsonOperator {
 
 		gPart, err := gabs.Consume(body)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse message body: %v", err)
 		}
 
-		gPart.Set(value, path...)
+		var data interface{}
+		if err = json.Unmarshal([]byte(value), &data); err != nil {
+			return nil, fmt.Errorf("failed to parse value: %v", err)
+		}
+
+		gPart.Set(data, path...)
 		return gPart.Data(), nil
 	}
 }

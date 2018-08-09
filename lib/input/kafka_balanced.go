@@ -46,6 +46,7 @@ This input adds the following metadata fields to each message:
 - kafka_topic
 - kafka_partition
 - kafka_offset
+- kafka_timestamp_unix
 - All existing message headers (version 0.11+)
 ` + "```" + `
 
