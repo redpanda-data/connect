@@ -184,6 +184,18 @@ is case insensitive.
 Checks whether the contents of a metadata key matches an argument. This operator
 is case sensitive.
 
+### `less_than`
+
+Checks whether the contents of a metadata key, parsed as a floating point
+number, is less than an argument. Returns false if the metadata value cannot be
+parsed into a number.
+
+### `greater_than`
+
+Checks whether the contents of a metadata key, parsed as a floating point
+number, is greater than an argument. Returns false if the metadata value cannot
+be parsed into a number.
+
 ## `not`
 
 ``` yaml

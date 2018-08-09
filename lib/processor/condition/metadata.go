@@ -23,6 +23,7 @@ package condition
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -51,7 +52,19 @@ is case insensitive.
 ### ` + "`equals_cs`" + `
 
 Checks whether the contents of a metadata key matches an argument. This operator
-is case sensitive.`,
+is case sensitive.
+
+### ` + "`less_than`" + `
+
+Checks whether the contents of a metadata key, parsed as a floating point
+number, is less than an argument. Returns false if the metadata value cannot be
+parsed into a number.
+
+### ` + "`greater_than`" + `
+
+Checks whether the contents of a metadata key, parsed as a floating point
+number, is greater than an argument. Returns false if the metadata value cannot
+be parsed into a number.`,
 	}
 }
 
@@ -103,6 +116,34 @@ func metadataEqualsCSOperator(key string, arg string) metadataOperator {
 	}
 }
 
+func metadataGreaterThanOperator(key string, argStr string) (metadataOperator, error) {
+	arg, err := strconv.ParseFloat(argStr, 10)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse argument as number: %v", err)
+	}
+	return func(md types.Metadata) bool {
+		val, verr := strconv.ParseFloat(md.Get(key), 10)
+		if verr != nil {
+			return false
+		}
+		return val > arg
+	}, nil
+}
+
+func metadataLessThanOperator(key string, argStr string) (metadataOperator, error) {
+	arg, err := strconv.ParseFloat(argStr, 10)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse argument as number: %v", err)
+	}
+	return func(md types.Metadata) bool {
+		val, verr := strconv.ParseFloat(md.Get(key), 10)
+		if verr != nil {
+			return false
+		}
+		return val < arg
+	}, nil
+}
+
 func strToMetadataOperator(str, key, arg string) (metadataOperator, error) {
 	switch str {
 	case "exists":
@@ -111,6 +152,10 @@ func strToMetadataOperator(str, key, arg string) (metadataOperator, error) {
 		return metadataEqualsOperator(key, arg), nil
 	case "equals_cs":
 		return metadataEqualsCSOperator(key, arg), nil
+	case "greater_than":
+		return metadataGreaterThanOperator(key, arg)
+	case "less_than":
+		return metadataLessThanOperator(key, arg)
 	}
 	return nil, ErrInvalidMetadataOperator
 }

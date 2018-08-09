@@ -119,6 +119,84 @@ func TestMetadataCheck(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "gt foo pos",
+			fields: fields{
+				operator: "greater_than",
+				key:      "foo",
+				part:     0,
+				arg:      "10",
+			},
+			arg: map[string]string{
+				"foo": "11",
+			},
+			want: true,
+		},
+		{
+			name: "gt foo nan neg",
+			fields: fields{
+				operator: "greater_than",
+				key:      "foo",
+				part:     0,
+				arg:      "10",
+			},
+			arg: map[string]string{
+				"foo": "nope",
+			},
+			want: false,
+		},
+		{
+			name: "gt foo neg",
+			fields: fields{
+				operator: "greater_than",
+				key:      "foo",
+				part:     0,
+				arg:      "10",
+			},
+			arg: map[string]string{
+				"foo": "9",
+			},
+			want: false,
+		},
+		{
+			name: "lt foo pos",
+			fields: fields{
+				operator: "less_than",
+				key:      "foo",
+				part:     0,
+				arg:      "10",
+			},
+			arg: map[string]string{
+				"foo": "9",
+			},
+			want: true,
+		},
+		{
+			name: "lt foo nan neg",
+			fields: fields{
+				operator: "less_than",
+				key:      "foo",
+				part:     0,
+				arg:      "10",
+			},
+			arg: map[string]string{
+				"foo": "nope",
+			},
+			want: false,
+		},
+		{
+			name: "lt foo neg",
+			fields: fields{
+				operator: "less_than",
+				key:      "foo",
+				part:     0,
+				arg:      "10",
+			},
+			arg: map[string]string{
+				"foo": "11",
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
