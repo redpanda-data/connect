@@ -42,6 +42,7 @@ type KafkaConfig struct {
 	Addresses       []string    `json:"addresses" yaml:"addresses"`
 	ClientID        string      `json:"client_id" yaml:"client_id"`
 	ConsumerGroup   string      `json:"consumer_group" yaml:"consumer_group"`
+	CommitPeriodMS  int         `json:"commit_period_ms" yaml:"commit_period_ms"`
 	Topic           string      `json:"topic" yaml:"topic"`
 	Partition       int32       `json:"partition" yaml:"partition"`
 	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
@@ -55,6 +56,7 @@ func NewKafkaConfig() KafkaConfig {
 		Addresses:       []string{"localhost:9092"},
 		ClientID:        "benthos_kafka_input",
 		ConsumerGroup:   "benthos_consumer_group",
+		CommitPeriodMS:  1000,
 		Topic:           "benthos_stream",
 		Partition:       0,
 		StartFromOldest: true,
@@ -76,7 +78,11 @@ type Kafka struct {
 
 	sMut sync.Mutex
 
-	offset int64
+	offsetLastCommitted time.Time
+
+	offsetCommitted int64
+	offsetCommit    int64
+	offset          int64
 
 	addresses []string
 	conf      KafkaConfig
@@ -122,6 +128,8 @@ func NewKafka(
 // closeClients closes the kafka clients, this interrupts loop() out of the read
 // block.
 func (k *Kafka) closeClients() {
+	k.commit()
+
 	k.sMut.Lock()
 	defer k.sMut.Unlock()
 
@@ -283,7 +291,19 @@ func (k *Kafka) Read() (types.Message, error) {
 
 // Acknowledge instructs whether the current offset should be committed.
 func (k *Kafka) Acknowledge(err error) error {
-	if err != nil {
+	if err == nil {
+		k.offsetCommit = k.offset
+	}
+	return k.commit()
+}
+
+func (k *Kafka) commit() error {
+	if k.offsetCommit == k.offsetCommitted {
+		return nil
+	}
+
+	if time.Since(k.offsetLastCommitted) <
+		(time.Millisecond * time.Duration(k.conf.CommitPeriodMS)) {
 		return nil
 	}
 
@@ -322,6 +342,9 @@ func (k *Kafka) Acknowledge(err error) error {
 			k.coordinator.Close()
 			k.coordinator = newCoord
 		}
+	} else {
+		k.offsetCommitted = k.offsetCommit
+		k.offsetLastCommitted = time.Now()
 	}
 
 	return nil

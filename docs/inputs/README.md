@@ -338,6 +338,7 @@ kafka:
   addresses:
   - localhost:9092
   client_id: benthos_kafka_input
+  commit_period_ms: 1000
   consumer_group: benthos_consumer_group
   partition: 0
   start_from_oldest: true
@@ -368,6 +369,7 @@ This input adds the following metadata fields to each message:
 - kafka_topic
 - kafka_partition
 - kafka_offset
+- kafka_timestamp_unix
 - All existing message headers (version 0.11+)
 ```
 
@@ -405,6 +407,7 @@ This input adds the following metadata fields to each message:
 - kafka_topic
 - kafka_partition
 - kafka_offset
+- kafka_timestamp_unix
 - All existing message headers (version 0.11+)
 ```
 

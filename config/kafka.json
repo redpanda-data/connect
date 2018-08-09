@@ -12,6 +12,7 @@
 				"localhost:9092"
 			],
 			"client_id": "benthos_kafka_input",
+			"commit_period_ms": 1000,
 			"consumer_group": "benthos_consumer_group",
 			"partition": 0,
 			"start_from_oldest": true,

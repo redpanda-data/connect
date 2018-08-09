@@ -111,6 +111,7 @@ INPUT_KAFKA_BALANCED_TLS_ENABLED            = false
 INPUT_KAFKA_BALANCED_TLS_SKIP_CERT_VERIFY   = false
 INPUT_KAFKA_BALANCED_TOPICS                 = benthos_stream
 INPUT_KAFKA_CLIENT_ID                       = benthos_kafka_input
+INPUT_KAFKA_COMMIT_PERIOD_MS                = 1000
 INPUT_KAFKA_CONSUMER_GROUP                  = benthos_consumer_group
 INPUT_KAFKA_PARTITION                       = 0
 INPUT_KAFKA_START_FROM_OLDEST               = true

@@ -72,6 +72,7 @@ input:
         addresses:
         - ${INPUT_KAFKA_ADDRESSES:localhost:9092}
         client_id: ${INPUT_KAFKA_CLIENT_ID:benthos_kafka_input}
+        commit_period_ms: ${INPUT_KAFKA_COMMIT_PERIOD_MS:1000}
         consumer_group: ${INPUT_KAFKA_CONSUMER_GROUP:benthos_consumer_group}
         partition: ${INPUT_KAFKA_PARTITION:0}
         start_from_oldest: ${INPUT_KAFKA_START_FROM_OLDEST:true}
