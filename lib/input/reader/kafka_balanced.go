@@ -43,6 +43,7 @@ type KafkaBalancedConfig struct {
 	Addresses       []string    `json:"addresses" yaml:"addresses"`
 	ClientID        string      `json:"client_id" yaml:"client_id"`
 	ConsumerGroup   string      `json:"consumer_group" yaml:"consumer_group"`
+	CommitPeriodMS  int         `json:"commit_period_ms" yaml:"commit_period_ms"`
 	Topics          []string    `json:"topics" yaml:"topics"`
 	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TLS             btls.Config `json:"tls" yaml:"tls"`
@@ -54,6 +55,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Addresses:       []string{"localhost:9092"},
 		ClientID:        "benthos_kafka_input",
 		ConsumerGroup:   "benthos_consumer_group",
+		CommitPeriodMS:  1000,
 		Topics:          []string{"benthos_stream"},
 		StartFromOldest: true,
 		TLS:             btls.NewConfig(),
@@ -70,6 +72,9 @@ type KafkaBalanced struct {
 
 	tlsConf *tls.Config
 
+	offsetLastCommitted time.Time
+	offsets             map[string]map[int32]int64
+
 	addresses []string
 	topics    []string
 	conf      KafkaBalancedConfig
@@ -82,9 +87,10 @@ func NewKafkaBalanced(
 	conf KafkaBalancedConfig, log log.Modular, stats metrics.Type,
 ) (*KafkaBalanced, error) {
 	k := KafkaBalanced{
-		conf:  conf,
-		stats: stats,
-		log:   log.NewModule(".input.kafka_balanced"),
+		conf:    conf,
+		stats:   stats,
+		offsets: map[string]map[int32]int64{},
+		log:     log.NewModule(".input.kafka_balanced"),
 	}
 	if conf.TLS.Enabled {
 		var err error
@@ -116,6 +122,7 @@ func (k *KafkaBalanced) closeClients() {
 	k.cMut.Lock()
 	defer k.cMut.Unlock()
 	if k.consumer != nil {
+		k.consumer.CommitOffsets()
 		k.consumer.Close()
 
 		// Drain all channels
@@ -192,6 +199,16 @@ func (k *KafkaBalanced) Connect() error {
 	return nil
 }
 
+func (k *KafkaBalanced) setOffset(topic string, partition int32, offset int64) {
+	var topicMap map[int32]int64
+	var exists bool
+	if topicMap, exists = k.offsets[topic]; !exists {
+		topicMap = map[int32]int64{}
+		k.offsets[topic] = topicMap
+	}
+	topicMap[partition] = offset
+}
+
 // Read attempts to read a message from a KafkaBalanced topic.
 func (k *KafkaBalanced) Read() (types.Message, error) {
 	var consumer *cluster.Consumer
@@ -224,29 +241,39 @@ func (k *KafkaBalanced) Read() (types.Message, error) {
 		meta.Set(string(hdr.Key), string(hdr.Value))
 	}
 
-	consumer.MarkOffset(data, "")
+	k.setOffset(data.Topic, data.Partition, data.Offset)
 	return msg, nil
 }
 
 // Acknowledge instructs whether the current offset should be committed.
 func (k *KafkaBalanced) Acknowledge(err error) error {
-	if err != nil {
+	if err == nil {
+		k.cMut.Lock()
+		if k.consumer != nil {
+			for topic, v := range k.offsets {
+				for part, offset := range v {
+					k.consumer.MarkPartitionOffset(topic, part, offset, "")
+				}
+			}
+		}
+		k.cMut.Unlock()
+	}
+
+	if time.Since(k.offsetLastCommitted) <
+		(time.Millisecond * time.Duration(k.conf.CommitPeriodMS)) {
 		return nil
 	}
 
-	var consumer *cluster.Consumer
-
+	var commitErr error
 	k.cMut.Lock()
 	if k.consumer != nil {
-		consumer = k.consumer
+		commitErr = k.consumer.CommitOffsets()
+	} else {
+		commitErr = types.ErrNotConnected
 	}
 	k.cMut.Unlock()
 
-	if consumer == nil {
-		return types.ErrNotConnected
-	}
-
-	return consumer.CommitOffsets()
+	return commitErr
 }
 
 // CloseAsync shuts down the KafkaBalanced input and stops processing requests.

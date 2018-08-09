@@ -9,7 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - New `metadata` condition type.
 - More metadata fields for `kafka` input.
-- Field `commit_period_ms` for `kafka` input for specifying a commit period.
+- Field `commit_period_ms` for `kafka` and `kafka_balanced` inputs for
+  specifying a commit period.
 
 ### 0.23.1 - 2018-08-06
 

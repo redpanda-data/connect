@@ -86,6 +86,7 @@ input:
         addresses:
         - ${INPUT_KAFKA_BALANCED_ADDRESSES:localhost:9092}
         client_id: ${INPUT_KAFKA_BALANCED_CLIENT_ID:benthos_kafka_input}
+        commit_period_ms: ${INPUT_KAFKA_BALANCED_COMMIT_PERIOD_MS:1000}
         consumer_group: ${INPUT_KAFKA_BALANCED_CONSUMER_GROUP:benthos_consumer_group}
         start_from_oldest: ${INPUT_KAFKA_BALANCED_START_FROM_OLDEST:true}
         tls:
