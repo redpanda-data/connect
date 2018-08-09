@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.23.4 - 2018-08-09
+
 ### Added
 
 - New `metadata` condition type.
