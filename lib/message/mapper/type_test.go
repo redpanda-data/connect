@@ -319,7 +319,7 @@ func TestTypeAlignResult(t *testing.T) {
 			length:  3,
 			skipped: nil,
 			input: [][][]byte{
-				[][]byte{
+				{
 					[]byte(`foo`),
 					[]byte(`bar`),
 					[]byte(`baz`),
@@ -336,7 +336,7 @@ func TestTypeAlignResult(t *testing.T) {
 			length:  3,
 			skipped: []int{1},
 			input: [][][]byte{
-				[][]byte{
+				{
 					[]byte(`foo`),
 					[]byte(`baz`),
 				},
@@ -352,7 +352,7 @@ func TestTypeAlignResult(t *testing.T) {
 			length:  8,
 			skipped: []int{0, 1, 2, 4, 5, 7},
 			input: [][][]byte{
-				[][]byte{
+				{
 					[]byte(`foo`),
 					[]byte(`baz`),
 				},
@@ -370,11 +370,11 @@ func TestTypeAlignResult(t *testing.T) {
 			length:  6,
 			skipped: []int{1, 4},
 			input: [][][]byte{
-				[][]byte{
+				{
 					[]byte(`foo`),
 					[]byte(`baz`),
 				},
-				[][]byte{
+				{
 					[]byte(`foo2`),
 					[]byte(`baz2`),
 				},
@@ -393,10 +393,10 @@ func TestTypeAlignResult(t *testing.T) {
 			length:  8,
 			skipped: []int{0, 1, 2, 4, 6, 7},
 			input: [][][]byte{
-				[][]byte{
+				{
 					[]byte(`foo`),
 				},
-				[][]byte{
+				{
 					[]byte(`baz`),
 				},
 			},
