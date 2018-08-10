@@ -335,6 +335,10 @@ func (k *Kafka) commit() error {
 		k.sMut.Lock()
 		defer k.sMut.Unlock()
 
+		if k.client == nil {
+			return nil
+		}
+
 		// Attempt to reconnect
 		if newCoord, err := k.client.Coordinator(k.conf.ConsumerGroup); err != nil {
 			k.log.Errorf("Failed to create new coordinator: %v\n", err)
