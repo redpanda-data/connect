@@ -56,22 +56,6 @@ func (d namespacedWrapper) GetGauge(path ...string) StatGauge {
 	return d.t.GetGauge(append([]string{d.ns}, path...)...)
 }
 
-func (d namespacedWrapper) Incr(path string, count int64) error {
-	return d.t.Incr(d.ns+"."+path, count)
-}
-
-func (d namespacedWrapper) Decr(path string, count int64) error {
-	return d.t.Decr(d.ns+"."+path, count)
-}
-
-func (d namespacedWrapper) Timing(path string, delta int64) error {
-	return d.t.Timing(d.ns+"."+path, delta)
-}
-
-func (d namespacedWrapper) Gauge(path string, value int64) error {
-	return d.t.Gauge(d.ns+"."+path, value)
-}
-
 func (d namespacedWrapper) SetLogger(log log.Modular) {
 	d.t.SetLogger(log.NewModule(d.ns))
 }

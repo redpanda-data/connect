@@ -108,34 +108,6 @@ func (c *combinedWrapper) GetGauge(path ...string) StatGauge {
 	}
 }
 
-func (c *combinedWrapper) Incr(path string, count int64) error {
-	if err := c.t1.Incr(path, count); err != nil {
-		return err
-	}
-	return c.t2.Incr(path, count)
-}
-
-func (c *combinedWrapper) Decr(path string, count int64) error {
-	if err := c.t1.Decr(path, count); err != nil {
-		return err
-	}
-	return c.t2.Decr(path, count)
-}
-
-func (c *combinedWrapper) Timing(path string, delta int64) error {
-	if err := c.t1.Timing(path, delta); err != nil {
-		return err
-	}
-	return c.t2.Timing(path, delta)
-}
-
-func (c *combinedWrapper) Gauge(path string, value int64) error {
-	if err := c.t1.Gauge(path, value); err != nil {
-		return err
-	}
-	return c.t2.Gauge(path, value)
-}
-
 func (c *combinedWrapper) SetLogger(log log.Modular) {
 	c.t1.SetLogger(log)
 	c.t2.SetLogger(log)

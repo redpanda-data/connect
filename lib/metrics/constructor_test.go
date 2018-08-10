@@ -25,25 +25,6 @@ import (
 	"testing"
 )
 
-func TestInterfaces(t *testing.T) {
-	foo, err := New(NewConfig())
-	if err != nil {
-		t.Error(err)
-	}
-	bar := Type(foo)
-	foo.Incr("nope", 1)
-	bar.Incr("nope", 1)
-
-	foo.Decr("nope", 1)
-	bar.Decr("nope", 1)
-
-	foo.Gauge("foo", 1)
-	foo.Gauge("foo", 2)
-
-	foo.Timing("bar", 1)
-	foo.Timing("bar", 2)
-}
-
 func TestSanitise(t *testing.T) {
 	exp := map[string]interface{}{
 		"type":        "http_server",

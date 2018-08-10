@@ -64,7 +64,8 @@ type Type interface {
 	// SetLogger sets the logging mechanism of the metrics type.
 	SetLogger(log log.Modular)
 
-	Flat
+	// Close stops aggregating stats and cleans up resources.
+	Close() error
 }
 
 // Flat is an interface for setting metrics via flat paths.

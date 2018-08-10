@@ -98,9 +98,10 @@ func NewDynamicFanIn(
 	for _, opt := range options {
 		opt(d)
 	}
+	mAddErr := d.stats.GetCounter("broker.dynamic_fan_in.input.add.error")
 	for key, input := range inputs {
 		if err := d.addInput(key, input); err != nil {
-			d.stats.Incr("broker.dynamic_fan_in.input.add.error", 1)
+			mAddErr.Incr(1)
 			d.log.Errorf("Failed to start new dynamic input '%v': %v\n", key, err)
 		}
 	}

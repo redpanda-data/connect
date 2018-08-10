@@ -102,6 +102,7 @@ type HTTPServer struct {
 	closeChan  chan struct{}
 	closedChan chan struct{}
 
+	mRunning  metrics.StatCounter
 	mCount    metrics.StatCounter
 	mSendSucc metrics.StatCounter
 
@@ -143,6 +144,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 
+		mRunning:      stats.GetCounter("output.http_server.running"),
 		mCount:        stats.GetCounter("output.http_server.count"),
 		mSendSucc:     stats.GetCounter("output.http_server.send.success"),
 		mGetReqRcvd:   stats.GetCounter("output.http_server.get.request.received"),
@@ -296,7 +298,6 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-r.Context().Done():
 			h.mStrmClosed.Incr(1)
-			h.stats.Incr("output.http_server.stream.client_closed", 1)
 			return
 		}
 		h.mStrmCount.Incr(1)
@@ -360,7 +361,6 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-r.Context().Done():
 			h.mStrmClosed.Incr(1)
-			h.stats.Incr("output.http_server.stream.client_closed", 1)
 			return
 		case <-h.closeChan:
 			return
@@ -399,7 +399,7 @@ func (h *HTTPServer) Consume(ts <-chan types.Transaction) error {
 
 	if h.server != nil {
 		go func() {
-			h.stats.Incr("output.http_server.running", 1)
+			h.mRunning.Incr(1)
 
 			if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
 				h.log.Infof(
@@ -421,7 +421,7 @@ func (h *HTTPServer) Consume(ts <-chan types.Transaction) error {
 				}
 			}
 
-			h.stats.Decr("output.http_server.running", 1)
+			h.mRunning.Decr(1)
 
 			atomic.StoreInt32(&h.running, 0)
 			close(h.closeChan)

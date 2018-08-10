@@ -105,10 +105,11 @@ func NewDynamicFanOut(
 	}
 	d.throt = throttle.New(throttle.OptCloseChan(d.closeChan))
 
+	mAddErr := d.stats.GetCounter("broker.dynamic_fan_out.output.add.error")
 	for k, v := range outputs {
 		if err := d.addOutput(k, v); err != nil {
 			d.log.Errorf("Failed to initialise dynamic output '%v': %v\n", k, err)
-			d.stats.Incr("broker.dynamic_fan_out.output.add.error", 1)
+			mAddErr.Incr(1)
 		} else {
 			d.onAdd(k)
 		}

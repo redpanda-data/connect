@@ -82,6 +82,8 @@ type Kafka struct {
 	version   sarama.KafkaVersion
 	conf      KafkaConfig
 
+	mDroppedMaxBytes metrics.StatCounter
+
 	key *text.InterpolatedBytes
 
 	producer    sarama.SyncProducer
@@ -98,8 +100,10 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 	}
 
 	k := Kafka{
-		log:         log.NewModule(".output.kafka"),
-		stats:       stats,
+		log:              log.NewModule(".output.kafka"),
+		stats:            stats,
+		mDroppedMaxBytes: stats.GetCounter("output.kafka.send.dropped.max_msg_bytes"),
+
 		conf:        conf,
 		key:         text.NewInterpolatedBytes([]byte(conf.Key)),
 		compression: compression,
@@ -202,7 +206,7 @@ func (k *Kafka) Write(msg types.Message) error {
 	msgs := []*sarama.ProducerMessage{}
 	msg.Iter(func(i int, p types.Part) error {
 		if len(p.Get()) > k.conf.MaxMsgBytes {
-			k.stats.Incr("output.kafka.send.dropped.max_msg_bytes", 1)
+			k.mDroppedMaxBytes.Incr(1)
 			return nil
 		}
 

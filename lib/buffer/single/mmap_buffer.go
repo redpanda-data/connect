@@ -48,6 +48,8 @@ type MmapBuffer struct {
 	logger log.Modular
 	stats  metrics.Type
 
+	mCacheErr metrics.StatCounter
+
 	readFrom  int
 	readIndex int
 
@@ -71,6 +73,7 @@ func NewMmapBuffer(config MmapBufferConfig, log log.Modular, stats metrics.Type)
 		cache:      cache,
 		logger:     log,
 		stats:      stats,
+		mCacheErr:  stats.GetCounter("cache.open.error"),
 		readFrom:   0,
 		readIndex:  0,
 		writtenTo:  0,
@@ -146,7 +149,7 @@ func (f *MmapBuffer) cacheManagerLoop(indexPtr *int) {
 		if err := f.cache.EnsureCached(targetIndex); err != nil {
 			// Failed to read, log the error and wait before trying again.
 			f.logger.Errorf("Failed to cache mmap file for index %v: %v\n", targetIndex, err)
-			f.stats.Incr("cache.open.error", 1)
+			f.mCacheErr.Incr(1)
 
 			f.cache.L.Unlock()
 			<-time.After(time.Duration(f.config.RetryPeriodMS) * time.Millisecond)

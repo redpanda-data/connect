@@ -80,6 +80,8 @@ type Kafka struct {
 
 	offsetLastCommitted time.Time
 
+	mRcvErr metrics.StatCounter
+
 	offsetCommitted int64
 	offsetCommit    int64
 	offset          int64
@@ -95,10 +97,11 @@ func NewKafka(
 	conf KafkaConfig, log log.Modular, stats metrics.Type,
 ) (*Kafka, error) {
 	k := Kafka{
-		offset: 0,
-		conf:   conf,
-		stats:  stats,
-		log:    log.NewModule(".input.kafka"),
+		offset:  0,
+		conf:    conf,
+		stats:   stats,
+		mRcvErr: stats.GetCounter("input.kafka.recv.error"),
+		log:     log.NewModule(".input.kafka"),
 	}
 
 	if conf.TLS.Enabled {
@@ -249,7 +252,7 @@ func (k *Kafka) Connect() error {
 		for err := range partConsumer.Errors() {
 			if err != nil {
 				k.log.Errorf("Kafka message recv error: %v\n", err)
-				k.stats.Incr("input.kafka.recv.error", 1)
+				k.mRcvErr.Incr(1)
 			}
 		}
 	}()

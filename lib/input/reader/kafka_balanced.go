@@ -75,6 +75,9 @@ type KafkaBalanced struct {
 	offsetLastCommitted time.Time
 	offsets             map[string]map[int32]int64
 
+	mRcvErr     metrics.StatCounter
+	mRebalanced metrics.StatCounter
+
 	addresses []string
 	topics    []string
 	conf      KafkaBalancedConfig
@@ -87,10 +90,12 @@ func NewKafkaBalanced(
 	conf KafkaBalancedConfig, log log.Modular, stats metrics.Type,
 ) (*KafkaBalanced, error) {
 	k := KafkaBalanced{
-		conf:    conf,
-		stats:   stats,
-		offsets: map[string]map[int32]int64{},
-		log:     log.NewModule(".input.kafka_balanced"),
+		conf:        conf,
+		stats:       stats,
+		mRcvErr:     stats.GetCounter("input.kafka_balanced.recv.error"),
+		mRebalanced: stats.GetCounter("input.kafka_balanced.rebalanced"),
+		offsets:     map[string]map[int32]int64{},
+		log:         log.NewModule(".input.kafka_balanced"),
 	}
 	if conf.TLS.Enabled {
 		var err error
@@ -183,13 +188,13 @@ func (k *KafkaBalanced) Connect() error {
 				}
 				if err != nil {
 					k.log.Errorf("KafkaBalanced message recv error: %v\n", err)
-					k.stats.Incr("input.kafka_balanced.recv.error", 1)
+					k.mRcvErr.Incr(1)
 				}
 			case _, open := <-consumer.Notifications():
 				if !open {
 					return
 				}
-				k.stats.Incr("input.kafka_balanced.rebalanced", 1)
+				k.mRebalanced.Incr(1)
 			}
 		}
 	}()
