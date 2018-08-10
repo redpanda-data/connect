@@ -102,8 +102,8 @@ func NewInproc(
 func (i *Inproc) loop() {
 	// Metrics paths
 	var (
-		mRunning     = i.stats.GetCounter("input.inproc." + i.pipe + ".running")
-		mRunningF    = i.stats.GetCounter("input.running")
+		mRunning     = i.stats.GetGauge("input.inproc." + i.pipe + ".running")
+		mRunningF    = i.stats.GetGauge("input.running")
 		mConn        = i.stats.GetCounter("input.inproc." + i.pipe + ".connection.up")
 		mConnF       = i.stats.GetCounter("input.connection.up")
 		mFailedConn  = i.stats.GetCounter("input.inproc." + i.pipe + ".connection.failed")

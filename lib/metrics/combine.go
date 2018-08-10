@@ -54,13 +54,6 @@ func (c *combinedCounter) Incr(count int64) error {
 	return c.c2.Incr(count)
 }
 
-func (c *combinedCounter) Decr(count int64) error {
-	if err := c.c1.Decr(count); err != nil {
-		return err
-	}
-	return c.c2.Decr(count)
-}
-
 type combinedTimer struct {
 	c1 StatTimer
 	c2 StatTimer
@@ -78,11 +71,25 @@ type combinedGauge struct {
 	c2 StatGauge
 }
 
-func (c *combinedGauge) Gauge(value int64) error {
-	if err := c.c1.Gauge(value); err != nil {
+func (c *combinedGauge) Set(value int64) error {
+	if err := c.c1.Set(value); err != nil {
 		return err
 	}
-	return c.c2.Gauge(value)
+	return c.c2.Set(value)
+}
+
+func (c *combinedGauge) Incr(count int64) error {
+	if err := c.c1.Incr(count); err != nil {
+		return err
+	}
+	return c.c2.Incr(count)
+}
+
+func (c *combinedGauge) Decr(count int64) error {
+	if err := c.c1.Decr(count); err != nil {
+		return err
+	}
+	return c.c2.Decr(count)
 }
 
 //------------------------------------------------------------------------------

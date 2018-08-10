@@ -126,7 +126,7 @@ func (n *NSQ) disconnect() error {
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (n *NSQ) loop() {
 	var (
-		mRunning  = n.stats.GetCounter("output.nsq.running")
+		mRunning  = n.stats.GetGauge("output.nsq.running")
 		mCount    = n.stats.GetCounter("output.nsq.count")
 		mSendErr  = n.stats.GetCounter("output.nsq.send.error")
 		mSendSucc = n.stats.GetCounter("output.nsq.send.success")

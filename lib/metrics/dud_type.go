@@ -36,8 +36,8 @@ func (d DudStat) Decr(count int64) error { return nil }
 // Timing does nothing.
 func (d DudStat) Timing(delta int64) error { return nil }
 
-// Gauge does nothing.
-func (d DudStat) Gauge(value int64) error { return nil }
+// Set does nothing.
+func (d DudStat) Set(value int64) error { return nil }
 
 //------------------------------------------------------------------------------
 

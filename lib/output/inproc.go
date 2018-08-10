@@ -95,8 +95,8 @@ func NewInproc(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (i *Inproc) loop() {
 	var (
-		mRunning  = i.stats.GetCounter("output.inproc." + i.pipe + ".running")
-		mRunningF = i.stats.GetCounter("output.running")
+		mRunning  = i.stats.GetGauge("output.inproc." + i.pipe + ".running")
+		mRunningF = i.stats.GetGauge("output.running")
 		mCount    = i.stats.GetCounter("output.inproc." + i.pipe + ".count")
 		mCountF   = i.stats.GetCounter("output.count")
 	)

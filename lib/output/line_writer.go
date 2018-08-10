@@ -84,8 +84,8 @@ func NewLineWriter(
 func (w *LineWriter) loop() {
 	// Metrics paths
 	var (
-		mRunning  = w.stats.GetCounter("output.running")
-		mRunningF = w.stats.GetCounter("output." + w.typeStr + ".running")
+		mRunning  = w.stats.GetGauge("output.running")
+		mRunningF = w.stats.GetGauge("output." + w.typeStr + ".running")
 		mCount    = w.stats.GetCounter("output.count")
 		mCountF   = w.stats.GetCounter("output." + w.typeStr + ".count")
 		mSuccess  = w.stats.GetCounter("output.success")

@@ -102,7 +102,7 @@ type HTTPServer struct {
 	closeChan  chan struct{}
 	closedChan chan struct{}
 
-	mRunning  metrics.StatCounter
+	mRunning  metrics.StatGauge
 	mCount    metrics.StatCounter
 	mSendSucc metrics.StatCounter
 
@@ -144,7 +144,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 
-		mRunning:      stats.GetCounter("output.http_server.running"),
+		mRunning:      stats.GetGauge("output.http_server.running"),
 		mCount:        stats.GetCounter("output.http_server.count"),
 		mSendSucc:     stats.GetCounter("output.http_server.send.success"),
 		mGetReqRcvd:   stats.GetCounter("output.http_server.get.request.received"),

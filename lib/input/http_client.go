@@ -259,7 +259,7 @@ func (h *HTTPClient) parseResponse(res *http.Response) (types.Message, error) {
 // POST requests.
 func (h *HTTPClient) loop() {
 	var (
-		mRunning     = h.stats.GetCounter("input.http_client.running")
+		mRunning     = h.stats.GetGauge("input.http_client.running")
 		mReqTimedOut = h.stats.GetCounter("input.http_client.request.timed_out")
 		mReqErr      = h.stats.GetCounter("input.http_client.request.error")
 		mReqParseErr = h.stats.GetCounter("input.http_client.request.parse.error")

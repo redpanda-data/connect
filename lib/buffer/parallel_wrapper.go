@@ -132,7 +132,7 @@ func (m *ParallelWrapper) inputLoop() {
 		backlog, err := m.buffer.PushMessage(tr.Payload)
 		if err == nil {
 			mWriteCount.Incr(1)
-			mWriteBacklog.Gauge(int64(backlog))
+			mWriteBacklog.Set(int64(backlog))
 		} else {
 			mWriteErr.Incr(1)
 		}
@@ -203,7 +203,7 @@ func (m *ParallelWrapper) outputLoop() {
 					m.log.Errorf("Failed to ack buffer message: %v\n", ackErr)
 				}
 			} else {
-				mBacklog.Gauge(int64(blog))
+				mBacklog.Set(int64(blog))
 			}
 		}(resChan, ackFunc)
 	}

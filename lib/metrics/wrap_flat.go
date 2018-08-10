@@ -53,8 +53,8 @@ func (f *FlatStat) Timing(delta int64) error {
 	return nil
 }
 
-// Gauge sets a gauge metric.
-func (f *FlatStat) Gauge(value int64) error {
+// Set sets a gauge metric.
+func (f *FlatStat) Set(value int64) error {
 	f.f.Gauge(f.path, value)
 	return nil
 }

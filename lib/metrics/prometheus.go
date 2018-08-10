@@ -70,9 +70,21 @@ func (p *PromGauge) Decr(count int64) error {
 	return nil
 }
 
-// Gauge sets a gauge metric.
-func (p *PromGauge) Gauge(value int64) error {
+// Set sets a gauge metric.
+func (p *PromGauge) Set(value int64) error {
 	p.ctr.Set(float64(value))
+	return nil
+}
+
+// PromCounter is a representation of a single metric stat. Interactions with
+// this stat are thread safe.
+type PromCounter struct {
+	ctr prometheus.Counter
+}
+
+// Incr increments a metric by an amount.
+func (p *PromCounter) Incr(count int64) error {
+	p.ctr.Add(float64(count))
 	return nil
 }
 
@@ -98,8 +110,9 @@ type Prometheus struct {
 	config Config
 	prefix string
 
-	gauges map[string]prometheus.Gauge
-	timers map[string]prometheus.Summary
+	counters map[string]prometheus.Counter
+	gauges   map[string]prometheus.Gauge
+	timers   map[string]prometheus.Summary
 
 	sync.Mutex
 }
@@ -107,10 +120,11 @@ type Prometheus struct {
 // NewPrometheus creates and returns a new Prometheus object.
 func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 	p := &Prometheus{
-		config: config,
-		prefix: toPromName(config.Prefix),
-		gauges: map[string]prometheus.Gauge{},
-		timers: map[string]prometheus.Summary{},
+		config:   config,
+		prefix:   toPromName(config.Prefix),
+		counters: map[string]prometheus.Counter{},
+		gauges:   map[string]prometheus.Gauge{},
+		timers:   map[string]prometheus.Summary{},
 	}
 
 	for _, opt := range opts {
@@ -142,22 +156,22 @@ func (p *Prometheus) GetCounter(path ...string) StatCounter {
 	dotPath := strings.Join(path, ".")
 	stat := toPromName(dotPath)
 
-	var ctr prometheus.Gauge
+	var ctr prometheus.Counter
 
 	p.Lock()
 	var exists bool
-	if ctr, exists = p.gauges[stat]; !exists {
-		ctr = prometheus.NewGauge(prometheus.GaugeOpts{
+	if ctr, exists = p.counters[stat]; !exists {
+		ctr = prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: p.prefix,
 			Name:      stat,
-			Help:      "Benthos Gauge metric",
+			Help:      "Benthos Counter metric",
 		})
 		prometheus.MustRegister(ctr)
-		p.gauges[stat] = ctr
+		p.counters[stat] = ctr
 	}
 	p.Unlock()
 
-	return &PromGauge{
+	return &PromCounter{
 		ctr: ctr,
 	}
 }

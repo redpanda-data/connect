@@ -124,7 +124,7 @@ func (n *NATSStream) connect() error {
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (n *NATSStream) loop() {
 	var (
-		mRunning = n.stats.GetCounter("output.nats_stream.running")
+		mRunning = n.stats.GetGauge("output.nats_stream.running")
 		mCount   = n.stats.GetCounter("output.nats_stream.count")
 		mErr     = n.stats.GetCounter("output.nats_stream.send.error")
 		mSucc    = n.stats.GetCounter("output.nats_stream.send.success")

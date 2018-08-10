@@ -54,8 +54,8 @@ func (l *LocalStat) Timing(delta int64) error {
 	return nil
 }
 
-// Gauge sets a gauge metric.
-func (l *LocalStat) Gauge(value int64) error {
+// Set sets a gauge metric.
+func (l *LocalStat) Set(value int64) error {
 	atomic.StoreInt64(l.value, value)
 	return nil
 }

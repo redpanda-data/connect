@@ -86,8 +86,8 @@ func (s *StatsdStat) Timing(delta int64) error {
 	return nil
 }
 
-// Gauge sets a gauge metric.
-func (s *StatsdStat) Gauge(value int64) error {
+// Set sets a gauge metric.
+func (s *StatsdStat) Set(value int64) error {
 	s.s.Gauge(s.path, value)
 	return nil
 }

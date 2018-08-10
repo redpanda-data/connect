@@ -137,7 +137,7 @@ func (r *RedisPubSub) disconnect() error {
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (r *RedisPubSub) loop() {
 	var (
-		mRunning   = r.stats.GetCounter("output.redis_pubsub.running")
+		mRunning   = r.stats.GetGauge("output.redis_pubsub.running")
 		mReconErr  = r.stats.GetCounter("output.redis_pubsub.reconnect.error")
 		mReconSucc = r.stats.GetCounter("output.redis_pubsub.reconnect.success")
 		mCount     = r.stats.GetCounter("output.redis_pubsub.count")

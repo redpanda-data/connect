@@ -163,7 +163,7 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 
 func (s *Nanomsg) loop() {
 	var (
-		mRunning  = s.stats.GetCounter("output.nanomsg.running")
+		mRunning  = s.stats.GetGauge("output.nanomsg.running")
 		mCount    = s.stats.GetCounter("output.nanomsg.count")
 		mSendErr  = s.stats.GetCounter("output.nanomsg.send.error")
 		mSendSucc = s.stats.GetCounter("output.nanomsg.send.success")

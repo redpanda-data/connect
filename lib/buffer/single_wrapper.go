@@ -137,7 +137,7 @@ func (m *SingleWrapper) inputLoop() {
 		backlog, err := m.buffer.PushMessage(tr.Payload)
 		if err == nil {
 			mWriteCount.Incr(1)
-			mWriteBacklog.Gauge(int64(backlog))
+			mWriteBacklog.Set(int64(backlog))
 		} else {
 			mWriteErr.Incr(1)
 		}
@@ -206,7 +206,7 @@ func (m *SingleWrapper) outputLoop() {
 				mLatency.Timing(time.Since(msg.CreatedAt()).Nanoseconds())
 				msg = nil
 				backlog, _ := m.buffer.ShiftMessage()
-				mBacklog.Gauge(int64(backlog))
+				mBacklog.Set(int64(backlog))
 				mSendSuccess.Incr(1)
 			} else {
 				mSendErr.Incr(1)

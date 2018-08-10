@@ -366,7 +366,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 //------------------------------------------------------------------------------
 
 func (h *HTTPServer) loop() {
-	mRunning := h.stats.GetCounter("input.http_server.running")
+	mRunning := h.stats.GetGauge("input.http_server.running")
 
 	defer func() {
 		atomic.StoreInt32(&h.running, 0)

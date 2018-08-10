@@ -82,8 +82,8 @@ func NewReader(
 func (r *Reader) loop() {
 	// Metrics paths
 	var (
-		mRunning      = r.stats.GetCounter("input." + r.typeStr + ".running")
-		mRunningF     = r.stats.GetCounter("input.running")
+		mRunning      = r.stats.GetGauge("input." + r.typeStr + ".running")
+		mRunningF     = r.stats.GetGauge("input.running")
 		mCount        = r.stats.GetCounter("input." + r.typeStr + ".count")
 		mCountF       = r.stats.GetCounter("input.count")
 		mReadSuccess  = r.stats.GetCounter("input." + r.typeStr + ".read.success")

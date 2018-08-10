@@ -196,7 +196,7 @@ func NewReadUntil(
 
 func (r *ReadUntil) loop() {
 	var (
-		mRunning         = r.stats.GetCounter("input.read_until.running")
+		mRunning         = r.stats.GetGauge("input.read_until.running")
 		mRestartErr      = r.stats.GetCounter("input.read_until.input.restart.error")
 		mRestartSucc     = r.stats.GetCounter("input.read_until.input.restart.success")
 		mInputClosed     = r.stats.GetCounter("input.read_until.input.closed")
