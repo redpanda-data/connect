@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.23.9 - 2018-08-10
+
+### Added
+
+- New `throttle` processor.
+
 ### 0.23.6 - 2018-08-09
 
 ### Added

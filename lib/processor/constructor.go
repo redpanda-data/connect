@@ -82,6 +82,7 @@ const (
 	TypeSelectParts  = "select_parts"
 	TypeSplit        = "split"
 	TypeText         = "text"
+	TypeThrottle     = "throttle"
 	TypeUnarchive    = "unarchive"
 )
 
@@ -116,6 +117,7 @@ type Config struct {
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Split        SplitConfig        `json:"split" yaml:"split"`
 	Text         TextConfig         `json:"text" yaml:"text"`
+	Throttle     ThrottleConfig     `json:"throttle" yaml:"throttle"`
 	Unarchive    UnarchiveConfig    `json:"unarchive" yaml:"unarchive"`
 }
 
@@ -149,6 +151,7 @@ func NewConfig() Config {
 		SelectParts:  NewSelectPartsConfig(),
 		Split:        NewSplitConfig(),
 		Text:         NewTextConfig(),
+		Throttle:     NewThrottleConfig(),
 		Unarchive:    NewUnarchiveConfig(),
 	}
 }

@@ -60,7 +60,8 @@ element will be selected, and so on.
 25. [`select_parts`](#select_parts)
 26. [`split`](#split)
 27. [`text`](#text)
-28. [`unarchive`](#unarchive)
+28. [`throttle`](#throttle)
+29. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -863,6 +864,21 @@ Removes all leading and trailing whitespace from the payload.
 #### `trim`
 
 Removes all leading and trailing occurrences of characters within the arg field.
+
+## `throttle`
+
+``` yaml
+type: throttle
+throttle:
+  period: 100us
+```
+
+Throttles the throughput of a pipeline to a maximum of one message batch per
+period. This throttle is per processing pipeline, and therefore four threads
+each with a throttle would result in four times the rate specified.
+
+The period should be specified as a time duration string. For example, '1s'
+would be 1 second, '10ms' would be 10 milliseconds, etc.
 
 ## `unarchive`
 

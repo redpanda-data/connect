@@ -302,6 +302,8 @@ pipeline:
       arg: ${PROCESSOR_TEXT_ARG}
       operator: ${PROCESSOR_TEXT_OPERATOR:trim_space}
       value: ${PROCESSOR_TEXT_VALUE}
+    throttle:
+      period: ${PROCESSOR_THROTTLE_PERIOD:100us}
     type: ${PROCESSOR_TYPE:noop}
     unarchive:
       format: ${PROCESSOR_UNARCHIVE_FORMAT:binary}

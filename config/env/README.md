@@ -277,6 +277,7 @@ PROCESSOR_SPLIT_SIZE                             = 1
 PROCESSOR_TEXT_ARG
 PROCESSOR_TEXT_OPERATOR                          = trim_space
 PROCESSOR_TEXT_VALUE
+PROCESSOR_THROTTLE_PERIOD                        = 100us
 PROCESSOR_UNARCHIVE_FORMAT                       = binary
 ```
 
