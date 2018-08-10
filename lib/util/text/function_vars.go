@@ -179,6 +179,14 @@ func ContainsFunctionVariables(inBytes []byte) bool {
 	return functionRegex.Find(inBytes) != nil
 }
 
+func escapeBytes(in []byte) []byte {
+	quoted := strconv.QuoteToASCII(string(in))
+	if len(quoted) < 3 {
+		return in
+	}
+	return []byte(quoted[1 : len(quoted)-1])
+}
+
 // ReplaceFunctionVariables will search a blob of data for the pattern
 // `${!foo}`, where `foo` is a function name.
 //
@@ -188,17 +196,42 @@ func ContainsFunctionVariables(inBytes []byte) bool {
 // Some functions are able to extract contents and metadata from a message, and
 // so a message must be supplied.
 func ReplaceFunctionVariables(msg Message, inBytes []byte) []byte {
+	return replaceFunctionVariables(msg, false, inBytes)
+}
+
+// ReplaceFunctionVariablesEscaped will search a blob of data for the pattern
+// `${!foo}`, where `foo` is a function name.
+//
+// For each aforementioned pattern found in the blob the contents of the
+// respective function will be run and will replace the pattern.
+//
+// The contents of the swapped pattern is escaped such that it can be safely
+// injected within the contents of a JSON object.
+//
+// Some functions are able to extract contents and metadata from a message, and
+// so a message must be supplied.
+func ReplaceFunctionVariablesEscaped(msg Message, inBytes []byte) []byte {
+	return replaceFunctionVariables(msg, true, inBytes)
+}
+
+func replaceFunctionVariables(msg Message, escape bool, inBytes []byte) []byte {
 	return functionRegex.ReplaceAllFunc(inBytes, func(content []byte) []byte {
 		if len(content) > 4 {
 			if colonIndex := bytes.IndexByte(content, ':'); colonIndex == -1 {
 				targetFunc := string(content[3 : len(content)-1])
 				if ftor, exists := functionVars[targetFunc]; exists {
+					if escape {
+						return escapeBytes(ftor(msg, ""))
+					}
 					return ftor(msg, "")
 				}
 			} else {
 				targetFunc := string(content[3:colonIndex])
 				argVal := string(content[colonIndex+1 : len(content)-1])
 				if ftor, exists := functionVars[targetFunc]; exists {
+					if escape {
+						return escapeBytes(ftor(msg, argVal))
+					}
 					return ftor(msg, argVal)
 				}
 			}

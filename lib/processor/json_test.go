@@ -555,7 +555,7 @@ func TestJSONSet(t *testing.T) {
 		{
 			name:   "set 5",
 			path:   "foo.bar",
-			value:  `{"baz":${!echo:"foo"}}`,
+			value:  `{"baz":"${!echo:foo}"}`,
 			input:  `{"foo":{"bar":5}}`,
 			output: `{"foo":{"bar":{"baz":"foo"}}}`,
 		},

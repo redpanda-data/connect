@@ -521,7 +521,7 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	valueBytes := p.valueBytes
 	if p.interpolate {
-		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
+		valueBytes = text.ReplaceFunctionVariablesEscaped(msg, valueBytes)
 	}
 
 	targetParts := p.parts

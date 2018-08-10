@@ -80,6 +80,39 @@ func TestMetadataFunction(t *testing.T) {
 	}
 }
 
+func TestFunctionEscaped(t *testing.T) {
+	msg := message.New([][]byte{[]byte(`{}`)})
+	msg.Get(0).Metadata().Set("foo", `{"foo":"bar"}`)
+
+	act := string(ReplaceFunctionVariablesEscaped(
+		msg, []byte(`{"metadata":"${!metadata:foo}"}`),
+	))
+	if exp := `{"metadata":"{\"foo\":\"bar\"}"}`; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariablesEscaped(
+		msg, []byte(`"${!metadata:foo}"`),
+	))
+	if exp := `"{\"foo\":\"bar\"}"`; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariablesEscaped(
+		msg, []byte(`"${!metadata_json_object}"`),
+	))
+	if exp := `"{\"foo\":\"{\\\"foo\\\":\\\"bar\\\"}\"}"`; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariablesEscaped(
+		msg, []byte(`"${!metadata:bar}"`),
+	))
+	if exp := `""`; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
 func TestMetadataFunctionIndex(t *testing.T) {
 	msg := message.New([][]byte{
 		[]byte("foo"),
