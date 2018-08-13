@@ -4,11 +4,12 @@
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
 [![Build Status][travis-badge]][travis-url]
 
-Benthos is a high performance message streaming service, able to connect various
-sources and sinks and perform arbitrary
+Benthos is a high performance and resilient message streaming service, able to
+connect various sources and sinks and perform arbitrary
 [actions, transformations and filters][processors] on payloads. It is easy to
 deploy and monitor, and ready to drop into your pipeline either as a static
-binary or a docker image.
+binary or a docker image. It can also be used as a [framework][godoc-url] for
+building your own resilient stream processors in Go.
 
 A Benthos stream consists of four layers: [inputs][inputs], optional
 [buffer][buffers], [processor][processors] workers and [outputs][outputs].
@@ -49,8 +50,8 @@ for choosing a level of resiliency that meets your needs.
 Documentation for Benthos components, concepts and recommendations can be found
 in the [docs directory.][general-docs]
 
-For building your own stream processors, using Benthos components as a library,
-check out the [examples on godoc.][godoc-url]
+For building your own stream processors using Benthos as a framework check out
+the [stream package][godoc-url], which also includes some examples.
 
 For some applied examples of Benthos such as streaming and deduplicating the
 Twitter firehose to Kafka [check out the cookbook section][cookbook-docs].
