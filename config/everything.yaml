@@ -472,6 +472,7 @@ output:
     - http://localhost:9200
     id: ${!count:elastic_ids}-${!timestamp_unix}
     index: benthos_index
+    type: doc
     timeout_ms: 5000
     basic_auth:
       enabled: false

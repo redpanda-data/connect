@@ -188,6 +188,7 @@ elasticsearch:
   id: ${!count:elastic_ids}-${!timestamp_unix}
   index: benthos_index
   timeout_ms: 5000
+  type: doc
   urls:
   - http://localhost:9200
 ```

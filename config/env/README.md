@@ -302,6 +302,7 @@ OUTPUT_ELASTICSEARCH_BASIC_AUTH_USERNAME
 OUTPUT_ELASTICSEARCH_ID                      = ${!count:elastic_ids}-${!timestamp_unix}
 OUTPUT_ELASTICSEARCH_INDEX                   = benthos_index
 OUTPUT_ELASTICSEARCH_TIMEOUT_MS              = 5000
+OUTPUT_ELASTICSEARCH_TYPE                    = doc
 OUTPUT_ELASTICSEARCH_URLS                    = http://localhost:9200
 OUTPUT_FILES_PATH                            = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_FILE_DELIMITER

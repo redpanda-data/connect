@@ -43,6 +43,7 @@ type ElasticsearchConfig struct {
 	URLs      []string             `json:"urls" yaml:"urls"`
 	ID        string               `json:"id" yaml:"id"`
 	Index     string               `json:"index" yaml:"index"`
+	Type      string               `json:"type" yaml:"type"`
 	TimeoutMS int                  `json:"timeout_ms" yaml:"timeout_ms"`
 	Auth      auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
 }
@@ -53,6 +54,7 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 		URLs:      []string{"http://localhost:9200"},
 		ID:        "${!count:elastic_ids}-${!timestamp_unix}",
 		Index:     "benthos_index",
+		Type:      "doc",
 		TimeoutMS: 5000,
 		Auth:      auth.NewBasicAuthConfig(),
 	}
@@ -153,7 +155,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 
 		_, err := e.client.Index().
 			Index(e.conf.Index).
-			Type("doc").
+			Type(e.conf.Type).
 			Id(string(id)).
 			BodyString(string(part.Get())).
 			Do(context.Background())

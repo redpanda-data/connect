@@ -331,6 +331,7 @@ output:
         id: ${OUTPUT_ELASTICSEARCH_ID:${!count:elastic_ids}-${!timestamp_unix}}
         index: ${OUTPUT_ELASTICSEARCH_INDEX:benthos_index}
         timeout_ms: ${OUTPUT_ELASTICSEARCH_TIMEOUT_MS:5000}
+        type: ${OUTPUT_ELASTICSEARCH_TYPE:doc}
         urls:
         - ${OUTPUT_ELASTICSEARCH_URLS:http://localhost:9200}
       file:

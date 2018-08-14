@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.23.12 - 2018-08-14
+
+### Added
+
+- New `type` field for `elasticsearch` output.
+
 ### 0.23.9 - 2018-08-10
 
 ### Added
