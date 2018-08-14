@@ -81,8 +81,6 @@ be generated for each part. This can be done by using function interpolations on
 the 'path' field as described [here](../config_interpolation.md#functions). For
 types that aren't file based (such as binary) the file field is ignored.
 
-### Metadata
-
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.
 
