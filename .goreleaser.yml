@@ -49,6 +49,7 @@ dockers:
       - "v{{ .Major }}.{{ .Minor }}"
       - latest
     extra_files:
+      - .git
       - cmd
       - config
       - Gopkg.lock

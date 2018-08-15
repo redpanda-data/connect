@@ -97,8 +97,14 @@ func (p *Pool) loop() {
 				}
 			}()
 			for {
-				t, open := <-w.TransactionChan()
-				if !open {
+				var t types.Transaction
+				var open bool
+				select {
+				case t, open = <-w.TransactionChan():
+					if !open {
+						return
+					}
+				case <-p.closeChan:
 					return
 				}
 				select {

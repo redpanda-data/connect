@@ -61,4 +61,4 @@ input:
 output:
   type: http_server
 logger:
-  log_level: INFO
+  level: INFO

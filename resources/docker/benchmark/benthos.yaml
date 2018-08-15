@@ -36,7 +36,7 @@ output:
 
 logger:
   prefix: service
-  log_level: INFO
+  level: INFO
 
 metrics:
   type: prometheus

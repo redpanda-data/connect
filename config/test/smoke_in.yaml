@@ -53,4 +53,4 @@ output:
         topic: benthos_topic
         client_id: benthos_output
 logger:
-  log_level: INFO
+  level: INFO
