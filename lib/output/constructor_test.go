@@ -30,80 +30,50 @@ import (
 
 func TestSanitise(t *testing.T) {
 	var actObj interface{}
-	var act []byte
+	var actBytes []byte
 	var err error
 
-	exp := `{` +
-		`"type":"amqp",` +
-		`"amqp":{` +
-		`"exchange":"benthos-exchange",` +
-		`"exchange_type":"direct",` +
-		`"immediate":false,` +
-		`"key":"benthos-key",` +
-		`"mandatory":false,` +
-		`"persistent":false,` +
-		`"url":"amqp://guest:guest@localhost:5672/"` +
-		`}` +
-		`}`
+	exp := NewConfig()
+	exp.Type = "amqp"
+	exp.Processors = []processor.Config{}
 
-	conf := NewConfig()
-	conf.Type = "amqp"
-	conf.Processors = nil
-
-	if actObj, err = SanitiseConfig(conf); err != nil {
+	if actObj, err = SanitiseConfig(exp); err != nil {
 		t.Fatal(err)
 	}
-	if act, err = json.Marshal(actObj); err != nil {
+	if actBytes, err = json.Marshal(actObj); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(string(act), exp) {
-		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
+
+	act := NewConfig()
+	if err := json.Unmarshal(actBytes, &act); err != nil {
+		t.Fatal(err)
 	}
 
-	exp = `{` +
-		`"type":"amqp",` +
-		`"amqp":{` +
-		`"exchange":"benthos-exchange",` +
-		`"exchange_type":"direct",` +
-		`"immediate":false,` +
-		`"key":"benthos-key",` +
-		`"mandatory":false,` +
-		`"persistent":false,` +
-		`"url":"amqp://guest:guest@localhost:5672/"` +
-		`},` +
-		`"processors":[` +
-		`{` +
-		`"type":"combine",` +
-		`"combine":{` +
-		`"parts":2` +
-		`}` +
-		`},` +
-		`{` +
-		`"type":"archive",` +
-		`"archive":{` +
-		`"format":"binary",` +
-		`"path":"nope"` +
-		`}` +
-		`}` +
-		`]` +
-		`}`
+	if !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
+	}
 
 	proc := processor.NewConfig()
 	proc.Type = "combine"
-	conf.Processors = append(conf.Processors, proc)
+	exp.Processors = append(exp.Processors, proc)
 
 	proc = processor.NewConfig()
 	proc.Type = "archive"
 	proc.Archive.Path = "nope"
-	conf.Processors = append(conf.Processors, proc)
+	exp.Processors = append(exp.Processors, proc)
 
-	if actObj, err = SanitiseConfig(conf); err != nil {
+	if actObj, err = SanitiseConfig(exp); err != nil {
 		t.Fatal(err)
 	}
-	if act, err = json.Marshal(actObj); err != nil {
+	if actBytes, err = json.Marshal(actObj); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(string(act), exp) {
-		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
+
+	act = NewConfig()
+	if err := json.Unmarshal(actBytes, &act); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
 	}
 }

@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"crypto/tls"
 	"fmt"
 	"strconv"
 	"strings"
@@ -31,6 +32,7 @@ import (
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	btls "github.com/Jeffail/benthos/lib/util/tls"
 	"github.com/streadway/amqp"
 )
 
@@ -38,14 +40,15 @@ import (
 
 // AMQPConfig contains configuration for the AMQP input type.
 type AMQPConfig struct {
-	URL           string `json:"url" yaml:"url"`
-	Exchange      string `json:"exchange" yaml:"exchange"`
-	ExchangeType  string `json:"exchange_type" yaml:"exchange_type"`
-	Queue         string `json:"queue" yaml:"queue"`
-	BindingKey    string `json:"key" yaml:"key"`
-	ConsumerTag   string `json:"consumer_tag" yaml:"consumer_tag"`
-	PrefetchCount int    `json:"prefetch_count" yaml:"prefetch_count"`
-	PrefetchSize  int    `json:"prefetch_size" yaml:"prefetch_size"`
+	URL           string      `json:"url" yaml:"url"`
+	Exchange      string      `json:"exchange" yaml:"exchange"`
+	ExchangeType  string      `json:"exchange_type" yaml:"exchange_type"`
+	Queue         string      `json:"queue" yaml:"queue"`
+	BindingKey    string      `json:"key" yaml:"key"`
+	ConsumerTag   string      `json:"consumer_tag" yaml:"consumer_tag"`
+	PrefetchCount int         `json:"prefetch_count" yaml:"prefetch_count"`
+	PrefetchSize  int         `json:"prefetch_size" yaml:"prefetch_size"`
+	TLS           btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewAMQPConfig creates a new AMQPConfig with default values.
@@ -59,6 +62,7 @@ func NewAMQPConfig() AMQPConfig {
 		ConsumerTag:   "benthos-consumer",
 		PrefetchCount: 10,
 		PrefetchSize:  0,
+		TLS:           btls.NewConfig(),
 	}
 }
 
@@ -70,7 +74,8 @@ type AMQP struct {
 	amqpChan     *amqp.Channel
 	consumerChan <-chan amqp.Delivery
 
-	ackTag uint64
+	ackTag  uint64
+	tlsConf *tls.Config
 
 	conf  AMQPConfig
 	stats metrics.Type
@@ -85,6 +90,12 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (Type, error)
 		conf:  conf,
 		stats: stats,
 		log:   log.NewModule(".input.amqp"),
+	}
+	if conf.TLS.Enabled {
+		var err error
+		if a.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
 	}
 	return &a, nil
 }
@@ -104,9 +115,16 @@ func (a *AMQP) Connect() (err error) {
 	var amqpChan *amqp.Channel
 	var consumerChan <-chan amqp.Delivery
 
-	conn, err = amqp.Dial(a.conf.URL)
-	if err != nil {
-		return fmt.Errorf("AMQP Connect: %s", err)
+	if a.conf.TLS.Enabled {
+		conn, err = amqp.DialTLS(a.conf.URL, a.tlsConf)
+		if err != nil {
+			return fmt.Errorf("AMQP Connect: %s", err)
+		}
+	} else {
+		conn, err = amqp.Dial(a.conf.URL)
+		if err != nil {
+			return fmt.Errorf("AMQP Connect: %s", err)
+		}
 	}
 
 	amqpChan, err = conn.Channel()

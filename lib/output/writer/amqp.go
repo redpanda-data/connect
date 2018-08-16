@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"crypto/tls"
 	"fmt"
 	"strings"
 	"sync"
@@ -30,6 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
+	btls "github.com/Jeffail/benthos/lib/util/tls"
 	"github.com/streadway/amqp"
 )
 
@@ -37,13 +39,14 @@ import (
 
 // AMQPConfig contains configuration fields for the AMQP output type.
 type AMQPConfig struct {
-	URL          string `json:"url" yaml:"url"`
-	Exchange     string `json:"exchange" yaml:"exchange"`
-	ExchangeType string `json:"exchange_type" yaml:"exchange_type"`
-	BindingKey   string `json:"key" yaml:"key"`
-	Persistent   bool   `json:"persistent" yaml:"persistent"`
-	Mandatory    bool   `json:"mandatory" yaml:"mandatory"`
-	Immediate    bool   `json:"immediate" yaml:"immediate"`
+	URL          string      `json:"url" yaml:"url"`
+	Exchange     string      `json:"exchange" yaml:"exchange"`
+	ExchangeType string      `json:"exchange_type" yaml:"exchange_type"`
+	BindingKey   string      `json:"key" yaml:"key"`
+	Persistent   bool        `json:"persistent" yaml:"persistent"`
+	Mandatory    bool        `json:"mandatory" yaml:"mandatory"`
+	Immediate    bool        `json:"immediate" yaml:"immediate"`
+	TLS          btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewAMQPConfig creates a new AMQPConfig with default values.
@@ -56,6 +59,7 @@ func NewAMQPConfig() AMQPConfig {
 		Persistent:   false,
 		Mandatory:    false,
 		Immediate:    false,
+		TLS:          btls.NewConfig(),
 	}
 }
 
@@ -68,7 +72,8 @@ type AMQP struct {
 	log   log.Modular
 	stats metrics.Type
 
-	conf AMQPConfig
+	conf    AMQPConfig
+	tlsConf *tls.Config
 
 	conn        *amqp.Connection
 	amqpChan    *amqp.Channel
@@ -92,6 +97,12 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error
 	if conf.Persistent {
 		a.deliveryMode = amqp.Persistent
 	}
+	if conf.TLS.Enabled {
+		var err error
+		if a.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
+	}
 	return &a, nil
 }
 
@@ -102,9 +113,19 @@ func (a *AMQP) Connect() error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
 
-	conn, err := amqp.Dial(a.conf.URL)
-	if err != nil {
-		return fmt.Errorf("amqp failed to connect: %v", err)
+	var conn *amqp.Connection
+	var err error
+
+	if a.conf.TLS.Enabled {
+		conn, err = amqp.DialTLS(a.conf.URL, a.tlsConf)
+		if err != nil {
+			return fmt.Errorf("amqp failed to connect: %v", err)
+		}
+	} else {
+		conn, err = amqp.Dial(a.conf.URL)
+		if err != nil {
+			return fmt.Errorf("amqp failed to connect: %v", err)
+		}
 	}
 
 	var amqpChan *amqp.Channel

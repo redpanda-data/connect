@@ -72,6 +72,10 @@ amqp:
   prefetch_count: 10
   prefetch_size: 0
   queue: benthos-queue
+  tls:
+    cas_file: ""
+    enabled: false
+    skip_cert_verify: false
   url: amqp://guest:guest@localhost:5672/
 ```
 

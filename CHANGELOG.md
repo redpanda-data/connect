@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.23.14 - 2018-08-16
+
+### Added
+
+- New `tls` fields for `amqp` input and output types.
+
 ### 0.23.12 - 2018-08-14
 
 ### Added

@@ -16,6 +16,10 @@ input:
         prefetch_count: ${INPUT_AMQP_PREFETCH_COUNT:10}
         prefetch_size: ${INPUT_AMQP_PREFETCH_SIZE:0}
         queue: ${INPUT_AMQP_QUEUE:benthos-queue}
+        tls:
+          cas_file: ${INPUT_AMQP_TLS_CAS_FILE}
+          enabled: ${INPUT_AMQP_TLS_ENABLED:false}
+          skip_cert_verify: ${INPUT_AMQP_TLS_SKIP_CERT_VERIFY:false}
         url: ${INPUT_AMQP_URL:amqp://guest:guest@localhost:5672/}
       dynamic:
         prefix: ${INPUT_DYNAMIC_PREFIX}
@@ -319,6 +323,10 @@ output:
         key: ${OUTPUT_AMQP_KEY:benthos-key}
         mandatory: ${OUTPUT_AMQP_MANDATORY:false}
         persistent: ${OUTPUT_AMQP_PERSISTENT:false}
+        tls:
+          cas_file: ${OUTPUT_AMQP_TLS_CAS_FILE}
+          enabled: ${OUTPUT_AMQP_TLS_ENABLED:false}
+          skip_cert_verify: ${OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY:false}
         url: ${OUTPUT_AMQP_URL:amqp://guest:guest@localhost:5672/}
       dynamic:
         prefix: ${OUTPUT_DYNAMIC_PREFIX}

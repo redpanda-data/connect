@@ -56,6 +56,10 @@ amqp:
   key: benthos-key
   mandatory: false
   persistent: false
+  tls:
+    cas_file: ""
+    enabled: false
+    skip_cert_verify: false
   url: amqp://guest:guest@localhost:5672/
 ```
 

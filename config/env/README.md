@@ -60,6 +60,9 @@ INPUT_AMQP_KEY                              = benthos-key
 INPUT_AMQP_PREFETCH_COUNT                   = 10
 INPUT_AMQP_PREFETCH_SIZE                    = 0
 INPUT_AMQP_QUEUE                            = benthos-queue
+INPUT_AMQP_TLS_CAS_FILE
+INPUT_AMQP_TLS_ENABLED                      = false
+INPUT_AMQP_TLS_SKIP_CERT_VERIFY             = false
 INPUT_AMQP_URL                              = amqp://guest:guest@localhost:5672/
 INPUT_DYNAMIC_PREFIX
 INPUT_DYNAMIC_TIMEOUT_MS                    = 5000
@@ -293,6 +296,9 @@ OUTPUT_AMQP_IMMEDIATE                        = false
 OUTPUT_AMQP_KEY                              = benthos-key
 OUTPUT_AMQP_MANDATORY                        = false
 OUTPUT_AMQP_PERSISTENT                       = false
+OUTPUT_AMQP_TLS_CAS_FILE
+OUTPUT_AMQP_TLS_ENABLED                      = false
+OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY             = false
 OUTPUT_AMQP_URL                              = amqp://guest:guest@localhost:5672/
 OUTPUT_DYNAMIC_PREFIX
 OUTPUT_DYNAMIC_TIMEOUT_MS                    = 5000
