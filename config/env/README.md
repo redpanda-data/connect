@@ -415,10 +415,9 @@ LOGGER_PREFIX        = benthos
 ## METRICS
 
 ```
-METRICS_TYPE                   = http_server
-METRICS_PREFIX                 = benthos
-METRICS_STATSD_ADDRESS         = localhost:4040
-METRICS_STATSD_FLUSH_PERIOD    = 100ms
-METRICS_STATSD_MAX_PACKET_SIZE = 1440
-METRICS_STATSD_NETWORK         = udp
+METRICS_TYPE                = http_server
+METRICS_PREFIX              = benthos
+METRICS_STATSD_ADDRESS      = localhost:4040
+METRICS_STATSD_FLUSH_PERIOD = 100ms
+METRICS_STATSD_NETWORK      = udp
 ```

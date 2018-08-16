@@ -509,6 +509,17 @@
   revision = "ae68e2d4c00fed4943b5f6698d504a5fe083da8a"
 
 [[projects]]
+  digest = "1:6b4bf575b6e6bc3f790cefc39602181f966e481d45302209c0d2d667fe9cd299"
+  name = "github.com/quipo/statsd"
+  packages = [
+    ".",
+    "event",
+  ]
+  pruneopts = "NUT"
+  revision = "977fadbd5cda9975ab87279994ea2029efdbd436"
+  version = "1.4.0"
+
+[[projects]]
   branch = "master"
   digest = "1:7c522337040d4ec9a136cd9d64fe4677ee1d3eae4a7f8831c2108f9bec43fa48"
   name = "github.com/rcrowley/go-metrics"
@@ -575,14 +586,6 @@
   revision = "3c6ecd8f22c6f40fbeec94c000a069d7d87c7624"
 
 [[projects]]
-  digest = "1:d6613cccd218e927314d7f6a7a6e8169473b07db7e07810341cacd3bdca920ba"
-  name = "gopkg.in/alexcesaro/statsd.v2"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "7fea3f0d2fab1ad973e641e51dba45443a311a90"
-  version = "v2.0.0"
-
-[[projects]]
   digest = "1:7c95b35057a0ff2e19f707173cc1a947fa43a6eb5c4d300d196ece0334046082"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
@@ -638,9 +641,9 @@
     "github.com/pebbe/zmq4",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",
+    "github.com/quipo/statsd",
     "github.com/streadway/amqp",
     "github.com/trivago/grok",
-    "gopkg.in/alexcesaro/statsd.v2",
     "gopkg.in/yaml.v2",
     "nanomsg.org/go-mangos",
     "nanomsg.org/go-mangos/protocol/pub",

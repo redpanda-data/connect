@@ -45,10 +45,9 @@ func TestSanitise(t *testing.T) {
 	exp = map[string]interface{}{
 		"type": "statsd",
 		"statsd": map[string]interface{}{
-			"address":         "foo",
-			"flush_period":    "100ms",
-			"max_packet_size": float64(1440),
-			"network":         "udp",
+			"address":      "foo",
+			"flush_period": "100ms",
+			"network":      "udp",
 		},
 	}
 

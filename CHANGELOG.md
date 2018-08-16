@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.23.15 - 2018-08-16
+
+### Changed
+
+- Improved statsd client with better cached aggregation.
+
 ### 0.23.14 - 2018-08-16
 
 ### Added

@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
-	"gopkg.in/alexcesaro/statsd.v2"
+	"github.com/quipo/statsd"
 )
 
 //------------------------------------------------------------------------------
@@ -41,21 +41,29 @@ func init() {
 
 //------------------------------------------------------------------------------
 
+type wrappedLogger struct {
+	m log.Modular
+}
+
+func (w *wrappedLogger) Println(v ...interface{}) {
+	w.m.Warnf(fmt.Sprintln(v...))
+}
+
+//------------------------------------------------------------------------------
+
 // StatsdConfig is config for the Statsd metrics type.
 type StatsdConfig struct {
-	Address       string `json:"address" yaml:"address"`
-	FlushPeriod   string `json:"flush_period" yaml:"flush_period"`
-	MaxPacketSize int    `json:"max_packet_size" yaml:"max_packet_size"`
-	Network       string `json:"network" yaml:"network"`
+	Address     string `json:"address" yaml:"address"`
+	FlushPeriod string `json:"flush_period" yaml:"flush_period"`
+	Network     string `json:"network" yaml:"network"`
 }
 
 // NewStatsdConfig creates an StatsdConfig struct with default values.
 func NewStatsdConfig() StatsdConfig {
 	return StatsdConfig{
-		Address:       "localhost:4040",
-		FlushPeriod:   "100ms",
-		MaxPacketSize: 1440,
-		Network:       "udp",
+		Address:     "localhost:4040",
+		FlushPeriod: "100ms",
+		Network:     "udp",
 	}
 }
 
@@ -65,18 +73,18 @@ func NewStatsdConfig() StatsdConfig {
 // this stat are thread safe.
 type StatsdStat struct {
 	path string
-	s    *statsd.Client
+	s    statsd.Statsd
 }
 
 // Incr increments a metric by an amount.
 func (s *StatsdStat) Incr(count int64) error {
-	s.s.Count(s.path, count)
+	s.s.Incr(s.path, count)
 	return nil
 }
 
 // Decr decrements a metric by an amount.
 func (s *StatsdStat) Decr(count int64) error {
-	s.s.Count(s.path, -count)
+	s.s.Decr(s.path, count)
 	return nil
 }
 
@@ -98,7 +106,7 @@ func (s *StatsdStat) Set(value int64) error {
 // endpoint.
 type Statsd struct {
 	config Config
-	s      *statsd.Client
+	s      statsd.Statsd
 	log    log.Modular
 }
 
@@ -116,23 +124,21 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 		opt(s)
 	}
 
-	tErrReported := time.Now()
-
-	if s.s, err = statsd.New(
-		statsd.Address(config.Statsd.Address),
-		statsd.FlushPeriod(flushPeriod),
-		statsd.MaxPacketSize(config.Statsd.MaxPacketSize),
-		statsd.Network(config.Statsd.Network),
-		statsd.Prefix(config.Prefix),
-		statsd.ErrorHandler(func(err error) {
-			if time.Since(tErrReported) > time.Second {
-				s.log.Errorf("Failed to push metrics: %v\n", err)
-				tErrReported = time.Now()
-			}
-		}),
-	); err != nil {
-		return nil, err
+	statsdclient := statsd.NewStatsdBuffer(
+		flushPeriod,
+		statsd.NewStatsdClient(config.Statsd.Address, config.Prefix),
+	)
+	statsdclient.Logger = &wrappedLogger{m: s.log}
+	if config.Statsd.Network == "udp" {
+		if err := statsdclient.CreateSocket(); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := statsdclient.CreateTCPSocket(); err != nil {
+			return nil, err
+		}
 	}
+	s.s = statsdclient
 	return s, nil
 }
 
@@ -164,13 +170,13 @@ func (h *Statsd) GetGauge(path ...string) StatGauge {
 
 // Incr increments a stat by a value.
 func (h *Statsd) Incr(stat string, value int64) error {
-	h.s.Count(stat, value)
+	h.s.Incr(stat, value)
 	return nil
 }
 
 // Decr decrements a stat by a value.
 func (h *Statsd) Decr(stat string, value int64) error {
-	h.s.Count(stat, -value)
+	h.s.Decr(stat, value)
 	return nil
 }
 

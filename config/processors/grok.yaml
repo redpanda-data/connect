@@ -44,5 +44,4 @@ metrics:
   statsd:
     address: localhost:4040
     flush_period: 100ms
-    max_packet_size: 1440
     network: udp
