@@ -61,8 +61,6 @@ func (c *Config) Get() (*tls.Config, error) {
 	return &tls.Config{
 		InsecureSkipVerify: c.InsecureSkipVerify,
 		RootCAs:            rootCAs,
-		MinVersion:         tls.VersionTLS12,
-		MaxVersion:         tls.VersionTLS12,
 	}, nil
 }
 
