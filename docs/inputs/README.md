@@ -67,11 +67,13 @@ type: amqp
 amqp:
   consumer_tag: benthos-consumer
   exchange: benthos-exchange
+  exchange_durable: true
   exchange_type: direct
   key: benthos-key
   prefetch_count: 10
   prefetch_size: 0
   queue: benthos-queue
+  queue_durable: true
   tls:
     cas_file: ""
     enabled: false

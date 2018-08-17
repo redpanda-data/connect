@@ -9,7 +9,9 @@ input:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
     exchange_type: direct
+    exchange_durable: true
     queue: benthos-queue
+    queue_durable: true
     key: benthos-key
     consumer_tag: benthos-consumer
     prefetch_count: 10
@@ -459,6 +461,7 @@ output:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
     exchange_type: direct
+    exchange_durable: true
     key: benthos-key
     persistent: false
     mandatory: false

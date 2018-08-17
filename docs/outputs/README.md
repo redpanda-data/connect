@@ -51,6 +51,7 @@ conditions please [read the docs here](../conditions/README.md)
 type: amqp
 amqp:
   exchange: benthos-exchange
+  exchange_durable: true
   exchange_type: direct
   immediate: false
   key: benthos-key

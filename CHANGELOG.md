@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.23.17 - 2018-08-17
+
+### Added
+
+- New durable fields for `amqp` input and output types.
+
 ### 0.23.15 - 2018-08-16
 
 ### Changed

@@ -40,29 +40,33 @@ import (
 
 // AMQPConfig contains configuration for the AMQP input type.
 type AMQPConfig struct {
-	URL           string      `json:"url" yaml:"url"`
-	Exchange      string      `json:"exchange" yaml:"exchange"`
-	ExchangeType  string      `json:"exchange_type" yaml:"exchange_type"`
-	Queue         string      `json:"queue" yaml:"queue"`
-	BindingKey    string      `json:"key" yaml:"key"`
-	ConsumerTag   string      `json:"consumer_tag" yaml:"consumer_tag"`
-	PrefetchCount int         `json:"prefetch_count" yaml:"prefetch_count"`
-	PrefetchSize  int         `json:"prefetch_size" yaml:"prefetch_size"`
-	TLS           btls.Config `json:"tls" yaml:"tls"`
+	URL             string      `json:"url" yaml:"url"`
+	Exchange        string      `json:"exchange" yaml:"exchange"`
+	ExchangeType    string      `json:"exchange_type" yaml:"exchange_type"`
+	ExchangeDurable bool        `json:"exchange_durable" yaml:"exchange_durable"`
+	Queue           string      `json:"queue" yaml:"queue"`
+	QueueDurable    bool        `json:"queue_durable" yaml:"queue_durable"`
+	BindingKey      string      `json:"key" yaml:"key"`
+	ConsumerTag     string      `json:"consumer_tag" yaml:"consumer_tag"`
+	PrefetchCount   int         `json:"prefetch_count" yaml:"prefetch_count"`
+	PrefetchSize    int         `json:"prefetch_size" yaml:"prefetch_size"`
+	TLS             btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
-		URL:           "amqp://guest:guest@localhost:5672/",
-		Exchange:      "benthos-exchange",
-		ExchangeType:  "direct",
-		Queue:         "benthos-queue",
-		BindingKey:    "benthos-key",
-		ConsumerTag:   "benthos-consumer",
-		PrefetchCount: 10,
-		PrefetchSize:  0,
-		TLS:           btls.NewConfig(),
+		URL:             "amqp://guest:guest@localhost:5672/",
+		Exchange:        "benthos-exchange",
+		ExchangeType:    "direct",
+		ExchangeDurable: true,
+		Queue:           "benthos-queue",
+		QueueDurable:    true,
+		BindingKey:      "benthos-key",
+		ConsumerTag:     "benthos-consumer",
+		PrefetchCount:   10,
+		PrefetchSize:    0,
+		TLS:             btls.NewConfig(),
 	}
 }
 
@@ -133,24 +137,24 @@ func (a *AMQP) Connect() (err error) {
 	}
 
 	if err = amqpChan.ExchangeDeclare(
-		a.conf.Exchange,     // name of the exchange
-		a.conf.ExchangeType, // type
-		true,                // durable
-		false,               // delete when complete
-		false,               // internal
-		false,               // noWait
-		nil,                 // arguments
+		a.conf.Exchange,        // name of the exchange
+		a.conf.ExchangeType,    // type
+		a.conf.ExchangeDurable, // durable
+		false, // delete when complete
+		false, // internal
+		false, // noWait
+		nil,   // arguments
 	); err != nil {
 		return fmt.Errorf("exchange Declare: %s", err)
 	}
 
 	if _, err = amqpChan.QueueDeclare(
-		a.conf.Queue, // name of the queue
-		true,         // durable
-		false,        // delete when usused
-		false,        // exclusive
-		false,        // noWait
-		nil,          // arguments
+		a.conf.Queue,        // name of the queue
+		a.conf.QueueDurable, // durable
+		false,               // delete when usused
+		false,               // exclusive
+		false,               // noWait
+		nil,                 // arguments
 	); err != nil {
 		return fmt.Errorf("queue Declare: %s", err)
 	}

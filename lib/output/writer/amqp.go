@@ -39,27 +39,29 @@ import (
 
 // AMQPConfig contains configuration fields for the AMQP output type.
 type AMQPConfig struct {
-	URL          string      `json:"url" yaml:"url"`
-	Exchange     string      `json:"exchange" yaml:"exchange"`
-	ExchangeType string      `json:"exchange_type" yaml:"exchange_type"`
-	BindingKey   string      `json:"key" yaml:"key"`
-	Persistent   bool        `json:"persistent" yaml:"persistent"`
-	Mandatory    bool        `json:"mandatory" yaml:"mandatory"`
-	Immediate    bool        `json:"immediate" yaml:"immediate"`
-	TLS          btls.Config `json:"tls" yaml:"tls"`
+	URL             string      `json:"url" yaml:"url"`
+	Exchange        string      `json:"exchange" yaml:"exchange"`
+	ExchangeType    string      `json:"exchange_type" yaml:"exchange_type"`
+	ExchangeDurable bool        `json:"exchange_durable" yaml:"exchange_durable"`
+	BindingKey      string      `json:"key" yaml:"key"`
+	Persistent      bool        `json:"persistent" yaml:"persistent"`
+	Mandatory       bool        `json:"mandatory" yaml:"mandatory"`
+	Immediate       bool        `json:"immediate" yaml:"immediate"`
+	TLS             btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
-		URL:          "amqp://guest:guest@localhost:5672/",
-		Exchange:     "benthos-exchange",
-		ExchangeType: "direct",
-		BindingKey:   "benthos-key",
-		Persistent:   false,
-		Mandatory:    false,
-		Immediate:    false,
-		TLS:          btls.NewConfig(),
+		URL:             "amqp://guest:guest@localhost:5672/",
+		Exchange:        "benthos-exchange",
+		ExchangeType:    "direct",
+		ExchangeDurable: true,
+		BindingKey:      "benthos-key",
+		Persistent:      false,
+		Mandatory:       false,
+		Immediate:       false,
+		TLS:             btls.NewConfig(),
 	}
 }
 
@@ -135,13 +137,13 @@ func (a *AMQP) Connect() error {
 	}
 
 	if err = amqpChan.ExchangeDeclare(
-		a.conf.Exchange,     // name of the exchange
-		a.conf.ExchangeType, // type
-		true,                // durable
-		false,               // delete when complete
-		false,               // internal
-		false,               // noWait
-		nil,                 // arguments
+		a.conf.Exchange,        // name of the exchange
+		a.conf.ExchangeType,    // type
+		a.conf.ExchangeDurable, // durable
+		false, // delete when complete
+		false, // internal
+		false, // noWait
+		nil,   // arguments
 	); err != nil {
 		conn.Close()
 		return fmt.Errorf("amqp failed to declare exchange: %v", err)
