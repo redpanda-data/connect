@@ -55,8 +55,21 @@ func TestAMQPIntegration(t *testing.T) {
 	if err = pool.Retry(func() error {
 		client, err := amqp.Dial(url)
 		if err == nil {
+			var mChan *amqp.Channel
+			if mChan, err = client.Channel(); err == nil {
+				err = mChan.ExchangeDeclare(
+					"test-exchange", // name of the exchange
+					"direct",        // type
+					true,            // durable
+					false,           // delete when complete
+					false,           // internal
+					false,           // noWait
+					nil,             // arguments
+				)
+			}
 			client.Close()
 		}
+
 		return err
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
@@ -77,8 +90,16 @@ func TestAMQPIntegration(t *testing.T) {
 }
 
 func testAMQPConnect(url string, t *testing.T) {
+	exchange := "test-exchange"
+	key := "benthos-key"
+
 	conf := NewAMQPConfig()
 	conf.URL = url
+	conf.QueueDeclare.Enabled = true
+	conf.BindingsDeclare = append(conf.BindingsDeclare, AMQPBindingConfig{
+		Exchange:   exchange,
+		RoutingKey: key,
+	})
 
 	m, err := NewAMQP(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
@@ -121,7 +142,7 @@ func testAMQPConnect(url string, t *testing.T) {
 		str := fmt.Sprintf("hello world: %v", i)
 		testMsgs[str] = struct{}{}
 		go func(testStr string) {
-			if pErr := mChan.Publish(conf.Exchange, conf.BindingKey, false, false, amqp.Publishing{
+			if pErr := mChan.Publish(exchange, key, false, false, amqp.Publishing{
 				Headers: amqp.Table{
 					"foo": "bar",
 					"root": amqp.Table{
@@ -171,6 +192,7 @@ func testAMQPConnect(url string, t *testing.T) {
 func testAMQPDisconnect(url string, t *testing.T) {
 	conf := NewAMQPConfig()
 	conf.URL = url
+	conf.QueueDeclare.Enabled = true
 
 	m, err := NewAMQP(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {

@@ -86,26 +86,33 @@ func TestAMQPIntegration(t *testing.T) {
 func createInputOutput(
 	inConf reader.AMQPConfig, outConf writer.AMQPConfig,
 ) (mInput reader.Type, mOutput writer.Type, err error) {
-	if mInput, err = reader.NewAMQP(inConf, log.Noop(), metrics.Noop()); err != nil {
-		return
-	}
-	if err = mInput.Connect(); err != nil {
-		return
-	}
 	if mOutput, err = writer.NewAMQP(outConf, log.Noop(), metrics.Noop()); err != nil {
 		return
 	}
 	if err = mOutput.Connect(); err != nil {
 		return
 	}
+	if mInput, err = reader.NewAMQP(inConf, log.Noop(), metrics.Noop()); err != nil {
+		return
+	}
+	if err = mInput.Connect(); err != nil {
+		return
+	}
 	return
 }
 
 func testAMQPSinglePart(url string, t *testing.T) {
-	inConf := reader.NewAMQPConfig()
-	inConf.URL = url
 	outConf := writer.NewAMQPConfig()
 	outConf.URL = url
+	outConf.ExchangeDeclare.Enabled = true
+
+	inConf := reader.NewAMQPConfig()
+	inConf.URL = url
+	inConf.QueueDeclare.Enabled = true
+	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
+		Exchange:   outConf.Exchange,
+		RoutingKey: outConf.BindingKey,
+	})
 
 	mInput, mOutput, err := createInputOutput(inConf, outConf)
 	if err != nil {
@@ -174,10 +181,17 @@ func testAMQPSinglePart(url string, t *testing.T) {
 }
 
 func testAMQPMultiplePart(url string, t *testing.T) {
-	inConf := reader.NewAMQPConfig()
-	inConf.URL = url
 	outConf := writer.NewAMQPConfig()
 	outConf.URL = url
+	outConf.ExchangeDeclare.Enabled = true
+
+	inConf := reader.NewAMQPConfig()
+	inConf.URL = url
+	inConf.QueueDeclare.Enabled = true
+	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
+		Exchange:   outConf.Exchange,
+		RoutingKey: outConf.BindingKey,
+	})
 
 	mInput, mOutput, err := createInputOutput(inConf, outConf)
 	if err != nil {
@@ -258,10 +272,17 @@ func testAMQPMultiplePart(url string, t *testing.T) {
 }
 
 func testAMQPDisconnect(url string, t *testing.T) {
-	inConf := reader.NewAMQPConfig()
-	inConf.URL = url
 	outConf := writer.NewAMQPConfig()
 	outConf.URL = url
+	outConf.ExchangeDeclare.Enabled = true
+
+	inConf := reader.NewAMQPConfig()
+	inConf.URL = url
+	inConf.QueueDeclare.Enabled = true
+	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
+		Exchange:   outConf.Exchange,
+		RoutingKey: outConf.BindingKey,
+	})
 
 	mInput, mOutput, err := createInputOutput(inConf, outConf)
 	if err != nil {

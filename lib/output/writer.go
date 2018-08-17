@@ -29,6 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -101,6 +102,8 @@ func (w *Writer) loop() {
 	mRunning.Incr(1)
 	mRunningF.Incr(1)
 
+	throt := throttle.New(throttle.OptCloseChan(w.closeChan))
+
 	for {
 		if err := w.writer.Connect(); err != nil {
 			// Close immediately if our writer is closed.
@@ -111,9 +114,7 @@ func (w *Writer) loop() {
 			w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
 			mFailedConn.Incr(1)
 			mFailedConnF.Incr(1)
-			select {
-			case <-time.After(time.Second):
-			case <-w.closeChan:
+			if !throt.Retry() {
 				return
 			}
 		} else {
@@ -155,15 +156,15 @@ func (w *Writer) loop() {
 					w.log.Errorf("Failed to reconnect to %v: %v\n", w.typeStr, err)
 					mFailedConn.Incr(1)
 					mFailedConnF.Incr(1)
-					select {
-					case <-time.After(time.Second):
-					case <-w.closeChan:
+					if !throt.Retry() {
 						return
 					}
 				} else if err = w.writer.Write(ts.Payload); err != types.ErrNotConnected {
 					mConn.Incr(1)
 					mConnF.Incr(1)
 					break
+				} else if !throt.Retry() {
+					return
 				}
 			}
 		}
@@ -177,9 +178,13 @@ func (w *Writer) loop() {
 			w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
 			mError.Incr(1)
 			mErrorF.Incr(1)
+			if !throt.Retry() {
+				return
+			}
 		} else {
 			mSuccess.Incr(1)
 			mSuccessF.Incr(1)
+			throt.Reset()
 		}
 		select {
 		case ts.ResponseChan <- response.NewError(err):

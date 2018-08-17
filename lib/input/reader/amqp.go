@@ -38,35 +38,46 @@ import (
 
 //------------------------------------------------------------------------------
 
+// AMQPQueueDeclareConfig contains fields indicating whether the target AMQP
+// queue needs to be declared and bound to an exchange, as well as any fields
+// specifying how to accomplish that.
+type AMQPQueueDeclareConfig struct {
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	Durable bool `json:"durable" yaml:"durable"`
+}
+
+// AMQPBindingConfig contains fields describing a queue binding to be declared.
+type AMQPBindingConfig struct {
+	Exchange   string `json:"exchange" yaml:"exchange"`
+	RoutingKey string `json:"key" yaml:"key"`
+}
+
 // AMQPConfig contains configuration for the AMQP input type.
 type AMQPConfig struct {
-	URL             string      `json:"url" yaml:"url"`
-	Exchange        string      `json:"exchange" yaml:"exchange"`
-	ExchangeType    string      `json:"exchange_type" yaml:"exchange_type"`
-	ExchangeDurable bool        `json:"exchange_durable" yaml:"exchange_durable"`
-	Queue           string      `json:"queue" yaml:"queue"`
-	QueueDurable    bool        `json:"queue_durable" yaml:"queue_durable"`
-	BindingKey      string      `json:"key" yaml:"key"`
-	ConsumerTag     string      `json:"consumer_tag" yaml:"consumer_tag"`
-	PrefetchCount   int         `json:"prefetch_count" yaml:"prefetch_count"`
-	PrefetchSize    int         `json:"prefetch_size" yaml:"prefetch_size"`
-	TLS             btls.Config `json:"tls" yaml:"tls"`
+	URL             string                 `json:"url" yaml:"url"`
+	Queue           string                 `json:"queue" yaml:"queue"`
+	QueueDeclare    AMQPQueueDeclareConfig `json:"queue_declare" yaml:"queue_declare"`
+	BindingsDeclare []AMQPBindingConfig    `json:"bindings_declare" yaml:"bindings_declare"`
+	ConsumerTag     string                 `json:"consumer_tag" yaml:"consumer_tag"`
+	PrefetchCount   int                    `json:"prefetch_count" yaml:"prefetch_count"`
+	PrefetchSize    int                    `json:"prefetch_size" yaml:"prefetch_size"`
+	TLS             btls.Config            `json:"tls" yaml:"tls"`
 }
 
 // NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
-		URL:             "amqp://guest:guest@localhost:5672/",
-		Exchange:        "benthos-exchange",
-		ExchangeType:    "direct",
-		ExchangeDurable: true,
-		Queue:           "benthos-queue",
-		QueueDurable:    true,
-		BindingKey:      "benthos-key",
+		URL:   "amqp://guest:guest@localhost:5672/",
+		Queue: "benthos-queue",
+		QueueDeclare: AMQPQueueDeclareConfig{
+			Enabled: false,
+			Durable: true,
+		},
 		ConsumerTag:     "benthos-consumer",
 		PrefetchCount:   10,
 		PrefetchSize:    0,
 		TLS:             btls.NewConfig(),
+		BindingsDeclare: []AMQPBindingConfig{},
 	}
 }
 
@@ -136,37 +147,29 @@ func (a *AMQP) Connect() (err error) {
 		return fmt.Errorf("AMQP Channel: %s", err)
 	}
 
-	if err = amqpChan.ExchangeDeclare(
-		a.conf.Exchange,        // name of the exchange
-		a.conf.ExchangeType,    // type
-		a.conf.ExchangeDurable, // durable
-		false, // delete when complete
-		false, // internal
-		false, // noWait
-		nil,   // arguments
-	); err != nil {
-		return fmt.Errorf("exchange Declare: %s", err)
+	if a.conf.QueueDeclare.Enabled {
+		if _, err = amqpChan.QueueDeclare(
+			a.conf.Queue,                // name of the queue
+			a.conf.QueueDeclare.Durable, // durable
+			false, // delete when unused
+			false, // exclusive
+			false, // noWait
+			nil,   // arguments
+		); err != nil {
+			return fmt.Errorf("queue Declare: %s", err)
+		}
 	}
 
-	if _, err = amqpChan.QueueDeclare(
-		a.conf.Queue,        // name of the queue
-		a.conf.QueueDurable, // durable
-		false,               // delete when usused
-		false,               // exclusive
-		false,               // noWait
-		nil,                 // arguments
-	); err != nil {
-		return fmt.Errorf("queue Declare: %s", err)
-	}
-
-	if err = amqpChan.QueueBind(
-		a.conf.Queue,      // name of the queue
-		a.conf.BindingKey, // bindingKey
-		a.conf.Exchange,   // sourceExchange
-		false,             // noWait
-		nil,               // arguments
-	); err != nil {
-		return fmt.Errorf("queue Bind: %s", err)
+	for _, bConf := range a.conf.BindingsDeclare {
+		if err = amqpChan.QueueBind(
+			a.conf.Queue,     // name of the queue
+			bConf.RoutingKey, // bindingKey
+			bConf.Exchange,   // sourceExchange
+			false,            // noWait
+			nil,              // arguments
+		); err != nil {
+			return fmt.Errorf("queue Bind: %s", err)
+		}
 	}
 
 	if err = amqpChan.Qos(

@@ -375,7 +375,6 @@ func TestWriterCanReconnect(t *testing.T) {
 		t.Error("Timed out")
 	}
 
-	// We will be failing to send but should still exit immediately.
 	w.CloseAsync()
 	if err = w.WaitForClose(time.Second); err != nil {
 		t.Error(err)
@@ -421,6 +420,7 @@ func TestWriterCantReconnect(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
+
 	select {
 	case writerImpl.connChan <- types.ErrNotConnected:
 	case <-time.After(time.Second):
@@ -429,6 +429,14 @@ func TestWriterCantReconnect(t *testing.T) {
 
 	// We will be failing to send but should still exit immediately.
 	w.CloseAsync()
+
+	go func() {
+		select {
+		case writerImpl.connChan <- types.ErrNotConnected:
+		case <-time.After(time.Second):
+		}
+	}()
+
 	if err = w.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}

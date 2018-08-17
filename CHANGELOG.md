@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.24.0 - 2018-08-17
+
+### Changed
+
+- Significant restructuring of `amqp` inputs and outputs. These changes should
+  be backwards compatible for existing pipelines, but changes the way in which
+  queues, exchanges and bindings are declared using these types.
+
 ### 0.23.17 - 2018-08-17
 
 ### Added

@@ -7,12 +7,11 @@ input:
   type: stdin
   amqp:
     url: amqp://guest:guest@localhost:5672/
-    exchange: benthos-exchange
-    exchange_type: direct
-    exchange_durable: true
     queue: benthos-queue
-    queue_durable: true
-    key: benthos-key
+    queue_declare:
+      enabled: false
+      durable: true
+    bindings_declare: []
     consumer_tag: benthos-consumer
     prefetch_count: 10
     prefetch_size: 0
@@ -460,8 +459,10 @@ output:
   amqp:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
-    exchange_type: direct
-    exchange_durable: true
+    exchange_declare:
+      enabled: false
+      type: direct
+      durable: true
     key: benthos-key
     persistent: false
     mandatory: false

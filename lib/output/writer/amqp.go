@@ -37,31 +37,42 @@ import (
 
 //------------------------------------------------------------------------------
 
+// AMQPExchangeDeclareConfig contains fields indicating whether the target AMQP
+// exchange needs to be declared, as well as any fields specifying how to
+// accomplish that.
+type AMQPExchangeDeclareConfig struct {
+	Enabled bool   `json:"enabled" yaml:"enabled"`
+	Type    string `json:"type" yaml:"type"`
+	Durable bool   `json:"durable" yaml:"durable"`
+}
+
 // AMQPConfig contains configuration fields for the AMQP output type.
 type AMQPConfig struct {
-	URL             string      `json:"url" yaml:"url"`
-	Exchange        string      `json:"exchange" yaml:"exchange"`
-	ExchangeType    string      `json:"exchange_type" yaml:"exchange_type"`
-	ExchangeDurable bool        `json:"exchange_durable" yaml:"exchange_durable"`
-	BindingKey      string      `json:"key" yaml:"key"`
-	Persistent      bool        `json:"persistent" yaml:"persistent"`
-	Mandatory       bool        `json:"mandatory" yaml:"mandatory"`
-	Immediate       bool        `json:"immediate" yaml:"immediate"`
-	TLS             btls.Config `json:"tls" yaml:"tls"`
+	URL             string                    `json:"url" yaml:"url"`
+	Exchange        string                    `json:"exchange" yaml:"exchange"`
+	ExchangeDeclare AMQPExchangeDeclareConfig `json:"exchange_declare" yaml:"exchange_declare"`
+	BindingKey      string                    `json:"key" yaml:"key"`
+	Persistent      bool                      `json:"persistent" yaml:"persistent"`
+	Mandatory       bool                      `json:"mandatory" yaml:"mandatory"`
+	Immediate       bool                      `json:"immediate" yaml:"immediate"`
+	TLS             btls.Config               `json:"tls" yaml:"tls"`
 }
 
 // NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
-		URL:             "amqp://guest:guest@localhost:5672/",
-		Exchange:        "benthos-exchange",
-		ExchangeType:    "direct",
-		ExchangeDurable: true,
-		BindingKey:      "benthos-key",
-		Persistent:      false,
-		Mandatory:       false,
-		Immediate:       false,
-		TLS:             btls.NewConfig(),
+		URL:      "amqp://guest:guest@localhost:5672/",
+		Exchange: "benthos-exchange",
+		ExchangeDeclare: AMQPExchangeDeclareConfig{
+			Enabled: false,
+			Type:    "direct",
+			Durable: true,
+		},
+		BindingKey: "benthos-key",
+		Persistent: false,
+		Mandatory:  false,
+		Immediate:  false,
+		TLS:        btls.NewConfig(),
 	}
 }
 
@@ -136,17 +147,19 @@ func (a *AMQP) Connect() error {
 		return fmt.Errorf("amqp failed to create channel: %v", err)
 	}
 
-	if err = amqpChan.ExchangeDeclare(
-		a.conf.Exchange,        // name of the exchange
-		a.conf.ExchangeType,    // type
-		a.conf.ExchangeDurable, // durable
-		false, // delete when complete
-		false, // internal
-		false, // noWait
-		nil,   // arguments
-	); err != nil {
-		conn.Close()
-		return fmt.Errorf("amqp failed to declare exchange: %v", err)
+	if a.conf.ExchangeDeclare.Enabled {
+		if err = amqpChan.ExchangeDeclare(
+			a.conf.Exchange,                // name of the exchange
+			a.conf.ExchangeDeclare.Type,    // type
+			a.conf.ExchangeDeclare.Durable, // durable
+			false, // delete when complete
+			false, // internal
+			false, // noWait
+			nil,   // arguments
+		); err != nil {
+			conn.Close()
+			return fmt.Errorf("amqp failed to declare exchange: %v", err)
+		}
 	}
 
 	if err = amqpChan.Confirm(false); err != nil {
@@ -223,14 +236,17 @@ func (a *AMQP) Write(msg types.Message) error {
 		)
 		if err != nil {
 			a.disconnect()
+			a.log.Errorf("Failed to send message: %v\n", err)
 			return types.ErrNotConnected
 		}
 		select {
 		case confirm, open := <-confirmChan:
 			if !open {
+				a.log.Errorln("Failed to send message, ensure your target exchange exists.")
 				return types.ErrNotConnected
 			}
 			if !confirm.Ack {
+				a.log.Errorln("Failed to acknowledge message.")
 				return types.ErrNoAck
 			}
 		case _, open := <-returnChan:
