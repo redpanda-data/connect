@@ -124,9 +124,14 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 		opt(s)
 	}
 
+	prefix := config.Prefix
+	if len(prefix) > 0 && prefix[len(prefix)-1] != '.' {
+		prefix = prefix + "."
+	}
+
 	statsdclient := statsd.NewStatsdBuffer(
 		flushPeriod,
-		statsd.NewStatsdClient(config.Statsd.Address, config.Prefix),
+		statsd.NewStatsdClient(config.Statsd.Address, prefix),
 	)
 	statsdclient.Logger = &wrappedLogger{m: s.log}
 	if config.Statsd.Network == "udp" {
