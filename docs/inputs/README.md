@@ -65,15 +65,14 @@ level which is only applied to messages from the baz input.
 ``` yaml
 type: amqp
 amqp:
+  bindings_declare: []
   consumer_tag: benthos-consumer
-  exchange: benthos-exchange
-  exchange_durable: true
-  exchange_type: direct
-  key: benthos-key
   prefetch_count: 10
   prefetch_size: 0
   queue: benthos-queue
-  queue_durable: true
+  queue_declare:
+    durable: true
+    enabled: false
   tls:
     cas_file: ""
     enabled: false
@@ -81,10 +80,25 @@ amqp:
   url: amqp://guest:guest@localhost:5672/
 ```
 
-AMQP (0.91) is the underlying messaging protocol that is used by various message
-brokers, including RabbitMQ.
+Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
+message brokers, including RabbitMQ.
 
-Exchange type options are: direct|fanout|topic|x-custom
+It's possible for this input type to declare the target queue by setting
+`queue_declare.enabled` to `true`, if the queue already exists then
+the declaration passively verifies that they match the target fields.
+
+Similarly, it is possible to declare queue bindings by adding objects to the
+`bindings_declare` array. Binding declare objects take the form of:
+
+``` yaml
+{
+  "exchange": "benthos-exchange",
+  "key": "benthos-key"
+}
+```
+
+TLS is automatic when connecting to an `amqps` URL, but custom
+settings can be enabled in the `tls` section.
 
 ### Metadata
 

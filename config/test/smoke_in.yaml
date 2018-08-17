@@ -25,7 +25,9 @@ output:
       amqp:
         url: amqp://guest:guest@rabbitmq:5672/
         exchange: benthos-exchange
-        exchange_type: direct
+        exchange_declare:
+          enabled: true
+          type: direct
         key: benthos-key
     - type: nsq
       nsq:

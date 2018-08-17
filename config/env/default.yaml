@@ -10,14 +10,12 @@ input:
     inputs:
     - amqp:
         consumer_tag: ${INPUT_AMQP_CONSUMER_TAG:benthos-consumer}
-        exchange: ${INPUT_AMQP_EXCHANGE:benthos-exchange}
-        exchange_durable: ${INPUT_AMQP_EXCHANGE_DURABLE:true}
-        exchange_type: ${INPUT_AMQP_EXCHANGE_TYPE:direct}
-        key: ${INPUT_AMQP_KEY:benthos-key}
         prefetch_count: ${INPUT_AMQP_PREFETCH_COUNT:10}
         prefetch_size: ${INPUT_AMQP_PREFETCH_SIZE:0}
         queue: ${INPUT_AMQP_QUEUE:benthos-queue}
-        queue_durable: ${INPUT_AMQP_QUEUE_DURABLE:true}
+        queue_declare:
+          durable: ${INPUT_AMQP_QUEUE_DECLARE_DURABLE:true}
+          enabled: ${INPUT_AMQP_QUEUE_DECLARE_ENABLED:false}
         tls:
           cas_file: ${INPUT_AMQP_TLS_CAS_FILE}
           enabled: ${INPUT_AMQP_TLS_ENABLED:false}
@@ -320,8 +318,10 @@ output:
     outputs:
     - amqp:
         exchange: ${OUTPUT_AMQP_EXCHANGE:benthos-exchange}
-        exchange_durable: ${OUTPUT_AMQP_EXCHANGE_DURABLE:true}
-        exchange_type: ${OUTPUT_AMQP_EXCHANGE_TYPE:direct}
+        exchange_declare:
+          durable: ${OUTPUT_AMQP_EXCHANGE_DECLARE_DURABLE:true}
+          enabled: ${OUTPUT_AMQP_EXCHANGE_DECLARE_ENABLED:false}
+          type: ${OUTPUT_AMQP_EXCHANGE_DECLARE_TYPE:direct}
         immediate: ${OUTPUT_AMQP_IMMEDIATE:false}
         key: ${OUTPUT_AMQP_KEY:benthos-key}
         mandatory: ${OUTPUT_AMQP_MANDATORY:false}

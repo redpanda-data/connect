@@ -33,10 +33,25 @@ func init() {
 	Constructors[TypeAMQP] = TypeSpec{
 		constructor: NewAMQP,
 		description: `
-AMQP (0.91) is the underlying messaging protocol that is used by various message
-brokers, including RabbitMQ.
+Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
+message brokers, including RabbitMQ.
 
-Exchange type options are: direct|fanout|topic|x-custom
+It's possible for this input type to declare the target queue by setting
+` + "`queue_declare.enabled` to `true`" + `, if the queue already exists then
+the declaration passively verifies that they match the target fields.
+
+Similarly, it is possible to declare queue bindings by adding objects to the
+` + "`bindings_declare`" + ` array. Binding declare objects take the form of:
+
+` + "``` yaml" + `
+{
+  "exchange": "benthos-exchange",
+  "key": "benthos-key"
+}
+` + "```" + `
+
+TLS is automatic when connecting to an ` + "`amqps`" + ` URL, but custom
+settings can be enabled in the ` + "`tls`" + ` section.
 
 ### Metadata
 
