@@ -85,7 +85,7 @@ output sink all the way up the pipeline to the input source.
 
 For this purpose we would be able to utilise our processing threads without the
 need for a buffer. We choose four processing threads like before, and choose to
-use ten parallel consumers of the input `baz`.
+use eight parallel consumers of the input `baz`.
 
 ``` yaml
 input:
