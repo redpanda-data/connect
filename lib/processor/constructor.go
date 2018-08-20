@@ -75,6 +75,7 @@ const (
 	TypeJSON         = "json"
 	TypeMergeJSON    = "merge_json"
 	TypeMetadata     = "metadata"
+	TypeMetric       = "metric"
 	TypeNoop         = "noop"
 	TypeProcessField = "process_field"
 	TypeProcessMap   = "process_map"
@@ -111,6 +112,7 @@ type Config struct {
 	JSON         JSONConfig         `json:"json" yaml:"json"`
 	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
+	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
@@ -145,6 +147,7 @@ func NewConfig() Config {
 		JSON:         NewJSONConfig(),
 		MergeJSON:    NewMergeJSONConfig(),
 		Metadata:     NewMetadataConfig(),
+		Metric:       NewMetricConfig(),
 		ProcessField: NewProcessFieldConfig(),
 		ProcessMap:   NewProcessMapConfig(),
 		Sample:       NewSampleConfig(),
