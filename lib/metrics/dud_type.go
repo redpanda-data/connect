@@ -52,28 +52,37 @@ func Noop() DudType {
 }
 
 // GetCounter returns a DudStat.
-func (d DudType) GetCounter(path ...string) StatCounter { return DudStat{} }
+func (d DudType) GetCounter(path string) StatCounter { return DudStat{} }
+
+// GetCounterVec returns a DudStat.
+func (d DudType) GetCounterVec(path string, n []string) StatCounterVec {
+	return fakeCounterVec(func() StatCounter {
+		return DudStat{}
+	})
+}
 
 // GetTimer returns a DudStat.
-func (d DudType) GetTimer(path ...string) StatTimer { return DudStat{} }
+func (d DudType) GetTimer(path string) StatTimer { return DudStat{} }
+
+// GetTimerVec returns a DudStat.
+func (d DudType) GetTimerVec(path string, n []string) StatTimerVec {
+	return fakeTimerVec(func() StatTimer {
+		return DudStat{}
+	})
+}
 
 // GetGauge returns a DudStat.
-func (d DudType) GetGauge(path ...string) StatGauge { return DudStat{} }
+func (d DudType) GetGauge(path string) StatGauge { return DudStat{} }
+
+// GetGaugeVec returns a DudStat.
+func (d DudType) GetGaugeVec(path string, n []string) StatGaugeVec {
+	return fakeGaugeVec(func() StatGauge {
+		return DudStat{}
+	})
+}
 
 // SetLogger does nothing.
 func (d DudType) SetLogger(log log.Modular) {}
-
-// Incr does nothing.
-func (d DudType) Incr(path string, count int64) error { return nil }
-
-// Decr does nothing.
-func (d DudType) Decr(path string, count int64) error { return nil }
-
-// Timing does nothing.
-func (d DudType) Timing(path string, delta int64) error { return nil }
-
-// Gauge does nothing.
-func (d DudType) Gauge(path string, value int64) error { return nil }
 
 // Close does nothing.
 func (d DudType) Close() error { return nil }

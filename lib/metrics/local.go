@@ -21,7 +21,6 @@
 package metrics
 
 import (
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -105,15 +104,13 @@ func (l *Local) GetTimings() map[string]int64 {
 //------------------------------------------------------------------------------
 
 // GetCounter returns a stat counter object for a path.
-func (l *Local) GetCounter(path ...string) StatCounter {
-	dotPath := strings.Join(path, ".")
-
+func (l *Local) GetCounter(path string) StatCounter {
 	l.Lock()
-	ptr, exists := l.flatCounters[dotPath]
+	ptr, exists := l.flatCounters[path]
 	if !exists {
 		var ctr int64
 		ptr = &ctr
-		l.flatCounters[dotPath] = ptr
+		l.flatCounters[path] = ptr
 	}
 	l.Unlock()
 
@@ -123,15 +120,13 @@ func (l *Local) GetCounter(path ...string) StatCounter {
 }
 
 // GetTimer returns a stat timer object for a path.
-func (l *Local) GetTimer(path ...string) StatTimer {
-	dotPath := strings.Join(path, ".")
-
+func (l *Local) GetTimer(path string) StatTimer {
 	l.Lock()
-	ptr, exists := l.flatTimings[dotPath]
+	ptr, exists := l.flatTimings[path]
 	if !exists {
 		var ctr int64
 		ptr = &ctr
-		l.flatTimings[dotPath] = ptr
+		l.flatTimings[path] = ptr
 	}
 	l.Unlock()
 
@@ -141,15 +136,13 @@ func (l *Local) GetTimer(path ...string) StatTimer {
 }
 
 // GetGauge returns a stat gauge object for a path.
-func (l *Local) GetGauge(path ...string) StatGauge {
-	dotPath := strings.Join(path, ".")
-
+func (l *Local) GetGauge(path string) StatGauge {
 	l.Lock()
-	ptr, exists := l.flatCounters[dotPath]
+	ptr, exists := l.flatCounters[path]
 	if !exists {
 		var ctr int64
 		ptr = &ctr
-		l.flatCounters[dotPath] = ptr
+		l.flatCounters[path] = ptr
 	}
 	l.Unlock()
 
@@ -158,56 +151,28 @@ func (l *Local) GetGauge(path ...string) StatGauge {
 	}
 }
 
-// Incr increments a stat by a value.
-func (l *Local) Incr(stat string, value int64) error {
-	l.Lock()
-	if ptr, exists := l.flatCounters[stat]; !exists {
-		ctr := value
-		l.flatCounters[stat] = &ctr
-	} else {
-		atomic.AddInt64(ptr, value)
-	}
-	l.Unlock()
-	return nil
+// GetCounterVec returns a stat counter object for a path with the labels
+// discarded.
+func (l *Local) GetCounterVec(path string, n []string) StatCounterVec {
+	return fakeCounterVec(func() StatCounter {
+		return l.GetCounter(path)
+	})
 }
 
-// Decr decrements a stat by a value.
-func (l *Local) Decr(stat string, value int64) error {
-	l.Lock()
-	if ptr, exists := l.flatCounters[stat]; !exists {
-		ctr := -value
-		l.flatCounters[stat] = &ctr
-	} else {
-		atomic.AddInt64(ptr, -value)
-	}
-	l.Unlock()
-	return nil
+// GetTimerVec returns a stat timer object for a path with the labels
+// discarded.
+func (l *Local) GetTimerVec(path string, n []string) StatTimerVec {
+	return fakeTimerVec(func() StatTimer {
+		return l.GetTimer(path)
+	})
 }
 
-// Timing sets a stat representing a duration.
-func (l *Local) Timing(stat string, delta int64) error {
-	l.Lock()
-	if ptr, exists := l.flatTimings[stat]; !exists {
-		ctr := delta
-		l.flatTimings[stat] = &ctr
-	} else {
-		atomic.StoreInt64(ptr, delta)
-	}
-	l.Unlock()
-	return nil
-}
-
-// Gauge sets a stat as a gauge value.
-func (l *Local) Gauge(stat string, value int64) error {
-	l.Lock()
-	if ptr, exists := l.flatCounters[stat]; !exists {
-		ctr := value
-		l.flatTimings[stat] = &ctr
-	} else {
-		atomic.StoreInt64(ptr, value)
-	}
-	l.Unlock()
-	return nil
+// GetGaugeVec returns a stat timer object for a path with the labels
+// discarded.
+func (l *Local) GetGaugeVec(path string, n []string) StatGaugeVec {
+	return fakeGaugeVec(func() StatGauge {
+		return l.GetGauge(path)
+	})
 }
 
 // SetLogger does nothing.

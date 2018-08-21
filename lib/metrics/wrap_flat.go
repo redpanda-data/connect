@@ -21,54 +21,52 @@
 package metrics
 
 import (
-	"strings"
-
 	"github.com/Jeffail/benthos/lib/log"
 )
 
 //------------------------------------------------------------------------------
 
-// FlatStat is a representation of a single metric stat. Interactions with this
+// flatStat is a representation of a single metric stat. Interactions with this
 // stat are thread safe.
-type FlatStat struct {
+type flatStat struct {
 	path string
 	f    Flat
 }
 
 // Incr increments a metric by an amount.
-func (f *FlatStat) Incr(count int64) error {
+func (f *flatStat) Incr(count int64) error {
 	f.f.Incr(f.path, count)
 	return nil
 }
 
 // Decr decrements a metric by an amount.
-func (f *FlatStat) Decr(count int64) error {
+func (f *flatStat) Decr(count int64) error {
 	f.f.Decr(f.path, count)
 	return nil
 }
 
 // Timing sets a timing metric.
-func (f *FlatStat) Timing(delta int64) error {
+func (f *flatStat) Timing(delta int64) error {
 	f.f.Timing(f.path, delta)
 	return nil
 }
 
 // Set sets a gauge metric.
-func (f *FlatStat) Set(value int64) error {
+func (f *flatStat) Set(value int64) error {
 	f.f.Gauge(f.path, value)
 	return nil
 }
 
 //------------------------------------------------------------------------------
 
-// WrappedFlat implements the entire Type interface around a Flat type.
-type WrappedFlat struct {
+// wrappedFlat implements the entire Type interface around a Flat type.
+type wrappedFlat struct {
 	f Flat
 }
 
 // WrapFlat creates a Type around a Flat implementation.
 func WrapFlat(f Flat) Type {
-	return &WrappedFlat{
+	return &wrappedFlat{
 		f: f,
 	}
 }
@@ -76,56 +74,69 @@ func WrapFlat(f Flat) Type {
 //------------------------------------------------------------------------------
 
 // GetCounter returns a stat counter object for a path.
-func (h *WrappedFlat) GetCounter(path ...string) StatCounter {
-	return &FlatStat{
-		path: strings.Join(path, "."),
+func (h *wrappedFlat) GetCounter(path string) StatCounter {
+	return &flatStat{
+		path: path,
 		f:    h.f,
 	}
+}
+
+// GetCounterVec returns a stat counter object for a path with the labels
+// discarded.
+func (h *wrappedFlat) GetCounterVec(path string, n []string) StatCounterVec {
+	return fakeCounterVec(func() StatCounter {
+		return &flatStat{
+			path: path,
+			f:    h.f,
+		}
+	})
 }
 
 // GetTimer returns a stat timer object for a path.
-func (h *WrappedFlat) GetTimer(path ...string) StatTimer {
-	return &FlatStat{
-		path: strings.Join(path, "."),
+func (h *wrappedFlat) GetTimer(path string) StatTimer {
+	return &flatStat{
+		path: path,
 		f:    h.f,
 	}
+}
+
+// GetTimerVec returns a stat timer object for a path with the labels
+// discarded.
+func (h *wrappedFlat) GetTimerVec(path string, n []string) StatTimerVec {
+	return fakeTimerVec(func() StatTimer {
+		return &flatStat{
+			path: path,
+			f:    h.f,
+		}
+	})
 }
 
 // GetGauge returns a stat gauge object for a path.
-func (h *WrappedFlat) GetGauge(path ...string) StatGauge {
-	return &FlatStat{
-		path: strings.Join(path, "."),
+func (h *wrappedFlat) GetGauge(path string) StatGauge {
+	return &flatStat{
+		path: path,
 		f:    h.f,
 	}
 }
 
-// Incr increments a stat by a value.
-func (h *WrappedFlat) Incr(stat string, value int64) error {
-	return h.f.Incr(stat, value)
-}
-
-// Decr decrements a stat by a value.
-func (h *WrappedFlat) Decr(stat string, value int64) error {
-	return h.f.Decr(stat, value)
-}
-
-// Timing sets a stat representing a duration.
-func (h *WrappedFlat) Timing(stat string, delta int64) error {
-	return h.f.Timing(stat, delta)
-}
-
-// Gauge sets a stat as a gauge value.
-func (h *WrappedFlat) Gauge(stat string, value int64) error {
-	return h.f.Gauge(stat, value)
+// GetGaugeVec returns a stat timer object for a path with the labels
+// discarded.
+func (h *wrappedFlat) GetGaugeVec(path string, n []string) StatGaugeVec {
+	return fakeGaugeVec(func() StatGauge {
+		return &flatStat{
+			path: path,
+			f:    h.f,
+		}
+	})
 }
 
 // SetLogger does nothing.
-func (h *WrappedFlat) SetLogger(log log.Modular) {
+func (h *wrappedFlat) SetLogger(log log.Modular) {
 }
 
-// Close stops the WrappedFlat object from aggregating metrics and cleans up
+// Close stops the wrappedFlat object from aggregating metrics and cleans up
 // resources.
-func (h *WrappedFlat) Close() error {
+func (h *wrappedFlat) Close() error {
 	return h.f.Close()
 }
 
