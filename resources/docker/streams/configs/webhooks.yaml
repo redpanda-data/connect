@@ -1,0 +1,30 @@
+input:
+  type: broker
+  broker:
+    inputs:
+      - type: http_server
+        http_server:
+          path: /post/customer1
+        processors:
+          - type: text
+            text:
+              operator: prepend
+              value: "Customer 1 received: "
+      - type: http_server
+        http_server:
+          path: /post/customer2
+        processors:
+          - type: text
+            text:
+              operator: prepend
+              value: "Customer 2 received: "
+      - type: http_server
+        http_server:
+          path: /post/customer3
+        processors:
+          - type: text
+            text:
+              operator: prepend
+              value: "Customer 3 received: "
+output:
+  type: stdout

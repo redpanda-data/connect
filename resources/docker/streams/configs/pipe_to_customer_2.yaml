@@ -1,0 +1,18 @@
+input:
+  type: nats
+  nats:
+    subject: benthos_messages
+    urls:
+    - nats://localhost:4222
+pipeline:
+  processors:
+    - type: json
+      json:
+        operator: set
+        path: meta.for.customer2
+        value: { "foo": "bar" }
+output:
+  type: http_client
+  http_client:
+    url: http://localhost:4195/webhooks/post/customer2
+    verb: POST
