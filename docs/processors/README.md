@@ -375,7 +375,7 @@ hash:
   parts: []
 ```
 
-Hashs parts of a message according to the selected algorithm. Supported
+Hashes parts of a message according to the selected algorithm. Supported
 algorithms are: sha256, sha512, xxhash64.
 
 This processor is mostly useful when combined with the
