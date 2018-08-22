@@ -46,22 +46,23 @@ element will be selected, and so on.
 11. [`filter`](#filter)
 12. [`filter_parts`](#filter_parts)
 13. [`grok`](#grok)
-14. [`hash_sample`](#hash_sample)
-15. [`http`](#http)
-16. [`insert_part`](#insert_part)
-17. [`jmespath`](#jmespath)
-18. [`json`](#json)
-19. [`merge_json`](#merge_json)
-20. [`metadata`](#metadata)
-21. [`noop`](#noop)
-22. [`process_field`](#process_field)
-23. [`process_map`](#process_map)
-24. [`sample`](#sample)
-25. [`select_parts`](#select_parts)
-26. [`split`](#split)
-27. [`text`](#text)
-28. [`throttle`](#throttle)
-29. [`unarchive`](#unarchive)
+14. [`hash`](#hash)
+15. [`hash_sample`](#hash_sample)
+16. [`http`](#http)
+17. [`insert_part`](#insert_part)
+18. [`jmespath`](#jmespath)
+19. [`json`](#json)
+20. [`merge_json`](#merge_json)
+21. [`metadata`](#metadata)
+22. [`noop`](#noop)
+23. [`process_field`](#process_field)
+24. [`process_map`](#process_map)
+25. [`sample`](#sample)
+26. [`select_parts`](#select_parts)
+27. [`split`](#split)
+28. [`text`](#text)
+29. [`throttle`](#throttle)
+30. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -364,6 +365,32 @@ valid output format.
 This processor respects type hints in the grok patterns, therefore with the
 pattern `%{WORD:first},%{INT:second:int}` and a payload of `foo,1`
 the resulting payload would be `{"first":"foo","second":1}`.
+
+## `hash`
+
+``` yaml
+type: hash
+hash:
+  algorithm: sha256
+  parts: []
+```
+
+Hashs parts of a message according to the selected algorithm. Supported
+algorithms are: sha256, sha512, xxhash64.
+
+This processor is mostly useful when combined with the
+[`process_field`](#process_field) processor as it allows you to hash a
+specific field of a document like this:
+
+``` yaml
+# Hash the contents of 'foo.bar'
+process_field:
+  path: foo.bar
+  processors:
+  - type: hash
+    hash:
+      algorithm: sha256
+```
 
 ## `hash_sample`
 

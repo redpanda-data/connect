@@ -237,6 +237,7 @@ PROCESSOR_GROK_NAMED_CAPTURES_ONLY               = true
 PROCESSOR_GROK_OUTPUT_FORMAT                     = json
 PROCESSOR_GROK_REMOVE_EMPTY_VALUES               = true
 PROCESSOR_GROK_USE_DEFAULT_PATTERNS              = true
+PROCESSOR_HASH_ALGORITHM                         = sha256
 PROCESSOR_HASH_SAMPLE_PARTS                      = 0
 PROCESSOR_HASH_SAMPLE_RETAIN_MAX                 = 10
 PROCESSOR_HASH_SAMPLE_RETAIN_MIN                 = 0

@@ -68,6 +68,7 @@ const (
 	TypeFilter       = "filter"
 	TypeFilterParts  = "filter_parts"
 	TypeGrok         = "grok"
+	TypeHash         = "hash"
 	TypeHashSample   = "hash_sample"
 	TypeHTTP         = "http"
 	TypeInsertPart   = "insert_part"
@@ -104,6 +105,7 @@ type Config struct {
 	Filter       FilterConfig       `json:"filter" yaml:"filter"`
 	FilterParts  FilterPartsConfig  `json:"filter_parts" yaml:"filter_parts"`
 	Grok         GrokConfig         `json:"grok" yaml:"grok"`
+	Hash         HashConfig         `json:"hash" yaml:"hash"`
 	HashSample   HashSampleConfig   `json:"hash_sample" yaml:"hash_sample"`
 	HTTP         HTTPConfig         `json:"http" yaml:"http"`
 	InsertPart   InsertPartConfig   `json:"insert_part" yaml:"insert_part"`
@@ -138,6 +140,7 @@ func NewConfig() Config {
 		Filter:       NewFilterConfig(),
 		FilterParts:  NewFilterPartsConfig(),
 		Grok:         NewGrokConfig(),
+		Hash:         NewHashConfig(),
 		HashSample:   NewHashSampleConfig(),
 		HTTP:         NewHTTPConfig(),
 		InsertPart:   NewInsertPartConfig(),

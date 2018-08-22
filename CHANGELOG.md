@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - The `index` field of the `elasticsearch` output can now be dynamically set
   using function interpolation.
+- New `hash` processor.
 
 ### 0.24.0 - 2018-08-17
 
