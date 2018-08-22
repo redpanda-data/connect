@@ -33,8 +33,11 @@ func init() {
 	Constructors[TypeElasticsearch] = TypeSpec{
 		constructor: NewElasticsearch,
 		description: `
-Publishes messages into an Elasticsearch index as documents. This output
-currently does not support creating the target index.`,
+Publishes messages into an Elasticsearch index. This output currently does not
+support creating the target index.
+
+Both the ` + "`id` and `index`" + ` fields can be dynamically set using function
+interpolations described [here](../config_interpolation.md#functions).`,
 	}
 }
 

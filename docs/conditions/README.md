@@ -275,7 +275,7 @@ output:
       bar:
         processors:
         - type: filter
-		  filter:
+          filter:
             type: not
             not:
               type: resource

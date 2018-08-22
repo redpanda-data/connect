@@ -114,7 +114,10 @@ func (n *NATS) loop() {
 	defer func() {
 		atomic.StoreInt32(&n.running, 0)
 
-		n.natsConn.Close()
+		if n.natsConn != nil {
+			n.natsConn.Close()
+			n.natsConn = nil
+		}
 		mRunning.Decr(1)
 
 		close(n.closedChan)

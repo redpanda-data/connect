@@ -70,23 +70,22 @@ type Elasticsearch struct {
 	urls []string
 	conf ElasticsearchConfig
 
-	idBytes       []byte
-	interpolateID bool
+	idStr             *text.InterpolatedString
+	indexStr          *text.InterpolatedString
+	interpolatedIndex bool
 
 	client *elastic.Client
 }
 
 // NewElasticsearch creates a new Elasticsearch writer type.
 func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
-	idBytes := []byte(conf.ID)
-	interpolateID := text.ContainsFunctionVariables(idBytes)
-
 	e := Elasticsearch{
-		log:           log.NewModule(".output.elasticsearch"),
-		stats:         stats,
-		conf:          conf,
-		idBytes:       idBytes,
-		interpolateID: interpolateID,
+		log:               log.NewModule(".output.elasticsearch"),
+		stats:             stats,
+		conf:              conf,
+		idStr:             text.NewInterpolatedString(conf.ID),
+		indexStr:          text.NewInterpolatedString(conf.Index),
+		interpolatedIndex: text.ContainsFunctionVariables([]byte(conf.Index)),
 	}
 
 	for _, u := range conf.URLs {
@@ -126,7 +125,7 @@ func (e *Elasticsearch) Connect() error {
 		return err
 	}
 
-	if err == nil {
+	if err == nil && !e.interpolatedIndex {
 		var indexExists bool
 		indexExists, err = e.client.IndexExists(e.conf.Index).Do(context.Background())
 		if err == nil && !indexExists {
@@ -148,15 +147,10 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, part types.Part) error {
-		id := e.idBytes
-		if e.interpolateID {
-			id = text.ReplaceFunctionVariables(msg, id)
-		}
-
 		_, err := e.client.Index().
-			Index(e.conf.Index).
+			Index(e.indexStr.Get(msg)).
 			Type(e.conf.Type).
-			Id(string(id)).
+			Id(e.idStr.Get(msg)).
 			BodyString(string(part.Get())).
 			Do(context.Background())
 

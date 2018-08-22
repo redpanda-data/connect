@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `index` field of the `elasticsearch` output can now be dynamically set
+  using function interpolation.
+
 ### 0.24.0 - 2018-08-17
 
 ### Changed
