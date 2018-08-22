@@ -26,6 +26,8 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 )
 
+//------------------------------------------------------------------------------
+
 // StatCounter is a representation of a single counter metric stat. Interactions
 // with this stat are thread safe.
 type StatCounter interface {
@@ -53,16 +55,53 @@ type StatGauge interface {
 	Decr(count int64) error
 }
 
+//------------------------------------------------------------------------------
+
+// StatCounterVec creates StatCounters with dynamic labels.
+type StatCounterVec interface {
+	// With returns a StatCounter with a set of label values.
+	With(labelValues ...string) StatCounter
+}
+
+// StatTimerVec creates StatTimers with dynamic labels.
+type StatTimerVec interface {
+	// With returns a StatTimer with a set of label values.
+	With(labelValues ...string) StatTimer
+}
+
+// StatGaugeVec creates StatGauges with dynamic labels.
+type StatGaugeVec interface {
+	// With returns a StatGauge with a set of label values.
+	With(labelValues ...string) StatGauge
+}
+
+//------------------------------------------------------------------------------
+
 // Type is an interface for metrics aggregation.
 type Type interface {
 	// GetCounter returns an editable counter stat for a given path.
-	GetCounter(path ...string) StatCounter
+	GetCounter(path string) StatCounter
+
+	// GetCounterVec returns an editable counter stat for a given path with
+	// labels, these labels must be consistent with any other metrics registered
+	// on the same path.
+	GetCounterVec(path string, labelNames []string) StatCounterVec
 
 	// GetTimer returns an editable timer stat for a given path.
-	GetTimer(path ...string) StatTimer
+	GetTimer(path string) StatTimer
+
+	// GetTimerVec returns an editable timer stat for a given path with labels,
+	// these labels must be consistent with any other metrics registered on the
+	// same path.
+	GetTimerVec(path string, labelNames []string) StatTimerVec
 
 	// GetGauge returns an editable gauge stat for a given path.
-	GetGauge(path ...string) StatGauge
+	GetGauge(path string) StatGauge
+
+	// GetGaugeVec returns an editable gauge stat for a given path with labels,
+	// these labels must be consistent with any other metrics registered on the
+	// same path.
+	GetGaugeVec(path string, labelNames []string) StatGaugeVec
 
 	// SetLogger sets the logging mechanism of the metrics type.
 	SetLogger(log log.Modular)
@@ -71,23 +110,7 @@ type Type interface {
 	Close() error
 }
 
-// Flat is an interface for setting metrics via flat paths.
-type Flat interface {
-	// Incr increments a metric by an amount.
-	Incr(path string, count int64) error
-
-	// Decr decrements a metric by an amount.
-	Decr(path string, count int64) error
-
-	// Timing sets a timing metric.
-	Timing(path string, delta int64) error
-
-	// Gauge sets a gauge metric.
-	Gauge(path string, value int64) error
-
-	// Close stops aggregating stats and cleans up resources.
-	Close() error
-}
+//------------------------------------------------------------------------------
 
 // WithHandlerFunc is an interface for metrics types that can expose their
 // metrics through an HTTP HandlerFunc endpoint. If a Type can be cast into
@@ -95,3 +118,5 @@ type Flat interface {
 type WithHandlerFunc interface {
 	HandlerFunc() http.HandlerFunc
 }
+
+//------------------------------------------------------------------------------

@@ -105,38 +105,42 @@ func (h *HTTP) HandlerFunc() http.HandlerFunc {
 }
 
 // GetCounter returns a stat counter object for a path.
-func (h *HTTP) GetCounter(path ...string) StatCounter {
-	return h.local.GetCounter(path...)
+func (h *HTTP) GetCounter(path string) StatCounter {
+	return h.local.GetCounter(path)
+}
+
+// GetCounterVec returns a stat counter object for a path with the labels
+// discarded.
+func (h *HTTP) GetCounterVec(path string, n []string) StatCounterVec {
+	return fakeCounterVec(func() StatCounter {
+		return h.local.GetCounter(path)
+	})
 }
 
 // GetTimer returns a stat timer object for a path.
-func (h *HTTP) GetTimer(path ...string) StatTimer {
-	return h.local.GetTimer(path...)
+func (h *HTTP) GetTimer(path string) StatTimer {
+	return h.local.GetTimer(path)
+}
+
+// GetTimerVec returns a stat timer object for a path with the labels
+// discarded.
+func (h *HTTP) GetTimerVec(path string, n []string) StatTimerVec {
+	return fakeTimerVec(func() StatTimer {
+		return h.local.GetTimer(path)
+	})
 }
 
 // GetGauge returns a stat gauge object for a path.
-func (h *HTTP) GetGauge(path ...string) StatGauge {
-	return h.local.GetGauge(path...)
+func (h *HTTP) GetGauge(path string) StatGauge {
+	return h.local.GetGauge(path)
 }
 
-// Incr increments a stat by a value.
-func (h *HTTP) Incr(stat string, value int64) error {
-	return h.local.Incr(stat, value)
-}
-
-// Decr decrements a stat by a value.
-func (h *HTTP) Decr(stat string, value int64) error {
-	return h.local.Decr(stat, value)
-}
-
-// Timing sets a stat representing a duration.
-func (h *HTTP) Timing(stat string, delta int64) error {
-	return h.local.Timing(stat, delta)
-}
-
-// Gauge sets a stat as a gauge value.
-func (h *HTTP) Gauge(stat string, value int64) error {
-	return h.local.Gauge(stat, value)
+// GetGaugeVec returns a stat timer object for a path with the labels
+// discarded.
+func (h *HTTP) GetGaugeVec(path string, n []string) StatGaugeVec {
+	return fakeGaugeVec(func() StatGauge {
+		return h.local.GetGauge(path)
+	})
 }
 
 // SetLogger does nothing.

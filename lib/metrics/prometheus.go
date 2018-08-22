@@ -88,8 +88,6 @@ func (p *PromCounter) Incr(count int64) error {
 	return nil
 }
 
-//------------------------------------------------------------------------------
-
 // PromTiming is a representation of a single metric stat. Interactions with
 // this stat are thread safe.
 type PromTiming struct {
@@ -104,15 +102,53 @@ func (p *PromTiming) Timing(val int64) error {
 
 //------------------------------------------------------------------------------
 
+// PromCounterVec creates StatCounters with dynamic labels.
+type PromCounterVec struct {
+	ctr *prometheus.CounterVec
+}
+
+// With returns a StatCounter with a set of label values.
+func (p *PromCounterVec) With(labelValues ...string) StatCounter {
+	return &PromCounter{
+		ctr: p.ctr.WithLabelValues(labelValues...),
+	}
+}
+
+// PromTimingVec creates StatTimers with dynamic labels.
+type PromTimingVec struct {
+	sum *prometheus.SummaryVec
+}
+
+// With returns a StatTimer with a set of label values.
+func (p *PromTimingVec) With(labelValues ...string) StatTimer {
+	return &PromTiming{
+		sum: p.sum.WithLabelValues(labelValues...),
+	}
+}
+
+// PromGaugeVec creates StatGauges with dynamic labels.
+type PromGaugeVec struct {
+	ctr *prometheus.GaugeVec
+}
+
+// With returns a StatGauge with a set of label values.
+func (p *PromGaugeVec) With(labelValues ...string) StatGauge {
+	return &PromGauge{
+		ctr: p.ctr.WithLabelValues(labelValues...),
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // Prometheus is a stats object with capability to hold internal stats as a JSON
 // endpoint.
 type Prometheus struct {
 	config Config
 	prefix string
 
-	counters map[string]prometheus.Counter
-	gauges   map[string]prometheus.Gauge
-	timers   map[string]prometheus.Summary
+	counters map[string]*prometheus.CounterVec
+	gauges   map[string]*prometheus.GaugeVec
+	timers   map[string]*prometheus.SummaryVec
 
 	sync.Mutex
 }
@@ -122,9 +158,9 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 	p := &Prometheus{
 		config:   config,
 		prefix:   toPromName(config.Prefix),
-		counters: map[string]prometheus.Counter{},
-		gauges:   map[string]prometheus.Gauge{},
-		timers:   map[string]prometheus.Summary{},
+		counters: map[string]*prometheus.CounterVec{},
+		gauges:   map[string]*prometheus.GaugeVec{},
+		timers:   map[string]*prometheus.SummaryVec{},
 	}
 
 	for _, opt := range opts {
@@ -152,154 +188,153 @@ func toPromName(dotSepName string) string {
 }
 
 // GetCounter returns a stat counter object for a path.
-func (p *Prometheus) GetCounter(path ...string) StatCounter {
-	dotPath := strings.Join(path, ".")
-	stat := toPromName(dotPath)
+func (p *Prometheus) GetCounter(path string) StatCounter {
+	stat := toPromName(path)
 
-	var ctr prometheus.Counter
+	var ctr *prometheus.CounterVec
 
 	p.Lock()
 	var exists bool
 	if ctr, exists = p.counters[stat]; !exists {
-		ctr = prometheus.NewCounter(prometheus.CounterOpts{
+		ctr = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: p.prefix,
 			Name:      stat,
 			Help:      "Benthos Counter metric",
-		})
+		}, nil)
 		prometheus.MustRegister(ctr)
 		p.counters[stat] = ctr
 	}
 	p.Unlock()
 
 	return &PromCounter{
-		ctr: ctr,
+		ctr: ctr.WithLabelValues(),
 	}
 }
 
 // GetTimer returns a stat timer object for a path.
-func (p *Prometheus) GetTimer(path ...string) StatTimer {
-	dotPath := strings.Join(path, ".")
-	stat := toPromName(dotPath)
+func (p *Prometheus) GetTimer(path string) StatTimer {
+	stat := toPromName(path)
 
-	var tmr prometheus.Summary
+	var tmr *prometheus.SummaryVec
 
 	p.Lock()
 	var exists bool
 	if tmr, exists = p.timers[stat]; !exists {
-		tmr = prometheus.NewSummary(prometheus.SummaryOpts{
+		tmr = prometheus.NewSummaryVec(prometheus.SummaryOpts{
 			Namespace: p.prefix,
 			Name:      stat,
 			Help:      "Benthos Timing metric",
-		})
+		}, nil)
 		prometheus.MustRegister(tmr)
 		p.timers[stat] = tmr
 	}
 	p.Unlock()
 
 	return &PromTiming{
-		sum: tmr,
+		sum: tmr.WithLabelValues(),
 	}
 }
 
 // GetGauge returns a stat gauge object for a path.
-func (p *Prometheus) GetGauge(path ...string) StatGauge {
-	dotPath := strings.Join(path, ".")
-	stat := toPromName(dotPath)
+func (p *Prometheus) GetGauge(path string) StatGauge {
+	stat := toPromName(path)
 
-	var ctr prometheus.Gauge
+	var ctr *prometheus.GaugeVec
 
 	p.Lock()
 	var exists bool
 	if ctr, exists = p.gauges[stat]; !exists {
-		ctr = prometheus.NewGauge(prometheus.GaugeOpts{
+		ctr = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: p.prefix,
 			Name:      stat,
 			Help:      "Benthos Gauge metric",
-		})
+		}, nil)
 		prometheus.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
 	p.Unlock()
 
 	return &PromGauge{
+		ctr: ctr.WithLabelValues(),
+	}
+}
+
+// GetCounterVec returns an editable counter stat for a given path with labels,
+// these labels must be consistent with any other metrics registered on the same
+// path.
+func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounterVec {
+	stat := toPromName(path)
+
+	var ctr *prometheus.CounterVec
+
+	p.Lock()
+	var exists bool
+	if ctr, exists = p.counters[stat]; !exists {
+		ctr = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: p.prefix,
+			Name:      stat,
+			Help:      "Benthos Counter metric",
+		}, labelNames)
+		prometheus.MustRegister(ctr)
+		p.counters[stat] = ctr
+	}
+	p.Unlock()
+
+	return &PromCounterVec{
 		ctr: ctr,
 	}
 }
 
-// Incr increments a stat by a value.
-func (p *Prometheus) Incr(stat string, value int64) error {
-	p.Lock()
-	if ctr, exists := p.gauges[stat]; exists {
-		ctr.Add(float64(value))
-	} else {
-		ctr = prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: p.prefix,
-			Name:      toPromName(stat),
-			Help:      "Benthos Gauge metric",
-		})
-		ctr.Set(float64(value))
-		prometheus.MustRegister(ctr)
-		p.gauges[stat] = ctr
-	}
-	p.Unlock()
-	return nil
-}
+// GetTimerVec returns an editable timer stat for a given path with labels,
+// these labels must be consistent with any other metrics registered on the same
+// path.
+func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec {
+	stat := toPromName(path)
 
-// Decr decrements a stat by a value.
-func (p *Prometheus) Decr(stat string, value int64) error {
-	p.Lock()
-	if ctr, exists := p.gauges[stat]; exists {
-		ctr.Sub(float64(value))
-	} else {
-		ctr = prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: p.prefix,
-			Name:      toPromName(stat),
-			Help:      "Benthos Gauge metric",
-		})
-		ctr.Set(-float64(value))
-		prometheus.MustRegister(ctr)
-		p.gauges[stat] = ctr
-	}
-	p.Unlock()
-	return nil
-}
+	var tmr *prometheus.SummaryVec
 
-// Timing sets a stat representing a duration.
-func (p *Prometheus) Timing(stat string, delta int64) error {
 	p.Lock()
-	if tmr, exists := p.timers[stat]; exists {
-		tmr.Observe(float64(delta))
-	} else {
-		tmr = prometheus.NewSummary(prometheus.SummaryOpts{
+	var exists bool
+	if tmr, exists = p.timers[stat]; !exists {
+		tmr = prometheus.NewSummaryVec(prometheus.SummaryOpts{
 			Namespace: p.prefix,
-			Name:      toPromName(stat),
+			Name:      stat,
 			Help:      "Benthos Timing metric",
-		})
-		tmr.Observe(float64(delta))
+		}, labelNames)
 		prometheus.MustRegister(tmr)
 		p.timers[stat] = tmr
 	}
 	p.Unlock()
-	return nil
+
+	return &PromTimingVec{
+		sum: tmr,
+	}
 }
 
-// Gauge sets a stat as a gauge value.
-func (p *Prometheus) Gauge(stat string, value int64) error {
+// GetGaugeVec returns an editable gauge stat for a given path with labels,
+// these labels must be consistent with any other metrics registered on the same
+// path.
+func (p *Prometheus) GetGaugeVec(path string, labelNames []string) StatGaugeVec {
+	stat := toPromName(path)
+
+	var ctr *prometheus.GaugeVec
+
 	p.Lock()
-	if ctr, exists := p.gauges[stat]; exists {
-		ctr.Set(float64(value))
-	} else {
-		ctr = prometheus.NewGauge(prometheus.GaugeOpts{
+	var exists bool
+	if ctr, exists = p.gauges[stat]; !exists {
+		ctr = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: p.prefix,
-			Name:      toPromName(stat),
+			Name:      stat,
 			Help:      "Benthos Gauge metric",
-		})
-		ctr.Set(float64(value))
+		}, labelNames)
 		prometheus.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
 	p.Unlock()
-	return nil
+
+	return &PromGaugeVec{
+		ctr: ctr,
+	}
 }
 
 // SetLogger does nothing.

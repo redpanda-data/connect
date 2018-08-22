@@ -23,7 +23,6 @@ package metrics
 import (
 	"fmt"
 	"io/ioutil"
-	"strings"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -150,51 +149,60 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 //------------------------------------------------------------------------------
 
 // GetCounter returns a stat counter object for a path.
-func (h *Statsd) GetCounter(path ...string) StatCounter {
+func (h *Statsd) GetCounter(path string) StatCounter {
 	return &StatsdStat{
-		path: strings.Join(path, "."),
+		path: path,
 		s:    h.s,
 	}
+}
+
+// GetCounterVec returns a stat counter object for a path with the labels
+// discarded.
+func (h *Statsd) GetCounterVec(path string, n []string) StatCounterVec {
+	return fakeCounterVec(func() StatCounter {
+		return &StatsdStat{
+			path: path,
+			s:    h.s,
+		}
+	})
 }
 
 // GetTimer returns a stat timer object for a path.
-func (h *Statsd) GetTimer(path ...string) StatTimer {
+func (h *Statsd) GetTimer(path string) StatTimer {
 	return &StatsdStat{
-		path: strings.Join(path, "."),
+		path: path,
 		s:    h.s,
 	}
+}
+
+// GetTimerVec returns a stat timer object for a path with the labels
+// discarded.
+func (h *Statsd) GetTimerVec(path string, n []string) StatTimerVec {
+	return fakeTimerVec(func() StatTimer {
+		return &StatsdStat{
+			path: path,
+			s:    h.s,
+		}
+	})
 }
 
 // GetGauge returns a stat gauge object for a path.
-func (h *Statsd) GetGauge(path ...string) StatGauge {
+func (h *Statsd) GetGauge(path string) StatGauge {
 	return &StatsdStat{
-		path: strings.Join(path, "."),
+		path: path,
 		s:    h.s,
 	}
 }
 
-// Incr increments a stat by a value.
-func (h *Statsd) Incr(stat string, value int64) error {
-	h.s.Incr(stat, value)
-	return nil
-}
-
-// Decr decrements a stat by a value.
-func (h *Statsd) Decr(stat string, value int64) error {
-	h.s.Decr(stat, value)
-	return nil
-}
-
-// Timing sets a stat representing a duration.
-func (h *Statsd) Timing(stat string, delta int64) error {
-	h.s.Timing(stat, delta)
-	return nil
-}
-
-// Gauge sets a stat as a gauge value.
-func (h *Statsd) Gauge(stat string, value int64) error {
-	h.s.Gauge(stat, value)
-	return nil
+// GetGaugeVec returns a stat timer object for a path with the labels
+// discarded.
+func (h *Statsd) GetGaugeVec(path string, n []string) StatGaugeVec {
+	return fakeGaugeVec(func() StatGauge {
+		return &StatsdStat{
+			path: path,
+			s:    h.s,
+		}
+	})
 }
 
 // SetLogger sets the logger used to print connection errors.

@@ -44,16 +44,28 @@ func Namespaced(t Type, ns string) Type {
 
 //------------------------------------------------------------------------------
 
-func (d namespacedWrapper) GetCounter(path ...string) StatCounter {
-	return d.t.GetCounter(append([]string{d.ns}, path...)...)
+func (d namespacedWrapper) GetCounter(path string) StatCounter {
+	return d.t.GetCounter(d.ns + "." + path)
 }
 
-func (d namespacedWrapper) GetTimer(path ...string) StatTimer {
-	return d.t.GetTimer(append([]string{d.ns}, path...)...)
+func (d namespacedWrapper) GetCounterVec(path string, labelNames []string) StatCounterVec {
+	return d.t.GetCounterVec(d.ns+"."+path, labelNames)
 }
 
-func (d namespacedWrapper) GetGauge(path ...string) StatGauge {
-	return d.t.GetGauge(append([]string{d.ns}, path...)...)
+func (d namespacedWrapper) GetTimer(path string) StatTimer {
+	return d.t.GetTimer(d.ns + "." + path)
+}
+
+func (d namespacedWrapper) GetTimerVec(path string, labelNames []string) StatTimerVec {
+	return d.t.GetTimerVec(d.ns+"."+path, labelNames)
+}
+
+func (d namespacedWrapper) GetGauge(path string) StatGauge {
+	return d.t.GetGauge(d.ns + "." + path)
+}
+
+func (d namespacedWrapper) GetGaugeVec(path string, labelNames []string) StatGaugeVec {
+	return d.t.GetGaugeVec(d.ns+"."+path, labelNames)
 }
 
 func (d namespacedWrapper) SetLogger(log log.Modular) {
