@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.25.0 - 2018-08-22
+
 ### Added
 
 - The `index` field of the `elasticsearch` output can now be dynamically set
   using function interpolation.
 - New `hash` processor.
+
+### Changed
+
+- API: The `metrics.Type` interface has been changed in order to add labels.
 
 ### 0.24.0 - 2018-08-17
 
