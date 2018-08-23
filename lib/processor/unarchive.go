@@ -22,6 +22,7 @@ package processor
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"fmt"
 	"io"
@@ -101,6 +102,35 @@ func tarUnarchive(part types.Part) ([]types.Part, error) {
 	return newParts, nil
 }
 
+func zipUnarchive(part types.Part) ([]types.Part, error) {
+	buf := bytes.NewReader(part.Get())
+	zr, err := zip.NewReader(buf, int64(buf.Len()))
+	if err != nil {
+		return nil, err
+	}
+
+	var newParts []types.Part
+
+	// Iterate through the files in the archive.
+	for _, f := range zr.File {
+		fr, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+
+		newPartBuf := bytes.Buffer{}
+		if _, err = newPartBuf.ReadFrom(fr); err != nil {
+			return nil, err
+		}
+
+		newParts = append(newParts,
+			message.NewPart(newPartBuf.Bytes()).
+				SetMetadata(part.Metadata().Copy().Set("name", f.Name)))
+	}
+
+	return newParts, nil
+}
+
 func binaryUnarchive(part types.Part) ([]types.Part, error) {
 	msg, err := message.FromBytes(part.Get())
 	if err != nil {
@@ -128,6 +158,8 @@ func strToUnarchiver(str string) (unarchiveFunc, error) {
 	switch str {
 	case "tar":
 		return tarUnarchive, nil
+	case "zip":
+		return zipUnarchive, nil
 	case "binary":
 		return binaryUnarchive, nil
 	case "lines":

@@ -22,6 +22,7 @@ package processor
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"fmt"
 	"os"
@@ -84,6 +85,71 @@ func TestUnarchiveTar(t *testing.T) {
 	}
 
 	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	input = [][]byte{buf.Bytes()}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Errorf("Unarchive failed: %v", res)
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+	for i := 0; i < msgs[0].Len(); i++ {
+		if name := msgs[0].Get(i).Metadata().Get("name"); name != expNames[i] {
+			t.Errorf("Unexpected name %d: %s != %s", i, name, expNames[i])
+		}
+	}
+}
+
+func TestUnarchiveZip(t *testing.T) {
+	conf := NewConfig()
+	conf.Unarchive.Format = "zip"
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+	expNames := []string{}
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	for i := range input {
+		exp = append(exp, input[i])
+
+		name := fmt.Sprintf("testfile%v", i)
+		expNames = append(expNames, name)
+		if fw, err := zw.Create(name); err != nil {
+			t.Fatal(err)
+		} else {
+			if _, err := fw.Write(input[i]); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if err := zw.Close(); err != nil {
 		t.Fatal(err)
 	}
 
