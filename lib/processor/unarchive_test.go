@@ -61,6 +61,7 @@ func TestUnarchiveTar(t *testing.T) {
 	}
 
 	exp := [][]byte{}
+	expNames := []string{}
 
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
@@ -73,6 +74,7 @@ func TestUnarchiveTar(t *testing.T) {
 			Mode: 0600,
 			Size: int64(len(input[i])),
 		}
+		expNames = append(expNames, hdr.Name)
 		if err := tw.WriteHeader(hdr); err != nil {
 			t.Fatal(err)
 		}
@@ -98,12 +100,17 @@ func TestUnarchiveTar(t *testing.T) {
 
 	msgs, res := proc.ProcessMessage(message.New(input))
 	if len(msgs) != 1 {
-		t.Error("Unarchive failed")
+		t.Errorf("Unarchive failed: %v", res)
 	} else if res != nil {
 		t.Errorf("Expected nil response: %v", res)
 	}
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+	for i := 0; i < msgs[0].Len(); i++ {
+		if name := msgs[0].Get(i).Metadata().Get("name"); name != expNames[i] {
+			t.Errorf("Unexpected name %d: %s != %s", i, name, expNames[i])
+		}
 	}
 }
 

@@ -79,7 +79,7 @@ func tarUnarchive(part types.Part) ([]types.Part, error) {
 
 	// Iterate through the files in the archive.
 	for {
-		_, err := tr.Next()
+		h, err := tr.Next()
 		if err == io.EOF {
 			// end of tar archive
 			break
@@ -95,7 +95,7 @@ func tarUnarchive(part types.Part) ([]types.Part, error) {
 
 		newParts = append(newParts,
 			message.NewPart(newPartBuf.Bytes()).
-				SetMetadata(part.Metadata().Copy()))
+				SetMetadata(part.Metadata().Copy().Set("name", h.Name)))
 	}
 
 	return newParts, nil
