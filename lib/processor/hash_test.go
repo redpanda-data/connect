@@ -234,3 +234,48 @@ func TestHashEmpty(t *testing.T) {
 		t.Error("Expected failure with zero part message")
 	}
 }
+
+func BenchmarkHashSha256(b *testing.B) {
+	conf := NewConfig()
+	conf.Hash.Algorithm = "sha256"
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		h := sha256.New()
+		h.Write(input[i])
+		exp = append(exp, h.Sum(nil))
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		b.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewHash(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		msgs, res := proc.ProcessMessage(message.New(input))
+		if len(msgs) != 1 {
+			b.Error("Hash failed")
+		} else if res != nil {
+			b.Errorf("Expected nil response: %v", res)
+		}
+		if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+			b.Errorf("Unexpected output: %s != %s", act, exp)
+		}
+	}
+}

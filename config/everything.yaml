@@ -215,14 +215,6 @@ input:
       enabled: false
       username: ""
       password: ""
-  zmq4:
-    urls:
-    - tcp://localhost:5555
-    bind: false
-    socket_type: PULL
-    sub_filters: []
-    high_water_mark: 0
-    poll_timeout_ms: 5000
   processors: []
 buffer:
   type: none
@@ -616,13 +608,6 @@ output:
       enabled: false
       username: ""
       password: ""
-  zmq4:
-    urls:
-    - tcp://*:5556
-    bind: true
-    socket_type: PUSH
-    high_water_mark: 0
-    poll_timeout_ms: 5000
   processors: []
 resources:
   caches:

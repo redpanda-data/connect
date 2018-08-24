@@ -89,7 +89,7 @@ func BenchmarkCombineMultiMessagesSharedBuffer(b *testing.B) {
 			if err := res.Error(); err != nil {
 				b.Error(err)
 			}
-		} else if exp, act := 3, len(message.GetAllBytes(msgs[0])); exp != act {
+		} else if exp, act := 4, len(message.GetAllBytes(msgs[0])); exp != act {
 			b.Errorf("Wrong parts count: %v != %v\n", act, exp)
 		}
 	}

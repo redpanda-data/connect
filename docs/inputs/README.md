@@ -58,7 +58,6 @@ level which is only applied to messages from the baz input.
 20. [`sqs`](#sqs)
 21. [`stdin`](#stdin)
 22. [`websocket`](#websocket)
-23. [`zmq4`](#zmq4)
 
 ## `amqp`
 
@@ -724,26 +723,3 @@ websocket:
 ```
 
 Sends messages to an HTTP server via a websocket connection.
-
-## `zmq4`
-
-``` yaml
-type: zmq4
-zmq4:
-  bind: false
-  high_water_mark: 0
-  poll_timeout_ms: 5000
-  socket_type: PULL
-  sub_filters: []
-  urls:
-  - tcp://localhost:5555
-```
-
-ZMQ4 is supported but currently depends on C bindings. Since this is an
-annoyance when building or using Benthos it is not compiled by default.
-
-Build it into your project by getting libzmq installed on your machine, then
-build with the tag: 'go install -tags "ZMQ4" github.com/Jeffail/benthos/cmd/...'
-
-ZMQ4 input supports PULL and SUB sockets only. If there is demand for other
-socket types then they can be added easily.

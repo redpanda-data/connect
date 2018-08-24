@@ -159,15 +159,7 @@ func (c *Hash) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	newMsg := msg.Copy()
 
-	targetParts := c.conf.Parts
-	if len(targetParts) == 0 {
-		targetParts = make([]int, newMsg.Len())
-		for i := range targetParts {
-			targetParts[i] = i
-		}
-	}
-
-	for _, index := range targetParts {
+	proc := func(index int) {
 		part := msg.Get(index).Get()
 		newPart, err := c.fn(part)
 		if err == nil {
@@ -176,6 +168,16 @@ func (c *Hash) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		} else {
 			c.log.Debugf("Failed to hash message part: %v\n", err)
 			c.mErr.Incr(1)
+		}
+	}
+
+	if len(c.conf.Parts) == 0 {
+		for i := 0; i < msg.Len(); i++ {
+			proc(i)
+		}
+	} else {
+		for _, index := range c.conf.Parts {
+			proc(index)
 		}
 	}
 

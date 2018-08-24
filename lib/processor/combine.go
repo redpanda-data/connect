@@ -34,28 +34,24 @@ func init() {
 	Constructors[TypeCombine] = TypeSpec{
 		constructor: NewCombine,
 		description: `
-If a message queue contains multiple part messages as individual parts it can
-be useful to 'squash' them back into a single message. We can then push it
-through a protocol that natively supports multiple part messages.
+Reads a number of discrete messages, buffering (but not acknowledging) the
+message parts until the size of the batch reaches or exceeds the target size.
 
-For example, if we started with N messages each containing M parts, pushed those
-messages into Kafka by splitting the parts. We could now consume our N*M
-messages from Kafka and squash them back into M part messages with the combine
-processor, and then subsequently push them into something like ZMQ.
+Once the size is reached or exceeded the parts are combined into a single batch
+of messages and sent through the pipeline. After reaching a destination the
+acknowledgment is sent out for all messages inside the batch at the same time,
+preserving at-least-once delivery guarantees.
 
-The metadata of the resulting batch will exactly match the metadata of the last
-message to enter the batch.
+When a batch is sent to an output the behaviour will differ depending on the
+protocol. If the output type supports multipart messages then the batch is sent
+as a single message with multiple parts. If the output only supports single part
+messages then the parts will be sent as a batch of single part messages. If the
+output supports neither multipart or batches of messages then Benthos falls back
+to sending them individually.
 
-If a message received has more parts than the 'combine' amount it will be sent
-unchanged with its original parts. This occurs even if there are cached parts
-waiting to be combined, which will change the ordering of message parts through
-the platform.
-
-When a message part is received that increases the total cached number of parts
-beyond the threshold it will have _all_ of its parts appended to the resuling
-message. E.g. if you set the threshold at 4 and send a message of 2 parts
-followed by a message of 3 parts then you will receive one output message of 5
-parts.`,
+If a Benthos stream contains multiple brokered inputs or outputs then the batch
+operator should *always* be applied directly after an input in order to avoid
+unexpected behaviour and message ordering.`,
 	}
 }
 

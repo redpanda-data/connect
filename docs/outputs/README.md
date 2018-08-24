@@ -43,7 +43,6 @@ conditions please [read the docs here](../conditions/README.md)
 19. [`sqs`](#sqs)
 20. [`stdout`](#stdout)
 21. [`websocket`](#websocket)
-22. [`zmq4`](#zmq4)
 
 ## `amqp`
 
@@ -553,19 +552,3 @@ websocket:
 ```
 
 Sends messages to an HTTP server via a websocket connection.
-
-## `zmq4`
-
-``` yaml
-type: zmq4
-zmq4:
-  bind: true
-  high_water_mark: 0
-  poll_timeout_ms: 5000
-  socket_type: PUSH
-  urls:
-  - tcp://*:5556
-```
-
-The zmq4 output type attempts to send messages to a ZMQ4 port, currently only
-PUSH and PUB sockets are supported.
