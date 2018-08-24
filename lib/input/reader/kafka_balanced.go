@@ -278,6 +278,10 @@ func (k *KafkaBalanced) Acknowledge(err error) error {
 	}
 	k.cMut.Unlock()
 
+	if commitErr == nil {
+		k.offsetLastCommitted = time.Now()
+	}
+
 	return commitErr
 }
 
