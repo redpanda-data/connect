@@ -167,6 +167,10 @@ install libzmq4 and use the compile time flag when building Benthos:
 make TAGS=ZMQ4
 ```
 
+### Contributing
+
+Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
+
 [inputs]: docs/inputs/README.md
 [buffers]: docs/buffers/README.md
 [processors]: docs/processors/README.md
