@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.26.0 - 2018-08-25
+
+### Added
+
+- New `kinesis` input and output.
+
 ### 0.25.0 - 2018-08-22
 
 ### Added

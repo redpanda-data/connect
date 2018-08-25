@@ -151,10 +151,10 @@ func (a *AMQP) Connect() (err error) {
 		if _, err = amqpChan.QueueDeclare(
 			a.conf.Queue,                // name of the queue
 			a.conf.QueueDeclare.Durable, // durable
-			false, // delete when unused
-			false, // exclusive
-			false, // noWait
-			nil,   // arguments
+			false,                       // delete when unused
+			false,                       // exclusive
+			false,                       // noWait
+			nil,                         // arguments
 		); err != nil {
 			return fmt.Errorf("queue Declare: %s", err)
 		}

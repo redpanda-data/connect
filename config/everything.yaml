@@ -102,6 +102,21 @@ input:
       enabled: false
       cas_file: ""
       skip_cert_verify: false
+  kinesis:
+    region: eu-west-1
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
+    limit: 100
+    stream: ""
+    shard: "0"
+    dynamodb_table: ""
+    client_id: benthos_consumer
+    commit_period_ms: 1000
+    start_from_oldest: true
+    timeout_ms: 5000
   mqtt:
     urls:
     - tcp://localhost:1883
@@ -542,6 +557,16 @@ output:
       enabled: false
       cas_file: ""
       skip_cert_verify: false
+  kinesis:
+    region: eu-west-1
+    stream: ""
+    hash_key: ""
+    partition_key: ""
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
   mqtt:
     urls:
     - tcp://localhost:1883

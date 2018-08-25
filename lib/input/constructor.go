@@ -71,6 +71,7 @@ const (
 	TypeInproc        = "inproc"
 	TypeKafka         = "kafka"
 	TypeKafkaBalanced = "kafka_balanced"
+	TypeKinesis       = "kinesis"
 	TypeMQTT          = "mqtt"
 	TypeNanomsg       = "nanomsg"
 	TypeNATS          = "nats"
@@ -101,6 +102,7 @@ type Config struct {
 	Inproc        InprocConfig               `json:"inproc" yaml:"inproc"`
 	Kafka         reader.KafkaConfig         `json:"kafka" yaml:"kafka"`
 	KafkaBalanced reader.KafkaBalancedConfig `json:"kafka_balanced" yaml:"kafka_balanced"`
+	Kinesis       reader.KinesisConfig       `json:"kinesis" yaml:"kinesis"`
 	MQTT          reader.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
 	Nanomsg       reader.ScaleProtoConfig    `json:"nanomsg" yaml:"nanomsg"`
 	NATS          reader.NATSConfig          `json:"nats" yaml:"nats"`
@@ -131,6 +133,7 @@ func NewConfig() Config {
 		Inproc:        NewInprocConfig(),
 		Kafka:         reader.NewKafkaConfig(),
 		KafkaBalanced: reader.NewKafkaBalancedConfig(),
+		Kinesis:       reader.NewKinesisConfig(),
 		MQTT:          reader.NewMQTTConfig(),
 		Nanomsg:       reader.NewScaleProtoConfig(),
 		NATS:          reader.NewNATSConfig(),

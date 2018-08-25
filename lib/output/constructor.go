@@ -70,6 +70,7 @@ const (
 	TypeHTTPServer    = "http_server"
 	TypeInproc        = "inproc"
 	TypeKafka         = "kafka"
+	TypeKinesis       = "kinesis"
 	TypeMQTT          = "mqtt"
 	TypeNanomsg       = "nanomsg"
 	TypeNATS          = "nats"
@@ -99,6 +100,7 @@ type Config struct {
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
 	Inproc        InprocConfig               `json:"inproc" yaml:"inproc"`
 	Kafka         writer.KafkaConfig         `json:"kafka" yaml:"kafka"`
+	Kinesis       writer.KinesisConfig       `json:"kinesis" yaml:"kinesis"`
 	MQTT          writer.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
 	Nanomsg       NanomsgConfig              `json:"nanomsg" yaml:"nanomsg"`
 	NATS          NATSConfig                 `json:"nats" yaml:"nats"`
@@ -128,6 +130,7 @@ func NewConfig() Config {
 		HTTPServer:    NewHTTPServerConfig(),
 		Inproc:        NewInprocConfig(),
 		Kafka:         writer.NewKafkaConfig(),
+		Kinesis:       writer.NewKinesisConfig(),
 		MQTT:          writer.NewMQTTConfig(),
 		Nanomsg:       NewNanomsgConfig(),
 		NATS:          NewNATSConfig(),

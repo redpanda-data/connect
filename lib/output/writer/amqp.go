@@ -152,10 +152,10 @@ func (a *AMQP) Connect() error {
 			a.conf.Exchange,                // name of the exchange
 			a.conf.ExchangeDeclare.Type,    // type
 			a.conf.ExchangeDeclare.Durable, // durable
-			false, // delete when complete
-			false, // internal
-			false, // noWait
-			nil,   // arguments
+			false,                          // delete when complete
+			false,                          // internal
+			false,                          // noWait
+			nil,                            // arguments
 		); err != nil {
 			conn.Close()
 			return fmt.Errorf("amqp failed to declare exchange: %v", err)

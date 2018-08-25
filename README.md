@@ -29,7 +29,7 @@ for choosing a level of resiliency that meets your needs.
 
 ## Supported Sources & Sinks
 
-- [Amazon (S3, SQS)][amazons3]
+- [AWS (S3, SQS, Kinesis)][aws]
 - [Elasticsearch][elasticsearch] (output only)
 - File
 - HTTP(S)
@@ -196,7 +196,7 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [travis-url]: https://travis-ci.org/Jeffail/benthos
 
 [dep]: https://github.com/golang/dep
-[amazons3]: https://aws.amazon.com/s3/
+[aws]: https://aws.amazon.com/
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/
 [rabbitmq]: https://www.rabbitmq.com/

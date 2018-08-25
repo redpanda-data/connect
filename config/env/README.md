@@ -123,6 +123,19 @@ INPUT_KAFKA_TLS_CAS_FILE
 INPUT_KAFKA_TLS_ENABLED                     = false
 INPUT_KAFKA_TLS_SKIP_CERT_VERIFY            = false
 INPUT_KAFKA_TOPIC                           = benthos_stream
+INPUT_KINESIS_CLIENT_ID                     = benthos_consumer
+INPUT_KINESIS_COMMIT_PERIOD_MS              = 1000
+INPUT_KINESIS_CREDENTIALS_ID
+INPUT_KINESIS_CREDENTIALS_ROLE
+INPUT_KINESIS_CREDENTIALS_SECRET
+INPUT_KINESIS_CREDENTIALS_TOKEN
+INPUT_KINESIS_DYNAMODB_TABLE
+INPUT_KINESIS_LIMIT                         = 100
+INPUT_KINESIS_REGION                        = eu-west-1
+INPUT_KINESIS_SHARD                         = 0
+INPUT_KINESIS_START_FROM_OLDEST             = true
+INPUT_KINESIS_STREAM
+INPUT_KINESIS_TIMEOUT_MS                    = 5000
 INPUT_MQTT_CLIENT_ID                        = benthos_input
 INPUT_MQTT_QOS                              = 1
 INPUT_MQTT_TOPICS                           = benthos_topic
@@ -356,6 +369,14 @@ OUTPUT_KAFKA_TLS_CAS_FILE
 OUTPUT_KAFKA_TLS_ENABLED                     = false
 OUTPUT_KAFKA_TLS_SKIP_CERT_VERIFY            = false
 OUTPUT_KAFKA_TOPIC                           = benthos_stream
+OUTPUT_KINESIS_CREDENTIALS_ID
+OUTPUT_KINESIS_CREDENTIALS_ROLE
+OUTPUT_KINESIS_CREDENTIALS_SECRET
+OUTPUT_KINESIS_CREDENTIALS_TOKEN
+OUTPUT_KINESIS_HASH_KEY
+OUTPUT_KINESIS_PARTITION_KEY
+OUTPUT_KINESIS_REGION                        = eu-west-1
+OUTPUT_KINESIS_STREAM
 OUTPUT_MQTT_CLIENT_ID                        = benthos_output
 OUTPUT_MQTT_QOS                              = 1
 OUTPUT_MQTT_TOPIC                            = benthos_topic

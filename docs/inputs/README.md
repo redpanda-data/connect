@@ -46,18 +46,19 @@ level which is only applied to messages from the baz input.
 8. [`inproc`](#inproc)
 9. [`kafka`](#kafka)
 10. [`kafka_balanced`](#kafka_balanced)
-11. [`mqtt`](#mqtt)
-12. [`nanomsg`](#nanomsg)
-13. [`nats`](#nats)
-14. [`nats_stream`](#nats_stream)
-15. [`nsq`](#nsq)
-16. [`read_until`](#read_until)
-17. [`redis_list`](#redis_list)
-18. [`redis_pubsub`](#redis_pubsub)
-19. [`s3`](#s3)
-20. [`sqs`](#sqs)
-21. [`stdin`](#stdin)
-22. [`websocket`](#websocket)
+11. [`kinesis`](#kinesis)
+12. [`mqtt`](#mqtt)
+13. [`nanomsg`](#nanomsg)
+14. [`nats`](#nats)
+15. [`nats_stream`](#nats_stream)
+16. [`nsq`](#nsq)
+17. [`read_until`](#read_until)
+18. [`redis_list`](#redis_list)
+19. [`redis_pubsub`](#redis_pubsub)
+20. [`s3`](#s3)
+21. [`sqs`](#sqs)
+22. [`stdin`](#stdin)
+23. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -433,6 +434,34 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
+
+## `kinesis`
+
+``` yaml
+type: kinesis
+kinesis:
+  client_id: benthos_consumer
+  commit_period_ms: 1000
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  dynamodb_table: ""
+  limit: 100
+  region: eu-west-1
+  shard: "0"
+  start_from_oldest: true
+  stream: ""
+  timeout_ms: 5000
+```
+
+Receive messages from a Kinesis stream.
+
+It's possible to use DynamoDB for persisting shard iterators by setting the
+table name. Offsets will then be tracked per `client_id` per
+`shard_id`. When using this mode you should create a table with
+`namespace` as the primary key and `shard_id` as a sort key.
 
 ## `mqtt`
 

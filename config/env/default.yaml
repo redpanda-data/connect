@@ -99,6 +99,21 @@ input:
           skip_cert_verify: ${INPUT_KAFKA_BALANCED_TLS_SKIP_CERT_VERIFY:false}
         topics:
         - ${INPUT_KAFKA_BALANCED_TOPICS:benthos_stream}
+      kinesis:
+        client_id: ${INPUT_KINESIS_CLIENT_ID:benthos_consumer}
+        commit_period_ms: ${INPUT_KINESIS_COMMIT_PERIOD_MS:1000}
+        credentials:
+          id: ${INPUT_KINESIS_CREDENTIALS_ID}
+          role: ${INPUT_KINESIS_CREDENTIALS_ROLE}
+          secret: ${INPUT_KINESIS_CREDENTIALS_SECRET}
+          token: ${INPUT_KINESIS_CREDENTIALS_TOKEN}
+        dynamodb_table: ${INPUT_KINESIS_DYNAMODB_TABLE}
+        limit: ${INPUT_KINESIS_LIMIT:100}
+        region: ${INPUT_KINESIS_REGION:eu-west-1}
+        shard: ${INPUT_KINESIS_SHARD:0}
+        start_from_oldest: ${INPUT_KINESIS_START_FROM_OLDEST:true}
+        stream: ${INPUT_KINESIS_STREAM}
+        timeout_ms: ${INPUT_KINESIS_TIMEOUT_MS:5000}
       mqtt:
         client_id: ${INPUT_MQTT_CLIENT_ID:benthos_input}
         qos: ${INPUT_MQTT_QOS:1}
@@ -403,6 +418,16 @@ output:
           enabled: ${OUTPUT_KAFKA_TLS_ENABLED:false}
           skip_cert_verify: ${OUTPUT_KAFKA_TLS_SKIP_CERT_VERIFY:false}
         topic: ${OUTPUT_KAFKA_TOPIC:benthos_stream}
+      kinesis:
+        credentials:
+          id: ${OUTPUT_KINESIS_CREDENTIALS_ID}
+          role: ${OUTPUT_KINESIS_CREDENTIALS_ROLE}
+          secret: ${OUTPUT_KINESIS_CREDENTIALS_SECRET}
+          token: ${OUTPUT_KINESIS_CREDENTIALS_TOKEN}
+        hash_key: ${OUTPUT_KINESIS_HASH_KEY}
+        partition_key: ${OUTPUT_KINESIS_PARTITION_KEY}
+        region: ${OUTPUT_KINESIS_REGION:eu-west-1}
+        stream: ${OUTPUT_KINESIS_STREAM}
       mqtt:
         client_id: ${OUTPUT_MQTT_CLIENT_ID:benthos_output}
         qos: ${OUTPUT_MQTT_QOS:1}

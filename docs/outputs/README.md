@@ -32,17 +32,18 @@ conditions please [read the docs here](../conditions/README.md)
 8. [`http_server`](#http_server)
 9. [`inproc`](#inproc)
 10. [`kafka`](#kafka)
-11. [`mqtt`](#mqtt)
-12. [`nanomsg`](#nanomsg)
-13. [`nats`](#nats)
-14. [`nats_stream`](#nats_stream)
-15. [`nsq`](#nsq)
-16. [`redis_list`](#redis_list)
-17. [`redis_pubsub`](#redis_pubsub)
-18. [`s3`](#s3)
-19. [`sqs`](#sqs)
-20. [`stdout`](#stdout)
-21. [`websocket`](#websocket)
+11. [`kinesis`](#kinesis)
+12. [`mqtt`](#mqtt)
+13. [`nanomsg`](#nanomsg)
+14. [`nats`](#nats)
+15. [`nats_stream`](#nats_stream)
+16. [`nsq`](#nsq)
+17. [`redis_list`](#redis_list)
+18. [`redis_pubsub`](#redis_pubsub)
+19. [`s3`](#s3)
+20. [`sqs`](#sqs)
+21. [`stdout`](#stdout)
+22. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -381,6 +382,27 @@ By default the paritioner will select partitions based on a hash of the key
 value. If the key is empty then a partition is chosen at random. You can
 alternatively force the partitioner to round-robin partitions with the field
 `round_robin_partitions`.
+
+## `kinesis`
+
+``` yaml
+type: kinesis
+kinesis:
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  hash_key: ""
+  partition_key: ""
+  region: eu-west-1
+  stream: ""
+```
+
+Sends messages to a Kinesis stream, both the `partition_key`
+(required) and `hash_key` (optional) fields can be dynamically set
+using function interpolations described
+[here](../config_interpolation.md#functions).
 
 ## `mqtt`
 
