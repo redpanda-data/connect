@@ -109,7 +109,7 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 	for i := 0; i < msgs[0].Len(); i++ {
-		if name := msgs[0].Get(i).Metadata().Get("name"); name != expNames[i] {
+		if name := msgs[0].Get(i).Metadata().Get("archive_filename"); name != expNames[i] {
 			t.Errorf("Unexpected name %d: %s != %s", i, name, expNames[i])
 		}
 	}
@@ -174,7 +174,7 @@ func TestUnarchiveZip(t *testing.T) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 	for i := 0; i < msgs[0].Len(); i++ {
-		if name := msgs[0].Get(i).Metadata().Get("name"); name != expNames[i] {
+		if name := msgs[0].Get(i).Metadata().Get("archive_filename"); name != expNames[i] {
 			t.Errorf("Unexpected name %d: %s != %s", i, name, expNames[i])
 		}
 	}

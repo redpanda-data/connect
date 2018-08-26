@@ -96,7 +96,7 @@ func tarUnarchive(part types.Part) ([]types.Part, error) {
 
 		newParts = append(newParts,
 			message.NewPart(newPartBuf.Bytes()).
-				SetMetadata(part.Metadata().Copy().Set("name", h.Name)))
+				SetMetadata(part.Metadata().Copy().Set("archive_filename", h.Name)))
 	}
 
 	return newParts, nil
@@ -125,7 +125,7 @@ func zipUnarchive(part types.Part) ([]types.Part, error) {
 
 		newParts = append(newParts,
 			message.NewPart(newPartBuf.Bytes()).
-				SetMetadata(part.Metadata().Copy().Set("name", f.Name)))
+				SetMetadata(part.Metadata().Copy().Set("archive_filename", f.Name)))
 	}
 
 	return newParts, nil
