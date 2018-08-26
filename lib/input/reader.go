@@ -159,9 +159,14 @@ func (r *Reader) loop() {
 					r.log.Errorf("Failed to reconnect to %v: %v\n", r.typeStr, err)
 					mFailedConn.Incr(1)
 					mFailedConnF.Incr(1)
+
+					if !r.connThrot.Retry() {
+						return
+					}
 				} else if msg, err = r.reader.Read(); err != types.ErrNotConnected {
 					mConn.Incr(1)
 					mConnF.Incr(1)
+					r.connThrot.Reset()
 					break
 				}
 			}

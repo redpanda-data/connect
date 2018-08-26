@@ -297,16 +297,17 @@ func (k *Kafka) Acknowledge(err error) error {
 	if err == nil {
 		k.offsetCommit = k.offset
 	}
+
+	if time.Since(k.offsetLastCommitted) <
+		(time.Millisecond * time.Duration(k.conf.CommitPeriodMS)) {
+		return nil
+	}
+
 	return k.commit()
 }
 
 func (k *Kafka) commit() error {
 	if k.offsetCommit == k.offsetCommitted {
-		return nil
-	}
-
-	if time.Since(k.offsetLastCommitted) <
-		(time.Millisecond * time.Duration(k.conf.CommitPeriodMS)) {
 		return nil
 	}
 

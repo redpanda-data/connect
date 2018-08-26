@@ -40,10 +40,11 @@ conditions please [read the docs here](../conditions/README.md)
 16. [`nsq`](#nsq)
 17. [`redis_list`](#redis_list)
 18. [`redis_pubsub`](#redis_pubsub)
-19. [`s3`](#s3)
-20. [`sqs`](#sqs)
-21. [`stdout`](#stdout)
-22. [`websocket`](#websocket)
+19. [`redis_streams`](#redis_streams)
+20. [`s3`](#s3)
+21. [`sqs`](#sqs)
+22. [`stdout`](#stdout)
+23. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -498,6 +499,28 @@ redis_pubsub:
 
 Publishes messages through the Redis PubSub model. It is not possible to
 guarantee that messages have been received.
+
+## `redis_streams`
+
+``` yaml
+type: redis_streams
+redis_streams:
+  body_key: body
+  max_length: 0
+  stream: benthos_stream
+  url: tcp://localhost:6379
+```
+
+Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't
+already exist) using the XADD command. It's possible to specify a maximum length
+of the target stream by setting it to a value greater than 0, in which case this
+cap is applied only when Redis is able to remove a whole macro node, for
+efficiency.
+
+Redis stream entries are key/value pairs, as such it is necessary to specify the
+key to be set to the body of the message. All metadata fields of the message
+will also be set as key/value pairs, if there is a key collision between
+a metadata item and the body then the body takes precedence.
 
 ## `s3`
 

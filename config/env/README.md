@@ -165,6 +165,15 @@ INPUT_REDIS_LIST_TIMEOUT_MS                 = 5000
 INPUT_REDIS_LIST_URL                        = tcp://localhost:6379
 INPUT_REDIS_PUBSUB_CHANNELS                 = benthos_chan
 INPUT_REDIS_PUBSUB_URL                      = tcp://localhost:6379
+INPUT_REDIS_STREAMS_BODY_KEY                = body
+INPUT_REDIS_STREAMS_CLIENT_ID               = benthos_consumer
+INPUT_REDIS_STREAMS_COMMIT_PERIOD_MS        = 1000
+INPUT_REDIS_STREAMS_CONSUMER_GROUP          = benthos_group
+INPUT_REDIS_STREAMS_LIMIT                   = 10
+INPUT_REDIS_STREAMS_START_FROM_OLDEST       = true
+INPUT_REDIS_STREAMS_STREAMS                 = benthos_stream
+INPUT_REDIS_STREAMS_TIMEOUT_MS              = 5000
+INPUT_REDIS_STREAMS_URL                     = tcp://localhost:6379
 INPUT_S3_BUCKET
 INPUT_S3_CREDENTIALS_ID
 INPUT_S3_CREDENTIALS_ROLE
@@ -399,6 +408,10 @@ OUTPUT_REDIS_LIST_KEY                        = benthos_list
 OUTPUT_REDIS_LIST_URL                        = tcp://localhost:6379
 OUTPUT_REDIS_PUBSUB_CHANNEL                  = benthos_chan
 OUTPUT_REDIS_PUBSUB_URL                      = tcp://localhost:6379
+OUTPUT_REDIS_STREAMS_BODY_KEY                = body
+OUTPUT_REDIS_STREAMS_MAX_LENGTH              = 0
+OUTPUT_REDIS_STREAMS_STREAM                  = benthos_stream
+OUTPUT_REDIS_STREAMS_URL                     = tcp://localhost:6379
 OUTPUT_S3_BUCKET
 OUTPUT_S3_CREDENTIALS_ID
 OUTPUT_S3_CREDENTIALS_ROLE

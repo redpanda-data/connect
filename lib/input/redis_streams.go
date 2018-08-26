@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Ashley Jeffs
+// Copyright (c) 2014 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,35 +18,43 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package output
+package input
 
 import (
+	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors[TypeRedisPubSub] = TypeSpec{
-		constructor: NewRedisPubSub,
+	Constructors[TypeRedisStreams] = TypeSpec{
+		constructor: NewRedisStreams,
 		description: `
-Publishes messages through the Redis PubSub model. It is not possible to
-guarantee that messages have been received.`,
+Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
+` + "`client_id`" + ` should be unique for each consumer of a group.
+
+The field ` + "`limit`" + ` specifies the maximum number of records to be
+received per request. When more than one record is returned they are batched and
+can be split into individual messages with the ` + "`split`" + ` processor.
+
+Redis stream entries are key/value pairs, as such it is necessary to specify the
+key that contains the body of the message. All other keys/value pairs are saved
+as metadata fields.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewRedisPubSub creates a new RedisPubSub output type.
-func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	w, err := writer.NewRedisPubSub(conf.RedisPubSub, log, stats)
+// NewRedisStreams creates a new Redis List input type.
+func NewRedisStreams(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	r, err := reader.NewRedisStreams(conf.RedisStreams, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter("redis_pubsub", w, log, stats)
+	return NewReader("redis_streams", reader.NewPreserver(r), log, stats)
 }
 
 //------------------------------------------------------------------------------

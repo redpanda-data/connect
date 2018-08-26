@@ -78,6 +78,7 @@ const (
 	TypeNSQ           = "nsq"
 	TypeRedisList     = "redis_list"
 	TypeRedisPubSub   = "redis_pubsub"
+	TypeRedisStreams  = "redis_streams"
 	TypeS3            = "s3"
 	TypeSQS           = "sqs"
 	TypeSTDOUT        = "stdout"
@@ -107,7 +108,8 @@ type Config struct {
 	NATSStream    NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
 	NSQ           NSQConfig                  `json:"nsq" yaml:"nsq"`
 	RedisList     writer.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub   RedisPubSubConfig          `json:"redis_pubsub" yaml:"redis_pubsub"`
+	RedisPubSub   writer.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
+	RedisStreams  writer.RedisStreamsConfig  `json:"redis_streams" yaml:"redis_streams"`
 	S3            writer.AmazonS3Config      `json:"s3" yaml:"s3"`
 	SQS           writer.AmazonSQSConfig     `json:"sqs" yaml:"sqs"`
 	STDOUT        STDOUTConfig               `json:"stdout" yaml:"stdout"`
@@ -137,7 +139,8 @@ func NewConfig() Config {
 		NATSStream:    NewNATSStreamConfig(),
 		NSQ:           NewNSQConfig(),
 		RedisList:     writer.NewRedisListConfig(),
-		RedisPubSub:   NewRedisPubSubConfig(),
+		RedisPubSub:   writer.NewRedisPubSubConfig(),
+		RedisStreams:  writer.NewRedisStreamsConfig(),
 		S3:            writer.NewAmazonS3Config(),
 		SQS:           writer.NewAmazonSQSConfig(),
 		STDOUT:        NewSTDOUTConfig(),

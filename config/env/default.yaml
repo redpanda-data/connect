@@ -158,6 +158,17 @@ input:
         channels:
         - ${INPUT_REDIS_PUBSUB_CHANNELS:benthos_chan}
         url: ${INPUT_REDIS_PUBSUB_URL:tcp://localhost:6379}
+      redis_streams:
+        body_key: ${INPUT_REDIS_STREAMS_BODY_KEY:body}
+        client_id: ${INPUT_REDIS_STREAMS_CLIENT_ID:benthos_consumer}
+        commit_period_ms: ${INPUT_REDIS_STREAMS_COMMIT_PERIOD_MS:1000}
+        consumer_group: ${INPUT_REDIS_STREAMS_CONSUMER_GROUP:benthos_group}
+        limit: ${INPUT_REDIS_STREAMS_LIMIT:10}
+        start_from_oldest: ${INPUT_REDIS_STREAMS_START_FROM_OLDEST:true}
+        streams:
+        - ${INPUT_REDIS_STREAMS_STREAMS:benthos_stream}
+        timeout_ms: ${INPUT_REDIS_STREAMS_TIMEOUT_MS:5000}
+        url: ${INPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
       s3:
         bucket: ${INPUT_S3_BUCKET}
         credentials:
@@ -461,6 +472,11 @@ output:
       redis_pubsub:
         channel: ${OUTPUT_REDIS_PUBSUB_CHANNEL:benthos_chan}
         url: ${OUTPUT_REDIS_PUBSUB_URL:tcp://localhost:6379}
+      redis_streams:
+        body_key: ${OUTPUT_REDIS_STREAMS_BODY_KEY:body}
+        max_length: ${OUTPUT_REDIS_STREAMS_MAX_LENGTH:0}
+        stream: ${OUTPUT_REDIS_STREAMS_STREAM:benthos_stream}
+        url: ${OUTPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
       s3:
         bucket: ${OUTPUT_S3_BUCKET}
         credentials:

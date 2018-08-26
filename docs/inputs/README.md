@@ -55,10 +55,11 @@ level which is only applied to messages from the baz input.
 17. [`read_until`](#read_until)
 18. [`redis_list`](#redis_list)
 19. [`redis_pubsub`](#redis_pubsub)
-20. [`s3`](#s3)
-21. [`sqs`](#sqs)
-22. [`stdin`](#stdin)
-23. [`websocket`](#websocket)
+20. [`redis_streams`](#redis_streams)
+21. [`s3`](#s3)
+22. [`sqs`](#sqs)
+23. [`stdin`](#stdin)
+24. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -645,6 +646,34 @@ redis_pubsub:
 
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple
 channels using this input.
+
+## `redis_streams`
+
+``` yaml
+type: redis_streams
+redis_streams:
+  body_key: body
+  client_id: benthos_consumer
+  commit_period_ms: 1000
+  consumer_group: benthos_group
+  limit: 10
+  start_from_oldest: true
+  streams:
+  - benthos_stream
+  timeout_ms: 5000
+  url: tcp://localhost:6379
+```
+
+Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
+`client_id` should be unique for each consumer of a group.
+
+The field `limit` specifies the maximum number of records to be
+received per request. When more than one record is returned they are batched and
+can be split into individual messages with the `split` processor.
+
+Redis stream entries are key/value pairs, as such it is necessary to specify the
+key that contains the body of the message. All other keys/value pairs are saved
+as metadata fields.
 
 ## `s3`
 

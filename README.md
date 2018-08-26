@@ -40,7 +40,7 @@ for choosing a level of resiliency that meets your needs.
 - [NATS Streaming][natsstreaming]
 - [NSQ][nsq]
 - [RabbitMQ (AMQP 0.91)][rabbitmq]
-- [Redis][redis]
+- [Redis (streams, list, pubsub)][redis]
 - Stdin/Stdout
 - Websocket
 - [ZMQ4][zmq]
