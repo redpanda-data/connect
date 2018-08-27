@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.26.2 - 2018-08-27
+
+### Added
+
+- New `metric` processor.
+
 ### 0.26.1 - 2018-08-26
 
 ### Added
