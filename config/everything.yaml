@@ -445,6 +445,11 @@ pipeline:
       operator: set
       key: example
       value: ${!hostname}
+    metric:
+      type: counter
+      path: ""
+      labels: {}
+      value: ""
     process_field:
       parts: []
       path: ""

@@ -54,15 +54,16 @@ element will be selected, and so on.
 19. [`json`](#json)
 20. [`merge_json`](#merge_json)
 21. [`metadata`](#metadata)
-22. [`noop`](#noop)
-23. [`process_field`](#process_field)
-24. [`process_map`](#process_map)
-25. [`sample`](#sample)
-26. [`select_parts`](#select_parts)
-27. [`split`](#split)
-28. [`text`](#text)
-29. [`throttle`](#throttle)
-30. [`unarchive`](#unarchive)
+22. [`metric`](#metric)
+23. [`noop`](#noop)
+24. [`process_field`](#process_field)
+25. [`process_map`](#process_map)
+26. [`sample`](#sample)
+27. [`select_parts`](#select_parts)
+28. [`split`](#split)
+29. [`text`](#text)
+30. [`throttle`](#throttle)
+31. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -671,6 +672,80 @@ Removes all metadata values from the message.
 
 Removes all metadata values from the message where the key is prefixed with the
 value provided.
+
+## `metric`
+
+``` yaml
+type: metric
+metric:
+  labels: {}
+  path: ""
+  type: counter
+  value: ""
+```
+
+Creates metrics by extracting values from messages.
+
+The `path` field should be a dot separated path of the metric to be
+set and will automatically be converted into the correct format of the
+configured metric aggregator.
+
+The `value` field can be set using function interpolations described
+[here](../config_interpolation.md#functions) and is used according to the
+following types:
+
+#### `counter`
+
+Increments a counter by exactly 1, the contents of `value` are ignored
+by this type.
+
+#### `counter_parts`
+
+Increments a counter by the number of parts within the message batch, the
+contents of `value` are ignored by this type.
+
+#### `counter_by`
+
+If the contents of `value` can be parsed as a positive integer value
+then the counter is incremented by this value.
+
+For example, the following configuration will increment the value of the
+`count.custom.field` metric by the contents of `field.some.value`:
+
+``` yaml
+type: metric
+metric:
+  type: counter_by
+  path: count.custom.field
+  value: ${!json_field:field.some.value}
+```
+
+#### `gauge`
+
+If the contents of `value` can be parsed as a positive integer value
+then the gauge is set to this value.
+
+For example, the following configuration will set the value of the
+`gauge.custom.field` metric to the contents of `field.some.value`:
+
+``` yaml
+type: metric
+metric:
+  type: gauge
+  path: gauge.custom.field
+  value: ${!json_field:field.some.value}
+```
+
+#### `timing`
+
+Equivalent to `gauge` where instead the metric is a timing.
+
+### Labels
+
+Some metrics aggregators, such as Prometheus, support arbitrary labels, in which
+case the `labels` field can be used in order to create them. Label
+values can also be set using function interpolations in order to dynamically
+populate them with context about the message.
 
 ## `noop`
 
