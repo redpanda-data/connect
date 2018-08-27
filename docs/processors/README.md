@@ -692,7 +692,9 @@ configured metric aggregator.
 
 The `value` field can be set using function interpolations described
 [here](../config_interpolation.md#functions) and is used according to the
-following types:
+specific type.
+
+### Types
 
 #### `counter`
 
