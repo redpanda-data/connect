@@ -295,6 +295,9 @@ PROCESSOR_MERGE_JSON_RETAIN_PARTS                = false
 PROCESSOR_METADATA_KEY                           = example
 PROCESSOR_METADATA_OPERATOR                      = set
 PROCESSOR_METADATA_VALUE                         = ${!hostname}
+PROCESSOR_METRIC_PATH
+PROCESSOR_METRIC_TYPE                            = counter
+PROCESSOR_METRIC_VALUE
 PROCESSOR_SAMPLE_RETAIN                          = 10
 PROCESSOR_SAMPLE_SEED                            = 0
 PROCESSOR_SELECT_PARTS_PARTS                     = 0

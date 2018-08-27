@@ -322,6 +322,10 @@ pipeline:
       key: ${PROCESSOR_METADATA_KEY:example}
       operator: ${PROCESSOR_METADATA_OPERATOR:set}
       value: ${PROCESSOR_METADATA_VALUE:${!hostname}}
+    metric:
+      path: ${PROCESSOR_METRIC_PATH}
+      type: ${PROCESSOR_METRIC_TYPE:counter}
+      value: ${PROCESSOR_METRIC_VALUE}
     sample:
       retain: ${PROCESSOR_SAMPLE_RETAIN:10}
       seed: ${PROCESSOR_SAMPLE_SEED:0}
