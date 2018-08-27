@@ -5,6 +5,7 @@ RUN useradd -u 10001 benthos
 WORKDIR /go/src/github.com/Jeffail/benthos/
 COPY . /go/src/github.com/Jeffail/benthos/
 
+ENV GO111MODULE on
 RUN CGO_ENABLED=0 GOOS=linux make
 
 FROM scratch

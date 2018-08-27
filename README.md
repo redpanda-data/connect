@@ -121,7 +121,7 @@ with [a config file][env-config] where _all_ common fields can be set this way.
 
 ## Install
 
-Build with Go:
+Build with Go (1.11 or later):
 
 ``` shell
 make deps
@@ -195,7 +195,6 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
 [travis-url]: https://travis-ci.org/Jeffail/benthos
 
-[dep]: https://github.com/golang/dep
 [aws]: https://aws.amazon.com/
 [zmq]: http://zeromq.org/
 [nanomsg]: http://nanomsg.org/
