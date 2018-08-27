@@ -41,14 +41,17 @@ func init() {
 		constructor: NewUnarchive,
 		description: `
 Unarchives parts of a message according to the selected archive type into
-multiple parts. Supported archive types are: tar, binary, lines.
+multiple parts. Supported archive types are: tar, zip, binary, lines.
 
 When a part is unarchived it is split into more message parts that replace the
 original part. If you wish to split the archive into one message per file then
 follow this with the 'split' processor.
 
 Parts that are selected but fail to unarchive (invalid format) will be removed
-from the message. If the message results in zero parts it is skipped entirely.`,
+from the message. If the message results in zero parts it is skipped entirely.
+
+For the unarchivers that contain file information (tar, zip), a metadata field
+is added to each part called ` + "`archive_filename`" + ` with the extracted filename.`,
 	}
 }
 

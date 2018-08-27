@@ -43,9 +43,9 @@ func init() {
 		constructor: NewArchive,
 		description: `
 Archives all the parts of a message into a single part according to the selected
-archive type. Supported archive types are: tar, binary, lines.
+archive type. Supported archive types are: tar, zip, binary, lines.
 
-Some archive types (such as tar) treat each archive item (message part) as a
+Some archive types (such as tar, zip) treat each archive item (message part) as a
 file with a path. Since message parts only contain raw data a unique path must
 be generated for each part. This can be done by using function interpolations on
 the 'path' field as described [here](../config_interpolation.md#functions). For
