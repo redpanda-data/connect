@@ -71,7 +71,7 @@ type decryptFunc func(key string, bytes []byte) ([]byte, error)
 func pgpDecode(key string, b []byte) ([]byte, error) {
 	// read the key from the filesystem
 	keyData, err := os.Open(key)
-	defer key.Close()
+	defer keyData.Close()
 
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func pgpDecode(key string, b []byte) ([]byte, error) {
 	}
   // check key type
 	if keyBlock.Type != openpgp.PrivateKeyType {
-		return nil, errors.New("invalid key type")
+		return nil, fmt.Errorf("invalid key type: %v", keyBlock.Type)
 	}
 
 	// add key to key list
@@ -102,10 +102,7 @@ func pgpDecode(key string, b []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	messageBuf := bytes.NewBuffer(nil)
-	messageBuf.ReadFrom(message.UnverifiedBody)
-
-	return messageBuf, nil
+	return ioutil.ReadAll(message.UnverifiedBody)
 }
 
 func strToDecryptor(str string) (decryptFunc, error) {
@@ -118,10 +115,10 @@ func strToDecryptor(str string) (decryptFunc, error) {
 
 //------------------------------------------------------------------------------
 
-// decryptFunc is a processor that can selectively decrypt parts of a message
+// Decrypt is a processor that can selectively decrypt parts of a message
 // following a chosen scheme.
-type decryptFunc struct {
-	conf decryptFuncConfig
+type Decrypt struct {
+	conf DecryptConfig
 	fn   decryptFunc
 
 	log   log.Modular
@@ -162,7 +159,7 @@ func NewDecrypt(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (c *Decode) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (c *Decrypt) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 
 	newMsg := msg.Copy()

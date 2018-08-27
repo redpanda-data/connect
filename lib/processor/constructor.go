@@ -63,6 +63,7 @@ const (
 	TypeConditional  = "conditional"
 	TypeDecode       = "decode"
 	TypeDecompress   = "decompress"
+	TypeDecrypt      = "decrypt"
 	TypeDedupe       = "dedupe"
 	TypeEncode       = "encode"
 	TypeFilter       = "filter"
@@ -101,6 +102,7 @@ type Config struct {
 	Conditional  ConditionalConfig  `json:"conditional" yaml:"conditional"`
 	Decode       DecodeConfig       `json:"decode" yaml:"decode"`
 	Decompress   DecompressConfig   `json:"decompress" yaml:"decompress"`
+	Decrypt      DecryptConfig      `json:"decrypt" yaml:"decrypt"`
 	Dedupe       DedupeConfig       `json:"dedupe" yaml:"dedupe"`
 	Encode       EncodeConfig       `json:"encode" yaml:"encode"`
 	Filter       FilterConfig       `json:"filter" yaml:"filter"`
@@ -138,6 +140,7 @@ func NewConfig() Config {
 		Conditional:  NewConditionalConfig(),
 		Decode:       NewDecodeConfig(),
 		Decompress:   NewDecompressConfig(),
+		Decrypt:      NewDecryptConfig(),
 		Dedupe:       NewDedupeConfig(),
 		Encode:       NewEncodeConfig(),
 		Filter:       NewFilterConfig(),
