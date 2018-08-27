@@ -22,6 +22,7 @@ package processor
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"io"
 	"os"
@@ -90,6 +91,61 @@ func TestArchiveTar(t *testing.T) {
 
 		newPartBuf := bytes.Buffer{}
 		if _, err = newPartBuf.ReadFrom(tr); err != nil {
+			t.Fatal(err)
+		}
+
+		act = append(act, newPartBuf.Bytes())
+	}
+
+	if !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestArchiveZip(t *testing.T) {
+	conf := NewConfig()
+	conf.Archive.Format = "zip"
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+
+	exp := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(exp))
+	if len(msgs) != 1 {
+		t.Error("Archive failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if msgs[0].Len() != 1 {
+		t.Fatal("More parts than expected")
+	}
+
+	act := [][]byte{}
+
+	buf := bytes.NewReader(msgs[0].Get(0).Get())
+	zr, err := zip.NewReader(buf, int64(buf.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range zr.File {
+		fr, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		newPartBuf := bytes.Buffer{}
+		if _, err = newPartBuf.ReadFrom(fr); err != nil {
 			t.Fatal(err)
 		}
 

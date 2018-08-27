@@ -22,6 +22,7 @@ package processor
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"fmt"
 	"os"
@@ -104,6 +105,36 @@ func tarArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 		SetMetadata(msg.Get(0).Metadata().Copy()), nil
 }
 
+func zipArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+	buf := &bytes.Buffer{}
+	zw := zip.NewWriter(buf)
+
+	// Iterate through the parts of the message.
+	err := msg.Iter(func(i int, part types.Part) error {
+		h, err := zip.FileInfoHeader(hFunc(part))
+		if err != nil {
+			return err
+		}
+		h.Method = zip.Deflate
+
+		w, err := zw.CreateHeader(h)
+		if err != nil {
+			return err
+		}
+		if _, err = w.Write(part.Get()); err != nil {
+			return err
+		}
+		return nil
+	})
+	zw.Close()
+
+	if err != nil {
+		return nil, err
+	}
+	return message.NewPart(buf.Bytes()).
+		SetMetadata(msg.Get(0).Metadata().Copy()), nil
+}
+
 func binaryArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 	return message.NewPart(message.ToBytes(msg)).
 		SetMetadata(msg.Get(0).Metadata().Copy()), nil
@@ -123,6 +154,8 @@ func strToArchiver(str string) (archiveFunc, error) {
 	switch str {
 	case "tar":
 		return tarArchive, nil
+	case "zip":
+		return zipArchive, nil
 	case "binary":
 		return binaryArchive, nil
 	case "lines":
