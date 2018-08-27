@@ -23,7 +23,7 @@ install: $(APPS)
 
 $(PATHINSTBIN)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/*/*.go)
 	@mkdir -p $(dir $@)
-	@go build -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
+	@go build -mod=vendor -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
 $(APPS): %: $(PATHINSTBIN)/%
 
@@ -38,24 +38,23 @@ docker-zmq:
 	@docker build -f ./resources/docker/Dockerfile.zmq . -t jeffail/benthos:$(VERSION)-zmq
 
 deps:
-	@go get github.com/golang/dep/cmd/dep
-	@$$GOPATH/bin/dep ensure
+	@go mod vendor
 
 fmt:
 	@go list ./... | xargs -I{} gofmt -w -s $$GOPATH/src/{}
 
 lint:
-	@go vet ./...
+	@go vet -mod=vendor ./...
 	@golint -min_confidence 0.5 ./cmd/... ./lib/...
 
 test:
-	@go test -short ./...
+	@go test -mod=vendor -short ./...
 
 test-race:
-	@go test -short -race ./...
+	@go test -mod=vendor -short -race ./...
 
 test-integration:
-	@go test -timeout 300s ./...
+	@go test -mod=vendor -timeout 300s ./...
 
 clean:
 	rm -rf $(PATHINSTBIN)
@@ -70,4 +69,4 @@ docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --list-buffers > ./docs/buffers/README.md; true
 	@$(PATHINSTBIN)/benthos --list-outputs > ./docs/outputs/README.md; true
 	@$(PATHINSTBIN)/benthos --list-caches > ./docs/caches/README.md; true
-	@go run ./cmd/tools/benthos_config_gen/main.go
+	@go run -mod=vendor ./cmd/tools/benthos_config_gen/main.go
