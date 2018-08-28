@@ -11,7 +11,7 @@ require (
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737
 	github.com/bsm/sarama-cluster v2.1.15+incompatible
-	github.com/cenkalti/backoff v2.0.0+incompatible // indirect
+	github.com/cenkalti/backoff v2.0.0+incompatible
 	github.com/containerd/continuity v0.0.0-20180814194400-c7c5070e6f6e // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
