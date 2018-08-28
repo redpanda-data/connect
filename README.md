@@ -35,6 +35,7 @@ for choosing a level of resiliency that meets your needs.
 - HTTP(S)
 - [Kafka][kafka]
 - [MQTT][mqtt]
+- [MySQL][mysql] (input only)
 - [Nanomsg][nanomsg]
 - [NATS][nats]
 - [NATS Streaming][natsstreaming]
@@ -200,6 +201,7 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [nanomsg]: http://nanomsg.org/
 [rabbitmq]: https://www.rabbitmq.com/
 [mqtt]: http://mqtt.org/
+[mysql]: https://dev.mysql.com/doc/refman/8.0/en/binary-log.html
 [nsq]: http://nsq.io/
 [nats]: http://nats.io/
 [natsstreaming]: https://nats.io/documentation/streaming/nats-streaming-intro/

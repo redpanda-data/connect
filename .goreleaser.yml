@@ -52,8 +52,8 @@ dockers:
       - .git
       - cmd
       - config
-      - Gopkg.lock
-      - Gopkg.toml
+      - go.mod
+      - go.sum
       - lib
       - LICENSE
       - Makefile

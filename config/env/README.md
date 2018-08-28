@@ -140,6 +140,22 @@ INPUT_MQTT_CLIENT_ID                        = benthos_input
 INPUT_MQTT_QOS                              = 1
 INPUT_MQTT_TOPICS                           = benthos_topic
 INPUT_MQTT_URLS                             = tcp://localhost:1883
+INPUT_MYSQL_BATCH_SIZE                      = 0
+INPUT_MYSQL_BUFFER_TIMEOUT
+INPUT_MYSQL_CACHE
+INPUT_MYSQL_CONSUMER_ID                     = 0
+INPUT_MYSQL_DATABASES
+INPUT_MYSQL_HOST
+INPUT_MYSQL_KEY_PREFIX
+INPUT_MYSQL_LATEST                          = false
+INPUT_MYSQL_MYSQLDUMP_PATH
+INPUT_MYSQL_PASSWORD
+INPUT_MYSQL_PORT                            = 0
+INPUT_MYSQL_PREFETCH_COUNT                  = 0
+INPUT_MYSQL_SYNC_INTERVAL
+INPUT_MYSQL_TABLES
+INPUT_MYSQL_USERNAME
+INPUT_MYSQL_VIEW
 INPUT_NANOMSG_BIND                          = true
 INPUT_NANOMSG_POLL_TIMEOUT_MS               = 5000
 INPUT_NANOMSG_REPLY_TIMEOUT_MS              = 5000
