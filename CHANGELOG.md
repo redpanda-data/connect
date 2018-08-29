@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- The `kinesis` output type now supports batched sends and per message
+  interpolation.
+
 ### 0.26.2 - 2018-08-27
 
 ### Added

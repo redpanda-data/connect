@@ -36,12 +36,19 @@
 	"output": {
 		"type": "kinesis",
 		"kinesis": {
+			"backoff": {
+				"initial_interval": "500ms",
+				"max_elapsed_time": "10s",
+				"max_interval": "3s",
+				"max_retries": 3
+			},
 			"credentials": {
 				"id": "",
 				"role": "",
 				"secret": "",
 				"token": ""
 			},
+			"endpoint": "",
 			"hash_key": "",
 			"partition_key": "",
 			"region": "eu-west-1",

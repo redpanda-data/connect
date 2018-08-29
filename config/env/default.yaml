@@ -434,11 +434,17 @@ output:
           skip_cert_verify: ${OUTPUT_KAFKA_TLS_SKIP_CERT_VERIFY:false}
         topic: ${OUTPUT_KAFKA_TOPIC:benthos_stream}
       kinesis:
+        backoff:
+          initial_interval: ${OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL:500ms}
+          max_elapsed_time: ${OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME:10s}
+          max_interval: ${OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL:3s}
+          max_retries: ${OUTPUT_KINESIS_BACKOFF_MAX_RETRIES:3}
         credentials:
           id: ${OUTPUT_KINESIS_CREDENTIALS_ID}
           role: ${OUTPUT_KINESIS_CREDENTIALS_ROLE}
           secret: ${OUTPUT_KINESIS_CREDENTIALS_SECRET}
           token: ${OUTPUT_KINESIS_CREDENTIALS_TOKEN}
+        endpoint: ${OUTPUT_KINESIS_ENDPOINT}
         hash_key: ${OUTPUT_KINESIS_HASH_KEY}
         partition_key: ${OUTPUT_KINESIS_PARTITION_KEY}
         region: ${OUTPUT_KINESIS_REGION:eu-west-1}
