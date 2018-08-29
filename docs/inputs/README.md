@@ -75,8 +75,9 @@ amqp:
     durable: true
     enabled: false
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   url: amqp://guest:guest@localhost:5672/
 ```
@@ -279,8 +280,9 @@ http_client:
     reconnect: true
   timeout_ms: 5000
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   url: http://localhost:4195/get
   verb: GET
@@ -365,8 +367,9 @@ kafka:
   start_from_oldest: true
   target_version: 1.0.0
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   topic: benthos_stream
 ```
@@ -409,8 +412,9 @@ kafka_balanced:
   consumer_group: benthos_consumer_group
   start_from_oldest: true
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   topics:
   - benthos_stream

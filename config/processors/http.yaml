@@ -41,8 +41,9 @@ pipeline:
         retry_period_ms: 1000
         timeout_ms: 5000
         tls:
-          cas_file: ""
+          client_certs: []
           enabled: false
+          root_cas_file: ""
           skip_cert_verify: false
         url: http://localhost:4195/post
         verb: POST
