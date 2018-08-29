@@ -574,6 +574,12 @@ output:
       cas_file: ""
       skip_cert_verify: false
   kinesis:
+    backoff:
+      initial_interval: ""
+      max_interval: ""
+      max_elapsed_time: ""
+      max_retries: 0
+    endpoint: ""
     region: eu-west-1
     stream: ""
     hash_key: ""

@@ -389,11 +389,17 @@ alternatively force the partitioner to round-robin partitions with the field
 ``` yaml
 type: kinesis
 kinesis:
+  backoff:
+    initial_interval: ""
+    max_elapsed_time: ""
+    max_interval: ""
+    max_retries: 0
   credentials:
     id: ""
     role: ""
     secret: ""
     token: ""
+  endpoint: ""
   hash_key: ""
   partition_key: ""
   region: eu-west-1
