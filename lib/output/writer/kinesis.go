@@ -53,13 +53,14 @@ var (
 
 // KinesisConfig contains configuration fields for the Kinesis output type.
 type KinesisConfig struct {
-	Backoff      KinesisConfigBackoff       `json:"backoff" yaml:"backoff"`
 	Endpoint     string                     `json:"endpoint" yaml:"endpoint"`
 	Region       string                     `json:"region" yaml:"region"`
 	Stream       string                     `json:"stream" yaml:"stream"`
 	HashKey      string                     `json:"hash_key" yaml:"hash_key"`
 	PartitionKey string                     `json:"partition_key" yaml:"partition_key"`
 	Credentials  AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
+	MaxRetries   uint64                     `json:"retries" yaml:"retries"`
+	Backoff      KinesisConfigBackoff       `json:"backoff" yaml:"backoff"`
 }
 
 // KinesisConfigBackoff contains backoff configuration fields for the Kinesis output type.
@@ -67,18 +68,11 @@ type KinesisConfigBackoff struct {
 	InitialInterval string `json:"initial_interval" yaml:"initial_interval"`
 	MaxInterval     string `json:"max_interval" yaml:"max_interval"`
 	MaxElapsedTime  string `json:"max_elapsed_time" yaml:"max_elapsed_time"`
-	MaxRetries      uint64 `json:"max_retries" yaml:"max_retries"`
 }
 
 // NewKinesisConfig creates a new Config with default values.
 func NewKinesisConfig() KinesisConfig {
 	return KinesisConfig{
-		Backoff: KinesisConfigBackoff{
-			MaxRetries:      3,
-			InitialInterval: "500ms",
-			MaxInterval:     "3s",
-			MaxElapsedTime:  "10s",
-		},
 		Endpoint:     "",
 		Region:       "eu-west-1",
 		Stream:       "",
@@ -88,6 +82,12 @@ func NewKinesisConfig() KinesisConfig {
 			ID:     "",
 			Secret: "",
 			Token:  "",
+		},
+		MaxRetries: 3,
+		Backoff: KinesisConfigBackoff{
+			InitialInterval: "500ms",
+			MaxInterval:     "3s",
+			MaxElapsedTime:  "10s",
 		},
 	}
 }
@@ -153,7 +153,7 @@ func NewKinesis(
 		}
 		b.MaxElapsedTime = d
 	}
-	k.backoff = backoff.WithMaxRetries(b, conf.Backoff.MaxRetries)
+	k.backoff = backoff.WithMaxRetries(b, conf.MaxRetries)
 
 	return &k, nil
 }

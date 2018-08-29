@@ -438,7 +438,6 @@ output:
           initial_interval: ${OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL:500ms}
           max_elapsed_time: ${OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME:10s}
           max_interval: ${OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL:3s}
-          max_retries: ${OUTPUT_KINESIS_BACKOFF_MAX_RETRIES:3}
         credentials:
           id: ${OUTPUT_KINESIS_CREDENTIALS_ID}
           role: ${OUTPUT_KINESIS_CREDENTIALS_ROLE}
@@ -448,6 +447,7 @@ output:
         hash_key: ${OUTPUT_KINESIS_HASH_KEY}
         partition_key: ${OUTPUT_KINESIS_PARTITION_KEY}
         region: ${OUTPUT_KINESIS_REGION:eu-west-1}
+        retries: ${OUTPUT_KINESIS_RETRIES:3}
         stream: ${OUTPUT_KINESIS_STREAM}
       mqtt:
         client_id: ${OUTPUT_MQTT_CLIENT_ID:benthos_output}

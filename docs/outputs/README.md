@@ -393,7 +393,6 @@ kinesis:
     initial_interval: 500ms
     max_elapsed_time: 10s
     max_interval: 3s
-    max_retries: 3
   credentials:
     id: ""
     role: ""
@@ -403,6 +402,7 @@ kinesis:
   hash_key: ""
   partition_key: ""
   region: eu-west-1
+  retries: 3
   stream: ""
 ```
 

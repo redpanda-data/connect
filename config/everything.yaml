@@ -574,11 +574,6 @@ output:
       cas_file: ""
       skip_cert_verify: false
   kinesis:
-    backoff:
-      initial_interval: 500ms
-      max_interval: 3s
-      max_elapsed_time: 10s
-      max_retries: 3
     endpoint: ""
     region: eu-west-1
     stream: ""
@@ -589,6 +584,11 @@ output:
       secret: ""
       token: ""
       role: ""
+    retries: 3
+    backoff:
+      initial_interval: 500ms
+      max_interval: 3s
+      max_elapsed_time: 10s
   mqtt:
     urls:
     - tcp://localhost:1883
