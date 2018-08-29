@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.26.3 - 2018-08-29
+
+### Added
+
+- New `zip` option for the `archive` and `unarchive` processors.
+
 ### Changed
 
 - The `kinesis` output type now supports batched sends and per message
