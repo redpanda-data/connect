@@ -390,10 +390,10 @@ alternatively force the partitioner to round-robin partitions with the field
 type: kinesis
 kinesis:
   backoff:
-    initial_interval: ""
-    max_elapsed_time: ""
-    max_interval: ""
-    max_retries: 0
+    initial_interval: 500ms
+    max_elapsed_time: 10s
+    max_interval: 3s
+    max_retries: 3
   credentials:
     id: ""
     role: ""
@@ -406,10 +406,12 @@ kinesis:
   stream: ""
 ```
 
-Sends messages to a Kinesis stream, both the `partition_key`
-(required) and `hash_key` (optional) fields can be dynamically set
-using function interpolations described
-[here](../config_interpolation.md#functions).
+Sends messages to a Kinesis stream.
+
+Both the `partition_key`(required) and `hash_key` (optional)
+fields can be dynamically set using function interpolations described
+[here](../config_interpolation.md#functions). When sending batched messages the
+interpolations are performed per message part.
 
 ## `mqtt`
 

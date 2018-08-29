@@ -146,6 +146,7 @@ func TestKinesisWriteChunk(t *testing.T) {
 }
 
 func TestKinesisWriteChunkWithThrottling(t *testing.T) {
+	t.Parallel()
 	batchLengths := []int{}
 	n := 1200
 	k := Kinesis{
@@ -202,6 +203,7 @@ func TestKinesisWriteChunkWithThrottling(t *testing.T) {
 }
 
 func TestKinesisWriteError(t *testing.T) {
+	t.Parallel()
 	var calls int
 	k := Kinesis{
 		backoff: backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2),
@@ -231,6 +233,7 @@ func TestKinesisWriteError(t *testing.T) {
 }
 
 func TestKinesisWriteMessageThrottling(t *testing.T) {
+	t.Parallel()
 	var calls [][]*kinesis.PutRecordsRequestEntry
 	k := Kinesis{
 		backoff: backoff.NewExponentialBackOff(),
@@ -280,6 +283,7 @@ func TestKinesisWriteMessageThrottling(t *testing.T) {
 }
 
 func TestKinesisWriteBackoffMaxRetriesExceeded(t *testing.T) {
+	t.Parallel()
 	var calls int
 	k := Kinesis{
 		backoff: backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2),
@@ -306,7 +310,7 @@ func TestKinesisWriteBackoffMaxRetriesExceeded(t *testing.T) {
 	msg.Append(message.NewPart([]byte(`{"foo":"bar","id":123}`)))
 
 	if err := k.Write(msg); err == nil {
-		t.Error(errors.New("Expected kinesis.Write to error"))
+		t.Error(errors.New("expected kinesis.Write to error"))
 	}
 	if exp := 3; calls != exp {
 		t.Errorf("Expected kinesis.PutRecords to have call count %d, got %d", exp, calls)

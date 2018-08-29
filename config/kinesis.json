@@ -37,10 +37,10 @@
 		"type": "kinesis",
 		"kinesis": {
 			"backoff": {
-				"initial_interval": "",
-				"max_elapsed_time": "",
-				"max_interval": "",
-				"max_retries": 0
+				"initial_interval": "500ms",
+				"max_elapsed_time": "10s",
+				"max_interval": "3s",
+				"max_retries": 3
 			},
 			"credentials": {
 				"id": "",

@@ -44,7 +44,7 @@ import (
 
 const (
 	kinesisMaxRecordsCount = 500
-	mebibyte = 1048576
+	mebibyte               = 1048576
 )
 
 var (
@@ -73,6 +73,13 @@ type KinesisConfigBackoff struct {
 // NewKinesisConfig creates a new Config with default values.
 func NewKinesisConfig() KinesisConfig {
 	return KinesisConfig{
+		Backoff: KinesisConfigBackoff{
+			MaxRetries:      3,
+			InitialInterval: "500ms",
+			MaxInterval:     "3s",
+			MaxElapsedTime:  "10s",
+		},
+		Endpoint:     "",
 		Region:       "eu-west-1",
 		Stream:       "",
 		HashKey:      "",
@@ -162,8 +169,7 @@ func (a *Kinesis) toRecords(msg types.Message) ([]*kinesis.PutRecordsRequestEntr
 	entries := make([]*kinesis.PutRecordsRequestEntry, msg.Len())
 
 	err := msg.Iter(func(i int, p types.Part) error {
-		m := message.New(nil)
-		m.Append(p)
+		m := message.Lock(msg, i)
 
 		entry := kinesis.PutRecordsRequestEntry{
 			Data:         p.Get(),
@@ -248,7 +254,7 @@ func (a *Kinesis) Write(msg types.Message) error {
 	}
 
 	input := &kinesis.PutRecordsInput{
-		Records: records,
+		Records:    records,
 		StreamName: a.streamName,
 	}
 
