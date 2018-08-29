@@ -75,9 +75,9 @@ archive:
 ```
 
 Archives all the parts of a message into a single part according to the selected
-archive type. Supported archive types are: tar, binary, lines.
+archive type. Supported archive types are: tar, zip, binary, lines.
 
-Some archive types (such as tar) treat each archive item (message part) as a
+Some archive types (such as tar, zip) treat each archive item (message part) as a
 file with a path. Since message parts only contain raw data a unique path must
 be generated for each part. This can be done by using function interpolations on
 the 'path' field as described [here](../config_interpolation.md#functions). For
@@ -988,7 +988,7 @@ unarchive:
 ```
 
 Unarchives parts of a message according to the selected archive type into
-multiple parts. Supported archive types are: tar, binary, lines.
+multiple parts. Supported archive types are: tar, zip, binary, lines.
 
 When a part is unarchived it is split into more message parts that replace the
 original part. If you wish to split the archive into one message per file then
@@ -996,5 +996,8 @@ follow this with the 'split' processor.
 
 Parts that are selected but fail to unarchive (invalid format) will be removed
 from the message. If the message results in zero parts it is skipped entirely.
+
+For the unarchivers that contain file information (tar, zip), a metadata field
+is added to each part called `archive_filename` with the extracted filename.
 
 [0]: ./examples.md

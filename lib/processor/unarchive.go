@@ -22,6 +22,7 @@ package processor
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"fmt"
 	"io"
@@ -40,14 +41,17 @@ func init() {
 		constructor: NewUnarchive,
 		description: `
 Unarchives parts of a message according to the selected archive type into
-multiple parts. Supported archive types are: tar, binary, lines.
+multiple parts. Supported archive types are: tar, zip, binary, lines.
 
 When a part is unarchived it is split into more message parts that replace the
 original part. If you wish to split the archive into one message per file then
 follow this with the 'split' processor.
 
 Parts that are selected but fail to unarchive (invalid format) will be removed
-from the message. If the message results in zero parts it is skipped entirely.`,
+from the message. If the message results in zero parts it is skipped entirely.
+
+For the unarchivers that contain file information (tar, zip), a metadata field
+is added to each part called ` + "`archive_filename`" + ` with the extracted filename.`,
 	}
 }
 
@@ -79,7 +83,7 @@ func tarUnarchive(part types.Part) ([]types.Part, error) {
 
 	// Iterate through the files in the archive.
 	for {
-		_, err := tr.Next()
+		h, err := tr.Next()
 		if err == io.EOF {
 			// end of tar archive
 			break
@@ -95,7 +99,36 @@ func tarUnarchive(part types.Part) ([]types.Part, error) {
 
 		newParts = append(newParts,
 			message.NewPart(newPartBuf.Bytes()).
-				SetMetadata(part.Metadata().Copy()))
+				SetMetadata(part.Metadata().Copy().Set("archive_filename", h.Name)))
+	}
+
+	return newParts, nil
+}
+
+func zipUnarchive(part types.Part) ([]types.Part, error) {
+	buf := bytes.NewReader(part.Get())
+	zr, err := zip.NewReader(buf, int64(buf.Len()))
+	if err != nil {
+		return nil, err
+	}
+
+	var newParts []types.Part
+
+	// Iterate through the files in the archive.
+	for _, f := range zr.File {
+		fr, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+
+		newPartBuf := bytes.Buffer{}
+		if _, err = newPartBuf.ReadFrom(fr); err != nil {
+			return nil, err
+		}
+
+		newParts = append(newParts,
+			message.NewPart(newPartBuf.Bytes()).
+				SetMetadata(part.Metadata().Copy().Set("archive_filename", f.Name)))
 	}
 
 	return newParts, nil
@@ -128,6 +161,8 @@ func strToUnarchiver(str string) (unarchiveFunc, error) {
 	switch str {
 	case "tar":
 		return tarUnarchive, nil
+	case "zip":
+		return zipUnarchive, nil
 	case "binary":
 		return binaryUnarchive, nil
 	case "lines":
