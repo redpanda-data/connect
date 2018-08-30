@@ -51,10 +51,28 @@ cache is the same for both inputs.
 
 ## `memcached`
 
+``` yaml
+type: memcached
+memcached:
+  addresses:
+  - localhost:11211
+  prefix: ""
+  retries: 3
+  retry_period_ms: 500
+  ttl: 300
+```
+
 Connects to a cluster of memcached services, a prefix can be specified to allow
 multiple cache types to share a memcached cluster under different namespaces.
 
 ## `memory`
+
+``` yaml
+type: memory
+memory:
+  compaction_interval_s: 60
+  ttl: 300
+```
 
 The memory cache simply stores key/value pairs in a map held in memory. This
 cache is therefore reset every time the service restarts. Each item in the cache
@@ -64,3 +82,4 @@ during the next compaction.
 A compaction only occurs during a write where the time since the last compaction
 is above the compaction interval. It is therefore possible to obtain values of
 keys that have expired between compactions.
+
