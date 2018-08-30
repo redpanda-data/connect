@@ -17,8 +17,9 @@ input:
     prefetch_size: 0
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
   broker:
     copies: 1
     inputs: []
@@ -47,8 +48,9 @@ input:
     drop_on: []
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
     oauth:
       enabled: false
       consumer_key: ""
@@ -87,8 +89,9 @@ input:
     target_version: 1.0.0
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
   kafka_balanced:
     addresses:
     - localhost:9092
@@ -101,8 +104,9 @@ input:
     target_version: 1.0.0
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
   kinesis:
     region: eu-west-1
     credentials:
@@ -412,8 +416,9 @@ pipeline:
         drop_on: []
         tls:
           enabled: false
-          cas_file: ""
+          root_cas_file: ""
           skip_cert_verify: false
+          client_certs: []
         oauth:
           enabled: false
           consumer_key: ""
@@ -496,8 +501,9 @@ output:
     immediate: false
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
   broker:
     copies: 1
     pattern: fan_out
@@ -536,8 +542,9 @@ output:
     drop_on: []
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
     oauth:
       enabled: false
       consumer_key: ""
@@ -572,8 +579,9 @@ output:
     target_version: 1.0.0
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
   kinesis:
     endpoint: ""
     region: eu-west-1

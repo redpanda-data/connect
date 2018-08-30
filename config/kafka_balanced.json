@@ -17,8 +17,9 @@
 			"start_from_oldest": true,
 			"target_version": "1.0.0",
 			"tls": {
-				"cas_file": "",
+				"client_certs": [],
 				"enabled": false,
+				"root_cas_file": "",
 				"skip_cert_verify": false
 			},
 			"topics": [

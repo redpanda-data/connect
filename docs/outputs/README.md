@@ -61,8 +61,9 @@ amqp:
   mandatory: false
   persistent: false
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   url: amqp://guest:guest@localhost:5672/
 ```
@@ -276,8 +277,9 @@ http_client:
   retry_period_ms: 1000
   timeout_ms: 5000
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   url: http://localhost:4195/post
   verb: POST
@@ -361,8 +363,9 @@ kafka:
   target_version: 1.0.0
   timeout_ms: 5000
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   topic: benthos_stream
 ```
