@@ -93,6 +93,7 @@ input:
         commit_period_ms: ${INPUT_KAFKA_BALANCED_COMMIT_PERIOD_MS:1000}
         consumer_group: ${INPUT_KAFKA_BALANCED_CONSUMER_GROUP:benthos_consumer_group}
         start_from_oldest: ${INPUT_KAFKA_BALANCED_START_FROM_OLDEST:true}
+        target_version: ${INPUT_KAFKA_BALANCED_TARGET_VERSION:1.0.0}
         tls:
           cas_file: ${INPUT_KAFKA_BALANCED_TLS_CAS_FILE}
           enabled: ${INPUT_KAFKA_BALANCED_TLS_ENABLED:false}
