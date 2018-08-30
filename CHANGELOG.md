@@ -5,10 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.27.0 - 2018-08-30
+
 ### Added
 
 - Function interpolation for the `topic` field of the `kafka` output.
 - New `target_version` field for the `kafka_balanced` input.
+- TLS config fields for client certificates.
 
 ### 0.26.3 - 2018-08-29
 
