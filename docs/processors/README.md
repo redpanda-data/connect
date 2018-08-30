@@ -754,7 +754,6 @@ populate them with context about the message.
 
 ``` yaml
 type: noop
-noop: null
 ```
 
 Noop is a no-op processor that does nothing, the message passes through

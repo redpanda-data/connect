@@ -115,6 +115,7 @@ type Config struct {
 	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
+	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
@@ -151,6 +152,7 @@ func NewConfig() Config {
 		MergeJSON:    NewMergeJSONConfig(),
 		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),
+		Plugin:       nil,
 		ProcessField: NewProcessFieldConfig(),
 		ProcessMap:   NewProcessMapConfig(),
 		Sample:       NewSampleConfig(),
@@ -182,7 +184,12 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 			return nil, err
 		}
 	} else {
-		outputMap[conf.Type] = hashMap[conf.Type]
+		if _, exists := hashMap[conf.Type]; exists {
+			outputMap[conf.Type] = hashMap[conf.Type]
+		}
+		if _, exists := pluginSpecs[conf.Type]; exists {
+			outputMap["plugin"] = hashMap["plugin"]
+		}
 	}
 
 	return outputMap, nil
@@ -200,6 +207,18 @@ func (m *Config) UnmarshalJSON(bytes []byte) error {
 		return err
 	}
 
+	if spec, exists := pluginSpecs[aliased.Type]; exists {
+		dummy := struct {
+			Conf interface{} `json:"plugin"`
+		}{
+			Conf: spec.confConstructor(),
+		}
+		if err := json.Unmarshal(bytes, &dummy); err != nil {
+			return fmt.Errorf("failed to parse plugin config: %v", err)
+		}
+		aliased.Plugin = dummy.Conf
+	}
+
 	*m = Config(aliased)
 	return nil
 }
@@ -212,6 +231,19 @@ func (m *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	if err := unmarshal(&aliased); err != nil {
 		return err
+	}
+
+	if spec, exists := pluginSpecs[aliased.Type]; exists {
+		confBytes, err := yaml.Marshal(aliased.Plugin)
+		if err != nil {
+			return err
+		}
+
+		conf := spec.confConstructor()
+		if err = yaml.Unmarshal(confBytes, conf); err != nil {
+			return err
+		}
+		aliased.Plugin = conf
 	}
 
 	*m = Config(aliased)
@@ -313,6 +345,9 @@ func New(
 ) (Type, error) {
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats)
+	}
+	if c, ok := pluginSpecs[conf.Type]; ok {
+		return c.constructor(conf.Plugin, mgr, log, stats)
 	}
 	return nil, types.ErrInvalidProcessorType
 }
