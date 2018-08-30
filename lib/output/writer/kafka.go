@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
@@ -84,7 +85,8 @@ type Kafka struct {
 
 	mDroppedMaxBytes metrics.StatCounter
 
-	key *text.InterpolatedBytes
+	key   *text.InterpolatedBytes
+	topic *text.InterpolatedString
 
 	producer    sarama.SyncProducer
 	compression sarama.CompressionCodec
@@ -106,6 +108,7 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 
 		conf:        conf,
 		key:         text.NewInterpolatedBytes([]byte(conf.Key)),
+		topic:       text.NewInterpolatedString(conf.Topic),
 		compression: compression,
 	}
 
@@ -210,9 +213,11 @@ func (k *Kafka) Write(msg types.Message) error {
 			return nil
 		}
 
-		key := k.key.Get(msg)
+		lMsg := message.Lock(msg, i)
+
+		key := k.key.Get(lMsg)
 		nextMsg := &sarama.ProducerMessage{
-			Topic: k.conf.Topic,
+			Topic: k.topic.Get(lMsg),
 			Value: sarama.ByteEncoder(p.Get()),
 		}
 		if len(key) > 0 {

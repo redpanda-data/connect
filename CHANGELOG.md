@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Function interpolation for the `topic` field of the `kafka` output.
+- New `target_version` field for the `kafka_balanced` input.
+
 ### 0.26.3 - 2018-08-29
 
 ### Added

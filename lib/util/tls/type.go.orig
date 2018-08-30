@@ -30,13 +30,20 @@ import (
 
 // Config contains configuration params for TLS.
 type Config struct {
+<<<<<<< HEAD
 	Enabled            bool              `json:"enabled" yaml:"enabled"`
 	RootCAsFile        string            `json:"cas_file" yaml:"cas_file"`
 	InsecureSkipVerify bool              `json:"skip_cert_verify" yaml:"skip_cert_verify"`
+	Certificates       []tls.Certificate `json:"certificates" yaml:"certificates"`
+=======
+	Enabled            bool   `json:"enabled" yaml:"enabled"`
+	RootCAsFile        string `json:"cas_file" yaml:"cas_file"`
+	InsecureSkipVerify bool   `json:"skip_cert_verify" yaml:"skip_cert_verify"`
 	ClientCertificates []struct {
 		CertFile string `json:"cert_file" yaml:"cert_file"`
 		KeyFile  string `json:"key_file" yaml:"key_file"`
 	} `json:"client_certs" yaml:"client_certs"`
+>>>>>>> upstream/master
 }
 
 // NewConfig creates a new Config with default values.
@@ -76,7 +83,11 @@ func (c *Config) Get() (*tls.Config, error) {
 	return &tls.Config{
 		InsecureSkipVerify: c.InsecureSkipVerify,
 		RootCAs:            rootCAs,
+<<<<<<< HEAD
+		Certificates:       c.Certificates,
+=======
 		Certificates:       clientCerts,
+>>>>>>> upstream/master
 	}, nil
 }
 

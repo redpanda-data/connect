@@ -98,6 +98,7 @@ input:
     topics:
     - benthos_stream
     start_from_oldest: true
+    target_version: 1.0.0
     tls:
       enabled: false
       cas_file: ""
