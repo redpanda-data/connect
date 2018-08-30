@@ -41,9 +41,13 @@ replicas or just a single broker.
 It is possible to specify a compression codec to use out of the following
 options: none, snappy, lz4 and gzip.
 
-If the field 'key' is not empty then each message will be given its contents as
-a key. This field can be dynamically set using function interpolations described
-[here](../config_interpolation.md#functions).
+If the field ` + "`key`" + ` is not empty then each message will be given its
+contents as a key.
+
+Both the ` + "`key` and `topic`" + ` fields can be dynamically set using
+function interpolations described [here](../config_interpolation.md#functions).
+When sending batched messages these interpolations are performed per message
+part.
 
 By default the paritioner will select partitions based on a hash of the key
 value. If the key is empty then a partition is chosen at random. You can

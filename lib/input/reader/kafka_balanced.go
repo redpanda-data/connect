@@ -46,6 +46,7 @@ type KafkaBalancedConfig struct {
 	CommitPeriodMS  int         `json:"commit_period_ms" yaml:"commit_period_ms"`
 	Topics          []string    `json:"topics" yaml:"topics"`
 	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TargetVersion   string      `json:"target_version" yaml:"target_version"`
 	TLS             btls.Config `json:"tls" yaml:"tls"`
 }
 
@@ -58,6 +59,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		CommitPeriodMS:  1000,
 		Topics:          []string{"benthos_stream"},
 		StartFromOldest: true,
+		TargetVersion:   sarama.V1_0_0_0.String(),
 		TLS:             btls.NewConfig(),
 	}
 }
@@ -68,6 +70,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 // partitions across other consumers of the same consumer group.
 type KafkaBalanced struct {
 	consumer *cluster.Consumer
+	version  sarama.KafkaVersion
 	cMut     sync.Mutex
 
 	tlsConf *tls.Config
@@ -117,6 +120,10 @@ func NewKafkaBalanced(
 			}
 		}
 	}
+	var err error
+	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
+		return nil, err
+	}
 	return &k, nil
 }
 
@@ -156,6 +163,7 @@ func (k *KafkaBalanced) Connect() error {
 	config := cluster.NewConfig()
 	config.ClientID = k.conf.ClientID
 	config.Net.DialTimeout = time.Second
+	config.Version = k.version
 	config.Consumer.Return.Errors = true
 	config.Group.Return.Notifications = true
 	config.Net.TLS.Enable = k.conf.TLS.Enabled
