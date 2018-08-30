@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
 - New `target_version` field for the `kafka_balanced` input.
 - TLS config fields for client certificates.
 
+### Changed
+
+- TLS config field `cas_file` has been renamed `root_cas_file`.
+
 ### 0.26.3 - 2018-08-29
 
 ### Added
