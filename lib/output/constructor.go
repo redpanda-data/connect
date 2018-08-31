@@ -107,6 +107,7 @@ type Config struct {
 	NATS          NATSConfig                 `json:"nats" yaml:"nats"`
 	NATSStream    NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
 	NSQ           NSQConfig                  `json:"nsq" yaml:"nsq"`
+	Plugin        interface{}                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	RedisList     writer.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub   writer.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
 	RedisStreams  writer.RedisStreamsConfig  `json:"redis_streams" yaml:"redis_streams"`
@@ -138,6 +139,7 @@ func NewConfig() Config {
 		NATS:          NewNATSConfig(),
 		NATSStream:    NewNATSStreamConfig(),
 		NSQ:           NewNSQConfig(),
+		Plugin:        nil,
 		RedisList:     writer.NewRedisListConfig(),
 		RedisPubSub:   writer.NewRedisPubSubConfig(),
 		RedisStreams:  writer.NewRedisStreamsConfig(),
@@ -174,7 +176,16 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 			return nil, err
 		}
 	} else {
-		outputMap[t] = hashMap[t]
+		if _, exists := hashMap[t]; exists {
+			outputMap[t] = hashMap[t]
+		}
+		if spec, exists := pluginSpecs[conf.Type]; exists {
+			if spec.confSanitiser != nil {
+				outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
+			} else {
+				outputMap["plugin"] = hashMap["plugin"]
+			}
+		}
 	}
 
 	if len(conf.Processors) == 0 {
@@ -207,6 +218,18 @@ func (c *Config) UnmarshalJSON(bytes []byte) error {
 		return err
 	}
 
+	if spec, exists := pluginSpecs[aliased.Type]; exists {
+		dummy := struct {
+			Conf interface{} `json:"plugin"`
+		}{
+			Conf: spec.confConstructor(),
+		}
+		if err := json.Unmarshal(bytes, &dummy); err != nil {
+			return fmt.Errorf("failed to parse plugin config: %v", err)
+		}
+		aliased.Plugin = dummy.Conf
+	}
+
 	*c = Config(aliased)
 	return nil
 }
@@ -219,6 +242,19 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	if err := unmarshal(&aliased); err != nil {
 		return err
+	}
+
+	if spec, exists := pluginSpecs[aliased.Type]; exists {
+		confBytes, err := yaml.Marshal(aliased.Plugin)
+		if err != nil {
+			return err
+		}
+
+		conf := spec.confConstructor()
+		if err = yaml.Unmarshal(confBytes, conf); err != nil {
+			return err
+		}
+		aliased.Plugin = conf
 	}
 
 	*c = Config(aliased)
@@ -323,6 +359,13 @@ func New(
 		output, err := c.constructor(conf, mgr, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create output '%v': %v", conf.Type, err)
+		}
+		return WrapWithPipelines(output, pipelines...)
+	}
+	if c, ok := pluginSpecs[conf.Type]; ok {
+		output, err := c.constructor(conf.Plugin, mgr, log, stats)
+		if err != nil {
+			return nil, err
 		}
 		return WrapWithPipelines(output, pipelines...)
 	}

@@ -67,7 +67,7 @@ type Xor struct {
 	children []Type
 }
 
-// NewXor returns an Xor processor.
+// NewXor returns an Xor condition.
 func NewXor(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
