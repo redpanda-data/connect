@@ -84,6 +84,16 @@ plugin:
 func TestPluginDescriptions(t *testing.T) {
 	RegisterPlugin("foo", newMockPluginConf, nil)
 	RegisterPlugin("bar", newMockPluginConf, nil)
+	DocumentPlugin("bar", "This is a bar plugin.", func(conf interface{}) interface{} {
+		mConf, ok := conf.(*mockPluginConf)
+		if !ok {
+			t.Fatalf("failed to cast config: %T", conf)
+		}
+		return map[string]interface{}{
+			"foo": mConf.Foo,
+			"bar": mConf.Bar,
+		}
+	})
 
 	exp := `Processor Plugins
 =================
@@ -104,9 +114,10 @@ beyond the standard set.
 type: bar
 plugin:
   bar: change this
-  baz: 10
   foo: default
 ` + "```" + `
+
+This is a bar plugin.
 
 ## ` + "`foo`" + `
 
