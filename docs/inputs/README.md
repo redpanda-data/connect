@@ -454,6 +454,7 @@ kinesis:
     secret: ""
     token: ""
   dynamodb_table: ""
+  endpoint: ""
   limit: 100
   region: eu-west-1
   shard: "0"

@@ -109,6 +109,7 @@ input:
           secret: ${INPUT_KINESIS_CREDENTIALS_SECRET}
           token: ${INPUT_KINESIS_CREDENTIALS_TOKEN}
         dynamodb_table: ${INPUT_KINESIS_DYNAMODB_TABLE}
+        endpoint: ${INPUT_KINESIS_ENDPOINT}
         limit: ${INPUT_KINESIS_LIMIT:100}
         region: ${INPUT_KINESIS_REGION:eu-west-1}
         shard: ${INPUT_KINESIS_SHARD:0}
