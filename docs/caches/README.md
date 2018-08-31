@@ -46,8 +46,37 @@ cache is the same for both inputs.
 
 ### Contents
 
-1. [`memcached`](#memcached)
-2. [`memory`](#memory)
+1. [`dynamodb`](#dynamodb)
+2. [`memcached`](#memcached)
+3. [`memory`](#memory)
+
+## `dynamodb`
+
+``` yaml
+type: dynamodb
+dynamodb:
+  consistent_read: false
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  data_key: ""
+  endpoint: ""
+  hash_key: ""
+  region: ""
+  table: ""
+  ttl: ""
+  ttl_key: ""
+```
+
+The dynamodb cache stores key/value pairs as a single document in a DynamoDB
+table. The key is stored as a string value and used as table hash key. The value
+is stored as a binary value using the 'data_key' field name. A prefix can be
+specified to allow multiple cache types to share a single DynamoDB table. An
+optional TTL duration ('ttl') and field ('ttl_key') can be specified if the 
+backing table has TTL enabled. Strong read consistency can be enabled using the
+'consistent_read' configuration field.
 
 ## `memcached`
 
