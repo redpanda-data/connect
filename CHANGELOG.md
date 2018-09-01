@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.28.0 - 2018-09-01
+
+### Added
+
+- New `endpoint` field added to `kinesis` input.
+- New `dynamodb` cache type.
+
 ### 0.27.0 - 2018-08-30
 
 ### Added
