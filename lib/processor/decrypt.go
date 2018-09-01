@@ -68,7 +68,7 @@ func NewDecryptConfig() DecryptConfig {
 
 type decryptFunc func(key string, bytes []byte) ([]byte, error)
 
-func pgpDecode(key string, b []byte) ([]byte, error) {
+func pgpDecrypt(key string, b []byte) ([]byte, error) {
 	// read the key from the filesystem
 	keyData, err := os.Open(key)
 	defer keyData.Close()
@@ -108,7 +108,7 @@ func pgpDecode(key string, b []byte) ([]byte, error) {
 func strToDecryptor(str string) (decryptFunc, error) {
 	switch str {
 	case "pgp":
-		return pgpDecode, nil
+		return pgpDecrypt, nil
 	}
 	return nil, fmt.Errorf("decrypt scheme not recognised: %v", str)
 }

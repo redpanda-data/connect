@@ -41,29 +41,31 @@ element will be selected, and so on.
 6. [`conditional`](#conditional)
 7. [`decode`](#decode)
 8. [`decompress`](#decompress)
-9. [`dedupe`](#dedupe)
-10. [`encode`](#encode)
-11. [`filter`](#filter)
-12. [`filter_parts`](#filter_parts)
-13. [`grok`](#grok)
-14. [`hash`](#hash)
-15. [`hash_sample`](#hash_sample)
-16. [`http`](#http)
-17. [`insert_part`](#insert_part)
-18. [`jmespath`](#jmespath)
-19. [`json`](#json)
-20. [`merge_json`](#merge_json)
-21. [`metadata`](#metadata)
-22. [`metric`](#metric)
-23. [`noop`](#noop)
-24. [`process_field`](#process_field)
-25. [`process_map`](#process_map)
-26. [`sample`](#sample)
-27. [`select_parts`](#select_parts)
-28. [`split`](#split)
-29. [`text`](#text)
-30. [`throttle`](#throttle)
-31. [`unarchive`](#unarchive)
+9. [`decrypt`](#decrypt)
+10. [`dedupe`](#dedupe)
+11. [`encode`](#encode)
+12. [`encrypt`](#encrypt)
+13. [`filter`](#filter)
+14. [`filter_parts`](#filter_parts)
+15. [`grok`](#grok)
+16. [`hash`](#hash)
+17. [`hash_sample`](#hash_sample)
+18. [`http`](#http)
+19. [`insert_part`](#insert_part)
+20. [`jmespath`](#jmespath)
+21. [`json`](#json)
+22. [`merge_json`](#merge_json)
+23. [`metadata`](#metadata)
+24. [`metric`](#metric)
+25. [`noop`](#noop)
+26. [`process_field`](#process_field)
+27. [`process_map`](#process_map)
+28. [`sample`](#sample)
+29. [`select_parts`](#select_parts)
+30. [`split`](#split)
+31. [`text`](#text)
+32. [`throttle`](#throttle)
+33. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -235,6 +237,20 @@ decompression types are: gzip, zlib, bzip2, flate.
 Parts that fail to decompress (invalid format) will be removed from the message.
 If the message results in zero parts it is skipped entirely.
 
+## `decrypt`
+
+``` yaml
+type: decrypt
+decompress:
+  scheme: pgp
+  key: "path/to/key"
+  parts: []
+```
+
+Decrypts parts of a message according to the selected scheme using the given key. Supported available
+schemes are: pgp.
+
+
 ## `dedupe`
 
 ``` yaml
@@ -282,6 +298,19 @@ encode:
 
 Encodes parts of a message according to the selected scheme. Supported schemes
 are: base64.
+
+## `encrypt`
+
+``` yaml
+type: encrypt
+decompress:
+  scheme: pgp
+  key: "path/to/key"
+  parts: []
+```
+
+Encrypts parts of a message according to the selected scheme using the given key. Supported available
+schemes are: pgp.
 
 ## `filter`
 
