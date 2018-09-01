@@ -108,6 +108,7 @@ input:
       skip_cert_verify: false
       client_certs: []
   kinesis:
+    endpoint: ""
     region: eu-west-1
     credentials:
       id: ""

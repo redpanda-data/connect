@@ -42,6 +42,7 @@ import (
 
 // KinesisConfig is configuration values for the input type.
 type KinesisConfig struct {
+	Endpoint        string                     `json:"endpoint" yaml:"endpoint"`
 	Region          string                     `json:"region" yaml:"region"`
 	Credentials     AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
 	Limit           int64                      `json:"limit" yaml:"limit"`
@@ -57,7 +58,8 @@ type KinesisConfig struct {
 // NewKinesisConfig creates a new Config with default values.
 func NewKinesisConfig() KinesisConfig {
 	return KinesisConfig{
-		Region: "eu-west-1",
+		Endpoint: "",
+		Region:   "eu-west-1",
 		Credentials: AmazonAWSCredentialsConfig{
 			ID:     "",
 			Secret: "",
@@ -121,6 +123,9 @@ func (k *Kinesis) Connect() error {
 	awsConf := aws.NewConfig()
 	if len(k.conf.Region) > 0 {
 		awsConf = awsConf.WithRegion(k.conf.Region)
+	}
+	if len(k.conf.Endpoint) > 0 {
+		awsConf = awsConf.WithEndpoint(k.conf.Endpoint)
 	}
 	if len(k.conf.Credentials.ID) > 0 {
 		awsConf = awsConf.WithCredentials(credentials.NewStaticCredentials(
