@@ -675,6 +675,20 @@ resources:
   caches:
     example:
       type: memory
+      dynamodb:
+        consistent_read: false
+        credentials:
+          id: ""
+          secret: ""
+          token: ""
+          role: ""
+        data_key: ""
+        endpoint: ""
+        hash_key: ""
+        region: ""
+        table: ""
+        ttl: ""
+        ttl_key: ""
       memcached:
         addresses:
         - localhost:11211

@@ -30,6 +30,7 @@ require (
 	github.com/gorilla/mux v1.6.2
 	github.com/gorilla/websocket v1.3.0
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
+	github.com/lib/pq v1.0.0 // indirect
 	github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.1
@@ -45,6 +46,7 @@ require (
 	github.com/pebbe/zmq4 v1.0.0
 	github.com/pierrec/lz4 v2.0.3+incompatible // indirect
 	github.com/pkg/errors v0.8.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v0.8.0
 	github.com/prometheus/client_model v0.0.0-20180712105110-5c3871d89910 // indirect
 	github.com/prometheus/common v0.0.0-20180801064454-c7de2306084e // indirect
@@ -53,6 +55,7 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20180503174638-e2704e165165 // indirect
 	github.com/sirupsen/logrus v1.0.6 // indirect
 	github.com/streadway/amqp v0.0.0-20180806233856-70e15c650864
+	github.com/stretchr/testify v1.2.2 // indirect
 	github.com/trivago/grok v1.0.0
 	golang.org/x/crypto v0.0.0-20180820150726-614d502a4dac // indirect
 	golang.org/x/net v0.0.0-20180826012351-8a410e7b638d // indirect
