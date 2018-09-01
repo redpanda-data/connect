@@ -27,7 +27,6 @@ import (
 	"golang.org/x/crypto/openpgp/armor"
 	"golang.org/x/crypto/openpgp/packet"
 	"io/ioutil"
-	"os"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -66,19 +65,11 @@ func NewDecryptConfig() DecryptConfig {
 
 //------------------------------------------------------------------------------
 
-type decryptFunc func(key string, bytes []byte) ([]byte, error)
+type decryptFunc func(key []byte, bytes []byte) ([]byte, error)
 
-func pgpDecrypt(key string, b []byte) ([]byte, error) {
-	// read the key from the filesystem
-	keyData, err := os.Open(key)
-	defer keyData.Close()
-
-	if err != nil {
-		return nil, err
-	}
-
+func pgpDecrypt(key []byte, b []byte) ([]byte, error) {
 	// decode armor
-	keyBlock, err := armor.Decode(keyData)
+	keyBlock, err := armor.Decode(bytes.NewReader(key))
 	if err != nil {
 		return nil, err
 	}
@@ -120,6 +111,7 @@ func strToDecryptor(str string) (decryptFunc, error) {
 type Decrypt struct {
 	conf DecryptConfig
 	fn   decryptFunc
+	key  []byte
 
 	log   log.Modular
 	stats metrics.Type
@@ -136,6 +128,10 @@ type Decrypt struct {
 func NewDecrypt(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	key, err := ioutil.ReadFile(conf.Decrypt.Key)
+	if err != nil {
+		return nil, err
+	}
 	cor, err := strToDecryptor(conf.Decrypt.Scheme)
 	if err != nil {
 		return nil, err
@@ -143,6 +139,7 @@ func NewDecrypt(
 	return &Decrypt{
 		conf:  conf.Decrypt,
 		fn:    cor,
+		key:   key,
 		log:   log.NewModule(".processor.decrypt"),
 		stats: stats,
 
@@ -174,7 +171,7 @@ func (c *Decrypt) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 
 	for _, index := range targetParts {
 		part := msg.Get(index).Get()
-		newPart, err := c.fn(c.conf.Key, part)
+		newPart, err := c.fn(c.key, part)
 		if err == nil {
 			c.mSucc.Incr(1)
 			newMsg.Get(index).Set(newPart)

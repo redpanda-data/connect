@@ -26,7 +26,7 @@ import (
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
 	"golang.org/x/crypto/openpgp/packet"
-	"os"
+	"io/ioutil"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -65,19 +65,11 @@ func NewEncryptConfig() EncryptConfig {
 
 //------------------------------------------------------------------------------
 
-type encryptFunc func(key string, bytes []byte) ([]byte, error)
+type encryptFunc func(key []byte, bytes []byte) ([]byte, error)
 
-func pgpEncrypt(key string, b []byte) ([]byte, error) {
-	// read the key from the filesystem
-	keyData, err := os.Open(key)
-	defer keyData.Close()
-
-	if err != nil {
-		return nil, err
-	}
-
+func pgpEncrypt(key []byte, b []byte) ([]byte, error) {
 	// decode armor
-	keyBlock, err := armor.Decode(keyData)
+	keyBlock, err := armor.Decode(bytes.NewReader(key))
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +107,7 @@ func strToEncryptr(str string) (encryptFunc, error) {
 type Encrypt struct {
 	conf EncryptConfig
 	fn   encryptFunc
+	key  []byte
 
 	log   log.Modular
 	stats metrics.Type
@@ -131,6 +124,10 @@ type Encrypt struct {
 func NewEncrypt(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	key, err := ioutil.ReadFile(conf.Encrypt.Key)
+	if err != nil {
+		return nil, err
+	}
 	cor, err := strToEncryptr(conf.Encrypt.Scheme)
 	if err != nil {
 		return nil, err
@@ -138,6 +135,7 @@ func NewEncrypt(
 	return &Encrypt{
 		conf:  conf.Encrypt,
 		fn:    cor,
+		key:   key,
 		log:   log.NewModule(".processor.encrypt"),
 		stats: stats,
 
@@ -169,7 +167,7 @@ func (c *Encrypt) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 
 	for _, index := range targetParts {
 		part := msg.Get(index).Get()
-		newPart, err := c.fn(c.conf.Key, part)
+		newPart, err := c.fn(c.key, part)
 		if err == nil {
 			c.mSucc.Incr(1)
 			newMsg.Get(index).Set(newPart)
