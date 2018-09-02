@@ -41,10 +41,13 @@ func init() {
 	Constructors[TypeRetry] = TypeSpec{
 		constructor: NewRetry,
 		description: `
-Attempts to write messages to a child output, if the write fails for any reason
-the message is retried until success. Messages in Benthos are always retried,
-but this would usually involve propagating the error back to the source of the
-message, whereby it reprocessed before reaching the output layer once again.
+Attempts to write messages to a child output and if the write fails for any
+reason the message is retried either until success or, if the retries or max
+elapsed time fields are non-zero, either is reached.
+
+All messages in Benthos are always retried on an output error, but this would
+usually involve propagating the error back to the source of the message, whereby
+it would be reprocessed before reaching the output layer once again.
 
 This output type is useful whenever we wish to avoid reprocessing a message on
 the event of a failed send. We might, for example, have a dedupe processor that

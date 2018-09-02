@@ -72,8 +72,8 @@ is reprocessed due to output failure or a service restart then it will be lost
 due to failing the deduplication step on the second attempt.
 
 You can avoid reprocessing payloads on failed sends by using either the
-` + "[`retry`](../output/README.md#retry)" + ` output type or the
-` + "[`broker`](../output/README.md#broker)" + ` output type using the 'try'
+` + "[`retry`](../outputs/README.md#retry)" + ` output type or the
+` + "[`broker`](../outputs/README.md#broker)" + ` output type using the 'try'
 pattern. However, if the service is restarted between retry attempts then the
 message can still be lost.
 
