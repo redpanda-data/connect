@@ -196,6 +196,16 @@ Checks whether the contents of a metadata key, parsed as a floating point
 number, is greater than an argument. Returns false if the metadata value cannot
 be parsed into a number.
 
+### `regexp_partial`
+
+Checks whether any section of the contents of a metadata key matches a regular
+expression (RE2 syntax).
+
+### `regexp_exact`
+
+Checks whether the contents of a metadata key exactly matches a regular expression 
+(RE2 syntax).
+
 ## `not`
 
 ``` yaml

@@ -23,6 +23,7 @@ package condition
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -64,7 +65,17 @@ parsed into a number.
 
 Checks whether the contents of a metadata key, parsed as a floating point
 number, is greater than an argument. Returns false if the metadata value cannot
-be parsed into a number.`,
+be parsed into a number.
+
+### ` + "`regexp_partial`" + `
+
+Checks whether any section of the contents of a metadata key matches a regular
+expression (RE2 syntax).
+
+### ` + "`regexp_exact`" + `
+
+Checks whether the contents of a metadata key exactly matches a regular expression 
+(RE2 syntax).`,
 	}
 }
 
@@ -144,6 +155,27 @@ func metadataLessThanOperator(key string, argStr string) (metadataOperator, erro
 	}, nil
 }
 
+func metadataRegexpPartialOperator(key string, argStr string) (metadataOperator, error) {
+	compiled, err := regexp.Compile(argStr)
+	if err != nil {
+		return nil, err
+	}
+	return func(md types.Metadata) bool {
+		return compiled.MatchString(md.Get(key))
+	}, nil
+}
+
+func metadataRegexpExactOperator(key string, argStr string) (metadataOperator, error) {
+	compiled, err := regexp.Compile(argStr)
+	if err != nil {
+		return nil, err
+	}
+	return func(md types.Metadata) bool {
+		val := md.Get(key)
+		return len(compiled.FindString(val)) == len(val)
+	}, nil
+}
+
 func strToMetadataOperator(str, key, arg string) (metadataOperator, error) {
 	switch str {
 	case "exists":
@@ -156,6 +188,10 @@ func strToMetadataOperator(str, key, arg string) (metadataOperator, error) {
 		return metadataGreaterThanOperator(key, arg)
 	case "less_than":
 		return metadataLessThanOperator(key, arg)
+	case "regexp_partial":
+		return metadataRegexpPartialOperator(key, arg)
+	case "regexp_exact":
+		return metadataRegexpExactOperator(key, arg)
 	}
 	return nil, ErrInvalidMetadataOperator
 }
