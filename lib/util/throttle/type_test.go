@@ -112,7 +112,7 @@ func TestThrottleExponent(t *testing.T) {
 		OptThrottlePeriod(base),
 	)
 
-	errMargin := 0.005
+	errMargin := 0.05
 
 	tBefore := time.Now()
 	throt.ExponentialRetry()
