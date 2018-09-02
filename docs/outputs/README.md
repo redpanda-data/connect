@@ -20,6 +20,11 @@ are content aware logical operators that can be combined using boolean logic.
 For more information regarding conditions, including a full list of available
 conditions please [read the docs here](../conditions/README.md)
 
+### Dead Letter Queues
+
+It's possible to create fallback outputs for when an output target fails using
+a [`broker`](#broker) output with the 'try' pattern.
+
 ### Contents
 
 1. [`amqp`](#amqp)

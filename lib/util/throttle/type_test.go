@@ -80,7 +80,7 @@ func TestThrottleLinear(t *testing.T) {
 		OptThrottlePeriod(time.Millisecond*100),
 	)
 
-	errMargin := 0.005
+	errMargin := 0.05
 
 	tBefore := time.Now()
 	throt.Retry()

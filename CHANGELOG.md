@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.29.0 - 2018-09-02
+
 ### Added
 
 - New `retry` output.
+- Added `regex_partial` and `regex_exact` operators to the `metadata` condition.
 
 ### Changed
 
