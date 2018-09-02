@@ -271,6 +271,23 @@ dedupe:
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).
 
+### Delivery Guarantees
+
+Performing a deduplication step on a payload in transit voids any at-least-once
+guarantees that the payload previously had, as it's impossible to fully
+guarantee that the message is propagated to the next destination. If the message
+is reprocessed due to output failure or a service restart then it will be lost
+due to failing the deduplication step on the second attempt.
+
+You can avoid reprocessing payloads on failed sends by using either the
+[`retry`](../output/README.md#retry) output type or the
+[`broker`](../output/README.md#broker) output type using the 'try'
+pattern. However, if the service is restarted between retry attempts then the
+message can still be lost.
+
+It is worth strongly considering the delivery guarantees that your pipeline is
+meant to provide when using this processor.
+
 ## `encode`
 
 ``` yaml

@@ -32,9 +32,9 @@ output:
   type: kinesis
   kinesis:
     backoff:
-      initial_interval: 500ms
-      max_elapsed_time: 10s
-      max_interval: 3s
+      initial_interval: 1s
+      max_elapsed_time: 30s
+      max_interval: 5s
     credentials:
       id: ""
       role: ""

@@ -596,9 +596,9 @@ output:
       role: ""
     max_retries: 0
     backoff:
-      initial_interval: 500ms
-      max_interval: 3s
-      max_elapsed_time: 10s
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
   mqtt:
     urls:
     - tcp://localhost:1883
@@ -637,6 +637,13 @@ output:
     stream: benthos_stream
     body_key: body
     max_length: 0
+  retry:
+    output: {}
+    max_retries: 0
+    backoff:
+      initial_interval: 500ms
+      max_interval: 3s
+      max_elapsed_time: 0s
   s3:
     region: eu-west-1
     bucket: ""

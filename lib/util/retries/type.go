@@ -50,7 +50,7 @@ func NewConfig() Config {
 		Backoff: Backoff{
 			InitialInterval: "500ms",
 			MaxInterval:     "3s",
-			MaxElapsedTime:  "10s",
+			MaxElapsedTime:  "0s",
 		},
 	}
 }

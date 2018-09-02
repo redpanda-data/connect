@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `retry` output.
+
 ### Changed
 
 - The `kinesis` output field `retries` has been renamed `max_retries` in order

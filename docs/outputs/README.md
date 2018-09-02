@@ -41,10 +41,11 @@ conditions please [read the docs here](../conditions/README.md)
 17. [`redis_list`](#redis_list)
 18. [`redis_pubsub`](#redis_pubsub)
 19. [`redis_streams`](#redis_streams)
-20. [`s3`](#s3)
-21. [`sqs`](#sqs)
-22. [`stdout`](#stdout)
-23. [`websocket`](#websocket)
+20. [`retry`](#retry)
+21. [`s3`](#s3)
+22. [`sqs`](#sqs)
+23. [`stdout`](#stdout)
+24. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -397,9 +398,9 @@ alternatively force the partitioner to round-robin partitions with the field
 type: kinesis
 kinesis:
   backoff:
-    initial_interval: 500ms
-    max_elapsed_time: 10s
-    max_interval: 3s
+    initial_interval: 1s
+    max_elapsed_time: 30s
+    max_interval: 5s
   credentials:
     id: ""
     role: ""
@@ -536,6 +537,32 @@ Redis stream entries are key/value pairs, as such it is necessary to specify the
 key to be set to the body of the message. All metadata fields of the message
 will also be set as key/value pairs, if there is a key collision between
 a metadata item and the body then the body takes precedence.
+
+## `retry`
+
+``` yaml
+type: retry
+retry:
+  backoff:
+    initial_interval: 500ms
+    max_elapsed_time: 0s
+    max_interval: 3s
+  max_retries: 0
+  output: {}
+```
+
+Attempts to write messages to a child output, if the write fails for any reason
+the message is retried until success. Messages in Benthos are always retried,
+but this would usually involve propagating the error back to the source of the
+message, whereby it reprocessed before reaching the output layer once again.
+
+This output type is useful whenever we wish to avoid reprocessing a message on
+the event of a failed send. We might, for example, have a dedupe processor that
+we want to avoid reapplying to the same message more than once in the pipeline.
+
+Rather than retrying the same output you may wish to retry the send using a
+different output target (a dead letter queue). In which case you should instead
+use the [`broker`](#broker) output type with the pattern 'try'.
 
 ## `s3`
 

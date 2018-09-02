@@ -79,6 +79,7 @@ const (
 	TypeRedisList     = "redis_list"
 	TypeRedisPubSub   = "redis_pubsub"
 	TypeRedisStreams  = "redis_streams"
+	TypeRetry         = "retry"
 	TypeS3            = "s3"
 	TypeSQS           = "sqs"
 	TypeSTDOUT        = "stdout"
@@ -111,6 +112,7 @@ type Config struct {
 	RedisList     writer.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub   writer.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
 	RedisStreams  writer.RedisStreamsConfig  `json:"redis_streams" yaml:"redis_streams"`
+	Retry         RetryConfig                `json:"retry" yaml:"retry"`
 	S3            writer.AmazonS3Config      `json:"s3" yaml:"s3"`
 	SQS           writer.AmazonSQSConfig     `json:"sqs" yaml:"sqs"`
 	STDOUT        STDOUTConfig               `json:"stdout" yaml:"stdout"`
@@ -143,6 +145,7 @@ func NewConfig() Config {
 		RedisList:     writer.NewRedisListConfig(),
 		RedisPubSub:   writer.NewRedisPubSubConfig(),
 		RedisStreams:  writer.NewRedisStreamsConfig(),
+		Retry:         NewRetryConfig(),
 		S3:            writer.NewAmazonS3Config(),
 		SQS:           writer.NewAmazonSQSConfig(),
 		STDOUT:        NewSTDOUTConfig(),

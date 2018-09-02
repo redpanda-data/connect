@@ -65,6 +65,10 @@ type KinesisConfig struct {
 
 // NewKinesisConfig creates a new Config with default values.
 func NewKinesisConfig() KinesisConfig {
+	rConf := retries.NewConfig()
+	rConf.Backoff.InitialInterval = "1s"
+	rConf.Backoff.MaxInterval = "5s"
+	rConf.Backoff.MaxElapsedTime = "30s"
 	return KinesisConfig{
 		Endpoint:     "",
 		Region:       "eu-west-1",
@@ -76,7 +80,7 @@ func NewKinesisConfig() KinesisConfig {
 			Secret: "",
 			Token:  "",
 		},
-		Config: retries.NewConfig(),
+		Config: rConf,
 	}
 }
 
