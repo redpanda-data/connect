@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- The `kinesis` output field `retries` has been renamed `max_retries` in order
+  to expose the difference in its zero value behaviour (endless retries) versus
+  other `retry` fields (zero retries).
+
 ### 0.28.0 - 2018-09-01
 
 ### Added

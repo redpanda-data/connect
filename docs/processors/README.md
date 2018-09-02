@@ -916,6 +916,9 @@ remainder is also sent as a single batch. For example, if your target size was
 10, and the processor received a batch of 95 message parts, the result would be
 9 batches of 10 messages followed by a batch of 5 messages.
 
+The split processor should *always* be positioned at the end of a list of
+processors.
+
 ## `text`
 
 ``` yaml

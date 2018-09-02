@@ -38,8 +38,7 @@ import (
 // The processor will read from a source, perform some processing, and then
 // either propagate a new message or drop it.
 type Processor struct {
-	running     int32
-	dispatchers int32
+	running int32
 
 	log   log.Modular
 	stats metrics.Type
@@ -66,7 +65,6 @@ func NewProcessor(
 ) *Processor {
 	return &Processor{
 		running:       1,
-		dispatchers:   1,
 		msgProcessors: msgProcessors,
 		log:           log.NewModule(".pipeline.processor"),
 		stats:         stats,
@@ -84,10 +82,8 @@ func NewProcessor(
 // loop is the processing loop of this pipeline.
 func (p *Processor) loop() {
 	defer func() {
-		if atomic.AddInt32(&p.dispatchers, -1) == 0 {
-			close(p.messagesOut)
-			close(p.closed)
-		}
+		close(p.messagesOut)
+		close(p.closed)
 	}()
 
 	var (
@@ -133,71 +129,13 @@ func (p *Processor) loop() {
 		if len(resultMsgs) > 1 {
 			p.dispatchMessages(resultMsgs, tran.ResponseChan)
 		} else {
-			p.dispatchMessage(resultMsgs[0], tran.ResponseChan)
-		}
-	}
-}
-
-// dispatchMessage attempts to send a single message result of processors over
-// the shared messages channel. This send is retried until success.
-func (p *Processor) dispatchMessage(m types.Message, ogResChan chan<- types.Response) {
-	resChan := make(chan types.Response)
-	transac := types.NewTransaction(m, resChan)
-
-	var res types.Response
-
-	select {
-	case p.messagesOut <- transac:
-	case <-p.closeChan:
-		return
-	}
-
-	atomic.AddInt32(&p.dispatchers, 1)
-	go func() {
-		defer func() {
-			if atomic.AddInt32(&p.dispatchers, -1) == 0 {
-				close(p.messagesOut)
-				close(p.closed)
-			}
-		}()
-
-		throt := throttle.New(throttle.OptCloseChan(p.closeChan))
-
-	sendLoop:
-		for {
-			var open bool
 			select {
-			case res, open = <-resChan:
-				if !open {
-					return
-				}
-			case <-p.closeChan:
-				return
-			}
-
-			if res.Error() == nil {
-				p.mSndSucc.Incr(1)
-				break sendLoop
-			}
-
-			p.mSndErr.Incr(1)
-			if !throt.Retry() {
-				return
-			}
-
-			select {
-			case p.messagesOut <- transac:
+			case p.messagesOut <- types.NewTransaction(resultMsgs[0], tran.ResponseChan):
 			case <-p.closeChan:
 				return
 			}
 		}
-
-		select {
-		case ogResChan <- res:
-		case <-p.closeChan:
-			return
-		}
-	}()
+	}
 }
 
 // dispatchMessages attempts to send a multiple messages results of processors

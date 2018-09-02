@@ -59,13 +59,13 @@ func TestDynamoDBIntegration(t *testing.T) {
 		// attempt to create test table
 		client.CreateTable(&dynamodb.CreateTableInput{
 			AttributeDefinitions: []*dynamodb.AttributeDefinition{
-				&dynamodb.AttributeDefinition{
+				{
 					AttributeName: aws.String(hashKey),
 					AttributeType: aws.String("S"),
 				},
 			},
 			KeySchema: []*dynamodb.KeySchemaElement{
-				&dynamodb.KeySchemaElement{
+				{
 					AttributeName: aws.String(hashKey),
 					KeyType:       aws.String(dynamodb.KeyTypeHash),
 				},

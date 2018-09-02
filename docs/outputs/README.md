@@ -407,9 +407,9 @@ kinesis:
     token: ""
   endpoint: ""
   hash_key: ""
+  max_retries: 0
   partition_key: ""
   region: eu-west-1
-  retries: 3
   stream: ""
 ```
 

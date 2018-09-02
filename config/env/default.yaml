@@ -447,9 +447,9 @@ output:
           token: ${OUTPUT_KINESIS_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_KINESIS_ENDPOINT}
         hash_key: ${OUTPUT_KINESIS_HASH_KEY}
+        max_retries: ${OUTPUT_KINESIS_MAX_RETRIES:0}
         partition_key: ${OUTPUT_KINESIS_PARTITION_KEY}
         region: ${OUTPUT_KINESIS_REGION:eu-west-1}
-        retries: ${OUTPUT_KINESIS_RETRIES:3}
         stream: ${OUTPUT_KINESIS_STREAM}
       mqtt:
         client_id: ${OUTPUT_MQTT_CLIENT_ID:benthos_output}

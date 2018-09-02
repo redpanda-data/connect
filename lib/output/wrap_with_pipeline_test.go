@@ -207,11 +207,13 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 		t.Errorf("Wrong contents: %s != %s", act, exp)
 	}
 
-	select {
-	case <-time.After(time.Second):
-		t.Fatal("timed out")
-	case tran.ResponseChan <- response.NewAck():
-	}
+	go func() {
+		select {
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		case tran.ResponseChan <- response.NewAck():
+		}
+	}()
 
 	select {
 	case <-time.After(time.Second):

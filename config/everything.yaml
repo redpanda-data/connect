@@ -594,7 +594,7 @@ output:
       secret: ""
       token: ""
       role: ""
-    retries: 3
+    max_retries: 0
     backoff:
       initial_interval: 500ms
       max_interval: 3s

@@ -155,7 +155,7 @@ func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 func (d *DynamoDB) Get(key string) ([]byte, error) {
 	res, err := d.client.GetItem(&dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
-			d.conf.HashKey: &dynamodb.AttributeValue{
+			d.conf.HashKey: {
 				S: aws.String(key),
 			},
 		},
@@ -207,7 +207,7 @@ func (d *DynamoDB) Add(key string, value []byte) error {
 func (d *DynamoDB) Delete(key string) error {
 	_, err := d.client.DeleteItem(&dynamodb.DeleteItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
-			d.conf.HashKey: &dynamodb.AttributeValue{
+			d.conf.HashKey: {
 				S: aws.String(key),
 			},
 		},
@@ -220,10 +220,10 @@ func (d *DynamoDB) Delete(key string) error {
 func (d *DynamoDB) putItemInput(key string, value []byte) *dynamodb.PutItemInput {
 	input := dynamodb.PutItemInput{
 		Item: map[string]*dynamodb.AttributeValue{
-			d.conf.HashKey: &dynamodb.AttributeValue{
+			d.conf.HashKey: {
 				S: aws.String(key),
 			},
-			d.conf.DataKey: &dynamodb.AttributeValue{
+			d.conf.DataKey: {
 				B: value,
 			},
 		},
