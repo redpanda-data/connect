@@ -31,7 +31,7 @@ import (
 
 func init() {
 	Constructors[TypeHDFS] = TypeSpec{
-		constructor: NewHdfs,
+		constructor: NewHDFS,
 		description: `
 Sends message parts as files to a HDFS directory. Each file is written
 with the path specified with the 'path' field, in order to have a different path
@@ -42,10 +42,10 @@ for each object you should use function interpolations described
 
 //------------------------------------------------------------------------------
 
-// NewHdfs creates a new Hdfs output type.
-func NewHdfs(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+// NewHDFS creates a new HDFS output type.
+func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	return NewWriter(
-		"hdfs", writer.HDFS(conf.HDFS, log, stats), log, stats,
+		"hdfs", writer.NewHDFS(conf.HDFS, log, stats), log, stats,
 	)
 }
 
