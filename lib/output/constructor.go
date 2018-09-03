@@ -66,6 +66,7 @@ const (
 	TypeElasticsearch = "elasticsearch"
 	TypeFile          = "file"
 	TypeFiles         = "files"
+	TypeHDFS          = "hdfs"
 	TypeHTTPClient    = "http_client"
 	TypeHTTPServer    = "http_server"
 	TypeInproc        = "inproc"
@@ -97,6 +98,7 @@ type Config struct {
 	Elasticsearch writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
 	File          FileConfig                 `json:"file" yaml:"file"`
 	Files         writer.FilesConfig         `json:"files" yaml:"files"`
+	HDFS          writer.HDFSConfig          `json:"hdfs" yaml:"hdfs"`
 	HTTPClient    writer.HTTPClientConfig    `json:"http_client" yaml:"http_client"`
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
 	Inproc        InprocConfig               `json:"inproc" yaml:"inproc"`
@@ -129,6 +131,7 @@ func NewConfig() Config {
 		Elasticsearch: writer.NewElasticsearchConfig(),
 		File:          NewFileConfig(),
 		Files:         writer.NewFilesConfig(),
+		HDFS:          writer.NewHDFSConfig(),
 		HTTPClient:    writer.NewHTTPClientConfig(),
 		HTTPServer:    NewHTTPServerConfig(),
 		Inproc:        NewInprocConfig(),
