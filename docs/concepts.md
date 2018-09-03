@@ -42,9 +42,7 @@ specific sinks.
 ## Content Based Multiplexing
 
 It is possible to perform content based multiplexing of messages to specific
-outputs using [an output broker with the `fan_out` pattern][broker-output] and a
-[filter processor][filter-processor] on each output, which is a processor
-that drops messages if the [condition][conditions] does not pass.
+outputs using [a switch output][switch-output] with two or more conditional outputs.
 [Conditions][conditions] are content aware logical operators that can be
 combined using boolean logic.
 
@@ -54,38 +52,27 @@ that `foo` doesn't receive, we can achieve that with this config:
 
 ``` yaml
 output:
-  type: broker
-  broker:
-    pattern: fan_out
+  type: switch
+  switch:
     outputs:
-    - type: foo
-      foo:
-        foo_field_1: value1
-      processors:
-      - type: filter
-        filter:
-          type: text
+    - output:
+        type: foo
+          foo:
+          foo_field_1: value1
+      condition:
+        type: text
           text:
             operator: contains
             part: 0
             arg: foo
-    - type: bar
-      bar:
-        bar_field_1: value2
-        bar_field_2: value3
-      processors:
-      - type: filter
-        filter:
-          type: not
-          not:
-            type: text
-            text:
-              operator: contains
-              part: 0
-              arg: foo
+    - output:
+        type: bar
+        bar:
+          bar_field_1: value2
+          bar_field_2: value3
 ```
 
-For more information regarding filter conditions, including the full list of
+For more information regarding conditions, including the full list of
 conditions available, please [read the docs here][conditions].
 
 ## Sharing Resources Across Processors
@@ -398,7 +385,7 @@ examples.
 [processors]: ./processors
 [buffers]: ./buffers
 [broker-input]: ./inputs/README.md#broker
-[broker-output]: ./outputs/README.md#broker
+[switch-output]: ./outputs/README.md#switch
 [filter-processor]: ./processors/README.md#filter
 [conditions]: ./conditions
 [caches]: ./caches

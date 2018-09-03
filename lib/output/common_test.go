@@ -20,8 +20,33 @@
 
 package output
 
-import "github.com/Jeffail/benthos/lib/log"
+import (
+	"time"
+
+	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/types"
+)
 
 var logConfig = log.Config{
 	LogLevel: "NONE",
+}
+
+// MockOutputType implements the output.Type interface.
+type MockOutputType struct {
+	TChan <-chan types.Transaction
+}
+
+// Consume sets the read channel. This implementation is NOT thread safe.
+func (m *MockOutputType) Consume(msgs <-chan types.Transaction) error {
+	m.TChan = msgs
+	return nil
+}
+
+// CloseAsync does nothing.
+func (m *MockOutputType) CloseAsync() {
+}
+
+// WaitForClose does nothing.
+func (m MockOutputType) WaitForClose(t time.Duration) error {
+	return nil
 }

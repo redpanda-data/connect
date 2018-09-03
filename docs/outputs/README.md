@@ -51,7 +51,8 @@ a [`broker`](#broker) output with the 'try' pattern.
 22. [`s3`](#s3)
 23. [`sqs`](#sqs)
 24. [`stdout`](#stdout)
-25. [`websocket`](#websocket)
+25. [`switch`](#switch)
+26. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -645,6 +646,68 @@ as:
 foo\n
 bar\n
 baz\n\n
+
+## `switch`
+
+``` yaml
+type: switch
+switch:
+  outputs: null
+```
+
+The switch output type allows you to configure multiple conditional output targets
+by listing child outputs paired with conditions. In the following example, messages
+containing "foo" will be sent to both the `foo` and `baz` outputs. Messages containing
+"bar" will be sent to both the `bar` and `baz` outputs. Messages containing both "foo"
+and "bar" will be sent to all three outputs. And finally, messages that do not contain
+"foo" or "bar" will be sent to the `baz` output only.
+
+``` yaml
+output:
+  type: switch
+  switch:
+    outputs:
+    - output:
+        type: foo
+        foo:
+          foo_field_1: value1
+      condition:
+        type: text
+        text:
+          operator: contains
+          part: 0
+          arg: foo
+      fallthrough: true
+    - output:
+        type: bar
+        bar:
+          bar_field_1: value2
+          bar_field_2: value3
+      condition:
+        type: text
+        text:
+          operator: contains
+          part: 0
+          arg: bar
+      fallthrough: true
+    - output:
+        type: baz
+        baz:
+          baz_field_1: value4
+        processors:
+        - type: baz_processor
+  processors:
+  - type: some_processor
+```
+
+The switch output requires a minimum of two outputs. If no condition is defined for
+an output, it behaves like a static `true` condition. If `fallthrough` is set to
+`true`, the swith output will continue evaluating additional outputs after finding
+a match. If an output applies back pressure it will block all subsequent messages,
+and if an output fails to send a message, it will be retried continously until
+completion or service shut down. Messages that do not match any outputs will be
+dropped.
+		
 
 ## `websocket`
 
