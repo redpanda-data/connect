@@ -21,6 +21,7 @@
 package condition
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -30,6 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/armon/go-radix"
 )
 
 //------------------------------------------------------------------------------
@@ -41,19 +43,63 @@ func init() {
 Metadata is a condition that checks metadata keys of a message part against an
 operator from the following list:
 
-### ` + "`exists`" + `
+### ` + "`enum`" + `
 
-Checks whether a metadata key exists.
+Checks whether the contents of a metadata key matches one of the defined enum
+values.
+
+` + "```yaml" + `
+type: metadata
+metadata:
+	operator: enum
+	part: 0
+	key: foo
+	arg:
+		- bar
+		- baz
+		- qux
+		- quux
+` + "```" + `
 
 ### ` + "`equals`" + `
 
 Checks whether the contents of a metadata key matches an argument. This operator
 is case insensitive.
 
+` + "```yaml" + `
+type: metadata
+metadata:
+	operator: equals
+	part: 0
+	key: foo
+	arg: bar
+` + "```" + `
+
 ### ` + "`equals_cs`" + `
 
 Checks whether the contents of a metadata key matches an argument. This operator
 is case sensitive.
+
+` + "```yaml" + `
+type: metadata
+metadata:
+	operator: equals_cs
+	part: 0
+	key: foo
+	arg: BAR
+` + "```" + `
+
+### ` + "`exists`" + `
+
+Checks whether a metadata key exists.
+
+` + "```yaml" + `
+type: metadata
+metadata:
+	operator: exists
+	part: 0
+	key: foo
+` + "```" + `
 
 ### ` + "`less_than`" + `
 
@@ -61,21 +107,58 @@ Checks whether the contents of a metadata key, parsed as a floating point
 number, is less than an argument. Returns false if the metadata value cannot be
 parsed into a number.
 
+` + "```yaml" + `
+type: metadata
+metadata:
+	operator: less_than
+	part: 0
+	key: foo
+	arg: 3
+` + "```" + `
+
 ### ` + "`greater_than`" + `
 
 Checks whether the contents of a metadata key, parsed as a floating point
 number, is greater than an argument. Returns false if the metadata value cannot
 be parsed into a number.
 
+` + "```yaml" + `
+type: metadata
+metadata:
+	operator: greater_than
+	part: 0
+	key: foo
+	arg: 3
+` + "```" + `
+
 ### ` + "`regexp_partial`" + `
 
 Checks whether any section of the contents of a metadata key matches a regular
 expression (RE2 syntax).
 
+` + "```yaml" + `
+type: metadata
+metadata:
+	operator: regexp_partial
+	part: 0
+	key: foo
+	arg: "1[a-z]2"
+` + "```" + `
+
 ### ` + "`regexp_exact`" + `
 
 Checks whether the contents of a metadata key exactly matches a regular expression 
-(RE2 syntax).`,
+(RE2 syntax).
+
+` + "```yaml" + `
+type: metadata
+metadata:
+	operator: regexp_partial
+	part: 0
+	key: foo
+	arg: "1[a-z]2"
+` + "```" + `
+`,
 	}
 }
 
@@ -89,10 +172,10 @@ var (
 // MetadataConfig is a configuration struct containing fields for the metadata
 // condition.
 type MetadataConfig struct {
-	Operator string `json:"operator" yaml:"operator"`
-	Part     int    `json:"part" yaml:"part"`
-	Key      string `json:"key" yaml:"key"`
-	Arg      string `json:"arg" yaml:"arg"`
+	Operator string       `json:"operator" yaml:"operator"`
+	Part     int          `json:"part" yaml:"part"`
+	Key      string       `json:"key" yaml:"key"`
+	Arg      rawJSONValue `json:"arg" yaml:"arg"`
 }
 
 // NewMetadataConfig returns a MetadataConfig with default values.
@@ -101,7 +184,7 @@ func NewMetadataConfig() MetadataConfig {
 		Operator: "equals_cs",
 		Part:     0,
 		Key:      "",
-		Arg:      "",
+		Arg:      []byte(`""`),
 	}
 }
 
@@ -109,53 +192,95 @@ func NewMetadataConfig() MetadataConfig {
 
 type metadataOperator func(md types.Metadata) bool
 
+func metadataEnumOperator(key string, arg rawJSONValue) (metadataOperator, error) {
+	var entries []string
+	if err := json.Unmarshal(arg, &entries); err != nil {
+		return nil, fmt.Errorf("failed to parse argument as array of strings: %v", err)
+	}
+	tree := radix.New()
+	for _, entry := range entries {
+		tree.Insert(entry, struct{}{})
+	}
+	return func(md types.Metadata) bool {
+		_, ok := tree.Get(md.Get(key))
+		return ok
+	}, nil
+}
+
+func metadataEqualsCSOperator(key string, arg rawJSONValue) (metadataOperator, error) {
+	var argStr string
+	if err := json.Unmarshal(arg, &argStr); err != nil {
+		return nil, fmt.Errorf("failed to parse argument as string: %v", err)
+	}
+	return func(md types.Metadata) bool {
+		return md.Get(key) == argStr
+	}, nil
+}
+
+func metadataEqualsOperator(key string, arg rawJSONValue) (metadataOperator, error) {
+	var argStr string
+	if err := json.Unmarshal(arg, &argStr); err != nil {
+		return nil, fmt.Errorf("failed to parse argument as string: %v", err)
+	}
+	return func(md types.Metadata) bool {
+		return strings.ToLower(md.Get(key)) == strings.ToLower(argStr)
+	}, nil
+}
+
 func metadataExistsOperator(key string) metadataOperator {
 	return func(md types.Metadata) bool {
 		return len(md.Get(key)) > 0
 	}
 }
 
-func metadataEqualsOperator(key string, arg string) metadataOperator {
-	return func(md types.Metadata) bool {
-		return strings.ToLower(md.Get(key)) == strings.ToLower(arg)
-	}
-}
-
-func metadataEqualsCSOperator(key string, arg string) metadataOperator {
-	return func(md types.Metadata) bool {
-		return md.Get(key) == arg
-	}
-}
-
-func metadataGreaterThanOperator(key string, argStr string) (metadataOperator, error) {
-	arg, err := strconv.ParseFloat(argStr, 10)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse argument as number: %v", err)
+func metadataGreaterThanOperator(key string, arg rawJSONValue) (metadataOperator, error) {
+	var v float64
+	if err := json.Unmarshal(arg, &v); err != nil {
+		return nil, fmt.Errorf("failed to parse argument as float64: %v", err)
 	}
 	return func(md types.Metadata) bool {
 		val, verr := strconv.ParseFloat(md.Get(key), 10)
 		if verr != nil {
 			return false
 		}
-		return val > arg
+		return val > v
 	}, nil
 }
 
-func metadataLessThanOperator(key string, argStr string) (metadataOperator, error) {
-	arg, err := strconv.ParseFloat(argStr, 10)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse argument as number: %v", err)
+func metadataHasPrefixOperator(key string, arg rawJSONValue) (metadataOperator, error) {
+	var entries []string
+	if err := json.Unmarshal(arg, &entries); err != nil {
+		return nil, fmt.Errorf("failed to parse argument as float64: %v", err)
+	}
+	tree := radix.New()
+	for _, entry := range entries {
+		tree.Insert(entry, struct{}{})
+	}
+	return func(md types.Metadata) bool {
+		_, _, ok := tree.LongestPrefix(md.Get(key))
+		return ok
+	}, nil
+}
+
+func metadataLessThanOperator(key string, arg rawJSONValue) (metadataOperator, error) {
+	var v float64
+	if err := json.Unmarshal(arg, &v); err != nil {
+		return nil, fmt.Errorf("failed to parse argument as float64: %v", err)
 	}
 	return func(md types.Metadata) bool {
 		val, verr := strconv.ParseFloat(md.Get(key), 10)
 		if verr != nil {
 			return false
 		}
-		return val < arg
+		return val < v
 	}, nil
 }
 
-func metadataRegexpPartialOperator(key string, argStr string) (metadataOperator, error) {
+func metadataRegexpPartialOperator(key string, arg rawJSONValue) (metadataOperator, error) {
+	var argStr string
+	if err := json.Unmarshal(arg, &argStr); err != nil {
+		return nil, fmt.Errorf("failed to parse argument as string: %v", err)
+	}
 	compiled, err := regexp.Compile(argStr)
 	if err != nil {
 		return nil, err
@@ -165,7 +290,11 @@ func metadataRegexpPartialOperator(key string, argStr string) (metadataOperator,
 	}, nil
 }
 
-func metadataRegexpExactOperator(key string, argStr string) (metadataOperator, error) {
+func metadataRegexpExactOperator(key string, arg rawJSONValue) (metadataOperator, error) {
+	var argStr string
+	if err := json.Unmarshal(arg, &argStr); err != nil {
+		return nil, fmt.Errorf("failed to parse argument as string: %v", err)
+	}
 	compiled, err := regexp.Compile(argStr)
 	if err != nil {
 		return nil, err
@@ -176,16 +305,20 @@ func metadataRegexpExactOperator(key string, argStr string) (metadataOperator, e
 	}, nil
 }
 
-func strToMetadataOperator(str, key, arg string) (metadataOperator, error) {
+func strToMetadataOperator(str, key string, arg rawJSONValue) (metadataOperator, error) {
 	switch str {
+	case "enum":
+		return metadataEnumOperator(key, arg)
+	case "equals":
+		return metadataEqualsOperator(key, arg)
+	case "equals_cs":
+		return metadataEqualsCSOperator(key, arg)
 	case "exists":
 		return metadataExistsOperator(key), nil
-	case "equals":
-		return metadataEqualsOperator(key, arg), nil
-	case "equals_cs":
-		return metadataEqualsCSOperator(key, arg), nil
 	case "greater_than":
 		return metadataGreaterThanOperator(key, arg)
+	case "has_prefix":
+		return metadataHasPrefixOperator(key, arg)
 	case "less_than":
 		return metadataLessThanOperator(key, arg)
 	case "regexp_partial":

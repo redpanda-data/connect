@@ -8,6 +8,7 @@ require (
 	github.com/OneOfOne/xxhash v1.2.2
 	github.com/Shopify/sarama v1.17.0
 	github.com/Shopify/toxiproxy v2.1.3+incompatible // indirect
+	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-sdk-go v1.15.21
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737

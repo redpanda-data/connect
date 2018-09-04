@@ -35,7 +35,7 @@ func TestMetadataCheck(t *testing.T) {
 		operator string
 		part     int
 		key      string
-		arg      string
+		arg      rawJSONValue
 	}
 	tests := []struct {
 		name   string
@@ -44,12 +44,38 @@ func TestMetadataCheck(t *testing.T) {
 		want   bool
 	}{
 		{
+			name: "enum pos",
+			fields: fields{
+				operator: "enum",
+				key:      "foo",
+				part:     0,
+				arg:      []byte(`["bar","baz","qux","quux"]`),
+			},
+			arg: map[string]string{
+				"foo": "bar",
+			},
+			want: true,
+		},
+		{
+			name: "enum neg",
+			fields: fields{
+				operator: "enum",
+				key:      "foo",
+				part:     0,
+				arg:      []byte(`["bar","baz","qux","quux"]`),
+			},
+			arg: map[string]string{
+				"foo": "quz",
+			},
+			want: false,
+		},
+		{
 			name: "equals_cs foo pos",
 			fields: fields{
 				operator: "equals_cs",
 				key:      "foo",
 				part:     0,
-				arg:      "bar",
+				arg:      []byte(`"bar"`),
 			},
 			arg: map[string]string{
 				"foo": "bar",
@@ -62,7 +88,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "equals_cs",
 				key:      "foo",
 				part:     0,
-				arg:      "BAR",
+				arg:      []byte(`"BAR"`),
 			},
 			arg: map[string]string{
 				"foo": "bar",
@@ -75,7 +101,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "equals",
 				key:      "foo",
 				part:     0,
-				arg:      "BAR",
+				arg:      []byte(`"BAR"`),
 			},
 			arg: map[string]string{
 				"foo": "bar",
@@ -88,7 +114,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "equals",
 				key:      "foo",
 				part:     0,
-				arg:      "baz",
+				arg:      []byte(`"baz"`),
 			},
 			arg: map[string]string{
 				"foo": "bar",
@@ -125,7 +151,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "greater_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      []byte(`10`),
 			},
 			arg: map[string]string{
 				"foo": "11",
@@ -138,7 +164,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "greater_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      []byte(`10`),
 			},
 			arg: map[string]string{
 				"foo": "nope",
@@ -151,10 +177,36 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "greater_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      []byte(`10`),
 			},
 			arg: map[string]string{
 				"foo": "9",
+			},
+			want: false,
+		},
+		{
+			name: "has_prefix pos",
+			fields: fields{
+				operator: "has_prefix",
+				key:      "foo",
+				part:     0,
+				arg:      []byte(`["foo","bar","baz"]`),
+			},
+			arg: map[string]string{
+				"foo": "barley",
+			},
+			want: true,
+		},
+		{
+			name: "has_prefix neg",
+			fields: fields{
+				operator: "has_prefix",
+				key:      "foo",
+				part:     0,
+				arg:      []byte(`["foo","bar","baz"]`),
+			},
+			arg: map[string]string{
+				"foo": "quz",
 			},
 			want: false,
 		},
@@ -164,7 +216,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "less_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      []byte(`10`),
 			},
 			arg: map[string]string{
 				"foo": "9",
@@ -177,7 +229,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "less_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      []byte(`10`),
 			},
 			arg: map[string]string{
 				"foo": "nope",
@@ -190,7 +242,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "less_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      []byte(`10`),
 			},
 			arg: map[string]string{
 				"foo": "11",
@@ -203,7 +255,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_partial",
 				key:      "foo",
 				part:     0,
-				arg:      "1[a-z]2",
+				arg:      []byte(`"1[a-z]2"`),
 			},
 			arg: map[string]string{
 				"foo": "hello 1a2 world",
@@ -216,7 +268,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_partial",
 				key:      "foo",
 				part:     0,
-				arg:      "1[a-z]2",
+				arg:      []byte(`"1[a-z]2"`),
 			},
 			arg: map[string]string{
 				"foo": "1a2",
@@ -229,7 +281,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_partial",
 				key:      "foo",
 				part:     0,
-				arg:      "1[a-z]2",
+				arg:      []byte(`"1[a-z]2"`),
 			},
 			arg: map[string]string{
 				"foo": "hello 12 world",
@@ -242,7 +294,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_exact",
 				key:      "foo",
 				part:     0,
-				arg:      "1[a-z]2",
+				arg:      []byte(`"1[a-z]2"`),
 			},
 			arg: map[string]string{
 				"foo": "hello 1a2 world",
@@ -255,7 +307,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_exact",
 				key:      "foo",
 				part:     0,
-				arg:      "1[a-z]2",
+				arg:      []byte(`"1[a-z]2"`),
 			},
 			arg: map[string]string{
 				"foo": "1a2",
@@ -268,7 +320,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_exact",
 				key:      "foo",
 				part:     0,
-				arg:      "1[a-z]2",
+				arg:      []byte(`"1[a-z]2"`),
 			},
 			arg: map[string]string{
 				"foo": "12",
