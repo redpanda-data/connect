@@ -529,6 +529,12 @@ output:
     delimiter: ""
   files:
     path: ${!count:files}-${!timestamp_unix_nano}.txt
+  hdfs:
+    hosts:
+    - localhost:9000
+    user: benthos_hdfs
+    directory: ""
+    path: ${!count:files}-${!timestamp_unix_nano}.txt
   http_client:
     url: http://localhost:4195/post
     verb: POST
