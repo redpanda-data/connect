@@ -157,7 +157,7 @@ var (
 	)
 	showAll = flag.Bool(
 		"all", false,
-		"Set whether _all_ fields should be shown when printing configuration"+
+		"Set whether all fields should be shown when printing configuration"+
 			" via --print-yaml or --print-json, otherwise only used values"+
 			" will be printed.",
 	)
@@ -171,9 +171,9 @@ var (
 	examples = flag.String(
 		"example", "",
 		"Add specific examples when printing a configuration file with"+
-			" `--print-yaml` or `--print-json` by listing comma separated"+
+			" --print-yaml or --print-json by listing comma separated"+
 			" types. Types can be any input, buffer, processor or output. For"+
-			" example: `benthos --print-yaml --example websocket,jmespath`"+
+			" example: benthos --print-yaml --example websocket,jmespath"+
 			" would print a config with a websocket input and output and a"+
 			" jmespath processor.",
 	)
