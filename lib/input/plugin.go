@@ -130,7 +130,12 @@ func PluginDescriptions() string {
 	for i, name := range names {
 		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, name))
 	}
-	buf.WriteString("\n")
+
+	if len(names) == 0 {
+		buf.WriteString("There are no plugins loaded.")
+	} else {
+		buf.WriteString("\n")
+	}
 
 	// Append each description
 	for i, name := range names {

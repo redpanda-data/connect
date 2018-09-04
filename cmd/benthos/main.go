@@ -23,14 +23,15 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"runtime/pprof"
-	"strings"
-
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"plugin"
+	"runtime/pprof"
+	"strings"
 	"syscall"
 	"time"
 
@@ -201,6 +202,26 @@ var (
 		"list-caches", false,
 		"Print a list of available cache options, then exit",
 	)
+	pluginsDir = flag.String(
+		"plugins-dir", "/usr/lib/benthos/plugins",
+		"EXPERIMENTAL: Specify a directory containing Benthos plugins",
+	)
+	printInputPlugins = flag.Bool(
+		"list-input-plugins", false,
+		"Print a list of loaded input plugins, then exit",
+	)
+	printOutputPlugins = flag.Bool(
+		"list-output-plugins", false,
+		"Print a list of loaded output plugins, then exit",
+	)
+	printProcessorPlugins = flag.Bool(
+		"list-processor-plugins", false,
+		"Print a list of loaded processor plugins, then exit",
+	)
+	printConditionPlugins = flag.Bool(
+		"list-condition-plugins", false,
+		"Print a list of loaded condition plugins, then exit",
+	)
 	streamsMode = flag.Bool(
 		"streams", false,
 		"Run Benthos in streams mode, where streams can be created, updated"+
@@ -297,6 +318,21 @@ func bootstrap() Config {
 		os.Exit(0)
 	}
 
+	if len(*pluginsDir) > 0 {
+		filepath.Walk(*pluginsDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
+			}
+			if filepath.Ext(path) == ".so" {
+				if _, err = plugin.Open(path); err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to load plugin '%s': %v\n", path, err)
+					return err
+				}
+			}
+			return nil
+		})
+	}
+
 	if len(*configPath) > 0 {
 		if err := config.Read(*configPath, *swapEnvs, &conf); err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
@@ -377,6 +413,22 @@ func bootstrap() Config {
 		}
 		if *printCaches {
 			fmt.Println(cache.Descriptions())
+		}
+		os.Exit(0)
+	}
+
+	if *printInputPlugins || *printOutputPlugins || *printProcessorPlugins || *printConditionPlugins {
+		if *printInputPlugins {
+			fmt.Println(input.PluginDescriptions())
+		}
+		if *printOutputPlugins {
+			fmt.Println(output.PluginDescriptions())
+		}
+		if *printProcessorPlugins {
+			fmt.Println(processor.PluginDescriptions())
+		}
+		if *printConditionPlugins {
+			fmt.Println(condition.PluginDescriptions())
 		}
 		os.Exit(0)
 	}
