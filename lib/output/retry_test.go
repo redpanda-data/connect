@@ -149,15 +149,16 @@ func TestRetrySadPath(t *testing.T) {
 
 	testMsg := message.New(nil)
 	tran := types.NewTransaction(testMsg, resChan)
-	for i := 0; i < 100; i++ {
-		go func() {
-			select {
-			case tChan <- tran:
-			case <-time.After(time.Second):
-				t.Fatal("timed out")
-			}
-		}()
 
+	go func() {
+		select {
+		case tChan <- tran:
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+	}()
+
+	for i := 0; i < 100; i++ {
 		select {
 		case tran = <-mOut.ts:
 		case <-resChan:
@@ -176,14 +177,6 @@ func TestRetrySadPath(t *testing.T) {
 			t.Fatal("timed out")
 		}
 	}
-
-	go func() {
-		select {
-		case tChan <- tran:
-		case <-time.After(time.Second):
-			t.Fatal("timed out")
-		}
-	}()
 
 	select {
 	case tran = <-mOut.ts:
