@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `hdfs` output.
+
 ### 0.29.0 - 2018-09-02
 
 ### Added
