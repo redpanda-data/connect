@@ -51,14 +51,14 @@ values.
 ` + "```yaml" + `
 type: metadata
 metadata:
-	operator: enum
-	part: 0
-	key: foo
-	arg:
-		- bar
-		- baz
-		- qux
-		- quux
+  operator: enum
+  part: 0
+  key: foo
+  arg:
+    - bar
+    - baz
+    - qux
+    - quux
 ` + "```" + `
 
 ### ` + "`equals`" + `
@@ -69,10 +69,10 @@ is case insensitive.
 ` + "```yaml" + `
 type: metadata
 metadata:
-	operator: equals
-	part: 0
-	key: foo
-	arg: bar
+  operator: equals
+  part: 0
+  key: foo
+  arg: bar
 ` + "```" + `
 
 ### ` + "`equals_cs`" + `
@@ -83,10 +83,10 @@ is case sensitive.
 ` + "```yaml" + `
 type: metadata
 metadata:
-	operator: equals_cs
-	part: 0
-	key: foo
-	arg: BAR
+  operator: equals_cs
+  part: 0
+  key: foo
+  arg: BAR
 ` + "```" + `
 
 ### ` + "`exists`" + `
@@ -96,9 +96,9 @@ Checks whether a metadata key exists.
 ` + "```yaml" + `
 type: metadata
 metadata:
-	operator: exists
-	part: 0
-	key: foo
+  operator: exists
+  part: 0
+  key: foo
 ` + "```" + `
 
 ### ` + "`less_than`" + `
@@ -110,10 +110,10 @@ parsed into a number.
 ` + "```yaml" + `
 type: metadata
 metadata:
-	operator: less_than
-	part: 0
-	key: foo
-	arg: 3
+  operator: less_than
+  part: 0
+  key: foo
+  arg: 3
 ` + "```" + `
 
 ### ` + "`greater_than`" + `
@@ -125,10 +125,10 @@ be parsed into a number.
 ` + "```yaml" + `
 type: metadata
 metadata:
-	operator: greater_than
-	part: 0
-	key: foo
-	arg: 3
+  operator: greater_than
+  part: 0
+  key: foo
+  arg: 3
 ` + "```" + `
 
 ### ` + "`regexp_partial`" + `
@@ -139,10 +139,10 @@ expression (RE2 syntax).
 ` + "```yaml" + `
 type: metadata
 metadata:
-	operator: regexp_partial
-	part: 0
-	key: foo
-	arg: "1[a-z]2"
+  operator: regexp_partial
+  part: 0
+  key: foo
+  arg: "1[a-z]2"
 ` + "```" + `
 
 ### ` + "`regexp_exact`" + `
@@ -153,10 +153,10 @@ Checks whether the contents of a metadata key exactly matches a regular expressi
 ` + "```yaml" + `
 type: metadata
 metadata:
-	operator: regexp_partial
-	part: 0
-	key: foo
-	arg: "1[a-z]2"
+  operator: regexp_partial
+  part: 0
+  key: foo
+  arg: "1[a-z]2"
 ` + "```" + `
 `,
 	}
