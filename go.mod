@@ -7,11 +7,13 @@ require (
 	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
 	github.com/OneOfOne/xxhash v1.2.2
 	github.com/Shopify/sarama v1.17.0
+	github.com/Shopify/toxiproxy v2.1.3+incompatible // indirect
 	github.com/aws/aws-sdk-go v1.15.21
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737
 	github.com/bsm/sarama-cluster v2.1.15+incompatible
 	github.com/cenkalti/backoff v2.0.0+incompatible
+	github.com/colinmarc/hdfs v1.1.3
 	github.com/containerd/continuity v0.0.0-20180814194400-c7c5070e6f6e // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -21,6 +23,7 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.1.1
 	github.com/edsrzf/mmap-go v0.0.0-20170320065105-0bce6a688712
+	github.com/fortytw2/leaktest v1.2.0 // indirect
 	github.com/go-redis/redis v6.14.0+incompatible
 	github.com/gofrs/uuid v3.1.0+incompatible
 	github.com/gogo/protobuf v1.1.1 // indirect
@@ -29,6 +32,7 @@ require (
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2
 	github.com/gorilla/websocket v1.3.0
+	github.com/hpcloud/tail v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
 	github.com/lib/pq v1.0.0 // indirect
 	github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329 // indirect
@@ -39,6 +43,8 @@ require (
 	github.com/nats-io/nuid v1.0.0 // indirect
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/olivere/elastic v6.1.25+incompatible
+	github.com/onsi/ginkgo v1.6.0 // indirect
+	github.com/onsi/gomega v1.4.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opencontainers/runc v0.1.1 // indirect
@@ -60,6 +66,9 @@ require (
 	golang.org/x/crypto v0.0.0-20180820150726-614d502a4dac // indirect
 	golang.org/x/net v0.0.0-20180826012351-8a410e7b638d // indirect
 	golang.org/x/sys v0.0.0-20180824143301-4910a1d54f87 // indirect
+	golang.org/x/text v0.3.0 // indirect
+	gopkg.in/fsnotify.v1 v1.4.7 // indirect
+	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.2.1
 	nanomsg.org/go-mangos v1.4.0
 )
