@@ -61,6 +61,7 @@ require (
 	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
 	github.com/rcrowley/go-metrics v0.0.0-20180503174638-e2704e165165 // indirect
 	github.com/sirupsen/logrus v1.0.6 // indirect
+	github.com/spf13/cast v1.2.0
 	github.com/streadway/amqp v0.0.0-20180806233856-70e15c650864
 	github.com/stretchr/testify v1.2.2 // indirect
 	github.com/trivago/grok v1.0.0

@@ -161,7 +161,7 @@ processor.
 ``` yaml
 type: metadata
 metadata:
-  arg: ""
+  arg: IiI=
   key: ""
   operator: equals_cs
   part: 0

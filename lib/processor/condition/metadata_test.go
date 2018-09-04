@@ -35,7 +35,7 @@ func TestMetadataCheck(t *testing.T) {
 		operator string
 		part     int
 		key      string
-		arg      rawJSONValue
+		arg      interface{}
 	}
 	tests := []struct {
 		name   string
@@ -44,12 +44,12 @@ func TestMetadataCheck(t *testing.T) {
 		want   bool
 	}{
 		{
-			name: "enum pos",
+			name: "enum pos 1",
 			fields: fields{
 				operator: "enum",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`["bar","baz","qux","quux"]`),
+				arg:      []interface{}{"bar", "baz", "qux", "quux", 333, 8.31},
 			},
 			arg: map[string]string{
 				"foo": "bar",
@@ -57,12 +57,38 @@ func TestMetadataCheck(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "enum neg",
+			name: "enum pos 2",
 			fields: fields{
 				operator: "enum",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`["bar","baz","qux","quux"]`),
+				arg:      []interface{}{"bar", "baz", "qux", "quux", 333, 8.31},
+			},
+			arg: map[string]string{
+				"foo": "333",
+			},
+			want: true,
+		},
+		{
+			name: "enum pos 3",
+			fields: fields{
+				operator: "enum",
+				key:      "foo",
+				part:     0,
+				arg:      []interface{}{"bar", "baz", "qux", "quux", 333, 8.31},
+			},
+			arg: map[string]string{
+				"foo": "8.31",
+			},
+			want: true,
+		},
+		{
+			name: "enum neg 1",
+			fields: fields{
+				operator: "enum",
+				key:      "foo",
+				part:     0,
+				arg:      []interface{}{"bar", "baz", "qux", "quux", 333, 8.31},
 			},
 			arg: map[string]string{
 				"foo": "quz",
@@ -75,7 +101,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "equals_cs",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`"bar"`),
+				arg:      "bar",
 			},
 			arg: map[string]string{
 				"foo": "bar",
@@ -88,7 +114,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "equals_cs",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`"BAR"`),
+				arg:      "BAR",
 			},
 			arg: map[string]string{
 				"foo": "bar",
@@ -101,7 +127,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "equals",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`"BAR"`),
+				arg:      "BAR",
 			},
 			arg: map[string]string{
 				"foo": "bar",
@@ -114,7 +140,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "equals",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`"baz"`),
+				arg:      "baz",
 			},
 			arg: map[string]string{
 				"foo": "bar",
@@ -146,12 +172,25 @@ func TestMetadataCheck(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "gt foo pos",
+			name: "gt foo pos 1",
 			fields: fields{
 				operator: "greater_than",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`10`),
+				arg:      10,
+			},
+			arg: map[string]string{
+				"foo": "11",
+			},
+			want: true,
+		},
+		{
+			name: "gt foo pos 2",
+			fields: fields{
+				operator: "greater_than",
+				key:      "foo",
+				part:     0,
+				arg:      "10",
 			},
 			arg: map[string]string{
 				"foo": "11",
@@ -164,7 +203,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "greater_than",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`10`),
+				arg:      10,
 			},
 			arg: map[string]string{
 				"foo": "nope",
@@ -177,7 +216,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "greater_than",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`10`),
+				arg:      10,
 			},
 			arg: map[string]string{
 				"foo": "9",
@@ -190,7 +229,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "has_prefix",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`["foo","bar","baz"]`),
+				arg:      []interface{}{"foo", "bar", "baz"},
 			},
 			arg: map[string]string{
 				"foo": "barley",
@@ -203,7 +242,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "has_prefix",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`["foo","bar","baz"]`),
+				arg:      []interface{}{"foo", "bar", "baz"},
 			},
 			arg: map[string]string{
 				"foo": "quz",
@@ -216,7 +255,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "less_than",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`10`),
+				arg:      10,
 			},
 			arg: map[string]string{
 				"foo": "9",
@@ -229,7 +268,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "less_than",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`10`),
+				arg:      10,
 			},
 			arg: map[string]string{
 				"foo": "nope",
@@ -242,7 +281,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "less_than",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`10`),
+				arg:      10,
 			},
 			arg: map[string]string{
 				"foo": "11",
@@ -255,7 +294,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_partial",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`"1[a-z]2"`),
+				arg:      "1[a-z]2",
 			},
 			arg: map[string]string{
 				"foo": "hello 1a2 world",
@@ -268,7 +307,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_partial",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`"1[a-z]2"`),
+				arg:      "1[a-z]2",
 			},
 			arg: map[string]string{
 				"foo": "1a2",
@@ -281,7 +320,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_partial",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`"1[a-z]2"`),
+				arg:      "1[a-z]2",
 			},
 			arg: map[string]string{
 				"foo": "hello 12 world",
@@ -294,7 +333,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_exact",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`"1[a-z]2"`),
+				arg:      "1[a-z]2",
 			},
 			arg: map[string]string{
 				"foo": "hello 1a2 world",
@@ -307,7 +346,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_exact",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`"1[a-z]2"`),
+				arg:      "1[a-z]2",
 			},
 			arg: map[string]string{
 				"foo": "1a2",
@@ -320,7 +359,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "regexp_exact",
 				key:      "foo",
 				part:     0,
-				arg:      []byte(`"1[a-z]2"`),
+				arg:      "1[a-z]2",
 			},
 			arg: map[string]string{
 				"foo": "12",

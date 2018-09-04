@@ -21,7 +21,6 @@
 package condition
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -31,7 +30,8 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	"github.com/armon/go-radix"
+	radix "github.com/armon/go-radix"
+	"github.com/spf13/cast"
 )
 
 //------------------------------------------------------------------------------
@@ -172,10 +172,10 @@ var (
 // MetadataConfig is a configuration struct containing fields for the metadata
 // condition.
 type MetadataConfig struct {
-	Operator string       `json:"operator" yaml:"operator"`
-	Part     int          `json:"part" yaml:"part"`
-	Key      string       `json:"key" yaml:"key"`
-	Arg      rawJSONValue `json:"arg" yaml:"arg"`
+	Operator string      `json:"operator" yaml:"operator"`
+	Part     int         `json:"part" yaml:"part"`
+	Key      string      `json:"key" yaml:"key"`
+	Arg      interface{} `json:"arg" yaml:"arg"`
 }
 
 // NewMetadataConfig returns a MetadataConfig with default values.
@@ -192,10 +192,10 @@ func NewMetadataConfig() MetadataConfig {
 
 type metadataOperator func(md types.Metadata) bool
 
-func metadataEnumOperator(key string, arg rawJSONValue) (metadataOperator, error) {
-	var entries []string
-	if err := json.Unmarshal(arg, &entries); err != nil {
-		return nil, fmt.Errorf("failed to parse argument as array of strings: %v", err)
+func metadataEnumOperator(key string, arg interface{}) (metadataOperator, error) {
+	entries, err := cast.ToStringSliceE(arg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse argument as string slice: %v", err)
 	}
 	tree := radix.New()
 	for _, entry := range entries {
@@ -207,9 +207,9 @@ func metadataEnumOperator(key string, arg rawJSONValue) (metadataOperator, error
 	}, nil
 }
 
-func metadataEqualsCSOperator(key string, arg rawJSONValue) (metadataOperator, error) {
-	var argStr string
-	if err := json.Unmarshal(arg, &argStr); err != nil {
+func metadataEqualsCSOperator(key string, arg interface{}) (metadataOperator, error) {
+	argStr, err := cast.ToStringE(arg)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse argument as string: %v", err)
 	}
 	return func(md types.Metadata) bool {
@@ -217,9 +217,9 @@ func metadataEqualsCSOperator(key string, arg rawJSONValue) (metadataOperator, e
 	}, nil
 }
 
-func metadataEqualsOperator(key string, arg rawJSONValue) (metadataOperator, error) {
-	var argStr string
-	if err := json.Unmarshal(arg, &argStr); err != nil {
+func metadataEqualsOperator(key string, arg interface{}) (metadataOperator, error) {
+	argStr, err := cast.ToStringE(arg)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse argument as string: %v", err)
 	}
 	return func(md types.Metadata) bool {
@@ -233,9 +233,9 @@ func metadataExistsOperator(key string) metadataOperator {
 	}
 }
 
-func metadataGreaterThanOperator(key string, arg rawJSONValue) (metadataOperator, error) {
-	var v float64
-	if err := json.Unmarshal(arg, &v); err != nil {
+func metadataGreaterThanOperator(key string, arg interface{}) (metadataOperator, error) {
+	v, err := cast.ToFloat64E(arg)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse argument as float64: %v", err)
 	}
 	return func(md types.Metadata) bool {
@@ -247,10 +247,10 @@ func metadataGreaterThanOperator(key string, arg rawJSONValue) (metadataOperator
 	}, nil
 }
 
-func metadataHasPrefixOperator(key string, arg rawJSONValue) (metadataOperator, error) {
-	var entries []string
-	if err := json.Unmarshal(arg, &entries); err != nil {
-		return nil, fmt.Errorf("failed to parse argument as float64: %v", err)
+func metadataHasPrefixOperator(key string, arg interface{}) (metadataOperator, error) {
+	entries, err := cast.ToStringSliceE(arg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse argument as string slice: %v", err)
 	}
 	tree := radix.New()
 	for _, entry := range entries {
@@ -262,9 +262,9 @@ func metadataHasPrefixOperator(key string, arg rawJSONValue) (metadataOperator, 
 	}, nil
 }
 
-func metadataLessThanOperator(key string, arg rawJSONValue) (metadataOperator, error) {
-	var v float64
-	if err := json.Unmarshal(arg, &v); err != nil {
+func metadataLessThanOperator(key string, arg interface{}) (metadataOperator, error) {
+	v, err := cast.ToFloat64E(arg)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse argument as float64: %v", err)
 	}
 	return func(md types.Metadata) bool {
@@ -276,9 +276,9 @@ func metadataLessThanOperator(key string, arg rawJSONValue) (metadataOperator, e
 	}, nil
 }
 
-func metadataRegexpPartialOperator(key string, arg rawJSONValue) (metadataOperator, error) {
-	var argStr string
-	if err := json.Unmarshal(arg, &argStr); err != nil {
+func metadataRegexpPartialOperator(key string, arg interface{}) (metadataOperator, error) {
+	argStr, err := cast.ToStringE(arg)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse argument as string: %v", err)
 	}
 	compiled, err := regexp.Compile(argStr)
@@ -290,9 +290,9 @@ func metadataRegexpPartialOperator(key string, arg rawJSONValue) (metadataOperat
 	}, nil
 }
 
-func metadataRegexpExactOperator(key string, arg rawJSONValue) (metadataOperator, error) {
-	var argStr string
-	if err := json.Unmarshal(arg, &argStr); err != nil {
+func metadataRegexpExactOperator(key string, arg interface{}) (metadataOperator, error) {
+	argStr, err := cast.ToStringE(arg)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse argument as string: %v", err)
 	}
 	compiled, err := regexp.Compile(argStr)
@@ -305,7 +305,7 @@ func metadataRegexpExactOperator(key string, arg rawJSONValue) (metadataOperator
 	}, nil
 }
 
-func strToMetadataOperator(str, key string, arg rawJSONValue) (metadataOperator, error) {
+func strToMetadataOperator(str, key string, arg interface{}) (metadataOperator, error) {
 	switch str {
 	case "enum":
 		return metadataEnumOperator(key, arg)
