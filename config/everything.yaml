@@ -176,9 +176,7 @@ input:
         operator: equals_cs
         part: 0
         key: ""
-        arg:
-        - 34
-        - 34
+        arg: ""
       or: []
       resource: ""
       static: true
@@ -283,9 +281,7 @@ pipeline:
           operator: equals_cs
           part: 0
           key: ""
-          arg:
-          - 34
-          - 34
+          arg: ""
         or: []
         resource: ""
         static: false
@@ -320,9 +316,7 @@ pipeline:
           operator: equals_cs
           part: 0
           key: ""
-          arg:
-          - 34
-          - 34
+          arg: ""
         or: []
         resource: ""
         static: true
@@ -362,9 +356,7 @@ pipeline:
         operator: equals_cs
         part: 0
         key: ""
-        arg:
-        - 34
-        - 34
+        arg: ""
       or: []
       resource: ""
       static: true
@@ -386,9 +378,7 @@ pipeline:
         operator: equals_cs
         part: 0
         key: ""
-        arg:
-        - 34
-        - 34
+        arg: ""
       or: []
       resource: ""
       static: true
@@ -736,9 +726,7 @@ resources:
         operator: equals_cs
         part: 0
         key: ""
-        arg:
-        - 34
-        - 34
+        arg: ""
       or: []
       resource: ""
       static: true

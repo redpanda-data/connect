@@ -332,7 +332,7 @@ filter_parts:
     part: 0
     query: ""
   metadata:
-    arg: IiI=
+    arg: ""
     key: ""
     operator: equals_cs
     part: 0

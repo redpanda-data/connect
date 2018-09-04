@@ -184,7 +184,7 @@ func NewMetadataConfig() MetadataConfig {
 		Operator: "equals_cs",
 		Part:     0,
 		Key:      "",
-		Arg:      []byte(`""`),
+		Arg:      "",
 	}
 }
 
