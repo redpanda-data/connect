@@ -33,24 +33,25 @@ a [`broker`](#broker) output with the 'try' pattern.
 4. [`elasticsearch`](#elasticsearch)
 5. [`file`](#file)
 6. [`files`](#files)
-7. [`http_client`](#http_client)
-8. [`http_server`](#http_server)
-9. [`inproc`](#inproc)
-10. [`kafka`](#kafka)
-11. [`kinesis`](#kinesis)
-12. [`mqtt`](#mqtt)
-13. [`nanomsg`](#nanomsg)
-14. [`nats`](#nats)
-15. [`nats_stream`](#nats_stream)
-16. [`nsq`](#nsq)
-17. [`redis_list`](#redis_list)
-18. [`redis_pubsub`](#redis_pubsub)
-19. [`redis_streams`](#redis_streams)
-20. [`retry`](#retry)
-21. [`s3`](#s3)
-22. [`sqs`](#sqs)
-23. [`stdout`](#stdout)
-24. [`websocket`](#websocket)
+7. [`hdfs`](#hdfs)
+8. [`http_client`](#http_client)
+9. [`http_server`](#http_server)
+10. [`inproc`](#inproc)
+11. [`kafka`](#kafka)
+12. [`kinesis`](#kinesis)
+13. [`mqtt`](#mqtt)
+14. [`nanomsg`](#nanomsg)
+15. [`nats`](#nats)
+16. [`nats_stream`](#nats_stream)
+17. [`nsq`](#nsq)
+18. [`redis_list`](#redis_list)
+19. [`redis_pubsub`](#redis_pubsub)
+20. [`redis_streams`](#redis_streams)
+21. [`retry`](#retry)
+22. [`s3`](#s3)
+23. [`sqs`](#sqs)
+24. [`stdout`](#stdout)
+25. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -256,6 +257,24 @@ Message parts only contain raw data, and therefore in order to create a unique
 file for each part you need to generate unique file names. This can be done by
 using function interpolations on the `path` field as described
 [here](../config_interpolation.md#functions).
+
+## `hdfs`
+
+``` yaml
+type: hdfs
+hdfs:
+  directory: ""
+  hosts:
+  - localhost:9000
+  path: ${!count:files}-${!timestamp_unix_nano}.txt
+  user: benthos_hdfs
+```
+
+Sends message parts as files to a HDFS directory. Each file is written
+with the path specified with the 'path' field, in order to have a different path
+for each object you should use function interpolations described
+[here](../config_interpolation.md#functions). When sending batched messages the
+interpolations are performed per message part.
 
 ## `http_client`
 

@@ -342,6 +342,10 @@ OUTPUT_ELASTICSEARCH_URLS                    = http://localhost:9200
 OUTPUT_FILES_PATH                            = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_FILE_DELIMITER
 OUTPUT_FILE_PATH
+OUTPUT_HDFS_DIRECTORY
+OUTPUT_HDFS_HOSTS                            = localhost:9000
+OUTPUT_HDFS_PATH                             = ${!count:files}-${!timestamp_unix_nano}.txt
+OUTPUT_HDFS_USER                             = benthos_hdfs
 OUTPUT_HTTP_CLIENT_BACKOFF_ON                = 429
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED        = false
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
