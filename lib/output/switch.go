@@ -235,24 +235,10 @@ func (o *Switch) Consume(transactions <-chan types.Transaction) error {
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (o *Switch) loop() {
 	var (
-		mCount         = o.stats.GetCounter("output.count")
-		mCountF        = o.stats.GetCounter("output." + o.typeStr + ".count")
-		mDropped       = o.stats.GetCounter("output.send.dropped")
-		mDroppedF      = o.stats.GetCounter("output." + o.typeStr + ".send.dropped")
-		mError         = o.stats.GetCounter("output.send.error")
-		mErrorF        = o.stats.GetCounter("output." + o.typeStr + ".send.error")
-		mPartsCount    = o.stats.GetCounter("output.parts.count")
-		mPartsCountF   = o.stats.GetCounter("output." + o.typeStr + ".parts.count")
-		mPartsDropped  = o.stats.GetCounter("output.parts.send.dropped")
-		mPartsDroppedF = o.stats.GetCounter("output." + o.typeStr + ".parts.send.dropped")
-		mPartsError    = o.stats.GetCounter("output.parts.send.error")
-		mPartsErrorF   = o.stats.GetCounter("output." + o.typeStr + ".parts.send.error")
-		mPartsSuccess  = o.stats.GetCounter("output.parts.send.success")
-		mPartsSuccessF = o.stats.GetCounter("output." + o.typeStr + ".parts.send.success")
-		mRunning       = o.stats.GetGauge("output.running")
-		mRunningF      = o.stats.GetGauge("output." + o.typeStr + ".running")
-		mSuccess       = o.stats.GetCounter("output.send.success")
-		mSuccessF      = o.stats.GetCounter("output." + o.typeStr + ".send.success")
+		mMsgDrop   = o.stats.GetCounter("broker.switch.messages.dropped")
+		mMsgRcvd   = o.stats.GetCounter("broker.switch.messages.received")
+		mMsgSnt    = o.stats.GetCounter("broker.switch.messages.sent")
+		mOutputErr = o.stats.GetCounter("broker.switch.output.error")
 	)
 
 	defer func() {
@@ -267,12 +253,8 @@ func (o *Switch) loop() {
 				}
 			}
 		}
-		mRunning.Decr(1)
-		mRunningF.Decr(1)
 		close(o.closedChan)
 	}()
-	mRunning.Incr(1)
-	mRunningF.Incr(1)
 
 	for atomic.LoadInt32(&o.running) == 1 {
 		var ts types.Transaction
@@ -286,11 +268,7 @@ func (o *Switch) loop() {
 		case <-o.closeChan:
 			return
 		}
-		mCount.Incr(1)
-		mCountF.Incr(1)
-		lParts := int64(ts.Payload.Len())
-		mPartsCount.Incr(lParts)
-		mPartsCountF.Incr(lParts)
+		mMsgRcvd.Incr(1)
 
 		var outputTargets []int
 		for i, oConf := range o.confs {
@@ -304,10 +282,7 @@ func (o *Switch) loop() {
 		if len(outputTargets) == 0 {
 			select {
 			case ts.ResponseChan <- response.NewAck():
-				mDropped.Incr(1)
-				mDroppedF.Incr(1)
-				mPartsDropped.Incr(lParts)
-				mPartsDroppedF.Incr(lParts)
+				mMsgDrop.Incr(1)
 			case <-o.closeChan:
 				return
 			}
@@ -330,19 +305,13 @@ func (o *Switch) loop() {
 					if res.Error() != nil {
 						newTargets = append(newTargets, i)
 						o.logger.Errorf("Failed to dispatch switch message: %v\n", res.Error())
-						mError.Incr(1)
-						mErrorF.Incr(1)
-						mPartsError.Incr(lParts)
-						mPartsErrorF.Incr(lParts)
+						mOutputErr.Incr(1)
 						if !o.throt.Retry() {
 							return
 						}
 					} else {
 						o.throt.Reset()
-						mSuccess.Incr(1)
-						mSuccessF.Incr(1)
-						mPartsSuccess.Incr(lParts)
-						mPartsSuccessF.Incr(lParts)
+						mMsgSnt.Incr(1)
 					}
 				case <-o.closeChan:
 					return
