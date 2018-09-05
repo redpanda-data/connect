@@ -19,7 +19,7 @@ pipeline:
 output:
   type: switch
   switch:
-    outputs: null
+    outputs: []
 resources:
   caches: {}
   conditions: {}

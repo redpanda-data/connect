@@ -12,7 +12,8 @@ combines multiple outputs under a specific pattern.
 
 It is possible to perform
 [content based multiplexing](../concepts.md#content-based-multiplexing) of
-messages to specific outputs using a broker with the 'fan_out' pattern and a
+messages to specific outputs either by using the `switch` output or a
+broker with the `fan_out` pattern and a
 [filter processor](../processors/README.md#filter) on each output, which
 is a processor that drops messages if the condition does not pass. Conditions
 are content aware logical operators that can be combined using boolean logic.
@@ -652,7 +653,7 @@ baz\n\n
 ``` yaml
 type: switch
 switch:
-  outputs: null
+  outputs: []
 ```
 
 The switch output type allows you to configure multiple conditional output targets
@@ -675,7 +676,6 @@ output:
         type: text
         text:
           operator: contains
-          part: 0
           arg: foo
       fallthrough: true
     - output:
@@ -687,7 +687,6 @@ output:
         type: text
         text:
           operator: contains
-          part: 0
           arg: bar
       fallthrough: true
     - output:

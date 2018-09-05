@@ -70,7 +70,6 @@ output:
         type: text
         text:
           operator: contains
-          part: 0
           arg: foo
       fallthrough: true
     - output:
@@ -82,7 +81,6 @@ output:
         type: text
         text:
           operator: contains
-          part: 0
           arg: bar
       fallthrough: true
     - output:
@@ -115,7 +113,9 @@ type SwitchConfig struct {
 
 // NewSwitchConfig creates a new SwitchConfig with default values.
 func NewSwitchConfig() SwitchConfig {
-	return SwitchConfig{}
+	return SwitchConfig{
+		Outputs: []switchConfigOutputs{},
+	}
 }
 
 type switchConfigOutputs struct {
@@ -144,7 +144,6 @@ type Switch struct {
 	outputs        []types.Output
 	outputNs       []int
 	confs          []switchConfigOutputs
-	typeStr        string
 
 	closedChan chan struct{}
 	closeChan  chan struct{}

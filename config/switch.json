@@ -24,7 +24,7 @@
 	"output": {
 		"type": "switch",
 		"switch": {
-			"outputs": null
+			"outputs": []
 		}
 	},
 	"resources": {
