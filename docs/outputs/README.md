@@ -656,12 +656,18 @@ switch:
   outputs: []
 ```
 
-The switch output type allows you to configure multiple conditional output targets
-by listing child outputs paired with conditions. In the following example, messages
-containing "foo" will be sent to both the `foo` and `baz` outputs. Messages containing
-"bar" will be sent to both the `bar` and `baz` outputs. Messages containing both "foo"
-and "bar" will be sent to all three outputs. And finally, messages that do not contain
-"foo" or "bar" will be sent to the `baz` output only.
+The switch output type allows you to configure multiple conditional output
+targets by listing child outputs paired with conditions. Conditional logic is
+currently applied per whole message batch. In order to multiplex per message of
+a batch use the [`broker`](#broker) output with the pattern
+`fan_out`.
+
+In the following example, messages containing "foo" will be sent to both the
+`foo` and `baz` outputs. Messages containing "bar" will be
+sent to both the `bar` and `baz` outputs. Messages
+containing both "foo" and "bar" will be sent to all three outputs. And finally,
+messages that do not contain "foo" or "bar" will be sent to the `baz`
+output only.
 
 ``` yaml
 output:
@@ -699,14 +705,13 @@ output:
   - type: some_processor
 ```
 
-The switch output requires a minimum of two outputs. If no condition is defined for
-an output, it behaves like a static `true` condition. If `fallthrough` is set to
-`true`, the swith output will continue evaluating additional outputs after finding
-a match. If an output applies back pressure it will block all subsequent messages,
-and if an output fails to send a message, it will be retried continously until
-completion or service shut down. Messages that do not match any outputs will be
-dropped.
-		
+The switch output requires a minimum of two outputs. If no condition is defined
+for an output, it behaves like a static `true` condition. If
+`fallthrough` is set to `true`, the switch output will
+continue evaluating additional outputs after finding a match. If an output
+applies back pressure it will block all subsequent messages, and if an output
+fails to send a message, it will be retried continously until completion or
+service shut down. Messages that do not match any outputs will be dropped.
 
 ## `websocket`
 

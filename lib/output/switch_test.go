@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,7 @@ package output
 import (
 	"errors"
 	"fmt"
-	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,18 +37,37 @@ import (
 
 //------------------------------------------------------------------------------
 
-var (
-	fallthroughConfig = switchConfigOutputs{Fallthrough: true}
-)
-
 func TestSwitchInterfaces(t *testing.T) {
 	f := &Switch{}
 	if types.Consumer(f) == nil {
-		t.Errorf("FanOut: nil types.Consumer")
+		t.Errorf("Switch: nil types.Consumer")
 	}
 	if types.Closable(f) == nil {
-		t.Errorf("FanOut: nil types.Closable")
+		t.Errorf("Switch: nil types.Closable")
 	}
+}
+
+//------------------------------------------------------------------------------
+
+func newSwitch(conf Config, mockOutputs []*MockOutputType) (*Switch, error) {
+	conf.Type = "switch"
+	genType, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		return nil, err
+	}
+
+	rType, ok := genType.(*Switch)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast: %T", genType)
+	}
+
+	for i := 0; i < len(mockOutputs); i++ {
+		close(rType.outputTsChans[i])
+		rType.outputs[i] = mockOutputs[i]
+		rType.outputTsChans[i] = make(chan types.Transaction)
+		mockOutputs[i].Consume(rType.outputTsChans[i])
+	}
+	return rType, nil
 }
 
 //------------------------------------------------------------------------------
@@ -56,20 +75,17 @@ func TestSwitchInterfaces(t *testing.T) {
 func TestSwitchNoConditions(t *testing.T) {
 	nOutputs, nMsgs := 10, 1000
 
-	outputs := []types.Output{}
-	confs := []switchConfigOutputs{}
+	conf := NewConfig()
 	mockOutputs := []*MockOutputType{}
-
 	for i := 0; i < nOutputs; i++ {
+		conf.Switch.Outputs = append(conf.Switch.Outputs, NewSwitchConfigOutput())
+		conf.Switch.Outputs[i].Fallthrough = true
 		mockOutputs = append(mockOutputs, &MockOutputType{})
-		outputs = append(outputs, mockOutputs[i])
-		confs = append(confs, fallthroughConfig)
 	}
 
-	s, err := newSwitch(outputs, confs, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	s, err := newSwitch(conf, mockOutputs)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	readChan := make(chan types.Transaction)
@@ -131,46 +147,47 @@ func TestSwitchNoConditions(t *testing.T) {
 func TestSwitchWithConditions(t *testing.T) {
 	nMsgs := 100
 
-	mockOutputs := []*MockOutputType{&MockOutputType{}, &MockOutputType{}, &MockOutputType{}}
-	outputs := []types.Output{mockOutputs[0], mockOutputs[1], mockOutputs[2]}
-	confs := make([]switchConfigOutputs, len(outputs))
+	mockOutputs := []*MockOutputType{{}, {}, {}}
+
+	conf := NewConfig()
+	for i := 0; i < len(mockOutputs); i++ {
+		conf.Switch.Outputs = append(conf.Switch.Outputs, NewSwitchConfigOutput())
+	}
 
 	fooConfig := condition.NewConfig()
 	fooConfig.Type = condition.TypeJMESPath
 	fooConfig.JMESPath.Query = "foo == 'bar'"
-	fooCondition, _ := condition.NewJMESPath(fooConfig, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
-	confs[0] = switchConfigOutputs{
-		cond: fooCondition,
-	}
+	conf.Switch.Outputs[0].Condition = fooConfig
 
 	barConfig := condition.NewConfig()
 	barConfig.Type = condition.TypeJMESPath
 	barConfig.JMESPath.Query = "foo == 'baz'"
-	barCondition, _ := condition.NewJMESPath(barConfig, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
-	confs[1] = switchConfigOutputs{
-		cond: barCondition,
+	conf.Switch.Outputs[1].Condition = barConfig
+
+	s, err := newSwitch(conf, mockOutputs)
+	if err != nil {
+		t.Error(err)
+		return
 	}
 
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	s, err := newSwitch(
-		outputs, confs, nil, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
 	if err = s.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		closed := 0
 		bar := `{"foo":"bar"}`
 		baz := `{"foo":"baz"}`
-		for closed < len(outputs) {
+
+	outputLoop:
+		for closed < len(mockOutputs) {
 			var ts types.Transaction
 			var ok bool
 
@@ -178,7 +195,7 @@ func TestSwitchWithConditions(t *testing.T) {
 			case ts, ok = <-mockOutputs[0].TChan:
 				if !ok {
 					closed++
-					break
+					continue outputLoop
 				}
 				if act := string(ts.Payload.Get(0).Get()); act != bar {
 					t.Errorf("Expected output 0 msgs to equal %s, got %s", bar, act)
@@ -186,7 +203,7 @@ func TestSwitchWithConditions(t *testing.T) {
 			case ts, ok = <-mockOutputs[1].TChan:
 				if !ok {
 					closed++
-					break
+					continue outputLoop
 				}
 				if act := string(ts.Payload.Get(0).Get()); act != baz {
 					t.Errorf("Expected output 1 msgs to equal %s, got %s", baz, act)
@@ -194,21 +211,21 @@ func TestSwitchWithConditions(t *testing.T) {
 			case ts, ok = <-mockOutputs[2].TChan:
 				if !ok {
 					closed++
-					break
+					continue outputLoop
 				}
 				if act := string(ts.Payload.Get(0).Get()); act == bar || act == baz {
 					t.Errorf("Expected output 2 msgs to not equal %s or %s, got %s", bar, baz, act)
 				}
 			case <-time.After(time.Second):
 				t.Error("Timed out waiting for output to propagate")
-				break
+				break outputLoop
 			}
 
 			select {
 			case ts.ResponseChan <- response.NewAck():
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to output")
-				break
+				break outputLoop
 			}
 		}
 	}()
@@ -240,54 +257,45 @@ func TestSwitchWithConditions(t *testing.T) {
 	}
 
 	s.CloseAsync()
-
 	if err := s.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
+	wg.Wait()
 }
 
 func TestSwitchNoMatch(t *testing.T) {
-	mockOutputs := []*MockOutputType{&MockOutputType{}, &MockOutputType{}, &MockOutputType{}}
-	outputs := []types.Output{mockOutputs[0], mockOutputs[1], mockOutputs[2]}
-	confs := make([]switchConfigOutputs, len(outputs))
+	mockOutputs := []*MockOutputType{{}, {}, {}}
+
+	conf := NewConfig()
+	for i := 0; i < len(mockOutputs); i++ {
+		conf.Switch.Outputs = append(conf.Switch.Outputs, NewSwitchConfigOutput())
+	}
 
 	fooConfig := condition.NewConfig()
 	fooConfig.Type = condition.TypeJMESPath
 	fooConfig.JMESPath.Query = "foo == 'bar'"
-	fooCondition, _ := condition.NewJMESPath(fooConfig, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
-	confs[0] = switchConfigOutputs{
-		cond: fooCondition,
-	}
+	conf.Switch.Outputs[0].Condition = fooConfig
 
 	barConfig := condition.NewConfig()
 	barConfig.Type = condition.TypeJMESPath
 	barConfig.JMESPath.Query = "foo == 'baz'"
-	barCondition, _ := condition.NewJMESPath(barConfig, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
-	confs[1] = switchConfigOutputs{
-		cond: barCondition,
-	}
+	conf.Switch.Outputs[1].Condition = barConfig
 
 	bazConfig := condition.NewConfig()
 	bazConfig.Type = condition.TypeStatic
 	bazConfig.Static = false
-	bazCondition, _ := condition.NewStatic(bazConfig, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
-	confs[2] = switchConfigOutputs{
-		cond: bazCondition,
+	conf.Switch.Outputs[2].Condition = bazConfig
+
+	s, err := newSwitch(conf, mockOutputs)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	s, err := newSwitch(
-		outputs, confs, nil, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
 	if err = s.Consume(readChan); err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	msg := message.New([][]byte{[]byte(`{"foo":"qux"}`)})
@@ -318,46 +326,46 @@ func TestSwitchNoMatch(t *testing.T) {
 func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 	nMsgs := 100
 
-	mockOutputs := []*MockOutputType{&MockOutputType{}, &MockOutputType{}, &MockOutputType{}}
-	outputs := []types.Output{mockOutputs[0], mockOutputs[1], mockOutputs[2]}
-	confs := make([]switchConfigOutputs, len(outputs))
+	mockOutputs := []*MockOutputType{{}, {}, {}}
+
+	conf := NewConfig()
+	for i := 0; i < len(mockOutputs); i++ {
+		conf.Switch.Outputs = append(conf.Switch.Outputs, NewSwitchConfigOutput())
+	}
 
 	fooConfig := condition.NewConfig()
 	fooConfig.Type = condition.TypeJMESPath
 	fooConfig.JMESPath.Query = "foo == 'bar'"
-	fooCondition, _ := condition.NewJMESPath(fooConfig, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
-	confs[0] = switchConfigOutputs{
-		cond: fooCondition,
-	}
+	conf.Switch.Outputs[0].Condition = fooConfig
 
 	barConfig := condition.NewConfig()
 	barConfig.Type = condition.TypeJMESPath
 	barConfig.JMESPath.Query = "foo == 'baz'"
-	barCondition, _ := condition.NewJMESPath(barConfig, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
-	confs[1] = switchConfigOutputs{
-		cond: barCondition,
+	conf.Switch.Outputs[1].Condition = barConfig
+
+	s, err := newSwitch(conf, mockOutputs)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	s, err := newSwitch(
-		outputs, confs, nil, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
 	if err = s.Consume(readChan); err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		closed := 0
 		bar := `{"foo":"bar"}`
 		baz := `{"foo":"baz"}`
-		for closed < len(outputs) {
+
+	outputLoop:
+		for closed < len(mockOutputs) {
 			var ts types.Transaction
 			var ok bool
 
@@ -367,7 +375,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 				case ts, ok = <-mockOutputs[0].TChan:
 					if !ok {
 						closed++
-						break
+						continue outputLoop
 					}
 					if act := string(ts.Payload.Get(0).Get()); act != bar {
 						t.Errorf("Expected output 0 msgs to equal %s, got %s", bar, act)
@@ -375,7 +383,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 				case ts, ok = <-mockOutputs[1].TChan:
 					if !ok {
 						closed++
-						break
+						continue outputLoop
 					}
 					if act := string(ts.Payload.Get(0).Get()); act != baz {
 						t.Errorf("Expected output 1 msgs to equal %s, got %s", baz, act)
@@ -383,12 +391,12 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 				case ts, ok = <-mockOutputs[2].TChan:
 					if !ok {
 						closed++
-						break
+						continue outputLoop
 					}
 					t.Error("Unexpected msg received by output 3")
 				case <-time.After(time.Second):
 					t.Error("Timed out waiting for output to propagate")
-					break
+					break outputLoop
 				}
 				if ts.ResponseChan != nil {
 					resChans = append(resChans, ts.ResponseChan)
@@ -400,7 +408,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 				case resChans[i] <- response.NewAck():
 				case <-time.After(time.Second):
 					t.Errorf("Timed out responding to output")
-					break
+					break outputLoop
 				}
 			}
 		}
@@ -435,22 +443,31 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 	if err := s.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
+
+	wg.Wait()
 }
+
 func TestSwitchAtLeastOnce(t *testing.T) {
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
-	outputs := []types.Output{&mockOne, &mockTwo}
-	confs := []switchConfigOutputs{fallthroughConfig, fallthroughConfig}
+	mockOutputs := []*MockOutputType{
+		&mockOne, &mockTwo,
+	}
+
+	conf := NewConfig()
+	for i := 0; i < len(mockOutputs); i++ {
+		outConf := NewSwitchConfigOutput()
+		outConf.Fallthrough = true
+		conf.Switch.Outputs = append(conf.Switch.Outputs, outConf)
+	}
+
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	s, err := newSwitch(
-		outputs, confs, nil, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
+	s, err := newSwitch(conf, mockOutputs)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	if err = s.Consume(readChan); err != nil {
 		t.Error(err)
@@ -524,21 +541,24 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 	}
 }
 
-func TestFanOutShutDownFromErrorResponse(t *testing.T) {
-	outputs := []types.Output{}
-	confs := []switchConfigOutputs{fallthroughConfig}
-	mockOutput := &MockOutputType{}
-	outputs = append(outputs, mockOutput)
+func TestSwitchShutDownFromErrorResponse(t *testing.T) {
+	mockOutputs := []*MockOutputType{{}, {}}
+
+	conf := NewConfig()
+	for i := 0; i < len(mockOutputs); i++ {
+		outConf := NewSwitchConfigOutput()
+		outConf.Fallthrough = true
+		conf.Switch.Outputs = append(conf.Switch.Outputs, outConf)
+	}
+
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	s, err := newSwitch(
-		outputs, confs, nil, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
+	s, err := newSwitch(conf, mockOutputs)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
+
 	if err = s.Consume(readChan); err != nil {
 		t.Error(err)
 		return
@@ -553,7 +573,15 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	var ts types.Transaction
 	var open bool
 	select {
-	case ts, open = <-mockOutput.TChan:
+	case ts, open = <-mockOutputs[0].TChan:
+		if !open {
+			t.Error("Switch output closed early")
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for msg rcv")
+	}
+	select {
+	case _, open = <-mockOutputs[1].TChan:
 		if !open {
 			t.Error("Switch output closed early")
 		}
@@ -573,7 +601,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	select {
-	case _, open := <-mockOutput.TChan:
+	case _, open := <-mockOutputs[0].TChan:
 		if open {
 			t.Error("Switch output still open after closure")
 		}
@@ -582,21 +610,24 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 }
 
-func TestFanOutShutDownFromReceive(t *testing.T) {
-	outputs := []types.Output{}
-	confs := []switchConfigOutputs{fallthroughConfig}
-	mockOutput := &MockOutputType{}
-	outputs = append(outputs, mockOutput)
+func TestSwitchShutDownFromReceive(t *testing.T) {
+	mockOutputs := []*MockOutputType{{}, {}}
+
+	conf := NewConfig()
+	for i := 0; i < len(mockOutputs); i++ {
+		outConf := NewSwitchConfigOutput()
+		outConf.Fallthrough = true
+		conf.Switch.Outputs = append(conf.Switch.Outputs, outConf)
+	}
+
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	s, err := newSwitch(
-		outputs, confs, nil, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
+	s, err := newSwitch(conf, mockOutputs)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
+
 	if err = s.Consume(readChan); err != nil {
 		t.Error(err)
 		return
@@ -609,7 +640,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 	}
 
 	select {
-	case _, open := <-mockOutput.TChan:
+	case _, open := <-mockOutputs[0].TChan:
 		if !open {
 			t.Error("Switch output closed early")
 		}
@@ -623,7 +654,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 	}
 
 	select {
-	case _, open := <-mockOutput.TChan:
+	case _, open := <-mockOutputs[0].TChan:
 		if open {
 			t.Error("Switch output still open after closure")
 		}
@@ -632,22 +663,25 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 	}
 }
 
-func TestFanOutShutDownFromSend(t *testing.T) {
-	outputs := []types.Output{}
-	confs := []switchConfigOutputs{fallthroughConfig}
-	mockOutput := &MockOutputType{}
-	outputs = append(outputs, mockOutput)
+func TestSwitchShutDownFromSend(t *testing.T) {
+	mockOutputs := []*MockOutputType{{}, {}}
+
+	conf := NewConfig()
+	for i := 0; i < len(mockOutputs); i++ {
+		outConf := NewSwitchConfigOutput()
+		outConf.Fallthrough = true
+		conf.Switch.Outputs = append(conf.Switch.Outputs, outConf)
+	}
+
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	oTM, err := newSwitch(
-		outputs, confs, nil, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
+	s, err := newSwitch(conf, mockOutputs)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
-	if err = oTM.Consume(readChan); err != nil {
+
+	if err = s.Consume(readChan); err != nil {
 		t.Error(err)
 		return
 	}
@@ -658,72 +692,19 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 		t.Error("Timed out waiting for msg send")
 	}
 
-	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second); err != nil {
+	s.CloseAsync()
+	if err := s.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
 
 	select {
-	case _, open := <-mockOutput.TChan:
+	case _, open := <-mockOutputs[0].TChan:
 		if open {
 			t.Error("Switch output still open after closure")
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg rcv")
 	}
-}
-
-//------------------------------------------------------------------------------
-
-func BenchmarkBasicFanOut(b *testing.B) {
-	nOutputs, nMsgs := 3, b.N
-
-	outputs := []types.Output{}
-	confs := []switchConfigOutputs{}
-	mockOutputs := []*MockOutputType{}
-
-	for i := 0; i < nOutputs; i++ {
-		mockOutputs = append(mockOutputs, &MockOutputType{})
-		outputs = append(outputs, mockOutputs[i])
-		confs = append(confs, fallthroughConfig)
-	}
-
-	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
-
-	oTM, err := newSwitch(
-		outputs, confs, nil, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err != nil {
-		b.Error(err)
-		return
-	}
-
-	content := [][]byte{[]byte("hello world")}
-	rChanSlice := make([]chan<- types.Response, nOutputs)
-
-	b.StartTimer()
-
-	for i := 0; i < nMsgs; i++ {
-		readChan <- types.NewTransaction(message.New(content), resChan)
-		for j := 0; j < nOutputs; j++ {
-			ts := <-mockOutputs[j].TChan
-			rChanSlice[i] = ts.ResponseChan
-		}
-		for j := 0; j < nOutputs; j++ {
-			rChanSlice[j] <- response.NewAck()
-		}
-		res := <-resChan
-		if res.Error() != nil {
-			b.Errorf("Received unexpected errors from broker: %v", res.Error())
-		}
-	}
-
-	b.StopTimer()
 }
 
 //------------------------------------------------------------------------------

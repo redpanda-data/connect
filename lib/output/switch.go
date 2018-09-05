@@ -21,6 +21,7 @@
 package output
 
 import (
+	"encoding/json"
 	"errors"
 	"sync/atomic"
 	"time"
@@ -50,12 +51,18 @@ func init() {
 	Constructors[TypeSwitch] = TypeSpec{
 		constructor: NewSwitch,
 		description: `
-The switch output type allows you to configure multiple conditional output targets
-by listing child outputs paired with conditions. In the following example, messages
-containing "foo" will be sent to both the ` + "`foo`" + ` and ` + "`baz`" + ` outputs. Messages containing
-"bar" will be sent to both the ` + "`bar`" + ` and ` + "`baz`" + ` outputs. Messages containing both "foo"
-and "bar" will be sent to all three outputs. And finally, messages that do not contain
-"foo" or "bar" will be sent to the ` + "`baz`" + ` output only.
+The switch output type allows you to configure multiple conditional output
+targets by listing child outputs paired with conditions. Conditional logic is
+currently applied per whole message batch. In order to multiplex per message of
+a batch use the ` + "[`broker`](#broker)" + ` output with the pattern
+` + "`fan_out`" + `.
+
+In the following example, messages containing "foo" will be sent to both the
+` + "`foo`" + ` and ` + "`baz`" + ` outputs. Messages containing "bar" will be
+sent to both the ` + "`bar`" + ` and ` + "`baz`" + ` outputs. Messages
+containing both "foo" and "bar" will be sent to all three outputs. And finally,
+messages that do not contain "foo" or "bar" will be sent to the ` + "`baz`" + `
+output only.
 
 ` + "``` yaml" + `
 output:
@@ -93,14 +100,35 @@ output:
   - type: some_processor
 ` + "```" + `
 
-The switch output requires a minimum of two outputs. If no condition is defined for
-an output, it behaves like a static ` + "`true`" + ` condition. If ` + "`fallthrough`" + ` is set to
-` + "`true`" + `, the swith output will continue evaluating additional outputs after finding
-a match. If an output applies back pressure it will block all subsequent messages,
-and if an output fails to send a message, it will be retried continously until
-completion or service shut down. Messages that do not match any outputs will be
-dropped.
-		`,
+The switch output requires a minimum of two outputs. If no condition is defined
+for an output, it behaves like a static ` + "`true`" + ` condition. If
+` + "`fallthrough`" + ` is set to ` + "`true`" + `, the switch output will
+continue evaluating additional outputs after finding a match. If an output
+applies back pressure it will block all subsequent messages, and if an output
+fails to send a message, it will be retried continously until completion or
+service shut down. Messages that do not match any outputs will be dropped.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			outSlice := []interface{}{}
+			for _, out := range conf.Switch.Outputs {
+				sanOutput, err := SanitiseConfig(out.Output)
+				if err != nil {
+					return nil, err
+				}
+				var sanCond interface{}
+				if sanCond, err = condition.SanitiseConfig(out.Condition); err != nil {
+					return nil, err
+				}
+				sanit := map[string]interface{}{
+					"output":      sanOutput,
+					"fallthrough": out.Fallthrough,
+					"condition":   sanCond,
+				}
+				outSlice = append(outSlice, sanit)
+			}
+			return map[string]interface{}{
+				"outputs": outSlice,
+			}, nil
+		},
 	}
 }
 
@@ -108,21 +136,64 @@ dropped.
 
 // SwitchConfig contains configuration fields for the Switch output type.
 type SwitchConfig struct {
-	Outputs []switchConfigOutputs `json:"outputs" yaml:"outputs"`
+	Outputs []SwitchConfigOutput `json:"outputs" yaml:"outputs"`
 }
 
 // NewSwitchConfig creates a new SwitchConfig with default values.
 func NewSwitchConfig() SwitchConfig {
 	return SwitchConfig{
-		Outputs: []switchConfigOutputs{},
+		Outputs: []SwitchConfigOutput{},
 	}
 }
 
-type switchConfigOutputs struct {
-	cond        types.Condition
-	Condition   *condition.Config `json:"condition" yaml:"condition"`
-	Fallthrough bool              `json:"fallthrough" yaml:"fallthrough"`
-	Output      Config            `json:"output" yaml:"output"`
+// SwitchConfigOutput contains configuration fields per output of a switch type.
+type SwitchConfigOutput struct {
+	Condition   condition.Config `json:"condition" yaml:"condition"`
+	Fallthrough bool             `json:"fallthrough" yaml:"fallthrough"`
+	Output      Config           `json:"output" yaml:"output"`
+}
+
+// NewSwitchConfigOutput creates a new switch output config with default values.
+func NewSwitchConfigOutput() SwitchConfigOutput {
+	cond := condition.NewConfig()
+	cond.Type = condition.TypeStatic
+	cond.Static = true
+
+	return SwitchConfigOutput{
+		Condition:   cond,
+		Fallthrough: false,
+		Output:      NewConfig(),
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// UnmarshalJSON ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (s *SwitchConfigOutput) UnmarshalJSON(bytes []byte) error {
+	type confAlias SwitchConfigOutput
+	aliased := confAlias(NewSwitchConfigOutput())
+
+	if err := json.Unmarshal(bytes, &aliased); err != nil {
+		return err
+	}
+
+	*s = SwitchConfigOutput(aliased)
+	return nil
+}
+
+// UnmarshalYAML ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (s *SwitchConfigOutput) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type confAlias SwitchConfigOutput
+	aliased := confAlias(NewSwitchConfigOutput())
+
+	if err := unmarshal(&aliased); err != nil {
+		return err
+	}
+
+	*s = SwitchConfigOutput(aliased)
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -141,16 +212,17 @@ type Switch struct {
 
 	outputTsChans  []chan types.Transaction
 	outputResChans []chan types.Response
-	outputs        []types.Output
-	outputNs       []int
-	confs          []switchConfigOutputs
+
+	outputs      []types.Output
+	conditions   []types.Condition
+	fallthroughs []bool
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
 
-// NewSwitch creates a new FanOut type by providing outputs. Messages will be sent to
-// a subset of outputs according to condition and fallthrough settings
+// NewSwitch creates a new Switch type by providing outputs. Messages will be
+// sent to a subset of outputs according to condition and fallthrough settings.
 func NewSwitch(
 	conf Config,
 	mgr types.Manager,
@@ -162,43 +234,27 @@ func NewSwitch(
 		return nil, ErrSwitchNoOutputs
 	}
 
-	outputs := make([]types.Output, lOutputs)
-	confs := make([]switchConfigOutputs, lOutputs)
-	var err error
-	for i, oConf := range conf.Switch.Outputs {
-		outputs[i], err = New(oConf.Output, mgr, logger, stats)
-		if err != nil {
-			return nil, err
-		}
-		if oConf.Condition != nil {
-			oConf.cond, err = condition.New(*oConf.Condition, mgr, logger, stats)
-			if err != nil {
-				return nil, err
-			}
-			confs[i] = oConf
-		}
-	}
-
-	return newSwitch(outputs, confs, mgr, logger, stats)
-}
-
-func newSwitch(
-	outputs []types.Output,
-	confs []switchConfigOutputs,
-	mgr types.Manager,
-	logger log.Modular,
-	stats metrics.Type,
-) (*Switch, error) {
 	o := &Switch{
 		running:      1,
 		stats:        stats,
 		logger:       logger.NewModule(".broker.switch"),
 		transactions: nil,
-		outputs:      outputs,
-		outputNs:     []int{},
-		confs:        confs,
+		outputs:      make([]types.Output, lOutputs),
+		conditions:   make([]types.Condition, lOutputs),
+		fallthroughs: make([]bool, lOutputs),
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
+	}
+
+	var err error
+	for i, oConf := range conf.Switch.Outputs {
+		if o.outputs[i], err = New(oConf.Output, mgr, logger, stats); err != nil {
+			return nil, err
+		}
+		if o.conditions[i], err = condition.New(oConf.Condition, mgr, logger, stats); err != nil {
+			return nil, err
+		}
+		o.fallthroughs[i] = oConf.Fallthrough
 	}
 
 	o.throt = throttle.New(throttle.OptCloseChan(o.closeChan))
@@ -206,7 +262,6 @@ func newSwitch(
 	o.outputTsChans = make([]chan types.Transaction, len(o.outputs))
 	o.outputResChans = make([]chan types.Response, len(o.outputs))
 	for i := range o.outputTsChans {
-		o.outputNs = append(o.outputNs, i)
 		o.outputTsChans[i] = make(chan types.Transaction)
 		o.outputResChans[i] = make(chan types.Response)
 		if err := o.outputs[i].Consume(o.outputTsChans[i]); err != nil {
@@ -270,10 +325,10 @@ func (o *Switch) loop() {
 		mMsgRcvd.Incr(1)
 
 		var outputTargets []int
-		for i, oConf := range o.confs {
-			if oConf.cond == nil || oConf.cond.Check(ts.Payload) {
-				outputTargets = append(outputTargets, o.outputNs[i])
-				if !oConf.Fallthrough {
+		for i, oCond := range o.conditions {
+			if oCond.Check(ts.Payload) {
+				outputTargets = append(outputTargets, i)
+				if !o.fallthroughs[i] {
 					break
 				}
 			}
@@ -326,14 +381,14 @@ func (o *Switch) loop() {
 	}
 }
 
-// CloseAsync shuts down the FanOut broker and stops processing requests.
+// CloseAsync shuts down the Switch broker and stops processing requests.
 func (o *Switch) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&o.running, 1, 0) {
 		close(o.closeChan)
 	}
 }
 
-// WaitForClose blocks until the FanOut broker has closed down.
+// WaitForClose blocks until the Switch broker has closed down.
 func (o *Switch) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-o.closedChan:
