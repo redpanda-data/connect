@@ -18,15 +18,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package reader
+package integration
 
 import (
-	"os"
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/colinmarc/hdfs"
 	"github.com/ory/dockertest"
 	"github.com/ory/dockertest/docker"
@@ -79,13 +83,13 @@ func TestHDFSIntegration(t *testing.T) {
 		}
 		_, err = fw.Write([]byte("testing hdfs reader"))
 		if err != nil {
-			client.Remove(testFile)
 			return err
 		}
 		err = fw.Close()
 		if err != nil {
 			return err
 		}
+		client.Remove(testFile)
 		return nil
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
@@ -97,40 +101,81 @@ func TestHDFSIntegration(t *testing.T) {
 		}
 	}()
 
-	t.Run("TestHDFSConnect", func(th *testing.T) {
-		testHDFSConnect(hosts, user, th)
+	t.Run("TestHDFSReaderWriterBasic", func(th *testing.T) {
+		testHDFSReaderBasic(hosts, user, th)
 	})
 }
 
-func testHDFSConnect(hosts []string, user string, t *testing.T) {
-	conf := NewHDFSConfig()
-	conf.User = user
-	conf.Hosts = hosts
-	conf.Directory = "/"
+func testHDFSReaderBasic(hosts []string, user string, t *testing.T) {
+	wconf := writer.NewHDFSConfig()
+	wconf.User = user
+	wconf.Hosts = hosts
+	wconf.Directory = "/"
+	wconf.Path = "${!count:files}-benthos_test.txt"
 
-	h := NewHDFS(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	w := writer.NewHDFS(wconf, log.Noop(), metrics.Noop())
 
-	if err := h.Connect(); err != nil {
+	if err := w.Connect(); err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		h.CloseAsync()
-		if err := h.WaitForClose(time.Second); err != nil {
+		w.CloseAsync()
+		if err := w.WaitForClose(time.Second); err != nil {
 			t.Error(err)
 		}
 	}()
 
-	testMsgs := len(h.targets)
+	N := 9
 
-	for testMsgs > 0 {
-		msg, err := h.Read()
+	testMsgs := [][][]byte{}
+
+	for i := 0; i < N; i++ {
+		testMsgs = append(testMsgs, [][]byte{
+			[]byte(fmt.Sprintf(`{"user":"%v","message":"hello world"}`, i)),
+		})
+	}
+
+	for i := 0; i < N; i++ {
+		if err := w.Write(message.New(testMsgs[i])); err != nil {
+			time.Sleep(time.Second * 3000)
+			t.Fatal(err)
+		}
+	}
+
+	rconf := reader.NewHDFSConfig()
+	rconf.User = user
+	rconf.Hosts = hosts
+	rconf.Directory = "/"
+
+	r := reader.NewHDFS(rconf, log.Noop(), metrics.Noop())
+
+	if err := r.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		r.CloseAsync()
+		if err := r.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	for i, expMsg := range testMsgs {
+		msg, err := r.Read()
 		if err != nil {
-			t.Fatalf("Failed to read messages from '%v': %v", h.targets, err)
+			t.Fatalf("Failed to read message '%v': %v", i, err)
 		}
-		if exp, act := "testing hdfs reader", string(msg.Get(0).Get()); exp != act {
-			t.Errorf("wrong data returned: %v != %v", act, exp)
+		if act := message.GetAllBytes(msg); !reflect.DeepEqual(expMsg, act) {
+			t.Errorf("wrong data returned: %s != %s", act, expMsg)
 		}
-		testMsgs = len(h.targets)
+		fileName := fmt.Sprintf("%v-benthos_test.txt", i+1)
+		filePath := fmt.Sprintf("/%v", fileName)
+		if exp, act := fileName, msg.Get(0).Metadata().Get("hdfs_name"); exp != act {
+			t.Errorf("Wrong metadata returned: %v != %v", act, exp)
+		}
+		if exp, act := filePath, msg.Get(0).Metadata().Get("hdfs_path"); exp != act {
+			t.Errorf("Wrong metadata returned: %v != %v", act, exp)
+		}
 	}
 }

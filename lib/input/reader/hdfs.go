@@ -128,7 +128,8 @@ func (h *HDFS) Read() (types.Message, error) {
 	}
 
 	msg := message.New([][]byte{msgBytes})
-	msg.Get(0).Metadata().Set("hdfs_path", fileName)
+	msg.Get(0).Metadata().Set("hdfs_name", fileName)
+	msg.Get(0).Metadata().Set("hdfs_path", filePath)
 	return msg, nil
 }
 
