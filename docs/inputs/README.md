@@ -41,25 +41,26 @@ level which is only applied to messages from the baz input.
 3. [`dynamic`](#dynamic)
 4. [`file`](#file)
 5. [`files`](#files)
-6. [`http_client`](#http_client)
-7. [`http_server`](#http_server)
-8. [`inproc`](#inproc)
-9. [`kafka`](#kafka)
-10. [`kafka_balanced`](#kafka_balanced)
-11. [`kinesis`](#kinesis)
-12. [`mqtt`](#mqtt)
-13. [`nanomsg`](#nanomsg)
-14. [`nats`](#nats)
-15. [`nats_stream`](#nats_stream)
-16. [`nsq`](#nsq)
-17. [`read_until`](#read_until)
-18. [`redis_list`](#redis_list)
-19. [`redis_pubsub`](#redis_pubsub)
-20. [`redis_streams`](#redis_streams)
-21. [`s3`](#s3)
-22. [`sqs`](#sqs)
-23. [`stdin`](#stdin)
-24. [`websocket`](#websocket)
+6. [`hdfs`](#hdfs)
+7. [`http_client`](#http_client)
+8. [`http_server`](#http_server)
+9. [`inproc`](#inproc)
+10. [`kafka`](#kafka)
+11. [`kafka_balanced`](#kafka_balanced)
+12. [`kinesis`](#kinesis)
+13. [`mqtt`](#mqtt)
+14. [`nanomsg`](#nanomsg)
+15. [`nats`](#nats)
+16. [`nats_stream`](#nats_stream)
+17. [`nsq`](#nsq)
+18. [`read_until`](#read_until)
+19. [`redis_list`](#redis_list)
+20. [`redis_pubsub`](#redis_pubsub)
+21. [`redis_streams`](#redis_streams)
+22. [`s3`](#s3)
+23. [`sqs`](#sqs)
+24. [`stdin`](#stdin)
+25. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -242,6 +243,32 @@ This input adds the following metadata fields to each message:
 
 ```
 - path
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
+
+## `hdfs`
+
+``` yaml
+type: hdfs
+hdfs:
+  directory: ""
+  hosts:
+  - localhost:9000
+  user: benthos_hdfs
+```
+
+Reads files from a HDFS directory, where each discrete file will be consumed as a single
+message payload.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```
+- hdfs_name
+- hdfs_path
 ```
 
 You can access these metadata fields using

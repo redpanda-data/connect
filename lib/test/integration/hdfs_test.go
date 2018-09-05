@@ -18,17 +18,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package writer
+package integration
 
 import (
 	"fmt"
-	"os"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/colinmarc/hdfs"
 	"github.com/ory/dockertest"
 	"github.com/ory/dockertest/docker"
@@ -63,14 +65,12 @@ func TestHDFSIntegration(t *testing.T) {
 		t.Fatalf("Could not start resource: %s", err)
 	}
 
-	var client *hdfs.Client
-
 	hosts := []string{"localhost:9000"}
 	user := "root"
 
 	if err = pool.Retry(func() error {
 		testFile := "/cluster_ready" + time.Now().Format("20060102150405")
-		client, err = hdfs.NewClient(hdfs.ClientOptions{
+		client, err := hdfs.NewClient(hdfs.ClientOptions{
 			Addresses: hosts,
 			User:      user,
 		})
@@ -81,7 +81,7 @@ func TestHDFSIntegration(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		_, err = fw.Write([]byte("cluster is ready"))
+		_, err = fw.Write([]byte("testing hdfs reader"))
 		if err != nil {
 			return err
 		}
@@ -89,6 +89,7 @@ func TestHDFSIntegration(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		client.Remove(testFile)
 		return nil
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
@@ -100,53 +101,81 @@ func TestHDFSIntegration(t *testing.T) {
 		}
 	}()
 
-	t.Run("TestHDFSConnect", func(th *testing.T) {
-		testHDFSConnect(hosts, user, client, th)
+	t.Run("TestHDFSReaderWriterBasic", func(th *testing.T) {
+		testHDFSReaderBasic(hosts, user, th)
 	})
 }
 
-func testHDFSConnect(hosts []string, user string, client *hdfs.Client, t *testing.T) {
-	conf := NewHDFSConfig()
-	conf.User = user
-	conf.Hosts = hosts
-	conf.Directory = "/"
-	conf.Path = "${!count:files}-benthos_test.txt"
+func testHDFSReaderBasic(hosts []string, user string, t *testing.T) {
+	wconf := writer.NewHDFSConfig()
+	wconf.User = user
+	wconf.Hosts = hosts
+	wconf.Directory = "/"
+	wconf.Path = "${!count:files}-benthos_test.txt"
 
-	h := NewHDFS(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	w := writer.NewHDFS(wconf, log.Noop(), metrics.Noop())
 
-	if err := h.Connect(); err != nil {
+	if err := w.Connect(); err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		h.CloseAsync()
-		if err := h.WaitForClose(time.Second); err != nil {
+		w.CloseAsync()
+		if err := w.WaitForClose(time.Second); err != nil {
 			t.Error(err)
 		}
 	}()
 
-	N := 10
+	N := 9
 
 	testMsgs := [][][]byte{}
+
 	for i := 0; i < N; i++ {
 		testMsgs = append(testMsgs, [][]byte{
 			[]byte(fmt.Sprintf(`{"user":"%v","message":"hello world"}`, i)),
 		})
 	}
+
 	for i := 0; i < N; i++ {
-		if err := h.Write(message.New(testMsgs[i])); err != nil {
+		if err := w.Write(message.New(testMsgs[i])); err != nil {
 			time.Sleep(time.Second * 3000)
 			t.Fatal(err)
 		}
 	}
-	for i := 0; i < N; i++ {
-		filePath := fmt.Sprintf("/%v-benthos_test.txt", i+1)
-		data, err := client.ReadFile(filePath)
-		if err != nil {
-			t.Fatalf("Failed to get file '%v': %v", filePath, err)
+
+	rconf := reader.NewHDFSConfig()
+	rconf.User = user
+	rconf.Hosts = hosts
+	rconf.Directory = "/"
+
+	r := reader.NewHDFS(rconf, log.Noop(), metrics.Noop())
+
+	if err := r.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		r.CloseAsync()
+		if err := r.WaitForClose(time.Second); err != nil {
+			t.Error(err)
 		}
-		if exp, act := string(testMsgs[i][0]), string(data); exp != act {
-			t.Errorf("wrong data returned: %v != %v", act, exp)
+	}()
+
+	for i, expMsg := range testMsgs {
+		msg, err := r.Read()
+		if err != nil {
+			t.Fatalf("Failed to read message '%v': %v", i, err)
+		}
+		if act := message.GetAllBytes(msg); !reflect.DeepEqual(expMsg, act) {
+			t.Errorf("wrong data returned: %s != %s", act, expMsg)
+		}
+		fileName := fmt.Sprintf("%v-benthos_test.txt", i+1)
+		filePath := fmt.Sprintf("/%v", fileName)
+		if exp, act := fileName, msg.Get(0).Metadata().Get("hdfs_name"); exp != act {
+			t.Errorf("Wrong metadata returned: %v != %v", act, exp)
+		}
+		if exp, act := filePath, msg.Get(0).Metadata().Get("hdfs_path"); exp != act {
+			t.Errorf("Wrong metadata returned: %v != %v", act, exp)
 		}
 	}
 }

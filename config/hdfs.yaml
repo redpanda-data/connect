@@ -5,11 +5,12 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: stdin
-  stdin:
-    delimiter: ""
-    max_buffer: 1e+06
-    multipart: false
+  type: hdfs
+  hdfs:
+    directory: ""
+    hosts:
+    - localhost:9000
+    user: benthos_hdfs
 buffer:
   type: none
   none: {}
