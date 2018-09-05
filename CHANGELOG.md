@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- New `hdfs` output.
+- New `hdfs` input and output.
 
 ### 0.29.0 - 2018-09-02
 
