@@ -101,21 +101,6 @@ metadata:
   key: foo
 ` + "```" + `
 
-### ` + "`less_than`" + `
-
-Checks whether the contents of a metadata key, parsed as a floating point
-number, is less than an argument. Returns false if the metadata value cannot be
-parsed into a number.
-
-` + "```yaml" + `
-type: metadata
-metadata:
-  operator: less_than
-  part: 0
-  key: foo
-  arg: 3
-` + "```" + `
-
 ### ` + "`greater_than`" + `
 
 Checks whether the contents of a metadata key, parsed as a floating point
@@ -126,6 +111,38 @@ be parsed into a number.
 type: metadata
 metadata:
   operator: greater_than
+  part: 0
+  key: foo
+  arg: 3
+` + "```" + `
+
+### ` + "`has_prefix`" + `
+
+Checks whether the contents of a metadata key match one of the provided prefixes.
+The arg field can either be a singular prefix string or a list of prefixes.
+
+` + "```yaml" + `
+type: metadata
+metadata:
+  operator: has_prefix
+  part: 0
+  key: foo
+  arg:
+    - foo
+    - bar
+    - baz
+` + "```" + `
+
+### ` + "`less_than`" + `
+
+Checks whether the contents of a metadata key, parsed as a floating point
+number, is less than an argument. Returns false if the metadata value cannot be
+parsed into a number.
+
+` + "```yaml" + `
+type: metadata
+metadata:
+  operator: less_than
   part: 0
   key: foo
   arg: 3
@@ -248,9 +265,14 @@ func metadataGreaterThanOperator(key string, arg interface{}) (metadataOperator,
 }
 
 func metadataHasPrefixOperator(key string, arg interface{}) (metadataOperator, error) {
+	if prefix, ok := arg.(string); ok {
+		return func(md types.Metadata) bool {
+			return strings.HasPrefix(md.Get(key), prefix)
+		}, nil
+	}
 	entries, err := cast.ToStringSliceE(arg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse argument as string slice: %v", err)
+		return nil, fmt.Errorf("failed to parse argument as string or string slice: %v", err)
 	}
 	tree := radix.New()
 	for _, entry := range entries {

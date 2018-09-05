@@ -224,7 +224,7 @@ func TestMetadataCheck(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "has_prefix pos",
+			name: "has_prefix pos 1",
 			fields: fields{
 				operator: "has_prefix",
 				key:      "foo",
@@ -237,7 +237,20 @@ func TestMetadataCheck(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "has_prefix neg",
+			name: "has_prefix pos 2",
+			fields: fields{
+				operator: "has_prefix",
+				key:      "foo",
+				part:     0,
+				arg:      "foo bar baz",
+			},
+			arg: map[string]string{
+				"foo": "foo bar bazley",
+			},
+			want: true,
+		},
+		{
+			name: "has_prefix neg 1",
 			fields: fields{
 				operator: "has_prefix",
 				key:      "foo",
@@ -246,6 +259,19 @@ func TestMetadataCheck(t *testing.T) {
 			},
 			arg: map[string]string{
 				"foo": "quz",
+			},
+			want: false,
+		},
+		{
+			name: "has_prefix neg 2",
+			fields: fields{
+				operator: "has_prefix",
+				key:      "foo",
+				part:     0,
+				arg:      "foo bar baz",
+			},
+			arg: map[string]string{
+				"foo": "barley",
 			},
 			want: false,
 		},
