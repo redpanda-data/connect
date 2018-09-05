@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -43,7 +43,7 @@ message payload.
 This input adds the following metadata fields to each message:
 
 ` + "```" + `
-- file_name
+- hdfs_path
 ` + "```" + `
 
 You can access these metadata fields using

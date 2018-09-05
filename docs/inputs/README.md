@@ -267,7 +267,7 @@ message payload.
 This input adds the following metadata fields to each message:
 
 ```
-- file_name
+- hdfs_path
 ```
 
 You can access these metadata fields using
