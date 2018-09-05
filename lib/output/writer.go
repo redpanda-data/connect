@@ -75,20 +75,22 @@ func NewWriter(
 func (w *Writer) loop() {
 	// Metrics paths
 	var (
-		mRunning     = w.stats.GetGauge("output.running")
-		mRunningF    = w.stats.GetGauge("output." + w.typeStr + ".running")
-		mCount       = w.stats.GetCounter("output.count")
-		mCountF      = w.stats.GetCounter("output." + w.typeStr + ".count")
-		mSuccess     = w.stats.GetCounter("output.send.success")
-		mSuccessF    = w.stats.GetCounter("output." + w.typeStr + ".send.success")
-		mError       = w.stats.GetCounter("output.send.error")
-		mErrorF      = w.stats.GetCounter("output." + w.typeStr + ".send.error")
-		mConn        = w.stats.GetCounter("output.connection.up")
-		mConnF       = w.stats.GetCounter("output." + w.typeStr + ".connection.up")
-		mFailedConn  = w.stats.GetCounter("output.connection.failed")
-		mFailedConnF = w.stats.GetCounter("output." + w.typeStr + ".connection.failed")
-		mLostConn    = w.stats.GetCounter("output.connection.lost")
-		mLostConnF   = w.stats.GetCounter("output." + w.typeStr + ".connection.lost")
+		mRunning       = w.stats.GetGauge("output.running")
+		mRunningF      = w.stats.GetGauge("output." + w.typeStr + ".running")
+		mCount         = w.stats.GetCounter("output.count")
+		mCountF        = w.stats.GetCounter("output." + w.typeStr + ".count")
+		mSuccess       = w.stats.GetCounter("output.send.success")
+		mSuccessF      = w.stats.GetCounter("output." + w.typeStr + ".send.success")
+		mPartsSuccess  = w.stats.GetCounter("output.parts.send.success")
+		mPartsSuccessF = w.stats.GetCounter("output." + w.typeStr + ".parts.send.success")
+		mError         = w.stats.GetCounter("output.send.error")
+		mErrorF        = w.stats.GetCounter("output." + w.typeStr + ".send.error")
+		mConn          = w.stats.GetCounter("output.connection.up")
+		mConnF         = w.stats.GetCounter("output." + w.typeStr + ".connection.up")
+		mFailedConn    = w.stats.GetCounter("output.connection.failed")
+		mFailedConnF   = w.stats.GetCounter("output." + w.typeStr + ".connection.failed")
+		mLostConn      = w.stats.GetCounter("output.connection.lost")
+		mLostConnF     = w.stats.GetCounter("output." + w.typeStr + ".connection.lost")
 	)
 
 	defer func() {
@@ -184,6 +186,8 @@ func (w *Writer) loop() {
 		} else {
 			mSuccess.Incr(1)
 			mSuccessF.Incr(1)
+			mPartsSuccess.Incr(int64(ts.Payload.Len()))
+			mPartsSuccessF.Incr(int64(ts.Payload.Len()))
 			throt.Reset()
 		}
 		select {

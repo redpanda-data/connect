@@ -16,7 +16,6 @@ buffer:
 pipeline:
   processors:
   - type: noop
-    noop: null
   threads: 1
 output:
   type: stdout

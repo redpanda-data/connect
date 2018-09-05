@@ -197,6 +197,84 @@ func TestMetadataCheck(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "regexp_partial 1",
+			fields: fields{
+				operator: "regexp_partial",
+				key:      "foo",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: map[string]string{
+				"foo": "hello 1a2 world",
+			},
+			want: true,
+		},
+		{
+			name: "regexp_partial 2",
+			fields: fields{
+				operator: "regexp_partial",
+				key:      "foo",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: map[string]string{
+				"foo": "1a2",
+			},
+			want: true,
+		},
+		{
+			name: "regexp_partial 3",
+			fields: fields{
+				operator: "regexp_partial",
+				key:      "foo",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: map[string]string{
+				"foo": "hello 12 world",
+			},
+			want: false,
+		},
+		{
+			name: "regexp_exact 1",
+			fields: fields{
+				operator: "regexp_exact",
+				key:      "foo",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: map[string]string{
+				"foo": "hello 1a2 world",
+			},
+			want: false,
+		},
+		{
+			name: "regexp_exact 2",
+			fields: fields{
+				operator: "regexp_exact",
+				key:      "foo",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: map[string]string{
+				"foo": "1a2",
+			},
+			want: true,
+		},
+		{
+			name: "regexp_exact 3",
+			fields: fields{
+				operator: "regexp_exact",
+				key:      "foo",
+				part:     0,
+				arg:      "1[a-z]2",
+			},
+			arg: map[string]string{
+				"foo": "12",
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

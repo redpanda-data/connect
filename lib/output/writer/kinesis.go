@@ -30,6 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/retries"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -53,25 +54,21 @@ var (
 
 // KinesisConfig contains configuration fields for the Kinesis output type.
 type KinesisConfig struct {
-	Endpoint     string                     `json:"endpoint" yaml:"endpoint"`
-	Region       string                     `json:"region" yaml:"region"`
-	Stream       string                     `json:"stream" yaml:"stream"`
-	HashKey      string                     `json:"hash_key" yaml:"hash_key"`
-	PartitionKey string                     `json:"partition_key" yaml:"partition_key"`
-	Credentials  AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
-	MaxRetries   uint64                     `json:"retries" yaml:"retries"`
-	Backoff      KinesisConfigBackoff       `json:"backoff" yaml:"backoff"`
-}
-
-// KinesisConfigBackoff contains backoff configuration fields for the Kinesis output type.
-type KinesisConfigBackoff struct {
-	InitialInterval string `json:"initial_interval" yaml:"initial_interval"`
-	MaxInterval     string `json:"max_interval" yaml:"max_interval"`
-	MaxElapsedTime  string `json:"max_elapsed_time" yaml:"max_elapsed_time"`
+	Endpoint       string                     `json:"endpoint" yaml:"endpoint"`
+	Region         string                     `json:"region" yaml:"region"`
+	Stream         string                     `json:"stream" yaml:"stream"`
+	HashKey        string                     `json:"hash_key" yaml:"hash_key"`
+	PartitionKey   string                     `json:"partition_key" yaml:"partition_key"`
+	Credentials    AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
+	retries.Config `json:",inline" yaml:",inline"`
 }
 
 // NewKinesisConfig creates a new Config with default values.
 func NewKinesisConfig() KinesisConfig {
+	rConf := retries.NewConfig()
+	rConf.Backoff.InitialInterval = "1s"
+	rConf.Backoff.MaxInterval = "5s"
+	rConf.Backoff.MaxElapsedTime = "30s"
 	return KinesisConfig{
 		Endpoint:     "",
 		Region:       "eu-west-1",
@@ -83,12 +80,7 @@ func NewKinesisConfig() KinesisConfig {
 			Secret: "",
 			Token:  "",
 		},
-		MaxRetries: 3,
-		Backoff: KinesisConfigBackoff{
-			InitialInterval: "500ms",
-			MaxInterval:     "3s",
-			MaxElapsedTime:  "10s",
-		},
+		Config: rConf,
 	}
 }
 
@@ -131,30 +123,10 @@ func NewKinesis(
 		streamName:   aws.String(conf.Stream),
 	}
 
-	b := backoff.NewExponentialBackOff()
-	if conf.Backoff.InitialInterval != "" {
-		d, err := time.ParseDuration(conf.Backoff.InitialInterval)
-		if err != nil {
-			return nil, fmt.Errorf("invalid backoff initial interval: %v", err)
-		}
-		b.InitialInterval = d
+	var err error
+	if k.backoff, err = conf.Config.Get(); err != nil {
+		return nil, err
 	}
-	if conf.Backoff.MaxInterval != "" {
-		d, err := time.ParseDuration(conf.Backoff.MaxInterval)
-		if err != nil {
-			return nil, fmt.Errorf("invalid backoff max interval: %v", err)
-		}
-		b.MaxInterval = d
-	}
-	if conf.Backoff.MaxElapsedTime != "" {
-		d, err := time.ParseDuration(conf.Backoff.MaxElapsedTime)
-		if err != nil {
-			return nil, fmt.Errorf("invalid backoff max elapsed interval: %v", err)
-		}
-		b.MaxElapsedTime = d
-	}
-	k.backoff = backoff.WithMaxRetries(b, conf.MaxRetries)
-
 	return &k, nil
 }
 

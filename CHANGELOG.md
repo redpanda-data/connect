@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `hdfs` input and output.
+- New `switch` output.
+
+### 0.29.0 - 2018-09-02
+
+### Added
+
+- New `retry` output.
+- Added `regex_partial` and `regex_exact` operators to the `metadata` condition.
+
+### Changed
+
+- The `kinesis` output field `retries` has been renamed `max_retries` in order
+  to expose the difference in its zero value behaviour (endless retries) versus
+  other `retry` fields (zero retries).
+
+### 0.28.0 - 2018-09-01
+
+### Added
+
+- New `endpoint` field added to `kinesis` input.
+- New `dynamodb` cache type.
+
 ### 0.27.0 - 2018-08-30
 
 ### Added

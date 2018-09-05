@@ -31,6 +31,11 @@ input:
         path: ${INPUT_FILE_PATH}
       files:
         path: ${INPUT_FILES_PATH}
+      hdfs:
+        directory: ${INPUT_HDFS_DIRECTORY}
+        hosts:
+        - ${INPUT_HDFS_HOSTS:localhost:9000}
+        user: ${INPUT_HDFS_USER:benthos_hdfs}
       http_client:
         backoff_on:
         - ${INPUT_HTTP_CLIENT_BACKOFF_ON:429}
@@ -109,6 +114,7 @@ input:
           secret: ${INPUT_KINESIS_CREDENTIALS_SECRET}
           token: ${INPUT_KINESIS_CREDENTIALS_TOKEN}
         dynamodb_table: ${INPUT_KINESIS_DYNAMODB_TABLE}
+        endpoint: ${INPUT_KINESIS_ENDPOINT}
         limit: ${INPUT_KINESIS_LIMIT:100}
         region: ${INPUT_KINESIS_REGION:eu-west-1}
         shard: ${INPUT_KINESIS_SHARD:0}
@@ -383,6 +389,12 @@ output:
         path: ${OUTPUT_FILE_PATH}
       files:
         path: ${OUTPUT_FILES_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+      hdfs:
+        directory: ${OUTPUT_HDFS_DIRECTORY}
+        hosts:
+        - ${OUTPUT_HDFS_HOSTS:localhost:9000}
+        path: ${OUTPUT_HDFS_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+        user: ${OUTPUT_HDFS_USER:benthos_hdfs}
       http_client:
         backoff_on:
         - ${OUTPUT_HTTP_CLIENT_BACKOFF_ON:429}
@@ -436,9 +448,9 @@ output:
         topic: ${OUTPUT_KAFKA_TOPIC:benthos_stream}
       kinesis:
         backoff:
-          initial_interval: ${OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL:500ms}
-          max_elapsed_time: ${OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME:10s}
-          max_interval: ${OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL:3s}
+          initial_interval: ${OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL:1s}
+          max_elapsed_time: ${OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME:30s}
+          max_interval: ${OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL:5s}
         credentials:
           id: ${OUTPUT_KINESIS_CREDENTIALS_ID}
           role: ${OUTPUT_KINESIS_CREDENTIALS_ROLE}
@@ -446,9 +458,9 @@ output:
           token: ${OUTPUT_KINESIS_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_KINESIS_ENDPOINT}
         hash_key: ${OUTPUT_KINESIS_HASH_KEY}
+        max_retries: ${OUTPUT_KINESIS_MAX_RETRIES:0}
         partition_key: ${OUTPUT_KINESIS_PARTITION_KEY}
         region: ${OUTPUT_KINESIS_REGION:eu-west-1}
-        retries: ${OUTPUT_KINESIS_RETRIES:3}
         stream: ${OUTPUT_KINESIS_STREAM}
       mqtt:
         client_id: ${OUTPUT_MQTT_CLIENT_ID:benthos_output}

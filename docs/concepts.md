@@ -42,15 +42,40 @@ specific sinks.
 ## Content Based Multiplexing
 
 It is possible to perform content based multiplexing of messages to specific
-outputs using [an output broker with the `fan_out` pattern][broker-output] and a
-[filter processor][filter-processor] on each output, which is a processor
-that drops messages if the [condition][conditions] does not pass.
-[Conditions][conditions] are content aware logical operators that can be
-combined using boolean logic.
+outputs using [a switch output][switch-output] with two or more conditional
+outputs. [Conditions][conditions] are content aware logical operators that can
+be combined using boolean logic.
 
 For example, say we have an output `foo` that we only want to receive messages
 that contain the word `foo`, and an output `bar` that we wish to send everything
 that `foo` doesn't receive, we can achieve that with this config:
+
+``` yaml
+output:
+  type: switch
+  switch:
+    outputs:
+    - output:
+        type: foo
+          foo:
+            foo_field_1: value1
+      condition:
+        type: text
+          text:
+            operator: contains
+            arg: foo
+    - output:
+        type: bar
+        bar:
+          bar_field_1: value2
+```
+
+Another method of content based multiplexing is with
+[an output broker with the `fan_out` pattern][broker-output] and a
+[filter processor][filter-processor] on each output, which is a processor
+that drops messages if the [condition][conditions] does not pass.
+
+For example, the equivalent config for the previous example would be:
 
 ``` yaml
 output:
@@ -67,12 +92,10 @@ output:
           type: text
           text:
             operator: contains
-            part: 0
             arg: foo
     - type: bar
       bar:
         bar_field_1: value2
-        bar_field_2: value3
       processors:
       - type: filter
         filter:
@@ -81,11 +104,10 @@ output:
             type: text
             text:
               operator: contains
-              part: 0
               arg: foo
 ```
 
-For more information regarding filter conditions, including the full list of
+For more information regarding conditions, including the full list of
 conditions available, please [read the docs here][conditions].
 
 ## Sharing Resources Across Processors
@@ -399,6 +421,7 @@ examples.
 [buffers]: ./buffers
 [broker-input]: ./inputs/README.md#broker
 [broker-output]: ./outputs/README.md#broker
+[switch-output]: ./outputs/README.md#switch
 [filter-processor]: ./processors/README.md#filter
 [conditions]: ./conditions
 [caches]: ./caches

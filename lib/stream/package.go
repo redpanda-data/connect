@@ -43,6 +43,16 @@ e.g. with four pipeline processing threads the pipeline would look like this:
 	                 \  Processing Pipeline -> Custom Processor /
 	                 \  Processing Pipeline -> Custom Processor /
 
+Plugins
+
+Benthos components (inputs, processors, conditions, outputs, etc) are pluggable
+by design, and can be complemented with your custom implementations by calling
+RegisterPlugin on a component package.
+
+This method is more complicated than simply adding a custom stream processor,
+but allows you to use your custom implementations in the same flexible way that
+native Benthos types can be used.
+
 Message Batches
 
 In Benthos every message is a batch, and it is the configuration of a stream

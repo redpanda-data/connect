@@ -17,6 +17,7 @@
 				"token": ""
 			},
 			"dynamodb_table": "",
+			"endpoint": "",
 			"limit": 100,
 			"region": "eu-west-1",
 			"shard": "0",
@@ -37,9 +38,9 @@
 		"type": "kinesis",
 		"kinesis": {
 			"backoff": {
-				"initial_interval": "500ms",
-				"max_elapsed_time": "10s",
-				"max_interval": "3s"
+				"initial_interval": "1s",
+				"max_elapsed_time": "30s",
+				"max_interval": "5s"
 			},
 			"credentials": {
 				"id": "",
@@ -49,9 +50,9 @@
 			},
 			"endpoint": "",
 			"hash_key": "",
+			"max_retries": 0,
 			"partition_key": "",
 			"region": "eu-west-1",
-			"retries": 3,
 			"stream": ""
 		}
 	},

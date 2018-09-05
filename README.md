@@ -32,6 +32,7 @@ for choosing a level of resiliency that meets your needs.
 - [AWS (S3, SQS, Kinesis)][aws]
 - [Elasticsearch][elasticsearch] (output only)
 - File
+- [HDFS][hdfs]
 - HTTP(S)
 - [Kafka][kafka]
 - [MQTT][mqtt]
@@ -206,3 +207,4 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [redis]: https://redis.io/
 [kafka]: https://kafka.apache.org/
 [elasticsearch]: https://www.elastic.co/
+[hdfs]: https://hadoop.apache.org/

@@ -34,6 +34,11 @@ input:
     delimiter: ""
   files:
     path: ""
+  hdfs:
+    hosts:
+    - localhost:9000
+    user: benthos_hdfs
+    directory: ""
   http_client:
     url: http://localhost:4195/get
     verb: GET
@@ -108,6 +113,7 @@ input:
       skip_cert_verify: false
       client_certs: []
   kinesis:
+    endpoint: ""
     region: eu-west-1
     credentials:
       id: ""
@@ -528,6 +534,12 @@ output:
     delimiter: ""
   files:
     path: ${!count:files}-${!timestamp_unix_nano}.txt
+  hdfs:
+    hosts:
+    - localhost:9000
+    user: benthos_hdfs
+    directory: ""
+    path: ${!count:files}-${!timestamp_unix_nano}.txt
   http_client:
     url: http://localhost:4195/post
     verb: POST
@@ -593,11 +605,11 @@ output:
       secret: ""
       token: ""
       role: ""
-    retries: 3
+    max_retries: 0
     backoff:
-      initial_interval: 500ms
-      max_interval: 3s
-      max_elapsed_time: 10s
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
   mqtt:
     urls:
     - tcp://localhost:1883
@@ -636,6 +648,13 @@ output:
     stream: benthos_stream
     body_key: body
     max_length: 0
+  retry:
+    output: {}
+    max_retries: 0
+    backoff:
+      initial_interval: 500ms
+      max_interval: 3s
+      max_elapsed_time: 0s
   s3:
     region: eu-west-1
     bucket: ""
@@ -656,6 +675,8 @@ output:
       role: ""
   stdout:
     delimiter: ""
+  switch:
+    outputs: []
   websocket:
     url: ws://localhost:4195/post/ws
     oauth:
@@ -674,6 +695,20 @@ resources:
   caches:
     example:
       type: memory
+      dynamodb:
+        consistent_read: false
+        credentials:
+          id: ""
+          secret: ""
+          token: ""
+          role: ""
+        data_key: ""
+        endpoint: ""
+        hash_key: ""
+        region: ""
+        table: ""
+        ttl: ""
+        ttl_key: ""
       memcached:
         addresses:
         - localhost:11211

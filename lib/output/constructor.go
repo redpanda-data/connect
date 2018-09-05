@@ -66,6 +66,7 @@ const (
 	TypeElasticsearch = "elasticsearch"
 	TypeFile          = "file"
 	TypeFiles         = "files"
+	TypeHDFS          = "hdfs"
 	TypeHTTPClient    = "http_client"
 	TypeHTTPServer    = "http_server"
 	TypeInproc        = "inproc"
@@ -79,9 +80,11 @@ const (
 	TypeRedisList     = "redis_list"
 	TypeRedisPubSub   = "redis_pubsub"
 	TypeRedisStreams  = "redis_streams"
+	TypeRetry         = "retry"
 	TypeS3            = "s3"
 	TypeSQS           = "sqs"
 	TypeSTDOUT        = "stdout"
+	TypeSwitch        = "switch"
 	TypeWebsocket     = "websocket"
 	TypeZMQ4          = "zmq4"
 )
@@ -97,6 +100,7 @@ type Config struct {
 	Elasticsearch writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
 	File          FileConfig                 `json:"file" yaml:"file"`
 	Files         writer.FilesConfig         `json:"files" yaml:"files"`
+	HDFS          writer.HDFSConfig          `json:"hdfs" yaml:"hdfs"`
 	HTTPClient    writer.HTTPClientConfig    `json:"http_client" yaml:"http_client"`
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
 	Inproc        InprocConfig               `json:"inproc" yaml:"inproc"`
@@ -107,12 +111,15 @@ type Config struct {
 	NATS          NATSConfig                 `json:"nats" yaml:"nats"`
 	NATSStream    NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
 	NSQ           NSQConfig                  `json:"nsq" yaml:"nsq"`
+	Plugin        interface{}                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	RedisList     writer.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub   writer.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
 	RedisStreams  writer.RedisStreamsConfig  `json:"redis_streams" yaml:"redis_streams"`
+	Retry         RetryConfig                `json:"retry" yaml:"retry"`
 	S3            writer.AmazonS3Config      `json:"s3" yaml:"s3"`
 	SQS           writer.AmazonSQSConfig     `json:"sqs" yaml:"sqs"`
 	STDOUT        STDOUTConfig               `json:"stdout" yaml:"stdout"`
+	Switch        SwitchConfig               `json:"switch" yaml:"switch"`
 	Websocket     writer.WebsocketConfig     `json:"websocket" yaml:"websocket"`
 	ZMQ4          *writer.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors    []processor.Config         `json:"processors" yaml:"processors"`
@@ -128,6 +135,7 @@ func NewConfig() Config {
 		Elasticsearch: writer.NewElasticsearchConfig(),
 		File:          NewFileConfig(),
 		Files:         writer.NewFilesConfig(),
+		HDFS:          writer.NewHDFSConfig(),
 		HTTPClient:    writer.NewHTTPClientConfig(),
 		HTTPServer:    NewHTTPServerConfig(),
 		Inproc:        NewInprocConfig(),
@@ -138,12 +146,15 @@ func NewConfig() Config {
 		NATS:          NewNATSConfig(),
 		NATSStream:    NewNATSStreamConfig(),
 		NSQ:           NewNSQConfig(),
+		Plugin:        nil,
 		RedisList:     writer.NewRedisListConfig(),
 		RedisPubSub:   writer.NewRedisPubSubConfig(),
 		RedisStreams:  writer.NewRedisStreamsConfig(),
+		Retry:         NewRetryConfig(),
 		S3:            writer.NewAmazonS3Config(),
 		SQS:           writer.NewAmazonSQSConfig(),
 		STDOUT:        NewSTDOUTConfig(),
+		Switch:        NewSwitchConfig(),
 		Websocket:     writer.NewWebsocketConfig(),
 		ZMQ4:          writer.NewZMQ4Config(),
 		Processors:    []processor.Config{},
@@ -174,7 +185,16 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 			return nil, err
 		}
 	} else {
-		outputMap[t] = hashMap[t]
+		if _, exists := hashMap[t]; exists {
+			outputMap[t] = hashMap[t]
+		}
+		if spec, exists := pluginSpecs[conf.Type]; exists {
+			if spec.confSanitiser != nil {
+				outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
+			} else {
+				outputMap["plugin"] = hashMap["plugin"]
+			}
+		}
 	}
 
 	if len(conf.Processors) == 0 {
@@ -207,6 +227,18 @@ func (c *Config) UnmarshalJSON(bytes []byte) error {
 		return err
 	}
 
+	if spec, exists := pluginSpecs[aliased.Type]; exists {
+		dummy := struct {
+			Conf interface{} `json:"plugin"`
+		}{
+			Conf: spec.confConstructor(),
+		}
+		if err := json.Unmarshal(bytes, &dummy); err != nil {
+			return fmt.Errorf("failed to parse plugin config: %v", err)
+		}
+		aliased.Plugin = dummy.Conf
+	}
+
 	*c = Config(aliased)
 	return nil
 }
@@ -219,6 +251,19 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	if err := unmarshal(&aliased); err != nil {
 		return err
+	}
+
+	if spec, exists := pluginSpecs[aliased.Type]; exists {
+		confBytes, err := yaml.Marshal(aliased.Plugin)
+		if err != nil {
+			return err
+		}
+
+		conf := spec.confConstructor()
+		if err = yaml.Unmarshal(confBytes, conf); err != nil {
+			return err
+		}
+		aliased.Plugin = conf
 	}
 
 	*c = Config(aliased)
@@ -238,13 +283,19 @@ combines multiple outputs under a specific pattern.
 
 It is possible to perform
 [content based multiplexing](../concepts.md#content-based-multiplexing) of
-messages to specific outputs using a broker with the 'fan_out' pattern and a
+messages to specific outputs either by using the ` + "`switch`" + ` output or a
+broker with the ` + "`fan_out`" + ` pattern and a
 [filter processor](../processors/README.md#filter) on each output, which
 is a processor that drops messages if the condition does not pass. Conditions
 are content aware logical operators that can be combined using boolean logic.
 
 For more information regarding conditions, including a full list of available
-conditions please [read the docs here](../conditions/README.md)`
+conditions please [read the docs here](../conditions/README.md)
+
+### Dead Letter Queues
+
+It's possible to create fallback outputs for when an output target fails using
+a ` + "[`broker`](#broker)" + ` output with the 'try' pattern.`
 
 // Descriptions returns a formatted string of collated descriptions of each
 // type.
@@ -323,6 +374,13 @@ func New(
 		output, err := c.constructor(conf, mgr, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create output '%v': %v", conf.Type, err)
+		}
+		return WrapWithPipelines(output, pipelines...)
+	}
+	if c, ok := pluginSpecs[conf.Type]; ok {
+		output, err := c.constructor(conf.Plugin, mgr, log, stats)
+		if err != nil {
+			return nil, err
 		}
 		return WrapWithPipelines(output, pipelines...)
 	}

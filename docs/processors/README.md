@@ -271,6 +271,23 @@ dedupe:
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).
 
+### Delivery Guarantees
+
+Performing a deduplication step on a payload in transit voids any at-least-once
+guarantees that the payload previously had, as it's impossible to fully
+guarantee that the message is propagated to the next destination. If the message
+is reprocessed due to output failure or a service restart then it will be lost
+due to failing the deduplication step on the second attempt.
+
+You can avoid reprocessing payloads on failed sends by using either the
+[`retry`](../outputs/README.md#retry) output type or the
+[`broker`](../outputs/README.md#broker) output type using the 'try'
+pattern. However, if the service is restarted between retry attempts then the
+message can still be lost.
+
+It is worth strongly considering the delivery guarantees that your pipeline is
+meant to provide when using this processor.
+
 ## `encode`
 
 ``` yaml
@@ -754,7 +771,6 @@ populate them with context about the message.
 
 ``` yaml
 type: noop
-noop: null
 ```
 
 Noop is a no-op processor that does nothing, the message passes through
@@ -916,6 +932,9 @@ For each batch, if there is a remainder of parts after splitting a batch, the
 remainder is also sent as a single batch. For example, if your target size was
 10, and the processor received a batch of 95 message parts, the result would be
 9 batches of 10 messages followed by a batch of 5 messages.
+
+The split processor should *always* be positioned at the end of a list of
+processors.
 
 ## `text`
 

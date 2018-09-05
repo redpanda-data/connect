@@ -70,7 +70,7 @@ type Count struct {
 	ctr int
 }
 
-// NewCount returns a Count processor.
+// NewCount returns a Count condition.
 func NewCount(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {

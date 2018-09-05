@@ -12,13 +12,19 @@ combines multiple outputs under a specific pattern.
 
 It is possible to perform
 [content based multiplexing](../concepts.md#content-based-multiplexing) of
-messages to specific outputs using a broker with the 'fan_out' pattern and a
+messages to specific outputs either by using the `switch` output or a
+broker with the `fan_out` pattern and a
 [filter processor](../processors/README.md#filter) on each output, which
 is a processor that drops messages if the condition does not pass. Conditions
 are content aware logical operators that can be combined using boolean logic.
 
 For more information regarding conditions, including a full list of available
 conditions please [read the docs here](../conditions/README.md)
+
+### Dead Letter Queues
+
+It's possible to create fallback outputs for when an output target fails using
+a [`broker`](#broker) output with the 'try' pattern.
 
 ### Contents
 
@@ -28,23 +34,26 @@ conditions please [read the docs here](../conditions/README.md)
 4. [`elasticsearch`](#elasticsearch)
 5. [`file`](#file)
 6. [`files`](#files)
-7. [`http_client`](#http_client)
-8. [`http_server`](#http_server)
-9. [`inproc`](#inproc)
-10. [`kafka`](#kafka)
-11. [`kinesis`](#kinesis)
-12. [`mqtt`](#mqtt)
-13. [`nanomsg`](#nanomsg)
-14. [`nats`](#nats)
-15. [`nats_stream`](#nats_stream)
-16. [`nsq`](#nsq)
-17. [`redis_list`](#redis_list)
-18. [`redis_pubsub`](#redis_pubsub)
-19. [`redis_streams`](#redis_streams)
-20. [`s3`](#s3)
-21. [`sqs`](#sqs)
-22. [`stdout`](#stdout)
-23. [`websocket`](#websocket)
+7. [`hdfs`](#hdfs)
+8. [`http_client`](#http_client)
+9. [`http_server`](#http_server)
+10. [`inproc`](#inproc)
+11. [`kafka`](#kafka)
+12. [`kinesis`](#kinesis)
+13. [`mqtt`](#mqtt)
+14. [`nanomsg`](#nanomsg)
+15. [`nats`](#nats)
+16. [`nats_stream`](#nats_stream)
+17. [`nsq`](#nsq)
+18. [`redis_list`](#redis_list)
+19. [`redis_pubsub`](#redis_pubsub)
+20. [`redis_streams`](#redis_streams)
+21. [`retry`](#retry)
+22. [`s3`](#s3)
+23. [`sqs`](#sqs)
+24. [`stdout`](#stdout)
+25. [`switch`](#switch)
+26. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -251,6 +260,24 @@ file for each part you need to generate unique file names. This can be done by
 using function interpolations on the `path` field as described
 [here](../config_interpolation.md#functions).
 
+## `hdfs`
+
+``` yaml
+type: hdfs
+hdfs:
+  directory: ""
+  hosts:
+  - localhost:9000
+  path: ${!count:files}-${!timestamp_unix_nano}.txt
+  user: benthos_hdfs
+```
+
+Sends message parts as files to a HDFS directory. Each file is written
+with the path specified with the 'path' field, in order to have a different path
+for each object you should use function interpolations described
+[here](../config_interpolation.md#functions). When sending batched messages the
+interpolations are performed per message part.
+
 ## `http_client`
 
 ``` yaml
@@ -397,9 +424,9 @@ alternatively force the partitioner to round-robin partitions with the field
 type: kinesis
 kinesis:
   backoff:
-    initial_interval: 500ms
-    max_elapsed_time: 10s
-    max_interval: 3s
+    initial_interval: 1s
+    max_elapsed_time: 30s
+    max_interval: 5s
   credentials:
     id: ""
     role: ""
@@ -407,9 +434,9 @@ kinesis:
     token: ""
   endpoint: ""
   hash_key: ""
+  max_retries: 0
   partition_key: ""
   region: eu-west-1
-  retries: 3
   stream: ""
 ```
 
@@ -537,6 +564,35 @@ key to be set to the body of the message. All metadata fields of the message
 will also be set as key/value pairs, if there is a key collision between
 a metadata item and the body then the body takes precedence.
 
+## `retry`
+
+``` yaml
+type: retry
+retry:
+  backoff:
+    initial_interval: 500ms
+    max_elapsed_time: 0s
+    max_interval: 3s
+  max_retries: 0
+  output: {}
+```
+
+Attempts to write messages to a child output and if the write fails for any
+reason the message is retried either until success or, if the retries or max
+elapsed time fields are non-zero, either is reached.
+
+All messages in Benthos are always retried on an output error, but this would
+usually involve propagating the error back to the source of the message, whereby
+it would be reprocessed before reaching the output layer once again.
+
+This output type is useful whenever we wish to avoid reprocessing a message on
+the event of a failed send. We might, for example, have a dedupe processor that
+we want to avoid reapplying to the same message more than once in the pipeline.
+
+Rather than retrying the same output you may wish to retry the send using a
+different output target (a dead letter queue). In which case you should instead
+use the [`broker`](#broker) output type with the pattern 'try'.
+
 ## `s3`
 
 ``` yaml
@@ -591,6 +647,66 @@ as:
 foo\n
 bar\n
 baz\n\n
+
+## `switch`
+
+``` yaml
+type: switch
+switch:
+  outputs: []
+```
+
+The switch output type allows you to configure multiple conditional output targets
+by listing child outputs paired with conditions. In the following example, messages
+containing "foo" will be sent to both the `foo` and `baz` outputs. Messages containing
+"bar" will be sent to both the `bar` and `baz` outputs. Messages containing both "foo"
+and "bar" will be sent to all three outputs. And finally, messages that do not contain
+"foo" or "bar" will be sent to the `baz` output only.
+
+``` yaml
+output:
+  type: switch
+  switch:
+    outputs:
+    - output:
+        type: foo
+        foo:
+          foo_field_1: value1
+      condition:
+        type: text
+        text:
+          operator: contains
+          arg: foo
+      fallthrough: true
+    - output:
+        type: bar
+        bar:
+          bar_field_1: value2
+          bar_field_2: value3
+      condition:
+        type: text
+        text:
+          operator: contains
+          arg: bar
+      fallthrough: true
+    - output:
+        type: baz
+        baz:
+          baz_field_1: value4
+        processors:
+        - type: baz_processor
+  processors:
+  - type: some_processor
+```
+
+The switch output requires a minimum of two outputs. If no condition is defined for
+an output, it behaves like a static `true` condition. If `fallthrough` is set to
+`true`, the swith output will continue evaluating additional outputs after finding
+a match. If an output applies back pressure it will block all subsequent messages,
+and if an output fails to send a message, it will be retried continously until
+completion or service shut down. Messages that do not match any outputs will be
+dropped.
+		
 
 ## `websocket`
 
