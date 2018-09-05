@@ -675,6 +675,8 @@ output:
       role: ""
   stdout:
     delimiter: ""
+  switch:
+    outputs: []
   websocket:
     url: ws://localhost:4195/post/ws
     oauth:

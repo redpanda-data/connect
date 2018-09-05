@@ -520,6 +520,8 @@ output:
         url: ${OUTPUT_SQS_URL}
       stdout:
         delimiter: ${OUTPUT_STDOUT_DELIMITER}
+      switch:
+        outputs: ${OUTPUT_SWITCH_OUTPUTS}
       type: ${OUTPUT_TYPE:dynamic}
       websocket:
         basic_auth:

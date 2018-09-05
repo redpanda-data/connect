@@ -8,8 +8,10 @@ require (
 	github.com/OneOfOne/xxhash v1.2.2
 	github.com/Shopify/sarama v1.17.0
 	github.com/Shopify/toxiproxy v2.1.3+incompatible // indirect
+	github.com/armon/go-metrics v0.0.0-20180713145231-3c58d8115a78 // indirect
 	github.com/aws/aws-sdk-go v1.15.21
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
+	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737
 	github.com/bsm/sarama-cluster v2.1.15+incompatible
 	github.com/cenkalti/backoff v2.0.0+incompatible
@@ -32,14 +34,19 @@ require (
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2
 	github.com/gorilla/websocket v1.3.0
+	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
+	github.com/hashicorp/go-msgpack v0.0.0-20150518234257-fa3f63826f7c // indirect
+	github.com/hashicorp/raft v1.0.0 // indirect
 	github.com/hpcloud/tail v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
 	github.com/lib/pq v1.0.0 // indirect
 	github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.1
+	github.com/nats-io/gnatsd v1.3.0 // indirect
 	github.com/nats-io/go-nats v1.5.0
 	github.com/nats-io/go-nats-streaming v0.4.0
+	github.com/nats-io/nats-streaming-server v0.10.2 // indirect
 	github.com/nats-io/nuid v1.0.0 // indirect
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/olivere/elastic v6.1.25+incompatible
