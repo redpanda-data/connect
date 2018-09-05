@@ -34,6 +34,11 @@ input:
     delimiter: ""
   files:
     path: ""
+  hdfs:
+    hosts:
+    - localhost:9000
+    user: benthos_hdfs
+    directory: ""
   http_client:
     url: http://localhost:4195/get
     verb: GET

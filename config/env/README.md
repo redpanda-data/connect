@@ -70,6 +70,9 @@ INPUT_FILE_DELIMITER
 INPUT_FILE_MAX_BUFFER                       = 1000000
 INPUT_FILE_MULTIPART                        = false
 INPUT_FILE_PATH
+INPUT_HDFS_DIRECTORY
+INPUT_HDFS_HOSTS                            = localhost:9000
+INPUT_HDFS_USER                             = benthos_hdfs
 INPUT_HTTP_CLIENT_BACKOFF_ON                = 429
 INPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED        = false
 INPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD

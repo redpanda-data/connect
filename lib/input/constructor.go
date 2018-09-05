@@ -66,6 +66,7 @@ const (
 	TypeDynamic       = "dynamic"
 	TypeFile          = "file"
 	TypeFiles         = "files"
+	TypeHDFS          = "hdfs"
 	TypeHTTPClient    = "http_client"
 	TypeHTTPServer    = "http_server"
 	TypeInproc        = "inproc"
@@ -98,6 +99,7 @@ type Config struct {
 	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
 	File          FileConfig                 `json:"file" yaml:"file"`
 	Files         reader.FilesConfig         `json:"files" yaml:"files"`
+	HDFS          reader.HDFSConfig          `json:"hdfs" yaml:"hdfs"`
 	HTTPClient    HTTPClientConfig           `json:"http_client" yaml:"http_client"`
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
 	Inproc        InprocConfig               `json:"inproc" yaml:"inproc"`
@@ -131,6 +133,7 @@ func NewConfig() Config {
 		Dynamic:       NewDynamicConfig(),
 		File:          NewFileConfig(),
 		Files:         reader.NewFilesConfig(),
+		HDFS:          reader.NewHDFSConfig(),
 		HTTPClient:    NewHTTPClientConfig(),
 		HTTPServer:    NewHTTPServerConfig(),
 		Inproc:        NewInprocConfig(),

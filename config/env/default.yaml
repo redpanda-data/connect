@@ -31,6 +31,11 @@ input:
         path: ${INPUT_FILE_PATH}
       files:
         path: ${INPUT_FILES_PATH}
+      hdfs:
+        directory: ${INPUT_HDFS_DIRECTORY}
+        hosts:
+        - ${INPUT_HDFS_HOSTS:localhost:9000}
+        user: ${INPUT_HDFS_USER:benthos_hdfs}
       http_client:
         backoff_on:
         - ${INPUT_HTTP_CLIENT_BACKOFF_ON:429}
