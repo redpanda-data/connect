@@ -34,12 +34,20 @@ type ClientCertConfig struct {
 	KeyFile  string `json:"key_file" yaml:"key_file"`
 }
 
+// ClientRawCertConfig contains raw certs and keys for a client
+// certificate.
+type ClientRawCertConfig struct {
+	Cert string `json:"cert" yaml:"cert"`
+	Key  string `json:"key" yaml:"key"`
+}
+
 // Config contains configuration params for TLS.
 type Config struct {
-	Enabled            bool               `json:"enabled" yaml:"enabled"`
-	RootCAsFile        string             `json:"root_cas_file" yaml:"root_cas_file"`
-	InsecureSkipVerify bool               `json:"skip_cert_verify" yaml:"skip_cert_verify"`
-	ClientCertificates []ClientCertConfig `json:"client_certs" yaml:"client_certs"`
+	Enabled               bool                  `json:"enabled" yaml:"enabled"`
+	RootCAsFile           string                `json:"root_cas_file" yaml:"root_cas_file"`
+	InsecureSkipVerify    bool                  `json:"skip_cert_verify" yaml:"skip_cert_verify"`
+	ClientCertificates    []ClientCertConfig    `json:"client_certs" yaml:"client_certs"`
+	RawClientCertificates []ClientRawCertConfig `json:"raw_client_certs" yaml:"raw_client_certs"`
 }
 
 // NewConfig creates a new Config with default values.
@@ -71,6 +79,14 @@ func (c *Config) Get() (*tls.Config, error) {
 
 	for _, pair := range c.ClientCertificates {
 		keyPair, err := tls.LoadX509KeyPair(pair.CertFile, pair.KeyFile)
+		if nil != err {
+			return nil, err
+		}
+		clientCerts = append(clientCerts, keyPair)
+	}
+
+	for _, conf := range c.RawClientCertificates {
+		keyPair, err := tls.X509KeyPair([]byte(conf.Cert), []byte(conf.Key))
 		if nil != err {
 			return nil, err
 		}
