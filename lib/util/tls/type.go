@@ -28,10 +28,12 @@ import (
 
 //------------------------------------------------------------------------------
 
-// ClientCertConfig contains config fields for a client certificate.
+// ClientCertConfig describes options for loading client certificates.
 type ClientCertConfig struct {
 	CertFile string `json:"cert_file" yaml:"cert_file"`
 	KeyFile  string `json:"key_file" yaml:"key_file"`
+	Cert     string `json:"cert" yaml:"cert"`
+	Key      string `json:"key" yaml:"key"`
 }
 
 // Config contains configuration params for TLS.
@@ -69,12 +71,12 @@ func (c *Config) Get() (*tls.Config, error) {
 
 	clientCerts := []tls.Certificate{}
 
-	for _, pair := range c.ClientCertificates {
-		keyPair, err := tls.LoadX509KeyPair(pair.CertFile, pair.KeyFile)
+	for _, certConf := range c.ClientCertificates {
+		cert, err := certConf.Load()
 		if nil != err {
 			return nil, err
 		}
-		clientCerts = append(clientCerts, keyPair)
+		clientCerts = append(clientCerts, cert)
 	}
 
 	return &tls.Config{
@@ -82,6 +84,14 @@ func (c *Config) Get() (*tls.Config, error) {
 		RootCAs:            rootCAs,
 		Certificates:       clientCerts,
 	}, nil
+}
+
+// Load takes a client cert config and returns a TLS certificate.
+func (c *ClientCertConfig) Load() (tls.Certificate, error) {
+	if c.CertFile != "" && c.KeyFile != "" {
+		return tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
+	}
+	return tls.X509KeyPair([]byte(c.Cert), []byte(c.Key))
 }
 
 //------------------------------------------------------------------------------
