@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `hdfs` input and output.
 - New `switch` output.
+- New `'enum' and 'has_prefix' operators for the `metadata` condition.
 
 ### 0.29.0 - 2018-09-02
 
