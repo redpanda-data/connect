@@ -5,11 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.30.0 - 2018-09-06
+
 ### Added
 
 - New `hdfs` input and output.
 - New `switch` output.
-- New `'enum' and 'has_prefix' operators for the `metadata` condition.
+- New `enum` and `has_prefix` operators for the `metadata` condition.
+- Ability to set `tls` client certificate fields directly.
 
 ### 0.29.0 - 2018-09-02
 
