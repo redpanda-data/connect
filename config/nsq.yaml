@@ -24,7 +24,6 @@ pipeline:
 output:
   type: nsq
   nsq:
-    max_in_flight: 100
     nsqd_tcp_address: localhost:4150
     topic: benthos_messages
     user_agent: benthos_producer

@@ -636,7 +636,6 @@ output:
     nsqd_tcp_address: localhost:4150
     topic: benthos_messages
     user_agent: benthos_producer
-    max_in_flight: 100
   redis_list:
     url: tcp://localhost:6379
     key: benthos_list

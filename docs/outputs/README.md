@@ -258,7 +258,8 @@ Writes each individual part of each message to a new file.
 Message parts only contain raw data, and therefore in order to create a unique
 file for each part you need to generate unique file names. This can be done by
 using function interpolations on the `path` field as described
-[here](../config_interpolation.md#functions).
+[here](../config_interpolation.md#functions). When sending batched messages
+these interpolations are performed per message part.
 
 ## `hdfs`
 
@@ -510,7 +511,6 @@ Publish to a NATS Stream subject.
 ``` yaml
 type: nsq
 nsq:
-  max_in_flight: 100
   nsqd_tcp_address: localhost:4150
   topic: benthos_messages
   user_agent: benthos_producer

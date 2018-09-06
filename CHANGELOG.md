@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.30.1 - 2018-09-06
+
+### Changed
+
+- The redundant `nsq` output field `max_in_flight` has been removed.
+- The `files` output now interpolates paths per message part of a batch.
+
 ### 0.30.0 - 2018-09-06
 
 ### Added

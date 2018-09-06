@@ -417,7 +417,6 @@ OUTPUT_NATS_STREAM_SUBJECT                   = benthos_messages
 OUTPUT_NATS_STREAM_URLS                      = nats://localhost:4222
 OUTPUT_NATS_SUBJECT                          = benthos_messages
 OUTPUT_NATS_URLS                             = nats://localhost:4222
-OUTPUT_NSQ_MAX_IN_FLIGHT                     = 100
 OUTPUT_NSQ_NSQD_TCP_ADDRESS                  = localhost:4150
 OUTPUT_NSQ_TOPIC                             = benthos_messages
 OUTPUT_NSQ_USER_AGENT                        = benthos_producer

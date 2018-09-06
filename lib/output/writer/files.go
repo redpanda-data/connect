@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
@@ -53,8 +54,7 @@ func NewFilesConfig() FilesConfig {
 type Files struct {
 	conf FilesConfig
 
-	pathBytes       []byte
-	interpolatePath bool
+	path *text.InterpolatedString
 
 	log   log.Modular
 	stats metrics.Type
@@ -66,14 +66,11 @@ func NewFiles(
 	log log.Modular,
 	stats metrics.Type,
 ) *Files {
-	pathBytes := []byte(conf.Path)
-	interpolatePath := text.ContainsFunctionVariables(pathBytes)
 	return &Files{
-		conf:            conf,
-		pathBytes:       pathBytes,
-		interpolatePath: interpolatePath,
-		log:             log.NewModule(".output.files"),
-		stats:           stats,
+		conf:  conf,
+		path:  text.NewInterpolatedString(conf.Path),
+		log:   log.NewModule(".output.files"),
+		stats: stats,
 	}
 }
 
@@ -86,10 +83,7 @@ func (f *Files) Connect() error {
 // Write attempts to write message contents to a directory as files.
 func (f *Files) Write(msg types.Message) error {
 	return msg.Iter(func(i int, p types.Part) error {
-		path := f.conf.Path
-		if f.interpolatePath {
-			path = string(text.ReplaceFunctionVariables(msg, f.pathBytes))
-		}
+		path := f.path.Get(message.Lock(msg, i))
 
 		err := os.MkdirAll(filepath.Dir(path), os.FileMode(0777))
 		if err != nil {
