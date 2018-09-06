@@ -9,6 +9,7 @@ require (
 	github.com/Shopify/sarama v1.17.0
 	github.com/Shopify/toxiproxy v2.1.3+incompatible // indirect
 	github.com/armon/go-metrics v0.0.0-20180713145231-3c58d8115a78 // indirect
+	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-sdk-go v1.15.21
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/boltdb/bolt v1.3.1 // indirect
@@ -67,6 +68,7 @@ require (
 	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
 	github.com/rcrowley/go-metrics v0.0.0-20180503174638-e2704e165165 // indirect
 	github.com/sirupsen/logrus v1.0.6 // indirect
+	github.com/spf13/cast v1.2.0
 	github.com/streadway/amqp v0.0.0-20180806233856-70e15c650864
 	github.com/stretchr/testify v1.2.2 // indirect
 	github.com/trivago/grok v1.0.0

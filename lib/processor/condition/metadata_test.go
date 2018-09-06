@@ -35,7 +35,7 @@ func TestMetadataCheck(t *testing.T) {
 		operator string
 		part     int
 		key      string
-		arg      string
+		arg      interface{}
 	}
 	tests := []struct {
 		name   string
@@ -43,6 +43,58 @@ func TestMetadataCheck(t *testing.T) {
 		arg    map[string]string
 		want   bool
 	}{
+		{
+			name: "enum pos 1",
+			fields: fields{
+				operator: "enum",
+				key:      "foo",
+				part:     0,
+				arg:      []interface{}{"bar", "baz", "qux", "quux", 333, 8.31},
+			},
+			arg: map[string]string{
+				"foo": "bar",
+			},
+			want: true,
+		},
+		{
+			name: "enum pos 2",
+			fields: fields{
+				operator: "enum",
+				key:      "foo",
+				part:     0,
+				arg:      []interface{}{"bar", "baz", "qux", "quux", 333, 8.31},
+			},
+			arg: map[string]string{
+				"foo": "333",
+			},
+			want: true,
+		},
+		{
+			name: "enum pos 3",
+			fields: fields{
+				operator: "enum",
+				key:      "foo",
+				part:     0,
+				arg:      []interface{}{"bar", "baz", "qux", "quux", 333, 8.31},
+			},
+			arg: map[string]string{
+				"foo": "8.31",
+			},
+			want: true,
+		},
+		{
+			name: "enum neg 1",
+			fields: fields{
+				operator: "enum",
+				key:      "foo",
+				part:     0,
+				arg:      []interface{}{"bar", "baz", "qux", "quux", 333, 8.31},
+			},
+			arg: map[string]string{
+				"foo": "quz",
+			},
+			want: false,
+		},
 		{
 			name: "equals_cs foo pos",
 			fields: fields{
@@ -120,7 +172,20 @@ func TestMetadataCheck(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "gt foo pos",
+			name: "gt foo pos 1",
+			fields: fields{
+				operator: "greater_than",
+				key:      "foo",
+				part:     0,
+				arg:      10,
+			},
+			arg: map[string]string{
+				"foo": "11",
+			},
+			want: true,
+		},
+		{
+			name: "gt foo pos 2",
 			fields: fields{
 				operator: "greater_than",
 				key:      "foo",
@@ -138,7 +203,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "greater_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      10,
 			},
 			arg: map[string]string{
 				"foo": "nope",
@@ -151,10 +216,62 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "greater_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      10,
 			},
 			arg: map[string]string{
 				"foo": "9",
+			},
+			want: false,
+		},
+		{
+			name: "has_prefix pos 1",
+			fields: fields{
+				operator: "has_prefix",
+				key:      "foo",
+				part:     0,
+				arg:      []interface{}{"foo", "bar", "baz"},
+			},
+			arg: map[string]string{
+				"foo": "barley",
+			},
+			want: true,
+		},
+		{
+			name: "has_prefix pos 2",
+			fields: fields{
+				operator: "has_prefix",
+				key:      "foo",
+				part:     0,
+				arg:      "foo bar baz",
+			},
+			arg: map[string]string{
+				"foo": "foo bar bazley",
+			},
+			want: true,
+		},
+		{
+			name: "has_prefix neg 1",
+			fields: fields{
+				operator: "has_prefix",
+				key:      "foo",
+				part:     0,
+				arg:      []interface{}{"foo", "bar", "baz"},
+			},
+			arg: map[string]string{
+				"foo": "quz",
+			},
+			want: false,
+		},
+		{
+			name: "has_prefix neg 2",
+			fields: fields{
+				operator: "has_prefix",
+				key:      "foo",
+				part:     0,
+				arg:      "foo bar baz",
+			},
+			arg: map[string]string{
+				"foo": "barley",
 			},
 			want: false,
 		},
@@ -164,7 +281,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "less_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      10,
 			},
 			arg: map[string]string{
 				"foo": "9",
@@ -177,7 +294,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "less_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      10,
 			},
 			arg: map[string]string{
 				"foo": "nope",
@@ -190,7 +307,7 @@ func TestMetadataCheck(t *testing.T) {
 				operator: "less_than",
 				key:      "foo",
 				part:     0,
-				arg:      "10",
+				arg:      10,
 			},
 			arg: map[string]string{
 				"foo": "11",
