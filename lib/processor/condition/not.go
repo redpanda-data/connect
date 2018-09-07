@@ -133,7 +133,7 @@ type Not struct {
 	child Type
 }
 
-// NewNot returns a Not processor.
+// NewNot returns a Not condition.
 func NewNot(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {

@@ -47,19 +47,17 @@ Publish to an NSQ topic.`,
 
 // NSQConfig contains configuration fields for the NSQ output type.
 type NSQConfig struct {
-	Address     string `json:"nsqd_tcp_address" yaml:"nsqd_tcp_address"`
-	Topic       string `json:"topic" yaml:"topic"`
-	UserAgent   string `json:"user_agent" yaml:"user_agent"`
-	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
+	Address   string `json:"nsqd_tcp_address" yaml:"nsqd_tcp_address"`
+	Topic     string `json:"topic" yaml:"topic"`
+	UserAgent string `json:"user_agent" yaml:"user_agent"`
 }
 
 // NewNSQConfig creates a new NSQConfig with default values.
 func NewNSQConfig() NSQConfig {
 	return NSQConfig{
-		Address:     "localhost:4150",
-		Topic:       "benthos_messages",
-		UserAgent:   "benthos_producer",
-		MaxInFlight: 100,
+		Address:   "localhost:4150",
+		Topic:     "benthos_messages",
+		UserAgent: "benthos_producer",
 	}
 }
 
@@ -102,7 +100,6 @@ func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type)
 func (n *NSQ) connect() (err error) {
 	cfg := nsq.NewConfig()
 	cfg.UserAgent = n.conf.NSQ.UserAgent
-	cfg.MaxInFlight = n.conf.NSQ.MaxInFlight
 
 	if n.producer, err = nsq.NewProducer(n.conf.NSQ.Address, cfg); err != nil {
 		return

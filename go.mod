@@ -10,12 +10,14 @@ require (
 	github.com/Shopify/sarama v1.17.0
 	github.com/Shopify/toxiproxy v2.1.3+incompatible // indirect
 	github.com/armon/go-metrics v0.0.0-20180713145231-3c58d8115a78 // indirect
+	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-sdk-go v1.15.21
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737
 	github.com/bsm/sarama-cluster v2.1.15+incompatible
 	github.com/cenkalti/backoff v2.0.0+incompatible
+	github.com/colinmarc/hdfs v1.1.3
 	github.com/containerd/continuity v0.0.0-20180814194400-c7c5070e6f6e // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -25,6 +27,7 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.1.1
 	github.com/edsrzf/mmap-go v0.0.0-20170320065105-0bce6a688712
+	github.com/fortytw2/leaktest v1.2.0 // indirect
 	github.com/go-redis/redis v6.14.0+incompatible
 	github.com/go-sql-driver/mysql v1.4.0
 	github.com/gofrs/uuid v3.1.0+incompatible
@@ -34,18 +37,16 @@ require (
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2
 	github.com/gorilla/websocket v1.3.0
-	github.com/hashicorp/go-immutable-radix v0.0.0-20180129170900-7f3cd4390caa // indirect
+	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
 	github.com/hashicorp/go-msgpack v0.0.0-20150518234257-fa3f63826f7c // indirect
-	github.com/hashicorp/golang-lru v0.0.0-20180201235237-0fb14efe8c47 // indirect
 	github.com/hashicorp/raft v1.0.0 // indirect
 	github.com/hpcloud/tail v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
-	github.com/juju/errors v0.0.0-20180806074554-22422dad46e1 // indirect
 	github.com/lib/pq v1.0.0 // indirect
 	github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.1
-	github.com/nats-io/gnatsd v1.2.0 // indirect
+	github.com/nats-io/gnatsd v1.3.0 // indirect
 	github.com/nats-io/go-nats v1.5.0
 	github.com/nats-io/go-nats-streaming v0.4.0
 	github.com/nats-io/nats-streaming-server v0.10.2 // indirect
@@ -75,6 +76,7 @@ require (
 	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07 // indirect
 	github.com/siddontang/go-mysql v0.0.0-20180824025401-555d0d9bd194
 	github.com/sirupsen/logrus v1.0.6 // indirect
+	github.com/spf13/cast v1.2.0
 	github.com/streadway/amqp v0.0.0-20180806233856-70e15c650864
 	github.com/stretchr/testify v1.2.2 // indirect
 	github.com/trivago/grok v1.0.0

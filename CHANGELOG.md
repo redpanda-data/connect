@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.30.1 - 2018-09-06
+
+### Changed
+
+- The redundant `nsq` output field `max_in_flight` has been removed.
+- The `files` output now interpolates paths per message part of a batch.
+
+### 0.30.0 - 2018-09-06
+
+### Added
+
+- New `hdfs` input and output.
+- New `switch` output.
+- New `enum` and `has_prefix` operators for the `metadata` condition.
+- Ability to set `tls` client certificate fields directly.
+
+### 0.29.0 - 2018-09-02
+
+### Added
+
+- New `retry` output.
+- Added `regex_partial` and `regex_exact` operators to the `metadata` condition.
+
+### Changed
+
+- The `kinesis` output field `retries` has been renamed `max_retries` in order
+  to expose the difference in its zero value behaviour (endless retries) versus
+  other `retry` fields (zero retries).
+
+### 0.28.0 - 2018-09-01
+
+### Added
+
+- New `endpoint` field added to `kinesis` input.
+- New `dynamodb` cache type.
+
+### 0.27.0 - 2018-08-30
+
+### Added
+
+- Function interpolation for the `topic` field of the `kafka` output.
+- New `target_version` field for the `kafka_balanced` input.
+- TLS config fields for client certificates.
+
+### Changed
+
+- TLS config field `cas_file` has been renamed `root_cas_file`.
+
+### 0.26.3 - 2018-08-29
+
+### Added
+
+- New `zip` option for the `archive` and `unarchive` processors.
+
+### Changed
+
+- The `kinesis` output type now supports batched sends and per message
+  interpolation.
+
 ### 0.26.2 - 2018-08-27
 
 ### Added

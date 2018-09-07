@@ -75,9 +75,9 @@ archive:
 ```
 
 Archives all the parts of a message into a single part according to the selected
-archive type. Supported archive types are: tar, binary, lines.
+archive type. Supported archive types are: tar, zip, binary, lines.
 
-Some archive types (such as tar) treat each archive item (message part) as a
+Some archive types (such as tar, zip) treat each archive item (message part) as a
 file with a path. Since message parts only contain raw data a unique path must
 be generated for each part. This can be done by using function interpolations on
 the 'path' field as described [here](../config_interpolation.md#functions). For
@@ -271,6 +271,23 @@ dedupe:
 Caches should be configured as a resource, for more information check out the
 [documentation here](../caches).
 
+### Delivery Guarantees
+
+Performing a deduplication step on a payload in transit voids any at-least-once
+guarantees that the payload previously had, as it's impossible to fully
+guarantee that the message is propagated to the next destination. If the message
+is reprocessed due to output failure or a service restart then it will be lost
+due to failing the deduplication step on the second attempt.
+
+You can avoid reprocessing payloads on failed sends by using either the
+[`retry`](../outputs/README.md#retry) output type or the
+[`broker`](../outputs/README.md#broker) output type using the 'try'
+pattern. However, if the service is restarted between retry attempts then the
+message can still be lost.
+
+It is worth strongly considering the delivery guarantees that your pipeline is
+meant to provide when using this processor.
+
 ## `encode`
 
 ``` yaml
@@ -436,8 +453,9 @@ http:
     retry_period_ms: 1000
     timeout_ms: 5000
     tls:
-      cas_file: ""
+      client_certs: []
       enabled: false
+      root_cas_file: ""
       skip_cert_verify: false
     url: http://localhost:4195/post
     verb: POST
@@ -753,7 +771,6 @@ populate them with context about the message.
 
 ``` yaml
 type: noop
-noop: null
 ```
 
 Noop is a no-op processor that does nothing, the message passes through
@@ -916,6 +933,9 @@ remainder is also sent as a single batch. For example, if your target size was
 10, and the processor received a batch of 95 message parts, the result would be
 9 batches of 10 messages followed by a batch of 5 messages.
 
+The split processor should *always* be positioned at the end of a list of
+processors.
+
 ## `text`
 
 ``` yaml
@@ -988,7 +1008,7 @@ unarchive:
 ```
 
 Unarchives parts of a message according to the selected archive type into
-multiple parts. Supported archive types are: tar, binary, lines.
+multiple parts. Supported archive types are: tar, zip, binary, lines.
 
 When a part is unarchived it is split into more message parts that replace the
 original part. If you wish to split the archive into one message per file then
@@ -996,5 +1016,8 @@ follow this with the 'split' processor.
 
 Parts that are selected but fail to unarchive (invalid format) will be removed
 from the message. If the message results in zero parts it is skipped entirely.
+
+For the unarchivers that contain file information (tar, zip), a metadata field
+is added to each part called `archive_filename` with the extracted filename.
 
 [0]: ./examples.md

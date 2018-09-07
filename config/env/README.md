@@ -59,8 +59,8 @@ INPUT_AMQP_PREFETCH_SIZE                    = 0
 INPUT_AMQP_QUEUE                            = benthos-queue
 INPUT_AMQP_QUEUE_DECLARE_DURABLE            = true
 INPUT_AMQP_QUEUE_DECLARE_ENABLED            = false
-INPUT_AMQP_TLS_CAS_FILE
 INPUT_AMQP_TLS_ENABLED                      = false
+INPUT_AMQP_TLS_ROOT_CAS_FILE
 INPUT_AMQP_TLS_SKIP_CERT_VERIFY             = false
 INPUT_AMQP_URL                              = amqp://guest:guest@localhost:5672/
 INPUT_DYNAMIC_PREFIX
@@ -70,6 +70,9 @@ INPUT_FILE_DELIMITER
 INPUT_FILE_MAX_BUFFER                       = 1000000
 INPUT_FILE_MULTIPART                        = false
 INPUT_FILE_PATH
+INPUT_HDFS_DIRECTORY
+INPUT_HDFS_HOSTS                            = localhost:9000
+INPUT_HDFS_USER                             = benthos_hdfs
 INPUT_HTTP_CLIENT_BACKOFF_ON                = 429
 INPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED        = false
 INPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
@@ -91,8 +94,8 @@ INPUT_HTTP_CLIENT_STREAM_MAX_BUFFER         = 1000000
 INPUT_HTTP_CLIENT_STREAM_MULTIPART          = false
 INPUT_HTTP_CLIENT_STREAM_RECONNECT          = true
 INPUT_HTTP_CLIENT_TIMEOUT_MS                = 5000
-INPUT_HTTP_CLIENT_TLS_CAS_FILE
 INPUT_HTTP_CLIENT_TLS_ENABLED               = false
+INPUT_HTTP_CLIENT_TLS_ROOT_CAS_FILE
 INPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY      = false
 INPUT_HTTP_CLIENT_URL                       = http://localhost:4195/get
 INPUT_HTTP_CLIENT_VERB                      = GET
@@ -109,8 +112,9 @@ INPUT_KAFKA_BALANCED_CLIENT_ID              = benthos_kafka_input
 INPUT_KAFKA_BALANCED_COMMIT_PERIOD_MS       = 1000
 INPUT_KAFKA_BALANCED_CONSUMER_GROUP         = benthos_consumer_group
 INPUT_KAFKA_BALANCED_START_FROM_OLDEST      = true
-INPUT_KAFKA_BALANCED_TLS_CAS_FILE
+INPUT_KAFKA_BALANCED_TARGET_VERSION         = 1.0.0
 INPUT_KAFKA_BALANCED_TLS_ENABLED            = false
+INPUT_KAFKA_BALANCED_TLS_ROOT_CAS_FILE
 INPUT_KAFKA_BALANCED_TLS_SKIP_CERT_VERIFY   = false
 INPUT_KAFKA_BALANCED_TOPICS                 = benthos_stream
 INPUT_KAFKA_CLIENT_ID                       = benthos_kafka_input
@@ -119,8 +123,8 @@ INPUT_KAFKA_CONSUMER_GROUP                  = benthos_consumer_group
 INPUT_KAFKA_PARTITION                       = 0
 INPUT_KAFKA_START_FROM_OLDEST               = true
 INPUT_KAFKA_TARGET_VERSION                  = 1.0.0
-INPUT_KAFKA_TLS_CAS_FILE
 INPUT_KAFKA_TLS_ENABLED                     = false
+INPUT_KAFKA_TLS_ROOT_CAS_FILE
 INPUT_KAFKA_TLS_SKIP_CERT_VERIFY            = false
 INPUT_KAFKA_TOPIC                           = benthos_stream
 INPUT_KINESIS_CLIENT_ID                     = benthos_consumer
@@ -130,6 +134,7 @@ INPUT_KINESIS_CREDENTIALS_ROLE
 INPUT_KINESIS_CREDENTIALS_SECRET
 INPUT_KINESIS_CREDENTIALS_TOKEN
 INPUT_KINESIS_DYNAMODB_TABLE
+INPUT_KINESIS_ENDPOINT
 INPUT_KINESIS_LIMIT                         = 100
 INPUT_KINESIS_REGION                        = eu-west-1
 INPUT_KINESIS_SHARD                         = 0
@@ -296,8 +301,8 @@ PROCESSOR_HTTP_REQUEST_OAUTH_REQUEST_URL
 PROCESSOR_HTTP_REQUEST_RETRIES                   = 3
 PROCESSOR_HTTP_REQUEST_RETRY_PERIOD_MS           = 1000
 PROCESSOR_HTTP_REQUEST_TIMEOUT_MS                = 5000
-PROCESSOR_HTTP_REQUEST_TLS_CAS_FILE
 PROCESSOR_HTTP_REQUEST_TLS_ENABLED               = false
+PROCESSOR_HTTP_REQUEST_TLS_ROOT_CAS_FILE
 PROCESSOR_HTTP_REQUEST_TLS_SKIP_CERT_VERIFY      = false
 PROCESSOR_HTTP_REQUEST_URL                       = http://localhost:4195/post
 PROCESSOR_HTTP_REQUEST_VERB                      = POST
@@ -339,8 +344,8 @@ OUTPUT_AMQP_IMMEDIATE                        = false
 OUTPUT_AMQP_KEY                              = benthos-key
 OUTPUT_AMQP_MANDATORY                        = false
 OUTPUT_AMQP_PERSISTENT                       = false
-OUTPUT_AMQP_TLS_CAS_FILE
 OUTPUT_AMQP_TLS_ENABLED                      = false
+OUTPUT_AMQP_TLS_ROOT_CAS_FILE
 OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY             = false
 OUTPUT_AMQP_URL                              = amqp://guest:guest@localhost:5672/
 OUTPUT_DYNAMIC_PREFIX
@@ -356,6 +361,10 @@ OUTPUT_ELASTICSEARCH_URLS                    = http://localhost:9200
 OUTPUT_FILES_PATH                            = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_FILE_DELIMITER
 OUTPUT_FILE_PATH
+OUTPUT_HDFS_DIRECTORY
+OUTPUT_HDFS_HOSTS                            = localhost:9000
+OUTPUT_HDFS_PATH                             = ${!count:files}-${!timestamp_unix_nano}.txt
+OUTPUT_HDFS_USER                             = benthos_hdfs
 OUTPUT_HTTP_CLIENT_BACKOFF_ON                = 429
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED        = false
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
@@ -371,8 +380,8 @@ OUTPUT_HTTP_CLIENT_OAUTH_REQUEST_URL
 OUTPUT_HTTP_CLIENT_RETRIES                   = 3
 OUTPUT_HTTP_CLIENT_RETRY_PERIOD_MS           = 1000
 OUTPUT_HTTP_CLIENT_TIMEOUT_MS                = 5000
-OUTPUT_HTTP_CLIENT_TLS_CAS_FILE
 OUTPUT_HTTP_CLIENT_TLS_ENABLED               = false
+OUTPUT_HTTP_CLIENT_TLS_ROOT_CAS_FILE
 OUTPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY      = false
 OUTPUT_HTTP_CLIENT_URL                       = http://localhost:4195/post
 OUTPUT_HTTP_CLIENT_VERB                      = POST
@@ -393,15 +402,20 @@ OUTPUT_KAFKA_MAX_MSG_BYTES                   = 1000000
 OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS          = false
 OUTPUT_KAFKA_TARGET_VERSION                  = 1.0.0
 OUTPUT_KAFKA_TIMEOUT_MS                      = 5000
-OUTPUT_KAFKA_TLS_CAS_FILE
 OUTPUT_KAFKA_TLS_ENABLED                     = false
+OUTPUT_KAFKA_TLS_ROOT_CAS_FILE
 OUTPUT_KAFKA_TLS_SKIP_CERT_VERIFY            = false
 OUTPUT_KAFKA_TOPIC                           = benthos_stream
+OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL      = 1s
+OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME      = 30s
+OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL          = 5s
 OUTPUT_KINESIS_CREDENTIALS_ID
 OUTPUT_KINESIS_CREDENTIALS_ROLE
 OUTPUT_KINESIS_CREDENTIALS_SECRET
 OUTPUT_KINESIS_CREDENTIALS_TOKEN
+OUTPUT_KINESIS_ENDPOINT
 OUTPUT_KINESIS_HASH_KEY
+OUTPUT_KINESIS_MAX_RETRIES                   = 0
 OUTPUT_KINESIS_PARTITION_KEY
 OUTPUT_KINESIS_REGION                        = eu-west-1
 OUTPUT_KINESIS_STREAM
@@ -419,7 +433,6 @@ OUTPUT_NATS_STREAM_SUBJECT                   = benthos_messages
 OUTPUT_NATS_STREAM_URLS                      = nats://localhost:4222
 OUTPUT_NATS_SUBJECT                          = benthos_messages
 OUTPUT_NATS_URLS                             = nats://localhost:4222
-OUTPUT_NSQ_MAX_IN_FLIGHT                     = 100
 OUTPUT_NSQ_NSQD_TCP_ADDRESS                  = localhost:4150
 OUTPUT_NSQ_TOPIC                             = benthos_messages
 OUTPUT_NSQ_USER_AGENT                        = benthos_producer

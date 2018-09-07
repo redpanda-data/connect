@@ -305,13 +305,16 @@ func TestBasicWrapProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	// Send error
 	errFailed := errors.New("derp, failed")
-	select {
-	case ts.ResponseChan <- response.NewError(errFailed):
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
+
+	// Send error
+	go func() {
+		select {
+		case ts.ResponseChan <- response.NewError(errFailed):
+		case <-time.After(time.Second):
+			t.Error("action timed out")
+		}
+	}()
 
 	// Receive again
 	select {
@@ -319,31 +322,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		t.Errorf("Unexpected response: %v", res.Error())
-	case ts, open = <-newInput.TransactionChan():
-		if !open {
-			t.Error("channel was closed")
-		} else if exp, act := "baz", string(ts.Payload.Get(0).Get()); exp != act {
-			t.Errorf("Wrong message received: %v != %v", act, exp)
-		}
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	// Send non-error
-	select {
-	case ts.ResponseChan <- response.NewAck():
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	// Receive response
-	select {
-	case res, open := <-resChan:
-		if !open {
-			t.Error("Channel was closed")
-		}
-		if res.Error() != nil {
+		if res.Error() != errFailed {
 			t.Error(res.Error())
 		}
 	case <-time.After(time.Second):
@@ -442,13 +421,16 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	// Send error
 	errFailed := errors.New("derp, failed")
-	select {
-	case ts.ResponseChan <- response.NewError(errFailed):
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
+
+	// Send error
+	go func() {
+		select {
+		case ts.ResponseChan <- response.NewError(errFailed):
+		case <-time.After(time.Second):
+			t.Error("action timed out")
+		}
+	}()
 
 	// Receive again
 	select {
@@ -456,31 +438,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		t.Errorf("Unexpected response: %v", res.Error())
-	case ts, open = <-newInput.TransactionChan():
-		if !open {
-			t.Error("channel was closed")
-		} else if exp, act := "baz", string(ts.Payload.Get(0).Get()); exp != act {
-			t.Errorf("Wrong message received: %v != %v", act, exp)
-		}
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	// Send non-error
-	select {
-	case ts.ResponseChan <- response.NewAck():
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	// Receive response
-	select {
-	case res, open := <-resChan:
-		if !open {
-			t.Error("Channel was closed")
-		}
-		if res.Error() != nil {
+		if res.Error() != errFailed {
 			t.Error(res.Error())
 		}
 	case <-time.After(time.Second):

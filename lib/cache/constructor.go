@@ -31,6 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
+	yaml "gopkg.in/yaml.v2"
 )
 
 //------------------------------------------------------------------------------
@@ -48,6 +49,7 @@ var Constructors = map[string]TypeSpec{}
 
 // String constants representing each cache type.
 const (
+	TypeDynamoDB  = "dynamodb"
 	TypeMemcached = "memcached"
 	TypeMemory    = "memory"
 )
@@ -57,6 +59,7 @@ const (
 // Config is the all encompassing configuration struct for all cache types.
 type Config struct {
 	Type      string          `json:"type" yaml:"type"`
+	DynamoDB  DynamoDBConfig  `json:"dynamodb" yaml:"dynamodb"`
 	Memcached MemcachedConfig `json:"memcached" yaml:"memcached"`
 	Memory    MemoryConfig    `json:"memory" yaml:"memory"`
 }
@@ -65,6 +68,7 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Type:      "memory",
+		DynamoDB:  NewDynamoDBConfig(),
 		Memcached: NewMemcachedConfig(),
 		Memory:    NewMemoryConfig(),
 	}
@@ -191,12 +195,26 @@ func Descriptions() string {
 
 	// Append each description
 	for i, name := range names {
+		var confBytes []byte
+
+		conf := NewConfig()
+		conf.Type = name
+		if confSanit, err := SanitiseConfig(conf); err == nil {
+			confBytes, _ = yaml.Marshal(confSanit)
+		}
+
 		buf.WriteString("## ")
 		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
+		if confBytes != nil {
+			buf.WriteString("\n``` yaml\n")
+			buf.Write(confBytes)
+			buf.WriteString("```\n")
+		}
 		buf.WriteString(Constructors[name].description)
+		buf.WriteString("\n")
 		if i != (len(names) - 1) {
-			buf.WriteString("\n\n")
+			buf.WriteString("\n")
 		}
 	}
 	return buf.String()

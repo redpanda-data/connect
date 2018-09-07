@@ -17,8 +17,9 @@ input:
     prefetch_size: 0
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
   broker:
     copies: 1
     inputs: []
@@ -33,6 +34,11 @@ input:
     delimiter: ""
   files:
     path: ""
+  hdfs:
+    hosts:
+    - localhost:9000
+    user: benthos_hdfs
+    directory: ""
   http_client:
     url: http://localhost:4195/get
     verb: GET
@@ -47,8 +53,9 @@ input:
     drop_on: []
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
     oauth:
       enabled: false
       consumer_key: ""
@@ -87,8 +94,9 @@ input:
     target_version: 1.0.0
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
   kafka_balanced:
     addresses:
     - localhost:9092
@@ -98,11 +106,14 @@ input:
     topics:
     - benthos_stream
     start_from_oldest: true
+    target_version: 1.0.0
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
   kinesis:
+    endpoint: ""
     region: eu-west-1
     credentials:
       id: ""
@@ -428,8 +439,9 @@ pipeline:
         drop_on: []
         tls:
           enabled: false
-          cas_file: ""
+          root_cas_file: ""
           skip_cert_verify: false
+          client_certs: []
         oauth:
           enabled: false
           consumer_key: ""
@@ -512,8 +524,9 @@ output:
     immediate: false
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
   broker:
     copies: 1
     pattern: fan_out
@@ -538,6 +551,12 @@ output:
     delimiter: ""
   files:
     path: ${!count:files}-${!timestamp_unix_nano}.txt
+  hdfs:
+    hosts:
+    - localhost:9000
+    user: benthos_hdfs
+    directory: ""
+    path: ${!count:files}-${!timestamp_unix_nano}.txt
   http_client:
     url: http://localhost:4195/post
     verb: POST
@@ -552,8 +571,9 @@ output:
     drop_on: []
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
     oauth:
       enabled: false
       consumer_key: ""
@@ -588,9 +608,11 @@ output:
     target_version: 1.0.0
     tls:
       enabled: false
-      cas_file: ""
+      root_cas_file: ""
       skip_cert_verify: false
+      client_certs: []
   kinesis:
+    endpoint: ""
     region: eu-west-1
     stream: ""
     hash_key: ""
@@ -600,6 +622,11 @@ output:
       secret: ""
       token: ""
       role: ""
+    max_retries: 0
+    backoff:
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
   mqtt:
     urls:
     - tcp://localhost:1883
@@ -626,7 +653,6 @@ output:
     nsqd_tcp_address: localhost:4150
     topic: benthos_messages
     user_agent: benthos_producer
-    max_in_flight: 100
   redis_list:
     url: tcp://localhost:6379
     key: benthos_list
@@ -638,6 +664,13 @@ output:
     stream: benthos_stream
     body_key: body
     max_length: 0
+  retry:
+    output: {}
+    max_retries: 0
+    backoff:
+      initial_interval: 500ms
+      max_interval: 3s
+      max_elapsed_time: 0s
   s3:
     region: eu-west-1
     bucket: ""
@@ -658,6 +691,8 @@ output:
       role: ""
   stdout:
     delimiter: ""
+  switch:
+    outputs: []
   websocket:
     url: ws://localhost:4195/post/ws
     oauth:
@@ -676,6 +711,20 @@ resources:
   caches:
     example:
       type: memory
+      dynamodb:
+        consistent_read: false
+        credentials:
+          id: ""
+          secret: ""
+          token: ""
+          role: ""
+        data_key: ""
+        endpoint: ""
+        hash_key: ""
+        region: ""
+        table: ""
+        ttl: ""
+        ttl_key: ""
       memcached:
         addresses:
         - localhost:11211

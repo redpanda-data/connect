@@ -18,8 +18,9 @@
 				"enabled": false
 			},
 			"tls": {
-				"cas_file": "",
+				"client_certs": [],
 				"enabled": false,
+				"root_cas_file": "",
 				"skip_cert_verify": false
 			},
 			"url": "amqp://guest:guest@localhost:5672/"
@@ -47,8 +48,9 @@
 			"mandatory": false,
 			"persistent": false,
 			"tls": {
-				"cas_file": "",
+				"client_certs": [],
 				"enabled": false,
+				"root_cas_file": "",
 				"skip_cert_verify": false
 			},
 			"url": "amqp://guest:guest@localhost:5672/"

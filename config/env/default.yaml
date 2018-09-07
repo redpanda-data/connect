@@ -17,8 +17,8 @@ input:
           durable: ${INPUT_AMQP_QUEUE_DECLARE_DURABLE:true}
           enabled: ${INPUT_AMQP_QUEUE_DECLARE_ENABLED:false}
         tls:
-          cas_file: ${INPUT_AMQP_TLS_CAS_FILE}
           enabled: ${INPUT_AMQP_TLS_ENABLED:false}
+          root_cas_file: ${INPUT_AMQP_TLS_ROOT_CAS_FILE}
           skip_cert_verify: ${INPUT_AMQP_TLS_SKIP_CERT_VERIFY:false}
         url: ${INPUT_AMQP_URL:amqp://guest:guest@localhost:5672/}
       dynamic:
@@ -31,6 +31,11 @@ input:
         path: ${INPUT_FILE_PATH}
       files:
         path: ${INPUT_FILES_PATH}
+      hdfs:
+        directory: ${INPUT_HDFS_DIRECTORY}
+        hosts:
+        - ${INPUT_HDFS_HOSTS:localhost:9000}
+        user: ${INPUT_HDFS_USER:benthos_hdfs}
       http_client:
         backoff_on:
         - ${INPUT_HTTP_CLIENT_BACKOFF_ON:429}
@@ -59,8 +64,8 @@ input:
           reconnect: ${INPUT_HTTP_CLIENT_STREAM_RECONNECT:true}
         timeout_ms: ${INPUT_HTTP_CLIENT_TIMEOUT_MS:5000}
         tls:
-          cas_file: ${INPUT_HTTP_CLIENT_TLS_CAS_FILE}
           enabled: ${INPUT_HTTP_CLIENT_TLS_ENABLED:false}
+          root_cas_file: ${INPUT_HTTP_CLIENT_TLS_ROOT_CAS_FILE}
           skip_cert_verify: ${INPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY:false}
         url: ${INPUT_HTTP_CLIENT_URL:http://localhost:4195/get}
         verb: ${INPUT_HTTP_CLIENT_VERB:GET}
@@ -82,8 +87,8 @@ input:
         start_from_oldest: ${INPUT_KAFKA_START_FROM_OLDEST:true}
         target_version: ${INPUT_KAFKA_TARGET_VERSION:1.0.0}
         tls:
-          cas_file: ${INPUT_KAFKA_TLS_CAS_FILE}
           enabled: ${INPUT_KAFKA_TLS_ENABLED:false}
+          root_cas_file: ${INPUT_KAFKA_TLS_ROOT_CAS_FILE}
           skip_cert_verify: ${INPUT_KAFKA_TLS_SKIP_CERT_VERIFY:false}
         topic: ${INPUT_KAFKA_TOPIC:benthos_stream}
       kafka_balanced:
@@ -93,9 +98,10 @@ input:
         commit_period_ms: ${INPUT_KAFKA_BALANCED_COMMIT_PERIOD_MS:1000}
         consumer_group: ${INPUT_KAFKA_BALANCED_CONSUMER_GROUP:benthos_consumer_group}
         start_from_oldest: ${INPUT_KAFKA_BALANCED_START_FROM_OLDEST:true}
+        target_version: ${INPUT_KAFKA_BALANCED_TARGET_VERSION:1.0.0}
         tls:
-          cas_file: ${INPUT_KAFKA_BALANCED_TLS_CAS_FILE}
           enabled: ${INPUT_KAFKA_BALANCED_TLS_ENABLED:false}
+          root_cas_file: ${INPUT_KAFKA_BALANCED_TLS_ROOT_CAS_FILE}
           skip_cert_verify: ${INPUT_KAFKA_BALANCED_TLS_SKIP_CERT_VERIFY:false}
         topics:
         - ${INPUT_KAFKA_BALANCED_TOPICS:benthos_stream}
@@ -108,6 +114,7 @@ input:
           secret: ${INPUT_KINESIS_CREDENTIALS_SECRET}
           token: ${INPUT_KINESIS_CREDENTIALS_TOKEN}
         dynamodb_table: ${INPUT_KINESIS_DYNAMODB_TABLE}
+        endpoint: ${INPUT_KINESIS_ENDPOINT}
         limit: ${INPUT_KINESIS_LIMIT:100}
         region: ${INPUT_KINESIS_REGION:eu-west-1}
         shard: ${INPUT_KINESIS_SHARD:0}
@@ -319,8 +326,8 @@ pipeline:
         retry_period_ms: ${PROCESSOR_HTTP_REQUEST_RETRY_PERIOD_MS:1000}
         timeout_ms: ${PROCESSOR_HTTP_REQUEST_TIMEOUT_MS:5000}
         tls:
-          cas_file: ${PROCESSOR_HTTP_REQUEST_TLS_CAS_FILE}
           enabled: ${PROCESSOR_HTTP_REQUEST_TLS_ENABLED:false}
+          root_cas_file: ${PROCESSOR_HTTP_REQUEST_TLS_ROOT_CAS_FILE}
           skip_cert_verify: ${PROCESSOR_HTTP_REQUEST_TLS_SKIP_CERT_VERIFY:false}
         url: ${PROCESSOR_HTTP_REQUEST_URL:http://localhost:4195/post}
         verb: ${PROCESSOR_HTTP_REQUEST_VERB:POST}
@@ -376,8 +383,8 @@ output:
         mandatory: ${OUTPUT_AMQP_MANDATORY:false}
         persistent: ${OUTPUT_AMQP_PERSISTENT:false}
         tls:
-          cas_file: ${OUTPUT_AMQP_TLS_CAS_FILE}
           enabled: ${OUTPUT_AMQP_TLS_ENABLED:false}
+          root_cas_file: ${OUTPUT_AMQP_TLS_ROOT_CAS_FILE}
           skip_cert_verify: ${OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY:false}
         url: ${OUTPUT_AMQP_URL:amqp://guest:guest@localhost:5672/}
       dynamic:
@@ -399,6 +406,12 @@ output:
         path: ${OUTPUT_FILE_PATH}
       files:
         path: ${OUTPUT_FILES_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+      hdfs:
+        directory: ${OUTPUT_HDFS_DIRECTORY}
+        hosts:
+        - ${OUTPUT_HDFS_HOSTS:localhost:9000}
+        path: ${OUTPUT_HDFS_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+        user: ${OUTPUT_HDFS_USER:benthos_hdfs}
       http_client:
         backoff_on:
         - ${OUTPUT_HTTP_CLIENT_BACKOFF_ON:429}
@@ -420,8 +433,8 @@ output:
         retry_period_ms: ${OUTPUT_HTTP_CLIENT_RETRY_PERIOD_MS:1000}
         timeout_ms: ${OUTPUT_HTTP_CLIENT_TIMEOUT_MS:5000}
         tls:
-          cas_file: ${OUTPUT_HTTP_CLIENT_TLS_CAS_FILE}
           enabled: ${OUTPUT_HTTP_CLIENT_TLS_ENABLED:false}
+          root_cas_file: ${OUTPUT_HTTP_CLIENT_TLS_ROOT_CAS_FILE}
           skip_cert_verify: ${OUTPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY:false}
         url: ${OUTPUT_HTTP_CLIENT_URL:http://localhost:4195/post}
         verb: ${OUTPUT_HTTP_CLIENT_VERB:POST}
@@ -446,17 +459,23 @@ output:
         target_version: ${OUTPUT_KAFKA_TARGET_VERSION:1.0.0}
         timeout_ms: ${OUTPUT_KAFKA_TIMEOUT_MS:5000}
         tls:
-          cas_file: ${OUTPUT_KAFKA_TLS_CAS_FILE}
           enabled: ${OUTPUT_KAFKA_TLS_ENABLED:false}
+          root_cas_file: ${OUTPUT_KAFKA_TLS_ROOT_CAS_FILE}
           skip_cert_verify: ${OUTPUT_KAFKA_TLS_SKIP_CERT_VERIFY:false}
         topic: ${OUTPUT_KAFKA_TOPIC:benthos_stream}
       kinesis:
+        backoff:
+          initial_interval: ${OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL:1s}
+          max_elapsed_time: ${OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME:30s}
+          max_interval: ${OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL:5s}
         credentials:
           id: ${OUTPUT_KINESIS_CREDENTIALS_ID}
           role: ${OUTPUT_KINESIS_CREDENTIALS_ROLE}
           secret: ${OUTPUT_KINESIS_CREDENTIALS_SECRET}
           token: ${OUTPUT_KINESIS_CREDENTIALS_TOKEN}
+        endpoint: ${OUTPUT_KINESIS_ENDPOINT}
         hash_key: ${OUTPUT_KINESIS_HASH_KEY}
+        max_retries: ${OUTPUT_KINESIS_MAX_RETRIES:0}
         partition_key: ${OUTPUT_KINESIS_PARTITION_KEY}
         region: ${OUTPUT_KINESIS_REGION:eu-west-1}
         stream: ${OUTPUT_KINESIS_STREAM}
@@ -483,7 +502,6 @@ output:
         urls:
         - ${OUTPUT_NATS_STREAM_URLS:nats://localhost:4222}
       nsq:
-        max_in_flight: ${OUTPUT_NSQ_MAX_IN_FLIGHT:100}
         nsqd_tcp_address: ${OUTPUT_NSQ_NSQD_TCP_ADDRESS:localhost:4150}
         topic: ${OUTPUT_NSQ_TOPIC:benthos_messages}
         user_agent: ${OUTPUT_NSQ_USER_AGENT:benthos_producer}

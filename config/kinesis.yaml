@@ -15,6 +15,7 @@ input:
       secret: ""
       token: ""
     dynamodb_table: ""
+    endpoint: ""
     limit: 100
     region: eu-west-1
     shard: "0"
@@ -30,12 +31,18 @@ pipeline:
 output:
   type: kinesis
   kinesis:
+    backoff:
+      initial_interval: 1s
+      max_elapsed_time: 30s
+      max_interval: 5s
     credentials:
       id: ""
       role: ""
       secret: ""
       token: ""
+    endpoint: ""
     hash_key: ""
+    max_retries: 0
     partition_key: ""
     region: eu-west-1
     stream: ""

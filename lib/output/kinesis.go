@@ -33,10 +33,12 @@ func init() {
 	Constructors[TypeKinesis] = TypeSpec{
 		constructor: NewKinesis,
 		description: `
-Sends messages to a Kinesis stream, both the ` + "`partition_key`" + `
-(required) and ` + "`hash_key`" + ` (optional) fields can be dynamically set
-using function interpolations described
-[here](../config_interpolation.md#functions).`,
+Sends messages to a Kinesis stream.
+
+Both the ` + "`partition_key`" + `(required) and ` + "`hash_key`" + ` (optional)
+fields can be dynamically set using function interpolations described
+[here](../config_interpolation.md#functions). When sending batched messages the
+interpolations are performed per message part.`,
 	}
 }
 

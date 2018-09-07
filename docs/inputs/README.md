@@ -41,14 +41,14 @@ level which is only applied to messages from the baz input.
 3. [`dynamic`](#dynamic)
 4. [`file`](#file)
 5. [`files`](#files)
-6. [`http_client`](#http_client)
-7. [`http_server`](#http_server)
-8. [`inproc`](#inproc)
-9. [`kafka`](#kafka)
-10. [`kafka_balanced`](#kafka_balanced)
-11. [`kinesis`](#kinesis)
-12. [`mqtt`](#mqtt)
-13. [`mysql`](#mysql)
+6. [`hdfs`](#hdfs)
+7. [`http_client`](#http_client)
+8. [`http_server`](#http_server)
+9. [`inproc`](#inproc)
+10. [`kafka`](#kafka)
+11. [`kafka_balanced`](#kafka_balanced)
+12. [`kinesis`](#kinesis)
+13. [`mqtt`](#mqtt)
 14. [`nanomsg`](#nanomsg)
 15. [`nats`](#nats)
 16. [`nats_stream`](#nats_stream)
@@ -76,8 +76,9 @@ amqp:
     durable: true
     enabled: false
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   url: amqp://guest:guest@localhost:5672/
 ```
@@ -247,6 +248,32 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+## `hdfs`
+
+``` yaml
+type: hdfs
+hdfs:
+  directory: ""
+  hosts:
+  - localhost:9000
+  user: benthos_hdfs
+```
+
+Reads files from a HDFS directory, where each discrete file will be consumed as a single
+message payload.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```
+- hdfs_name
+- hdfs_path
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
+
 ## `http_client`
 
 ``` yaml
@@ -280,8 +307,9 @@ http_client:
     reconnect: true
   timeout_ms: 5000
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   url: http://localhost:4195/get
   verb: GET
@@ -366,8 +394,9 @@ kafka:
   start_from_oldest: true
   target_version: 1.0.0
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   topic: benthos_stream
 ```
@@ -409,9 +438,11 @@ kafka_balanced:
   commit_period_ms: 1000
   consumer_group: benthos_consumer_group
   start_from_oldest: true
+  target_version: 1.0.0
   tls:
-    cas_file: ""
+    client_certs: []
     enabled: false
+    root_cas_file: ""
     skip_cert_verify: false
   topics:
   - benthos_stream
@@ -450,6 +481,7 @@ kinesis:
     secret: ""
     token: ""
   dynamodb_table: ""
+  endpoint: ""
   limit: 100
   region: eu-west-1
   shard: "0"

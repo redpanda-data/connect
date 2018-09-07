@@ -65,7 +65,7 @@ type Or struct {
 	children []Type
 }
 
-// NewOr returns an Or processor.
+// NewOr returns an Or condition.
 func NewOr(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
