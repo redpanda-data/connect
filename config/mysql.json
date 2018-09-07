@@ -1,0 +1,64 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000,
+		"root_path": "/benthos",
+		"debug_endpoints": false
+	},
+	"input": {
+		"type": "mysql",
+		"mysql": {
+			"batch_size": 0,
+			"buffer_timeout": "",
+			"cache": "",
+			"consumer_id": 0,
+			"databases": null,
+			"host": "",
+			"key_prefix": "",
+			"latest": false,
+			"mysqldump_path": "",
+			"password": "",
+			"port": 0,
+			"prefetch_count": 0,
+			"sync_interval": "",
+			"tables": null,
+			"username": "",
+			"view": ""
+		}
+	},
+	"buffer": {
+		"type": "none",
+		"none": {}
+	},
+	"pipeline": {
+		"processors": [],
+		"threads": 1
+	},
+	"output": {
+		"type": "stdout",
+		"stdout": {
+			"delimiter": ""
+		}
+	},
+	"resources": {
+		"caches": {},
+		"conditions": {}
+	},
+	"logger": {
+		"prefix": "benthos",
+		"level": "INFO",
+		"add_timestamp": true,
+		"json_format": true
+	},
+	"metrics": {
+		"type": "http_server",
+		"prefix": "benthos",
+		"http_server": {},
+		"prometheus": {},
+		"statsd": {
+			"address": "localhost:4040",
+			"flush_period": "100ms",
+			"network": "udp"
+		}
+	}
+}

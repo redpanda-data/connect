@@ -2,6 +2,7 @@ module github.com/Jeffail/benthos
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
+	github.com/BurntSushi/toml v0.3.0 // indirect
 	github.com/Jeffail/gabs v1.1.0
 	github.com/Microsoft/go-winio v0.4.11 // indirect
 	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
@@ -28,6 +29,7 @@ require (
 	github.com/edsrzf/mmap-go v0.0.0-20170320065105-0bce6a688712
 	github.com/fortytw2/leaktest v1.2.0 // indirect
 	github.com/go-redis/redis v6.14.0+incompatible
+	github.com/go-sql-driver/mysql v1.4.0
 	github.com/gofrs/uuid v3.1.0+incompatible
 	github.com/gogo/protobuf v1.1.1 // indirect
 	github.com/golang/protobuf v1.2.0 // indirect
@@ -40,6 +42,7 @@ require (
 	github.com/hashicorp/raft v1.0.0 // indirect
 	github.com/hpcloud/tail v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
+	github.com/juju/errors v0.0.0-20180806074554-22422dad46e1 // indirect
 	github.com/lib/pq v1.0.0 // indirect
 	github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
@@ -59,6 +62,7 @@ require (
 	github.com/ory/dockertest v3.3.2+incompatible
 	github.com/pebbe/zmq4 v1.0.0
 	github.com/pierrec/lz4 v2.0.3+incompatible // indirect
+	github.com/pingcap/check v0.0.0-20171206051426-1c287c953996 // indirect
 	github.com/pkg/errors v0.8.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v0.8.0
@@ -67,6 +71,11 @@ require (
 	github.com/prometheus/procfs v0.0.0-20180725123919-05ee40e3a273 // indirect
 	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
 	github.com/rcrowley/go-metrics v0.0.0-20180503174638-e2704e165165 // indirect
+	github.com/satori/go.uuid v1.2.0 // indirect
+	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24 // indirect
+	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726 // indirect
+	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07 // indirect
+	github.com/siddontang/go-mysql v0.0.0-20180824025401-555d0d9bd194
 	github.com/sirupsen/logrus v1.0.6 // indirect
 	github.com/spf13/cast v1.2.0
 	github.com/streadway/amqp v0.0.0-20180806233856-70e15c650864
@@ -76,6 +85,7 @@ require (
 	golang.org/x/net v0.0.0-20180826012351-8a410e7b638d // indirect
 	golang.org/x/sys v0.0.0-20180824143301-4910a1d54f87 // indirect
 	golang.org/x/text v0.3.0 // indirect
+	google.golang.org/appengine v1.1.0 // indirect
 	gopkg.in/fsnotify.v1 v1.4.7 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.2.1

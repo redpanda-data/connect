@@ -135,6 +135,23 @@ input:
     topics:
     - benthos_topic
     client_id: benthos_input
+  mysql:
+    batch_size: 0
+    buffer_timeout: ""
+    cache: ""
+    consumer_id: 0
+    databases: []
+    host: ""
+    key_prefix: ""
+    latest: false
+    mysqldump_path: ""
+    password: ""
+    prefetch_count: 0
+    port: 0
+    sync_interval: ""
+    tables: []
+    username: ""
+    view: ""
   nanomsg:
     urls:
     - tcp://*:5555
