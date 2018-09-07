@@ -326,6 +326,11 @@ the batch use the [`filter_parts`](#filter_parts) processor.
 type: filter_parts
 filter_parts:
   and: []
+  bounds_check:
+    max_part_size: 1.073741824e+09
+    max_parts: 100
+    min_part_size: 1
+    min_parts: 1
   count:
     arg: 100
   jmespath:

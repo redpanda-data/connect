@@ -171,6 +171,11 @@ input:
     condition:
       type: text
       and: []
+      bounds_check:
+        max_parts: 100
+        min_parts: 1
+        max_part_size: 1073741824
+        min_part_size: 1
       count:
         arg: 100
       jmespath:
@@ -276,6 +281,11 @@ pipeline:
       condition:
         type: static
         and: []
+        bounds_check:
+          max_parts: 100
+          min_parts: 1
+          max_part_size: 1073741824
+          min_part_size: 1
         count:
           arg: 100
         jmespath:
@@ -311,6 +321,11 @@ pipeline:
       condition:
         type: text
         and: []
+        bounds_check:
+          max_parts: 100
+          min_parts: 1
+          max_part_size: 1073741824
+          min_part_size: 1
         count:
           arg: 100
         jmespath:
@@ -351,6 +366,11 @@ pipeline:
     filter:
       type: text
       and: []
+      bounds_check:
+        max_parts: 100
+        min_parts: 1
+        max_part_size: 1073741824
+        min_part_size: 1
       count:
         arg: 100
       jmespath:
@@ -373,6 +393,11 @@ pipeline:
     filter_parts:
       type: text
       and: []
+      bounds_check:
+        max_parts: 100
+        min_parts: 1
+        max_part_size: 1073741824
+        min_part_size: 1
       count:
         arg: 100
       jmespath:
@@ -722,6 +747,11 @@ resources:
     example:
       type: text
       and: []
+      bounds_check:
+        max_parts: 100
+        min_parts: 1
+        max_part_size: 1073741824
+        min_part_size: 1
       count:
         arg: 100
       jmespath:
