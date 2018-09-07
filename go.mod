@@ -42,6 +42,7 @@ require (
 	github.com/hashicorp/raft v1.0.0 // indirect
 	github.com/hpcloud/tail v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
+	github.com/juju/errors v0.0.0-20180806074554-22422dad46e1 // indirect
 	github.com/lib/pq v1.0.0 // indirect
 	github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
