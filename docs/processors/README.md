@@ -325,32 +325,11 @@ the batch use the [`filter_parts`](#filter_parts) processor.
 ``` yaml
 type: filter_parts
 filter_parts:
-  and: []
-  bounds_check:
-    max_part_size: 1.073741824e+09
-    max_parts: 100
-    min_part_size: 1
-    min_parts: 1
-  count:
-    arg: 100
-  jmespath:
-    part: 0
-    query: ""
-  metadata:
-    arg: ""
-    key: ""
-    operator: equals_cs
-    part: 0
-  not: {}
-  or: []
-  resource: ""
-  static: true
+  type: text
   text:
     arg: ""
     operator: equals_cs
     part: 0
-  type: text
-  xor: []
 ```
 
 Tests each individual part of a message batch against a condition, if the

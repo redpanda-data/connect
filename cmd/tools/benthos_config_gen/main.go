@@ -39,6 +39,7 @@ import (
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
+	"github.com/Jeffail/benthos/lib/processor/condition"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -521,6 +522,32 @@ func main() {
 
 		createYAML(t, filepath.Join(configsDir, "processors", t+".yaml"), sanit)
 		createJSON(t, filepath.Join(configsDir, "processors", t+".json"), sanit)
+	}
+
+	// Create condition configs for all types.
+	for t := range condition.Constructors {
+		conf := NewConfig()
+		conf.Input.Processors = nil
+		conf.Output.Processors = nil
+
+		condConf := condition.NewConfig()
+		condConf.Type = t
+
+		procConf := processor.NewConfig()
+		procConf.Type = "filter_parts"
+		procConf.FilterParts = processor.FilterPartsConfig{
+			Config: condConf,
+		}
+
+		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
+
+		sanit, err := conf.Sanitised(true, true)
+		if err != nil {
+			panic(err)
+		}
+
+		createYAML(t, filepath.Join(configsDir, "conditions", t+".yaml"), sanit)
+		createJSON(t, filepath.Join(configsDir, "conditions", t+".json"), sanit)
 	}
 
 	// Create buffers config

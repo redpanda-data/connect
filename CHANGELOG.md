@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `bounds_check` condition type.
+
 ### 0.30.1 - 2018-09-06
 
 ### Changed

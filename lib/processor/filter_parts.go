@@ -46,6 +46,9 @@ part message.
 This processor is useful if you are combining messages into batches using the
 ` + "[`combine`](#combine) or [`batch`](#batch)" + ` processors and wish to
 remove specific parts.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return condition.SanitiseConfig(conf.FilterParts.Config)
+		},
 	}
 }
 
