@@ -239,6 +239,11 @@ pipeline:
     batch:
       byte_size: ${PROCESSOR_BATCH_BYTE_SIZE:10000}
       condition:
+        bounds_check:
+          max_part_size: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PART_SIZE:1073741824}
+          max_parts: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PARTS:100}
+          min_part_size: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PART_SIZE:1}
+          min_parts: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PARTS:1}
         count:
           arg: ${PROCESSOR_BATCH_CONDITION_COUNT_ARG:100}
         jmespath:

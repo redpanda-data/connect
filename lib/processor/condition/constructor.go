@@ -55,51 +55,54 @@ var Constructors = map[string]TypeSpec{}
 
 // String constants representing each condition type.
 var (
-	TypeAnd      = "and"
-	TypeCount    = "count"
-	TypeJMESPath = "jmespath"
-	TypeNot      = "not"
-	TypeMetadata = "metadata"
-	TypeOr       = "or"
-	TypeResource = "resource"
-	TypeStatic   = "static"
-	TypeText     = "text"
-	TypeXor      = "xor"
+	TypeAnd         = "and"
+	TypeBoundsCheck = "bounds_check"
+	TypeCount       = "count"
+	TypeJMESPath    = "jmespath"
+	TypeNot         = "not"
+	TypeMetadata    = "metadata"
+	TypeOr          = "or"
+	TypeResource    = "resource"
+	TypeStatic      = "static"
+	TypeText        = "text"
+	TypeXor         = "xor"
 )
 
 //------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all condition types.
 type Config struct {
-	Type     string         `json:"type" yaml:"type"`
-	And      AndConfig      `json:"and" yaml:"and"`
-	Count    CountConfig    `json:"count" yaml:"count"`
-	JMESPath JMESPathConfig `json:"jmespath" yaml:"jmespath"`
-	Not      NotConfig      `json:"not" yaml:"not"`
-	Metadata MetadataConfig `json:"metadata" yaml:"metadata"`
-	Or       OrConfig       `json:"or" yaml:"or"`
-	Plugin   interface{}    `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	Resource string         `json:"resource" yaml:"resource"`
-	Static   bool           `json:"static" yaml:"static"`
-	Text     TextConfig     `json:"text" yaml:"text"`
-	Xor      XorConfig      `json:"xor" yaml:"xor"`
+	Type        string            `json:"type" yaml:"type"`
+	And         AndConfig         `json:"and" yaml:"and"`
+	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
+	Count       CountConfig       `json:"count" yaml:"count"`
+	JMESPath    JMESPathConfig    `json:"jmespath" yaml:"jmespath"`
+	Not         NotConfig         `json:"not" yaml:"not"`
+	Metadata    MetadataConfig    `json:"metadata" yaml:"metadata"`
+	Or          OrConfig          `json:"or" yaml:"or"`
+	Plugin      interface{}       `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Resource    string            `json:"resource" yaml:"resource"`
+	Static      bool              `json:"static" yaml:"static"`
+	Text        TextConfig        `json:"text" yaml:"text"`
+	Xor         XorConfig         `json:"xor" yaml:"xor"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:     "text",
-		And:      NewAndConfig(),
-		Count:    NewCountConfig(),
-		JMESPath: NewJMESPathConfig(),
-		Not:      NewNotConfig(),
-		Metadata: NewMetadataConfig(),
-		Or:       NewOrConfig(),
-		Plugin:   nil,
-		Resource: "",
-		Static:   true,
-		Text:     NewTextConfig(),
-		Xor:      NewXorConfig(),
+		Type:        "text",
+		And:         NewAndConfig(),
+		BoundsCheck: NewBoundsCheckConfig(),
+		Count:       NewCountConfig(),
+		JMESPath:    NewJMESPathConfig(),
+		Not:         NewNotConfig(),
+		Metadata:    NewMetadataConfig(),
+		Or:          NewOrConfig(),
+		Plugin:      nil,
+		Resource:    "",
+		Static:      true,
+		Text:        NewTextConfig(),
+		Xor:         NewXorConfig(),
 	}
 }
 

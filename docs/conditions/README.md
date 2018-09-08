@@ -81,15 +81,16 @@ duplicate condition configs by using the [resource condition][resource].
 ### Contents
 
 1. [`and`](#and)
-2. [`count`](#count)
-3. [`jmespath`](#jmespath)
-4. [`metadata`](#metadata)
-5. [`not`](#not)
-6. [`or`](#or)
-7. [`resource`](#resource)
-8. [`static`](#static)
-9. [`text`](#text)
-10. [`xor`](#xor)
+2. [`bounds_check`](#bounds_check)
+3. [`count`](#count)
+4. [`jmespath`](#jmespath)
+5. [`metadata`](#metadata)
+6. [`not`](#not)
+7. [`or`](#or)
+8. [`resource`](#resource)
+9. [`static`](#static)
+10. [`text`](#text)
+11. [`xor`](#xor)
 
 ## `and`
 
@@ -99,6 +100,19 @@ and: []
 ```
 
 And is a condition that returns the logical AND of its children conditions.
+
+## `bounds_check`
+
+``` yaml
+type: bounds_check
+bounds_check:
+  max_part_size: 1.073741824e+09
+  max_parts: 100
+  min_part_size: 1
+  min_parts: 1
+```
+
+BoundsCheck is a condition that checks a message against a set of bounds.
 
 ## `count`
 
