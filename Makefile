@@ -42,7 +42,7 @@ deps:
 	@go mod vendor
 
 fmt:
-	@go list ./... | xargs -I{} gofmt -w -s $$GOPATH/src/{}
+	@go list -f {{.Dir}} ./... | xargs -I{} gofmt -w -s {}
 
 lint:
 	@go vet $(GO_FLAGS) ./...
