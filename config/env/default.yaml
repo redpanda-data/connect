@@ -136,6 +136,7 @@ input:
         urls:
         - ${INPUT_NANOMSG_URLS:tcp://*:5555}
       nats:
+        queue: ${INPUT_NATS_QUEUE:benthos_queue}
         subject: ${INPUT_NATS_SUBJECT:benthos_messages}
         urls:
         - ${INPUT_NATS_URLS:nats://localhost:4222}

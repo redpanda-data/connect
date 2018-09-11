@@ -150,6 +150,7 @@ INPUT_NANOMSG_POLL_TIMEOUT_MS               = 5000
 INPUT_NANOMSG_REPLY_TIMEOUT_MS              = 5000
 INPUT_NANOMSG_SOCKET_TYPE                   = PULL
 INPUT_NANOMSG_URLS                          = tcp://*:5555
+INPUT_NATS_QUEUE                            = benthos_queue
 INPUT_NATS_STREAM_CLIENT_ID                 = benthos_client
 INPUT_NATS_STREAM_CLUSTER_ID                = test-cluster
 INPUT_NATS_STREAM_DURABLE_NAME              = benthos_offset

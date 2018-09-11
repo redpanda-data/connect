@@ -38,6 +38,7 @@ import (
 type NATSConfig struct {
 	URLs    []string `json:"urls" yaml:"urls"`
 	Subject string   `json:"subject" yaml:"subject"`
+	QueueID string   `json:"queue" yaml:"queue"`
 }
 
 // NewNATSConfig creates a new NATSConfig with default values.
@@ -45,6 +46,7 @@ func NewNATSConfig() NATSConfig {
 	return NATSConfig{
 		URLs:    []string{nats.DefaultURL},
 		Subject: "benthos_messages",
+		QueueID: "benthos_queue",
 	}
 }
 
@@ -97,7 +99,14 @@ func (n *NATS) Connect() error {
 		return err
 	}
 	natsChan := make(chan *nats.Msg)
-	if natsSub, err = natsConn.ChanSubscribe(n.conf.Subject, natsChan); err != nil {
+
+	if len(n.conf.QueueID) > 0 {
+		natsSub, err = natsConn.ChanQueueSubscribe(n.conf.Subject, n.conf.QueueID, natsChan)
+	} else {
+		natsSub, err = natsConn.ChanSubscribe(n.conf.Subject, natsChan)
+	}
+
+	if err != nil {
 		return err
 	}
 
