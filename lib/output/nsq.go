@@ -21,6 +21,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/lib/message"
 	"io/ioutil"
 	llog "log"
 	"sync/atomic"
@@ -30,6 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/text"
 	nsq "github.com/nsqio/go-nsq"
 )
 
@@ -39,7 +41,10 @@ func init() {
 	Constructors[TypeNSQ] = TypeSpec{
 		constructor: NewNSQ,
 		description: `
-Publish to an NSQ topic.`,
+Publish to an NSQ topic. The ` + "`topic`" + ` field can be dynamically set
+using function interpolations described
+[here](../config_interpolation.md#functions). When sending batched messages
+these interpolations are performed per message part.`,
 	}
 }
 
@@ -70,7 +75,8 @@ type NSQ struct {
 	log   log.Modular
 	stats metrics.Type
 
-	conf Config
+	conf     Config
+	topicStr *text.InterpolatedString
 
 	producer *nsq.Producer
 
@@ -87,6 +93,7 @@ func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type)
 		log:        log.NewModule(".output.nsq"),
 		stats:      stats,
 		conf:       conf,
+		topicStr:   text.NewInterpolatedString(conf.NSQ.Topic),
 		closedChan: make(chan struct{}),
 		closeChan:  make(chan struct{}),
 	}
@@ -166,7 +173,7 @@ func (n *NSQ) loop() {
 		}
 		mCount.Incr(1)
 		err := ts.Payload.Iter(func(i int, p types.Part) error {
-			return n.producer.Publish(n.conf.NSQ.Topic, p.Get())
+			return n.producer.Publish(n.topicStr.Get(message.Lock(ts.Payload, i)), p.Get())
 		})
 		if err != nil {
 			mSendErr.Incr(1)

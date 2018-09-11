@@ -5,10 +5,18 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.31.0 - 2018-09-11
+
 ### Added
 
 - New `bounds_check` condition type.
 - New `check_field` condition type.
+- New `queue` field added to `nats` input.
+- Function interpolation for the `topic` field of the `nsq` output.
+
+### Changed
+
+- The `nats` input now defaults to joining a queue.
 
 ### 0.30.1 - 2018-09-06
 
