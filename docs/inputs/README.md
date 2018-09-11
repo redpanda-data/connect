@@ -551,6 +551,7 @@ Currently only PULL and SUB sockets are supported.
 ``` yaml
 type: nats
 nats:
+  queue: benthos_queue
   subject: benthos_messages
   urls:
   - nats://localhost:4222

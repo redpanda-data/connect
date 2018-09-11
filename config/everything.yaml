@@ -147,6 +147,7 @@ input:
     urls:
     - nats://localhost:4222
     subject: benthos_messages
+    queue: benthos_queue
   nats_stream:
     urls:
     - nats://localhost:4222
