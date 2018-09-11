@@ -57,6 +57,7 @@ var Constructors = map[string]TypeSpec{}
 var (
 	TypeAnd         = "and"
 	TypeBoundsCheck = "bounds_check"
+	TypeCheckField  = "check_field"
 	TypeCount       = "count"
 	TypeJMESPath    = "jmespath"
 	TypeNot         = "not"
@@ -75,6 +76,7 @@ type Config struct {
 	Type        string            `json:"type" yaml:"type"`
 	And         AndConfig         `json:"and" yaml:"and"`
 	BoundsCheck BoundsCheckConfig `json:"bounds_check" yaml:"bounds_check"`
+	CheckField  CheckFieldConfig  `json:"check_field" yaml:"check_field"`
 	Count       CountConfig       `json:"count" yaml:"count"`
 	JMESPath    JMESPathConfig    `json:"jmespath" yaml:"jmespath"`
 	Not         NotConfig         `json:"not" yaml:"not"`
@@ -93,6 +95,7 @@ func NewConfig() Config {
 		Type:        "text",
 		And:         NewAndConfig(),
 		BoundsCheck: NewBoundsCheckConfig(),
+		CheckField:  NewCheckFieldConfig(),
 		Count:       NewCountConfig(),
 		JMESPath:    NewJMESPathConfig(),
 		Not:         NewNotConfig(),

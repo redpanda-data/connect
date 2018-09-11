@@ -193,6 +193,7 @@ func envify(rootPath string, conf interface{}, paths map[string]string) (newConf
 		"CONDITIONAL",
 		"PROCESS_FIELD",
 		"PROCESS_MAP",
+		"CHECK_FIELD",
 		"FILTER",
 		"DEDUPE",
 		"INPUT_BROKER_INPUTS_BROKER",

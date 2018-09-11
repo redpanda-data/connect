@@ -82,15 +82,16 @@ duplicate condition configs by using the [resource condition][resource].
 
 1. [`and`](#and)
 2. [`bounds_check`](#bounds_check)
-3. [`count`](#count)
-4. [`jmespath`](#jmespath)
-5. [`metadata`](#metadata)
-6. [`not`](#not)
-7. [`or`](#or)
-8. [`resource`](#resource)
-9. [`static`](#static)
-10. [`text`](#text)
-11. [`xor`](#xor)
+3. [`check_field`](#check_field)
+4. [`count`](#count)
+5. [`jmespath`](#jmespath)
+6. [`metadata`](#metadata)
+7. [`not`](#not)
+8. [`or`](#or)
+9. [`resource`](#resource)
+10. [`static`](#static)
+11. [`text`](#text)
+12. [`xor`](#xor)
 
 ## `and`
 
@@ -112,7 +113,20 @@ bounds_check:
   min_parts: 1
 ```
 
-BoundsCheck is a condition that checks a message against a set of bounds.
+Checks a message against a set of bounds.
+
+## `check_field`
+
+``` yaml
+type: check_field
+check_field:
+  condition: {}
+  parts: []
+  path: ""
+```
+
+Extracts the value of a field within messages (currently only JSON format is
+supported) and then tests the extracted value against a child condition.
 
 ## `count`
 

@@ -770,22 +770,14 @@ process_field:
   processors: []
 ```
 
-A processor that extracts the value of a field within payloads as a string
-(currently only JSON format is supported) then applies a list of processors to
-the extracted value, and finally sets the field within the original payloads to
-the processed result as a string.
+A processor that extracts the value of a field within payloads (currently only
+JSON format is supported) then applies a list of processors to the extracted
+value, and finally sets the field within the original payloads to the processed
+result.
 
 If the number of messages resulting from the processing steps does not match the
 original count then this processor fails and the messages continue unchanged.
 Therefore, you should avoid using batch and filter type processors in this list.
-
-### Batch Ordering
-
-This processor supports batch messages. When processing results are mapped back
-into the original payload they will be correctly aligned with the original
-batch. However, the ordering of field extracted message parts as they are sent
-through processors are not guaranteed to match the ordering of the original
-batch.
 
 ## `process_map`
 

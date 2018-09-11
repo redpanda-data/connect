@@ -36,22 +36,14 @@ func init() {
 	Constructors[TypeProcessField] = TypeSpec{
 		constructor: NewProcessField,
 		description: `
-A processor that extracts the value of a field within payloads as a string
-(currently only JSON format is supported) then applies a list of processors to
-the extracted value, and finally sets the field within the original payloads to
-the processed result as a string.
+A processor that extracts the value of a field within payloads (currently only
+JSON format is supported) then applies a list of processors to the extracted
+value, and finally sets the field within the original payloads to the processed
+result.
 
 If the number of messages resulting from the processing steps does not match the
 original count then this processor fails and the messages continue unchanged.
-Therefore, you should avoid using batch and filter type processors in this list.
-
-### Batch Ordering
-
-This processor supports batch messages. When processing results are mapped back
-into the original payload they will be correctly aligned with the original
-batch. However, the ordering of field extracted message parts as they are sent
-through processors are not guaranteed to match the ordering of the original
-batch.`,
+Therefore, you should avoid using batch and filter type processors in this list.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
 			procConfs := make([]interface{}, len(conf.ProcessField.Processors))
@@ -164,7 +156,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	gParts := make([]*gabs.Container, len(targetParts))
 
 	for i, index := range targetParts {
-		reqMsg.Get(i).Set([]byte("nil"))
+		reqMsg.Get(i).Set([]byte(""))
 		var err error
 		var jObj interface{}
 		if jObj, err = payload.Get(index).JSON(); err != nil {
@@ -180,7 +172,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		case string:
 			reqMsg.Get(i).Set([]byte(t))
 		default:
-			reqMsg.Get(i).Set([]byte(gTarget.String()))
+			reqMsg.Get(i).SetJSON(gTarget.Data())
 		}
 	}
 

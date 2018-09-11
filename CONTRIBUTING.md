@@ -3,7 +3,7 @@ Contributing to Benthos
 
 Joining Club Blob by contributing to the Benthos project is a selfless, boring
 and occasionally painful act. As such any contributors to this project will be
-treated with the respect and sympathy that they deserve.
+treated with the respect and compassion that they deserve.
 
 Please be dull, please be respecting of others and their efforts, please do not
 take criticism or rejection of your ideas personally.
@@ -23,7 +23,7 @@ doing the following:
 ## Suggesting Enhancements
 
 Having even the most casual interest in Benthos gives you honorary membership of
-club Blob, entitling you to give a reserved (and hypothetical) tickle of the
+Club Blob, entitling you to give a reserved (and hypothetical) tickle of the
 projects' toes in order to steer it in the direction of your whim.
 
 Please don't abuse this entitlement, the poor blobfish can only gobble so many
@@ -61,12 +61,11 @@ with `make docs`.
 
 The core components within Benthos (inputs, processors, conditions and outputs)
 are all easily pluggable. However, these components are carefully vetted and
-there are no plans to add niche or user specific plugins this way as it would
-flood the configuration tools.
+there are no plans to add niche or user specific plugins to the main project.
 
 There are general plans for allowing a separate tier of implementations of these
 components into the main project, but until these plans are finalised and
 implemented please keep your plugins on a fork.
 
-Obviously, if your component implementations are generally useful please raise
-an issue and we can discuss adding it into the main project.
+However, if your component implementations are generally useful please raise an
+issue and we can discuss adding it into the main project.

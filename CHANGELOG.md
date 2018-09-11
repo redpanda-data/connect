@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `bounds_check` condition type.
+- New `check_field` condition type.
 
 ### 0.30.1 - 2018-09-06
 

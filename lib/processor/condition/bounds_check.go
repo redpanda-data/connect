@@ -34,14 +34,14 @@ func init() {
 	Constructors[TypeBoundsCheck] = TypeSpec{
 		constructor: NewBoundsCheck,
 		description: `
-BoundsCheck is a condition that checks a message against a set of bounds.`,
+Checks a message against a set of bounds.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
 // BoundsCheckConfig contains configuration fields for the BoundsCheck
-// processor.
+// condition.
 type BoundsCheckConfig struct {
 	MaxParts    int `json:"max_parts" yaml:"max_parts"`
 	MinParts    int `json:"min_parts" yaml:"min_parts"`
