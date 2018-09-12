@@ -426,7 +426,7 @@ client_certs:
   - cert_file: ./example.pem
     key_file: ./example.key
   - cert: foo
-	key: bar
+    key: bar
 ```
 
 ### Metadata
@@ -485,7 +485,7 @@ client_certs:
   - cert_file: ./example.pem
     key_file: ./example.key
   - cert: foo
-	key: bar
+    key: bar
 ```
 
 ### Metadata
