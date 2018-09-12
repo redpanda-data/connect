@@ -419,6 +419,24 @@ value. If the key is empty then a partition is chosen at random. You can
 alternatively force the partitioner to round-robin partitions with the field
 `round_robin_partitions`.
 
+### TLS
+
+Custom TLS settings can be used to override system defaults. This includes
+providing a collection of root certificate authorities, providing a list of
+client certificates to use for client verification and skipping certificate
+verification.
+
+Client certificates can either be added by file or by raw contents:
+
+``` yaml
+enabled: true
+client_certs:
+  - cert_file: ./example.pem
+    key_file: ./example.key
+  - cert: foo
+	key: bar
+```
+
 ## `kinesis`
 
 ``` yaml

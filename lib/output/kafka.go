@@ -25,6 +25,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -52,7 +53,9 @@ part.
 By default the paritioner will select partitions based on a hash of the key
 value. If the key is empty then a partition is chosen at random. You can
 alternatively force the partitioner to round-robin partitions with the field
-` + "`round_robin_partitions`" + `.`,
+` + "`round_robin_partitions`" + `.
+
+` + tls.Documentation + ``,
 	}
 }
 

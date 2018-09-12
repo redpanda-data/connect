@@ -25,6 +25,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -36,6 +37,8 @@ func init() {
 Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
+
+` + tls.Documentation + `
 
 ### Metadata
 

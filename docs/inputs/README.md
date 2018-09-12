@@ -411,6 +411,24 @@ that the server will be backwards compatible. In order to support newer client
 features you should increase this version up to the known version of the target
 server.
 
+### TLS
+
+Custom TLS settings can be used to override system defaults. This includes
+providing a collection of root certificate authorities, providing a list of
+client certificates to use for client verification and skipping certificate
+verification.
+
+Client certificates can either be added by file or by raw contents:
+
+``` yaml
+enabled: true
+client_certs:
+  - cert_file: ./example.pem
+    key_file: ./example.key
+  - cert: foo
+	key: bar
+```
+
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -451,6 +469,24 @@ kafka_balanced:
 Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
+
+### TLS
+
+Custom TLS settings can be used to override system defaults. This includes
+providing a collection of root certificate authorities, providing a list of
+client certificates to use for client verification and skipping certificate
+verification.
+
+Client certificates can either be added by file or by raw contents:
+
+``` yaml
+enabled: true
+client_certs:
+  - cert_file: ./example.pem
+    key_file: ./example.key
+  - cert: foo
+	key: bar
+```
 
 ### Metadata
 

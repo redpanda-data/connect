@@ -28,6 +28,27 @@ import (
 
 //------------------------------------------------------------------------------
 
+// Documentation is a markdown description of how and why to use TLS settings.
+const Documentation = `### TLS
+
+Custom TLS settings can be used to override system defaults. This includes
+providing a collection of root certificate authorities, providing a list of
+client certificates to use for client verification and skipping certificate
+verification.
+
+Client certificates can either be added by file or by raw contents:
+
+` + "``` yaml" + `
+enabled: true
+client_certs:
+  - cert_file: ./example.pem
+    key_file: ./example.key
+  - cert: foo
+	key: bar
+` + "```" + ``
+
+//------------------------------------------------------------------------------
+
 // ClientCertConfig contains config fields for a client certificate.
 type ClientCertConfig struct {
 	CertFile string `json:"cert_file" yaml:"cert_file"`
