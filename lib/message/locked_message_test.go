@@ -23,8 +23,6 @@ package message
 import (
 	"reflect"
 	"testing"
-
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestLockedMessageGet(t *testing.T) {
@@ -35,7 +33,7 @@ func TestLockedMessageGet(t *testing.T) {
 	}), 0)
 
 	exp := []byte("hello")
-	if act := m.Get(0); !reflect.DeepEqual(exp, act) {
+	if act := m.Get(0).Get(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Messages not equal: %s != %s", exp, act)
 	}
 
@@ -46,24 +44,7 @@ func TestLockedMessageGet(t *testing.T) {
 	}), 1)
 
 	exp = []byte("world")
-	if act := m.Get(0); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Messages not equal: %s != %s", exp, act)
-	}
-}
-
-func TestLockedMessageSerialisation(t *testing.T) {
-	m := Lock(New([][]byte{
-		[]byte("hello"),
-		[]byte("world"),
-		[]byte("12345"),
-	}), 0)
-	m2 := New([][]byte{
-		[]byte("hello"),
-		[]byte("world"),
-		[]byte("12345"),
-	})
-
-	if act, exp := m.Bytes(), m2.Bytes(); !reflect.DeepEqual(exp, act) {
+	if act := m.Get(0).Get(); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Messages not equal: %s != %s", exp, act)
 	}
 }
@@ -78,7 +59,7 @@ func TestLockedMessageGetAll(t *testing.T) {
 	exp := [][]byte{
 		[]byte("hello"),
 	}
-	if act := m.GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := GetAllBytes(m); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Messages not equal: %s != %s", exp, act)
 	}
 
@@ -91,7 +72,7 @@ func TestLockedMessageGetAll(t *testing.T) {
 	exp = [][]byte{
 		[]byte("world"),
 	}
-	if act := m.GetAll(); !reflect.DeepEqual(exp, act) {
+	if act := GetAllBytes(m); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Messages not equal: %s != %s", exp, act)
 	}
 }
@@ -108,11 +89,11 @@ func TestLockedMessageJSONGet(t *testing.T) {
 		[][]byte{[]byte(`{"foo":{"bar":"baz"}}`)},
 	), 0)
 
-	if _, err := msg.GetJSON(1); err != ErrMessagePartNotExist {
+	if _, err := msg.Get(1).JSON(); err != ErrMessagePartNotExist {
 		t.Errorf("Wrong error returned on bad part: %v != %v", err, ErrMessagePartNotExist)
 	}
 
-	jObj, err := msg.GetJSON(0)
+	jObj, err := msg.Get(0).JSON()
 	if err != nil {
 		t.Error(err)
 	}
@@ -126,9 +107,9 @@ func TestLockedMessageJSONGet(t *testing.T) {
 		t.Errorf("Wrong output from jsonGet: %v != %v", act, exp)
 	}
 
-	msg.Set(0, []byte(`{"foo":{"bar":"baz2"}}`))
+	msg.Get(0).Set([]byte(`{"foo":{"bar":"baz2"}}`))
 
-	jObj, err = msg.GetJSON(0)
+	jObj, err = msg.Get(0).JSON()
 	if err != nil {
 		t.Error(err)
 	}
@@ -137,21 +118,20 @@ func TestLockedMessageJSONGet(t *testing.T) {
 	}
 }
 
+/*
 func TestLockedMessageConditionCaching(t *testing.T) {
-	msg := Lock(&Type{
-		parts: [][]byte{
-			[]byte(`foo`),
-		},
-	}, 0)
+	msg := Lock(New([][]byte{
+		[]byte(`foo`),
+	}), 0)
 
 	dummyCond1 := &dummyCond{
 		call: func(m types.Message) bool {
-			return string(m.Get(0)) == "foo"
+			return string(m.Get(0).Get()) == "foo"
 		},
 	}
 	dummyCond2 := &dummyCond{
 		call: func(m types.Message) bool {
-			return string(m.Get(0)) == "bar"
+			return string(m.Get(0).Get()) == "bar"
 		},
 	}
 
@@ -179,3 +159,4 @@ func TestLockedMessageConditionCaching(t *testing.T) {
 		t.Errorf("Wrong count of calls for cond 2: %v != %v", act, exp)
 	}
 }
+*/

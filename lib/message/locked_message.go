@@ -59,9 +59,9 @@ func (m *lockedMessage) DeepCopy() types.Message {
 
 func (m *lockedMessage) Get(index int) types.Part {
 	if index != 0 && index != -1 {
-		return nil
+		return NewPart(nil)
 	}
-	return m.m.Get(m.part)
+	return m.m.Get(m.part).Copy()
 }
 
 func (m *lockedMessage) SetAll(p []types.Part) {
@@ -79,7 +79,7 @@ func (m *lockedMessage) Len() int {
 }
 
 func (m *lockedMessage) Iter(f func(i int, b types.Part) error) error {
-	return f(0, m.m.Get(m.part))
+	return f(0, m.m.Get(m.part).Copy())
 }
 
 func (m *lockedMessage) LazyCondition(label string, cond types.Condition) bool {
