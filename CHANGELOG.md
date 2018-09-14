@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.31.2 - 2018-09-14
+
+### Added
+
+- New `prefetch_count` field added to `nats` input.
+
 ### 0.31.0 - 2018-09-11
 
 ### Added

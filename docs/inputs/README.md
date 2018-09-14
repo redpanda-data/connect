@@ -404,7 +404,7 @@ kafka:
 Connects to a kafka (0.8+) server. Offsets are managed within kafka as per the
 consumer group (set via config). Only one partition per input is supported, if
 you wish to balance partitions across a consumer group look at the
-'kafka_balanced' input type instead.
+`kafka_balanced` input type instead.
 
 The target version by default will be the oldest supported, as it is expected
 that the server will be backwards compatible. In order to support newer client
@@ -587,6 +587,7 @@ Currently only PULL and SUB sockets are supported.
 ``` yaml
 type: nats
 nats:
+  prefetch_count: 32
   queue: benthos_queue
   subject: benthos_messages
   urls:

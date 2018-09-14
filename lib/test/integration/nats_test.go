@@ -32,11 +32,11 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/types"
+	nats "github.com/nats-io/go-nats"
 	"github.com/ory/dockertest"
-	"github.com/streadway/amqp"
 )
 
-func TestAMQPIntegration(t *testing.T) {
+func TestNATSIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -49,19 +49,20 @@ func TestAMQPIntegration(t *testing.T) {
 	}
 	pool.MaxWait = time.Second * 30
 
-	resource, err := pool.Run("rabbitmq", "latest", nil)
+	resource, err := pool.Run("nats", "latest", nil)
 	if err != nil {
 		t.Fatalf("Could not start resource: %s", err)
 	}
 
-	url := fmt.Sprintf("amqp://guest:guest@localhost:%v/", resource.GetPort("5672/tcp"))
+	url := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp"))
 
 	if err = pool.Retry(func() error {
-		client, err := amqp.Dial(url)
-		if err == nil {
-			client.Close()
+		natsConn, err := nats.Connect(url)
+		if err != nil {
+			return err
 		}
-		return err
+		natsConn.Close()
+		return nil
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
@@ -72,49 +73,47 @@ func TestAMQPIntegration(t *testing.T) {
 		}
 	}()
 
-	t.Run("TestAMQPSinglePart", func(te *testing.T) {
-		testAMQPSinglePart(url, te)
+	t.Run("TestNATSSinglePart", func(te *testing.T) {
+		testNATSSinglePart(url, te)
 	})
-	t.Run("TestAMQPMultiPart", func(te *testing.T) {
-		testAMQPSinglePart(url, te)
+	t.Run("TestNATSMultiplePart", func(te *testing.T) {
+		testNATSMultiplePart(url, te)
 	})
-	t.Run("TestAMQPDisconnect", func(te *testing.T) {
-		testAMQPDisconnect(url, te)
+	t.Run("TestNATSDisconnect", func(te *testing.T) {
+		testNATSDisconnect(url, te)
 	})
 }
 
-func createInputOutput(
-	inConf reader.AMQPConfig, outConf writer.AMQPConfig,
+func createNATSInputOutput(
+	inConf reader.NATSConfig, outConf writer.NATSConfig,
 ) (mInput reader.Type, mOutput writer.Type, err error) {
-	if mOutput, err = writer.NewAMQP(outConf, log.Noop(), metrics.Noop()); err != nil {
-		return
-	}
-	if err = mOutput.Connect(); err != nil {
-		return
-	}
-	if mInput, err = reader.NewAMQP(inConf, log.Noop(), metrics.Noop()); err != nil {
+	if mInput, err = reader.NewNATS(inConf, log.Noop(), metrics.Noop()); err != nil {
 		return
 	}
 	if err = mInput.Connect(); err != nil {
 		return
 	}
+	if mOutput, err = writer.NewNATS(outConf, log.Noop(), metrics.Noop()); err != nil {
+		return
+	}
+	if err = mOutput.Connect(); err != nil {
+		return
+	}
 	return
 }
 
-func testAMQPSinglePart(url string, t *testing.T) {
-	outConf := writer.NewAMQPConfig()
-	outConf.URL = url
-	outConf.ExchangeDeclare.Enabled = true
+func testNATSSinglePart(url string, t *testing.T) {
+	subject := "benthos_test_single"
 
-	inConf := reader.NewAMQPConfig()
-	inConf.URL = url
-	inConf.QueueDeclare.Enabled = true
-	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
-		Exchange:   outConf.Exchange,
-		RoutingKey: outConf.BindingKey,
-	})
+	inConf := reader.NewNATSConfig()
+	inConf.URLs = []string{url}
+	inConf.Subject = subject
 
-	mInput, mOutput, err := createInputOutput(inConf, outConf)
+	outConf := writer.NewNATSConfig()
+	outConf.URLs = []string{url}
+	outConf.Subject = subject
+
+	mInput, mOutput, err := createNATSInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,12 +163,6 @@ func testAMQPSinglePart(url string, t *testing.T) {
 				t.Errorf("Unexpected message: %v", act)
 			}
 			delete(testMsgs, act)
-			if act = actM.Get(0).Metadata().Get("foo"); act != "bar" {
-				t.Errorf("Wrong metadata returned: %v != bar", act)
-			}
-			if act = actM.Get(0).Metadata().Get("root_foo"); act != "bar2" {
-				t.Errorf("Wrong metadata returned: %v != bar2", act)
-			}
 		}
 		if err = mInput.Acknowledge(nil); err != nil {
 			t.Error(err)
@@ -180,20 +173,18 @@ func testAMQPSinglePart(url string, t *testing.T) {
 	wg.Wait()
 }
 
-func testAMQPMultiplePart(url string, t *testing.T) {
-	outConf := writer.NewAMQPConfig()
-	outConf.URL = url
-	outConf.ExchangeDeclare.Enabled = true
+func testNATSMultiplePart(url string, t *testing.T) {
+	subject := "benthos_test_multi"
 
-	inConf := reader.NewAMQPConfig()
-	inConf.URL = url
-	inConf.QueueDeclare.Enabled = true
-	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
-		Exchange:   outConf.Exchange,
-		RoutingKey: outConf.BindingKey,
-	})
+	inConf := reader.NewNATSConfig()
+	inConf.URLs = []string{url}
+	inConf.Subject = subject
 
-	mInput, mOutput, err := createInputOutput(inConf, outConf)
+	outConf := writer.NewNATSConfig()
+	outConf.URLs = []string{url}
+	outConf.Subject = subject
+
+	mInput, mOutput, err := createNATSInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,18 +240,6 @@ func testAMQPMultiplePart(url string, t *testing.T) {
 				t.Errorf("Unexpected message: %v", act)
 			}
 			delete(testMsgs, act)
-			if act = actM.Get(0).Metadata().Get("foo"); act != "bar" {
-				t.Errorf("Wrong metadata returned: %v != bar", act)
-			}
-			if act = actM.Get(1).Metadata().Get("foo"); act != "" {
-				t.Errorf("Wrong metadata returned: %v != ''", act)
-			}
-			if act = actM.Get(1).Metadata().Get("root_foo"); act != "bar2" {
-				t.Errorf("Wrong metadata returned: %v != bar2", act)
-			}
-			if act = actM.Get(0).Metadata().Get("root_foo"); act != "" {
-				t.Errorf("Wrong metadata returned: %v != ''", act)
-			}
 		}
 		if err = mInput.Acknowledge(nil); err != nil {
 			t.Error(err)
@@ -271,20 +250,18 @@ func testAMQPMultiplePart(url string, t *testing.T) {
 	wg.Wait()
 }
 
-func testAMQPDisconnect(url string, t *testing.T) {
-	outConf := writer.NewAMQPConfig()
-	outConf.URL = url
-	outConf.ExchangeDeclare.Enabled = true
+func testNATSDisconnect(url string, t *testing.T) {
+	subject := "benthos_test_disconnect"
 
-	inConf := reader.NewAMQPConfig()
-	inConf.URL = url
-	inConf.QueueDeclare.Enabled = true
-	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
-		Exchange:   outConf.Exchange,
-		RoutingKey: outConf.BindingKey,
-	})
+	inConf := reader.NewNATSConfig()
+	inConf.URLs = []string{url}
+	inConf.Subject = subject
 
-	mInput, mOutput, err := createInputOutput(inConf, outConf)
+	outConf := writer.NewNATSConfig()
+	outConf.URLs = []string{url}
+	outConf.Subject = subject
+
+	mInput, mOutput, err := createNATSInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}

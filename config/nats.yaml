@@ -7,6 +7,7 @@ http:
 input:
   type: nats
   nats:
+    prefetch_count: 32
     queue: benthos_queue
     subject: benthos_messages
     urls:

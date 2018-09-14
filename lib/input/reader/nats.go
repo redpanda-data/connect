@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -36,17 +37,19 @@ import (
 
 // NATSConfig contains configuration fields for the NATS input type.
 type NATSConfig struct {
-	URLs    []string `json:"urls" yaml:"urls"`
-	Subject string   `json:"subject" yaml:"subject"`
-	QueueID string   `json:"queue" yaml:"queue"`
+	URLs          []string `json:"urls" yaml:"urls"`
+	Subject       string   `json:"subject" yaml:"subject"`
+	QueueID       string   `json:"queue" yaml:"queue"`
+	PrefetchCount int      `json:"prefetch_count" yaml:"prefetch_count"`
 }
 
 // NewNATSConfig creates a new NATSConfig with default values.
 func NewNATSConfig() NATSConfig {
 	return NATSConfig{
-		URLs:    []string{nats.DefaultURL},
-		Subject: "benthos_messages",
-		QueueID: "benthos_queue",
+		URLs:          []string{nats.DefaultURL},
+		Subject:       "benthos_messages",
+		QueueID:       "benthos_queue",
+		PrefetchCount: 32,
 	}
 }
 
@@ -76,6 +79,9 @@ func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (Type, error)
 		interruptChan: make(chan struct{}),
 	}
 	n.urls = strings.Join(conf.URLs, ",")
+	if conf.PrefetchCount < 0 {
+		return nil, errors.New("prefetch count must be greater than or equal to zero")
+	}
 
 	return &n, nil
 }
@@ -98,7 +104,7 @@ func (n *NATS) Connect() error {
 	if natsConn, err = nats.Connect(n.urls); err != nil {
 		return err
 	}
-	natsChan := make(chan *nats.Msg)
+	natsChan := make(chan *nats.Msg, n.conf.PrefetchCount)
 
 	if len(n.conf.QueueID) > 0 {
 		natsSub, err = natsConn.ChanQueueSubscribe(n.conf.Subject, n.conf.QueueID, natsChan)

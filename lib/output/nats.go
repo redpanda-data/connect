@@ -21,15 +21,10 @@
 package output
 
 import (
-	"strings"
-	"sync/atomic"
-	"time"
-
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/response"
+	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/types"
-	nats "github.com/nats-io/go-nats"
 )
 
 //------------------------------------------------------------------------------
@@ -43,154 +38,13 @@ For at-least-once behaviour with NATS look at NATS Stream.`,
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// NATSConfig contains configuration fields for the NATS output type.
-type NATSConfig struct {
-	URLs    []string `json:"urls" yaml:"urls"`
-	Subject string   `json:"subject" yaml:"subject"`
-}
-
-// NewNATSConfig creates a new NATSConfig with default values.
-func NewNATSConfig() NATSConfig {
-	return NATSConfig{
-		URLs:    []string{nats.DefaultURL},
-		Subject: "benthos_messages",
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// NATS is an output type that serves NATS messages.
-type NATS struct {
-	running int32
-
-	log   log.Modular
-	stats metrics.Type
-
-	natsConn *nats.Conn
-
-	urls string
-	conf Config
-
-	transactions <-chan types.Transaction
-
-	closedChan chan struct{}
-	closeChan  chan struct{}
-}
-
 // NewNATS creates a new NATS output type.
 func NewNATS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	n := NATS{
-		running:    1,
-		log:        log.NewModule(".output.nats"),
-		stats:      stats,
-		conf:       conf,
-		closedChan: make(chan struct{}),
-		closeChan:  make(chan struct{}),
+	w, err := writer.NewNATS(conf.NATS, log, stats)
+	if err != nil {
+		return nil, err
 	}
-	n.urls = strings.Join(conf.NATS.URLs, ",")
-
-	return &n, nil
-}
-
-//------------------------------------------------------------------------------
-
-func (n *NATS) connect() error {
-	var err error
-	n.natsConn, err = nats.Connect(n.urls)
-	return err
-}
-
-// loop is an internal loop that brokers incoming messages to output pipe.
-func (n *NATS) loop() {
-	var (
-		mRunning = n.stats.GetGauge("output.nats.running")
-		mCount   = n.stats.GetCounter("output.nats.count")
-		mErr     = n.stats.GetCounter("output.nats.send.error")
-		mSucc    = n.stats.GetCounter("output.nats.send.success")
-	)
-
-	defer func() {
-		atomic.StoreInt32(&n.running, 0)
-
-		if n.natsConn != nil {
-			n.natsConn.Close()
-			n.natsConn = nil
-		}
-		mRunning.Decr(1)
-
-		close(n.closedChan)
-	}()
-	mRunning.Incr(1)
-
-	for {
-		if err := n.connect(); err != nil {
-			n.log.Errorf("Failed to connect to NATS: %v\n", err)
-			select {
-			case <-time.After(time.Second):
-			case <-n.closeChan:
-				return
-			}
-		} else {
-			break
-		}
-	}
-	n.log.Infof("Sending NATS messages to URLs: %s\n", n.urls)
-
-	var open bool
-	for atomic.LoadInt32(&n.running) == 1 {
-		var ts types.Transaction
-		select {
-		case ts, open = <-n.transactions:
-			if !open {
-				return
-			}
-		case <-n.closeChan:
-			return
-		}
-		mCount.Incr(1)
-		err := ts.Payload.Iter(func(i int, p types.Part) error {
-			return n.natsConn.Publish(n.conf.NATS.Subject, p.Get())
-		})
-		if err != nil {
-			mErr.Incr(1)
-		} else {
-			mSucc.Incr(1)
-		}
-		select {
-		case ts.ResponseChan <- response.NewError(err):
-		case <-n.closeChan:
-			return
-		}
-	}
-}
-
-// Consume assigns a messages channel for the output to read.
-func (n *NATS) Consume(ts <-chan types.Transaction) error {
-	if n.transactions != nil {
-		return types.ErrAlreadyStarted
-	}
-	n.transactions = ts
-	go n.loop()
-	return nil
-}
-
-// CloseAsync shuts down the NATS output and stops processing messages.
-func (n *NATS) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&n.running, 1, 0) {
-		close(n.closeChan)
-	}
-}
-
-// WaitForClose blocks until the NATS output has closed down.
-func (n *NATS) WaitForClose(timeout time.Duration) error {
-	select {
-	case <-n.closedChan:
-	case <-time.After(timeout):
-		return types.ErrTimeout
-	}
-	return nil
+	return NewWriter("nats", w, log, stats)
 }
 
 //------------------------------------------------------------------------------

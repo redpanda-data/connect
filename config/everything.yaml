@@ -148,6 +148,7 @@ input:
     - nats://localhost:4222
     subject: benthos_messages
     queue: benthos_queue
+    prefetch_count: 32
   nats_stream:
     urls:
     - nats://localhost:4222

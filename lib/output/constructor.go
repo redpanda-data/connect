@@ -108,7 +108,7 @@ type Config struct {
 	Kinesis       writer.KinesisConfig       `json:"kinesis" yaml:"kinesis"`
 	MQTT          writer.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
 	Nanomsg       NanomsgConfig              `json:"nanomsg" yaml:"nanomsg"`
-	NATS          NATSConfig                 `json:"nats" yaml:"nats"`
+	NATS          writer.NATSConfig          `json:"nats" yaml:"nats"`
 	NATSStream    NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
 	NSQ           NSQConfig                  `json:"nsq" yaml:"nsq"`
 	Plugin        interface{}                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -143,7 +143,7 @@ func NewConfig() Config {
 		Kinesis:       writer.NewKinesisConfig(),
 		MQTT:          writer.NewMQTTConfig(),
 		Nanomsg:       NewNanomsgConfig(),
-		NATS:          NewNATSConfig(),
+		NATS:          writer.NewNATSConfig(),
 		NATSStream:    NewNATSStreamConfig(),
 		NSQ:           NewNSQConfig(),
 		Plugin:        nil,
