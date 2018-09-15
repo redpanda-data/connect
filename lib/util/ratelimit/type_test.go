@@ -53,24 +53,16 @@ func TestRateLimitBasic(t *testing.T) {
 	}
 
 	for i := 0; i < conf.Count; i++ {
-		got, period := rl.Get()
-		if !got {
-			t.Errorf("Rate limited on get %v", i)
-		}
+		period, _ := rl.Get()
 		if period > 0 {
 			t.Errorf("Period above zero: %v", period)
 		}
 	}
 
-	if got, period := rl.Get(); got {
+	if period, _ := rl.Get(); period == 0 {
 		t.Error("Expected limit on final request")
-	} else {
-		if period > time.Second {
-			t.Errorf("Period beyond interval: %v", period)
-		}
-		if period <= 0 {
-			t.Errorf("Period less than or equal to zero: %v", period)
-		}
+	} else if period > time.Second {
+		t.Errorf("Period beyond interval: %v", period)
 	}
 }
 
@@ -85,47 +77,31 @@ func TestRateLimitRefresh(t *testing.T) {
 	}
 
 	for i := 0; i < conf.Count; i++ {
-		got, period := rl.Get()
-		if !got {
-			t.Errorf("Rate limited on get %v", i)
-		}
+		period, _ := rl.Get()
 		if period > 0 {
 			t.Errorf("Period above zero: %v", period)
 		}
 	}
 
-	if got, period := rl.Get(); got {
+	if period, _ := rl.Get(); period == 0 {
 		t.Error("Expected limit on final request")
-	} else {
-		if period > time.Second {
-			t.Errorf("Period beyond interval: %v", period)
-		}
-		if period <= 0 {
-			t.Errorf("Period less than or equal to zero: %v", period)
-		}
+	} else if period > time.Second {
+		t.Errorf("Period beyond interval: %v", period)
 	}
 
 	<-time.After(time.Millisecond * 15)
 
 	for i := 0; i < conf.Count; i++ {
-		got, period := rl.Get()
-		if !got {
+		period, _ := rl.Get()
+		if period != 0 {
 			t.Errorf("Rate limited on get %v", i)
-		}
-		if period > 0 {
-			t.Errorf("Period above zero: %v", period)
 		}
 	}
 
-	if got, period := rl.Get(); got {
+	if period, _ := rl.Get(); period == 0 {
 		t.Error("Expected limit on final request")
-	} else {
-		if period > time.Second {
-			t.Errorf("Period beyond interval: %v", period)
-		}
-		if period <= 0 {
-			t.Errorf("Period less than or equal to zero: %v", period)
-		}
+	} else if period > time.Second {
+		t.Errorf("Period beyond interval: %v", period)
 	}
 }
 
@@ -163,8 +139,8 @@ func BenchmarkRateLimit(b *testing.B) {
 		go func() {
 			<-startChan
 			for j := 0; j < b.N; j++ {
-				ok, period := rl.Get()
-				if !ok {
+				period, _ := rl.Get()
+				if period > 0 {
 					time.Sleep(period)
 				}
 			}

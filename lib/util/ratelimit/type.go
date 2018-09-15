@@ -77,10 +77,11 @@ func New(conf Config) (*Type, error) {
 
 //------------------------------------------------------------------------------
 
-// Get access to the rate limited resource. Returns a bool indicating whether
-// access is permitted and, if false, an appropriate time period to wait before
-// requesting again.
-func (r *Type) Get() (bool, time.Duration) {
+// Get access to the rate limited resource. Returns a duration or an error if
+// the rate limit check fails. The returned duration is either zero (meaning the
+// resource can be hit) or a reasonable length of time to wait before requesting
+// again.
+func (r *Type) Get() (time.Duration, error) {
 	r.mut.Lock()
 	r.bucket--
 
@@ -90,13 +91,13 @@ func (r *Type) Get() (bool, time.Duration) {
 
 		if remaining > 0 {
 			r.mut.Unlock()
-			return false, remaining
+			return remaining, nil
 		}
 		r.bucket = r.size - 1
 		r.lastRefresh = time.Now()
 	}
 	r.mut.Unlock()
-	return true, 0
+	return 0, nil
 }
 
 //------------------------------------------------------------------------------
