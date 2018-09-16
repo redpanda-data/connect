@@ -59,6 +59,9 @@ func (f *fakeMgr) GetCache(name string) (types.Cache, error) {
 func (f *fakeMgr) GetCondition(name string) (types.Condition, error) {
 	return nil, types.ErrConditionNotFound
 }
+func (f *fakeMgr) GetRateLimit(name string) (types.RateLimit, error) {
+	return nil, types.ErrRateLimitNotFound
+}
 func (f *fakeMgr) GetPipe(name string) (<-chan types.Transaction, error) {
 	return nil, types.ErrPipeNotFound
 }

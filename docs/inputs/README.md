@@ -297,6 +297,7 @@ http_client:
     enabled: false
     request_url: ""
   payload: ""
+  rate_limit: ""
   retries: 3
   retry_period_ms: 1000
   stream:

@@ -25,6 +25,7 @@ input:
       enabled: false
       request_url: ""
     payload: ""
+    rate_limit: ""
     retries: 3
     retry_period_ms: 1000
     stream:
@@ -67,6 +68,7 @@ output:
       consumer_secret: ""
       enabled: false
       request_url: ""
+    rate_limit: ""
     retries: 3
     retry_period_ms: 1000
     timeout_ms: 5000
@@ -80,6 +82,7 @@ output:
 resources:
   caches: {}
   conditions: {}
+  rate_limits: {}
 logger:
   prefix: benthos
   level: INFO

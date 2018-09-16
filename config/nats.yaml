@@ -27,6 +27,7 @@ output:
 resources:
   caches: {}
   conditions: {}
+  rate_limits: {}
 logger:
   prefix: benthos
   level: INFO

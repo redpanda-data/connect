@@ -18,6 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// Package ratelimit implements a rate limiter to be shared across components
-// hitting the same protected resource.
+// Package ratelimit implements the types.RateLimit interface for limiting
+// access to resources shared service wide.
 package ratelimit

@@ -128,6 +128,11 @@ func (n *nsMgr) GetCondition(name string) (types.Condition, error) {
 	return n.mgr.GetCondition(name)
 }
 
+// GetRateLimit attempts to find a service wide rate limit by its name.
+func (n *nsMgr) GetRateLimit(name string) (types.RateLimit, error) {
+	return n.mgr.GetRateLimit(name)
+}
+
 // GetPipe returns a named pipe transaction channel.
 func (n *nsMgr) GetPipe(name string) (<-chan types.Transaction, error) {
 	// Pipes are always absolute.

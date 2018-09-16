@@ -29,6 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
+	"github.com/Jeffail/benthos/lib/ratelimit"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -45,6 +46,7 @@ type APIReg interface {
 type Config struct {
 	Caches     map[string]cache.Config     `json:"caches" yaml:"caches"`
 	Conditions map[string]condition.Config `json:"conditions" yaml:"conditions"`
+	RateLimits map[string]ratelimit.Config `json:"rate_limit" yaml:"rate_limit"`
 }
 
 // NewConfig returns a Config with default values.
@@ -52,6 +54,7 @@ func NewConfig() Config {
 	return Config{
 		Caches:     map[string]cache.Config{},
 		Conditions: map[string]condition.Config{},
+		RateLimits: map[string]ratelimit.Config{},
 	}
 }
 
@@ -63,6 +66,9 @@ func AddExamples(c *Config) {
 	}
 	if len(c.Conditions) == 0 {
 		c.Conditions["example"] = condition.NewConfig()
+	}
+	if len(c.RateLimits) == 0 {
+		c.RateLimits["example"] = ratelimit.NewConfig()
 	}
 }
 
@@ -86,9 +92,17 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 		}
 	}
 
+	rateLimits := map[string]interface{}{}
+	for k, v := range conf.RateLimits {
+		if rateLimits[k], err = ratelimit.SanitiseConfig(v); err != nil {
+			return nil, err
+		}
+	}
+
 	return map[string]interface{}{
-		"caches":     caches,
-		"conditions": conditions,
+		"caches":      caches,
+		"conditions":  conditions,
+		"rate_limits": rateLimits,
 	}, nil
 }
 
@@ -102,6 +116,7 @@ type Type struct {
 	apiReg     APIReg
 	caches     map[string]types.Cache
 	conditions map[string]types.Condition
+	rateLimits map[string]types.RateLimit
 
 	pipes    map[string]<-chan types.Transaction
 	pipeLock sync.RWMutex
@@ -119,6 +134,7 @@ func New(
 		apiReg:     apiReg,
 		caches:     map[string]types.Cache{},
 		conditions: map[string]types.Condition{},
+		rateLimits: map[string]types.RateLimit{},
 		pipes:      map[string]<-chan types.Transaction{},
 	}
 
@@ -155,8 +171,20 @@ func New(
 		t.conditions[k] = newCond
 	}
 
-	// Note: Caches and conditions are considered READONLY from this point
-	// onwards and are therefore NOT protected by mutexes or channels.
+	for k, conf := range conf.RateLimits {
+		newRL, err := ratelimit.New(conf, t, log.NewModule(".resource."+k), metrics.Namespaced(stats, "resource."+k))
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to create rate_limit resource '%v' of type '%v': %v",
+				k, conf.Type, err,
+			)
+		}
+		t.rateLimits[k] = newRL
+	}
+
+	// Note: Caches, conditions and rate limits are considered READONLY from
+	// this point onwards and are therefore NOT protected by mutexes or
+	// channels.
 
 	return t, nil
 }
@@ -209,6 +237,14 @@ func (t *Type) GetCondition(name string) (types.Condition, error) {
 		return c, nil
 	}
 	return nil, types.ErrConditionNotFound
+}
+
+// GetRateLimit attempts to find a service wide rate limit by its name.
+func (t *Type) GetRateLimit(name string) (types.RateLimit, error) {
+	if rl, exists := t.rateLimits[name]; exists {
+		return rl, nil
+	}
+	return nil, types.ErrRateLimitNotFound
 }
 
 //------------------------------------------------------------------------------

@@ -301,6 +301,7 @@ http_client:
     consumer_secret: ""
     enabled: false
     request_url: ""
+  rate_limit: ""
   retries: 3
   retry_period_ms: 1000
   timeout_ms: 5000

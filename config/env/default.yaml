@@ -54,6 +54,7 @@ input:
           enabled: ${INPUT_HTTP_CLIENT_OAUTH_ENABLED:false}
           request_url: ${INPUT_HTTP_CLIENT_OAUTH_REQUEST_URL}
         payload: ${INPUT_HTTP_CLIENT_PAYLOAD}
+        rate_limit: ${INPUT_HTTP_CLIENT_RATE_LIMIT}
         retries: ${INPUT_HTTP_CLIENT_RETRIES:3}
         retry_period_ms: ${INPUT_HTTP_CLIENT_RETRY_PERIOD_MS:1000}
         stream:
@@ -312,6 +313,7 @@ pipeline:
           consumer_secret: ${PROCESSOR_HTTP_REQUEST_OAUTH_CONSUMER_SECRET}
           enabled: ${PROCESSOR_HTTP_REQUEST_OAUTH_ENABLED:false}
           request_url: ${PROCESSOR_HTTP_REQUEST_OAUTH_REQUEST_URL}
+        rate_limit: ${PROCESSOR_HTTP_REQUEST_RATE_LIMIT}
         retries: ${PROCESSOR_HTTP_REQUEST_RETRIES:3}
         retry_period_ms: ${PROCESSOR_HTTP_REQUEST_RETRY_PERIOD_MS:1000}
         timeout_ms: ${PROCESSOR_HTTP_REQUEST_TIMEOUT_MS:5000}
@@ -419,6 +421,7 @@ output:
           consumer_secret: ${OUTPUT_HTTP_CLIENT_OAUTH_CONSUMER_SECRET}
           enabled: ${OUTPUT_HTTP_CLIENT_OAUTH_ENABLED:false}
           request_url: ${OUTPUT_HTTP_CLIENT_OAUTH_REQUEST_URL}
+        rate_limit: ${OUTPUT_HTTP_CLIENT_RATE_LIMIT}
         retries: ${OUTPUT_HTTP_CLIENT_RETRIES:3}
         retry_period_ms: ${OUTPUT_HTTP_CLIENT_RETRY_PERIOD_MS:1000}
         timeout_ms: ${OUTPUT_HTTP_CLIENT_TIMEOUT_MS:5000}

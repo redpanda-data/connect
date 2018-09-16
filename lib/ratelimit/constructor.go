@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package cache
+package ratelimit
 
 import (
 	"bytes"
@@ -36,9 +36,9 @@ import (
 
 //------------------------------------------------------------------------------
 
-// TypeSpec is a constructor and a usage description for each cache type.
+// TypeSpec is a constructor and a usage description for each ratelimit type.
 type TypeSpec struct {
-	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error)
+	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.RateLimit, error)
 	description string
 }
 
@@ -47,30 +47,24 @@ var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
-// String constants representing each cache type.
+// String constants representing each ratelimit type.
 const (
-	TypeDynamoDB  = "dynamodb"
-	TypeMemcached = "memcached"
-	TypeMemory    = "memory"
+	TypeLocal = "local"
 )
 
 //------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all cache types.
 type Config struct {
-	Type      string          `json:"type" yaml:"type"`
-	DynamoDB  DynamoDBConfig  `json:"dynamodb" yaml:"dynamodb"`
-	Memcached MemcachedConfig `json:"memcached" yaml:"memcached"`
-	Memory    MemoryConfig    `json:"memory" yaml:"memory"`
+	Type  string      `json:"type" yaml:"type"`
+	Local LocalConfig `json:"local" yaml:"local"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:      "memory",
-		DynamoDB:  NewDynamoDBConfig(),
-		Memcached: NewMemcachedConfig(),
-		Memory:    NewMemoryConfig(),
+		Type:  "local",
+		Local: NewLocalConfig(),
 	}
 }
 
@@ -128,52 +122,47 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 //------------------------------------------------------------------------------
 
-var header = "This document was generated with `benthos --list-caches`" + `
+var header = "This document was generated with `benthos --list-rate-limits`" + `
 
-A cache is a key/value store which can be used by certain processors for
-applications such as deduplication. Caches are listed with unique labels which
-are referred to by processors that may share them. For example, if we were to
-deduplicate hypothetical 'foo' and 'bar' inputs, but not 'baz', we could arrange
-our config as follows:
+A rate limit is a strategy for limiting the usage of a shared resource across
+parallel components in a Benthos instance, or potentially across multiple
+instances.
+
+For example, if we wanted to protect an HTTP service with a local rate limit
+we could configure one like so:
 
 ` + "``` yaml" + `
 input:
-  type: broker
-  broker:
-    inputs:
-    - type: foo
-      processors:
-      - type: dedupe
-        dedupe:
-          cache: foobar
-          hash: none
-          parts: [0]
-    - type: bar
-      processors:
-      - type: dedupe
-        dedupe:
-          cache: foobar
-          hash: none
-          parts: [0]
-    - type: baz
+  type: foo
+pipeline:
+  threads: 8
+  processors:
+  - type: http
+    http:
+      request:
+        url: http://foo.bar/baz
+        rate_limit: foobar
+      parallel: true
 resources:
-  caches:
+  rate_limits:
     foobar:
-      type: memcached
-      memcached:
-        addresses:
-        - localhost:11211
-        ttl: 60
+      type: local
+      local:
+        count: 500
+        interval: 1s
 ` + "```" + `
 
-In that example we have a single memcached based cache 'foobar', which is used
-by the dedupe processors of both the 'foo' and 'bar' inputs. A message received
-from both 'foo' and 'bar' would therefore be detected and removed since the
-cache is the same for both inputs.`
+In this example if the messages from the input ` + "`foo`" + ` are batches the
+requests of a batch will be sent in parallel. This is usually going to be what
+we want, but could potentially stress our HTTP server if a batch is large.
+
+However, by using a rate limit we can guarantee that even across parallel
+processing pipelines and variable sized batches we wont hit the service more
+than 500 times per second.`
 
 // Descriptions returns a formatted string of descriptions for each type.
 func Descriptions() string {
-	// Order our cache types alphabetically
+	// Order our rate limit types alphabetically
 	names := []string{}
 	for name := range Constructors {
 		names = append(names, name)
@@ -181,8 +170,8 @@ func Descriptions() string {
 	sort.Strings(names)
 
 	buf := bytes.Buffer{}
-	buf.WriteString("Caches\n")
-	buf.WriteString(strings.Repeat("=", 6))
+	buf.WriteString("Rate Limits\n")
+	buf.WriteString(strings.Repeat("=", 11))
 	buf.WriteString("\n\n")
 	buf.WriteString(header)
 	buf.WriteString("\n\n")
@@ -220,21 +209,21 @@ func Descriptions() string {
 	return buf.String()
 }
 
-// New creates a cache type based on an cache configuration.
+// New creates a rate limit type based on an rate limit configuration.
 func New(
 	conf Config,
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-) (types.Cache, error) {
+) (types.RateLimit, error) {
 	if c, ok := Constructors[conf.Type]; ok {
-		cache, err := c.constructor(conf, mgr, log, stats)
+		rl, err := c.constructor(conf, mgr, log, stats)
 		for err != nil {
-			return nil, fmt.Errorf("failed to create cache '%v': %v", conf.Type, err)
+			return nil, fmt.Errorf("failed to create rate limit '%v': %v", conf.Type, err)
 		}
-		return cache, nil
+		return rl, nil
 	}
-	return nil, types.ErrInvalidCacheType
+	return nil, types.ErrInvalidRateLimitType
 }
 
 //------------------------------------------------------------------------------

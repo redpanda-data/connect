@@ -13,6 +13,7 @@ Documentation
 - [Processors](./processors/README.md)
 - [Conditions](./conditions/README.md)
 - [Caches](./caches/README.md)
+- [Rate Limits](./rate_limits/README.md)
 
 ## Other Sections
 

@@ -24,66 +24,69 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/metrics"
 )
 
 //------------------------------------------------------------------------------
 
-func TestRateLimitConfErrors(t *testing.T) {
+func TestLocalRateLimitConfErrors(t *testing.T) {
 	conf := NewConfig()
-	conf.Count = -1
-	if _, err := New(conf); err == nil {
+	conf.Local.Count = -1
+	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("expected error from bad count")
 	}
 
 	conf = NewConfig()
-	conf.Interval = "nope"
-	if _, err := New(conf); err == nil {
+	conf.Local.Interval = "nope"
+	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("expected error from bad interval")
 	}
 }
 
-func TestRateLimitBasic(t *testing.T) {
+func TestLocalRateLimitBasic(t *testing.T) {
 	conf := NewConfig()
-	conf.Count = 10
-	conf.Interval = "1s"
+	conf.Local.Count = 10
+	conf.Local.Interval = "1s"
 
-	rl, err := New(conf)
+	rl, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < conf.Count; i++ {
-		period, _ := rl.Get()
+	for i := 0; i < conf.Local.Count; i++ {
+		period, _ := rl.Access()
 		if period > 0 {
 			t.Errorf("Period above zero: %v", period)
 		}
 	}
 
-	if period, _ := rl.Get(); period == 0 {
+	if period, _ := rl.Access(); period == 0 {
 		t.Error("Expected limit on final request")
 	} else if period > time.Second {
 		t.Errorf("Period beyond interval: %v", period)
 	}
 }
 
-func TestRateLimitRefresh(t *testing.T) {
+func TestLocalRateLimitRefresh(t *testing.T) {
 	conf := NewConfig()
-	conf.Count = 10
-	conf.Interval = "10ms"
+	conf.Local.Count = 10
+	conf.Local.Interval = "10ms"
 
-	rl, err := New(conf)
+	rl, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < conf.Count; i++ {
-		period, _ := rl.Get()
+	for i := 0; i < conf.Local.Count; i++ {
+		period, _ := rl.Access()
 		if period > 0 {
 			t.Errorf("Period above zero: %v", period)
 		}
 	}
 
-	if period, _ := rl.Get(); period == 0 {
+	if period, _ := rl.Access(); period == 0 {
 		t.Error("Expected limit on final request")
 	} else if period > time.Second {
 		t.Errorf("Period beyond interval: %v", period)
@@ -91,14 +94,14 @@ func TestRateLimitRefresh(t *testing.T) {
 
 	<-time.After(time.Millisecond * 15)
 
-	for i := 0; i < conf.Count; i++ {
-		period, _ := rl.Get()
+	for i := 0; i < conf.Local.Count; i++ {
+		period, _ := rl.Access()
 		if period != 0 {
 			t.Errorf("Rate limited on get %v", i)
 		}
 	}
 
-	if period, _ := rl.Get(); period == 0 {
+	if period, _ := rl.Access(); period == 0 {
 		t.Error("Expected limit on final request")
 	} else if period > time.Second {
 		t.Errorf("Period beyond interval: %v", period)
@@ -127,10 +130,10 @@ func BenchmarkRateLimit(b *testing.B) {
 	wg.Add(nParallel)
 
 	conf := NewConfig()
-	conf.Count = 1000
-	conf.Interval = "1ns"
+	conf.Local.Count = 1000
+	conf.Local.Interval = "1ns"
 
-	rl, err := New(conf)
+	rl, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -139,7 +142,7 @@ func BenchmarkRateLimit(b *testing.B) {
 		go func() {
 			<-startChan
 			for j := 0; j < b.N; j++ {
-				period, _ := rl.Get()
+				period, _ := rl.Access()
 				if period > 0 {
 					time.Sleep(period)
 				}

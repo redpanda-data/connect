@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
+	"github.com/Jeffail/benthos/lib/ratelimit"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -66,6 +67,38 @@ func TestManagerBadCache(t *testing.T) {
 
 	if _, err := New(conf, nil, testLog, metrics.DudType{}); err == nil {
 		t.Fatal("Expected error from bad cache")
+	}
+}
+
+func TestManagerRateLimit(t *testing.T) {
+	conf := NewConfig()
+	conf.RateLimits["foo"] = ratelimit.NewConfig()
+	conf.RateLimits["bar"] = ratelimit.NewConfig()
+
+	mgr, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := mgr.GetRateLimit("foo"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mgr.GetRateLimit("bar"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mgr.GetRateLimit("baz"); err != types.ErrRateLimitNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, types.ErrRateLimitNotFound)
+	}
+}
+
+func TestManagerBadRateLimit(t *testing.T) {
+	conf := NewConfig()
+	badConf := ratelimit.NewConfig()
+	badConf.Type = "notexist"
+	conf.RateLimits["bad"] = badConf
+
+	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+		t.Fatal("Expected error from bad rate limit")
 	}
 }
 

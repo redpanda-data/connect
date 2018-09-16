@@ -46,6 +46,7 @@ import (
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/processor/condition"
+	"github.com/Jeffail/benthos/lib/ratelimit"
 	"github.com/Jeffail/benthos/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
 	"github.com/Jeffail/benthos/lib/util/config"
@@ -201,6 +202,10 @@ var (
 	printCaches = flag.Bool(
 		"list-caches", false,
 		"Print a list of available cache options, then exit",
+	)
+	printRateLimits = flag.Bool(
+		"list-rate-limits", false,
+		"Print a list of available rate_limit options, then exit",
 	)
 	pluginsDir = flag.String(
 		"plugins-dir", "/usr/lib/benthos/plugins",
@@ -395,7 +400,8 @@ func bootstrap() Config {
 	}
 
 	// If we only want to print our inputs or outputs we should exit afterwards
-	if *printInputs || *printOutputs || *printBuffers || *printProcessors || *printConditions || *printCaches {
+	if *printInputs || *printOutputs || *printBuffers || *printProcessors ||
+		*printConditions || *printCaches || *printRateLimits {
 		if *printInputs {
 			fmt.Println(input.Descriptions())
 		}
@@ -404,6 +410,9 @@ func bootstrap() Config {
 		}
 		if *printConditions {
 			fmt.Println(condition.Descriptions())
+		}
+		if *printRateLimits {
+			fmt.Println(ratelimit.Descriptions())
 		}
 		if *printBuffers {
 			fmt.Println(buffer.Descriptions())

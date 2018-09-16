@@ -49,6 +49,18 @@ type Cache interface {
 
 //------------------------------------------------------------------------------
 
+// RateLimit is a strategy for limiting access to a shared resource, this
+// strategy can be safely used by components in parallel.
+type RateLimit interface {
+	// Access the rate limited resource. Returns a duration or an error if the
+	// rate limit check fails. The returned duration is either zero (meaning the
+	// resource may be accessed) or a reasonable length of time to wait before
+	// requesting again.
+	Access() (time.Duration, error)
+}
+
+//------------------------------------------------------------------------------
+
 // Condition reads a message, calculates a condition and returns a boolean.
 type Condition interface {
 	// Check tests a message against a configured condition.
@@ -82,6 +94,9 @@ type Manager interface {
 
 	// GetCondition attempts to find a service wide condition by its name.
 	GetCondition(name string) (Condition, error)
+
+	// GetRateLimit attempts to find a service wide rate limit by its name.
+	GetRateLimit(name string) (RateLimit, error)
 
 	// GetPipe attempts to find a service wide transaction chan by its name.
 	GetPipe(name string) (<-chan Transaction, error)

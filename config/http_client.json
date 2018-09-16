@@ -30,6 +30,7 @@
 				"request_url": ""
 			},
 			"payload": "",
+			"rate_limit": "",
 			"retries": 3,
 			"retry_period_ms": 1000,
 			"stream": {
@@ -82,6 +83,7 @@
 				"enabled": false,
 				"request_url": ""
 			},
+			"rate_limit": "",
 			"retries": 3,
 			"retry_period_ms": 1000,
 			"timeout_ms": 5000,
@@ -97,7 +99,8 @@
 	},
 	"resources": {
 		"caches": {},
-		"conditions": {}
+		"conditions": {},
+		"rate_limits": {}
 	},
 	"logger": {
 		"prefix": "benthos",

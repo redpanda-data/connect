@@ -43,6 +43,11 @@ func (f DudMgr) GetCondition(name string) (Condition, error) {
 	return nil, ErrConditionNotFound
 }
 
+// GetRateLimit always returns ErrRateLimitNotFound.
+func (f DudMgr) GetRateLimit(name string) (RateLimit, error) {
+	return nil, ErrRateLimitNotFound
+}
+
 // GetPipe attempts to find a service wide message producer by its name.
 func (f DudMgr) GetPipe(name string) (<-chan Transaction, error) {
 	return nil, ErrPipeNotFound

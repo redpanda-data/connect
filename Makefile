@@ -70,4 +70,5 @@ docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --list-buffers > ./docs/buffers/README.md; true
 	@$(PATHINSTBIN)/benthos --list-outputs > ./docs/outputs/README.md; true
 	@$(PATHINSTBIN)/benthos --list-caches > ./docs/caches/README.md; true
+	@$(PATHINSTBIN)/benthos --list-rate-limits > ./docs/rate_limits/README.md; true
 	@go run $(GO_FLAGS) ./cmd/tools/benthos_config_gen/main.go

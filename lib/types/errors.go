@@ -37,6 +37,7 @@ var (
 
 	ErrInvalidProcessorType = errors.New("processor type was not recognised")
 	ErrInvalidCacheType     = errors.New("cache type was not recognised")
+	ErrInvalidRateLimitType = errors.New("rate_limit type was not recognised")
 	ErrInvalidConditionType = errors.New("condition type was not recognised")
 	ErrInvalidBufferType    = errors.New("buffer type was not recognised")
 	ErrInvalidInputType     = errors.New("input type was not recognised")
@@ -62,6 +63,7 @@ var (
 var (
 	ErrCacheNotFound     = errors.New("cache not found")
 	ErrConditionNotFound = errors.New("condition not found")
+	ErrRateLimitNotFound = errors.New("rate limit not found")
 	ErrKeyAlreadyExists  = errors.New("key already exists")
 	ErrKeyNotFound       = errors.New("key does not exist")
 	ErrPipeNotFound      = errors.New("pipe was not found")

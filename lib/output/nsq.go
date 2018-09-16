@@ -21,13 +21,13 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/lib/message"
 	"io/ioutil"
 	llog "log"
 	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"

@@ -115,8 +115,9 @@ conditions available, please [read the docs here][conditions].
 Sometimes it is advantageous to share configurations for resources such as
 caches or complex conditions between processors when they would otherwise be
 duplicated. For this purpose there is a `resource` section in a Benthos config
-where [caches][caches] and [conditions][conditions] can be configured to a label
-that is referred to by any processors/conditions that wish to use them.
+where [caches][caches], [conditions][conditions] and [rate limits][rate-limits]
+can be configured to a label that is referred to by any components that wish to
+use them.
 
 For example, let's imagine we have three inputs, two of which we wish to
 deduplicate using a shared cache. We also have two outputs, one of which only
@@ -417,11 +418,12 @@ examples.
 
 [default-conf]: ../../config/everything.yaml
 [pipeline]: ./pipeline.md
-[processors]: ./processors
-[buffers]: ./buffers
+[processors]: ./processors/README.md
+[buffers]: ./buffers/README.md
 [broker-input]: ./inputs/README.md#broker
 [broker-output]: ./outputs/README.md#broker
 [switch-output]: ./outputs/README.md#switch
 [filter-processor]: ./processors/README.md#filter
-[conditions]: ./conditions
-[caches]: ./caches
+[conditions]: ./conditions/README.md
+[caches]: ./caches/README.md
+[rate-limits]: ./rate_limits/README.md

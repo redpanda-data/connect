@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `rate_limit` resource with a `local` type.
+- Field `rate_limit` added to `http` based processors, inputs and outputs.
+
 ### 0.31.2 - 2018-09-14
 
 ### Added

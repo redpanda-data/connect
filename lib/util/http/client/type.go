@@ -49,6 +49,7 @@ type Config struct {
 	URL          string            `json:"url" yaml:"url"`
 	Verb         string            `json:"verb" yaml:"verb"`
 	Headers      map[string]string `json:"headers" yaml:"headers"`
+	RateLimit    string            `json:"rate_limit" yaml:"rate_limit"`
 	TimeoutMS    int64             `json:"timeout_ms" yaml:"timeout_ms"`
 	RetryMS      int64             `json:"retry_period_ms" yaml:"retry_period_ms"`
 	MaxBackoffMS int64             `json:"max_retry_backoff_ms" yaml:"max_retry_backoff_ms"`
@@ -67,6 +68,7 @@ func NewConfig() Config {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
+		RateLimit:    "",
 		TimeoutMS:    5000,
 		RetryMS:      1000,
 		MaxBackoffMS: 300000,
@@ -92,16 +94,21 @@ type Type struct {
 
 	conf          Config
 	retryThrottle *throttle.Type
+	rateLimit     types.RateLimit
 
 	log   log.Modular
 	stats metrics.Type
+	mgr   types.Manager
 
-	mCount   metrics.StatCounter
-	mErr     metrics.StatCounter
-	mErrReq  metrics.StatCounter
-	mErrRes  metrics.StatCounter
-	mSucc    metrics.StatCounter
-	mLatency metrics.StatTimer
+	mCount    metrics.StatCounter
+	mErr      metrics.StatCounter
+	mErrReq   metrics.StatCounter
+	mErrRes   metrics.StatCounter
+	mLimited  metrics.StatCounter
+	mLimitFor metrics.StatCounter
+	mLimitErr metrics.StatCounter
+	mSucc     metrics.StatCounter
+	mLatency  metrics.StatTimer
 
 	mCodes   map[int]metrics.StatCounter
 	codesMut sync.RWMutex
@@ -116,6 +123,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		conf:      conf,
 		log:       log.Noop(),
 		stats:     metrics.Noop(),
+		mgr:       types.NoopMgr(),
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
 		headers:   map[string]*text.InterpolatedString{},
@@ -151,9 +159,19 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	h.mErr = h.stats.GetCounter("client.http.error")
 	h.mErrReq = h.stats.GetCounter("client.http.error.request")
 	h.mErrRes = h.stats.GetCounter("client.http.error.response")
+	h.mLimited = h.stats.GetCounter("client.http.rate_limit.count")
+	h.mLimitFor = h.stats.GetCounter("client.http.rate_limit.total_ms")
+	h.mLimitErr = h.stats.GetCounter("client.http.rate_limit.error")
 	h.mLatency = h.stats.GetTimer("client.http.latency")
 	h.mSucc = h.stats.GetCounter("client.http.success")
 	h.mCodes = map[int]metrics.StatCounter{}
+
+	if len(h.conf.RateLimit) > 0 {
+		var err error
+		if h.rateLimit, err = h.mgr.GetRateLimit(h.conf.RateLimit); err != nil {
+			return nil, fmt.Errorf("failed to obtain rate limit resource: %v", err)
+		}
+	}
 
 	h.retryThrottle = throttle.New(
 		throttle.OptMaxUnthrottledRetries(0),
@@ -189,6 +207,13 @@ func OptSetStats(stats metrics.Type) func(*Type) {
 	}
 }
 
+// OptSetManager sets the manager to use.
+func OptSetManager(mgr types.Manager) func(*Type) {
+	return func(t *Type) {
+		t.mgr = mgr
+	}
+}
+
 //------------------------------------------------------------------------------
 
 func (h *Type) incrCode(code int) {
@@ -207,6 +232,33 @@ func (h *Type) incrCode(code int) {
 	h.codesMut.Lock()
 	h.mCodes[code] = ctr
 	h.codesMut.Unlock()
+}
+
+func (h *Type) waitForAccess() bool {
+	if h.rateLimit == nil {
+		return true
+	}
+	for {
+		period, err := h.rateLimit.Access()
+		if err != nil {
+			h.log.Errorf("Rate limit error: %v\n", err)
+			h.mLimitErr.Incr(1)
+			period = time.Second
+		}
+		if period > 0 {
+			if err == nil {
+				h.mLimited.Incr(1)
+				h.mLimitFor.Incr(period.Nanoseconds() / 1000000)
+			}
+			select {
+			case <-time.After(period):
+			case <-h.closeChan:
+				return false
+			}
+		} else {
+			return true
+		}
+	}
 }
 
 // CreateRequest creates an HTTP request out of a single message.
@@ -350,6 +402,9 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 
 	startedAt := time.Now()
 
+	if !h.waitForAccess() {
+		return nil, types.ErrTypeClosed
+	}
 	rateLimited := false
 	if res, err = h.client.Do(req); err == nil {
 		h.incrCode(res.StatusCode)
@@ -381,6 +436,9 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 			if !h.retryThrottle.Retry() {
 				return nil, types.ErrTypeClosed
 			}
+		}
+		if !h.waitForAccess() {
+			return nil, types.ErrTypeClosed
 		}
 		rateLimited = false
 		if res, err = h.client.Do(req); err == nil {
