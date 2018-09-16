@@ -57,7 +57,7 @@ message has multiple parts the request will be sent according to
 
 // NewHTTPClient creates a new HTTPClient output type.
 func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	h, err := writer.NewHTTPClient(conf.HTTPClient, log, stats)
+	h, err := writer.NewHTTPClient(conf.HTTPClient, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

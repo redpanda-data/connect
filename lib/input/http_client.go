@@ -147,6 +147,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 		h.conf.HTTPClient.Config,
 		client.OptSetCloseChan(h.closeChan),
 		client.OptSetLogger(h.log),
+		client.OptSetManager(mgr),
 		client.OptSetStats(metrics.Namespaced(h.stats, "input.http_client")),
 	); err != nil {
 		return nil, err

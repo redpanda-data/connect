@@ -130,6 +130,7 @@ func NewHTTP(
 		conf.HTTP.Client,
 		client.OptSetLogger(g.log),
 		client.OptSetStats(metrics.Namespaced(g.stats, "processor.http")),
+		client.OptSetManager(mgr),
 	); err != nil {
 		return nil, err
 	}

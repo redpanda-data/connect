@@ -28,7 +28,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -56,7 +55,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	conf.RetryMS = 1
 	conf.NumRetries = 3
 
-	h, err := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +96,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	conf := NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +179,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 	conf := NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
