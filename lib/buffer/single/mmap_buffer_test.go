@@ -226,7 +226,7 @@ func TestMmapBufferMultiFiles(t *testing.T) {
 
 	defer cleanUpMmapDir(dir)
 
-	n := 10000
+	n := 100
 
 	conf := NewMmapBufferConfig()
 	conf.FileSize = 1000
@@ -280,7 +280,7 @@ func TestMmapBufferRecoverFiles(t *testing.T) {
 
 	defer cleanUpMmapDir(dir)
 
-	n := 10000
+	n := 100
 
 	conf := NewMmapBufferConfig()
 	conf.FileSize = 1000

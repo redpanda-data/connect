@@ -41,12 +41,12 @@ import (
 
 // StreamStatus tracks a stream along with information regarding its internals.
 type StreamStatus struct {
+	stoppedAfter int64
 	config       stream.Config
 	strm         *stream.Type
 	logger       log.Modular
 	metrics      *metrics.Local
 	createdAt    time.Time
-	stoppedAfter int64
 }
 
 // NewStreamStatus creates a new StreamStatus.

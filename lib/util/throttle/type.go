@@ -30,6 +30,13 @@ import (
 // Type is a throttle of retries to avoid endless busy loops when a message
 // fails to reach its destination.
 type Type struct {
+	// consecutiveRetries is the live count of consecutive retries.
+	consecutiveRetries int64
+
+	// throttlePeriod is the current throttle period, by default this is set to
+	// the baseThrottlePeriod.
+	throttlePeriod int64
+
 	// unthrottledRetries is the number of concecutive retries we are
 	// comfortable attempting before throttling begins.
 	unthrottledRetries int64
@@ -41,15 +48,8 @@ type Type struct {
 	// baseThrottlePeriod is the static duration for which our throttle lasts.
 	baseThrottlePeriod int64
 
-	// throttlePeriod is the current throttle period, by default this is set to
-	// the baseThrottlePeriod.
-	throttlePeriod int64
-
 	// closeChan can interrupt a throttle when closed.
 	closeChan <-chan struct{}
-
-	// consecutiveRetries is the live count of consecutive retries.
-	consecutiveRetries int64
 }
 
 // New creates a new throttle, which permits a static number of consecutive
