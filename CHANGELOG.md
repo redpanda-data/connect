@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.31.4 - 2018-09-16
+
 ### Added
 
 - New `rate_limit` resource with a `local` type.
