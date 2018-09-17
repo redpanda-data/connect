@@ -13,7 +13,7 @@ receives a multipart message (perhaps from ZMQ), will output a unique message
 per part. These parts are 'at-least-once', but if any part is unsuccessfully
 sent it will mean the whole set of parts will be resent as message delivery can
 only be guaranteed for the whole batch. We could potentially read those
-individual parts and use the `combine` processor to 'squash' them back into a
+individual parts and use the `batch` processor to 'squash' them back into a
 multipart message, but such a system can be brittle.
 
 Alternatively we can use the `archive` and `unarchive` processors, which squash
@@ -61,9 +61,9 @@ input:
     topic: benthos_stream
     partition: 0
   processors:
-  - type: combine
-    combine:
-      parts: 3
+  - type: batch
+    batch:
+      count: 3
   - type: bounds_check
 output:
   type: zmq4

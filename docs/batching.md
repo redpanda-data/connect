@@ -20,12 +20,10 @@ messages and message batches are interchangable within Benthos.
 ## Creating Batches
 
 There are [processors][processors] within Benthos that can expand and contract
-batches, these are the [`combine`][combine], [`batch`][batch] and
-[`split`][split] processors.
+batches, these are the [`batch`][batch] and [`split`][split] processors.
 
-When creating batches with `combine` or `batch` the processor continously reads
-messages until a target size has been reached, then the batch continues through
-the pipeline.
+The `batch` processor continously reads messages until a target size has been
+reached, then the batch continues through the pipeline.
 
 As messages are read and stored in a batch the input they originated from is
 told to grab the next message but defer from acknowledging the current one, this
@@ -95,7 +93,6 @@ batch of one message. Whatever messages result from the child processors will
 continue as their own batch.
 
 [processors]: ./processors/README.md
-[combine]: ./processors/README.md#combine
 [batch]: ./processors/README.md#batch
 [split]: ./processors/README.md#split
 [archive]: ./processors/README.md#archive

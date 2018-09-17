@@ -276,7 +276,7 @@ following:
 
 Some output sinks do not support multipart messages and when receiving one will
 send each part as an individual message as a batch (the Kafka output will do
-this). You can use this to your advantage by using the `combine` processor to
+this). You can use this to your advantage by using the `batch` processor to
 create batches of messages to send.
 
 For example, given the following input and output combination:
@@ -296,9 +296,9 @@ config:
 input:
   type: foo
   processors:
-  - type: combine
-    combine:
-      parts: 8
+  - type: batch
+    batch:
+      count: 8
 output:
   type: kafka
 ```

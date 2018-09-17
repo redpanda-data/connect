@@ -280,8 +280,8 @@ You can [find some examples here][0].
 ### Batching and Multiple Part Messages
 
 All Benthos processors support multiple part messages, which are synonymous with
-batches. Some processors such as [combine](#combine), [batch](#batch) and
-[split](#split) are able to create, expand and break down batches.
+batches. Some processors such as [batch](#batch) and [split](#split) are able to
+create, expand and break down batches.
 
 Many processors are able to perform their behaviours on specific parts of a
 message batch, or on all parts, and have a field ` + "`parts`" + ` for

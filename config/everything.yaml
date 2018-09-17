@@ -284,7 +284,8 @@ pipeline:
       format: binary
       path: ${!count:files}-${!timestamp_unix_nano}.txt
     batch:
-      byte_size: 10000
+      byte_size: 0
+      count: 0
       condition:
         type: static
         and: []

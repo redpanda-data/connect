@@ -40,7 +40,10 @@ func init() {
 Reads a number of discrete messages, buffering (but not acknowledging) the
 message parts until either:
 
-- The total size of the batch in bytes matches or exceeds ` + "`byte_size`" + `.
+- The ` + "`byte_size`" + ` field is non-zero and the total size of the batch in
+  bytes matches or exceeds it.
+- The ` + "`count" + ` field is non-zero and the total number of messages in the
+  batch matches or exceeds it.
 - A message added to the batch causes the condition to resolve ` + "`true`" + `.
 - The ` + "`period_ms`" + ` field is non-zero and the time since the last batch
   exceeds its value.
@@ -50,11 +53,11 @@ messages and sent through the pipeline. After reaching a destination the
 acknowledgment is sent out for all messages inside the batch at the same time,
 preserving at-least-once delivery guarantees.
 
-The ` + "`period_ms`" + ` field is optional, and when greater than zero defines
-a period in milliseconds whereby a batch is sent even if the ` + "`byte_size`" + `
-has not yet been reached. Batch parameters are only triggered when a message is
-added, meaning a pending batch can last beyond this period if no messages are
-added since the period was reached.
+The ` + "`period_ms`" + ` field - when greater than zero - defines a period in
+milliseconds whereby a batch is sent even if the ` + "`byte_size`" + ` has not
+yet been reached. Batch parameters are only triggered when a message is added,
+meaning a pending batch can last beyond this period if no messages are added
+since the period was reached.
 
 When a batch is sent to an output the behaviour will differ depending on the
 protocol. If the output type supports multipart messages then the batch is sent
@@ -73,6 +76,7 @@ unexpected behaviour and message ordering.`,
 			}
 			return map[string]interface{}{
 				"byte_size": conf.Batch.ByteSize,
+				"count":     conf.Batch.Count,
 				"condition": condSanit,
 				"period_ms": conf.Batch.PeriodMS,
 			}, nil
@@ -85,6 +89,7 @@ unexpected behaviour and message ordering.`,
 // BatchConfig contains configuration fields for the Batch processor.
 type BatchConfig struct {
 	ByteSize  int              `json:"byte_size" yaml:"byte_size"`
+	Count     int              `json:"count" yaml:"count"`
 	Condition condition.Config `json:"condition" yaml:"condition"`
 	PeriodMS  int              `json:"period_ms" yaml:"period_ms"`
 }
@@ -95,7 +100,8 @@ func NewBatchConfig() BatchConfig {
 	cond.Type = "static"
 	cond.Static = false
 	return BatchConfig{
-		ByteSize:  10000,
+		ByteSize:  0,
+		Count:     0,
 		Condition: cond,
 		PeriodMS:  0,
 	}
@@ -116,7 +122,8 @@ type Batch struct {
 	log   log.Modular
 	stats metrics.Type
 
-	n         int
+	byteSize  int
+	count     int
 	period    time.Duration
 	cond      condition.Type
 	sizeTally int
@@ -128,6 +135,7 @@ type Batch struct {
 	mSent        metrics.StatCounter
 	mSentParts   metrics.StatCounter
 	mSizeBatch   metrics.StatCounter
+	mCountBatch  metrics.StatCounter
 	mPeriodBatch metrics.StatCounter
 	mCondBatch   metrics.StatCounter
 	mDropped     metrics.StatCounter
@@ -142,17 +150,25 @@ func NewBatch(
 	if err != nil {
 		return nil, err
 	}
+	if conf.Batch.ByteSize <= 0 &&
+		conf.Batch.Count <= 0 &&
+		conf.Batch.PeriodMS <= 0 {
+		logger.Warnln("Batch processor configured without a count, byte_size or" +
+			" period_ms cap. It's possible that this batch will never resolve.")
+	}
 	return &Batch{
-		log:    logger,
-		stats:  stats,
-		n:      conf.Batch.ByteSize,
-		period: time.Duration(conf.Batch.PeriodMS) * time.Millisecond,
-		cond:   cond,
+		log:      logger,
+		stats:    stats,
+		byteSize: conf.Batch.ByteSize,
+		count:    conf.Batch.Count,
+		period:   time.Duration(conf.Batch.PeriodMS) * time.Millisecond,
+		cond:     cond,
 
 		lastBatch: time.Now(),
 
 		mCount:       stats.GetCounter("processor.batch.count"),
 		mSizeBatch:   stats.GetCounter("processor.batch.on_size"),
+		mCountBatch:  stats.GetCounter("processor.batch.on_count"),
 		mPeriodBatch: stats.GetCounter("processor.batch.on_period"),
 		mCondBatch:   stats.GetCounter("processor.batch.on_condition"),
 		mSent:        stats.GetCounter("processor.batch.sent"),
@@ -176,7 +192,12 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	})
 
 	batch := false
-	if !batch && c.sizeTally >= c.n {
+	if !batch && c.count > 0 && len(c.parts) >= c.count {
+		batch = true
+		c.mCountBatch.Incr(1)
+		c.log.Traceln("Batching based on count")
+	}
+	if !batch && c.byteSize > 0 && c.sizeTally >= c.byteSize {
 		batch = true
 		c.mSizeBatch.Incr(1)
 		c.log.Traceln("Batching based on byte_size")

@@ -78,21 +78,21 @@ pipeline:
     unarchive:
       format: tar
   - type: split
-  - type: combine
-    combine:
-      parts: 10 # The size of message batches to send to Kafka
+  - type: batch
+    batch:
+      count: 10 # The size of message batches to send to Kafka
 ```
 
 The processors in this example start off with a simple decompress and unarchive
 of the payload. This results in a single payload of multiple documents. The
 split processor turns this payload into individual messages.
 
-The final processor is optional. It is a combine stage that bundles the
-individual messages back into batches to be sent to the Kafka topic, increasing
-the throughput. If the combine processor is used it should be a factor of the
-number of messages inside the S3 archives. The size also needs to be low enough
-so that the overall size of the batch doesn't exceed the maximum bytes of a
-Kafka request.
+The final processor is optional. It is a batch stage that bundles the individual
+messages back into batches to be sent to the Kafka topic, increasing the
+throughput. If the batch processor is used it should be a factor of the number
+of messages inside the S3 archives. The size also needs to be low enough so that
+the overall size of the batch doesn't exceed the maximum bytes of a Kafka
+request.
 
 These processors are heavy on CPU, which is why they are configured inside the
 pipeline section. This allows you to explicitly set the number of parallel

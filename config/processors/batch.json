@@ -22,11 +22,12 @@
 			{
 				"type": "batch",
 				"batch": {
-					"byte_size": 10000,
+					"byte_size": 0,
 					"condition": {
 						"type": "static",
 						"static": false
 					},
+					"count": 0,
 					"period_ms": 0
 				}
 			}

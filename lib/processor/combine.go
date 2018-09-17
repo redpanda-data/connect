@@ -34,24 +34,8 @@ func init() {
 	Constructors[TypeCombine] = TypeSpec{
 		constructor: NewCombine,
 		description: `
-Reads a number of discrete messages, buffering (but not acknowledging) the
-message parts until the size of the batch reaches or exceeds the target size.
-
-Once the size is reached or exceeded the parts are combined into a single batch
-of messages and sent through the pipeline. After reaching a destination the
-acknowledgment is sent out for all messages inside the batch at the same time,
-preserving at-least-once delivery guarantees.
-
-When a batch is sent to an output the behaviour will differ depending on the
-protocol. If the output type supports multipart messages then the batch is sent
-as a single message with multiple parts. If the output only supports single part
-messages then the parts will be sent as a batch of single part messages. If the
-output supports neither multipart or batches of messages then Benthos falls back
-to sending them individually.
-
-If a Benthos stream contains multiple brokered inputs or outputs then the batch
-operator should *always* be applied directly after an input in order to avoid
-unexpected behaviour and message ordering.`,
+DEPRECATED: Use the ` + "[`batch`](#batch)" + ` processor with the
+` + "`count`" + ` field instead.`,
 	}
 }
 
@@ -97,8 +81,10 @@ type Combine struct {
 func NewCombine(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	logger := log.NewModule(".processor.combine")
+	logger.Warnf("WARNING: The combine processor is deprecated, please use `batch` with the `count` field instead.")
 	return &Combine{
-		log:   log.NewModule(".processor.combine"),
+		log:   logger,
 		stats: stats,
 		n:     conf.Combine.Parts,
 

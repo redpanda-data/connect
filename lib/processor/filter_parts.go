@@ -44,8 +44,7 @@ in this case each condition will be applied to a part as if it were a single
 part message.
 
 This processor is useful if you are combining messages into batches using the
-` + "[`combine`](#combine) or [`batch`](#batch)" + ` processors and wish to
-remove specific parts.`,
+` + "[`batch`](#batch)" + ` processor and wish to remove specific parts.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return condition.SanitiseConfig(conf.FilterParts.Config)
 		},

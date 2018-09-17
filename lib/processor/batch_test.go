@@ -31,6 +31,32 @@ import (
 	"github.com/Jeffail/benthos/lib/processor/condition"
 )
 
+func TestBatchBasic(t *testing.T) {
+	conf := NewConfig()
+	conf.Batch.Count = 2
+	conf.Batch.ByteSize = 0
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	exp := [][]byte{[]byte("foo"), []byte("bar")}
+
+	msgs, res := proc.ProcessMessage(message.New(exp))
+	if len(msgs) != 1 {
+		t.Error("Expected success")
+	}
+	if !reflect.DeepEqual(exp, message.GetAllBytes(msgs[0])) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msgs[0]), exp)
+	}
+	if res != nil {
+		t.Error("Expected nil res")
+	}
+}
+
 func TestBatchTwoParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Batch.ByteSize = 6

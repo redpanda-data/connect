@@ -18,8 +18,8 @@ You can [find some examples here][0].
 ### Batching and Multiple Part Messages
 
 All Benthos processors support multiple part messages, which are synonymous with
-batches. Some processors such as [combine](#combine), [batch](#batch) and
-[split](#split) are able to create, expand and break down batches.
+batches. Some processors such as [batch](#batch) and [split](#split) are able to
+create, expand and break down batches.
 
 Many processors are able to perform their behaviours on specific parts of a
 message batch, or on all parts, and have a field `parts` for
@@ -96,17 +96,21 @@ of the batch.
 ``` yaml
 type: batch
 batch:
-  byte_size: 10000
+  byte_size: 0
   condition:
     type: static
     static: false
+  count: 0
   period_ms: 0
 ```
 
 Reads a number of discrete messages, buffering (but not acknowledging) the
 message parts until either:
 
-- The total size of the batch in bytes matches or exceeds `byte_size`.
+- The `byte_size` field is non-zero and the total size of the batch in
+  bytes matches or exceeds it.
+- The `count field is non-zero and the total number of messages in the
+  batch matches or exceeds it.
 - A message added to the batch causes the condition to resolve `true`.
 - The `period_ms` field is non-zero and the time since the last batch
   exceeds its value.
@@ -116,11 +120,11 @@ messages and sent through the pipeline. After reaching a destination the
 acknowledgment is sent out for all messages inside the batch at the same time,
 preserving at-least-once delivery guarantees.
 
-The `period_ms` field is optional, and when greater than zero defines
-a period in milliseconds whereby a batch is sent even if the `byte_size`
-has not yet been reached. Batch parameters are only triggered when a message is
-added, meaning a pending batch can last beyond this period if no messages are
-added since the period was reached.
+The `period_ms` field - when greater than zero - defines a period in
+milliseconds whereby a batch is sent even if the `byte_size` has not
+yet been reached. Batch parameters are only triggered when a message is added,
+meaning a pending batch can last beyond this period if no messages are added
+since the period was reached.
 
 When a batch is sent to an output the behaviour will differ depending on the
 protocol. If the output type supports multipart messages then the batch is sent
@@ -156,24 +160,8 @@ combine:
   parts: 2
 ```
 
-Reads a number of discrete messages, buffering (but not acknowledging) the
-message parts until the size of the batch reaches or exceeds the target size.
-
-Once the size is reached or exceeded the parts are combined into a single batch
-of messages and sent through the pipeline. After reaching a destination the
-acknowledgment is sent out for all messages inside the batch at the same time,
-preserving at-least-once delivery guarantees.
-
-When a batch is sent to an output the behaviour will differ depending on the
-protocol. If the output type supports multipart messages then the batch is sent
-as a single message with multiple parts. If the output only supports single part
-messages then the parts will be sent as a batch of single part messages. If the
-output supports neither multipart or batches of messages then Benthos falls back
-to sending them individually.
-
-If a Benthos stream contains multiple brokered inputs or outputs then the batch
-operator should *always* be applied directly after an input in order to avoid
-unexpected behaviour and message ordering.
+DEPRECATED: Use the [`batch`](#batch) processor with the
+`count` field instead.
 
 ## `compress`
 
@@ -321,7 +309,7 @@ Tests each message against a condition, if the condition fails then the message
 is dropped. You can find a [full list of conditions here](../conditions).
 
 NOTE: If you are combining messages into batches using the
-[`combine`](#combine) or [`batch`](#batch) processors this filter will
+[`batch`](#batch) processor this filter will
 apply to the _whole_ batch. If you instead wish to filter _individual_ parts of
 the batch use the [`filter_parts`](#filter_parts) processor.
 
@@ -344,8 +332,7 @@ in this case each condition will be applied to a part as if it were a single
 part message.
 
 This processor is useful if you are combining messages into batches using the
-[`combine`](#combine) or [`batch`](#batch) processors and wish to
-remove specific parts.
+[`batch`](#batch) processor and wish to remove specific parts.
 
 ## `grok`
 

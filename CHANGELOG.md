@@ -8,6 +8,15 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `process_batch` processor.
+- Added `count` field to `batch` processor.
+
+### Changed
+
+- The `combine` processor is now considered DEPRECATED, please use the `batch`
+  processor instead.
+- The `batch` processor field `byte_size` is now set at 0 (and therefore
+  ignored) by default. A log warning has been added in case anyone was relying
+  on the default.
 
 ### 0.31.4 - 2018-09-16
 

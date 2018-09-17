@@ -12,9 +12,9 @@ input:
         topics:
         - data_stream
   processors:
-  - type: combine
-    combine:
-      parts: 8 # Batch size: Tune this to increase output throughput
+  - type: batch
+    batch:
+      count: 8 # Batch size: Tune this to increase output throughput
 pipeline:
   threads: 4 # This should exactly match the number of logical CPUs
   processors:

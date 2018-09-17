@@ -91,9 +91,9 @@ input:
         topics:
         - data_stream
   processors:
-  - type: combine
-    combine:
-      parts: 8 # Batch size: Tune this to increase output throughput
+  - type: batch
+    batch:
+      count: 8 # Batch size: Tune this to increase output throughput
 ```
 
 The `kafka_balanced` input is used here, which automatically distributes the
@@ -106,10 +106,11 @@ order to get a good distribution of messages.
 Using a broker allows us to tune the number of parallel consumers inside the
 process in order to reach our maximum CPU utilisation.
 
-We also use a `combine` processor on the input in order to create batches of
-messages. The advantage of this is that a batch will be sent as a single request
-on the Kafka producer output. By tuning the batch size we should be able to
-increase our output throughput to prevent it from bottlenecking the pipeline.
+We also use a `batch` processor on the input in order to create batches of a
+fixed number of messages. The advantage of this is that a batch will be sent as
+a single request on the Kafka producer output. By tuning the batch size we
+should be able to increase our output throughput to prevent it from
+bottlenecking the pipeline.
 
 ## Pipeline
 
