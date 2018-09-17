@@ -237,6 +237,8 @@ func (c *Config) UnmarshalJSON(bytes []byte) error {
 			return fmt.Errorf("failed to parse plugin config: %v", err)
 		}
 		aliased.Plugin = dummy.Conf
+	} else {
+		aliased.Plugin = nil
 	}
 
 	*c = Config(aliased)
@@ -264,6 +266,8 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			return err
 		}
 		aliased.Plugin = conf
+	} else {
+		aliased.Plugin = nil
 	}
 
 	*c = Config(aliased)
