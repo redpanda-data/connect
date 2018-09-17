@@ -26,6 +26,8 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
+	"sync"
+	"time"
 )
 
 //------------------------------------------------------------------------------
@@ -59,13 +61,15 @@ unexpected behaviour and message ordering.`,
 
 // CombineConfig contains configuration fields for the Combine processor.
 type CombineConfig struct {
-	Parts int `json:"parts" yaml:"parts"`
+	Timeout time.Duration `json:"timeout" yaml:"timeout"`
+	Parts   int           `json:"parts" yaml:"parts"`
 }
 
 // NewCombineConfig returns a CombineConfig with default values.
 func NewCombineConfig() CombineConfig {
 	return CombineConfig{
-		Parts: 2,
+		Timeout: 5 * time.Second,
+		Parts:   2,
 	}
 }
 
@@ -81,10 +85,13 @@ func NewCombineConfig() CombineConfig {
 // the pipeline as a single message and an acknowledgement for that message
 // determines whether the whole batch of messages are acknowledged.
 type Combine struct {
-	log   log.Modular
-	stats metrics.Type
-	n     int
-	parts []types.Part
+	started bool
+	log     log.Modular
+	stats   metrics.Type
+	n       int
+	timeout time.Duration
+	parts   []types.Part
+	mutext  *sync.Mutex
 
 	mCount     metrics.StatCounter
 	mWarnParts metrics.StatCounter
@@ -94,13 +101,14 @@ type Combine struct {
 }
 
 // NewCombine returns a Combine processor.
-func NewCombine(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+func NewCombine(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	return &Combine{
-		log:   log.NewModule(".processor.combine"),
-		stats: stats,
-		n:     conf.Combine.Parts,
+		started: false,
+		log:     log.NewModule(".processor.combine"),
+		stats:   stats,
+		timeout: conf.Combine.Timeout,
+		n:       conf.Combine.Parts,
+		mutext:  &sync.Mutex{},
 
 		mCount:     stats.GetCounter("processor.combine.count"),
 		mWarnParts: stats.GetCounter("processor.combine.warning.too_many_parts"),
@@ -115,6 +123,22 @@ func NewCombine(
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+	if !c.started {
+		c.started = true
+
+		go func() {
+			ticker := time.NewTicker(c.timeout)
+
+			for {
+				<-ticker.C
+
+				if len(c.parts) >= c.n {
+					c.flush()
+				}
+			}
+		}()
+	}
+
 	c.mCount.Incr(1)
 
 	if msg.Len() > c.n {
@@ -131,23 +155,30 @@ func (c *Combine) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		return nil
 	})
 
-	// If we have reached our target count of parts in the buffer.
+	defer c.log.Traceln("Added message to pending batch")
+	defer c.mDropped.Incr(1)
+
 	if len(c.parts) >= c.n {
-		newMsg := message.New(nil)
-		newMsg.Append(c.parts...)
-
-		c.parts = nil
-
-		c.mSent.Incr(1)
-		c.mSentParts.Incr(int64(newMsg.Len()))
-		c.log.Traceln("Batching based on parts")
-		msgs := [1]types.Message{newMsg}
-		return msgs[:], nil
+		return c.flush()
 	}
 
-	c.log.Traceln("Added message to pending batch")
-	c.mDropped.Incr(1)
 	return nil, response.NewUnack()
+}
+
+func (c *Combine) flush() ([]types.Message, types.Response) {
+	c.mutext.Lock()
+	defer c.mutext.Unlock()
+
+	// If we have reached our target count of parts in the buffer.
+	newMsg := message.New(nil)
+	newMsg.Append(c.parts...)
+
+	c.parts = nil
+	c.mSent.Incr(1)
+	c.mSentParts.Incr(int64(newMsg.Len()))
+	c.log.Traceln("Batching based on parts")
+	msgs := [1]types.Message{newMsg}
+	return msgs[:], nil
 }
 
 //------------------------------------------------------------------------------

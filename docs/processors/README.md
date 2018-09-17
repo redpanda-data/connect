@@ -148,11 +148,14 @@ are also provided if enabled.
 ``` yaml
 type: combine
 combine:
+  timeout: 5s
   parts: 2
 ```
 
 Reads a number of discrete messages, buffering (but not acknowledging) the
 message parts until the size of the batch reaches or exceeds the target size.
+The processor has a window of 5 seconds, when the window is closed, process
+will flush all messages it has dispite of parts number.
 
 Once the size is reached or exceeded the parts are combined into a single batch
 of messages and sent through the pipeline. After reaching a destination the
