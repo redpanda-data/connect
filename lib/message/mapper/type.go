@@ -276,6 +276,12 @@ partLoop:
 		}
 
 		t.log.Tracef("Unmapped message part '%v': %q\n", i, msg.Get(i).Get())
+
+		if len(t.reqMap) == 0 && len(t.reqOptMap) == 0 {
+			mappedMsg.Append(msg.Get(i).Copy())
+			continue partLoop
+		}
+
 		sourceObj, err := getGabs(msg, i)
 		if err != nil {
 			t.mReqErr.Incr(1)
@@ -288,9 +294,6 @@ partLoop:
 		}
 
 		destObj := gabs.New()
-		if len(t.reqMap) == 0 && len(t.reqOptMap) == 0 {
-			destObj = sourceObj
-		}
 		for k, v := range t.reqMap {
 			src := sourceObj
 			if len(v) > 0 && v != "." {
@@ -390,6 +393,12 @@ func (t *Type) MapResponses(payload, response types.Message) error {
 		return fmt.Errorf("payload message counts have diverged from the request and response: %v != %v", act, exp)
 	}
 
+	parts := make([]types.Part, payload.Len())
+	payload.Iter(func(i int, p types.Part) error {
+		parts[i] = p
+		return nil
+	})
+
 partLoop:
 	for i := 0; i < response.Len(); i++ {
 		if response.Get(i).Get() == nil {
@@ -397,6 +406,21 @@ partLoop:
 			continue partLoop
 		}
 		t.log.Tracef("Premapped response part '%v': %q\n", i, response.Get(i).Get())
+
+		if len(t.resMap) == 0 && len(t.resOptMap) == 0 {
+			newPart := response.Get(i).Copy()
+
+			// Overwrite payload parts with new parts metadata.
+			metadata := parts[i].Metadata()
+			newPart.Metadata().Iter(func(k, v string) error {
+				metadata.Set(k, v)
+				return nil
+			})
+
+			newPart.SetMetadata(metadata)
+			parts[i] = newPart
+			continue partLoop
+		}
 
 		sourceObj, err := getGabs(response, i)
 		if err != nil {
@@ -418,9 +442,6 @@ partLoop:
 			continue partLoop
 		}
 
-		if len(t.resMap) == 0 && len(t.resOptMap) == 0 {
-			destObj = sourceObj
-		}
 		for k, v := range t.resMap {
 			src := sourceObj
 			if len(v) > 0 && v != "." {
@@ -455,7 +476,7 @@ partLoop:
 			}
 		}
 
-		if err = payload.Get(i).SetJSON(destObj.Data()); err != nil {
+		if err = parts[i].SetJSON(destObj.Data()); err != nil {
 			t.mResErr.Incr(1)
 			t.mResErrJSON.Incr(1)
 			t.log.Debugf("Failed to marshal response map result in message part '%v'. Map contents: '%v'\n", i, destObj.String())
@@ -464,9 +485,10 @@ partLoop:
 			continue partLoop
 		}
 
-		t.log.Tracef("Mapped message part '%v': %q\n", i, payload.Get(i).Get())
+		t.log.Tracef("Mapped message part '%v': %q\n", i, parts[i].Get())
 	}
 
+	payload.SetAll(parts)
 	return nil
 }
 

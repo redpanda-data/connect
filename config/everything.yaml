@@ -511,6 +511,7 @@ pipeline:
       path: ""
       labels: {}
       value: ""
+    process_batch: []
     process_field:
       parts: []
       path: ""

@@ -31,6 +31,10 @@ counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the last
 element will be selected, and so on.
 
+Sometimes a processor acts across an entire batch, when instead we'd like to
+perform them on individual messages of a batch. In this case the
+[`process_batch`](#process_batch) processor can be used.
+
 ### Contents
 
 1. [`archive`](#archive)
@@ -56,14 +60,15 @@ element will be selected, and so on.
 21. [`metadata`](#metadata)
 22. [`metric`](#metric)
 23. [`noop`](#noop)
-24. [`process_field`](#process_field)
-25. [`process_map`](#process_map)
-26. [`sample`](#sample)
-27. [`select_parts`](#select_parts)
-28. [`split`](#split)
-29. [`text`](#text)
-30. [`throttle`](#throttle)
-31. [`unarchive`](#unarchive)
+24. [`process_batch`](#process_batch)
+25. [`process_field`](#process_field)
+26. [`process_map`](#process_map)
+27. [`sample`](#sample)
+28. [`select_parts`](#select_parts)
+29. [`split`](#split)
+30. [`text`](#text)
+31. [`throttle`](#throttle)
+32. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -764,6 +769,21 @@ type: noop
 
 Noop is a no-op processor that does nothing, the message passes through
 unchanged.
+
+## `process_batch`
+
+``` yaml
+type: process_batch
+process_batch: []
+```
+
+A processor that applies a list of child processors to messages of a batch as
+though they were each a batch of one message. This is useful for forcing batch
+wide processors such as [`dedupe`](#dedupe) to apply to individual
+message parts of a batch instead.
+
+Please note that most processors already process per message of a batch, and
+this processor is not needed in those cases.
 
 ## `process_field`
 

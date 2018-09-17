@@ -40,13 +40,18 @@ input:
   type: broker
   broker:
     inputs:
-      - type: foo
-      - type: bar
+    - type: foo
+    - type: bar
   processors:
-    - type: combine
-      combine:
-          parts: 100
+  - type: batch
+    batch:
+      byte_size: 20_000_000
 ```
+
+You should *never* configure processors that remove payloads (`filter`,
+`dedupe`, etc) before a batch processor as this can potentially break
+acknowledgement propagation. Instead, always batch first and then configure your
+processors [to work with the batch](#processing-batches).
 
 ## Archiving Batches
 
@@ -57,9 +62,42 @@ also possible with the [`unarchive`][unarchive] processor.
 This allows you to send and receive message batches over protocols that do not
 support batching or multiple part messages.
 
+## Processing Batches
+
+Most processors will perform the same action on each message part of a batch,
+and therefore they behave the same regardless of whether they see a single
+message or a batch of plenty.
+
+However, some processors act on an entire batch and this might be undesirable.
+For example, imagine we batch our messages for the purpose of throughput
+optimisation but also need to perform deduplication on the payloads. The
+`dedupe` processor works batch wide, so in this case we need to force the
+processor to work as though each batched message is its own batch. We can do
+this with the [`process_batch`][process_batch] processor:
+
+``` yaml
+input:
+  type: foo
+  processors:
+  - type: batch
+    batch:
+      byte_size: 20_000_000
+  - type: process_batch
+    process_batch:
+    - type: dedupe
+      dedupe:
+        cache: foocache
+        key: ${!json_field:foo.bar}
+```
+
+The `dedupe` processor will now treat all items of the batch as if it were a
+batch of one message. Whatever messages result from the child processors will
+continue as their own batch.
+
 [processors]: ./processors/README.md
 [combine]: ./processors/README.md#combine
 [batch]: ./processors/README.md#batch
 [split]: ./processors/README.md#split
 [archive]: ./processors/README.md#archive
 [unarchive]: ./processors/README.md#unarchive
+[process_batch]: ./processors/README.md#process_batch

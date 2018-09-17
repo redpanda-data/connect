@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `process_batch` processor.
+
 ### 0.31.4 - 2018-09-16
 
 ### Added

@@ -78,6 +78,7 @@ const (
 	TypeMetadata     = "metadata"
 	TypeMetric       = "metric"
 	TypeNoop         = "noop"
+	TypeProcessBatch = "process_batch"
 	TypeProcessField = "process_field"
 	TypeProcessMap   = "process_map"
 	TypeSample       = "sample"
@@ -116,6 +117,7 @@ type Config struct {
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	ProcessBatch ProcessBatchConfig `json:"process_batch" yaml:"process_batch"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
@@ -153,6 +155,7 @@ func NewConfig() Config {
 		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),
 		Plugin:       nil,
+		ProcessBatch: NewProcessBatchConfig(),
 		ProcessField: NewProcessFieldConfig(),
 		ProcessMap:   NewProcessMapConfig(),
 		Sample:       NewSampleConfig(),
@@ -288,7 +291,11 @@ parts is empty these processors will be applied to all message parts.
 Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the last
-element will be selected, and so on.`
+element will be selected, and so on.
+
+Sometimes a processor acts across an entire batch, when instead we'd like to
+perform them on individual messages of a batch. In this case the
+` + "[`process_batch`](#process_batch)" + ` processor can be used.`
 
 var footer = `
 [0]: ./examples.md`

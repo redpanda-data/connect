@@ -691,7 +691,7 @@ func TestTypeOverlayResultRoot(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := `{"bar":{"baz":2},"foo":{"bar":{"new":"root"}}}`, string(msg.Get(0).Get()); exp != act {
+	if exp, act := `{"foo":{"bar":{"new":"root"}},"bar":{"baz":2}}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
