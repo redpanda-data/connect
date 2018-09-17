@@ -17,6 +17,7 @@ pipeline:
   processors:
   - type: combine
     combine:
+      timeout: 5s
       parts: 2
   threads: 1
 output:

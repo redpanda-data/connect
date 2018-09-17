@@ -21,14 +21,14 @@
 package processor
 
 import (
+	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/metrics"
 	"math/rand"
 	"os"
 	"reflect"
 	"testing"
-
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/metrics"
+	"time"
 )
 
 func TestCombineTwoParts(t *testing.T) {
@@ -112,6 +112,33 @@ func TestCombineLotsOfParts(t *testing.T) {
 	}
 
 	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Expected success")
+	}
+	if !reflect.DeepEqual(input, message.GetAllBytes(msgs[0])) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msgs[0]), input)
+	}
+	if res != nil {
+		t.Error("Expected nil res")
+	}
+}
+
+func TestTimeout(t *testing.T) {
+	conf := NewConfig()
+	conf.Combine.Timeout = 2 * time.Second
+	conf.Combine.Parts = 2
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	proc, err := NewCombine(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// Part count is 1, less than expecting 2, we have to wait for timeout -- 2 seconds
+	input := [][]byte{[]byte("foo")}
+	msgs, res := proc.ProcessMessage(message.New(input))
+	time.Sleep(conf.Combine.Timeout + 1*time.Second)
 	if len(msgs) != 1 {
 		t.Error("Expected success")
 	}
