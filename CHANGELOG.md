@@ -5,10 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### 0.32.0 - 2018-09-18
+
 ### Added
 
 - New `process_batch` processor.
 - Added `count` field to `batch` processor.
+- Metrics for `kinesis` output throttles.
 
 ### Changed
 
