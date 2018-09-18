@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-### 0.32.0 - 2018-09-18
+## 0.32.0 - 2018-09-18
 
 ### Added
 
@@ -21,20 +21,20 @@ All notable changes to this project will be documented in this file.
   ignored) by default. A log warning has been added in case anyone was relying
   on the default.
 
-### 0.31.4 - 2018-09-16
+## 0.31.4 - 2018-09-16
 
 ### Added
 
 - New `rate_limit` resource with a `local` type.
 - Field `rate_limit` added to `http` based processors, inputs and outputs.
 
-### 0.31.2 - 2018-09-14
+## 0.31.2 - 2018-09-14
 
 ### Added
 
 - New `prefetch_count` field added to `nats` input.
 
-### 0.31.0 - 2018-09-11
+## 0.31.0 - 2018-09-11
 
 ### Added
 
@@ -47,14 +47,14 @@ All notable changes to this project will be documented in this file.
 
 - The `nats` input now defaults to joining a queue.
 
-### 0.30.1 - 2018-09-06
+## 0.30.1 - 2018-09-06
 
 ### Changed
 
 - The redundant `nsq` output field `max_in_flight` has been removed.
 - The `files` output now interpolates paths per message part of a batch.
 
-### 0.30.0 - 2018-09-06
+## 0.30.0 - 2018-09-06
 
 ### Added
 
@@ -63,7 +63,7 @@ All notable changes to this project will be documented in this file.
 - New `enum` and `has_prefix` operators for the `metadata` condition.
 - Ability to set `tls` client certificate fields directly.
 
-### 0.29.0 - 2018-09-02
+## 0.29.0 - 2018-09-02
 
 ### Added
 
@@ -76,14 +76,14 @@ All notable changes to this project will be documented in this file.
   to expose the difference in its zero value behaviour (endless retries) versus
   other `retry` fields (zero retries).
 
-### 0.28.0 - 2018-09-01
+## 0.28.0 - 2018-09-01
 
 ### Added
 
 - New `endpoint` field added to `kinesis` input.
 - New `dynamodb` cache type.
 
-### 0.27.0 - 2018-08-30
+## 0.27.0 - 2018-08-30
 
 ### Added
 
@@ -95,7 +95,7 @@ All notable changes to this project will be documented in this file.
 
 - TLS config field `cas_file` has been renamed `root_cas_file`.
 
-### 0.26.3 - 2018-08-29
+## 0.26.3 - 2018-08-29
 
 ### Added
 
@@ -106,25 +106,25 @@ All notable changes to this project will be documented in this file.
 - The `kinesis` output type now supports batched sends and per message
   interpolation.
 
-### 0.26.2 - 2018-08-27
+## 0.26.2 - 2018-08-27
 
 ### Added
 
 - New `metric` processor.
 
-### 0.26.1 - 2018-08-26
+## 0.26.1 - 2018-08-26
 
 ### Added
 
 - New `redis_streams` input and output.
 
-### 0.26.0 - 2018-08-25
+## 0.26.0 - 2018-08-25
 
 ### Added
 
 - New `kinesis` input and output.
 
-### 0.25.0 - 2018-08-22
+## 0.25.0 - 2018-08-22
 
 ### Added
 
@@ -136,7 +136,7 @@ All notable changes to this project will be documented in this file.
 
 - API: The `metrics.Type` interface has been changed in order to add labels.
 
-### 0.24.0 - 2018-08-17
+## 0.24.0 - 2018-08-17
 
 ### Changed
 
@@ -144,43 +144,43 @@ All notable changes to this project will be documented in this file.
   be backwards compatible for existing pipelines, but changes the way in which
   queues, exchanges and bindings are declared using these types.
 
-### 0.23.17 - 2018-08-17
+## 0.23.17 - 2018-08-17
 
 ### Added
 
 - New durable fields for `amqp` input and output types.
 
-### 0.23.15 - 2018-08-16
+## 0.23.15 - 2018-08-16
 
 ### Changed
 
 - Improved statsd client with better cached aggregation.
 
-### 0.23.14 - 2018-08-16
+## 0.23.14 - 2018-08-16
 
 ### Added
 
 - New `tls` fields for `amqp` input and output types.
 
-### 0.23.12 - 2018-08-14
+## 0.23.12 - 2018-08-14
 
 ### Added
 
 - New `type` field for `elasticsearch` output.
 
-### 0.23.9 - 2018-08-10
+## 0.23.9 - 2018-08-10
 
 ### Added
 
 - New `throttle` processor.
 
-### 0.23.6 - 2018-08-09
+## 0.23.6 - 2018-08-09
 
 ### Added
 
 - New `less_than` and `greater_than` operators for `metadata` condition.
 
-### 0.23.4 - 2018-08-09
+## 0.23.4 - 2018-08-09
 
 ### Added
 
@@ -189,7 +189,7 @@ All notable changes to this project will be documented in this file.
 - Field `commit_period_ms` for `kafka` and `kafka_balanced` inputs for
   specifying a commit period.
 
-### 0.23.1 - 2018-08-06
+## 0.23.1 - 2018-08-06
 
 ### Added
 
@@ -199,7 +199,7 @@ All notable changes to this project will be documented in this file.
   input.
 - Added field to `split` processor for specifying target batch sizes.
 
-### 0.23.0 - 2018-08-06
+## 0.23.0 - 2018-08-06
 
 ### Added
 
@@ -213,7 +213,7 @@ All notable changes to this project will be documented in this file.
   returns a JSON object when no key is specified, this behaviour can now be done
   using the `metadata_json_object` function.
 
-### 0.22.0 - 2018-08-03
+## 0.22.0 - 2018-08-03
 
 ### Added
 
@@ -230,7 +230,7 @@ All notable changes to this project will be documented in this file.
   and output types.
 - Removed deprecated `json_fields` field from the `dedupe` processor.
 
-### 0.21.0 - 2018-07-31
+## 0.21.0 - 2018-07-31
 
 ### Added
 
@@ -242,7 +242,7 @@ All notable changes to this project will be documented in this file.
   the `kafka`, `kafka_balanced` and `http_client` input and output types, as
   well as the `http` processor type.
 
-### 0.20.8 - 2018-07-30
+## 0.20.8 - 2018-07-30
 
 ### Added
 
@@ -252,7 +252,7 @@ All notable changes to this project will be documented in this file.
   this includes the `http_client` input and output as well as the `http`
   processor.
 
-### 0.20.7 - 2018-07-27
+## 0.20.7 - 2018-07-27
 
 ### Added
 
