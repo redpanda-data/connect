@@ -102,6 +102,11 @@ type Kinesis struct {
 
 	log   log.Modular
 	stats metrics.Type
+
+	mThrottled       metrics.StatCounter
+	mThrottledF      metrics.StatCounter
+	mPartsThrottled  metrics.StatCounter
+	mPartsThrottledF metrics.StatCounter
 }
 
 // NewKinesis creates a new Amazon Kinesis writer.Type.
@@ -115,12 +120,16 @@ func NewKinesis(
 	}
 
 	k := Kinesis{
-		conf:         conf,
-		log:          log.NewModule(".output.kinesis"),
-		stats:        stats,
-		hashKey:      text.NewInterpolatedString(conf.HashKey),
-		partitionKey: text.NewInterpolatedString(conf.PartitionKey),
-		streamName:   aws.String(conf.Stream),
+		conf:             conf,
+		log:              log.NewModule(".output.kinesis"),
+		stats:            stats,
+		mPartsThrottled:  stats.GetCounter(".output.parts.send.throttled"),
+		mPartsThrottledF: stats.GetCounter(".output.kinesis.parts.send.throttled"),
+		mThrottled:       stats.GetCounter(".output.send.throttled"),
+		mThrottledF:      stats.GetCounter(".output.kinesis.send.throttled"),
+		hashKey:          text.NewInterpolatedString(conf.HashKey),
+		partitionKey:     text.NewInterpolatedString(conf.PartitionKey),
+		streamName:       aws.String(conf.Stream),
 	}
 
 	var err error
@@ -272,6 +281,10 @@ func (a *Kinesis) Write(msg types.Message) error {
 		// if throttling errors detected, pause briefly
 		l := len(failed)
 		if l > 0 {
+			a.mThrottled.Incr(1)
+			a.mThrottledF.Incr(1)
+			a.mPartsThrottled.Incr(int64(l))
+			a.mPartsThrottledF.Incr(int64(l))
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
 				return types.ErrTimeout

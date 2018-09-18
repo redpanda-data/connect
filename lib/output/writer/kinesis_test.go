@@ -20,6 +20,17 @@ import (
 	"github.com/ory/dockertest"
 )
 
+var (
+	mockStats = metrics.DudType{}
+)
+
+var (
+	mThrottled       = mockStats.GetCounter(".output.send.throttled")
+	mThrottledF      = mockStats.GetCounter(".output.kinesis.send.throttled")
+	mPartsThrottled  = mockStats.GetCounter(".output.parts.send.throttled")
+	mPartsThrottledF = mockStats.GetCounter(".output.kinesis.parts.send.throttled")
+)
+
 type mockKinesis struct {
 	kinesisiface.KinesisAPI
 	fn func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error)
@@ -174,9 +185,13 @@ func TestKinesisWriteChunkWithThrottling(t *testing.T) {
 				return &output, nil
 			},
 		},
-		log:          log.Noop(),
-		partitionKey: text.NewInterpolatedString("${!json_field:id}"),
-		hashKey:      text.NewInterpolatedString(""),
+		mThrottled:       mThrottled,
+		mThrottledF:      mThrottledF,
+		mPartsThrottled:  mPartsThrottled,
+		mPartsThrottledF: mPartsThrottledF,
+		log:              log.Noop(),
+		partitionKey:     text.NewInterpolatedString("${!json_field:id}"),
+		hashKey:          text.NewInterpolatedString(""),
 	}
 
 	msg := message.New(nil)
@@ -259,9 +274,13 @@ func TestKinesisWriteMessageThrottling(t *testing.T) {
 				return &output, nil
 			},
 		},
-		log:          log.Noop(),
-		partitionKey: text.NewInterpolatedString("${!json_field:id}"),
-		hashKey:      text.NewInterpolatedString(""),
+		mThrottled:       mThrottled,
+		mThrottledF:      mThrottledF,
+		mPartsThrottled:  mPartsThrottled,
+		mPartsThrottledF: mPartsThrottledF,
+		log:              log.Noop(),
+		partitionKey:     text.NewInterpolatedString("${!json_field:id}"),
+		hashKey:          text.NewInterpolatedString(""),
 	}
 
 	msg := message.New(nil)
@@ -301,9 +320,13 @@ func TestKinesisWriteBackoffMaxRetriesExceeded(t *testing.T) {
 				return &output, nil
 			},
 		},
-		log:          log.Noop(),
-		partitionKey: text.NewInterpolatedString("${!json_field:id}"),
-		hashKey:      text.NewInterpolatedString(""),
+		mThrottled:       mThrottled,
+		mThrottledF:      mThrottledF,
+		mPartsThrottled:  mPartsThrottled,
+		mPartsThrottledF: mPartsThrottledF,
+		log:              log.Noop(),
+		partitionKey:     text.NewInterpolatedString("${!json_field:id}"),
+		hashKey:          text.NewInterpolatedString(""),
 	}
 
 	msg := message.New(nil)
