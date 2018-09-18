@@ -18,38 +18,80 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package output
+package writer
 
 import (
-	"github.com/Jeffail/benthos/lib/output/writer"
+	"fmt"
+	"testing"
+	"time"
+
+	"nanomsg.org/go-mangos"
+	"nanomsg.org/go-mangos/protocol/pull"
+	"nanomsg.org/go-mangos/transport/tcp"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
-func init() {
-	Constructors[TypeNSQ] = TypeSpec{
-		constructor: NewNSQ,
-		description: `
-Publish to an NSQ topic. The ` + "`topic`" + ` field can be dynamically set
-using function interpolations described
-[here](../config_interpolation.md#functions). When sending batched messages
-these interpolations are performed per message part.`,
-	}
-}
+func TestNanomsgBasic(t *testing.T) {
+	nTestLoops := 1000
 
-//------------------------------------------------------------------------------
+	conf := NewNanomsgConfig()
+	conf.URLs = []string{"tcp://localhost:1324"}
+	conf.Bind = true
+	conf.PollTimeoutMS = 100
+	conf.SocketType = "PUSH"
 
-// NewNSQ creates a new NSQ output type.
-func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	w, err := writer.NewNSQ(conf.NSQ, log, stats)
+	s, err := NewNanomsg(conf, log.Noop(), metrics.Noop())
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
-	return NewWriter("nsq", w, log, stats)
+
+	if err = s.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		s.CloseAsync()
+		if err = s.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	socket, err := pull.NewSocket()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer socket.Close()
+
+	socket.AddTransport(tcp.NewTransport())
+	socket.SetOption(mangos.OptionRecvDeadline, time.Second)
+
+	if err = socket.Dial("tcp://localhost:1324"); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+		testMsg := message.New([][]byte{[]byte(testStr)})
+
+		go func() {
+			if serr := s.Write(testMsg); serr != nil {
+				t.Error(serr)
+			}
+		}()
+
+		data, err := socket.Recv()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res := string(data); res != testStr {
+			t.Errorf("Wrong value on output: %v != %v", res, testStr)
+		}
+	}
 }
 
 //------------------------------------------------------------------------------

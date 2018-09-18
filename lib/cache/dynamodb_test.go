@@ -7,6 +7,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -150,8 +151,8 @@ func testDynamodbAddAndDelete(t *testing.T, conf Config) {
 	}()
 
 	exp := []byte(`{"foo":"baz"}`)
-	if err := c.Add("foo", exp); err == nil {
-		t.Error("Expected second call to 'add' to fail")
+	if err := c.Add("foo", exp); err != types.ErrKeyAlreadyExists {
+		t.Errorf("Wrong error returned: %v != %v", err, types.ErrKeyAlreadyExists)
 	}
 
 	if err := c.Delete("foo"); err != nil {

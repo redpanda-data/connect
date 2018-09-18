@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -44,11 +45,11 @@ func init() {
 		description: `
 The dynamodb cache stores key/value pairs as a single document in a DynamoDB
 table. The key is stored as a string value and used as table hash key. The value
-is stored as a binary value using the 'data_key' field name. A prefix can be
-specified to allow multiple cache types to share a single DynamoDB table. An
-optional TTL duration ('ttl') and field ('ttl_key') can be specified if the 
-backing table has TTL enabled. Strong read consistency can be enabled using the
-'consistent_read' configuration field.`,
+is stored as a binary value using the ` + "`data_key`" + ` field name. A prefix
+can be specified to allow multiple cache types to share a single DynamoDB table.
+An optional TTL duration (` + "`ttl`" + `) and field (` + "`ttl_key`" + `) can
+be specified if the backing table has TTL enabled. Strong read consistency can
+be enabled using the ` + "`consistent_read`" + ` configuration field.`,
 	}
 }
 
@@ -196,8 +197,13 @@ func (d *DynamoDB) Add(key string, value []byte) error {
 	input.ExpressionAttributeNames = expr.Names()
 	input.ConditionExpression = expr.Condition()
 
-	_, err = d.client.PutItem(input)
-	if err != nil {
+	if _, err = d.client.PutItem(input); err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case dynamodb.ErrCodeConditionalCheckFailedException:
+				return types.ErrKeyAlreadyExists
+			}
+		}
 		return err
 	}
 	return nil

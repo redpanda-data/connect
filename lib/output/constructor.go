@@ -107,10 +107,10 @@ type Config struct {
 	Kafka         writer.KafkaConfig         `json:"kafka" yaml:"kafka"`
 	Kinesis       writer.KinesisConfig       `json:"kinesis" yaml:"kinesis"`
 	MQTT          writer.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
-	Nanomsg       NanomsgConfig              `json:"nanomsg" yaml:"nanomsg"`
+	Nanomsg       writer.NanomsgConfig       `json:"nanomsg" yaml:"nanomsg"`
 	NATS          writer.NATSConfig          `json:"nats" yaml:"nats"`
-	NATSStream    NATSStreamConfig           `json:"nats_stream" yaml:"nats_stream"`
-	NSQ           NSQConfig                  `json:"nsq" yaml:"nsq"`
+	NATSStream    writer.NATSStreamConfig    `json:"nats_stream" yaml:"nats_stream"`
+	NSQ           writer.NSQConfig           `json:"nsq" yaml:"nsq"`
 	Plugin        interface{}                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	RedisList     writer.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub   writer.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
@@ -142,10 +142,10 @@ func NewConfig() Config {
 		Kafka:         writer.NewKafkaConfig(),
 		Kinesis:       writer.NewKinesisConfig(),
 		MQTT:          writer.NewMQTTConfig(),
-		Nanomsg:       NewNanomsgConfig(),
+		Nanomsg:       writer.NewNanomsgConfig(),
 		NATS:          writer.NewNATSConfig(),
-		NATSStream:    NewNATSStreamConfig(),
-		NSQ:           NewNSQConfig(),
+		NATSStream:    writer.NewNATSStreamConfig(),
+		NSQ:           writer.NewNSQConfig(),
 		Plugin:        nil,
 		RedisList:     writer.NewRedisListConfig(),
 		RedisPubSub:   writer.NewRedisPubSubConfig(),
