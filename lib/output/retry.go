@@ -193,17 +193,12 @@ func NewRetry(
 func (r *Retry) loop() {
 	// Metrics paths
 	var (
-		mRunning       = r.stats.GetGauge("output.running")
-		mRunningF      = r.stats.GetGauge("output.retry.running")
-		mCount         = r.stats.GetCounter("output.count")
-		mCountF        = r.stats.GetCounter("output.retry.count")
-		mSuccess       = r.stats.GetCounter("output.send.success")
-		mSuccessF      = r.stats.GetCounter("output.retry.send.success")
-		mPartsSuccess  = r.stats.GetCounter("output.parts.send.success")
-		mPartsSuccessF = r.stats.GetCounter("output.retry.parts.send.success")
-		mError         = r.stats.GetCounter("output.send.error")
-		mErrorF        = r.stats.GetCounter("output.retry.send.error")
-		mEndOfRetries  = r.stats.GetCounter("output.retry.end_of_retries")
+		mRunning      = r.stats.GetGauge("output.retry.running")
+		mCount        = r.stats.GetCounter("output.retry.count")
+		mSuccess      = r.stats.GetCounter("output.retry.send.success")
+		mPartsSuccess = r.stats.GetCounter("output.retry.parts.send.success")
+		mError        = r.stats.GetCounter("output.retry.send.error")
+		mEndOfRetries = r.stats.GetCounter("output.retry.end_of_retries")
 	)
 
 	defer func() {
@@ -213,11 +208,9 @@ func (r *Retry) loop() {
 		for ; err != nil; err = r.wrapped.WaitForClose(time.Second) {
 		}
 		mRunning.Decr(1)
-		mRunningF.Decr(1)
 		close(r.closedChan)
 	}()
 	mRunning.Incr(1)
-	mRunningF.Incr(1)
 
 	resChan := make(chan types.Response)
 
@@ -230,7 +223,6 @@ func (r *Retry) loop() {
 				return
 			}
 			mCount.Incr(1)
-			mCountF.Incr(1)
 		case <-r.closeChan:
 			return
 		}
@@ -254,7 +246,6 @@ func (r *Retry) loop() {
 
 			if res.Error() != nil {
 				mError.Incr(1)
-				mErrorF.Incr(1)
 				r.log.Errorf("Failed to send message: %v\n", res.Error())
 
 				nextBackoff := r.backoff.NextBackOff()
@@ -272,9 +263,7 @@ func (r *Retry) loop() {
 				}
 			} else {
 				mSuccess.Incr(1)
-				mSuccessF.Incr(1)
 				mPartsSuccess.Incr(int64(ts.Payload.Len()))
-				mPartsSuccessF.Incr(int64(ts.Payload.Len()))
 				r.backoff.Reset()
 				resOut = response.NewAck()
 				break retryLoop
