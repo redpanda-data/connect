@@ -70,6 +70,8 @@ INPUT_FILE_DELIMITER
 INPUT_FILE_MAX_BUFFER                       = 1000000
 INPUT_FILE_MULTIPART                        = false
 INPUT_FILE_PATH
+INPUT_GCP_PUBSUB_PROJECT
+INPUT_GCP_PUBSUB_SUBSCRIPTION
 INPUT_HDFS_DIRECTORY
 INPUT_HDFS_HOSTS                            = localhost:9000
 INPUT_HDFS_USER                             = benthos_hdfs
@@ -354,6 +356,8 @@ OUTPUT_ELASTICSEARCH_URLS                    = http://localhost:9200
 OUTPUT_FILES_PATH                            = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_FILE_DELIMITER
 OUTPUT_FILE_PATH
+OUTPUT_GCP_PUBSUB_PROJECT
+OUTPUT_GCP_PUBSUB_TOPIC
 OUTPUT_HDFS_DIRECTORY
 OUTPUT_HDFS_HOSTS                            = localhost:9000
 OUTPUT_HDFS_PATH                             = ${!count:files}-${!timestamp_unix_nano}.txt

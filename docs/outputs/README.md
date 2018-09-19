@@ -34,26 +34,27 @@ a [`broker`](#broker) output with the 'try' pattern.
 4. [`elasticsearch`](#elasticsearch)
 5. [`file`](#file)
 6. [`files`](#files)
-7. [`hdfs`](#hdfs)
-8. [`http_client`](#http_client)
-9. [`http_server`](#http_server)
-10. [`inproc`](#inproc)
-11. [`kafka`](#kafka)
-12. [`kinesis`](#kinesis)
-13. [`mqtt`](#mqtt)
-14. [`nanomsg`](#nanomsg)
-15. [`nats`](#nats)
-16. [`nats_stream`](#nats_stream)
-17. [`nsq`](#nsq)
-18. [`redis_list`](#redis_list)
-19. [`redis_pubsub`](#redis_pubsub)
-20. [`redis_streams`](#redis_streams)
-21. [`retry`](#retry)
-22. [`s3`](#s3)
-23. [`sqs`](#sqs)
-24. [`stdout`](#stdout)
-25. [`switch`](#switch)
-26. [`websocket`](#websocket)
+7. [`gcp_pubsub`](#gcp_pubsub)
+8. [`hdfs`](#hdfs)
+9. [`http_client`](#http_client)
+10. [`http_server`](#http_server)
+11. [`inproc`](#inproc)
+12. [`kafka`](#kafka)
+13. [`kinesis`](#kinesis)
+14. [`mqtt`](#mqtt)
+15. [`nanomsg`](#nanomsg)
+16. [`nats`](#nats)
+17. [`nats_stream`](#nats_stream)
+18. [`nsq`](#nsq)
+19. [`redis_list`](#redis_list)
+20. [`redis_pubsub`](#redis_pubsub)
+21. [`redis_streams`](#redis_streams)
+22. [`retry`](#retry)
+23. [`s3`](#s3)
+24. [`sqs`](#sqs)
+25. [`stdout`](#stdout)
+26. [`switch`](#switch)
+27. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -260,6 +261,18 @@ file for each part you need to generate unique file names. This can be done by
 using function interpolations on the `path` field as described
 [here](../config_interpolation.md#functions). When sending batched messages
 these interpolations are performed per message part.
+
+## `gcp_pubsub`
+
+``` yaml
+type: gcp_pubsub
+gcp_pubsub:
+  project: ""
+  topic: ""
+```
+
+Sends messages to a GCP Cloud Pub/Sub topic. Metadata from messages are sent as
+attributes.
 
 ## `hdfs`
 

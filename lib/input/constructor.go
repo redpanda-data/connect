@@ -66,6 +66,7 @@ const (
 	TypeDynamic       = "dynamic"
 	TypeFile          = "file"
 	TypeFiles         = "files"
+	TypeGCPPubSub     = "gcp_pubsub"
 	TypeHDFS          = "hdfs"
 	TypeHTTPClient    = "http_client"
 	TypeHTTPServer    = "http_server"
@@ -99,6 +100,7 @@ type Config struct {
 	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
 	File          FileConfig                 `json:"file" yaml:"file"`
 	Files         reader.FilesConfig         `json:"files" yaml:"files"`
+	GCPPubSub     reader.GCPPubSubConfig     `json:"gcp_pubsub" yaml:"gcp_pubsub"`
 	HDFS          reader.HDFSConfig          `json:"hdfs" yaml:"hdfs"`
 	HTTPClient    HTTPClientConfig           `json:"http_client" yaml:"http_client"`
 	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
@@ -133,6 +135,7 @@ func NewConfig() Config {
 		Dynamic:       NewDynamicConfig(),
 		File:          NewFileConfig(),
 		Files:         reader.NewFilesConfig(),
+		GCPPubSub:     reader.NewGCPPubSubConfig(),
 		HDFS:          reader.NewHDFSConfig(),
 		HTTPClient:    NewHTTPClientConfig(),
 		HTTPServer:    NewHTTPServerConfig(),

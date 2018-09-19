@@ -32,6 +32,7 @@ for choosing a level of resiliency that meets your needs.
 - [AWS (S3, SQS, Kinesis)][aws]
 - [Elasticsearch][elasticsearch] (output only)
 - File
+- [GCP (pub/sub)][gcp]
 - [HDFS][hdfs]
 - HTTP(S)
 - [Kafka][kafka]
@@ -208,3 +209,4 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [kafka]: https://kafka.apache.org/
 [elasticsearch]: https://www.elastic.co/
 [hdfs]: https://hadoop.apache.org/
+[gcp]: https://cloud.google.com/
