@@ -34,6 +34,9 @@ input:
     delimiter: ""
   files:
     path: ""
+  gcp_pubsub:
+    project: ""
+    subscription: ""
   hdfs:
     hosts:
     - localhost:9000
@@ -585,6 +588,9 @@ output:
     delimiter: ""
   files:
     path: ${!count:files}-${!timestamp_unix_nano}.txt
+  gcp_pubsub:
+    project: ""
+    topic: ""
   hdfs:
     hosts:
     - localhost:9000

@@ -31,6 +31,9 @@ input:
         path: ${INPUT_FILE_PATH}
       files:
         path: ${INPUT_FILES_PATH}
+      gcp_pubsub:
+        project: ${INPUT_GCP_PUBSUB_PROJECT}
+        subscription: ${INPUT_GCP_PUBSUB_SUBSCRIPTION}
       hdfs:
         directory: ${INPUT_HDFS_DIRECTORY}
         hosts:
@@ -399,6 +402,9 @@ output:
         path: ${OUTPUT_FILE_PATH}
       files:
         path: ${OUTPUT_FILES_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+      gcp_pubsub:
+        project: ${OUTPUT_GCP_PUBSUB_PROJECT}
+        topic: ${OUTPUT_GCP_PUBSUB_TOPIC}
       hdfs:
         directory: ${OUTPUT_HDFS_DIRECTORY}
         hosts:
