@@ -57,20 +57,21 @@ used.
 17. [`insert_part`](#insert_part)
 18. [`jmespath`](#jmespath)
 19. [`json`](#json)
-20. [`log`](#log)
-21. [`merge_json`](#merge_json)
-22. [`metadata`](#metadata)
-23. [`metric`](#metric)
-24. [`noop`](#noop)
-25. [`process_batch`](#process_batch)
-26. [`process_field`](#process_field)
-27. [`process_map`](#process_map)
-28. [`sample`](#sample)
-29. [`select_parts`](#select_parts)
-30. [`split`](#split)
-31. [`text`](#text)
-32. [`throttle`](#throttle)
-33. [`unarchive`](#unarchive)
+20. [`lambda`](#lambda)
+21. [`log`](#log)
+22. [`merge_json`](#merge_json)
+23. [`metadata`](#metadata)
+24. [`metric`](#metric)
+25. [`noop`](#noop)
+26. [`process_batch`](#process_batch)
+27. [`process_field`](#process_field)
+28. [`process_map`](#process_map)
+29. [`sample`](#sample)
+30. [`select_parts`](#select_parts)
+31. [`split`](#split)
+32. [`text`](#text)
+33. [`throttle`](#throttle)
+34. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -621,6 +622,38 @@ json:
 
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
 contains keys that aren't strings those fields will be ignored.
+
+## `lambda`
+
+``` yaml
+type: lambda
+lambda:
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  function: ""
+  parallel: false
+  rate_limit: ""
+  region: eu-west-1
+  retries: 3
+  timeout_ms: 5000
+```
+
+Invokes an AWS lambda for each message part of a batch. The contents of the
+message part is the payload of the request, and the result of the invocation
+will become the new contents of the message.
+
+It is possible to perform requests per message of a batch in parallel by setting
+the `parallel` flag to `true`. The `rate_limit`
+field can be used to specify a rate limit [resource](../rate_limits/README.md)
+to cap the rate of requests across parallel components service wide.
+
+In order to map or encode the payload to a specific request body, and map the
+response back into the original payload instead of replacing it entirely, you
+can use the [`process_map`](#process_map) or
+ [`process_field`](#process_field) processors.
 
 ## `log`
 

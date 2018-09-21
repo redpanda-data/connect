@@ -502,6 +502,18 @@ pipeline:
       operator: get
       path: ""
       value: ""
+    lambda:
+      credentials:
+        id: ""
+        secret: ""
+        token: ""
+        role: ""
+      region: eu-west-1
+      function: ""
+      timeout_ms: 5000
+      retries: 3
+      rate_limit: ""
+      parallel: false
     log:
       level: INFO
       message: ""

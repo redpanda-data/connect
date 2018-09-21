@@ -336,6 +336,18 @@ pipeline:
       operator: ${PROCESSOR_JSON_OPERATOR:get}
       path: ${PROCESSOR_JSON_PATH}
       value: ${PROCESSOR_JSON_VALUE}
+    lambda:
+      credentials:
+        id: ${PROCESSOR_LAMBDA_CREDENTIALS_ID}
+        role: ${PROCESSOR_LAMBDA_CREDENTIALS_ROLE}
+        secret: ${PROCESSOR_LAMBDA_CREDENTIALS_SECRET}
+        token: ${PROCESSOR_LAMBDA_CREDENTIALS_TOKEN}
+      function: ${PROCESSOR_LAMBDA_FUNCTION}
+      parallel: ${PROCESSOR_LAMBDA_PARALLEL:false}
+      rate_limit: ${PROCESSOR_LAMBDA_RATE_LIMIT}
+      region: ${PROCESSOR_LAMBDA_REGION:eu-west-1}
+      retries: ${PROCESSOR_LAMBDA_RETRIES:3}
+      timeout_ms: ${PROCESSOR_LAMBDA_TIMEOUT_MS:5000}
     log:
       level: ${PROCESSOR_LOG_LEVEL:INFO}
       message: ${PROCESSOR_LOG_MESSAGE}
