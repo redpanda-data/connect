@@ -74,6 +74,7 @@ const (
 	TypeInsertPart   = "insert_part"
 	TypeJMESPath     = "jmespath"
 	TypeJSON         = "json"
+	TypeLog          = "log"
 	TypeMergeJSON    = "merge_json"
 	TypeMetadata     = "metadata"
 	TypeMetric       = "metric"
@@ -113,6 +114,7 @@ type Config struct {
 	InsertPart   InsertPartConfig   `json:"insert_part" yaml:"insert_part"`
 	JMESPath     JMESPathConfig     `json:"jmespath" yaml:"jmespath"`
 	JSON         JSONConfig         `json:"json" yaml:"json"`
+	Log          LogConfig          `json:"log" yaml:"log"`
 	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
@@ -151,6 +153,7 @@ func NewConfig() Config {
 		InsertPart:   NewInsertPartConfig(),
 		JMESPath:     NewJMESPathConfig(),
 		JSON:         NewJSONConfig(),
+		Log:          NewLogConfig(),
 		MergeJSON:    NewMergeJSONConfig(),
 		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),

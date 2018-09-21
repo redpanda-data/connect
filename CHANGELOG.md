@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `gcp_pubsub` input and outputs.
+- New `log` processor.
+
 ## 0.32.0 - 2018-09-18
 
 ### Added

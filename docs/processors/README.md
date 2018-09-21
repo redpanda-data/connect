@@ -56,19 +56,20 @@ perform them on individual messages of a batch. In this case the
 17. [`insert_part`](#insert_part)
 18. [`jmespath`](#jmespath)
 19. [`json`](#json)
-20. [`merge_json`](#merge_json)
-21. [`metadata`](#metadata)
-22. [`metric`](#metric)
-23. [`noop`](#noop)
-24. [`process_batch`](#process_batch)
-25. [`process_field`](#process_field)
-26. [`process_map`](#process_map)
-27. [`sample`](#sample)
-28. [`select_parts`](#select_parts)
-29. [`split`](#split)
-30. [`text`](#text)
-31. [`throttle`](#throttle)
-32. [`unarchive`](#unarchive)
+20. [`log`](#log)
+21. [`merge_json`](#merge_json)
+22. [`metadata`](#metadata)
+23. [`metric`](#metric)
+24. [`noop`](#noop)
+25. [`process_batch`](#process_batch)
+26. [`process_field`](#process_field)
+27. [`process_map`](#process_map)
+28. [`sample`](#sample)
+29. [`select_parts`](#select_parts)
+30. [`split`](#split)
+31. [`text`](#text)
+32. [`throttle`](#throttle)
+33. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -619,6 +620,35 @@ json:
 
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
 contains keys that aren't strings those fields will be ignored.
+
+## `log`
+
+``` yaml
+type: log
+log:
+  level: INFO
+  message: ""
+```
+
+Log is a processor that prints a log event each time it processes a message. The
+message is then sent onwards unchanged. The log message can be set using
+function interpolations described [here](../config_interpolation.md#functions)
+which allows you to log the contents and metadata of a message.
+
+For example, if we wished to create a debug log event for each message in a
+pipeline in order to expose the JSON field `foo.bar` as well as the
+metadata field `kafka_partition` we can achieve that with the
+following config:
+
+``` yaml
+type: log
+log:
+  level: DEBUG
+  message: "field: ${!json_field:foo.bar}, part: ${!metadata:kafka_partition}"
+```
+
+The `level` field determines the log level of the printed events and
+can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.
 
 ## `merge_json`
 

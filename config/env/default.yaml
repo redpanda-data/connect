@@ -336,6 +336,9 @@ pipeline:
       operator: ${PROCESSOR_JSON_OPERATOR:get}
       path: ${PROCESSOR_JSON_PATH}
       value: ${PROCESSOR_JSON_VALUE}
+    log:
+      level: ${PROCESSOR_LOG_LEVEL:INFO}
+      message: ${PROCESSOR_LOG_MESSAGE}
     merge_json:
       retain_parts: ${PROCESSOR_MERGE_JSON_RETAIN_PARTS:false}
     metadata:

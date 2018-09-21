@@ -307,6 +307,8 @@ PROCESSOR_JMESPATH_QUERY
 PROCESSOR_JSON_OPERATOR                              = get
 PROCESSOR_JSON_PATH
 PROCESSOR_JSON_VALUE
+PROCESSOR_LOG_LEVEL                                  = INFO
+PROCESSOR_LOG_MESSAGE
 PROCESSOR_MERGE_JSON_RETAIN_PARTS                    = false
 PROCESSOR_METADATA_KEY                               = example
 PROCESSOR_METADATA_OPERATOR                          = set

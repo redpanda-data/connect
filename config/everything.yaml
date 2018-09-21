@@ -502,6 +502,9 @@ pipeline:
       operator: get
       path: ""
       value: ""
+    log:
+      level: INFO
+      message: ""
     merge_json:
       parts: []
       retain_parts: false
