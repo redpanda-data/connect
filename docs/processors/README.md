@@ -31,9 +31,10 @@ counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the last
 element will be selected, and so on.
 
-Sometimes a processor acts across an entire batch, when instead we'd like to
-perform them on individual messages of a batch. In this case the
-[`process_batch`](#process_batch) processor can be used.
+Some processors such as `filter` and `dedupe` act across an entire
+batch, when instead we'd like to perform them on individual messages of a batch.
+In this case the [`process_batch`](#process_batch) processor can be
+used.
 
 ### Contents
 
