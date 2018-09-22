@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.33.0 - 2018-09-22
+
 ### Added
 
 - New `gcp_pubsub` input and outputs.
