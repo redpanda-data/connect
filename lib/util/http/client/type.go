@@ -311,8 +311,9 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 
 // ParseResponse attempts to parse an HTTP response into a 2D slice of bytes.
 func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err error) {
+	resMsg = message.New(nil)
 	if res.Body == nil {
-		return nil, nil
+		return
 	}
 	contentType := res.Header.Get("Content-Type")
 

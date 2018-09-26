@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `process_dag` processor.
+
 ## 0.33.0 - 2018-09-22
 
 ### Added

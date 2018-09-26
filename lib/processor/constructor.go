@@ -81,6 +81,7 @@ const (
 	TypeMetric       = "metric"
 	TypeNoop         = "noop"
 	TypeProcessBatch = "process_batch"
+	TypeProcessDAG   = "process_dag"
 	TypeProcessField = "process_field"
 	TypeProcessMap   = "process_map"
 	TypeSample       = "sample"
@@ -122,6 +123,7 @@ type Config struct {
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	ProcessBatch ProcessBatchConfig `json:"process_batch" yaml:"process_batch"`
+	ProcessDAG   ProcessDAGConfig   `json:"process_dag" yaml:"process_dag"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
@@ -162,6 +164,7 @@ func NewConfig() Config {
 		Metric:       NewMetricConfig(),
 		Plugin:       nil,
 		ProcessBatch: NewProcessBatchConfig(),
+		ProcessDAG:   NewProcessDAGConfig(),
 		ProcessField: NewProcessFieldConfig(),
 		ProcessMap:   NewProcessMapConfig(),
 		Sample:       NewSampleConfig(),

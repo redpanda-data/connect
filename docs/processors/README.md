@@ -64,14 +64,15 @@ used.
 24. [`metric`](#metric)
 25. [`noop`](#noop)
 26. [`process_batch`](#process_batch)
-27. [`process_field`](#process_field)
-28. [`process_map`](#process_map)
-29. [`sample`](#sample)
-30. [`select_parts`](#select_parts)
-31. [`split`](#split)
-32. [`text`](#text)
-33. [`throttle`](#throttle)
-34. [`unarchive`](#unarchive)
+27. [`process_dag`](#process_dag)
+28. [`process_field`](#process_field)
+29. [`process_map`](#process_map)
+30. [`sample`](#sample)
+31. [`select_parts`](#select_parts)
+32. [`split`](#split)
+33. [`text`](#text)
+34. [`throttle`](#throttle)
+35. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -835,6 +836,72 @@ message parts of a batch instead.
 
 Please note that most processors already process per message of a batch, and
 this processor is not needed in those cases.
+
+## `process_dag`
+
+``` yaml
+type: process_dag
+process_dag: {}
+```
+
+A processor that manages a map of `process_map` processors and
+calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to
+their postmap targets for provided fields and their premap targets for required
+fields.
+
+The DAG is then used to execute the children in the necessary order with the
+maximum parallelism possible.
+
+The field `dependencies` is an optional array of fields that a child
+depends on. This is useful for when fields are required but don't appear within
+a premap such as those used in conditions.
+
+This processor is extremely useful for performing a complex mesh of enrichments
+where network requests mean we desire maximum parallelism across those
+enrichments.
+
+For example, if we had three target HTTP services that we wished to enrich each
+document with - foo, bar and baz - where baz relies on the result of both foo
+and bar, we might express that relationship here like so:
+
+``` yaml
+type: process_dag
+process_dag:
+  foo:
+    premap:
+      .: .
+    processors:
+    - type: http
+      http:
+        request:
+          url: http://foo/enrich
+    postmap:
+      foo_result: .
+  bar:
+    premap:
+      .: msg.sub.path
+    processors:
+    - type: http
+      http:
+        request:
+          url: http://bar/enrich
+    postmap:
+      bar_result: .
+  baz:
+    premap:
+      foo_obj: foo_result
+      bar_obj: bar_result
+    processors:
+    - type: http
+      http:
+        request:
+          url: http://baz/enrich
+    postmap:
+      baz_obj: .
+```
+
+With this config the DAG would determine that the children foo and bar can be
+executed in parallel, and once they are both finished we may proceed onto baz.
 
 ## `process_field`
 
