@@ -5,9 +5,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.34.0 - 2018-09-27
+
 ### Added
 
 - New `process_dag` processor.
+- New `static_fields` map added to log config for setting static log fields.
+
+### Changed
+
+- JSON log field containing component path moved from `@service` to `component`.
 
 ## 0.33.0 - 2018-09-22
 

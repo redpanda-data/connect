@@ -198,6 +198,7 @@ func envify(rootPath string, conf interface{}, paths map[string]string) (newConf
 		"DEDUPE",
 		"INPUT_BROKER_INPUTS_BROKER",
 		"OUTPUT_BROKER_OUTPUTS_BROKER",
+		"LOGGER_STATIC_FIELDS",
 	}
 	aliases := map[string]string{
 		"INPUT_BROKER_INPUTS":   "INPUT",

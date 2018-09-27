@@ -21,6 +21,7 @@
 package log
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -94,10 +95,11 @@ func logLevelToInt(level string) int {
 
 // Config holds configuration options for a logger object.
 type Config struct {
-	Prefix       string `json:"prefix" yaml:"prefix"`
-	LogLevel     string `json:"level" yaml:"level"`
-	AddTimeStamp bool   `json:"add_timestamp" yaml:"add_timestamp"`
-	JSONFormat   bool   `json:"json_format" yaml:"json_format"`
+	Prefix       string            `json:"prefix" yaml:"prefix"`
+	LogLevel     string            `json:"level" yaml:"level"`
+	AddTimeStamp bool              `json:"add_timestamp" yaml:"add_timestamp"`
+	JSONFormat   bool              `json:"json_format" yaml:"json_format"`
+	StaticFields map[string]string `json:"static_fields" yaml:"static_fields"`
 }
 
 // NewConfig returns a config struct with the default values for each field.
@@ -107,6 +109,9 @@ func NewConfig() Config {
 		LogLevel:     "INFO",
 		AddTimeStamp: true,
 		JSONFormat:   true,
+		StaticFields: map[string]string{
+			"@service": "benthos",
+		},
 	}
 }
 
@@ -114,9 +119,10 @@ func NewConfig() Config {
 
 // Logger is an object with support for levelled logging and modular components.
 type Logger struct {
-	stream io.Writer
-	config Config
-	level  int
+	stream      io.Writer
+	config      Config
+	level       int
+	extraFields string
 }
 
 // New creates and returns a new logger object.
@@ -126,6 +132,14 @@ func New(stream io.Writer, config Config) Modular {
 		config: config,
 		level:  logLevelToInt(config.LogLevel),
 	}
+
+	if len(config.StaticFields) > 0 {
+		jBytes, _ := json.Marshal(config.StaticFields)
+		if len(jBytes) > 2 {
+			logger.extraFields = string(jBytes[1:len(jBytes)-1]) + ","
+		}
+	}
+
 	return &logger
 }
 
@@ -145,9 +159,10 @@ func (l *Logger) NewModule(prefix string) Modular {
 	config.Prefix = fmt.Sprintf("%v%v", config.Prefix, prefix)
 
 	return &Logger{
-		stream: l.stream,
-		config: config,
-		level:  l.level,
+		stream:      l.stream,
+		config:      config,
+		level:       l.level,
+		extraFields: l.extraFields,
 	}
 }
 
@@ -158,14 +173,14 @@ func (l *Logger) writeFormatted(message string, level string, other ...interface
 	if l.config.JSONFormat {
 		if l.config.AddTimeStamp {
 			fmt.Fprintf(l.stream, fmt.Sprintf(
-				"{\"@timestamp\":\"%v\",\"level\":\"%v\",\"@service\":\"%v\",\"message\":%v}\n",
-				time.Now().Format(time.RFC3339), level, l.config.Prefix,
-				strconv.QuoteToASCII(message),
+				"{\"@timestamp\":\"%v\",%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
+				time.Now().Format(time.RFC3339), l.extraFields, level,
+				l.config.Prefix, strconv.QuoteToASCII(message),
 			), other...)
 		} else {
 			fmt.Fprintf(l.stream, fmt.Sprintf(
-				"{\"level\":\"%v\",\"@service\":\"%v\",\"message\":%v}\n",
-				level, l.config.Prefix,
+				"{%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
+				l.extraFields, level, l.config.Prefix,
 				strconv.QuoteToASCII(message),
 			), other...)
 		}
@@ -188,14 +203,14 @@ func (l *Logger) writeLine(message string, level string) {
 	if l.config.JSONFormat {
 		if l.config.AddTimeStamp {
 			fmt.Fprintf(l.stream,
-				"{\"@timestamp\":\"%v\",\"level\":\"%v\",\"@service\":\"%v\",\"message\":%v}\n",
-				time.Now().Format(time.RFC3339), level, l.config.Prefix,
-				strconv.QuoteToASCII(message),
+				"{\"@timestamp\":\"%v\",%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
+				time.Now().Format(time.RFC3339), l.extraFields, level,
+				l.config.Prefix, strconv.QuoteToASCII(message),
 			)
 		} else {
 			fmt.Fprintf(l.stream,
-				"{\"level\":\"%v\",\"@service\":\"%v\",\"message\":%v}\n",
-				level, l.config.Prefix,
+				"{%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
+				l.extraFields, level, l.config.Prefix,
 				strconv.QuoteToASCII(message),
 			)
 		}
