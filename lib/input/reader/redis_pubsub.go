@@ -108,7 +108,7 @@ func (r *RedisPubSub) Connect() error {
 		return err
 	}
 
-	r.log.Infof("Receiving Redis pub/sub messages from URL: %s\n", r.conf.URL)
+	r.log.Infof("Receiving Redis pub/sub messages from channels: %v\n", r.conf.Channels)
 
 	r.client = client
 	r.pubsub = r.client.Subscribe(r.conf.Channels...)

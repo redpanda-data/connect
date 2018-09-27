@@ -200,7 +200,7 @@ func (r *RedisStreams) Connect() error {
 		}
 	}
 
-	r.log.Infof("Receiving messages from Redis streams %v at URL: %s\n", r.conf.Streams, r.conf.URL)
+	r.log.Infof("Receiving messages from Redis streams: %v\n", r.conf.Streams)
 
 	r.client = client
 	return nil

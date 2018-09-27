@@ -105,7 +105,7 @@ func (r *RedisPubSub) Connect() error {
 		return err
 	}
 
-	r.log.Infof("Pushing messages to Redis channel %v at URL: %v\n", r.conf.Channel, r.conf.URL)
+	r.log.Infof("Pushing messages to Redis channel: %v\n", r.conf.Channel)
 
 	r.client = client
 	return nil

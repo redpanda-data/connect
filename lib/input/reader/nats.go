@@ -116,7 +116,7 @@ func (n *NATS) Connect() error {
 		return err
 	}
 
-	n.log.Infof("Receiving NATS messages from URLs: %s\n", n.urls)
+	n.log.Infof("Receiving NATS messages from subject: %v\n", n.conf.Subject)
 
 	n.natsConn = natsConn
 	n.natsSub = natsSub

@@ -105,7 +105,7 @@ func (n *NATSStream) Connect() error {
 		stan.NatsURL(n.urls),
 	)
 	if err == nil {
-		n.log.Infof("Sending NATS messages to URLs: %s\n", n.urls)
+		n.log.Infof("Sending NATS messages to subject: %v\n", n.conf.Subject)
 	}
 	return err
 }

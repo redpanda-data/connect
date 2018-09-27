@@ -108,7 +108,7 @@ func (r *RedisList) Connect() error {
 		return err
 	}
 
-	r.log.Infof("Receiving messages from Redis list %v at URL: %s\n", r.conf.Key, r.conf.URL)
+	r.log.Infof("Receiving messages from Redis list: %v\n", r.conf.Key)
 
 	r.client = client
 	return nil

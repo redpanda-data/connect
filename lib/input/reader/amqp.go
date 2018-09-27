@@ -194,7 +194,7 @@ func (a *AMQP) Connect() (err error) {
 	a.amqpChan = amqpChan
 	a.consumerChan = consumerChan
 
-	a.log.Infof("Receiving AMQP messages from URL: %s\n", a.conf.URL)
+	a.log.Infof("Receiving AMQP messages from queue: %v\n", a.conf.Queue)
 	return
 }
 

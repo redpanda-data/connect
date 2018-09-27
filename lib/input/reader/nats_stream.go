@@ -174,7 +174,7 @@ func (n *NATSStream) Connect() error {
 
 	n.natsConn = natsConn
 	n.natsSub = natsSub
-	n.log.Infof("Receiving NATS Streaming messages from URLs: %s\n", n.urls)
+	n.log.Infof("Receiving NATS Streaming messages from subject: %v\n", n.conf.Subject)
 	return nil
 }
 
