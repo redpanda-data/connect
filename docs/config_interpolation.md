@@ -16,7 +16,7 @@ config section supports functions you should read its respective documentation.
 
 You can use environment variables to replace Benthos config values using
 `${variable-name}` or `${variable-name:default-value}` syntax. A good example of
-this is the [environment variable config](../../config/env/default.yaml), which
+this is the [environment variable config](../config/env/default.yaml), which
 creates environment variables for each default field value in a standard
 single-in-single-out bridge config.
 
