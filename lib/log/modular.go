@@ -117,6 +117,49 @@ func NewConfig() Config {
 
 //------------------------------------------------------------------------------
 
+// UnmarshalJSON ensures that when parsing configs that are in a slice the
+// default values are still applied.
+func (l *Config) UnmarshalJSON(bytes []byte) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	defaultFields := aliased.StaticFields
+	aliased.StaticFields = nil
+	if err := json.Unmarshal(bytes, &aliased); err != nil {
+		return err
+	}
+
+	if aliased.StaticFields == nil {
+		aliased.StaticFields = defaultFields
+	}
+
+	*l = Config(aliased)
+	return nil
+}
+
+// UnmarshalYAML ensures that when parsing configs that are in a slice the
+// default values are still applied.
+func (l *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	defaultFields := aliased.StaticFields
+	aliased.StaticFields = nil
+
+	if err := unmarshal(&aliased); err != nil {
+		return err
+	}
+
+	if aliased.StaticFields == nil {
+		aliased.StaticFields = defaultFields
+	}
+
+	*l = Config(aliased)
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
 // Logger is an object with support for levelled logging and modular components.
 type Logger struct {
 	stream      io.Writer

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.34.2 - 2018-09-27
+
+### Changed
+
+- Allow `log` config field `static_fields` to be fully overridden.
+
 ## 0.34.0 - 2018-09-27
 
 ### Added
