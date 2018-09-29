@@ -7,6 +7,5 @@ cache:
 env:
   - GO111MODULE=on
 script:
-  - make deps
   - make
   - make test
