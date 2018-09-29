@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.34.3 - 2018-09-29
+
+### Added
+
+- Field `endpoint` added to all AWS types.
+
 ## 0.34.2 - 2018-09-27
 
 ### Changed
