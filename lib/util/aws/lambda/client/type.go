@@ -29,43 +29,26 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/lambda"
 )
 
 //------------------------------------------------------------------------------
 
-// AWSCredentialsConfig contains configuration params for AWS credentials.
-type AWSCredentialsConfig struct {
-	ID     string `json:"id" yaml:"id"`
-	Secret string `json:"secret" yaml:"secret"`
-	Token  string `json:"token" yaml:"token"`
-	Role   string `json:"role" yaml:"role"`
-}
-
 // Config contains configuration fields for the Lambda client.
 type Config struct {
-	Credentials AWSCredentialsConfig `json:"credentials" yaml:"credentials"`
-	Region      string               `json:"region" yaml:"region"`
-	Function    string               `json:"function" yaml:"function"`
-	TimeoutMS   int64                `json:"timeout_ms" yaml:"timeout_ms"`
-	NumRetries  int                  `json:"retries" yaml:"retries"`
-	RateLimit   string               `json:"rate_limit" yaml:"rate_limit"`
+	session.Config `json:",inline" yaml:",inline"`
+	Function       string `json:"function" yaml:"function"`
+	TimeoutMS      int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	NumRetries     int    `json:"retries" yaml:"retries"`
+	RateLimit      string `json:"rate_limit" yaml:"rate_limit"`
 }
 
 // NewConfig returns a Config with default values.
 func NewConfig() Config {
 	return Config{
-		Credentials: AWSCredentialsConfig{
-			ID:     "",
-			Secret: "",
-			Token:  "",
-			Role:   "",
-		},
-		Region:     "eu-west-1",
+		Config:     session.NewConfig(),
 		Function:   "",
 		TimeoutMS:  5000,
 		NumRetries: 3,
@@ -129,27 +112,9 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		}
 	}
 
-	awsConf := aws.NewConfig()
-	if len(l.conf.Region) > 0 {
-		awsConf = awsConf.WithRegion(l.conf.Region)
-	}
-	if len(l.conf.Credentials.ID) > 0 {
-		awsConf = awsConf.WithCredentials(credentials.NewStaticCredentials(
-			l.conf.Credentials.ID,
-			l.conf.Credentials.Secret,
-			l.conf.Credentials.Token,
-		))
-	}
-
-	sess, err := session.NewSession(awsConf)
+	sess, err := l.conf.GetSession()
 	if err != nil {
 		return nil, err
-	}
-
-	if len(l.conf.Credentials.Role) > 0 {
-		sess.Config = sess.Config.WithCredentials(
-			stscreds.NewCredentials(sess, l.conf.Credentials.Role),
-		)
 	}
 
 	l.lambda = lambda.New(sess)

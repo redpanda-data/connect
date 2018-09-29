@@ -64,7 +64,7 @@ dynamodb:
   data_key: ""
   endpoint: ""
   hash_key: ""
-  region: ""
+  region: eu-west-1
   table: ""
   ttl: ""
   ttl_key: ""

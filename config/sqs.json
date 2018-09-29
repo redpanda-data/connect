@@ -14,6 +14,7 @@
 				"secret": "",
 				"token": ""
 			},
+			"endpoint": "",
 			"region": "eu-west-1",
 			"timeout_s": 5,
 			"url": ""
@@ -36,6 +37,7 @@
 				"secret": "",
 				"token": ""
 			},
+			"endpoint": "",
 			"region": "eu-west-1",
 			"url": ""
 		}

@@ -29,10 +29,9 @@ import (
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	sess "github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/Jeffail/gabs"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -41,33 +40,24 @@ import (
 
 //------------------------------------------------------------------------------
 
-// AmazonAWSCredentialsConfig contains configuration params for AWS credentials.
-type AmazonAWSCredentialsConfig struct {
-	ID     string `json:"id" yaml:"id"`
-	Secret string `json:"secret" yaml:"secret"`
-	Token  string `json:"token" yaml:"token"`
-	Role   string `json:"role" yaml:"role"`
-}
-
 // AmazonS3Config contains configuration values for the AmazonS3 input type.
 type AmazonS3Config struct {
-	Region          string                     `json:"region" yaml:"region"`
-	Bucket          string                     `json:"bucket" yaml:"bucket"`
-	Prefix          string                     `json:"prefix" yaml:"prefix"`
-	Retries         int                        `json:"retries" yaml:"retries"`
-	DeleteObjects   bool                       `json:"delete_objects" yaml:"delete_objects"`
-	SQSURL          string                     `json:"sqs_url" yaml:"sqs_url"`
-	SQSBodyPath     string                     `json:"sqs_body_path" yaml:"sqs_body_path"`
-	SQSEnvelopePath string                     `json:"sqs_envelope_path" yaml:"sqs_envelope_path"`
-	SQSMaxMessages  int64                      `json:"sqs_max_messages" yaml:"sqs_max_messages"`
-	Credentials     AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
-	TimeoutS        int64                      `json:"timeout_s" yaml:"timeout_s"`
+	sess.Config     `json:",inline" yaml:",inline"`
+	Bucket          string `json:"bucket" yaml:"bucket"`
+	Prefix          string `json:"prefix" yaml:"prefix"`
+	Retries         int    `json:"retries" yaml:"retries"`
+	DeleteObjects   bool   `json:"delete_objects" yaml:"delete_objects"`
+	SQSURL          string `json:"sqs_url" yaml:"sqs_url"`
+	SQSBodyPath     string `json:"sqs_body_path" yaml:"sqs_body_path"`
+	SQSEnvelopePath string `json:"sqs_envelope_path" yaml:"sqs_envelope_path"`
+	SQSMaxMessages  int64  `json:"sqs_max_messages" yaml:"sqs_max_messages"`
+	TimeoutS        int64  `json:"timeout_s" yaml:"timeout_s"`
 }
 
 // NewAmazonS3Config creates a new AmazonS3Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
 	return AmazonS3Config{
-		Region:          "eu-west-1",
+		Config:          sess.NewConfig(),
 		Bucket:          "",
 		Prefix:          "",
 		Retries:         3,
@@ -76,13 +66,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		SQSBodyPath:     "Records.s3.object.key",
 		SQSEnvelopePath: "",
 		SQSMaxMessages:  10,
-		Credentials: AmazonAWSCredentialsConfig{
-			ID:     "",
-			Secret: "",
-			Token:  "",
-			Role:   "",
-		},
-		TimeoutS: 5,
+		TimeoutS:        5,
 	}
 }
 
@@ -144,27 +128,9 @@ func (a *AmazonS3) Connect() error {
 		return nil
 	}
 
-	awsConf := aws.NewConfig()
-	if len(a.conf.Region) > 0 {
-		awsConf = awsConf.WithRegion(a.conf.Region)
-	}
-	if len(a.conf.Credentials.ID) > 0 {
-		awsConf = awsConf.WithCredentials(credentials.NewStaticCredentials(
-			a.conf.Credentials.ID,
-			a.conf.Credentials.Secret,
-			a.conf.Credentials.Token,
-		))
-	}
-
-	sess, err := session.NewSession(awsConf)
+	sess, err := a.conf.GetSession()
 	if err != nil {
 		return err
-	}
-
-	if len(a.conf.Credentials.Role) > 0 {
-		sess.Config = sess.Config.WithCredentials(
-			stscreds.NewCredentials(sess, a.conf.Credentials.Role),
-		)
 	}
 
 	sThree := s3.New(sess)

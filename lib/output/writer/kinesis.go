@@ -30,11 +30,10 @@ import (
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	sess "github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/Jeffail/benthos/lib/util/retries"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/kinesis/kinesisiface"
@@ -52,14 +51,16 @@ var (
 	kinesisPayloadLimitExceeded = regexp.MustCompile("Member must have length less than or equal to")
 )
 
+type sessionConfig struct {
+	sess.Config `json:",inline" yaml:",inline"`
+}
+
 // KinesisConfig contains configuration fields for the Kinesis output type.
 type KinesisConfig struct {
-	Endpoint       string                     `json:"endpoint" yaml:"endpoint"`
-	Region         string                     `json:"region" yaml:"region"`
-	Stream         string                     `json:"stream" yaml:"stream"`
-	HashKey        string                     `json:"hash_key" yaml:"hash_key"`
-	PartitionKey   string                     `json:"partition_key" yaml:"partition_key"`
-	Credentials    AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
+	sessionConfig  `json:",inline" yaml:",inline"`
+	Stream         string `json:"stream" yaml:"stream"`
+	HashKey        string `json:"hash_key" yaml:"hash_key"`
+	PartitionKey   string `json:"partition_key" yaml:"partition_key"`
 	retries.Config `json:",inline" yaml:",inline"`
 }
 
@@ -70,17 +71,13 @@ func NewKinesisConfig() KinesisConfig {
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
 	return KinesisConfig{
-		Endpoint:     "",
-		Region:       "eu-west-1",
+		sessionConfig: sessionConfig{
+			Config: sess.NewConfig(),
+		},
 		Stream:       "",
 		HashKey:      "",
 		PartitionKey: "",
-		Credentials: AmazonAWSCredentialsConfig{
-			ID:     "",
-			Secret: "",
-			Token:  "",
-		},
-		Config: rConf,
+		Config:       rConf,
 	}
 }
 
@@ -182,30 +179,9 @@ func (a *Kinesis) Connect() error {
 		return nil
 	}
 
-	awsConf := aws.NewConfig()
-	if len(a.conf.Region) > 0 {
-		awsConf = awsConf.WithRegion(a.conf.Region)
-	}
-	if len(a.conf.Endpoint) > 0 {
-		awsConf = awsConf.WithEndpoint(a.conf.Endpoint)
-	}
-	if len(a.conf.Credentials.ID) > 0 {
-		awsConf = awsConf.WithCredentials(credentials.NewStaticCredentials(
-			a.conf.Credentials.ID,
-			a.conf.Credentials.Secret,
-			a.conf.Credentials.Token,
-		))
-	}
-
-	sess, err := session.NewSession(awsConf)
+	sess, err := a.conf.GetSession()
 	if err != nil {
 		return err
-	}
-
-	if len(a.conf.Credentials.Role) > 0 {
-		sess.Config = sess.Config.WithCredentials(
-			stscreds.NewCredentials(sess, a.conf.Credentials.Role),
-		)
 	}
 
 	a.session = sess

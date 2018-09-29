@@ -117,13 +117,13 @@ input:
       skip_cert_verify: false
       client_certs: []
   kinesis:
-    endpoint: ""
-    region: eu-west-1
     credentials:
       id: ""
       secret: ""
       token: ""
       role: ""
+    endpoint: ""
+    region: eu-west-1
     limit: 100
     stream: ""
     shard: "0"
@@ -225,6 +225,12 @@ input:
     commit_period_ms: 1000
     timeout_ms: 5000
   s3:
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
+    endpoint: ""
     region: eu-west-1
     bucket: ""
     prefix: ""
@@ -234,20 +240,16 @@ input:
     sqs_body_path: Records.s3.object.key
     sqs_envelope_path: ""
     sqs_max_messages: 10
-    credentials:
-      id: ""
-      secret: ""
-      token: ""
-      role: ""
     timeout_s: 5
   sqs:
-    region: eu-west-1
-    url: ""
     credentials:
       id: ""
       secret: ""
       token: ""
       role: ""
+    endpoint: ""
+    region: eu-west-1
+    url: ""
     timeout_s: 5
   stdin:
     multipart: false
@@ -508,6 +510,7 @@ pipeline:
         secret: ""
         token: ""
         role: ""
+      endpoint: ""
       region: eu-west-1
       function: ""
       timeout_ms: 5000
@@ -669,16 +672,16 @@ output:
       skip_cert_verify: false
       client_certs: []
   kinesis:
-    endpoint: ""
-    region: eu-west-1
-    stream: ""
-    hash_key: ""
-    partition_key: ""
     credentials:
       id: ""
       secret: ""
       token: ""
       role: ""
+    endpoint: ""
+    region: eu-west-1
+    stream: ""
+    hash_key: ""
+    partition_key: ""
     max_retries: 0
     backoff:
       initial_interval: 1s
@@ -729,23 +732,25 @@ output:
       max_interval: 3s
       max_elapsed_time: 0s
   s3:
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
+    endpoint: ""
     region: eu-west-1
     bucket: ""
     path: ${!count:files}-${!timestamp_unix_nano}.txt
-    credentials:
-      id: ""
-      secret: ""
-      token: ""
-      role: ""
     timeout_s: 5
   sqs:
-    region: eu-west-1
-    url: ""
     credentials:
       id: ""
       secret: ""
       token: ""
       role: ""
+    endpoint: ""
+    region: eu-west-1
+    url: ""
   stdout:
     delimiter: ""
   switch:
@@ -769,16 +774,16 @@ resources:
     example:
       type: memory
       dynamodb:
-        consistent_read: false
         credentials:
           id: ""
           secret: ""
           token: ""
           role: ""
-        data_key: ""
         endpoint: ""
+        region: eu-west-1
+        consistent_read: false
+        data_key: ""
         hash_key: ""
-        region: ""
         table: ""
         ttl: ""
         ttl_key: ""

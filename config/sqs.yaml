@@ -12,6 +12,7 @@ input:
       role: ""
       secret: ""
       token: ""
+    endpoint: ""
     region: eu-west-1
     timeout_s: 5
     url: ""
@@ -29,6 +30,7 @@ output:
       role: ""
       secret: ""
       token: ""
+    endpoint: ""
     region: eu-west-1
     url: ""
 resources:

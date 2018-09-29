@@ -26,9 +26,8 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	sess "github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
@@ -37,21 +36,15 @@ import (
 
 // AmazonSQSConfig contains configuration fields for the output AmazonSQS type.
 type AmazonSQSConfig struct {
-	Region      string                     `json:"region" yaml:"region"`
-	URL         string                     `json:"url" yaml:"url"`
-	Credentials AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
+	sess.Config `json:",inline" yaml:",inline"`
+	URL         string `json:"url" yaml:"url"`
 }
 
 // NewAmazonSQSConfig creates a new Config with default values.
 func NewAmazonSQSConfig() AmazonSQSConfig {
 	return AmazonSQSConfig{
-		Region: "eu-west-1",
+		Config: sess.NewConfig(),
 		URL:    "",
-		Credentials: AmazonAWSCredentialsConfig{
-			ID:     "",
-			Secret: "",
-			Token:  "",
-		},
 	}
 }
 
@@ -88,27 +81,9 @@ func (a *AmazonSQS) Connect() error {
 		return nil
 	}
 
-	awsConf := aws.NewConfig()
-	if len(a.conf.Region) > 0 {
-		awsConf = awsConf.WithRegion(a.conf.Region)
-	}
-	if len(a.conf.Credentials.ID) > 0 {
-		awsConf = awsConf.WithCredentials(credentials.NewStaticCredentials(
-			a.conf.Credentials.ID,
-			a.conf.Credentials.Secret,
-			a.conf.Credentials.Token,
-		))
-	}
-
-	sess, err := session.NewSession(awsConf)
+	sess, err := a.conf.GetSession()
 	if err != nil {
 		return err
-	}
-
-	if len(a.conf.Credentials.Role) > 0 {
-		sess.Config = sess.Config.WithCredentials(
-			stscreds.NewCredentials(sess, a.conf.Credentials.Role),
-		)
 	}
 
 	a.session = sess

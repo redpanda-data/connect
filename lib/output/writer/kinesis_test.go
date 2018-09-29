@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	sess "github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -374,15 +375,15 @@ func TestKinesisIntegration(t *testing.T) {
 
 	endpoint := fmt.Sprintf("http://localhost:%d", port)
 	config := KinesisConfig{
-		Endpoint:     endpoint,
-		Region:       "us-east-1",
 		Stream:       "foo",
 		PartitionKey: "${!json_field:id}",
-		Credentials: AmazonAWSCredentialsConfig{
-			ID:     "xxxxxx",
-			Secret: "xxxxxx",
-			Token:  "xxxxxx",
-		},
+	}
+	config.Region = "us-east-1"
+	config.Endpoint = endpoint
+	config.Credentials = sess.CredentialsConfig{
+		ID:     "xxxxxx",
+		Secret: "xxxxxx",
+		Token:  "xxxxxx",
 	}
 
 	// bootstrap kinesis

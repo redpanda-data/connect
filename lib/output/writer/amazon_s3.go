@@ -27,44 +27,29 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	sess "github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 //------------------------------------------------------------------------------
 
-// AmazonAWSCredentialsConfig contains configuration params for AWS credentials.
-type AmazonAWSCredentialsConfig struct {
-	ID     string `json:"id" yaml:"id"`
-	Secret string `json:"secret" yaml:"secret"`
-	Token  string `json:"token" yaml:"token"`
-	Role   string `json:"role" yaml:"role"`
-}
-
 // AmazonS3Config contains configuration fields for the AmazonS3 output type.
 type AmazonS3Config struct {
-	Region      string                     `json:"region" yaml:"region"`
-	Bucket      string                     `json:"bucket" yaml:"bucket"`
-	Path        string                     `json:"path" yaml:"path"`
-	Credentials AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
-	TimeoutS    int64                      `json:"timeout_s" yaml:"timeout_s"`
+	sess.Config `json:",inline" yaml:",inline"`
+	Bucket      string `json:"bucket" yaml:"bucket"`
+	Path        string `json:"path" yaml:"path"`
+	TimeoutS    int64  `json:"timeout_s" yaml:"timeout_s"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
 	return AmazonS3Config{
-		Region: "eu-west-1",
-		Bucket: "",
-		Path:   "${!count:files}-${!timestamp_unix_nano}.txt",
-		Credentials: AmazonAWSCredentialsConfig{
-			ID:     "",
-			Secret: "",
-			Token:  "",
-		},
+		Config:   sess.NewConfig(),
+		Bucket:   "",
+		Path:     "${!count:files}-${!timestamp_unix_nano}.txt",
 		TimeoutS: 5,
 	}
 }
@@ -109,27 +94,9 @@ func (a *AmazonS3) Connect() error {
 		return nil
 	}
 
-	awsConf := aws.NewConfig()
-	if len(a.conf.Region) > 0 {
-		awsConf = awsConf.WithRegion(a.conf.Region)
-	}
-	if len(a.conf.Credentials.ID) > 0 {
-		awsConf = awsConf.WithCredentials(credentials.NewStaticCredentials(
-			a.conf.Credentials.ID,
-			a.conf.Credentials.Secret,
-			a.conf.Credentials.Token,
-		))
-	}
-
-	sess, err := session.NewSession(awsConf)
+	sess, err := a.conf.GetSession()
 	if err != nil {
 		return err
-	}
-
-	if len(a.conf.Credentials.Role) > 0 {
-		sess.Config = sess.Config.WithCredentials(
-			stscreds.NewCredentials(sess, a.conf.Credentials.Role),
-		)
 	}
 
 	a.session = sess

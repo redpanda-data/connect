@@ -35,26 +35,3 @@ release:
     owner: Jeffail
     name: benthos
   disable: false
-dockers:
-  -
-    image: jeffail/benthos
-    goos: linux
-    goarch: amd64
-    binary: benthos
-    skip_push: false
-    dockerfile: ./resources/docker/Dockerfile
-    tag_templates:
-      - "v{{ .Version }}"
-      - "v{{ .Major }}"
-      - "v{{ .Major }}.{{ .Minor }}"
-      - latest
-    extra_files:
-      - .git
-      - cmd
-      - config
-      - go.mod
-      - go.sum
-      - lib
-      - LICENSE
-      - Makefile
-      - vendor

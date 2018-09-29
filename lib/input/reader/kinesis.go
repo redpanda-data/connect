@@ -29,9 +29,8 @@ import (
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	sess "github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -42,30 +41,21 @@ import (
 
 // KinesisConfig is configuration values for the input type.
 type KinesisConfig struct {
-	Endpoint        string                     `json:"endpoint" yaml:"endpoint"`
-	Region          string                     `json:"region" yaml:"region"`
-	Credentials     AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
-	Limit           int64                      `json:"limit" yaml:"limit"`
-	Stream          string                     `json:"stream" yaml:"stream"`
-	Shard           string                     `json:"shard" yaml:"shard"`
-	DynamoDBTable   string                     `json:"dynamodb_table" yaml:"dynamodb_table"`
-	ClientID        string                     `json:"client_id" yaml:"client_id"`
-	CommitPeriodMS  int                        `json:"commit_period_ms" yaml:"commit_period_ms"`
-	StartFromOldest bool                       `json:"start_from_oldest" yaml:"start_from_oldest"`
-	TimeoutMS       int64                      `json:"timeout_ms" yaml:"timeout_ms"`
+	sess.Config     `json:",inline" yaml:",inline"`
+	Limit           int64  `json:"limit" yaml:"limit"`
+	Stream          string `json:"stream" yaml:"stream"`
+	Shard           string `json:"shard" yaml:"shard"`
+	DynamoDBTable   string `json:"dynamodb_table" yaml:"dynamodb_table"`
+	ClientID        string `json:"client_id" yaml:"client_id"`
+	CommitPeriodMS  int    `json:"commit_period_ms" yaml:"commit_period_ms"`
+	StartFromOldest bool   `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TimeoutMS       int64  `json:"timeout_ms" yaml:"timeout_ms"`
 }
 
 // NewKinesisConfig creates a new Config with default values.
 func NewKinesisConfig() KinesisConfig {
 	return KinesisConfig{
-		Endpoint: "",
-		Region:   "eu-west-1",
-		Credentials: AmazonAWSCredentialsConfig{
-			ID:     "",
-			Secret: "",
-			Token:  "",
-			Role:   "",
-		},
+		Config:          sess.NewConfig(),
 		Limit:           100,
 		Stream:          "",
 		Shard:           "0",
@@ -120,30 +110,9 @@ func (k *Kinesis) Connect() error {
 		return nil
 	}
 
-	awsConf := aws.NewConfig()
-	if len(k.conf.Region) > 0 {
-		awsConf = awsConf.WithRegion(k.conf.Region)
-	}
-	if len(k.conf.Endpoint) > 0 {
-		awsConf = awsConf.WithEndpoint(k.conf.Endpoint)
-	}
-	if len(k.conf.Credentials.ID) > 0 {
-		awsConf = awsConf.WithCredentials(credentials.NewStaticCredentials(
-			k.conf.Credentials.ID,
-			k.conf.Credentials.Secret,
-			k.conf.Credentials.Token,
-		))
-	}
-
-	sess, err := session.NewSession(awsConf)
+	sess, err := k.conf.GetSession()
 	if err != nil {
 		return err
-	}
-
-	if len(k.conf.Credentials.Role) > 0 {
-		sess.Config = sess.Config.WithCredentials(
-			stscreds.NewCredentials(sess, k.conf.Credentials.Role),
-		)
 	}
 
 	dynamo := dynamodb.New(sess)

@@ -14,6 +14,7 @@ input:
       secret: ""
       token: ""
     delete_objects: false
+    endpoint: ""
     prefix: ""
     region: eu-west-1
     retries: 3
@@ -37,6 +38,7 @@ output:
       role: ""
       secret: ""
       token: ""
+    endpoint: ""
     path: ${!count:files}-${!timestamp_unix_nano}.txt
     region: eu-west-1
     timeout_s: 5

@@ -123,20 +123,21 @@ with [a config file][env-config] where _all_ common fields can be set this way.
 
 ## Install
 
-Build with Go (1.11 or later):
+Grab a binary for your OS from [here.][releases]
 
-``` shell
-make deps
-make
-```
-
-Or, pull the docker image:
+Or pull the docker image:
 
 ``` shell
 docker pull jeffail/benthos
 ```
 
-Or, [grab a binary for your OS from here.][releases]
+Build with Go (1.11 or later):
+
+``` shell
+git clone git@github.com:Jeffail/benthos
+cd benthos
+make
+```
 
 ### Docker Builds
 
@@ -167,6 +168,12 @@ install libzmq4 and use the compile time flag when building Benthos:
 
 ``` shell
 make TAGS=ZMQ4
+```
+
+Or to build a docker image with ZMQ support:
+
+``` shell
+make docker-zmq
 ```
 
 ## Contributing

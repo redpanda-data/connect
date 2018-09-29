@@ -773,6 +773,7 @@ s3:
     secret: ""
     token: ""
   delete_objects: false
+  endpoint: ""
   prefix: ""
   region: eu-west-1
   retries: 3
@@ -821,6 +822,7 @@ sqs:
     role: ""
     secret: ""
     token: ""
+  endpoint: ""
   region: eu-west-1
   timeout_s: 5
   url: ""

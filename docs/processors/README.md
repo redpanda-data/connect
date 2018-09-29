@@ -634,6 +634,7 @@ lambda:
     role: ""
     secret: ""
     token: ""
+  endpoint: ""
   function: ""
   parallel: false
   rate_limit: ""

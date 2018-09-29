@@ -190,6 +190,7 @@ input:
           secret: ${INPUT_S3_CREDENTIALS_SECRET}
           token: ${INPUT_S3_CREDENTIALS_TOKEN}
         delete_objects: ${INPUT_S3_DELETE_OBJECTS:false}
+        endpoint: ${INPUT_S3_ENDPOINT}
         prefix: ${INPUT_S3_PREFIX}
         region: ${INPUT_S3_REGION:eu-west-1}
         retries: ${INPUT_S3_RETRIES:3}
@@ -204,6 +205,7 @@ input:
           role: ${INPUT_SQS_CREDENTIALS_ROLE}
           secret: ${INPUT_SQS_CREDENTIALS_SECRET}
           token: ${INPUT_SQS_CREDENTIALS_TOKEN}
+        endpoint: ${INPUT_SQS_ENDPOINT}
         region: ${INPUT_SQS_REGION:eu-west-1}
         timeout_s: ${INPUT_SQS_TIMEOUT_S:5}
         url: ${INPUT_SQS_URL}
@@ -342,6 +344,7 @@ pipeline:
         role: ${PROCESSOR_LAMBDA_CREDENTIALS_ROLE}
         secret: ${PROCESSOR_LAMBDA_CREDENTIALS_SECRET}
         token: ${PROCESSOR_LAMBDA_CREDENTIALS_TOKEN}
+      endpoint: ${PROCESSOR_LAMBDA_ENDPOINT}
       function: ${PROCESSOR_LAMBDA_FUNCTION}
       parallel: ${PROCESSOR_LAMBDA_PARALLEL:false}
       rate_limit: ${PROCESSOR_LAMBDA_RATE_LIMIT}
@@ -538,6 +541,7 @@ output:
           role: ${OUTPUT_S3_CREDENTIALS_ROLE}
           secret: ${OUTPUT_S3_CREDENTIALS_SECRET}
           token: ${OUTPUT_S3_CREDENTIALS_TOKEN}
+        endpoint: ${OUTPUT_S3_ENDPOINT}
         path: ${OUTPUT_S3_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
         region: ${OUTPUT_S3_REGION:eu-west-1}
         timeout_s: ${OUTPUT_S3_TIMEOUT_S:5}
@@ -547,6 +551,7 @@ output:
           role: ${OUTPUT_SQS_CREDENTIALS_ROLE}
           secret: ${OUTPUT_SQS_CREDENTIALS_SECRET}
           token: ${OUTPUT_SQS_CREDENTIALS_TOKEN}
+        endpoint: ${OUTPUT_SQS_ENDPOINT}
         region: ${OUTPUT_SQS_REGION:eu-west-1}
         url: ${OUTPUT_SQS_URL}
       stdout:

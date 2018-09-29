@@ -27,11 +27,9 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
@@ -57,28 +55,26 @@ be enabled using the ` + "`consistent_read`" + ` configuration field.`,
 
 // DynamoDBConfig contains config fields for the DynamoDB cache type.
 type DynamoDBConfig struct {
-	ConsistentRead bool                       `json:"consistent_read" yaml:"consistent_read"`
-	Credentials    AmazonAWSCredentialsConfig `json:"credentials" yaml:"credentials"`
-	DataKey        string                     `json:"data_key" yaml:"data_key"`
-	Endpoint       string                     `json:"endpoint" yaml:"endpoint"`
-	HashKey        string                     `json:"hash_key" yaml:"hash_key"`
-	Region         string                     `json:"region" yaml:"region"`
-	Table          string                     `json:"table" yaml:"table"`
-	TTL            string                     `json:"ttl" yaml:"ttl"`
-	TTLKey         string                     `json:"ttl_key" yaml:"ttl_key"`
-}
-
-// AmazonAWSCredentialsConfig contains configuration params for AWS credentials.
-type AmazonAWSCredentialsConfig struct {
-	ID     string `json:"id" yaml:"id"`
-	Secret string `json:"secret" yaml:"secret"`
-	Token  string `json:"token" yaml:"token"`
-	Role   string `json:"role" yaml:"role"`
+	session.Config `json:",inline" yaml:",inline"`
+	ConsistentRead bool   `json:"consistent_read" yaml:"consistent_read"`
+	DataKey        string `json:"data_key" yaml:"data_key"`
+	HashKey        string `json:"hash_key" yaml:"hash_key"`
+	Table          string `json:"table" yaml:"table"`
+	TTL            string `json:"ttl" yaml:"ttl"`
+	TTLKey         string `json:"ttl_key" yaml:"ttl_key"`
 }
 
 // NewDynamoDBConfig creates a MemoryConfig populated with default values.
 func NewDynamoDBConfig() DynamoDBConfig {
-	return DynamoDBConfig{}
+	return DynamoDBConfig{
+		Config:         session.NewConfig(),
+		ConsistentRead: false,
+		DataKey:        "",
+		HashKey:        "",
+		Table:          "",
+		TTL:            "",
+		TTLKey:         "",
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -110,30 +106,9 @@ func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 		d.ttl = ttl
 	}
 
-	awsConf := aws.NewConfig()
-	if len(d.conf.Region) > 0 {
-		awsConf = awsConf.WithRegion(d.conf.Region)
-	}
-	if len(d.conf.Endpoint) > 0 {
-		awsConf = awsConf.WithEndpoint(d.conf.Endpoint)
-	}
-	if len(d.conf.Credentials.ID) > 0 {
-		awsConf = awsConf.WithCredentials(credentials.NewStaticCredentials(
-			d.conf.Credentials.ID,
-			d.conf.Credentials.Secret,
-			d.conf.Credentials.Token,
-		))
-	}
-
-	sess, err := session.NewSession(awsConf)
+	sess, err := d.conf.GetSession()
 	if err != nil {
 		return nil, err
-	}
-
-	if len(d.conf.Credentials.Role) > 0 {
-		sess.Config = sess.Config.WithCredentials(
-			stscreds.NewCredentials(sess, d.conf.Credentials.Role),
-		)
 	}
 
 	d.client = dynamodb.New(sess)

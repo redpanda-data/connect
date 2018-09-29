@@ -105,7 +105,7 @@ for an output, it behaves like a static ` + "`true`" + ` condition. If
 ` + "`fallthrough`" + ` is set to ` + "`true`" + `, the switch output will
 continue evaluating additional outputs after finding a match. If an output
 applies back pressure it will block all subsequent messages, and if an output
-fails to send a message, it will be retried continously until completion or
+fails to send a message, it will be retried continuously until completion or
 service shut down. Messages that do not match any outputs will be dropped.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			outSlice := []interface{}{}

@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker clean docs test test-race test-integration fmt lint install docker-zmq
+.PHONY: all deps rpm docker docker-deps docker-zmq docker-push clean docs test test-race test-integration fmt lint install
 
 TAGS =
 
@@ -7,14 +7,17 @@ DEST_DIR       = ./target
 PATHINSTBIN    = $(DEST_DIR)/bin
 PATHINSTDOCKER = $(DEST_DIR)/docker
 
-VERSION := $(shell git describe --tags || echo "v0.0.0")
-DATE    := $(shell date +"%Y-%m-%dT%H:%M:%SZ")
+VERSION   := $(shell git describe --tags || echo "v0.0.0")
+VER_MAJOR := $(shell echo $(VERSION) | cut -f1 -d.)
+VER_MINOR := $(shell echo $(VERSION) | cut -f2 -d.)
+VER_PATCH := $(shell echo $(VERSION) | cut -f3 -d.)
+DATE      := $(shell date +"%Y-%m-%dT%H:%M:%SZ")
 
 VER_FLAGS = -X main.Version=$(VERSION) \
 	-X main.DateBuilt=$(DATE)
 
 LD_FLAGS =
-GO_FLAGS = -mod=vendor
+GO_FLAGS =
 
 APPS = benthos
 all: $(APPS)
@@ -29,17 +32,24 @@ $(PATHINSTBIN)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/*/*.go)
 $(APPS): %: $(PATHINSTBIN)/%
 
 docker:
-	@docker rmi jeffail/benthos:$(VERSION); true
 	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VERSION)
-	@docker rmi jeffail/benthos:latest; true
+	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:$(VER_MAJOR)
+	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:$(VER_MAJOR).$(VER_MINOR)
 	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:latest
 
+docker-deps:
+	@docker build -f ./resources/docker/Dockerfile --target deps . -t jeffail/benthos:$(VERSION)-deps
+
 docker-zmq:
-	@docker rmi jeffail/benthos:$(VERSION)-zmq; true
 	@docker build -f ./resources/docker/Dockerfile.zmq . -t jeffail/benthos:$(VERSION)-zmq
 
-deps:
-	@go mod vendor
+docker-push:
+	@docker push jeffail/benthos:$(VERSION)-deps; true
+	@docker push jeffail/benthos:$(VERSION)-zmq; true
+	@docker push jeffail/benthos:$(VERSION); true
+	@docker push jeffail/benthos:$(VER_MAJOR); true
+	@docker push jeffail/benthos:$(VER_MAJOR).$(VER_MINOR); true
+	@docker push jeffail/benthos:latest; true
 
 fmt:
 	@go list -f {{.Dir}} ./... | xargs -I{} gofmt -w -s {}
@@ -55,7 +65,7 @@ test-race:
 	@go test $(GO_FLAGS) -short -race ./...
 
 test-integration:
-	@go test $(GO_FLAGS) -timeout 300s ./...
+	@go test $(GO_FLAGS) -timeout 600s ./...
 
 clean:
 	rm -rf $(PATHINSTBIN)
