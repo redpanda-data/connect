@@ -41,8 +41,10 @@ import (
 // output type.
 type ElasticsearchConfig struct {
 	URLs      []string             `json:"urls" yaml:"urls"`
+	Sniff     bool                 `json:"sniff" yaml:"sniff"`
 	ID        string               `json:"id" yaml:"id"`
 	Index     string               `json:"index" yaml:"index"`
+	Pipeline  string               `json:"pipeline" yaml:"pipeline"`
 	Type      string               `json:"type" yaml:"type"`
 	TimeoutMS int                  `json:"timeout_ms" yaml:"timeout_ms"`
 	Auth      auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
@@ -52,8 +54,10 @@ type ElasticsearchConfig struct {
 func NewElasticsearchConfig() ElasticsearchConfig {
 	return ElasticsearchConfig{
 		URLs:      []string{"http://localhost:9200"},
+		Sniff:     true,
 		ID:        "${!count:elastic_ids}-${!timestamp_unix}",
 		Index:     "benthos_index",
+		Pipeline:  "",
 		Type:      "doc",
 		TimeoutMS: 5000,
 		Auth:      auth.NewBasicAuthConfig(),
@@ -67,11 +71,13 @@ type Elasticsearch struct {
 	log   log.Modular
 	stats metrics.Type
 
-	urls []string
-	conf ElasticsearchConfig
+	urls  []string
+	sniff bool
+	conf  ElasticsearchConfig
 
 	idStr             *text.InterpolatedString
 	indexStr          *text.InterpolatedString
+	pipelineStr       *text.InterpolatedString
 	interpolatedIndex bool
 
 	client *elastic.Client
@@ -83,8 +89,10 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 		log:               log.NewModule(".output.elasticsearch"),
 		stats:             stats,
 		conf:              conf,
+		sniff:             conf.Sniff,
 		idStr:             text.NewInterpolatedString(conf.ID),
 		indexStr:          text.NewInterpolatedString(conf.Index),
+		pipelineStr:       text.NewInterpolatedString(conf.Pipeline),
 		interpolatedIndex: text.ContainsFunctionVariables([]byte(conf.Index)),
 	}
 
@@ -112,6 +120,7 @@ func (e *Elasticsearch) Connect() error {
 		elastic.SetHttpClient(&http.Client{
 			Timeout: time.Duration(e.conf.TimeoutMS) * time.Millisecond,
 		}),
+		elastic.SetSniff(e.sniff),
 	}
 
 	if e.conf.Auth.Enabled {
@@ -149,6 +158,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 	return msg.Iter(func(i int, part types.Part) error {
 		_, err := e.client.Index().
 			Index(e.indexStr.Get(msg)).
+			Pipeline(e.pipelineStr.Get(msg)).
 			Type(e.conf.Type).
 			Id(e.idStr.Get(msg)).
 			BodyString(string(part.Get())).

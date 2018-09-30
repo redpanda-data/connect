@@ -594,8 +594,10 @@ output:
   elasticsearch:
     urls:
     - http://localhost:9200
+    sniff: true
     id: ${!count:elastic_ids}-${!timestamp_unix}
     index: benthos_index
+    pipeline: ""
     type: doc
     timeout_ms: 5000
     basic_auth:
