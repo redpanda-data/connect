@@ -215,6 +215,8 @@ elasticsearch:
     username: ""
   id: ${!count:elastic_ids}-${!timestamp_unix}
   index: benthos_index
+  pipeline: ""
+  sniff: true
   timeout_ms: 5000
   type: doc
   urls:

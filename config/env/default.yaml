@@ -408,6 +408,8 @@ output:
           username: ${OUTPUT_ELASTICSEARCH_BASIC_AUTH_USERNAME}
         id: ${OUTPUT_ELASTICSEARCH_ID:${!count:elastic_ids}-${!timestamp_unix}}
         index: ${OUTPUT_ELASTICSEARCH_INDEX:benthos_index}
+        pipeline: ${OUTPUT_ELASTICSEARCH_PIPELINE}
+        sniff: ${OUTPUT_ELASTICSEARCH_SNIFF:true}
         timeout_ms: ${OUTPUT_ELASTICSEARCH_TIMEOUT_MS:5000}
         type: ${OUTPUT_ELASTICSEARCH_TYPE:doc}
         urls:
