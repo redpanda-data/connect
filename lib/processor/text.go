@@ -66,6 +66,14 @@ value.
 
 Removes all HTML tags from a message.
 
+#### ` + "`to_lower`" + `
+
+Converts all text into lower case.
+
+#### ` + "`to_upper`" + `
+
+Converts all text into upper case.
+
 #### ` + "`trim_space`" + `
 
 Removes all leading and trailing whitespace from the payload.
@@ -124,6 +132,18 @@ func newTextTrimSpaceOperator() textOperator {
 	}
 }
 
+func newTextToUpperOperator() textOperator {
+	return func(body []byte, value []byte) ([]byte, error) {
+		return bytes.ToUpper(body), nil
+	}
+}
+
+func newTextToLowerOperator() textOperator {
+	return func(body []byte, value []byte) ([]byte, error) {
+		return bytes.ToLower(body), nil
+	}
+}
+
 func newTextTrimOperator(arg string) textOperator {
 	return func(body []byte, value []byte) ([]byte, error) {
 		return bytes.Trim(body, arg), nil
@@ -164,6 +184,10 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 		return newTextTrimSpaceOperator(), nil
 	case "trim":
 		return newTextTrimOperator(arg), nil
+	case "to_lower":
+		return newTextToLowerOperator(), nil
+	case "to_upper":
+		return newTextToUpperOperator(), nil
 	case "replace":
 		return newTextReplaceOperator(arg), nil
 	case "replace_regexp":

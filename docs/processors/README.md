@@ -1095,6 +1095,14 @@ value.
 
 Removes all HTML tags from a message.
 
+#### `to_lower`
+
+Converts all text into lower case.
+
+#### `to_upper`
+
+Converts all text into upper case.
+
 #### `trim_space`
 
 Removes all leading and trailing whitespace from the payload.

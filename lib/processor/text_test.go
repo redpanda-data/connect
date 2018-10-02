@@ -263,6 +263,108 @@ func TestTextTrimSpace(t *testing.T) {
 	}
 }
 
+func TestTextToUpper(t *testing.T) {
+	type jTest struct {
+		name   string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "to upper 1",
+			input:  `123 hello WORLD @#$`,
+			output: `123 HELLO WORLD @#$`,
+		},
+		{
+			name:   "to upper 2",
+			input:  `123 HELLO WORLD @#$`,
+			output: `123 HELLO WORLD @#$`,
+		},
+		{
+			name:   "to upper 3",
+			input:  `123 @#$`,
+			output: `123 @#$`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Text.Operator = "to_upper"
+		conf.Text.Parts = []int{0}
+
+		tp, err := NewText(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := tp.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
+func TestTextToLower(t *testing.T) {
+	type jTest struct {
+		name   string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "to lower 1",
+			input:  `123 hello WORLD @#$`,
+			output: `123 hello world @#$`,
+		},
+		{
+			name:   "to lower 2",
+			input:  `123 hello world @#$`,
+			output: `123 hello world @#$`,
+		},
+		{
+			name:   "to lower 3",
+			input:  `123 @#$`,
+			output: `123 @#$`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Text.Operator = "to_lower"
+		conf.Text.Parts = []int{0}
+
+		tp, err := NewText(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := tp.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestTextTrim(t *testing.T) {
 	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}

@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.34.4 - 2018-10-02
+
 ### Added
 
 - Field `pipeline` and `sniff` added to the `elasticsearch` output.
+- Operators `to_lower` and `to_upper` added to the `text` processor.
 
 ## 0.34.3 - 2018-09-29
 
