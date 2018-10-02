@@ -967,6 +967,9 @@ Map paths are arbitrary dot paths, target path hierarchies are constructed if
 they do not yet exist. Processing is skipped for message parts where the premap
 targets aren't found, for optional premap targets use `premap_optional`.
 
+Map target paths that are parents of other map target paths will always be
+mapped first, therefore it is possible to map subpath overrides.
+
 If postmap targets are not found the merge is abandoned, for optional postmap
 targets use `postmap_optional`.
 

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.34.5 - 2018-10-02
+
+### Changed
+
+- The `process_map` processor now allows map target path overrides when a target
+  is the parent of another target.
+
 ## 0.34.4 - 2018-10-02
 
 ### Added

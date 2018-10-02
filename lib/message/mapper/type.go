@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -22,11 +21,15 @@ type Type struct {
 	log   log.Modular
 	stats metrics.Type
 
-	reqMap    map[string]string
-	reqOptMap map[string]string
+	reqTargets    []string
+	reqMap        map[string]string
+	reqOptTargets []string
+	reqOptMap     map[string]string
 
-	resMap    map[string]string
-	resOptMap map[string]string
+	resTargets    []string
+	resMap        map[string]string
+	resOptTargets []string
+	resOptMap     map[string]string
 
 	conditions []types.Condition
 
@@ -62,11 +65,18 @@ func New(opts ...func(*Type)) (*Type, error) {
 		opt(t)
 	}
 
-	if err := validateMap(t.reqMap); err != nil {
+	var err error
+	if t.reqTargets, err = validateMap(t.reqMap); err != nil {
 		return nil, fmt.Errorf("bad request mandatory map: %v", err)
 	}
-	if err := validateMap(t.resMap); err != nil {
+	if t.reqOptTargets, err = validateMap(t.reqOptMap); err != nil {
+		return nil, fmt.Errorf("bad request optional map: %v", err)
+	}
+	if t.resTargets, err = validateMap(t.resMap); err != nil {
 		return nil, fmt.Errorf("bad response mandatory map: %v", err)
+	}
+	if t.resOptTargets, err = validateMap(t.resOptMap); err != nil {
+		return nil, fmt.Errorf("bad response optional map: %v", err)
 	}
 
 	t.mErrParts = t.stats.GetCounter("error.parts_diverged")
@@ -139,46 +149,24 @@ func OptSetStats(s metrics.Type) func(*Type) {
 
 //------------------------------------------------------------------------------
 
-func validateMap(m map[string]string) error {
-	targets := []string{}
-	for k := range m {
+func validateMap(m map[string]string) ([]string, error) {
+	targets := make([]string, 0, len(m))
+	for k, v := range m {
+		if k == "." {
+			if _, exists := m[""]; exists {
+				return nil, errors.New("dot path '.' and empty path '' both set root")
+			}
+			m[""] = v
+			delete(m, ".")
+			k = ""
+		}
+		if v == "." {
+			m[k] = ""
+		}
 		targets = append(targets, k)
 	}
-	for i, trgt1 := range targets {
-		if trgt1 == "." {
-			trgt1 = ""
-		}
-		if trgt1 == "" && len(targets) > 1 {
-			return errors.New("root map target collides with other targets")
-		}
-		for j, trgt2 := range targets {
-			if trgt2 == "." {
-				trgt2 = ""
-			}
-			if j == i {
-				continue
-			}
-			t1Split, t2Split := strings.Split(trgt1, "."), strings.Split(trgt2, ".")
-			if len(t1Split) == len(t2Split) {
-				// Siblings can't collide
-				continue
-			}
-			if len(t1Split) >= len(t2Split) {
-				continue
-			}
-			matchedSubpaths := true
-			for k, t1p := range t1Split {
-				if t1p != t2Split[k] {
-					matchedSubpaths = false
-					break
-				}
-			}
-			if matchedSubpaths {
-				return fmt.Errorf("map targets '%v' and '%v' collide", trgt1, trgt2)
-			}
-		}
-	}
-	return nil
+	sort.Slice(targets, func(i, j int) bool { return len(targets[i]) < len(targets[j]) })
+	return targets, nil
 }
 
 //------------------------------------------------------------------------------
@@ -187,14 +175,10 @@ func validateMap(m map[string]string) error {
 func (t *Type) TargetsUsed() []string {
 	depsMap := map[string]struct{}{}
 	for _, v := range t.reqMap {
-		if len(v) > 0 && v != "." {
-			depsMap[v] = struct{}{}
-		}
+		depsMap[v] = struct{}{}
 	}
 	for _, v := range t.reqOptMap {
-		if len(v) > 0 && v != "." {
-			depsMap[v] = struct{}{}
-		}
+		depsMap[v] = struct{}{}
 	}
 	deps := []string{}
 	for k := range depsMap {
@@ -208,14 +192,10 @@ func (t *Type) TargetsUsed() []string {
 func (t *Type) TargetsProvided() []string {
 	targetsMap := map[string]struct{}{}
 	for k := range t.resMap {
-		if len(k) > 0 && k != "." {
-			targetsMap[k] = struct{}{}
-		}
+		targetsMap[k] = struct{}{}
 	}
 	for k := range t.resOptMap {
-		if len(k) > 0 && k != "." {
-			targetsMap[k] = struct{}{}
-		}
+		targetsMap[k] = struct{}{}
 	}
 	targets := []string{}
 	for k := range targetsMap {
@@ -294,9 +274,10 @@ partLoop:
 		}
 
 		destObj := gabs.New()
-		for k, v := range t.reqMap {
+		for _, k := range t.reqTargets {
+			v := t.reqMap[k]
 			src := sourceObj
-			if len(v) > 0 && v != "." {
+			if len(v) > 0 {
 				src = sourceObj.Path(v)
 				if src.Data() == nil {
 					t.mReqErr.Incr(1)
@@ -308,21 +289,22 @@ partLoop:
 					continue partLoop
 				}
 			}
-			if len(k) > 0 && k != "." {
+			if len(k) > 0 {
 				destObj.SetP(src.Data(), k)
 			} else {
 				destObj = src
 			}
 		}
-		for k, v := range t.reqOptMap {
+		for _, k := range t.reqOptTargets {
+			v := t.reqOptMap[k]
 			src := sourceObj
-			if len(v) > 0 && v != "." {
+			if len(v) > 0 {
 				src = sourceObj.Path(v)
 				if src.Data() == nil {
 					continue
 				}
 			}
-			if len(k) > 0 && k != "." {
+			if len(k) > 0 {
 				destObj.SetP(src.Data(), k)
 			} else {
 				destObj = src
@@ -335,6 +317,7 @@ partLoop:
 			t.mReqErrJSON.Incr(1)
 			t.log.Debugf("Failed to marshal request map result in message part '%v'. Map contents: '%v'\n", i, destObj.String())
 		}
+		mappedMsg.Get(i).SetMetadata(msg.Get(i).Metadata().Copy())
 		t.log.Tracef("Mapped request part '%v': %q\n", i, mappedMsg.Get(-1).Get())
 	}
 
@@ -442,9 +425,10 @@ partLoop:
 			continue partLoop
 		}
 
-		for k, v := range t.resMap {
+		for _, k := range t.resTargets {
+			v := t.resMap[k]
 			src := sourceObj
-			if len(v) > 0 && v != "." {
+			if len(v) > 0 {
 				src = sourceObj.Path(v)
 				if src.Data() == nil {
 					t.mResErr.Incr(1)
@@ -455,21 +439,22 @@ partLoop:
 					continue partLoop
 				}
 			}
-			if len(k) > 0 && k != "." {
+			if len(k) > 0 {
 				destObj.SetP(src.Data(), k)
 			} else {
 				destObj = src
 			}
 		}
-		for k, v := range t.resOptMap {
+		for _, k := range t.resOptTargets {
+			v := t.resOptMap[k]
 			src := sourceObj
-			if len(v) > 0 && v != "." {
+			if len(v) > 0 {
 				src = sourceObj.Path(v)
 				if src.Data() == nil {
 					continue
 				}
 			}
-			if len(k) > 0 && k != "." {
+			if len(k) > 0 {
 				destObj.SetP(src.Data(), k)
 			} else {
 				destObj = src

@@ -87,6 +87,36 @@ func TestProcessDAGSimple(t *testing.T) {
 	}
 }
 
+func TestProcessDAGRoot(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_dag"
+	conf.ProcessDAG["foo"] = createProcMapConf("root", "tmp.foo")
+	conf.ProcessDAG["bar"] = createProcMapConf("", "tmp.bar")
+	conf.ProcessDAG["baz"] = createProcMapConf("tmp.bar", "tmp.baz")
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp := [][]byte{
+		[]byte(`{"oops":"no root","tmp":{"bar":{"oops":"no root"},"baz":{"oops":"no root"}}}`),
+		[]byte(`{"root":"foobarbaz","tmp":{"bar":{"root":"foobarbaz"},"baz":{"root":"foobarbaz"},"foo":"foobarbaz"}}`),
+		[]byte(`{"root":"foobarbaz","tmp":{"also":"here","bar":{"root":"foobarbaz","tmp":{"also":"here"}},"baz":{"root":"foobarbaz","tmp":{"also":"here"}},"foo":"foobarbaz"}}`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{
+		[]byte(`{"oops":"no root"}`),
+		[]byte(`{"root":"foobarbaz"}`),
+		[]byte(`{"root":"foobarbaz","tmp":{"also":"here"}}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
 func TestProcessDAGDiamond(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "process_dag"

@@ -13,6 +13,7 @@ import (
 
 func TestTypeDeps(t *testing.T) {
 	expDeps := []string{
+		"",
 		"dep.1",
 		"dep.2",
 		"dep.3",
@@ -125,22 +126,22 @@ func TestTypeMapValidation(t *testing.T) {
 			passes: true,
 		},
 		{
-			name: "bad res map",
+			name: "res root then override map",
 			resMap: map[string]string{
 				"":        "baz",
 				"foo.baz": "bar",
 			},
 			reqMap: map[string]string{},
-			passes: false,
+			passes: true,
 		},
 		{
-			name: "bad res map 2",
+			name: "res target then override map",
 			resMap: map[string]string{
 				"foo.bar":     "baz",
 				"foo.bar.baz": "bar",
 			},
 			reqMap: map[string]string{},
-			passes: false,
+			passes: true,
 		},
 		{
 			name: "good res map",
@@ -153,11 +154,29 @@ func TestTypeMapValidation(t *testing.T) {
 			passes: true,
 		},
 		{
-			name:   "bad req map",
+			name:   "req root then override map",
 			resMap: map[string]string{},
 			reqMap: map[string]string{
 				"":        "baz",
 				"foo.baz": "bar",
+			},
+			passes: true,
+		},
+		{
+			name: "res root collision",
+			resMap: map[string]string{
+				"":  "baz",
+				".": "bar",
+			},
+			reqMap: map[string]string{},
+			passes: false,
+		},
+		{
+			name:   "req root collision",
+			resMap: map[string]string{},
+			reqMap: map[string]string{
+				"":  "baz",
+				".": "bar",
 			},
 			passes: false,
 		},
@@ -473,6 +492,24 @@ func TestTypeMapRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	if exp, act := []int{0}, skipped; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	e, err = New(OptSetReqMap(map[string]string{
+		".":   "foo",
+		"bar": "baz",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg = message.New([][]byte{
+		[]byte(`{"foo":{"bar":1,"preserve":true},"baz":"baz value"}`),
+	})
+	if res, _, err = e.MapRequests(msg); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := `{"bar":"baz value","preserve":true}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
