@@ -470,6 +470,12 @@ partLoop:
 			continue partLoop
 		}
 
+		metadata := parts[i].Metadata()
+		response.Get(i).Metadata().Iter(func(k, v string) error {
+			metadata.Set(k, v)
+			return nil
+		})
+		parts[i].SetMetadata(metadata)
 		t.log.Tracef("Mapped message part '%v': %q\n", i, parts[i].Get())
 	}
 
