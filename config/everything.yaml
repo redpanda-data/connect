@@ -799,6 +799,12 @@ resources:
       memory:
         ttl: 300
         compaction_interval_s: 60
+      redis:
+        url: tcp://localhost:6379
+        prefix: ""
+        expiration: 24h
+        retries: 3
+        retry_period_ms: 500
   conditions:
     example:
       type: text

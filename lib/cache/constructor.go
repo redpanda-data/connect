@@ -52,6 +52,7 @@ const (
 	TypeDynamoDB  = "dynamodb"
 	TypeMemcached = "memcached"
 	TypeMemory    = "memory"
+	TypeRedis     = "redis"
 )
 
 //------------------------------------------------------------------------------
@@ -62,6 +63,7 @@ type Config struct {
 	DynamoDB  DynamoDBConfig  `json:"dynamodb" yaml:"dynamodb"`
 	Memcached MemcachedConfig `json:"memcached" yaml:"memcached"`
 	Memory    MemoryConfig    `json:"memory" yaml:"memory"`
+	Redis     RedisConfig     `json:"redis" yaml:"redis"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -71,6 +73,7 @@ func NewConfig() Config {
 		DynamoDB:  NewDynamoDBConfig(),
 		Memcached: NewMemcachedConfig(),
 		Memory:    NewMemoryConfig(),
+		Redis:     NewRedisConfig(),
 	}
 }
 

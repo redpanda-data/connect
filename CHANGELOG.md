@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.34.7 - 2018-10-04
+
+### Added
+
+- New `redis` cache type.
+
 ## 0.34.5 - 2018-10-02
 
 ### Changed

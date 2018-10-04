@@ -49,6 +49,7 @@ cache is the same for both inputs.
 1. [`dynamodb`](#dynamodb)
 2. [`memcached`](#memcached)
 3. [`memory`](#memory)
+4. [`redis`](#redis)
 
 ## `dynamodb`
 
@@ -111,4 +112,19 @@ during the next compaction.
 A compaction only occurs during a write where the time since the last compaction
 is above the compaction interval. It is therefore possible to obtain values of
 keys that have expired between compactions.
+
+## `redis`
+
+``` yaml
+type: redis
+redis:
+  expiration: 24h
+  prefix: ""
+  retries: 3
+  retry_period_ms: 500
+  url: tcp://localhost:6379
+```
+
+Use a Redis instance as a cache. The expiration can be set to zero or an empty
+string in order to set no expiration.
 
