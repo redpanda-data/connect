@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `content` interpolation function.
+
 ## 0.34.7 - 2018-10-04
 
 ### Added

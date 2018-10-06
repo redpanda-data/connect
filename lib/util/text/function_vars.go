@@ -107,6 +107,17 @@ func metadataMapFunction(msg Message, arg string) []byte {
 	return result
 }
 
+func contentFunction(msg Message, arg string) []byte {
+	part := 0
+	if len(arg) > 0 {
+		partB, err := strconv.ParseInt(arg, 10, 64)
+		if err == nil {
+			part = int(partB)
+		}
+	}
+	return msg.Get(part).Get()
+}
+
 //------------------------------------------------------------------------------
 
 var functionRegex *regexp.Regexp
@@ -168,6 +179,7 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 
 		return []byte(strconv.FormatUint(count, 10))
 	},
+	"content":              contentFunction,
 	"json_field":           jsonFieldFunction,
 	"metadata":             metadataFunction,
 	"metadata_json_object": metadataMapFunction,

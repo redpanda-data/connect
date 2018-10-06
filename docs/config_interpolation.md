@@ -62,6 +62,16 @@ The syntax for functions is `${!function-name}`, or `${!function-name:arg}` if
 the function takes an argument, where `function-name` should be replaced with
 one of the following function names:
 
+### `content`
+
+Resolves to the content of a message part. The message referred to will depend
+on the context of where the function is called.
+
+When applied to a batch of message parts this function targets the first message
+part by default. It is possible to specify a target part index with an integer
+argument, e.g. `${!content:2}` would print the contents of the third message
+part.
+
 ### `json_field`
 
 Resolves to the value of a JSON field within the message payload located by a

@@ -167,6 +167,27 @@ func TestMetadataMapFunction(t *testing.T) {
 	}
 }
 
+func TestContentFunctionIndex(t *testing.T) {
+	msg := message.New([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+	})
+
+	act := string(ReplaceFunctionVariables(
+		msg, []byte(`${!content:0} bar baz`),
+	))
+	if exp := "foo bar baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!content:1} baz`),
+	))
+	if exp := "foo bar baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
 func TestJSONFunction(t *testing.T) {
 	type testCase struct {
 		name   string
