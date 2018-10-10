@@ -23,9 +23,7 @@ package manager
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
-	"path"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -97,58 +95,6 @@ func (s *StreamStatus) Logger() log.Modular {
 // setClosed sets the flag indicating that the stream is closed.
 func (s *StreamStatus) setClosed() {
 	atomic.SwapInt64(&s.stoppedAfter, int64(time.Since(s.createdAt)))
-}
-
-//------------------------------------------------------------------------------
-
-type nsMgr struct {
-	ns  string
-	mgr types.Manager
-}
-
-func namespacedMgr(ns string, mgr types.Manager) *nsMgr {
-	return &nsMgr{
-		ns:  "/" + ns,
-		mgr: mgr,
-	}
-}
-
-// RegisterEndpoint registers a server wide HTTP endpoint.
-func (n *nsMgr) RegisterEndpoint(p, desc string, h http.HandlerFunc) {
-	n.mgr.RegisterEndpoint(path.Join(n.ns, p), desc, h)
-}
-
-// GetCache attempts to find a service wide cache by its name.
-func (n *nsMgr) GetCache(name string) (types.Cache, error) {
-	return n.mgr.GetCache(name)
-}
-
-// GetCondition attempts to find a service wide condition by its name.
-func (n *nsMgr) GetCondition(name string) (types.Condition, error) {
-	return n.mgr.GetCondition(name)
-}
-
-// GetRateLimit attempts to find a service wide rate limit by its name.
-func (n *nsMgr) GetRateLimit(name string) (types.RateLimit, error) {
-	return n.mgr.GetRateLimit(name)
-}
-
-// GetPipe returns a named pipe transaction channel.
-func (n *nsMgr) GetPipe(name string) (<-chan types.Transaction, error) {
-	// Pipes are always absolute.
-	return n.mgr.GetPipe(name)
-}
-
-// SetPipe sets a named pipe.
-func (n *nsMgr) SetPipe(name string, t <-chan types.Transaction) {
-	// Pipes are always absolute.
-	n.mgr.SetPipe(name, t)
-}
-
-// UnsetPipe unsets a named pipe.
-func (n *nsMgr) UnsetPipe(name string, t <-chan types.Transaction) {
-	// Pipes are always absolute.
-	n.mgr.UnsetPipe(name, t)
 }
 
 //------------------------------------------------------------------------------
