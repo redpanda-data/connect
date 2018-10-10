@@ -143,15 +143,19 @@ func (a *AmazonS3) Connect() error {
 		if len(a.conf.Prefix) > 0 {
 			listInput.Prefix = aws.String(a.conf.Prefix)
 		}
-		objList, err := sThree.ListObjects(listInput)
+		err := sThree.ListObjectsPages(listInput,
+			func(page *s3.ListObjectsOutput, isLastPage bool) bool {
+				for _, obj := range page.Contents {
+					a.targetKeys = append(a.targetKeys, objKey{
+						s3Key:    *obj.Key,
+						attempts: a.conf.Retries,
+					})
+				}
+				return true
+			},
+		)
 		if err != nil {
 			return fmt.Errorf("failed to list objects: %v", err)
-		}
-		for _, obj := range objList.Contents {
-			a.targetKeys = append(a.targetKeys, objKey{
-				s3Key:    *obj.Key,
-				attempts: a.conf.Retries,
-			})
 		}
 	} else {
 		a.sqs = sqs.New(sess)
