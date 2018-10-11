@@ -51,28 +51,29 @@ used.
 11. [`filter`](#filter)
 12. [`filter_parts`](#filter_parts)
 13. [`grok`](#grok)
-14. [`hash`](#hash)
-15. [`hash_sample`](#hash_sample)
-16. [`http`](#http)
-17. [`insert_part`](#insert_part)
-18. [`jmespath`](#jmespath)
-19. [`json`](#json)
-20. [`lambda`](#lambda)
-21. [`log`](#log)
-22. [`merge_json`](#merge_json)
-23. [`metadata`](#metadata)
-24. [`metric`](#metric)
-25. [`noop`](#noop)
-26. [`process_batch`](#process_batch)
-27. [`process_dag`](#process_dag)
-28. [`process_field`](#process_field)
-29. [`process_map`](#process_map)
-30. [`sample`](#sample)
-31. [`select_parts`](#select_parts)
-32. [`split`](#split)
-33. [`text`](#text)
-34. [`throttle`](#throttle)
-35. [`unarchive`](#unarchive)
+14. [`group_by`](#group_by)
+15. [`hash`](#hash)
+16. [`hash_sample`](#hash_sample)
+17. [`http`](#http)
+18. [`insert_part`](#insert_part)
+19. [`jmespath`](#jmespath)
+20. [`json`](#json)
+21. [`lambda`](#lambda)
+22. [`log`](#log)
+23. [`merge_json`](#merge_json)
+24. [`metadata`](#metadata)
+25. [`metric`](#metric)
+26. [`noop`](#noop)
+27. [`process_batch`](#process_batch)
+28. [`process_dag`](#process_dag)
+29. [`process_field`](#process_field)
+30. [`process_map`](#process_map)
+31. [`sample`](#sample)
+32. [`select_parts`](#select_parts)
+33. [`split`](#split)
+34. [`text`](#text)
+35. [`throttle`](#throttle)
+36. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -359,6 +360,82 @@ valid output format.
 This processor respects type hints in the grok patterns, therefore with the
 pattern `%{WORD:first},%{INT:second:int}` and a payload of `foo,1`
 the resulting payload would be `{"first":"foo","second":1}`.
+
+## `group_by`
+
+``` yaml
+type: group_by
+group_by: []
+```
+
+Splits a batch of messages into N batches, where each resulting batch contains a
+group of messages determined by conditions that are applied per message of the
+original batch. Once the groups are established a list of processors are applied
+to their respective grouped batch, which can be used to label the batch as per
+their grouping.
+
+Each group is configured in a list with a condition and a list of processors:
+
+``` yaml
+type: group_by
+group_by:
+  - condition:
+      type: static
+      static: true
+    processors:
+      - type: noop
+```
+
+Messages are added to the first group that passes and can only belong to a
+single group. Messages that do not pass the conditions of any group are placed
+in a final batch with no processors applied.
+
+For example, imagine we have a batch of messages that we wish to split into two
+groups - the foos and the bars - which should be sent to different output
+destinations based on those groupings. We also need to send the foos as a tar
+gzip archive. For this purpose we can use the `group_by` processor
+with a [`switch`](../outputs/README.md#switch) output:
+
+``` yaml
+pipeline:
+  processors:
+  - type: group_by
+    group_by:
+    - condition:
+        type: text
+        text:
+          operator: contains
+          arg: "this is a foo"
+      processors:
+      - type: archive
+        archive:
+          format: tar
+      - type: compress
+        compress:
+          algorithm: gzip
+      - type: metadata
+        metadata:
+          operator: set
+          key: grouping
+          value: foo
+output:
+  type: switch
+  switch:
+    outputs:
+    - output:
+        type: foo_output
+      condition:
+        type: metadata
+        metadata:
+          operator: equals
+          key: grouping
+          arg: foo
+    - output:
+        type: bar_output
+```
+
+Since any message that isn't a foo is a bar, and bars do not require their own
+processing steps, we only need a single grouping configuration.
 
 ## `hash`
 

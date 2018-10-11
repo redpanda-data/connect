@@ -453,6 +453,7 @@ pipeline:
       named_captures_only: true
       use_default_patterns: true
       output_format: json
+    group_by: []
     hash:
       parts: []
       algorithm: sha256

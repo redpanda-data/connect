@@ -68,6 +68,7 @@ const (
 	TypeFilter       = "filter"
 	TypeFilterParts  = "filter_parts"
 	TypeGrok         = "grok"
+	TypeGroupBy      = "group_by"
 	TypeHash         = "hash"
 	TypeHashSample   = "hash_sample"
 	TypeHTTP         = "http"
@@ -110,6 +111,7 @@ type Config struct {
 	Filter       FilterConfig       `json:"filter" yaml:"filter"`
 	FilterParts  FilterPartsConfig  `json:"filter_parts" yaml:"filter_parts"`
 	Grok         GrokConfig         `json:"grok" yaml:"grok"`
+	GroupBy      GroupByConfig      `json:"group_by" yaml:"group_by"`
 	Hash         HashConfig         `json:"hash" yaml:"hash"`
 	HashSample   HashSampleConfig   `json:"hash_sample" yaml:"hash_sample"`
 	HTTP         HTTPConfig         `json:"http" yaml:"http"`
@@ -151,6 +153,7 @@ func NewConfig() Config {
 		Filter:       NewFilterConfig(),
 		FilterParts:  NewFilterPartsConfig(),
 		Grok:         NewGrokConfig(),
+		GroupBy:      NewGroupByConfig(),
 		Hash:         NewHashConfig(),
 		HashSample:   NewHashSampleConfig(),
 		HTTP:         NewHTTPConfig(),
