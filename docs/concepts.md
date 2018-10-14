@@ -57,13 +57,13 @@ output:
     outputs:
     - output:
         type: foo
-          foo:
-            foo_field_1: value1
+        foo:
+          foo_field_1: value1
       condition:
         type: text
-          text:
-            operator: contains
-            arg: foo
+        text:
+          operator: contains
+          arg: foo
     - output:
         type: bar
         bar:
