@@ -39,13 +39,17 @@ docker:
 
 docker-deps:
 	@docker build -f ./resources/docker/Dockerfile --target deps . -t jeffail/benthos:$(VERSION)-deps
+	@docker tag jeffail/benthos:$(VERSION)-deps jeffail/benthos:latest-deps
 
 docker-zmq:
 	@docker build -f ./resources/docker/Dockerfile.zmq . -t jeffail/benthos:$(VERSION)-zmq
+	@docker tag jeffail/benthos:$(VERSION)-zmq jeffail/benthos:latest-zmq
 
 docker-push:
 	@docker push jeffail/benthos:$(VERSION)-deps; true
+	@docker push jeffail/benthos:latest-deps; true
 	@docker push jeffail/benthos:$(VERSION)-zmq; true
+	@docker push jeffail/benthos:latest-zmq; true
 	@docker push jeffail/benthos:$(VERSION); true
 	@docker push jeffail/benthos:$(VER_MAJOR); true
 	@docker push jeffail/benthos:$(VER_MAJOR).$(VER_MINOR); true
