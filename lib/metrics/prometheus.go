@@ -91,7 +91,7 @@ func (p *PromCounter) Incr(count int64) error {
 // PromTiming is a representation of a single metric stat. Interactions with
 // this stat are thread safe.
 type PromTiming struct {
-	sum prometheus.Summary
+	sum prometheus.Observer
 }
 
 // Timing sets a timing metric.

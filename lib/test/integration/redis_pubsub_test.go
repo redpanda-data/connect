@@ -39,7 +39,6 @@ func TestRedisPubSubIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	t.Skip("Skipping RedisPubSub tests because the library crashes on shutdown")
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {

@@ -35,7 +35,7 @@ import (
 	"github.com/ory/dockertest"
 )
 
-func TestRedisListIntegration(t *testing.T) {
+func TestRedisStreamsIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -54,10 +54,10 @@ func TestRedisListIntegration(t *testing.T) {
 	url := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
 
 	if err = pool.Retry(func() error {
-		conf := reader.NewRedisListConfig()
+		conf := writer.NewRedisStreamsConfig()
 		conf.URL = url
 
-		r, cErr := reader.NewRedisList(conf, log.Noop(), metrics.Noop())
+		r, cErr := writer.NewRedisStreams(conf, log.Noop(), metrics.Noop())
 		if cErr != nil {
 			return cErr
 		}
@@ -75,45 +75,49 @@ func TestRedisListIntegration(t *testing.T) {
 		}
 	}()
 
-	t.Run("TestRedisListSinglePart", func(te *testing.T) {
-		testRedisListSinglePart(url, te)
+	t.Run("TestRedisStreamsSinglePart", func(te *testing.T) {
+		testRedisStreamsSinglePart(url, te)
 	})
-	t.Run("TestRedisListMultiplePart", func(te *testing.T) {
-		testRedisListMultiplePart(url, te)
+	t.Run("TestRedisStreamsMultiplePart", func(te *testing.T) {
+		testRedisStreamsMultiplePart(url, te)
 	})
-	t.Run("TestRedisListDisconnect", func(te *testing.T) {
-		testRedisListDisconnect(url, te)
+	t.Run("TestRedisStreamsDisconnect", func(te *testing.T) {
+		testRedisStreamsDisconnect(url, te)
 	})
 }
 
-func createRedisListInputOutput(
-	inConf reader.RedisListConfig, outConf writer.RedisListConfig,
+func createRedisStreamsInputOutput(
+	inConf reader.RedisStreamsConfig, outConf writer.RedisStreamsConfig,
 ) (mInput reader.Type, mOutput writer.Type, err error) {
-	if mInput, err = reader.NewRedisList(inConf, log.Noop(), metrics.Noop()); err != nil {
-		return
-	}
-	if err = mInput.Connect(); err != nil {
-		return
-	}
-	if mOutput, err = writer.NewRedisList(outConf, log.Noop(), metrics.Noop()); err != nil {
+	if mOutput, err = writer.NewRedisStreams(outConf, log.Noop(), metrics.Noop()); err != nil {
 		return
 	}
 	if err = mOutput.Connect(); err != nil {
 		return
 	}
+	if err = mOutput.Write(message.New([][]byte{[]byte(`IGNORE ME`)})); err != nil {
+		return
+	}
+	if mInput, err = reader.NewRedisStreams(inConf, log.Noop(), metrics.Noop()); err != nil {
+		return
+	}
+	if err = mInput.Connect(); err != nil {
+		return
+	}
 	return
 }
 
-func testRedisListSinglePart(url string, t *testing.T) {
-	inConf := reader.NewRedisListConfig()
+func testRedisStreamsSinglePart(url string, t *testing.T) {
+	inConf := reader.NewRedisStreamsConfig()
 	inConf.URL = url
-	inConf.Key = "benthos_test_list_single_part"
+	inConf.Streams = []string{"benthos_test_streams_single_part"}
+	inConf.StartFromOldest = false
 
-	outConf := writer.NewRedisListConfig()
+	outConf := writer.NewRedisStreamsConfig()
 	outConf.URL = url
-	outConf.Key = "benthos_test_list_single_part"
+	outConf.Stream = "benthos_test_streams_single_part"
 
-	mInput, mOutput, err := createRedisListInputOutput(inConf, outConf)
+	mInput, mOutput, err := createRedisStreamsInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,11 +162,14 @@ func testRedisListSinglePart(url string, t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else {
-			act := string(actM.Get(0).Get())
-			if _, exists := testMsgs[act]; !exists {
-				t.Errorf("Unexpected message: %v", act)
-			}
-			delete(testMsgs, act)
+			actM.Iter(func(i int, part types.Part) error {
+				act := string(part.Get())
+				if _, exists := testMsgs[act]; !exists {
+					t.Errorf("Unexpected message: %v", act)
+				}
+				delete(testMsgs, act)
+				return nil
+			})
 		}
 		if err = mInput.Acknowledge(nil); err != nil {
 			t.Error(err)
@@ -173,16 +180,17 @@ func testRedisListSinglePart(url string, t *testing.T) {
 	wg.Wait()
 }
 
-func testRedisListMultiplePart(url string, t *testing.T) {
-	inConf := reader.NewRedisListConfig()
+func testRedisStreamsMultiplePart(url string, t *testing.T) {
+	inConf := reader.NewRedisStreamsConfig()
 	inConf.URL = url
-	inConf.Key = "benthos_test_list_multiple_part"
+	inConf.Streams = []string{"benthos_test_streams_multiple_part"}
+	inConf.StartFromOldest = false
 
-	outConf := writer.NewRedisListConfig()
+	outConf := writer.NewRedisStreamsConfig()
 	outConf.URL = url
-	outConf.Key = "benthos_test_list_multiple_part"
+	outConf.Stream = "benthos_test_streams_multiple_part"
 
-	mInput, mOutput, err := createRedisListInputOutput(inConf, outConf)
+	mInput, mOutput, err := createRedisStreamsInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,11 +241,14 @@ func testRedisListMultiplePart(url string, t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else {
-			act := string(actM.Get(0).Get())
-			if _, exists := testMsgs[act]; !exists {
-				t.Errorf("Unexpected message: %v", act)
-			}
-			delete(testMsgs, act)
+			actM.Iter(func(i int, part types.Part) error {
+				act := string(part.Get())
+				if _, exists := testMsgs[act]; !exists {
+					t.Errorf("Unexpected message: %v", act)
+				}
+				delete(testMsgs, act)
+				return nil
+			})
 		}
 		if err = mInput.Acknowledge(nil); err != nil {
 			t.Error(err)
@@ -248,16 +259,16 @@ func testRedisListMultiplePart(url string, t *testing.T) {
 	wg.Wait()
 }
 
-func testRedisListDisconnect(url string, t *testing.T) {
-	inConf := reader.NewRedisListConfig()
+func testRedisStreamsDisconnect(url string, t *testing.T) {
+	inConf := reader.NewRedisStreamsConfig()
 	inConf.URL = url
-	inConf.Key = "benthos_test_list_disconnect"
+	inConf.Streams = []string{"benthos_test_streams_disconnect"}
 
-	outConf := writer.NewRedisListConfig()
+	outConf := writer.NewRedisStreamsConfig()
 	outConf.URL = url
-	outConf.Key = "benthos_test_list_disconnect"
+	outConf.Stream = "benthos_test_streams_disconnect"
 
-	mInput, mOutput, err := createRedisListInputOutput(inConf, outConf)
+	mInput, mOutput, err := createRedisStreamsInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
