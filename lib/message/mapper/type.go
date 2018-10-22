@@ -317,7 +317,7 @@ partLoop:
 			t.mReqErrJSON.Incr(1)
 			t.log.Debugf("Failed to marshal request map result in message part '%v'. Map contents: '%v'\n", i, destObj.String())
 		}
-		mappedMsg.Get(i).SetMetadata(msg.Get(i).Metadata().Copy())
+		mappedMsg.Get(-1).SetMetadata(msg.Get(i).Metadata().Copy())
 		t.log.Tracef("Mapped request part '%v': %q\n", i, mappedMsg.Get(-1).Get())
 	}
 
