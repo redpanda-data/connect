@@ -514,6 +514,69 @@ func TestTypeMapRequest(t *testing.T) {
 	}
 }
 
+func TestTypeMapRequestMetadata(t *testing.T) {
+	condConf := condition.NewConfig()
+	condConf.Type = condition.TypeText
+	condConf.Text.Operator = "contains"
+	condConf.Text.Arg = "bar"
+
+	cond, err := condition.New(condConf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e, err := New(
+		OptSetConditions([]types.Condition{cond}),
+		OptSetOptReqMap(map[string]string{
+			"test": "test",
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg := message.New([][]byte{
+		[]byte(`{"test":"foo message"}`),
+		[]byte(`{"test":"bar message"}`),
+		[]byte(`{"test":"foo message"}`),
+		[]byte(`{"test":"baz bar message"}`),
+		[]byte(`{"test":"foo message"}`),
+	})
+	msg.Get(0).Metadata().Set("test", "foo")
+	msg.Get(1).Metadata().Set("test", "bar")
+	msg.Get(2).Metadata().Set("test", "foo")
+	msg.Get(3).Metadata().Set("test", "baz")
+	msg.Get(5).Metadata().Set("test", "foo")
+
+	var res types.Message
+	var skipped []int
+	if res, skipped, err = e.MapRequests(msg); err != nil {
+		t.Fatal(err)
+	}
+
+	if exp, act := 2, res.Len(); exp != act {
+		t.Errorf("Unexpected value: %v != %v", act, exp)
+	}
+
+	if exp, act := []int{0, 2, 4}, skipped; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected value: %v != %v", act, exp)
+	}
+
+	if exp, act := `{"test":"bar message"}`, string(res.Get(0).Get()); exp != act {
+		t.Errorf("Unexpected value: %v != %v", act, exp)
+	}
+	if exp, act := `{"test":"baz bar message"}`, string(res.Get(1).Get()); exp != act {
+		t.Errorf("Unexpected value: %v != %v", act, exp)
+	}
+
+	if exp, act := "bar", res.Get(0).Metadata().Get("test"); exp != act {
+		t.Errorf("Unexpected value: %v != %v", act, exp)
+	}
+	if exp, act := "baz", res.Get(1).Metadata().Get("test"); exp != act {
+		t.Errorf("Unexpected value: %v != %v", act, exp)
+	}
+}
+
 func TestTypeMapOptRequest(t *testing.T) {
 	e, err := New(OptSetOptReqMap(map[string]string{
 		".": "foo",
