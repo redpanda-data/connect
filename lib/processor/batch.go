@@ -42,8 +42,8 @@ message parts until either:
 
 - The ` + "`byte_size`" + ` field is non-zero and the total size of the batch in
   bytes matches or exceeds it.
-- The ` + "`count" + ` field is non-zero and the total number of messages in the
-  batch matches or exceeds it.
+- The ` + "`count`" + ` field is non-zero and the total number of messages in
+  the batch matches or exceeds it.
 - A message added to the batch causes the condition to resolve ` + "`true`" + `.
 - The ` + "`period_ms`" + ` field is non-zero and the time since the last batch
   exceeds its value.
