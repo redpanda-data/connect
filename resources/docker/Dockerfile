@@ -20,7 +20,7 @@ RUN CGO_ENABLED=0 GOOS=linux make
 
 FROM scratch AS package
 
-LABEL maintainer="Ashley Jeffs <ash.jeffs@gmail.com>"
+LABEL maintainer="Ashley Jeffs <ash@jeffail.uk>"
 
 WORKDIR /root/
 

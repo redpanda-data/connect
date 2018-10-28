@@ -20,7 +20,7 @@ RUN GOOS=linux make TAGS=ZMQ4
 
 FROM debian:stretch
 
-LABEL maintainer="Ashley Jeffs <ash.jeffs@gmail.com>"
+LABEL maintainer="Ashley Jeffs <ash@jeffail.uk>"
 
 WORKDIR /root/
 
