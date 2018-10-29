@@ -209,12 +209,17 @@ already exists it will be changed.
 ``` yaml
 type: elasticsearch
 elasticsearch:
+  backoff:
+    initial_interval: 1s
+    max_elapsed_time: 30s
+    max_interval: 5s
   basic_auth:
     enabled: false
     password: ""
     username: ""
   id: ${!count:elastic_ids}-${!timestamp_unix}
   index: benthos_index
+  max_retries: 0
   pipeline: ""
   sniff: true
   timeout_ms: 5000
@@ -227,7 +232,8 @@ Publishes messages into an Elasticsearch index. This output currently does not
 support creating the target index.
 
 Both the `id` and `index` fields can be dynamically set using function
-interpolations described [here](../config_interpolation.md#functions).
+interpolations described [here](../config_interpolation.md#functions). When
+sending batched messages these interpolations are performed per message part.
 
 ## `file`
 

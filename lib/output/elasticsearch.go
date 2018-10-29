@@ -37,7 +37,8 @@ Publishes messages into an Elasticsearch index. This output currently does not
 support creating the target index.
 
 Both the ` + "`id` and `index`" + ` fields can be dynamically set using function
-interpolations described [here](../config_interpolation.md#functions).`,
+interpolations described [here](../config_interpolation.md#functions). When
+sending batched messages these interpolations are performed per message part.`,
 	}
 }
 

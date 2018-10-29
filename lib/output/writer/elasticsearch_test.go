@@ -111,6 +111,10 @@ func TestElasticIntegration(t *testing.T) {
 	t.Run("TestElasticIndexInterpolation", func(te *testing.T) {
 		testElasticIndexInterpolation(urls, client, te)
 	})
+
+	t.Run("TestElasticBatch", func(te *testing.T) {
+		testElasticBatch(urls, client, te)
+	})
 }
 
 func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
@@ -231,6 +235,69 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 			t.Error(err)
 		} else {
 			if exp, act := string(testMsgs[i][0]), string(sourceBytes); exp != act {
+				t.Errorf("wrong user field returned: %v != %v", act, exp)
+			}
+		}
+	}
+}
+
+func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
+	conf := NewElasticsearchConfig()
+	conf.Index = "${!metadata:index}"
+	conf.ID = "bar-${!count:bar}"
+	conf.URLs = urls
+
+	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = m.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		m.CloseAsync()
+		if cErr := m.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	N := 10
+
+	testMsg := [][]byte{}
+	for i := 0; i < N; i++ {
+		testMsg = append(testMsg,
+			[]byte(fmt.Sprintf(`{"user":"%v","message":"hello world"}`, i)),
+		)
+	}
+	msg := message.New(testMsg)
+	for i := 0; i < N; i++ {
+		msg.Get(i).Metadata().Set("index", "test_conn_index")
+	}
+	if err = m.Write(msg); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < N; i++ {
+		id := fmt.Sprintf("bar-%v", i+1)
+		get, err := client.Get().
+			Index("test_conn_index").
+			Type("doc").
+			Id(id).
+			Do(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to get doc '%v': %v", id, err)
+		}
+		if !get.Found {
+			t.Errorf("document %v not found", i)
+		}
+
+		var sourceBytes []byte
+		sourceBytes, err = get.Source.MarshalJSON()
+		if err != nil {
+			t.Error(err)
+		} else {
+			if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
 				t.Errorf("wrong user field returned: %v != %v", act, exp)
 			}
 		}

@@ -343,149 +343,153 @@ PROCESSOR_UNARCHIVE_FORMAT                           = binary
 ## OUTPUT
 
 ```
-OUTPUTS                                      = 1
-OUTPUTS_PATTERN                              = greedy
-OUTPUT_TYPE                                  = dynamic
-OUTPUT_AMQP_EXCHANGE                         = benthos-exchange
-OUTPUT_AMQP_EXCHANGE_DECLARE_DURABLE         = true
-OUTPUT_AMQP_EXCHANGE_DECLARE_ENABLED         = false
-OUTPUT_AMQP_EXCHANGE_DECLARE_TYPE            = direct
-OUTPUT_AMQP_IMMEDIATE                        = false
-OUTPUT_AMQP_KEY                              = benthos-key
-OUTPUT_AMQP_MANDATORY                        = false
-OUTPUT_AMQP_PERSISTENT                       = false
-OUTPUT_AMQP_TLS_ENABLED                      = false
+OUTPUTS                                       = 1
+OUTPUTS_PATTERN                               = greedy
+OUTPUT_TYPE                                   = dynamic
+OUTPUT_AMQP_EXCHANGE                          = benthos-exchange
+OUTPUT_AMQP_EXCHANGE_DECLARE_DURABLE          = true
+OUTPUT_AMQP_EXCHANGE_DECLARE_ENABLED          = false
+OUTPUT_AMQP_EXCHANGE_DECLARE_TYPE             = direct
+OUTPUT_AMQP_IMMEDIATE                         = false
+OUTPUT_AMQP_KEY                               = benthos-key
+OUTPUT_AMQP_MANDATORY                         = false
+OUTPUT_AMQP_PERSISTENT                        = false
+OUTPUT_AMQP_TLS_ENABLED                       = false
 OUTPUT_AMQP_TLS_ROOT_CAS_FILE
-OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY             = false
-OUTPUT_AMQP_URL                              = amqp://guest:guest@localhost:5672/
+OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY              = false
+OUTPUT_AMQP_URL                               = amqp://guest:guest@localhost:5672/
 OUTPUT_DYNAMIC_PREFIX
-OUTPUT_DYNAMIC_TIMEOUT_MS                    = 5000
-OUTPUT_ELASTICSEARCH_BASIC_AUTH_ENABLED      = false
+OUTPUT_DYNAMIC_TIMEOUT_MS                     = 5000
+OUTPUT_ELASTICSEARCH_BACKOFF_INITIAL_INTERVAL = 1s
+OUTPUT_ELASTICSEARCH_BACKOFF_MAX_ELAPSED_TIME = 30s
+OUTPUT_ELASTICSEARCH_BACKOFF_MAX_INTERVAL     = 5s
+OUTPUT_ELASTICSEARCH_BASIC_AUTH_ENABLED       = false
 OUTPUT_ELASTICSEARCH_BASIC_AUTH_PASSWORD
 OUTPUT_ELASTICSEARCH_BASIC_AUTH_USERNAME
-OUTPUT_ELASTICSEARCH_ID                      = ${!count:elastic_ids}-${!timestamp_unix}
-OUTPUT_ELASTICSEARCH_INDEX                   = benthos_index
+OUTPUT_ELASTICSEARCH_ID                       = ${!count:elastic_ids}-${!timestamp_unix}
+OUTPUT_ELASTICSEARCH_INDEX                    = benthos_index
+OUTPUT_ELASTICSEARCH_MAX_RETRIES              = 0
 OUTPUT_ELASTICSEARCH_PIPELINE
-OUTPUT_ELASTICSEARCH_SNIFF                   = true
-OUTPUT_ELASTICSEARCH_TIMEOUT_MS              = 5000
-OUTPUT_ELASTICSEARCH_TYPE                    = doc
-OUTPUT_ELASTICSEARCH_URLS                    = http://localhost:9200
-OUTPUT_FILES_PATH                            = ${!count:files}-${!timestamp_unix_nano}.txt
+OUTPUT_ELASTICSEARCH_SNIFF                    = true
+OUTPUT_ELASTICSEARCH_TIMEOUT_MS               = 5000
+OUTPUT_ELASTICSEARCH_TYPE                     = doc
+OUTPUT_ELASTICSEARCH_URLS                     = http://localhost:9200
+OUTPUT_FILES_PATH                             = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_FILE_DELIMITER
 OUTPUT_FILE_PATH
 OUTPUT_GCP_PUBSUB_PROJECT
 OUTPUT_GCP_PUBSUB_TOPIC
 OUTPUT_HDFS_DIRECTORY
-OUTPUT_HDFS_HOSTS                            = localhost:9000
-OUTPUT_HDFS_PATH                             = ${!count:files}-${!timestamp_unix_nano}.txt
-OUTPUT_HDFS_USER                             = benthos_hdfs
-OUTPUT_HTTP_CLIENT_BACKOFF_ON                = 429
-OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED        = false
+OUTPUT_HDFS_HOSTS                             = localhost:9000
+OUTPUT_HDFS_PATH                              = ${!count:files}-${!timestamp_unix_nano}.txt
+OUTPUT_HDFS_USER                              = benthos_hdfs
+OUTPUT_HTTP_CLIENT_BACKOFF_ON                 = 429
+OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED         = false
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME
-OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE      = application/octet-stream
-OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF_MS      = 300000
+OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE       = application/octet-stream
+OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF_MS       = 300000
 OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN
 OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN_SECRET
 OUTPUT_HTTP_CLIENT_OAUTH_CONSUMER_KEY
 OUTPUT_HTTP_CLIENT_OAUTH_CONSUMER_SECRET
-OUTPUT_HTTP_CLIENT_OAUTH_ENABLED             = false
+OUTPUT_HTTP_CLIENT_OAUTH_ENABLED              = false
 OUTPUT_HTTP_CLIENT_OAUTH_REQUEST_URL
 OUTPUT_HTTP_CLIENT_RATE_LIMIT
-OUTPUT_HTTP_CLIENT_RETRIES                   = 3
-OUTPUT_HTTP_CLIENT_RETRY_PERIOD_MS           = 1000
-OUTPUT_HTTP_CLIENT_TIMEOUT_MS                = 5000
-OUTPUT_HTTP_CLIENT_TLS_ENABLED               = false
+OUTPUT_HTTP_CLIENT_RETRIES                    = 3
+OUTPUT_HTTP_CLIENT_RETRY_PERIOD_MS            = 1000
+OUTPUT_HTTP_CLIENT_TIMEOUT_MS                 = 5000
+OUTPUT_HTTP_CLIENT_TLS_ENABLED                = false
 OUTPUT_HTTP_CLIENT_TLS_ROOT_CAS_FILE
-OUTPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY      = false
-OUTPUT_HTTP_CLIENT_URL                       = http://localhost:4195/post
-OUTPUT_HTTP_CLIENT_VERB                      = POST
+OUTPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY       = false
+OUTPUT_HTTP_CLIENT_URL                        = http://localhost:4195/post
+OUTPUT_HTTP_CLIENT_VERB                       = POST
 OUTPUT_HTTP_SERVER_ADDRESS
 OUTPUT_HTTP_SERVER_CERT_FILE
 OUTPUT_HTTP_SERVER_KEY_FILE
-OUTPUT_HTTP_SERVER_PATH                      = /get
-OUTPUT_HTTP_SERVER_STREAM_PATH               = /get/stream
-OUTPUT_HTTP_SERVER_TIMEOUT_MS                = 5000
-OUTPUT_HTTP_SERVER_WS_PATH                   = /get/ws
+OUTPUT_HTTP_SERVER_PATH                       = /get
+OUTPUT_HTTP_SERVER_STREAM_PATH                = /get/stream
+OUTPUT_HTTP_SERVER_TIMEOUT_MS                 = 5000
+OUTPUT_HTTP_SERVER_WS_PATH                    = /get/ws
 OUTPUT_INPROC
-OUTPUT_KAFKA_ACK_REPLICAS                    = false
-OUTPUT_KAFKA_ADDRESSES                       = localhost:9092
-OUTPUT_KAFKA_CLIENT_ID                       = benthos_kafka_output
-OUTPUT_KAFKA_COMPRESSION                     = none
+OUTPUT_KAFKA_ACK_REPLICAS                     = false
+OUTPUT_KAFKA_ADDRESSES                        = localhost:9092
+OUTPUT_KAFKA_CLIENT_ID                        = benthos_kafka_output
+OUTPUT_KAFKA_COMPRESSION                      = none
 OUTPUT_KAFKA_KEY
-OUTPUT_KAFKA_MAX_MSG_BYTES                   = 1000000
-OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS          = false
-OUTPUT_KAFKA_TARGET_VERSION                  = 1.0.0
-OUTPUT_KAFKA_TIMEOUT_MS                      = 5000
-OUTPUT_KAFKA_TLS_ENABLED                     = false
+OUTPUT_KAFKA_MAX_MSG_BYTES                    = 1000000
+OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS           = false
+OUTPUT_KAFKA_TARGET_VERSION                   = 1.0.0
+OUTPUT_KAFKA_TIMEOUT_MS                       = 5000
+OUTPUT_KAFKA_TLS_ENABLED                      = false
 OUTPUT_KAFKA_TLS_ROOT_CAS_FILE
-OUTPUT_KAFKA_TLS_SKIP_CERT_VERIFY            = false
-OUTPUT_KAFKA_TOPIC                           = benthos_stream
-OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL      = 1s
-OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME      = 30s
-OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL          = 5s
+OUTPUT_KAFKA_TLS_SKIP_CERT_VERIFY             = false
+OUTPUT_KAFKA_TOPIC                            = benthos_stream
+OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL       = 1s
+OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME       = 30s
+OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL           = 5s
 OUTPUT_KINESIS_CREDENTIALS_ID
 OUTPUT_KINESIS_CREDENTIALS_ROLE
 OUTPUT_KINESIS_CREDENTIALS_SECRET
 OUTPUT_KINESIS_CREDENTIALS_TOKEN
 OUTPUT_KINESIS_ENDPOINT
 OUTPUT_KINESIS_HASH_KEY
-OUTPUT_KINESIS_MAX_RETRIES                   = 0
+OUTPUT_KINESIS_MAX_RETRIES                    = 0
 OUTPUT_KINESIS_PARTITION_KEY
-OUTPUT_KINESIS_REGION                        = eu-west-1
+OUTPUT_KINESIS_REGION                         = eu-west-1
 OUTPUT_KINESIS_STREAM
-OUTPUT_MQTT_CLIENT_ID                        = benthos_output
-OUTPUT_MQTT_QOS                              = 1
-OUTPUT_MQTT_TOPIC                            = benthos_topic
-OUTPUT_MQTT_URLS                             = tcp://localhost:1883
-OUTPUT_NANOMSG_BIND                          = false
-OUTPUT_NANOMSG_POLL_TIMEOUT_MS               = 5000
-OUTPUT_NANOMSG_SOCKET_TYPE                   = PUSH
-OUTPUT_NANOMSG_URLS                          = tcp://localhost:5556
-OUTPUT_NATS_STREAM_CLIENT_ID                 = benthos_client
-OUTPUT_NATS_STREAM_CLUSTER_ID                = test-cluster
-OUTPUT_NATS_STREAM_SUBJECT                   = benthos_messages
-OUTPUT_NATS_STREAM_URLS                      = nats://localhost:4222
-OUTPUT_NATS_SUBJECT                          = benthos_messages
-OUTPUT_NATS_URLS                             = nats://localhost:4222
-OUTPUT_NSQ_NSQD_TCP_ADDRESS                  = localhost:4150
-OUTPUT_NSQ_TOPIC                             = benthos_messages
-OUTPUT_NSQ_USER_AGENT                        = benthos_producer
-OUTPUT_REDIS_LIST_KEY                        = benthos_list
-OUTPUT_REDIS_LIST_URL                        = tcp://localhost:6379
-OUTPUT_REDIS_PUBSUB_CHANNEL                  = benthos_chan
-OUTPUT_REDIS_PUBSUB_URL                      = tcp://localhost:6379
-OUTPUT_REDIS_STREAMS_BODY_KEY                = body
-OUTPUT_REDIS_STREAMS_MAX_LENGTH              = 0
-OUTPUT_REDIS_STREAMS_STREAM                  = benthos_stream
-OUTPUT_REDIS_STREAMS_URL                     = tcp://localhost:6379
+OUTPUT_MQTT_CLIENT_ID                         = benthos_output
+OUTPUT_MQTT_QOS                               = 1
+OUTPUT_MQTT_TOPIC                             = benthos_topic
+OUTPUT_MQTT_URLS                              = tcp://localhost:1883
+OUTPUT_NANOMSG_BIND                           = false
+OUTPUT_NANOMSG_POLL_TIMEOUT_MS                = 5000
+OUTPUT_NANOMSG_SOCKET_TYPE                    = PUSH
+OUTPUT_NANOMSG_URLS                           = tcp://localhost:5556
+OUTPUT_NATS_STREAM_CLIENT_ID                  = benthos_client
+OUTPUT_NATS_STREAM_CLUSTER_ID                 = test-cluster
+OUTPUT_NATS_STREAM_SUBJECT                    = benthos_messages
+OUTPUT_NATS_STREAM_URLS                       = nats://localhost:4222
+OUTPUT_NATS_SUBJECT                           = benthos_messages
+OUTPUT_NATS_URLS                              = nats://localhost:4222
+OUTPUT_NSQ_NSQD_TCP_ADDRESS                   = localhost:4150
+OUTPUT_NSQ_TOPIC                              = benthos_messages
+OUTPUT_NSQ_USER_AGENT                         = benthos_producer
+OUTPUT_REDIS_LIST_KEY                         = benthos_list
+OUTPUT_REDIS_LIST_URL                         = tcp://localhost:6379
+OUTPUT_REDIS_PUBSUB_CHANNEL                   = benthos_chan
+OUTPUT_REDIS_PUBSUB_URL                       = tcp://localhost:6379
+OUTPUT_REDIS_STREAMS_BODY_KEY                 = body
+OUTPUT_REDIS_STREAMS_MAX_LENGTH               = 0
+OUTPUT_REDIS_STREAMS_STREAM                   = benthos_stream
+OUTPUT_REDIS_STREAMS_URL                      = tcp://localhost:6379
 OUTPUT_S3_BUCKET
 OUTPUT_S3_CREDENTIALS_ID
 OUTPUT_S3_CREDENTIALS_ROLE
 OUTPUT_S3_CREDENTIALS_SECRET
 OUTPUT_S3_CREDENTIALS_TOKEN
 OUTPUT_S3_ENDPOINT
-OUTPUT_S3_PATH                               = ${!count:files}-${!timestamp_unix_nano}.txt
-OUTPUT_S3_REGION                             = eu-west-1
-OUTPUT_S3_TIMEOUT_S                          = 5
+OUTPUT_S3_PATH                                = ${!count:files}-${!timestamp_unix_nano}.txt
+OUTPUT_S3_REGION                              = eu-west-1
+OUTPUT_S3_TIMEOUT_S                           = 5
 OUTPUT_SQS_CREDENTIALS_ID
 OUTPUT_SQS_CREDENTIALS_ROLE
 OUTPUT_SQS_CREDENTIALS_SECRET
 OUTPUT_SQS_CREDENTIALS_TOKEN
 OUTPUT_SQS_ENDPOINT
-OUTPUT_SQS_REGION                            = eu-west-1
+OUTPUT_SQS_REGION                             = eu-west-1
 OUTPUT_SQS_URL
 OUTPUT_STDOUT_DELIMITER
-OUTPUT_WEBSOCKET_BASIC_AUTH_ENABLED          = false
+OUTPUT_WEBSOCKET_BASIC_AUTH_ENABLED           = false
 OUTPUT_WEBSOCKET_BASIC_AUTH_PASSWORD
 OUTPUT_WEBSOCKET_BASIC_AUTH_USERNAME
 OUTPUT_WEBSOCKET_OAUTH_ACCESS_TOKEN
 OUTPUT_WEBSOCKET_OAUTH_ACCESS_TOKEN_SECRET
 OUTPUT_WEBSOCKET_OAUTH_CONSUMER_KEY
 OUTPUT_WEBSOCKET_OAUTH_CONSUMER_SECRET
-OUTPUT_WEBSOCKET_OAUTH_ENABLED               = false
+OUTPUT_WEBSOCKET_OAUTH_ENABLED                = false
 OUTPUT_WEBSOCKET_OAUTH_REQUEST_URL
-OUTPUT_WEBSOCKET_URL                         = ws://localhost:4195/post/ws
+OUTPUT_WEBSOCKET_URL                          = ws://localhost:4195/post/ws
 ```
 
 ## LOGGER

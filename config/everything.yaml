@@ -605,6 +605,11 @@ output:
       enabled: false
       username: ""
       password: ""
+    max_retries: 0
+    backoff:
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
   file:
     path: ""
     delimiter: ""

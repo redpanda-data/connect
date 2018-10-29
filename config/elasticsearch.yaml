@@ -19,12 +19,17 @@ pipeline:
 output:
   type: elasticsearch
   elasticsearch:
+    backoff:
+      initial_interval: 1s
+      max_elapsed_time: 30s
+      max_interval: 5s
     basic_auth:
       enabled: false
       password: ""
       username: ""
     id: ${!count:elastic_ids}-${!timestamp_unix}
     index: benthos_index
+    max_retries: 0
     pipeline: ""
     sniff: true
     timeout_ms: 5000

@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.34.13 - 2018-10-29
+
 ### Added
 
 - New `group_by` processor.
+- Add bulk send support to `elasticsearch` output.
 
 ## 0.34.8 - 2018-10-10
 
