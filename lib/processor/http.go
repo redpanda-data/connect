@@ -149,13 +149,11 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		// Easy, just do a single request.
 		var err error
 		if responseMsg, err = h.client.Send(msg); err != nil {
-			if err != nil {
-				h.mErr.Incr(1)
-				h.mErrHTTP.Incr(1)
-				return nil, response.NewError(fmt.Errorf(
-					"HTTP request '%v' failed: %v", h.conf.HTTP.Client.URL, err,
-				))
-			}
+			h.mErr.Incr(1)
+			h.mErrHTTP.Incr(1)
+			return nil, response.NewError(fmt.Errorf(
+				"HTTP request '%v' failed: %v", h.conf.HTTP.Client.URL, err,
+			))
 		}
 	} else {
 		// Hard, need to do parallel requests limited by max parallelism.

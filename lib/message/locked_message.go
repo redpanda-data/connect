@@ -45,16 +45,26 @@ type lockedMessage struct {
 	part int
 }
 
-// Copy simply returns the same type, it's read only and therefore doesn't need
-// copying.
+// Copy creates a shallow copy of the locked message, meaning it has only one
+// part.
 func (m *lockedMessage) Copy() types.Message {
-	return m
+	parts := []types.Part{
+		m.m.Get(m.part).Copy(),
+	}
+	msg := New(nil)
+	msg.SetAll(parts)
+	return msg
 }
 
-// DeepCopy simply returns the same type, it's read only and therefore doesn't
-// need copying.
+// DeepCopy creates a deep copy of the locked message, meaning it has only one
+// part.
 func (m *lockedMessage) DeepCopy() types.Message {
-	return m
+	parts := []types.Part{
+		m.m.Get(m.part).DeepCopy(),
+	}
+	msg := New(nil)
+	msg.SetAll(parts)
+	return msg
 }
 
 func (m *lockedMessage) Get(index int) types.Part {

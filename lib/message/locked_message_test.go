@@ -49,6 +49,44 @@ func TestLockedMessageGet(t *testing.T) {
 	}
 }
 
+func TestLockedMessageCopy(t *testing.T) {
+	root := New([][]byte{
+		[]byte("hello"),
+		[]byte("world"),
+		[]byte("12345"),
+	})
+	m := Lock(root, 1)
+	copied := m.Copy()
+	root.Get(1).Get()[2] = '@'
+
+	exp := []byte("wo@ld")
+	if act := copied.Get(0).Get(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Messages not equal: %s != %s", exp, act)
+	}
+
+	root.Get(1).Set([]byte("world"))
+	exp = []byte("wo@ld")
+	if act := copied.Get(0).Get(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Messages not equal: %s != %s", exp, act)
+	}
+}
+
+func TestLockedMessageDeepCopy(t *testing.T) {
+	root := New([][]byte{
+		[]byte("hello"),
+		[]byte("world"),
+		[]byte("12345"),
+	})
+	m := Lock(root, 1)
+	copied := m.DeepCopy()
+	root.Get(1).Get()[2] = '@'
+
+	exp := []byte("world")
+	if act := copied.Get(0).Get(); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Messages not equal: %s != %s", exp, act)
+	}
+}
+
 func TestLockedMessageGetAll(t *testing.T) {
 	m := Lock(New([][]byte{
 		[]byte("hello"),
