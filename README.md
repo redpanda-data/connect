@@ -29,13 +29,14 @@ for choosing a level of resiliency that meets your needs.
 
 ## Supported Sources & Sinks
 
-- [AWS (S3, SQS, Kinesis)][aws]
+- [AWS (DynamoDB, Kinesis, S3, SQS)][aws]
 - [Elasticsearch][elasticsearch] (output only)
 - File
 - [GCP (pub/sub)][gcp]
 - [HDFS][hdfs]
 - HTTP(S)
 - [Kafka][kafka]
+- [Memcached][memcached] (output only)
 - [MQTT][mqtt]
 - [Nanomsg][nanomsg]
 - [NATS][nats]
