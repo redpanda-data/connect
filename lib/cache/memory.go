@@ -122,6 +122,18 @@ func (m *Memory) Set(key string, value []byte) error {
 	return nil
 }
 
+// SetMulti attempts to set the value of multiple keys, returns an error if any
+// keys fail.
+func (m *Memory) SetMulti(items map[string][]byte) error {
+	m.Lock()
+	m.compaction()
+	for k, v := range items {
+		m.items[k] = item{value: v, ts: time.Now()}
+	}
+	m.Unlock()
+	return nil
+}
+
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
 func (m *Memory) Add(key string, value []byte) error {

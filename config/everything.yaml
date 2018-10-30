@@ -588,6 +588,9 @@ output:
     copies: 1
     pattern: fan_out
     outputs: []
+  cache:
+    target: ""
+    key: ${!count:items}-${!timestamp_unix_nano}
   dynamic:
     outputs: {}
     prefix: ""
@@ -795,6 +798,11 @@ resources:
         table: ""
         ttl: ""
         ttl_key: ""
+        max_retries: 3
+        backoff:
+          initial_interval: 1s
+          max_interval: 5s
+          max_elapsed_time: 30s
       memcached:
         addresses:
         - localhost:11211

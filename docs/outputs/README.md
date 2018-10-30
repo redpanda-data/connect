@@ -30,31 +30,32 @@ a [`broker`](#broker) output with the 'try' pattern.
 
 1. [`amqp`](#amqp)
 2. [`broker`](#broker)
-3. [`dynamic`](#dynamic)
-4. [`elasticsearch`](#elasticsearch)
-5. [`file`](#file)
-6. [`files`](#files)
-7. [`gcp_pubsub`](#gcp_pubsub)
-8. [`hdfs`](#hdfs)
-9. [`http_client`](#http_client)
-10. [`http_server`](#http_server)
-11. [`inproc`](#inproc)
-12. [`kafka`](#kafka)
-13. [`kinesis`](#kinesis)
-14. [`mqtt`](#mqtt)
-15. [`nanomsg`](#nanomsg)
-16. [`nats`](#nats)
-17. [`nats_stream`](#nats_stream)
-18. [`nsq`](#nsq)
-19. [`redis_list`](#redis_list)
-20. [`redis_pubsub`](#redis_pubsub)
-21. [`redis_streams`](#redis_streams)
-22. [`retry`](#retry)
-23. [`s3`](#s3)
-24. [`sqs`](#sqs)
-25. [`stdout`](#stdout)
-26. [`switch`](#switch)
-27. [`websocket`](#websocket)
+3. [`cache`](#cache)
+4. [`dynamic`](#dynamic)
+5. [`elasticsearch`](#elasticsearch)
+6. [`file`](#file)
+7. [`files`](#files)
+8. [`gcp_pubsub`](#gcp_pubsub)
+9. [`hdfs`](#hdfs)
+10. [`http_client`](#http_client)
+11. [`http_server`](#http_server)
+12. [`inproc`](#inproc)
+13. [`kafka`](#kafka)
+14. [`kinesis`](#kinesis)
+15. [`mqtt`](#mqtt)
+16. [`nanomsg`](#nanomsg)
+17. [`nats`](#nats)
+18. [`nats_stream`](#nats_stream)
+19. [`nsq`](#nsq)
+20. [`redis_list`](#redis_list)
+21. [`redis_pubsub`](#redis_pubsub)
+22. [`redis_streams`](#redis_streams)
+23. [`retry`](#retry)
+24. [`s3`](#s3)
+25. [`sqs`](#sqs)
+26. [`stdout`](#stdout)
+27. [`switch`](#switch)
+28. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -180,6 +181,45 @@ level, where they will be applied to _all_ child outputs, as well as on the
 individual child outputs. If you have processors at both the broker level _and_
 on child outputs then the broker processors will be applied _before_ the child
 nodes processors.
+
+## `cache`
+
+``` yaml
+type: cache
+cache:
+  key: ${!count:items}-${!timestamp_unix_nano}
+  target: ""
+```
+
+Stores message parts as items in a cache. Caches are configured within the
+[resources section](../caches/README.md) and can target any of the following
+types:
+
+- dynamodb
+- memcached
+- memory
+- redis
+
+Like follows:
+``` yaml
+output:
+  type: cache
+  cache:
+	target: foo
+	key: ${!json_field:document.id}
+resources:
+  caches:
+    foo:
+      type: memcached
+      memcached:
+        addresses:
+        - localhost:11211
+        ttl: 60
+```
+
+In order to create a unique `key` value per item you should use
+function interpolations described [here](../config_interpolation.md#functions).
+When sending batched messages the interpolations are performed per message part.
 
 ## `dynamic`
 

@@ -22,17 +22,20 @@ package cache
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/aws/session"
+	"github.com/Jeffail/benthos/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
+	"github.com/cenkalti/backoff"
 )
 
 //------------------------------------------------------------------------------
@@ -42,38 +45,54 @@ func init() {
 		constructor: NewDynamoDB,
 		description: `
 The dynamodb cache stores key/value pairs as a single document in a DynamoDB
-table. The key is stored as a string value and used as table hash key. The value
-is stored as a binary value using the ` + "`data_key`" + ` field name. A prefix
-can be specified to allow multiple cache types to share a single DynamoDB table.
-An optional TTL duration (` + "`ttl`" + `) and field (` + "`ttl_key`" + `) can
-be specified if the backing table has TTL enabled. Strong read consistency can
-be enabled using the ` + "`consistent_read`" + ` configuration field.`,
+table. The key is stored as a string value and used as the table hash key. The
+value is stored as a binary value using the ` + "`data_key`" + ` field name.
+
+A prefix can be specified to allow multiple cache types to share a single
+DynamoDB table. An optional TTL duration (` + "`ttl`" + `) and field
+(` + "`ttl_key`" + `) can be specified if the backing table has TTL enabled.
+
+Strong read consistency can be enabled using the ` + "`consistent_read`" + `
+configuration field.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
+type sessionConfig struct {
+	session.Config `json:",inline" yaml:",inline"`
+}
+
 // DynamoDBConfig contains config fields for the DynamoDB cache type.
 type DynamoDBConfig struct {
-	session.Config `json:",inline" yaml:",inline"`
+	sessionConfig  `json:",inline" yaml:",inline"`
 	ConsistentRead bool   `json:"consistent_read" yaml:"consistent_read"`
 	DataKey        string `json:"data_key" yaml:"data_key"`
 	HashKey        string `json:"hash_key" yaml:"hash_key"`
 	Table          string `json:"table" yaml:"table"`
 	TTL            string `json:"ttl" yaml:"ttl"`
 	TTLKey         string `json:"ttl_key" yaml:"ttl_key"`
+	retries.Config `json:",inline" yaml:",inline"`
 }
 
 // NewDynamoDBConfig creates a MemoryConfig populated with default values.
 func NewDynamoDBConfig() DynamoDBConfig {
+	rConf := retries.NewConfig()
+	rConf.MaxRetries = 3
+	rConf.Backoff.InitialInterval = "1s"
+	rConf.Backoff.MaxInterval = "5s"
+	rConf.Backoff.MaxElapsedTime = "30s"
 	return DynamoDBConfig{
-		Config:         session.NewConfig(),
+		sessionConfig: sessionConfig{
+			Config: session.NewConfig(),
+		},
 		ConsistentRead: false,
 		DataKey:        "",
 		HashKey:        "",
 		Table:          "",
 		TTL:            "",
 		TTLKey:         "",
+		Config:         rConf,
 	}
 }
 
@@ -81,21 +100,83 @@ func NewDynamoDBConfig() DynamoDBConfig {
 
 // DynamoDB is a DynamoDB based cache implementation.
 type DynamoDB struct {
-	client dynamodbiface.DynamoDBAPI
-	conf   DynamoDBConfig
-	log    log.Modular
-	stats  metrics.Type
-	table  *string
-	ttl    time.Duration
+	client      dynamodbiface.DynamoDBAPI
+	conf        DynamoDBConfig
+	log         log.Modular
+	stats       metrics.Type
+	table       *string
+	ttl         time.Duration
+	backoffCtor func() backoff.BackOff
+	boffPool    sync.Pool
+
+	mLatency         metrics.StatTimer
+	mGetCount        metrics.StatCounter
+	mGetRetry        metrics.StatCounter
+	mGetFailed       metrics.StatCounter
+	mGetSuccess      metrics.StatCounter
+	mGetLatency      metrics.StatTimer
+	mGetNotFound     metrics.StatCounter
+	mSetCount        metrics.StatCounter
+	mSetRetry        metrics.StatCounter
+	mSetFailed       metrics.StatCounter
+	mSetSuccess      metrics.StatCounter
+	mSetLatency      metrics.StatTimer
+	mSetMultiCount   metrics.StatCounter
+	mSetMultiRetry   metrics.StatCounter
+	mSetMultiFailed  metrics.StatCounter
+	mSetMultiSuccess metrics.StatCounter
+	mSetMultiLatency metrics.StatTimer
+	mAddCount        metrics.StatCounter
+	mAddDupe         metrics.StatCounter
+	mAddRetry        metrics.StatCounter
+	mAddFailedDupe   metrics.StatCounter
+	mAddFailedErr    metrics.StatCounter
+	mAddSuccess      metrics.StatCounter
+	mAddLatency      metrics.StatTimer
+	mDelCount        metrics.StatCounter
+	mDelRetry        metrics.StatCounter
+	mDelFailedErr    metrics.StatCounter
+	mDelSuccess      metrics.StatCounter
+	mDelLatency      metrics.StatTimer
 }
 
 // NewDynamoDB creates a new DynamoDB cache type.
 func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error) {
 	d := DynamoDB{
 		conf:  conf.DynamoDB,
-		log:   log,
+		log:   log.NewModule(".cache.dynamodb"),
 		stats: stats,
 		table: aws.String(conf.DynamoDB.Table),
+
+		mLatency:         stats.GetTimer("cache.dynamodb.latency"),
+		mGetCount:        stats.GetCounter("cache.dynamodb.get.count"),
+		mGetRetry:        stats.GetCounter("cache.dynamodb.get.retry"),
+		mGetFailed:       stats.GetCounter("cache.dynamodb.get.failed.error"),
+		mGetNotFound:     stats.GetCounter("cache.dynamodb.get.failed.not_found"),
+		mGetSuccess:      stats.GetCounter("cache.dynamodb.get.success"),
+		mGetLatency:      stats.GetTimer("cache.dynamodb.get.latency"),
+		mSetCount:        stats.GetCounter("cache.dynamodb.set.count"),
+		mSetRetry:        stats.GetCounter("cache.dynamodb.set.retry"),
+		mSetFailed:       stats.GetCounter("cache.dynamodb.set.failed.error"),
+		mSetSuccess:      stats.GetCounter("cache.dynamodb.set.success"),
+		mSetLatency:      stats.GetTimer("cache.dynamodb.set.latency"),
+		mSetMultiCount:   stats.GetCounter("cache.dynamodb.set_multi.count"),
+		mSetMultiRetry:   stats.GetCounter("cache.dynamodb.set_multi.retry"),
+		mSetMultiFailed:  stats.GetCounter("cache.dynamodb.set_multi.failed.error"),
+		mSetMultiSuccess: stats.GetCounter("cache.dynamodb.set_multi.success"),
+		mSetMultiLatency: stats.GetTimer("cache.dynamodb.set.l_multiatency"),
+		mAddCount:        stats.GetCounter("cache.dynamodb.add.count"),
+		mAddDupe:         stats.GetCounter("cache.dynamodb.add.failed.duplicate"),
+		mAddRetry:        stats.GetCounter("cache.dynamodb.add.retry"),
+		mAddFailedDupe:   stats.GetCounter("cache.dynamodb.add.failed.duplicate"),
+		mAddFailedErr:    stats.GetCounter("cache.dynamodb.add.failed.error"),
+		mAddSuccess:      stats.GetCounter("cache.dynamodb.add.success"),
+		mAddLatency:      stats.GetTimer("cache.dynamodb.add.latency"),
+		mDelCount:        stats.GetCounter("cache.dynamodb.delete.count"),
+		mDelRetry:        stats.GetCounter("cache.dynamodb.delete.retry"),
+		mDelFailedErr:    stats.GetCounter("cache.dynamodb.delete.failed.error"),
+		mDelSuccess:      stats.GetCounter("cache.dynamodb.delete.success"),
+		mDelLatency:      stats.GetTimer("cache.dynamodb.del.latency"),
 	}
 
 	if d.conf.TTL != "" {
@@ -121,6 +202,15 @@ func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 		return nil, fmt.Errorf("dynamodb table '%s' must be active", d.conf.Table)
 	}
 
+	if d.backoffCtor, err = conf.DynamoDB.Config.GetCtor(); err != nil {
+		return nil, err
+	}
+	d.boffPool = sync.Pool{
+		New: func() interface{} {
+			return d.backoffCtor()
+		},
+	}
+
 	return &d, nil
 }
 
@@ -129,6 +219,39 @@ func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 // Get attempts to locate and return a cached value by its key, returns an error
 // if the key does not exist.
 func (d *DynamoDB) Get(key string) ([]byte, error) {
+	d.mGetCount.Incr(1)
+
+	tStarted := time.Now()
+	boff := d.boffPool.Get().(backoff.BackOff)
+
+	result, err := d.get(key)
+	for err != nil && err != types.ErrCacheNotFound {
+		wait := boff.NextBackOff()
+		if wait == backoff.Stop {
+			break
+		}
+		time.Sleep(wait)
+		d.mGetRetry.Incr(1)
+		result, err = d.get(key)
+	}
+	if err == nil {
+		d.mGetSuccess.Incr(1)
+	} else if err == types.ErrCacheNotFound {
+		d.mGetNotFound.Incr(1)
+	} else {
+		d.mGetFailed.Incr(1)
+	}
+
+	latency := int64(time.Since(tStarted))
+	d.mGetLatency.Timing(latency)
+	d.mLatency.Timing(latency)
+
+	boff.Reset()
+	d.boffPool.Put(boff)
+	return result, err
+}
+
+func (d *DynamoDB) get(key string) ([]byte, error) {
 	res, err := d.client.GetItem(&dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			d.conf.HashKey: {
@@ -151,16 +274,131 @@ func (d *DynamoDB) Get(key string) ([]byte, error) {
 
 // Set attempts to set the value of a key.
 func (d *DynamoDB) Set(key string, value []byte) error {
+	d.mSetCount.Incr(1)
+
+	tStarted := time.Now()
+	boff := d.boffPool.Get().(backoff.BackOff)
+
 	_, err := d.client.PutItem(d.putItemInput(key, value))
-	if err != nil {
-		return err
+	for err != nil {
+		wait := boff.NextBackOff()
+		if wait == backoff.Stop {
+			break
+		}
+		time.Sleep(wait)
+		d.mSetRetry.Incr(1)
+		_, err = d.client.PutItem(d.putItemInput(key, value))
 	}
-	return nil
+	if err == nil {
+		d.mSetSuccess.Incr(1)
+	} else {
+		d.mSetFailed.Incr(1)
+	}
+
+	latency := int64(time.Since(tStarted))
+	d.mSetLatency.Timing(latency)
+	d.mLatency.Timing(latency)
+
+	boff.Reset()
+	d.boffPool.Put(boff)
+	return err
+}
+
+// SetMulti attempts to set the value of multiple keys, if any keys fail to be
+// set an error is returned.
+func (d *DynamoDB) SetMulti(items map[string][]byte) error {
+	d.mSetMultiCount.Incr(1)
+
+	tStarted := time.Now()
+	boff := d.boffPool.Get().(backoff.BackOff)
+
+	writeReqs := []*dynamodb.WriteRequest{}
+	for k, v := range items {
+		writeReqs = append(writeReqs, &dynamodb.WriteRequest{
+			PutRequest: &dynamodb.PutRequest{
+				Item: d.putItemInput(k, v).Item,
+			},
+		})
+	}
+
+	var err error
+	for len(writeReqs) > 0 {
+		wait := boff.NextBackOff()
+		var batchResult *dynamodb.BatchWriteItemOutput
+		batchResult, err = d.client.BatchWriteItem(&dynamodb.BatchWriteItemInput{
+			RequestItems: map[string][]*dynamodb.WriteRequest{
+				*d.table: writeReqs,
+			},
+		})
+		if err != nil {
+			d.log.Errorf("Write multi error: %v\n", err)
+		} else if unproc := batchResult.UnprocessedItems[*d.table]; len(unproc) > 0 {
+			writeReqs = unproc
+			err = fmt.Errorf("failed to set %v items", len(unproc))
+		} else {
+			writeReqs = nil
+		}
+
+		if err != nil {
+			if wait == backoff.Stop {
+				break
+			}
+			time.After(wait)
+			d.mSetMultiRetry.Incr(1)
+		}
+	}
+
+	if err == nil {
+		d.mSetMultiSuccess.Incr(1)
+	} else {
+		d.mSetMultiFailed.Incr(1)
+	}
+
+	latency := int64(time.Since(tStarted))
+	d.mSetMultiLatency.Timing(latency)
+	d.mLatency.Timing(latency)
+
+	boff.Reset()
+	d.boffPool.Put(boff)
+	return err
 }
 
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
 func (d *DynamoDB) Add(key string, value []byte) error {
+	d.mAddCount.Incr(1)
+
+	tStarted := time.Now()
+	boff := d.boffPool.Get().(backoff.BackOff)
+
+	err := d.add(key, value)
+	for err != nil && err != types.ErrKeyAlreadyExists {
+		wait := boff.NextBackOff()
+		if wait == backoff.Stop {
+			break
+		}
+		time.Sleep(wait)
+		d.mAddRetry.Incr(1)
+		err = d.add(key, value)
+	}
+	if err == nil {
+		d.mAddSuccess.Incr(1)
+	} else if err == types.ErrKeyAlreadyExists {
+		d.mAddFailedDupe.Incr(1)
+	} else {
+		d.mAddFailedErr.Incr(1)
+	}
+
+	latency := int64(time.Since(tStarted))
+	d.mAddLatency.Timing(latency)
+	d.mLatency.Timing(latency)
+
+	boff.Reset()
+	d.boffPool.Put(boff)
+	return err
+}
+
+func (d *DynamoDB) add(key string, value []byte) error {
 	input := d.putItemInput(key, value)
 
 	expr, err := expression.NewBuilder().
@@ -186,6 +424,37 @@ func (d *DynamoDB) Add(key string, value []byte) error {
 
 // Delete attempts to remove a key.
 func (d *DynamoDB) Delete(key string) error {
+	d.mDelCount.Incr(1)
+
+	tStarted := time.Now()
+	boff := d.boffPool.Get().(backoff.BackOff)
+
+	err := d.delete(key)
+	for err != nil {
+		wait := boff.NextBackOff()
+		if wait == backoff.Stop {
+			break
+		}
+		time.Sleep(wait)
+		d.mDelRetry.Incr(1)
+		err = d.delete(key)
+	}
+	if err == nil {
+		d.mDelSuccess.Incr(1)
+	} else {
+		d.mDelFailedErr.Incr(1)
+	}
+
+	latency := int64(time.Since(tStarted))
+	d.mDelLatency.Timing(latency)
+	d.mLatency.Timing(latency)
+
+	boff.Reset()
+	d.boffPool.Put(boff)
+	return err
+}
+
+func (d *DynamoDB) delete(key string) error {
 	_, err := d.client.DeleteItem(&dynamodb.DeleteItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			d.conf.HashKey: {

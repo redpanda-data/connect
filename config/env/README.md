@@ -358,6 +358,8 @@ OUTPUT_AMQP_TLS_ENABLED                       = false
 OUTPUT_AMQP_TLS_ROOT_CAS_FILE
 OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY              = false
 OUTPUT_AMQP_URL                               = amqp://guest:guest@localhost:5672/
+OUTPUT_CACHE_KEY                              = ${!count:items}-${!timestamp_unix_nano}
+OUTPUT_CACHE_TARGET
 OUTPUT_DYNAMIC_PREFIX
 OUTPUT_DYNAMIC_TIMEOUT_MS                     = 5000
 OUTPUT_ELASTICSEARCH_BACKOFF_INITIAL_INTERVAL = 1s

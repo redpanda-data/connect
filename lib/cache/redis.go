@@ -236,6 +236,18 @@ func (r *Redis) Set(key string, value []byte) error {
 	return err
 }
 
+// SetMulti attempts to set the value of multiple keys, returns an error if any
+// keys fail.
+func (r *Redis) SetMulti(items map[string][]byte) error {
+	// TODO: Come back and optimise this.
+	for k, v := range items {
+		if err := r.Set(k, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists or if the operation fails.
 func (r *Redis) Add(key string, value []byte) error {

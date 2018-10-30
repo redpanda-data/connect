@@ -401,6 +401,9 @@ output:
           root_cas_file: ${OUTPUT_AMQP_TLS_ROOT_CAS_FILE}
           skip_cert_verify: ${OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY:false}
         url: ${OUTPUT_AMQP_URL:amqp://guest:guest@localhost:5672/}
+      cache:
+        key: ${OUTPUT_CACHE_KEY:${!count:items}-${!timestamp_unix_nano}}
+        target: ${OUTPUT_CACHE_TARGET}
       dynamic:
         prefix: ${OUTPUT_DYNAMIC_PREFIX}
         timeout_ms: ${OUTPUT_DYNAMIC_TIMEOUT_MS:5000}

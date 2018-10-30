@@ -60,32 +60,46 @@ func NewConfig() Config {
 // Get returns a valid *backoff.ExponentialBackoff based on the configuration
 // values of Config.
 func (c *Config) Get() (backoff.BackOff, error) {
-	boff := backoff.NewExponentialBackOff()
+	ctor, err := c.GetCtor()
+	if err != nil {
+		return nil, err
+	}
+	return ctor(), nil
+}
+
+// GetCtor returns a constructor for a backoff.Backoff based on the
+// configuration values of Config.
+func (c *Config) GetCtor() (func() backoff.BackOff, error) {
+	var initInterval, maxInterval, maxElapsed time.Duration
+	var err error
 	if c.Backoff.InitialInterval != "" {
-		d, err := time.ParseDuration(c.Backoff.InitialInterval)
-		if err != nil {
+		if initInterval, err = time.ParseDuration(c.Backoff.InitialInterval); err != nil {
 			return nil, fmt.Errorf("invalid backoff initial interval: %v", err)
 		}
-		boff.InitialInterval = d
 	}
 	if c.Backoff.MaxInterval != "" {
-		d, err := time.ParseDuration(c.Backoff.MaxInterval)
-		if err != nil {
+		if maxInterval, err = time.ParseDuration(c.Backoff.MaxInterval); err != nil {
 			return nil, fmt.Errorf("invalid backoff max interval: %v", err)
 		}
-		boff.MaxInterval = d
 	}
 	if c.Backoff.MaxElapsedTime != "" {
-		d, err := time.ParseDuration(c.Backoff.MaxElapsedTime)
-		if err != nil {
+		if maxElapsed, err = time.ParseDuration(c.Backoff.MaxElapsedTime); err != nil {
 			return nil, fmt.Errorf("invalid backoff max elapsed interval: %v", err)
 		}
-		boff.MaxElapsedTime = d
 	}
-	if c.MaxRetries > 0 {
-		return backoff.WithMaxRetries(boff, c.MaxRetries), nil
-	}
-	return boff, nil
+
+	return func() backoff.BackOff {
+		boff := backoff.NewExponentialBackOff()
+
+		boff.InitialInterval = initInterval
+		boff.MaxInterval = maxInterval
+		boff.MaxElapsedTime = maxElapsed
+
+		if c.MaxRetries > 0 {
+			return backoff.WithMaxRetries(boff, c.MaxRetries)
+		}
+		return boff
+	}, nil
 }
 
 //------------------------------------------------------------------------------

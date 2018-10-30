@@ -105,6 +105,10 @@ func TestDynamoDBIntegration(t *testing.T) {
 		testDynamodbGetAndSet(t, conf)
 	})
 
+	t.Run("testDynamodbGetAndSetMulti", func(t *testing.T) {
+		testDynamodbGetAndSetMulti(t, conf)
+	})
+
 	t.Run("testDynamodbAddAndDelete", func(t *testing.T) {
 		testDynamodbAddAndDelete(t, conf)
 	})
@@ -131,6 +135,38 @@ func testDynamodbGetAndSet(t *testing.T, conf Config) {
 		t.Error(err)
 	} else if string(act) != string(exp) {
 		t.Errorf("Expected key 'foo' to have value %s, got %s", string(exp), string(act))
+	}
+}
+
+func testDynamodbGetAndSetMulti(t *testing.T, conf Config) {
+	c, err := NewDynamoDB(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := map[string][]byte{
+		"foo": []byte(`{"test":"foo"}`),
+		"bar": []byte(`{"test":"bar"}`),
+		"baz": []byte(`{"test":"baz"}`),
+	}
+
+	if err := c.SetMulti(exp); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		for k := range exp {
+			if err := c.Delete(k); err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+
+	for k, v := range exp {
+		if act, err := c.Get(k); err != nil {
+			t.Error(err)
+		} else if string(act) != string(v) {
+			t.Errorf("Expected key '%v' to have value %s, got %s", k, string(v), string(act))
+		}
 	}
 }
 
