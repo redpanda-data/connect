@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.35.0 - 2018-10-30
+
 - New `cache` output type.
 
 ## 0.34.13 - 2018-10-29
