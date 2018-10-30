@@ -218,3 +218,4 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [elasticsearch]: https://www.elastic.co/
 [hdfs]: https://hadoop.apache.org/
 [gcp]: https://cloud.google.com/
+[memcached]: https://memcached.org/
