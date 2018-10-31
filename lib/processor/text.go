@@ -66,6 +66,10 @@ value.
 
 Removes all HTML tags from a message.
 
+#### ` + "`set`" + `
+
+Replace the contents of a message entirely with a value.
+
 #### ` + "`to_lower`" + `
 
 Converts all text into lower case.
@@ -150,6 +154,12 @@ func newTextTrimOperator(arg string) textOperator {
 	}
 }
 
+func newTextSetOperator() textOperator {
+	return func(body []byte, value []byte) ([]byte, error) {
+		return value, nil
+	}
+}
+
 func newTextReplaceOperator(arg string) textOperator {
 	replaceArg := []byte(arg)
 	return func(body []byte, value []byte) ([]byte, error) {
@@ -194,6 +204,8 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 		return newTextReplaceRegexpOperator(arg)
 	case "strip_html":
 		return newTextStripHTMLOperator(arg), nil
+	case "set":
+		return newTextSetOperator(), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }

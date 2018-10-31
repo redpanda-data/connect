@@ -1175,6 +1175,10 @@ value.
 
 Removes all HTML tags from a message.
 
+#### `set`
+
+Replace the contents of a message entirely with a value.
+
 #### `to_lower`
 
 Converts all text into lower case.

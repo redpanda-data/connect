@@ -89,6 +89,62 @@ func TestTextPartBounds(t *testing.T) {
 	}
 }
 
+func TestTextSet(t *testing.T) {
+	type jTest struct {
+		name   string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "set 1",
+			value:  `baz`,
+			input:  `foo`,
+			output: `baz`,
+		},
+		{
+			name:   "set 2",
+			value:  `baz`,
+			input:  ``,
+			output: `baz`,
+		},
+		{
+			name:   "set 3",
+			value:  ``,
+			input:  `foo`,
+			output: ``,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Text.Operator = "set"
+		conf.Text.Parts = []int{0}
+		conf.Text.Value = test.value
+
+		tp, err := NewText(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := tp.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestTextAppend(t *testing.T) {
 	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
