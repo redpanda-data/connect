@@ -580,6 +580,20 @@ func TestJSONSet(t *testing.T) {
 			input:  `{"foo":2}`,
 			output: `{"baz":1}`,
 		},
+		{
+			name:   "set interpolate 1",
+			path:   "foo",
+			value:  `{"baz":"${!json_field:bar}"}`,
+			input:  `{"foo":2,"bar":"hello world this is a string"}`,
+			output: `{"bar":"hello world this is a string","foo":{"baz":"hello world this is a string"}}`,
+		},
+		{
+			name:   "set interpolate 2",
+			path:   ".",
+			value:  `{"${!json_field:key}":{"value":"${!json_field:value}"}}`,
+			input:  `{"key":"dynamic","value":{"foo":"bar"}}`,
+			output: `{"dynamic":{"value":"{\"foo\":\"bar\"}"}}`,
+		},
 	}
 
 	for _, test := range tests {
@@ -733,6 +747,16 @@ value: 5
 operator: set
 path: foo.bar
 value: hello world
+`,
+		`parts:
+- 0
+operator: set
+path: foo.bar
+value:
+  root:
+  - values:
+    - nested: true
+    with: array
 `,
 		`parts:
 - 0

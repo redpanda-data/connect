@@ -142,6 +142,7 @@ func (r *rawJSONValue) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 
 	var convertMap func(m map[interface{}]interface{}) map[string]interface{}
+	var convertArray func(a []interface{})
 	convertMap = func(m map[interface{}]interface{}) map[string]interface{} {
 		newMap := map[string]interface{}{}
 		for k, v := range m {
@@ -150,16 +151,33 @@ func (r *rawJSONValue) UnmarshalYAML(unmarshal func(interface{}) error) error {
 				continue
 			}
 			newVal := v
-			if iMap, isIMap := v.(map[interface{}]interface{}); isIMap {
-				newVal = convertMap(iMap)
+			switch t := v.(type) {
+			case []interface{}:
+				convertArray(t)
+			case map[interface{}]interface{}:
+				newVal = convertMap(t)
 			}
 			newMap[keyStr] = newVal
 		}
 		return newMap
 	}
-
-	if iMap, isIMap := yamlObj.(map[interface{}]interface{}); isIMap {
-		yamlObj = convertMap(iMap)
+	convertArray = func(a []interface{}) {
+		for i, v := range a {
+			newVal := v
+			switch t := v.(type) {
+			case []interface{}:
+				convertArray(t)
+			case map[interface{}]interface{}:
+				newVal = convertMap(t)
+			}
+			a[i] = newVal
+		}
+	}
+	switch t := yamlObj.(type) {
+	case []interface{}:
+		convertArray(t)
+	case map[interface{}]interface{}:
+		yamlObj = convertMap(t)
 	}
 
 	rawJSON, err := json.Marshal(yamlObj)
