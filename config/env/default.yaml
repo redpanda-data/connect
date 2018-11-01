@@ -32,6 +32,8 @@ input:
       files:
         path: ${INPUT_FILES_PATH}
       gcp_pubsub:
+        max_outstanding_bytes: ${INPUT_GCP_PUBSUB_MAX_OUTSTANDING_BYTES:1000000000}
+        max_outstanding_messages: ${INPUT_GCP_PUBSUB_MAX_OUTSTANDING_MESSAGES:1000}
         project: ${INPUT_GCP_PUBSUB_PROJECT}
         subscription: ${INPUT_GCP_PUBSUB_SUBSCRIPTION}
       hdfs:

@@ -254,6 +254,8 @@ You can access these metadata fields using
 ``` yaml
 type: gcp_pubsub
 gcp_pubsub:
+  max_outstanding_bytes: 1e+09
+  max_outstanding_messages: 1000
   project: ""
   subscription: ""
 ```

@@ -37,6 +37,8 @@ input:
   gcp_pubsub:
     project: ""
     subscription: ""
+    max_outstanding_messages: 1000
+    max_outstanding_bytes: 1000000000
   hdfs:
     hosts:
     - localhost:9000

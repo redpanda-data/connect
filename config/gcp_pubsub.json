@@ -8,6 +8,8 @@
 	"input": {
 		"type": "gcp_pubsub",
 		"gcp_pubsub": {
+			"max_outstanding_bytes": 1000000000,
+			"max_outstanding_messages": 1000,
 			"project": "",
 			"subscription": ""
 		}

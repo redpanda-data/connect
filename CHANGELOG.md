@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Add max-outstanding fields to `gcp_pubsub` input.
+
 ## 0.35.1 - 2018-10-31
 
 - New `set` operator for the `text` processor.
