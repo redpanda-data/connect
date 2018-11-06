@@ -1,0 +1,72 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000,
+		"root_path": "/benthos",
+		"debug_endpoints": false
+	},
+	"input": {
+		"type": "stdin",
+		"stdin": {
+			"delimiter": "",
+			"max_buffer": 1000000,
+			"multipart": false
+		}
+	},
+	"buffer": {
+		"type": "none",
+		"none": {}
+	},
+	"pipeline": {
+		"processors": [],
+		"threads": 1
+	},
+	"output": {
+		"type": "dynamodb",
+		"dynamodb": {
+			"backoff": {
+				"initial_interval": "1s",
+				"max_elapsed_time": "30s",
+				"max_interval": "5s"
+			},
+			"credentials": {
+				"id": "",
+				"role": "",
+				"secret": "",
+				"token": ""
+			},
+			"endpoint": "",
+			"max_retries": 3,
+			"region": "eu-west-1",
+			"string_columns": {},
+			"table": "",
+			"ttl": "",
+			"ttl_key": ""
+		}
+	},
+	"resources": {
+		"caches": {},
+		"conditions": {},
+		"rate_limits": {}
+	},
+	"logger": {
+		"prefix": "benthos",
+		"level": "INFO",
+		"add_timestamp": true,
+		"json_format": true,
+		"static_fields": {
+			"@service": "benthos"
+		}
+	},
+	"metrics": {
+		"type": "http_server",
+		"prefix": "benthos",
+		"http_server": {},
+		"prometheus": {},
+		"statsd": {
+			"address": "localhost:4040",
+			"flush_period": "100ms",
+			"network": "udp"
+		}
+	}
+}

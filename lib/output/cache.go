@@ -21,6 +21,8 @@
 package output
 
 import (
+	"sort"
+
 	"github.com/Jeffail/benthos/lib/cache"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -32,7 +34,12 @@ import (
 
 func init() {
 	var cachesList string
+	var cachesSlice []string
 	for k := range cache.Constructors {
+		cachesSlice = append(cachesSlice, k)
+	}
+	sort.Strings(cachesSlice)
+	for _, k := range cachesSlice {
 		cachesList = cachesList + "- " + k + "\n"
 	}
 

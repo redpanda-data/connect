@@ -5,13 +5,25 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
 - Add max-outstanding fields to `gcp_pubsub` input.
+- Add new `dynamodb` output.
+
+### Changed
+
+- The `s3` output now calculates `path` field function interpolations per
+  message of a batch.
 
 ## 0.35.1 - 2018-10-31
+
+### Added
 
 - New `set` operator for the `text` processor.
 
 ## 0.35.0 - 2018-10-30
+
+### Added
 
 - New `cache` output type.
 

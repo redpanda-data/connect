@@ -597,6 +597,23 @@ output:
     outputs: {}
     prefix: ""
     timeout_ms: 5000
+  dynamodb:
+    credentials:
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
+    endpoint: ""
+    region: eu-west-1
+    table: ""
+    string_columns: {}
+    ttl: ""
+    ttl_key: ""
+    max_retries: 3
+    backoff:
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
   elasticsearch:
     urls:
     - http://localhost:9200
