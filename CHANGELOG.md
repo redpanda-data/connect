@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.36.0 - 2018-11-06
+
 ### Added
 
 - Add max-outstanding fields to `gcp_pubsub` input.
