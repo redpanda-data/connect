@@ -32,30 +32,31 @@ a [`broker`](#broker) output with the 'try' pattern.
 2. [`broker`](#broker)
 3. [`cache`](#cache)
 4. [`dynamic`](#dynamic)
-5. [`elasticsearch`](#elasticsearch)
-6. [`file`](#file)
-7. [`files`](#files)
-8. [`gcp_pubsub`](#gcp_pubsub)
-9. [`hdfs`](#hdfs)
-10. [`http_client`](#http_client)
-11. [`http_server`](#http_server)
-12. [`inproc`](#inproc)
-13. [`kafka`](#kafka)
-14. [`kinesis`](#kinesis)
-15. [`mqtt`](#mqtt)
-16. [`nanomsg`](#nanomsg)
-17. [`nats`](#nats)
-18. [`nats_stream`](#nats_stream)
-19. [`nsq`](#nsq)
-20. [`redis_list`](#redis_list)
-21. [`redis_pubsub`](#redis_pubsub)
-22. [`redis_streams`](#redis_streams)
-23. [`retry`](#retry)
-24. [`s3`](#s3)
-25. [`sqs`](#sqs)
-26. [`stdout`](#stdout)
-27. [`switch`](#switch)
-28. [`websocket`](#websocket)
+5. [`dynamodb`](#dynamodb)
+6. [`elasticsearch`](#elasticsearch)
+7. [`file`](#file)
+8. [`files`](#files)
+9. [`gcp_pubsub`](#gcp_pubsub)
+10. [`hdfs`](#hdfs)
+11. [`http_client`](#http_client)
+12. [`http_server`](#http_server)
+13. [`inproc`](#inproc)
+14. [`kafka`](#kafka)
+15. [`kinesis`](#kinesis)
+16. [`mqtt`](#mqtt)
+17. [`nanomsg`](#nanomsg)
+18. [`nats`](#nats)
+19. [`nats_stream`](#nats_stream)
+20. [`nsq`](#nsq)
+21. [`redis_list`](#redis_list)
+22. [`redis_pubsub`](#redis_pubsub)
+23. [`redis_streams`](#redis_streams)
+24. [`retry`](#retry)
+25. [`s3`](#s3)
+26. [`sqs`](#sqs)
+27. [`stdout`](#stdout)
+28. [`switch`](#switch)
+29. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -243,6 +244,46 @@ To perform CRUD actions on the outputs themselves use POST, DELETE, and GET
 methods on the `/outputs/{output_id}` endpoint. When using POST the
 body of the request should be a JSON configuration for the output, if the output
 already exists it will be changed.
+
+## `dynamodb`
+
+``` yaml
+type: dynamodb
+dynamodb:
+  backoff:
+    initial_interval: 1s
+    max_elapsed_time: 30s
+    max_interval: 5s
+  credentials:
+    id: ""
+    role: ""
+    secret: ""
+    token: ""
+  endpoint: ""
+  max_retries: 3
+  region: eu-west-1
+  string_columns: {}
+  table: ""
+  ttl: ""
+  ttl_key: ""
+```
+
+Inserts messages into a DynamoDB table. Columns are populated by writing a map
+of key/value pairs, where the values are
+[function interpolated](../config_interpolation.md#functions) strings calculated
+per message of a batch. This allows you to populate columns by extracting
+fields within the document payload or metadata like follows:
+
+``` yaml
+type: dynamodb
+dynamodb:
+  table: foo
+  string_columns:
+    id: ${!json_field:id}
+    title: ${!json_field:body.title}
+    topic: ${!metadata:kafka_topic}
+    full_content: ${!content}
+```
 
 ## `elasticsearch`
 
@@ -694,9 +735,10 @@ s3:
 ```
 
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
-with the path specified with the 'path' field, in order to have a different path
-for each object you should use function interpolations described
-[here](../config_interpolation.md#functions).
+with the path specified with the `path` field. In order to have a
+different path for each object you should use function interpolations described
+[here](../config_interpolation.md#functions), which are calculated per message
+of a batch.
 
 ## `sqs`
 

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	sess "github.com/Jeffail/benthos/lib/util/aws/session"
@@ -115,7 +116,7 @@ func (a *AmazonS3) Write(msg types.Message) error {
 	return msg.Iter(func(i int, p types.Part) error {
 		path := a.conf.Path
 		if a.interpolatePath {
-			path = string(text.ReplaceFunctionVariables(msg, a.pathBytes))
+			path = string(text.ReplaceFunctionVariables(message.Lock(msg, i), a.pathBytes))
 		}
 
 		if _, err := a.uploader.Upload(&s3manager.UploadInput{

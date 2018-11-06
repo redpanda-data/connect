@@ -30,23 +30,38 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors[TypeS3] = TypeSpec{
-		constructor: NewAmazonS3,
+	Constructors[TypeDynamoDB] = TypeSpec{
+		constructor: NewDynamoDB,
 		description: `
-Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
-with the path specified with the ` + "`path`" + ` field. In order to have a
-different path for each object you should use function interpolations described
-[here](../config_interpolation.md#functions), which are calculated per message
-of a batch.`,
+Inserts messages into a DynamoDB table. Columns are populated by writing a map
+of key/value pairs, where the values are
+[function interpolated](../config_interpolation.md#functions) strings calculated
+per message of a batch. This allows you to populate columns by extracting
+fields within the document payload or metadata like follows:
+
+` + "``` yaml" + `
+type: dynamodb
+dynamodb:
+  table: foo
+  string_columns:
+    id: ${!json_field:id}
+    title: ${!json_field:body.title}
+    topic: ${!metadata:kafka_topic}
+    full_content: ${!content}
+` + "```" + ``,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// NewAmazonS3 creates a new AmazonS3 output type.
-func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+// NewDynamoDB creates a new DynamoDB output type.
+func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	dyn, err := writer.NewDynamoDB(conf.DynamoDB, log, stats)
+	if err != nil {
+		return nil, err
+	}
 	return NewWriter(
-		"s3", writer.NewAmazonS3(conf.S3, log, stats), log, stats,
+		"dynamodb", dyn, log, stats,
 	)
 }
 

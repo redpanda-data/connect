@@ -64,6 +64,7 @@ const (
 	TypeBroker        = "broker"
 	TypeCache         = "cache"
 	TypeDynamic       = "dynamic"
+	TypeDynamoDB      = "dynamodb"
 	TypeElasticsearch = "elasticsearch"
 	TypeFile          = "file"
 	TypeFiles         = "files"
@@ -100,6 +101,7 @@ type Config struct {
 	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
 	Cache         writer.CacheConfig         `json:"cache" yaml:"cache"`
 	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
+	DynamoDB      writer.DynamoDBConfig      `json:"dynamodb" yaml:"dynamodb"`
 	Elasticsearch writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
 	File          FileConfig                 `json:"file" yaml:"file"`
 	Files         writer.FilesConfig         `json:"files" yaml:"files"`
@@ -137,6 +139,7 @@ func NewConfig() Config {
 		Broker:        NewBrokerConfig(),
 		Cache:         writer.NewCacheConfig(),
 		Dynamic:       NewDynamicConfig(),
+		DynamoDB:      writer.NewDynamoDBConfig(),
 		Elasticsearch: writer.NewElasticsearchConfig(),
 		File:          NewFileConfig(),
 		Files:         writer.NewFilesConfig(),
