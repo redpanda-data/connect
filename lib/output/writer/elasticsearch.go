@@ -31,12 +31,23 @@ import (
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	sess "github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/Jeffail/benthos/lib/util/http/auth"
 	"github.com/Jeffail/benthos/lib/util/retries"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/cenkalti/backoff"
 	"github.com/olivere/elastic"
+	aws "github.com/olivere/elastic/aws/v4"
 )
+
+//------------------------------------------------------------------------------
+
+// OptionalAWSConfig contains config fields for AWS authentication with an
+// enable flag.
+type OptionalAWSConfig struct {
+	Enabled     bool `json:"enabled" yaml:"enabled"`
+	sess.Config `json:",inline" yaml:",inline"`
+}
 
 //------------------------------------------------------------------------------
 
@@ -51,6 +62,7 @@ type ElasticsearchConfig struct {
 	Type           string               `json:"type" yaml:"type"`
 	TimeoutMS      int                  `json:"timeout_ms" yaml:"timeout_ms"`
 	Auth           auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
+	AWS            OptionalAWSConfig    `json:"aws" yaml:"aws"`
 	retries.Config `json:",inline" yaml:",inline"`
 }
 
@@ -70,7 +82,11 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 		Type:      "doc",
 		TimeoutMS: 5000,
 		Auth:      auth.NewBasicAuthConfig(),
-		Config:    rConf,
+		AWS: OptionalAWSConfig{
+			Enabled: false,
+			Config:  sess.NewConfig(),
+		},
+		Config: rConf,
 	}
 }
 
@@ -147,6 +163,14 @@ func (e *Elasticsearch) Connect() error {
 		opts = append(opts, elastic.SetBasicAuth(
 			e.conf.Auth.Username, e.conf.Auth.Password,
 		))
+	}
+	if e.conf.AWS.Enabled {
+		tsess, err := e.conf.AWS.GetSession()
+		if err != nil {
+			return err
+		}
+		signingClient := aws.NewV4SigningClient(tsess.Config.Credentials, e.conf.AWS.Region)
+		opts = append(opts, elastic.SetHttpClient(signingClient))
 	}
 
 	var err error

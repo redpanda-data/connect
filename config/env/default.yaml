@@ -410,6 +410,15 @@ output:
         prefix: ${OUTPUT_DYNAMIC_PREFIX}
         timeout_ms: ${OUTPUT_DYNAMIC_TIMEOUT_MS:5000}
       elasticsearch:
+        aws:
+          credentials:
+            id: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ID}
+            role: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ROLE}
+            secret: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_SECRET}
+            token: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_TOKEN}
+          enabled: ${OUTPUT_ELASTICSEARCH_AWS_ENABLED:false}
+          endpoint: ${OUTPUT_ELASTICSEARCH_AWS_ENDPOINT}
+          region: ${OUTPUT_ELASTICSEARCH_AWS_REGION:eu-west-1}
         backoff:
           initial_interval: ${OUTPUT_ELASTICSEARCH_BACKOFF_INITIAL_INTERVAL:1s}
           max_elapsed_time: ${OUTPUT_ELASTICSEARCH_BACKOFF_MAX_ELAPSED_TIME:30s}

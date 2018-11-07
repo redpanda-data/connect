@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.36.1 - 2018-11-07
+
+### Added
+
+- New `aws` fields to the `elasticsearch` output to allow AWS authentication.
+
 ## 0.36.0 - 2018-11-06
 
 ### Added

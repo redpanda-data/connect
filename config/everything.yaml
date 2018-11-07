@@ -627,6 +627,15 @@ output:
       enabled: false
       username: ""
       password: ""
+    aws:
+      enabled: false
+      credentials:
+        id: ""
+        secret: ""
+        token: ""
+        role: ""
+      endpoint: ""
+      region: eu-west-1
     max_retries: 0
     backoff:
       initial_interval: 1s

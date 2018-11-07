@@ -290,6 +290,15 @@ dynamodb:
 ``` yaml
 type: elasticsearch
 elasticsearch:
+  aws:
+    credentials:
+      id: ""
+      role: ""
+      secret: ""
+      token: ""
+    enabled: false
+    endpoint: ""
+    region: eu-west-1
   backoff:
     initial_interval: 1s
     max_elapsed_time: 30s
