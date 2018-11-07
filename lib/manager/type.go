@@ -46,7 +46,7 @@ type APIReg interface {
 type Config struct {
 	Caches     map[string]cache.Config     `json:"caches" yaml:"caches"`
 	Conditions map[string]condition.Config `json:"conditions" yaml:"conditions"`
-	RateLimits map[string]ratelimit.Config `json:"rate_limit" yaml:"rate_limit"`
+	RateLimits map[string]ratelimit.Config `json:"rate_limits" yaml:"rate_limits"`
 }
 
 // NewConfig returns a Config with default values.

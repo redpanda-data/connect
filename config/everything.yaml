@@ -879,7 +879,7 @@ resources:
         part: 0
         arg: ""
       xor: []
-  rate_limit:
+  rate_limits:
     example:
       type: local
       local:
