@@ -615,6 +615,71 @@ func TestTextReplaceRegexp(t *testing.T) {
 	}
 }
 
+func TestTextFindRegexp(t *testing.T) {
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	type jTest struct {
+		name   string
+		arg    string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "find regexp 1",
+			arg:    "foo?",
+			input:  `foo bar`,
+			output: `foo`,
+		},
+		{
+			name:   "find regexp 2",
+			arg:    "foo?",
+			input:  `fo bar`,
+			output: `fo`,
+		},
+		{
+			name:   "find regexp 3",
+			arg:    "foo?",
+			input:  `fooo bar`,
+			output: `foo`,
+		},
+		{
+			name:   "find regexp 4",
+			arg:    "foo?",
+			input:  `baz bar`,
+			output: ``,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Text.Operator = "find_regexp"
+		conf.Text.Arg = test.arg
+		conf.Text.Parts = []int{0}
+
+		tp, err := NewText(conf, nil, tLog, tStats)
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := tp.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestTextStripHTML(t *testing.T) {
 	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}

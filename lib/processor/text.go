@@ -177,6 +177,16 @@ func newTextReplaceRegexpOperator(arg string) (textOperator, error) {
 	}, nil
 }
 
+func newTextFindRegexpOperator(arg string) (textOperator, error) {
+	rp, err := regexp.Compile(arg)
+	if err != nil {
+		return nil, err
+	}
+	return func(body []byte, value []byte) ([]byte, error) {
+		return rp.Find(body), nil
+	}, nil
+}
+
 func newTextStripHTMLOperator(arg string) textOperator {
 	p := bluemonday.NewPolicy()
 	return func(body []byte, value []byte) ([]byte, error) {
@@ -202,6 +212,8 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 		return newTextReplaceOperator(arg), nil
 	case "replace_regexp":
 		return newTextReplaceRegexpOperator(arg)
+	case "find_regexp":
+		return newTextFindRegexpOperator(arg)
 	case "strip_html":
 		return newTextStripHTMLOperator(arg), nil
 	case "set":
