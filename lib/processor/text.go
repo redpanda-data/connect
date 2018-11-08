@@ -62,6 +62,10 @@ Replaces all occurrences of the argument in a message with a value.
 Replaces all occurrences of the argument regular expression in a message with a
 value.
 
+#### ` + "`find_regexp`" + `
+
+Extract the first match of the argument regular expression in a message.
+
 #### ` + "`strip_html`" + `
 
 Removes all HTML tags from a message.
