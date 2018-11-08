@@ -62,6 +62,10 @@ Replaces all occurrences of the argument in a message with a value.
 Replaces all occurrences of the argument regular expression in a message with a
 value.
 
+#### ` + "`find_regexp`" + `
+
+Extract the first match of the argument regular expression in a message.
+
 #### ` + "`strip_html`" + `
 
 Removes all HTML tags from a message.
@@ -177,6 +181,16 @@ func newTextReplaceRegexpOperator(arg string) (textOperator, error) {
 	}, nil
 }
 
+func newTextFindRegexpOperator(arg string) (textOperator, error) {
+	rp, err := regexp.Compile(arg)
+	if err != nil {
+		return nil, err
+	}
+	return func(body []byte, value []byte) ([]byte, error) {
+		return rp.Find(body), nil
+	}, nil
+}
+
 func newTextStripHTMLOperator(arg string) textOperator {
 	p := bluemonday.NewPolicy()
 	return func(body []byte, value []byte) ([]byte, error) {
@@ -202,6 +216,8 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 		return newTextReplaceOperator(arg), nil
 	case "replace_regexp":
 		return newTextReplaceRegexpOperator(arg)
+	case "find_regexp":
+		return newTextFindRegexpOperator(arg)
 	case "strip_html":
 		return newTextStripHTMLOperator(arg), nil
 	case "set":
