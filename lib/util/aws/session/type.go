@@ -40,9 +40,10 @@ type CredentialsConfig struct {
 // Config contains configuration fields for an AWS session. This config is
 // common across any AWS components.
 type Config struct {
-	Credentials CredentialsConfig `json:"credentials" yaml:"credentials"`
-	Endpoint    string            `json:"endpoint" yaml:"endpoint"`
-	Region      string            `json:"region" yaml:"region"`
+	Credentials    CredentialsConfig `json:"credentials" yaml:"credentials"`
+	Endpoint       string            `json:"endpoint" yaml:"endpoint"`
+	Region         string            `json:"region" yaml:"region"`
+	ForcePathStyle bool              `json:"force_path_style" yaml:"force_path_style"`
 }
 
 // NewConfig returns a Config with default values.
@@ -70,6 +71,7 @@ func (c Config) GetSession() (*session.Session, error) {
 
 	if len(c.Endpoint) > 0 {
 		awsConf = awsConf.WithEndpoint(c.Endpoint)
+		awsConf.S3ForcePathStyle = &c.ForcePathStyle
 	}
 
 	if len(c.Credentials.ID) > 0 {
