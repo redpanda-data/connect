@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.37.0 - 2018-11-09
+
+### Changed
+
+- Removed submatch indexes in the `text` processor `find_regexp` operator and
+  added documentation for expanding submatches in the `replace_regexp` operator.
+
 ## 0.36.4 - 2018-11-09
 
 ### Added

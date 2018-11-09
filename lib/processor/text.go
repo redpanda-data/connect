@@ -24,7 +24,6 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
-	"strconv"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -61,26 +60,12 @@ Replaces all occurrences of the argument in a message with a value.
 #### ` + "`replace_regexp`" + `
 
 Replaces all occurrences of the argument regular expression in a message with a
-value.
+value. Inside the value $ signs are interpreted as submatch expansions, e.g. $1
+represents the text of the first submatch.
 
 #### ` + "`find_regexp`" + `
 
 Extract the matching section of the argument regular expression in a message.
-
-##### Finding submatches
-
-It is possible to extract submatches by their index by specifying the indexes
-within the ` + "`value`" + ` field as a comma separated list. Submatch indexes
-start at 1, with 0 referencing the entire match.
-
-For example, if our regular expression (the ` + "`arg`" + ` field) is set to
-` + "`(foo?) bar? (baz?)`" + ` and our ` + "`value`" + ` is set to
-` + "`1,2`" + `, and a message is processed with the contents
-` + "`hello foo bar baz world`" + ` then the result would be:
-` + "`foo baz`" + `.
-
-Since the ` + "`value`" + ` field is function interpolated it is also possible
-to have dynamic submatch indexes.
 
 #### ` + "`strip_html`" + `
 
@@ -203,37 +188,7 @@ func newTextFindRegexpOperator(arg string) (textOperator, error) {
 		return nil, err
 	}
 	return func(body []byte, value []byte) ([]byte, error) {
-		var submatches []int64
-		if len(value) > 0 {
-			smParts := bytes.Split(value, []byte(","))
-			for _, p := range smParts {
-				if len(p) == 0 {
-					continue
-				}
-				index, err := strconv.ParseInt(string(p), 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse value into submatch index: %v", err)
-				}
-				if index < 0 {
-					return nil, fmt.Errorf("submatch indexes must be greater than 0, parsed value: %v", index)
-				}
-				submatches = append(submatches, index)
-			}
-		}
-		matches := rp.FindSubmatch(body)
-		if len(matches) == 0 {
-			return nil, nil
-		}
-		if len(submatches) == 0 {
-			return matches[0], nil
-		}
-		var result bytes.Buffer
-		for _, i := range submatches {
-			if int64(len(matches)) > i {
-				result.Write(matches[i])
-			}
-		}
-		return result.Bytes(), nil
+		return rp.Find(body), nil
 	}, nil
 }
 

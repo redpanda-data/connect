@@ -1169,26 +1169,12 @@ Replaces all occurrences of the argument in a message with a value.
 #### `replace_regexp`
 
 Replaces all occurrences of the argument regular expression in a message with a
-value.
+value. Inside the value $ signs are interpreted as submatch expansions, e.g. $1
+represents the text of the first submatch.
 
 #### `find_regexp`
 
 Extract the matching section of the argument regular expression in a message.
-
-##### Finding submatches
-
-It is possible to extract submatches by their index by specifying the indexes
-within the `value` field as a comma separated list. Submatch indexes
-start at 1, with 0 referencing the entire match.
-
-For example, if our regular expression (the `arg` field) is set to
-`(foo?) bar? (baz?)` and our `value` is set to
-`1,2`, and a message is processed with the contents
-`hello foo bar baz world` then the result would be:
-`foo baz`.
-
-Since the `value` field is function interpolated it is also possible
-to have dynamic submatch indexes.
 
 #### `strip_html`
 
