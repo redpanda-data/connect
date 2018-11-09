@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.36.4 - 2018-11-09
+
+### Added
+
+- Allow submatch indexes in the `find_regexp` operator for the `text` processor.
+
 ## 0.36.3 - 2018-11-08
 
 ### Added

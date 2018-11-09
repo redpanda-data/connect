@@ -616,12 +616,10 @@ func TestTextReplaceRegexp(t *testing.T) {
 }
 
 func TestTextFindRegexp(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
-
 	type jTest struct {
 		name   string
 		arg    string
+		value  string
 		input  string
 		output string
 	}
@@ -651,15 +649,44 @@ func TestTextFindRegexp(t *testing.T) {
 			input:  `baz bar`,
 			output: ``,
 		},
+		{
+			name:   "find regexp submatch 1",
+			arg:    "(foo?)",
+			value:  "1",
+			input:  `foo bar`,
+			output: `foo`,
+		},
+		{
+			name:   "find regexp submatch 2",
+			arg:    "(foo?) (bar?)",
+			value:  "2",
+			input:  `foo bar`,
+			output: `bar`,
+		},
+		{
+			name:   "find regexp submatch 3",
+			arg:    "(foo?) (bar?)",
+			value:  "0",
+			input:  `foo bar`,
+			output: `foo bar`,
+		},
+		{
+			name:   "find regexp submatch 4",
+			arg:    "(foo?) (bar?)",
+			value:  ",,,2,2,,",
+			input:  `foo bar`,
+			output: `barbar`,
+		},
 	}
 
 	for _, test := range tests {
 		conf := NewConfig()
 		conf.Text.Operator = "find_regexp"
 		conf.Text.Arg = test.arg
+		conf.Text.Value = test.value
 		conf.Text.Parts = []int{0}
 
-		tp, err := NewText(conf, nil, tLog, tStats)
+		tp, err := NewText(conf, nil, log.Noop(), metrics.Noop())
 		if err != nil {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
