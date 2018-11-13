@@ -1158,6 +1158,14 @@ you can find a list of functions [here](../config_interpolation.md#functions).
 
 Appends text to the end of the payload.
 
+#### `escape_url_query`
+
+Escapes text so that it is safe to place within the query section of a URL.
+
+#### `find_regexp`
+
+Extract the matching section of the argument regular expression in a message.
+
 #### `prepend`
 
 Prepends text to the beginning of the payload.
@@ -1172,17 +1180,13 @@ Replaces all occurrences of the argument regular expression in a message with a
 value. Inside the value $ signs are interpreted as submatch expansions, e.g. $1
 represents the text of the first submatch.
 
-#### `find_regexp`
+#### `set`
 
-Extract the matching section of the argument regular expression in a message.
+Replace the contents of a message entirely with a value.
 
 #### `strip_html`
 
 Removes all HTML tags from a message.
-
-#### `set`
-
-Replace the contents of a message entirely with a value.
 
 #### `to_lower`
 
@@ -1192,13 +1196,13 @@ Converts all text into lower case.
 
 Converts all text into upper case.
 
-#### `trim_space`
-
-Removes all leading and trailing whitespace from the payload.
-
 #### `trim`
 
 Removes all leading and trailing occurrences of characters within the arg field.
+
+#### `trim_space`
+
+Removes all leading and trailing whitespace from the payload.
 
 ## `throttle`
 

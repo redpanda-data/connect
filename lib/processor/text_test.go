@@ -421,6 +421,57 @@ func TestTextToLower(t *testing.T) {
 	}
 }
 
+func TestTextEscapeURLQuery(t *testing.T) {
+	type jTest struct {
+		name   string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "escape url query 1",
+			input:  `foo bar`,
+			output: `foo+bar`,
+		},
+		{
+			name:   "escape url query 2",
+			input:  `http://foo.bar/wat?this=that`,
+			output: `http%3A%2F%2Ffoo.bar%2Fwat%3Fthis%3Dthat`,
+		},
+		{
+			name:   "escape url query 3",
+			input:  `foobar`,
+			output: `foobar`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Text.Operator = "escape_url_query"
+		conf.Text.Parts = []int{0}
+
+		tp, err := NewText(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := tp.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestTextTrim(t *testing.T) {
 	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}

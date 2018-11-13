@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.37.1 - 2018-11-13
+
+### Added
+
+- New `escape_url_query` operator for the `text` processor.
+
 ## 0.37.0 - 2018-11-09
 
 ### Changed
