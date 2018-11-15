@@ -22,6 +22,7 @@ package cache
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -482,7 +483,7 @@ func (d *DynamoDB) putItemInput(key string, value []byte) *dynamodb.PutItemInput
 
 	if d.ttl != 0 && d.conf.TTLKey != "" {
 		input.Item[d.conf.TTLKey] = &dynamodb.AttributeValue{
-			S: aws.String(time.Now().Add(d.ttl).Format(time.RFC3339Nano)),
+			N: aws.String(strconv.FormatInt(time.Now().Add(d.ttl).Unix(), 10)),
 		}
 	}
 

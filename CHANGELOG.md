@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.37.2 - 2018-11-15
+
+### Fixed
+
+- The `dynamodb` cache and output types now set TTL columns as unix timestamps.
+
 ## 0.37.1 - 2018-11-13
 
 ### Added

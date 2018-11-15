@@ -23,6 +23,7 @@ package writer
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -156,7 +157,7 @@ func (d *DynamoDB) Write(msg types.Message) error {
 		items := map[string]*dynamodb.AttributeValue{}
 		if d.ttl != 0 && d.conf.TTLKey != "" {
 			items[d.conf.TTLKey] = &dynamodb.AttributeValue{
-				S: aws.String(time.Now().Add(d.ttl).Format(time.RFC3339Nano)),
+				N: aws.String(strconv.FormatInt(time.Now().Add(d.ttl).Unix(), 10)),
 			}
 		}
 		for k, v := range d.strColumns {
