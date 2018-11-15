@@ -60,7 +60,10 @@ func LoadStreamConfigsFromDirectory(replaceEnvVars bool, dir string) (map[string
 			return nil
 		}
 
-		id := strings.TrimPrefix(path, dir)
+		var id string
+		if id, werr = filepath.Rel(dir, path); werr != nil {
+			return werr
+		}
 		id = strings.Trim(id, string(filepath.Separator))
 		id = strings.Replace(id, string(filepath.Separator), "_", -1)
 

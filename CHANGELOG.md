@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Fixed relative path trimming for streams from file directories.
+
 ## 0.37.2 - 2018-11-15
 
 ### Fixed
