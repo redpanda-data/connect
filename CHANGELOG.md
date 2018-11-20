@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Metadata is now sent to `kafka` outputs.
+
 ### Fixed
 
 - Fixed relative path trimming for streams from file directories.
