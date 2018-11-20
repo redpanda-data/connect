@@ -156,7 +156,7 @@ func buildHeaders(part types.Part) []sarama.RecordHeader {
 	out := []sarama.RecordHeader{}
 	meta := part.Metadata()
 	meta.Iter(func(k, v string) error {
-		out := append(out, sarama.RecordHeader{
+		out = append(out, sarama.RecordHeader{
 			Key:   []byte(k),
 			Value: []byte(v),
 		})
