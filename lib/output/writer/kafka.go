@@ -152,6 +152,22 @@ func strToCompressionCodec(str string) (sarama.CompressionCodec, error) {
 
 //------------------------------------------------------------------------------
 
+func buildHeaders(part types.Part) []sarama.RecordHeader {
+	out := []sarama.RecordHeader{}
+	meta := part.Metadata()
+	meta.Iter(func(k, v string) error {
+		out := append(out, sarama.RecordHeader{
+			Key:   []byte(k),
+			Value: []byte(v),
+		})
+		return nil
+	})
+
+	return out
+}
+
+//------------------------------------------------------------------------------
+
 // Connect attempts to establish a connection to a Kafka broker.
 func (k *Kafka) Connect() error {
 	k.connMut.Lock()
@@ -217,8 +233,9 @@ func (k *Kafka) Write(msg types.Message) error {
 
 		key := k.key.Get(lMsg)
 		nextMsg := &sarama.ProducerMessage{
-			Topic: k.topic.Get(lMsg),
-			Value: sarama.ByteEncoder(p.Get()),
+			Topic:   k.topic.Get(lMsg),
+			Value:   sarama.ByteEncoder(p.Get()),
+			Headers: buildHeaders(p),
 		}
 		if len(key) > 0 {
 			nextMsg.Key = sarama.ByteEncoder(key)
