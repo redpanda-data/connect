@@ -793,15 +793,25 @@ created will be downloaded. Note that the prefix configuration is only used when
 downloading objects without SQS configured.
 
 If your bucket is configured to send events directly to an SQS queue then you
-need to set the 'sqs_body_path' field to where the object key is found in the
-payload. However, it is also common practice to send bucket events to an SNS
-topic which sends enveloped events to SQS, in which case you must also set the
-'sqs_envelope_path' field to where the payload can be found.
+need to set the `sqs_body_path` field to where the object key is found
+in the payload. However, it is also common practice to send bucket events to an
+SNS topic which sends enveloped events to SQS, in which case you must also set
+the `sqs_envelope_path` field to where the payload can be found.
 
 Here is a guide for setting up an SQS queue that receives events for new S3
 bucket objects:
 
 https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html
+
+WARNING: When using SQS please make sure you have sensible values for
+`sqs_max_messages` and also the visibility timeout of the queue
+itself.
+
+When Benthos consumes an S3 item as a result of receiving an SQS message the
+message is not deleted until the S3 item has been sent onwards. This ensures
+at-least-once crash resiliency, but also means that if the S3 item takes longer
+to process than the visibility timeout of your queue then the same items might
+be processed multiple times.
 
 ### Metadata
 
