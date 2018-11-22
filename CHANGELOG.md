@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.38.0 - 2018-11-22
+
+### Changed
+
+- Resource based conditions no longer benefit from cached results. In practice
+  this optimisation was easy to lose in config and difficult to maintain.
+
 ## 0.37.4 - 2018-11-22
 
 ### Added
