@@ -151,6 +151,7 @@ input:
         client_id: ${INPUT_NATS_STREAM_CLIENT_ID:benthos_client}
         cluster_id: ${INPUT_NATS_STREAM_CLUSTER_ID:test-cluster}
         durable_name: ${INPUT_NATS_STREAM_DURABLE_NAME:benthos_offset}
+        max_inflight: ${INPUT_NATS_STREAM_MAX_INFLIGHT:1024}
         queue: ${INPUT_NATS_STREAM_QUEUE:benthos_queue}
         start_from_oldest: ${INPUT_NATS_STREAM_START_FROM_OLDEST:true}
         subject: ${INPUT_NATS_STREAM_SUBJECT:benthos_messages}
