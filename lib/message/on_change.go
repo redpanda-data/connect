@@ -111,4 +111,8 @@ func (p ocPart) SetJSON(jObj interface{}) error {
 	return p.p.SetJSON(jObj)
 }
 
+func (p ocPart) IsEmpty() bool {
+	return p.p.IsEmpty()
+}
+
 //------------------------------------------------------------------------------

@@ -814,3 +814,43 @@ func TestTypeOverlayResultMisaligned(t *testing.T) {
 		t.Error("Expected error from misaligned batches")
 	}
 }
+
+func BenchmarkTypeOverlayResult(b *testing.B) {
+	e, err := New(OptSetResMap(map[string]string{
+		"foo": "foo",
+		"bar": "bar",
+	}))
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	msg := message.New(nil)
+	overlay := message.New(nil)
+	for i := 0; i < b.N; i++ {
+		msg.Append(message.NewPart([]byte(`{"http":{"address":"0.0.0.0:4195","read_timeout_ms":5000,"root_path":"/benthos","debug_endpoints":false},"input":{"type":"stdin","stdin":{"delimiter":"","max_buffer":1000000,"multipart":false}},"buffer":{"type":"none","none":{}},"pipeline":{"processors":[{"type":"process_dag","process_dag":{}}],"threads":1},"output":{"type":"stdout","stdout":{"delimiter":""}},"resources":{"caches":{},"conditions":{},"rate_limits":{}},"logger":{"prefix":"benthos","level":"INFO","add_timestamp":true,"json_format":true,"static_fields":{"@service":"benthos"}},"metrics":{"type":"http_server","prefix":"benthos","http_server":{},"prometheus":{},"statsd":{"address":"localhost:4040","flush_period":"100ms","network":"udp"}}}`)))
+		overlay.Append(message.NewPart([]byte(`{
+			"foo":{"http":{"address":"0.0.0.0:4195","read_timeout_ms":5000,"root_path":"/benthos","debug_endpoints":false},"input":{"type":"stdin","stdin":{"delimiter":"","max_buffer":1000000,"multipart":false}},"buffer":{"type":"none","none":{}},"pipeline":{"processors":[{"type":"process_dag","process_dag":{}}],"threads":1},"output":{"type":"stdout","stdout":{"delimiter":""}},"resources":{"caches":{},"conditions":{},"rate_limits":{}},"logger":{"prefix":"benthos","level":"INFO","add_timestamp":true,"json_format":true,"static_fields":{"@service":"benthos"}},"metrics":{"type":"http_server","prefix":"benthos","http_server":{},"prometheus":{},"statsd":{"address":"localhost:4040","flush_period":"100ms","network":"udp"}}},
+			"bar":{"http":{"address":"0.0.0.0:4195","read_timeout_ms":5000,"root_path":"/benthos","debug_endpoints":false},"input":{"type":"stdin","stdin":{"delimiter":"","max_buffer":1000000,"multipart":false}},"buffer":{"type":"none","none":{}},"pipeline":{"processors":[{"type":"process_dag","process_dag":{}}],"threads":1},"output":{"type":"stdout","stdout":{"delimiter":""}},"resources":{"caches":{},"conditions":{},"rate_limits":{}},"logger":{"prefix":"benthos","level":"INFO","add_timestamp":true,"json_format":true,"static_fields":{"@service":"benthos"}},"metrics":{"type":"http_server","prefix":"benthos","http_server":{},"prometheus":{},"statsd":{"address":"localhost:4040","flush_period":"100ms","network":"udp"}}}
+		}`)))
+	}
+
+	// Pre-marshal the documents as JSON.
+	msg.Iter(func(i int, p types.Part) error {
+		if _, err = p.JSON(); err != nil {
+			b.Fatal(err)
+		}
+		return nil
+	})
+	overlay.Iter(func(i int, p types.Part) error {
+		if _, err = p.JSON(); err != nil {
+			b.Fatal(err)
+		}
+		return nil
+	})
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	if err = e.MapResponses(msg, overlay); err != nil {
+		b.Fatal(err)
+	}
+}

@@ -79,6 +79,10 @@ type Part interface {
 	// resulting byte slice.
 	SetJSON(doc interface{}) error
 
+	// IsEmpty returns true if the message part has zero contents (not including
+	// metadata).
+	IsEmpty() bool
+
 	// Copy creates a shallow copy of the message, where values and metadata can
 	// be edited independently from the original version. However, editing the
 	// byte slice contents will alter the contents of the original, and if

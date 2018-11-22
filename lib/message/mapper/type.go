@@ -244,7 +244,7 @@ func (t *Type) MapRequests(payload types.Message) (types.Message, []int, error) 
 partLoop:
 	for i := 0; i < msg.Len(); i++ {
 		// Skip if message part is empty.
-		if p := msg.Get(i).Get(); p == nil || len(p) == 0 {
+		if msg.Get(i).IsEmpty() {
 			skipped = append(skipped, i)
 			continue partLoop
 		}
@@ -255,10 +255,8 @@ partLoop:
 			continue partLoop
 		}
 
-		t.log.Tracef("Unmapped message part '%v': %q\n", i, msg.Get(i).Get())
-
 		if len(t.reqMap) == 0 && len(t.reqOptMap) == 0 {
-			mappedMsg.Append(msg.Get(i).Copy())
+			mappedMsg.Append(msg.Get(i))
 			continue partLoop
 		}
 
@@ -317,8 +315,7 @@ partLoop:
 			t.mReqErrJSON.Incr(1)
 			t.log.Debugf("Failed to marshal request map result in message part '%v'. Map contents: '%v'\n", i, destObj.String())
 		}
-		mappedMsg.Get(-1).SetMetadata(msg.Get(i).Metadata().Copy())
-		t.log.Tracef("Mapped request part '%v': %q\n", i, mappedMsg.Get(-1).Get())
+		mappedMsg.Get(-1).SetMetadata(msg.Get(i).Metadata())
 	}
 
 	return mappedMsg, skipped, nil
@@ -384,11 +381,10 @@ func (t *Type) MapResponses(payload, response types.Message) error {
 
 partLoop:
 	for i := 0; i < response.Len(); i++ {
-		if response.Get(i).Get() == nil {
+		if response.Get(i).IsEmpty() {
 			// Parts that are nil are skipped.
 			continue partLoop
 		}
-		t.log.Tracef("Premapped response part '%v': %q\n", i, response.Get(i).Get())
 
 		if len(t.resMap) == 0 && len(t.resOptMap) == 0 {
 			newPart := response.Get(i).Copy()
@@ -476,7 +472,6 @@ partLoop:
 			return nil
 		})
 		parts[i].SetMetadata(metadata)
-		t.log.Tracef("Mapped message part '%v': %q\n", i, parts[i].Get())
 	}
 
 	payload.SetAll(parts)
