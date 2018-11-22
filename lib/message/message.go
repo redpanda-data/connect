@@ -106,9 +106,7 @@ func (m *Type) Get(index int) types.Part {
 	if m.parts[index] == nil {
 		m.parts[index] = NewPart(nil)
 	}
-	return onChangePart(m.parts[index], func() {
-		m.resultCache = nil
-	})
+	return m.parts[index]
 }
 
 // SetAll changes the entire set of message parts.
@@ -136,30 +134,11 @@ func (m *Type) Iter(f func(i int, p types.Part) error) error {
 			p = NewPart(nil)
 			m.parts[i] = p
 		}
-		part := onChangePart(p, func() {
-			m.resultCache = nil
-		})
-		if err := f(i, part); err != nil {
+		if err := f(i, p); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// LazyCondition resolves a particular condition on the message, if the
-// condition has already been applied to this message the cached result is
-// returned instead. When a message is altered in any way the conditions cache
-// is cleared.
-func (m *Type) LazyCondition(label string, cond types.Condition) bool {
-	if m.resultCache == nil {
-		m.resultCache = map[string]bool{}
-	} else if res, exists := m.resultCache[label]; exists {
-		return res
-	}
-
-	res := cond.Check(m)
-	m.resultCache[label] = res
-	return res
 }
 
 // CreatedAt returns a timestamp whereby the message was created.

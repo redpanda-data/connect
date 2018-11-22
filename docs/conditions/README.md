@@ -426,11 +426,6 @@ resources:
         arg: filter me please
 ```
 
-It is also worth noting that when conditions are used as resources in this way
-they will only be executed once per message, regardless of how many times they
-are referenced (unless the content is modified). Therefore, resource conditions
-can act as a runtime optimisation as well as a config optimisation.
-
 ## `static`
 
 ``` yaml

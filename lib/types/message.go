@@ -124,11 +124,6 @@ type Message interface {
 	// argument with the index and contents of the message part.
 	Iter(f func(i int, part Part) error) error
 
-	// LazyCondition lazily evaluates conditions on the message by caching the
-	// results as per a label to identify the condition. The cache of results is
-	// cleared whenever the contents of the message is changed.
-	LazyCondition(label string, cond Condition) bool
-
 	// Copy creates a shallow copy of the message, where the list of message
 	// parts can be edited independently from the original version. However,
 	// editing the byte array contents of a message part will alter the contents

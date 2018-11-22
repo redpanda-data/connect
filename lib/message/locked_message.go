@@ -92,10 +92,6 @@ func (m *lockedMessage) Iter(f func(i int, b types.Part) error) error {
 	return f(0, m.m.Get(m.part).Copy())
 }
 
-func (m *lockedMessage) LazyCondition(label string, cond types.Condition) bool {
-	return cond.Check(m)
-}
-
 func (m *lockedMessage) CreatedAt() time.Time {
 	return m.m.CreatedAt()
 }

@@ -283,7 +283,7 @@ partLoop:
 		if err != nil {
 			t.mReqErr.Incr(1)
 			t.mReqErrJSON.Incr(1)
-			t.log.Debugf("Failed to parse message part '%v': %v. Failed part: %q\n", i, err, msg.Get(i).Get())
+			t.log.Debugf("Failed to parse message part '%v': %v. Failed part: %q\n", i, err, msg.Get(i).Copy().Get())
 
 			// Skip if message part fails JSON parse.
 			skipped = append(skipped, i)
@@ -299,7 +299,7 @@ partLoop:
 				if src.Data() == nil {
 					t.mReqErr.Incr(1)
 					t.mReqErrMap.Incr(1)
-					t.log.Debugf("Failed to find request map target '%v' in message part '%v'. Message contents: %q\n", v, i, msg.Get(i).Get())
+					t.log.Debugf("Failed to find request map target '%v' in message part '%v'. Message contents: %q\n", v, i, msg.Get(i).Copy().Get())
 
 					// Skip if message part fails mapping.
 					skipped = append(skipped, i)

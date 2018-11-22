@@ -462,6 +462,7 @@ func (d *dummyCond) Check(m types.Message) bool {
 	return d.call(m)
 }
 
+/*
 func TestMessageConditionCaching(t *testing.T) {
 	msg := New([][]byte{
 		[]byte(`foo`),
@@ -528,6 +529,7 @@ func TestMessageConditionCaching(t *testing.T) {
 		t.Errorf("Wrong count of calls for cond 2: %v != %v", act, exp)
 	}
 }
+*/
 
 func TestMessageCrossContaminateJSON(t *testing.T) {
 	msg1 := New([][]byte{
