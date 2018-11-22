@@ -160,6 +160,7 @@ INPUT_NATS_QUEUE                            = benthos_queue
 INPUT_NATS_STREAM_CLIENT_ID                 = benthos_client
 INPUT_NATS_STREAM_CLUSTER_ID                = test-cluster
 INPUT_NATS_STREAM_DURABLE_NAME              = benthos_offset
+INPUT_NATS_STREAM_MAX_INFLIGHT              = 1024
 INPUT_NATS_STREAM_QUEUE                     = benthos_queue
 INPUT_NATS_STREAM_START_FROM_OLDEST         = true
 INPUT_NATS_STREAM_SUBJECT                   = benthos_messages

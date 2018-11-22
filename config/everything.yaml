@@ -164,6 +164,7 @@ input:
     durable_name: benthos_offset
     start_from_oldest: true
     subject: benthos_messages
+    max_inflight: 1024
   nsq:
     nsqd_tcp_addresses:
     - localhost:4150

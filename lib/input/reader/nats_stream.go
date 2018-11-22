@@ -44,6 +44,7 @@ type NATSStreamConfig struct {
 	DurableName     string   `json:"durable_name" yaml:"durable_name"`
 	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	Subject         string   `json:"subject" yaml:"subject"`
+	MaxInflight     int      `json:"max_inflight" yaml:"max_inflight"`
 }
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
@@ -56,6 +57,7 @@ func NewNATSStreamConfig() NATSStreamConfig {
 		DurableName:     "benthos_offset",
 		StartFromOldest: true,
 		Subject:         "benthos_messages",
+		MaxInflight:     1024,
 	}
 }
 
@@ -150,6 +152,9 @@ func (n *NATSStream) Connect() error {
 		options = append(options, stan.DeliverAllAvailable())
 	} else {
 		options = append(options, stan.StartWithLastReceived())
+	}
+	if n.conf.MaxInflight != 0 {
+		options = append(options, stan.MaxInflight(n.conf.MaxInflight))
 	}
 
 	var natsSub stan.Subscription
