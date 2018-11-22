@@ -144,16 +144,6 @@ func TestLockedMessageJSONGet(t *testing.T) {
 	if act := jObj; !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong output from jsonGet: %v != %v", act, exp)
 	}
-
-	msg.Get(0).Set([]byte(`{"foo":{"bar":"baz2"}}`))
-
-	jObj, err = msg.Get(0).JSON()
-	if err != nil {
-		t.Error(err)
-	}
-	if act := jObj; !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong output from jsonGet: %v != %v", act, exp)
-	}
 }
 
 /*

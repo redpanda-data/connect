@@ -106,4 +106,10 @@ func cloneGeneric(root interface{}) (interface{}, error) {
 	}
 }
 
+// CopyJSON recursively creates a deep copy of a JSON structure extracted from a
+// message part.
+func CopyJSON(root interface{}) (interface{}, error) {
+	return cloneGeneric(root)
+}
+
 //------------------------------------------------------------------------------

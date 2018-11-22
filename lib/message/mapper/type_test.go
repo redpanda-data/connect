@@ -1,7 +1,28 @@
+// Copyright (c) 2018 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 package mapper
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -323,6 +344,64 @@ func TestTypeMapRequests(t *testing.T) {
 	}
 }
 
+func TestMapRequestsParallel(t *testing.T) {
+	N := 100
+
+	inputMsg := message.New([][]byte{
+		[]byte(`{"foo":{"bar":"baz"}}`),
+	})
+	inputMsg.Iter(func(i int, p types.Part) error {
+		_, _ = p.JSON()
+		_ = p.Metadata()
+		return nil
+	})
+	expMsg := [][]byte{
+		[]byte(`{"new":{"bar":"baz"}}`),
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+
+	launchChan := make(chan struct{})
+
+	for i := 0; i < N; i++ {
+		cConf := condition.NewConfig()
+		cConf.Type = "jmespath"
+		cConf.JMESPath.Query = "foo.bar == 'baz'"
+
+		cond, err := condition.New(cConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		e, err := New(OptSetReqMap(map[string]string{
+			"new.bar": "foo.bar",
+		}), OptSetConditions([]types.Condition{cond}))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		go func() {
+			<-launchChan
+			defer wg.Done()
+
+			res, skipped, err := e.MapRequests(inputMsg)
+			if err != nil {
+				t.Errorf("failed: %v", err)
+			}
+			if act, exp := skipped, []int{}; !reflect.DeepEqual(exp, act) {
+				t.Errorf("Wrong skipped slice: %v != %v", act, exp)
+			}
+			if act, exp := message.GetAllBytes(res), expMsg; !reflect.DeepEqual(exp, act) {
+				t.Errorf("Wrong output: %s != %s", act, exp)
+			}
+		}()
+	}
+
+	close(launchChan)
+	wg.Wait()
+}
+
 func TestTypeAlignResult(t *testing.T) {
 	type testCase struct {
 		name    string
@@ -510,6 +589,24 @@ func TestTypeMapRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	if exp, act := `{"bar":"baz value","preserve":true}`, string(res.Get(0).Get()); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	e, err = New(OptSetReqMap(map[string]string{
+		"foo": "",
+		"bar": "baz",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg = message.New([][]byte{
+		[]byte(`{"foo":{"bar":1,"preserve":true},"baz":"baz value"}`),
+	})
+	if res, _, err = e.MapRequests(msg); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := `{"bar":"baz value","foo":{"baz":"baz value","foo":{"bar":1,"preserve":true}}}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -812,6 +909,44 @@ func TestTypeOverlayResultMisaligned(t *testing.T) {
 		[]byte(`{"this":"should be removed"}`),
 	})); err == nil {
 		t.Error("Expected error from misaligned batches")
+	}
+}
+
+func BenchmarkMapRequests(b *testing.B) {
+	cConf := condition.NewConfig()
+	cConf.Type = "jmespath"
+	cConf.JMESPath.Query = "keys(@) == ['foo']"
+
+	cond, err := condition.New(cConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	e, err := New(OptSetReqMap(map[string]string{
+		"bar": "foo.input.stdin.delimiter",
+	}), OptSetConditions([]types.Condition{cond}))
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	msg := message.New(nil)
+	for i := 0; i < b.N; i++ {
+		msg.Append(message.NewPart([]byte(`{"foo":{"http":{"address":"0.0.0.0:4195","read_timeout_ms":5000,"root_path":"/benthos","debug_endpoints":false},"input":{"type":"stdin","stdin":{"delimiter":"","max_buffer":1000000,"multipart":false}},"buffer":{"type":"none","none":{}},"pipeline":{"processors":[{"type":"process_dag","process_dag":{}}],"threads":1},"output":{"type":"stdout","stdout":{"delimiter":""}},"resources":{"caches":{},"conditions":{},"rate_limits":{}},"logger":{"prefix":"benthos","level":"INFO","add_timestamp":true,"json_format":true,"static_fields":{"@service":"benthos"}},"metrics":{"type":"http_server","prefix":"benthos","http_server":{},"prometheus":{},"statsd":{"address":"localhost:4040","flush_period":"100ms","network":"udp"}}}}`)))
+	}
+	msg.Iter(func(i int, p types.Part) error {
+		_, _ = p.JSON()
+		_ = p.Metadata()
+		return nil
+	})
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	_, skipped, err := e.MapRequests(msg)
+	if err != nil {
+		b.Errorf("failed: %v", err)
+	}
+	if act, exp := skipped, []int{}; !reflect.DeepEqual(exp, act) {
+		b.Errorf("Wrong skipped slice: %v != %v", act, exp)
 	}
 }
 

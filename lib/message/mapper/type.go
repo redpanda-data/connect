@@ -1,3 +1,23 @@
+// Copyright (c) 2018 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 package mapper
 
 import (
@@ -238,8 +258,7 @@ func getGabs(msg types.Message, index int) (*gabs.Container, error) {
 func (t *Type) MapRequests(payload types.Message) (types.Message, []int, error) {
 	mappedMsg := message.New(nil)
 	skipped := []int{}
-
-	msg := payload.Copy()
+	msg := payload
 
 partLoop:
 	for i := 0; i < msg.Len(); i++ {
@@ -256,7 +275,7 @@ partLoop:
 		}
 
 		if len(t.reqMap) == 0 && len(t.reqOptMap) == 0 {
-			mappedMsg.Append(msg.Get(i))
+			mappedMsg.Append(msg.Get(i).Copy())
 			continue partLoop
 		}
 
@@ -287,10 +306,11 @@ partLoop:
 					continue partLoop
 				}
 			}
+			srcData, _ := message.CopyJSON(src.Data())
 			if len(k) > 0 {
-				destObj.SetP(src.Data(), k)
+				destObj.SetP(srcData, k)
 			} else {
-				destObj = src
+				destObj, _ = gabs.Consume(srcData)
 			}
 		}
 		for _, k := range t.reqOptTargets {
@@ -302,10 +322,11 @@ partLoop:
 					continue
 				}
 			}
+			srcData, _ := message.CopyJSON(src.Data())
 			if len(k) > 0 {
-				destObj.SetP(src.Data(), k)
+				destObj.SetP(srcData, k)
 			} else {
-				destObj = src
+				destObj, _ = gabs.Consume(srcData)
 			}
 		}
 
@@ -315,7 +336,7 @@ partLoop:
 			t.mReqErrJSON.Incr(1)
 			t.log.Debugf("Failed to marshal request map result in message part '%v'. Map contents: '%v'\n", i, destObj.String())
 		}
-		mappedMsg.Get(-1).SetMetadata(msg.Get(i).Metadata())
+		mappedMsg.Get(-1).SetMetadata(msg.Get(i).Metadata().Copy())
 	}
 
 	return mappedMsg, skipped, nil

@@ -71,7 +71,7 @@ func (m *lockedMessage) Get(index int) types.Part {
 	if index != 0 && index != -1 {
 		return NewPart(nil)
 	}
-	return m.m.Get(m.part).Copy()
+	return m.m.Get(m.part)
 }
 
 func (m *lockedMessage) SetAll(p []types.Part) {

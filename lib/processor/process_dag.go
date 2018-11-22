@@ -199,6 +199,12 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	p.mCountParts.Incr(int64(msg.Len()))
 
 	result := msg.Copy()
+	result.Iter(func(i int, p types.Part) error {
+		_, _ = p.JSON()
+		_ = p.Metadata()
+		return nil
+	})
+
 	for _, layer := range p.dag {
 		results := make([]types.Message, len(layer))
 		errors := make([]error, len(layer))

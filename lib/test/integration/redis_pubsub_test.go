@@ -145,8 +145,8 @@ func testRedisPubSubSinglePart(url string, t *testing.T) {
 			})
 			msg.Get(0).Metadata().Set("foo", "bar")
 			msg.Get(0).Metadata().Set("root_foo", "bar2")
-			if err = mOutput.Write(msg); err != nil {
-				t.Fatal(err)
+			if gerr := mOutput.Write(msg); gerr != nil {
+				t.Fatal(gerr)
 			}
 			wg.Done()
 		}(str)
@@ -220,8 +220,8 @@ func testRedisPubSubMultiplePart(url string, t *testing.T) {
 			})
 			msg.Get(0).Metadata().Set("foo", "bar")
 			msg.Get(1).Metadata().Set("root_foo", "bar2")
-			if err = mOutput.Write(msg); err != nil {
-				t.Fatal(err)
+			if gerr := mOutput.Write(msg); gerr != nil {
+				t.Fatal(gerr)
 			}
 			wg.Done()
 		}(str1, str2, str3)

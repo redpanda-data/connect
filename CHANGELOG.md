@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.37.4 - 2018-11-22
+
 ### Added
 
 - Metadata is now sent to `kafka` outputs.
+- New `max_inflight` field added to the `nats_stream` input.
 
 ### Fixed
 
