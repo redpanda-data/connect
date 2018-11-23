@@ -355,7 +355,6 @@ func (p *ProcessMap) CreateResult(msg types.Message) (types.Message, error) {
 	i := 0
 	for _, m := range procResults {
 		m.Iter(func(_ int, part types.Part) error {
-			p.log.Tracef("Processed request part '%v': %q\n", i, part.Get())
 			i++
 			return nil
 		})
