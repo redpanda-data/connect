@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.38.1 - 2018-11-23
+
+### Changed
+
+- The `s3` output now attempts to batch uploads.
+- The `s3` input now exposes errors in deleting SQS messages during acks.
+
 ## 0.38.0 - 2018-11-22
 
 ### Changed

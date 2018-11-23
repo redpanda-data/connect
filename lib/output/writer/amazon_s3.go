@@ -22,6 +22,7 @@ package writer
 
 import (
 	"bytes"
+	"context"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -62,8 +63,7 @@ func NewAmazonS3Config() AmazonS3Config {
 type AmazonS3 struct {
 	conf AmazonS3Config
 
-	pathBytes       []byte
-	interpolatePath bool
+	path *text.InterpolatedString
 
 	session  *session.Session
 	uploader *s3manager.Uploader
@@ -77,16 +77,13 @@ func NewAmazonS3(
 	conf AmazonS3Config,
 	log log.Modular,
 	stats metrics.Type,
-) *AmazonS3 {
-	pathBytes := []byte(conf.Path)
-	interpolatePath := text.ContainsFunctionVariables(pathBytes)
+) (*AmazonS3, error) {
 	return &AmazonS3{
-		conf:            conf,
-		pathBytes:       pathBytes,
-		interpolatePath: interpolatePath,
-		log:             log.NewModule(".output.amazon_s3"),
-		stats:           stats,
-	}
+		conf:  conf,
+		log:   log.NewModule(".output.s3"),
+		stats: stats,
+		path:  text.NewInterpolatedString(conf.Path),
+	}, nil
 }
 
 // Connect attempts to establish a connection to the target S3 bucket.
@@ -113,21 +110,27 @@ func (a *AmazonS3) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
-		path := a.conf.Path
-		if a.interpolatePath {
-			path = string(text.ReplaceFunctionVariables(message.Lock(msg, i), a.pathBytes))
-		}
+	bStr := aws.String(a.conf.Bucket)
 
-		if _, err := a.uploader.Upload(&s3manager.UploadInput{
-			Body:   bytes.NewReader(p.Get()),
-			Bucket: aws.String(a.conf.Bucket),
-			Key:    aws.String(path),
-		}); err != nil {
-			return err
-		}
+	iter := &s3manager.UploadObjectsIterator{}
+	msg.Iter(func(i int, p types.Part) error {
+		iter.Objects = append(iter.Objects, s3manager.BatchUploadObject{
+			Object: &s3manager.UploadInput{
+				Bucket: bStr,
+				Key:    aws.String(a.path.Get(message.Lock(msg, i))),
+				Body:   bytes.NewReader(p.Get()),
+			},
+			After: func() error {
+				return nil
+			},
+		})
 		return nil
 	})
+	ctx, cancel := context.WithTimeout(
+		aws.BackgroundContext(), time.Second*time.Duration(a.conf.TimeoutS),
+	)
+	defer cancel()
+	return a.uploader.UploadWithIterator(ctx, iter)
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

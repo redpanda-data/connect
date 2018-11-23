@@ -45,8 +45,12 @@ of a batch.`,
 
 // NewAmazonS3 creates a new AmazonS3 output type.
 func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	sthree, err := writer.NewAmazonS3(conf.S3, log, stats)
+	if err != nil {
+		return nil, err
+	}
 	return NewWriter(
-		"s3", writer.NewAmazonS3(conf.S3, log, stats), log, stats,
+		"s3", sthree, log, stats,
 	)
 }
 
