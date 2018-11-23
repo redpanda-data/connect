@@ -299,7 +299,7 @@ partLoop:
 				if src.Data() == nil {
 					t.mReqErr.Incr(1)
 					t.mReqErrMap.Incr(1)
-					t.log.Debugf("Failed to find request map target '%v' in message part '%v'. Message contents: %q\n", v, i, msg.Get(i).Copy().Get())
+					t.log.Debugf("Failed to find request map target '%v' in message part '%v'.\n", v, i)
 
 					// Skip if message part fails mapping.
 					skipped = append(skipped, i)
@@ -450,7 +450,7 @@ partLoop:
 				if src.Data() == nil {
 					t.mResErr.Incr(1)
 					t.mResErrMap.Incr(1)
-					t.log.Debugf("Failed to find map target '%v' in response part '%v'. Response contents: %q\n", v, i, response.Get(i).Get())
+					t.log.Debugf("Failed to find map target '%v' in response part '%v'.\n", v, i)
 
 					// Skip parts that fail mapping.
 					continue partLoop
