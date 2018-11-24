@@ -120,6 +120,47 @@ func TestPartShallowCopy(t *testing.T) {
 	}
 }
 
+func TestPartCopyDirtyJSON(t *testing.T) {
+	p := NewPart(nil)
+	dirtyObj := map[string]int{
+		"foo": 1,
+		"bar": 2,
+		"baz": 3,
+	}
+	bytesExp := `{"bar":2,"baz":3,"foo":1}`
+	genExp := map[string]interface{}{
+		"foo": float64(1),
+		"bar": float64(2),
+		"baz": float64(3),
+	}
+	p.SetJSON(dirtyObj)
+
+	p2 := p.Copy()
+	p3 := p.DeepCopy()
+
+	p2JSON, err := p2.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := genExp, p2JSON; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
+	}
+	if exp, act := string(bytesExp), string(p2.Get()); exp != act {
+		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
+	}
+
+	p3JSON, err := p3.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := genExp, p3JSON; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
+	}
+	if exp, act := string(bytesExp), string(p3.Get()); exp != act {
+		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
+	}
+}
+
 func TestPartDeepCopy(t *testing.T) {
 	p := NewPart([]byte(`{"hello":"world"}`))
 	p.Metadata().

@@ -79,8 +79,11 @@ func (p *Part) DeepCopy() types.Part {
 			clonedJSON = nil
 		}
 	}
-	np := make([]byte, len(p.data))
-	copy(np, p.data)
+	var np []byte
+	if p.data != nil {
+		np = make([]byte, len(p.data))
+		copy(np, p.data)
+	}
 	return &Part{
 		data:      np,
 		metadata:  clonedMeta,
