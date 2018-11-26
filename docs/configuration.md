@@ -167,13 +167,46 @@ error messages.
 
 However, with validation it can be hard to capture all problems, and the user
 usually understands their intentions better than the service. In order to help
-expose and diagnose config errors Benthos can echo back your configuration
-_after_ it has been parsed.
+expose and diagnose config errors Benthos provides two mechanisms, linting and echoing.
 
-Echoing is done with the `--print-yaml` and `--print-json` commands, which print
-the Benthos configuration in YAML and JSON format respectively. Since this is
-done _after_ parsing and applying your config it is able to show you exactly how
-your config was interpretted:
+### Linting
+
+Benthos has a lint command (`--lint`) that, after parsing a config file, will
+print any errors it detects.
+
+The main goal of the linter is to expose instances where fields within a
+provided config are valid JSON or YAML but don't actually affect the behaviour
+of Benthos. These are useful for pointing out typos in object keys or the use of
+deprecated fields.
+
+For example, imagine we have a config `foo.yaml`, where we intend to read from
+AMQP, but there is a typo in our config struct:
+
+``` yaml
+input:
+  type: amqp
+  amqq:
+    url: amqp://guest:guest@rabbitmqserver:5672/
+```
+
+This config is parse successfully, and Benthos will simply ignore the `amqq` key
+and run using default values for the `amqp` input. This is therefore an easy
+error to miss, but if we use the linter it will immediately report the problem:
+
+``` sh
+$ benthos -c ./foo.yaml --lint
+input: Key 'amqq' found but is ignored
+```
+
+Which points us to exactly where the problem is.
+
+### Echoing
+
+Echoing is where Benthos can print back your configuration _after_ it has been
+parsed. It is done with the `--print-yaml` and `--print-json` commands, which
+print the Benthos configuration in YAML and JSON format respectively. Since this
+is done _after_ parsing and applying your config it is able to show you exactly
+how your config was interpretted:
 
 ``` sh
 benthos -c ./your-config.yaml --print-yaml
