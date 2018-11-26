@@ -23,12 +23,15 @@ package metrics
 import (
 	"reflect"
 	"testing"
+
+	"github.com/Jeffail/benthos/lib/util/config"
 )
 
 func TestSanitise(t *testing.T) {
-	exp := map[string]interface{}{
+	exp := config.Sanitised{
 		"type":        "http_server",
 		"http_server": map[string]interface{}{},
+		"prefix":      "benthos",
 	}
 
 	conf := NewConfig()
@@ -42,13 +45,14 @@ func TestSanitise(t *testing.T) {
 		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
 	}
 
-	exp = map[string]interface{}{
+	exp = config.Sanitised{
 		"type": "statsd",
 		"statsd": map[string]interface{}{
 			"address":      "foo",
 			"flush_period": "100ms",
 			"network":      "udp",
 		},
+		"prefix": "benthos",
 	}
 
 	conf = NewConfig()
