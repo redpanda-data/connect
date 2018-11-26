@@ -38,18 +38,17 @@ import (
 	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/buffer"
 	"github.com/Jeffail/benthos/lib/cache"
+	"github.com/Jeffail/benthos/lib/config"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/manager"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output"
-	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/ratelimit"
 	"github.com/Jeffail/benthos/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
-	"github.com/Jeffail/benthos/lib/util/config"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -60,89 +59,6 @@ var (
 	Version   string
 	DateBuilt string
 )
-
-//------------------------------------------------------------------------------
-
-// Config is the benthos configuration struct.
-type Config struct {
-	HTTP                 api.Config `json:"http" yaml:"http"`
-	stream.Config        `json:",inline" yaml:",inline"`
-	Manager              manager.Config `json:"resources" yaml:"resources"`
-	Logger               log.Config     `json:"logger" yaml:"logger"`
-	Metrics              metrics.Config `json:"metrics" yaml:"metrics"`
-	SystemCloseTimeoutMS int            `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
-}
-
-// NewConfig returns a new configuration with default values.
-func NewConfig() Config {
-	metricsConf := metrics.NewConfig()
-	metricsConf.Prefix = "benthos"
-
-	return Config{
-		HTTP:                 api.NewConfig(),
-		Config:               stream.NewConfig(),
-		Manager:              manager.NewConfig(),
-		Logger:               log.NewConfig(),
-		Metrics:              metricsConf,
-		SystemCloseTimeoutMS: 20000,
-	}
-}
-
-// Sanitised returns a sanitised copy of the Benthos configuration, meaning
-// fields of no consequence (unused inputs, outputs, processors etc) are
-// excluded.
-func (c Config) Sanitised() (interface{}, error) {
-	inConf, err := input.SanitiseConfig(c.Input)
-	if err != nil {
-		return nil, err
-	}
-
-	var pipeConf interface{}
-	pipeConf, err = pipeline.SanitiseConfig(c.Pipeline)
-	if err != nil {
-		return nil, err
-	}
-
-	var outConf interface{}
-	outConf, err = output.SanitiseConfig(c.Output)
-	if err != nil {
-		return nil, err
-	}
-
-	var bufConf interface{}
-	bufConf, err = buffer.SanitiseConfig(c.Buffer)
-	if err != nil {
-		return nil, err
-	}
-
-	var metConf interface{}
-	metConf, err = metrics.SanitiseConfig(c.Metrics)
-	if err != nil {
-		return nil, err
-	}
-
-	return struct {
-		HTTP                 interface{} `json:"http" yaml:"http"`
-		Input                interface{} `json:"input" yaml:"input"`
-		Buffer               interface{} `json:"buffer" yaml:"buffer"`
-		Pipeline             interface{} `json:"pipeline" yaml:"pipeline"`
-		Output               interface{} `json:"output" yaml:"output"`
-		Manager              interface{} `json:"resources" yaml:"resources"`
-		Logger               interface{} `json:"logger" yaml:"logger"`
-		Metrics              interface{} `json:"metrics" yaml:"metrics"`
-		SystemCloseTimeoutMS interface{} `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
-	}{
-		HTTP:                 c.HTTP,
-		Input:                inConf,
-		Buffer:               bufConf,
-		Pipeline:             pipeConf,
-		Output:               outConf,
-		Manager:              c.Manager,
-		Logger:               c.Logger,
-		Metrics:              metConf,
-		SystemCloseTimeoutMS: c.SystemCloseTimeoutMS,
-	}, nil
-}
 
 //------------------------------------------------------------------------------
 
@@ -159,12 +75,15 @@ var (
 	)
 	showAll = flag.Bool(
 		"all", false,
-		"Set whether all fields should be shown when printing configuration"+
-			" via --print-yaml or --print-json, otherwise only used values"+
-			" will be printed.",
+		"Set whether all fields should be shown when printing configuration\n"+
+			"via --print-yaml or --print-json, otherwise only used values\n"+
+			"will be printed.",
 	)
 	configPath = flag.String(
 		"c", "", "Path to a configuration file",
+	)
+	lintConfig = flag.Bool(
+		"lint", false, "Lint the target configuration file, then exit",
 	)
 	swapEnvs = flag.Bool(
 		"swap-envs", true,
@@ -172,12 +91,12 @@ var (
 	)
 	examples = flag.String(
 		"example", "",
-		"Add specific examples when printing a configuration file with"+
-			" --print-yaml or --print-json by listing comma separated"+
-			" types. Types can be any input, buffer, processor or output. For"+
-			" example: benthos --print-yaml --example websocket,jmespath"+
-			" would print a config with a websocket input and output and a"+
-			" jmespath processor.",
+		"Add specific examples when printing a configuration file with\n"+
+			"--print-yaml or --print-json by listing comma separated\n"+
+			"types. Types can be any input, buffer, processor or output. For\n"+
+			"example: benthos --print-yaml --example websocket,jmespath\n"+
+			"would print a config with a websocket input and output and a\n"+
+			"jmespath processor.",
 	)
 	printInputs = flag.Bool(
 		"list-inputs", false,
@@ -229,73 +148,27 @@ var (
 	)
 	streamsMode = flag.Bool(
 		"streams", false,
-		"Run Benthos in streams mode, where streams can be created, updated"+
-			" and removed via REST HTTP endpoints. In streams mode the stream"+
-			" fields of a config file (input, buffer, pipeline, output) will"+
-			" be ignored. Instead, any .yaml or .json files inside the"+
-			" --streams-dir directory will be parsed as stream configs.",
+		"Run Benthos in streams mode, where streams can be created, updated\n"+
+			"and removed via REST HTTP endpoints. In streams mode the stream\n"+
+			"fields of a config file (input, buffer, pipeline, output) will\n"+
+			"be ignored. Instead, any .yaml or .json files inside the\n"+
+			"--streams-dir directory will be parsed as stream configs.",
 	)
 	streamsDir = flag.String(
 		"streams-dir", "/benthos/streams",
-		"When running Benthos in streams mode any files in this directory with"+
-			" a .json or .yaml extension will be parsed as a stream"+
-			" configuration (input, buffer, pipeline, output), where the"+
-			" filename less the extension will be the id of the stream.",
+		"When running Benthos in streams mode any files in this directory with\n"+
+			"a .json or .yaml extension will be parsed as a stream\n"+
+			"configuration (input, buffer, pipeline, output), where the\n"+
+			"filename less the extension will be the id of the stream.",
 	)
 )
 
 //------------------------------------------------------------------------------
 
-func addExamples(examples string, conf *Config) {
-	var inputType, bufferType, conditionType, outputType string
-	var processorTypes []string
-	for _, e := range strings.Split(examples, ",") {
-		if _, exists := input.Constructors[e]; exists && len(inputType) == 0 {
-			inputType = e
-		}
-		if _, exists := buffer.Constructors[e]; exists {
-			bufferType = e
-		}
-		if _, exists := processor.Constructors[e]; exists {
-			processorTypes = append(processorTypes, e)
-		}
-		if _, exists := condition.Constructors[e]; exists {
-			conditionType = e
-		}
-		if _, exists := output.Constructors[e]; exists {
-			outputType = e
-		}
-	}
-	if len(inputType) > 0 {
-		conf.Input.Type = inputType
-	}
-	if len(bufferType) > 0 {
-		conf.Buffer.Type = bufferType
-	}
-	if len(processorTypes) > 0 {
-		for _, procType := range processorTypes {
-			procConf := processor.NewConfig()
-			procConf.Type = procType
-			conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
-		}
-	}
-	if len(conditionType) > 0 {
-		condConf := condition.NewConfig()
-		condConf.Type = conditionType
-		procConf := processor.NewConfig()
-		procConf.Type = "filter"
-		procConf.Filter.Config = condConf
-		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
-	}
-	if len(outputType) > 0 {
-		conf.Output.Type = outputType
-	}
-}
-
 // bootstrap reads cmd args and either parses and config file or prints helper
 // text and exits.
-func bootstrap() Config {
-	conf := NewConfig()
+func bootstrap() config.Type {
+	conf := config.New()
 
 	// A list of default config paths to check for if not explicitly defined
 	defaultPaths := []string{
@@ -309,10 +182,6 @@ func bootstrap() Config {
 		fmt.Fprintln(os.Stderr, "Usage: benthos [flags...]")
 		fmt.Fprintln(os.Stderr, "Flags:")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr,
-			"\nFor example configs use --print-yaml or --print-json\n"+
-				"For a list of available inputs or outputs use --list-inputs or --list-outputs\n"+
-				"For a list of available buffer options use --list-buffers\n")
 	}
 
 	flag.Parse()
@@ -338,8 +207,10 @@ func bootstrap() Config {
 		})
 	}
 
+	var lints []string
 	if len(*configPath) > 0 {
-		if err := config.Read(*configPath, *swapEnvs, &conf); err != nil {
+		var err error
+		if lints, err = config.Read(*configPath, *swapEnvs, *lintConfig, &conf); err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			os.Exit(1)
 		}
@@ -349,13 +220,21 @@ func bootstrap() Config {
 			if _, err := os.Stat(path); err == nil {
 				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
 
-				if err = config.Read(path, *swapEnvs, &conf); err != nil {
+				if lints, err = config.Read(path, *swapEnvs, *lintConfig, &conf); err != nil {
 					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 					os.Exit(1)
 				}
 				break
 			}
 		}
+	}
+	if len(lints) > 0 {
+		for _, l := range lints {
+			fmt.Fprintln(os.Stderr, l)
+		}
+		os.Exit(1)
+	} else if *lintConfig {
+		os.Exit(0)
 	}
 
 	// If the user wants the configuration to be printed we do so and then exit.
@@ -364,7 +243,7 @@ func bootstrap() Config {
 		var err error
 
 		if len(*examples) > 0 {
-			addExamples(*examples, &conf)
+			config.AddExamples(&conf, strings.Split(*examples, ",")...)
 		}
 
 		if !*showAll {

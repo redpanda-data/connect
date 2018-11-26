@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.38.2 - 2018-11-26
+
+- Added `--lint` command flag for linting config files.
+
 ## 0.38.1 - 2018-11-23
 
 ### Changed

@@ -5,16 +5,11 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: nsq
-  nsq:
-    channel: benthos_stream
-    lookupd_http_addresses:
-    - localhost:4161
-    max_in_flight: 100
-    nsqd_tcp_addresses:
-    - localhost:4150
-    topic: benthos_messages
-    user_agent: benthos_consumer
+  type: stdin
+  stdin:
+    delimiter: ""
+    max_buffer: 1e+06
+    multipart: false
 buffer:
   type: none
   none: {}
@@ -22,11 +17,9 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: nsq
-  nsq:
-    nsqd_tcp_address: localhost:4150
-    topic: benthos_messages
-    user_agent: benthos_producer
+  type: stdout
+  stdout:
+    delimiter: ""
 resources:
   caches: {}
   conditions: {}
@@ -40,6 +33,11 @@ logger:
     '@service': benthos
 metrics:
   type: http_server
-  http_server: {}
   prefix: benthos
+  http_server: {}
+  prometheus: {}
+  statsd:
+    address: localhost:4040
+    flush_period: 100ms
+    network: udp
 sys_exit_timeout_ms: 20000

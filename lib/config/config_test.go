@@ -1,11 +1,11 @@
-// Copyright (c) 2017 Ashley Jeffs
+// Copyright (c) 2018 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, sub to the following conditions:
+// furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
@@ -21,38 +21,40 @@
 package config
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"path/filepath"
-
-	"github.com/Jeffail/benthos/lib/util/text"
-	"gopkg.in/yaml.v2"
+	"reflect"
+	"testing"
 )
 
-//------------------------------------------------------------------------------
-
-// Read will attempt to read a configuration file path into a structure.
-func Read(path string, replaceEnvs bool, config interface{}) error {
-	configBytes, err := ioutil.ReadFile(path)
-	if err != nil {
-		return err
+func CheckTagsOfType(v reflect.Type, checkedTypes map[string]struct{}, t *testing.T) {
+	tPath := v.PkgPath() + "." + v.Name()
+	if _, exists := checkedTypes[tPath]; len(v.PkgPath()) > 0 && exists {
+		return
 	}
+	checkedTypes[tPath] = struct{}{}
 
-	if replaceEnvs {
-		configBytes = text.ReplaceEnvVariables(configBytes)
-	}
+	switch v.Kind() {
+	case reflect.Slice:
+		CheckTagsOfType(v.Elem(), checkedTypes, t)
+	case reflect.Map:
+		CheckTagsOfType(v.Elem(), checkedTypes, t)
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			field := v.Field(i)
+			jTag := field.Tag.Get("json")
+			yTag := field.Tag.Get("yaml")
 
-	ext := filepath.Ext(path)
-	if ".js" == ext || ".json" == ext {
-		if err = json.Unmarshal(configBytes, config); err != nil {
-			return err
+			if jTag != yTag {
+				t.Errorf("Mismatched config tags in type %v: json(%v) != yaml(%v)", tPath, jTag, yTag)
+			}
+
+			CheckTagsOfType(field.Type, checkedTypes, t)
 		}
-	} else { // if ".yml" == ext || ".yaml" == ext {
-		if err = yaml.Unmarshal(configBytes, config); err != nil {
-			return err
-		}
 	}
-	return nil
 }
 
-//------------------------------------------------------------------------------
+func TestConfigTags(t *testing.T) {
+	v := reflect.TypeOf(New())
+
+	checkedTypes := map[string]struct{}{}
+	CheckTagsOfType(v, checkedTypes, t)
+}

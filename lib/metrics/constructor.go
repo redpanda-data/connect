@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/util/config"
 )
 
 //------------------------------------------------------------------------------
@@ -93,9 +94,10 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 		return nil, err
 	}
 
-	outputMap := map[string]interface{}{}
+	outputMap := config.Sanitised{}
 	outputMap["type"] = hashMap["type"]
 	outputMap[conf.Type] = hashMap[conf.Type]
+	outputMap["prefix"] = hashMap["prefix"]
 
 	return outputMap, nil
 }
