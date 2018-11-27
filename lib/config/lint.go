@@ -22,6 +22,7 @@ package config
 
 import (
 	"fmt"
+	"sort"
 
 	"gopkg.in/yaml.v2"
 )
@@ -30,7 +31,14 @@ import (
 
 func lintWalkObj(path string, raw, processed map[interface{}]interface{}) []string {
 	lints := []string{}
-	for k, y := range raw {
+
+	keys := []string{}
+	for k := range raw {
+		keys = append(keys, fmt.Sprintf("%v", k))
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		y := raw[k]
 		x, exists := processed[k]
 		if !exists {
 			lints = append(lints, fmt.Sprintf("%v: Key '%v' found but is ignored", path, k))

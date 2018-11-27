@@ -75,9 +75,9 @@ var (
 	)
 	showAll = flag.Bool(
 		"all", false,
-		"Set whether all fields should be shown when printing configuration\n"+
-			"via --print-yaml or --print-json, otherwise only used values\n"+
-			"will be printed.",
+		`
+Set whether all fields should be shown when printing configuration via
+--print-yaml or --print-json, otherwise only used values will be printed.`[1:],
 	)
 	configPath = flag.String(
 		"c", "", "Path to a configuration file",
@@ -85,18 +85,25 @@ var (
 	lintConfig = flag.Bool(
 		"lint", false, "Lint the target configuration file, then exit",
 	)
+	strictConfig = flag.Bool(
+		"strict", false,
+		`
+Parse config files in strict mode, where any linting errors will cause Benthos
+to fail`[1:],
+	)
 	swapEnvs = flag.Bool(
 		"swap-envs", true,
 		"Swap ${FOO} patterns in config file with environment variables",
 	)
 	examples = flag.String(
 		"example", "",
-		"Add specific examples when printing a configuration file with\n"+
-			"--print-yaml or --print-json by listing comma separated\n"+
-			"types. Types can be any input, buffer, processor or output. For\n"+
-			"example: benthos --print-yaml --example websocket,jmespath\n"+
-			"would print a config with a websocket input and output and a\n"+
-			"jmespath processor.",
+		`
+Add specific examples when printing a configuration file with --print-yaml or
+--print-json by listing comma separated types. Types can be any input, buffer,
+processor or output.
+
+For example: 'benthos --print-yaml --example websocket,jmespath' would print a
+config with a websocket input and output and a jmespath processor.`[1:],
 	)
 	printInputs = flag.Bool(
 		"list-inputs", false,
@@ -148,18 +155,19 @@ var (
 	)
 	streamsMode = flag.Bool(
 		"streams", false,
-		"Run Benthos in streams mode, where streams can be created, updated\n"+
-			"and removed via REST HTTP endpoints. In streams mode the stream\n"+
-			"fields of a config file (input, buffer, pipeline, output) will\n"+
-			"be ignored. Instead, any .yaml or .json files inside the\n"+
-			"--streams-dir directory will be parsed as stream configs.",
+		`
+Run Benthos in streams mode, where streams can be created, updated and removed
+via REST HTTP endpoints. In streams mode the stream fields of a config file
+(input, buffer, pipeline, output) will be ignored. Instead, any .yaml or .json
+files inside the --streams-dir directory will be parsed as stream configs.`[1:],
 	)
 	streamsDir = flag.String(
 		"streams-dir", "/benthos/streams",
-		"When running Benthos in streams mode any files in this directory with\n"+
-			"a .json or .yaml extension will be parsed as a stream\n"+
-			"configuration (input, buffer, pipeline, output), where the\n"+
-			"filename less the extension will be the id of the stream.",
+		`
+When running Benthos in streams mode any files in this directory with a .json or
+.yaml extension will be parsed as a stream configuration (input, buffer,
+pipeline, output), where the filename less the extension will be the id of the
+stream.`[1:],
 	)
 )
 
@@ -167,7 +175,7 @@ var (
 
 // bootstrap reads cmd args and either parses and config file or prints helper
 // text and exits.
-func bootstrap() config.Type {
+func bootstrap() (config.Type, []string) {
 	conf := config.New()
 
 	// A list of default config paths to check for if not explicitly defined
@@ -210,7 +218,7 @@ func bootstrap() config.Type {
 	var lints []string
 	if len(*configPath) > 0 {
 		var err error
-		if lints, err = config.Read(*configPath, *swapEnvs, *lintConfig, &conf); err != nil {
+		if lints, err = config.Read(*configPath, *swapEnvs, &conf); err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			os.Exit(1)
 		}
@@ -220,7 +228,7 @@ func bootstrap() config.Type {
 			if _, err := os.Stat(path); err == nil {
 				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
 
-				if lints, err = config.Read(path, *swapEnvs, *lintConfig, &conf); err != nil {
+				if lints, err = config.Read(path, *swapEnvs, &conf); err != nil {
 					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 					os.Exit(1)
 				}
@@ -228,12 +236,13 @@ func bootstrap() config.Type {
 			}
 		}
 	}
-	if len(lints) > 0 {
-		for _, l := range lints {
-			fmt.Fprintln(os.Stderr, l)
+	if *lintConfig {
+		if len(lints) > 0 {
+			for _, l := range lints {
+				fmt.Fprintln(os.Stderr, l)
+			}
+			os.Exit(1)
 		}
-		os.Exit(1)
-	} else if *lintConfig {
 		os.Exit(0)
 	}
 
@@ -321,7 +330,7 @@ func bootstrap() config.Type {
 		os.Exit(0)
 	}
 
-	return conf
+	return conf, lints
 }
 
 type stoppableStreams interface {
@@ -330,7 +339,7 @@ type stoppableStreams interface {
 
 func main() {
 	// Bootstrap by reading cmd flags and configuration file.
-	config := bootstrap()
+	config, lints := bootstrap()
 
 	// Logging and stats aggregation.
 	var logger log.Modular
@@ -340,6 +349,21 @@ func main() {
 		logger = log.New(os.Stderr, config.Logger)
 	} else {
 		logger = log.New(os.Stdout, config.Logger)
+	}
+
+	if len(lints) > 0 {
+		lintlog := logger.NewModule(".linter")
+		for _, lint := range lints {
+			if *strictConfig {
+				lintlog.Errorln(lint)
+			} else {
+				lintlog.Infoln(lint)
+			}
+		}
+		if *strictConfig {
+			lintlog.Errorln("Shutting down due to --strict mode")
+			os.Exit(1)
+		}
 	}
 
 	// Create our metrics type.

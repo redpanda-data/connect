@@ -5,9 +5,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.38.5 - 2018-11-27
+
+### Added
+
+- Lint errors are logged (level INFO) during normal Benthos operation.
+- New `--strict` command flag which causes Benthos to abort when linting errors
+  are found in a config file.
+
 ## 0.38.4 - 2018-11-26
 
-- Added `--lint` command flag for linting config files.
+### Added
+
+- New `--lint` command flag for linting config files.
 
 ## 0.38.1 - 2018-11-23
 

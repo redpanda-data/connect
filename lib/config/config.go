@@ -185,7 +185,7 @@ func AddExamples(conf *Type, examples ...string) {
 
 // Read will attempt to read a configuration file path into a structure. Returns
 // an array of lint messages or an error.
-func Read(path string, replaceEnvs, doLint bool, config *Type) ([]string, error) {
+func Read(path string, replaceEnvs bool, config *Type) ([]string, error) {
 	configBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -206,10 +206,7 @@ func Read(path string, replaceEnvs, doLint bool, config *Type) ([]string, error)
 		}
 	}
 
-	if doLint {
-		return Lint(configBytes, *config)
-	}
-	return nil, nil
+	return Lint(configBytes, *config)
 }
 
 //------------------------------------------------------------------------------
