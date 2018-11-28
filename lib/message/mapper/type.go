@@ -432,6 +432,18 @@ partLoop:
 			continue partLoop
 		}
 
+		// Check all mandatory map targets before proceeding.
+		for _, k := range t.resTargets {
+			if v := t.resMap[k]; len(v) > 0 && sourceObj.Path(v).Data() == nil {
+				t.mResErr.Incr(1)
+				t.mResErrMap.Incr(1)
+				t.log.Debugf("Failed to find map target '%v' in response part '%v'.\n", v, i)
+
+				// Skip parts that fail mapping.
+				continue partLoop
+			}
+		}
+
 		var destObj *gabs.Container
 		if destObj, err = getGabs(payload, i); err != nil {
 			t.mResErr.Incr(1)
@@ -447,14 +459,6 @@ partLoop:
 			src := sourceObj
 			if len(v) > 0 {
 				src = sourceObj.Path(v)
-				if src.Data() == nil {
-					t.mResErr.Incr(1)
-					t.mResErrMap.Incr(1)
-					t.log.Debugf("Failed to find map target '%v' in response part '%v'.\n", v, i)
-
-					// Skip parts that fail mapping.
-					continue partLoop
-				}
 			}
 			if len(k) > 0 {
 				destObj.SetP(src.Data(), k)
