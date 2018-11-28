@@ -799,6 +799,32 @@ func TestTypeOverlayResult(t *testing.T) {
 
 	msg = message.New([][]byte{
 		[]byte(`{}`),
+	})
+	msg.Get(0).JSON()
+	if err = e.MapResponses(msg, message.New([][]byte{
+		[]byte(`{"foo":{"bar":0},"baz":{"qux":1}}`),
+	})); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := `{}`, string(msg.Get(0).Get()); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	msg = message.New([][]byte{
+		[]byte(`{}`),
+	})
+	msg.Get(0).JSON()
+	if err = e.MapResponses(msg, message.New([][]byte{
+		[]byte(`{"bar":{"baz":0}},"baz":{"qux":1}}`),
+	})); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := `{}`, string(msg.Get(0).Get()); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	msg = message.New([][]byte{
+		[]byte(`{}`),
 		[]byte(`{}`),
 		[]byte(`{}`),
 	})
