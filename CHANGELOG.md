@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.38.6 - 2018-11-28
+
+### Added
+
+- New `group_by_value` processor.
+
 ## 0.38.5 - 2018-11-27
 
 ### Added

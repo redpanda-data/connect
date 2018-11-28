@@ -52,28 +52,29 @@ used.
 12. [`filter_parts`](#filter_parts)
 13. [`grok`](#grok)
 14. [`group_by`](#group_by)
-15. [`hash`](#hash)
-16. [`hash_sample`](#hash_sample)
-17. [`http`](#http)
-18. [`insert_part`](#insert_part)
-19. [`jmespath`](#jmespath)
-20. [`json`](#json)
-21. [`lambda`](#lambda)
-22. [`log`](#log)
-23. [`merge_json`](#merge_json)
-24. [`metadata`](#metadata)
-25. [`metric`](#metric)
-26. [`noop`](#noop)
-27. [`process_batch`](#process_batch)
-28. [`process_dag`](#process_dag)
-29. [`process_field`](#process_field)
-30. [`process_map`](#process_map)
-31. [`sample`](#sample)
-32. [`select_parts`](#select_parts)
-33. [`split`](#split)
-34. [`text`](#text)
-35. [`throttle`](#throttle)
-36. [`unarchive`](#unarchive)
+15. [`group_by_value`](#group_by_value)
+16. [`hash`](#hash)
+17. [`hash_sample`](#hash_sample)
+18. [`http`](#http)
+19. [`insert_part`](#insert_part)
+20. [`jmespath`](#jmespath)
+21. [`json`](#json)
+22. [`lambda`](#lambda)
+23. [`log`](#log)
+24. [`merge_json`](#merge_json)
+25. [`metadata`](#metadata)
+26. [`metric`](#metric)
+27. [`noop`](#noop)
+28. [`process_batch`](#process_batch)
+29. [`process_dag`](#process_dag)
+30. [`process_field`](#process_field)
+31. [`process_map`](#process_map)
+32. [`sample`](#sample)
+33. [`select_parts`](#select_parts)
+34. [`split`](#split)
+35. [`text`](#text)
+36. [`throttle`](#throttle)
+37. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -436,6 +437,44 @@ output:
 
 Since any message that isn't a foo is a bar, and bars do not require their own
 processing steps, we only need a single grouping configuration.
+
+## `group_by_value`
+
+``` yaml
+type: group_by_value
+group_by_value:
+  value: ${!metadata:example}
+```
+
+Splits a batch of messages into N batches, where each resulting batch contains a
+group of messages determined by a
+[function interpolated string](../config_interpolation.md#functions) evaluated
+per message. This allows you to group messages using arbitrary fields within
+their content or metadata, process them individually, and send them to unique
+locations as per their group.
+
+For example, if we were consuming Kafka messages and needed to group them by
+their key, archive the groups, and send them to S3 with the key as part of the
+path we could achieve that with the following:
+
+``` yaml
+pipeline:
+  processors:
+  - type: group_by_value
+    group_by_value:
+      value: ${!metadata:kafka_key}
+  - type: archive
+    archive:
+      format: tar
+  - type: compress
+    compress:
+      algorithm: gzip
+output:
+  type: s3
+  s3:
+    bucket: TODO
+    path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz
+```
 
 ## `hash`
 

@@ -1,0 +1,171 @@
+// Copyright (c) 2018 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package processor
+
+import (
+	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/response"
+	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/text"
+)
+
+//------------------------------------------------------------------------------
+
+func init() {
+	Constructors[TypeGroupByValue] = TypeSpec{
+		constructor: NewGroupByValue,
+		description: `
+Splits a batch of messages into N batches, where each resulting batch contains a
+group of messages determined by a
+[function interpolated string](../config_interpolation.md#functions) evaluated
+per message. This allows you to group messages using arbitrary fields within
+their content or metadata, process them individually, and send them to unique
+locations as per their group.
+
+For example, if we were consuming Kafka messages and needed to group them by
+their key, archive the groups, and send them to S3 with the key as part of the
+path we could achieve that with the following:
+
+` + "``` yaml" + `
+pipeline:
+  processors:
+  - type: group_by_value
+    group_by_value:
+      value: ${!metadata:kafka_key}
+  - type: archive
+    archive:
+      format: tar
+  - type: compress
+    compress:
+      algorithm: gzip
+output:
+  type: s3
+  s3:
+    bucket: TODO
+    path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz
+` + "```" + ``,
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// GroupByValueConfig is a configuration struct containing fields for the
+// GroupByValue processor, which breaks message batches down into N batches of a
+// smaller size according to a function interpolated string evaluated per
+// message part.
+type GroupByValueConfig struct {
+	Value string `json:"value" yaml:"value"`
+}
+
+// NewGroupByValueConfig returns a GroupByValueConfig with default values.
+func NewGroupByValueConfig() GroupByValueConfig {
+	return GroupByValueConfig{
+		Value: "${!metadata:example}",
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// GroupByValue is a processor that breaks message batches down into N batches
+// of a smaller size according to a function interpolated string evaluated per
+// message part.
+type GroupByValue struct {
+	log   log.Modular
+	stats metrics.Type
+
+	value *text.InterpolatedString
+
+	mCount     metrics.StatCounter
+	mGroups    metrics.StatGauge
+	mDropped   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mSentParts metrics.StatCounter
+}
+
+// NewGroupByValue returns a GroupByValue processor.
+func NewGroupByValue(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
+	return &GroupByValue{
+		log:   log.NewModule(".processor.group_by_value"),
+		stats: stats,
+
+		value: text.NewInterpolatedString(conf.GroupByValue.Value),
+
+		mCount:     stats.GetCounter("processor.group_by_value.count"),
+		mGroups:    stats.GetGauge("processor.group_by_value.groups"),
+		mDropped:   stats.GetCounter("processor.group_by_value.dropped"),
+		mSent:      stats.GetCounter("processor.group_by_value.sent"),
+		mSentParts: stats.GetCounter("processor.group_by_value.parts.sent"),
+	}, nil
+}
+
+//------------------------------------------------------------------------------
+
+// ProcessMessage applies the processor to a message, either creating >0
+// resulting messages or a response to be sent back to the message source.
+func (g *GroupByValue) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+	g.mCount.Incr(1)
+
+	if msg.Len() == 0 {
+		g.mDropped.Incr(1)
+		return nil, response.NewAck()
+	}
+
+	groupKeys := []string{}
+	groupMap := map[string]types.Message{}
+
+	msg.Iter(func(i int, p types.Part) error {
+		v := g.value.Get(message.Lock(msg, i))
+		if group, exists := groupMap[v]; exists {
+			group.Append(p)
+		} else {
+			g.log.Tracef("New group formed: %v\n", v)
+			groupKeys = append(groupKeys, v)
+			newMsg := message.New(nil)
+			newMsg.Append(p)
+			groupMap[v] = newMsg
+		}
+		return nil
+	})
+
+	msgs := []types.Message{}
+	for _, key := range groupKeys {
+		msgs = append(msgs, groupMap[key])
+	}
+
+	g.mGroups.Set(int64(len(groupKeys)))
+
+	if len(msgs) == 0 {
+		g.mDropped.Incr(1)
+		return nil, response.NewAck()
+	}
+
+	g.mSent.Incr(int64(len(msgs)))
+	for _, m := range msgs {
+		g.mSentParts.Incr(int64(m.Len()))
+	}
+	return msgs, nil
+}
+
+//------------------------------------------------------------------------------

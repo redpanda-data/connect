@@ -457,6 +457,8 @@ pipeline:
       use_default_patterns: true
       output_format: json
     group_by: []
+    group_by_value:
+      value: ${!metadata:example}
     hash:
       parts: []
       algorithm: sha256
