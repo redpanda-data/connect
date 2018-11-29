@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 0.38.7 - 2018-11-29
+## 0.38.8 - 2018-11-29
 
 ### Added
 
