@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.38.7 - 2018-11-29
+
+### Added
+
+- New `content_type` field for the `s3` output.
+
 ## 0.38.6 - 2018-11-28
 
 ### Added

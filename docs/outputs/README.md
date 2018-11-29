@@ -732,6 +732,7 @@ use the [`broker`](#broker) output type with the pattern 'try'.
 type: s3
 s3:
   bucket: ""
+  content_type: application/octet-stream
   credentials:
     id: ""
     role: ""

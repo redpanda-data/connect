@@ -783,6 +783,7 @@ output:
     region: eu-west-1
     bucket: ""
     path: ${!count:files}-${!timestamp_unix_nano}.txt
+    content_type: application/octet-stream
     timeout_s: 5
   sqs:
     credentials:

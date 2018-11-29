@@ -43,16 +43,18 @@ type AmazonS3Config struct {
 	sess.Config `json:",inline" yaml:",inline"`
 	Bucket      string `json:"bucket" yaml:"bucket"`
 	Path        string `json:"path" yaml:"path"`
+	ContentType string `json:"content_type" yaml:"content_type"`
 	TimeoutS    int64  `json:"timeout_s" yaml:"timeout_s"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
 	return AmazonS3Config{
-		Config:   sess.NewConfig(),
-		Bucket:   "",
-		Path:     "${!count:files}-${!timestamp_unix_nano}.txt",
-		TimeoutS: 5,
+		Config:      sess.NewConfig(),
+		Bucket:      "",
+		Path:        "${!count:files}-${!timestamp_unix_nano}.txt",
+		ContentType: "application/octet-stream",
+		TimeoutS:    5,
 	}
 }
 
@@ -110,27 +112,22 @@ func (a *AmazonS3) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	bStr := aws.String(a.conf.Bucket)
-
-	iter := &s3manager.UploadObjectsIterator{}
-	msg.Iter(func(i int, p types.Part) error {
-		iter.Objects = append(iter.Objects, s3manager.BatchUploadObject{
-			Object: &s3manager.UploadInput{
-				Bucket: bStr,
-				Key:    aws.String(a.path.Get(message.Lock(msg, i))),
-				Body:   bytes.NewReader(p.Get()),
-			},
-			After: func() error {
-				return nil
-			},
-		})
-		return nil
-	})
 	ctx, cancel := context.WithTimeout(
 		aws.BackgroundContext(), time.Second*time.Duration(a.conf.TimeoutS),
 	)
 	defer cancel()
-	return a.uploader.UploadWithIterator(ctx, iter)
+
+	return msg.Iter(func(i int, p types.Part) error {
+		if _, err := a.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
+			Bucket:      &a.conf.Bucket,
+			Key:         aws.String(a.path.Get(message.Lock(msg, i))),
+			Body:        bytes.NewReader(p.Get()),
+			ContentType: &a.conf.ContentType,
+		}); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

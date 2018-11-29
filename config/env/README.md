@@ -477,6 +477,7 @@ OUTPUT_REDIS_STREAMS_MAX_LENGTH               = 0
 OUTPUT_REDIS_STREAMS_STREAM                   = benthos_stream
 OUTPUT_REDIS_STREAMS_URL                      = tcp://localhost:6379
 OUTPUT_S3_BUCKET
+OUTPUT_S3_CONTENT_TYPE                        = application/octet-stream
 OUTPUT_S3_CREDENTIALS_ID
 OUTPUT_S3_CREDENTIALS_ROLE
 OUTPUT_S3_CREDENTIALS_SECRET
