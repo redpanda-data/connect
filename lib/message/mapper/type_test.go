@@ -220,6 +220,7 @@ func TestTypeMapRequests(t *testing.T) {
 		input   [][]byte
 		output  [][]byte
 		skipped []int
+		failed  []int
 	}
 
 	tests := []testCase{
@@ -231,7 +232,8 @@ func TestTypeMapRequests(t *testing.T) {
 			output: [][]byte{
 				[]byte(`{"foo":{"bar":1}}`),
 			},
-			skipped: []int{},
+			skipped: []int(nil),
+			failed:  []int(nil),
 		},
 		{
 			name: "Single part skipped",
@@ -240,6 +242,7 @@ func TestTypeMapRequests(t *testing.T) {
 			},
 			output:  nil,
 			skipped: []int{0},
+			failed:  []int(nil),
 		},
 		{
 			name: "Single part bad json",
@@ -247,19 +250,22 @@ func TestTypeMapRequests(t *testing.T) {
 				[]byte(` 35234 keep 5$$%@#%`),
 			},
 			output:  nil,
-			skipped: []int{0},
+			skipped: []int(nil),
+			failed:  []int{0},
 		},
 		{
 			name:    "Empty",
 			input:   [][]byte{},
 			output:  nil,
-			skipped: []int{},
+			skipped: []int(nil),
+			failed:  []int(nil),
 		},
 		{
 			name:    "Empty part",
 			input:   [][]byte{[]byte(nil)},
 			output:  nil,
 			skipped: []int{0},
+			failed:  []int(nil),
 		},
 		{
 			name: "Multi parts",
@@ -271,7 +277,8 @@ func TestTypeMapRequests(t *testing.T) {
 				[]byte(`{"foo":{"bar":2}}`),
 				[]byte(`{"foo":{"bar":3}}`),
 			},
-			skipped: []int{},
+			skipped: []int(nil),
+			failed:  []int(nil),
 		},
 		{
 			name: "Multi parts some skipped",
@@ -285,6 +292,7 @@ func TestTypeMapRequests(t *testing.T) {
 				[]byte(`{"foo":{"bar":3}}`),
 			},
 			skipped: []int{1},
+			failed:  []int(nil),
 		},
 		{
 			name: "Multi parts some skipped some nil",
@@ -299,6 +307,7 @@ func TestTypeMapRequests(t *testing.T) {
 				[]byte(`{"foo":{"bar":3}}`),
 			},
 			skipped: []int{1, 3},
+			failed:  []int(nil),
 		},
 		{
 			name: "Multi parts all skipped",
@@ -309,6 +318,7 @@ func TestTypeMapRequests(t *testing.T) {
 			},
 			output:  nil,
 			skipped: []int{0, 1, 2},
+			failed:  []int(nil),
 		},
 	}
 
@@ -330,13 +340,16 @@ func TestTypeMapRequests(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		res, skipped, err := e.MapRequests(message.New(test.input))
+		res, skipped, failed := e.MapRequests(message.New(test.input))
 		if err != nil {
 			t.Errorf("Test '%v' failed: %v", test.name, err)
 			continue
 		}
 		if act, exp := skipped, test.skipped; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong skipped slice for test '%v': %v != %v", test.name, act, exp)
+		}
+		if act, exp := failed, test.failed; !reflect.DeepEqual(exp, act) {
+			t.Errorf("Wrong failed slice for test '%v': %v != %v", test.name, act, exp)
 		}
 		if act, exp := message.GetAllBytes(res), test.output; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong output for test '%v': %s != %s", test.name, act, exp)
@@ -385,11 +398,14 @@ func TestMapRequestsParallel(t *testing.T) {
 			<-launchChan
 			defer wg.Done()
 
-			res, skipped, err := e.MapRequests(inputMsg)
+			res, skipped, failed := e.MapRequests(inputMsg)
 			if err != nil {
 				t.Errorf("failed: %v", err)
 			}
-			if act, exp := skipped, []int{}; !reflect.DeepEqual(exp, act) {
+			if act, exp := failed, []int(nil); !reflect.DeepEqual(exp, act) {
+				t.Errorf("Wrong failed slice: %v != %v", act, exp)
+			}
+			if act, exp := skipped, []int(nil); !reflect.DeepEqual(exp, act) {
 				t.Errorf("Wrong skipped slice: %v != %v", act, exp)
 			}
 			if act, exp := message.GetAllBytes(res), expMsg; !reflect.DeepEqual(exp, act) {
@@ -407,15 +423,15 @@ func TestTypeAlignResult(t *testing.T) {
 		name    string
 		length  int
 		skipped []int
+		failed  []int
 		input   [][][]byte
 		output  [][]byte
 	}
 
 	tests := []testCase{
 		{
-			name:    "single message no skipped",
-			length:  3,
-			skipped: nil,
+			name:   "single message no skipped",
+			length: 3,
 			input: [][][]byte{
 				{
 					[]byte(`foo`),
@@ -446,9 +462,44 @@ func TestTypeAlignResult(t *testing.T) {
 			},
 		},
 		{
+			name:   "single message failed",
+			length: 3,
+			failed: []int{1},
+			input: [][][]byte{
+				{
+					[]byte(`foo`),
+					[]byte(`baz`),
+				},
+			},
+			output: [][]byte{
+				[]byte(`foo`),
+				nil,
+				[]byte(`baz`),
+			},
+		},
+		{
 			name:    "single message lots skipped",
 			length:  8,
 			skipped: []int{0, 1, 2, 4, 5, 7},
+			input: [][][]byte{
+				{
+					[]byte(`foo`),
+					[]byte(`baz`),
+				},
+			},
+			output: [][]byte{
+				nil, nil, nil,
+				[]byte(`foo`),
+				nil, nil,
+				[]byte(`baz`),
+				nil,
+			},
+		},
+		{
+			name:    "single message lots skipped or failed",
+			length:  8,
+			skipped: []int{1, 4, 7},
+			failed:  []int{0, 2, 5},
 			input: [][][]byte{
 				{
 					[]byte(`foo`),
@@ -506,6 +557,27 @@ func TestTypeAlignResult(t *testing.T) {
 				nil, nil,
 			},
 		},
+		{
+			name:    "multi message lots skipped or failed",
+			length:  8,
+			skipped: []int{1, 2},
+			failed:  []int{0, 4, 6, 7},
+			input: [][][]byte{
+				{
+					[]byte(`foo`),
+				},
+				{
+					[]byte(`baz`),
+				},
+			},
+			output: [][]byte{
+				nil, nil, nil,
+				[]byte(`foo`),
+				nil,
+				[]byte(`baz`),
+				nil, nil,
+			},
+		},
 	}
 
 	e, err := New()
@@ -518,7 +590,7 @@ func TestTypeAlignResult(t *testing.T) {
 		for _, p := range test.input {
 			input = append(input, message.New(p))
 		}
-		msg, err := e.AlignResult(test.length, test.skipped, input)
+		msg, err := e.AlignResult(test.length, test.skipped, test.failed, input)
 		if err != nil {
 			t.Errorf("Error '%v': %v", test.name, err)
 			continue
@@ -538,10 +610,7 @@ func TestTypeMapRequest(t *testing.T) {
 	msg := message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"zip":"old"}`),
 	})
-	var res types.Message
-	if res, _, err = e.MapRequests(msg); err != nil {
-		t.Fatal(err)
-	}
+	res, _, _ := e.MapRequests(msg)
 	if exp, act := `{"foo":{"bar":1},"zip":"old"}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -556,9 +625,7 @@ func TestTypeMapRequest(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"zip":"old"}`),
 	})
-	if res, _, err = e.MapRequests(msg); err != nil {
-		t.Fatal(err)
-	}
+	res, _, _ = e.MapRequests(msg)
 	if exp, act := `{"bar":1}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -566,11 +633,11 @@ func TestTypeMapRequest(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`{"zip":"old"}`),
 	})
-	var skipped []int
-	if _, skipped, err = e.MapRequests(msg); err != nil {
-		t.Fatal(err)
+	_, skipped, failed := e.MapRequests(msg)
+	if exp, act := []int(nil), skipped; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := []int{0}, skipped; !reflect.DeepEqual(exp, act) {
+	if exp, act := []int{0}, failed; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -585,9 +652,7 @@ func TestTypeMapRequest(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`{"foo":{"bar":1,"preserve":true},"baz":"baz value"}`),
 	})
-	if res, _, err = e.MapRequests(msg); err != nil {
-		t.Fatal(err)
-	}
+	res, _, _ = e.MapRequests(msg)
 	if exp, act := `{"bar":"baz value","preserve":true}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -603,9 +668,7 @@ func TestTypeMapRequest(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`{"foo":{"bar":1,"preserve":true},"baz":"baz value"}`),
 	})
-	if res, _, err = e.MapRequests(msg); err != nil {
-		t.Fatal(err)
-	}
+	res, _, _ = e.MapRequests(msg)
 	if exp, act := `{"bar":"baz value","foo":{"baz":"baz value","foo":{"bar":1,"preserve":true}}}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -645,12 +708,7 @@ func TestTypeMapRequestMetadata(t *testing.T) {
 	msg.Get(3).Metadata().Set("test", "baz")
 	msg.Get(5).Metadata().Set("test", "foo")
 
-	var res types.Message
-	var skipped []int
-	if res, skipped, err = e.MapRequests(msg); err != nil {
-		t.Fatal(err)
-	}
-
+	res, skipped, _ := e.MapRequests(msg)
 	if exp, act := 2, res.Len(); exp != act {
 		t.Errorf("Unexpected value: %v != %v", act, exp)
 	}
@@ -685,10 +743,7 @@ func TestTypeMapOptRequest(t *testing.T) {
 	msg := message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"zip":"old"}`),
 	})
-	var res types.Message
-	if res, _, err = e.MapRequests(msg); err != nil {
-		t.Fatal(err)
-	}
+	res, _, _ := e.MapRequests(msg)
 	if exp, act := `{"bar":1}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -696,9 +751,7 @@ func TestTypeMapOptRequest(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`{"zip":"old"}`),
 	})
-	if res, _, err = e.MapRequests(msg); err != nil {
-		t.Fatal(err)
-	}
+	res, _, _ = e.MapRequests(msg)
 	if exp, act := `{}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -713,9 +766,7 @@ func TestTypeMapOptRequest(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"zip":"old"}`),
 	})
-	if res, _, err = e.MapRequests(msg); err != nil {
-		t.Fatal(err)
-	}
+	res, _, _ = e.MapRequests(msg)
 	if exp, act := `{"foo":{"bar":1}}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -736,10 +787,15 @@ func TestTypeOverlayResult(t *testing.T) {
 		[]byte(`{}`),
 	})
 	msg.Get(0).Metadata().Set("foo", "bar")
-	if err = e.MapResponses(msg, message.New([][]byte{
+
+	var failed []int
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"bar":{"baz":2}}`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int(nil), failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{"bar":1,"baz":2}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -754,11 +810,14 @@ func TestTypeOverlayResult(t *testing.T) {
 	})
 	msg.Get(0).Metadata().Set("foo", "bar1")
 	msg.Get(1).Metadata().Set("foo", "bar2")
-	if err = e.MapResponses(msg, message.New([][]byte{
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"bar":{"baz":2}}`),
 		[]byte(`{"foo":{"bar":3},"bar":{"baz":4},"baz":{"qux":5}}`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int(nil), failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{"bar":1,"baz":2}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -776,10 +835,13 @@ func TestTypeOverlayResult(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`{}`),
 	})
-	if err = e.MapResponses(msg, message.New([][]byte{
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`not %#%$ valid json`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int{0}, failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -788,10 +850,13 @@ func TestTypeOverlayResult(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`not valid json`),
 	})
-	if err = e.MapResponses(msg, message.New([][]byte{
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{}`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int{0}, failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `not valid json`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -801,10 +866,13 @@ func TestTypeOverlayResult(t *testing.T) {
 		[]byte(`{}`),
 	})
 	msg.Get(0).JSON()
-	if err = e.MapResponses(msg, message.New([][]byte{
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":0},"baz":{"qux":1}}`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int{0}, failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -814,10 +882,13 @@ func TestTypeOverlayResult(t *testing.T) {
 		[]byte(`{}`),
 	})
 	msg.Get(0).JSON()
-	if err = e.MapResponses(msg, message.New([][]byte{
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"bar":{"baz":0}},"baz":{"qux":1}}`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int{0}, failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -828,12 +899,15 @@ func TestTypeOverlayResult(t *testing.T) {
 		[]byte(`{}`),
 		[]byte(`{}`),
 	})
-	if err = e.MapResponses(msg, message.New([][]byte{
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"bar":{"baz":2}}`),
 		nil,
 		[]byte(`{"foo":{"bar":3},"bar":{"baz":4}}`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int(nil), failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{"bar":1,"baz":2}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -848,10 +922,13 @@ func TestTypeOverlayResult(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`{"bar":"old"}`),
 	})
-	if err = e.MapResponses(msg, message.New([][]byte{
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{}`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int{0}, failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{"bar":"old"}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -870,10 +947,15 @@ func TestTypeOverlayResultRoot(t *testing.T) {
 		[]byte(`{"this":"should be removed"}`),
 	})
 	msg.Get(0).Metadata().Set("foo", "bar1")
-	if err = e.MapResponses(msg, message.New([][]byte{
+
+	var failed []int
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"new":"root"}},"bar":{"baz":2}}`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int(nil), failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{"new":"root"}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -892,10 +974,13 @@ func TestTypeOverlayResultRoot(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`{"this":"should be removed"}`),
 	})
-	if err = e.MapResponses(msg, message.New([][]byte{
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"new":"root"}},"bar":{"baz":2}}`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int(nil), failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{"new":"root"}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -909,10 +994,13 @@ func TestTypeOverlayResultRoot(t *testing.T) {
 	msg = message.New([][]byte{
 		[]byte(`{"zip":"original"}`),
 	})
-	if err = e.MapResponses(msg, message.New([][]byte{
+	if failed, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"new":"root"}},"bar":{"baz":2}}`),
 	})); err != nil {
 		t.Fatal(err)
+	}
+	if exp, act := []int(nil), failed; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := `{"foo":{"bar":{"new":"root"}},"bar":{"baz":2}}`, string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
@@ -930,7 +1018,7 @@ func TestTypeOverlayResultMisaligned(t *testing.T) {
 	msg := message.New([][]byte{
 		[]byte(`{"this":"should be removed"}`),
 	})
-	if err = e.MapResponses(msg, message.New([][]byte{
+	if _, err = e.MapResponses(msg, message.New([][]byte{
 		[]byte(`{"foo":{"bar":{"new":"root"}},"bar":{"baz":2}}`),
 		[]byte(`{"this":"should be removed"}`),
 	})); err == nil {
@@ -967,9 +1055,12 @@ func BenchmarkMapRequests(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	_, skipped, err := e.MapRequests(msg)
+	_, skipped, failed := e.MapRequests(msg)
 	if err != nil {
 		b.Errorf("failed: %v", err)
+	}
+	if act, exp := failed, []int{}; !reflect.DeepEqual(exp, act) {
+		b.Errorf("Wrong failed slice: %v != %v", act, exp)
 	}
 	if act, exp := skipped, []int{}; !reflect.DeepEqual(exp, act) {
 		b.Errorf("Wrong skipped slice: %v != %v", act, exp)
@@ -1011,7 +1102,7 @@ func BenchmarkTypeOverlayResult(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	if err = e.MapResponses(msg, overlay); err != nil {
+	if _, err = e.MapResponses(msg, overlay); err != nil {
 		b.Fatal(err)
 	}
 }

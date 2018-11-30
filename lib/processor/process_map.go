@@ -328,14 +328,7 @@ func (p *ProcessMap) CreateResult(msg types.Message) (types.Message, error) {
 		}
 	}
 
-	mappedMsg, skipped, err := p.mapper.MapRequests(mapMsg)
-	if err != nil {
-		p.mErr.Incr(1)
-		p.mErrPre.Incr(1)
-		p.log.Errorf("Failed to map request: %v\n", err)
-		return nil, err
-	}
-
+	mappedMsg, skipped, failed := p.mapper.MapRequests(mapMsg)
 	if mappedMsg.Len() == 0 {
 		p.mSkipped.Incr(1)
 		p.mSkippedParts.Incr(int64(msg.Len()))
@@ -344,8 +337,8 @@ func (p *ProcessMap) CreateResult(msg types.Message) (types.Message, error) {
 		return mapMsg, nil
 	}
 
-	var procResults []types.Message
-	if procResults, err = processMap(mappedMsg, p.children); err != nil {
+	procResults, err := processMap(mappedMsg, p.children)
+	if err != nil {
 		p.mErrProc.Incr(1)
 		p.mErr.Incr(1)
 		p.log.Errorf("Processors failed: %v\n", err)
@@ -361,7 +354,7 @@ func (p *ProcessMap) CreateResult(msg types.Message) (types.Message, error) {
 	}
 
 	var alignedResult types.Message
-	if alignedResult, err = p.mapper.AlignResult(msg.Len(), skipped, procResults); err != nil {
+	if alignedResult, err = p.mapper.AlignResult(msg.Len(), skipped, failed, procResults); err != nil {
 		p.mErrPost.Incr(1)
 		p.mErr.Incr(1)
 		p.log.Errorf("Postmap failed: %v\n", err)
@@ -374,7 +367,7 @@ func (p *ProcessMap) CreateResult(msg types.Message) (types.Message, error) {
 // OverlayResult attempts to merge the result of a process_map with the original
 //  payload as per the map specified in the postmap and postmap_optional fields.
 func (p *ProcessMap) OverlayResult(payload, response types.Message) error {
-	if err := p.mapper.MapResponses(payload, response); err != nil {
+	if _, err := p.mapper.MapResponses(payload, response); err != nil {
 		p.mErrPost.Incr(1)
 		p.mErr.Incr(1)
 		p.log.Errorf("Postmap failed: %v\n", err)
