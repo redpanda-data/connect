@@ -257,6 +257,7 @@ dynamodb:
   credentials:
     id: ""
     role: ""
+    role_external_id: ""
     secret: ""
     token: ""
   endpoint: ""
@@ -294,6 +295,7 @@ elasticsearch:
     credentials:
       id: ""
       role: ""
+      role_external_id: ""
       secret: ""
       token: ""
     enabled: false
@@ -561,6 +563,7 @@ kinesis:
   credentials:
     id: ""
     role: ""
+    role_external_id: ""
     secret: ""
     token: ""
   endpoint: ""
@@ -736,6 +739,7 @@ s3:
   credentials:
     id: ""
     role: ""
+    role_external_id: ""
     secret: ""
     token: ""
   endpoint: ""
@@ -758,6 +762,7 @@ sqs:
   credentials:
     id: ""
     role: ""
+    role_external_id: ""
     secret: ""
     token: ""
   endpoint: ""

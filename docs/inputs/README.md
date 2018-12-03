@@ -531,6 +531,7 @@ kinesis:
   credentials:
     id: ""
     role: ""
+    role_external_id: ""
     secret: ""
     token: ""
   dynamodb_table: ""
@@ -773,6 +774,7 @@ s3:
   credentials:
     id: ""
     role: ""
+    role_external_id: ""
     secret: ""
     token: ""
   delete_objects: false
@@ -833,6 +835,7 @@ sqs:
   credentials:
     id: ""
     role: ""
+    role_external_id: ""
     secret: ""
     token: ""
   endpoint: ""

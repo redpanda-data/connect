@@ -748,6 +748,7 @@ lambda:
   credentials:
     id: ""
     role: ""
+    role_external_id: ""
     secret: ""
     token: ""
   endpoint: ""

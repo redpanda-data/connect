@@ -11,6 +11,7 @@ input:
     credentials:
       id: ""
       role: ""
+      role_external_id: ""
       secret: ""
       token: ""
     delete_objects: false
@@ -37,6 +38,7 @@ output:
     credentials:
       id: ""
       role: ""
+      role_external_id: ""
       secret: ""
       token: ""
     endpoint: ""

@@ -12,6 +12,7 @@ input:
     credentials:
       id: ""
       role: ""
+      role_external_id: ""
       secret: ""
       token: ""
     dynamodb_table: ""
@@ -38,6 +39,7 @@ output:
     credentials:
       id: ""
       role: ""
+      role_external_id: ""
       secret: ""
       token: ""
     endpoint: ""

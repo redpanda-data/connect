@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `role_external_id` added to all S3 credential configs.
+
 ## 0.38.8 - 2018-11-29
 
 ### Added

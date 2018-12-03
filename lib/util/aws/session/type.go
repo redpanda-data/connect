@@ -31,10 +31,11 @@ import (
 
 // CredentialsConfig contains configuration params for AWS credentials.
 type CredentialsConfig struct {
-	ID     string `json:"id" yaml:"id"`
-	Secret string `json:"secret" yaml:"secret"`
-	Token  string `json:"token" yaml:"token"`
-	Role   string `json:"role" yaml:"role"`
+	ID         string `json:"id" yaml:"id"`
+	Secret     string `json:"secret" yaml:"secret"`
+	Token      string `json:"token" yaml:"token"`
+	Role       string `json:"role" yaml:"role"`
+	ExternalID string `json:"role_external_id" yaml:"role_external_id"`
 }
 
 // Config contains configuration fields for an AWS session. This config is
@@ -49,10 +50,11 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Credentials: CredentialsConfig{
-			ID:     "",
-			Secret: "",
-			Token:  "",
-			Role:   "",
+			ID:         "",
+			Secret:     "",
+			Token:      "",
+			Role:       "",
+			ExternalID: "",
 		},
 		Endpoint: "",
 		Region:   "eu-west-1",
@@ -86,8 +88,16 @@ func (c Config) GetSession() (*session.Session, error) {
 	}
 
 	if len(c.Credentials.Role) > 0 {
+		var opts []func(*stscreds.AssumeRoleProvider)
+		if len(c.Credentials.ExternalID) > 0 {
+			opts = []func(*stscreds.AssumeRoleProvider){
+				func(p *stscreds.AssumeRoleProvider) {
+					p.ExternalID = &c.Credentials.ExternalID
+				},
+			}
+		}
 		sess.Config = sess.Config.WithCredentials(
-			stscreds.NewCredentials(sess, c.Credentials.Role),
+			stscreds.NewCredentials(sess, c.Credentials.Role, opts...),
 		)
 	}
 

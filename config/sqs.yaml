@@ -10,6 +10,7 @@ input:
     credentials:
       id: ""
       role: ""
+      role_external_id: ""
       secret: ""
       token: ""
     endpoint: ""
@@ -28,6 +29,7 @@ output:
     credentials:
       id: ""
       role: ""
+      role_external_id: ""
       secret: ""
       token: ""
     endpoint: ""

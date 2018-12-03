@@ -117,6 +117,7 @@ input:
         credentials:
           id: ${INPUT_KINESIS_CREDENTIALS_ID}
           role: ${INPUT_KINESIS_CREDENTIALS_ROLE}
+          role_external_id: ${INPUT_KINESIS_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${INPUT_KINESIS_CREDENTIALS_SECRET}
           token: ${INPUT_KINESIS_CREDENTIALS_TOKEN}
         dynamodb_table: ${INPUT_KINESIS_DYNAMODB_TABLE}
@@ -190,6 +191,7 @@ input:
         credentials:
           id: ${INPUT_S3_CREDENTIALS_ID}
           role: ${INPUT_S3_CREDENTIALS_ROLE}
+          role_external_id: ${INPUT_S3_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${INPUT_S3_CREDENTIALS_SECRET}
           token: ${INPUT_S3_CREDENTIALS_TOKEN}
         delete_objects: ${INPUT_S3_DELETE_OBJECTS:false}
@@ -206,6 +208,7 @@ input:
         credentials:
           id: ${INPUT_SQS_CREDENTIALS_ID}
           role: ${INPUT_SQS_CREDENTIALS_ROLE}
+          role_external_id: ${INPUT_SQS_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${INPUT_SQS_CREDENTIALS_SECRET}
           token: ${INPUT_SQS_CREDENTIALS_TOKEN}
         endpoint: ${INPUT_SQS_ENDPOINT}
@@ -347,6 +350,7 @@ pipeline:
       credentials:
         id: ${PROCESSOR_LAMBDA_CREDENTIALS_ID}
         role: ${PROCESSOR_LAMBDA_CREDENTIALS_ROLE}
+        role_external_id: ${PROCESSOR_LAMBDA_CREDENTIALS_ROLE_EXTERNAL_ID}
         secret: ${PROCESSOR_LAMBDA_CREDENTIALS_SECRET}
         token: ${PROCESSOR_LAMBDA_CREDENTIALS_TOKEN}
       endpoint: ${PROCESSOR_LAMBDA_ENDPOINT}
@@ -417,6 +421,7 @@ output:
           credentials:
             id: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ID}
             role: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ROLE_EXTERNAL_ID}
             secret: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_SECRET}
             token: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_TOKEN}
           enabled: ${OUTPUT_ELASTICSEARCH_AWS_ENABLED:false}
@@ -513,6 +518,7 @@ output:
         credentials:
           id: ${OUTPUT_KINESIS_CREDENTIALS_ID}
           role: ${OUTPUT_KINESIS_CREDENTIALS_ROLE}
+          role_external_id: ${OUTPUT_KINESIS_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${OUTPUT_KINESIS_CREDENTIALS_SECRET}
           token: ${OUTPUT_KINESIS_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_KINESIS_ENDPOINT}
@@ -564,6 +570,7 @@ output:
         credentials:
           id: ${OUTPUT_S3_CREDENTIALS_ID}
           role: ${OUTPUT_S3_CREDENTIALS_ROLE}
+          role_external_id: ${OUTPUT_S3_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${OUTPUT_S3_CREDENTIALS_SECRET}
           token: ${OUTPUT_S3_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_S3_ENDPOINT}
@@ -574,6 +581,7 @@ output:
         credentials:
           id: ${OUTPUT_SQS_CREDENTIALS_ID}
           role: ${OUTPUT_SQS_CREDENTIALS_ROLE}
+          role_external_id: ${OUTPUT_SQS_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${OUTPUT_SQS_CREDENTIALS_SECRET}
           token: ${OUTPUT_SQS_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_SQS_ENDPOINT}

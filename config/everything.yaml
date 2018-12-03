@@ -124,6 +124,7 @@ input:
       secret: ""
       token: ""
       role: ""
+      role_external_id: ""
     endpoint: ""
     region: eu-west-1
     limit: 100
@@ -233,6 +234,7 @@ input:
       secret: ""
       token: ""
       role: ""
+      role_external_id: ""
     endpoint: ""
     region: eu-west-1
     bucket: ""
@@ -250,6 +252,7 @@ input:
       secret: ""
       token: ""
       role: ""
+      role_external_id: ""
     endpoint: ""
     region: eu-west-1
     url: ""
@@ -516,6 +519,7 @@ pipeline:
         secret: ""
         token: ""
         role: ""
+        role_external_id: ""
       endpoint: ""
       region: eu-west-1
       function: ""
@@ -606,6 +610,7 @@ output:
       secret: ""
       token: ""
       role: ""
+      role_external_id: ""
     endpoint: ""
     region: eu-west-1
     table: ""
@@ -637,6 +642,7 @@ output:
         secret: ""
         token: ""
         role: ""
+        role_external_id: ""
       endpoint: ""
       region: eu-west-1
     max_retries: 0
@@ -719,6 +725,7 @@ output:
       secret: ""
       token: ""
       role: ""
+      role_external_id: ""
     endpoint: ""
     region: eu-west-1
     stream: ""
@@ -779,6 +786,7 @@ output:
       secret: ""
       token: ""
       role: ""
+      role_external_id: ""
     endpoint: ""
     region: eu-west-1
     bucket: ""
@@ -791,6 +799,7 @@ output:
       secret: ""
       token: ""
       role: ""
+      role_external_id: ""
     endpoint: ""
     region: eu-west-1
     url: ""
@@ -822,6 +831,7 @@ resources:
           secret: ""
           token: ""
           role: ""
+          role_external_id: ""
         endpoint: ""
         region: eu-west-1
         consistent_read: false

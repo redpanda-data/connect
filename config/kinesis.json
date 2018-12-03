@@ -13,6 +13,7 @@
 			"credentials": {
 				"id": "",
 				"role": "",
+				"role_external_id": "",
 				"secret": "",
 				"token": ""
 			},
@@ -45,6 +46,7 @@
 			"credentials": {
 				"id": "",
 				"role": "",
+				"role_external_id": "",
 				"secret": "",
 				"token": ""
 			},

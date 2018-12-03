@@ -64,6 +64,7 @@ dynamodb:
   credentials:
     id: ""
     role: ""
+    role_external_id: ""
     secret: ""
     token: ""
   data_key: ""
