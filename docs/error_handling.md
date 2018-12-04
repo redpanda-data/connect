@@ -53,7 +53,7 @@ batch.
 
 Similar to both of the previous examples it is possible to send messages to
 different destinations using either a [`group_by`][group_by] processor with a
-[`switch`][switch`] output, or a [`broker`][broker] output with
+[`switch`][switch] output, or a [`broker`][broker] output with
 [`filter_parts`][filter_parts] processors.
 
 ``` yaml
@@ -66,12 +66,13 @@ pipeline:
 output:
   type: switch
   switch:
-  - output:
-      type: foo # Dead letter queue
-    condition:
-      type: processor_failed
-  - output:
-      type: bar # Everything else
+    outputs:
+    - output:
+        type: foo # Dead letter queue
+      condition:
+        type: processor_failed
+    - output:
+        type: bar # Everything else
 ```
 
 Note that the [`group_by`][group_by] processor is only necessary when messages
