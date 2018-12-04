@@ -348,6 +348,12 @@ func (h *HTTPClient) TransactionChan() <-chan types.Transaction {
 	return h.transactions
 }
 
+// Connected returns a boolean indicating whether this input is currently
+// connected to its target.
+func (h *HTTPClient) Connected() bool {
+	return true
+}
+
 // CloseAsync shuts down the HTTPClient input.
 func (h *HTTPClient) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {

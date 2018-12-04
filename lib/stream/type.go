@@ -22,6 +22,7 @@ package stream
 
 import (
 	"bytes"
+	"net/http"
 	"runtime/pprof"
 	"time"
 
@@ -69,6 +70,28 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	if err := t.start(); err != nil {
 		return nil, err
 	}
+
+	healthCheck := func(w http.ResponseWriter, r *http.Request) {
+		connected := true
+		if !t.inputLayer.Connected() {
+			connected = false
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("input not connected\n"))
+		}
+		if !t.outputLayer.Connected() {
+			connected = false
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("output not connected\n"))
+		}
+		if connected {
+			w.Write([]byte("OK"))
+		}
+	}
+	t.manager.RegisterEndpoint(
+		"/ready",
+		"Returns 200 OK if all inputs and outputs are connected, otherwise a 503 is returned.",
+		healthCheck,
+	)
 	return t, nil
 }
 

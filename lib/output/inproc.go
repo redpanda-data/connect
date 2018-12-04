@@ -156,6 +156,12 @@ func (i *Inproc) Consume(ts <-chan types.Transaction) error {
 	return nil
 }
 
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (i *Inproc) Connected() bool {
+	return true
+}
+
 // CloseAsync shuts down the Inproc output and stops processing messages.
 func (i *Inproc) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&i.running, 1, 0) {

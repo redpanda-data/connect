@@ -54,6 +54,17 @@ func (g *Greedy) Consume(ts <-chan types.Transaction) error {
 	return nil
 }
 
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (g *Greedy) Connected() bool {
+	for _, out := range g.outputs {
+		if !out.Connected() {
+			return false
+		}
+	}
+	return true
+}
+
 //------------------------------------------------------------------------------
 
 // CloseAsync shuts down the Greedy broker and stops processing requests.

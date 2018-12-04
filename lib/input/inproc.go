@@ -169,6 +169,12 @@ func (i *Inproc) TransactionChan() <-chan types.Transaction {
 	return i.transactions
 }
 
+// Connected returns a boolean indicating whether this input is currently
+// connected to its target.
+func (i *Inproc) Connected() bool {
+	return true
+}
+
 // CloseAsync shuts down the Inproc input and stops processing requests.
 func (i *Inproc) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&i.running, 1, 0) {

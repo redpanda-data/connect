@@ -312,6 +312,12 @@ func (r *ReadUntil) TransactionChan() <-chan types.Transaction {
 	return r.transactions
 }
 
+// Connected returns a boolean indicating whether this input is currently
+// connected to its target.
+func (r *ReadUntil) Connected() bool {
+	return r.wrapped.Connected()
+}
+
 // CloseAsync shuts down the ReadUntil input and stops processing requests.
 func (r *ReadUntil) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&r.running, 1, 0) {

@@ -5,10 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New endpoint `/ready` that returns 200 when both the input and output
+  components are connected, otherwise 503. This is intended to be used as a
+  readiness probe.
+
 ### Changed
 
 - Large simplifications to all metrics paths.
 - Fully removed the previously deprecated `combine` processor.
+- Input and output plugins updated to support new connection health checks.
 
 ## 0.38.10 - 2018-12-04
 

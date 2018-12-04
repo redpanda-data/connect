@@ -291,6 +291,12 @@ func (r *Retry) Consume(ts <-chan types.Transaction) error {
 	return nil
 }
 
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (r *Retry) Connected() bool {
+	return r.wrapped.Connected()
+}
+
 // CloseAsync shuts down the Retry input and stops processing requests.
 func (r *Retry) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&r.running, 1, 0) {

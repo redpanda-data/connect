@@ -73,6 +73,12 @@ func (i *WithPipeline) Consume(tsChan <-chan types.Transaction) error {
 	return i.pipe.Consume(tsChan)
 }
 
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (i *WithPipeline) Connected() bool {
+	return i.out.Connected()
+}
+
 //------------------------------------------------------------------------------
 
 // CloseAsync triggers a closure of this object but does not block.

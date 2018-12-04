@@ -44,6 +44,10 @@ func (m *mockInput) TransactionChan() <-chan types.Transaction {
 	return m.ts
 }
 
+func (m *mockInput) Connected() bool {
+	return true
+}
+
 func (m *mockInput) CloseAsync() {
 	close(m.ts)
 }

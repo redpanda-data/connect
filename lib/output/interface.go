@@ -26,4 +26,8 @@ import "github.com/Jeffail/benthos/lib/types"
 type Type interface {
 	types.Closable
 	types.Consumer
+
+	// Connected returns a boolean indicating whether this output is currently
+	// connected to its target.
+	Connected() bool
 }

@@ -36,7 +36,8 @@ import (
 
 // Writer is an output type that writes messages to a writer.Type.
 type Writer struct {
-	running int32
+	running     int32
+	isConnected int32
 
 	typeStr string
 	writer  writer.Type
@@ -93,6 +94,7 @@ func (w *Writer) loop() {
 		for ; err != nil; err = w.writer.WaitForClose(time.Second) {
 		}
 		mRunning.Decr(1)
+		atomic.StoreInt32(&w.isConnected, 0)
 		close(w.closedChan)
 	}()
 	mRunning.Incr(1)
@@ -116,6 +118,7 @@ func (w *Writer) loop() {
 		}
 	}
 	mConn.Incr(1)
+	atomic.StoreInt32(&w.isConnected, 1)
 
 	for atomic.LoadInt32(&w.running) == 1 {
 		var ts types.Transaction
@@ -136,6 +139,7 @@ func (w *Writer) loop() {
 		// If our writer says it is not connected.
 		if err == types.ErrNotConnected {
 			mLostConn.Incr(1)
+			atomic.StoreInt32(&w.isConnected, 0)
 
 			// Continue to try to reconnect while still active.
 			for atomic.LoadInt32(&w.running) == 1 {
@@ -151,6 +155,7 @@ func (w *Writer) loop() {
 						return
 					}
 				} else if err = w.writer.Write(ts.Payload); err != types.ErrNotConnected {
+					atomic.StoreInt32(&w.isConnected, 1)
 					mConn.Incr(1)
 					break
 				} else if !throt.Retry() {
@@ -193,6 +198,12 @@ func (w *Writer) Consume(ts <-chan types.Transaction) error {
 	w.transactions = ts
 	go w.loop()
 	return nil
+}
+
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (w *Writer) Connected() bool {
+	return atomic.LoadInt32(&w.isConnected) == 1
 }
 
 // CloseAsync shuts down the File output and stops processing messages.

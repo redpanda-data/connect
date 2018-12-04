@@ -139,6 +139,13 @@ func (d *DynamicFanIn) TransactionChan() <-chan types.Transaction {
 	return d.transactionChan
 }
 
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (d *DynamicFanIn) Connected() bool {
+	// Always return true as this is fuzzy right now.
+	return true
+}
+
 //------------------------------------------------------------------------------
 
 // OptDynamicFanInSetOnAdd sets the function that is called whenever a dynamic

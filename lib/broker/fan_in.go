@@ -93,6 +93,22 @@ func (i *FanIn) TransactionChan() <-chan types.Transaction {
 	return i.transactions
 }
 
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (i *FanIn) Connected() bool {
+	type connector interface {
+		Connected() bool
+	}
+	for _, in := range i.closables {
+		if c, ok := in.(connector); ok {
+			if !c.Connected() {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 //------------------------------------------------------------------------------
 
 // loop is an internal loop that brokers incoming messages to many outputs.

@@ -416,6 +416,12 @@ func (h *HTTPServer) TransactionChan() <-chan types.Transaction {
 	return h.transactions
 }
 
+// Connected returns a boolean indicating whether this input is currently
+// connected to its target.
+func (h *HTTPServer) Connected() bool {
+	return true
+}
+
 // CloseAsync shuts down the HTTPServer input and stops processing requests.
 func (h *HTTPServer) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {

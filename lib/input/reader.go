@@ -35,7 +35,8 @@ import (
 
 // Reader is an input implementation that reads messages from a reader.Type.
 type Reader struct {
-	running int32
+	running   int32
+	connected int32
 
 	typeStr string
 	reader  reader.Type
@@ -104,6 +105,7 @@ func (r *Reader) loop() {
 		for ; err != nil; err = r.reader.WaitForClose(time.Second) {
 		}
 		mRunning.Decr(1)
+		atomic.StoreInt32(&r.connected, 0)
 
 		close(r.transactions)
 		close(r.closedChan)
@@ -126,6 +128,7 @@ func (r *Reader) loop() {
 		}
 	}
 	mConn.Incr(1)
+	atomic.StoreInt32(&r.connected, 1)
 
 	for atomic.LoadInt32(&r.running) == 1 {
 		msg, err := r.reader.Read()
@@ -133,6 +136,7 @@ func (r *Reader) loop() {
 		// If our reader says it is not connected.
 		if err == types.ErrNotConnected {
 			mLostConn.Incr(1)
+			atomic.StoreInt32(&r.connected, 0)
 
 			// Continue to try to reconnect while still active.
 			for atomic.LoadInt32(&r.running) == 1 {
@@ -150,6 +154,7 @@ func (r *Reader) loop() {
 					}
 				} else if msg, err = r.reader.Read(); err != types.ErrNotConnected {
 					mConn.Incr(1)
+					atomic.StoreInt32(&r.connected, 1)
 					r.connThrot.Reset()
 					break
 				}
@@ -214,6 +219,12 @@ func (r *Reader) loop() {
 // this input type.
 func (r *Reader) TransactionChan() <-chan types.Transaction {
 	return r.transactions
+}
+
+// Connected returns a boolean indicating whether this input is currently
+// connected to its target.
+func (r *Reader) Connected() bool {
+	return atomic.LoadInt32(&r.connected) == 1
 }
 
 // CloseAsync shuts down the Reader input and stops processing requests.

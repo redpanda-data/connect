@@ -144,6 +144,12 @@ func (w *LineWriter) loop() {
 	}
 }
 
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (w *LineWriter) Connected() bool {
+	return true
+}
+
 // Consume assigns a messages channel for the output to read.
 func (w *LineWriter) Consume(ts <-chan types.Transaction) error {
 	if w.transactions != nil {

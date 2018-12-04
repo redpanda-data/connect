@@ -48,6 +48,11 @@ func (m *MockInputType) TransactionChan() <-chan types.Transaction {
 	return m.TChan
 }
 
+// Connected returns true.
+func (m *MockInputType) Connected() bool {
+	return true
+}
+
 // CloseAsync does nothing.
 func (m *MockInputType) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&m.closed, 0, 1) {
@@ -73,6 +78,11 @@ func (m MockInputType) WaitForClose(t time.Duration) error {
 // MockOutputType implements the output.Type interface.
 type MockOutputType struct {
 	TChan <-chan types.Transaction
+}
+
+// Connected returns true.
+func (m *MockOutputType) Connected() bool {
+	return true
 }
 
 // Consume sets the read channel. This implementation is NOT thread safe.

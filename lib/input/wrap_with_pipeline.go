@@ -73,6 +73,12 @@ func (i *WithPipeline) TransactionChan() <-chan types.Transaction {
 	return i.pipe.TransactionChan()
 }
 
+// Connected returns a boolean indicating whether this input is currently
+// connected to its target.
+func (i *WithPipeline) Connected() bool {
+	return i.in.Connected()
+}
+
 //------------------------------------------------------------------------------
 
 // CloseAsync triggers a closure of this object but does not block.

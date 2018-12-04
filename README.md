@@ -81,10 +81,20 @@ docker run --rm \
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 ```
 
+## Monitoring
+
+### Health Checks
+
+Benthos serves two HTTP endpoints for health checks:
+- `/ping` can be used as a liveness probe as it always returns a 200.
+- `/ready` can be used as a readiness probe as it serves a 200 only when both
+  the input and output are connected, otherwise a 503 is returned.
+
 ### Metrics
 
 Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for
-debugging purposes an HTTP endpoint that returns a JSON formatted object.
+debugging purposes an HTTP endpoint that returns a JSON formatted object. The
+target can be specified [via config][metrics-config].
 
 ## Configuration
 
@@ -187,6 +197,7 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [outputs]: docs/outputs/README.md
 
 [metrics]: docs/metrics.md
+[metrics-config]: config/metrics.yaml#L35
 [config-interp]: docs/config_interpolation.md
 [compose-examples]: resources/docker/compose_examples
 [streams-api]: docs/api/streams.md

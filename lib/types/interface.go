@@ -149,12 +149,20 @@ type Consumer interface {
 type Output interface {
 	Consumer
 	Closable
+
+	// Connected returns a boolean indicating whether this output is currently
+	// connected to its target.
+	Connected() bool
 }
 
 // Input is a closable Producer.
 type Input interface {
 	Producer
 	Closable
+
+	// Connected returns a boolean indicating whether this input is currently
+	// connected to its target.
+	Connected() bool
 }
 
 // Pipeline is an interface that implements both the Consumer and Producer

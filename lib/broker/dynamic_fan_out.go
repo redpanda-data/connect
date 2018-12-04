@@ -342,6 +342,13 @@ func (d *DynamicFanOut) loop() {
 	}
 }
 
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (d *DynamicFanOut) Connected() bool {
+	// Always return true as this is fuzzy right now.
+	return true
+}
+
 // CloseAsync shuts down the DynamicFanOut broker and stops processing requests.
 func (d *DynamicFanOut) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&d.running, 1, 0) {

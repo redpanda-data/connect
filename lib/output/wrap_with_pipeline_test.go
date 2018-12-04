@@ -47,6 +47,10 @@ func (m *mockOutput) Consume(ts <-chan types.Transaction) error {
 	return nil
 }
 
+func (m *mockOutput) Connected() bool {
+	return true
+}
+
 func (m *mockOutput) CloseAsync() {
 	// NOT EXPECTING TO HIT THIS
 }

@@ -96,6 +96,17 @@ func (o *FanOut) Consume(transactions <-chan types.Transaction) error {
 	return nil
 }
 
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (o *FanOut) Connected() bool {
+	for _, out := range o.outputs {
+		if !out.Connected() {
+			return false
+		}
+	}
+	return true
+}
+
 //------------------------------------------------------------------------------
 
 // loop is an internal loop that brokers incoming messages to many outputs.

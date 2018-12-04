@@ -449,6 +449,13 @@ func (h *HTTPServer) Consume(ts <-chan types.Transaction) error {
 	return nil
 }
 
+// Connected returns a boolean indicating whether this output is currently
+// connected to its target.
+func (h *HTTPServer) Connected() bool {
+	// Always return true as this is fuzzy right now.
+	return true
+}
+
 // CloseAsync shuts down the HTTPServer output and stops processing requests.
 func (h *HTTPServer) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {

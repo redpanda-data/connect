@@ -28,4 +28,8 @@ import (
 type Type interface {
 	types.Closable
 	types.Producer
+
+	// Connected returns a boolean indicating whether this input is currently
+	// connected to its target.
+	Connected() bool
 }
