@@ -63,7 +63,7 @@ type NATS struct {
 // NewNATS creates a new NATS output type.
 func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (Type, error) {
 	n := NATS{
-		log:  log.NewModule(".output.nats"),
+		log:  log,
 		conf: conf,
 	}
 	n.urls = strings.Join(conf.URLs, ",")

@@ -22,6 +22,7 @@ package output
 
 import (
 	"encoding/json"
+	"fmt"
 	"path"
 	"sync"
 	"time"
@@ -145,7 +146,12 @@ func NewDynamic(
 		if err := json.Unmarshal(c, &newConf); err != nil {
 			return err
 		}
-		newOutput, err := New(newConf, mgr, log, stats)
+		ns := fmt.Sprintf("dynamic.outputs.%v", id)
+		newOutput, err := New(
+			newConf, mgr,
+			log.NewModule("."+ns),
+			metrics.Combine(stats, metrics.Namespaced(stats, ns)),
+		)
 		if err != nil {
 			return err
 		}

@@ -81,18 +81,17 @@ type Combine struct {
 func NewCombine(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	logger := log.NewModule(".processor.combine")
-	logger.Warnf("WARNING: The combine processor is deprecated, please use `batch` with the `count` field instead.")
+	log.Warnf("WARNING: The combine processor is deprecated, please use `batch` with the `count` field instead.")
 	return &Combine{
-		log:   logger,
+		log:   log,
 		stats: stats,
 		n:     conf.Combine.Parts,
 
-		mCount:     stats.GetCounter("processor.combine.count"),
-		mWarnParts: stats.GetCounter("processor.combine.warning.too_many_parts"),
-		mSent:      stats.GetCounter("processor.combine.sent"),
-		mSentParts: stats.GetCounter("processor.combine.parts.sent"),
-		mDropped:   stats.GetCounter("processor.combine.dropped"),
+		mCount:     stats.GetCounter("count"),
+		mWarnParts: stats.GetCounter("warning.too_many_parts"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
+		mDropped:   stats.GetCounter("dropped"),
 	}, nil
 }
 

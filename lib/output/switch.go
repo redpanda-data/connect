@@ -23,6 +23,7 @@ package output
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -237,7 +238,7 @@ func NewSwitch(
 	o := &Switch{
 		running:      1,
 		stats:        stats,
-		logger:       logger.NewModule(".broker.switch"),
+		logger:       logger,
 		transactions: nil,
 		outputs:      make([]types.Output, lOutputs),
 		conditions:   make([]types.Condition, lOutputs),
@@ -248,10 +249,19 @@ func NewSwitch(
 
 	var err error
 	for i, oConf := range conf.Switch.Outputs {
-		if o.outputs[i], err = New(oConf.Output, mgr, logger, stats); err != nil {
+		ns := fmt.Sprintf("switch.%v", i)
+		if o.outputs[i], err = New(
+			oConf.Output, mgr,
+			logger.NewModule("."+ns+".output"),
+			metrics.Combine(stats, metrics.Namespaced(stats, ns+".output")),
+		); err != nil {
 			return nil, err
 		}
-		if o.conditions[i], err = condition.New(oConf.Condition, mgr, logger, stats); err != nil {
+		if o.conditions[i], err = condition.New(
+			oConf.Condition, mgr,
+			logger.NewModule("."+ns+".condition"),
+			metrics.Namespaced(stats, ns+".condition"),
+		); err != nil {
 			return nil, err
 		}
 		o.fallthroughs[i] = oConf.Fallthrough
@@ -289,10 +299,10 @@ func (o *Switch) Consume(transactions <-chan types.Transaction) error {
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (o *Switch) loop() {
 	var (
-		mMsgDrop   = o.stats.GetCounter("broker.switch.messages.dropped")
-		mMsgRcvd   = o.stats.GetCounter("broker.switch.messages.received")
-		mMsgSnt    = o.stats.GetCounter("broker.switch.messages.sent")
-		mOutputErr = o.stats.GetCounter("broker.switch.output.error")
+		mMsgDrop   = o.stats.GetCounter("switch.messages.dropped")
+		mMsgRcvd   = o.stats.GetCounter("switch.messages.received")
+		mMsgSnt    = o.stats.GetCounter("switch.messages.sent")
+		mOutputErr = o.stats.GetCounter("switch.output.error")
 	)
 
 	defer func() {

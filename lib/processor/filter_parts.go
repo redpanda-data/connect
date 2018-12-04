@@ -87,9 +87,7 @@ type FilterParts struct {
 func NewFilterParts(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	nsLog := log.NewModule(".processor.filter_parts")
-	nsStats := metrics.Namespaced(stats, "processor.filter_parts")
-	cond, err := condition.New(conf.FilterParts.Config, mgr, nsLog, nsStats)
+	cond, err := condition.New(conf.FilterParts.Config, mgr, log, stats)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to construct condition '%v': %v",
@@ -97,15 +95,15 @@ func NewFilterParts(
 		)
 	}
 	return &FilterParts{
-		log:       nsLog,
+		log:       log,
 		stats:     stats,
 		condition: cond,
 
-		mCount:       stats.GetCounter("processor.filter_parts.count"),
-		mPartDropped: stats.GetCounter("processor.filter_parts.part.dropped"),
-		mDropped:     stats.GetCounter("processor.filter_parts.dropped"),
-		mSent:        stats.GetCounter("processor.filter_parts.sent"),
-		mSentParts:   stats.GetCounter("processor.filter_parts.parts.sent"),
+		mCount:       stats.GetCounter("count"),
+		mPartDropped: stats.GetCounter("part.dropped"),
+		mDropped:     stats.GetCounter("dropped"),
+		mSent:        stats.GetCounter("sent"),
+		mSentParts:   stats.GetCounter("parts.sent"),
 	}, nil
 }
 

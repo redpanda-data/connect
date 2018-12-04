@@ -76,7 +76,7 @@ func NewZMQ4(conf *ZMQ4Config, log log.Modular, stats metrics.Type) (*ZMQ4, erro
 	z := ZMQ4{
 		conf:        conf,
 		stats:       stats,
-		log:         log.NewModule(".input.zmq4"),
+		log:         log,
 		pollTimeout: time.Millisecond * time.Duration(conf.PollTimeoutMS),
 	}
 

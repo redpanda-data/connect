@@ -22,6 +22,7 @@ package input
 
 import (
 	"encoding/json"
+	"fmt"
 	"path"
 	"sync"
 	"time"
@@ -147,7 +148,13 @@ func NewDynamic(
 		if err := json.Unmarshal(c, &newConf); err != nil {
 			return err
 		}
-		newInput, err := New(Config(newConf), mgr, log, stats, pipelines...)
+		ns := fmt.Sprintf("dynamic.inputs.%v", id)
+		newInput, err := New(
+			Config(newConf), mgr,
+			log.NewModule("."+ns),
+			metrics.Combine(stats, metrics.Namespaced(stats, ns)),
+			pipelines...,
+		)
 		if err != nil {
 			return err
 		}

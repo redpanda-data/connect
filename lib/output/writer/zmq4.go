@@ -73,7 +73,7 @@ type ZMQ4 struct {
 // NewZMQ4 creates a new ZMQ4 output type.
 func NewZMQ4(conf *ZMQ4Config, log log.Modular, stats metrics.Type) (*ZMQ4, error) {
 	z := ZMQ4{
-		log:         log.NewModule(".output.zmq4"),
+		log:         log,
 		stats:       stats,
 		conf:        conf,
 		pollTimeout: time.Millisecond * time.Duration(conf.PollTimeoutMS),

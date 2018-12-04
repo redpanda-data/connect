@@ -26,10 +26,10 @@ var (
 )
 
 var (
-	mThrottled       = mockStats.GetCounter(".output.send.throttled")
-	mThrottledF      = mockStats.GetCounter(".output.kinesis.send.throttled")
-	mPartsThrottled  = mockStats.GetCounter(".output.parts.send.throttled")
-	mPartsThrottledF = mockStats.GetCounter(".output.kinesis.parts.send.throttled")
+	mThrottled       = mockStats.GetCounter("send.throttled")
+	mThrottledF      = mockStats.GetCounter("send.throttled")
+	mPartsThrottled  = mockStats.GetCounter("parts.send.throttled")
+	mPartsThrottledF = mockStats.GetCounter("parts.send.throttled")
 )
 
 type mockKinesis struct {

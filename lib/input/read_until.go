@@ -161,13 +161,19 @@ func NewReadUntil(
 		return nil, errors.New("cannot create read_until input without a child")
 	}
 
-	wrapped, err := New(*conf.ReadUntil.Input, mgr, log, stats)
+	wrapped, err := New(
+		*conf.ReadUntil.Input, mgr, log, stats,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create input '%v': %v", conf.ReadUntil.Input.Type, err)
 	}
 
 	var cond condition.Type
-	if cond, err = condition.New(conf.ReadUntil.Condition, mgr, log, stats); err != nil {
+	if cond, err = condition.New(
+		conf.ReadUntil.Condition, mgr,
+		log.NewModule(".read_until.condition"),
+		metrics.Namespaced(stats, "read_until.condition"),
+	); err != nil {
 		return nil, fmt.Errorf("failed to create condition '%v': %v", conf.ReadUntil.Condition.Type, err)
 	}
 
@@ -179,8 +185,8 @@ func NewReadUntil(
 		wrapperStats: stats,
 		wrapperMgr:   mgr,
 
-		log:          log.NewModule(".input.read_until"),
-		stats:        stats,
+		log:          log.NewModule(".read_until"),
+		stats:        metrics.Namespaced(stats, "read_until"),
 		wrapped:      wrapped,
 		cond:         cond,
 		transactions: make(chan types.Transaction),
@@ -196,16 +202,16 @@ func NewReadUntil(
 
 func (r *ReadUntil) loop() {
 	var (
-		mRunning         = r.stats.GetGauge("input.read_until.running")
-		mRestartErr      = r.stats.GetCounter("input.read_until.input.restart.error")
-		mRestartSucc     = r.stats.GetCounter("input.read_until.input.restart.success")
-		mInputClosed     = r.stats.GetCounter("input.read_until.input.closed")
-		mCount           = r.stats.GetCounter("input.read_until.count")
-		mPropagated      = r.stats.GetCounter("input.read_until.propagated")
-		mFinalPropagated = r.stats.GetCounter("input.read_until.final.propagated")
-		mFinalResSent    = r.stats.GetCounter("input.read_until.final.response.sent")
-		mFinalResSucc    = r.stats.GetCounter("input.read_until.final.response.success")
-		mFinalResErr     = r.stats.GetCounter("input.read_until.final.response.error")
+		mRunning         = r.stats.GetGauge("running")
+		mRestartErr      = r.stats.GetCounter("restart.error")
+		mRestartSucc     = r.stats.GetCounter("restart.success")
+		mInputClosed     = r.stats.GetCounter("input.closed")
+		mCount           = r.stats.GetCounter("count")
+		mPropagated      = r.stats.GetCounter("propagated")
+		mFinalPropagated = r.stats.GetCounter("final.propagated")
+		mFinalResSent    = r.stats.GetCounter("final.response.sent")
+		mFinalResSucc    = r.stats.GetCounter("final.response.success")
+		mFinalResErr     = r.stats.GetCounter("final.response.error")
 	)
 
 	defer func() {

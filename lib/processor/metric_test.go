@@ -115,9 +115,7 @@ func TestMetricCounter(t *testing.T) {
 	}
 
 	expMetrics := map[string]int64{
-		"processor.metric.count":   7,
-		"processor.metric.success": 7,
-		"foo.bar":                  7,
+		"foo.bar": 7,
 	}
 
 	for _, i := range inputs {
@@ -171,9 +169,7 @@ func TestMetricCounterParts(t *testing.T) {
 	}
 
 	expMetrics := map[string]int64{
-		"processor.metric.count":   7,
-		"processor.metric.success": 7,
-		"foo.bar":                  5,
+		"foo.bar": 5,
 	}
 
 	for _, i := range inputs {
@@ -229,10 +225,7 @@ func TestMetricCounterBy(t *testing.T) {
 	}
 
 	expMetrics := map[string]int64{
-		"processor.metric.count":   7,
-		"processor.metric.success": 2,
-		"processor.metric.error":   5,
-		"foo.bar":                  5,
+		"foo.bar": 5,
 	}
 
 	for _, i := range inputs {
@@ -288,10 +281,7 @@ func TestMetricGauge(t *testing.T) {
 	}
 
 	expMetrics := map[string]int64{
-		"processor.metric.count":   7,
-		"processor.metric.success": 1,
-		"processor.metric.error":   6,
-		"foo.bar":                  5,
+		"foo.bar": 5,
 	}
 
 	for _, i := range inputs {
@@ -347,10 +337,7 @@ func TestMetricTiming(t *testing.T) {
 	}
 
 	expMetrics := map[string]int64{
-		"processor.metric.count":   7,
-		"processor.metric.success": 1,
-		"processor.metric.error":   6,
-		"foo.bar":                  5,
+		"foo.bar": 5,
 	}
 
 	for _, i := range inputs {

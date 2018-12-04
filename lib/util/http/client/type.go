@@ -155,15 +155,15 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		opt(&h)
 	}
 
-	h.mCount = h.stats.GetCounter("client.http.count")
-	h.mErr = h.stats.GetCounter("client.http.error")
-	h.mErrReq = h.stats.GetCounter("client.http.error.request")
-	h.mErrRes = h.stats.GetCounter("client.http.error.response")
-	h.mLimited = h.stats.GetCounter("client.http.rate_limit.count")
-	h.mLimitFor = h.stats.GetCounter("client.http.rate_limit.total_ms")
-	h.mLimitErr = h.stats.GetCounter("client.http.rate_limit.error")
-	h.mLatency = h.stats.GetTimer("client.http.latency")
-	h.mSucc = h.stats.GetCounter("client.http.success")
+	h.mCount = h.stats.GetCounter("count")
+	h.mErr = h.stats.GetCounter("error")
+	h.mErrReq = h.stats.GetCounter("error.request")
+	h.mErrRes = h.stats.GetCounter("error.response")
+	h.mLimited = h.stats.GetCounter("rate_limit.count")
+	h.mLimitFor = h.stats.GetCounter("rate_limit.total_ms")
+	h.mLimitErr = h.stats.GetCounter("rate_limit.error")
+	h.mLatency = h.stats.GetTimer("latency")
+	h.mSucc = h.stats.GetCounter("success")
 	h.mCodes = map[int]metrics.StatCounter{}
 
 	if len(h.conf.RateLimit) > 0 {
@@ -196,7 +196,7 @@ func OptSetCloseChan(c <-chan struct{}) func(*Type) {
 // OptSetLogger sets the logger to use.
 func OptSetLogger(log log.Modular) func(*Type) {
 	return func(t *Type) {
-		t.log = log.NewModule(".client.http")
+		t.log = log
 	}
 }
 
@@ -226,7 +226,7 @@ func (h *Type) incrCode(code int) {
 		return
 	}
 
-	ctr = h.stats.GetCounter(fmt.Sprintf("client.http.code.%v", code))
+	ctr = h.stats.GetCounter(fmt.Sprintf("code.%v", code))
 	ctr.Incr(1)
 
 	h.codesMut.Lock()

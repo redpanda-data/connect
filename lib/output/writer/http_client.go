@@ -67,7 +67,7 @@ func NewHTTPClient(
 ) (*HTTPClient, error) {
 	h := HTTPClient{
 		stats:     stats,
-		log:       log.NewModule(".output.http_client"),
+		log:       log,
 		conf:      conf,
 		closeChan: make(chan struct{}),
 	}

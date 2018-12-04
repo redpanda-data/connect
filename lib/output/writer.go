@@ -61,7 +61,7 @@ func NewWriter(
 		running:      1,
 		typeStr:      typeStr,
 		writer:       w,
-		log:          log.NewModule(".output." + typeStr),
+		log:          log,
 		stats:        stats,
 		transactions: nil,
 		closeChan:    make(chan struct{}),
@@ -75,22 +75,17 @@ func NewWriter(
 func (w *Writer) loop() {
 	// Metrics paths
 	var (
-		mRunning       = w.stats.GetGauge("output.running")
-		mRunningF      = w.stats.GetGauge("output." + w.typeStr + ".running")
-		mCount         = w.stats.GetCounter("output.count")
-		mCountF        = w.stats.GetCounter("output." + w.typeStr + ".count")
-		mSuccess       = w.stats.GetCounter("output.send.success")
-		mSuccessF      = w.stats.GetCounter("output." + w.typeStr + ".send.success")
-		mPartsSuccess  = w.stats.GetCounter("output.parts.send.success")
-		mPartsSuccessF = w.stats.GetCounter("output." + w.typeStr + ".parts.send.success")
-		mError         = w.stats.GetCounter("output.send.error")
-		mErrorF        = w.stats.GetCounter("output." + w.typeStr + ".send.error")
-		mConn          = w.stats.GetCounter("output.connection.up")
-		mConnF         = w.stats.GetCounter("output." + w.typeStr + ".connection.up")
-		mFailedConn    = w.stats.GetCounter("output.connection.failed")
-		mFailedConnF   = w.stats.GetCounter("output." + w.typeStr + ".connection.failed")
-		mLostConn      = w.stats.GetCounter("output.connection.lost")
-		mLostConnF     = w.stats.GetCounter("output." + w.typeStr + ".connection.lost")
+		mRunning      = w.stats.GetGauge("running")
+		mCount        = w.stats.GetCounter("count")
+		mPartsCount   = w.stats.GetCounter("parts.count")
+		mSuccess      = w.stats.GetCounter("send.success")
+		mPartsSuccess = w.stats.GetCounter("parts.send.success")
+		mError        = w.stats.GetCounter("send.error")
+		mSent         = w.stats.GetCounter("batch.sent")
+		mPartsSent    = w.stats.GetCounter("sent")
+		mConn         = w.stats.GetCounter("connection.up")
+		mFailedConn   = w.stats.GetCounter("connection.failed")
+		mLostConn     = w.stats.GetCounter("connection.lost")
 	)
 
 	defer func() {
@@ -98,11 +93,9 @@ func (w *Writer) loop() {
 		for ; err != nil; err = w.writer.WaitForClose(time.Second) {
 		}
 		mRunning.Decr(1)
-		mRunningF.Decr(1)
 		close(w.closedChan)
 	}()
 	mRunning.Incr(1)
-	mRunningF.Incr(1)
 
 	throt := throttle.New(throttle.OptCloseChan(w.closeChan))
 
@@ -115,7 +108,6 @@ func (w *Writer) loop() {
 
 			w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
 			mFailedConn.Incr(1)
-			mFailedConnF.Incr(1)
 			if !throt.Retry() {
 				return
 			}
@@ -124,7 +116,6 @@ func (w *Writer) loop() {
 		}
 	}
 	mConn.Incr(1)
-	mConnF.Incr(1)
 
 	for atomic.LoadInt32(&w.running) == 1 {
 		var ts types.Transaction
@@ -135,7 +126,7 @@ func (w *Writer) loop() {
 				return
 			}
 			mCount.Incr(1)
-			mCountF.Incr(1)
+			mPartsCount.Incr(int64(ts.Payload.Len()))
 		case <-w.closeChan:
 			return
 		}
@@ -145,7 +136,6 @@ func (w *Writer) loop() {
 		// If our writer says it is not connected.
 		if err == types.ErrNotConnected {
 			mLostConn.Incr(1)
-			mLostConnF.Incr(1)
 
 			// Continue to try to reconnect while still active.
 			for atomic.LoadInt32(&w.running) == 1 {
@@ -157,13 +147,11 @@ func (w *Writer) loop() {
 
 					w.log.Errorf("Failed to reconnect to %v: %v\n", w.typeStr, err)
 					mFailedConn.Incr(1)
-					mFailedConnF.Incr(1)
 					if !throt.Retry() {
 						return
 					}
 				} else if err = w.writer.Write(ts.Payload); err != types.ErrNotConnected {
 					mConn.Incr(1)
-					mConnF.Incr(1)
 					break
 				} else if !throt.Retry() {
 					return
@@ -179,15 +167,14 @@ func (w *Writer) loop() {
 		if err != nil {
 			w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
 			mError.Incr(1)
-			mErrorF.Incr(1)
 			if !throt.Retry() {
 				return
 			}
 		} else {
 			mSuccess.Incr(1)
-			mSuccessF.Incr(1)
 			mPartsSuccess.Incr(int64(ts.Payload.Len()))
-			mPartsSuccessF.Incr(int64(ts.Payload.Len()))
+			mSent.Incr(1)
+			mPartsSent.Incr(int64(ts.Payload.Len()))
 			throt.Reset()
 		}
 		select {

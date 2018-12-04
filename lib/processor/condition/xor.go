@@ -72,8 +72,9 @@ func NewXor(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	children := []Type{}
-	for _, childConf := range conf.Xor {
-		child, err := New(childConf, mgr, log, stats)
+	for i, childConf := range conf.Xor {
+		ns := fmt.Sprintf("xor.%v", i)
+		child, err := New(childConf, mgr, log.NewModule("."+ns), metrics.Namespaced(stats, ns))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create child '%v': %v", childConf.Type, err)
 		}

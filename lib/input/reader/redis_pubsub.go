@@ -71,7 +71,7 @@ func NewRedisPubSub(
 	r := &RedisPubSub{
 		conf:  conf,
 		stats: stats,
-		log:   log.NewModule(".input.redis_pubsub"),
+		log:   log,
 	}
 
 	var err error

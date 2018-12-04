@@ -599,7 +599,7 @@ func TestTypeAPIGetStats(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if exp, act := float64(1), stats.S("input", "http_server", "running").Data().(float64); exp != act {
+	if exp, act := float64(1), stats.S("input", "running").Data().(float64); exp != act {
 		t.Errorf("Wrong stat value: %v != %v", act, exp)
 		t.Logf("Metrics: %v", stats)
 	}

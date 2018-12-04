@@ -80,7 +80,7 @@ func NewMQTT(
 		msgChan:       make(chan mqtt.Message),
 		interruptChan: make(chan struct{}),
 		stats:         stats,
-		log:           log.NewModule(".input.mqtt"),
+		log:           log,
 	}
 
 	for _, u := range conf.URLs {

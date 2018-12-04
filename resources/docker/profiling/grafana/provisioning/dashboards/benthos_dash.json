@@ -82,7 +82,7 @@
       "targets": [
         {
           "$$hashKey": "object:193",
-          "expr": "rate(benthos_input_count[30s])",
+          "expr": "rate(benthos_input_received[30s])",
           "format": "time_series",
           "instant": false,
           "intervalFactor": 1,
@@ -91,7 +91,7 @@
         },
         {
           "$$hashKey": "object:194",
-          "expr": "rate(benthos_output_success[30s])",
+          "expr": "rate(benthos_output_sent[30s])",
           "format": "time_series",
           "instant": false,
           "intervalFactor": 1,

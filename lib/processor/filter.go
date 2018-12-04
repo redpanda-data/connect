@@ -83,9 +83,7 @@ type Filter struct {
 func NewFilter(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	nsLog := log.NewModule(".processor.filter")
-	nsStats := metrics.Namespaced(stats, "processor.filter")
-	cond, err := condition.New(conf.Filter.Config, mgr, nsLog, nsStats)
+	cond, err := condition.New(conf.Filter.Config, mgr, log, stats)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to construct condition '%v': %v",
@@ -93,14 +91,14 @@ func NewFilter(
 		)
 	}
 	return &Filter{
-		log:       nsLog,
+		log:       log,
 		stats:     stats,
 		condition: cond,
 
-		mCount:     stats.GetCounter("processor.filter.count"),
-		mDropped:   stats.GetCounter("processor.filter.dropped"),
-		mSent:      stats.GetCounter("processor.filter.sent"),
-		mSentParts: stats.GetCounter("processor.filter.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mDropped:   stats.GetCounter("dropped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

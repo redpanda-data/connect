@@ -98,7 +98,7 @@ func NewDynamoDB(
 	}
 	db := &DynamoDB{
 		conf:       conf,
-		log:        log.NewModule(".output.dynamodb"),
+		log:        log,
 		stats:      stats,
 		table:      aws.String(conf.Table),
 		backoff:    boff,

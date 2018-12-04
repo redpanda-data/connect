@@ -177,7 +177,7 @@ func NewRetry(
 		running: 1,
 		conf:    conf.Retry,
 
-		log:             log.NewModule(".output.retry"),
+		log:             log,
 		stats:           stats,
 		wrapped:         wrapped,
 		backoff:         boff,
@@ -193,12 +193,12 @@ func NewRetry(
 func (r *Retry) loop() {
 	// Metrics paths
 	var (
-		mRunning      = r.stats.GetGauge("output.retry.running")
-		mCount        = r.stats.GetCounter("output.retry.count")
-		mSuccess      = r.stats.GetCounter("output.retry.send.success")
-		mPartsSuccess = r.stats.GetCounter("output.retry.parts.send.success")
-		mError        = r.stats.GetCounter("output.retry.send.error")
-		mEndOfRetries = r.stats.GetCounter("output.retry.end_of_retries")
+		mRunning      = r.stats.GetGauge("retry.running")
+		mCount        = r.stats.GetCounter("retry.count")
+		mSuccess      = r.stats.GetCounter("retry.send.success")
+		mPartsSuccess = r.stats.GetCounter("retry.parts.send.success")
+		mError        = r.stats.GetCounter("retry.send.error")
+		mEndOfRetries = r.stats.GetCounter("retry.end_of_retries")
 	)
 
 	defer func() {

@@ -79,7 +79,7 @@ func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (
 	s := ScaleProto{
 		conf:  conf,
 		stats: stats,
-		log:   log.NewModule(".input.scale_proto"),
+		log:   log,
 	}
 
 	for _, u := range conf.URLs {

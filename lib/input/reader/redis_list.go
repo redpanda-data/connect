@@ -71,7 +71,7 @@ func NewRedisList(
 	r := &RedisList{
 		conf:  conf,
 		stats: stats,
-		log:   log.NewModule(".input.redis_list"),
+		log:   log,
 	}
 
 	var err error

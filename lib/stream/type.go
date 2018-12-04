@@ -45,9 +45,7 @@ type Type struct {
 	pipelineLayer pipeline.Type
 	outputLayer   output.Type
 
-	complementaryInputPipes  []types.PipelineConstructorFunc
-	complementaryProcs       []types.ProcessorConstructorFunc
-	complementaryOutputPipes []types.PipelineConstructorFunc
+	complementaryProcs []types.ProcessorConstructorFunc
 
 	manager types.Manager
 	stats   metrics.Type
@@ -76,27 +74,11 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 
 //------------------------------------------------------------------------------
 
-// OptAddInputPipelines adds additional pipelines that will be constructed for
-// each input of the Benthos stream.
-func OptAddInputPipelines(pipes ...types.PipelineConstructorFunc) func(*Type) {
-	return func(t *Type) {
-		t.complementaryInputPipes = append(t.complementaryInputPipes, pipes...)
-	}
-}
-
 // OptAddProcessors adds additional processors that will be constructed for each
 // logical thread of the processing pipeline layer of the Benthos stream.
 func OptAddProcessors(procs ...types.ProcessorConstructorFunc) func(*Type) {
 	return func(t *Type) {
 		t.complementaryProcs = append(t.complementaryProcs, procs...)
-	}
-}
-
-// OptAddOutputPipelines adds additional pipelines that will be constructed for
-// each output of the Benthos stream.
-func OptAddOutputPipelines(pipes ...types.PipelineConstructorFunc) func(*Type) {
-	return func(t *Type) {
-		t.complementaryOutputPipes = append(t.complementaryOutputPipes, pipes...)
 	}
 }
 
@@ -145,26 +127,30 @@ func OptOnClose(onClose func()) func(*Type) {
 func (t *Type) start() (err error) {
 	// Constructors
 	if t.inputLayer, err = input.New(
-		t.conf.Input, t.manager, t.logger, t.stats, t.complementaryInputPipes...,
+		t.conf.Input, t.manager,
+		t.logger.NewModule(".input"), metrics.Namespaced(t.stats, "input"),
 	); err != nil {
 		return
 	}
-	if t.conf.Buffer.Type != "none" {
+	if t.conf.Buffer.Type != buffer.TypeNone {
 		if t.bufferLayer, err = buffer.New(
-			t.conf.Buffer, t.logger, t.stats,
+			t.conf.Buffer, t.logger.NewModule(".buffer"), metrics.Namespaced(t.stats, "buffer"),
 		); err != nil {
 			return
 		}
 	}
 	if tLen := len(t.complementaryProcs) + len(t.conf.Pipeline.Processors); tLen > 0 {
 		if t.pipelineLayer, err = pipeline.New(
-			t.conf.Pipeline, t.manager, t.logger, t.stats, t.complementaryProcs...,
+			t.conf.Pipeline, t.manager,
+			t.logger.NewModule(".pipeline"), metrics.Namespaced(t.stats, "pipeline"),
+			t.complementaryProcs...,
 		); err != nil {
 			return
 		}
 	}
 	if t.outputLayer, err = output.New(
-		t.conf.Output, t.manager, t.logger, t.stats, t.complementaryOutputPipes...,
+		t.conf.Output, t.manager,
+		t.logger.NewModule(".output"), metrics.Namespaced(t.stats, "output"),
 	); err != nil {
 		return
 	}

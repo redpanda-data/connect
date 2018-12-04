@@ -182,16 +182,23 @@ func NewGroupBy(
 	groupCtrs := make([]metrics.StatCounter, len(conf.GroupBy))
 
 	for i, gConf := range conf.GroupBy {
-		groupPrefix := fmt.Sprintf("processor.group_by.groups.%v", i)
-		nsLog := log.NewModule(groupPrefix)
+		groupPrefix := fmt.Sprintf("groups.%v", i)
+		nsLog := log.NewModule("." + groupPrefix)
 		nsStats := metrics.Namespaced(stats, groupPrefix)
 
-		if groups[i].Condition, err = condition.New(gConf.Condition, mgr, nsLog, nsStats); err != nil {
+		if groups[i].Condition, err = condition.New(
+			gConf.Condition, mgr,
+			nsLog.NewModule(".condition"), metrics.Namespaced(nsStats, "condition"),
+		); err != nil {
 			return nil, fmt.Errorf("failed to create condition for group '%v': %v", i, err)
 		}
 		for j, pConf := range gConf.Processors {
+			prefix := fmt.Sprintf("processor.%v", j)
 			var proc Type
-			if proc, err = New(pConf, mgr, nsLog, nsStats); err != nil {
+			if proc, err = New(
+				pConf, mgr,
+				nsLog.NewModule("."+prefix), metrics.Namespaced(nsStats, prefix),
+			); err != nil {
 				return nil, fmt.Errorf("failed to create processor '%v' for group '%v': %v", j, i, err)
 			}
 			groups[i].Processors = append(groups[i].Processors, proc)
@@ -201,17 +208,17 @@ func NewGroupBy(
 	}
 
 	return &GroupBy{
-		log:   log.NewModule(".processor.group_by"),
+		log:   log,
 		stats: stats,
 
 		groups:     groups,
 		mGroupPass: groupCtrs,
 
-		mGroupDefault: stats.GetCounter("processor.group_by.groups.default.passed"),
-		mCount:        stats.GetCounter("processor.group_by.count"),
-		mDropped:      stats.GetCounter("processor.group_by.dropped"),
-		mSent:         stats.GetCounter("processor.group_by.sent"),
-		mSentParts:    stats.GetCounter("processor.group_by.parts.sent"),
+		mGroupDefault: stats.GetCounter("groups.default.passed"),
+		mCount:        stats.GetCounter("count"),
+		mDropped:      stats.GetCounter("dropped"),
+		mSent:         stats.GetCounter("sent"),
+		mSentParts:    stats.GetCounter("parts.sent"),
 	}, nil
 }
 

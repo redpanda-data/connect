@@ -23,6 +23,7 @@ package processor
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -223,12 +224,10 @@ type ProcessMap struct {
 func NewProcessMap(
 	conf ProcessMapConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (*ProcessMap, error) {
-	nsStats := metrics.Namespaced(stats, "processor.process_map")
-	nsLog := log.NewModule(".processor.process_map")
-
 	var children []types.Processor
-	for _, pconf := range conf.Processors {
-		proc, err := New(pconf, mgr, nsLog, nsStats)
+	for i, pconf := range conf.Processors {
+		prefix := fmt.Sprintf("processor.%v", i)
+		proc, err := New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
 		if err != nil {
 			return nil, err
 		}
@@ -236,8 +235,9 @@ func NewProcessMap(
 	}
 
 	var conditions []types.Condition
-	for _, cconf := range conf.Conditions {
-		cond, err := condition.New(cconf, mgr, nsLog, nsStats)
+	for i, cconf := range conf.Conditions {
+		prefix := fmt.Sprintf("condition.%v", i)
+		cond, err := condition.New(cconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
 		if err != nil {
 			return nil, err
 		}
@@ -249,24 +249,23 @@ func NewProcessMap(
 
 		children: children,
 
-		log: nsLog,
-
-		mCount:        stats.GetCounter("processor.process_map.count"),
-		mCountParts:   stats.GetCounter("processor.process_map.parts.count"),
-		mSkipped:      stats.GetCounter("processor.process_map.skipped"),
-		mSkippedParts: stats.GetCounter("processor.process_map.parts.skipped"),
-		mErr:          stats.GetCounter("processor.process_map.error"),
-		mErrPre:       stats.GetCounter("processor.process_map.error.premap"),
-		mErrProc:      stats.GetCounter("processor.process_map.error.processors"),
-		mErrPost:      stats.GetCounter("processor.process_map.error.postmap"),
-		mSent:         stats.GetCounter("processor.process_map.sent"),
-		mSentParts:    stats.GetCounter("processor.process_map.parts.sent"),
+		log:           log,
+		mCount:        stats.GetCounter("count"),
+		mCountParts:   stats.GetCounter("parts.count"),
+		mSkipped:      stats.GetCounter("skipped"),
+		mSkippedParts: stats.GetCounter("parts.skipped"),
+		mErr:          stats.GetCounter("error"),
+		mErrPre:       stats.GetCounter("error.premap"),
+		mErrProc:      stats.GetCounter("error.processors"),
+		mErrPost:      stats.GetCounter("error.postmap"),
+		mSent:         stats.GetCounter("sent"),
+		mSentParts:    stats.GetCounter("parts.sent"),
 	}
 
 	var err error
 	if p.mapper, err = mapper.New(
-		mapper.OptSetLogger(nsLog),
-		mapper.OptSetStats(nsStats),
+		mapper.OptSetLogger(log),
+		mapper.OptSetStats(stats),
 		mapper.OptSetConditions(conditions),
 		mapper.OptSetReqMap(conf.Premap),
 		mapper.OptSetOptReqMap(conf.PremapOptional),

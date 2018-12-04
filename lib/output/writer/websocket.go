@@ -69,7 +69,7 @@ func NewWebsocket(
 	stats metrics.Type,
 ) (*Websocket, error) {
 	ws := &Websocket{
-		log:   log.NewModule(".output.websocket"),
+		log:   log,
 		stats: stats,
 		lock:  &sync.Mutex{},
 		conf:  conf,

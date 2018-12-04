@@ -95,10 +95,10 @@ func NewKafkaBalanced(
 	k := KafkaBalanced{
 		conf:        conf,
 		stats:       stats,
-		mRcvErr:     stats.GetCounter("input.kafka_balanced.recv.error"),
-		mRebalanced: stats.GetCounter("input.kafka_balanced.rebalanced"),
+		mRcvErr:     stats.GetCounter("recv.error"),
+		mRebalanced: stats.GetCounter("rebalanced"),
 		offsets:     map[string]map[int32]int64{},
-		log:         log.NewModule(".input.kafka_balanced"),
+		log:         log,
 	}
 	if conf.TLS.Enabled {
 		var err error

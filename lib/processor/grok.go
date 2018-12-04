@@ -116,15 +116,15 @@ func NewGrok(
 		parts:    conf.Grok.Parts,
 		gparsers: compiled,
 		conf:     conf,
-		log:      log.NewModule(".processor.grok"),
+		log:      log,
 		stats:    stats,
 
-		mCount:     stats.GetCounter("processor.grok.count"),
-		mErrGrok:   stats.GetCounter("processor.grok.error.grok_no_matches"),
-		mErrJSONS:  stats.GetCounter("processor.grok.error.json_set"),
-		mSucc:      stats.GetCounter("processor.grok.success"),
-		mSent:      stats.GetCounter("processor.grok.sent"),
-		mSentParts: stats.GetCounter("processor.grok.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mErrGrok:   stats.GetCounter("error.grok_no_matches"),
+		mErrJSONS:  stats.GetCounter("error.json_set"),
+		mSucc:      stats.GetCounter("success"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}
 	return g, nil
 }

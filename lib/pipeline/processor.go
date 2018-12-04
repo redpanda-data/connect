@@ -67,10 +67,7 @@ func NewProcessor(
 	return &Processor{
 		running:       1,
 		msgProcessors: msgProcessors,
-		log:           log.NewModule(".pipeline.processor"),
 		stats:         stats,
-		mSndSucc:      stats.GetCounter("pipeline.processor.send.success"),
-		mSndErr:       stats.GetCounter("pipeline.processor.send.error"),
 		messagesOut:   make(chan types.Transaction),
 		responsesIn:   make(chan types.Response),
 		closeChan:     make(chan struct{}),
@@ -87,11 +84,6 @@ func (p *Processor) loop() {
 		close(p.closed)
 	}()
 
-	var (
-		mProcCount   = p.stats.GetCounter("pipeline.processor.count")
-		mProcDropped = p.stats.GetCounter("pipeline.processor.dropped")
-	)
-
 	var open bool
 	for atomic.LoadInt32(&p.running) == 1 {
 		var tran types.Transaction
@@ -103,11 +95,9 @@ func (p *Processor) loop() {
 		case <-p.closeChan:
 			return
 		}
-		mProcCount.Incr(1)
 
 		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
-			mProcDropped.Incr(1)
 			select {
 			case tran.ResponseChan <- resultRes:
 			case <-p.closeChan:
@@ -160,10 +150,8 @@ func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- type
 				if skipAck {
 					atomic.AddInt64(&skipAcks, 1)
 				}
-				p.mSndSucc.Incr(1)
 				return
 			}
-			p.mSndErr.Incr(1)
 			if !throt.Retry() {
 				return
 			}

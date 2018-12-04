@@ -81,12 +81,12 @@ func NewThrottle(
 ) (Type, error) {
 	t := &Throttle{
 		conf:  conf,
-		log:   log.NewModule(".processor.throttle"),
+		log:   log,
 		stats: stats,
 
-		mCount:     stats.GetCounter("processor.throttle.count"),
-		mSent:      stats.GetCounter("processor.throttle.sent"),
-		mSentParts: stats.GetCounter("processor.throttle.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}
 
 	var err error

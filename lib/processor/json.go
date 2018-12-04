@@ -500,18 +500,18 @@ func NewJSON(
 	j := &JSON{
 		parts: conf.JSON.Parts,
 		conf:  conf,
-		log:   log.NewModule(".processor.json"),
+		log:   log,
 		stats: stats,
 
 		valueBytes: conf.JSON.Value,
 
-		mCount:     stats.GetCounter("processor.json.count"),
-		mErrJSONP:  stats.GetCounter("processor.json.error.json_parse"),
-		mErrJSONS:  stats.GetCounter("processor.json.error.json_set"),
-		mErr:       stats.GetCounter("processor.json.error"),
-		mSucc:      stats.GetCounter("processor.json.success"),
-		mSent:      stats.GetCounter("processor.json.sent"),
-		mSentParts: stats.GetCounter("processor.json.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mErrJSONP:  stats.GetCounter("error.json_parse"),
+		mErrJSONS:  stats.GetCounter("error.json_set"),
+		mErr:       stats.GetCounter("error"),
+		mSucc:      stats.GetCounter("success"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}
 
 	j.interpolate = text.ContainsFunctionVariables(j.valueBytes)

@@ -107,16 +107,16 @@ func NewGroupByValue(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	return &GroupByValue{
-		log:   log.NewModule(".processor.group_by_value"),
+		log:   log,
 		stats: stats,
 
 		value: text.NewInterpolatedString(conf.GroupByValue.Value),
 
-		mCount:     stats.GetCounter("processor.group_by_value.count"),
-		mGroups:    stats.GetGauge("processor.group_by_value.groups"),
-		mDropped:   stats.GetCounter("processor.group_by_value.dropped"),
-		mSent:      stats.GetCounter("processor.group_by_value.sent"),
-		mSentParts: stats.GetCounter("processor.group_by_value.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mGroups:    stats.GetGauge("groups"),
+		mDropped:   stats.GetCounter("dropped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

@@ -113,9 +113,9 @@ func (m *ParallelWrapper) inputLoop() {
 	}()
 
 	var (
-		mWriteCount   = m.stats.GetCounter("buffer.write.count")
-		mWriteErr     = m.stats.GetCounter("buffer.write.error")
-		mWriteBacklog = m.stats.GetGauge("buffer.backlog")
+		mWriteCount   = m.stats.GetCounter("write.count")
+		mWriteErr     = m.stats.GetCounter("write.error")
+		mWriteBacklog = m.stats.GetGauge("backlog")
 	)
 
 	for atomic.LoadInt32(&m.consuming) == 1 {
@@ -153,13 +153,13 @@ func (m *ParallelWrapper) outputLoop() {
 	}()
 
 	var (
-		mReadCount   = m.stats.GetCounter("buffer.read.count")
-		mReadErr     = m.stats.GetCounter("buffer.read.error")
-		mSendSuccess = m.stats.GetCounter("buffer.send.success")
-		mSendErr     = m.stats.GetCounter("buffer.send.error")
-		mAckErr      = m.stats.GetCounter("buffer.ack.error")
-		mLatency     = m.stats.GetTimer("buffer.latency")
-		mBacklog     = m.stats.GetGauge("buffer.backlog")
+		mReadCount   = m.stats.GetCounter("read.count")
+		mReadErr     = m.stats.GetCounter("read.error")
+		mSendSuccess = m.stats.GetCounter("send.success")
+		mSendErr     = m.stats.GetCounter("send.error")
+		mAckErr      = m.stats.GetCounter("ack.error")
+		mLatency     = m.stats.GetTimer("latency")
+		mBacklog     = m.stats.GetGauge("backlog")
 	)
 
 	for atomic.LoadInt32(&m.running) == 1 {

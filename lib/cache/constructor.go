@@ -231,7 +231,7 @@ func New(
 	stats metrics.Type,
 ) (types.Cache, error) {
 	if c, ok := Constructors[conf.Type]; ok {
-		cache, err := c.constructor(conf, mgr, log, stats)
+		cache, err := c.constructor(conf, mgr, log.NewModule("."+conf.Type), stats)
 		for err != nil {
 			return nil, fmt.Errorf("failed to create cache '%v': %v", conf.Type, err)
 		}

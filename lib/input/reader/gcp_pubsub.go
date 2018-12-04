@@ -87,7 +87,7 @@ func NewGCPPubSub(
 	}
 	return &GCPPubSub{
 		conf:   conf,
-		log:    log.NewModule(".input.gcp_pubsub"),
+		log:    log,
 		stats:  stats,
 		client: client,
 	}, nil

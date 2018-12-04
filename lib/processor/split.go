@@ -83,15 +83,15 @@ func NewSplit(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	return &Split{
-		log:   log.NewModule(".processor.split"),
+		log:   log,
 		stats: stats,
 
 		size: conf.Split.Size,
 
-		mCount:     stats.GetCounter("processor.split.count"),
-		mDropped:   stats.GetCounter("processor.split.dropped"),
-		mSent:      stats.GetCounter("processor.split.sent"),
-		mSentParts: stats.GetCounter("processor.split.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mDropped:   stats.GetCounter("dropped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

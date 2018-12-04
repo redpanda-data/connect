@@ -110,15 +110,15 @@ func NewEncode(
 	return &Encode{
 		conf:  conf.Encode,
 		fn:    cor,
-		log:   log.NewModule(".processor.encode"),
+		log:   log,
 		stats: stats,
 
-		mCount:     stats.GetCounter("processor.encode.count"),
-		mSucc:      stats.GetCounter("processor.encode.success"),
-		mErr:       stats.GetCounter("processor.encode.error"),
-		mSkipped:   stats.GetCounter("processor.encode.skipped"),
-		mSent:      stats.GetCounter("processor.encode.sent"),
-		mSentParts: stats.GetCounter("processor.encode.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
+		mSkipped:   stats.GetCounter("skipped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

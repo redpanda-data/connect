@@ -119,24 +119,24 @@ func NewHTTP(
 ) (Type, error) {
 	g := &HTTP{
 		conf:  conf,
-		log:   log.NewModule(".processor.http"),
+		log:   log,
 		stats: stats,
 
 		parallel: conf.HTTP.Parallel,
 		max:      conf.HTTP.MaxParallel,
 
-		mCount:     stats.GetCounter("processor.http.count"),
-		mSucc:      stats.GetCounter("processor.http.success"),
-		mErr:       stats.GetCounter("processor.http.error"),
-		mErrHTTP:   stats.GetCounter("processor.http.error.http"),
-		mSent:      stats.GetCounter("processor.http.sent"),
-		mSentParts: stats.GetCounter("processor.http.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
+		mErrHTTP:   stats.GetCounter("error.http"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}
 	var err error
 	if g.client, err = client.New(
 		conf.HTTP.Client,
 		client.OptSetLogger(g.log),
-		client.OptSetStats(metrics.Namespaced(g.stats, "processor.http")),
+		client.OptSetStats(metrics.Namespaced(g.stats, "client")),
 		client.OptSetManager(mgr),
 	); err != nil {
 		return nil, err

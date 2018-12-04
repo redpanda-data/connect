@@ -152,15 +152,15 @@ func NewCompress(
 	return &Compress{
 		conf:  conf.Compress,
 		comp:  cor,
-		log:   log.NewModule(".processor.compress"),
+		log:   log,
 		stats: stats,
 
-		mCount:     stats.GetCounter("processor.compress.count"),
-		mSucc:      stats.GetCounter("processor.compress.success"),
-		mErr:       stats.GetCounter("processor.compress.error"),
-		mSkipped:   stats.GetCounter("processor.compress.skipped"),
-		mSent:      stats.GetCounter("processor.compress.sent"),
-		mSentParts: stats.GetCounter("processor.compress.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
+		mSkipped:   stats.GetCounter("skipped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

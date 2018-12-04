@@ -92,7 +92,7 @@ func NewNATSStream(conf NATSStreamConfig, log log.Modular, stats metrics.Type) (
 	n := NATSStream{
 		conf:          conf,
 		stats:         stats,
-		log:           log.NewModule(".input.nats_stream"),
+		log:           log,
 		msgChan:       make(chan *stan.Msg),
 		interruptChan: make(chan struct{}),
 	}

@@ -81,15 +81,15 @@ func NewSample(
 	gen := rand.New(rand.NewSource(conf.Sample.RandomSeed))
 	return &Sample{
 		conf:   conf,
-		log:    log.NewModule(".processor.sample"),
+		log:    log,
 		stats:  stats,
 		retain: conf.Sample.Retain / 100.0,
 		gen:    gen,
 
-		mCount:     stats.GetCounter("processor.sample.count"),
-		mDropped:   stats.GetCounter("processor.sample.dropped"),
-		mSent:      stats.GetCounter("processor.sample.sent"),
-		mSentParts: stats.GetCounter("processor.sample.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mDropped:   stats.GetCounter("dropped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

@@ -75,7 +75,7 @@ func NewAmazonSQS(
 ) *AmazonSQS {
 	return &AmazonSQS{
 		conf:  conf,
-		log:   log.NewModule(".input.amazon_sqs"),
+		log:   log,
 		stats: stats,
 	}
 }

@@ -145,39 +145,39 @@ type DynamoDB struct {
 func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error) {
 	d := DynamoDB{
 		conf:  conf.DynamoDB,
-		log:   log.NewModule(".cache.dynamodb"),
+		log:   log,
 		stats: stats,
 		table: aws.String(conf.DynamoDB.Table),
 
-		mLatency:         stats.GetTimer("cache.dynamodb.latency"),
-		mGetCount:        stats.GetCounter("cache.dynamodb.get.count"),
-		mGetRetry:        stats.GetCounter("cache.dynamodb.get.retry"),
-		mGetFailed:       stats.GetCounter("cache.dynamodb.get.failed.error"),
-		mGetNotFound:     stats.GetCounter("cache.dynamodb.get.failed.not_found"),
-		mGetSuccess:      stats.GetCounter("cache.dynamodb.get.success"),
-		mGetLatency:      stats.GetTimer("cache.dynamodb.get.latency"),
-		mSetCount:        stats.GetCounter("cache.dynamodb.set.count"),
-		mSetRetry:        stats.GetCounter("cache.dynamodb.set.retry"),
-		mSetFailed:       stats.GetCounter("cache.dynamodb.set.failed.error"),
-		mSetSuccess:      stats.GetCounter("cache.dynamodb.set.success"),
-		mSetLatency:      stats.GetTimer("cache.dynamodb.set.latency"),
-		mSetMultiCount:   stats.GetCounter("cache.dynamodb.set_multi.count"),
-		mSetMultiRetry:   stats.GetCounter("cache.dynamodb.set_multi.retry"),
-		mSetMultiFailed:  stats.GetCounter("cache.dynamodb.set_multi.failed.error"),
-		mSetMultiSuccess: stats.GetCounter("cache.dynamodb.set_multi.success"),
-		mSetMultiLatency: stats.GetTimer("cache.dynamodb.set.l_multiatency"),
-		mAddCount:        stats.GetCounter("cache.dynamodb.add.count"),
-		mAddDupe:         stats.GetCounter("cache.dynamodb.add.failed.duplicate"),
-		mAddRetry:        stats.GetCounter("cache.dynamodb.add.retry"),
-		mAddFailedDupe:   stats.GetCounter("cache.dynamodb.add.failed.duplicate"),
-		mAddFailedErr:    stats.GetCounter("cache.dynamodb.add.failed.error"),
-		mAddSuccess:      stats.GetCounter("cache.dynamodb.add.success"),
-		mAddLatency:      stats.GetTimer("cache.dynamodb.add.latency"),
-		mDelCount:        stats.GetCounter("cache.dynamodb.delete.count"),
-		mDelRetry:        stats.GetCounter("cache.dynamodb.delete.retry"),
-		mDelFailedErr:    stats.GetCounter("cache.dynamodb.delete.failed.error"),
-		mDelSuccess:      stats.GetCounter("cache.dynamodb.delete.success"),
-		mDelLatency:      stats.GetTimer("cache.dynamodb.del.latency"),
+		mLatency:         stats.GetTimer("latency"),
+		mGetCount:        stats.GetCounter("get.count"),
+		mGetRetry:        stats.GetCounter("get.retry"),
+		mGetFailed:       stats.GetCounter("get.failed.error"),
+		mGetNotFound:     stats.GetCounter("get.failed.not_found"),
+		mGetSuccess:      stats.GetCounter("get.success"),
+		mGetLatency:      stats.GetTimer("get.latency"),
+		mSetCount:        stats.GetCounter("set.count"),
+		mSetRetry:        stats.GetCounter("set.retry"),
+		mSetFailed:       stats.GetCounter("set.failed.error"),
+		mSetSuccess:      stats.GetCounter("set.success"),
+		mSetLatency:      stats.GetTimer("set.latency"),
+		mSetMultiCount:   stats.GetCounter("set_multi.count"),
+		mSetMultiRetry:   stats.GetCounter("set_multi.retry"),
+		mSetMultiFailed:  stats.GetCounter("set_multi.failed.error"),
+		mSetMultiSuccess: stats.GetCounter("set_multi.success"),
+		mSetMultiLatency: stats.GetTimer("set_multi.latency"),
+		mAddCount:        stats.GetCounter("add.count"),
+		mAddDupe:         stats.GetCounter("add.failed.duplicate"),
+		mAddRetry:        stats.GetCounter("add.retry"),
+		mAddFailedDupe:   stats.GetCounter("add.failed.duplicate"),
+		mAddFailedErr:    stats.GetCounter("add.failed.error"),
+		mAddSuccess:      stats.GetCounter("add.success"),
+		mAddLatency:      stats.GetTimer("add.latency"),
+		mDelCount:        stats.GetCounter("delete.count"),
+		mDelRetry:        stats.GetCounter("delete.retry"),
+		mDelFailedErr:    stats.GetCounter("delete.failed.error"),
+		mDelSuccess:      stats.GetCounter("delete.success"),
+		mDelLatency:      stats.GetTimer("delete.latency"),
 	}
 
 	if d.conf.TTL != "" {
@@ -200,7 +200,7 @@ func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 	if err != nil {
 		return nil, err
 	} else if out == nil || out.Table == nil || out.Table.TableStatus == nil || *out.Table.TableStatus != dynamodb.TableStatusActive {
-		return nil, fmt.Errorf("dynamodb table '%s' must be active", d.conf.Table)
+		return nil, fmt.Errorf("table '%s' must be active", d.conf.Table)
 	}
 
 	if d.backoffCtor, err = conf.DynamoDB.Config.GetCtor(); err != nil {

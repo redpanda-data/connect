@@ -84,15 +84,15 @@ func NewMergeJSON(
 	j := &MergeJSON{
 		parts:  conf.MergeJSON.Parts,
 		retain: conf.MergeJSON.RetainParts,
-		log:    log.NewModule(".processor.merge_json"),
+		log:    log,
 		stats:  stats,
 
-		mCount:     stats.GetCounter("processor.merge_json.count"),
-		mErrJSONP:  stats.GetCounter("processor.merge_json.error.json_parse"),
-		mErrJSONS:  stats.GetCounter("processor.merge_json.error.json_set"),
-		mSucc:      stats.GetCounter("processor.merge_json.success"),
-		mSent:      stats.GetCounter("processor.merge_json.sent"),
-		mSentParts: stats.GetCounter("processor.merge_json.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mErrJSONP:  stats.GetCounter("error.json_parse"),
+		mErrJSONS:  stats.GetCounter("error.json_set"),
+		mSucc:      stats.GetCounter("success"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}
 	return j, nil
 }

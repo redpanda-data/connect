@@ -166,15 +166,15 @@ func NewDecompress(
 	return &Decompress{
 		conf:   conf.Decompress,
 		decomp: dcor,
-		log:    log.NewModule(".processor.decompress"),
+		log:    log,
 		stats:  stats,
 
-		mCount:     stats.GetCounter("processor.decompress.count"),
-		mSucc:      stats.GetCounter("processor.decompress.success"),
-		mErr:       stats.GetCounter("processor.decompress.error"),
-		mSkipped:   stats.GetCounter("processor.decompress.skipped"),
-		mSent:      stats.GetCounter("processor.decompress.sent"),
-		mSentParts: stats.GetCounter("processor.decompress.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
+		mSkipped:   stats.GetCounter("skipped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

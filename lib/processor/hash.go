@@ -138,15 +138,15 @@ func NewHash(
 	return &Hash{
 		conf:  conf.Hash,
 		fn:    cor,
-		log:   log.NewModule(".processor.hash"),
+		log:   log,
 		stats: stats,
 
-		mCount:     stats.GetCounter("processor.hash.count"),
-		mSucc:      stats.GetCounter("processor.hash.success"),
-		mErr:       stats.GetCounter("processor.hash.error"),
-		mSkipped:   stats.GetCounter("processor.hash.skipped"),
-		mSent:      stats.GetCounter("processor.hash.sent"),
-		mSentParts: stats.GetCounter("processor.hash.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
+		mSkipped:   stats.GetCounter("skipped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

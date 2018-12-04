@@ -184,7 +184,12 @@ func NewBroker(
 	var err error
 	for j := 0; j < conf.Broker.Copies; j++ {
 		for i, oConf := range outputConfs {
-			outputs[j*len(outputConfs)+i], err = New(oConf, mgr, log, stats, pipelines...)
+			ns := fmt.Sprintf("broker.outputs.%v", (j*conf.Broker.Copies)+i)
+			outputs[j*len(outputConfs)+i], err = New(
+				oConf, mgr,
+				log.NewModule("."+ns),
+				metrics.Combine(stats, metrics.Namespaced(stats, ns)),
+				pipelines...)
 			if err != nil {
 				return nil, err
 			}

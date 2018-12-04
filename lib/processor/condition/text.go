@@ -242,10 +242,10 @@ func NewText(
 		operator: op,
 		part:     conf.Text.Part,
 
-		mSkippedEmpty: stats.GetCounter("condition.text.skipped.empty_message"),
-		mSkipped:      stats.GetCounter("condition.text.skipped"),
-		mSkippedOOB:   stats.GetCounter("condition.text.skipped.out_of_bounds"),
-		mApplied:      stats.GetCounter("condition.text.applied"),
+		mSkippedEmpty: stats.GetCounter("skipped.empty_message"),
+		mSkipped:      stats.GetCounter("skipped"),
+		mSkippedOOB:   stats.GetCounter("skipped.out_of_bounds"),
+		mApplied:      stats.GetCounter("applied"),
 	}, nil
 }
 

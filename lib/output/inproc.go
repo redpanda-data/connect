@@ -81,7 +81,7 @@ func NewInproc(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 		running:         1,
 		pipe:            string(conf.Inproc),
 		mgr:             mgr,
-		log:             log.NewModule(".output.inproc"),
+		log:             log,
 		stats:           stats,
 		transactionsOut: make(chan types.Transaction),
 		closedChan:      make(chan struct{}),
@@ -95,22 +95,23 @@ func NewInproc(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (i *Inproc) loop() {
 	var (
-		mRunning  = i.stats.GetGauge("output.inproc." + i.pipe + ".running")
-		mRunningF = i.stats.GetGauge("output.running")
-		mCount    = i.stats.GetCounter("output.inproc." + i.pipe + ".count")
-		mCountF   = i.stats.GetCounter("output.count")
+		mRunning       = i.stats.GetGauge("running")
+		mCount         = i.stats.GetCounter("count")
+		mPartsCount    = i.stats.GetCounter("parts.count")
+		mSendSucc      = i.stats.GetCounter("send.success")
+		mPartsSendSucc = i.stats.GetCounter("parts.send.success")
+		mSent          = i.stats.GetCounter("batch.sent")
+		mPartsSent     = i.stats.GetCounter("sent")
 	)
 
 	defer func() {
 		mRunning.Decr(1)
-		mRunningF.Decr(1)
 		atomic.StoreInt32(&i.running, 0)
 		i.mgr.UnsetPipe(i.pipe, i.transactionsOut)
 		close(i.transactionsOut)
 		close(i.closedChan)
 	}()
 	mRunning.Incr(1)
-	mRunningF.Incr(1)
 
 	i.mgr.SetPipe(i.pipe, i.transactionsOut)
 	i.log.Infof("Sending inproc messages to ID: %s\n", i.pipe)
@@ -128,9 +129,17 @@ func (i *Inproc) loop() {
 		}
 
 		mCount.Incr(1)
-		mCountF.Incr(1)
+		if ts.Payload != nil {
+			mPartsCount.Incr(int64(ts.Payload.Len()))
+		}
 		select {
 		case i.transactionsOut <- ts:
+			mSendSucc.Incr(1)
+			mSent.Incr(1)
+			if ts.Payload != nil {
+				mPartsSendSucc.Incr(int64(ts.Payload.Len()))
+				mPartsSent.Incr(int64(ts.Payload.Len()))
+			}
 		case <-i.closeChan:
 			return
 		}

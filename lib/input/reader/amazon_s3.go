@@ -116,7 +116,7 @@ func NewAmazonS3(
 		conf:        conf,
 		sqsBodyPath: path,
 		sqsEnvPath:  envPath,
-		log:         log.NewModule(".input.amazon_s3"),
+		log:         log,
 		stats:       stats,
 	}
 }

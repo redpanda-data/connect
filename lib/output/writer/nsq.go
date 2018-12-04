@@ -69,7 +69,7 @@ type NSQ struct {
 // NewNSQ creates a new NSQ output type.
 func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (*NSQ, error) {
 	n := NSQ{
-		log:      log.NewModule(".output.nsq"),
+		log:      log,
 		conf:     conf,
 		topicStr: text.NewInterpolatedString(conf.Topic),
 	}

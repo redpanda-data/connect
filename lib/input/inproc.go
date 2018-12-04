@@ -86,7 +86,7 @@ func NewInproc(
 		running:      1,
 		pipe:         string(conf.Inproc),
 		mgr:          mgr,
-		log:          log.NewModule(".input.inproc." + string(conf.Inproc)),
+		log:          log,
 		stats:        stats,
 		transactions: make(chan types.Transaction),
 		closeChan:    make(chan struct{}),
@@ -102,26 +102,22 @@ func NewInproc(
 func (i *Inproc) loop() {
 	// Metrics paths
 	var (
-		mRunning     = i.stats.GetGauge("input.inproc." + i.pipe + ".running")
-		mRunningF    = i.stats.GetGauge("input.running")
-		mConn        = i.stats.GetCounter("input.inproc." + i.pipe + ".connection.up")
-		mConnF       = i.stats.GetCounter("input.connection.up")
-		mFailedConn  = i.stats.GetCounter("input.inproc." + i.pipe + ".connection.failed")
-		mFailedConnF = i.stats.GetCounter("input.connection.failed")
-		mLostConn    = i.stats.GetCounter("input.inproc." + i.pipe + ".connection.lost")
-		mLostConnF   = i.stats.GetCounter("input.connection.lost")
-		mCount       = i.stats.GetCounter("input.inproc." + i.pipe + ".count")
-		mCountF      = i.stats.GetCounter("input.count")
+		mRunning    = i.stats.GetGauge("running")
+		mRcvd       = i.stats.GetCounter("batch.received")
+		mPartsRcvd  = i.stats.GetCounter("received")
+		mConn       = i.stats.GetCounter("connection.up")
+		mFailedConn = i.stats.GetCounter("connection.failed")
+		mLostConn   = i.stats.GetCounter("connection.lost")
+		mCount      = i.stats.GetCounter("count")
+		mPartsCount = i.stats.GetCounter("parts.count")
 	)
 
 	defer func() {
 		mRunning.Decr(1)
-		mRunningF.Decr(1)
 		close(i.transactions)
 		close(i.closedChan)
 	}()
 	mRunning.Incr(1)
-	mRunningF.Incr(1)
 
 	var inprocChan <-chan types.Transaction
 
@@ -132,7 +128,6 @@ messageLoop:
 				var err error
 				if inprocChan, err = i.mgr.GetPipe(i.pipe); err != nil {
 					mFailedConn.Incr(1)
-					mFailedConnF.Incr(1)
 					i.log.Errorf("Failed to connect to inproc output '%v': %v\n", i.pipe, err)
 					select {
 					case <-time.After(time.Second):
@@ -145,18 +140,18 @@ messageLoop:
 				}
 			}
 			mConn.Incr(1)
-			mConnF.Incr(1)
 		}
 		select {
 		case t, open := <-inprocChan:
 			if !open {
 				mLostConn.Incr(1)
-				mLostConnF.Incr(1)
 				inprocChan = nil
 				continue messageLoop
 			}
 			mCount.Incr(1)
-			mCountF.Incr(1)
+			mPartsCount.Incr(int64(t.Payload.Len()))
+			mRcvd.Incr(1)
+			mPartsRcvd.Incr(int64(t.Payload.Len()))
 			select {
 			case i.transactions <- t:
 			case <-i.closeChan:

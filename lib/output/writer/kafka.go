@@ -102,9 +102,9 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 	}
 
 	k := Kafka{
-		log:              log.NewModule(".output.kafka"),
+		log:              log,
 		stats:            stats,
-		mDroppedMaxBytes: stats.GetCounter("output.kafka.send.dropped.max_msg_bytes"),
+		mDroppedMaxBytes: stats.GetCounter("send.dropped.max_msg_bytes"),
 
 		conf:        conf,
 		key:         text.NewInterpolatedBytes([]byte(conf.Key)),

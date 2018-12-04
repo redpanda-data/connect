@@ -89,15 +89,15 @@ func NewSelectParts(
 ) (Type, error) {
 	return &SelectParts{
 		conf:  conf,
-		log:   log.NewModule(".processor.select_parts"),
+		log:   log,
 		stats: stats,
 
-		mCount:     stats.GetCounter("processor.select_parts.count"),
-		mSkipped:   stats.GetCounter("processor.select_parts.skipped"),
-		mSelected:  stats.GetCounter("processor.select_parts.selected"),
-		mDropped:   stats.GetCounter("processor.select_parts.dropped"),
-		mSent:      stats.GetCounter("processor.select_parts.sent"),
-		mSentParts: stats.GetCounter("processor.select_parts.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSkipped:   stats.GetCounter("skipped"),
+		mSelected:  stats.GetCounter("selected"),
+		mDropped:   stats.GetCounter("dropped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

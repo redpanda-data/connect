@@ -104,23 +104,23 @@ func NewLambda(
 ) (Type, error) {
 	l := &Lambda{
 		conf:  conf,
-		log:   log.NewModule(".processor.lambda"),
+		log:   log,
 		stats: stats,
 
 		parallel: conf.Lambda.Parallel,
 
-		mCount:     stats.GetCounter("processor.lambda.count"),
-		mSucc:      stats.GetCounter("processor.lambda.success"),
-		mErr:       stats.GetCounter("processor.lambda.error"),
-		mErrLambda: stats.GetCounter("processor.lambda.error.lambda"),
-		mSent:      stats.GetCounter("processor.lambda.sent"),
-		mSentParts: stats.GetCounter("processor.lambda.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
+		mErrLambda: stats.GetCounter("error.lambda"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}
 	var err error
 	if l.client, err = client.New(
 		conf.Lambda.Config,
 		client.OptSetLogger(l.log),
-		client.OptSetStats(metrics.Namespaced(l.stats, "processor.lambda")),
+		client.OptSetStats(metrics.Namespaced(l.stats, "client")),
 		client.OptSetManager(mgr),
 	); err != nil {
 		return nil, err

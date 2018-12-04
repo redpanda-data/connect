@@ -176,7 +176,12 @@ type ProcessorConstructorFunc func() (Processor, error)
 // PipelineConstructorFunc is a constructor to be called for each parallel
 // stream pipeline thread in order to construct a custom pipeline
 // implementation.
-type PipelineConstructorFunc func() (Pipeline, error)
+//
+// An integer pointer is provided to pipeline constructors that tracks the
+// number of components spanning multiple pipelines. Each pipeline is expected
+// to increment i by the number of components they contain, and may use the
+// value for metric and logging namespacing.
+type PipelineConstructorFunc func(i *int) (Pipeline, error)
 
 //------------------------------------------------------------------------------
 

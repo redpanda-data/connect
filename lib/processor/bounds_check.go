@@ -86,16 +86,16 @@ func NewBoundsCheck(
 ) (Type, error) {
 	return &BoundsCheck{
 		conf:  conf,
-		log:   log.NewModule(".processor.bounds_check"),
+		log:   log,
 		stats: stats,
 
-		mCount:           stats.GetCounter("processor.bounds_check.count"),
-		mDropped:         stats.GetCounter("processor.bounds_check.dropped"),
-		mDroppedEmpty:    stats.GetCounter("processor.bounds_check.dropped_empty"),
-		mDroppedNumParts: stats.GetCounter("processor.bounds_check.dropped_num_parts"),
-		mDroppedPartSize: stats.GetCounter("processor.bounds_check.dropped_part_size"),
-		mSent:            stats.GetCounter("processor.bounds_check.sent"),
-		mSentParts:       stats.GetCounter("processor.bounds_check.parts.sent"),
+		mCount:           stats.GetCounter("count"),
+		mDropped:         stats.GetCounter("dropped"),
+		mDroppedEmpty:    stats.GetCounter("dropped_empty"),
+		mDroppedNumParts: stats.GetCounter("dropped_num_parts"),
+		mDroppedPartSize: stats.GetCounter("dropped_part_size"),
+		mSent:            stats.GetCounter("sent"),
+		mSentParts:       stats.GetCounter("parts.sent"),
 	}, nil
 }
 

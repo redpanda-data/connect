@@ -102,9 +102,13 @@ type HTTPServer struct {
 	closeChan  chan struct{}
 	closedChan chan struct{}
 
-	mRunning  metrics.StatGauge
-	mCount    metrics.StatCounter
-	mSendSucc metrics.StatCounter
+	mRunning       metrics.StatGauge
+	mCount         metrics.StatCounter
+	mPartsCount    metrics.StatCounter
+	mSendSucc      metrics.StatCounter
+	mPartsSendSucc metrics.StatCounter
+	mSent          metrics.StatCounter
+	mPartsSent     metrics.StatCounter
 
 	mGetReqRcvd  metrics.StatCounter
 	mGetCount    metrics.StatCounter
@@ -138,29 +142,33 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		running:    1,
 		conf:       conf,
 		stats:      stats,
-		log:        log.NewModule(".output.http_server"),
+		log:        log,
 		mux:        mux,
 		server:     server,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 
-		mRunning:      stats.GetGauge("output.http_server.running"),
-		mCount:        stats.GetCounter("output.http_server.count"),
-		mSendSucc:     stats.GetCounter("output.http_server.send.success"),
-		mGetReqRcvd:   stats.GetCounter("output.http_server.get.request.received"),
-		mGetCount:     stats.GetCounter("output.http_server.get.count"),
-		mGetSendSucc:  stats.GetCounter("output.http_server.get.send.success"),
-		mWSCount:      stats.GetCounter("output.http_server.ws.count"),
-		mWSReqRcvd:    stats.GetCounter("output.http_server.stream.request.received"),
-		mWSSendSucc:   stats.GetCounter("output.http_server.ws.send.success"),
-		mWSSendErr:    stats.GetCounter("output.http_server.ws.send.error"),
-		mStrmReqRcvd:  stats.GetCounter("output.http_server.stream.request.received"),
-		mStrmErrCast:  stats.GetCounter("output.http_server.stream.error.cast_flusher"),
-		mStrmErrWrong: stats.GetCounter("output.http_server.stream.error.wrong_method"),
-		mStrmClosed:   stats.GetCounter("output.http_server.stream.client_closed"),
-		mStrmCount:    stats.GetCounter("output.http_server.stream.count"),
-		mStrmErrWrite: stats.GetCounter("output.http_server.stream.error.write"),
-		mStrmSndSucc:  stats.GetCounter("output.http_server.stream.send.success"),
+		mRunning:       stats.GetGauge("running"),
+		mCount:         stats.GetCounter("count"),
+		mPartsCount:    stats.GetCounter("parts.count"),
+		mSendSucc:      stats.GetCounter("send.success"),
+		mPartsSendSucc: stats.GetCounter("parts.send.success"),
+		mSent:          stats.GetCounter("batch.sent"),
+		mPartsSent:     stats.GetCounter("sent"),
+		mGetReqRcvd:    stats.GetCounter("get.request.received"),
+		mGetCount:      stats.GetCounter("get.count"),
+		mGetSendSucc:   stats.GetCounter("get.send.success"),
+		mWSCount:       stats.GetCounter("ws.count"),
+		mWSReqRcvd:     stats.GetCounter("stream.request.received"),
+		mWSSendSucc:    stats.GetCounter("ws.send.success"),
+		mWSSendErr:     stats.GetCounter("ws.send.error"),
+		mStrmReqRcvd:   stats.GetCounter("stream.request.received"),
+		mStrmErrCast:   stats.GetCounter("stream.error.cast_flusher"),
+		mStrmErrWrong:  stats.GetCounter("stream.error.wrong_method"),
+		mStrmClosed:    stats.GetCounter("stream.client_closed"),
+		mStrmCount:     stats.GetCounter("stream.count"),
+		mStrmErrWrite:  stats.GetCounter("stream.error.write"),
+		mStrmSndSucc:   stats.GetCounter("stream.send.success"),
 	}
 
 	if mux != nil {
@@ -231,6 +239,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		h.mGetCount.Incr(1)
 		h.mCount.Incr(1)
+		h.mPartsCount.Incr(int64(ts.Payload.Len()))
 	case <-time.After(tOutDuration - time.Since(tStart)):
 		http.Error(w, "Timed out waiting for message", http.StatusRequestTimeout)
 		return
@@ -258,6 +267,9 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mSendSucc.Incr(1)
+	h.mPartsSendSucc.Incr(int64(ts.Payload.Len()))
+	h.mSent.Incr(1)
+	h.mPartsSent.Incr(int64(ts.Payload.Len()))
 	h.mGetSendSucc.Incr(1)
 
 	select {
@@ -326,6 +338,9 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		h.mStrmSndSucc.Incr(1)
 		h.mSendSucc.Incr(1)
+		h.mPartsSendSucc.Incr(int64(ts.Payload.Len()))
+		h.mSent.Incr(1)
+		h.mPartsSent.Incr(int64(ts.Payload.Len()))
 	}
 }
 
@@ -375,6 +390,9 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			h.mWSSendSucc.Incr(1)
 			h.mSendSucc.Incr(1)
+			h.mPartsSendSucc.Incr(int64(ts.Payload.Len()))
+			h.mSent.Incr(1)
+			h.mPartsSent.Incr(int64(ts.Payload.Len()))
 		}
 
 		if werr != nil {

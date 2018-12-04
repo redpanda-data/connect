@@ -47,8 +47,9 @@ func NewPool(
 	}
 
 	for i := range p.workers {
+		procs := 0
 		var err error
-		if p.workers[i], err = constructor(); err != nil {
+		if p.workers[i], err = constructor(&procs); err != nil {
 			return nil, err
 		}
 	}

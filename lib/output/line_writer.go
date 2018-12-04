@@ -68,7 +68,7 @@ func NewLineWriter(
 	return &LineWriter{
 		running:     1,
 		typeStr:     typeStr,
-		log:         log.NewModule(".output." + typeStr),
+		log:         log,
 		stats:       stats,
 		customDelim: customDelimiter,
 		handle:      handle,
@@ -84,14 +84,14 @@ func NewLineWriter(
 func (w *LineWriter) loop() {
 	// Metrics paths
 	var (
-		mRunning  = w.stats.GetGauge("output.running")
-		mRunningF = w.stats.GetGauge("output." + w.typeStr + ".running")
-		mCount    = w.stats.GetCounter("output.count")
-		mCountF   = w.stats.GetCounter("output." + w.typeStr + ".count")
-		mSuccess  = w.stats.GetCounter("output.success")
-		mSuccessF = w.stats.GetCounter("output." + w.typeStr + ".success")
-		mError    = w.stats.GetCounter("output.error")
-		mErrorF   = w.stats.GetCounter("output." + w.typeStr + ".error")
+		mRunning      = w.stats.GetGauge("running")
+		mCount        = w.stats.GetCounter("count")
+		mPartsCount   = w.stats.GetCounter("parts.count")
+		mSuccess      = w.stats.GetCounter("send.success")
+		mPartsSuccess = w.stats.GetCounter("parts.send.success")
+		mSent         = w.stats.GetCounter("batch.sent")
+		mPartsSent    = w.stats.GetCounter("sent")
+		mError        = w.stats.GetCounter("error")
 	)
 
 	defer func() {
@@ -99,12 +99,10 @@ func (w *LineWriter) loop() {
 			w.handle.Close()
 		}
 		mRunning.Decr(1)
-		mRunningF.Decr(1)
 
 		close(w.closedChan)
 	}()
 	mRunning.Incr(1)
-	mRunningF.Incr(1)
 
 	delim := []byte("\n")
 	if len(w.customDelim) > 0 {
@@ -120,7 +118,7 @@ func (w *LineWriter) loop() {
 				return
 			}
 			mCount.Incr(1)
-			mCountF.Incr(1)
+			mPartsCount.Incr(int64(ts.Payload.Len()))
 		case <-w.closeChan:
 			return
 		}
@@ -132,10 +130,11 @@ func (w *LineWriter) loop() {
 		}
 		if err != nil {
 			mError.Incr(1)
-			mErrorF.Incr(1)
 		} else {
 			mSuccess.Incr(1)
-			mSuccessF.Incr(1)
+			mPartsSuccess.Incr(int64(ts.Payload.Len()))
+			mSent.Incr(1)
+			mPartsSent.Incr(int64(ts.Payload.Len()))
 		}
 		select {
 		case ts.ResponseChan <- response.NewError(err):

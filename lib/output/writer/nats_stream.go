@@ -79,7 +79,7 @@ func NewNATSStream(conf NATSStreamConfig, log log.Modular, stats metrics.Type) (
 	}
 
 	n := NATSStream{
-		log:  log.NewModule(".output.nats_stream"),
+		log:  log,
 		conf: conf,
 	}
 	n.urls = strings.Join(conf.URLs, ",")

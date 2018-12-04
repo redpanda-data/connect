@@ -16,7 +16,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "iteration": 1537970143773,
+  "iteration": 1543778528915,
   "links": [],
   "panels": [
     {
@@ -77,7 +77,7 @@
       "targets": [
         {
           "$$hashKey": "object:589",
-          "expr": "${prefix}_processor_process__dag_processor_process__map_error/${prefix}_processor_process__dag_processor_process__map_count",
+          "expr": "${prefix}_pipeline_processor_1_dag_error/${prefix}_pipeline_processor_1_dag_count",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "{{id}}",
@@ -182,7 +182,7 @@
       "targets": [
         {
           "$$hashKey": "object:944",
-          "expr": "rate({__name__=~\"${prefix}_processor_process__dag_processor_process__map_processor_http_client_http_code_5[0-9]*\"}[30s])",
+          "expr": "rate({__name__=~\"${prefix}_pipeline_processor_1_dag_processor_0_client_code_5[0-9]*\"}[30s])",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "{{id}} 5XX",
@@ -190,7 +190,7 @@
         },
         {
           "$$hashKey": "object:150",
-          "expr": "rate({__name__=~\"${prefix}_processor_process__dag_processor_process__map_processor_http_client_http_code_4[0-9]*\"}[30s])",
+          "expr": "rate({__name__=~\"${prefix}_pipeline_processor_1_dag_processor_0_client_code_4[0-9]*\"}[30s])",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "{{id}} 4XX",
@@ -198,7 +198,7 @@
         },
         {
           "$$hashKey": "object:894",
-          "expr": "rate({__name__=~\"${prefix}_processor_process__dag_processor_process__map_processor_http_client_http_code_3[0-9]*\"}[30s])",
+          "expr": "rate({__name__=~\"${prefix}_pipeline_processor_1_dag_processor_0_client_code_3[0-9]*\"}[30s])",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "{{id}} 3XX",
@@ -206,7 +206,7 @@
         },
         {
           "$$hashKey": "object:916",
-          "expr": "rate({__name__=~\"${prefix}_processor_process__dag_processor_process__map_processor_http_client_http_code_2[0-9]*\"}[30s])",
+          "expr": "rate({__name__=~\"${prefix}_pipeline_processor_1_dag_processor_0_client_code_2[0-9]*\"}[30s])",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "{{id}} 2XX",
@@ -315,7 +315,7 @@
       "targets": [
         {
           "$$hashKey": "object:944",
-          "expr": "${prefix}_processor_process__dag_processor_process__map_processor_http_client_http_latency",
+          "expr": "benthos_pipeline_processor_1_dag_processor_0_client_latency",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "{{id}} {{quantile}}",
@@ -429,7 +429,7 @@
       "targets": [
         {
           "$$hashKey": "object:193",
-          "expr": "rate(${prefix}_input_count[30s])",
+          "expr": "rate(${prefix}_input_received[30s])",
           "format": "time_series",
           "instant": false,
           "intervalFactor": 1,
@@ -438,7 +438,7 @@
         },
         {
           "$$hashKey": "object:194",
-          "expr": "rate(${prefix}_output_success[30s])",
+          "expr": "rate(${prefix}_output_sent[30s])",
           "format": "time_series",
           "instant": false,
           "intervalFactor": 1,

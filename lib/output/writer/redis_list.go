@@ -69,7 +69,7 @@ func NewRedisList(
 ) (*RedisList, error) {
 
 	r := &RedisList{
-		log:   log.NewModule(".output.redis_list"),
+		log:   log,
 		stats: stats,
 		conf:  conf,
 	}

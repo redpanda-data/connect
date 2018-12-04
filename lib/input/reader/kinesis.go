@@ -97,7 +97,7 @@ func NewKinesis(
 ) *Kinesis {
 	return &Kinesis{
 		conf:      conf,
-		log:       log.NewModule(".input.kinesis"),
+		log:       log,
 		timeout:   time.Duration(conf.TimeoutMS) * time.Millisecond,
 		namespace: fmt.Sprintf("%v-%v", conf.ClientID, conf.Stream),
 		stats:     stats,

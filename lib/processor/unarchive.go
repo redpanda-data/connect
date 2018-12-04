@@ -202,16 +202,16 @@ func NewUnarchive(
 	return &Unarchive{
 		conf:      conf.Unarchive,
 		unarchive: dcor,
-		log:       log.NewModule(".processor.unarchive"),
+		log:       log,
 		stats:     stats,
 
-		mCount:     stats.GetCounter("processor.unarchive.count"),
-		mSucc:      stats.GetCounter("processor.unarchive.success"),
-		mErr:       stats.GetCounter("processor.unarchive.error"),
-		mSkipped:   stats.GetCounter("processor.unarchive.skipped"),
-		mDropped:   stats.GetCounter("processor.unarchive.dropped"),
-		mSent:      stats.GetCounter("processor.unarchive.sent"),
-		mSentParts: stats.GetCounter("processor.unarchive.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
+		mSkipped:   stats.GetCounter("skipped"),
+		mDropped:   stats.GetCounter("dropped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

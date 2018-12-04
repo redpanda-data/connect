@@ -82,7 +82,7 @@ func NewAmazonS3(
 ) (*AmazonS3, error) {
 	return &AmazonS3{
 		conf:  conf,
-		log:   log.NewModule(".output.s3"),
+		log:   log,
 		stats: stats,
 		path:  text.NewInterpolatedString(conf.Path),
 	}, nil

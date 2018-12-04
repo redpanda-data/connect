@@ -70,7 +70,7 @@ func NewRedisPubSub(
 ) (*RedisPubSub, error) {
 
 	r := &RedisPubSub{
-		log:   log.NewModule(".output.redis_pubsub"),
+		log:   log,
 		stats: stats,
 		conf:  conf,
 	}

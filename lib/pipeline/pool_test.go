@@ -42,7 +42,7 @@ func TestPoolBasic(t *testing.T) {
 		mockProc.dropChan <- true
 	}()
 
-	constr := func() (types.Pipeline, error) {
+	constr := func(i *int) (types.Pipeline, error) {
 		return NewProcessor(
 			log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 			metrics.DudType{},
@@ -156,7 +156,7 @@ func TestPoolBasic(t *testing.T) {
 func TestPoolMultiMsgs(t *testing.T) {
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
-	constr := func() (types.Pipeline, error) {
+	constr := func(i *int) (types.Pipeline, error) {
 		return NewProcessor(
 			log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
 			metrics.DudType{},

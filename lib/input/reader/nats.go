@@ -75,7 +75,7 @@ func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (Type, error)
 	n := NATS{
 		conf:          conf,
 		stats:         stats,
-		log:           log.NewModule(".input.nats"),
+		log:           log,
 		interruptChan: make(chan struct{}),
 	}
 	n.urls = strings.Join(conf.URLs, ",")

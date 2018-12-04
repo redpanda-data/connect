@@ -140,10 +140,6 @@ type Metric struct {
 	mGauge   metrics.StatGaugeVec
 	mTimer   metrics.StatTimerVec
 
-	mCount metrics.StatCounter
-	mSucc  metrics.StatCounter
-	mErr   metrics.StatCounter
-
 	handler func(string, types.Message) error
 }
 
@@ -183,11 +179,8 @@ func NewMetric(
 ) (Type, error) {
 	m := &Metric{
 		conf:             conf,
-		log:              log.NewModule(".processor.metric"),
+		log:              log,
 		stats:            stats,
-		mCount:           stats.GetCounter("processor.metric.count"),
-		mSucc:            stats.GetCounter("processor.metric.success"),
-		mErr:             stats.GetCounter("processor.metric.error"),
 		interpolateValue: text.ContainsFunctionVariables([]byte(conf.Metric.Value)),
 	}
 
@@ -277,18 +270,13 @@ func (m *Metric) handleTimer(val string, msg types.Message) error {
 
 // ProcessMessage applies the processor to a message
 func (m *Metric) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	m.mCount.Incr(1)
-
 	value := m.conf.Metric.Value
 	if m.interpolateValue {
 		value = string(text.ReplaceFunctionVariables(msg, []byte(m.conf.Metric.Value)))
 	}
 
-	err := m.handler(value, msg)
-	if err != nil {
-		m.mErr.Incr(1)
-	} else {
-		m.mSucc.Incr(1)
+	if err := m.handler(value, msg); err != nil {
+		m.log.Errorf("Handler error: %v\n", err)
 	}
 
 	return []types.Message{msg}, nil

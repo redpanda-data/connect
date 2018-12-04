@@ -97,15 +97,15 @@ func NewHashSample(
 ) (Type, error) {
 	return &HashSample{
 		conf:  conf,
-		log:   log.NewModule(".processor.hash_sample"),
+		log:   log,
 		stats: stats,
 
-		mCount:     stats.GetCounter("processor.hash_sample.count"),
-		mDropOOB:   stats.GetCounter("processor.hash_sample.dropped_part_out_of_bounds"),
-		mDropped:   stats.GetCounter("processor.hash_sample.dropped"),
-		mErrHash:   stats.GetCounter("processor.hash_sample.hashing_error"),
-		mSent:      stats.GetCounter("processor.hash_sample.sent"),
-		mSentParts: stats.GetCounter("processor.hash_sample.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mDropOOB:   stats.GetCounter("dropped_part_out_of_bounds"),
+		mDropped:   stats.GetCounter("dropped"),
+		mErrHash:   stats.GetCounter("hashing_error"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

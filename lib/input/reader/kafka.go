@@ -100,8 +100,8 @@ func NewKafka(
 		offset:  0,
 		conf:    conf,
 		stats:   stats,
-		mRcvErr: stats.GetCounter("input.kafka.recv.error"),
-		log:     log.NewModule(".input.kafka"),
+		mRcvErr: stats.GetCounter("recv.error"),
+		log:     log,
 	}
 
 	if conf.TLS.Enabled {

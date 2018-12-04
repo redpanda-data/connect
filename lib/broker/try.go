@@ -93,11 +93,11 @@ func (t *Try) loop() {
 	}()
 
 	var (
-		mMsgsRcvd = t.stats.GetCounter("broker.try.messages.received")
+		mMsgsRcvd = t.stats.GetCounter("messages.received")
 		mErrs     = []metrics.StatCounter{}
 	)
 	for i := range t.outputs {
-		mErrs = append(mErrs, t.stats.GetCounter(fmt.Sprintf("broker.try.%v.failed", i)))
+		mErrs = append(mErrs, t.stats.GetCounter(fmt.Sprintf("broker.outputs.%v.failed", i)))
 	}
 
 	var open bool

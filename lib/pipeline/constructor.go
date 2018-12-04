@@ -90,14 +90,17 @@ func New(
 	stats metrics.Type,
 	processorCtors ...types.ProcessorConstructorFunc,
 ) (Type, error) {
-	procCtor := func() (types.Pipeline, error) {
+	procs := 0
+	procCtor := func(i *int) (types.Pipeline, error) {
 		processors := make([]types.Processor, len(conf.Processors)+len(processorCtors))
-		for i, procConf := range conf.Processors {
+		for j, procConf := range conf.Processors {
+			prefix := fmt.Sprintf("processor.%v", *i)
 			var err error
-			processors[i], err = processor.New(procConf, mgr, log, stats)
+			processors[j], err = processor.New(procConf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
 			if err != nil {
 				return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 			}
+			*i++
 		}
 		for j, procCtor := range processorCtors {
 			var err error
@@ -109,7 +112,7 @@ func New(
 		return NewProcessor(log, stats, processors...), nil
 	}
 	if conf.Threads <= 1 {
-		return procCtor()
+		return procCtor(&procs)
 	}
 	return NewPool(procCtor, conf.Threads, log, stats)
 }

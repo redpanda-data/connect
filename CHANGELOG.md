@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Large changes to all metrics paths.
+
 ## 0.38.10 - 2018-12-04
 
 ### Added

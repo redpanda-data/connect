@@ -92,7 +92,7 @@ func (o *RoundRobin) loop() {
 	}()
 
 	var (
-		mMsgsRcvd = o.stats.GetCounter("broker.round_robin.messages.received")
+		mMsgsRcvd = o.stats.GetCounter("messages.received")
 	)
 
 	i := 0

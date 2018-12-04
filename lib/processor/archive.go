@@ -202,14 +202,14 @@ func NewArchive(
 		pathBytes:       pathBytes,
 		interpolatePath: interpolatePath,
 		archive:         archiver,
-		log:             log.NewModule(".processor.archive"),
+		log:             log,
 		stats:           stats,
 
-		mCount:   stats.GetCounter("processor.archive.count"),
-		mSkipped: stats.GetCounter("processor.archive.skipped"),
-		mErr:     stats.GetCounter("processor.archive.error"),
-		mSucc:    stats.GetCounter("processor.archive.success"),
-		mSent:    stats.GetCounter("processor.archive.sent"),
+		mCount:   stats.GetCounter("count"),
+		mSkipped: stats.GetCounter("skipped"),
+		mErr:     stats.GetCounter("error"),
+		mSucc:    stats.GetCounter("success"),
+		mSent:    stats.GetCounter("sent"),
 	}, nil
 }
 

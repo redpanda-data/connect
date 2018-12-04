@@ -61,7 +61,7 @@ func NewFanOut(
 	o := &FanOut{
 		running:      1,
 		stats:        stats,
-		logger:       logger.NewModule(".broker.fan_out"),
+		logger:       logger,
 		transactions: nil,
 		outputs:      outputs,
 		outputNs:     []int{},
@@ -108,9 +108,9 @@ func (o *FanOut) loop() {
 	}()
 
 	var (
-		mMsgsRcvd  = o.stats.GetCounter("broker.fan_out.messages.received")
-		mOutputErr = o.stats.GetCounter("broker.fan_out.output.error")
-		mMsgsSnt   = o.stats.GetCounter("broker.fan_out.messages.sent")
+		mMsgsRcvd  = o.stats.GetCounter("messages.received")
+		mOutputErr = o.stats.GetCounter("error")
+		mMsgsSnt   = o.stats.GetCounter("messages.sent")
 	)
 
 	for atomic.LoadInt32(&o.running) == 1 {

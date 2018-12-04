@@ -188,7 +188,7 @@ func NewDedupe(
 
 	return &Dedupe{
 		conf:  conf,
-		log:   log.NewModule(".processor.dedupe"),
+		log:   log,
 		stats: stats,
 
 		keyBytes:       keyBytes,
@@ -197,13 +197,13 @@ func NewDedupe(
 		cache:      c,
 		hasherFunc: hFunc,
 
-		mCount:     stats.GetCounter("processor.dedupe.count"),
-		mErrJSON:   stats.GetCounter("processor.dedupe.error.json_parse"),
-		mDropped:   stats.GetCounter("processor.dedupe.dropped"),
-		mErrHash:   stats.GetCounter("processor.dedupe.error.hash"),
-		mErrCache:  stats.GetCounter("processor.dedupe.error.cache"),
-		mSent:      stats.GetCounter("processor.dedupe.sent"),
-		mSentParts: stats.GetCounter("processor.dedupe.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mErrJSON:   stats.GetCounter("error.json_parse"),
+		mDropped:   stats.GetCounter("dropped"),
+		mErrHash:   stats.GetCounter("error.hash"),
+		mErrCache:  stats.GetCounter("error.cache"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

@@ -73,7 +73,7 @@ type Nanomsg struct {
 // NewNanomsg creates a new Nanomsg output type.
 func NewNanomsg(conf NanomsgConfig, log log.Modular, stats metrics.Type) (*Nanomsg, error) {
 	s := Nanomsg{
-		log:   log.NewModule(".output.nanomsg"),
+		log:   log,
 		stats: stats,
 		conf:  conf,
 	}

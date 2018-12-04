@@ -97,13 +97,13 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		opt(&l)
 	}
 
-	l.mCount = l.stats.GetCounter("client.lambda.count")
-	l.mSucc = l.stats.GetCounter("client.lambda.success")
-	l.mErr = l.stats.GetCounter("client.lambda.error")
-	l.mLimited = l.stats.GetCounter("client.lambda.rate_limit.count")
-	l.mLimitFor = l.stats.GetCounter("client.lambda.rate_limit.total_ms")
-	l.mLimitErr = l.stats.GetCounter("client.lambda.rate_limit.error")
-	l.mLatency = l.stats.GetTimer("client.lambda.latency")
+	l.mCount = l.stats.GetCounter("count")
+	l.mSucc = l.stats.GetCounter("success")
+	l.mErr = l.stats.GetCounter("error")
+	l.mLimited = l.stats.GetCounter("rate_limit.count")
+	l.mLimitFor = l.stats.GetCounter("rate_limit.total_ms")
+	l.mLimitErr = l.stats.GetCounter("rate_limit.error")
+	l.mLatency = l.stats.GetTimer("latency")
 
 	if len(l.conf.RateLimit) > 0 {
 		var err error
@@ -126,7 +126,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 // OptSetLogger sets the logger to use.
 func OptSetLogger(log log.Modular) func(*Type) {
 	return func(t *Type) {
-		t.log = log.NewModule(".client.lambda")
+		t.log = log
 	}
 }
 

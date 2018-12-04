@@ -106,15 +106,15 @@ func NewDecode(
 	return &Decode{
 		conf:  conf.Decode,
 		fn:    cor,
-		log:   log.NewModule(".processor.decode"),
+		log:   log,
 		stats: stats,
 
-		mCount:     stats.GetCounter("processor.decode.count"),
-		mSucc:      stats.GetCounter("processor.decode.success"),
-		mErr:       stats.GetCounter("processor.decode.error"),
-		mSkipped:   stats.GetCounter("processor.decode.skipped"),
-		mSent:      stats.GetCounter("processor.decode.sent"),
-		mSentParts: stats.GetCounter("processor.decode.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
+		mSkipped:   stats.GetCounter("skipped"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

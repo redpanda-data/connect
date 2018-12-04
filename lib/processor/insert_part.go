@@ -91,12 +91,12 @@ func NewInsertPart(
 		part:        part,
 		interpolate: interpolate,
 		conf:        conf,
-		log:         log.NewModule(".processor.insert_part"),
+		log:         log,
 		stats:       stats,
 
-		mCount:     stats.GetCounter("processor.insert_part.count"),
-		mSent:      stats.GetCounter("processor.insert_part.sent"),
-		mSentParts: stats.GetCounter("processor.insert_part.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}, nil
 }
 

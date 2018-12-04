@@ -368,14 +368,20 @@ func New(
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
 	if len(conf.Processors) > 0 {
-		pipelines = append(pipelines, []types.PipelineConstructorFunc{func() (types.Pipeline, error) {
+		pipelines = append(pipelines, []types.PipelineConstructorFunc{func(i *int) (types.Pipeline, error) {
+			if i == nil {
+				procs := 0
+				i = &procs
+			}
 			processors := make([]types.Processor, len(conf.Processors))
-			for i, procConf := range conf.Processors {
+			for j, procConf := range conf.Processors {
+				prefix := fmt.Sprintf("processor.%v", *i)
 				var err error
-				processors[i], err = processor.New(procConf, mgr, log.NewModule("."+conf.Type), stats)
+				processors[j], err = processor.New(procConf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
 				if err != nil {
 					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 				}
+				*i++
 			}
 			return pipeline.NewProcessor(log, stats, processors...), nil
 		}}...)

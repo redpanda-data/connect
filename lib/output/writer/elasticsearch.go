@@ -116,7 +116,7 @@ type Elasticsearch struct {
 // NewElasticsearch creates a new Elasticsearch writer type.
 func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
 	e := Elasticsearch{
-		log:               log.NewModule(".output.elasticsearch"),
+		log:               log,
 		stats:             stats,
 		conf:              conf,
 		sniff:             conf.Sniff,
@@ -124,7 +124,7 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 		indexStr:          text.NewInterpolatedString(conf.Index),
 		pipelineStr:       text.NewInterpolatedString(conf.Pipeline),
 		interpolatedIndex: text.ContainsFunctionVariables([]byte(conf.Index)),
-		eJSONErr:          stats.GetCounter("output.elasticsearch.error.json"),
+		eJSONErr:          stats.GetCounter("error.json"),
 	}
 
 	for _, u := range conf.URLs {

@@ -72,7 +72,7 @@ func NewMQTT(
 	stats metrics.Type,
 ) (*MQTT, error) {
 	m := &MQTT{
-		log:   log.NewModule(".output.mqtt"),
+		log:   log,
 		stats: stats,
 		conf:  conf,
 	}

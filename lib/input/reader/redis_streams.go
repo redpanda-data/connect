@@ -93,7 +93,7 @@ func NewRedisStreams(
 	r := &RedisStreams{
 		conf:       conf,
 		stats:      stats,
-		log:        log.NewModule(".input.redis_streams"),
+		log:        log,
 		backlogs:   make(map[string]string, len(conf.Streams)),
 		ackSend:    make(map[string][]string, len(conf.Streams)),
 		ackPending: make(map[string][]string, len(conf.Streams)),

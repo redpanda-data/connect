@@ -104,7 +104,7 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (Type, error)
 	a := AMQP{
 		conf:  conf,
 		stats: stats,
-		log:   log.NewModule(".input.amqp"),
+		log:   log,
 	}
 	if conf.TLS.Enabled {
 		var err error

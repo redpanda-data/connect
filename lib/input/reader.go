@@ -63,7 +63,7 @@ func NewReader(
 		running:      1,
 		typeStr:      typeStr,
 		reader:       r,
-		log:          log.NewModule(".input." + typeStr),
+		log:          log,
 		stats:        stats,
 		transactions: make(chan types.Transaction),
 		responses:    make(chan types.Response),
@@ -82,30 +82,21 @@ func NewReader(
 func (r *Reader) loop() {
 	// Metrics paths
 	var (
-		mRunning      = r.stats.GetGauge("input." + r.typeStr + ".running")
-		mRunningF     = r.stats.GetGauge("input.running")
-		mCount        = r.stats.GetCounter("input." + r.typeStr + ".count")
-		mCountF       = r.stats.GetCounter("input.count")
-		mReadSuccess  = r.stats.GetCounter("input." + r.typeStr + ".read.success")
-		mReadSuccessF = r.stats.GetCounter("input.read.success")
-		mReadError    = r.stats.GetCounter("input." + r.typeStr + ".read.error")
-		mReadErrorF   = r.stats.GetCounter("input.read.error")
-		mSendSuccess  = r.stats.GetCounter("input." + r.typeStr + ".send.success")
-		mSendSuccessF = r.stats.GetCounter("input.send.success")
-		mSendError    = r.stats.GetCounter("input." + r.typeStr + ".send.error")
-		mSendErrorF   = r.stats.GetCounter("input.send.error")
-		mAckSuccess   = r.stats.GetCounter("input." + r.typeStr + ".ack.success")
-		mAckSuccessF  = r.stats.GetCounter("input.ack.success")
-		mAckError     = r.stats.GetCounter("input." + r.typeStr + ".ack.error")
-		mAckErrorF    = r.stats.GetCounter("input.ack.error")
-		mConn         = r.stats.GetCounter("input." + r.typeStr + ".connection.up")
-		mConnF        = r.stats.GetCounter("input.connection.up")
-		mFailedConn   = r.stats.GetCounter("input." + r.typeStr + ".connection.failed")
-		mFailedConnF  = r.stats.GetCounter("input.connection.failed")
-		mLostConn     = r.stats.GetCounter("input." + r.typeStr + ".connection.lost")
-		mLostConnF    = r.stats.GetCounter("input.connection.lost")
-		mLatency      = r.stats.GetTimer("input." + r.typeStr + ".latency")
-		mLatencyF     = r.stats.GetTimer("input.latency")
+		mRunning     = r.stats.GetGauge("running")
+		mCount       = r.stats.GetCounter("count")
+		mPartsCount  = r.stats.GetCounter("parts.count")
+		mRcvd        = r.stats.GetCounter("batch.received")
+		mPartsRcvd   = r.stats.GetCounter("received")
+		mReadSuccess = r.stats.GetCounter("read.success")
+		mReadError   = r.stats.GetCounter("read.error")
+		mSendSuccess = r.stats.GetCounter("send.success")
+		mSendError   = r.stats.GetCounter("send.error")
+		mAckSuccess  = r.stats.GetCounter("ack.success")
+		mAckError    = r.stats.GetCounter("ack.error")
+		mConn        = r.stats.GetCounter("connection.up")
+		mFailedConn  = r.stats.GetCounter("connection.failed")
+		mLostConn    = r.stats.GetCounter("connection.lost")
+		mLatency     = r.stats.GetTimer("latency")
 	)
 
 	defer func() {
@@ -113,13 +104,11 @@ func (r *Reader) loop() {
 		for ; err != nil; err = r.reader.WaitForClose(time.Second) {
 		}
 		mRunning.Decr(1)
-		mRunningF.Decr(1)
 
 		close(r.transactions)
 		close(r.closedChan)
 	}()
 	mRunning.Incr(1)
-	mRunningF.Incr(1)
 
 	for {
 		if err := r.reader.Connect(); err != nil {
@@ -128,7 +117,6 @@ func (r *Reader) loop() {
 			}
 			r.log.Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
 			mFailedConn.Incr(1)
-			mFailedConnF.Incr(1)
 			if !r.connThrot.Retry() {
 				return
 			}
@@ -138,7 +126,6 @@ func (r *Reader) loop() {
 		}
 	}
 	mConn.Incr(1)
-	mConnF.Incr(1)
 
 	for atomic.LoadInt32(&r.running) == 1 {
 		msg, err := r.reader.Read()
@@ -146,7 +133,6 @@ func (r *Reader) loop() {
 		// If our reader says it is not connected.
 		if err == types.ErrNotConnected {
 			mLostConn.Incr(1)
-			mLostConnF.Incr(1)
 
 			// Continue to try to reconnect while still active.
 			for atomic.LoadInt32(&r.running) == 1 {
@@ -158,14 +144,12 @@ func (r *Reader) loop() {
 
 					r.log.Errorf("Failed to reconnect to %v: %v\n", r.typeStr, err)
 					mFailedConn.Incr(1)
-					mFailedConnF.Incr(1)
 
 					if !r.connThrot.Retry() {
 						return
 					}
 				} else if msg, err = r.reader.Read(); err != types.ErrNotConnected {
 					mConn.Incr(1)
-					mConnF.Incr(1)
 					r.connThrot.Reset()
 					break
 				}
@@ -180,7 +164,6 @@ func (r *Reader) loop() {
 		if err != nil || msg == nil {
 			if err != types.ErrTimeout && err != types.ErrNotConnected {
 				mReadError.Incr(1)
-				mReadErrorF.Incr(1)
 				r.log.Errorf("Failed to read message: %v\n", err)
 			}
 			if !r.connThrot.Retry() {
@@ -190,9 +173,10 @@ func (r *Reader) loop() {
 		} else {
 			r.connThrot.Reset()
 			mCount.Incr(1)
-			mCountF.Incr(1)
+			mPartsCount.Incr(int64(msg.Len()))
 			mReadSuccess.Incr(1)
-			mReadSuccessF.Incr(1)
+			mPartsRcvd.Incr(int64(msg.Len()))
+			mRcvd.Incr(1)
 		}
 
 		select {
@@ -208,21 +192,16 @@ func (r *Reader) loop() {
 			}
 			if res.Error() != nil {
 				mSendError.Incr(1)
-				mSendErrorF.Incr(1)
 			} else {
 				mSendSuccess.Incr(1)
-				mSendSuccessF.Incr(1)
 			}
 			if res.Error() != nil || !res.SkipAck() {
 				if err = r.reader.Acknowledge(res.Error()); err != nil {
 					mAckError.Incr(1)
-					mAckErrorF.Incr(1)
 				} else {
 					tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
 					mLatency.Timing(tTaken)
-					mLatencyF.Timing(tTaken)
 					mAckSuccess.Incr(1)
-					mAckSuccessF.Incr(1)
 				}
 			}
 		case <-r.closeChan:

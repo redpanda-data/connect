@@ -122,16 +122,16 @@ func NewJMESPath(
 		parts: conf.JMESPath.Parts,
 		query: query,
 		conf:  conf,
-		log:   log.NewModule(".processor.jmespath"),
+		log:   log,
 		stats: stats,
 
-		mCount:     stats.GetCounter("processor.jmespath.count"),
-		mErrJSONP:  stats.GetCounter("processor.jmespath.error.json_parse"),
-		mErrJMES:   stats.GetCounter("processor.jmespath.error.jmespath_search"),
-		mErrJSONS:  stats.GetCounter("processor.jmespath.error.json_set"),
-		mSucc:      stats.GetCounter("processor.jmespath.success"),
-		mSent:      stats.GetCounter("processor.jmespath.sent"),
-		mSentParts: stats.GetCounter("processor.jmespath.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mErrJSONP:  stats.GetCounter("error.json_parse"),
+		mErrJMES:   stats.GetCounter("error.jmespath_search"),
+		mErrJSONS:  stats.GetCounter("error.json_set"),
+		mSucc:      stats.GetCounter("success"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}
 	return j, nil
 }

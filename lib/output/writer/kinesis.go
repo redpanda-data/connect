@@ -117,16 +117,14 @@ func NewKinesis(
 	}
 
 	k := Kinesis{
-		conf:             conf,
-		log:              log.NewModule(".output.kinesis"),
-		stats:            stats,
-		mPartsThrottled:  stats.GetCounter(".output.parts.send.throttled"),
-		mPartsThrottledF: stats.GetCounter(".output.kinesis.parts.send.throttled"),
-		mThrottled:       stats.GetCounter(".output.send.throttled"),
-		mThrottledF:      stats.GetCounter(".output.kinesis.send.throttled"),
-		hashKey:          text.NewInterpolatedString(conf.HashKey),
-		partitionKey:     text.NewInterpolatedString(conf.PartitionKey),
-		streamName:       aws.String(conf.Stream),
+		conf:            conf,
+		log:             log,
+		stats:           stats,
+		mPartsThrottled: stats.GetCounter("parts.send.throttled"),
+		mThrottled:      stats.GetCounter("send.throttled"),
+		hashKey:         text.NewInterpolatedString(conf.HashKey),
+		partitionKey:    text.NewInterpolatedString(conf.PartitionKey),
+		streamName:      aws.String(conf.Stream),
 	}
 
 	var err error
@@ -258,9 +256,7 @@ func (a *Kinesis) Write(msg types.Message) error {
 		l := len(failed)
 		if l > 0 {
 			a.mThrottled.Incr(1)
-			a.mThrottledF.Incr(1)
 			a.mPartsThrottled.Incr(int64(l))
-			a.mPartsThrottledF.Incr(int64(l))
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
 				return types.ErrTimeout

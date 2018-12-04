@@ -113,11 +113,11 @@ func NewJMESPath(
 		part:  conf.JMESPath.Part,
 		query: query,
 
-		mSkipped:  stats.GetCounter("condition.jmespath.skipped"),
-		mErrJSONP: stats.GetCounter("condition.jmespath.error.json_parse"),
-		mDropped:  stats.GetCounter("condition.jmespath.dropped"),
-		mErrJMES:  stats.GetCounter("condition.jmespath.error.jmespath_search"),
-		mApplied:  stats.GetCounter("condition.jmespath.applied"),
+		mSkipped:  stats.GetCounter("skipped"),
+		mErrJSONP: stats.GetCounter("error.json_parse"),
+		mDropped:  stats.GetCounter("dropped"),
+		mErrJMES:  stats.GetCounter("error.jmespath_search"),
+		mApplied:  stats.GetCounter("applied"),
 	}, nil
 }
 

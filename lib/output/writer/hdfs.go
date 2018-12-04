@@ -80,7 +80,7 @@ func NewHDFS(
 		conf:            conf,
 		pathBytes:       pathBytes,
 		interpolatePath: interpolatePath,
-		log:             log.NewModule(".output.hdfs"),
+		log:             log,
 		stats:           stats,
 	}
 }

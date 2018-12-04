@@ -145,19 +145,18 @@ type Batch struct {
 func NewBatch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	logger := log.NewModule(".processor.batch")
-	cond, err := condition.New(conf.Batch.Condition, mgr, logger, metrics.Namespaced(stats, "processor.batch"))
+	cond, err := condition.New(conf.Batch.Condition, mgr, log.NewModule(".condition"), metrics.Namespaced(stats, "condition"))
 	if err != nil {
 		return nil, err
 	}
 	if conf.Batch.ByteSize <= 0 &&
 		conf.Batch.Count <= 0 &&
 		conf.Batch.PeriodMS <= 0 {
-		logger.Warnln("Batch processor configured without a count, byte_size or" +
+		log.Warnln("Batch processor configured without a count, byte_size or" +
 			" period_ms cap. It's possible that this batch will never resolve.")
 	}
 	return &Batch{
-		log:      logger,
+		log:      log,
 		stats:    stats,
 		byteSize: conf.Batch.ByteSize,
 		count:    conf.Batch.Count,
@@ -166,14 +165,14 @@ func NewBatch(
 
 		lastBatch: time.Now(),
 
-		mCount:       stats.GetCounter("processor.batch.count"),
-		mSizeBatch:   stats.GetCounter("processor.batch.on_size"),
-		mCountBatch:  stats.GetCounter("processor.batch.on_count"),
-		mPeriodBatch: stats.GetCounter("processor.batch.on_period"),
-		mCondBatch:   stats.GetCounter("processor.batch.on_condition"),
-		mSent:        stats.GetCounter("processor.batch.sent"),
-		mSentParts:   stats.GetCounter("processor.batch.parts.sent"),
-		mDropped:     stats.GetCounter("processor.batch.dropped"),
+		mCount:       stats.GetCounter("count"),
+		mSizeBatch:   stats.GetCounter("on_size"),
+		mCountBatch:  stats.GetCounter("on_count"),
+		mPeriodBatch: stats.GetCounter("on_period"),
+		mCondBatch:   stats.GetCounter("on_condition"),
+		mSent:        stats.GetCounter("sent"),
+		mSentParts:   stats.GetCounter("parts.sent"),
+		mDropped:     stats.GetCounter("dropped"),
 	}, nil
 }
 

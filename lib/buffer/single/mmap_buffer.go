@@ -73,7 +73,7 @@ func NewMmapBuffer(config MmapBufferConfig, log log.Modular, stats metrics.Type)
 		cache:      cache,
 		logger:     log,
 		stats:      stats,
-		mCacheErr:  stats.GetCounter("cache.open.error"),
+		mCacheErr:  stats.GetCounter("open.error"),
 		readFrom:   0,
 		readIndex:  0,
 		writtenTo:  0,

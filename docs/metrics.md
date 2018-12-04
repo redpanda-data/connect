@@ -11,7 +11,9 @@ are lots of more granular metrics available that may not appear here.
 
 ## Input
 
-- `input.count`: Measures the number of messages read by the input.
+- `input.count`: The number of times the input has attempted to read messages.
+- `input.received`: The number of messages received by the input.
+- `input.batch.received`: The number of message batches received by the input.
 - `input.connection.up`
 - `input.connection.failed`
 - `input.connection.lost`
@@ -33,14 +35,18 @@ are lots of more granular metrics available that may not appear here.
 
 ## Processors
 
-- `processor.<type>.count`
-- `processor.<type>.dropped`
+Processor metrics are prefixed by the area of the Benthos stream they reside in
+and their index. For example, processors in the `pipeline` section will be
+prefixed with `pipeline.processor.N`, where N is the index.
+
+- `pipeline.processor.0.count`
+- `pipeline.processor.0.dropped`
 
 ## Output
 
-- `output.count`
-- `output.send.success`
-- `output.send.error`
+- `output.count`: The number of times the output has attempted to send messages.
+- `output.sent`: The number of messages sent.
+- `output.batch.sent`: The number of message batches sent.
 - `output.connection.up`
 - `output.connection.failed`
 - `output.connection.lost`

@@ -156,8 +156,8 @@ func NewProcessDAG(
 	explicitDeps := map[string][]string{}
 
 	for k, v := range conf.ProcessDAG {
-		nsLog := log.NewModule(fmt.Sprintf(".processor.process_dag.%v", k))
-		nsStats := metrics.Namespaced(stats, fmt.Sprintf("processor.process_dag.%v", k))
+		nsLog := log.NewModule(fmt.Sprintf(".%v", k))
+		nsStats := metrics.Namespaced(stats, k)
 
 		child, err := NewProcessMap(v.ProcessMapConfig, mgr, nsLog, nsStats)
 		if err != nil {
@@ -177,13 +177,13 @@ func NewProcessDAG(
 		children: children,
 		dag:      dag,
 
-		log: log.NewModule(".processor.process_dag"),
+		log: log,
 
-		mCount:      stats.GetCounter("processor.process_dag.count"),
-		mCountParts: stats.GetCounter("processor.process_dag.parts.count"),
-		mErr:        stats.GetCounter("processor.process_dag.error"),
-		mSent:       stats.GetCounter("processor.process_dag.sent"),
-		mSentParts:  stats.GetCounter("processor.process_dag.parts.sent"),
+		mCount:      stats.GetCounter("count"),
+		mCountParts: stats.GetCounter("parts.count"),
+		mErr:        stats.GetCounter("error"),
+		mSent:       stats.GetCounter("sent"),
+		mSentParts:  stats.GetCounter("parts.sent"),
 	}
 
 	p.log.Infof("Resolved DAG: %v\n", p.dag)

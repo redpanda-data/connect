@@ -76,7 +76,7 @@ func NewCache(
 		conf:  conf,
 		key:   text.NewInterpolatedString(conf.Key),
 		cache: cache,
-		log:   log.NewModule(fmt.Sprintf(".output.cache.%v", conf.Target)),
+		log:   log,
 		stats: stats,
 	}, nil
 }

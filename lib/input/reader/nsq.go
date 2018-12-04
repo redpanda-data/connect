@@ -82,7 +82,7 @@ func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (Type, error) {
 	n := NSQ{
 		conf:             conf,
 		stats:            stats,
-		log:              log.NewModule(".input.nsq"),
+		log:              log,
 		internalMessages: make(chan *nsq.Message),
 		interruptChan:    make(chan struct{}),
 	}

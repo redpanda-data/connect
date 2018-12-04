@@ -129,27 +129,24 @@ type CheckField struct {
 func NewCheckField(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	nsStats := metrics.Namespaced(stats, "condition.check_field")
-	nsLog := log.NewModule(".condition.check_field")
-
 	if conf.CheckField.Condition == nil {
 		return nil, errors.New("cannot create check_field condition without a child")
 	}
 
-	child, err := New(*conf.CheckField.Condition, mgr, nsLog, nsStats)
+	child, err := New(*conf.CheckField.Condition, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}
 
 	return &CheckField{
 		conf:     conf.CheckField,
-		log:      log.NewModule(".condition.check_field"),
+		log:      log,
 		stats:    stats,
 		child:    child,
 		path:     strings.Split(conf.CheckField.Path, "."),
-		mApplied: stats.GetCounter("condition.check_field.applied"),
-		mErr:     stats.GetCounter("condition.check_field.error"),
-		mErrJSON: stats.GetCounter("condition.check_field.error.json_parse"),
+		mApplied: stats.GetCounter("applied"),
+		mErr:     stats.GetCounter("error"),
+		mErrJSON: stats.GetCounter("error.json_parse"),
 	}, nil
 }
 

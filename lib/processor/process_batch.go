@@ -21,6 +21,8 @@
 package processor
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -84,12 +86,10 @@ type ProcessBatch struct {
 func NewProcessBatch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	nsStats := metrics.Namespaced(stats, "processor.process_batch")
-	nsLog := log.NewModule(".processor.process_batch")
-
 	var children []types.Processor
-	for _, pconf := range conf.ProcessBatch {
-		proc, err := New(pconf, mgr, nsLog, nsStats)
+	for i, pconf := range conf.ProcessBatch {
+		prefix := fmt.Sprintf("%v", i)
+		proc, err := New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
 		if err != nil {
 			return nil, err
 		}
@@ -97,13 +97,13 @@ func NewProcessBatch(
 	}
 	return &ProcessBatch{
 		children: children,
-		log:      nsLog,
+		log:      log,
 
-		mCount:     stats.GetCounter("processor.process_batch.count"),
-		mErr:       stats.GetCounter("processor.process_batch.error"),
-		mSent:      stats.GetCounter("processor.process_batch.sent"),
-		mSentParts: stats.GetCounter("processor.process_batch.parts.sent"),
-		mDropped:   stats.GetCounter("processor.process_batch.dropped"),
+		mCount:     stats.GetCounter("count"),
+		mErr:       stats.GetCounter("error"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
+		mDropped:   stats.GetCounter("dropped"),
 	}, nil
 }
 

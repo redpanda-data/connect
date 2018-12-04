@@ -139,7 +139,7 @@ func New(
 	}
 
 	for k, conf := range conf.Caches {
-		newCache, err := cache.New(conf, t, log.NewModule(".resource."+k), metrics.Namespaced(stats, "resource."+k))
+		newCache, err := cache.New(conf, t, log.NewModule(".resource.cache."+k), metrics.Namespaced(stats, "resource.cache."+k))
 		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to create cache resource '%v' of type '%v': %v",
@@ -160,7 +160,7 @@ func New(
 
 	// TODO: Prevent recursive conditions.
 	for k, newConf := range conf.Conditions {
-		newCond, err := condition.New(newConf, t, log.NewModule(".resource."+k), metrics.Namespaced(stats, "resource."+k))
+		newCond, err := condition.New(newConf, t, log.NewModule(".resource.condition."+k), metrics.Namespaced(stats, "resource.condition."+k))
 		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to create condition resource '%v' of type '%v': %v",
@@ -172,7 +172,7 @@ func New(
 	}
 
 	for k, conf := range conf.RateLimits {
-		newRL, err := ratelimit.New(conf, t, log.NewModule(".resource."+k), metrics.Namespaced(stats, "resource."+k))
+		newRL, err := ratelimit.New(conf, t, log.NewModule(".resource.rate_limit."+k), metrics.Namespaced(stats, "resource.rate_limit."+k))
 		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to create rate_limit resource '%v' of type '%v': %v",

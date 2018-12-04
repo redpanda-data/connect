@@ -158,18 +158,18 @@ func NewMetadata(
 ) (Type, error) {
 	m := &Metadata{
 		conf:  conf,
-		log:   log.NewModule(".processor.metadata"),
+		log:   log,
 		stats: stats,
 
 		parts: conf.Metadata.Parts,
 
 		valueBytes: []byte(conf.Metadata.Value),
 
-		mCount:     stats.GetCounter("processor.metadata.count"),
-		mErr:       stats.GetCounter("processor.metadata.error"),
-		mSucc:      stats.GetCounter("processor.metadata.success"),
-		mSent:      stats.GetCounter("processor.metadata.sent"),
-		mSentParts: stats.GetCounter("processor.metadata.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mErr:       stats.GetCounter("error"),
+		mSucc:      stats.GetCounter("success"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}
 
 	m.interpolate = text.ContainsFunctionVariables(m.valueBytes)

@@ -267,16 +267,16 @@ func NewText(
 	t := &Text{
 		parts: conf.Text.Parts,
 		conf:  conf,
-		log:   log.NewModule(".processor.text"),
+		log:   log,
 		stats: stats,
 
 		valueBytes: []byte(conf.Text.Value),
 
-		mCount:     stats.GetCounter("processor.text.count"),
-		mSucc:      stats.GetCounter("processor.text.success"),
-		mErr:       stats.GetCounter("processor.text.error"),
-		mSent:      stats.GetCounter("processor.text.sent"),
-		mSentParts: stats.GetCounter("processor.text.parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
+		mSent:      stats.GetCounter("sent"),
+		mSentParts: stats.GetCounter("parts.sent"),
 	}
 
 	t.interpolate = text.ContainsFunctionVariables(t.valueBytes)

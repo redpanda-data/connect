@@ -72,7 +72,7 @@ func NewHDFS(
 ) *HDFS {
 	return &HDFS{
 		conf:  conf,
-		log:   log.NewModule(".output.hdfs"),
+		log:   log,
 		stats: stats,
 	}
 }

@@ -84,17 +84,17 @@ func NewBoundsCheck(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	return &BoundsCheck{
-		log:              log.NewModule(".condition.bounds_check"),
+		log:              log,
 		stats:            stats,
 		maxParts:         conf.BoundsCheck.MaxParts,
 		maxPartSize:      conf.BoundsCheck.MaxPartSize,
 		minParts:         conf.BoundsCheck.MinParts,
 		minPartSize:      conf.BoundsCheck.MinPartSize,
-		mApplied:         stats.GetCounter("condition.bounds_check.applied"),
-		mSkipped:         stats.GetCounter("condition.bounds_check.skipped"),
-		mSkippedEmpty:    stats.GetCounter("condition.bounds_check.skipped.empty_message"),
-		mSkippedNumParts: stats.GetCounter("condition.bounds_check.skipped.num_parts"),
-		mSkippedPartSize: stats.GetCounter("condition.bounds_check.skipped.part_size"),
+		mApplied:         stats.GetCounter("applied"),
+		mSkipped:         stats.GetCounter("skipped"),
+		mSkippedEmpty:    stats.GetCounter("skipped.empty_message"),
+		mSkippedNumParts: stats.GetCounter("skipped.num_parts"),
+		mSkippedPartSize: stats.GetCounter("skipped.part_size"),
 	}, nil
 }
 

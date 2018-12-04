@@ -69,7 +69,7 @@ func NewFiles(
 	return &Files{
 		conf:  conf,
 		path:  text.NewInterpolatedString(conf.Path),
-		log:   log.NewModule(".output.files"),
+		log:   log,
 		stats: stats,
 	}
 }

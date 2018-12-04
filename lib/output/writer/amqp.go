@@ -102,7 +102,7 @@ type AMQP struct {
 func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
 	a := AMQP{
 		key:          text.NewInterpolatedString(conf.BindingKey),
-		log:          log.NewModule(".output.amqp"),
+		log:          log,
 		stats:        stats,
 		conf:         conf,
 		deliveryMode: amqp.Transient,

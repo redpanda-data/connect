@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -105,12 +106,10 @@ type ProcessField struct {
 func NewProcessField(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	nsStats := metrics.Namespaced(stats, "processor.process_field")
-	nsLog := log.NewModule(".processor.process_field")
-
 	var children []Type
-	for _, pconf := range conf.ProcessField.Processors {
-		proc, err := New(pconf, mgr, nsLog, nsStats)
+	for i, pconf := range conf.ProcessField.Processors {
+		prefix := fmt.Sprintf("processor.%v", i)
+		proc, err := New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
 		if err != nil {
 			return nil, err
 		}
@@ -121,16 +120,16 @@ func NewProcessField(
 		path:     strings.Split(conf.ProcessField.Path, "."),
 		children: children,
 
-		log: nsLog,
+		log: log,
 
-		mCount:              stats.GetCounter("processor.process_field.count"),
-		mErr:                stats.GetCounter("processor.process_field.error"),
-		mErrJSONParse:       stats.GetCounter("processor.process_field.error.json_parse"),
-		mErrMisaligned:      stats.GetCounter("processor.process_field.error.misaligned"),
-		mErrMisalignedBatch: stats.GetCounter("processor.process_field.error.misaligned_messages"),
-		mSent:               stats.GetCounter("processor.process_field.sent"),
-		mSentParts:          stats.GetCounter("processor.process_field.parts.sent"),
-		mDropped:            stats.GetCounter("processor.process_field.dropped"),
+		mCount:              stats.GetCounter("count"),
+		mErr:                stats.GetCounter("error"),
+		mErrJSONParse:       stats.GetCounter("error.json_parse"),
+		mErrMisaligned:      stats.GetCounter("error.misaligned"),
+		mErrMisalignedBatch: stats.GetCounter("error.misaligned_messages"),
+		mSent:               stats.GetCounter("sent"),
+		mSentParts:          stats.GetCounter("parts.sent"),
+		mDropped:            stats.GetCounter("dropped"),
 	}, nil
 }
 

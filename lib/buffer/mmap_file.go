@@ -54,7 +54,7 @@ preferably all buffers altogether.`,
 // NewMmapFile creates a buffer held in memory and persisted to file through
 // memory map.
 func NewMmapFile(config Config, log log.Modular, stats metrics.Type) (Type, error) {
-	b, err := single.NewMmapBuffer(config.Mmap, log.NewModule(".buffer.mmap_file"), stats)
+	b, err := single.NewMmapBuffer(config.Mmap, log, stats)
 	if err != nil {
 		return nil, err
 	}

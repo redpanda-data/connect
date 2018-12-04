@@ -73,7 +73,7 @@ func NewRedisStreams(
 ) (*RedisStreams, error) {
 
 	r := &RedisStreams{
-		log:   log.NewModule(".output.redis_streams"),
+		log:   log,
 		stats: stats,
 		conf:  conf,
 	}
