@@ -58,7 +58,6 @@ const (
 	TypeArchive      = "archive"
 	TypeBatch        = "batch"
 	TypeBoundsCheck  = "bounds_check"
-	TypeCombine      = "combine"
 	TypeCompress     = "compress"
 	TypeConditional  = "conditional"
 	TypeDecode       = "decode"
@@ -102,7 +101,6 @@ type Config struct {
 	Archive      ArchiveConfig      `json:"archive" yaml:"archive"`
 	Batch        BatchConfig        `json:"batch" yaml:"batch"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
-	Combine      CombineConfig      `json:"combine" yaml:"combine"`
 	Compress     CompressConfig     `json:"compress" yaml:"compress"`
 	Conditional  ConditionalConfig  `json:"conditional" yaml:"conditional"`
 	Decode       DecodeConfig       `json:"decode" yaml:"decode"`
@@ -145,7 +143,6 @@ func NewConfig() Config {
 		Archive:      NewArchiveConfig(),
 		Batch:        NewBatchConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),
-		Combine:      NewCombineConfig(),
 		Compress:     NewCompressConfig(),
 		Conditional:  NewConditionalConfig(),
 		Decode:       NewDecodeConfig(),

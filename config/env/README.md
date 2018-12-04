@@ -273,7 +273,6 @@ PROCESSOR_BOUNDS_CHECK_MAX_PARTS                     = 100
 PROCESSOR_BOUNDS_CHECK_MAX_PART_SIZE                 = 1073741824
 PROCESSOR_BOUNDS_CHECK_MIN_PARTS                     = 1
 PROCESSOR_BOUNDS_CHECK_MIN_PART_SIZE                 = 1
-PROCESSOR_COMBINE_PARTS                              = 2
 PROCESSOR_COMPRESS_ALGORITHM                         = gzip
 PROCESSOR_COMPRESS_LEVEL                             = -1
 PROCESSOR_DECODE_SCHEME                              = base64

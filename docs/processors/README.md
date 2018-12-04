@@ -41,40 +41,39 @@ used.
 1. [`archive`](#archive)
 2. [`batch`](#batch)
 3. [`bounds_check`](#bounds_check)
-4. [`combine`](#combine)
-5. [`compress`](#compress)
-6. [`conditional`](#conditional)
-7. [`decode`](#decode)
-8. [`decompress`](#decompress)
-9. [`dedupe`](#dedupe)
-10. [`encode`](#encode)
-11. [`filter`](#filter)
-12. [`filter_parts`](#filter_parts)
-13. [`grok`](#grok)
-14. [`group_by`](#group_by)
-15. [`group_by_value`](#group_by_value)
-16. [`hash`](#hash)
-17. [`hash_sample`](#hash_sample)
-18. [`http`](#http)
-19. [`insert_part`](#insert_part)
-20. [`jmespath`](#jmespath)
-21. [`json`](#json)
-22. [`lambda`](#lambda)
-23. [`log`](#log)
-24. [`merge_json`](#merge_json)
-25. [`metadata`](#metadata)
-26. [`metric`](#metric)
-27. [`noop`](#noop)
-28. [`process_batch`](#process_batch)
-29. [`process_dag`](#process_dag)
-30. [`process_field`](#process_field)
-31. [`process_map`](#process_map)
-32. [`sample`](#sample)
-33. [`select_parts`](#select_parts)
-34. [`split`](#split)
-35. [`text`](#text)
-36. [`throttle`](#throttle)
-37. [`unarchive`](#unarchive)
+4. [`compress`](#compress)
+5. [`conditional`](#conditional)
+6. [`decode`](#decode)
+7. [`decompress`](#decompress)
+8. [`dedupe`](#dedupe)
+9. [`encode`](#encode)
+10. [`filter`](#filter)
+11. [`filter_parts`](#filter_parts)
+12. [`grok`](#grok)
+13. [`group_by`](#group_by)
+14. [`group_by_value`](#group_by_value)
+15. [`hash`](#hash)
+16. [`hash_sample`](#hash_sample)
+17. [`http`](#http)
+18. [`insert_part`](#insert_part)
+19. [`jmespath`](#jmespath)
+20. [`json`](#json)
+21. [`lambda`](#lambda)
+22. [`log`](#log)
+23. [`merge_json`](#merge_json)
+24. [`metadata`](#metadata)
+25. [`metric`](#metric)
+26. [`noop`](#noop)
+27. [`process_batch`](#process_batch)
+28. [`process_dag`](#process_dag)
+29. [`process_field`](#process_field)
+30. [`process_map`](#process_map)
+31. [`sample`](#sample)
+32. [`select_parts`](#select_parts)
+33. [`split`](#split)
+34. [`text`](#text)
+35. [`throttle`](#throttle)
+36. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -157,17 +156,6 @@ bounds_check:
 Checks whether each message fits within certain boundaries, and drops messages
 that do not. A metric is incremented for each dropped message and debug logs
 are also provided if enabled.
-
-## `combine`
-
-``` yaml
-type: combine
-combine:
-  parts: 2
-```
-
-DEPRECATED: Use the [`batch`](#batch) processor with the
-`count` field instead.
 
 ## `compress`
 

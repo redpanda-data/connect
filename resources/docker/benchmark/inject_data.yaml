@@ -14,9 +14,9 @@ input:
       type: static
       static: false
   processors:
-  - type: combine
-    combine:
-      parts: 200
+  - type: batch
+    batch:
+      count: 200
 
 buffer:
   type: none

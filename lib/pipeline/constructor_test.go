@@ -62,9 +62,10 @@ func TestSanitise(t *testing.T) {
 	exp = `{` +
 		`"processors":[` +
 		`{` +
-		`"type":"combine",` +
-		`"combine":{` +
-		`"parts":2` +
+		`"type":"log",` +
+		`"log":{` +
+		`"level":"INFO",` +
+		`"message":""` +
 		`}` +
 		`},` +
 		`{` +
@@ -79,7 +80,7 @@ func TestSanitise(t *testing.T) {
 		`}`
 
 	proc := processor.NewConfig()
-	proc.Type = "combine"
+	proc.Type = "log"
 	conf.Processors = append(conf.Processors, proc)
 
 	proc = processor.NewConfig()

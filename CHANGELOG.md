@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Large changes to all metrics paths.
+- Large simplifications to all metrics paths.
+- Fully removed the previously deprecated `combine` processor.
 
 ## 0.38.10 - 2018-12-04
 

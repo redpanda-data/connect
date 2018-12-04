@@ -106,27 +106,6 @@ func TestSanitise(t *testing.T) {
 	var err error
 
 	exp := `{` +
-		`"type":"combine",` +
-		`"combine":{` +
-		`"parts":3` +
-		`}` +
-		`}`
-
-	conf := NewConfig()
-	conf.Type = "combine"
-	conf.Combine.Parts = 3
-
-	if actObj, err = SanitiseConfig(conf); err != nil {
-		t.Fatal(err)
-	}
-	if act, err = json.Marshal(actObj); err != nil {
-		t.Fatal(err)
-	}
-	if string(act) != exp {
-		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
-	}
-
-	exp = `{` +
 		`"type":"archive",` +
 		`"archive":{` +
 		`"format":"binary",` +
@@ -134,7 +113,7 @@ func TestSanitise(t *testing.T) {
 		`}` +
 		`}`
 
-	conf = NewConfig()
+	conf := NewConfig()
 	conf.Type = "archive"
 	conf.Archive.Path = "nope"
 

@@ -284,8 +284,6 @@ pipeline:
       max_parts: ${PROCESSOR_BOUNDS_CHECK_MAX_PARTS:100}
       min_part_size: ${PROCESSOR_BOUNDS_CHECK_MIN_PART_SIZE:1}
       min_parts: ${PROCESSOR_BOUNDS_CHECK_MIN_PARTS:1}
-    combine:
-      parts: ${PROCESSOR_COMBINE_PARTS:2}
     compress:
       algorithm: ${PROCESSOR_COMPRESS_ALGORITHM:gzip}
       level: ${PROCESSOR_COMPRESS_LEVEL:-1}
