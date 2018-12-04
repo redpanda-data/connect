@@ -155,7 +155,7 @@ func NewGroupByConfig() GroupByConfig {
 
 type group struct {
 	Condition  condition.Type
-	Processors []Type
+	Processors []types.Processor
 }
 
 // GroupBy is a processor that group_bys messages into a message per part.
@@ -253,18 +253,7 @@ func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 			continue
 		}
 
-		resultMsgs := []types.Message{gmsg}
-		var res types.Response
-		for j := 0; len(resultMsgs) > 0 && j < len(g.groups[i].Processors); j++ {
-			var nextResultMsgs []types.Message
-			for _, m := range resultMsgs {
-				var rMsgs []types.Message
-				rMsgs, res = g.groups[i].Processors[j].ProcessMessage(m)
-				nextResultMsgs = append(nextResultMsgs, rMsgs...)
-			}
-			resultMsgs = nextResultMsgs
-		}
-
+		resultMsgs, res := ExecuteAll(g.groups[i].Processors, gmsg)
 		if len(resultMsgs) > 0 {
 			msgs = append(msgs, resultMsgs...)
 		}

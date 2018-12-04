@@ -27,6 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
@@ -104,18 +105,7 @@ func (p *Processor) loop() {
 		}
 		mProcCount.Incr(1)
 
-		resultMsgs := []types.Message{tran.Payload}
-		var resultRes types.Response
-		for i := 0; len(resultMsgs) > 0 && i < len(p.msgProcessors); i++ {
-			var nextResultMsgs []types.Message
-			for _, m := range resultMsgs {
-				var rMsgs []types.Message
-				rMsgs, resultRes = p.msgProcessors[i].ProcessMessage(m)
-				nextResultMsgs = append(nextResultMsgs, rMsgs...)
-			}
-			resultMsgs = nextResultMsgs
-		}
-
+		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
 			mProcDropped.Incr(1)
 			select {

@@ -88,10 +88,11 @@ duplicate condition configs by using the [resource condition][resource].
 6. [`metadata`](#metadata)
 7. [`not`](#not)
 8. [`or`](#or)
-9. [`resource`](#resource)
-10. [`static`](#static)
-11. [`text`](#text)
-12. [`xor`](#xor)
+9. [`processor_failed`](#processor_failed)
+10. [`resource`](#resource)
+11. [`static`](#static)
+12. [`text`](#text)
+13. [`xor`](#xor)
 
 ## `and`
 
@@ -377,6 +378,18 @@ or: []
 ```
 
 Or is a condition that returns the logical OR of its children conditions.
+
+## `processor_failed`
+
+``` yaml
+type: processor_failed
+processor_failed:
+  part: 0
+```
+
+Returns true if a processing stage of a message has failed. This condition is
+useful for dropping failed messages or creating dead letter queues, you can read
+more about these patterns [here](../error_handling.md).
 
 ## `resource`
 

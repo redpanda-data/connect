@@ -202,6 +202,8 @@ input:
         key: ""
         arg: ""
       or: []
+      processor_failed:
+        part: 0
       resource: ""
       static: true
       text:
@@ -321,6 +323,8 @@ pipeline:
           key: ""
           arg: ""
         or: []
+        processor_failed:
+          part: 0
         resource: ""
         static: false
         text:
@@ -365,6 +369,8 @@ pipeline:
           key: ""
           arg: ""
         or: []
+        processor_failed:
+          part: 0
         resource: ""
         static: true
         text:
@@ -414,6 +420,8 @@ pipeline:
         key: ""
         arg: ""
       or: []
+      processor_failed:
+        part: 0
       resource: ""
       static: true
       text:
@@ -445,6 +453,8 @@ pipeline:
         key: ""
         arg: ""
       or: []
+      processor_failed:
+        part: 0
       resource: ""
       static: true
       text:
@@ -886,6 +896,8 @@ resources:
         key: ""
         arg: ""
       or: []
+      processor_failed:
+        part: 0
       resource: ""
       static: true
       text:

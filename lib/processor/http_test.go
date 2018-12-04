@@ -53,8 +53,21 @@ func TestHTTPClientRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, res := h.ProcessMessage(message.New([][]byte{[]byte("test")})); res == nil || res.Error() == nil {
-		t.Error("Expected error from end of retries")
+	msgs, res := h.ProcessMessage(message.New([][]byte{[]byte("test")}))
+	if res != nil {
+		t.Fatal(res.Error())
+	}
+	if len(msgs) != 1 {
+		t.Fatal("Wrong count of error messages")
+	}
+	if msgs[0].Len() != 1 {
+		t.Fatal("Wrong count of error message parts")
+	}
+	if exp, act := "test", string(msgs[0].Get(0).Get()); exp != act {
+		t.Errorf("Wrong message contents: %v != %v", act, exp)
+	}
+	if !HasFailed(msgs[0].Get(0)) {
+		t.Error("Failed message part not flagged")
 	}
 
 	if exp, act := uint32(4), atomic.LoadUint32(&reqCount); exp != act {
@@ -186,12 +199,23 @@ func TestHTTPClientParallelError(t *testing.T) {
 	}))
 	if res != nil {
 		t.Error(res.Error())
-	} else if expC, actC := 5, msgs[0].Len(); actC != expC {
-		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
+	}
+	if expC, actC := 5, msgs[0].Len(); actC != expC {
+		t.Fatalf("Wrong result count: %v != %v", actC, expC)
+	}
+	if exp, act := "baz", string(msgs[0].Get(2).Get()); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "baz", string(message.GetAllBytes(msgs[0])[2]); act != exp {
-		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if !HasFailed(msgs[0].Get(2)) {
+		t.Error("Expected failed flag")
+	}
+	for _, i := range []int{0, 1, 3, 4} {
+		if exp, act := "foobar", string(msgs[0].Get(i).Get()); act != exp {
+			t.Errorf("Wrong result: %v != %v", act, exp)
+		}
+		if HasFailed(msgs[0].Get(i)) {
+			t.Error("Did not expect failed flag")
+		}
 	}
 }
 

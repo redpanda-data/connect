@@ -5,9 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.38.9 - 2018-12-04
+
 ### Added
 
 - Field `role_external_id` added to all S3 credential configs.
+- New `processor_failed` condition and improved processor error handling which
+  can be read about [here](./docs/error_handling.md)
 
 ## 0.38.8 - 2018-11-29
 

@@ -50,7 +50,14 @@ to cap the rate of requests across parallel components service wide.
 In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
 can use the ` + "[`process_map`](#process_map)" + ` or
- ` + "[`process_field`](#process_field)" + ` processors.`,
+ ` + "[`process_field`](#process_field)" + ` processors.
+
+### Error Handling
+
+When all retry attempts for a message are exhausted the processor cancels the
+attempt. These failed messages will continue through the pipeline unchanged, but
+can be dropped or placed in a dead letter queue according to your config, you
+can read about these patterns [here](../error_handling.md).`,
 	}
 }
 
@@ -133,13 +140,16 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		// Easy, just do a single request.
 		var err error
 		if responseMsg, err = l.client.Invoke(msg); err != nil {
-			if err != nil {
-				l.mErr.Incr(1)
-				l.log.Errorf("Lambda function '%v' failed: %v\n", l.conf.Lambda.Config.Function, err)
-				return nil, response.NewError(fmt.Errorf(
-					"lambda function '%v' failed: %v", l.conf.Lambda.Config.Function, err,
-				))
-			}
+			l.mErr.Incr(1)
+			l.mErrLambda.Incr(1)
+			l.log.Errorf("Lambda function '%v' failed: %v\n", l.conf.Lambda.Config.Function, err)
+			responseMsg = msg
+			responseMsg.Iter(func(i int, p types.Part) error {
+				FlagFail(p)
+				return nil
+			})
+		} else {
+			l.mSucc.Incr(1)
 		}
 	} else {
 		parts := make([]types.Part, msg.Len())
@@ -158,9 +168,12 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 					err = fmt.Errorf("unexpected response size: %v", result.Len())
 				}
 				if err != nil {
+					l.mErr.Incr(1)
 					l.mErrLambda.Incr(1)
 					l.log.Errorf("Lambda parallel request to '%v' failed: %v\n", l.conf.Lambda.Config.Function, err)
+					FlagFail(parts[index])
 				} else {
+					l.mSucc.Incr(1)
 					parts[index] = result.Get(0)
 				}
 
@@ -181,7 +194,6 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		))
 	}
 
-	l.mSucc.Incr(1)
 	msgs := [1]types.Message{responseMsg}
 
 	l.mSent.Incr(1)

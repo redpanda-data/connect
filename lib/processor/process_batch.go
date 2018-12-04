@@ -69,7 +69,7 @@ func NewProcessBatchConfig() ProcessBatchConfig {
 // ProcessBatch is a processor that applies a list of child processors to each
 // message of a batch individually.
 type ProcessBatch struct {
-	children []Type
+	children []types.Processor
 
 	log log.Modular
 
@@ -87,7 +87,7 @@ func NewProcessBatch(
 	nsStats := metrics.Namespaced(stats, "processor.process_batch")
 	nsLog := log.NewModule(".processor.process_batch")
 
-	var children []Type
+	var children []types.Processor
 	for _, pconf := range conf.ProcessBatch {
 		proc, err := New(pconf, mgr, nsLog, nsStats)
 		if err != nil {
@@ -117,20 +117,14 @@ func (p *ProcessBatch) ProcessMessage(msg types.Message) ([]types.Message, types
 	resultMsgs := make([]types.Message, msg.Len())
 	msg.Iter(func(i int, p types.Part) error {
 		tmpMsg := message.New(nil)
-		tmpMsg.SetAll([]types.Part{p.Copy()})
+		tmpMsg.SetAll([]types.Part{p})
 		resultMsgs[i] = tmpMsg
 		return nil
 	})
 
 	var res types.Response
-	for i := 0; len(resultMsgs) > 0 && i < len(p.children); i++ {
-		var nextResultMsgs []types.Message
-		for _, m := range resultMsgs {
-			var rMsgs []types.Message
-			rMsgs, res = p.children[i].ProcessMessage(m)
-			nextResultMsgs = append(nextResultMsgs, rMsgs...)
-		}
-		resultMsgs = nextResultMsgs
+	if resultMsgs, res = ExecuteAll(p.children, resultMsgs...); res != nil {
+		return nil, res
 	}
 
 	resMsg := message.New(nil)

@@ -22,7 +22,7 @@ package processor
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -203,7 +203,7 @@ type ProcessMap struct {
 	parts []int
 
 	mapper   *mapper.Type
-	children []Type
+	children []types.Processor
 
 	log log.Modular
 
@@ -226,7 +226,7 @@ func NewProcessMap(
 	nsStats := metrics.Namespaced(stats, "processor.process_map")
 	nsLog := log.NewModule(".processor.process_map")
 
-	var children []Type
+	var children []types.Processor
 	for _, pconf := range conf.Processors {
 		proc, err := New(pconf, mgr, nsLog, nsStats)
 		if err != nil {
@@ -379,20 +379,14 @@ func (p *ProcessMap) OverlayResult(payload, response types.Message) error {
 	return nil
 }
 
-func processMap(mappedMsg types.Message, processors []Type) ([]types.Message, error) {
-	requestMsgs := []types.Message{mappedMsg}
-	i := 0
-	for ; len(requestMsgs) > 0 && i < len(processors); i++ {
-		var nextRequestMsgs []types.Message
-		for _, m := range requestMsgs {
-			rMsgs, _ := processors[i].ProcessMessage(m)
-			nextRequestMsgs = append(nextRequestMsgs, rMsgs...)
-		}
-		requestMsgs = nextRequestMsgs
+func processMap(mappedMsg types.Message, processors []types.Processor) ([]types.Message, error) {
+	requestMsgs, res := ExecuteAll(processors, mappedMsg)
+	if res != nil && res.Error() != nil {
+		return nil, res.Error()
 	}
 
 	if len(requestMsgs) == 0 {
-		return nil, fmt.Errorf("processor index '%v' returned zero messages", i)
+		return nil, errors.New("processors resulted in zero messages")
 	}
 
 	return requestMsgs, nil

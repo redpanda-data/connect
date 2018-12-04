@@ -26,6 +26,8 @@ Documentation
   - Maximising CPU Utilisation
 - [Message Batching](./batching.md) explains how multiple part messages and
   message batching works within Benthos.
+- [Error Handling](./error_handling.md) explains how you can handle errors from
+  processor steps in order to recover or reroute the data.
 - [Making Configuration Easier](./configuration.md) explains some of the tools
   provided by Benthos that help make writing configs easier.
 - [Config Interpolation](./config_interpolation.md) explains how to incorporate

@@ -62,7 +62,14 @@ interpolations described [here](../config_interpolation.md#functions).
 In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
 can use the ` + "[`process_map`](#process_map)" + ` or
- ` + "[`process_field`](#process_field)" + ` processors.`,
+ ` + "[`process_field`](#process_field)" + ` processors.
+ 
+### Error Handling
+
+When all retry attempts for a message are exhausted the processor cancels the
+attempt. These failed messages will continue through the pipeline unchanged, but
+can be dropped or placed in a dead letter queue according to your config, you
+can read about these patterns [here](../error_handling.md).`,
 	}
 }
 
@@ -151,9 +158,14 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		if responseMsg, err = h.client.Send(msg); err != nil {
 			h.mErr.Incr(1)
 			h.mErrHTTP.Incr(1)
-			return nil, response.NewError(fmt.Errorf(
-				"HTTP request '%v' failed: %v", h.conf.HTTP.Client.URL, err,
-			))
+			h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.Client.URL, err)
+			responseMsg = msg
+			responseMsg.Iter(func(i int, p types.Part) error {
+				FlagFail(p)
+				return nil
+			})
+		} else {
+			h.mSucc.Incr(1)
 		}
 	} else {
 		// Hard, need to do parallel requests limited by max parallelism.
@@ -178,6 +190,8 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 					}
 					if err == nil {
 						results[index] = result.Get(0)
+					} else {
+						FlagFail(results[index])
 					}
 					resChan <- err
 				}
@@ -190,8 +204,11 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		}()
 		for i := 0; i < msg.Len(); i++ {
 			if err := <-resChan; err != nil {
+				h.mErr.Incr(1)
 				h.mErrHTTP.Incr(1)
 				h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.Client.URL, err)
+			} else {
+				h.mSucc.Incr(1)
 			}
 		}
 
@@ -201,14 +218,11 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	}
 
 	if responseMsg.Len() < 1 {
-		h.mErr.Incr(1)
-		h.mErrHTTP.Incr(1)
 		return nil, response.NewError(fmt.Errorf(
 			"HTTP response from '%v' was empty", h.conf.HTTP.Client.URL,
 		))
 	}
 
-	h.mSucc.Incr(1)
 	msgs := [1]types.Message{responseMsg}
 
 	h.mSent.Incr(1)
