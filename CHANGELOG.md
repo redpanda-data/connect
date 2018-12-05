@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.39.0 - 2018-12-05
+
 ### Added
 
 - New endpoint `/ready` that returns 200 when both the input and output
