@@ -209,7 +209,6 @@ type ProcessMap struct {
 	log log.Modular
 
 	mCount        metrics.StatCounter
-	mCountParts   metrics.StatCounter
 	mSkipped      metrics.StatCounter
 	mSkippedParts metrics.StatCounter
 	mErr          metrics.StatCounter
@@ -217,7 +216,7 @@ type ProcessMap struct {
 	mErrProc      metrics.StatCounter
 	mErrPost      metrics.StatCounter
 	mSent         metrics.StatCounter
-	mSentParts    metrics.StatCounter
+	mBatchSent    metrics.StatCounter
 }
 
 // NewProcessMap returns a ProcessField processor.
@@ -251,7 +250,6 @@ func NewProcessMap(
 
 		log:           log,
 		mCount:        stats.GetCounter("count"),
-		mCountParts:   stats.GetCounter("parts.count"),
 		mSkipped:      stats.GetCounter("skipped"),
 		mSkippedParts: stats.GetCounter("parts.skipped"),
 		mErr:          stats.GetCounter("error"),
@@ -259,7 +257,7 @@ func NewProcessMap(
 		mErrProc:      stats.GetCounter("error.processors"),
 		mErrPost:      stats.GetCounter("error.postmap"),
 		mSent:         stats.GetCounter("sent"),
-		mSentParts:    stats.GetCounter("parts.sent"),
+		mBatchSent:    stats.GetCounter("batch.sent"),
 	}
 
 	var err error
@@ -325,7 +323,6 @@ func (p *ProcessMap) TargetsProvided() []string {
 // original message in order to complete the map.
 func (p *ProcessMap) CreateResult(msg types.Message) (types.Message, error) {
 	p.mCount.Incr(1)
-	p.mCountParts.Incr(int64(msg.Len()))
 
 	mapMsg := msg
 	if len(p.parts) > 0 {
@@ -380,8 +377,8 @@ func (p *ProcessMap) OverlayResult(payload, response types.Message) ([]int, erro
 		return nil, err
 	}
 
-	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(payload.Len()))
+	p.mBatchSent.Incr(1)
+	p.mSent.Incr(int64(payload.Len()))
 	return failed, nil
 }
 

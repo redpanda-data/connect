@@ -86,9 +86,9 @@ type HashSample struct {
 	mCount     metrics.StatCounter
 	mDropOOB   metrics.StatCounter
 	mDropped   metrics.StatCounter
-	mErrHash   metrics.StatCounter
+	mErr       metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewHashSample returns a HashSample processor.
@@ -103,9 +103,9 @@ func NewHashSample(
 		mCount:     stats.GetCounter("count"),
 		mDropOOB:   stats.GetCounter("dropped_part_out_of_bounds"),
 		mDropped:   stats.GetCounter("dropped"),
-		mErrHash:   stats.GetCounter("hashing_error"),
+		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -135,7 +135,7 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 		// Attempt to add part to hash.
 		if _, err := hash.Write(msg.Get(index).Get()); nil != err {
-			s.mErrHash.Incr(1)
+			s.mErr.Incr(1)
 			s.log.Debugf("Cannot hash message part for sampling: %v\n", err)
 			return nil, response.NewAck()
 		}
@@ -143,13 +143,13 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	rate := scaleNum(hash.Sum64())
 	if rate >= s.conf.HashSample.RetainMin && rate < s.conf.HashSample.RetainMax {
-		s.mSent.Incr(1)
-		s.mSentParts.Incr(int64(msg.Len()))
+		s.mBatchSent.Incr(1)
+		s.mSent.Incr(int64(msg.Len()))
 		msgs := [1]types.Message{msg}
 		return msgs[:], nil
 	}
 
-	s.mDropped.Incr(1)
+	s.mDropped.Incr(int64(msg.Len()))
 	return nil, response.NewAck()
 }
 

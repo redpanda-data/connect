@@ -88,7 +88,7 @@ func NewProcessFieldConfig() ProcessFieldConfig {
 type ProcessField struct {
 	parts    []int
 	path     []string
-	children []Type
+	children []types.Processor
 
 	log log.Modular
 
@@ -98,17 +98,16 @@ type ProcessField struct {
 	mErrMisaligned      metrics.StatCounter
 	mErrMisalignedBatch metrics.StatCounter
 	mSent               metrics.StatCounter
-	mSentParts          metrics.StatCounter
-	mDropped            metrics.StatCounter
+	mBatchSent          metrics.StatCounter
 }
 
 // NewProcessField returns a ProcessField processor.
 func NewProcessField(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	var children []Type
+	var children []types.Processor
 	for i, pconf := range conf.ProcessField.Processors {
-		prefix := fmt.Sprintf("processor.%v", i)
+		prefix := fmt.Sprintf("%v", i)
 		proc, err := New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
 		if err != nil {
 			return nil, err
@@ -128,8 +127,7 @@ func NewProcessField(
 		mErrMisaligned:      stats.GetCounter("error.misaligned"),
 		mErrMisalignedBatch: stats.GetCounter("error.misaligned_messages"),
 		mSent:               stats.GetCounter("sent"),
-		mSentParts:          stats.GetCounter("parts.sent"),
-		mDropped:            stats.GetCounter("dropped"),
+		mBatchSent:          stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -160,10 +158,12 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		var jObj interface{}
 		if jObj, err = payload.Get(index).JSON(); err != nil {
 			p.mErrJSONParse.Incr(1)
+			p.mErr.Incr(1)
 			p.log.Errorf("Failed to decode part: %v\n", err)
 		}
 		if gParts[i], err = gabs.Consume(jObj); err != nil {
 			p.mErrJSONParse.Incr(1)
+			p.mErr.Incr(1)
 			p.log.Errorf("Failed to decode part: %v\n", err)
 		}
 		gTarget := gParts[i].S(p.path...)
@@ -175,17 +175,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		}
 	}
 
-	resultMsgs := []types.Message{reqMsg}
-	for i := 0; len(resultMsgs) > 0 && i < len(p.children); i++ {
-		var nextResultMsgs []types.Message
-		for _, m := range resultMsgs {
-			var rMsgs []types.Message
-			rMsgs, _ = p.children[i].ProcessMessage(m)
-			nextResultMsgs = append(nextResultMsgs, rMsgs...)
-		}
-		resultMsgs = nextResultMsgs
-	}
-
+	resultMsgs, _ := ExecuteAll(p.children, reqMsg)
 	resMsg := message.New(nil)
 	for _, rMsg := range resultMsgs {
 		rMsg.Iter(func(i int, p types.Part) error {
@@ -195,21 +185,31 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	}
 
 	if exp, act := len(targetParts), resMsg.Len(); exp != act {
-		p.mSent.Incr(1)
-		p.mSentParts.Incr(int64(payload.Len()))
+		p.mBatchSent.Incr(1)
+		p.mSent.Incr(int64(payload.Len()))
 		p.mErr.Incr(1)
 		p.mErrMisalignedBatch.Incr(1)
 		p.log.Errorf("Misaligned processor result batch. Expected %v messages, received %v\n", exp, act)
+		resMsg.Iter(func(i int, p types.Part) error {
+			FlagFail(p)
+			return nil
+		})
 		return
 	}
 
 	for i, index := range targetParts {
 		gParts[i].Set(string(resMsg.Get(i).Get()), p.path...)
-		payload.Get(index).SetJSON(gParts[i].Data())
+		tPart := payload.Get(index)
+		tPart.SetJSON(gParts[i].Data())
+		tPartMeta := tPart.Metadata()
+		resMsg.Get(i).Metadata().Iter(func(k, v string) error {
+			tPartMeta.Set(k, v)
+			return nil
+		})
 	}
 
-	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(payload.Len()))
+	p.mBatchSent.Incr(1)
+	p.mSent.Incr(int64(payload.Len()))
 	return
 }
 

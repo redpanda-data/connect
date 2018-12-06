@@ -91,11 +91,10 @@ type Lambda struct {
 	stats metrics.Type
 
 	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
 	mErrLambda metrics.StatCounter
-	mSucc      metrics.StatCounter
+	mErr       metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewLambda returns a Lambda processor.
@@ -110,11 +109,10 @@ func NewLambda(
 		parallel: conf.Lambda.Parallel,
 
 		mCount:     stats.GetCounter("count"),
-		mSucc:      stats.GetCounter("success"),
-		mErr:       stats.GetCounter("error"),
 		mErrLambda: stats.GetCounter("error.lambda"),
+		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
 	if l.client, err = client.New(
@@ -148,8 +146,6 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 				FlagFail(p)
 				return nil
 			})
-		} else {
-			l.mSucc.Incr(1)
 		}
 	} else {
 		parts := make([]types.Part, msg.Len())
@@ -173,7 +169,6 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 					l.log.Errorf("Lambda parallel request to '%v' failed: %v\n", l.conf.Lambda.Config.Function, err)
 					FlagFail(parts[index])
 				} else {
-					l.mSucc.Incr(1)
 					parts[index] = result.Get(0)
 				}
 
@@ -196,8 +191,8 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 
 	msgs := [1]types.Message{responseMsg}
 
-	l.mSent.Incr(1)
-	l.mSentParts.Incr(int64(responseMsg.Len()))
+	l.mBatchSent.Incr(1)
+	l.mSent.Incr(int64(responseMsg.Len()))
 	return msgs[:], nil
 }
 

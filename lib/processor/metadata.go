@@ -147,9 +147,8 @@ type Metadata struct {
 
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter
-	mSucc      metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewMetadata returns a Metadata processor.
@@ -167,9 +166,8 @@ func NewMetadata(
 
 		mCount:     stats.GetCounter("count"),
 		mErr:       stats.GetCounter("error"),
-		mSucc:      stats.GetCounter("success"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
 	m.interpolate = text.ContainsFunctionVariables(m.valueBytes)
@@ -198,6 +196,7 @@ func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		if err := p.operator(newMsg.Get(index).Metadata(), valueBytes); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)
+			FlagFail(newMsg.Get(index))
 		}
 	}
 
@@ -213,8 +212,8 @@ func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	msgs := [1]types.Message{newMsg}
 
-	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(newMsg.Len()))
+	p.mBatchSent.Incr(1)
+	p.mSent.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

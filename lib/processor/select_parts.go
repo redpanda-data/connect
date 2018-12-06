@@ -80,7 +80,7 @@ type SelectParts struct {
 	mSelected  metrics.StatCounter
 	mDropped   metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewSelectParts returns a SelectParts processor.
@@ -97,7 +97,7 @@ func NewSelectParts(
 		mSelected:  stats.GetCounter("selected"),
 		mDropped:   stats.GetCounter("dropped"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -131,8 +131,8 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 		return nil, response.NewAck()
 	}
 
-	m.mSent.Incr(1)
-	m.mSentParts.Incr(int64(newMsg.Len()))
+	m.mBatchSent.Incr(1)
+	m.mSent.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

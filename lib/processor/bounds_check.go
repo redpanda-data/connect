@@ -77,7 +77,7 @@ type BoundsCheck struct {
 	mDroppedNumParts metrics.StatCounter
 	mDroppedPartSize metrics.StatCounter
 	mSent            metrics.StatCounter
-	mSentParts       metrics.StatCounter
+	mBatchSent       metrics.StatCounter
 }
 
 // NewBoundsCheck returns a BoundsCheck processor.
@@ -95,7 +95,7 @@ func NewBoundsCheck(
 		mDroppedNumParts: stats.GetCounter("dropped_num_parts"),
 		mDroppedPartSize: stats.GetCounter("dropped_part_size"),
 		mSent:            stats.GetCounter("sent"),
-		mSentParts:       stats.GetCounter("parts.sent"),
+		mBatchSent:       stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -147,8 +147,8 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 		return nil, response.NewAck()
 	}
 
-	m.mSent.Incr(1)
-	m.mSentParts.Incr(int64(msg.Len()))
+	m.mBatchSent.Incr(1)
+	m.mSent.Incr(int64(msg.Len()))
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

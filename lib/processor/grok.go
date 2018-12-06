@@ -85,9 +85,9 @@ type Grok struct {
 	mCount     metrics.StatCounter
 	mErrGrok   metrics.StatCounter
 	mErrJSONS  metrics.StatCounter
-	mSucc      metrics.StatCounter
+	mErr       metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewGrok returns a Grok processor.
@@ -122,9 +122,9 @@ func NewGrok(
 		mCount:     stats.GetCounter("count"),
 		mErrGrok:   stats.GetCounter("error.grok_no_matches"),
 		mErrJSONS:  stats.GetCounter("error.json_set"),
-		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	return g, nil
 }
@@ -145,6 +145,7 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			var err error
 			if values, err = compiler.ParseTyped(body); err != nil {
 				g.log.Debugf("Failed to parse body: %v\n", err)
+				FlagFail(newMsg.Get(index))
 				continue
 			}
 			if len(values) > 0 {
@@ -154,15 +155,17 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 		if len(values) == 0 {
 			g.mErrGrok.Incr(1)
+			g.mErr.Incr(1)
 			g.log.Debugf("No matches found for payload: %s\n", body)
+			FlagFail(newMsg.Get(index))
 			return
 		}
 
 		if err := newMsg.Get(index).SetJSON(values); err != nil {
 			g.mErrJSONS.Incr(1)
+			g.mErr.Incr(1)
 			g.log.Debugf("Failed to convert grok result into json: %v\n", err)
-		} else {
-			g.mSucc.Incr(1)
+			FlagFail(newMsg.Get(index))
 		}
 	}
 
@@ -178,8 +181,8 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	msgs := [1]types.Message{newMsg}
 
-	g.mSent.Incr(1)
-	g.mSentParts.Incr(int64(newMsg.Len()))
+	g.mBatchSent.Incr(1)
+	g.mSent.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

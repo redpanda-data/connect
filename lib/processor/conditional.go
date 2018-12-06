@@ -91,8 +91,8 @@ func NewConditionalConfig() ConditionalConfig {
 // condition.
 type Conditional struct {
 	cond         condition.Type
-	children     []Type
-	elseChildren []Type
+	children     []types.Processor
+	elseChildren []types.Processor
 
 	log log.Modular
 
@@ -100,8 +100,7 @@ type Conditional struct {
 	mCondPassed metrics.StatCounter
 	mCondFailed metrics.StatCounter
 	mSent       metrics.StatCounter
-	mSentParts  metrics.StatCounter
-	mDropped    metrics.StatCounter
+	mBatchSent  metrics.StatCounter
 }
 
 // NewConditional returns a Conditional processor.
@@ -115,7 +114,7 @@ func NewConditional(
 
 	nsStats := metrics.Namespaced(stats, "if")
 	nsLog := log.NewModule(".if")
-	var children []Type
+	var children []types.Processor
 	for _, pconf := range conf.Conditional.Processors {
 		var proc Type
 		if proc, err = New(pconf, mgr, nsLog, nsStats); err != nil {
@@ -126,7 +125,7 @@ func NewConditional(
 
 	nsStats = metrics.Namespaced(stats, "else")
 	nsLog = log.NewModule(".else")
-	var elseChildren []Type
+	var elseChildren []types.Processor
 	for _, pconf := range conf.Conditional.ElseProcessors {
 		var proc Type
 		if proc, err = New(pconf, mgr, nsLog, nsStats); err != nil {
@@ -146,8 +145,7 @@ func NewConditional(
 		mCondPassed: stats.GetCounter("passed"),
 		mCondFailed: stats.GetCounter("failed"),
 		mSent:       stats.GetCounter("sent"),
-		mSentParts:  stats.GetCounter("parts.sent"),
-		mDropped:    stats.GetCounter("dropped"),
+		mBatchSent:  stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -158,7 +156,7 @@ func NewConditional(
 func (c *Conditional) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
 	c.mCount.Incr(1)
 
-	var procs []Type
+	var procs []types.Processor
 
 	if c.cond.Check(msg) {
 		c.mCondPassed.Incr(1)
@@ -170,29 +168,16 @@ func (c *Conditional) ProcessMessage(msg types.Message) (msgs []types.Message, r
 		procs = c.elseChildren
 	}
 
-	resultMsgs := []types.Message{msg}
-	var resultRes types.Response
-
-	for i := 0; len(resultMsgs) > 0 && i < len(procs); i++ {
-		var nextResultMsgs []types.Message
-		for _, m := range resultMsgs {
-			var rMsgs []types.Message
-			rMsgs, resultRes = procs[i].ProcessMessage(m)
-			nextResultMsgs = append(nextResultMsgs, rMsgs...)
-		}
-		resultMsgs = nextResultMsgs
-	}
-
+	resultMsgs, resultRes := ExecuteAll(procs, msg)
 	if len(resultMsgs) == 0 {
-		c.mDropped.Incr(1)
 		res = resultRes
 	} else {
-		c.mSent.Incr(int64(len(resultMsgs)))
+		c.mBatchSent.Incr(int64(len(resultMsgs)))
 		totalParts := 0
 		for _, msg := range resultMsgs {
 			totalParts += msg.Len()
 		}
-		c.mSentParts.Incr(int64(totalParts))
+		c.mSent.Incr(int64(totalParts))
 		msgs = resultMsgs
 	}
 

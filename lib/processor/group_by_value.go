@@ -97,9 +97,8 @@ type GroupByValue struct {
 
 	mCount     metrics.StatCounter
 	mGroups    metrics.StatGauge
-	mDropped   metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewGroupByValue returns a GroupByValue processor.
@@ -114,9 +113,8 @@ func NewGroupByValue(
 
 		mCount:     stats.GetCounter("count"),
 		mGroups:    stats.GetGauge("groups"),
-		mDropped:   stats.GetCounter("dropped"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -128,7 +126,6 @@ func (g *GroupByValue) ProcessMessage(msg types.Message) ([]types.Message, types
 	g.mCount.Incr(1)
 
 	if msg.Len() == 0 {
-		g.mDropped.Incr(1)
 		return nil, response.NewAck()
 	}
 
@@ -157,13 +154,12 @@ func (g *GroupByValue) ProcessMessage(msg types.Message) ([]types.Message, types
 	g.mGroups.Set(int64(len(groupKeys)))
 
 	if len(msgs) == 0 {
-		g.mDropped.Incr(1)
 		return nil, response.NewAck()
 	}
 
-	g.mSent.Incr(int64(len(msgs)))
+	g.mBatchSent.Incr(int64(len(msgs)))
 	for _, m := range msgs {
-		g.mSentParts.Incr(int64(m.Len()))
+		g.mSent.Incr(int64(m.Len()))
 	}
 	return msgs, nil
 }

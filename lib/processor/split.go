@@ -75,7 +75,7 @@ type Split struct {
 	mCount     metrics.StatCounter
 	mDropped   metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewSplit returns a Split processor.
@@ -91,7 +91,7 @@ func NewSplit(
 		mCount:     stats.GetCounter("count"),
 		mDropped:   stats.GetCounter("dropped"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -123,8 +123,8 @@ func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		msgs = append(msgs, newMsg)
 	}
 
-	s.mSent.Incr(int64(len(msgs)))
-	s.mSentParts.Incr(int64(msg.Len()))
+	s.mBatchSent.Incr(int64(len(msgs)))
+	s.mSent.Incr(int64(msg.Len()))
 	return msgs, nil
 }
 

@@ -148,11 +148,9 @@ type Decompress struct {
 	stats metrics.Type
 
 	mCount     metrics.StatCounter
-	mSucc      metrics.StatCounter
 	mErr       metrics.StatCounter
-	mSkipped   metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewDecompress returns a Decompress processor.
@@ -170,11 +168,9 @@ func NewDecompress(
 		stats:  stats,
 
 		mCount:     stats.GetCounter("count"),
-		mSucc:      stats.GetCounter("success"),
 		mErr:       stats.GetCounter("error"),
-		mSkipped:   stats.GetCounter("skipped"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -190,10 +186,11 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		part := msg.Get(index).Get()
 		newPart, err := d.decomp(part)
 		if err == nil {
-			d.mSucc.Incr(1)
 			newMsg.Get(index).Set(newPart)
 		} else {
 			d.mErr.Incr(1)
+			d.log.Errorf("Failed to decompress message part: %v\n", err)
+			FlagFail(newMsg.Get(index))
 		}
 	}
 
@@ -208,12 +205,11 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	}
 
 	if newMsg.Len() == 0 {
-		d.mSkipped.Incr(1)
 		return nil, response.NewAck()
 	}
 
-	d.mSent.Incr(1)
-	d.mSentParts.Incr(int64(newMsg.Len()))
+	d.mBatchSent.Incr(1)
+	d.mSent.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

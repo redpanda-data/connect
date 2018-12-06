@@ -133,7 +133,7 @@ type Batch struct {
 
 	mCount       metrics.StatCounter
 	mSent        metrics.StatCounter
-	mSentParts   metrics.StatCounter
+	mBatchSent   metrics.StatCounter
 	mSizeBatch   metrics.StatCounter
 	mCountBatch  metrics.StatCounter
 	mPeriodBatch metrics.StatCounter
@@ -171,7 +171,7 @@ func NewBatch(
 		mPeriodBatch: stats.GetCounter("on_period"),
 		mCondBatch:   stats.GetCounter("on_condition"),
 		mSent:        stats.GetCounter("sent"),
-		mSentParts:   stats.GetCounter("parts.sent"),
+		mBatchSent:   stats.GetCounter("batch.sent"),
 		mDropped:     stats.GetCounter("dropped"),
 	}, nil
 }
@@ -221,8 +221,8 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		c.sizeTally = 0
 		c.lastBatch = time.Now()
 
-		c.mSentParts.Incr(int64(newMsg.Len()))
-		c.mSent.Incr(1)
+		c.mSent.Incr(int64(newMsg.Len()))
+		c.mBatchSent.Incr(1)
 		msgs := [1]types.Message{newMsg}
 		return msgs[:], nil
 	}

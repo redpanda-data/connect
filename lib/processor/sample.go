@@ -71,7 +71,7 @@ type Sample struct {
 	mCount     metrics.StatCounter
 	mDropped   metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewSample returns a Sample processor.
@@ -89,7 +89,7 @@ func NewSample(
 		mCount:     stats.GetCounter("count"),
 		mDropped:   stats.GetCounter("dropped"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -103,8 +103,8 @@ func (s *Sample) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		s.mDropped.Incr(1)
 		return nil, response.NewAck()
 	}
-	s.mSent.Incr(1)
-	s.mSentParts.Incr(int64(msg.Len()))
+	s.mBatchSent.Incr(1)
+	s.mSent.Incr(int64(msg.Len()))
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

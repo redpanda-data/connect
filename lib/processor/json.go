@@ -488,9 +488,8 @@ type JSON struct {
 	mErrJSONP  metrics.StatCounter
 	mErrJSONS  metrics.StatCounter
 	mErr       metrics.StatCounter
-	mSucc      metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewJSON returns a JSON processor.
@@ -509,9 +508,8 @@ func NewJSON(
 		mErrJSONP:  stats.GetCounter("error.json_parse"),
 		mErrJSONS:  stats.GetCounter("error.json_set"),
 		mErr:       stats.GetCounter("error"),
-		mSucc:      stats.GetCounter("success"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
 	j.interpolate = text.ContainsFunctionVariables(j.valueBytes)
@@ -545,7 +543,9 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		jsonPart, err := newMsg.Get(index).JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
+			p.mErr.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
+			FlagFail(newMsg.Get(index))
 			return
 		}
 
@@ -553,6 +553,7 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		if data, err = p.operator(jsonPart, json.RawMessage(valueBytes)); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)
+			FlagFail(newMsg.Get(index))
 			return
 		}
 
@@ -564,12 +565,10 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		default:
 			if err = newMsg.Get(index).SetJSON(data); err != nil {
 				p.mErrJSONS.Incr(1)
+				p.mErr.Incr(1)
 				p.log.Debugf("Failed to convert json into part: %v\n", err)
+				FlagFail(newMsg.Get(index))
 			}
-		}
-
-		if err == nil {
-			p.mSucc.Incr(1)
 		}
 	}
 
@@ -585,8 +584,8 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	msgs := [1]types.Message{newMsg}
 
-	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(newMsg.Len()))
+	p.mBatchSent.Incr(1)
+	p.mSent.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

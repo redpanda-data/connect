@@ -72,7 +72,7 @@ type Throttle struct {
 
 	mCount     metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewThrottle returns a Throttle processor.
@@ -86,7 +86,7 @@ func NewThrottle(
 
 		mCount:     stats.GetCounter("count"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
 	var err error
@@ -110,8 +110,8 @@ func (m *Throttle) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	m.lastBatch = time.Now()
 
-	m.mSent.Incr(1)
-	m.mSentParts.Incr(int64(msg.Len()))
+	m.mBatchSent.Incr(1)
+	m.mSent.Incr(int64(msg.Len()))
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

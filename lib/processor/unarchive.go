@@ -30,7 +30,6 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -183,12 +182,11 @@ type Unarchive struct {
 	stats metrics.Type
 
 	mCount     metrics.StatCounter
-	mSucc      metrics.StatCounter
 	mErr       metrics.StatCounter
 	mSkipped   metrics.StatCounter
 	mDropped   metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewUnarchive returns a Unarchive processor.
@@ -206,12 +204,11 @@ func NewUnarchive(
 		stats:     stats,
 
 		mCount:     stats.GetCounter("count"),
-		mSucc:      stats.GetCounter("success"),
 		mErr:       stats.GetCounter("error"),
 		mSkipped:   stats.GetCounter("skipped"),
 		mDropped:   stats.GetCounter("dropped"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -243,22 +240,18 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		}
 		newParts, err := d.unarchive(part)
 		if err == nil {
-			d.mSucc.Incr(1)
 			newMsg.Append(newParts...)
 		} else {
 			d.mErr.Incr(1)
+			d.log.Errorf("Failed to unarchive message part: %v\n", err)
+			newMsg.Append(part)
+			FlagFail(newMsg.Get(-1))
 		}
 		return nil
 	})
 
-	if newMsg.Len() == 0 {
-		d.mSkipped.Incr(1)
-		d.mDropped.Incr(1)
-		return nil, response.NewAck()
-	}
-
-	d.mSent.Incr(1)
-	d.mSentParts.Incr(int64(newMsg.Len()))
+	d.mBatchSent.Incr(1)
+	d.mSent.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

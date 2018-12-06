@@ -105,9 +105,9 @@ type JMESPath struct {
 	mErrJSONP  metrics.StatCounter
 	mErrJMES   metrics.StatCounter
 	mErrJSONS  metrics.StatCounter
-	mSucc      metrics.StatCounter
+	mErr       metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewJMESPath returns a JMESPath processor.
@@ -129,9 +129,9 @@ func NewJMESPath(
 		mErrJSONP:  stats.GetCounter("error.json_parse"),
 		mErrJMES:   stats.GetCounter("error.jmespath_search"),
 		mErrJSONS:  stats.GetCounter("error.json_set"),
-		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	return j, nil
 }
@@ -157,22 +157,26 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		jsonPart, err := newMsg.Get(index).JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
+			p.mErr.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
+			FlagFail(newMsg.Get(index))
 			return
 		}
 
 		var result interface{}
 		if result, err = safeSearch(jsonPart, p.query); err != nil {
 			p.mErrJMES.Incr(1)
+			p.mErr.Incr(1)
 			p.log.Debugf("Failed to search json: %v\n", err)
+			FlagFail(newMsg.Get(index))
 			return
 		}
 
 		if err = newMsg.Get(index).SetJSON(result); err != nil {
 			p.mErrJSONS.Incr(1)
+			p.mErr.Incr(1)
 			p.log.Debugf("Failed to convert jmespath result into part: %v\n", err)
-		} else {
-			p.mSucc.Incr(1)
+			FlagFail(newMsg.Get(index))
 		}
 	}
 
@@ -188,8 +192,8 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	msgs := [1]types.Message{newMsg}
 
-	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(newMsg.Len()))
+	p.mBatchSent.Incr(1)
+	p.mSent.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

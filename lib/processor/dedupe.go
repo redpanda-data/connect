@@ -161,12 +161,12 @@ type Dedupe struct {
 	hasherFunc hasherFunc
 
 	mCount     metrics.StatCounter
-	mErrJSON   metrics.StatCounter
-	mDropped   metrics.StatCounter
 	mErrHash   metrics.StatCounter
 	mErrCache  metrics.StatCounter
+	mErr       metrics.StatCounter
+	mDropped   metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewDedupe returns a Dedupe processor.
@@ -198,12 +198,12 @@ func NewDedupe(
 		hasherFunc: hFunc,
 
 		mCount:     stats.GetCounter("count"),
-		mErrJSON:   stats.GetCounter("error.json_parse"),
-		mDropped:   stats.GetCounter("dropped"),
 		mErrHash:   stats.GetCounter("error.hash"),
 		mErrCache:  stats.GetCounter("error.cache"),
+		mErr:       stats.GetCounter("error"),
+		mDropped:   stats.GetCounter("dropped"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -230,6 +230,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			if partBytes := msg.Get(index).Get(); partBytes != nil {
 				if _, err := hasher.Write(msg.Get(index).Get()); nil != err {
 					d.mErrHash.Incr(1)
+					d.mErr.Incr(1)
 					d.mDropped.Incr(1)
 					d.log.Errorf("Hash error: %v\n", err)
 				} else {
@@ -247,6 +248,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	} else if err := d.cache.Add(string(hasher.Bytes()), []byte{'t'}); err != nil {
 		if err != types.ErrKeyAlreadyExists {
 			d.mErrCache.Incr(1)
+			d.mErr.Incr(1)
 			d.log.Errorf("Cache error: %v\n", err)
 			if d.conf.Dedupe.DropOnCacheErr {
 				d.mDropped.Incr(1)
@@ -258,8 +260,8 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		}
 	}
 
-	d.mSent.Incr(1)
-	d.mSentParts.Incr(int64(msg.Len()))
+	d.mBatchSent.Incr(1)
+	d.mSent.Incr(int64(msg.Len()))
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }

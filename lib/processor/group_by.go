@@ -166,11 +166,10 @@ type GroupBy struct {
 	groups     []group
 	mGroupPass []metrics.StatCounter
 
-	mGroupDefault metrics.StatCounter
 	mCount        metrics.StatCounter
-	mDropped      metrics.StatCounter
+	mGroupDefault metrics.StatCounter
 	mSent         metrics.StatCounter
-	mSentParts    metrics.StatCounter
+	mBatchSent    metrics.StatCounter
 }
 
 // NewGroupBy returns a GroupBy processor.
@@ -214,11 +213,10 @@ func NewGroupBy(
 		groups:     groups,
 		mGroupPass: groupCtrs,
 
-		mGroupDefault: stats.GetCounter("groups.default.passed"),
 		mCount:        stats.GetCounter("count"),
-		mDropped:      stats.GetCounter("dropped"),
+		mGroupDefault: stats.GetCounter("groups.default.passed"),
 		mSent:         stats.GetCounter("sent"),
-		mSentParts:    stats.GetCounter("parts.sent"),
+		mBatchSent:    stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -230,7 +228,6 @@ func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	g.mCount.Incr(1)
 
 	if msg.Len() == 0 {
-		g.mDropped.Incr(1)
 		return nil, response.NewAck()
 	}
 
@@ -276,13 +273,12 @@ func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	}
 
 	if len(msgs) == 0 {
-		g.mDropped.Incr(1)
 		return nil, response.NewAck()
 	}
 
-	g.mSent.Incr(int64(len(msgs)))
+	g.mBatchSent.Incr(int64(len(msgs)))
 	for _, m := range msgs {
-		g.mSentParts.Incr(int64(m.Len()))
+		g.mSent.Incr(int64(m.Len()))
 	}
 	return msgs, nil
 }

@@ -92,11 +92,9 @@ type Encode struct {
 	stats metrics.Type
 
 	mCount     metrics.StatCounter
-	mSucc      metrics.StatCounter
 	mErr       metrics.StatCounter
-	mSkipped   metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewEncode returns a Encode processor.
@@ -114,11 +112,9 @@ func NewEncode(
 		stats: stats,
 
 		mCount:     stats.GetCounter("count"),
-		mSucc:      stats.GetCounter("success"),
 		mErr:       stats.GetCounter("error"),
-		mSkipped:   stats.GetCounter("skipped"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -134,11 +130,11 @@ func (c *Encode) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		part := msg.Get(index).Get()
 		newPart, err := c.fn(part)
 		if err == nil {
-			c.mSucc.Incr(1)
 			newMsg.Get(index).Set(newPart)
 		} else {
 			c.log.Debugf("Failed to encode message part: %v\n", err)
 			c.mErr.Incr(1)
+			FlagFail(newMsg.Get(index))
 		}
 	}
 
@@ -153,12 +149,11 @@ func (c *Encode) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	}
 
 	if newMsg.Len() == 0 {
-		c.mSkipped.Incr(1)
 		return nil, response.NewAck()
 	}
 
-	c.mSent.Incr(1)
-	c.mSentParts.Incr(int64(newMsg.Len()))
+	c.mBatchSent.Incr(1)
+	c.mSent.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

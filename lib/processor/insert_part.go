@@ -78,7 +78,7 @@ type InsertPart struct {
 
 	mCount     metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewInsertPart returns a InsertPart processor.
@@ -96,7 +96,7 @@ func NewInsertPart(
 
 		mCount:     stats.GetCounter("count"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -137,8 +137,8 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		newMsg.Append(message.NewPart(newPart))
 	}
 
-	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(newMsg.Len()))
+	p.mBatchSent.Incr(1)
+	p.mSent.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
 }

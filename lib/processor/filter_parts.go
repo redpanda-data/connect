@@ -76,11 +76,10 @@ type FilterParts struct {
 
 	condition condition.Type
 
-	mCount       metrics.StatCounter
-	mPartDropped metrics.StatCounter
-	mDropped     metrics.StatCounter
-	mSent        metrics.StatCounter
-	mSentParts   metrics.StatCounter
+	mCount     metrics.StatCounter
+	mDropped   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewFilterParts returns a FilterParts processor.
@@ -99,11 +98,10 @@ func NewFilterParts(
 		stats:     stats,
 		condition: cond,
 
-		mCount:       stats.GetCounter("count"),
-		mPartDropped: stats.GetCounter("part.dropped"),
-		mDropped:     stats.GetCounter("dropped"),
-		mSent:        stats.GetCounter("sent"),
-		mSentParts:   stats.GetCounter("parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mDropped:   stats.GetCounter("dropped"),
+		mSent:      stats.GetCounter("sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -120,17 +118,16 @@ func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 		if c.condition.Check(message.Lock(msg, i)) {
 			newMsg.Append(msg.Get(i).Copy())
 		} else {
-			c.mPartDropped.Incr(1)
+			c.mDropped.Incr(1)
 		}
 	}
 	if newMsg.Len() > 0 {
-		c.mSent.Incr(1)
-		c.mSentParts.Incr(int64(newMsg.Len()))
+		c.mBatchSent.Incr(1)
+		c.mSent.Incr(int64(newMsg.Len()))
 		msgs := [1]types.Message{newMsg}
 		return msgs[:], nil
 	}
 
-	c.mDropped.Incr(1)
 	return nil, response.NewAck()
 }
 

@@ -254,10 +254,9 @@ type Text struct {
 	stats metrics.Type
 
 	mCount     metrics.StatCounter
-	mSucc      metrics.StatCounter
 	mErr       metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewText returns a Text processor.
@@ -273,10 +272,9 @@ func NewText(
 		valueBytes: []byte(conf.Text.Value),
 
 		mCount:     stats.GetCounter("count"),
-		mSucc:      stats.GetCounter("success"),
 		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
 	t.interpolate = text.ContainsFunctionVariables(t.valueBytes)
@@ -307,11 +305,10 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		if data, err = t.operator(data, valueBytes); err != nil {
 			t.mErr.Incr(1)
 			t.log.Debugf("Failed to apply operator: %v\n", err)
+			FlagFail(newMsg.Get(index))
 			return
 		}
-
 		newMsg.Get(index).Set(data)
-		t.mSucc.Incr(1)
 	}
 
 	if len(t.parts) == 0 {
@@ -326,8 +323,8 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	msgs := [1]types.Message{newMsg}
 
-	t.mSent.Incr(1)
-	t.mSentParts.Incr(int64(newMsg.Len()))
+	t.mBatchSent.Incr(1)
+	t.mSent.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

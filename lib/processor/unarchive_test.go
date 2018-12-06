@@ -32,7 +32,6 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/response"
 )
 
 func TestUnarchiveBadAlgo(t *testing.T) {
@@ -227,15 +226,17 @@ func TestUnarchiveBinary(t *testing.T) {
 		return
 	}
 
-	if msgs, res := proc.ProcessMessage(message.New(nil)); len(msgs) > 0 {
-		t.Error("Expected fail on bad message")
-	} else if _, ok := res.(response.Ack); !ok {
-		t.Error("Expected simple response from bad message")
-	}
-	if msgs, _ := proc.ProcessMessage(
+	msgs, _ := proc.ProcessMessage(
 		message.New([][]byte{[]byte("wat this isnt good")}),
-	); len(msgs) > 0 {
-		t.Error("Expected fail on bad message")
+	)
+	if exp, act := 1, len(msgs); exp != act {
+		t.Fatalf("Wrong count: %v != %v", act, exp)
+	}
+	if exp, act := 1, msgs[0].Len(); exp != act {
+		t.Fatalf("Wrong count: %v != %v", act, exp)
+	}
+	if !HasFailed(msgs[0].Get(0)) {
+		t.Error("Expected fail")
 	}
 
 	testMsg := message.New([][]byte{[]byte("hello"), []byte("world")})
@@ -354,30 +355,5 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 		if exp, act := result.value, string(message.GetAllBytes(msgs[0])[(result.index+1)%5]); exp == act {
 			t.Errorf("Processor was applied to wrong index %v: %v != %v", (result.index+1)%5, act, exp)
 		}
-	}
-}
-
-func TestUnarchiveEmpty(t *testing.T) {
-	conf := NewConfig()
-	conf.Unarchive.Format = "tar"
-	conf.Unarchive.Parts = []int{0, 1}
-
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	msgs, _ := proc.ProcessMessage(message.New([][]byte{}))
-	if len(msgs) != 0 {
-		t.Error("Expected failure with zero part message")
-	}
-
-	msgs, _ = proc.ProcessMessage(message.New(
-		[][]byte{[]byte("first"), []byte("second")},
-	))
-	if len(msgs) != 0 {
-		t.Error("Expected failure with bad data")
 	}
 }

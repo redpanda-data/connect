@@ -72,9 +72,9 @@ type MergeJSON struct {
 	mCount     metrics.StatCounter
 	mErrJSONP  metrics.StatCounter
 	mErrJSONS  metrics.StatCounter
-	mSucc      metrics.StatCounter
+	mErr       metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewMergeJSON returns a MergeJSON processor.
@@ -90,9 +90,9 @@ func NewMergeJSON(
 		mCount:     stats.GetCounter("count"),
 		mErrJSONP:  stats.GetCounter("error.json_parse"),
 		mErrJSONS:  stats.GetCounter("error.json_set"),
-		mSucc:      stats.GetCounter("success"),
+		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	return j, nil
 }
@@ -109,6 +109,7 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		jsonPart, err := msg.Get(index).JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
+			p.mErr.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
 			return
 		}
@@ -116,6 +117,7 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		var gPart *gabs.Container
 		if gPart, err = gabs.Consume(jsonPart); err != nil {
 			p.mErrJSONP.Incr(1)
+			p.mErr.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
 			return
 		}
@@ -161,16 +163,15 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	i := newMsg.Append(message.NewPart(nil))
 	if err := newMsg.Get(i).SetJSON(newPart.Data()); err != nil {
 		p.mErrJSONS.Incr(1)
+		p.mErr.Incr(1)
 		p.log.Debugf("Failed to marshal merged part into json: %v\n", err)
-	} else {
-		p.mSucc.Incr(1)
 	}
 	newMsg.Get(i).SetMetadata(firstMetadata)
 
 	msgs := [1]types.Message{newMsg}
 
-	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(newMsg.Len()))
+	p.mBatchSent.Incr(1)
+	p.mSent.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
 }
 

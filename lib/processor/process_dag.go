@@ -141,11 +141,10 @@ type ProcessDAG struct {
 
 	log log.Modular
 
-	mCount      metrics.StatCounter
-	mCountParts metrics.StatCounter
-	mErr        metrics.StatCounter
-	mSent       metrics.StatCounter
-	mSentParts  metrics.StatCounter
+	mCount     metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSent      metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewProcessDAG returns a ProcessField processor.
@@ -179,11 +178,10 @@ func NewProcessDAG(
 
 		log: log,
 
-		mCount:      stats.GetCounter("count"),
-		mCountParts: stats.GetCounter("parts.count"),
-		mErr:        stats.GetCounter("error"),
-		mSent:       stats.GetCounter("sent"),
-		mSentParts:  stats.GetCounter("parts.sent"),
+		mCount:     stats.GetCounter("count"),
+		mErr:       stats.GetCounter("error"),
+		mSent:      stats.GetCounter("sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
 	p.log.Infof("Resolved DAG: %v\n", p.dag)
@@ -196,7 +194,6 @@ func NewProcessDAG(
 // resulting messages or a response to be sent back to the message source.
 func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
-	p.mCountParts.Incr(int64(msg.Len()))
 
 	result := msg.Copy()
 	result.Iter(func(i int, p types.Part) error {
@@ -239,8 +236,8 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		}
 	}
 
-	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(result.Len()))
+	p.mBatchSent.Incr(1)
+	p.mSent.Incr(int64(result.Len()))
 
 	msgs := [1]types.Message{result}
 	return msgs[:], nil

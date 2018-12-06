@@ -108,9 +108,8 @@ type HTTP struct {
 	mCount     metrics.StatCounter
 	mErrHTTP   metrics.StatCounter
 	mErr       metrics.StatCounter
-	mSucc      metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewHTTP returns a HTTP processor.
@@ -126,11 +125,10 @@ func NewHTTP(
 		max:      conf.HTTP.MaxParallel,
 
 		mCount:     stats.GetCounter("count"),
-		mSucc:      stats.GetCounter("success"),
-		mErr:       stats.GetCounter("error"),
 		mErrHTTP:   stats.GetCounter("error.http"),
+		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
 	if g.client, err = client.New(
@@ -164,8 +162,6 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 				FlagFail(p)
 				return nil
 			})
-		} else {
-			h.mSucc.Incr(1)
 		}
 	} else {
 		// Hard, need to do parallel requests limited by max parallelism.
@@ -207,8 +203,6 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 				h.mErr.Incr(1)
 				h.mErrHTTP.Incr(1)
 				h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.Client.URL, err)
-			} else {
-				h.mSucc.Incr(1)
 			}
 		}
 
@@ -225,8 +219,8 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	msgs := [1]types.Message{responseMsg}
 
-	h.mSent.Incr(1)
-	h.mSentParts.Incr(int64(responseMsg.Len()))
+	h.mBatchSent.Incr(1)
+	h.mSent.Incr(int64(responseMsg.Len()))
 	return msgs[:], nil
 }
 

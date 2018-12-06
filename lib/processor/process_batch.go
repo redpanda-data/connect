@@ -78,8 +78,7 @@ type ProcessBatch struct {
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
-	mDropped   metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewProcessBatch returns a ProcessBatch processor.
@@ -102,8 +101,7 @@ func NewProcessBatch(
 		mCount:     stats.GetCounter("count"),
 		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
-		mDropped:   stats.GetCounter("dropped"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -135,12 +133,11 @@ func (p *ProcessBatch) ProcessMessage(msg types.Message) ([]types.Message, types
 		})
 	}
 	if resMsg.Len() == 0 {
-		p.mDropped.Incr(1)
 		return nil, res
 	}
 
-	p.mSent.Incr(1)
-	p.mSentParts.Incr(int64(resMsg.Len()))
+	p.mBatchSent.Incr(1)
+	p.mSent.Incr(int64(resMsg.Len()))
 
 	resMsgs := [1]types.Message{resMsg}
 	return resMsgs[:], nil

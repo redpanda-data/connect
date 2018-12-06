@@ -175,11 +175,11 @@ type Archive struct {
 	pathBytes       []byte
 	interpolatePath bool
 
-	mCount   metrics.StatCounter
-	mSkipped metrics.StatCounter
-	mErr     metrics.StatCounter
-	mSucc    metrics.StatCounter
-	mSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mErr       metrics.StatCounter
+	mSucc      metrics.StatCounter
+	mSent      metrics.StatCounter
+	mBatchSent metrics.StatCounter
 
 	log   log.Modular
 	stats metrics.Type
@@ -205,11 +205,11 @@ func NewArchive(
 		log:             log,
 		stats:           stats,
 
-		mCount:   stats.GetCounter("count"),
-		mSkipped: stats.GetCounter("skipped"),
-		mErr:     stats.GetCounter("error"),
-		mSucc:    stats.GetCounter("success"),
-		mSent:    stats.GetCounter("sent"),
+		mCount:     stats.GetCounter("count"),
+		mErr:       stats.GetCounter("error"),
+		mSucc:      stats.GetCounter("success"),
+		mSent:      stats.GetCounter("sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -262,19 +262,24 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	d.mCount.Incr(1)
 
 	if msg.Len() == 0 {
-		d.mSkipped.Incr(1)
 		return nil, response.NewAck()
 	}
+
+	d.mSent.Incr(1)
+	d.mBatchSent.Incr(1)
 
 	newPart, err := d.archive(d.createHeaderFunc(msg), msg)
 	if err != nil {
 		d.log.Errorf("Failed to create archive: %v\n", err)
 		d.mErr.Incr(1)
-		return nil, response.NewAck()
+		msg.Iter(func(i int, p types.Part) error {
+			FlagFail(p)
+			return nil
+		})
+		msgs := [1]types.Message{msg}
+		return msgs[:], nil
 	}
-
 	d.mSucc.Incr(1)
-	d.mSent.Incr(1)
 
 	newMsg := message.New(nil)
 	newMsg.Append(newPart)

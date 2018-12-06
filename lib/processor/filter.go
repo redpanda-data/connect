@@ -76,7 +76,7 @@ type Filter struct {
 	mCount     metrics.StatCounter
 	mDropped   metrics.StatCounter
 	mSent      metrics.StatCounter
-	mSentParts metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewFilter returns a Filter processor.
@@ -98,7 +98,7 @@ func NewFilter(
 		mCount:     stats.GetCounter("count"),
 		mDropped:   stats.GetCounter("dropped"),
 		mSent:      stats.GetCounter("sent"),
-		mSentParts: stats.GetCounter("parts.sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -110,12 +110,12 @@ func (c *Filter) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	c.mCount.Incr(1)
 
 	if !c.condition.Check(msg) {
-		c.mDropped.Incr(1)
+		c.mDropped.Incr(int64(msg.Len()))
 		return nil, response.NewAck()
 	}
 
-	c.mSent.Incr(1)
-	c.mSentParts.Incr(int64(msg.Len()))
+	c.mBatchSent.Incr(1)
+	c.mSent.Incr(int64(msg.Len()))
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }
