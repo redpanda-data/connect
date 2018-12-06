@@ -224,9 +224,17 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 				p.log.Errorf("Failed to perform child '%v': %v\n", id, err)
 				continue
 			}
-			if err := p.children[id].OverlayResult(result, results[i]); err != nil {
+			if failed, err := p.children[id].OverlayResult(result, results[i]); err != nil {
 				p.log.Errorf("Failed to overlay child '%v': %v\n", id, err)
+				result.Iter(func(i int, p types.Part) error {
+					FlagFail(p)
+					return nil
+				})
 				continue
+			} else {
+				for _, j := range failed {
+					FlagFail(result.Get(j))
+				}
 			}
 		}
 	}

@@ -534,7 +534,6 @@ func NewJSON(
 // resulting messages or a response to be sent back to the message source.
 func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
-
 	newMsg := msg.Copy()
 
 	valueBytes := p.valueBytes
@@ -542,27 +541,19 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		valueBytes = text.ReplaceFunctionVariablesEscaped(msg, valueBytes)
 	}
 
-	targetParts := p.parts
-	if len(targetParts) == 0 {
-		targetParts = make([]int, newMsg.Len())
-		for i := range targetParts {
-			targetParts[i] = i
-		}
-	}
-
-	for _, index := range targetParts {
+	proc := func(index int) {
 		jsonPart, err := newMsg.Get(index).JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
-			continue
+			return
 		}
 
 		var data interface{}
 		if data, err = p.operator(jsonPart, json.RawMessage(valueBytes)); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)
-			continue
+			return
 		}
 
 		switch t := data.(type) {
@@ -579,6 +570,16 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 		if err == nil {
 			p.mSucc.Incr(1)
+		}
+	}
+
+	if len(p.parts) == 0 {
+		for i := 0; i < msg.Len(); i++ {
+			proc(i)
+		}
+	} else {
+		for _, i := range p.parts {
+			proc(i)
 		}
 	}
 

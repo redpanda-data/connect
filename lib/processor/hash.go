@@ -176,8 +176,8 @@ func (c *Hash) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			proc(i)
 		}
 	} else {
-		for _, index := range c.conf.Parts {
-			proc(index)
+		for _, i := range c.conf.Parts {
+			proc(i)
 		}
 	}
 

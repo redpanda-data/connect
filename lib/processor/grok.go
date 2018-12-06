@@ -135,18 +135,9 @@ func NewGrok(
 // resulting messages or a response to be sent back to the message source.
 func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	g.mCount.Incr(1)
-
 	newMsg := msg.Copy()
 
-	targetParts := g.parts
-	if len(targetParts) == 0 {
-		targetParts = make([]int, newMsg.Len())
-		for i := range targetParts {
-			targetParts[i] = i
-		}
-	}
-
-	for _, index := range targetParts {
+	proc := func(index int) {
 		body := msg.Get(index).Get()
 
 		var values map[string]interface{}
@@ -164,7 +155,7 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		if len(values) == 0 {
 			g.mErrGrok.Incr(1)
 			g.log.Debugf("No matches found for payload: %s\n", body)
-			continue
+			return
 		}
 
 		if err := newMsg.Get(index).SetJSON(values); err != nil {
@@ -172,6 +163,16 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			g.log.Debugf("Failed to convert grok result into json: %v\n", err)
 		} else {
 			g.mSucc.Incr(1)
+		}
+	}
+
+	if len(g.parts) == 0 {
+		for i := 0; i < msg.Len(); i++ {
+			proc(i)
+		}
+	} else {
+		for _, i := range g.parts {
+			proc(i)
 		}
 	}
 

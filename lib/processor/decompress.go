@@ -184,18 +184,9 @@ func NewDecompress(
 // resulting messages or a response to be sent back to the message source.
 func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	d.mCount.Incr(1)
-
 	newMsg := msg.Copy()
 
-	targetParts := d.conf.Parts
-	if len(targetParts) == 0 {
-		targetParts = make([]int, newMsg.Len())
-		for i := range targetParts {
-			targetParts[i] = i
-		}
-	}
-
-	for _, index := range targetParts {
+	proc := func(index int) {
 		part := msg.Get(index).Get()
 		newPart, err := d.decomp(part)
 		if err == nil {
@@ -203,6 +194,16 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 			newMsg.Get(index).Set(newPart)
 		} else {
 			d.mErr.Incr(1)
+		}
+	}
+
+	if len(d.conf.Parts) == 0 {
+		for i := 0; i < msg.Len(); i++ {
+			proc(i)
+		}
+	} else {
+		for _, i := range d.conf.Parts {
+			proc(i)
 		}
 	}
 

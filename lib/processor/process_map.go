@@ -289,10 +289,18 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		return msgs[:], nil
 	}
 
+	var failed []int
 	result := msg.Copy()
-	if err = p.OverlayResult(result, alignedResult); err != nil {
+	if failed, err = p.OverlayResult(result, alignedResult); err != nil {
+		msg.Iter(func(i int, p types.Part) error {
+			FlagFail(p)
+			return nil
+		})
 		msgs := [1]types.Message{msg}
 		return msgs[:], nil
+	}
+	for _, i := range failed {
+		FlagFail(result.Get(i))
 	}
 
 	msgs := [1]types.Message{result}
@@ -333,6 +341,9 @@ func (p *ProcessMap) CreateResult(msg types.Message) (types.Message, error) {
 		p.mSkippedParts.Incr(int64(msg.Len()))
 		parts := make([]types.Part, msg.Len())
 		mapMsg.SetAll(parts)
+		for _, i := range failed {
+			FlagFail(mapMsg.Get(i))
+		}
 		return mapMsg, nil
 	}
 
@@ -344,14 +355,6 @@ func (p *ProcessMap) CreateResult(msg types.Message) (types.Message, error) {
 		return nil, err
 	}
 
-	i := 0
-	for _, m := range procResults {
-		m.Iter(func(_ int, part types.Part) error {
-			i++
-			return nil
-		})
-	}
-
 	var alignedResult types.Message
 	if alignedResult, err = p.mapper.AlignResult(msg.Len(), skipped, failed, procResults); err != nil {
 		p.mErrPost.Incr(1)
@@ -360,22 +363,26 @@ func (p *ProcessMap) CreateResult(msg types.Message) (types.Message, error) {
 		return nil, err
 	}
 
+	for _, i := range failed {
+		FlagFail(alignedResult.Get(i))
+	}
 	return alignedResult, nil
 }
 
 // OverlayResult attempts to merge the result of a process_map with the original
 //  payload as per the map specified in the postmap and postmap_optional fields.
-func (p *ProcessMap) OverlayResult(payload, response types.Message) error {
-	if _, err := p.mapper.MapResponses(payload, response); err != nil {
+func (p *ProcessMap) OverlayResult(payload, response types.Message) ([]int, error) {
+	failed, err := p.mapper.MapResponses(payload, response)
+	if err != nil {
 		p.mErrPost.Incr(1)
 		p.mErr.Incr(1)
 		p.log.Errorf("Postmap failed: %v\n", err)
-		return err
+		return nil, err
 	}
 
 	p.mSent.Incr(1)
 	p.mSentParts.Incr(int64(payload.Len()))
-	return nil
+	return failed, nil
 }
 
 func processMap(mappedMsg types.Message, processors []types.Processor) ([]types.Message, error) {

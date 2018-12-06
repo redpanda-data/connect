@@ -294,7 +294,6 @@ func NewText(
 // resulting messages or a response to be sent back to the message source.
 func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	t.mCount.Incr(1)
-
 	newMsg := msg.Copy()
 
 	valueBytes := t.valueBytes
@@ -302,25 +301,27 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
 	}
 
-	targetParts := t.parts
-	if len(targetParts) == 0 {
-		targetParts = make([]int, newMsg.Len())
-		for i := range targetParts {
-			targetParts[i] = i
-		}
-	}
-
-	for _, index := range targetParts {
+	proc := func(index int) {
 		data := newMsg.Get(index).Get()
 		var err error
 		if data, err = t.operator(data, valueBytes); err != nil {
 			t.mErr.Incr(1)
 			t.log.Debugf("Failed to apply operator: %v\n", err)
-			continue
+			return
 		}
 
 		newMsg.Get(index).Set(data)
 		t.mSucc.Incr(1)
+	}
+
+	if len(t.parts) == 0 {
+		for i := 0; i < msg.Len(); i++ {
+			proc(i)
+		}
+	} else {
+		for _, i := range t.parts {
+			proc(i)
+		}
 	}
 
 	msgs := [1]types.Message{newMsg}

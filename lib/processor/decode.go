@@ -124,26 +124,27 @@ func NewDecode(
 // resulting messages or a response to be sent back to the message source.
 func (c *Decode) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
-
 	newMsg := msg.Copy()
 
-	targetParts := c.conf.Parts
-	if len(targetParts) == 0 {
-		targetParts = make([]int, newMsg.Len())
-		for i := range targetParts {
-			targetParts[i] = i
-		}
-	}
-
-	for _, index := range targetParts {
-		part := msg.Get(index).Get()
+	proc := func(i int) {
+		part := msg.Get(i).Get()
 		newPart, err := c.fn(part)
 		if err == nil {
 			c.mSucc.Incr(1)
-			newMsg.Get(index).Set(newPart)
+			newMsg.Get(i).Set(newPart)
 		} else {
 			c.log.Errorf("Failed to decode message part: %v\n", err)
 			c.mErr.Incr(1)
+		}
+	}
+
+	if len(c.conf.Parts) == 0 {
+		for i := 0; i < msg.Len(); i++ {
+			proc(i)
+		}
+	} else {
+		for _, i := range c.conf.Parts {
+			proc(i)
 		}
 	}
 

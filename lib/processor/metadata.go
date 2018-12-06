@@ -187,7 +187,6 @@ func NewMetadata(
 // resulting messages or a response to be sent back to the message source.
 func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
-
 	newMsg := msg.Copy()
 
 	valueBytes := p.valueBytes
@@ -195,18 +194,20 @@ func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
 	}
 
-	targetParts := p.parts
-	if len(targetParts) == 0 {
-		targetParts = make([]int, newMsg.Len())
-		for i := range targetParts {
-			targetParts[i] = i
-		}
-	}
-
-	for _, index := range targetParts {
+	proc := func(index int) {
 		if err := p.operator(newMsg.Get(index).Metadata(), valueBytes); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)
+		}
+	}
+
+	if len(p.parts) == 0 {
+		for i := 0; i < msg.Len(); i++ {
+			proc(i)
+		}
+	} else {
+		for _, i := range p.parts {
+			proc(i)
 		}
 	}
 

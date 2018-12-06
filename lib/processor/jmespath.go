@@ -151,30 +151,21 @@ func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err er
 // resulting messages or a response to be sent back to the message source.
 func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
-
 	newMsg := msg.Copy()
 
-	targetParts := p.parts
-	if len(targetParts) == 0 {
-		targetParts = make([]int, newMsg.Len())
-		for i := range targetParts {
-			targetParts[i] = i
-		}
-	}
-
-	for _, index := range targetParts {
+	proc := func(index int) {
 		jsonPart, err := newMsg.Get(index).JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
-			continue
+			return
 		}
 
 		var result interface{}
 		if result, err = safeSearch(jsonPart, p.query); err != nil {
 			p.mErrJMES.Incr(1)
 			p.log.Debugf("Failed to search json: %v\n", err)
-			continue
+			return
 		}
 
 		if err = newMsg.Get(index).SetJSON(result); err != nil {
@@ -182,6 +173,16 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			p.log.Debugf("Failed to convert jmespath result into part: %v\n", err)
 		} else {
 			p.mSucc.Incr(1)
+		}
+	}
+
+	if len(p.parts) == 0 {
+		for i := 0; i < msg.Len(); i++ {
+			proc(i)
+		}
+	} else {
+		for _, i := range p.parts {
+			proc(i)
 		}
 	}
 
