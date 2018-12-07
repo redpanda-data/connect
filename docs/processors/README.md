@@ -188,8 +188,8 @@ For example, with the following config:
 ```
 
 If the processor `foo` fails for a particular message, that message
-will be fed into to the processors `bar` and `baz`. Messages that do
-not fail for the processor `foo` will skip these processors.
+will be fed into the processors `bar` and `baz`. Messages that do not
+fail for the processor `foo` will skip these processors.
 
 When messages leave the catch block their fail flags are cleared. This processor
 is useful for when it's possible to recover failed messages, or when special
