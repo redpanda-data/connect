@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -169,6 +170,19 @@ func (a *AmazonS3) Connect() error {
 	return nil
 }
 
+func digStrsFromSlices(slice []interface{}) []string {
+	var strs []string
+	for _, v := range slice {
+		switch t := v.(type) {
+		case []interface{}:
+			strs = append(strs, digStrsFromSlices(t)...)
+		case string:
+			strs = append(strs, t)
+		}
+	}
+	return strs
+}
+
 func (a *AmazonS3) readSQSEvents() error {
 	var dudMessageHandles []*sqs.DeleteMessageBatchRequestEntry
 
@@ -208,6 +222,21 @@ messageLoop:
 					a.log.Errorf("Failed to parse SQS message envelope: %v\n", err)
 					continue messageLoop
 				}
+			case []interface{}:
+				docs := []interface{}{}
+				strs := digStrsFromSlices(t)
+				for _, v := range strs {
+					var gObj2 interface{}
+					if err2 := json.Unmarshal([]byte(v), &gObj2); err2 == nil {
+						docs = append(docs, gObj2)
+					}
+				}
+				if len(docs) == 0 {
+					dudMessageHandles = append(dudMessageHandles, msgHandle)
+					a.log.Errorf("Failed to parse SQS message envelope: %v\n", err)
+					continue messageLoop
+				}
+				gObj, _ = gabs.Consume(docs)
 			default:
 				dudMessageHandles = append(dudMessageHandles, msgHandle)
 				a.log.Errorf("Unexpected envelope value: %v", t)
@@ -226,11 +255,10 @@ messageLoop:
 			}
 		case []interface{}:
 			newTargets := []string{}
-			for _, jStr := range t {
-				if p, ok := jStr.(string); ok {
-					if strings.HasPrefix(p, a.conf.Prefix) {
-						newTargets = append(newTargets, p)
-					}
+			strs := digStrsFromSlices(t)
+			for _, p := range strs {
+				if strings.HasPrefix(p, a.conf.Prefix) {
+					newTargets = append(newTargets, p)
 				}
 			}
 			if len(newTargets) == 0 {
