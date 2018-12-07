@@ -40,7 +40,9 @@ and their index. For example, processors in the `pipeline` section will be
 prefixed with `pipeline.processor.N`, where N is the index.
 
 - `pipeline.processor.0.count`
-- `pipeline.processor.0.dropped`
+- `pipeline.processor.0.sent`
+- `pipeline.processor.0.batch.sent`
+- `pipeline.processor.0.error`
 
 ## Output
 

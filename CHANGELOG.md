@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.39.1 - 2018-12-07
+
+### Added
+
+- All processors now attach error flags.
+- S3 input is now more flexible with SNS triggered SQS events.
+
+### Changed
+
+- Processor metrics have been made more consistent.
+
 ## 0.39.0 - 2018-12-05
 
 ### Added
