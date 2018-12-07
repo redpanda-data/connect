@@ -1,0 +1,55 @@
+{
+	"http": {
+		"address": "0.0.0.0:4195",
+		"read_timeout_ms": 5000,
+		"root_path": "/benthos",
+		"debug_endpoints": false
+	},
+	"input": {
+		"type": "stdin",
+		"stdin": {
+			"delimiter": "",
+			"max_buffer": 1000000,
+			"multipart": false
+		}
+	},
+	"buffer": {
+		"type": "none",
+		"none": {}
+	},
+	"pipeline": {
+		"processors": [
+			{
+				"type": "catch",
+				"catch": []
+			}
+		],
+		"threads": 1
+	},
+	"output": {
+		"type": "stdout",
+		"stdout": {
+			"delimiter": ""
+		}
+	},
+	"resources": {
+		"caches": {},
+		"conditions": {},
+		"rate_limits": {}
+	},
+	"logger": {
+		"prefix": "benthos",
+		"level": "INFO",
+		"add_timestamp": true,
+		"json_format": true,
+		"static_fields": {
+			"@service": "benthos"
+		}
+	},
+	"metrics": {
+		"type": "http_server",
+		"http_server": {},
+		"prefix": "benthos"
+	},
+	"sys_exit_timeout_ms": 20000
+}

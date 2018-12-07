@@ -15,6 +15,12 @@ specific output (set in the output section).
 By organising processors you can configure complex behaviours in your pipeline.
 You can [find some examples here][0].
 
+### Error Handling
+
+Some processors have conditions whereby they might fail. Benthos has mechanisms
+for detecting and recovering from these failures which can be read about
+[here](../error_handling.md).
+
 ### Batching and Multiple Part Messages
 
 All Benthos processors support multiple part messages, which are synonymous with
@@ -41,39 +47,41 @@ used.
 1. [`archive`](#archive)
 2. [`batch`](#batch)
 3. [`bounds_check`](#bounds_check)
-4. [`compress`](#compress)
-5. [`conditional`](#conditional)
-6. [`decode`](#decode)
-7. [`decompress`](#decompress)
-8. [`dedupe`](#dedupe)
-9. [`encode`](#encode)
-10. [`filter`](#filter)
-11. [`filter_parts`](#filter_parts)
-12. [`grok`](#grok)
-13. [`group_by`](#group_by)
-14. [`group_by_value`](#group_by_value)
-15. [`hash`](#hash)
-16. [`hash_sample`](#hash_sample)
-17. [`http`](#http)
-18. [`insert_part`](#insert_part)
-19. [`jmespath`](#jmespath)
-20. [`json`](#json)
-21. [`lambda`](#lambda)
-22. [`log`](#log)
-23. [`merge_json`](#merge_json)
-24. [`metadata`](#metadata)
-25. [`metric`](#metric)
-26. [`noop`](#noop)
-27. [`process_batch`](#process_batch)
-28. [`process_dag`](#process_dag)
-29. [`process_field`](#process_field)
-30. [`process_map`](#process_map)
-31. [`sample`](#sample)
-32. [`select_parts`](#select_parts)
-33. [`split`](#split)
-34. [`text`](#text)
-35. [`throttle`](#throttle)
-36. [`unarchive`](#unarchive)
+4. [`catch`](#catch)
+5. [`compress`](#compress)
+6. [`conditional`](#conditional)
+7. [`decode`](#decode)
+8. [`decompress`](#decompress)
+9. [`dedupe`](#dedupe)
+10. [`encode`](#encode)
+11. [`filter`](#filter)
+12. [`filter_parts`](#filter_parts)
+13. [`grok`](#grok)
+14. [`group_by`](#group_by)
+15. [`group_by_value`](#group_by_value)
+16. [`hash`](#hash)
+17. [`hash_sample`](#hash_sample)
+18. [`http`](#http)
+19. [`insert_part`](#insert_part)
+20. [`jmespath`](#jmespath)
+21. [`json`](#json)
+22. [`lambda`](#lambda)
+23. [`log`](#log)
+24. [`merge_json`](#merge_json)
+25. [`metadata`](#metadata)
+26. [`metric`](#metric)
+27. [`noop`](#noop)
+28. [`process_batch`](#process_batch)
+29. [`process_dag`](#process_dag)
+30. [`process_field`](#process_field)
+31. [`process_map`](#process_map)
+32. [`sample`](#sample)
+33. [`select_parts`](#select_parts)
+34. [`split`](#split)
+35. [`text`](#text)
+36. [`throttle`](#throttle)
+37. [`try`](#try)
+38. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -156,6 +164,38 @@ bounds_check:
 Checks whether each message fits within certain boundaries, and drops messages
 that do not. A metric is incremented for each dropped message and debug logs
 are also provided if enabled.
+
+## `catch`
+
+``` yaml
+type: catch
+catch: []
+```
+
+Behaves similarly to the [`process_batch`](#process_batch) processor,
+where a list of child processors are applied to individual messages of a batch.
+However, processors are only applied to messages that failed a processing step
+prior to the catch.
+
+For example, with the following config:
+
+``` yaml
+- type: foo
+- type: catch
+  catch:
+  - type: bar
+  - type: baz
+```
+
+If the processor `foo` fails for a particular message, that message
+will be fed into to the processors `bar` and `baz`. Messages that do
+not fail for the processor `foo` will skip these processors.
+
+When messages leave the catch block their fail flags are cleared. This processor
+is useful for when it's possible to recover failed messages, or when special
+actions (such as logging/metrics) are required before dropping them.
+
+More information about error handing can be found [here](../error_handling.md).
 
 ## `compress`
 
@@ -1260,6 +1300,38 @@ each with a throttle would result in four times the rate specified.
 
 The period should be specified as a time duration string. For example, '1s'
 would be 1 second, '10ms' would be 10 milliseconds, etc.
+
+## `try`
+
+``` yaml
+type: try
+try: []
+```
+
+Behaves similarly to the [`process_batch`](#process_batch) processor,
+where a list of child processors are applied to individual messages of a batch.
+However, if a processor fails for a message then that message will skip all
+following processors.
+
+For example, with the following config:
+
+``` yaml
+- type: try
+  try:
+  - type: foo
+  - type: bar
+  - type: baz
+```
+
+If the processor `foo` fails for a particular message, that message
+will skip the processors `bar` and `baz`.
+
+This processor is useful for when child processors depend on the successful
+output of previous processors. This processor can be followed with a
+[catch](#catch) processor for defining child processors to be applied
+only to failed messages.
+
+More information about error handing can be found [here](../error_handling.md).
 
 ## `unarchive`
 

@@ -338,6 +338,7 @@ pipeline:
       min_parts: 1
       max_part_size: 1073741824
       min_part_size: 1
+    catch: []
     compress:
       algorithm: gzip
       level: -1
@@ -578,6 +579,7 @@ pipeline:
       operator: trim_space
       arg: ""
       value: ""
+    try: []
     throttle:
       period: 100us
     unarchive:

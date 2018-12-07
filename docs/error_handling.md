@@ -15,6 +15,46 @@ This behaviour allows you to define in your config whether you would like the
 failed messages to be dropped, recovered with more processing, or routed to a
 dead-letter queue, or any combination thereof. 
 
+### Abandon on Failure
+
+It's possible to define a list of processors which should be skipped for
+messages that failed a previous stage using the [`try`][try] processor:
+
+``` yaml
+  - type: try
+    try:
+    - type: foo
+    - type: bar # Skipped if foo failed
+    - type: baz # Skipped if foo or bar failed
+```
+
+### Recover Failed Messages
+
+Failed messages can be fed into their own processor steps with a
+[`catch`][catch] processor:
+
+``` yaml
+  - type: catch
+    catch:
+    - type: foo # Recover here
+```
+
+Once messages finish the catch block they will have their failure flags removed
+and are treated like regular messages. If this behaviour is not desired then it
+is possible to simulate a catch block with a [`conditional`][conditional]
+processor:
+
+``` yaml
+  - type: process_batch
+    process_batch:
+    - type: conditional
+      conditional:
+        condition:
+          type: processor_failed
+        processors:
+        - type: foo # Recover here
+```
+
 ### Drop Failed Messages
 
 In order to filter out any failed messages from your pipeline you can simply use
@@ -28,33 +68,11 @@ a [`filter_parts`][filter_parts] processor:
 
 This will remove any failed messages from a batch.
 
-### Recover Failed Messages
-
-In order to apply special recovery processing steps to only payloads that have
-failed you can use a [`process_batch`][process_batch] and
-[`conditional`][conditional] processor combination:
-
-``` yaml
-  - type: process_batch
-    process_batch:
-    - type: conditional
-      conditional:
-        condition:
-          type: processor_failed
-        processors:
-        - type: foo # Recover here
-```
-
-Note that the `process_batch` processor is only required when your messages are
-batched, as it allows you to conditionally process individual messages of the
-batch.
-
 ### Route to a Dead-Letter Queue
 
-Similar to both of the previous examples it is possible to send messages to
-different destinations using either a [`group_by`][group_by] processor with a
-[`switch`][switch] output, or a [`broker`][broker] output with
-[`filter_parts`][filter_parts] processors.
+It is possible to send failed messages to different destinations using either a
+[`group_by`][group_by] processor with a [`switch`][switch] output, or a
+[`broker`][broker] output with [`filter_parts`][filter_parts] processors.
 
 ``` yaml
 pipeline:
@@ -105,6 +123,8 @@ output:
 [filter_parts]: ./processors/README.md#filter_parts
 [process_batch]: ./processors/README.md#process_batch
 [conditional]: ./processors/README.md#conditional
+[catch]: ./processors/README.md#catch
+[try]: ./processors/README.md#try
 [group_by]: ./processors/README.md#group_by
 [switch]: ./outputs/README.md#switch
 [broker]: ./outputs/README.md#broker

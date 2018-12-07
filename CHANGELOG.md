@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.39.2 - 2018-12-07
+
+### Added
+
+- New `try` and `catch` processors for improved processor error handling.
+
 ## 0.39.1 - 2018-12-07
 
 ### Added

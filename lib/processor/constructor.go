@@ -58,6 +58,7 @@ const (
 	TypeArchive      = "archive"
 	TypeBatch        = "batch"
 	TypeBoundsCheck  = "bounds_check"
+	TypeCatch        = "catch"
 	TypeCompress     = "compress"
 	TypeConditional  = "conditional"
 	TypeDecode       = "decode"
@@ -89,6 +90,7 @@ const (
 	TypeSelectParts  = "select_parts"
 	TypeSplit        = "split"
 	TypeText         = "text"
+	TypeTry          = "try"
 	TypeThrottle     = "throttle"
 	TypeUnarchive    = "unarchive"
 )
@@ -101,6 +103,7 @@ type Config struct {
 	Archive      ArchiveConfig      `json:"archive" yaml:"archive"`
 	Batch        BatchConfig        `json:"batch" yaml:"batch"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
+	Catch        CatchConfig        `json:"catch" yaml:"catch"`
 	Compress     CompressConfig     `json:"compress" yaml:"compress"`
 	Conditional  ConditionalConfig  `json:"conditional" yaml:"conditional"`
 	Decode       DecodeConfig       `json:"decode" yaml:"decode"`
@@ -132,6 +135,7 @@ type Config struct {
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Split        SplitConfig        `json:"split" yaml:"split"`
 	Text         TextConfig         `json:"text" yaml:"text"`
+	Try          TryConfig          `json:"try" yaml:"try"`
 	Throttle     ThrottleConfig     `json:"throttle" yaml:"throttle"`
 	Unarchive    UnarchiveConfig    `json:"unarchive" yaml:"unarchive"`
 }
@@ -143,6 +147,7 @@ func NewConfig() Config {
 		Archive:      NewArchiveConfig(),
 		Batch:        NewBatchConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),
+		Catch:        NewCatchConfig(),
 		Compress:     NewCompressConfig(),
 		Conditional:  NewConditionalConfig(),
 		Decode:       NewDecodeConfig(),
@@ -174,6 +179,7 @@ func NewConfig() Config {
 		SelectParts:  NewSelectPartsConfig(),
 		Split:        NewSplitConfig(),
 		Text:         NewTextConfig(),
+		Try:          NewTryConfig(),
 		Throttle:     NewThrottleConfig(),
 		Unarchive:    NewUnarchiveConfig(),
 	}
@@ -288,6 +294,12 @@ specific output (set in the output section).
 
 By organising processors you can configure complex behaviours in your pipeline.
 You can [find some examples here][0].
+
+### Error Handling
+
+Some processors have conditions whereby they might fail. Benthos has mechanisms
+for detecting and recovering from these failures which can be read about
+[here](../error_handling.md).
 
 ### Batching and Multiple Part Messages
 
