@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -587,6 +588,15 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (p *JSON) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p *JSON) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

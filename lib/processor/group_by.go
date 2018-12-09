@@ -22,6 +22,7 @@ package processor
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -281,6 +282,28 @@ func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		g.mSent.Incr(int64(m.Len()))
 	}
 	return msgs, nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (g *GroupBy) CloseAsync() {
+	for _, group := range g.groups {
+		for _, p := range group.Processors {
+			p.CloseAsync()
+		}
+	}
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (g *GroupBy) WaitForClose(timeout time.Duration) error {
+	stopBy := time.Now().Add(timeout)
+	for _, group := range g.groups {
+		for _, p := range group.Processors {
+			if err := p.WaitForClose(time.Until(stopBy)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------

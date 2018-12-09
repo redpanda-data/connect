@@ -23,6 +23,7 @@ package processor
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/response"
 
@@ -39,6 +40,15 @@ type passthrough struct {
 func (p *passthrough) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.called++
 	return []types.Message{msg}, nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (p *passthrough) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p *passthrough) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 func TestExecuteAllBasic(t *testing.T) {
@@ -142,6 +152,15 @@ func (p *dropped) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	return nil, response.NewUnack()
 }
 
+// CloseAsync shuts down the processor and stops processing requests.
+func (p *dropped) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p *dropped) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
 func TestExecuteAllBuffered(t *testing.T) {
 	procs := []types.Processor{
 		&passthrough{},
@@ -176,6 +195,15 @@ type errored struct {
 func (p *errored) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.called++
 	return nil, response.NewError(errors.New("test error"))
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (p *errored) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p *errored) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 func TestExecuteAllErrored(t *testing.T) {

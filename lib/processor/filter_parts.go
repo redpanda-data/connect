@@ -22,6 +22,7 @@ package processor
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -129,6 +130,15 @@ func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 	}
 
 	return nil, response.NewAck()
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (c *FilterParts) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (c *FilterParts) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

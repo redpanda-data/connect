@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -326,6 +327,15 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	t.mBatchSent.Incr(1)
 	t.mSent.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (t *Text) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (t *Text) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

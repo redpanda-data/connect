@@ -35,6 +35,8 @@ type Type interface {
 	// response in case of failure. If the slice of messages is empty the
 	// response should be returned to the source.
 	ProcessMessage(msg types.Message) ([]types.Message, types.Response)
+
+	types.Closable
 }
 
 //------------------------------------------------------------------------------

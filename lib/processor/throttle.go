@@ -116,4 +116,13 @@ func (m *Throttle) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	return msgs[:], nil
 }
 
+// CloseAsync shuts down the processor and stops processing requests.
+func (m *Throttle) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (m *Throttle) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
 //------------------------------------------------------------------------------

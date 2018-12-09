@@ -40,6 +40,17 @@ func (p CustomProcessor) ProcessMessage(m types.Message) ([]types.Message, types
 	return []types.Message{m}, nil
 }
 
+// CloseAsync shuts down the processor and stops processing requests.
+func (p CustomProcessor) CloseAsync() {
+	// Do nothing as our processor doesn't require resource cleanup.
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p CustomProcessor) WaitForClose(timeout time.Duration) error {
+	// Do nothing as our processor doesn't require resource cleanup.
+	return nil
+}
+
 // ExampleYAMLConfig demonstrates running a Benthos stream with a configuration
 // parsed from a YAML file and a custom processor.
 func Example_yamlConfig() {

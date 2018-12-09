@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -297,6 +298,24 @@ func resolveDAG(explicitDeps map[string][]string, procs map[string]*ProcessMap) 
 		return nil, fmt.Errorf("failed to resolve DAG, circular dependencies detected for targets: %v", tProcs)
 	}
 	return layers, nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (p *ProcessDAG) CloseAsync() {
+	for _, c := range p.children {
+		c.CloseAsync()
+	}
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p *ProcessDAG) WaitForClose(timeout time.Duration) error {
+	stopBy := time.Now().Add(timeout)
+	for _, c := range p.children {
+		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------

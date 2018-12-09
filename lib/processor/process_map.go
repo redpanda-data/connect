@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -393,4 +394,22 @@ func processMap(mappedMsg types.Message, processors []types.Processor) ([]types.
 	}
 
 	return requestMsgs, nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (p *ProcessMap) CloseAsync() {
+	for _, c := range p.children {
+		c.CloseAsync()
+	}
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p *ProcessMap) WaitForClose(timeout time.Duration) error {
+	stopBy := time.Now().Add(timeout)
+	for _, c := range p.children {
+		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
+			return err
+		}
+	}
+	return nil
 }

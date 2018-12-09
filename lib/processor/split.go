@@ -21,6 +21,8 @@
 package processor
 
 import (
+	"time"
+
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -126,6 +128,15 @@ func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	s.mBatchSent.Incr(int64(len(msgs)))
 	s.mSent.Incr(int64(msg.Len()))
 	return msgs, nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (s *Split) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (s *Split) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

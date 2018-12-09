@@ -51,6 +51,17 @@ func (p SplitToBatch) ProcessMessage(m types.Message) ([]types.Message, types.Re
 	return []types.Message{message.New(splitParts)}, nil
 }
 
+// CloseAsync shuts down the processor and stops processing requests.
+func (p SplitToBatch) CloseAsync() {
+	// Do nothing as our processor doesn't require resource cleanup.
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p SplitToBatch) WaitForClose(timeout time.Duration) error {
+	// Do nothing as our processor doesn't require resource cleanup.
+	return nil
+}
+
 // ExampleSplitToBatch demonstrates running a Kafka to Kafka stream where each
 // incoming message is parsed as a line delimited blob of payloads and the
 // payloads are sent on as a single batch of messages.

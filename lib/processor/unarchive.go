@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -254,6 +255,15 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	d.mSent.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (d *Unarchive) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (d *Unarchive) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

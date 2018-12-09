@@ -23,6 +23,7 @@ package processor
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -211,6 +212,24 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(payload.Len()))
 	return
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (p *ProcessField) CloseAsync() {
+	for _, c := range p.children {
+		c.CloseAsync()
+	}
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p *ProcessField) WaitForClose(timeout time.Duration) error {
+	stopBy := time.Now().Add(timeout)
+	for _, c := range p.children {
+		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------

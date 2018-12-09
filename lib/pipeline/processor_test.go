@@ -38,7 +38,9 @@ import (
 var errMockProc = errors.New("this is an error from mock processor")
 
 type mockMsgProcessor struct {
-	dropChan chan bool
+	dropChan          chan bool
+	hasClosedAsync    bool
+	hasWaitedForClose bool
 }
 
 func (m *mockMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
@@ -51,6 +53,17 @@ func (m *mockMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, t
 	})
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (m *mockMsgProcessor) CloseAsync() {
+	m.hasClosedAsync = true
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (m *mockMsgProcessor) WaitForClose(timeout time.Duration) error {
+	m.hasWaitedForClose = true
+	return nil
 }
 
 func TestProcessorPipeline(t *testing.T) {
@@ -171,10 +184,18 @@ func TestProcessorPipeline(t *testing.T) {
 	if err := proc.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
+	if !mockProc.hasClosedAsync {
+		t.Error("Expected mockproc to have closed asynchronously")
+	}
+	if !mockProc.hasWaitedForClose {
+		t.Error("Expected mockproc to have waited for close")
+	}
 }
 
 type mockMultiMsgProcessor struct {
-	N int
+	N                 int
+	hasClosedAsync    bool
+	hasWaitedForClose bool
 }
 
 func (m *mockMultiMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
@@ -186,6 +207,17 @@ func (m *mockMultiMsgProcessor) ProcessMessage(msg types.Message) ([]types.Messa
 		msgs = append(msgs, newMsg)
 	}
 	return msgs, nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (m *mockMultiMsgProcessor) CloseAsync() {
+	m.hasClosedAsync = true
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (m *mockMultiMsgProcessor) WaitForClose(timeout time.Duration) error {
+	m.hasWaitedForClose = true
+	return nil
 }
 
 func TestProcessorMultiMsgs(t *testing.T) {
@@ -264,6 +296,12 @@ func TestProcessorMultiMsgs(t *testing.T) {
 	proc.CloseAsync()
 	if err := proc.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
+	}
+	if !mockProc.hasClosedAsync {
+		t.Error("Expected mockproc to have closed asynchronously")
+	}
+	if !mockProc.hasWaitedForClose {
+		t.Error("Expected mockproc to have waited for close")
 	}
 }
 
@@ -367,5 +405,11 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	proc.CloseAsync()
 	if err := proc.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
+	}
+	if !mockProc.hasClosedAsync {
+		t.Error("Expected mockproc to have closed asynchronously")
+	}
+	if !mockProc.hasWaitedForClose {
+		t.Error("Expected mockproc to have waited for close")
 	}
 }

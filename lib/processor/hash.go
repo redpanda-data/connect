@@ -25,6 +25,7 @@ import (
 	"crypto/sha512"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -185,6 +186,15 @@ func (c *Hash) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	c.mSent.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (c *Hash) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (c *Hash) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

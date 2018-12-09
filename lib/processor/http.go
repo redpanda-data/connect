@@ -22,6 +22,7 @@ package processor
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -222,6 +223,15 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	h.mBatchSent.Incr(1)
 	h.mSent.Incr(int64(responseMsg.Len()))
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (h *HTTP) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (h *HTTP) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

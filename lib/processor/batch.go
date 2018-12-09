@@ -232,4 +232,13 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	return nil, response.NewUnack()
 }
 
+// CloseAsync shuts down the processor and stops processing requests.
+func (c *Batch) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (c *Batch) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
 //------------------------------------------------------------------------------

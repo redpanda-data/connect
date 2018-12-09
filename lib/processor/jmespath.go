@@ -22,6 +22,7 @@ package processor
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -195,6 +196,15 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(newMsg.Len()))
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (p *JMESPath) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p *JMESPath) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

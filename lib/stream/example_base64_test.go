@@ -59,6 +59,17 @@ func (p Base64Encoder) ProcessMessage(m types.Message) ([]types.Message, types.R
 	return []types.Message{result}, nil
 }
 
+// CloseAsync shuts down the processor and stops processing requests.
+func (p Base64Encoder) CloseAsync() {
+	// Do nothing as our processor doesn't require resource cleanup.
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p Base64Encoder) WaitForClose(timeout time.Duration) error {
+	// Do nothing as our processor doesn't require resource cleanup.
+	return nil
+}
+
 // ExampleBase64Encoder demonstrates running a Kafka to Kafka stream where each
 // incoming message is encoded with base64.
 func Example_base64Encoder() {

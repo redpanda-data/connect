@@ -80,6 +80,11 @@ func NewProcessor(
 // loop is the processing loop of this pipeline.
 func (p *Processor) loop() {
 	defer func() {
+		// Signal all children to close.
+		for _, c := range p.msgProcessors {
+			c.CloseAsync()
+		}
+
 		close(p.messagesOut)
 		close(p.closed)
 	}()
@@ -212,10 +217,18 @@ func (p *Processor) CloseAsync() {
 
 // WaitForClose blocks until the StackBuffer output has closed down.
 func (p *Processor) WaitForClose(timeout time.Duration) error {
+	stopBy := time.Now().Add(timeout)
 	select {
 	case <-p.closed:
-	case <-time.After(timeout):
+	case <-time.After(time.Until(stopBy)):
 		return types.ErrTimeout
+	}
+
+	// Wait for all processors to close.
+	for _, c := range p.msgProcessors {
+		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
+			return err
+		}
 	}
 	return nil
 }

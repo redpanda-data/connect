@@ -219,6 +219,17 @@ func (m mockProc) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	return msgs[:], nil
 }
 
+// CloseAsync shuts down the processor and stops processing requests.
+func (m mockProc) CloseAsync() {
+	// Do nothing as our processor doesn't require resource cleanup.
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (m mockProc) WaitForClose(timeout time.Duration) error {
+	// Do nothing as our processor doesn't require resource cleanup.
+	return nil
+}
+
 //------------------------------------------------------------------------------
 
 func TestBasicWrapProcessors(t *testing.T) {

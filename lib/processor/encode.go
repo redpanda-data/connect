@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -156,6 +157,15 @@ func (c *Encode) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	c.mSent.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (c *Encode) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (c *Encode) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

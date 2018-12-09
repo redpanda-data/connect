@@ -22,6 +22,7 @@ package processor
 
 import (
 	"math/rand"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -107,6 +108,15 @@ func (s *Sample) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	s.mSent.Incr(int64(msg.Len()))
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (s *Sample) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (s *Sample) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

@@ -22,6 +22,7 @@ package processor
 
 import (
 	"errors"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -151,6 +152,15 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 	m.mSent.Incr(int64(msg.Len()))
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (m *BoundsCheck) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (m *BoundsCheck) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

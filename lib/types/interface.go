@@ -82,6 +82,8 @@ type Processor interface {
 	// response in case of failure. If the slice of messages is empty the
 	// response will be returned to the source.
 	ProcessMessage(Message) ([]Message, Response)
+
+	Closable
 }
 
 //------------------------------------------------------------------------------

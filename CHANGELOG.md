@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- API: The `types.Processor` interface has been changed in order to add lifetime
+  cleanup methods (added `CloseAsync` and `WaitForClose`). For the overwhelming
+  majority of processors these functions will be no-ops.
+
 ## 0.39.2 - 2018-12-07
 
 ### Added

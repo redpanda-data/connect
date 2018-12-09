@@ -288,4 +288,13 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	return msgs[:], nil
 }
 
+// CloseAsync shuts down the processor and stops processing requests.
+func (d *Archive) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (d *Archive) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
 //------------------------------------------------------------------------------

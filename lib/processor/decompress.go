@@ -28,6 +28,7 @@ import (
 	"compress/zlib"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -212,6 +213,15 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	d.mSent.Incr(int64(newMsg.Len()))
 	msgs := [1]types.Message{newMsg}
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (d *Decompress) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (d *Decompress) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

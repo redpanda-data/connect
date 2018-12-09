@@ -23,6 +23,7 @@ package processor
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -194,6 +195,15 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	l.mBatchSent.Incr(1)
 	l.mSent.Incr(int64(responseMsg.Len()))
 	return msgs[:], nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (l *Lambda) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (l *Lambda) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

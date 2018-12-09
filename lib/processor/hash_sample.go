@@ -22,6 +22,7 @@ package processor
 
 import (
 	"math"
+	"time"
 
 	"github.com/OneOfOne/xxhash"
 
@@ -151,6 +152,15 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	s.mDropped.Incr(int64(msg.Len()))
 	return nil, response.NewAck()
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (s *HashSample) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (s *HashSample) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

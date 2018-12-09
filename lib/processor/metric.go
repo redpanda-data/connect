@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -280,4 +281,13 @@ func (m *Metric) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	}
 
 	return []types.Message{msg}, nil
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (m *Metric) CloseAsync() {
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (m *Metric) WaitForClose(timeout time.Duration) error {
+	return nil
 }

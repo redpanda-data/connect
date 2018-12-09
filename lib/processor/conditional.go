@@ -21,6 +21,8 @@
 package processor
 
 import (
+	"time"
+
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
@@ -182,6 +184,32 @@ func (c *Conditional) ProcessMessage(msg types.Message) (msgs []types.Message, r
 	}
 
 	return
+}
+
+// CloseAsync shuts down the processor and stops processing requests.
+func (c *Conditional) CloseAsync() {
+	for _, p := range c.children {
+		p.CloseAsync()
+	}
+	for _, p := range c.elseChildren {
+		p.CloseAsync()
+	}
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (c *Conditional) WaitForClose(timeout time.Duration) error {
+	stopBy := time.Now().Add(timeout)
+	for _, p := range c.children {
+		if err := p.WaitForClose(time.Until(stopBy)); err != nil {
+			return err
+		}
+	}
+	for _, p := range c.elseChildren {
+		if err := p.WaitForClose(time.Until(stopBy)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
