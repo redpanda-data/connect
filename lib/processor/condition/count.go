@@ -68,6 +68,10 @@ func NewCountConfig() CountConfig {
 type Count struct {
 	arg int
 	ctr int
+
+	mCount metrics.StatCounter
+	mTrue  metrics.StatCounter
+	mFalse metrics.StatCounter
 }
 
 // NewCount returns a Count condition.
@@ -77,6 +81,10 @@ func NewCount(
 	return &Count{
 		arg: conf.Count.Arg,
 		ctr: 0,
+
+		mCount: stats.GetCounter("count"),
+		mTrue:  stats.GetCounter("true"),
+		mFalse: stats.GetCounter("false"),
 	}, nil
 }
 
@@ -84,11 +92,14 @@ func NewCount(
 
 // Check attempts to check a message part against a configured condition.
 func (c *Count) Check(msg types.Message) bool {
+	c.mCount.Incr(1)
 	c.ctr++
 	if c.ctr < c.arg {
+		c.mFalse.Incr(1)
 		return true
 	}
 	c.ctr = 0
+	c.mTrue.Incr(1)
 	return false
 }
 

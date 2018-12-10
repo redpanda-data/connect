@@ -91,11 +91,12 @@ type JMESPath struct {
 	part  int
 	query *jmespath.JMESPath
 
-	mSkipped  metrics.StatCounter
+	mCount    metrics.StatCounter
+	mTrue     metrics.StatCounter
+	mFalse    metrics.StatCounter
 	mErrJSONP metrics.StatCounter
-	mDropped  metrics.StatCounter
 	mErrJMES  metrics.StatCounter
-	mApplied  metrics.StatCounter
+	mErr      metrics.StatCounter
 }
 
 // NewJMESPath returns a JMESPath condition.
@@ -113,11 +114,12 @@ func NewJMESPath(
 		part:  conf.JMESPath.Part,
 		query: query,
 
-		mSkipped:  stats.GetCounter("skipped"),
-		mErrJSONP: stats.GetCounter("error.json_parse"),
-		mDropped:  stats.GetCounter("dropped"),
-		mErrJMES:  stats.GetCounter("error.jmespath_search"),
-		mApplied:  stats.GetCounter("applied"),
+		mCount:    stats.GetCounter("count"),
+		mTrue:     stats.GetCounter("true"),
+		mFalse:    stats.GetCounter("false"),
+		mErrJSONP: stats.GetCounter("error_json_parse"),
+		mErrJMES:  stats.GetCounter("error_jmespath_search"),
+		mErr:      stats.GetCounter("error"),
 	}, nil
 }
 
@@ -134,34 +136,41 @@ func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err er
 
 // Check attempts to check a message part against a configured condition.
 func (c *JMESPath) Check(msg types.Message) bool {
+	c.mCount.Incr(1)
 	index := c.part
 	if index < 0 {
 		index = msg.Len() + index
 	}
 
 	if index < 0 || index >= msg.Len() {
-		c.mSkipped.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	}
 
 	jsonPart, err := msg.Get(index).JSON()
 	if err != nil {
-		c.mErrJSONP.Incr(1)
-		c.mDropped.Incr(1)
 		c.log.Debugf("Failed to parse part into json: %v\n", err)
+		c.mErrJSONP.Incr(1)
+		c.mErr.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	}
 
 	var result interface{}
 	if result, err = safeSearch(jsonPart, c.query); err != nil {
-		c.mErrJMES.Incr(1)
-		c.mDropped.Incr(1)
 		c.log.Debugf("Failed to search json: %v\n", err)
+		c.mErrJMES.Incr(1)
+		c.mErr.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	}
-	c.mApplied.Incr(1)
 
 	resultBool, _ := result.(bool)
+	if resultBool {
+		c.mTrue.Incr(1)
+	} else {
+		c.mFalse.Incr(1)
+	}
 	return resultBool
 }
 

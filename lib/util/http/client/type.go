@@ -372,20 +372,28 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 	return
 }
 
+type retryStrategy int
+
+const (
+	noRetry retryStrategy = iota
+	retryLinear
+	retryBackoff
+)
+
 // checkStatus compares a returned status code against configured logic
-// determining whether the send is resolved, and if not whether the retry should
-// be linear.
-func (h *Type) checkStatus(code int) (resolved bool, linearRetry bool) {
+// determining whether the send succeeded, and if not what the retry strategy
+// should be.
+func (h *Type) checkStatus(code int) (succeeded bool, retStrat retryStrategy) {
 	if _, exists := h.dropOn[code]; exists {
-		return true, false
+		return false, noRetry
 	}
 	if _, exists := h.backoffOn[code]; exists {
-		return false, false
+		return false, retryBackoff
 	}
 	if code < 200 || code > 299 {
-		return false, true
+		return false, retryLinear
 	}
-	return true, false
+	return true, noRetry
 }
 
 // Do attempts to create and perform an HTTP request from a message payload.
@@ -406,11 +414,16 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 	if !h.waitForAccess() {
 		return nil, types.ErrTypeClosed
 	}
+
 	rateLimited := false
+	numRetries := h.conf.NumRetries
 	if res, err = h.client.Do(req); err == nil {
 		h.incrCode(res.StatusCode)
-		if resolved, linear := h.checkStatus(res.StatusCode); !resolved {
-			rateLimited = !linear
+		if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
+			rateLimited = retryStrat == retryBackoff
+			if retryStrat == noRetry {
+				numRetries = 0
+			}
 			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
 			if res.Body != nil {
 				res.Body.Close()
@@ -418,7 +431,7 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 		}
 	}
 
-	i, j := 0, h.conf.NumRetries
+	i, j := 0, numRetries
 	for i < j && err != nil {
 		h.mErrRes.Incr(1)
 		h.mErr.Incr(1)
@@ -444,8 +457,11 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 		rateLimited = false
 		if res, err = h.client.Do(req); err == nil {
 			h.incrCode(res.StatusCode)
-			if resolved, linear := h.checkStatus(res.StatusCode); !resolved {
-				rateLimited = !linear
+			if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
+				rateLimited = retryStrat == retryBackoff
+				if retryStrat == noRetry {
+					numRetries = 0
+				}
 				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
 				if res.Body != nil {
 					res.Body.Close()

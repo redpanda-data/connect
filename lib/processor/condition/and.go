@@ -7,11 +7,11 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright andice and this permission andice shall be included in
+// The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT and LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
@@ -63,6 +63,10 @@ func NewAndConfig() AndConfig {
 // And is a condition that returns the logical AND of all children.
 type And struct {
 	children []Type
+
+	mCount metrics.StatCounter
+	mTrue  metrics.StatCounter
+	mFalse metrics.StatCounter
 }
 
 // NewAnd returns an And condition.
@@ -71,7 +75,7 @@ func NewAnd(
 ) (Type, error) {
 	children := []Type{}
 	for i, childConf := range conf.And {
-		ns := fmt.Sprintf("and.%v", i)
+		ns := fmt.Sprintf("%v", i)
 		child, err := New(childConf, mgr, log.NewModule("."+ns), metrics.Namespaced(stats, ns))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create child '%v': %v", childConf.Type, err)
@@ -80,6 +84,10 @@ func NewAnd(
 	}
 	return &And{
 		children: children,
+
+		mCount: stats.GetCounter("count"),
+		mTrue:  stats.GetCounter("true"),
+		mFalse: stats.GetCounter("false"),
 	}, nil
 }
 
@@ -87,11 +95,14 @@ func NewAnd(
 
 // Check attempts to check a message part against a configured condition.
 func (c *And) Check(msg types.Message) bool {
+	c.mCount.Incr(1)
 	for _, child := range c.children {
 		if !child.Check(msg) {
+			c.mFalse.Incr(1)
 			return false
 		}
 	}
+	c.mTrue.Incr(1)
 	return true
 }
 

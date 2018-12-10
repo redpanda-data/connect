@@ -84,6 +84,12 @@ type Resource struct {
 	mgr  types.Manager
 	name string
 	log  log.Modular
+
+	mCount       metrics.StatCounter
+	mTrue        metrics.StatCounter
+	mFalse       metrics.StatCounter
+	mErr         metrics.StatCounter
+	mErrNotFound metrics.StatCounter
 }
 
 // NewResource returns a resource condition.
@@ -97,6 +103,12 @@ func NewResource(
 		mgr:  mgr,
 		name: conf.Resource,
 		log:  log,
+
+		mCount:       stats.GetCounter("count"),
+		mTrue:        stats.GetCounter("true"),
+		mFalse:       stats.GetCounter("false"),
+		mErrNotFound: stats.GetCounter("error_not_found"),
+		mErr:         stats.GetCounter("error"),
 	}, nil
 }
 
@@ -104,12 +116,23 @@ func NewResource(
 
 // Check attempts to check a message part against a configured condition.
 func (c *Resource) Check(msg types.Message) bool {
+	c.mCount.Incr(1)
 	cond, err := c.mgr.GetCondition(c.name)
 	if err != nil {
 		c.log.Debugf("Failed to obtain condition resource '%v': %v", c.name, err)
+		c.mErrNotFound.Incr(1)
+		c.mErr.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	}
-	return cond.Check(msg)
+
+	res := cond.Check(msg)
+	if res {
+		c.mTrue.Incr(1)
+	} else {
+		c.mFalse.Incr(1)
+	}
+	return res
 }
 
 //------------------------------------------------------------------------------

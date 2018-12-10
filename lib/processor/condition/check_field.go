@@ -120,7 +120,9 @@ type CheckField struct {
 	child Type
 	path  []string
 
-	mApplied metrics.StatCounter
+	mCount   metrics.StatCounter
+	mTrue    metrics.StatCounter
+	mFalse   metrics.StatCounter
 	mErrJSON metrics.StatCounter
 	mErr     metrics.StatCounter
 }
@@ -139,14 +141,17 @@ func NewCheckField(
 	}
 
 	return &CheckField{
-		conf:     conf.CheckField,
-		log:      log,
-		stats:    stats,
-		child:    child,
-		path:     strings.Split(conf.CheckField.Path, "."),
-		mApplied: stats.GetCounter("applied"),
+		conf:  conf.CheckField,
+		log:   log,
+		stats: stats,
+		child: child,
+		path:  strings.Split(conf.CheckField.Path, "."),
+
+		mCount:   stats.GetCounter("count"),
+		mTrue:    stats.GetCounter("true"),
+		mFalse:   stats.GetCounter("false"),
+		mErrJSON: stats.GetCounter("error_json_parse"),
 		mErr:     stats.GetCounter("error"),
-		mErrJSON: stats.GetCounter("error.json_parse"),
 	}, nil
 }
 
@@ -154,6 +159,8 @@ func NewCheckField(
 
 // Check attempts to check a message part against a configured condition
 func (c *CheckField) Check(msg types.Message) bool {
+	c.mCount.Incr(1)
+
 	payload := msg.Copy()
 
 	proc := func(index int) {
@@ -194,8 +201,13 @@ func (c *CheckField) Check(msg types.Message) bool {
 		}
 	}
 
-	c.mApplied.Incr(1)
-	return c.child.Check(payload)
+	res := c.child.Check(payload)
+	if res {
+		c.mTrue.Incr(1)
+	} else {
+		c.mFalse.Incr(1)
+	}
+	return res
 }
 
 //------------------------------------------------------------------------------

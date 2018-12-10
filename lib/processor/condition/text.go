@@ -223,10 +223,9 @@ type Text struct {
 	operator textOperator
 	part     int
 
-	mSkippedEmpty metrics.StatCounter
-	mSkipped      metrics.StatCounter
-	mSkippedOOB   metrics.StatCounter
-	mApplied      metrics.StatCounter
+	mCount metrics.StatCounter
+	mTrue  metrics.StatCounter
+	mFalse metrics.StatCounter
 }
 
 // NewText returns a Text condition.
@@ -242,10 +241,9 @@ func NewText(
 		operator: op,
 		part:     conf.Text.Part,
 
-		mSkippedEmpty: stats.GetCounter("skipped.empty_message"),
-		mSkipped:      stats.GetCounter("skipped"),
-		mSkippedOOB:   stats.GetCounter("skipped.out_of_bounds"),
-		mApplied:      stats.GetCounter("applied"),
+		mCount: stats.GetCounter("count"),
+		mTrue:  stats.GetCounter("true"),
+		mFalse: stats.GetCounter("false"),
 	}, nil
 }
 
@@ -253,23 +251,27 @@ func NewText(
 
 // Check attempts to check a message part against a configured condition.
 func (c *Text) Check(msg types.Message) bool {
+	c.mCount.Incr(1)
 	index := c.part
 	lParts := msg.Len()
 	if lParts == 0 {
-		c.mSkippedEmpty.Incr(1)
-		c.mSkipped.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	}
 
 	msgPart := msg.Get(index).Get()
 	if msgPart == nil {
-		c.mSkippedOOB.Incr(1)
-		c.mSkipped.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	}
 
-	c.mApplied.Incr(1)
-	return c.operator(msgPart)
+	res := c.operator(msgPart)
+	if res {
+		c.mTrue.Incr(1)
+	} else {
+		c.mFalse.Incr(1)
+	}
+	return res
 }
 
 //------------------------------------------------------------------------------

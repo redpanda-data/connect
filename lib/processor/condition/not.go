@@ -131,6 +131,10 @@ func (m *NotConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // Not is a condition that returns the opposite of a child condition.
 type Not struct {
 	child Type
+
+	mCount metrics.StatCounter
+	mTrue  metrics.StatCounter
+	mFalse metrics.StatCounter
 }
 
 // NewNot returns a Not condition.
@@ -142,12 +146,16 @@ func NewNot(
 		newConf := NewConfig()
 		childConf = &newConf
 	}
-	child, err := New(*childConf, mgr, log, stats)
+	child, err := New(*childConf, mgr, log.NewModule(".not"), metrics.Namespaced(stats, "not"))
 	if err != nil {
 		return nil, err
 	}
 	return &Not{
 		child: child,
+
+		mCount: stats.GetCounter("count"),
+		mTrue:  stats.GetCounter("true"),
+		mFalse: stats.GetCounter("false"),
 	}, nil
 }
 
@@ -155,7 +163,14 @@ func NewNot(
 
 // Check attempts to check a message part against a configured condition.
 func (c *Not) Check(msg types.Message) bool {
-	return !c.child.Check(msg)
+	c.mCount.Incr(1)
+	res := !c.child.Check(msg)
+	if res {
+		c.mTrue.Incr(1)
+	} else {
+		c.mFalse.Incr(1)
+	}
+	return res
 }
 
 //------------------------------------------------------------------------------

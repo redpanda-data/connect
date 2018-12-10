@@ -59,6 +59,10 @@ func NewProcessorFailedConfig() ProcessorFailedConfig {
 // failed for a message.
 type ProcessorFailed struct {
 	part int
+
+	mCount metrics.StatCounter
+	mTrue  metrics.StatCounter
+	mFalse metrics.StatCounter
 }
 
 // NewProcessorFailed returns a ProcessorFailed condition.
@@ -67,6 +71,10 @@ func NewProcessorFailed(
 ) (Type, error) {
 	return &ProcessorFailed{
 		part: conf.ProcessorFailed.Part,
+
+		mCount: stats.GetCounter("count"),
+		mTrue:  stats.GetCounter("true"),
+		mFalse: stats.GetCounter("false"),
 	}, nil
 }
 
@@ -74,9 +82,12 @@ func NewProcessorFailed(
 
 // Check attempts to check a message part against a configured condition.
 func (p *ProcessorFailed) Check(msg types.Message) bool {
+	p.mCount.Incr(1)
 	if l := len(msg.Get(p.part).Metadata().Get("benthos_processing_failed")); l > 0 {
+		p.mTrue.Incr(1)
 		return true
 	}
+	p.mFalse.Incr(1)
 	return false
 }
 

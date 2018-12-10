@@ -44,6 +44,12 @@ prefixed with `pipeline.processor.N`, where N is the index.
 - `pipeline.processor.0.batch.sent`
 - `pipeline.processor.0.error`
 
+## Conditions
+
+- `condition.count`
+- `condition.true`
+- `condition.false`
+
 ## Output
 
 - `output.count`: The number of times the output has attempted to send messages.

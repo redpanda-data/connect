@@ -72,11 +72,9 @@ type BoundsCheck struct {
 	minParts    int
 	minPartSize int
 
-	mApplied         metrics.StatCounter
-	mSkipped         metrics.StatCounter
-	mSkippedEmpty    metrics.StatCounter
-	mSkippedNumParts metrics.StatCounter
-	mSkippedPartSize metrics.StatCounter
+	mCount metrics.StatCounter
+	mTrue  metrics.StatCounter
+	mFalse metrics.StatCounter
 }
 
 // NewBoundsCheck returns a BoundsCheck condition.
@@ -84,17 +82,15 @@ func NewBoundsCheck(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	return &BoundsCheck{
-		log:              log,
-		stats:            stats,
-		maxParts:         conf.BoundsCheck.MaxParts,
-		maxPartSize:      conf.BoundsCheck.MaxPartSize,
-		minParts:         conf.BoundsCheck.MinParts,
-		minPartSize:      conf.BoundsCheck.MinPartSize,
-		mApplied:         stats.GetCounter("applied"),
-		mSkipped:         stats.GetCounter("skipped"),
-		mSkippedEmpty:    stats.GetCounter("skipped.empty_message"),
-		mSkippedNumParts: stats.GetCounter("skipped.num_parts"),
-		mSkippedPartSize: stats.GetCounter("skipped.part_size"),
+		log:         log,
+		stats:       stats,
+		maxParts:    conf.BoundsCheck.MaxParts,
+		maxPartSize: conf.BoundsCheck.MaxPartSize,
+		minParts:    conf.BoundsCheck.MinParts,
+		minPartSize: conf.BoundsCheck.MinPartSize,
+		mCount:      stats.GetCounter("count"),
+		mTrue:       stats.GetCounter("true"),
+		mFalse:      stats.GetCounter("false"),
 	}, nil
 }
 
@@ -102,27 +98,25 @@ func NewBoundsCheck(
 
 // Check attempts to check a message part against a configured condition
 func (c *BoundsCheck) Check(msg types.Message) bool {
+	c.mCount.Incr(1)
 	switch lParts := msg.Len(); {
 	case lParts == 0:
 		c.log.Debugln("Rejecting empty message")
-		c.mSkipped.Incr(1)
-		c.mSkippedEmpty.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	case lParts < c.minParts:
 		c.log.Debugf(
 			"Rejecting message due to parts below minimum (%v): %v\n",
 			c.minParts, lParts,
 		)
-		c.mSkipped.Incr(1)
-		c.mSkippedNumParts.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	case lParts > c.maxParts:
 		c.log.Debugf(
 			"Rejecting message due to parts exceeding limit (%v): %v\n",
 			c.maxParts, lParts,
 		)
-		c.mSkipped.Incr(1)
-		c.mSkippedNumParts.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	}
 
@@ -140,11 +134,10 @@ func (c *BoundsCheck) Check(msg types.Message) bool {
 	})
 
 	if reject {
-		c.mSkipped.Incr(1)
-		c.mSkippedPartSize.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	}
 
-	c.mApplied.Incr(1)
+	c.mTrue.Incr(1)
 	return true
 }

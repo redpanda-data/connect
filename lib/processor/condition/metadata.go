@@ -359,10 +359,9 @@ type Metadata struct {
 	operator metadataOperator
 	part     int
 
-	mSkippedEmpty metrics.StatCounter
-	mSkipped      metrics.StatCounter
-	mSkippedOOB   metrics.StatCounter
-	mApplied      metrics.StatCounter
+	mCount metrics.StatCounter
+	mTrue  metrics.StatCounter
+	mFalse metrics.StatCounter
 }
 
 // NewMetadata returns a Metadata condition.
@@ -378,10 +377,9 @@ func NewMetadata(
 		operator: op,
 		part:     conf.Metadata.Part,
 
-		mSkippedEmpty: stats.GetCounter("skipped.empty_message"),
-		mSkipped:      stats.GetCounter("skipped"),
-		mSkippedOOB:   stats.GetCounter("skipped.out_of_bounds"),
-		mApplied:      stats.GetCounter("applied"),
+		mCount: stats.GetCounter("count"),
+		mTrue:  stats.GetCounter("true"),
+		mFalse: stats.GetCounter("false"),
 	}, nil
 }
 
@@ -389,16 +387,21 @@ func NewMetadata(
 
 // Check attempts to check a message part against a configured condition.
 func (c *Metadata) Check(msg types.Message) bool {
+	c.mCount.Incr(1)
 	index := c.part
 	lParts := msg.Len()
 	if lParts == 0 {
-		c.mSkippedEmpty.Incr(1)
-		c.mSkipped.Incr(1)
+		c.mFalse.Incr(1)
 		return false
 	}
 
-	c.mApplied.Incr(1)
-	return c.operator(msg.Get(index).Metadata())
+	res := c.operator(msg.Get(index).Metadata())
+	if res {
+		c.mTrue.Incr(1)
+	} else {
+		c.mFalse.Incr(1)
+	}
+	return res
 }
 
 //------------------------------------------------------------------------------
