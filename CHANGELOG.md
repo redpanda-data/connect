@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.40.0 - 2018-12-10
+
+### Added
+
+- New `subprocess` processor.
+
 ### Changed
 
 - API: The `types.Processor` interface has been changed in order to add lifetime

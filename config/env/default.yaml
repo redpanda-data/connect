@@ -381,6 +381,8 @@ pipeline:
       - ${PROCESSOR_SELECT_PARTS_PARTS:0}
     split:
       size: ${PROCESSOR_SPLIT_SIZE:1}
+    subprocess:
+      name: ${PROCESSOR_SUBPROCESS_NAME:cat}
     text:
       arg: ${PROCESSOR_TEXT_ARG}
       operator: ${PROCESSOR_TEXT_OPERATOR:trim_space}

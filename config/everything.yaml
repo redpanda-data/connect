@@ -574,6 +574,10 @@ pipeline:
       - 0
     split:
       size: 1
+    subprocess:
+      parts: []
+      name: cat
+      args: []
     text:
       parts: []
       operator: trim_space

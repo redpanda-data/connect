@@ -89,6 +89,7 @@ const (
 	TypeSample       = "sample"
 	TypeSelectParts  = "select_parts"
 	TypeSplit        = "split"
+	TypeSubprocess   = "subprocess"
 	TypeText         = "text"
 	TypeTry          = "try"
 	TypeThrottle     = "throttle"
@@ -134,6 +135,7 @@ type Config struct {
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Split        SplitConfig        `json:"split" yaml:"split"`
+	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
 	Text         TextConfig         `json:"text" yaml:"text"`
 	Try          TryConfig          `json:"try" yaml:"try"`
 	Throttle     ThrottleConfig     `json:"throttle" yaml:"throttle"`
@@ -178,6 +180,7 @@ func NewConfig() Config {
 		Sample:       NewSampleConfig(),
 		SelectParts:  NewSelectPartsConfig(),
 		Split:        NewSplitConfig(),
+		Subprocess:   NewSubprocessConfig(),
 		Text:         NewTextConfig(),
 		Try:          NewTryConfig(),
 		Throttle:     NewThrottleConfig(),

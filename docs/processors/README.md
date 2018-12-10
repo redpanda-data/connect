@@ -78,10 +78,11 @@ used.
 32. [`sample`](#sample)
 33. [`select_parts`](#select_parts)
 34. [`split`](#split)
-35. [`text`](#text)
-36. [`throttle`](#throttle)
-37. [`try`](#try)
-38. [`unarchive`](#unarchive)
+35. [`subprocess`](#subprocess)
+36. [`text`](#text)
+37. [`throttle`](#throttle)
+38. [`try`](#try)
+39. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -1217,6 +1218,31 @@ remainder is also sent as a single batch. For example, if your target size was
 
 The split processor should *always* be positioned at the end of a list of
 processors.
+
+## `subprocess`
+
+``` yaml
+type: subprocess
+subprocess:
+  args: []
+  name: cat
+  parts: []
+```
+
+Subprocess is a processor that runs a process in the background and, for each
+message, will pipe its contents to the stdin stream of the process followed by a
+newline.
+
+The subprocess must then either return a line over stdout or stderr. If a
+response is returned over stdout then its contents will replace the message. If
+a response is instead returned from stderr will be logged and the message will
+continue unchanged and will be marked as failed.
+
+NOTE: it is required that processes executed in this way flush their stdout
+pipes for each line.
+
+Benthos will attempt to keep the process alive for as long as the pipeline is
+running. If the process exits early it will be restarted.
 
 ## `text`
 

@@ -341,6 +341,7 @@ PROCESSOR_SAMPLE_RETAIN                              = 10
 PROCESSOR_SAMPLE_SEED                                = 0
 PROCESSOR_SELECT_PARTS_PARTS                         = 0
 PROCESSOR_SPLIT_SIZE                                 = 1
+PROCESSOR_SUBPROCESS_NAME                            = cat
 PROCESSOR_TEXT_ARG
 PROCESSOR_TEXT_OPERATOR                              = trim_space
 PROCESSOR_TEXT_VALUE
