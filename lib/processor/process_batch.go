@@ -133,9 +133,6 @@ func (p *ProcessBatch) ProcessMessage(msg types.Message) ([]types.Message, types
 			return nil
 		})
 	}
-	if resMsg.Len() == 0 {
-		return nil, res
-	}
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(resMsg.Len()))

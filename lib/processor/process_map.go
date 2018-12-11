@@ -284,18 +284,23 @@ func NewProcessMap(
 func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	alignedResult, err := p.CreateResult(msg)
 	if err != nil {
-		msgs := [1]types.Message{msg}
+		result := msg.Copy()
+		result.Iter(func(i int, p types.Part) error {
+			FlagFail(p)
+			return nil
+		})
+		msgs := [1]types.Message{result}
 		return msgs[:], nil
 	}
 
 	var failed []int
 	result := msg.Copy()
 	if failed, err = p.OverlayResult(result, alignedResult); err != nil {
-		msg.Iter(func(i int, p types.Part) error {
+		result.Iter(func(i int, p types.Part) error {
 			FlagFail(p)
 			return nil
 		})
-		msgs := [1]types.Message{msg}
+		msgs := [1]types.Message{result}
 		return msgs[:], nil
 	}
 	for _, i := range failed {

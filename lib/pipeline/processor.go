@@ -103,6 +103,10 @@ func (p *Processor) loop() {
 
 		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
+			if resultRes == nil {
+				resultRes = response.NewUnack()
+				p.log.Warnln("Nil response returned with zero messages from processors")
+			}
 			select {
 			case tran.ResponseChan <- resultRes:
 			case <-p.closeChan:

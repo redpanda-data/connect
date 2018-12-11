@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -48,7 +49,13 @@ func ExecuteAll(procs []types.Processor, msgs ...types.Message) ([]types.Message
 		resultMsgs = nextResultMsgs
 	}
 
-	return resultMsgs, resultRes
+	if len(resultMsgs) == 0 {
+		if resultRes == nil {
+			resultRes = response.NewUnack()
+		}
+		return nil, resultRes
+	}
+	return resultMsgs, nil
 }
 
 // ExecuteTryAll attempts to execute a slice of processors to messages, if a
@@ -80,7 +87,13 @@ func ExecuteTryAll(procs []types.Processor, msgs ...types.Message) ([]types.Mess
 		resultMsgs = nextResultMsgs
 	}
 
-	return resultMsgs, resultRes
+	if len(resultMsgs) == 0 {
+		if resultRes == nil {
+			resultRes = response.NewUnack()
+		}
+		return nil, resultRes
+	}
+	return resultMsgs, nil
 }
 
 // ExecuteCatchAll attempts to execute a slice of processors to only messages
@@ -111,7 +124,13 @@ func ExecuteCatchAll(procs []types.Processor, msgs ...types.Message) ([]types.Me
 		resultMsgs = nextResultMsgs
 	}
 
-	return resultMsgs, resultRes
+	if len(resultMsgs) == 0 {
+		if resultRes == nil {
+			resultRes = response.NewUnack()
+		}
+		return nil, resultRes
+	}
+	return resultMsgs, nil
 }
 
 //------------------------------------------------------------------------------
