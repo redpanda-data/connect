@@ -9,7 +9,7 @@ input:
   amqp:
     bindings_declare: []
     consumer_tag: benthos-consumer
-    max_batch_size: 1
+    max_batch_count: 1
     prefetch_count: 10
     prefetch_size: 0
     queue: benthos-queue

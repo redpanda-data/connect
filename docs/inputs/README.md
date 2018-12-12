@@ -70,7 +70,7 @@ type: amqp
 amqp:
   bindings_declare: []
   consumer_tag: benthos-consumer
-  max_batch_size: 1
+  max_batch_count: 1
   prefetch_count: 10
   prefetch_size: 0
   queue: benthos-queue
@@ -88,7 +88,7 @@ amqp:
 Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
 message brokers, including RabbitMQ.
 
-The field `max_batch_size` specifies the maximum number of prefetched
+The field `max_batch_count` specifies the maximum number of prefetched
 messages to be batched together. When more than one message is batched they can
 be split into individual messages with the `split` processor.
 
@@ -412,7 +412,7 @@ kafka:
   client_id: benthos_kafka_input
   commit_period_ms: 1000
   consumer_group: benthos_consumer_group
-  max_batch_size: 1
+  max_batch_count: 1
   partition: 0
   start_from_oldest: true
   target_version: 1.0.0
@@ -429,7 +429,7 @@ consumer group (set via config). Only one partition per input is supported, if
 you wish to balance partitions across a consumer group look at the
 `kafka_balanced` input type instead.
 
-The field `max_batch_size` specifies the maximum number of prefetched
+The field `max_batch_count` specifies the maximum number of prefetched
 messages to be batched together. When more than one message is batched they can
 be split into individual messages with the `split` processor.
 
@@ -482,7 +482,7 @@ kafka_balanced:
   client_id: benthos_kafka_input
   commit_period_ms: 1000
   consumer_group: benthos_consumer_group
-  max_batch_size: 1
+  max_batch_count: 1
   start_from_oldest: true
   target_version: 1.0.0
   tls:
@@ -498,7 +498,7 @@ Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
 
-The field `max_batch_size` specifies the maximum number of prefetched
+The field `max_batch_count` specifies the maximum number of prefetched
 messages to be batched together. When more than one message is batched they can
 be split into individual messages with the `split` processor.
 

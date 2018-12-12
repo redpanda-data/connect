@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.41.0 - 2018-12-12
+
+### Changed
+
+- Renamed `max_batch_size` to `max_batch_count` for consistency.
+
 ## 0.40.2 - 2018-12-12
 
 ### Added

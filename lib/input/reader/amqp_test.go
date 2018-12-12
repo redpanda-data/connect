@@ -199,7 +199,7 @@ func testAMQPBatch(url string, t *testing.T) {
 	conf := NewAMQPConfig()
 	conf.URL = url
 	conf.QueueDeclare.Enabled = true
-	conf.MaxBatchSize = 10
+	conf.MaxBatchCount = 10
 	conf.BindingsDeclare = append(conf.BindingsDeclare, AMQPBindingConfig{
 		Exchange:   exchange,
 		RoutingKey: key,
@@ -256,8 +256,8 @@ func testAMQPBatch(url string, t *testing.T) {
 				ContentType:     "application/octet-stream",
 				ContentEncoding: "",
 				Body:            []byte(testStr),
-				DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
-				Priority:        0,              // 0-9
+				DeliveryMode:    1, // 1=non-persistent, 2=persistent
+				Priority:        0, // 0-9
 			}); pErr != nil {
 				t.Error(pErr)
 			}

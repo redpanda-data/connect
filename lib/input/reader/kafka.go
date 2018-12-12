@@ -47,7 +47,7 @@ type KafkaConfig struct {
 	Partition       int32       `json:"partition" yaml:"partition"`
 	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion   string      `json:"target_version" yaml:"target_version"`
-	MaxBatchSize    int         `json:"max_batch_size" yaml:"max_batch_size"`
+	MaxBatchCount   int         `json:"max_batch_count" yaml:"max_batch_count"`
 	TLS             btls.Config `json:"tls" yaml:"tls"`
 }
 
@@ -62,7 +62,7 @@ func NewKafkaConfig() KafkaConfig {
 		Partition:       0,
 		StartFromOldest: true,
 		TargetVersion:   sarama.V1_0_0_0.String(),
-		MaxBatchSize:    1,
+		MaxBatchCount:   1,
 		TLS:             btls.NewConfig(),
 	}
 }
@@ -299,7 +299,7 @@ func (k *Kafka) Read() (types.Message, error) {
 	addPart(data)
 
 batchLoop:
-	for i := 1; i < k.conf.MaxBatchSize; i++ {
+	for i := 1; i < k.conf.MaxBatchCount; i++ {
 		select {
 		case data, open = <-partConsumer.Messages():
 			if !open {

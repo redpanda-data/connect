@@ -61,7 +61,7 @@ type AMQPConfig struct {
 	ConsumerTag     string                 `json:"consumer_tag" yaml:"consumer_tag"`
 	PrefetchCount   int                    `json:"prefetch_count" yaml:"prefetch_count"`
 	PrefetchSize    int                    `json:"prefetch_size" yaml:"prefetch_size"`
-	MaxBatchSize    int                    `json:"max_batch_size" yaml:"max_batch_size"`
+	MaxBatchCount   int                    `json:"max_batch_count" yaml:"max_batch_count"`
 	TLS             btls.Config            `json:"tls" yaml:"tls"`
 }
 
@@ -78,7 +78,7 @@ func NewAMQPConfig() AMQPConfig {
 		PrefetchCount:   10,
 		PrefetchSize:    0,
 		TLS:             btls.NewConfig(),
-		MaxBatchSize:    1,
+		MaxBatchCount:   1,
 		BindingsDeclare: []AMQPBindingConfig{},
 	}
 }
@@ -335,7 +335,7 @@ func (a *AMQP) Read() (types.Message, error) {
 	addPart(data)
 
 batchLoop:
-	for i := 1; i < a.conf.MaxBatchSize; i++ {
+	for i := 1; i < a.conf.MaxBatchCount; i++ {
 		select {
 		case data, open = <-c:
 			if !open {

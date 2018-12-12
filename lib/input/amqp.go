@@ -36,7 +36,7 @@ func init() {
 Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
 message brokers, including RabbitMQ.
 
-The field ` + "`max_batch_size`" + ` specifies the maximum number of prefetched
+The field ` + "`max_batch_count`" + ` specifies the maximum number of prefetched
 messages to be batched together. When more than one message is batched they can
 be split into individual messages with the ` + "`split`" + ` processor.
 
