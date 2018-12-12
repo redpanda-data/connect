@@ -39,6 +39,10 @@ consumer group (set via config). Only one partition per input is supported, if
 you wish to balance partitions across a consumer group look at the
 ` + "`kafka_balanced`" + ` input type instead.
 
+The field ` + "`max_batch_size`" + ` specifies the maximum number of prefetched
+messages to be batched together. When more than one message is batched they can
+be split into individual messages with the ` + "`split`" + ` processor.
+
 The target version by default will be the oldest supported, as it is expected
 that the server will be backwards compatible. In order to support newer client
 features you should increase this version up to the known version of the target

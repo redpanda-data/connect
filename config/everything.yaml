@@ -15,6 +15,7 @@ input:
     consumer_tag: benthos-consumer
     prefetch_count: 10
     prefetch_size: 0
+    max_batch_size: 1
     tls:
       enabled: false
       root_cas_file: ""
@@ -98,6 +99,7 @@ input:
     partition: 0
     start_from_oldest: true
     target_version: 1.0.0
+    max_batch_size: 1
     tls:
       enabled: false
       root_cas_file: ""
@@ -113,6 +115,7 @@ input:
     - benthos_stream
     start_from_oldest: true
     target_version: 1.0.0
+    max_batch_size: 1
     tls:
       enabled: false
       root_cas_file: ""

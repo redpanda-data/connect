@@ -70,6 +70,7 @@ type: amqp
 amqp:
   bindings_declare: []
   consumer_tag: benthos-consumer
+  max_batch_size: 1
   prefetch_count: 10
   prefetch_size: 0
   queue: benthos-queue
@@ -86,6 +87,10 @@ amqp:
 
 Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
 message brokers, including RabbitMQ.
+
+The field `max_batch_size` specifies the maximum number of prefetched
+messages to be batched together. When more than one message is batched they can
+be split into individual messages with the `split` processor.
 
 It's possible for this input type to declare the target queue by setting
 `queue_declare.enabled` to `true`, if the queue already exists then
@@ -407,6 +412,7 @@ kafka:
   client_id: benthos_kafka_input
   commit_period_ms: 1000
   consumer_group: benthos_consumer_group
+  max_batch_size: 1
   partition: 0
   start_from_oldest: true
   target_version: 1.0.0
@@ -422,6 +428,10 @@ Connects to a kafka (0.8+) server. Offsets are managed within kafka as per the
 consumer group (set via config). Only one partition per input is supported, if
 you wish to balance partitions across a consumer group look at the
 `kafka_balanced` input type instead.
+
+The field `max_batch_size` specifies the maximum number of prefetched
+messages to be batched together. When more than one message is batched they can
+be split into individual messages with the `split` processor.
 
 The target version by default will be the oldest supported, as it is expected
 that the server will be backwards compatible. In order to support newer client
@@ -472,6 +482,7 @@ kafka_balanced:
   client_id: benthos_kafka_input
   commit_period_ms: 1000
   consumer_group: benthos_consumer_group
+  max_batch_size: 1
   start_from_oldest: true
   target_version: 1.0.0
   tls:
@@ -486,6 +497,10 @@ kafka_balanced:
 Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
+
+The field `max_batch_size` specifies the maximum number of prefetched
+messages to be batched together. When more than one message is batched they can
+be split into individual messages with the `split` processor.
 
 ### TLS
 

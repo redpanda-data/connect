@@ -84,6 +84,9 @@ func TestAMQPIntegration(t *testing.T) {
 	t.Run("TestAMQPConnect", func(te *testing.T) {
 		testAMQPConnect(url, te)
 	})
+	t.Run("TestAMQPBatch", func(te *testing.T) {
+		testAMQPBatch(url, te)
+	})
 	t.Run("TestAMQPDisconnect", func(te *testing.T) {
 		testAMQPDisconnect(url, te)
 	})
@@ -187,6 +190,107 @@ func testAMQPConnect(url string, t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func testAMQPBatch(url string, t *testing.T) {
+	exchange := "test-exchange"
+	key := "benthos-key"
+
+	conf := NewAMQPConfig()
+	conf.URL = url
+	conf.QueueDeclare.Enabled = true
+	conf.MaxBatchSize = 10
+	conf.BindingsDeclare = append(conf.BindingsDeclare, AMQPBindingConfig{
+		Exchange:   exchange,
+		RoutingKey: key,
+	})
+
+	m, err := NewAMQP(conf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = m.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		m.CloseAsync()
+		if cErr := m.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	var mIn *amqp.Connection
+	if mIn, err = amqp.Dial(url); err != nil {
+		t.Fatal(err)
+	}
+
+	var mChan *amqp.Channel
+	if mChan, err = mIn.Channel(); err != nil {
+		t.Fatalf("AMQP Channel: %s", err)
+	}
+
+	defer func() {
+		mChan.Close()
+		mIn.Close()
+	}()
+
+	N := 10
+
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+
+	testMsgs := map[string]struct{}{}
+	for i := 0; i < N; i++ {
+		str := fmt.Sprintf("hello world: %v", i)
+		testMsgs[str] = struct{}{}
+		go func(testStr string) {
+			if pErr := mChan.Publish(exchange, key, false, false, amqp.Publishing{
+				Headers: amqp.Table{
+					"foo": "bar",
+					"root": amqp.Table{
+						"foo": "bar2",
+					},
+				},
+				ContentType:     "application/octet-stream",
+				ContentEncoding: "",
+				Body:            []byte(testStr),
+				DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
+				Priority:        0,              // 0-9
+			}); pErr != nil {
+				t.Error(pErr)
+			}
+			wg.Done()
+		}(str)
+	}
+
+	wg.Wait()
+
+	lMsgs := len(testMsgs)
+	for lMsgs > 0 {
+		var actM types.Message
+		actM, err = m.Read()
+		if err != nil {
+			t.Error(err)
+		} else {
+			act := string(actM.Get(0).Get())
+			if _, exists := testMsgs[act]; !exists {
+				t.Errorf("Unexpected message: %v", act)
+			}
+			delete(testMsgs, act)
+			if act = actM.Get(0).Metadata().Get("foo"); act != "bar" {
+				t.Errorf("Wrong metadata returned: %v != bar", act)
+			}
+			if act = actM.Get(0).Metadata().Get("root_foo"); act != "bar2" {
+				t.Errorf("Wrong metadata returned: %v != bar2", act)
+			}
+		}
+		if err = m.Acknowledge(nil); err != nil {
+			t.Error(err)
+		}
+		lMsgs = len(testMsgs)
+	}
 }
 
 func testAMQPDisconnect(url string, t *testing.T) {

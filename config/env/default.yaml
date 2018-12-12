@@ -10,6 +10,7 @@ input:
     inputs:
     - amqp:
         consumer_tag: ${INPUT_AMQP_CONSUMER_TAG:benthos-consumer}
+        max_batch_size: ${INPUT_AMQP_MAX_BATCH_SIZE:1}
         prefetch_count: ${INPUT_AMQP_PREFETCH_COUNT:10}
         prefetch_size: ${INPUT_AMQP_PREFETCH_SIZE:0}
         queue: ${INPUT_AMQP_QUEUE:benthos-queue}
@@ -89,6 +90,7 @@ input:
         client_id: ${INPUT_KAFKA_CLIENT_ID:benthos_kafka_input}
         commit_period_ms: ${INPUT_KAFKA_COMMIT_PERIOD_MS:1000}
         consumer_group: ${INPUT_KAFKA_CONSUMER_GROUP:benthos_consumer_group}
+        max_batch_size: ${INPUT_KAFKA_MAX_BATCH_SIZE:1}
         partition: ${INPUT_KAFKA_PARTITION:0}
         start_from_oldest: ${INPUT_KAFKA_START_FROM_OLDEST:true}
         target_version: ${INPUT_KAFKA_TARGET_VERSION:1.0.0}
@@ -103,6 +105,7 @@ input:
         client_id: ${INPUT_KAFKA_BALANCED_CLIENT_ID:benthos_kafka_input}
         commit_period_ms: ${INPUT_KAFKA_BALANCED_COMMIT_PERIOD_MS:1000}
         consumer_group: ${INPUT_KAFKA_BALANCED_CONSUMER_GROUP:benthos_consumer_group}
+        max_batch_size: ${INPUT_KAFKA_BALANCED_MAX_BATCH_SIZE:1}
         start_from_oldest: ${INPUT_KAFKA_BALANCED_START_FROM_OLDEST:true}
         target_version: ${INPUT_KAFKA_BALANCED_TARGET_VERSION:1.0.0}
         tls:

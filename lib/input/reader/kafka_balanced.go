@@ -47,6 +47,7 @@ type KafkaBalancedConfig struct {
 	Topics          []string    `json:"topics" yaml:"topics"`
 	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion   string      `json:"target_version" yaml:"target_version"`
+	MaxBatchSize    int         `json:"max_batch_size" yaml:"max_batch_size"`
 	TLS             btls.Config `json:"tls" yaml:"tls"`
 }
 
@@ -60,6 +61,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Topics:          []string{"benthos_stream"},
 		StartFromOldest: true,
 		TargetVersion:   sarama.V1_0_0_0.String(),
+		MaxBatchSize:    1,
 		TLS:             btls.NewConfig(),
 	}
 }
@@ -236,25 +238,50 @@ func (k *KafkaBalanced) Read() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
+	msg := message.New(nil)
+	addPart := func(data *sarama.ConsumerMessage) {
+		part := message.NewPart(data.Value)
+
+		meta := msg.Get(0).Metadata()
+		meta.Set("kafka_key", string(data.Key))
+		meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
+		meta.Set("kafka_topic", data.Topic)
+		meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
+		meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
+		for _, hdr := range data.Headers {
+			meta.Set(string(hdr.Key), string(hdr.Value))
+		}
+
+		msg.Append(part)
+
+		k.setOffset(data.Topic, data.Partition, data.Offset)
+	}
+
 	data, open := <-consumer.Messages()
 	if !open {
 		k.closeClients()
-		return nil, types.ErrNotConnected
+		return nil, types.ErrTypeClosed
+	}
+	addPart(data)
+
+batchLoop:
+	for i := 1; i < k.conf.MaxBatchSize; i++ {
+		select {
+		case data, open = <-consumer.Messages():
+			if !open {
+				k.closeClients()
+				return nil, types.ErrTypeClosed
+			}
+			addPart(data)
+		default:
+			// Drained the buffer
+			break batchLoop
+		}
 	}
 
-	msg := message.New([][]byte{data.Value})
-
-	meta := msg.Get(0).Metadata()
-	meta.Set("kafka_key", string(data.Key))
-	meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
-	meta.Set("kafka_topic", data.Topic)
-	meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
-	meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
-	for _, hdr := range data.Headers {
-		meta.Set(string(hdr.Key), string(hdr.Value))
+	if msg.Len() == 0 {
+		return nil, types.ErrTimeout
 	}
-
-	k.setOffset(data.Topic, data.Partition, data.Offset)
 	return msg, nil
 }
 

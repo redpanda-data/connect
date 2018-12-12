@@ -47,6 +47,7 @@ type KafkaConfig struct {
 	Partition       int32       `json:"partition" yaml:"partition"`
 	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion   string      `json:"target_version" yaml:"target_version"`
+	MaxBatchSize    int         `json:"max_batch_size" yaml:"max_batch_size"`
 	TLS             btls.Config `json:"tls" yaml:"tls"`
 }
 
@@ -61,6 +62,7 @@ func NewKafkaConfig() KafkaConfig {
 		Partition:       0,
 		StartFromOldest: true,
 		TargetVersion:   sarama.V1_0_0_0.String(),
+		MaxBatchSize:    1,
 		TLS:             btls.NewConfig(),
 	}
 }
@@ -272,23 +274,47 @@ func (k *Kafka) Read() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
+	msg := message.New(nil)
+	addPart := func(data *sarama.ConsumerMessage) {
+		k.offset = data.Offset + 1
+		part := message.NewPart(data.Value)
+
+		meta := part.Metadata()
+		meta.Set("kafka_key", string(data.Key))
+		meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
+		meta.Set("kafka_topic", data.Topic)
+		meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
+		meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
+		for _, hdr := range data.Headers {
+			meta.Set(string(hdr.Key), string(hdr.Value))
+		}
+
+		msg.Append(part)
+	}
+
 	data, open := <-partConsumer.Messages()
 	if !open {
 		return nil, types.ErrTypeClosed
 	}
-	k.offset = data.Offset + 1
-	msg := message.New([][]byte{data.Value})
+	addPart(data)
 
-	meta := msg.Get(0).Metadata()
-	meta.Set("kafka_key", string(data.Key))
-	meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
-	meta.Set("kafka_topic", data.Topic)
-	meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
-	meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
-	for _, hdr := range data.Headers {
-		meta.Set(string(hdr.Key), string(hdr.Value))
+batchLoop:
+	for i := 1; i < k.conf.MaxBatchSize; i++ {
+		select {
+		case data, open = <-partConsumer.Messages():
+			if !open {
+				return nil, types.ErrTypeClosed
+			}
+			addPart(data)
+		default:
+			// Drained the buffer
+			break batchLoop
+		}
 	}
 
+	if msg.Len() == 0 {
+		return nil, types.ErrTimeout
+	}
 	return msg, nil
 }
 

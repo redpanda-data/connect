@@ -61,6 +61,7 @@ type AMQPConfig struct {
 	ConsumerTag     string                 `json:"consumer_tag" yaml:"consumer_tag"`
 	PrefetchCount   int                    `json:"prefetch_count" yaml:"prefetch_count"`
 	PrefetchSize    int                    `json:"prefetch_size" yaml:"prefetch_size"`
+	MaxBatchSize    int                    `json:"max_batch_size" yaml:"max_batch_size"`
 	TLS             btls.Config            `json:"tls" yaml:"tls"`
 }
 
@@ -77,6 +78,7 @@ func NewAMQPConfig() AMQPConfig {
 		PrefetchCount:   10,
 		PrefetchSize:    0,
 		TLS:             btls.NewConfig(),
+		MaxBatchSize:    1,
 		BindingsDeclare: []AMQPBindingConfig{},
 	}
 }
@@ -224,7 +226,7 @@ func (a *AMQP) disconnect() error {
 //------------------------------------------------------------------------------
 
 // Determine the type of the value and set the metadata.
-func setMetadata(m types.Message, k string, v interface{}) {
+func setMetadata(p types.Part, k string, v interface{}) {
 	var metaValue string
 	var metaKey = strings.Replace(k, "-", "_", -1)
 
@@ -257,7 +259,7 @@ func setMetadata(m types.Message, k string, v interface{}) {
 		metaValue = dec[:index] + "." + dec[index:]
 	case amqp.Table:
 		for key, value := range v {
-			setMetadata(m, metaKey+"_"+key, value)
+			setMetadata(p, metaKey+"_"+key, value)
 		}
 		return
 	default:
@@ -265,7 +267,7 @@ func setMetadata(m types.Message, k string, v interface{}) {
 	}
 
 	if metaValue != "" {
-		m.Get(0).Metadata().Set(metaKey, metaValue)
+		p.Metadata().Set(metaKey, metaValue)
 	}
 }
 
@@ -285,47 +287,70 @@ func (a *AMQP) Read() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
+	msg := message.New(nil)
+	addPart := func(data amqp.Delivery) {
+		// Only store the latest delivery tag, but always Ack multiple.
+		a.ackTag = data.DeliveryTag
+
+		part := message.NewPart(data.Body)
+
+		for k, v := range data.Headers {
+			setMetadata(part, k, v)
+		}
+
+		setMetadata(part, "amqp_content_type", data.ContentType)
+		setMetadata(part, "amqp_content_encoding", data.ContentEncoding)
+
+		if data.DeliveryMode != 0 {
+			setMetadata(part, "amqp_delivery_mode", data.DeliveryMode)
+		}
+
+		setMetadata(part, "amqp_priority", data.Priority)
+		setMetadata(part, "amqp_correlation_id", data.CorrelationId)
+		setMetadata(part, "amqp_reply_to", data.ReplyTo)
+		setMetadata(part, "amqp_expiration", data.Expiration)
+		setMetadata(part, "amqp_message_id", data.MessageId)
+
+		if !data.Timestamp.IsZero() {
+			setMetadata(part, "amqp_timestamp", data.Timestamp.Unix())
+		}
+
+		setMetadata(part, "amqp_type", data.Type)
+		setMetadata(part, "amqp_user_id", data.UserId)
+		setMetadata(part, "amqp_app_id", data.AppId)
+		setMetadata(part, "amqp_consumer_tag", data.ConsumerTag)
+		setMetadata(part, "amqp_delivery_tag", data.DeliveryTag)
+		setMetadata(part, "amqp_redelivered", data.Redelivered)
+		setMetadata(part, "amqp_exchange", data.Exchange)
+		setMetadata(part, "amqp_routing_key", data.RoutingKey)
+
+		msg.Append(part)
+	}
+
 	data, open := <-c
 	if !open {
 		a.disconnect()
 		return nil, types.ErrNotConnected
 	}
+	addPart(data)
 
-	// Only store the latest delivery tag, but always Ack multiple.
-	a.ackTag = data.DeliveryTag
-
-	msg := message.New([][]byte{data.Body})
-
-	for k, v := range data.Headers {
-		setMetadata(msg, k, v)
+batchLoop:
+	for i := 1; i < a.conf.MaxBatchSize; i++ {
+		select {
+		case data, open = <-c:
+			if !open {
+				return nil, types.ErrTypeClosed
+			}
+			addPart(data)
+		default:
+			// Drained the buffer
+			break batchLoop
+		}
 	}
 
-	setMetadata(msg, "amqp_content_type", data.ContentType)
-	setMetadata(msg, "amqp_content_encoding", data.ContentEncoding)
-
-	if data.DeliveryMode != 0 {
-		setMetadata(msg, "amqp_delivery_mode", data.DeliveryMode)
+	if msg.Len() == 0 {
+		return nil, types.ErrTimeout
 	}
-
-	setMetadata(msg, "amqp_priority", data.Priority)
-	setMetadata(msg, "amqp_correlation_id", data.CorrelationId)
-	setMetadata(msg, "amqp_reply_to", data.ReplyTo)
-	setMetadata(msg, "amqp_expiration", data.Expiration)
-	setMetadata(msg, "amqp_message_id", data.MessageId)
-
-	if !data.Timestamp.IsZero() {
-		setMetadata(msg, "amqp_timestamp", data.Timestamp.Unix())
-	}
-
-	setMetadata(msg, "amqp_type", data.Type)
-	setMetadata(msg, "amqp_user_id", data.UserId)
-	setMetadata(msg, "amqp_app_id", data.AppId)
-	setMetadata(msg, "amqp_consumer_tag", data.ConsumerTag)
-	setMetadata(msg, "amqp_delivery_tag", data.DeliveryTag)
-	setMetadata(msg, "amqp_redelivered", data.Redelivered)
-	setMetadata(msg, "amqp_exchange", data.Exchange)
-	setMetadata(msg, "amqp_routing_key", data.RoutingKey)
-
 	return msg, nil
 }
 

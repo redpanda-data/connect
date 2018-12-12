@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.40.2 - 2018-12-12
+
+### Added
+
+- New `max_batch_size` field added to `kafka`, `kafka_balanced` and `amqp`
+  inputs. This provides a mechanism for creating message batches optimistically.
+
 ## 0.40.0 - 2018-12-10
 
 ### Added
