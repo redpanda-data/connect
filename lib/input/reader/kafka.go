@@ -280,14 +280,14 @@ func (k *Kafka) Read() (types.Message, error) {
 		part := message.NewPart(data.Value)
 
 		meta := part.Metadata()
+		for _, hdr := range data.Headers {
+			meta.Set(string(hdr.Key), string(hdr.Value))
+		}
 		meta.Set("kafka_key", string(data.Key))
 		meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
 		meta.Set("kafka_topic", data.Topic)
 		meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
 		meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
-		for _, hdr := range data.Headers {
-			meta.Set(string(hdr.Key), string(hdr.Value))
-		}
 
 		msg.Append(part)
 	}
