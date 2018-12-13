@@ -14,7 +14,7 @@ output:
           - localhost:9092
           client_id: benthos_kafka_output
           topic: benthos_stream
-          timeout_ms: 5000
+          timeout: "5s"
           ack_replicas: true
       - type: amqp
         amqp:

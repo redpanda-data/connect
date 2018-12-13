@@ -46,11 +46,13 @@ table name. Offsets will then be tracked per ` + "`client_id`" + ` per
 
 // NewKinesis creates a new AWS Kinesis input type.
 func NewKinesis(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	k, err := reader.NewKinesis(conf.Kinesis, log, stats)
+	if err != nil {
+		return nil, err
+	}
 	return NewReader(
 		"kinesis",
-		reader.NewPreserver(
-			reader.NewKinesis(conf.Kinesis, log, stats),
-		),
+		reader.NewPreserver(k),
 		log, stats,
 	)
 }

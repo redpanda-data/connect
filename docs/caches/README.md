@@ -97,7 +97,7 @@ memcached:
   - localhost:11211
   prefix: ""
   retries: 3
-  retry_period_ms: 500
+  retry_period: 500ms
   ttl: 300
 ```
 
@@ -109,7 +109,7 @@ multiple cache types to share a memcached cluster under different namespaces.
 ``` yaml
 type: memory
 memory:
-  compaction_interval_s: 60
+  compaction_interval: 60s
   ttl: 300
 ```
 
@@ -130,7 +130,7 @@ redis:
   expiration: 24h
   prefix: ""
   retries: 3
-  retry_period_ms: 500
+  retry_period: 500ms
   url: tcp://localhost:6379
 ```
 

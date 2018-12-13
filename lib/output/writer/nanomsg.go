@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -40,19 +41,19 @@ import (
 
 // NanomsgConfig contains configuration fields for the Nanomsg output type.
 type NanomsgConfig struct {
-	URLs          []string `json:"urls" yaml:"urls"`
-	Bind          bool     `json:"bind" yaml:"bind"`
-	SocketType    string   `json:"socket_type" yaml:"socket_type"`
-	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
+	URLs        []string `json:"urls" yaml:"urls"`
+	Bind        bool     `json:"bind" yaml:"bind"`
+	SocketType  string   `json:"socket_type" yaml:"socket_type"`
+	PollTimeout string   `json:"poll_timeout" yaml:"poll_timeout"`
 }
 
 // NewNanomsgConfig creates a new NanomsgConfig with default values.
 func NewNanomsgConfig() NanomsgConfig {
 	return NanomsgConfig{
-		URLs:          []string{"tcp://localhost:5556"},
-		Bind:          false,
-		SocketType:    "PUSH",
-		PollTimeoutMS: 5000,
+		URLs:        []string{"tcp://localhost:5556"},
+		Bind:        false,
+		SocketType:  "PUSH",
+		PollTimeout: "5s",
 	}
 }
 
@@ -65,6 +66,8 @@ type Nanomsg struct {
 
 	urls []string
 	conf NanomsgConfig
+
+	timeout time.Duration
 
 	socket  mangos.Socket
 	sockMut sync.RWMutex
@@ -82,6 +85,13 @@ func NewNanomsg(conf NanomsgConfig, log log.Modular, stats metrics.Type) (*Nanom
 			if len(splitU) > 0 {
 				s.urls = append(s.urls, splitU)
 			}
+		}
+	}
+
+	if tout := conf.PollTimeout; len(tout) > 0 {
+		var err error
+		if s.timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse poll timeout string: %v", err)
 		}
 	}
 
@@ -122,8 +132,7 @@ func (s *Nanomsg) Connect() error {
 
 	// Set timeout to prevent endless lock.
 	if err = socket.SetOption(
-		mangos.OptionRecvDeadline,
-		time.Millisecond*time.Duration(s.conf.PollTimeoutMS),
+		mangos.OptionRecvDeadline, s.timeout,
 	); nil != err {
 		return err
 	}

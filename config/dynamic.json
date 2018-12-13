@@ -1,7 +1,7 @@
 {
 	"http": {
 		"address": "0.0.0.0:4195",
-		"read_timeout_ms": 5000,
+		"read_timeout": "5s",
 		"root_path": "/benthos",
 		"debug_endpoints": false
 	},
@@ -10,7 +10,7 @@
 		"dynamic": {
 			"inputs": {},
 			"prefix": "",
-			"timeout_ms": 5000
+			"timeout": "5s"
 		}
 	},
 	"buffer": {
@@ -26,7 +26,7 @@
 		"dynamic": {
 			"outputs": {},
 			"prefix": "",
-			"timeout_ms": 5000
+			"timeout": "5s"
 		}
 	},
 	"resources": {
@@ -48,5 +48,5 @@
 		"http_server": {},
 		"prefix": "benthos"
 	},
-	"sys_exit_timeout_ms": 20000
+	"shutdown_timeout": "20s"
 }

@@ -23,6 +23,7 @@
 package writer
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -41,7 +42,7 @@ type ZMQ4Config struct {
 	Bind          bool     `json:"bind" yaml:"bind"`
 	SocketType    string   `json:"socket_type" yaml:"socket_type"`
 	HighWaterMark int      `json:"high_water_mark" yaml:"high_water_mark"`
-	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
+	PollTimeout   string   `json:"poll_timeout" yaml:"poll_timeout"`
 }
 
 // NewZMQ4Config creates a new ZMQ4Config with default values.
@@ -51,7 +52,7 @@ func NewZMQ4Config() *ZMQ4Config {
 		Bind:          true,
 		SocketType:    "PUSH",
 		HighWaterMark: 0,
-		PollTimeoutMS: 5000,
+		PollTimeout:   "5s",
 	}
 }
 
@@ -73,15 +74,21 @@ type ZMQ4 struct {
 // NewZMQ4 creates a new ZMQ4 output type.
 func NewZMQ4(conf *ZMQ4Config, log log.Modular, stats metrics.Type) (*ZMQ4, error) {
 	z := ZMQ4{
-		log:         log,
-		stats:       stats,
-		conf:        conf,
-		pollTimeout: time.Millisecond * time.Duration(conf.PollTimeoutMS),
+		log:   log,
+		stats: stats,
+		conf:  conf,
 	}
 
 	_, err := getZMQType(conf.SocketType)
 	if nil != err {
 		return nil, err
+	}
+
+	if tout := conf.PollTimeout; len(tout) > 0 {
+		var err error
+		if z.pollTimeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse poll timeout string: %v", err)
+		}
 	}
 
 	for _, u := range conf.URLs {

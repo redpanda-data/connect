@@ -1,6 +1,6 @@
 http:
   address: 0.0.0.0:4195
-  read_timeout_ms: 5000
+  read_timeout: 5s
   root_path: /benthos
   debug_endpoints: false
 input:
@@ -27,7 +27,7 @@ input:
   dynamic:
     inputs: {}
     prefix: ""
-    timeout_ms: 5000
+    timeout: 5s
   file:
     path: ""
     multipart: false
@@ -51,9 +51,9 @@ input:
     headers:
       Content-Type: application/octet-stream
     rate_limit: ""
-    timeout_ms: 5000
-    retry_period_ms: 1000
-    max_retry_backoff_ms: 300000
+    timeout: 5s
+    retry_period: 1s
+    max_retry_backoff: 300s
     retries: 3
     backoff_on:
     - 429
@@ -85,7 +85,7 @@ input:
     address: ""
     path: /post
     ws_path: /post/ws
-    timeout_ms: 5000
+    timeout: 5s
     cert_file: ""
     key_file: ""
   inproc: ""
@@ -94,7 +94,7 @@ input:
     - localhost:9092
     client_id: benthos_kafka_input
     consumer_group: benthos_consumer_group
-    commit_period_ms: 1000
+    commit_period: 1s
     topic: benthos_stream
     partition: 0
     start_from_oldest: true
@@ -110,7 +110,7 @@ input:
     - localhost:9092
     client_id: benthos_kafka_input
     consumer_group: benthos_consumer_group
-    commit_period_ms: 1000
+    commit_period: 1s
     topics:
     - benthos_stream
     start_from_oldest: true
@@ -135,9 +135,9 @@ input:
     shard: "0"
     dynamodb_table: ""
     client_id: benthos_consumer
-    commit_period_ms: 1000
+    commit_period: 1s
     start_from_oldest: true
-    timeout_ms: 5000
+    timeout: 5s
   mqtt:
     urls:
     - tcp://localhost:1883
@@ -151,8 +151,8 @@ input:
     bind: true
     socket_type: PULL
     sub_filters: []
-    poll_timeout_ms: 5000
-    reply_timeout_ms: 5000
+    poll_timeout: 5s
+    reply_timeout: 5s
   nats:
     urls:
     - nats://localhost:4222
@@ -217,7 +217,7 @@ input:
   redis_list:
     url: tcp://localhost:6379
     key: benthos_list
-    timeout_ms: 5000
+    timeout: 5s
   redis_pubsub:
     url: tcp://localhost:6379
     channels:
@@ -231,8 +231,8 @@ input:
     client_id: benthos_consumer
     limit: 10
     start_from_oldest: true
-    commit_period_ms: 1000
-    timeout_ms: 5000
+    commit_period: 1s
+    timeout: 5s
   s3:
     credentials:
       id: ""
@@ -250,7 +250,7 @@ input:
     sqs_body_path: Records.s3.object.key
     sqs_envelope_path: ""
     sqs_max_messages: 10
-    timeout_s: 5
+    timeout: 5s
   sqs:
     credentials:
       id: ""
@@ -261,7 +261,7 @@ input:
     endpoint: ""
     region: eu-west-1
     url: ""
-    timeout_s: 5
+    timeout: 5s
   stdin:
     multipart: false
     max_buffer: 1000000
@@ -288,7 +288,7 @@ buffer:
   mmap_file:
     directory: ""
     file_size: 262144000
-    retry_period_ms: 1000
+    retry_period: 1s
     clean_up: true
     reserved_disk_space: 104857600
   none: {}
@@ -335,7 +335,7 @@ pipeline:
           part: 0
           arg: ""
         xor: []
-      period_ms: 0
+      period: ""
     bounds_check:
       max_parts: 100
       min_parts: 1
@@ -489,9 +489,9 @@ pipeline:
         headers:
           Content-Type: application/octet-stream
         rate_limit: ""
-        timeout_ms: 5000
-        retry_period_ms: 1000
-        max_retry_backoff_ms: 300000
+        timeout: 5s
+        retry_period: 1s
+        max_retry_backoff: 300s
         retries: 3
         backoff_on:
         - 429
@@ -535,7 +535,7 @@ pipeline:
       endpoint: ""
       region: eu-west-1
       function: ""
-      timeout_ms: 5000
+      timeout: 5s
       retries: 3
       rate_limit: ""
       parallel: false
@@ -620,7 +620,7 @@ output:
   dynamic:
     outputs: {}
     prefix: ""
-    timeout_ms: 5000
+    timeout: 5s
   dynamodb:
     credentials:
       id: ""
@@ -647,7 +647,7 @@ output:
     index: benthos_index
     pipeline: ""
     type: doc
-    timeout_ms: 5000
+    timeout: 5s
     basic_auth:
       enabled: false
       username: ""
@@ -687,9 +687,9 @@ output:
     headers:
       Content-Type: application/octet-stream
     rate_limit: ""
-    timeout_ms: 5000
-    retry_period_ms: 1000
-    max_retry_backoff_ms: 300000
+    timeout: 5s
+    retry_period: 1s
+    max_retry_backoff: 300s
     retries: 3
     backoff_on:
     - 429
@@ -715,7 +715,7 @@ output:
     path: /get
     stream_path: /get/stream
     ws_path: /get/ws
-    timeout_ms: 5000
+    timeout: 5s
     cert_file: ""
     key_file: ""
   inproc: ""
@@ -728,7 +728,7 @@ output:
     topic: benthos_stream
     compression: none
     max_msg_bytes: 1000000
-    timeout_ms: 5000
+    timeout: 5s
     ack_replicas: false
     target_version: 1.0.0
     tls:
@@ -764,7 +764,7 @@ output:
     - tcp://localhost:5556
     bind: false
     socket_type: PUSH
-    poll_timeout_ms: 5000
+    poll_timeout: 5s
   nats:
     urls:
     - nats://localhost:4222
@@ -809,7 +809,7 @@ output:
     bucket: ""
     path: ${!count:files}-${!timestamp_unix_nano}.txt
     content_type: application/octet-stream
-    timeout_s: 5
+    timeout: 5s
   sqs:
     credentials:
       id: ""
@@ -868,16 +868,16 @@ resources:
         prefix: ""
         ttl: 300
         retries: 3
-        retry_period_ms: 500
+        retry_period: 500ms
       memory:
         ttl: 300
-        compaction_interval_s: 60
+        compaction_interval: 60s
       redis:
         url: tcp://localhost:6379
         prefix: ""
         expiration: 24h
         retries: 3
-        retry_period_ms: 500
+        retry_period: 500ms
   conditions:
     example:
       type: text
@@ -934,5 +934,5 @@ metrics:
     address: localhost:4040
     flush_period: 100ms
     network: udp
-sys_exit_timeout_ms: 20000
+shutdown_timeout: 20s
 

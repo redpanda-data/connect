@@ -44,7 +44,7 @@ All variables within the config are listed in this document.
 ```
 HTTP_ADDRESS         = 0.0.0.0:4195
 HTTP_DEBUG_ENDPOINTS = false
-HTTP_READ_TIMEOUT_MS = 5000
+HTTP_READ_TIMEOUT    = 5s
 HTTP_ROOT_PATH       = /benthos
 ```
 
@@ -65,7 +65,7 @@ INPUT_AMQP_TLS_ROOT_CAS_FILE
 INPUT_AMQP_TLS_SKIP_CERT_VERIFY             = false
 INPUT_AMQP_URL                              = amqp://guest:guest@localhost:5672/
 INPUT_DYNAMIC_PREFIX
-INPUT_DYNAMIC_TIMEOUT_MS                    = 5000
+INPUT_DYNAMIC_TIMEOUT                       = 5s
 INPUT_FILES_PATH
 INPUT_FILE_DELIMITER
 INPUT_FILE_MAX_BUFFER                       = 1000000
@@ -83,7 +83,7 @@ INPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED        = false
 INPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
 INPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME
 INPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE      = application/octet-stream
-INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF_MS      = 300000
+INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF         = 300s
 INPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN
 INPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN_SECRET
 INPUT_HTTP_CLIENT_OAUTH_CONSUMER_KEY
@@ -93,13 +93,13 @@ INPUT_HTTP_CLIENT_OAUTH_REQUEST_URL
 INPUT_HTTP_CLIENT_PAYLOAD
 INPUT_HTTP_CLIENT_RATE_LIMIT
 INPUT_HTTP_CLIENT_RETRIES                   = 3
-INPUT_HTTP_CLIENT_RETRY_PERIOD_MS           = 1000
+INPUT_HTTP_CLIENT_RETRY_PERIOD              = 1s
 INPUT_HTTP_CLIENT_STREAM_DELIMITER
 INPUT_HTTP_CLIENT_STREAM_ENABLED            = false
 INPUT_HTTP_CLIENT_STREAM_MAX_BUFFER         = 1000000
 INPUT_HTTP_CLIENT_STREAM_MULTIPART          = false
 INPUT_HTTP_CLIENT_STREAM_RECONNECT          = true
-INPUT_HTTP_CLIENT_TIMEOUT_MS                = 5000
+INPUT_HTTP_CLIENT_TIMEOUT                   = 5s
 INPUT_HTTP_CLIENT_TLS_ENABLED               = false
 INPUT_HTTP_CLIENT_TLS_ROOT_CAS_FILE
 INPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY      = false
@@ -109,13 +109,13 @@ INPUT_HTTP_SERVER_ADDRESS
 INPUT_HTTP_SERVER_CERT_FILE
 INPUT_HTTP_SERVER_KEY_FILE
 INPUT_HTTP_SERVER_PATH                      = /post
-INPUT_HTTP_SERVER_TIMEOUT_MS                = 5000
+INPUT_HTTP_SERVER_TIMEOUT                   = 5s
 INPUT_HTTP_SERVER_WS_PATH                   = /post/ws
 INPUT_INPROC
 INPUT_KAFKA_ADDRESSES                       = localhost:9092
 INPUT_KAFKA_BALANCED_ADDRESSES              = localhost:9092
 INPUT_KAFKA_BALANCED_CLIENT_ID              = benthos_kafka_input
-INPUT_KAFKA_BALANCED_COMMIT_PERIOD_MS       = 1000
+INPUT_KAFKA_BALANCED_COMMIT_PERIOD          = 1s
 INPUT_KAFKA_BALANCED_CONSUMER_GROUP         = benthos_consumer_group
 INPUT_KAFKA_BALANCED_MAX_BATCH_COUNT        = 1
 INPUT_KAFKA_BALANCED_START_FROM_OLDEST      = true
@@ -125,7 +125,7 @@ INPUT_KAFKA_BALANCED_TLS_ROOT_CAS_FILE
 INPUT_KAFKA_BALANCED_TLS_SKIP_CERT_VERIFY   = false
 INPUT_KAFKA_BALANCED_TOPICS                 = benthos_stream
 INPUT_KAFKA_CLIENT_ID                       = benthos_kafka_input
-INPUT_KAFKA_COMMIT_PERIOD_MS                = 1000
+INPUT_KAFKA_COMMIT_PERIOD                   = 1s
 INPUT_KAFKA_CONSUMER_GROUP                  = benthos_consumer_group
 INPUT_KAFKA_MAX_BATCH_COUNT                 = 1
 INPUT_KAFKA_PARTITION                       = 0
@@ -136,7 +136,7 @@ INPUT_KAFKA_TLS_ROOT_CAS_FILE
 INPUT_KAFKA_TLS_SKIP_CERT_VERIFY            = false
 INPUT_KAFKA_TOPIC                           = benthos_stream
 INPUT_KINESIS_CLIENT_ID                     = benthos_consumer
-INPUT_KINESIS_COMMIT_PERIOD_MS              = 1000
+INPUT_KINESIS_COMMIT_PERIOD                 = 1s
 INPUT_KINESIS_CREDENTIALS_ID
 INPUT_KINESIS_CREDENTIALS_ROLE
 INPUT_KINESIS_CREDENTIALS_ROLE_EXTERNAL_ID
@@ -149,14 +149,14 @@ INPUT_KINESIS_REGION                        = eu-west-1
 INPUT_KINESIS_SHARD                         = 0
 INPUT_KINESIS_START_FROM_OLDEST             = true
 INPUT_KINESIS_STREAM
-INPUT_KINESIS_TIMEOUT_MS                    = 5000
+INPUT_KINESIS_TIMEOUT                       = 5s
 INPUT_MQTT_CLIENT_ID                        = benthos_input
 INPUT_MQTT_QOS                              = 1
 INPUT_MQTT_TOPICS                           = benthos_topic
 INPUT_MQTT_URLS                             = tcp://localhost:1883
 INPUT_NANOMSG_BIND                          = true
-INPUT_NANOMSG_POLL_TIMEOUT_MS               = 5000
-INPUT_NANOMSG_REPLY_TIMEOUT_MS              = 5000
+INPUT_NANOMSG_POLL_TIMEOUT                  = 5s
+INPUT_NANOMSG_REPLY_TIMEOUT                 = 5s
 INPUT_NANOMSG_SOCKET_TYPE                   = PULL
 INPUT_NANOMSG_URLS                          = tcp://*:5555
 INPUT_NATS_PREFETCH_COUNT                   = 32
@@ -178,18 +178,18 @@ INPUT_NSQ_NSQD_TCP_ADDRESSES                = localhost:4150
 INPUT_NSQ_TOPIC                             = benthos_messages
 INPUT_NSQ_USER_AGENT                        = benthos_consumer
 INPUT_REDIS_LIST_KEY                        = benthos_list
-INPUT_REDIS_LIST_TIMEOUT_MS                 = 5000
+INPUT_REDIS_LIST_TIMEOUT                    = 5s
 INPUT_REDIS_LIST_URL                        = tcp://localhost:6379
 INPUT_REDIS_PUBSUB_CHANNELS                 = benthos_chan
 INPUT_REDIS_PUBSUB_URL                      = tcp://localhost:6379
 INPUT_REDIS_STREAMS_BODY_KEY                = body
 INPUT_REDIS_STREAMS_CLIENT_ID               = benthos_consumer
-INPUT_REDIS_STREAMS_COMMIT_PERIOD_MS        = 1000
+INPUT_REDIS_STREAMS_COMMIT_PERIOD           = 1s
 INPUT_REDIS_STREAMS_CONSUMER_GROUP          = benthos_group
 INPUT_REDIS_STREAMS_LIMIT                   = 10
 INPUT_REDIS_STREAMS_START_FROM_OLDEST       = true
 INPUT_REDIS_STREAMS_STREAMS                 = benthos_stream
-INPUT_REDIS_STREAMS_TIMEOUT_MS              = 5000
+INPUT_REDIS_STREAMS_TIMEOUT                 = 5s
 INPUT_REDIS_STREAMS_URL                     = tcp://localhost:6379
 INPUT_S3_BUCKET
 INPUT_S3_CREDENTIALS_ID
@@ -206,7 +206,7 @@ INPUT_S3_SQS_BODY_PATH                      = Records.s3.object.key
 INPUT_S3_SQS_ENVELOPE_PATH
 INPUT_S3_SQS_MAX_MESSAGES                   = 10
 INPUT_S3_SQS_URL
-INPUT_S3_TIMEOUT_S                          = 5
+INPUT_S3_TIMEOUT                            = 5s
 INPUT_SQS_CREDENTIALS_ID
 INPUT_SQS_CREDENTIALS_ROLE
 INPUT_SQS_CREDENTIALS_ROLE_EXTERNAL_ID
@@ -214,7 +214,7 @@ INPUT_SQS_CREDENTIALS_SECRET
 INPUT_SQS_CREDENTIALS_TOKEN
 INPUT_SQS_ENDPOINT
 INPUT_SQS_REGION                            = eu-west-1
-INPUT_SQS_TIMEOUT_S                         = 5
+INPUT_SQS_TIMEOUT                           = 5s
 INPUT_SQS_URL
 INPUT_STDIN_DELIMITER
 INPUT_STDIN_MAX_BUFFER                      = 1000000
@@ -241,7 +241,7 @@ BUFFER_MMAP_FILE_CLEAN_UP            = true
 BUFFER_MMAP_FILE_DIRECTORY
 BUFFER_MMAP_FILE_FILE_SIZE           = 262144000
 BUFFER_MMAP_FILE_RESERVED_DISK_SPACE = 104857600
-BUFFER_MMAP_FILE_RETRY_PERIOD_MS     = 1000
+BUFFER_MMAP_FILE_RETRY_PERIOD        = 1s
 ```
 
 ## PROCESSOR
@@ -271,7 +271,7 @@ PROCESSOR_BATCH_CONDITION_TEXT_OPERATOR              = equals_cs
 PROCESSOR_BATCH_CONDITION_TEXT_PART                  = 0
 PROCESSOR_BATCH_CONDITION_TYPE                       = static
 PROCESSOR_BATCH_COUNT                                = 0
-PROCESSOR_BATCH_PERIOD_MS                            = 0
+PROCESSOR_BATCH_PERIOD
 PROCESSOR_BOUNDS_CHECK_MAX_PARTS                     = 100
 PROCESSOR_BOUNDS_CHECK_MAX_PART_SIZE                 = 1073741824
 PROCESSOR_BOUNDS_CHECK_MIN_PARTS                     = 1
@@ -297,7 +297,7 @@ PROCESSOR_HTTP_REQUEST_BASIC_AUTH_ENABLED            = false
 PROCESSOR_HTTP_REQUEST_BASIC_AUTH_PASSWORD
 PROCESSOR_HTTP_REQUEST_BASIC_AUTH_USERNAME
 PROCESSOR_HTTP_REQUEST_HEADERS_CONTENT_TYPE          = application/octet-stream
-PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF_MS          = 300000
+PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF             = 300s
 PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN
 PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN_SECRET
 PROCESSOR_HTTP_REQUEST_OAUTH_CONSUMER_KEY
@@ -306,8 +306,8 @@ PROCESSOR_HTTP_REQUEST_OAUTH_ENABLED                 = false
 PROCESSOR_HTTP_REQUEST_OAUTH_REQUEST_URL
 PROCESSOR_HTTP_REQUEST_RATE_LIMIT
 PROCESSOR_HTTP_REQUEST_RETRIES                       = 3
-PROCESSOR_HTTP_REQUEST_RETRY_PERIOD_MS               = 1000
-PROCESSOR_HTTP_REQUEST_TIMEOUT_MS                    = 5000
+PROCESSOR_HTTP_REQUEST_RETRY_PERIOD                  = 1s
+PROCESSOR_HTTP_REQUEST_TIMEOUT                       = 5s
 PROCESSOR_HTTP_REQUEST_TLS_ENABLED                   = false
 PROCESSOR_HTTP_REQUEST_TLS_ROOT_CAS_FILE
 PROCESSOR_HTTP_REQUEST_TLS_SKIP_CERT_VERIFY          = false
@@ -330,7 +330,7 @@ PROCESSOR_LAMBDA_PARALLEL                            = false
 PROCESSOR_LAMBDA_RATE_LIMIT
 PROCESSOR_LAMBDA_REGION                              = eu-west-1
 PROCESSOR_LAMBDA_RETRIES                             = 3
-PROCESSOR_LAMBDA_TIMEOUT_MS                          = 5000
+PROCESSOR_LAMBDA_TIMEOUT                             = 5s
 PROCESSOR_LOG_LEVEL                                  = INFO
 PROCESSOR_LOG_MESSAGE
 PROCESSOR_MERGE_JSON_RETAIN_PARTS                    = false
@@ -373,7 +373,7 @@ OUTPUT_AMQP_URL                                       = amqp://guest:guest@local
 OUTPUT_CACHE_KEY                                      = ${!count:items}-${!timestamp_unix_nano}
 OUTPUT_CACHE_TARGET
 OUTPUT_DYNAMIC_PREFIX
-OUTPUT_DYNAMIC_TIMEOUT_MS                             = 5000
+OUTPUT_DYNAMIC_TIMEOUT                                = 5s
 OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ID
 OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ROLE
 OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ROLE_EXTERNAL_ID
@@ -393,7 +393,7 @@ OUTPUT_ELASTICSEARCH_INDEX                            = benthos_index
 OUTPUT_ELASTICSEARCH_MAX_RETRIES                      = 0
 OUTPUT_ELASTICSEARCH_PIPELINE
 OUTPUT_ELASTICSEARCH_SNIFF                            = true
-OUTPUT_ELASTICSEARCH_TIMEOUT_MS                       = 5000
+OUTPUT_ELASTICSEARCH_TIMEOUT                          = 5s
 OUTPUT_ELASTICSEARCH_TYPE                             = doc
 OUTPUT_ELASTICSEARCH_URLS                             = http://localhost:9200
 OUTPUT_FILES_PATH                                     = ${!count:files}-${!timestamp_unix_nano}.txt
@@ -410,7 +410,7 @@ OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED                 = false
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME
 OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE               = application/octet-stream
-OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF_MS               = 300000
+OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF                  = 300s
 OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN
 OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN_SECRET
 OUTPUT_HTTP_CLIENT_OAUTH_CONSUMER_KEY
@@ -419,8 +419,8 @@ OUTPUT_HTTP_CLIENT_OAUTH_ENABLED                      = false
 OUTPUT_HTTP_CLIENT_OAUTH_REQUEST_URL
 OUTPUT_HTTP_CLIENT_RATE_LIMIT
 OUTPUT_HTTP_CLIENT_RETRIES                            = 3
-OUTPUT_HTTP_CLIENT_RETRY_PERIOD_MS                    = 1000
-OUTPUT_HTTP_CLIENT_TIMEOUT_MS                         = 5000
+OUTPUT_HTTP_CLIENT_RETRY_PERIOD                       = 1s
+OUTPUT_HTTP_CLIENT_TIMEOUT                            = 5s
 OUTPUT_HTTP_CLIENT_TLS_ENABLED                        = false
 OUTPUT_HTTP_CLIENT_TLS_ROOT_CAS_FILE
 OUTPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY               = false
@@ -431,7 +431,7 @@ OUTPUT_HTTP_SERVER_CERT_FILE
 OUTPUT_HTTP_SERVER_KEY_FILE
 OUTPUT_HTTP_SERVER_PATH                               = /get
 OUTPUT_HTTP_SERVER_STREAM_PATH                        = /get/stream
-OUTPUT_HTTP_SERVER_TIMEOUT_MS                         = 5000
+OUTPUT_HTTP_SERVER_TIMEOUT                            = 5s
 OUTPUT_HTTP_SERVER_WS_PATH                            = /get/ws
 OUTPUT_INPROC
 OUTPUT_KAFKA_ACK_REPLICAS                             = false
@@ -442,7 +442,7 @@ OUTPUT_KAFKA_KEY
 OUTPUT_KAFKA_MAX_MSG_BYTES                            = 1000000
 OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS                   = false
 OUTPUT_KAFKA_TARGET_VERSION                           = 1.0.0
-OUTPUT_KAFKA_TIMEOUT_MS                               = 5000
+OUTPUT_KAFKA_TIMEOUT                                  = 5s
 OUTPUT_KAFKA_TLS_ENABLED                              = false
 OUTPUT_KAFKA_TLS_ROOT_CAS_FILE
 OUTPUT_KAFKA_TLS_SKIP_CERT_VERIFY                     = false
@@ -466,7 +466,7 @@ OUTPUT_MQTT_QOS                                       = 1
 OUTPUT_MQTT_TOPIC                                     = benthos_topic
 OUTPUT_MQTT_URLS                                      = tcp://localhost:1883
 OUTPUT_NANOMSG_BIND                                   = false
-OUTPUT_NANOMSG_POLL_TIMEOUT_MS                        = 5000
+OUTPUT_NANOMSG_POLL_TIMEOUT                           = 5s
 OUTPUT_NANOMSG_SOCKET_TYPE                            = PUSH
 OUTPUT_NANOMSG_URLS                                   = tcp://localhost:5556
 OUTPUT_NATS_STREAM_CLIENT_ID                          = benthos_client
@@ -496,7 +496,7 @@ OUTPUT_S3_CREDENTIALS_TOKEN
 OUTPUT_S3_ENDPOINT
 OUTPUT_S3_PATH                                        = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_S3_REGION                                      = eu-west-1
-OUTPUT_S3_TIMEOUT_S                                   = 5
+OUTPUT_S3_TIMEOUT                                     = 5s
 OUTPUT_SQS_CREDENTIALS_ID
 OUTPUT_SQS_CREDENTIALS_ROLE
 OUTPUT_SQS_CREDENTIALS_ROLE_EXTERNAL_ID

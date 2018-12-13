@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -39,15 +40,15 @@ import (
 type AmazonSQSConfig struct {
 	sess.Config `json:",inline" yaml:",inline"`
 	URL         string `json:"url" yaml:"url"`
-	TimeoutS    int64  `json:"timeout_s" yaml:"timeout_s"`
+	Timeout     string `json:"timeout" yaml:"timeout"`
 }
 
 // NewAmazonSQSConfig creates a new Config with default values.
 func NewAmazonSQSConfig() AmazonSQSConfig {
 	return AmazonSQSConfig{
-		Config:   sess.NewConfig(),
-		URL:      "",
-		TimeoutS: 5,
+		Config:  sess.NewConfig(),
+		URL:     "",
+		Timeout: "5s",
 	}
 }
 
@@ -62,6 +63,7 @@ type AmazonSQS struct {
 
 	session *session.Session
 	sqs     *sqs.SQS
+	timeout time.Duration
 
 	log   log.Modular
 	stats metrics.Type
@@ -72,12 +74,20 @@ func NewAmazonSQS(
 	conf AmazonSQSConfig,
 	log log.Modular,
 	stats metrics.Type,
-) *AmazonSQS {
-	return &AmazonSQS{
-		conf:  conf,
-		log:   log,
-		stats: stats,
+) (*AmazonSQS, error) {
+	var timeout time.Duration
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
 	}
+	return &AmazonSQS{
+		conf:    conf,
+		log:     log,
+		stats:   stats,
+		timeout: timeout,
+	}, nil
 }
 
 // Connect attempts to establish a connection to the target SQS queue.
@@ -107,7 +117,7 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 	output, err := a.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(a.conf.URL),
 		MaxNumberOfMessages: aws.Int64(1),
-		WaitTimeSeconds:     aws.Int64(a.conf.TimeoutS),
+		WaitTimeSeconds:     aws.Int64(int64(a.timeout.Seconds())),
 	})
 	if err != nil {
 		return nil, err

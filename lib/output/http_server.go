@@ -23,6 +23,7 @@ package output
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -66,7 +67,7 @@ type HTTPServerConfig struct {
 	Path       string `json:"path" yaml:"path"`
 	StreamPath string `json:"stream_path" yaml:"stream_path"`
 	WSPath     string `json:"ws_path" yaml:"ws_path"`
-	TimeoutMS  int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	Timeout    string `json:"timeout" yaml:"timeout"`
 	CertFile   string `json:"cert_file" yaml:"cert_file"`
 	KeyFile    string `json:"key_file" yaml:"key_file"`
 }
@@ -78,7 +79,7 @@ func NewHTTPServerConfig() HTTPServerConfig {
 		Path:       "/get",
 		StreamPath: "/get/stream",
 		WSPath:     "/get/ws",
-		TimeoutMS:  5000,
+		Timeout:    "5s",
 		CertFile:   "",
 		KeyFile:    "",
 	}
@@ -94,8 +95,9 @@ type HTTPServer struct {
 	stats metrics.Type
 	log   log.Modular
 
-	mux    *http.ServeMux
-	server *http.Server
+	mux     *http.ServeMux
+	server  *http.Server
+	timeout time.Duration
 
 	transactions <-chan types.Transaction
 
@@ -171,6 +173,13 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mStrmSndSucc:   stats.GetCounter("stream.send.success"),
 	}
 
+	if tout := conf.HTTPServer.Timeout; len(tout) > 0 {
+		var err error
+		if h.timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
+	}
+
 	if mux != nil {
 		if len(h.conf.HTTPServer.Path) > 0 {
 			h.mux.HandleFunc(h.conf.HTTPServer.Path, h.getHandler)
@@ -224,7 +233,6 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tStart := time.Now()
-	tOutDuration := time.Millisecond * time.Duration(h.conf.HTTPServer.TimeoutMS)
 
 	var ts types.Transaction
 	var open bool
@@ -240,7 +248,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		h.mGetCount.Incr(1)
 		h.mCount.Incr(1)
 		h.mPartsCount.Incr(int64(ts.Payload.Len()))
-	case <-time.After(tOutDuration - time.Since(tStart)):
+	case <-time.After(h.timeout - time.Since(tStart)):
 		http.Error(w, "Timed out waiting for message", http.StatusRequestTimeout)
 		return
 	}

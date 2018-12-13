@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Converted all integer based time period fields to string based, e.g.
+  `timeout_ms: 5000` would now be `timeout: 5s`. This will may potentially be
+  disruptive but the `--strict` flag should catch all deprecated fields in an
+  existing config.
+
 ## 0.41.0 - 2018-12-12
 
 ### Changed

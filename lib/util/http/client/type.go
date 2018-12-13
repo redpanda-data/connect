@@ -46,18 +46,18 @@ import (
 
 // Config is a configuration struct for an HTTP client.
 type Config struct {
-	URL          string            `json:"url" yaml:"url"`
-	Verb         string            `json:"verb" yaml:"verb"`
-	Headers      map[string]string `json:"headers" yaml:"headers"`
-	RateLimit    string            `json:"rate_limit" yaml:"rate_limit"`
-	TimeoutMS    int64             `json:"timeout_ms" yaml:"timeout_ms"`
-	RetryMS      int64             `json:"retry_period_ms" yaml:"retry_period_ms"`
-	MaxBackoffMS int64             `json:"max_retry_backoff_ms" yaml:"max_retry_backoff_ms"`
-	NumRetries   int               `json:"retries" yaml:"retries"`
-	BackoffOn    []int             `json:"backoff_on" yaml:"backoff_on"`
-	DropOn       []int             `json:"drop_on" yaml:"drop_on"`
-	TLS          tls.Config        `json:"tls" yaml:"tls"`
-	auth.Config  `json:",inline" yaml:",inline"`
+	URL         string            `json:"url" yaml:"url"`
+	Verb        string            `json:"verb" yaml:"verb"`
+	Headers     map[string]string `json:"headers" yaml:"headers"`
+	RateLimit   string            `json:"rate_limit" yaml:"rate_limit"`
+	Timeout     string            `json:"timeout" yaml:"timeout"`
+	Retry       string            `json:"retry_period" yaml:"retry_period"`
+	MaxBackoff  string            `json:"max_retry_backoff" yaml:"max_retry_backoff"`
+	NumRetries  int               `json:"retries" yaml:"retries"`
+	BackoffOn   []int             `json:"backoff_on" yaml:"backoff_on"`
+	DropOn      []int             `json:"drop_on" yaml:"drop_on"`
+	TLS         tls.Config        `json:"tls" yaml:"tls"`
+	auth.Config `json:",inline" yaml:",inline"`
 }
 
 // NewConfig creates a new Config with default values.
@@ -68,15 +68,15 @@ func NewConfig() Config {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
-		RateLimit:    "",
-		TimeoutMS:    5000,
-		RetryMS:      1000,
-		MaxBackoffMS: 300000,
-		NumRetries:   3,
-		BackoffOn:    []int{429},
-		DropOn:       []int{},
-		TLS:          tls.NewConfig(),
-		Config:       auth.NewConfig(),
+		RateLimit:  "",
+		Timeout:    "5s",
+		Retry:      "1s",
+		MaxBackoff: "300s",
+		NumRetries: 3,
+		BackoffOn:  []int{429},
+		DropOn:     []int{},
+		TLS:        tls.NewConfig(),
+		Config:     auth.NewConfig(),
 	}
 }
 
@@ -129,7 +129,13 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		headers:   map[string]*text.InterpolatedString{},
 	}
 
-	h.client.Timeout = time.Duration(h.conf.TimeoutMS) * time.Millisecond
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if h.client.Timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
+	}
+
 	if h.conf.TLS.Enabled {
 		tlsConf, err := h.conf.TLS.Get()
 		if err != nil {
@@ -173,11 +179,25 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		}
 	}
 
+	var retry, maxBackoff time.Duration
+	if tout := conf.Retry; len(tout) > 0 {
+		var err error
+		if retry, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse retry duration string: %v", err)
+		}
+	}
+	if tout := conf.MaxBackoff; len(tout) > 0 {
+		var err error
+		if maxBackoff, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse max backoff duration string: %v", err)
+		}
+	}
+
 	h.retryThrottle = throttle.New(
 		throttle.OptMaxUnthrottledRetries(0),
 		throttle.OptCloseChan(h.closeChan),
-		throttle.OptThrottlePeriod(time.Millisecond*time.Duration(conf.RetryMS)),
-		throttle.OptMaxExponentPeriod(time.Millisecond*time.Duration(conf.MaxBackoffMS)),
+		throttle.OptThrottlePeriod(retry),
+		throttle.OptMaxExponentPeriod(maxBackoff),
 	)
 
 	return &h, nil

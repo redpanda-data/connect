@@ -66,7 +66,7 @@ func TestConstructorConfigDefaults(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := 60, conf[0].Memory.CompactionIntervalS; exp != act {
+	if exp, act := "60s", conf[0].Memory.CompactionInterval; exp != act {
 		t.Errorf("Wrong default compaction interval: %v != %v", act, exp)
 	}
 	if exp, act := 16, conf[0].Memory.TTL; exp != act {
@@ -92,7 +92,7 @@ func TestConstructorConfigDefaultsYAML(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := 60, conf[0].Memory.CompactionIntervalS; exp != act {
+	if exp, act := "60s", conf[0].Memory.CompactionInterval; exp != act {
 		t.Errorf("Wrong default compaction interval: %v != %v", act, exp)
 	}
 	if exp, act := 16, conf[0].Memory.TTL; exp != act {

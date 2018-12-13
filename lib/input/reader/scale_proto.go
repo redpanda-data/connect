@@ -21,43 +21,43 @@
 package reader
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
-
-	"nanomsg.org/go-mangos"
-	"nanomsg.org/go-mangos/protocol/pull"
-	"nanomsg.org/go-mangos/protocol/sub"
-	"nanomsg.org/go-mangos/transport/ipc"
-	"nanomsg.org/go-mangos/transport/tcp"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"nanomsg.org/go-mangos"
+	"nanomsg.org/go-mangos/protocol/pull"
+	"nanomsg.org/go-mangos/protocol/sub"
+	"nanomsg.org/go-mangos/transport/ipc"
+	"nanomsg.org/go-mangos/transport/tcp"
 )
 
 //------------------------------------------------------------------------------
 
 // ScaleProtoConfig contains configuration fields for the ScaleProto input type.
 type ScaleProtoConfig struct {
-	URLs          []string `json:"urls" yaml:"urls"`
-	Bind          bool     `json:"bind" yaml:"bind"`
-	SocketType    string   `json:"socket_type" yaml:"socket_type"`
-	SubFilters    []string `json:"sub_filters" yaml:"sub_filters"`
-	PollTimeoutMS int      `json:"poll_timeout_ms" yaml:"poll_timeout_ms"`
-	RepTimeoutMS  int      `json:"reply_timeout_ms" yaml:"reply_timeout_ms"`
+	URLs        []string `json:"urls" yaml:"urls"`
+	Bind        bool     `json:"bind" yaml:"bind"`
+	SocketType  string   `json:"socket_type" yaml:"socket_type"`
+	SubFilters  []string `json:"sub_filters" yaml:"sub_filters"`
+	PollTimeout string   `json:"poll_timeout" yaml:"poll_timeout"`
+	RepTimeout  string   `json:"reply_timeout" yaml:"reply_timeout"`
 }
 
 // NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		URLs:          []string{"tcp://*:5555"},
-		Bind:          true,
-		SocketType:    "PULL",
-		SubFilters:    []string{},
-		PollTimeoutMS: 5000,
-		RepTimeoutMS:  5000,
+		URLs:        []string{"tcp://*:5555"},
+		Bind:        true,
+		SocketType:  "PULL",
+		SubFilters:  []string{},
+		PollTimeout: "5s",
+		RepTimeout:  "5s",
 	}
 }
 
@@ -67,6 +67,9 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 type ScaleProto struct {
 	socket mangos.Socket
 	cMut   sync.Mutex
+
+	pollTimeout time.Duration
+	repTimeout  time.Duration
 
 	urls  []string
 	conf  ScaleProtoConfig
@@ -89,6 +92,20 @@ func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (
 			}
 		}
 	}
+
+	if tout := conf.PollTimeout; len(tout) > 0 {
+		var err error
+		if s.pollTimeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse poll timeout string: %v", err)
+		}
+	}
+	if tout := conf.RepTimeout; len(tout) > 0 {
+		var err error
+		if s.repTimeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse reply timeout string: %v", err)
+		}
+	}
+
 	return &s, nil
 }
 
@@ -131,17 +148,11 @@ func (s *ScaleProto) Connect() error {
 	}
 
 	// Set timeout to prevent endless lock.
-	err = socket.SetOption(
-		mangos.OptionRecvDeadline,
-		time.Millisecond*time.Duration(s.conf.PollTimeoutMS),
-	)
+	err = socket.SetOption(mangos.OptionRecvDeadline, s.pollTimeout)
 	if nil != err {
 		return err
 	}
-	err = socket.SetOption(
-		mangos.OptionSendDeadline,
-		time.Millisecond*time.Duration(s.conf.RepTimeoutMS),
-	)
+	err = socket.SetOption(mangos.OptionSendDeadline, s.repTimeout)
 	if nil != err {
 		return err
 	}

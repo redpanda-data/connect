@@ -100,7 +100,7 @@ func TestMemoryCacheCompaction(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "memory"
 	conf.Memory.TTL = 0
-	conf.Memory.CompactionIntervalS = 0
+	conf.Memory.CompactionInterval = ""
 
 	c, err := New(conf, nil, testLog, metrics.DudType{})
 	if err != nil {

@@ -22,6 +22,7 @@ package reader
 
 import (
 	"crypto/tls"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,7 +44,7 @@ type KafkaBalancedConfig struct {
 	Addresses       []string    `json:"addresses" yaml:"addresses"`
 	ClientID        string      `json:"client_id" yaml:"client_id"`
 	ConsumerGroup   string      `json:"consumer_group" yaml:"consumer_group"`
-	CommitPeriodMS  int         `json:"commit_period_ms" yaml:"commit_period_ms"`
+	CommitPeriod    string      `json:"commit_period" yaml:"commit_period"`
 	Topics          []string    `json:"topics" yaml:"topics"`
 	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion   string      `json:"target_version" yaml:"target_version"`
@@ -57,7 +58,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Addresses:       []string{"localhost:9092"},
 		ClientID:        "benthos_kafka_input",
 		ConsumerGroup:   "benthos_consumer_group",
-		CommitPeriodMS:  1000,
+		CommitPeriod:    "1s",
 		Topics:          []string{"benthos_stream"},
 		StartFromOldest: true,
 		TargetVersion:   sarama.V1_0_0_0.String(),
@@ -79,6 +80,7 @@ type KafkaBalanced struct {
 
 	offsetLastCommitted time.Time
 	offsets             map[string]map[int32]int64
+	commitPeriod        time.Duration
 
 	mRcvErr     metrics.StatCounter
 	mRebalanced metrics.StatCounter
@@ -120,6 +122,12 @@ func NewKafkaBalanced(
 			if len(splitTopics) > 0 {
 				k.topics = append(k.topics, splitTopics)
 			}
+		}
+	}
+	if tout := conf.CommitPeriod; len(tout) > 0 {
+		var err error
+		if k.commitPeriod, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse commit period string: %v", err)
 		}
 	}
 	var err error
@@ -299,8 +307,7 @@ func (k *KafkaBalanced) Acknowledge(err error) error {
 		k.cMut.Unlock()
 	}
 
-	if time.Since(k.offsetLastCommitted) <
-		(time.Millisecond * time.Duration(k.conf.CommitPeriodMS)) {
+	if time.Since(k.offsetLastCommitted) < k.commitPeriod {
 		return nil
 	}
 

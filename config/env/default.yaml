@@ -2,7 +2,7 @@
 http:
   address: ${HTTP_ADDRESS:0.0.0.0:4195}
   debug_endpoints: ${HTTP_DEBUG_ENDPOINTS:false}
-  read_timeout_ms: ${HTTP_READ_TIMEOUT_MS:5000}
+  read_timeout: ${HTTP_READ_TIMEOUT:5s}
   root_path: ${HTTP_ROOT_PATH:/benthos}
 input:
   broker:
@@ -24,7 +24,7 @@ input:
         url: ${INPUT_AMQP_URL:amqp://guest:guest@localhost:5672/}
       dynamic:
         prefix: ${INPUT_DYNAMIC_PREFIX}
-        timeout_ms: ${INPUT_DYNAMIC_TIMEOUT_MS:5000}
+        timeout: ${INPUT_DYNAMIC_TIMEOUT:5s}
       file:
         delimiter: ${INPUT_FILE_DELIMITER}
         max_buffer: ${INPUT_FILE_MAX_BUFFER:1000000}
@@ -51,7 +51,7 @@ input:
           username: ${INPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME}
         headers:
           Content-Type: ${INPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
-        max_retry_backoff_ms: ${INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF_MS:300000}
+        max_retry_backoff: ${INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
         oauth:
           access_token: ${INPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN}
           access_token_secret: ${INPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN_SECRET}
@@ -62,14 +62,14 @@ input:
         payload: ${INPUT_HTTP_CLIENT_PAYLOAD}
         rate_limit: ${INPUT_HTTP_CLIENT_RATE_LIMIT}
         retries: ${INPUT_HTTP_CLIENT_RETRIES:3}
-        retry_period_ms: ${INPUT_HTTP_CLIENT_RETRY_PERIOD_MS:1000}
+        retry_period: ${INPUT_HTTP_CLIENT_RETRY_PERIOD:1s}
         stream:
           delimiter: ${INPUT_HTTP_CLIENT_STREAM_DELIMITER}
           enabled: ${INPUT_HTTP_CLIENT_STREAM_ENABLED:false}
           max_buffer: ${INPUT_HTTP_CLIENT_STREAM_MAX_BUFFER:1000000}
           multipart: ${INPUT_HTTP_CLIENT_STREAM_MULTIPART:false}
           reconnect: ${INPUT_HTTP_CLIENT_STREAM_RECONNECT:true}
-        timeout_ms: ${INPUT_HTTP_CLIENT_TIMEOUT_MS:5000}
+        timeout: ${INPUT_HTTP_CLIENT_TIMEOUT:5s}
         tls:
           enabled: ${INPUT_HTTP_CLIENT_TLS_ENABLED:false}
           root_cas_file: ${INPUT_HTTP_CLIENT_TLS_ROOT_CAS_FILE}
@@ -81,14 +81,14 @@ input:
         cert_file: ${INPUT_HTTP_SERVER_CERT_FILE}
         key_file: ${INPUT_HTTP_SERVER_KEY_FILE}
         path: ${INPUT_HTTP_SERVER_PATH:/post}
-        timeout_ms: ${INPUT_HTTP_SERVER_TIMEOUT_MS:5000}
+        timeout: ${INPUT_HTTP_SERVER_TIMEOUT:5s}
         ws_path: ${INPUT_HTTP_SERVER_WS_PATH:/post/ws}
       inproc: ${INPUT_INPROC}
       kafka:
         addresses:
         - ${INPUT_KAFKA_ADDRESSES:localhost:9092}
         client_id: ${INPUT_KAFKA_CLIENT_ID:benthos_kafka_input}
-        commit_period_ms: ${INPUT_KAFKA_COMMIT_PERIOD_MS:1000}
+        commit_period: ${INPUT_KAFKA_COMMIT_PERIOD:1s}
         consumer_group: ${INPUT_KAFKA_CONSUMER_GROUP:benthos_consumer_group}
         max_batch_count: ${INPUT_KAFKA_MAX_BATCH_COUNT:1}
         partition: ${INPUT_KAFKA_PARTITION:0}
@@ -103,7 +103,7 @@ input:
         addresses:
         - ${INPUT_KAFKA_BALANCED_ADDRESSES:localhost:9092}
         client_id: ${INPUT_KAFKA_BALANCED_CLIENT_ID:benthos_kafka_input}
-        commit_period_ms: ${INPUT_KAFKA_BALANCED_COMMIT_PERIOD_MS:1000}
+        commit_period: ${INPUT_KAFKA_BALANCED_COMMIT_PERIOD:1s}
         consumer_group: ${INPUT_KAFKA_BALANCED_CONSUMER_GROUP:benthos_consumer_group}
         max_batch_count: ${INPUT_KAFKA_BALANCED_MAX_BATCH_COUNT:1}
         start_from_oldest: ${INPUT_KAFKA_BALANCED_START_FROM_OLDEST:true}
@@ -116,7 +116,7 @@ input:
         - ${INPUT_KAFKA_BALANCED_TOPICS:benthos_stream}
       kinesis:
         client_id: ${INPUT_KINESIS_CLIENT_ID:benthos_consumer}
-        commit_period_ms: ${INPUT_KINESIS_COMMIT_PERIOD_MS:1000}
+        commit_period: ${INPUT_KINESIS_COMMIT_PERIOD:1s}
         credentials:
           id: ${INPUT_KINESIS_CREDENTIALS_ID}
           role: ${INPUT_KINESIS_CREDENTIALS_ROLE}
@@ -130,7 +130,7 @@ input:
         shard: ${INPUT_KINESIS_SHARD:0}
         start_from_oldest: ${INPUT_KINESIS_START_FROM_OLDEST:true}
         stream: ${INPUT_KINESIS_STREAM}
-        timeout_ms: ${INPUT_KINESIS_TIMEOUT_MS:5000}
+        timeout: ${INPUT_KINESIS_TIMEOUT:5s}
       mqtt:
         client_id: ${INPUT_MQTT_CLIENT_ID:benthos_input}
         qos: ${INPUT_MQTT_QOS:1}
@@ -140,8 +140,8 @@ input:
         - ${INPUT_MQTT_URLS:tcp://localhost:1883}
       nanomsg:
         bind: ${INPUT_NANOMSG_BIND:true}
-        poll_timeout_ms: ${INPUT_NANOMSG_POLL_TIMEOUT_MS:5000}
-        reply_timeout_ms: ${INPUT_NANOMSG_REPLY_TIMEOUT_MS:5000}
+        poll_timeout: ${INPUT_NANOMSG_POLL_TIMEOUT:5s}
+        reply_timeout: ${INPUT_NANOMSG_REPLY_TIMEOUT:5s}
         socket_type: ${INPUT_NANOMSG_SOCKET_TYPE:PULL}
         urls:
         - ${INPUT_NANOMSG_URLS:tcp://*:5555}
@@ -172,7 +172,7 @@ input:
         user_agent: ${INPUT_NSQ_USER_AGENT:benthos_consumer}
       redis_list:
         key: ${INPUT_REDIS_LIST_KEY:benthos_list}
-        timeout_ms: ${INPUT_REDIS_LIST_TIMEOUT_MS:5000}
+        timeout: ${INPUT_REDIS_LIST_TIMEOUT:5s}
         url: ${INPUT_REDIS_LIST_URL:tcp://localhost:6379}
       redis_pubsub:
         channels:
@@ -181,13 +181,13 @@ input:
       redis_streams:
         body_key: ${INPUT_REDIS_STREAMS_BODY_KEY:body}
         client_id: ${INPUT_REDIS_STREAMS_CLIENT_ID:benthos_consumer}
-        commit_period_ms: ${INPUT_REDIS_STREAMS_COMMIT_PERIOD_MS:1000}
+        commit_period: ${INPUT_REDIS_STREAMS_COMMIT_PERIOD:1s}
         consumer_group: ${INPUT_REDIS_STREAMS_CONSUMER_GROUP:benthos_group}
         limit: ${INPUT_REDIS_STREAMS_LIMIT:10}
         start_from_oldest: ${INPUT_REDIS_STREAMS_START_FROM_OLDEST:true}
         streams:
         - ${INPUT_REDIS_STREAMS_STREAMS:benthos_stream}
-        timeout_ms: ${INPUT_REDIS_STREAMS_TIMEOUT_MS:5000}
+        timeout: ${INPUT_REDIS_STREAMS_TIMEOUT:5s}
         url: ${INPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
       s3:
         bucket: ${INPUT_S3_BUCKET}
@@ -206,7 +206,7 @@ input:
         sqs_envelope_path: ${INPUT_S3_SQS_ENVELOPE_PATH}
         sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:10}
         sqs_url: ${INPUT_S3_SQS_URL}
-        timeout_s: ${INPUT_S3_TIMEOUT_S:5}
+        timeout: ${INPUT_S3_TIMEOUT:5s}
       sqs:
         credentials:
           id: ${INPUT_SQS_CREDENTIALS_ID}
@@ -216,7 +216,7 @@ input:
           token: ${INPUT_SQS_CREDENTIALS_TOKEN}
         endpoint: ${INPUT_SQS_ENDPOINT}
         region: ${INPUT_SQS_REGION:eu-west-1}
-        timeout_s: ${INPUT_SQS_TIMEOUT_S:5}
+        timeout: ${INPUT_SQS_TIMEOUT:5s}
         url: ${INPUT_SQS_URL}
       stdin:
         delimiter: ${INPUT_STDIN_DELIMITER}
@@ -246,7 +246,7 @@ buffer:
     directory: ${BUFFER_MMAP_FILE_DIRECTORY}
     file_size: ${BUFFER_MMAP_FILE_FILE_SIZE:262144000}
     reserved_disk_space: ${BUFFER_MMAP_FILE_RESERVED_DISK_SPACE:104857600}
-    retry_period_ms: ${BUFFER_MMAP_FILE_RETRY_PERIOD_MS:1000}
+    retry_period: ${BUFFER_MMAP_FILE_RETRY_PERIOD:1s}
   type: ${BUFFER_TYPE:none}
 pipeline:
   processors:
@@ -281,7 +281,7 @@ pipeline:
           part: ${PROCESSOR_BATCH_CONDITION_TEXT_PART:0}
         type: ${PROCESSOR_BATCH_CONDITION_TYPE:static}
       count: ${PROCESSOR_BATCH_COUNT:0}
-      period_ms: ${PROCESSOR_BATCH_PERIOD_MS:0}
+      period: ${PROCESSOR_BATCH_PERIOD}
     bounds_check:
       max_part_size: ${PROCESSOR_BOUNDS_CHECK_MAX_PART_SIZE:1073741824}
       max_parts: ${PROCESSOR_BOUNDS_CHECK_MAX_PARTS:100}
@@ -322,7 +322,7 @@ pipeline:
           username: ${PROCESSOR_HTTP_REQUEST_BASIC_AUTH_USERNAME}
         headers:
           Content-Type: ${PROCESSOR_HTTP_REQUEST_HEADERS_CONTENT_TYPE:application/octet-stream}
-        max_retry_backoff_ms: ${PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF_MS:300000}
+        max_retry_backoff: ${PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF:300s}
         oauth:
           access_token: ${PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN}
           access_token_secret: ${PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN_SECRET}
@@ -332,8 +332,8 @@ pipeline:
           request_url: ${PROCESSOR_HTTP_REQUEST_OAUTH_REQUEST_URL}
         rate_limit: ${PROCESSOR_HTTP_REQUEST_RATE_LIMIT}
         retries: ${PROCESSOR_HTTP_REQUEST_RETRIES:3}
-        retry_period_ms: ${PROCESSOR_HTTP_REQUEST_RETRY_PERIOD_MS:1000}
-        timeout_ms: ${PROCESSOR_HTTP_REQUEST_TIMEOUT_MS:5000}
+        retry_period: ${PROCESSOR_HTTP_REQUEST_RETRY_PERIOD:1s}
+        timeout: ${PROCESSOR_HTTP_REQUEST_TIMEOUT:5s}
         tls:
           enabled: ${PROCESSOR_HTTP_REQUEST_TLS_ENABLED:false}
           root_cas_file: ${PROCESSOR_HTTP_REQUEST_TLS_ROOT_CAS_FILE}
@@ -362,7 +362,7 @@ pipeline:
       rate_limit: ${PROCESSOR_LAMBDA_RATE_LIMIT}
       region: ${PROCESSOR_LAMBDA_REGION:eu-west-1}
       retries: ${PROCESSOR_LAMBDA_RETRIES:3}
-      timeout_ms: ${PROCESSOR_LAMBDA_TIMEOUT_MS:5000}
+      timeout: ${PROCESSOR_LAMBDA_TIMEOUT:5s}
     log:
       level: ${PROCESSOR_LOG_LEVEL:INFO}
       message: ${PROCESSOR_LOG_MESSAGE}
@@ -420,7 +420,7 @@ output:
         target: ${OUTPUT_CACHE_TARGET}
       dynamic:
         prefix: ${OUTPUT_DYNAMIC_PREFIX}
-        timeout_ms: ${OUTPUT_DYNAMIC_TIMEOUT_MS:5000}
+        timeout: ${OUTPUT_DYNAMIC_TIMEOUT:5s}
       elasticsearch:
         aws:
           credentials:
@@ -445,7 +445,7 @@ output:
         max_retries: ${OUTPUT_ELASTICSEARCH_MAX_RETRIES:0}
         pipeline: ${OUTPUT_ELASTICSEARCH_PIPELINE}
         sniff: ${OUTPUT_ELASTICSEARCH_SNIFF:true}
-        timeout_ms: ${OUTPUT_ELASTICSEARCH_TIMEOUT_MS:5000}
+        timeout: ${OUTPUT_ELASTICSEARCH_TIMEOUT:5s}
         type: ${OUTPUT_ELASTICSEARCH_TYPE:doc}
         urls:
         - ${OUTPUT_ELASTICSEARCH_URLS:http://localhost:9200}
@@ -472,7 +472,7 @@ output:
           username: ${OUTPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME}
         headers:
           Content-Type: ${OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
-        max_retry_backoff_ms: ${OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF_MS:300000}
+        max_retry_backoff: ${OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
         oauth:
           access_token: ${OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN}
           access_token_secret: ${OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN_SECRET}
@@ -482,8 +482,8 @@ output:
           request_url: ${OUTPUT_HTTP_CLIENT_OAUTH_REQUEST_URL}
         rate_limit: ${OUTPUT_HTTP_CLIENT_RATE_LIMIT}
         retries: ${OUTPUT_HTTP_CLIENT_RETRIES:3}
-        retry_period_ms: ${OUTPUT_HTTP_CLIENT_RETRY_PERIOD_MS:1000}
-        timeout_ms: ${OUTPUT_HTTP_CLIENT_TIMEOUT_MS:5000}
+        retry_period: ${OUTPUT_HTTP_CLIENT_RETRY_PERIOD:1s}
+        timeout: ${OUTPUT_HTTP_CLIENT_TIMEOUT:5s}
         tls:
           enabled: ${OUTPUT_HTTP_CLIENT_TLS_ENABLED:false}
           root_cas_file: ${OUTPUT_HTTP_CLIENT_TLS_ROOT_CAS_FILE}
@@ -496,7 +496,7 @@ output:
         key_file: ${OUTPUT_HTTP_SERVER_KEY_FILE}
         path: ${OUTPUT_HTTP_SERVER_PATH:/get}
         stream_path: ${OUTPUT_HTTP_SERVER_STREAM_PATH:/get/stream}
-        timeout_ms: ${OUTPUT_HTTP_SERVER_TIMEOUT_MS:5000}
+        timeout: ${OUTPUT_HTTP_SERVER_TIMEOUT:5s}
         ws_path: ${OUTPUT_HTTP_SERVER_WS_PATH:/get/ws}
       inproc: ${OUTPUT_INPROC}
       kafka:
@@ -509,7 +509,7 @@ output:
         max_msg_bytes: ${OUTPUT_KAFKA_MAX_MSG_BYTES:1000000}
         round_robin_partitions: ${OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS:false}
         target_version: ${OUTPUT_KAFKA_TARGET_VERSION:1.0.0}
-        timeout_ms: ${OUTPUT_KAFKA_TIMEOUT_MS:5000}
+        timeout: ${OUTPUT_KAFKA_TIMEOUT:5s}
         tls:
           enabled: ${OUTPUT_KAFKA_TLS_ENABLED:false}
           root_cas_file: ${OUTPUT_KAFKA_TLS_ROOT_CAS_FILE}
@@ -540,7 +540,7 @@ output:
         - ${OUTPUT_MQTT_URLS:tcp://localhost:1883}
       nanomsg:
         bind: ${OUTPUT_NANOMSG_BIND:false}
-        poll_timeout_ms: ${OUTPUT_NANOMSG_POLL_TIMEOUT_MS:5000}
+        poll_timeout: ${OUTPUT_NANOMSG_POLL_TIMEOUT:5s}
         socket_type: ${OUTPUT_NANOMSG_SOCKET_TYPE:PUSH}
         urls:
         - ${OUTPUT_NANOMSG_URLS:tcp://localhost:5556}
@@ -581,7 +581,7 @@ output:
         endpoint: ${OUTPUT_S3_ENDPOINT}
         path: ${OUTPUT_S3_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
         region: ${OUTPUT_S3_REGION:eu-west-1}
-        timeout_s: ${OUTPUT_S3_TIMEOUT_S:5}
+        timeout: ${OUTPUT_S3_TIMEOUT:5s}
       sqs:
         credentials:
           id: ${OUTPUT_SQS_CREDENTIALS_ID}

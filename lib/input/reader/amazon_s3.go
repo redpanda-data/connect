@@ -52,7 +52,7 @@ type AmazonS3Config struct {
 	SQSBodyPath     string `json:"sqs_body_path" yaml:"sqs_body_path"`
 	SQSEnvelopePath string `json:"sqs_envelope_path" yaml:"sqs_envelope_path"`
 	SQSMaxMessages  int64  `json:"sqs_max_messages" yaml:"sqs_max_messages"`
-	TimeoutS        int64  `json:"timeout_s" yaml:"timeout_s"`
+	Timeout         string `json:"timeout" yaml:"timeout"`
 }
 
 // NewAmazonS3Config creates a new AmazonS3Config with default values.
@@ -67,7 +67,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		SQSBodyPath:     "Records.s3.object.key",
 		SQSEnvelopePath: "",
 		SQSMaxMessages:  10,
-		TimeoutS:        5,
+		Timeout:         "5s",
 	}
 }
 
@@ -94,6 +94,7 @@ type AmazonS3 struct {
 	s3         *s3.S3
 	downloader *s3manager.Downloader
 	sqs        *sqs.SQS
+	timeout    time.Duration
 
 	log   log.Modular
 	stats metrics.Type
@@ -104,7 +105,7 @@ func NewAmazonS3(
 	conf AmazonS3Config,
 	log log.Modular,
 	stats metrics.Type,
-) *AmazonS3 {
+) (*AmazonS3, error) {
 	var path []string
 	if len(conf.SQSBodyPath) > 0 {
 		path = strings.Split(conf.SQSBodyPath, ".")
@@ -113,13 +114,21 @@ func NewAmazonS3(
 	if len(conf.SQSEnvelopePath) > 0 {
 		envPath = strings.Split(conf.SQSEnvelopePath, ".")
 	}
+	var timeout time.Duration
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
+	}
 	return &AmazonS3{
 		conf:        conf,
 		sqsBodyPath: path,
 		sqsEnvPath:  envPath,
 		log:         log,
 		stats:       stats,
-	}
+		timeout:     timeout,
+	}, nil
 }
 
 // Connect attempts to establish a connection to the target S3 bucket and any
@@ -189,7 +198,7 @@ func (a *AmazonS3) readSQSEvents() error {
 	output, err := a.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(a.conf.SQSURL),
 		MaxNumberOfMessages: aws.Int64(a.conf.SQSMaxMessages),
-		WaitTimeSeconds:     aws.Int64(a.conf.TimeoutS),
+		WaitTimeSeconds:     aws.Int64(int64(a.timeout.Seconds())),
 	})
 	if err != nil {
 		return err

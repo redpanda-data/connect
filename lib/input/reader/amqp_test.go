@@ -84,9 +84,6 @@ func TestAMQPIntegration(t *testing.T) {
 	t.Run("TestAMQPConnect", func(te *testing.T) {
 		testAMQPConnect(url, te)
 	})
-	t.Run("TestAMQPBatch", func(te *testing.T) {
-		testAMQPBatch(url, te)
-	})
 	t.Run("TestAMQPDisconnect", func(te *testing.T) {
 		testAMQPDisconnect(url, te)
 	})

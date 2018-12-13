@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -114,10 +115,11 @@ func NewConditional(
 		return nil, err
 	}
 
-	nsStats := metrics.Namespaced(stats, "if")
-	nsLog := log.NewModule(".if")
 	var children []types.Processor
-	for _, pconf := range conf.Conditional.Processors {
+	for i, pconf := range conf.Conditional.Processors {
+		ns := fmt.Sprintf("if.%v", i)
+		nsStats := metrics.Namespaced(stats, ns)
+		nsLog := log.NewModule("." + ns)
 		var proc Type
 		if proc, err = New(pconf, mgr, nsLog, nsStats); err != nil {
 			return nil, err
@@ -125,10 +127,11 @@ func NewConditional(
 		children = append(children, proc)
 	}
 
-	nsStats = metrics.Namespaced(stats, "else")
-	nsLog = log.NewModule(".else")
 	var elseChildren []types.Processor
-	for _, pconf := range conf.Conditional.ElseProcessors {
+	for i, pconf := range conf.Conditional.ElseProcessors {
+		ns := fmt.Sprintf("else.%v", i)
+		nsStats := metrics.Namespaced(stats, ns)
+		nsLog := log.NewModule("." + ns)
 		var proc Type
 		if proc, err = New(pconf, mgr, nsLog, nsStats); err != nil {
 			return nil, err

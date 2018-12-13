@@ -23,6 +23,7 @@ package writer
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -44,7 +45,7 @@ type AmazonS3Config struct {
 	Bucket      string `json:"bucket" yaml:"bucket"`
 	Path        string `json:"path" yaml:"path"`
 	ContentType string `json:"content_type" yaml:"content_type"`
-	TimeoutS    int64  `json:"timeout_s" yaml:"timeout_s"`
+	Timeout     string `json:"timeout" yaml:"timeout"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
@@ -54,7 +55,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		Bucket:      "",
 		Path:        "${!count:files}-${!timestamp_unix_nano}.txt",
 		ContentType: "application/octet-stream",
-		TimeoutS:    5,
+		Timeout:     "5s",
 	}
 }
 
@@ -69,6 +70,7 @@ type AmazonS3 struct {
 
 	session  *session.Session
 	uploader *s3manager.Uploader
+	timeout  time.Duration
 
 	log   log.Modular
 	stats metrics.Type
@@ -80,11 +82,19 @@ func NewAmazonS3(
 	log log.Modular,
 	stats metrics.Type,
 ) (*AmazonS3, error) {
+	var timeout time.Duration
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
+		}
+	}
 	return &AmazonS3{
-		conf:  conf,
-		log:   log,
-		stats: stats,
-		path:  text.NewInterpolatedString(conf.Path),
+		conf:    conf,
+		log:     log,
+		stats:   stats,
+		path:    text.NewInterpolatedString(conf.Path),
+		timeout: timeout,
 	}, nil
 }
 
@@ -113,7 +123,7 @@ func (a *AmazonS3) Write(msg types.Message) error {
 	}
 
 	ctx, cancel := context.WithTimeout(
-		aws.BackgroundContext(), time.Second*time.Duration(a.conf.TimeoutS),
+		aws.BackgroundContext(), a.timeout,
 	)
 	defer cancel()
 

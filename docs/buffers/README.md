@@ -60,7 +60,7 @@ mmap_file:
   directory: ""
   file_size: 2.62144e+08
   reserved_disk_space: 1.048576e+08
-  retry_period_ms: 1000
+  retry_period: 1s
 ```
 
 The mmap file buffer type uses memory mapped files to perform low-latency,

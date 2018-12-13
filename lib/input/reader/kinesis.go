@@ -47,9 +47,9 @@ type KinesisConfig struct {
 	Shard           string `json:"shard" yaml:"shard"`
 	DynamoDBTable   string `json:"dynamodb_table" yaml:"dynamodb_table"`
 	ClientID        string `json:"client_id" yaml:"client_id"`
-	CommitPeriodMS  int    `json:"commit_period_ms" yaml:"commit_period_ms"`
+	CommitPeriod    string `json:"commit_period" yaml:"commit_period"`
 	StartFromOldest bool   `json:"start_from_oldest" yaml:"start_from_oldest"`
-	TimeoutMS       int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	Timeout         string `json:"timeout" yaml:"timeout"`
 }
 
 // NewKinesisConfig creates a new Config with default values.
@@ -61,9 +61,9 @@ func NewKinesisConfig() KinesisConfig {
 		Shard:           "0",
 		DynamoDBTable:   "",
 		ClientID:        "benthos_consumer",
-		CommitPeriodMS:  1000,
+		CommitPeriod:    "1s",
 		StartFromOldest: true,
-		TimeoutMS:       5000,
+		Timeout:         "5s",
 	}
 }
 
@@ -83,7 +83,8 @@ type Kinesis struct {
 	sharditer           string
 	namespace           string
 
-	timeout time.Duration
+	commitPeriod time.Duration
+	timeout      time.Duration
 
 	log   log.Modular
 	stats metrics.Type
@@ -94,14 +95,28 @@ func NewKinesis(
 	conf KinesisConfig,
 	log log.Modular,
 	stats metrics.Type,
-) *Kinesis {
-	return &Kinesis{
-		conf:      conf,
-		log:       log,
-		timeout:   time.Duration(conf.TimeoutMS) * time.Millisecond,
-		namespace: fmt.Sprintf("%v-%v", conf.ClientID, conf.Stream),
-		stats:     stats,
+) (*Kinesis, error) {
+	var timeout, commitPeriod time.Duration
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
 	}
+	if tout := conf.CommitPeriod; len(tout) > 0 {
+		var err error
+		if commitPeriod, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse commit period string: %v", err)
+		}
+	}
+	return &Kinesis{
+		conf:         conf,
+		log:          log,
+		timeout:      timeout,
+		commitPeriod: commitPeriod,
+		namespace:    fmt.Sprintf("%v-%v", conf.ClientID, conf.Stream),
+		stats:        stats,
+	}, nil
 }
 
 // Connect attempts to establish a connection to the target SQS queue.
@@ -272,8 +287,7 @@ func (k *Kinesis) Acknowledge(err error) error {
 		k.sharditerCommit = k.sharditer
 	}
 
-	if time.Since(k.offsetLastCommitted) <
-		(time.Millisecond * time.Duration(k.conf.CommitPeriodMS)) {
+	if time.Since(k.offsetLastCommitted) < k.commitPeriod {
 		return nil
 	}
 

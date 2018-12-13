@@ -40,7 +40,7 @@ import (
 type Config struct {
 	session.Config `json:",inline" yaml:",inline"`
 	Function       string `json:"function" yaml:"function"`
-	TimeoutMS      int64  `json:"timeout_ms" yaml:"timeout_ms"`
+	Timeout        string `json:"timeout" yaml:"timeout"`
 	NumRetries     int    `json:"retries" yaml:"retries"`
 	RateLimit      string `json:"rate_limit" yaml:"rate_limit"`
 }
@@ -50,7 +50,7 @@ func NewConfig() Config {
 	return Config{
 		Config:     session.NewConfig(),
 		Function:   "",
-		TimeoutMS:  5000,
+		Timeout:    "5s",
 		NumRetries: 3,
 		RateLimit:  "",
 	}
@@ -82,11 +82,17 @@ type Type struct {
 // New returns a Lambda client.
 func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	l := Type{
-		conf:    conf,
-		log:     log.Noop(),
-		stats:   metrics.Noop(),
-		mgr:     types.NoopMgr(),
-		timeout: time.Duration(conf.TimeoutMS) * time.Millisecond,
+		conf:  conf,
+		log:   log.Noop(),
+		stats: metrics.Noop(),
+		mgr:   types.NoopMgr(),
+	}
+
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if l.timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
 	}
 
 	if len(conf.Function) == 0 {

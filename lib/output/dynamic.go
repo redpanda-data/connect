@@ -63,9 +63,9 @@ already exists it will be changed.`,
 				outMap[k] = sanOutput
 			}
 			return map[string]interface{}{
-				"outputs":    outMap,
-				"prefix":     conf.Dynamic.Prefix,
-				"timeout_ms": conf.Dynamic.TimeoutMS,
+				"outputs": outMap,
+				"prefix":  conf.Dynamic.Prefix,
+				"timeout": conf.Dynamic.Timeout,
 			}, nil
 		},
 	}
@@ -75,17 +75,17 @@ already exists it will be changed.`,
 
 // DynamicConfig contains configuration fields for the Dynamic output type.
 type DynamicConfig struct {
-	Outputs   map[string]Config `json:"outputs" yaml:"outputs"`
-	Prefix    string            `json:"prefix" yaml:"prefix"`
-	TimeoutMS int               `json:"timeout_ms" yaml:"timeout_ms"`
+	Outputs map[string]Config `json:"outputs" yaml:"outputs"`
+	Prefix  string            `json:"prefix" yaml:"prefix"`
+	Timeout string            `json:"timeout" yaml:"timeout"`
 }
 
 // NewDynamicConfig creates a new DynamicConfig with default values.
 func NewDynamicConfig() DynamicConfig {
 	return DynamicConfig{
-		Outputs:   map[string]Config{},
-		Prefix:    "",
-		TimeoutMS: 5000,
+		Outputs: map[string]Config{},
+		Prefix:  "",
+		Timeout: "5s",
 	}
 }
 
@@ -109,7 +109,13 @@ func NewDynamic(
 		outputs[k] = newOutput
 	}
 
-	reqTimeout := time.Millisecond * time.Duration(conf.Dynamic.TimeoutMS)
+	var reqTimeout time.Duration
+	if tout := conf.Dynamic.Timeout; len(tout) > 0 {
+		var err error
+		if reqTimeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
+	}
 
 	outputConfigs := conf.Dynamic.Outputs
 	outputConfigsMut := sync.RWMutex{}

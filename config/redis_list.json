@@ -1,7 +1,7 @@
 {
 	"http": {
 		"address": "0.0.0.0:4195",
-		"read_timeout_ms": 5000,
+		"read_timeout": "5s",
 		"root_path": "/benthos",
 		"debug_endpoints": false
 	},
@@ -9,7 +9,7 @@
 		"type": "redis_list",
 		"redis_list": {
 			"key": "benthos_list",
-			"timeout_ms": 5000,
+			"timeout": "5s",
 			"url": "tcp://localhost:6379"
 		}
 	},
@@ -47,5 +47,5 @@
 		"http_server": {},
 		"prefix": "benthos"
 	},
-	"sys_exit_timeout_ms": 20000
+	"shutdown_timeout": "20s"
 }

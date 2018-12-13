@@ -60,7 +60,7 @@ type ElasticsearchConfig struct {
 	Index          string               `json:"index" yaml:"index"`
 	Pipeline       string               `json:"pipeline" yaml:"pipeline"`
 	Type           string               `json:"type" yaml:"type"`
-	TimeoutMS      int                  `json:"timeout_ms" yaml:"timeout_ms"`
+	Timeout        string               `json:"timeout" yaml:"timeout"`
 	Auth           auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
 	AWS            OptionalAWSConfig    `json:"aws" yaml:"aws"`
 	retries.Config `json:",inline" yaml:",inline"`
@@ -74,14 +74,14 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 	rConf.Backoff.MaxElapsedTime = "30s"
 
 	return ElasticsearchConfig{
-		URLs:      []string{"http://localhost:9200"},
-		Sniff:     true,
-		ID:        "${!count:elastic_ids}-${!timestamp_unix}",
-		Index:     "benthos_index",
-		Pipeline:  "",
-		Type:      "doc",
-		TimeoutMS: 5000,
-		Auth:      auth.NewBasicAuthConfig(),
+		URLs:     []string{"http://localhost:9200"},
+		Sniff:    true,
+		ID:       "${!count:elastic_ids}-${!timestamp_unix}",
+		Index:    "benthos_index",
+		Pipeline: "",
+		Type:     "doc",
+		Timeout:  "5s",
+		Auth:     auth.NewBasicAuthConfig(),
 		AWS: OptionalAWSConfig{
 			Enabled: false,
 			Config:  sess.NewConfig(),
@@ -102,6 +102,7 @@ type Elasticsearch struct {
 	conf  ElasticsearchConfig
 
 	backoff backoff.BackOff
+	timeout time.Duration
 
 	idStr             *text.InterpolatedString
 	indexStr          *text.InterpolatedString
@@ -135,6 +136,13 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 		}
 	}
 
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if e.timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
+	}
+
 	var err error
 	if e.backoff, err = conf.Config.Get(); err != nil {
 		return nil, err
@@ -154,7 +162,7 @@ func (e *Elasticsearch) Connect() error {
 	opts := []elastic.ClientOptionFunc{
 		elastic.SetURL(e.urls...),
 		elastic.SetHttpClient(&http.Client{
-			Timeout: time.Duration(e.conf.TimeoutMS) * time.Millisecond,
+			Timeout: e.timeout,
 		}),
 		elastic.SetSniff(e.sniff),
 	}

@@ -46,21 +46,21 @@ string in order to set no expiration.`,
 
 // RedisConfig is a config struct for a redis connection.
 type RedisConfig struct {
-	URL           string `json:"url" yaml:"url"`
-	Prefix        string `json:"prefix" yaml:"prefix"`
-	Expiration    string `json:"expiration" yaml:"expiration"`
-	Retries       int    `json:"retries" yaml:"retries"`
-	RetryPeriodMS int    `json:"retry_period_ms" yaml:"retry_period_ms"`
+	URL         string `json:"url" yaml:"url"`
+	Prefix      string `json:"prefix" yaml:"prefix"`
+	Expiration  string `json:"expiration" yaml:"expiration"`
+	Retries     int    `json:"retries" yaml:"retries"`
+	RetryPeriod string `json:"retry_period" yaml:"retry_period"`
 }
 
 // NewRedisConfig returns a RedisConfig with default values.
 func NewRedisConfig() RedisConfig {
 	return RedisConfig{
-		URL:           "tcp://localhost:6379",
-		Prefix:        "",
-		Expiration:    "24h",
-		Retries:       3,
-		RetryPeriodMS: 500,
+		URL:         "tcp://localhost:6379",
+		Prefix:      "",
+		Expiration:  "24h",
+		Retries:     3,
+		RetryPeriod: "500ms",
 	}
 }
 
@@ -116,6 +116,14 @@ func NewRedis(
 		}
 	}
 
+	var retryPeriod time.Duration
+	if tout := conf.Redis.RetryPeriod; len(tout) > 0 {
+		var err error
+		if retryPeriod, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse retry period string: %v", err)
+		}
+	}
+
 	url, err := url.Parse(conf.Redis.URL)
 	if err != nil {
 		return nil, err
@@ -162,7 +170,7 @@ func NewRedis(
 		mDelSuccess:    stats.GetCounter("delete.success"),
 		mDelLatency:    stats.GetTimer("delete.latency"),
 
-		retryPeriod: time.Duration(conf.Redis.RetryPeriodMS) * time.Millisecond,
+		retryPeriod: retryPeriod,
 		ttl:         ttl,
 		prefix:      conf.Redis.Prefix,
 		client:      client,

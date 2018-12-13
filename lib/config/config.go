@@ -44,12 +44,12 @@ import (
 
 // Type is the Benthos service configuration struct.
 type Type struct {
-	HTTP                 api.Config `json:"http" yaml:"http"`
-	stream.Config        `json:",inline" yaml:",inline"`
-	Manager              manager.Config `json:"resources" yaml:"resources"`
-	Logger               log.Config     `json:"logger" yaml:"logger"`
-	Metrics              metrics.Config `json:"metrics" yaml:"metrics"`
-	SystemCloseTimeoutMS int            `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
+	HTTP               api.Config `json:"http" yaml:"http"`
+	stream.Config      `json:",inline" yaml:",inline"`
+	Manager            manager.Config `json:"resources" yaml:"resources"`
+	Logger             log.Config     `json:"logger" yaml:"logger"`
+	Metrics            metrics.Config `json:"metrics" yaml:"metrics"`
+	SystemCloseTimeout string         `json:"shutdown_timeout" yaml:"shutdown_timeout"`
 }
 
 // New returns a new configuration with default values.
@@ -58,27 +58,27 @@ func New() Type {
 	metricsConf.Prefix = "benthos"
 
 	return Type{
-		HTTP:                 api.NewConfig(),
-		Config:               stream.NewConfig(),
-		Manager:              manager.NewConfig(),
-		Logger:               log.NewConfig(),
-		Metrics:              metricsConf,
-		SystemCloseTimeoutMS: 20000,
+		HTTP:               api.NewConfig(),
+		Config:             stream.NewConfig(),
+		Manager:            manager.NewConfig(),
+		Logger:             log.NewConfig(),
+		Metrics:            metricsConf,
+		SystemCloseTimeout: "20s",
 	}
 }
 
 // SanitisedConfig is a config struct of generic types, this is returned by
 // Sanitised() and is a generic structure containing only fields of relevance.
 type SanitisedConfig struct {
-	HTTP                 interface{} `json:"http" yaml:"http"`
-	Input                interface{} `json:"input" yaml:"input"`
-	Buffer               interface{} `json:"buffer" yaml:"buffer"`
-	Pipeline             interface{} `json:"pipeline" yaml:"pipeline"`
-	Output               interface{} `json:"output" yaml:"output"`
-	Manager              interface{} `json:"resources" yaml:"resources"`
-	Logger               interface{} `json:"logger" yaml:"logger"`
-	Metrics              interface{} `json:"metrics" yaml:"metrics"`
-	SystemCloseTimeoutMS interface{} `json:"sys_exit_timeout_ms" yaml:"sys_exit_timeout_ms"`
+	HTTP               interface{} `json:"http" yaml:"http"`
+	Input              interface{} `json:"input" yaml:"input"`
+	Buffer             interface{} `json:"buffer" yaml:"buffer"`
+	Pipeline           interface{} `json:"pipeline" yaml:"pipeline"`
+	Output             interface{} `json:"output" yaml:"output"`
+	Manager            interface{} `json:"resources" yaml:"resources"`
+	Logger             interface{} `json:"logger" yaml:"logger"`
+	Metrics            interface{} `json:"metrics" yaml:"metrics"`
+	SystemCloseTimeout interface{} `json:"shutdown_timeout" yaml:"shutdown_timeout"`
 }
 
 // Sanitised returns a sanitised copy of the Benthos configuration, meaning
@@ -115,15 +115,15 @@ func (c Type) Sanitised() (*SanitisedConfig, error) {
 	}
 
 	return &SanitisedConfig{
-		HTTP:                 c.HTTP,
-		Input:                inConf,
-		Buffer:               bufConf,
-		Pipeline:             pipeConf,
-		Output:               outConf,
-		Manager:              c.Manager,
-		Logger:               c.Logger,
-		Metrics:              metConf,
-		SystemCloseTimeoutMS: c.SystemCloseTimeoutMS,
+		HTTP:               c.HTTP,
+		Input:              inConf,
+		Buffer:             bufConf,
+		Pipeline:           pipeConf,
+		Output:             outConf,
+		Manager:            c.Manager,
+		Logger:             c.Logger,
+		Metrics:            metConf,
+		SystemCloseTimeout: c.SystemCloseTimeout,
 	}, nil
 }
 

@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -45,7 +46,7 @@ message parts until either:
 - The ` + "`count`" + ` field is non-zero and the total number of messages in
   the batch matches or exceeds it.
 - A message added to the batch causes the condition to resolve ` + "`true`" + `.
-- The ` + "`period_ms`" + ` field is non-zero and the time since the last batch
+- The ` + "`period`" + ` field is non-empty and the time since the last batch
   exceeds its value.
 
 Once one of these events trigger the parts are combined into a single batch of
@@ -53,11 +54,11 @@ messages and sent through the pipeline. After reaching a destination the
 acknowledgment is sent out for all messages inside the batch at the same time,
 preserving at-least-once delivery guarantees.
 
-The ` + "`period_ms`" + ` field - when greater than zero - defines a period in
-milliseconds whereby a batch is sent even if the ` + "`byte_size`" + ` has not
-yet been reached. Batch parameters are only triggered when a message is added,
-meaning a pending batch can last beyond this period if no messages are added
-since the period was reached.
+The ` + "`period`" + ` field - when non-empty - defines a period of time whereby
+a batch is sent even if the ` + "`byte_size`" + ` has not yet been reached.
+Batch parameters are only triggered when a message is added, meaning a pending
+batch can last beyond this period if no messages are added since the period was
+reached.
 
 When a batch is sent to an output the behaviour will differ depending on the
 protocol. If the output type supports multipart messages then the batch is sent
@@ -78,7 +79,7 @@ unexpected behaviour and message ordering.`,
 				"byte_size": conf.Batch.ByteSize,
 				"count":     conf.Batch.Count,
 				"condition": condSanit,
-				"period_ms": conf.Batch.PeriodMS,
+				"period":    conf.Batch.Period,
 			}, nil
 		},
 	}
@@ -91,7 +92,7 @@ type BatchConfig struct {
 	ByteSize  int              `json:"byte_size" yaml:"byte_size"`
 	Count     int              `json:"count" yaml:"count"`
 	Condition condition.Config `json:"condition" yaml:"condition"`
-	PeriodMS  int              `json:"period_ms" yaml:"period_ms"`
+	Period    string           `json:"period" yaml:"period"`
 }
 
 // NewBatchConfig returns a BatchConfig with default values.
@@ -103,7 +104,7 @@ func NewBatchConfig() BatchConfig {
 		ByteSize:  0,
 		Count:     0,
 		Condition: cond,
-		PeriodMS:  0,
+		Period:    "",
 	}
 }
 
@@ -151,16 +152,22 @@ func NewBatch(
 	}
 	if conf.Batch.ByteSize <= 0 &&
 		conf.Batch.Count <= 0 &&
-		conf.Batch.PeriodMS <= 0 {
+		len(conf.Batch.Period) <= 0 {
 		log.Warnln("Batch processor configured without a count, byte_size or" +
-			" period_ms cap. It's possible that this batch will never resolve.")
+			" period cap. It's possible that this batch will never resolve.")
+	}
+	var period time.Duration
+	if len(conf.Batch.Period) > 0 {
+		if period, err = time.ParseDuration(conf.Batch.Period); err != nil {
+			return nil, fmt.Errorf("failed to parse duration string: %v", err)
+		}
 	}
 	return &Batch{
 		log:      log,
 		stats:    stats,
 		byteSize: conf.Batch.ByteSize,
 		count:    conf.Batch.Count,
-		period:   time.Duration(conf.Batch.PeriodMS) * time.Millisecond,
+		period:   period,
 		cond:     cond,
 
 		lastBatch: time.Now(),
@@ -204,7 +211,7 @@ func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	if !batch && c.period > 0 && time.Since(c.lastBatch) > c.period {
 		batch = true
 		c.mPeriodBatch.Incr(1)
-		c.log.Traceln("Batching based on period_ms")
+		c.log.Traceln("Batching based on period")
 	}
 	if !batch && c.cond.Check(msg) {
 		batch = true

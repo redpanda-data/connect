@@ -42,7 +42,7 @@ func TestScaleProtoBasic(t *testing.T) {
 	conf.URLs = []string{"tcp://localhost:1238", "tcp://localhost:1239"}
 	conf.Bind = true
 	conf.SocketType = "PULL"
-	conf.PollTimeoutMS = 100
+	conf.PollTimeout = "100ms"
 
 	s, err := NewScaleProto(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {
@@ -132,7 +132,7 @@ func TestScaleProtoPubSub(t *testing.T) {
 	conf.Bind = true
 	conf.SocketType = "SUB"
 	conf.SubFilters = []string{"testTopic"}
-	conf.PollTimeoutMS = 100
+	conf.PollTimeout = "100ms"
 
 	s, err := NewScaleProto(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
 	if err != nil {

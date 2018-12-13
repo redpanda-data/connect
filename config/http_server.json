@@ -1,7 +1,7 @@
 {
 	"http": {
 		"address": "0.0.0.0:4195",
-		"read_timeout_ms": 5000,
+		"read_timeout": "5s",
 		"root_path": "/benthos",
 		"debug_endpoints": false
 	},
@@ -12,7 +12,7 @@
 			"cert_file": "",
 			"key_file": "",
 			"path": "/post",
-			"timeout_ms": 5000,
+			"timeout": "5s",
 			"ws_path": "/post/ws"
 		}
 	},
@@ -32,7 +32,7 @@
 			"key_file": "",
 			"path": "/get",
 			"stream_path": "/get/stream",
-			"timeout_ms": 5000,
+			"timeout": "5s",
 			"ws_path": "/get/ws"
 		}
 	},
@@ -55,5 +55,5 @@
 		"http_server": {},
 		"prefix": "benthos"
 	},
-	"sys_exit_timeout_ms": 20000
+	"shutdown_timeout": "20s"
 }

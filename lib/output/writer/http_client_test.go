@@ -52,7 +52,7 @@ func TestHTTPClientRetries(t *testing.T) {
 
 	conf := NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
-	conf.RetryMS = 1
+	conf.Retry = "1ms"
 	conf.NumRetries = 3
 
 	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())

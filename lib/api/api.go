@@ -41,7 +41,7 @@ import (
 // Config contains the configuration fields for the Benthos API.
 type Config struct {
 	Address        string `json:"address" yaml:"address"`
-	ReadTimeoutMS  int    `json:"read_timeout_ms" yaml:"read_timeout_ms"`
+	ReadTimeout    string `json:"read_timeout" yaml:"read_timeout"`
 	RootPath       string `json:"root_path" yaml:"root_path"`
 	DebugEndpoints bool   `json:"debug_endpoints" yaml:"debug_endpoints"`
 }
@@ -50,7 +50,7 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Address:        "0.0.0.0:4195",
-		ReadTimeoutMS:  5000,
+		ReadTimeout:    "5s",
 		RootPath:       "/benthos",
 		DebugEndpoints: false,
 	}
@@ -79,12 +79,18 @@ func New(
 	wholeConf interface{},
 	log log.Modular,
 	stats metrics.Type,
-) *Type {
+) (*Type, error) {
 	handler := mux.NewRouter()
 	server := &http.Server{
-		Addr:        conf.Address,
-		Handler:     handler,
-		ReadTimeout: time.Millisecond * time.Duration(conf.ReadTimeoutMS),
+		Addr:    conf.Address,
+		Handler: handler,
+	}
+
+	if tout := conf.ReadTimeout; len(tout) > 0 {
+		var err error
+		if server.ReadTimeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse read timeout string: %v", err)
+		}
 	}
 
 	t := &Type{
@@ -199,7 +205,7 @@ func New(
 		)
 	}
 
-	return t
+	return t, nil
 }
 
 // RegisterEndpoint registers a http.HandlerFunc under a path with a

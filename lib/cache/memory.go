@@ -21,6 +21,7 @@
 package cache
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -50,15 +51,15 @@ keys that have expired between compactions.`,
 
 // MemoryConfig contains config fields for the Memory cache type.
 type MemoryConfig struct {
-	TTL                 int `json:"ttl" yaml:"ttl"`
-	CompactionIntervalS int `json:"compaction_interval_s" yaml:"compaction_interval_s"`
+	TTL                int    `json:"ttl" yaml:"ttl"`
+	CompactionInterval string `json:"compaction_interval" yaml:"compaction_interval"`
 }
 
 // NewMemoryConfig creates a MemoryConfig populated with default values.
 func NewMemoryConfig() MemoryConfig {
 	return MemoryConfig{
-		TTL:                 300, // 5 Mins
-		CompactionIntervalS: 60,
+		TTL:                300, // 5 Mins
+		CompactionInterval: "60s",
 	}
 }
 
@@ -80,10 +81,17 @@ type Memory struct {
 
 // NewMemory creates a new Memory cache type.
 func NewMemory(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error) {
+	var interval time.Duration
+	if tout := conf.Memory.CompactionInterval; len(tout) > 0 {
+		var err error
+		if interval, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse compaction interval string: %v", err)
+		}
+	}
 	return &Memory{
 		items:          map[string]item{},
 		ttl:            time.Second * time.Duration(conf.Memory.TTL),
-		compInterval:   time.Second * time.Duration(conf.Memory.CompactionIntervalS),
+		compInterval:   interval,
 		lastCompaction: time.Now(),
 	}, nil
 }

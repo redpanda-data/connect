@@ -180,7 +180,7 @@ func TestHTTPTimeout(t *testing.T) {
 	conf := NewConfig()
 	conf.HTTPServer.Address = "localhost:1232"
 	conf.HTTPServer.Path = "/testpost"
-	conf.HTTPServer.TimeoutMS = 1
+	conf.HTTPServer.Timeout = "1ms"
 
 	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.DudType{})
 	if err != nil {

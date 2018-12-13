@@ -39,7 +39,7 @@ import (
 type MmapCacheConfig struct {
 	Path              string `json:"directory" yaml:"directory"`
 	FileSize          int    `json:"file_size" yaml:"file_size"`
-	RetryPeriodMS     int    `json:"retry_period_ms" yaml:"retry_period_ms"`
+	RetryPeriod       string `json:"retry_period" yaml:"retry_period"`
 	CleanUp           bool   `json:"clean_up" yaml:"clean_up"`
 	ReservedDiskSpace uint64 `json:"reserved_disk_space" yaml:"reserved_disk_space"`
 }
@@ -49,7 +49,7 @@ func NewMmapCacheConfig() MmapCacheConfig {
 	return MmapCacheConfig{
 		Path:              "",
 		FileSize:          250 * 1024 * 1024, // 250MiB
-		RetryPeriodMS:     1000,              // 1 second
+		RetryPeriod:       "1s",              // 1 second
 		CleanUp:           true,
 		ReservedDiskSpace: 100 * 1024 * 1024, // 50MiB
 	}

@@ -382,7 +382,11 @@ func main() {
 	if err != nil {
 		logger.Warnf("Failed to generate sanitised config: %v\n", err)
 	}
-	httpServer := api.New(Version, DateBuilt, config.HTTP, sanConf, logger, stats)
+	var httpServer *api.Type
+	if httpServer, err = api.New(Version, DateBuilt, config.HTTP, sanConf, logger, stats); err != nil {
+		logger.Errorf("Failed to initialise API: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Create resource manager.
 	manager, err := manager.New(config.Manager, httpServer, logger, stats)
@@ -397,7 +401,7 @@ func main() {
 	// Create data streams.
 	if *streamsMode {
 		streamMgr := strmmgr.New(
-			strmmgr.OptSetAPITimeout(time.Duration(config.HTTP.ReadTimeoutMS)*time.Millisecond),
+			strmmgr.OptSetAPITimeout(time.Second*5),
 			strmmgr.OptSetLogger(logger),
 			strmmgr.OptSetManager(manager),
 			strmmgr.OptSetStats(stats),
@@ -448,21 +452,28 @@ func main() {
 		close(httpServerClosedChan)
 	}()
 
+	var exitTimeout time.Duration
+	if tout := config.SystemCloseTimeout; len(tout) > 0 {
+		var err error
+		if exitTimeout, err = time.ParseDuration(tout); err != nil {
+			logger.Errorf("Failed to parse shutdown timeout period string: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	// Defer clean up.
 	defer func() {
-		tout := time.Millisecond * time.Duration(config.SystemCloseTimeoutMS)
-
 		go func() {
 			httpServer.Shutdown(context.Background())
 			select {
 			case <-httpServerClosedChan:
-			case <-time.After(tout / 2):
+			case <-time.After(exitTimeout / 2):
 				logger.Warnln("Service failed to close HTTP server gracefully in time.")
 			}
 		}()
 
 		go func() {
-			<-time.After(tout + time.Second)
+			<-time.After(exitTimeout + time.Second)
 			logger.Warnln(
 				"Service failed to close cleanly within allocated time." +
 					" Exiting forcefully and dumping stack trace to stderr.",
@@ -471,7 +482,7 @@ func main() {
 			os.Exit(1)
 		}()
 
-		if err := dataStream.Stop(tout); err != nil {
+		if err := dataStream.Stop(exitTimeout); err != nil {
 			os.Exit(1)
 		}
 	}()

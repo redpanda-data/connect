@@ -36,7 +36,7 @@ import (
 func TestTypeConstruction(t *testing.T) {
 	conf := NewConfig()
 	conf.Input.Type = input.TypeNanomsg
-	conf.Input.Nanomsg.PollTimeoutMS = 100
+	conf.Input.Nanomsg.PollTimeout = "100ms"
 	conf.Output.Type = output.TypeNanomsg
 
 	strm, err := New(conf) // nanomsg => nanomsg

@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"fmt"
 	"net/url"
 	"sync"
 	"time"
@@ -36,17 +37,17 @@ import (
 
 // RedisListConfig contains configuration fields for the RedisList input type.
 type RedisListConfig struct {
-	URL       string `json:"url" yaml:"url"`
-	Key       string `json:"key" yaml:"key"`
-	TimeoutMS int    `json:"timeout_ms" yaml:"timeout_ms"`
+	URL     string `json:"url" yaml:"url"`
+	Key     string `json:"key" yaml:"key"`
+	Timeout string `json:"timeout" yaml:"timeout"`
 }
 
 // NewRedisListConfig creates a new RedisListConfig with default values.
 func NewRedisListConfig() RedisListConfig {
 	return RedisListConfig{
-		URL:       "tcp://localhost:6379",
-		Key:       "benthos_list",
-		TimeoutMS: 5000,
+		URL:     "tcp://localhost:6379",
+		Key:     "benthos_list",
+		Timeout: "5s",
 	}
 }
 
@@ -57,8 +58,9 @@ type RedisList struct {
 	client *redis.Client
 	cMut   sync.Mutex
 
-	url  *url.URL
-	conf RedisListConfig
+	url     *url.URL
+	conf    RedisListConfig
+	timeout time.Duration
 
 	stats metrics.Type
 	log   log.Modular
@@ -72,6 +74,13 @@ func NewRedisList(
 		conf:  conf,
 		stats: stats,
 		log:   log,
+	}
+
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if r.timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
 	}
 
 	var err error
@@ -126,10 +135,7 @@ func (r *RedisList) Read() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
-	res, err := client.BLPop(
-		time.Millisecond*time.Duration(r.conf.TimeoutMS),
-		r.conf.Key,
-	).Result()
+	res, err := client.BLPop(r.timeout, r.conf.Key).Result()
 
 	if err != nil && err != redis.Nil {
 		r.disconnect()

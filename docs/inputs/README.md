@@ -198,7 +198,7 @@ type: dynamic
 dynamic:
   inputs: {}
   prefix: ""
-  timeout_ms: 5000
+  timeout: 5s
 ```
 
 The dynamic type is a special broker type where the inputs are identified by
@@ -309,7 +309,7 @@ http_client:
   drop_on: []
   headers:
     Content-Type: application/octet-stream
-  max_retry_backoff_ms: 300000
+  max_retry_backoff: 300s
   oauth:
     access_token: ""
     access_token_secret: ""
@@ -320,14 +320,14 @@ http_client:
   payload: ""
   rate_limit: ""
   retries: 3
-  retry_period_ms: 1000
+  retry_period: 1s
   stream:
     delimiter: ""
     enabled: false
     max_buffer: 1e+06
     multipart: false
     reconnect: true
-  timeout_ms: 5000
+  timeout: 5s
   tls:
     client_certs: []
     enabled: false
@@ -362,7 +362,7 @@ http_server:
   cert_file: ""
   key_file: ""
   path: /post
-  timeout_ms: 5000
+  timeout: 5s
   ws_path: /post/ws
 ```
 
@@ -410,7 +410,7 @@ kafka:
   addresses:
   - localhost:9092
   client_id: benthos_kafka_input
-  commit_period_ms: 1000
+  commit_period: 1s
   consumer_group: benthos_consumer_group
   max_batch_count: 1
   partition: 0
@@ -480,7 +480,7 @@ kafka_balanced:
   addresses:
   - localhost:9092
   client_id: benthos_kafka_input
-  commit_period_ms: 1000
+  commit_period: 1s
   consumer_group: benthos_consumer_group
   max_batch_count: 1
   start_from_oldest: true
@@ -542,7 +542,7 @@ You can access these metadata fields using
 type: kinesis
 kinesis:
   client_id: benthos_consumer
-  commit_period_ms: 1000
+  commit_period: 1s
   credentials:
     id: ""
     role: ""
@@ -556,7 +556,7 @@ kinesis:
   shard: "0"
   start_from_oldest: true
   stream: ""
-  timeout_ms: 5000
+  timeout: 5s
 ```
 
 Receive messages from a Kinesis stream.
@@ -602,8 +602,8 @@ You can access these metadata fields using
 type: nanomsg
 nanomsg:
   bind: true
-  poll_timeout_ms: 5000
-  reply_timeout_ms: 5000
+  poll_timeout: 5s
+  reply_timeout: 5s
   socket_type: PULL
   sub_filters: []
   urls:
@@ -733,7 +733,7 @@ added to the first part of the message that triggers to input to stop.
 type: redis_list
 redis_list:
   key: benthos_list
-  timeout_ms: 5000
+  timeout: 5s
   url: tcp://localhost:6379
 ```
 
@@ -759,13 +759,13 @@ type: redis_streams
 redis_streams:
   body_key: body
   client_id: benthos_consumer
-  commit_period_ms: 1000
+  commit_period: 1s
   consumer_group: benthos_group
   limit: 10
   start_from_oldest: true
   streams:
   - benthos_stream
-  timeout_ms: 5000
+  timeout: 5s
   url: tcp://localhost:6379
 ```
 
@@ -801,7 +801,7 @@ s3:
   sqs_envelope_path: ""
   sqs_max_messages: 10
   sqs_url: ""
-  timeout_s: 5
+  timeout: 5s
 ```
 
 Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
@@ -855,7 +855,7 @@ sqs:
     token: ""
   endpoint: ""
   region: eu-west-1
-  timeout_s: 5
+  timeout: 5s
   url: ""
 ```
 

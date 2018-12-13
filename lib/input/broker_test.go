@@ -34,7 +34,7 @@ func TestBrokerConfigDefaults(t *testing.T) {
 					"type": "http_server",
 					"http_server": {
 						"address": "address:1",
-						"timeout_ms": 1
+						"timeout": "1ms"
 					}
 				},
 				{
@@ -82,10 +82,10 @@ func TestBrokerConfigDefaults(t *testing.T) {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 
-	if exp, actual := int64(1), inputConfs[0].HTTPServer.TimeoutMS; exp != actual {
+	if exp, actual := "1ms", inputConfs[0].HTTPServer.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
-	if exp, actual := int64(5000), inputConfs[1].HTTPServer.TimeoutMS; exp != actual {
+	if exp, actual := "5s", inputConfs[1].HTTPServer.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 }

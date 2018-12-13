@@ -46,8 +46,8 @@ type RedisStreamsConfig struct {
 	ClientID        string   `json:"client_id" yaml:"client_id"`
 	Limit           int64    `json:"limit" yaml:"limit"`
 	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
-	CommitPeriodMS  int      `json:"commit_period_ms" yaml:"commit_period_ms"`
-	TimeoutMS       int      `json:"timeout_ms" yaml:"timeout_ms"`
+	CommitPeriod    string   `json:"commit_period" yaml:"commit_period"`
+	Timeout         string   `json:"timeout" yaml:"timeout"`
 }
 
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.
@@ -60,8 +60,8 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		ClientID:        "benthos_consumer",
 		Limit:           10,
 		StartFromOldest: true,
-		CommitPeriodMS:  1000,
-		TimeoutMS:       5000,
+		CommitPeriod:    "1s",
+		Timeout:         "5s",
 	}
 }
 
@@ -71,6 +71,9 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 type RedisStreams struct {
 	client *redis.Client
 	cMut   sync.Mutex
+
+	timeout      time.Duration
+	commitPeriod time.Duration
 
 	url  *url.URL
 	conf RedisStreamsConfig
@@ -107,6 +110,20 @@ func NewRedisStreams(
 	r.url, err = url.Parse(r.conf.URL)
 	if err != nil {
 		return nil, err
+	}
+
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if r.timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
+	}
+
+	if tout := conf.CommitPeriod; len(tout) > 0 {
+		var err error
+		if r.commitPeriod, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse commit period string: %v", err)
+		}
 	}
 
 	return r, nil
@@ -229,7 +246,7 @@ func (r *RedisStreams) Read() (types.Message, error) {
 	}
 
 	res, err := client.XReadGroup(&redis.XReadGroupArgs{
-		Block:    time.Millisecond * time.Duration(r.conf.TimeoutMS),
+		Block:    r.timeout,
 		Consumer: r.conf.ClientID,
 		Group:    r.conf.ConsumerGroup,
 		Streams:  strs,
@@ -298,8 +315,7 @@ func (r *RedisStreams) Acknowledge(err error) error {
 		r.scheduleAcks()
 	}
 
-	if time.Since(r.ackLastSent) <
-		(time.Millisecond * time.Duration(r.conf.CommitPeriodMS)) {
+	if time.Since(r.ackLastSent) < r.commitPeriod {
 		return nil
 	}
 

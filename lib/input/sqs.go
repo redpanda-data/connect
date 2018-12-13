@@ -42,11 +42,13 @@ messages.`,
 
 // NewAmazonSQS creates a new AWS SQS input type.
 func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	s, err := reader.NewAmazonSQS(conf.SQS, log, stats)
+	if err != nil {
+		return nil, err
+	}
 	return NewReader(
 		"sqs",
-		reader.NewPreserver(
-			reader.NewAmazonSQS(conf.SQS, log, stats),
-		),
+		reader.NewPreserver(s),
 		log, stats,
 	)
 }

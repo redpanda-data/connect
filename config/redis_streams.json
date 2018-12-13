@@ -1,7 +1,7 @@
 {
 	"http": {
 		"address": "0.0.0.0:4195",
-		"read_timeout_ms": 5000,
+		"read_timeout": "5s",
 		"root_path": "/benthos",
 		"debug_endpoints": false
 	},
@@ -10,14 +10,14 @@
 		"redis_streams": {
 			"body_key": "body",
 			"client_id": "benthos_consumer",
-			"commit_period_ms": 1000,
+			"commit_period": "1s",
 			"consumer_group": "benthos_group",
 			"limit": 10,
 			"start_from_oldest": true,
 			"streams": [
 				"benthos_stream"
 			],
-			"timeout_ms": 5000,
+			"timeout": "5s",
 			"url": "tcp://localhost:6379"
 		}
 	},
@@ -57,5 +57,5 @@
 		"http_server": {},
 		"prefix": "benthos"
 	},
-	"sys_exit_timeout_ms": 20000
+	"shutdown_timeout": "20s"
 }

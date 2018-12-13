@@ -1,7 +1,7 @@
 {
 	"http": {
 		"address": "0.0.0.0:4195",
-		"read_timeout_ms": 5000,
+		"read_timeout": "5s",
 		"root_path": "/benthos",
 		"debug_endpoints": false
 	},
@@ -37,7 +37,7 @@
 						"headers": {
 							"Content-Type": "application/octet-stream"
 						},
-						"max_retry_backoff_ms": 300000,
+						"max_retry_backoff": "300s",
 						"oauth": {
 							"access_token": "",
 							"access_token_secret": "",
@@ -48,8 +48,8 @@
 						},
 						"rate_limit": "",
 						"retries": 3,
-						"retry_period_ms": 1000,
-						"timeout_ms": 5000,
+						"retry_period": "1s",
+						"timeout": "5s",
 						"tls": {
 							"client_certs": [],
 							"enabled": false,
@@ -89,5 +89,5 @@
 		"http_server": {},
 		"prefix": "benthos"
 	},
-	"sys_exit_timeout_ms": 20000
+	"shutdown_timeout": "20s"
 }

@@ -94,7 +94,7 @@ $ curl http://localhost:4195/streams/foo | jq '.'
         "cert_file": "",
         "key_file": "",
         "path": "/post",
-        "timeout_ms": 5000
+        "timeout": "5s"
       }
     },
     "buffer": {
@@ -123,7 +123,7 @@ $ curl http://localhost:4195/streams/foo | jq '.'
         "key_file": "",
         "path": "/get",
         "stream_path": "/get/stream",
-        "timeout_ms": 5000
+        "timeout": "5s"
       }
     }
   }

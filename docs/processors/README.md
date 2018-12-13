@@ -115,7 +115,7 @@ batch:
     type: static
     static: false
   count: 0
-  period_ms: 0
+  period: ""
 ```
 
 Reads a number of discrete messages, buffering (but not acknowledging) the
@@ -126,7 +126,7 @@ message parts until either:
 - The `count` field is non-zero and the total number of messages in
   the batch matches or exceeds it.
 - A message added to the batch causes the condition to resolve `true`.
-- The `period_ms` field is non-zero and the time since the last batch
+- The `period` field is non-empty and the time since the last batch
   exceeds its value.
 
 Once one of these events trigger the parts are combined into a single batch of
@@ -134,11 +134,11 @@ messages and sent through the pipeline. After reaching a destination the
 acknowledgment is sent out for all messages inside the batch at the same time,
 preserving at-least-once delivery guarantees.
 
-The `period_ms` field - when greater than zero - defines a period in
-milliseconds whereby a batch is sent even if the `byte_size` has not
-yet been reached. Batch parameters are only triggered when a message is added,
-meaning a pending batch can last beyond this period if no messages are added
-since the period was reached.
+The `period` field - when non-empty - defines a period of time whereby
+a batch is sent even if the `byte_size` has not yet been reached.
+Batch parameters are only triggered when a message is added, meaning a pending
+batch can last beyond this period if no messages are added since the period was
+reached.
 
 When a batch is sent to an output the behaviour will differ depending on the
 protocol. If the output type supports multipart messages then the batch is sent
@@ -566,7 +566,7 @@ http:
     drop_on: []
     headers:
       Content-Type: application/octet-stream
-    max_retry_backoff_ms: 300000
+    max_retry_backoff: 300s
     oauth:
       access_token: ""
       access_token_secret: ""
@@ -576,8 +576,8 @@ http:
       request_url: ""
     rate_limit: ""
     retries: 3
-    retry_period_ms: 1000
-    timeout_ms: 5000
+    retry_period: 1s
+    timeout: 5s
     tls:
       client_certs: []
       enabled: false
@@ -793,7 +793,7 @@ lambda:
   rate_limit: ""
   region: eu-west-1
   retries: 3
-  timeout_ms: 5000
+  timeout: 5s
 ```
 
 Invokes an AWS lambda for each message part of a batch. The contents of the

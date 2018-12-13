@@ -82,11 +82,13 @@ func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 	if len(conf.S3.Bucket) == 0 {
 		return nil, errors.New("invalid bucket (cannot be empty)")
 	}
+	r, err := reader.NewAmazonS3(conf.S3, log, stats)
+	if err != nil {
+		return nil, err
+	}
 	return NewReader(
 		"s3",
-		reader.NewPreserver(
-			reader.NewAmazonS3(conf.S3, log, stats),
-		),
+		reader.NewPreserver(r),
 		log, stats,
 	)
 }

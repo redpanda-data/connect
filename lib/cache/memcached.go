@@ -21,14 +21,14 @@
 package cache
 
 import (
+	"fmt"
 	"strings"
 	"time"
-
-	"github.com/bradfitz/gomemcache/memcache"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/bradfitz/gomemcache/memcache"
 )
 
 //------------------------------------------------------------------------------
@@ -46,21 +46,21 @@ multiple cache types to share a memcached cluster under different namespaces.`,
 
 // MemcachedConfig is a config struct for a memcached connection.
 type MemcachedConfig struct {
-	Addresses     []string `json:"addresses" yaml:"addresses"`
-	Prefix        string   `json:"prefix" yaml:"prefix"`
-	TTL           int32    `json:"ttl" yaml:"ttl"`
-	Retries       int      `json:"retries" yaml:"retries"`
-	RetryPeriodMS int      `json:"retry_period_ms" yaml:"retry_period_ms"`
+	Addresses   []string `json:"addresses" yaml:"addresses"`
+	Prefix      string   `json:"prefix" yaml:"prefix"`
+	TTL         int32    `json:"ttl" yaml:"ttl"`
+	Retries     int      `json:"retries" yaml:"retries"`
+	RetryPeriod string   `json:"retry_period" yaml:"retry_period"`
 }
 
 // NewMemcachedConfig returns a MemcachedConfig with default values.
 func NewMemcachedConfig() MemcachedConfig {
 	return MemcachedConfig{
-		Addresses:     []string{"localhost:11211"},
-		Prefix:        "",
-		TTL:           300,
-		Retries:       3,
-		RetryPeriodMS: 500,
+		Addresses:   []string{"localhost:11211"},
+		Prefix:      "",
+		TTL:         300,
+		Retries:     3,
+		RetryPeriod: "500ms",
 	}
 }
 
@@ -112,6 +112,13 @@ func NewMemcached(
 			}
 		}
 	}
+	var retryPeriod time.Duration
+	if tout := conf.Memcached.RetryPeriod; len(tout) > 0 {
+		var err error
+		if retryPeriod, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse retry period string: %v", err)
+		}
+	}
 	return &Memcached{
 		conf:  conf,
 		log:   log,
@@ -141,7 +148,7 @@ func NewMemcached(
 		mDelSuccess:    stats.GetCounter("delete.success"),
 		mDelLatency:    stats.GetTimer("delete.latency"),
 
-		retryPeriod: time.Duration(conf.Memcached.RetryPeriodMS) * time.Millisecond,
+		retryPeriod: retryPeriod,
 		mc:          memcache.New(addresses...),
 	}, nil
 }

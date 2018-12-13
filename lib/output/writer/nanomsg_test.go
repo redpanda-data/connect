@@ -42,7 +42,7 @@ func TestNanomsgBasic(t *testing.T) {
 	conf := NewNanomsgConfig()
 	conf.URLs = []string{"tcp://localhost:1324"}
 	conf.Bind = true
-	conf.PollTimeoutMS = 100
+	conf.PollTimeout = "100ms"
 	conf.SocketType = "PUSH"
 
 	s, err := NewNanomsg(conf, log.Noop(), metrics.Noop())

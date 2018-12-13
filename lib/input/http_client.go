@@ -136,7 +136,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 	if h.conf.HTTPClient.Stream.Enabled {
 		// Timeout should be left at zero if we are streaming.
-		h.conf.HTTPClient.TimeoutMS = 0
+		h.conf.HTTPClient.Timeout = ""
 	}
 	if len(h.conf.HTTPClient.Payload) > 0 {
 		h.payload = message.New([][]byte{[]byte(h.conf.HTTPClient.Payload)})

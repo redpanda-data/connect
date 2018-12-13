@@ -1,7 +1,7 @@
 {
 	"http": {
 		"address": "0.0.0.0:4195",
-		"read_timeout_ms": 5000,
+		"read_timeout": "5s",
 		"root_path": "/benthos",
 		"debug_endpoints": false
 	},
@@ -51,7 +51,7 @@
 			"max_retries": 0,
 			"pipeline": "",
 			"sniff": true,
-			"timeout_ms": 5000,
+			"timeout": "5s",
 			"type": "doc",
 			"urls": [
 				"http://localhost:9200"
@@ -77,5 +77,5 @@
 		"http_server": {},
 		"prefix": "benthos"
 	},
-	"sys_exit_timeout_ms": 20000
+	"shutdown_timeout": "20s"
 }

@@ -47,7 +47,7 @@ type KafkaConfig struct {
 	Topic                string      `json:"topic" yaml:"topic"`
 	Compression          string      `json:"compression" yaml:"compression"`
 	MaxMsgBytes          int         `json:"max_msg_bytes" yaml:"max_msg_bytes"`
-	TimeoutMS            int         `json:"timeout_ms" yaml:"timeout_ms"`
+	Timeout              string      `json:"timeout" yaml:"timeout"`
 	AckReplicas          bool        `json:"ack_replicas" yaml:"ack_replicas"`
 	TargetVersion        string      `json:"target_version" yaml:"target_version"`
 	TLS                  btls.Config `json:"tls" yaml:"tls"`
@@ -63,7 +63,7 @@ func NewKafkaConfig() KafkaConfig {
 		Topic:                "benthos_stream",
 		Compression:          "none",
 		MaxMsgBytes:          1000000,
-		TimeoutMS:            5000,
+		Timeout:              "5s",
 		AckReplicas:          false,
 		TargetVersion:        sarama.V1_0_0_0.String(),
 		TLS:                  btls.NewConfig(),
@@ -78,6 +78,7 @@ type Kafka struct {
 	stats metrics.Type
 
 	tlsConf *tls.Config
+	timeout time.Duration
 
 	addresses []string
 	version   sarama.KafkaVersion
@@ -110,6 +111,13 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 		key:         text.NewInterpolatedBytes([]byte(conf.Key)),
 		topic:       text.NewInterpolatedString(conf.Topic),
 		compression: compression,
+	}
+
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if k.timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
+		}
 	}
 
 	if conf.TLS.Enabled {
@@ -184,7 +192,7 @@ func (k *Kafka) Connect() error {
 
 	config.Producer.Compression = k.compression
 	config.Producer.MaxMessageBytes = k.conf.MaxMsgBytes
-	config.Producer.Timeout = time.Duration(k.conf.TimeoutMS) * time.Millisecond
+	config.Producer.Timeout = k.timeout
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 	config.Net.TLS.Enable = k.conf.TLS.Enabled

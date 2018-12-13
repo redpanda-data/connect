@@ -34,14 +34,14 @@ func TestOutBrokerConfigDefaults(t *testing.T) {
 					"type": "http_client",
 					"http_client": {
 						"url": "address:1",
-						"timeout_ms": 1
+						"timeout": "1ms"
 					}
 				},
 				{
 					"type": "http_client",
 					"http_client": {
 						"url": "address:2",
-						"retry_period_ms": 2
+						"retry_period": "2ms"
 					}
 				}
 			]
@@ -75,17 +75,17 @@ func TestOutBrokerConfigDefaults(t *testing.T) {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 
-	if exp, actual := int64(1), outputConfs[0].HTTPClient.TimeoutMS; exp != actual {
+	if exp, actual := "1ms", outputConfs[0].HTTPClient.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
-	if exp, actual := int64(5000), outputConfs[1].HTTPClient.TimeoutMS; exp != actual {
+	if exp, actual := "5s", outputConfs[1].HTTPClient.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 
-	if exp, actual := int64(1000), outputConfs[0].HTTPClient.RetryMS; exp != actual {
+	if exp, actual := "1s", outputConfs[0].HTTPClient.Retry; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
-	if exp, actual := int64(2), outputConfs[1].HTTPClient.RetryMS; exp != actual {
+	if exp, actual := "2ms", outputConfs[1].HTTPClient.Retry; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 }
@@ -99,19 +99,19 @@ func TestOutBrokerConfigDitto(t *testing.T) {
 					"type": "http_client",
 					"http_client": {
 						"url": "address:1",
-						"timeout_ms": 1
+						"timeout": "1ms"
 					}
 				},
 				{
 					"type": "ditto",
 					"http_client": {
-						"timeout_ms": 2
+						"timeout": "2ms"
 					}
 				},
 				{
 					"type": "ditto",
 					"http_client": {
-						"timeout_ms": 3
+						"timeout": "3ms"
 					}
 				}
 			]
@@ -151,13 +151,13 @@ func TestOutBrokerConfigDitto(t *testing.T) {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 
-	if exp, actual := int64(1), outputConfs[0].HTTPClient.TimeoutMS; exp != actual {
+	if exp, actual := "1ms", outputConfs[0].HTTPClient.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
-	if exp, actual := int64(2), outputConfs[1].HTTPClient.TimeoutMS; exp != actual {
+	if exp, actual := "2ms", outputConfs[1].HTTPClient.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
-	if exp, actual := int64(3), outputConfs[2].HTTPClient.TimeoutMS; exp != actual {
+	if exp, actual := "3ms", outputConfs[2].HTTPClient.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 }
@@ -171,13 +171,13 @@ func TestOutBrokerConfigDittoMulti(t *testing.T) {
 					"type": "http_client",
 					"http_client": {
 						"url": "address:1",
-						"timeout_ms": 1
+						"timeout": "1ms"
 					}
 				},
 				{
 					"type": "ditto_2",
 					"http_client": {
-						"timeout_ms": 2
+						"timeout": "2ms"
 					}
 				}
 			]
@@ -217,13 +217,13 @@ func TestOutBrokerConfigDittoMulti(t *testing.T) {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 
-	if exp, actual := int64(1), outputConfs[0].HTTPClient.TimeoutMS; exp != actual {
+	if exp, actual := "1ms", outputConfs[0].HTTPClient.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
-	if exp, actual := int64(2), outputConfs[1].HTTPClient.TimeoutMS; exp != actual {
+	if exp, actual := "2ms", outputConfs[1].HTTPClient.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
-	if exp, actual := int64(2), outputConfs[2].HTTPClient.TimeoutMS; exp != actual {
+	if exp, actual := "2ms", outputConfs[2].HTTPClient.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 }
@@ -237,13 +237,13 @@ func TestOutBrokerConfigDittoZeroed(t *testing.T) {
 					"type": "http_client",
 					"http_client": {
 						"url": "address:1",
-						"timeout_ms": 1
+						"timeout": "1ms"
 					}
 				},
 				{
 					"type": "ditto_0",
 					"http_client": {
-						"timeout_ms": 2
+						"timeout": "2ms"
 					}
 				}
 			]
@@ -271,7 +271,7 @@ func TestOutBrokerConfigDittoZeroed(t *testing.T) {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 
-	if exp, actual := int64(1), outputConfs[0].HTTPClient.TimeoutMS; exp != actual {
+	if exp, actual := "1ms", outputConfs[0].HTTPClient.Timeout; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 }

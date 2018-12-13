@@ -22,6 +22,7 @@ package reader
 
 import (
 	"crypto/tls"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,7 +43,7 @@ type KafkaConfig struct {
 	Addresses       []string    `json:"addresses" yaml:"addresses"`
 	ClientID        string      `json:"client_id" yaml:"client_id"`
 	ConsumerGroup   string      `json:"consumer_group" yaml:"consumer_group"`
-	CommitPeriodMS  int         `json:"commit_period_ms" yaml:"commit_period_ms"`
+	CommitPeriod    string      `json:"commit_period" yaml:"commit_period"`
 	Topic           string      `json:"topic" yaml:"topic"`
 	Partition       int32       `json:"partition" yaml:"partition"`
 	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
@@ -57,7 +58,7 @@ func NewKafkaConfig() KafkaConfig {
 		Addresses:       []string{"localhost:9092"},
 		ClientID:        "benthos_kafka_input",
 		ConsumerGroup:   "benthos_consumer_group",
-		CommitPeriodMS:  1000,
+		CommitPeriod:    "1s",
 		Topic:           "benthos_stream",
 		Partition:       0,
 		StartFromOldest: true,
@@ -81,6 +82,7 @@ type Kafka struct {
 	sMut sync.Mutex
 
 	offsetLastCommitted time.Time
+	commitPeriod        time.Duration
 
 	mRcvErr metrics.StatCounter
 
@@ -123,6 +125,13 @@ func NewKafka(
 			if len(splitAddr) > 0 {
 				k.addresses = append(k.addresses, splitAddr)
 			}
+		}
+	}
+
+	if tout := conf.CommitPeriod; len(tout) > 0 {
+		var err error
+		if k.commitPeriod, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse commit period string: %v", err)
 		}
 	}
 	return &k, nil
@@ -324,8 +333,7 @@ func (k *Kafka) Acknowledge(err error) error {
 		k.offsetCommit = k.offset
 	}
 
-	if time.Since(k.offsetLastCommitted) <
-		(time.Millisecond * time.Duration(k.conf.CommitPeriodMS)) {
+	if time.Since(k.offsetLastCommitted) < k.commitPeriod {
 		return nil
 	}
 

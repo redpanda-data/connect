@@ -229,7 +229,7 @@ type: dynamic
 dynamic:
   outputs: {}
   prefix: ""
-  timeout_ms: 5000
+  timeout: 5s
 ```
 
 The dynamic type is a special broker type where the outputs are identified by
@@ -314,7 +314,7 @@ elasticsearch:
   max_retries: 0
   pipeline: ""
   sniff: true
-  timeout_ms: 5000
+  timeout: 5s
   type: doc
   urls:
   - http://localhost:9200
@@ -406,7 +406,7 @@ http_client:
   drop_on: []
   headers:
     Content-Type: application/octet-stream
-  max_retry_backoff_ms: 300000
+  max_retry_backoff: 300s
   oauth:
     access_token: ""
     access_token_secret: ""
@@ -416,8 +416,8 @@ http_client:
     request_url: ""
   rate_limit: ""
   retries: 3
-  retry_period_ms: 1000
-  timeout_ms: 5000
+  retry_period: 1s
+  timeout: 5s
   tls:
     client_certs: []
     enabled: false
@@ -457,7 +457,7 @@ http_server:
   key_file: ""
   path: /get
   stream_path: /get/stream
-  timeout_ms: 5000
+  timeout: 5s
   ws_path: /get/ws
 ```
 
@@ -503,7 +503,7 @@ kafka:
   max_msg_bytes: 1e+06
   round_robin_partitions: false
   target_version: 1.0.0
-  timeout_ms: 5000
+  timeout: 5s
   tls:
     client_certs: []
     enabled: false
@@ -601,7 +601,7 @@ Pushes messages to an MQTT broker.
 type: nanomsg
 nanomsg:
   bind: false
-  poll_timeout_ms: 5000
+  poll_timeout: 5s
   socket_type: PUSH
   urls:
   - tcp://localhost:5556
@@ -745,7 +745,7 @@ s3:
   endpoint: ""
   path: ${!count:files}-${!timestamp_unix_nano}.txt
   region: eu-west-1
-  timeout_s: 5
+  timeout: 5s
 ```
 
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
