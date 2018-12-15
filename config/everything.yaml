@@ -575,6 +575,8 @@ pipeline:
     select_parts:
       parts:
       - 0
+    sleep:
+      duration: 100us
     split:
       size: 1
     subprocess:

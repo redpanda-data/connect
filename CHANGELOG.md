@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `sleep` processor.
+
 ### Changed
 
 - Converted all integer based time period fields to string based, e.g.

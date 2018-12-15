@@ -216,6 +216,11 @@ func (p *Processor) TransactionChan() <-chan types.Transaction {
 func (p *Processor) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&p.running, 1, 0) {
 		close(p.closeChan)
+
+		// Signal all children to close.
+		for _, c := range p.msgProcessors {
+			c.CloseAsync()
+		}
 	}
 }
 

@@ -88,6 +88,7 @@ const (
 	TypeProcessMap   = "process_map"
 	TypeSample       = "sample"
 	TypeSelectParts  = "select_parts"
+	TypeSleep        = "sleep"
 	TypeSplit        = "split"
 	TypeSubprocess   = "subprocess"
 	TypeText         = "text"
@@ -134,6 +135,7 @@ type Config struct {
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
+	Sleep        SleepConfig        `json:"sleep" yaml:"sleep"`
 	Split        SplitConfig        `json:"split" yaml:"split"`
 	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
 	Text         TextConfig         `json:"text" yaml:"text"`
@@ -179,6 +181,7 @@ func NewConfig() Config {
 		ProcessMap:   NewProcessMapConfig(),
 		Sample:       NewSampleConfig(),
 		SelectParts:  NewSelectPartsConfig(),
+		Sleep:        NewSleepConfig(),
 		Split:        NewSplitConfig(),
 		Subprocess:   NewSubprocessConfig(),
 		Text:         NewTextConfig(),

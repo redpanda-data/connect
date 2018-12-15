@@ -77,12 +77,13 @@ used.
 31. [`process_map`](#process_map)
 32. [`sample`](#sample)
 33. [`select_parts`](#select_parts)
-34. [`split`](#split)
-35. [`subprocess`](#subprocess)
-36. [`text`](#text)
-37. [`throttle`](#throttle)
-38. [`try`](#try)
-39. [`unarchive`](#unarchive)
+34. [`sleep`](#sleep)
+35. [`split`](#split)
+36. [`subprocess`](#subprocess)
+37. [`text`](#text)
+38. [`throttle`](#throttle)
+39. [`try`](#try)
+40. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -1198,6 +1199,18 @@ Part indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1. E.g. if index = -1 then the selected part
 will be the last part of the message, if index = -2 then the part before the
 last element with be selected, and so on.
+
+## `sleep`
+
+``` yaml
+type: sleep
+sleep:
+  duration: 100us
+```
+
+Sleep for a period of time specified as a duration string. This processor will
+interpolate functions within the `duration` field, you can find a list
+of functions [here](../config_interpolation.md#functions).
 
 ## `split`
 

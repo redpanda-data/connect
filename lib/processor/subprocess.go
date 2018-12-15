@@ -28,6 +28,7 @@ import (
 	"io"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -81,11 +82,12 @@ func NewSubprocessConfig() SubprocessConfig {
 
 // Subprocess is a processor that executes a command.
 type Subprocess struct {
+	subprocClosed int32
+
 	log   log.Modular
 	stats metrics.Type
 
-	conf SubprocessConfig
-
+	conf    SubprocessConfig
 	subproc *subprocWrapper
 
 	mCount     metrics.StatCounter
@@ -339,7 +341,9 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 // CloseAsync shuts down the processor and stops processing requests.
 func (e *Subprocess) CloseAsync() {
-	close(e.subproc.closeChan)
+	if atomic.CompareAndSwapInt32(&e.subprocClosed, 0, 1) {
+		close(e.subproc.closeChan)
+	}
 }
 
 // WaitForClose blocks until the processor has closed down.

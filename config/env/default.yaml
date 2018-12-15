@@ -382,6 +382,8 @@ pipeline:
     select_parts:
       parts:
       - ${PROCESSOR_SELECT_PARTS_PARTS:0}
+    sleep:
+      duration: ${PROCESSOR_SLEEP_DURATION:100us}
     split:
       size: ${PROCESSOR_SPLIT_SIZE:1}
     subprocess:
