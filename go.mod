@@ -13,6 +13,7 @@ require (
 	github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da // indirect
 	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-sdk-go v1.16.3
+	github.com/benhoyt/goawk v1.1.2
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737
 	github.com/bsm/sarama-cluster v2.1.15+incompatible

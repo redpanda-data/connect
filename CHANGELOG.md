@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `sleep` processor.
+- New `awk` processor.
 
 ### Changed
 

@@ -56,6 +56,7 @@ var Constructors = map[string]TypeSpec{}
 // String constants representing each processor type.
 const (
 	TypeArchive      = "archive"
+	TypeAWK          = "awk"
 	TypeBatch        = "batch"
 	TypeBoundsCheck  = "bounds_check"
 	TypeCatch        = "catch"
@@ -103,6 +104,7 @@ const (
 type Config struct {
 	Type         string             `json:"type" yaml:"type"`
 	Archive      ArchiveConfig      `json:"archive" yaml:"archive"`
+	AWK          AWKConfig          `json:"awk" yaml:"awk"`
 	Batch        BatchConfig        `json:"batch" yaml:"batch"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
 	Catch        CatchConfig        `json:"catch" yaml:"catch"`
@@ -149,6 +151,7 @@ func NewConfig() Config {
 	return Config{
 		Type:         "bounds_check",
 		Archive:      NewArchiveConfig(),
+		AWK:          NewAWKConfig(),
 		Batch:        NewBatchConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),
 		Catch:        NewCatchConfig(),
