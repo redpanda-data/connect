@@ -51,11 +51,11 @@ Metadata of a message will be automatically declared as variables, where any
 invalid characters in the name will be replaced with underscores. Variables can
 also automatically be extracted from the input based on a codec:
 
-### ` + "`none`" + `
+### ` + "`none`" + `
 
 No variables are extracted.
 
-### ` + "`json`" + `
+### ` + "`json`" + `
 
 Variables are extracted from the message by walking the flattened JSON
 structure. Each value is converted into a variable by taking its full path, e.g.
@@ -66,7 +66,7 @@ the object:
 	"foo": {
 		"bar": {
 			"value": "foobar"
-		}
+		},
 		"baz": 10
 	}
 }
