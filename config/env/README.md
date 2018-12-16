@@ -251,6 +251,8 @@ PROCESSOR_THREADS                                    = 1
 PROCESSOR_TYPE                                       = noop
 PROCESSOR_ARCHIVE_FORMAT                             = binary
 PROCESSOR_ARCHIVE_PATH                               = ${!count:files}-${!timestamp_unix_nano}.txt
+PROCESSOR_AWK_CODEC                                  = none
+PROCESSOR_AWK_PROGRAM                                = BEGIN { x = 0 } { print $0 " " x; x++ }
 PROCESSOR_BATCH_BYTE_SIZE                            = 0
 PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PARTS     = 100
 PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PART_SIZE = 1073741824

@@ -299,6 +299,10 @@ pipeline:
     archive:
       format: binary
       path: ${!count:files}-${!timestamp_unix_nano}.txt
+    awk:
+      parts: []
+      codec: none
+      program: BEGIN { x = 0 } { print $0 " " x; x++ }
     batch:
       byte_size: 0
       count: 0

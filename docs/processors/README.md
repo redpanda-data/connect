@@ -45,45 +45,46 @@ used.
 ### Contents
 
 1. [`archive`](#archive)
-2. [`batch`](#batch)
-3. [`bounds_check`](#bounds_check)
-4. [`catch`](#catch)
-5. [`compress`](#compress)
-6. [`conditional`](#conditional)
-7. [`decode`](#decode)
-8. [`decompress`](#decompress)
-9. [`dedupe`](#dedupe)
-10. [`encode`](#encode)
-11. [`filter`](#filter)
-12. [`filter_parts`](#filter_parts)
-13. [`grok`](#grok)
-14. [`group_by`](#group_by)
-15. [`group_by_value`](#group_by_value)
-16. [`hash`](#hash)
-17. [`hash_sample`](#hash_sample)
-18. [`http`](#http)
-19. [`insert_part`](#insert_part)
-20. [`jmespath`](#jmespath)
-21. [`json`](#json)
-22. [`lambda`](#lambda)
-23. [`log`](#log)
-24. [`merge_json`](#merge_json)
-25. [`metadata`](#metadata)
-26. [`metric`](#metric)
-27. [`noop`](#noop)
-28. [`process_batch`](#process_batch)
-29. [`process_dag`](#process_dag)
-30. [`process_field`](#process_field)
-31. [`process_map`](#process_map)
-32. [`sample`](#sample)
-33. [`select_parts`](#select_parts)
-34. [`sleep`](#sleep)
-35. [`split`](#split)
-36. [`subprocess`](#subprocess)
-37. [`text`](#text)
-38. [`throttle`](#throttle)
-39. [`try`](#try)
-40. [`unarchive`](#unarchive)
+2. [`awk`](#awk)
+3. [`batch`](#batch)
+4. [`bounds_check`](#bounds_check)
+5. [`catch`](#catch)
+6. [`compress`](#compress)
+7. [`conditional`](#conditional)
+8. [`decode`](#decode)
+9. [`decompress`](#decompress)
+10. [`dedupe`](#dedupe)
+11. [`encode`](#encode)
+12. [`filter`](#filter)
+13. [`filter_parts`](#filter_parts)
+14. [`grok`](#grok)
+15. [`group_by`](#group_by)
+16. [`group_by_value`](#group_by_value)
+17. [`hash`](#hash)
+18. [`hash_sample`](#hash_sample)
+19. [`http`](#http)
+20. [`insert_part`](#insert_part)
+21. [`jmespath`](#jmespath)
+22. [`json`](#json)
+23. [`lambda`](#lambda)
+24. [`log`](#log)
+25. [`merge_json`](#merge_json)
+26. [`metadata`](#metadata)
+27. [`metric`](#metric)
+28. [`noop`](#noop)
+29. [`process_batch`](#process_batch)
+30. [`process_dag`](#process_dag)
+31. [`process_field`](#process_field)
+32. [`process_map`](#process_map)
+33. [`sample`](#sample)
+34. [`select_parts`](#select_parts)
+35. [`sleep`](#sleep)
+36. [`split`](#split)
+37. [`subprocess`](#subprocess)
+38. [`text`](#text)
+39. [`throttle`](#throttle)
+40. [`try`](#try)
+41. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -105,6 +106,51 @@ types that aren't file based (such as binary) the file field is ignored.
 
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.
+
+## `awk`
+
+``` yaml
+type: awk
+awk:
+  codec: none
+  parts: []
+  program: BEGIN { x = 0 } { print $0 " " x; x++ }
+```
+
+Executes an AWK program on messages by feeding the raw contents as the input and
+replaces the contents with the result.
+
+Metadata of a message will be automatically declared as variables, where any
+invalid characters in the name will be replaced with underscores. Variables can
+also automatically be extracted from the input based on a codec:
+
+### `none`
+
+No variables are extracted.
+
+### `json`
+
+Variables are extracted from the message by walking the flattened JSON
+structure. Each value is converted into a variable by taking its full path, e.g.
+the object:
+
+``` json
+{
+	"foo": {
+		"bar": {
+			"value": "foobar"
+		}
+		"baz": 10
+	}
+}
+```
+
+Would result in the following variable declarations:
+
+```
+foo_bar_value = foobar
+foo_baz = 10
+```
 
 ## `batch`
 

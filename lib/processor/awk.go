@@ -95,7 +95,7 @@ func NewAWKConfig() AWKConfig {
 	return AWKConfig{
 		Parts:   []int{},
 		Codec:   "none",
-		Program: "{ print $0 }",
+		Program: "BEGIN { x = 0 } { print $0 \" \" x; x++ }",
 	}
 }
 
