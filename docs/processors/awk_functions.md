@@ -6,7 +6,34 @@ this document. These functions can be overridden by functions in the program.
 
 ## Contents
 
-1. [Date Functions](#date-functions)
+1. [JSON Functions](#json-functions)
+2. [Date Functions](#date-functions)
+
+## JSON Functions
+
+### `create_json_object(key1, val1, key2, val2, ...)`
+
+Generates a valid JSON object of key value pair arguments. The arguments are
+variadic, meaning any number of pairs can be listed. The value will always
+resolve to a string regardless of the value type. E.g. the following call:
+
+`create_json_object("a", "1", "b", 2, "c", "3")`
+
+Would result in this string:
+
+`{"a":"1","b":"2","c":"3"}`
+
+### `create_json_array(val1, val2, ...)`
+
+Generates a valid JSON array of value arguments. The arguments are variadic,
+meaning any number of values can be listed. The value will always resolve to a
+string regardless of the value type. E.g. the following call:
+
+`create_json_array("1", 2, "3")`
+
+Would result in this string:
+
+`["1","2","3"]`
 
 ## Date Functions
 

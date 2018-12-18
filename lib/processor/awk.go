@@ -22,6 +22,7 @@ package processor
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"regexp"
@@ -220,6 +221,24 @@ var awkFunctionsMap = map[string]interface{}{
 			return 0, err
 		}
 		return ts.UnixNano(), nil
+	},
+	"create_json_object": func(vals ...string) string {
+		pairs := map[string]string{}
+		for i := 0; i < len(vals)-1; i += 2 {
+			pairs[vals[i]] = vals[i+1]
+		}
+		bytes, _ := json.Marshal(pairs)
+		if len(bytes) == 0 {
+			return "{}"
+		}
+		return string(bytes)
+	},
+	"create_json_array": func(vals ...string) string {
+		bytes, _ := json.Marshal(vals)
+		if len(bytes) == 0 {
+			return "[]"
+		}
+		return string(bytes)
 	},
 }
 

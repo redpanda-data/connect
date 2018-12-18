@@ -186,6 +186,41 @@ func TestAWK(t *testing.T) {
 			input:   `foo`,
 			output:  `1545134252123000064`,
 		},
+		{
+			name:    "create json object 1",
+			codec:   "none",
+			program: `{ print create_json_object("foo", "1", "bar", "2", "baz", "3") }`,
+			input:   `this is ignored`,
+			output:  `{"bar":"2","baz":"3","foo":"1"}`,
+		},
+		{
+			name:    "create json object 2",
+			codec:   "none",
+			program: `{ print create_json_object("foo", "1", "bar", 2, "baz", "true") }`,
+			input:   `this is ignored`,
+			output:  `{"bar":"2","baz":"true","foo":"1"}`,
+		},
+		{
+			name:    "create json object 3",
+			codec:   "none",
+			program: `{ print create_json_object() }`,
+			input:   `this is ignored`,
+			output:  `{}`,
+		},
+		{
+			name:    "create json array 1",
+			codec:   "none",
+			program: `{ print create_json_array("1", 2, "3") }`,
+			input:   `this is ignored`,
+			output:  `["1","2","3"]`,
+		},
+		{
+			name:    "create json array 2",
+			codec:   "none",
+			program: `{ print create_json_array() }`,
+			input:   `this is ignored`,
+			output:  `[]`,
+		},
 	}
 
 	for _, test := range tests {
