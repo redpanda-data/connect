@@ -81,6 +81,30 @@ func TestAWKValidation(t *testing.T) {
 	}
 }
 
+func TestAWKBadDateString(t *testing.T) {
+	conf := NewConfig()
+	conf.AWK.Parts = []int{0}
+	conf.AWK.Codec = "none"
+	conf.AWK.Program = `{ print timestamp_unix("this isnt a date string") }`
+
+	a, err := NewAWK(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgIn := message.New([][]byte{[]byte("this is a value")})
+	msgs, res := a.ProcessMessage(msgIn)
+	if len(msgs) != 1 {
+		t.Fatal("No passthrough on error")
+	}
+	if res != nil {
+		t.Fatal("Non-nil result")
+	}
+	if exp, act := "this is a value", string(message.GetAllBytes(msgs[0])[0]); exp != act {
+		t.Errorf("Wrong output from bad function call: %v != %v", act, exp)
+	}
+}
+
 func TestAWK(t *testing.T) {
 	type jTest struct {
 		name     string
@@ -121,6 +145,46 @@ func TestAWK(t *testing.T) {
 			program:  `{ print $2 meta_foo }`,
 			input:    `foo`,
 			output:   ``,
+		},
+		{
+			name: "parse metadata datestring 1",
+			metadata: map[string]string{
+				"foostamp": "2018-12-18T11:57:32",
+			},
+			codec:   "none",
+			program: `{ foo = foostamp; print timestamp_unix(foo) }`,
+			input:   `foo`,
+			output:  `1545134252`,
+		},
+		{
+			name: "parse metadata datestring 2",
+			metadata: map[string]string{
+				"foostamp": "2018TOTALLY12CUSTOM18T11:57:32",
+			},
+			codec:   "none",
+			program: `{ foo = foostamp; print timestamp_unix(foo, "2006TOTALLY01CUSTOM02T15:04:05") }`,
+			input:   `foo`,
+			output:  `1545134252`,
+		},
+		{
+			name: "parse metadata datestring 3",
+			metadata: map[string]string{
+				"foostamp": "2018-12-18T11:57:32",
+			},
+			codec:   "none",
+			program: `{ print timestamp_unix(foostamp) }`,
+			input:   `foo`,
+			output:  `1545134252`,
+		},
+		{
+			name: "parse metadata datestring 4",
+			metadata: map[string]string{
+				"foostamp": "2018-12-18T11:57:32.123",
+			},
+			codec:   "none",
+			program: `{ foo = foostamp; print timestamp_unix_nano(foo) }`,
+			input:   `foo`,
+			output:  `1545134252123000064`,
 		},
 	}
 

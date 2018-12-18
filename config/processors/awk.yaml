@@ -19,7 +19,7 @@ pipeline:
     awk:
       codec: none
       parts: []
-      program: BEGIN { x = 0 } { print $0 " " x; x++ }
+      program: BEGIN { x = 0 } { print $0, x; x++ }
   threads: 1
 output:
   type: stdout

@@ -47,6 +47,9 @@ func init() {
 Executes an AWK program on messages by feeding the raw contents as the input and
 replaces the contents with the result.
 
+Comes with a wide range of [custom functions](./awk_functions.md). These
+functions can be overridden by functions within the program.
+
 Metadata of a message will be automatically declared as variables, where any
 invalid characters in the name will be replaced with underscores. Variables can
 also automatically be extracted from the input based on a codec:
@@ -65,9 +68,9 @@ the object:
 {
 	"foo": {
 		"bar": {
-			"value": "foobar"
+			"value": 10
 		},
-		"baz": 10
+		"created_at": "2018-12-18T11:57:32"
 	}
 }
 ` + "```" + `
@@ -75,8 +78,27 @@ the object:
 Would result in the following variable declarations:
 
 ` + "```" + `
-foo_bar_value = foobar
-foo_baz = 10
+foo_bar_value = 10
+foo_created_at = "2018-12-18T11:57:32"
+` + "```" + `
+
+This can be combined with the ` + "[`process_map`](#process_map)" + ` processor
+in order to perform arithmetic on fields. For example, given messages containing
+the above object, we could calculate the seconds elapsed since
+` + "`foo.created_at`" + ` and store it in a new field
+` + "`foo.elapsed_seconds`" + ` with:
+
+` + "``` yaml" + `
+- type: process_map
+  process_map:
+    processors:
+    - type: awk
+      awk:
+        codec: json
+        program: |
+          { print timestamp_unix() - timestamp_unix(foo_created_at) }
+    postmap:
+      foo.elapsed_seconds: .
 ` + "```" + ``,
 	}
 }
@@ -95,7 +117,7 @@ func NewAWKConfig() AWKConfig {
 	return AWKConfig{
 		Parts:   []int{},
 		Codec:   "none",
-		Program: "BEGIN { x = 0 } { print $0 \" \" x; x++ }",
+		Program: "BEGIN { x = 0 } { print $0, x; x++ }",
 	}
 }
 
@@ -121,7 +143,9 @@ type AWK struct {
 func NewAWK(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	program, err := parser.ParseProgram([]byte(conf.AWK.Program), nil)
+	program, err := parser.ParseProgram([]byte(conf.AWK.Program), &parser.ParserConfig{
+		Funcs: awkFunctionsMap,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile AWK program: %v", err)
 	}
@@ -144,6 +168,59 @@ func NewAWK(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	return a, nil
+}
+
+//------------------------------------------------------------------------------
+
+func getTime(dateStr string, format string) (time.Time, error) {
+	if len(dateStr) == 0 {
+		return time.Now(), nil
+	}
+	if len(format) == 0 {
+		var err error
+		var parsed time.Time
+	layoutIter:
+		for _, layout := range []string{
+			time.RubyDate,
+			time.RFC1123Z,
+			time.RFC1123,
+			time.RFC3339,
+			time.RFC822,
+			time.RFC822Z,
+			"Mon, 2 Jan 2006 15:04:05 -0700",
+			"2006-01-02T15:04:05MST",
+			"2006-01-02T15:04:05",
+			"2006-01-02 15:04:05",
+			"2006-01-02T15:04:05Z0700",
+			"2006-01-02",
+		} {
+			if parsed, err = time.Parse(layout, dateStr); err == nil {
+				break layoutIter
+			}
+		}
+		if err != nil {
+			return time.Time{}, fmt.Errorf("failed to detect datetime format of: %v", dateStr)
+		}
+		return parsed, nil
+	}
+	return time.Parse(format, dateStr)
+}
+
+var awkFunctionsMap = map[string]interface{}{
+	"timestamp_unix": func(dateStr string, format string) (int64, error) {
+		ts, err := getTime(dateStr, format)
+		if err != nil {
+			return 0, err
+		}
+		return ts.Unix(), nil
+	},
+	"timestamp_unix_nano": func(dateStr string, format string) (int64, error) {
+		ts, err := getTime(dateStr, format)
+		if err != nil {
+			return 0, err
+		}
+		return ts.UnixNano(), nil
+	},
 }
 
 //------------------------------------------------------------------------------
@@ -190,6 +267,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			Stdin:  bytes.NewReader(newMsg.Get(index).Get()),
 			Output: &outBuf,
 			Error:  &errBuf,
+			Funcs:  awkFunctionsMap,
 		}
 
 		if a.conf.Codec == "json" {
