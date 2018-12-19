@@ -114,11 +114,14 @@ type: awk
 awk:
   codec: none
   parts: []
-  program: BEGIN { x = 0 } { print $0 " " x; x++ }
+  program: BEGIN { x = 0 } { print $0, x; x++ }
 ```
 
 Executes an AWK program on messages by feeding the raw contents as the input and
 replaces the contents with the result.
+
+Comes with a wide range of [custom functions](./awk_functions.md). These
+functions can be overridden by functions within the program.
 
 Metadata of a message will be automatically declared as variables, where any
 invalid characters in the name will be replaced with underscores. Variables can
@@ -138,9 +141,9 @@ the object:
 {
 	"foo": {
 		"bar": {
-			"value": "foobar"
+			"value": 10
 		},
-		"baz": 10
+		"created_at": "2018-12-18T11:57:32"
 	}
 }
 ```
@@ -148,8 +151,27 @@ the object:
 Would result in the following variable declarations:
 
 ```
-foo_bar_value = foobar
-foo_baz = 10
+foo_bar_value = 10
+foo_created_at = "2018-12-18T11:57:32"
+```
+
+This can be combined with the [`process_map`](#process_map) processor
+in order to perform arithmetic on fields. For example, given messages containing
+the above object, we could calculate the seconds elapsed since
+`foo.created_at` and store it in a new field
+`foo.elapsed_seconds` with:
+
+``` yaml
+- type: process_map
+  process_map:
+    processors:
+    - type: awk
+      awk:
+        codec: json
+        program: |
+          { print timestamp_unix() - timestamp_unix(foo_created_at) }
+    postmap:
+      foo.elapsed_seconds: .
 ```
 
 ## `batch`

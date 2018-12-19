@@ -24,7 +24,7 @@
 				"awk": {
 					"codec": "none",
 					"parts": [],
-					"program": "BEGIN { x = 0 } { print $0 \" \" x; x++ }"
+					"program": "BEGIN { x = 0 } { print $0, x; x++ }"
 				}
 			}
 		],
