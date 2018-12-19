@@ -93,7 +93,7 @@ func NewZMQ4(conf *ZMQ4Config, log log.Modular, stats metrics.Type) (*ZMQ4, erro
 		return nil, err
 	}
 
-	if tout := conf.Timeout; len(tout) > 0 {
+	if tout := conf.PollTimeout; len(tout) > 0 {
 		if z.pollTimeout, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse poll timeout string: %v", err)
 		}
