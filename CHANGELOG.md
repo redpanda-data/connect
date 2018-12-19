@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-### Added
+## 0.42.0 - 2018-12-19
+
+### Added
 
 - New `sleep` processor.
 - New `awk` processor.
