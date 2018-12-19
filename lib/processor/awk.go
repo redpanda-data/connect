@@ -227,7 +227,7 @@ var awkFunctionsMap = map[string]interface{}{
 		if len(formatArg) > 0 {
 			format = formatArg
 		}
-		t := time.Unix(unix, 0)
+		t := time.Unix(unix, 0).In(time.UTC)
 		return t.Format(format)
 	},
 	"timestamp_format_nano": func(unixNano int64, formatArg string) string {
@@ -237,7 +237,7 @@ var awkFunctionsMap = map[string]interface{}{
 		}
 		s := unixNano / 1000000000
 		ns := unixNano - (s * 1000000000)
-		t := time.Unix(s, ns)
+		t := time.Unix(s, ns).In(time.UTC)
 		return t.Format(format)
 	},
 	"create_json_object": func(vals ...string) string {

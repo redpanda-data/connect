@@ -194,7 +194,7 @@ func TestAWK(t *testing.T) {
 			codec:   "none",
 			program: `{ print timestamp_format(foostamp, "02 Jan 06 15:04") }`,
 			input:   `foo`,
-			output:  `18 Dec 18 12:57`,
+			output:  `18 Dec 18 11:57`,
 		},
 		{
 			name: "format metadata unix nano custom 1",
@@ -204,7 +204,7 @@ func TestAWK(t *testing.T) {
 			codec:   "none",
 			program: `{ print timestamp_format_nano(foostamp, "02 Jan 06 15:04:05.000000000") }`,
 			input:   `foo`,
-			output:  `18 Dec 18 12:57:32.123000064`,
+			output:  `18 Dec 18 11:57:32.123000064`,
 		},
 		{
 			name:    "create json object 1",
