@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Functions `timestamp_format` and `timestamp_format_nano` added to `awk`
+  processor.
+
 ## 0.42.0 - 2018-12-19
 
 ### Added

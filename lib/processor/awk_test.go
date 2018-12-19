@@ -187,6 +187,26 @@ func TestAWK(t *testing.T) {
 			output:  `1545134252123000064`,
 		},
 		{
+			name: "format metadata unix custom 1",
+			metadata: map[string]string{
+				"foostamp": "1545134252",
+			},
+			codec:   "none",
+			program: `{ print timestamp_format(foostamp, "02 Jan 06 15:04") }`,
+			input:   `foo`,
+			output:  `18 Dec 18 12:57`,
+		},
+		{
+			name: "format metadata unix nano custom 1",
+			metadata: map[string]string{
+				"foostamp": "1545134252123000064",
+			},
+			codec:   "none",
+			program: `{ print timestamp_format_nano(foostamp, "02 Jan 06 15:04:05.000000000") }`,
+			input:   `foo`,
+			output:  `18 Dec 18 12:57:32.123000064`,
+		},
+		{
 			name:    "create json object 1",
 			codec:   "none",
 			program: `{ print create_json_object("foo", "1", "bar", "2", "baz", "3") }`,

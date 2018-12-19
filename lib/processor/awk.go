@@ -222,6 +222,24 @@ var awkFunctionsMap = map[string]interface{}{
 		}
 		return ts.UnixNano(), nil
 	},
+	"timestamp_format": func(unix int64, formatArg string) string {
+		format := time.RFC3339
+		if len(formatArg) > 0 {
+			format = formatArg
+		}
+		t := time.Unix(unix, 0)
+		return t.Format(format)
+	},
+	"timestamp_format_nano": func(unixNano int64, formatArg string) string {
+		format := time.RFC3339
+		if len(formatArg) > 0 {
+			format = formatArg
+		}
+		s := unixNano / 1000000000
+		ns := unixNano - (s * 1000000000)
+		t := time.Unix(s, ns)
+		return t.Format(format)
+	},
 	"create_json_object": func(vals ...string) string {
 		pairs := map[string]string{}
 		for i := 0; i < len(vals)-1; i += 2 {

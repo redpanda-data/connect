@@ -73,4 +73,22 @@ unix timestamp in nanoseconds (the number of nanoseconds since 01-01-1970).
 The format is defined by showing how the reference time, defined to be
 `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.
 
+### `timestamp_format(unix, format)`
+
+Formats a unix timestamp. The format is defined by showing how the reference
+time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it
+were the value.
+
+The format is optional, and if omitted RFC3339 (`2006-01-02T15:04:05Z07:00`)
+will be used.
+
+### `timestamp_format_nano(unixNano, format)`
+
+Formats a unix timestamp in nanoseconds. The format is defined by showing how
+the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be
+displayed if it were the value.
+
+The format is optional, and if omitted RFC3339 (`2006-01-02T15:04:05Z07:00`)
+will be used.
+
 [awk-processor]: ./README.md#awk
