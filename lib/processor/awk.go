@@ -45,8 +45,9 @@ func init() {
 	Constructors[TypeAWK] = TypeSpec{
 		constructor: NewAWK,
 		description: `
-Executes an AWK program on messages by feeding the raw contents as the input and
-replaces the contents with the result.
+Executes an AWK program on messages by feeding contents as the input based on a
+codec and replaces the contents with the result. If the result is empty (nothing
+is printed by the program) then the original message contents remain unchanged.
 
 Comes with a wide range of [custom functions](./awk_functions.md). These
 functions can be overridden by functions within the program.
@@ -57,13 +58,14 @@ also automatically be extracted from the input based on a codec:
 
 ### ` + "`none`" + `
 
-No variables are extracted.
+No variables are extracted. The full contents of the message are fed into the
+program.
 
 ### ` + "`json`" + `
 
-Variables are extracted from the message by walking the flattened JSON
-structure. Each value is converted into a variable by taking its full path, e.g.
-the object:
+No contents are fed into the program. Instead, variables are extracted from the
+message by walking the flattened JSON structure. Each value is converted into a
+variable by taking its full path, e.g. the object:
 
 ` + "``` json" + `
 {
@@ -134,6 +136,8 @@ type AWK struct {
 	log   log.Modular
 	stats metrics.Type
 
+	functions map[string]interface{}
+
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter
 	mSent      metrics.StatCounter
@@ -156,12 +160,18 @@ func NewAWK(
 	default:
 		return nil, fmt.Errorf("unrecognised codec: %v", conf.AWK.Codec)
 	}
+	functionOverrides := make(map[string]interface{}, len(awkFunctionsMap))
+	for k, v := range awkFunctionsMap {
+		functionOverrides[k] = v
+	}
 	a := &AWK{
 		parts:   conf.AWK.Parts,
 		program: program,
 		conf:    conf.AWK,
 		log:     log,
 		stats:   stats,
+
+		functions: functionOverrides,
 
 		mCount:     stats.GetCounter("count"),
 		mErr:       stats.GetCounter("error"),
@@ -240,6 +250,14 @@ var awkFunctionsMap = map[string]interface{}{
 		t := time.Unix(s, ns).In(time.UTC)
 		return t.Format(format)
 	},
+	"metadata_get": func(key string) string {
+		// Do nothing, this is a placeholder for compilation.
+		return ""
+	},
+	"metadata_set": func(key, value string) string {
+		// Do nothing, this is a placeholder for compilation.
+		return ""
+	},
 	"create_json_object": func(vals ...string) string {
 		pairs := map[string]string{}
 		for i := 0; i < len(vals)-1; i += 2 {
@@ -300,11 +318,18 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	proc := func(index int) {
 		var outBuf, errBuf bytes.Buffer
 
+		// Function overrides
+		a.functions["metadata_get"] = func(k string) string {
+			return newMsg.Get(index).Metadata().Get(k)
+		}
+		a.functions["metadata_set"] = func(k, v string) {
+			newMsg.Get(index).Metadata().Set(k, v)
+		}
+
 		config := &interp.Config{
-			Stdin:  bytes.NewReader(newMsg.Get(index).Get()),
 			Output: &outBuf,
 			Error:  &errBuf,
-			Funcs:  awkFunctionsMap,
+			Funcs:  a.functions,
 		}
 
 		if a.conf.Codec == "json" {
@@ -319,6 +344,9 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			for k, v := range flattenForAWK("", jsonPart) {
 				config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
 			}
+			config.Stdin = bytes.NewReader([]byte(" "))
+		} else {
+			config.Stdin = bytes.NewReader(newMsg.Get(index).Get())
 		}
 
 		newMsg.Get(index).Metadata().Iter(func(k, v string) error {
@@ -348,11 +376,13 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			FlagFail(newMsg.Get(index))
 		}
 
-		// Remove trailing line break
-		if resMsg[len(resMsg)-1] == '\n' {
-			resMsg = resMsg[:len(resMsg)-1]
+		if len(resMsg) > 0 {
+			// Remove trailing line break
+			if resMsg[len(resMsg)-1] == '\n' {
+				resMsg = resMsg[:len(resMsg)-1]
+			}
+			newMsg.Get(index).Set(resMsg)
 		}
-		newMsg.Get(index).Set(resMsg)
 	}
 
 	if len(a.parts) == 0 {

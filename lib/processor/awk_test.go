@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -107,15 +108,71 @@ func TestAWKBadDateString(t *testing.T) {
 
 func TestAWK(t *testing.T) {
 	type jTest struct {
-		name     string
-		metadata map[string]string
-		codec    string
-		program  string
-		input    string
-		output   string
+		name          string
+		metadata      map[string]string
+		metadataAfter map[string]string
+		codec         string
+		program       string
+		input         string
+		output        string
 	}
 
 	tests := []jTest{
+		{
+			name:    "no print 1",
+			codec:   "none",
+			program: `{ }`,
+			input:   `hello world`,
+			output:  `hello world`,
+		},
+		{
+			name:    "empty print 1",
+			codec:   "none",
+			program: `{ print "" }`,
+			input:   `hello world`,
+			output:  ``,
+		},
+		{
+			name: "metadata get 1",
+			metadata: map[string]string{
+				"meta.foo": "12",
+			},
+			codec:   "none",
+			program: `{ print metadata_get("meta.foo") }`,
+			input:   `hello world`,
+			output:  `12`,
+		},
+		{
+			name: "metadata get 2",
+			metadata: map[string]string{
+				"meta.foo": "12",
+			},
+			codec:   "none",
+			program: `{ print metadata_get("meta.bar") }`,
+			input:   `hello world`,
+			output:  ``,
+		},
+		{
+			name: "metadata set 1",
+			metadata: map[string]string{
+				"meta.foo": "12",
+			},
+			metadataAfter: map[string]string{
+				"meta.foo": "24",
+				"meta.bar": "36",
+			},
+			codec:   "none",
+			program: `{ metadata_set("meta.foo", 24); metadata_set("meta.bar", "36") }`,
+			input:   `hello world`,
+			output:  `hello world`,
+		},
+		{
+			name:    "json 1",
+			codec:   "json",
+			program: `{ print obj_foo }`,
+			input:   `{"obj":{"foo":"hello"}}`,
+			output:  `hello`,
+		},
 		{
 			name: "metadata 1",
 			metadata: map[string]string{
@@ -264,6 +321,17 @@ func TestAWK(t *testing.T) {
 		msgs, _ := a.ProcessMessage(inMsg)
 		if len(msgs) != 1 {
 			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp := test.metadataAfter; len(exp) > 0 {
+			act := map[string]string{}
+			msgs[0].Get(0).Metadata().Iter(func(k, v string) error {
+				act[k] = v
+				return nil
+			})
+			if !reflect.DeepEqual(exp, act) {
+				t.Errorf("Wrong metadata contents: %v != %v", act, exp)
+			}
 		}
 
 		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {

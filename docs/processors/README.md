@@ -117,8 +117,9 @@ awk:
   program: BEGIN { x = 0 } { print $0, x; x++ }
 ```
 
-Executes an AWK program on messages by feeding the raw contents as the input and
-replaces the contents with the result.
+Executes an AWK program on messages by feeding contents as the input based on a
+codec and replaces the contents with the result. If the result is empty (nothing
+is printed by the program) then the original message contents remain unchanged.
 
 Comes with a wide range of [custom functions](./awk_functions.md). These
 functions can be overridden by functions within the program.
@@ -129,13 +130,14 @@ also automatically be extracted from the input based on a codec:
 
 ### `none`
 
-No variables are extracted.
+No variables are extracted. The full contents of the message are fed into the
+program.
 
 ### `json`
 
-Variables are extracted from the message by walking the flattened JSON
-structure. Each value is converted into a variable by taking its full path, e.g.
-the object:
+No contents are fed into the program. Instead, variables are extracted from the
+message by walking the flattened JSON structure. Each value is converted into a
+variable by taking its full path, e.g. the object:
 
 ``` json
 {
