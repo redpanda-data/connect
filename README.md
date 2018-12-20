@@ -1,4 +1,4 @@
-![Benthos](icon.png "Benthos")
+![Benthos](https://www.jeffail.uk/images/benthoses/new_benthos.png "Benthos")
 
 [![godoc for Jeffail/benthos][godoc-badge]][godoc-url]
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
