@@ -1464,4 +1464,4 @@ from the message. If the message results in zero parts it is skipped entirely.
 For the unarchivers that contain file information (tar, zip), a metadata field
 is added to each part called `archive_filename` with the extracted filename.
 
-[0]: ./examples.md
+[0]: ../examples/README.md

@@ -332,7 +332,7 @@ In this case the ` + "[`process_batch`](#process_batch)" + ` processor can be
 used.`
 
 var footer = `
-[0]: ./examples.md`
+[0]: ../examples/README.md`
 
 // Descriptions returns a formatted string of collated descriptions of each
 // type.

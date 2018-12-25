@@ -11,10 +11,7 @@ input:
         consumer_group: benthos_mutator_group
         topics:
         - data_stream
-  processors:
-  - type: batch
-    batch:
-      count: 8 # Batch size: Tune this to increase output throughput
+        max_batch_count: 8 # Batch size: Tune this to increase output throughput
 pipeline:
   threads: 4 # This should exactly match the number of logical CPUs
   processors:

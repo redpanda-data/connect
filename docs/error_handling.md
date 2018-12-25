@@ -13,7 +13,7 @@ referred to later in the pipeline using the
 
 This behaviour allows you to define in your config whether you would like the
 failed messages to be dropped, recovered with more processing, or routed to a
-dead-letter queue, or any combination thereof. 
+dead-letter queue, or any combination thereof.
 
 ### Abandon on Failure
 

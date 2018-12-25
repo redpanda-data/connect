@@ -206,8 +206,8 @@ Like follows:
 output:
   type: cache
   cache:
-	target: foo
-	key: ${!json_field:document.id}
+    target: foo
+    key: ${!json_field:document.id}
 resources:
   caches:
     foo:

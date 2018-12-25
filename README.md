@@ -57,7 +57,7 @@ For building your own stream processors using Benthos as a framework check out
 the [stream package][godoc-url], which also includes some examples.
 
 For some applied examples of Benthos such as streaming and deduplicating the
-Twitter firehose to Kafka [check out the cookbook section][cookbook-docs].
+Twitter firehose to Kafka [check out the examples section][examples-docs].
 
 ## Run
 
@@ -203,7 +203,7 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [streams-api]: docs/api/streams.md
 [streams-mode]: docs/streams/README.md
 [general-docs]: docs/README.md
-[cookbook-docs]: docs/cookbook/README.md
+[examples-docs]: docs/examples/README.md
 [env-config]: config/env/README.md
 [config-doc]: docs/configuration.md
 

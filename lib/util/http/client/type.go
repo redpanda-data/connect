@@ -480,7 +480,7 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 			if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
 				rateLimited = retryStrat == retryBackoff
 				if retryStrat == noRetry {
-					numRetries = 0
+					j = 0
 				}
 				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
 				if res.Body != nil {
