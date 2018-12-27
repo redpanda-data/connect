@@ -79,7 +79,8 @@ type Kinesis struct {
 	dynamo  *dynamodb.DynamoDB
 
 	offsetLastCommitted time.Time
-	sharditerCommit     string
+	sequenceCommit      string
+	sequence            string
 	sharditer           string
 	namespace           string
 
@@ -119,22 +120,9 @@ func NewKinesis(
 	}, nil
 }
 
-// Connect attempts to establish a connection to the target SQS queue.
-func (k *Kinesis) Connect() error {
-	if k.session != nil {
-		return nil
-	}
-
-	sess, err := k.conf.GetSession()
-	if err != nil {
-		return err
-	}
-
-	dynamo := dynamodb.New(sess)
-	kin := kinesis.New(sess)
-
-	if len(k.sharditer) == 0 && len(k.conf.DynamoDBTable) > 0 {
-		resp, err := dynamo.GetItemWithContext(
+func (k *Kinesis) getIter() error {
+	if len(k.sequenceCommit) == 0 && len(k.conf.DynamoDBTable) > 0 {
+		resp, err := k.dynamo.GetItemWithContext(
 			aws.BackgroundContext(),
 			&dynamodb.GetItemInput{
 				TableName:      aws.String(k.conf.DynamoDBTable),
@@ -156,10 +144,37 @@ func (k *Kinesis) Connect() error {
 			}
 			return err
 		}
-		if seqAttr := resp.Item["sequence_number"]; seqAttr != nil {
+		if seqAttr := resp.Item["sequence"]; seqAttr != nil {
 			if seqAttr.S != nil {
-				k.sharditer = *seqAttr.S
+				k.sequenceCommit = *seqAttr.S
+				k.sequence = *seqAttr.S
 			}
+		}
+	}
+
+	if len(k.sharditer) == 0 && len(k.sequence) > 0 {
+		getShardIter := kinesis.GetShardIteratorInput{
+			ShardId:                &k.conf.Shard,
+			StreamName:             &k.conf.Stream,
+			StartingSequenceNumber: &k.sequence,
+			ShardIteratorType:      aws.String(kinesis.ShardIteratorTypeAfterSequenceNumber),
+		}
+		res, err := k.kinesis.GetShardIteratorWithContext(
+			aws.BackgroundContext(),
+			&getShardIter,
+			request.WithResponseReadTimeout(k.timeout),
+		)
+		if err != nil {
+			if err.Error() == request.ErrCodeResponseTimeout {
+				return types.ErrTimeout
+			} else if err.Error() == kinesis.ErrCodeInvalidArgumentException {
+				k.log.Errorf("Failed to receive iterator from sequence number: %v\n", err.Error())
+			} else {
+				return err
+			}
+		}
+		if res.ShardIterator != nil {
+			k.sharditer = *res.ShardIterator
 		}
 	}
 
@@ -169,12 +184,16 @@ func (k *Kinesis) Connect() error {
 		if !k.conf.StartFromOldest {
 			iterType = kinesis.ShardIteratorTypeLatest
 		}
+		// If we failed to obtain from a sequence we start from beginning
+		if len(k.sequence) > 0 {
+			iterType = kinesis.ShardIteratorTypeTrimHorizon
+		}
 		getShardIter := kinesis.GetShardIteratorInput{
 			ShardId:           &k.conf.Shard,
 			StreamName:        &k.conf.Stream,
 			ShardIteratorType: &iterType,
 		}
-		res, err := kin.GetShardIteratorWithContext(
+		res, err := k.kinesis.GetShardIteratorWithContext(
 			aws.BackgroundContext(),
 			&getShardIter,
 			request.WithResponseReadTimeout(k.timeout),
@@ -185,21 +204,38 @@ func (k *Kinesis) Connect() error {
 			}
 			return err
 		}
-		if res.ShardIterator == nil {
-			return errors.New("received nil shard iterator")
+		if res.ShardIterator != nil {
+			k.sharditer = *res.ShardIterator
 		}
-		k.sharditer = *res.ShardIterator
 	}
 
 	if len(k.sharditer) == 0 {
 		return errors.New("failed to obtain shard iterator")
 	}
+	return nil
+}
 
-	k.sharditerCommit = k.sharditer
+// Connect attempts to establish a connection to the target SQS queue.
+func (k *Kinesis) Connect() error {
+	if k.session != nil {
+		return nil
+	}
 
-	k.kinesis = kin
-	k.dynamo = dynamo
+	sess, err := k.conf.GetSession()
+	if err != nil {
+		return err
+	}
+
+	k.dynamo = dynamodb.New(sess)
+	k.kinesis = kinesis.New(sess)
 	k.session = sess
+
+	if err = k.getIter(); err != nil {
+		k.dynamo = nil
+		k.kinesis = nil
+		k.session = nil
+		return err
+	}
 
 	k.log.Infof("Receiving Amazon Kinesis messages from stream: %v\n", k.conf.Stream)
 	return nil
@@ -209,6 +245,11 @@ func (k *Kinesis) Connect() error {
 func (k *Kinesis) Read() (types.Message, error) {
 	if k.session == nil {
 		return nil, types.ErrNotConnected
+	}
+	if len(k.sharditer) == 0 {
+		if err := k.getIter(); err != nil {
+			return nil, fmt.Errorf("failed to obtain iterator: %v\n", err)
+		}
 	}
 
 	getRecords := kinesis.GetRecordsInput{
@@ -222,6 +263,9 @@ func (k *Kinesis) Read() (types.Message, error) {
 	)
 	if err != nil {
 		if err.Error() == request.ErrCodeResponseTimeout {
+			return nil, types.ErrTimeout
+		} else if err.Error() == kinesis.ErrCodeExpiredIteratorException {
+			k.log.Warnln("Shard iterator expired, attempting to refresh")
 			return nil, types.ErrTimeout
 		}
 		return nil, err
@@ -243,6 +287,9 @@ func (k *Kinesis) Read() (types.Message, error) {
 			part.Metadata().Set("kinesis_stream", k.conf.Stream)
 
 			msg.Append(part)
+			if rec.SequenceNumber != nil {
+				k.sequence = *rec.SequenceNumber
+			}
 		}
 	}
 
@@ -269,8 +316,8 @@ func (k *Kinesis) commit() error {
 					"shard_id": {
 						S: aws.String(k.conf.Shard),
 					},
-					"sequence_number": {
-						S: aws.String(k.sharditerCommit),
+					"sequence": {
+						S: aws.String(k.sequenceCommit),
 					},
 				},
 			},
@@ -287,7 +334,7 @@ func (k *Kinesis) commit() error {
 // successfully propagated or not.
 func (k *Kinesis) Acknowledge(err error) error {
 	if err == nil {
-		k.sharditerCommit = k.sharditer
+		k.sequenceCommit = k.sequence
 	}
 
 	if time.Since(k.offsetLastCommitted) < k.commitPeriod {
