@@ -227,6 +227,10 @@ func (k *Kinesis) Read() (types.Message, error) {
 		return nil, err
 	}
 
+	if res.NextShardIterator != nil {
+		k.sharditer = *res.NextShardIterator
+	}
+
 	if len(res.Records) == 0 {
 		return nil, types.ErrTimeout
 	}
@@ -246,7 +250,6 @@ func (k *Kinesis) Read() (types.Message, error) {
 		return nil, types.ErrTimeout
 	}
 
-	k.sharditer = *res.NextShardIterator
 	return msg, nil
 }
 
