@@ -23,6 +23,7 @@ package processor
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"regexp"
@@ -258,12 +259,13 @@ var awkFunctionsMap = map[string]interface{}{
 	"metadata_set": func(key, value string) {
 		// Do nothing, this is a placeholder for compilation.
 	},
-	"json_get": func(path string) string {
+	"json_get": func(path string) (string, error) {
 		// Do nothing, this is a placeholder for compilation.
-		return ""
+		return "", errors.New("not implemented")
 	},
-	"json_set": func(path, value string) {
+	"json_set": func(path, value string) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
 	},
 	"create_json_object": func(vals ...string) string {
 		pairs := map[string]string{}
@@ -334,36 +336,33 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		a.functions["metadata_set"] = func(k, v string) {
 			part.Metadata().Set(k, v)
 		}
-		a.functions["json_get"] = func(path string) string {
+		a.functions["json_get"] = func(path string) (string, error) {
 			var gPart *gabs.Container
 			jsonPart, err := part.JSON()
 			if err == nil {
 				gPart, err = gabs.Consume(jsonPart)
 			}
 			if err != nil {
-				a.log.Warnf("Failed to parse part into json: %v\n", err)
-				FlagFail(part)
-				return "null"
+				return "", fmt.Errorf("failed to parse message into json: %v", err)
 			}
 			gTarget := gPart.Path(path)
 			if gTarget.Data() == nil {
-				return "null"
+				return "null", nil
 			}
-			return gPart.Path(path).String()
+			return gPart.Path(path).String(), nil
 		}
-		a.functions["json_set"] = func(path, v string) {
+		a.functions["json_set"] = func(path, v string) (int, error) {
 			var gPart *gabs.Container
 			jsonPart, err := part.JSON()
 			if err == nil {
 				gPart, err = gabs.Consume(jsonPart)
 			}
 			if err != nil {
-				a.log.Warnf("Failed to parse part into json: %v\n", err)
-				FlagFail(part)
-				return
+				return 0, fmt.Errorf("failed to parse message into json: %v", err)
 			}
 			gPart.SetP(v, path)
 			part.SetJSON(gPart.Data())
+			return 0, nil
 		}
 
 		config := &interp.Config{
