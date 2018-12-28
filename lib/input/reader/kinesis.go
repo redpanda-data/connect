@@ -248,7 +248,7 @@ func (k *Kinesis) Read() (types.Message, error) {
 	}
 	if len(k.sharditer) == 0 {
 		if err := k.getIter(); err != nil {
-			return nil, fmt.Errorf("failed to obtain iterator: %v\n", err)
+			return nil, fmt.Errorf("failed to obtain iterator: %v", err)
 		}
 	}
 
