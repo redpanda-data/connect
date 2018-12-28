@@ -31,6 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/gabs"
 	"github.com/benhoyt/goawk/interp"
 	"github.com/benhoyt/goawk/parser"
 )
@@ -58,8 +59,8 @@ also automatically be extracted from the input based on a codec:
 
 ### ` + "`none`" + `
 
-No variables are extracted. The full contents of the message are fed into the
-program.
+Only metadata variables are extracted and the full contents of the message are
+fed into the program.
 
 ### ` + "`json`" + `
 
@@ -254,9 +255,15 @@ var awkFunctionsMap = map[string]interface{}{
 		// Do nothing, this is a placeholder for compilation.
 		return ""
 	},
-	"metadata_set": func(key, value string) string {
+	"metadata_set": func(key, value string) {
+		// Do nothing, this is a placeholder for compilation.
+	},
+	"json_get": func(path string) string {
 		// Do nothing, this is a placeholder for compilation.
 		return ""
+	},
+	"json_set": func(path, value string) {
+		// Do nothing, this is a placeholder for compilation.
 	},
 	"create_json_object": func(vals ...string) string {
 		pairs := map[string]string{}
@@ -318,12 +325,45 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	proc := func(index int) {
 		var outBuf, errBuf bytes.Buffer
 
+		part := newMsg.Get(index)
+
 		// Function overrides
 		a.functions["metadata_get"] = func(k string) string {
-			return newMsg.Get(index).Metadata().Get(k)
+			return part.Metadata().Get(k)
 		}
 		a.functions["metadata_set"] = func(k, v string) {
-			newMsg.Get(index).Metadata().Set(k, v)
+			part.Metadata().Set(k, v)
+		}
+		a.functions["json_get"] = func(path string) string {
+			var gPart *gabs.Container
+			jsonPart, err := part.JSON()
+			if err == nil {
+				gPart, err = gabs.Consume(jsonPart)
+			}
+			if err != nil {
+				a.log.Warnf("Failed to parse part into json: %v\n", err)
+				FlagFail(part)
+				return "null"
+			}
+			gTarget := gPart.Path(path)
+			if gTarget.Data() == nil {
+				return "null"
+			}
+			return gPart.Path(path).String()
+		}
+		a.functions["json_set"] = func(path, v string) {
+			var gPart *gabs.Container
+			jsonPart, err := part.JSON()
+			if err == nil {
+				gPart, err = gabs.Consume(jsonPart)
+			}
+			if err != nil {
+				a.log.Warnf("Failed to parse part into json: %v\n", err)
+				FlagFail(part)
+				return
+			}
+			gPart.SetP(v, path)
+			part.SetJSON(gPart.Data())
 		}
 
 		config := &interp.Config{
@@ -333,11 +373,11 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		}
 
 		if a.conf.Codec == "json" {
-			jsonPart, err := newMsg.Get(index).JSON()
+			jsonPart, err := part.JSON()
 			if err != nil {
 				a.mErr.Incr(1)
 				a.log.Errorf("Failed to parse part into json: %v\n", err)
-				FlagFail(newMsg.Get(index))
+				FlagFail(part)
 				return
 			}
 
@@ -346,10 +386,10 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			}
 			config.Stdin = bytes.NewReader([]byte(" "))
 		} else {
-			config.Stdin = bytes.NewReader(newMsg.Get(index).Get())
+			config.Stdin = bytes.NewReader(part.Get())
 		}
 
-		newMsg.Get(index).Metadata().Iter(func(k, v string) error {
+		part.Metadata().Iter(func(k, v string) error {
 			config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
 			return nil
 		})
@@ -357,7 +397,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		if _, err := interp.ExecProgram(a.program, config); err != nil {
 			a.mErr.Incr(1)
 			a.log.Errorf("Non-fatal execution error: %v\n", err)
-			FlagFail(newMsg.Get(index))
+			FlagFail(part)
 			return
 		}
 
@@ -366,14 +406,14 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		} else if len(errMsg) > 0 {
 			a.mErr.Incr(1)
 			a.log.Errorf("Execution error: %s\n", errMsg)
-			FlagFail(newMsg.Get(index))
+			FlagFail(part)
 		}
 
 		resMsg, err := ioutil.ReadAll(&outBuf)
 		if err != nil {
 			a.mErr.Incr(1)
 			a.log.Errorf("Read output error: %v\n", err)
-			FlagFail(newMsg.Get(index))
+			FlagFail(part)
 		}
 
 		if len(resMsg) > 0 {
@@ -381,7 +421,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			if resMsg[len(resMsg)-1] == '\n' {
 				resMsg = resMsg[:len(resMsg)-1]
 			}
-			newMsg.Get(index).Set(resMsg)
+			part.Set(resMsg)
 		}
 	}
 
