@@ -74,12 +74,6 @@ func TestAWKValidation(t *testing.T) {
 	if _, err = NewAWK(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error from bad codec")
 	}
-
-	conf.AWK.Codec = "text"
-	conf.AWK.Program = "not valid at all"
-	if _, err = NewAWK(conf, nil, log.Noop(), metrics.Noop()); err == nil {
-		t.Error("Expected error from bad program")
-	}
 }
 
 func TestAWKBadDateString(t *testing.T) {
@@ -224,7 +218,7 @@ func TestAWK(t *testing.T) {
 				"meta.foo": "12",
 				"meta.bar": "34",
 			},
-			codec:   "none",
+			codec:   "text",
 			program: `{ print $2 " " meta_foo }`,
 			input:   `hello world`,
 			output:  `world 12`,
@@ -253,7 +247,7 @@ func TestAWK(t *testing.T) {
 			metadata: map[string]string{
 				"foostamp": "2018-12-18T11:57:32",
 			},
-			codec:   "none",
+			codec:   "text",
 			program: `{ foo = foostamp; print timestamp_unix(foo) }`,
 			input:   `foo`,
 			output:  `1545134252`,
@@ -263,7 +257,7 @@ func TestAWK(t *testing.T) {
 			metadata: map[string]string{
 				"foostamp": "2018TOTALLY12CUSTOM18T11:57:32",
 			},
-			codec:   "none",
+			codec:   "text",
 			program: `{ foo = foostamp; print timestamp_unix(foo, "2006TOTALLY01CUSTOM02T15:04:05") }`,
 			input:   `foo`,
 			output:  `1545134252`,
@@ -273,7 +267,7 @@ func TestAWK(t *testing.T) {
 			metadata: map[string]string{
 				"foostamp": "2018-12-18T11:57:32",
 			},
-			codec:   "none",
+			codec:   "text",
 			program: `{ print timestamp_unix(foostamp) }`,
 			input:   `foo`,
 			output:  `1545134252`,
@@ -283,7 +277,7 @@ func TestAWK(t *testing.T) {
 			metadata: map[string]string{
 				"foostamp": "2018-12-18T11:57:32.123",
 			},
-			codec:   "none",
+			codec:   "text",
 			program: `{ foo = foostamp; print timestamp_unix_nano(foo) }`,
 			input:   `foo`,
 			output:  `1545134252123000064`,
@@ -293,7 +287,7 @@ func TestAWK(t *testing.T) {
 			metadata: map[string]string{
 				"foostamp": "1545134252",
 			},
-			codec:   "none",
+			codec:   "text",
 			program: `{ print timestamp_format(foostamp, "02 Jan 06 15:04") }`,
 			input:   `foo`,
 			output:  `18 Dec 18 11:57`,
@@ -303,7 +297,7 @@ func TestAWK(t *testing.T) {
 			metadata: map[string]string{
 				"foostamp": "1545134252123000064",
 			},
-			codec:   "none",
+			codec:   "text",
 			program: `{ print timestamp_format_nano(foostamp, "02 Jan 06 15:04:05.000000000") }`,
 			input:   `foo`,
 			output:  `18 Dec 18 11:57:32.123000064`,

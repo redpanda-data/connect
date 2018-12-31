@@ -251,7 +251,7 @@ PROCESSOR_THREADS                                    = 1
 PROCESSOR_TYPE                                       = noop
 PROCESSOR_ARCHIVE_FORMAT                             = binary
 PROCESSOR_ARCHIVE_PATH                               = ${!count:files}-${!timestamp_unix_nano}.txt
-PROCESSOR_AWK_CODEC                                  = none
+PROCESSOR_AWK_CODEC                                  = text
 PROCESSOR_AWK_PROGRAM                                = BEGIN { x = 0 } { print $0, x; x++ }
 PROCESSOR_BATCH_BYTE_SIZE                            = 0
 PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PARTS     = 100
@@ -500,12 +500,16 @@ OUTPUT_S3_ENDPOINT
 OUTPUT_S3_PATH                                        = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_S3_REGION                                      = eu-west-1
 OUTPUT_S3_TIMEOUT                                     = 5s
+OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL                   = 1s
+OUTPUT_SQS_BACKOFF_MAX_ELAPSED_TIME                   = 30s
+OUTPUT_SQS_BACKOFF_MAX_INTERVAL                       = 5s
 OUTPUT_SQS_CREDENTIALS_ID
 OUTPUT_SQS_CREDENTIALS_ROLE
 OUTPUT_SQS_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_SQS_CREDENTIALS_SECRET
 OUTPUT_SQS_CREDENTIALS_TOKEN
 OUTPUT_SQS_ENDPOINT
+OUTPUT_SQS_MAX_RETRIES                                = 0
 OUTPUT_SQS_REGION                                     = eu-west-1
 OUTPUT_SQS_URL
 OUTPUT_STDOUT_DELIMITER

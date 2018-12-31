@@ -32,6 +32,11 @@
 	"output": {
 		"type": "sqs",
 		"sqs": {
+			"backoff": {
+				"initial_interval": "1s",
+				"max_elapsed_time": "30s",
+				"max_interval": "5s"
+			},
 			"credentials": {
 				"id": "",
 				"role": "",
@@ -40,6 +45,7 @@
 				"token": ""
 			},
 			"endpoint": "",
+			"max_retries": 0,
 			"region": "eu-west-1",
 			"url": ""
 		}

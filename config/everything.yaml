@@ -301,7 +301,7 @@ pipeline:
       path: ${!count:files}-${!timestamp_unix_nano}.txt
     awk:
       parts: []
-      codec: none
+      codec: text
       program: BEGIN { x = 0 } { print $0, x; x++ }
     batch:
       byte_size: 0
@@ -826,6 +826,11 @@ output:
     endpoint: ""
     region: eu-west-1
     url: ""
+    max_retries: 0
+    backoff:
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
   stdout:
     delimiter: ""
   switch:

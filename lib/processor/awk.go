@@ -54,14 +54,20 @@ is printed by the program) then the original message contents remain unchanged.
 Comes with a wide range of [custom functions](./awk_functions.md). These
 functions can be overridden by functions within the program.
 
-Metadata of a message will be automatically declared as variables, where any
-invalid characters in the name will be replaced with underscores. Variables can
-also automatically be extracted from the input based on a codec:
+Metadata of a message can be automatically declared as variables depending on
+the codec chosen, where any invalid characters in the name will be replaced with
+underscores. Some codecs can also declare variables extracted from the input
+contents:
 
 ### ` + "`none`" + `
 
-Only metadata variables are extracted and the full contents of the message are
-fed into the program.
+No variables are declared and an empty string is fed into the program. Functions
+can still be used in order to extract metadata and message contents.
+
+### ` + "`text`" + `
+
+Metadata variables are extracted and the full contents of the message are fed
+into the program.
 
 ### ` + "`json`" + `
 
@@ -121,7 +127,7 @@ type AWKConfig struct {
 func NewAWKConfig() AWKConfig {
 	return AWKConfig{
 		Parts:   []int{},
-		Codec:   "none",
+		Codec:   "text",
 		Program: "BEGIN { x = 0 } { print $0, x; x++ }",
 	}
 }
@@ -158,6 +164,7 @@ func NewAWK(
 	}
 	switch conf.AWK.Codec {
 	case "none":
+	case "text":
 	case "json":
 	default:
 		return nil, fmt.Errorf("unrecognised codec: %v", conf.AWK.Codec)
@@ -384,14 +391,18 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 				config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
 			}
 			config.Stdin = bytes.NewReader([]byte(" "))
-		} else {
+		} else if a.conf.Codec == "text" {
 			config.Stdin = bytes.NewReader(part.Get())
+		} else {
+			config.Stdin = bytes.NewReader([]byte(" "))
 		}
 
-		part.Metadata().Iter(func(k, v string) error {
-			config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
-			return nil
-		})
+		if a.conf.Codec != "none" {
+			part.Metadata().Iter(func(k, v string) error {
+				config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
+				return nil
+			})
+		}
 
 		if _, err := interp.ExecProgram(a.program, config); err != nil {
 			a.mErr.Incr(1)

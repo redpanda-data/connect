@@ -112,7 +112,7 @@ of the batch.
 ``` yaml
 type: awk
 awk:
-  codec: none
+  codec: text
   parts: []
   program: BEGIN { x = 0 } { print $0, x; x++ }
 ```
@@ -124,14 +124,20 @@ is printed by the program) then the original message contents remain unchanged.
 Comes with a wide range of [custom functions](./awk_functions.md). These
 functions can be overridden by functions within the program.
 
-Metadata of a message will be automatically declared as variables, where any
-invalid characters in the name will be replaced with underscores. Variables can
-also automatically be extracted from the input based on a codec:
+Metadata of a message can be automatically declared as variables depending on
+the codec chosen, where any invalid characters in the name will be replaced with
+underscores. Some codecs can also declare variables extracted from the input
+contents:
 
 ### `none`
 
-No variables are extracted. The full contents of the message are fed into the
-program.
+No variables are declared and an empty string is fed into the program. Functions
+can still be used in order to extract metadata and message contents.
+
+### `text`
+
+Metadata variables are extracted and the full contents of the message are fed
+into the program.
 
 ### `json`
 

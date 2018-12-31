@@ -17,7 +17,7 @@ pipeline:
   processors:
   - type: awk
     awk:
-      codec: none
+      codec: text
       parts: []
       program: BEGIN { x = 0 } { print $0, x; x++ }
   threads: 1

@@ -759,6 +759,10 @@ of a batch.
 ``` yaml
 type: sqs
 sqs:
+  backoff:
+    initial_interval: 1s
+    max_elapsed_time: 30s
+    max_interval: 5s
   credentials:
     id: ""
     role: ""
@@ -766,6 +770,7 @@ sqs:
     secret: ""
     token: ""
   endpoint: ""
+  max_retries: 0
   region: eu-west-1
   url: ""
 ```
