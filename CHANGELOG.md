@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 
 - Output type `sqs` now supports batched message sends.
 
-### 0.42.3 - 2018-12-28
+## 0.42.3 - 2018-12-28
 
 ### Added
 
