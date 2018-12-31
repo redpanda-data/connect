@@ -21,30 +21,48 @@
 package writer
 
 import (
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	sess "github.com/Jeffail/benthos/lib/util/aws/session"
+	"github.com/Jeffail/benthos/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/cenkalti/backoff"
+)
+
+//------------------------------------------------------------------------------
+
+const (
+	sqsMaxRecordsCount = 10
 )
 
 //------------------------------------------------------------------------------
 
 // AmazonSQSConfig contains configuration fields for the output AmazonSQS type.
 type AmazonSQSConfig struct {
-	sess.Config `json:",inline" yaml:",inline"`
-	URL         string `json:"url" yaml:"url"`
+	sessionConfig  `json:",inline" yaml:",inline"`
+	URL            string `json:"url" yaml:"url"`
+	retries.Config `json:",inline" yaml:",inline"`
 }
 
 // NewAmazonSQSConfig creates a new Config with default values.
 func NewAmazonSQSConfig() AmazonSQSConfig {
+	rConf := retries.NewConfig()
+	rConf.Backoff.InitialInterval = "1s"
+	rConf.Backoff.MaxInterval = "5s"
+	rConf.Backoff.MaxElapsedTime = "30s"
 	return AmazonSQSConfig{
-		Config: sess.NewConfig(),
+		sessionConfig: sessionConfig{
+			Config: sess.NewConfig(),
+		},
 		URL:    "",
+		Config: rConf,
 	}
 }
 
@@ -55,6 +73,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 type AmazonSQS struct {
 	conf AmazonSQSConfig
 
+	backoff backoff.BackOff
 	session *session.Session
 	sqs     *sqs.SQS
 
@@ -67,12 +86,18 @@ func NewAmazonSQS(
 	conf AmazonSQSConfig,
 	log log.Modular,
 	stats metrics.Type,
-) *AmazonSQS {
-	return &AmazonSQS{
+) (*AmazonSQS, error) {
+	s := &AmazonSQS{
 		conf:  conf,
 		log:   log,
 		stats: stats,
 	}
+
+	var err error
+	if s.backoff, err = conf.Config.Get(); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 // Connect attempts to establish a connection to the target SQS queue.
@@ -99,35 +124,81 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	/*
-		msgs := []*sqs.SendMessageBatchRequestEntry{}
-		for _, part := range message.GetAllBytes(msg) {
-			msgs = append(msgs, &sqs.SendMessageBatchRequestEntry{
-				MessageBody: aws.String(string(part)),
-			})
-		}
-
-		res, err := a.sqs.SendMessageBatch(&sqs.SendMessageBatchInput{
-			QueueUrl: aws.String(a.conf.URL),
-			Entries:  msgs,
-		})
-		if err != nil {
-			return err
-		}
-		if nFailed := len(res.Failed); nFailed > 0 {
-			return fmt.Errorf("%v batch items failed", nFailed)
-		}
-	*/
-
-	return msg.Iter(func(i int, p types.Part) error {
-		if _, err := a.sqs.SendMessage(&sqs.SendMessageInput{
-			QueueUrl:    aws.String(a.conf.URL),
+	entries := []*sqs.SendMessageBatchRequestEntry{}
+	msg.Iter(func(i int, p types.Part) error {
+		entries = append(entries, &sqs.SendMessageBatchRequestEntry{
+			Id:          aws.String(strconv.FormatInt(int64(i), 10)),
 			MessageBody: aws.String(string(p.Get())),
-		}); err != nil {
-			return err
-		}
+		})
 		return nil
 	})
+
+	input := &sqs.SendMessageBatchInput{
+		QueueUrl: aws.String(a.conf.URL),
+		Entries:  entries,
+	}
+
+	// trim input input length to max sqs batch size
+	if len(entries) > sqsMaxRecordsCount {
+		input.Entries, entries = entries[:sqsMaxRecordsCount], entries[sqsMaxRecordsCount:]
+	} else {
+		entries = nil
+	}
+
+	var err error
+	for len(input.Entries) > 0 {
+		wait := a.backoff.NextBackOff()
+
+		var batchResult *sqs.SendMessageBatchOutput
+		if batchResult, err = a.sqs.SendMessageBatch(input); err != nil {
+			a.log.Warnf("SQS error: %v\n", err)
+			// bail if a message is too large or all retry attempts expired
+			if wait == backoff.Stop {
+				return err
+			}
+			continue
+		}
+
+		if unproc := batchResult.Failed; len(unproc) > 0 {
+			input.Entries = []*sqs.SendMessageBatchRequestEntry{}
+			for _, v := range unproc {
+				if *v.SenderFault {
+					err = fmt.Errorf("record failed with code: %v", *v.Code)
+					a.log.Errorf("SQS record error: %v\n", err)
+					return err
+				}
+				input.Entries = append(input.Entries, &sqs.SendMessageBatchRequestEntry{
+					Id:          v.Id,
+					MessageBody: v.Message,
+				})
+			}
+			err = fmt.Errorf("failed to send %v messages", len(unproc))
+		} else {
+			input.Entries = nil
+		}
+
+		if err != nil {
+			if wait == backoff.Stop {
+				break
+			}
+			time.After(wait)
+		}
+
+		// add remaining records to batch
+		l := len(input.Entries)
+		if n := len(entries); n > 0 && l < sqsMaxRecordsCount {
+			if remaining := sqsMaxRecordsCount - l; remaining < n {
+				input.Entries, entries = append(input.Entries, entries[:remaining]...), entries[remaining:]
+			} else {
+				input.Entries, entries = append(input.Entries, entries...), nil
+			}
+		}
+	}
+
+	if err == nil {
+		a.backoff.Reset()
+	}
+	return err
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

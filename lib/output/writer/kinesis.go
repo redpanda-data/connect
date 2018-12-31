@@ -273,7 +273,7 @@ func (a *Kinesis) Write(msg types.Message) error {
 			}
 		}
 	}
-	return nil
+	return err
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

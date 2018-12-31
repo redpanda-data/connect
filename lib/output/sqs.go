@@ -41,8 +41,12 @@ Sends messages to an SQS queue.`,
 
 // NewAmazonSQS creates a new AmazonSQS output type.
 func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	s, err := writer.NewAmazonSQS(conf.SQS, log, stats)
+	if err != nil {
+		return nil, err
+	}
 	return NewWriter(
-		"sqs", writer.NewAmazonSQS(conf.SQS, log, stats), log, stats,
+		"sqs", s, log, stats,
 	)
 }
 

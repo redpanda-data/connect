@@ -5,13 +5,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.42.4 - 2018-12-31
+
+### Changed
+
+- Output type `sqs` now supports batched message sends.
+
 ### 0.42.3 - 2018-12-28
 
 ### Added
 
 - Functions `json_get` and `json_set` added to `awk` processor.
 
-### 0.42.1 - 2018-12-20
+## 0.42.1 - 2018-12-20
 
 ### Added
 

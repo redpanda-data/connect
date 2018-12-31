@@ -203,7 +203,7 @@ func (d *DynamoDB) Write(msg types.Message) error {
 	if err == nil {
 		d.backoff.Reset()
 	}
-	return nil
+	return err
 }
 
 // CloseAsync begins cleaning up resources used by this writer asynchronously.
