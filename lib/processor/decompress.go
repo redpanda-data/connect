@@ -42,11 +42,8 @@ func init() {
 	Constructors[TypeDecompress] = TypeSpec{
 		constructor: NewDecompress,
 		description: `
-Decompresses message parts according to the selected algorithm. Supported
-decompression types are: gzip, zlib, bzip2, flate.
-
-Parts that fail to decompress (invalid format) will be removed from the message.
-If the message results in zero parts it is skipped entirely.`,
+Decompresses messages according to the selected algorithm. Supported
+decompression types are: gzip, zlib, bzip2, flate.`,
 	}
 }
 

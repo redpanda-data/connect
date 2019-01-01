@@ -38,8 +38,8 @@ func init() {
 	Constructors[TypeEncode] = TypeSpec{
 		constructor: NewEncode,
 		description: `
-Encodes parts of a message according to the selected scheme. Supported schemes
-are: base64.`,
+Encodes messages according to the selected scheme. Supported schemes are:
+base64.`,
 	}
 }
 

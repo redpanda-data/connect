@@ -12,13 +12,13 @@ this document. These functions can be overridden by functions in the program.
 
 ## JSON Functions
 
-### `json_get(path)`
+### `json_get(path)`
 
 Attempts to find a JSON value in the input message payload by a dot separated
 path and returns it as a string. This function is always available even when the
 `json` codec is not used.
 
-### `json_set(path, value)`
+### `json_set(path, value)`
 
 Attempts to set a JSON value in the input message payload identified by a dot
 separated path. This function is always available even when the `json` codec is

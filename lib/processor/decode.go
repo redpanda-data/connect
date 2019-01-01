@@ -39,8 +39,8 @@ func init() {
 	Constructors[TypeDecode] = TypeSpec{
 		constructor: NewDecode,
 		description: `
-Decodes parts of a message according to the selected scheme. Supported available
-schemes are: base64.`,
+Decodes messages according to the selected scheme. Supported available schemes
+are: base64.`,
 	}
 }
 

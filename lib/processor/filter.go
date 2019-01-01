@@ -37,13 +37,11 @@ func init() {
 	Constructors[TypeFilter] = TypeSpec{
 		constructor: NewFilter,
 		description: `
-Tests each message against a condition, if the condition fails then the message
-is dropped. You can find a [full list of conditions here](../conditions).
+Tests each message batch against a condition, if the condition fails then the
+batch is dropped. You can find a [full list of conditions here](../conditions).
 
-NOTE: If you are combining messages into batches using the
-` + "[`batch`](#batch)" + ` processor this filter will
-apply to the _whole_ batch. If you instead wish to filter _individual_ parts of
-the batch use the ` + "[`filter_parts`](#filter_parts)" + ` processor.`,
+In order to filter individual messages of a batch use the
+` + "[`filter_parts`](#filter_parts)" + ` processor.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return condition.SanitiseConfig(conf.Filter.Config)
 		},

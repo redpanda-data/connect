@@ -36,7 +36,7 @@ func init() {
 	Constructors[TypeJMESPath] = TypeSpec{
 		constructor: NewJMESPath,
 		description: `
-Parses a message part as a JSON blob and attempts to apply a JMESPath expression
+Parses a message as a JSON document and attempts to apply a JMESPath expression
 to it, replacing the contents of the part with the result. Please refer to the
 [JMESPath website](http://jmespath.org/) for information and tutorials regarding
 the syntax of expressions.
@@ -45,11 +45,10 @@ For example, with the following config:
 
 ` + "``` yaml" + `
 jmespath:
-  parts: [ 0 ]
   query: locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}
 ` + "```" + `
 
-If the initial contents of part 0 were:
+If the initial contents of a message were:
 
 ` + "``` json" + `
 {
@@ -62,7 +61,7 @@ If the initial contents of part 0 were:
 }
 ` + "```" + `
 
-Then the resulting contents of part 0 would be:
+Then the resulting contents would be:
 
 ` + "``` json" + `
 {"Cities": "Bellevue, Olympia, Seattle"}

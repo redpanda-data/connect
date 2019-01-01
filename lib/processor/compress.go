@@ -40,8 +40,8 @@ func init() {
 	Constructors[TypeCompress] = TypeSpec{
 		constructor: NewCompress,
 		description: `
-Compresses parts of a message according to the selected algorithm. Supported
-compression types are: gzip, zlib, flate.
+Compresses messages according to the selected algorithm. Supported compression
+algorithms are: gzip, zlib, flate.
 
 The 'level' field might not apply to all algorithms.`,
 	}

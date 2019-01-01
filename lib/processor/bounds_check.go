@@ -36,9 +36,8 @@ func init() {
 	Constructors[TypeBoundsCheck] = TypeSpec{
 		constructor: NewBoundsCheck,
 		description: `
-Checks whether each message fits within certain boundaries, and drops messages
-that do not. A metric is incremented for each dropped message and debug logs
-are also provided if enabled.`,
+Checks whether each message batch fits within certain boundaries, and drops
+batches that do not.`,
 	}
 }
 

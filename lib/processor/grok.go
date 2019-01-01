@@ -36,10 +36,10 @@ func init() {
 	Constructors[TypeGrok] = TypeSpec{
 		constructor: NewGrok,
 		description: `
-Parses a payload by attempting to apply a list of Grok patterns, if a pattern
-returns at least one value a resulting structured object is created according to
-the chosen output format and will replace the payload. Currently only json is a
-valid output format.
+Parses message payloads by attempting to apply a list of Grok patterns, if a
+pattern returns at least one value a resulting structured object is created
+according to the chosen output format and will replace the payload. Currently
+only json is a valid output format.
 
 This processor respects type hints in the grok patterns, therefore with the
 pattern ` + "`%{WORD:first},%{INT:second:int}`" + ` and a payload of ` + "`foo,1`" + `

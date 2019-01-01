@@ -95,14 +95,15 @@ archive:
   path: ${!count:files}-${!timestamp_unix_nano}.txt
 ```
 
-Archives all the parts of a message into a single part according to the selected
-archive type. Supported archive types are: tar, zip, binary, lines.
+Archives all the messages of a batch into a single message according to the
+selected archive format. Supported archive formats are: tar, zip, binary, lines.
 
-Some archive types (such as tar, zip) treat each archive item (message part) as a
-file with a path. Since message parts only contain raw data a unique path must
-be generated for each part. This can be done by using function interpolations on
-the 'path' field as described [here](../config_interpolation.md#functions). For
-types that aren't file based (such as binary) the file field is ignored.
+Some archive formats (such as tar, zip) treat each archive item (message part)
+as a file with a path. Since message parts only contain raw data a unique path
+must be generated for each part. This can be done by using function
+interpolations on the 'path' field as described
+[here](../config_interpolation.md#functions). For types that aren't file based
+(such as binary) the file field is ignored.
 
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.
@@ -239,9 +240,8 @@ bounds_check:
   min_parts: 1
 ```
 
-Checks whether each message fits within certain boundaries, and drops messages
-that do not. A metric is incremented for each dropped message and debug logs
-are also provided if enabled.
+Checks whether each message batch fits within certain boundaries, and drops
+batches that do not.
 
 ## `catch`
 
@@ -285,8 +285,8 @@ compress:
   parts: []
 ```
 
-Compresses parts of a message according to the selected algorithm. Supported
-compression types are: gzip, zlib, flate.
+Compresses messages according to the selected algorithm. Supported compression
+algorithms are: gzip, zlib, flate.
 
 The 'level' field might not apply to all algorithms.
 
@@ -306,10 +306,13 @@ conditional:
 ```
 
 Conditional is a processor that has a list of child `processors`,
-`else_processors`, and a condition. For each message, if the condition
-passes, the child `processors` will be applied, otherwise the
-`else_processors` are applied. This processor is useful for applying
-processors based on the content type of the message.
+`else_processors`, and a condition. For each message batch, if the
+condition passes, the child `processors` will be applied, otherwise
+the `else_processors` are applied. This processor is useful for
+applying processors based on the content of message batches.
+
+In order to conditionally process each message of a batch individually use this
+processor with the [`process_batch`](#process_batch) processor.
 
 You can find a [full list of conditions here](../conditions).
 
@@ -322,8 +325,8 @@ decode:
   scheme: base64
 ```
 
-Decodes parts of a message according to the selected scheme. Supported available
-schemes are: base64.
+Decodes messages according to the selected scheme. Supported available schemes
+are: base64.
 
 ## `decompress`
 
@@ -334,11 +337,8 @@ decompress:
   parts: []
 ```
 
-Decompresses message parts according to the selected algorithm. Supported
+Decompresses messages according to the selected algorithm. Supported
 decompression types are: gzip, zlib, bzip2, flate.
-
-Parts that fail to decompress (invalid format) will be removed from the message.
-If the message results in zero parts it is skipped entirely.
 
 ## `dedupe`
 
@@ -353,15 +353,19 @@ dedupe:
   - 0
 ```
 
-Dedupes messages by caching selected (and optionally hashed) message parts,
-dropping messages that are already cached. The hash type can be chosen from:
-none or xxhash (more will come soon).
+Dedupes message batches by caching selected (and optionally hashed) messages,
+dropping batches that are already cached. The hash type can be chosen from:
+none or xxhash.
+
+This processor acts across an entire batch, in order to deduplicate individual
+messages within a batch use this processor with the
+[`process_batch`](#process_batch) processor.
 
 Optionally, the `key` field can be populated in order to hash on a
-function interpolated string rather than the full contents of message parts.
-This allows you to deduplicate based on dynamic fields within a message, such as
-its metadata, JSON fields, etc. A full list of interpolation functions can be
-found [here](../config_interpolation.md#functions).
+function interpolated string rather than the full contents of messages. This
+allows you to deduplicate based on dynamic fields within a message, such as its
+metadata, JSON fields, etc. A full list of interpolation functions can be found
+[here](../config_interpolation.md#functions).
 
 For example, the following config would deduplicate based on the concatenated
 values of the metadata field `kafka_key` and the value of the JSON
@@ -402,8 +406,8 @@ encode:
   scheme: base64
 ```
 
-Encodes parts of a message according to the selected scheme. Supported schemes
-are: base64.
+Encodes messages according to the selected scheme. Supported schemes are:
+base64.
 
 ## `filter`
 
@@ -417,13 +421,11 @@ filter:
     part: 0
 ```
 
-Tests each message against a condition, if the condition fails then the message
-is dropped. You can find a [full list of conditions here](../conditions).
+Tests each message batch against a condition, if the condition fails then the
+batch is dropped. You can find a [full list of conditions here](../conditions).
 
-NOTE: If you are combining messages into batches using the
-[`batch`](#batch) processor this filter will
-apply to the _whole_ batch. If you instead wish to filter _individual_ parts of
-the batch use the [`filter_parts`](#filter_parts) processor.
+In order to filter individual messages of a batch use the
+[`filter_parts`](#filter_parts) processor.
 
 ## `filter_parts`
 
@@ -437,11 +439,11 @@ filter_parts:
     part: 0
 ```
 
-Tests each individual part of a message batch against a condition, if the
-condition fails then the part is dropped. If the resulting batch is empty it
-will be dropped. You can find a [full list of conditions here](../conditions),
-in this case each condition will be applied to a part as if it were a single
-part message.
+Tests each individual message of a batch against a condition, if the condition
+fails then the message is dropped. If the resulting batch is empty it will be
+dropped. You can find a [full list of conditions here](../conditions), in this
+case each condition will be applied to a message as if it were a single message
+batch.
 
 This processor is useful if you are combining messages into batches using the
 [`batch`](#batch) processor and wish to remove specific parts.
@@ -459,10 +461,10 @@ grok:
   use_default_patterns: true
 ```
 
-Parses a payload by attempting to apply a list of Grok patterns, if a pattern
-returns at least one value a resulting structured object is created according to
-the chosen output format and will replace the payload. Currently only json is a
-valid output format.
+Parses message payloads by attempting to apply a list of Grok patterns, if a
+pattern returns at least one value a resulting structured object is created
+according to the chosen output format and will replace the payload. Currently
+only json is a valid output format.
 
 This processor respects type hints in the grok patterns, therefore with the
 pattern `%{WORD:first},%{INT:second:int}` and a payload of `foo,1`
@@ -591,8 +593,8 @@ hash:
   parts: []
 ```
 
-Hashes parts of a message according to the selected algorithm. Supported
-algorithms are: sha256, sha512, xxhash64.
+Hashes messages according to the selected algorithm. Supported algorithms are:
+sha256, sha512, xxhash64.
 
 This processor is mostly useful when combined with the
 [`process_field`](#process_field) processor as it allows you to hash a
@@ -619,12 +621,15 @@ hash_sample:
   retain_min: 0
 ```
 
-Retains a percentage of messages deterministically by hashing selected parts of
-the message and checking the hash against a valid range, dropping all others.
+Retains a percentage of message batches deterministically by hashing selected
+messages and checking the hash against a valid range, dropping all others.
 
 For example, setting `retain_min` to `0.0` and `remain_max` to `50.0`
 results in dropping half of the input stream, and setting `retain_min`
 to `50.0` and `retain_max` to `100.1` will drop the _other_ half.
+
+In order to sample individual messages of a batch use this processor with the
+[`process_batch`](#process_batch) processor.
 
 ## `http`
 
@@ -707,14 +712,14 @@ insert_part:
   index: -1
 ```
 
-Insert a new message part at an index. If the specified index is greater than
-the length of the existing parts it will be appended to the end.
+Insert a new message into a batch at an index. If the specified index is greater
+than the length of the existing batch it will be appended to the end.
 
-The index can be negative, and if so the part will be inserted from the end
-counting backwards starting from -1. E.g. if index = -1 then the new part will
-become the last part of the message, if index = -2 then the new part will be
-inserted before the last element, and so on. If the negative index is greater
-than the length of the existing parts it will be inserted at the beginning.
+The index can be negative, and if so the message will be inserted from the end
+counting backwards starting from -1. E.g. if index = -1 then the new message
+will become the last of the batch, if index = -2 then the new message will be
+inserted before the last message, and so on. If the negative index is greater
+than the length of the existing batch it will be inserted at the beginning.
 
 This processor will interpolate functions within the 'content' field, you can
 find a list of functions [here](../config_interpolation.md#functions).
@@ -728,7 +733,7 @@ jmespath:
   query: ""
 ```
 
-Parses a message part as a JSON blob and attempts to apply a JMESPath expression
+Parses a message as a JSON document and attempts to apply a JMESPath expression
 to it, replacing the contents of the part with the result. Please refer to the
 [JMESPath website](http://jmespath.org/) for information and tutorials regarding
 the syntax of expressions.
@@ -737,11 +742,10 @@ For example, with the following config:
 
 ``` yaml
 jmespath:
-  parts: [ 0 ]
   query: locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}
 ```
 
-If the initial contents of part 0 were:
+If the initial contents of a message were:
 
 ``` json
 {
@@ -754,7 +758,7 @@ If the initial contents of part 0 were:
 }
 ```
 
-Then the resulting contents of part 0 would be:
+Then the resulting contents would be:
 
 ``` json
 {"Cities": "Bellevue, Olympia, Seattle"}
@@ -775,8 +779,8 @@ json:
   value: ""
 ```
 
-Parses a message part as a JSON document, performs a mutation on the data, and
-then overwrites the previous contents with the new value.
+Parses messages as a JSON document, performs a mutation on the data, and then
+overwrites the previous contents with the new value.
 
 If the path is empty or "." the root of the data will be targeted.
 
@@ -932,11 +936,11 @@ merge_json:
   retain_parts: false
 ```
 
-Parses selected message parts as JSON documents, attempts to merge them into one
-single JSON document and then writes it to a new message part at the end of the
-message. Merged parts are removed unless `retain_parts` is set to
-true. The new merged message part will contain the metadata of the first part to
-be merged.
+Parses selected messages of a batch as JSON documents, attempts to merge them
+into one single JSON document and then writes it to a new message at the end of
+the batch. Merged parts are removed unless `retain_parts` is set to
+true. The new merged message will contain the metadata of the first part to be
+merged.
 
 ## `metadata`
 
@@ -1248,9 +1252,9 @@ sample:
   seed: 0
 ```
 
-Retains a randomly sampled percentage of messages (0 to 100) and drops all
-others. The random seed is static in order to sample deterministically, but can
-be set in config to allow parallel samples that are unique.
+Retains a randomly sampled percentage of message batches (0 to 100) and drops
+all others. The random seed is static in order to sample deterministically, but
+can be set in config to allow parallel samples that are unique.
 
 ## `select_parts`
 
@@ -1261,20 +1265,20 @@ select_parts:
   - 0
 ```
 
-Cherry pick a set of parts from messages by their index. Indexes larger than the
-number of parts are simply ignored.
+Cherry pick a set of messages from a batch by their index. Indexes larger than
+the number of messages are simply ignored.
 
-The selected parts are added to the new message in the same order as the
+The selected parts are added to the new message batch in the same order as the
 selection array. E.g. with 'parts' set to [ 2, 0, 1 ] and the message parts
 [ '0', '1', '2', '3' ], the output will be [ '2', '0', '1' ].
 
-If none of the selected parts exist in the input message (resulting in an empty
-output message) the message is dropped entirely.
+If none of the selected parts exist in the input batch (resulting in an empty
+output message) the batch is dropped entirely.
 
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if index = -1 then the selected part
-will be the last part of the message, if index = -2 then the part before the
-last element with be selected, and so on.
+Message indexes can be negative, and if so the part will be selected from the
+end counting backwards starting from -1. E.g. if index = -1 then the selected
+part will be the last part of the message, if index = -2 then the part before
+the last element with be selected, and so on.
 
 ## `sleep`
 
@@ -1457,17 +1461,15 @@ unarchive:
   parts: []
 ```
 
-Unarchives parts of a message according to the selected archive type into
-multiple parts. Supported archive types are: tar, zip, binary, lines.
+Unarchives messages according to the selected archive format into multiple
+messages within a batch. Supported archive formats are: tar, zip, binary, lines.
 
-When a part is unarchived it is split into more message parts that replace the
-original part. If you wish to split the archive into one message per file then
-follow this with the 'split' processor.
+When a message is unarchived the new messages replaces the original message in
+the batch. Messages that are selected but fail to unarchive (invalid format)
+will remain unchanged in the message batch but will be flagged as having failed.
 
-Parts that are selected but fail to unarchive (invalid format) will be removed
-from the message. If the message results in zero parts it is skipped entirely.
-
-For the unarchivers that contain file information (tar, zip), a metadata field
-is added to each part called `archive_filename` with the extracted filename.
+For the unarchive formats that contain file information (tar, zip), a metadata
+field is added to each message called `archive_filename` with the
+extracted filename.
 
 [0]: ../examples/README.md

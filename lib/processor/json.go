@@ -40,8 +40,8 @@ func init() {
 	Constructors[TypeJSON] = TypeSpec{
 		constructor: NewJSON,
 		description: `
-Parses a message part as a JSON document, performs a mutation on the data, and
-then overwrites the previous contents with the new value.
+Parses messages as a JSON document, performs a mutation on the data, and then
+overwrites the previous contents with the new value.
 
 If the path is empty or "." the root of the data will be targeted.
 

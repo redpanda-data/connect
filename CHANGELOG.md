@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.0.0 - 2019-01-01
+
 ### Changed
 
 - Processor `awk` codecs changed.

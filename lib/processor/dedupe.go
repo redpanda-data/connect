@@ -41,15 +41,19 @@ func init() {
 	Constructors[TypeDedupe] = TypeSpec{
 		constructor: NewDedupe,
 		description: `
-Dedupes messages by caching selected (and optionally hashed) message parts,
-dropping messages that are already cached. The hash type can be chosen from:
-none or xxhash (more will come soon).
+Dedupes message batches by caching selected (and optionally hashed) messages,
+dropping batches that are already cached. The hash type can be chosen from:
+none or xxhash.
+
+This processor acts across an entire batch, in order to deduplicate individual
+messages within a batch use this processor with the
+` + "[`process_batch`](#process_batch)" + ` processor.
 
 Optionally, the ` + "`key`" + ` field can be populated in order to hash on a
-function interpolated string rather than the full contents of message parts.
-This allows you to deduplicate based on dynamic fields within a message, such as
-its metadata, JSON fields, etc. A full list of interpolation functions can be
-found [here](../config_interpolation.md#functions).
+function interpolated string rather than the full contents of messages. This
+allows you to deduplicate based on dynamic fields within a message, such as its
+metadata, JSON fields, etc. A full list of interpolation functions can be found
+[here](../config_interpolation.md#functions).
 
 For example, the following config would deduplicate based on the concatenated
 values of the metadata field ` + "`kafka_key`" + ` and the value of the JSON
