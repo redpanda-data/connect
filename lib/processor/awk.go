@@ -59,17 +59,17 @@ the codec chosen, where any invalid characters in the name will be replaced with
 underscores. Some codecs can also declare variables extracted from the input
 contents:
 
-### ` + "`none`" + `
+` + "`none`" + `
 
 No variables are declared and an empty string is fed into the program. Functions
 can still be used in order to extract metadata and message contents.
 
-### ` + "`text`" + `
+` + "`text`" + `
 
 Metadata variables are extracted and the full contents of the message are fed
 into the program.
 
-### ` + "`json`" + `
+` + "`json`" + `
 
 No contents are fed into the program. Instead, variables are extracted from the
 message by walking the flattened JSON structure. Each value is converted into a
