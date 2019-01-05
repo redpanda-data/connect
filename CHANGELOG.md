@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.0.1 - 2019-01-05
+
+### Added
+
+- Function `print_log` added to `awk` processor.
+
+### Fixed
+
+- The `awk` processor function `json_get` no longer returns string values with
+  quotes.
+
 ## 1.0.0 - 2019-01-01
 
 ### Changed

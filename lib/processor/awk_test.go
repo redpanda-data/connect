@@ -182,6 +182,13 @@ func TestAWK(t *testing.T) {
 			output:  `not json content`,
 		},
 		{
+			name:    "json get 4",
+			codec:   "none",
+			program: `{ print json_get("obj.foo") }`,
+			input:   `{"obj":{"foo":"hello"}}`,
+			output:  `hello`,
+		},
+		{
 			name:    "json set 1",
 			codec:   "none",
 			program: `{ json_set("obj.foo", "hello world") }`,

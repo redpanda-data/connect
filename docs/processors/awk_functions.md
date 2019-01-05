@@ -9,6 +9,7 @@ this document. These functions can be overridden by functions in the program.
 1. [JSON Functions](#json-functions)
 2. [Metadata Functions](#metadata-functions)
 3. [Date Functions](#date-functions)
+4. [Logging Functions](#logging-functions)
 
 ## JSON Functions
 
@@ -114,5 +115,12 @@ displayed if it were the value.
 
 The format is optional, and if omitted RFC3339 (`2006-01-02T15:04:05Z07:00`)
 will be used.
+
+## Logging Functions
+
+### `print_log(message, level)`
+
+Prints a Benthos log message at a particular log level. The log level is
+optional, and if omitted the level `INFO` will be used.
 
 [awk-processor]: ./README.md#awk

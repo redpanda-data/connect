@@ -173,6 +173,26 @@ func NewAWK(
 	for k, v := range awkFunctionsMap {
 		functionOverrides[k] = v
 	}
+	functionOverrides["print_log"] = func(value, level string) {
+		switch level {
+		default:
+			fallthrough
+		case "":
+			fallthrough
+		case "INFO":
+			log.Infoln(value)
+		case "TRACE":
+			log.Traceln(value)
+		case "DEBUG":
+			log.Debugln(value)
+		case "WARN":
+			log.Warnln(value)
+		case "ERROR":
+			log.Errorln(value)
+		case "FATAL":
+			log.Fatalln(value)
+		}
+	}
 	a := &AWK{
 		parts:   conf.AWK.Parts,
 		program: program,
@@ -292,6 +312,9 @@ var awkFunctionsMap = map[string]interface{}{
 		}
 		return string(bytes)
 	},
+	"print_log": func(value, level string) {
+		// Do nothing, this is a placeholder for compilation.
+	},
 }
 
 //------------------------------------------------------------------------------
@@ -356,7 +379,10 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			if gTarget.Data() == nil {
 				return "null", nil
 			}
-			return gPart.Path(path).String(), nil
+			if str, isString := gTarget.Data().(string); isString {
+				return str, nil
+			}
+			return gTarget.String(), nil
 		}
 		a.functions["json_set"] = func(path, v string) (int, error) {
 			var gPart *gabs.Container
