@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.0.2 - 2019-01-07
+
+### Fixed
+
+- The `subprocess` processor now attempts to read all flushed stderr output from
+  a process when it fails.
+
 ## 1.0.1 - 2019-01-05
 
 ### Added

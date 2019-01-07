@@ -278,6 +278,19 @@ func (s *subprocWrapper) Send(line []byte) ([]byte, error) {
 	select {
 	case outBytes, open = <-outChan:
 	case errBytes, open = <-errChan:
+		tout := time.After(time.Second)
+		var errBuf bytes.Buffer
+		errBuf.Write(errBytes)
+	flushErrLoop:
+		for open {
+			select {
+			case errBytes, open = <-errChan:
+				errBuf.Write(errBytes)
+			case <-tout:
+				break flushErrLoop
+			}
+		}
+		errBytes = errBuf.Bytes()
 	}
 
 	if !open {
