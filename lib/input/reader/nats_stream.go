@@ -140,6 +140,7 @@ func (n *NATSStream) Connect() error {
 		}
 		close(newMsgChan)
 		newMsgChan = nil
+		n.disconnect()
 	}
 
 	natsConn, err := stan.Connect(

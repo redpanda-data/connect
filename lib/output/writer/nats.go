@@ -101,7 +101,15 @@ func (n *NATS) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		return conn.Publish(n.conf.Subject, p.Get())
+		err := conn.Publish(n.conf.Subject, p.Get())
+		if err == nats.ErrConnectionClosed {
+			conn.Close()
+			n.connMut.Lock()
+			n.natsConn = nil
+			n.connMut.Unlock()
+			return types.ErrNotConnected
+		}
+		return err
 	})
 }
 

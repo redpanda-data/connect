@@ -13,7 +13,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- The `nats_steam` input now actively attempt to recover stale connections.
+- The `nats_steam` input and output now actively attempt to recover stale
+  connections.
 
 ## 1.0.2 - 2019-01-07
 
