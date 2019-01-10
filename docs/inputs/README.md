@@ -793,6 +793,8 @@ s3:
     secret: ""
     token: ""
   delete_objects: false
+  download_manager:
+    enabled: true
   endpoint: ""
   prefix: ""
   region: eu-west-1
@@ -809,6 +811,9 @@ SQS queue has been configured then only object keys read from the queue will be
 downloaded. Otherwise, the entire list of objects found when this input is
 created will be downloaded. Note that the prefix configuration is only used when
 downloading objects without SQS configured.
+
+If the download manager is enabled this can help speed up file downloads but
+results in file metadata not being copied.
 
 If your bucket is configured to send events directly to an SQS queue then you
 need to set the `sqs_body_path` field to where the object key is found
@@ -837,6 +842,7 @@ This input adds the following metadata fields to each message:
 
 ```
 - s3_key
+- All existing file metadata (only when NOT using download manager)
 ```
 
 You can access these metadata fields using

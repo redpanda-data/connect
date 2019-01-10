@@ -128,11 +128,18 @@ func (a *AmazonS3) Write(msg types.Message) error {
 	defer cancel()
 
 	return msg.Iter(func(i int, p types.Part) error {
+		metadata := map[string]*string{}
+		p.Metadata().Iter(func(k, v string) error {
+			metadata[k] = aws.String(v)
+			return nil
+		})
+
 		if _, err := a.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 			Bucket:      &a.conf.Bucket,
 			Key:         aws.String(a.path.Get(message.Lock(msg, i))),
 			Body:        bytes.NewReader(p.Get()),
 			ContentType: &a.conf.ContentType,
+			Metadata:    metadata,
 		}); err != nil {
 			return err
 		}

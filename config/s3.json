@@ -17,6 +17,9 @@
 				"token": ""
 			},
 			"delete_objects": false,
+			"download_manager": {
+				"enabled": true
+			},
 			"endpoint": "",
 			"prefix": "",
 			"region": "eu-west-1",

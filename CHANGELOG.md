@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Input `s3` can now toggle the use of a download manager, switching off now
+  downloads metadata from the target file.
+- Output `s3` now writes metadata to the uploaded file.
+
 ## 1.0.2 - 2019-01-07
 
 ### Fixed
