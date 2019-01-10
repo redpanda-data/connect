@@ -96,6 +96,7 @@ func NewNATSStream(conf NATSStreamConfig, log log.Modular, stats metrics.Type) (
 		msgChan:       make(chan *stan.Msg),
 		interruptChan: make(chan struct{}),
 	}
+	close(n.msgChan)
 	n.urls = strings.Join(conf.URLs, ",")
 
 	return &n, nil
@@ -125,21 +126,33 @@ func (n *NATSStream) Connect() error {
 		return nil
 	}
 
+	newMsgChan := make(chan *stan.Msg)
+	handler := func(m *stan.Msg) {
+		select {
+		case newMsgChan <- m:
+		case <-n.interruptChan:
+			n.disconnect()
+		}
+	}
+	dcHandler := func() {
+		if newMsgChan == nil {
+			return
+		}
+		close(newMsgChan)
+		newMsgChan = nil
+	}
+
 	natsConn, err := stan.Connect(
 		n.conf.ClusterID,
 		n.conf.ClientID,
 		stan.NatsURL(n.urls),
+		stan.SetConnectionLostHandler(func(_ stan.Conn, reason error) {
+			n.log.Errorf("Connection lost: %v", reason)
+			dcHandler()
+		}),
 	)
 	if err != nil {
 		return err
-	}
-
-	handler := func(m *stan.Msg) {
-		select {
-		case n.msgChan <- m:
-		case <-n.interruptChan:
-			n.disconnect()
-		}
 	}
 
 	options := []stan.SubscriptionOption{
@@ -179,6 +192,7 @@ func (n *NATSStream) Connect() error {
 
 	n.natsConn = natsConn
 	n.natsSub = natsSub
+	n.msgChan = newMsgChan
 	n.log.Infof("Receiving NATS Streaming messages from subject: %v\n", n.conf.Subject)
 	return nil
 }
@@ -186,8 +200,12 @@ func (n *NATSStream) Connect() error {
 // Read attempts to read a new message from the NATS streaming server.
 func (n *NATSStream) Read() (types.Message, error) {
 	var msg *stan.Msg
+	var open bool
 	select {
-	case msg = <-n.msgChan:
+	case msg, open = <-n.msgChan:
+		if !open {
+			return nil, types.ErrNotConnected
+		}
 		n.unAckMsgs = append(n.unAckMsgs, msg)
 	case <-n.interruptChan:
 		n.unAckMsgs = nil
