@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
 
 - The `nats_steam` input and output now actively attempt to recover stale
   connections.
+- The `awk` processor prints errors and flags failure when the program exits
+  with a non-zero status.
 
 ## 1.0.2 - 2019-01-07
 

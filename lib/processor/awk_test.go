@@ -51,6 +51,9 @@ func TestAWKValidation(t *testing.T) {
 	if exp, act := "this is bad json", string(message.GetAllBytes(msgs[0])[0]); exp != act {
 		t.Errorf("Wrong output from bad json: %v != %v", act, exp)
 	}
+	if !HasFailed(msgs[0].Get(0)) {
+		t.Error("Expected fail flag on message part")
+	}
 
 	conf.AWK.Parts = []int{5}
 
@@ -73,6 +76,33 @@ func TestAWKValidation(t *testing.T) {
 	conf.AWK.Codec = "not valid"
 	if _, err = NewAWK(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error from bad codec")
+	}
+}
+
+func TestAWKBadExitStatus(t *testing.T) {
+	conf := NewConfig()
+	conf.AWK.Parts = []int{0}
+	conf.AWK.Codec = "none"
+	conf.AWK.Program = "{ exit 1; print foo }"
+
+	a, err := NewAWK(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgIn := message.New([][]byte{[]byte("this will fail")})
+	msgs, res := a.ProcessMessage(msgIn)
+	if len(msgs) != 1 {
+		t.Fatal("No passthrough for bad input data")
+	}
+	if res != nil {
+		t.Fatal("Non-nil result")
+	}
+	if exp, act := "this will fail", string(message.GetAllBytes(msgs[0])[0]); exp != act {
+		t.Errorf("Wrong output from exit status 1: %v != %v", act, exp)
+	}
+	if !HasFailed(msgs[0].Get(0)) {
+		t.Error("Expected fail flag on message part")
 	}
 }
 
