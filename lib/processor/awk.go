@@ -430,9 +430,17 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			})
 		}
 
-		if _, err := interp.ExecProgram(a.program, config); err != nil {
+		if exitStatus, err := interp.ExecProgram(a.program, config); err != nil {
 			a.mErr.Incr(1)
 			a.log.Errorf("Non-fatal execution error: %v\n", err)
+			FlagFail(part)
+			return
+		} else if exitStatus != 0 {
+			a.mErr.Incr(1)
+			a.log.Errorf(
+				"Non-fatal execution error: %v\n",
+				fmt.Errorf("awk interpreter returned non-zero exit code: %d", exitStatus),
+			)
 			FlagFail(part)
 			return
 		}
