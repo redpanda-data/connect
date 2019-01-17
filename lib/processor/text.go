@@ -55,6 +55,10 @@ Appends text to the end of the payload.
 
 Escapes text so that it is safe to place within the query section of a URL.
 
+#### ` + "`unescape_url_query`" + `
+
+Unescapes text that has been url escaped.
+
 #### ` + "`find_regexp`" + `
 
 Extract the matching section of the argument regular expression in a message.
@@ -138,6 +142,16 @@ func newTextEscapeURLQueryOperator() textOperator {
 	}
 }
 
+func newTextUnescapeURLQueryOperator() textOperator {
+	return func(body []byte, value []byte) ([]byte, error) {
+		s, err := url.QueryUnescape(string(body))
+		if err != nil {
+			return nil, err
+		}
+		return []byte(s), nil
+	}
+}
+
 func newTextPrependOperator() textOperator {
 	return func(body []byte, value []byte) ([]byte, error) {
 		if len(value) == 0 {
@@ -217,6 +231,8 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 		return newTextAppendOperator(), nil
 	case "escape_url_query":
 		return newTextEscapeURLQueryOperator(), nil
+	case "unescape_url_query":
+		return newTextUnescapeURLQueryOperator(), nil
 	case "find_regexp":
 		return newTextFindRegexpOperator(arg)
 	case "prepend":

@@ -5,11 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.1.0 - 2019-01-17
+
 ### Added
 
 - Input `s3` can now toggle the use of a download manager, switching off now
   downloads metadata from the target file.
 - Output `s3` now writes metadata to the uploaded file.
+- Operator `unescape_url_query` added to `text` processor.
 
 ### Fixed
 

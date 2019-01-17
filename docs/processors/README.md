@@ -1353,6 +1353,10 @@ Appends text to the end of the payload.
 
 Escapes text so that it is safe to place within the query section of a URL.
 
+#### `unescape_url_query`
+
+Unescapes text that has been url escaped.
+
 #### `find_regexp`
 
 Extract the matching section of the argument regular expression in a message.

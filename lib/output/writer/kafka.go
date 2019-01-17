@@ -103,9 +103,8 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 	}
 
 	k := Kafka{
-		log:              log,
-		stats:            stats,
-		mDroppedMaxBytes: stats.GetCounter("send.dropped.max_msg_bytes"),
+		log:   log,
+		stats: stats,
 
 		conf:        conf,
 		key:         text.NewInterpolatedBytes([]byte(conf.Key)),
@@ -232,11 +231,6 @@ func (k *Kafka) Write(msg types.Message) error {
 
 	msgs := []*sarama.ProducerMessage{}
 	msg.Iter(func(i int, p types.Part) error {
-		if len(p.Get()) > k.conf.MaxMsgBytes {
-			k.mDroppedMaxBytes.Incr(1)
-			return nil
-		}
-
 		lMsg := message.Lock(msg, i)
 
 		key := k.key.Get(lMsg)
