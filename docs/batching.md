@@ -19,8 +19,16 @@ messages and message batches are interchangable within Benthos.
 
 ## Creating Batches
 
-There are [processors][processors] within Benthos that can expand and contract
-batches, these are the [`batch`][batch] and [`split`][split] processors.
+Most input types have some way of creating batches of messages from their input.
+For example, the [`kafka`][kafka] and [`kafka_balanced`][kafka_balanced] inputs
+have the field `max_batch_count`, which specifies the maximum count of
+prefetched messages each batch should contain (defaults at 1). These input
+specific methods are usually the most efficient and should therefore be
+preferred.
+
+Alternatively, there are also [processors][processors] within Benthos that can
+expand and contract batches, these are the [`batch`][batch] and [`split`][split]
+processors.
 
 The `batch` processor continously reads messages until a target size has been
 reached, then the batch continues through the pipeline.
@@ -98,3 +106,5 @@ continue as their own batch.
 [archive]: ./processors/README.md#archive
 [unarchive]: ./processors/README.md#unarchive
 [process_batch]: ./processors/README.md#process_batch
+[kafka]: ./inputs/README.md#kafka
+[kafka_balanced]: ./inputs/README.md#kafka_balanced

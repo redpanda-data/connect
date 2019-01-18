@@ -28,6 +28,8 @@ Documentation
   message batching works within Benthos.
 - [Error Handling](./error_handling.md) explains how you can handle errors from
   processor steps in order to recover or reroute the data.
+- [Workflows](./workflows.md) explains how Benthos can be configured to easily
+  support complex processor flows using automatic DAG resolution.
 - [Making Configuration Easier](./configuration.md) explains some of the tools
   provided by Benthos that help make writing configs easier.
 - [Config Interpolation](./config_interpolation.md) explains how to incorporate

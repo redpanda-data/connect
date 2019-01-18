@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Fixed break down metric indexes for input and output brokers.
+
 ## 1.1.0 - 2019-01-17
 
 ### Added
