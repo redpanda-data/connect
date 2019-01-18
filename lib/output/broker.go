@@ -184,7 +184,7 @@ func NewBroker(
 	var err error
 	for j := 0; j < conf.Broker.Copies; j++ {
 		for i, oConf := range outputConfs {
-			ns := fmt.Sprintf("broker.outputs.%v", (j*len(conf.Broker.Outputs))+i)
+			ns := fmt.Sprintf("broker.outputs.%v", i)
 			outputs[j*len(outputConfs)+i], err = New(
 				oConf, mgr,
 				log.NewModule("."+ns),

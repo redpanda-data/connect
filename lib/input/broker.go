@@ -273,7 +273,7 @@ func NewBroker(
 	var err error
 	for j := 0; j < conf.Broker.Copies; j++ {
 		for i, iConf := range conf.Broker.Inputs {
-			ns := fmt.Sprintf("broker.inputs.%v", (j*len(conf.Broker.Inputs))+i)
+			ns := fmt.Sprintf("broker.inputs.%v", i)
 			inputs[len(conf.Broker.Inputs)*j+i], err = New(
 				iConf, mgr,
 				log.NewModule("."+ns),
