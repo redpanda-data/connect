@@ -34,6 +34,7 @@ func TestEnvVarDetection(t *testing.T) {
 		"foo $BENTHOS_TEST_FOO} baz $but_not_this}": false,
 		"foo ${BENTHOS_TEST_FOO baz ${or_this":      false,
 		"nothing $ here boss {}":                    false,
+		"foo ${BENTHOS_TEST_FOO:barthisdoesntend":   false,
 	}
 
 	for in, exp := range tests {
@@ -58,9 +59,11 @@ func TestEnvSwapping(t *testing.T) {
 		"foo ${BENTHOS_TEST_FOO:bar} http://bar.com baz":     "foo bar http://bar.com baz",
 		"foo ${BENTHOS_TEST_FOO} http://bar.com baz":         "foo  http://bar.com baz",
 		"foo ${BENTHOS_TEST_FOO:wat@nuh.com} baz":            "foo wat@nuh.com baz",
-		"foo ${} baz":                         "foo ${} baz",
-		"foo ${BENTHOS_TEST_FOO:foo,bar} baz": "foo foo,bar baz",
-		"foo ${BENTHOS_TEST_FOO} baz":         "foo  baz",
+		"foo ${} baz":                                                  "foo ${} baz",
+		"foo ${BENTHOS_TEST_FOO:foo,bar} baz":                          "foo foo,bar baz",
+		"foo ${BENTHOS_TEST_FOO} baz":                                  "foo  baz",
+		"foo ${BENTHOS_TEST_FOO:${!metadata:foo}} baz":                 "foo ${!metadata:foo} baz",
+		"foo ${BENTHOS_TEST_FOO:${!metadata:foo}${!metadata:bar}} baz": "foo ${!metadata:foo}${!metadata:bar} baz",
 	}
 
 	for in, exp := range tests {
