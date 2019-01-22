@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.1.3 - 2019-01-22
+
+### Fixed
+
+- The `archive` processor now interpolates the `path` per message of the batch.
+
 ## 1.1.2 - 2019-01-21
 
 ### Fixed

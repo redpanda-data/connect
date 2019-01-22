@@ -77,7 +77,7 @@ func NewArchiveConfig() ArchiveConfig {
 
 type archiveFunc func(hFunc headerFunc, msg types.Message) (types.Part, error)
 
-type headerFunc func(body types.Part) os.FileInfo
+type headerFunc func(index int, body types.Part) os.FileInfo
 
 func tarArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 	buf := &bytes.Buffer{}
@@ -85,7 +85,7 @@ func tarArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 
 	// Iterate through the parts of the message.
 	err := msg.Iter(func(i int, part types.Part) error {
-		hdr, err := tar.FileInfoHeader(hFunc(part), "")
+		hdr, err := tar.FileInfoHeader(hFunc(i, part), "")
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func zipArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 
 	// Iterate through the parts of the message.
 	err := msg.Iter(func(i int, part types.Part) error {
-		h, err := zip.FileInfoHeader(hFunc(part))
+		h, err := zip.FileInfoHeader(hFunc(i, part))
 		if err != nil {
 			return err
 		}
@@ -241,11 +241,11 @@ func (f fakeInfo) Sys() interface{} {
 	return nil
 }
 
-func (d *Archive) createHeaderFunc(msg types.Message) func(types.Part) os.FileInfo {
-	return func(body types.Part) os.FileInfo {
+func (d *Archive) createHeaderFunc(msg types.Message) func(int, types.Part) os.FileInfo {
+	return func(index int, body types.Part) os.FileInfo {
 		path := d.conf.Path
 		if d.interpolatePath {
-			path = string(text.ReplaceFunctionVariables(msg, d.pathBytes))
+			path = string(text.ReplaceFunctionVariables(message.Lock(msg, index), d.pathBytes))
 		}
 		return fakeInfo{
 			name: path,

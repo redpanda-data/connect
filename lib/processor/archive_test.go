@@ -24,6 +24,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"reflect"
@@ -32,6 +33,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestArchiveBadAlgo(t *testing.T) {
@@ -49,6 +51,7 @@ func TestArchiveBadAlgo(t *testing.T) {
 func TestArchiveTar(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "tar"
+	conf.Archive.Path = "foo-${!metadata:path}"
 
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 
@@ -65,7 +68,12 @@ func TestArchiveTar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(exp))
+	msg := message.New(exp)
+	msg.Iter(func(i int, p types.Part) error {
+		p.Metadata().Set("path", fmt.Sprintf("bar%v", i))
+		return nil
+	})
+	msgs, res := proc.ProcessMessage(msg)
 	if len(msgs) != 1 {
 		t.Error("Archive failed")
 	} else if res != nil {
@@ -79,8 +87,10 @@ func TestArchiveTar(t *testing.T) {
 
 	buf := bytes.NewBuffer(msgs[0].Get(0).Get())
 	tr := tar.NewReader(buf)
+	i := 0
 	for {
-		_, err = tr.Next()
+		var hdr *tar.Header
+		hdr, err = tr.Next()
 		if err == io.EOF {
 			// end of tar archive
 			break
@@ -95,6 +105,10 @@ func TestArchiveTar(t *testing.T) {
 		}
 
 		act = append(act, newPartBuf.Bytes())
+		if exp, act := fmt.Sprintf("foo-bar%v", i), hdr.FileInfo().Name(); exp != act {
+			t.Errorf("Wrong filename: %v != %v", act, exp)
+		}
+		i++
 	}
 
 	if !reflect.DeepEqual(exp, act) {
