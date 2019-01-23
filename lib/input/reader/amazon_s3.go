@@ -308,7 +308,11 @@ messageLoop:
 		QueueUrl: aws.String(a.conf.SQSURL),
 		Entries:  dudMessageHandles,
 	})
-	return types.ErrTimeout
+
+	if len(a.targetKeys) == 0 {
+		return types.ErrTimeout
+	}
+	return nil
 }
 
 func (a *AmazonS3) popTargetKey() {
@@ -324,7 +328,7 @@ func (a *AmazonS3) popTargetKey() {
 	a.readKeys = append(a.readKeys, target)
 }
 
-// readFromMgr attempts to read a new message from the target S3 bucket.
+// Read attempts to read a new message from the target S3 bucket.
 func (a *AmazonS3) Read() (types.Message, error) {
 	return a.readMethod()
 }
@@ -433,12 +437,11 @@ func (a *AmazonS3) readFromMgr() (types.Message, error) {
 // Acknowledge confirms whether or not our unacknowledged messages have been
 // successfully propagated or not.
 func (a *AmazonS3) Acknowledge(err error) error {
-	var serr error
 	if err == nil {
 		deleteHandles := []*sqs.DeleteMessageBatchRequestEntry{}
 		for _, key := range a.readKeys {
 			if a.conf.DeleteObjects {
-				if _, serr = a.s3.DeleteObject(&s3.DeleteObjectInput{
+				if _, serr := a.s3.DeleteObject(&s3.DeleteObjectInput{
 					Bucket: aws.String(a.conf.Bucket),
 					Key:    aws.String(key.s3Key),
 				}); serr != nil {
@@ -449,17 +452,24 @@ func (a *AmazonS3) Acknowledge(err error) error {
 				deleteHandles = append(deleteHandles, key.sqsHandle)
 			}
 		}
-		if len(deleteHandles) > 0 {
-			var res *sqs.DeleteMessageBatchOutput
-			if res, serr = a.sqs.DeleteMessageBatch(&sqs.DeleteMessageBatchInput{
+		for len(deleteHandles) > 0 {
+			input := sqs.DeleteMessageBatchInput{
 				QueueUrl: aws.String(a.conf.SQSURL),
 				Entries:  deleteHandles,
-			}); serr != nil {
-				a.log.Errorf("Failed to delete consumed SQS message: %v\n", serr)
+			}
+
+			// trim input entries to max size
+			if len(deleteHandles) > 10 {
+				input.Entries, deleteHandles = deleteHandles[:10], deleteHandles[10:]
 			} else {
-				serr = fmt.Errorf("failed to delete %v consumed SQS messages", len(res.Failed))
-				for _, f := range res.Failed {
-					a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", f.Id, f.Code)
+				deleteHandles = nil
+			}
+
+			if res, serr := a.sqs.DeleteMessageBatch(&input); serr != nil {
+				a.log.Errorf("Failed to delete consumed SQS messages: %v\n", serr)
+			} else {
+				for _, fail := range res.Failed {
+					a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", fail.Id, fail.Code)
 				}
 			}
 		}
@@ -468,7 +478,7 @@ func (a *AmazonS3) Acknowledge(err error) error {
 		a.targetKeys = append(a.readKeys, a.targetKeys...)
 		a.readKeys = nil
 	}
-	return serr
+	return nil
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

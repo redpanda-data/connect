@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.1.4 - 2019-01-23
+
+### Fixed
+
+- The `s3` input now caps and iterates batched SQS deletes.
+
 ## 1.1.3 - 2019-01-22
 
 ### Fixed
