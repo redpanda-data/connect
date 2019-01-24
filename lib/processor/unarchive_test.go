@@ -215,6 +215,36 @@ fourth
 	}
 }
 
+func TestUnarchiveJSONArray(t *testing.T) {
+	conf := NewConfig()
+	conf.Unarchive.Format = "json_array"
+
+	exp := [][]byte{
+		[]byte(`{"foo":"bar"}`),
+		[]byte(`5`),
+		[]byte(`"testing 123"`),
+		[]byte(`["nested","array"]`),
+		[]byte(`true`),
+	}
+
+	proc, err := NewUnarchive(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New([][]byte{
+		[]byte(`[{"foo":"bar"},5,"testing 123",["nested","array"],true]`),
+	}))
+	if len(msgs) != 1 {
+		t.Error("Unarchive failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
 func TestUnarchiveBinary(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "binary"

@@ -43,7 +43,8 @@ func init() {
 		constructor: NewArchive,
 		description: `
 Archives all the messages of a batch into a single message according to the
-selected archive format. Supported archive formats are: tar, zip, binary, lines.
+selected archive format. Supported archive formats are:
+` + "`tar`, `zip`, `binary`, `lines` and `json_array`." + `
 
 Some archive formats (such as tar, zip) treat each archive item (message part)
 as a file with a path. Since message parts only contain raw data a unique path
@@ -51,6 +52,9 @@ must be generated for each part. This can be done by using function
 interpolations on the 'path' field as described
 [here](../config_interpolation.md#functions). For types that aren't file based
 (such as binary) the file field is ignored.
+
+The ` + "`json_array`" + ` format attempts to JSON parse each message and append
+the result to an array, which becomes the contents of the resulting message.
 
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.`,
@@ -151,6 +155,31 @@ func linesArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 		SetMetadata(msg.Get(0).Metadata().Copy()), nil
 }
 
+func jsonArrayArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+	var array []interface{}
+
+	// Iterate through the parts of the message.
+	err := msg.Iter(func(i int, part types.Part) error {
+		doc, jerr := part.JSON()
+		if jerr != nil {
+			return fmt.Errorf("failed to parse message as JSON: %v", jerr)
+		}
+		array = append(array, doc)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	newPart := message.NewPart(nil)
+	if err = newPart.SetJSON(array); err != nil {
+		return nil, fmt.Errorf("failed to marshal archived array into a JSON document: %v", err)
+	}
+	newPart.SetMetadata(msg.Get(0).Metadata().Copy())
+
+	return newPart, nil
+}
+
 func strToArchiver(str string) (archiveFunc, error) {
 	switch str {
 	case "tar":
@@ -161,6 +190,8 @@ func strToArchiver(str string) (archiveFunc, error) {
 		return binaryArchive, nil
 	case "lines":
 		return linesArchive, nil
+	case "json_array":
+		return jsonArrayArchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }

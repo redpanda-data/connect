@@ -210,6 +210,39 @@ fourth
 	}
 }
 
+func TestArchiveJSONArray(t *testing.T) {
+	conf := NewConfig()
+	conf.Archive.Format = "json_array"
+
+	proc, err := NewArchive(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New([][]byte{
+		[]byte(`{"foo":"bar"}`),
+		[]byte(`5`),
+		[]byte(`"testing 123"`),
+		[]byte(`["nested","array"]`),
+		[]byte(`true`),
+	}))
+	if len(msgs) != 1 {
+		t.Error("Archive failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if msgs[0].Len() != 1 {
+		t.Fatal("More parts than expected")
+	}
+
+	exp := [][]byte{[]byte(
+		`[{"foo":"bar"},5,"testing 123",["nested","array"],true]`,
+	)}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
 func TestArchiveBinary(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "binary"

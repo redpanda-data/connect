@@ -41,11 +41,15 @@ func init() {
 		constructor: NewUnarchive,
 		description: `
 Unarchives messages according to the selected archive format into multiple
-messages within a batch. Supported archive formats are: tar, zip, binary, lines.
+messages within a batch. Supported archive formats are:
+` + "`tar`, `zip`, `binary`, `lines` and `json_array`." + `
 
 When a message is unarchived the new messages replaces the original message in
 the batch. Messages that are selected but fail to unarchive (invalid format)
 will remain unchanged in the message batch but will be flagged as having failed.
+
+The ` + "`json_array`" + ` format attempts to parse the message as a JSON array
+and for each element of the array expands its contents into a new message.
 
 For the unarchive formats that contain file information (tar, zip), a metadata
 field is added to each message called ` + "`archive_filename`" + ` with the
@@ -155,6 +159,28 @@ func linesUnarchive(part types.Part) ([]types.Part, error) {
 	return parts, nil
 }
 
+func jsonArrayUnarchive(part types.Part) ([]types.Part, error) {
+	jDoc, err := part.JSON()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse message into JSON array: %v", err)
+	}
+
+	jArray, ok := jDoc.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("failed to parse message into JSON array: invalid type '%T'", jDoc)
+	}
+
+	parts := make([]types.Part, len(jArray))
+	for i, ele := range jArray {
+		newPart := message.NewPart(nil).SetMetadata(part.Metadata().Copy())
+		if err = newPart.SetJSON(ele); err != nil {
+			return nil, fmt.Errorf("failed to marshal element into new message: %v", err)
+		}
+		parts[i] = newPart
+	}
+	return parts, nil
+}
+
 func strToUnarchiver(str string) (unarchiveFunc, error) {
 	switch str {
 	case "tar":
@@ -165,6 +191,8 @@ func strToUnarchiver(str string) (unarchiveFunc, error) {
 		return binaryUnarchive, nil
 	case "lines":
 		return linesUnarchive, nil
+	case "json_array":
+		return jsonArrayUnarchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }

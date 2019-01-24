@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `json_array` format added to the `archive` and `unarchive` processors.
+
 ## 1.1.4 - 2019-01-23
 
 ### Fixed
