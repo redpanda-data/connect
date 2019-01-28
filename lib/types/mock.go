@@ -48,6 +48,11 @@ func (f DudMgr) GetRateLimit(name string) (RateLimit, error) {
 	return nil, ErrRateLimitNotFound
 }
 
+// GetPlugin always returns ErrPluginNotFound.
+func (f DudMgr) GetPlugin(name string) (interface{}, error) {
+	return nil, ErrPluginNotFound
+}
+
 // GetPipe attempts to find a service wide message producer by its name.
 func (f DudMgr) GetPipe(name string) (<-chan Transaction, error) {
 	return nil, ErrPipeNotFound

@@ -5,9 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.2.0 - 2019-01-28
+
 ### Added
 
 - New `json_array` format added to the `archive` and `unarchive` processors.
+- Preliminary support added to the resource manager API to allow arbitrary
+  shared resource plugins.
 
 ## 1.1.4 - 2019-01-23
 

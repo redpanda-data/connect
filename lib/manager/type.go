@@ -31,6 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/ratelimit"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/config"
 )
 
 //------------------------------------------------------------------------------
@@ -47,6 +48,7 @@ type Config struct {
 	Caches     map[string]cache.Config     `json:"caches" yaml:"caches"`
 	Conditions map[string]condition.Config `json:"conditions" yaml:"conditions"`
 	RateLimits map[string]ratelimit.Config `json:"rate_limits" yaml:"rate_limits"`
+	Plugins    map[string]PluginConfig     `json:"plugins,omitempty" yaml:"plugins,omitempty"`
 }
 
 // NewConfig returns a Config with default values.
@@ -55,6 +57,7 @@ func NewConfig() Config {
 		Caches:     map[string]cache.Config{},
 		Conditions: map[string]condition.Config{},
 		RateLimits: map[string]ratelimit.Config{},
+		Plugins:    map[string]PluginConfig{},
 	}
 }
 
@@ -99,11 +102,29 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 		}
 	}
 
-	return map[string]interface{}{
+	plugins := map[string]interface{}{}
+	for k, v := range conf.Plugins {
+		if spec, exists := pluginSpecs[v.Type]; exists {
+			if spec.confSanitiser != nil {
+				outputMap := config.Sanitised{}
+				outputMap["type"] = v.Type
+				outputMap["plugin"] = spec.confSanitiser(v.Plugin)
+				plugins[k] = outputMap
+			} else {
+				plugins[k] = v
+			}
+		}
+	}
+
+	m := map[string]interface{}{
 		"caches":      caches,
 		"conditions":  conditions,
 		"rate_limits": rateLimits,
-	}, nil
+	}
+	if len(plugins) > 0 {
+		m["plugins"] = plugins
+	}
+	return m, nil
 }
 
 //------------------------------------------------------------------------------
@@ -117,6 +138,7 @@ type Type struct {
 	caches     map[string]types.Cache
 	conditions map[string]types.Condition
 	rateLimits map[string]types.RateLimit
+	plugins    map[string]interface{}
 
 	pipes    map[string]<-chan types.Transaction
 	pipeLock sync.RWMutex
@@ -135,6 +157,7 @@ func New(
 		caches:     map[string]types.Cache{},
 		conditions: map[string]types.Condition{},
 		rateLimits: map[string]types.RateLimit{},
+		plugins:    map[string]interface{}{},
 		pipes:      map[string]<-chan types.Transaction{},
 	}
 
@@ -180,6 +203,21 @@ func New(
 			)
 		}
 		t.rateLimits[k] = newRL
+	}
+
+	for k, conf := range conf.Plugins {
+		spec, exists := pluginSpecs[conf.Type]
+		if !exists {
+			return nil, fmt.Errorf("unrecognised plugin type '%v'", conf.Type)
+		}
+		newP, err := spec.constructor(conf.Plugin, t, log.NewModule(".resource.plugin."+k), metrics.Namespaced(stats, "resource.plugin."+k))
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to create plugin resource '%v' of type '%v': %v",
+				k, conf.Type, err,
+			)
+		}
+		t.plugins[k] = newP
 	}
 
 	// Note: Caches, conditions and rate limits are considered READONLY from
@@ -245,6 +283,14 @@ func (t *Type) GetRateLimit(name string) (types.RateLimit, error) {
 		return rl, nil
 	}
 	return nil, types.ErrRateLimitNotFound
+}
+
+// GetPlugin attempts to find a service wide resource plugin by its name.
+func (t *Type) GetPlugin(name string) (interface{}, error) {
+	if pl, exists := t.plugins[name]; exists {
+		return pl, nil
+	}
+	return nil, types.ErrPluginNotFound
 }
 
 //------------------------------------------------------------------------------

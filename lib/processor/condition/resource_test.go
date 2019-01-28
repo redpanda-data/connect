@@ -49,6 +49,9 @@ func (f *fakeMgr) GetCondition(name string) (types.Condition, error) {
 func (f *fakeMgr) GetRateLimit(name string) (types.RateLimit, error) {
 	return nil, types.ErrRateLimitNotFound
 }
+func (f *fakeMgr) GetPlugin(name string) (interface{}, error) {
+	return nil, types.ErrPluginNotFound
+}
 func (f *fakeMgr) GetPipe(name string) (<-chan types.Transaction, error) {
 	return nil, types.ErrPipeNotFound
 }

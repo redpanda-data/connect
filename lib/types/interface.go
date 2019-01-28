@@ -104,6 +104,9 @@ type Manager interface {
 	// GetRateLimit attempts to find a service wide rate limit by its name.
 	GetRateLimit(name string) (RateLimit, error)
 
+	// GetPlugin attempts to find a service wide resource plugin by its name.
+	// GetPlugin(name string) (interface{}, error) TODO: Add this in V2
+
 	// GetPipe attempts to find a service wide transaction chan by its name.
 	GetPipe(name string) (<-chan Transaction, error)
 
