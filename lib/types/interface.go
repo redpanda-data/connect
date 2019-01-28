@@ -49,6 +49,9 @@ type Cache interface {
 
 	// Delete attempts to remove a key. Returns an error if a failure occurs.
 	Delete(key string) error
+
+	// TODO: Add this in V2
+	// Closable
 }
 
 //------------------------------------------------------------------------------
@@ -61,6 +64,9 @@ type RateLimit interface {
 	// resource may be accessed) or a reasonable length of time to wait before
 	// requesting again.
 	Access() (time.Duration, error)
+
+	// TODO: Add this in V2
+	// Closable
 }
 
 //------------------------------------------------------------------------------

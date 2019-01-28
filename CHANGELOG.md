@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.2.1 - 2019-01-28
+
+### Added
+
+- Resources (including plugins) that implement `Closable` are now shutdown
+  cleanly.
+
 ## 1.2.0 - 2019-01-28
 
 ### Added

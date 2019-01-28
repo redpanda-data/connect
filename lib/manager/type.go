@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/cache"
 	"github.com/Jeffail/benthos/lib/log"
@@ -291,6 +292,70 @@ func (t *Type) GetPlugin(name string) (interface{}, error) {
 		return pl, nil
 	}
 	return nil, types.ErrPluginNotFound
+}
+
+//------------------------------------------------------------------------------
+
+// CloseAsync triggers the shut down of all resource types that implement the
+// lifetime interface types.Closable.
+// TODO: Simplify this in V2.
+func (t *Type) CloseAsync() {
+	for _, c := range t.caches {
+		if closer, ok := c.(types.Closable); ok {
+			closer.CloseAsync()
+		}
+	}
+	for _, c := range t.conditions {
+		if closer, ok := c.(types.Closable); ok {
+			closer.CloseAsync()
+		}
+	}
+	for _, c := range t.plugins {
+		if closer, ok := c.(types.Closable); ok {
+			closer.CloseAsync()
+		}
+	}
+	for _, c := range t.rateLimits {
+		if closer, ok := c.(types.Closable); ok {
+			closer.CloseAsync()
+		}
+	}
+}
+
+// WaitForClose blocks until either all closable resource types are shut down or
+// a timeout occurs.
+// TODO: Simplify this in V2.
+func (t *Type) WaitForClose(timeout time.Duration) error {
+	timesOut := time.Now().Add(timeout)
+	for k, c := range t.caches {
+		if closer, ok := c.(types.Closable); ok {
+			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
+				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+			}
+		}
+	}
+	for k, c := range t.conditions {
+		if closer, ok := c.(types.Closable); ok {
+			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
+				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+			}
+		}
+	}
+	for k, c := range t.rateLimits {
+		if closer, ok := c.(types.Closable); ok {
+			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
+				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+			}
+		}
+	}
+	for k, c := range t.plugins {
+		if closer, ok := c.(types.Closable); ok {
+			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
+				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+			}
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------

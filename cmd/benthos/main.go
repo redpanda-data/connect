@@ -482,7 +482,17 @@ func main() {
 			os.Exit(1)
 		}()
 
+		timesOut := time.Now().Add(exitTimeout)
 		if err := dataStream.Stop(exitTimeout); err != nil {
+			os.Exit(1)
+		}
+		manager.CloseAsync()
+		if err := manager.WaitForClose(time.Until(timesOut)); err != nil {
+			logger.Warnf(
+				"Service failed to close cleanly within allocated time: %v."+
+					" Exiting forcefully and dumping stack trace to stderr.\n", err,
+			)
+			pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 			os.Exit(1)
 		}
 	}()
