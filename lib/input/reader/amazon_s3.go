@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"strconv"
 	"strings"
 	"time"
 
@@ -333,6 +334,17 @@ func (a *AmazonS3) Read() (types.Message, error) {
 	return a.readMethod()
 }
 
+func addS3Metadata(p types.Part, obj *s3.GetObjectOutput) {
+	meta := p.Metadata()
+	if obj.LastModified != nil {
+		meta.Set("s3_last_modified", obj.LastModified.Format(time.RFC3339))
+		meta.Set("s3_last_modified_unix", strconv.FormatInt(obj.LastModified.Unix(), 10))
+	}
+	if obj.ContentType != nil {
+		meta.Set("s3_content_type", *obj.ContentType)
+	}
+}
+
 // read attempts to read a new message from the target S3 bucket.
 func (a *AmazonS3) read() (types.Message, error) {
 	if a.session == nil {
@@ -366,7 +378,7 @@ func (a *AmazonS3) read() (types.Message, error) {
 		} else {
 			a.targetKeys[0] = target
 		}
-		return nil, fmt.Errorf("failed to download file, %v", err)
+		return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
 	}
 
 	a.popTargetKey()
@@ -375,7 +387,7 @@ func (a *AmazonS3) read() (types.Message, error) {
 
 	bytes, err := ioutil.ReadAll(obj.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download file, %v", err)
+		return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
 	}
 	msg := message.New([][]byte{bytes})
 	meta := msg.Get(0).Metadata()
@@ -383,6 +395,8 @@ func (a *AmazonS3) read() (types.Message, error) {
 		meta.Set(k, *v)
 	}
 	meta.Set("s3_key", target.s3Key)
+	meta.Set("s3_bucket", a.conf.Bucket)
+	addS3Metadata(msg.Get(0), obj)
 
 	return msg, nil
 }
@@ -423,13 +437,15 @@ func (a *AmazonS3) readFromMgr() (types.Message, error) {
 		} else {
 			a.targetKeys[0] = target
 		}
-		return nil, fmt.Errorf("failed to download file, %v", err)
+		return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
 	}
 
 	a.popTargetKey()
 
 	msg := message.New([][]byte{buff.Bytes()})
-	msg.Get(0).Metadata().Set("s3_key", target.s3Key)
+	msg.Get(0).Metadata().
+		Set("s3_key", target.s3Key).
+		Set("s3_bucket", a.conf.Bucket)
 
 	return msg, nil
 }

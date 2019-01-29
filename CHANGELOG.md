@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Improved error logging for `s3` input download failures.
+- More metadata fields copied to messages from the `s3` input.
+
 ## 1.2.1 - 2019-01-28
 
 ### Added
