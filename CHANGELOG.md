@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Improved error logging for `s3` input download failures.
 - More metadata fields copied to messages from the `s3` input.
+- Field `push_url` added to the `prometheus` metrics target.
 
 ## 1.2.1 - 2019-01-28
 

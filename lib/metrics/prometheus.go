@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/client_golang/prometheus/push"
 )
 
 //------------------------------------------------------------------------------
@@ -35,7 +36,11 @@ import (
 func init() {
 	constructors[TypePrometheus] = typeSpec{
 		constructor: NewPrometheus,
-		description: `Host endpoints for Prometheus scraping.`,
+		description: `
+Host endpoints for Prometheus scraping. The field ` + "`push_url`" + ` is
+optional and when set will trigger a push of metrics once Benthos shuts down.
+This is useful for when Benthos instances are short lived. Do not include the
+"/metrics/jobs/..." path to the push URL.`,
 	}
 }
 
@@ -43,11 +48,14 @@ func init() {
 
 // PrometheusConfig is config for the Prometheus metrics type.
 type PrometheusConfig struct {
+	PushURL string `json:"push_url" yaml:"push_url"`
 }
 
 // NewPrometheusConfig creates an PrometheusConfig struct with default values.
 func NewPrometheusConfig() PrometheusConfig {
-	return PrometheusConfig{}
+	return PrometheusConfig{
+		PushURL: "",
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -143,7 +151,7 @@ func (p *PromGaugeVec) With(labelValues ...string) StatGauge {
 // Prometheus is a stats object with capability to hold internal stats as a JSON
 // endpoint.
 type Prometheus struct {
-	config Config
+	config PrometheusConfig
 	prefix string
 
 	counters map[string]*prometheus.CounterVec
@@ -156,7 +164,7 @@ type Prometheus struct {
 // NewPrometheus creates and returns a new Prometheus object.
 func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 	p := &Prometheus{
-		config:   config,
+		config:   config.Prometheus,
 		prefix:   toPromName(config.Prefix),
 		counters: map[string]*prometheus.CounterVec{},
 		gauges:   map[string]*prometheus.GaugeVec{},
@@ -344,6 +352,9 @@ func (p *Prometheus) SetLogger(log log.Modular) {
 // Close stops the Prometheus object from aggregating metrics and cleans up
 // resources.
 func (p *Prometheus) Close() error {
+	if len(p.config.PushURL) > 0 {
+		return push.New(p.config.PushURL, "benthos_push").Gatherer(prometheus.DefaultGatherer).Push()
+	}
 	return nil
 }
 

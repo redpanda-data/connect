@@ -540,6 +540,7 @@ LOGGER_PREFIX        = benthos
 ```
 METRICS_TYPE                = http_server
 METRICS_PREFIX              = benthos
+METRICS_PROMETHEUS_PUSH_URL
 METRICS_STATSD_ADDRESS      = localhost:4040
 METRICS_STATSD_FLUSH_PERIOD = 100ms
 METRICS_STATSD_NETWORK      = udp

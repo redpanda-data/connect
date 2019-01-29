@@ -942,7 +942,8 @@ metrics:
   type: http_server
   prefix: benthos
   http_server: {}
-  prometheus: {}
+  prometheus:
+    push_url: ""
   statsd:
     address: localhost:4040
     flush_period: 100ms

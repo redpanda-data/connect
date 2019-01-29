@@ -629,6 +629,8 @@ logger:
   prefix: ${LOGGER_PREFIX:benthos}
 metrics:
   prefix: ${METRICS_PREFIX:benthos}
+  prometheus:
+    push_url: ${METRICS_PROMETHEUS_PUSH_URL}
   statsd:
     address: ${METRICS_STATSD_ADDRESS:localhost:4040}
     flush_period: ${METRICS_STATSD_FLUSH_PERIOD:100ms}

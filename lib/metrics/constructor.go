@@ -63,11 +63,11 @@ const (
 // Config is the all encompassing configuration struct for all metric output
 // types.
 type Config struct {
-	Type       string       `json:"type" yaml:"type"`
-	Prefix     string       `json:"prefix" yaml:"prefix"`
-	HTTP       struct{}     `json:"http_server" yaml:"http_server"`
-	Prometheus struct{}     `json:"prometheus" yaml:"prometheus"`
-	Statsd     StatsdConfig `json:"statsd" yaml:"statsd"`
+	Type       string           `json:"type" yaml:"type"`
+	Prefix     string           `json:"prefix" yaml:"prefix"`
+	HTTP       struct{}         `json:"http_server" yaml:"http_server"`
+	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
+	Statsd     StatsdConfig     `json:"statsd" yaml:"statsd"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -76,7 +76,7 @@ func NewConfig() Config {
 		Type:       "http_server",
 		Prefix:     "benthos",
 		HTTP:       struct{}{},
-		Prometheus: struct{}{},
+		Prometheus: NewPrometheusConfig(),
 		Statsd:     NewStatsdConfig(),
 	}
 }

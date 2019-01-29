@@ -375,7 +375,11 @@ func main() {
 		<-time.After(time.Second)
 		stats, err = metrics.New(config.Metrics, metrics.OptSetLogger(logger))
 	}
-	defer stats.Close()
+	defer func() {
+		if sCloseErr := stats.Close(); sCloseErr != nil {
+			logger.Errorf("Failed to cleanly close metrics aggregator: %v\n", sCloseErr)
+		}
+	}()
 
 	// Create HTTP API with a sanitised service config.
 	sanConf, err := config.Sanitised()
