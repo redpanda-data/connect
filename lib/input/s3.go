@@ -72,12 +72,12 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 - s3_key
 - s3_bucket
-- s3_last_modified_unix \*
-- s3_last_modified (RFC3339) \*
-- s3_content_type \*
-- All user defined metadata \*
+- s3_last_modified_unix*
+- s3_last_modified (RFC3339)*
+- s3_content_type*
+- All user defined metadata*
 
-\* Only added when NOT using download manager
+* Only added when NOT using download manager
 ` + "```" + `
 
 You can access these metadata fields using

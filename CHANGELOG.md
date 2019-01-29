@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.3.0 - 2019-01-29
+
 ### Added
 
 - Improved error logging for `s3` input download failures.
