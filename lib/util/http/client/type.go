@@ -234,7 +234,8 @@ func OptSetManager(mgr types.Manager) func(*Type) {
 	}
 }
 
-// OptSetHTTPTransport sets the HTTP Transport to use.
+// OptSetHTTPTransport sets the HTTP Transport to use. NOTE: This setting will
+// override any configured TLS options.
 func OptSetHTTPTransport(transport *http.Transport) func(*Type) {
 	return func(t *Type) {
 		t.client.Transport = transport
