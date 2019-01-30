@@ -234,6 +234,13 @@ func OptSetManager(mgr types.Manager) func(*Type) {
 	}
 }
 
+// OptSetHTTPTransport sets the HTTP Transport to use.
+func OptSetHTTPTransport(transport *http.Transport) func(*Type) {
+	return func(t *Type) {
+		t.client.Transport = transport
+	}
+}
+
 //------------------------------------------------------------------------------
 
 func (h *Type) incrCode(code int) {
