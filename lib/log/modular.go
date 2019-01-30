@@ -215,17 +215,19 @@ func (l *Logger) NewModule(prefix string) Modular {
 func (l *Logger) writeFormatted(message string, level string, other ...interface{}) {
 	if l.config.JSONFormat {
 		if l.config.AddTimeStamp {
-			fmt.Fprintf(l.stream, fmt.Sprintf(
+			fmt.Fprintf(
+				l.stream,
 				"{\"@timestamp\":\"%v\",%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
-				time.Now().Format(time.RFC3339), l.extraFields, level,
-				l.config.Prefix, strconv.QuoteToASCII(message),
-			), other...)
+				time.Now().Format(time.RFC3339), l.extraFields, level, l.config.Prefix,
+				strconv.QuoteToASCII(fmt.Sprintf(message, other...)),
+			)
 		} else {
-			fmt.Fprintf(l.stream, fmt.Sprintf(
+			fmt.Fprintf(
+				l.stream,
 				"{%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
 				l.extraFields, level, l.config.Prefix,
-				strconv.QuoteToASCII(message),
-			), other...)
+				strconv.QuoteToASCII(fmt.Sprintf(message, other...)),
+			)
 		}
 	} else {
 		if l.config.AddTimeStamp {
