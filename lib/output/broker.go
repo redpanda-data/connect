@@ -181,33 +181,47 @@ func NewBroker(
 
 	outputs := make([]types.Output, lOutputs)
 
+	_, isThreaded := map[string]struct{}{
+		"round_robin": {},
+		"greedy":      {},
+	}[conf.Broker.Pattern]
+
 	var err error
 	for j := 0; j < conf.Broker.Copies; j++ {
 		for i, oConf := range outputConfs {
 			ns := fmt.Sprintf("broker.outputs.%v", i)
+			var pipes []types.PipelineConstructorFunc
+			if isThreaded {
+				pipes = pipelines
+			}
 			outputs[j*len(outputConfs)+i], err = New(
 				oConf, mgr,
 				log.NewModule("."+ns),
 				metrics.Combine(stats, metrics.Namespaced(stats, ns)),
-				pipelines...)
+				pipes...)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
+	var b Type
 	switch conf.Broker.Pattern {
 	case "fan_out":
-		return broker.NewFanOut(outputs, log, stats)
+		b, err = broker.NewFanOut(outputs, log, stats)
 	case "round_robin":
-		return broker.NewRoundRobin(outputs, stats)
+		b, err = broker.NewRoundRobin(outputs, stats)
 	case "greedy":
-		return broker.NewGreedy(outputs)
+		b, err = broker.NewGreedy(outputs)
 	case "try":
-		return broker.NewTry(outputs, stats)
+		b, err = broker.NewTry(outputs, stats)
+	default:
+		return nil, fmt.Errorf("broker pattern was not recognised: %v", conf.Broker.Pattern)
 	}
-
-	return nil, fmt.Errorf("broker pattern was not recognised: %v", conf.Broker.Pattern)
+	if err == nil && !isThreaded {
+		b, err = WrapWithPipelines(b, pipelines...)
+	}
+	return b, err
 }
 
 //------------------------------------------------------------------------------

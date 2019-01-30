@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Output broker types now correctly allocate nested processors for `fan_out` and
+  `try` patterns.
+
 ## 1.3.0 - 2019-01-29
 
 ### Added
