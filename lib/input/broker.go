@@ -178,63 +178,38 @@ func (b *brokerInputList) UnmarshalYAML(unmarshal func(interface{}) error) error
 // formats that we do not know at this stage, therefore we use the more hacky
 // method as performance is not an issue at this stage.
 func parseInputConfsWithDefaults(rawInputs []interface{}) ([]Config, error) {
-	type confAlias Config
-
 	inputConfs := []Config{}
 
 	// NOTE: Use yaml here as it supports more types than JSON
 	// (map[interface{}]interface{}).
 	for i, boxedConfig := range rawInputs {
-		newConfs := []confAlias{confAlias(NewConfig())}
-		if i > 0 {
-			// If the type of this output is 'ditto' we want to start with a
-			// duplicate of the previous config.
-			newConfsFromDitto := func(label string) error {
-				// Remove the vanilla config.
-				newConfs = []confAlias{}
+		newConfigs := make([]Config, 1)
+		label := broker.GetGenericType(boxedConfig)
 
-				// Check if there is a ditto multiplier.
-				if len(label) > 5 && label[5] == '_' {
-					if label[6:] == "0" {
-						// This is a special case where we are expressing that
-						// we want to end up with zero duplicates.
-						return nil
-					}
+		if i > 0 && strings.Index(label, "ditto") == 0 {
+			broker.RemoveGenericType(boxedConfig)
+
+			// Check if there is a ditto multiplier.
+			if len(label) > 5 && label[5] == '_' {
+				if label[6:] == "0" {
+					// This is a special case where we are expressing that
+					// we want to end up with zero duplicates.
+					newConfigs = nil
+				} else {
 					n, err := strconv.Atoi(label[6:])
 					if err != nil {
-						return fmt.Errorf("failed to parse ditto multiplier: %v", err)
+						return nil, fmt.Errorf("failed to parse ditto multiplier: %v", err)
 					}
-					for j := 0; j < n; j++ {
-						newConfs = append(newConfs, confAlias(inputConfs[i-1]))
-					}
-				} else {
-					// Otherwise just add a single dupe of the previous config.
-					newConfs = append(newConfs, confAlias(inputConfs[i-1]))
+					newConfigs = make([]Config, n)
 				}
-				return nil
+			} else {
+				newConfigs = make([]Config, 1)
 			}
-			switch unboxed := boxedConfig.(type) {
-			case map[string]interface{}:
-				if t, ok := unboxed["type"].(string); ok && strings.Index(t, "ditto") == 0 {
-					if err := newConfsFromDitto(t); err != nil {
-						return nil, err
-					}
-					if len(newConfs) > 0 {
-						unboxed["type"] = newConfs[0].Type
-					}
-				}
-			case map[interface{}]interface{}:
-				if t, ok := unboxed["type"].(string); ok && strings.Index(t, "ditto") == 0 {
-					if err := newConfsFromDitto(t); err != nil {
-						return nil, err
-					}
-					if len(newConfs) > 0 {
-						unboxed["type"] = newConfs[0].Type
-					}
-				}
-			}
+
+			broker.ComplementGenericConfig(boxedConfig, rawInputs[i-1])
 		}
-		for _, conf := range newConfs {
+
+		for _, conf := range newConfigs {
 			rawBytes, err := yaml.Marshal(boxedConfig)
 			if err != nil {
 				return nil, err
@@ -242,7 +217,7 @@ func parseInputConfsWithDefaults(rawInputs []interface{}) ([]Config, error) {
 			if err = yaml.Unmarshal(rawBytes, &conf); err != nil {
 				return nil, err
 			}
-			inputConfs = append(inputConfs, Config(conf))
+			inputConfs = append(inputConfs, conf)
 		}
 	}
 

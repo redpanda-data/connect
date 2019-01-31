@@ -5,12 +5,18 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.3.2 - 2019-01-31
+
+### Fixed
+
+- Brokers now correctly parse configs containing plugin types as children.
+
 ## 1.3.1 - 2019-01-30
 
 ### Fixed
 
-- Output broker types now correctly allocate nested processors for `fan_out` and
-  `try` patterns.
+- Output broker types now correctly allocates nested processors for `fan_out`
+  and `try` patterns.
 - JSON formatted loggers now correctly escape error messages with line breaks.
 
 ## 1.3.0 - 2019-01-29

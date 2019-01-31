@@ -22,7 +22,12 @@ package output
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
+
+	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestOutBrokerConfigDefaults(t *testing.T) {
@@ -158,6 +163,125 @@ func TestOutBrokerConfigDitto(t *testing.T) {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 	if exp, actual := "3ms", outputConfs[2].HTTPClient.Timeout; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+}
+
+type exampleConfig struct {
+	Foo int    `json:"foo" yaml:"foo"`
+	Bar string `json:"bar" yaml:"bar"`
+	Baz string `json:"baz" yaml:"baz"`
+}
+
+func newExampleConfig() *exampleConfig {
+	return &exampleConfig{
+		Foo: 1000,
+		Bar: "bar",
+		Baz: "default",
+	}
+}
+
+func TestBrokerConfigPluginDitto(t *testing.T) {
+	t.Parallel()
+
+	RegisterPlugin(
+		"example",
+		func() interface{} {
+			return newExampleConfig()
+		},
+		func(iconf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Output, error) {
+			return nil, errors.New("err not implemented")
+		},
+	)
+
+	testConf := []byte(`{
+		"type": "broker",
+		"broker": {
+			"outputs": [
+				{
+					"type": "example",
+					"plugin": {
+						"foo": 23
+					}
+				},
+				{
+					"type": "ditto",
+					"plugin": {
+						"bar": "baz"
+					}
+				},
+				{
+					"type": "ditto",
+					"plugin": {
+						"foo": 29
+					}
+				}
+			]
+		}
+	}`)
+
+	conf := NewConfig()
+	if err := json.Unmarshal(testConf, &conf); err != nil {
+		t.Error(err)
+		return
+	}
+
+	outputConfs := conf.Broker.Outputs
+
+	if exp, actual := 3, len(outputConfs); exp != actual {
+		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)
+		return
+	}
+
+	if exp, actual := "example", outputConfs[0].Type; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "example", outputConfs[1].Type; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "example", outputConfs[2].Type; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+
+	plugOneConf, ok := outputConfs[0].Plugin.(*exampleConfig)
+	if !ok {
+		t.Fatalf("Wrong config type: %T", outputConfs[0].Plugin)
+	}
+	if exp, actual := 23, plugOneConf.Foo; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "bar", plugOneConf.Bar; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "default", plugOneConf.Baz; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+
+	plugTwoConf, ok := outputConfs[1].Plugin.(*exampleConfig)
+	if !ok {
+		t.Fatalf("Wrong config type: %T", outputConfs[1].Plugin)
+	}
+	if exp, actual := 23, plugTwoConf.Foo; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "baz", plugTwoConf.Bar; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "default", plugTwoConf.Baz; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+
+	plugThreeConf, ok := outputConfs[2].Plugin.(*exampleConfig)
+	if !ok {
+		t.Fatalf("Wrong config type: %T", outputConfs[2].Plugin)
+	}
+	if exp, actual := 29, plugThreeConf.Foo; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "baz", plugThreeConf.Bar; exp != actual {
+		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
+	}
+	if exp, actual := "default", plugThreeConf.Baz; exp != actual {
 		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
 	}
 }
