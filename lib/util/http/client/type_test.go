@@ -184,7 +184,7 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 	conf.URL = ts.URL + "/${!json_field:foo.bar}"
 	conf.Headers["static"] = "foo"
 	conf.Headers["dynamic"] = "hdr-${!json_field:foo.baz}"
-	conf.Host = "simpleHost.com"
+	conf.Headers["Host"] = "simpleHost.com"
 
 	h, err := New(
 		conf,

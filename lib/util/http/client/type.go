@@ -49,7 +49,6 @@ type Config struct {
 	URL         string            `json:"url" yaml:"url"`
 	Verb        string            `json:"verb" yaml:"verb"`
 	Headers     map[string]string `json:"headers" yaml:"headers"`
-	Host        string            `json:"host" yaml:"host"`
 	RateLimit   string            `json:"rate_limit" yaml:"rate_limit"`
 	Timeout     string            `json:"timeout" yaml:"timeout"`
 	Retry       string            `json:"retry_period" yaml:"retry_period"`
@@ -69,7 +68,6 @@ func NewConfig() Config {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
-		Host:       "",
 		RateLimit:  "",
 		Timeout:    "5s",
 		Retry:      "1s",
@@ -158,11 +156,11 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	}
 
 	for k, v := range conf.Headers {
-		h.headers[k] = text.NewInterpolatedString(v)
-	}
-
-	if conf.Host != "" {
-		h.host = text.NewInterpolatedString(conf.Host)
+		if strings.ToLower(k) == "host" {
+			h.host = text.NewInterpolatedString(v)
+		} else {
+			h.headers[k] = text.NewInterpolatedString(v)
+		}
 	}
 
 	for _, opt := range opts {

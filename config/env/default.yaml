@@ -51,7 +51,6 @@ input:
           username: ${INPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME}
         headers:
           Content-Type: ${INPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
-        host: ${INPUT_HTTP_CLIENT_HOST}
         max_retry_backoff: ${INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
         oauth:
           access_token: ${INPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN}
@@ -328,7 +327,6 @@ pipeline:
           username: ${PROCESSOR_HTTP_REQUEST_BASIC_AUTH_USERNAME}
         headers:
           Content-Type: ${PROCESSOR_HTTP_REQUEST_HEADERS_CONTENT_TYPE:application/octet-stream}
-        host: ${PROCESSOR_HTTP_REQUEST_HOST}
         max_retry_backoff: ${PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF:300s}
         oauth:
           access_token: ${PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN}
@@ -481,7 +479,6 @@ output:
           username: ${OUTPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME}
         headers:
           Content-Type: ${OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
-        host: ${OUTPUT_HTTP_CLIENT_HOST}
         max_retry_backoff: ${OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
         oauth:
           access_token: ${OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN}

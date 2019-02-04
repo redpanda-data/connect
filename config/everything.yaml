@@ -50,7 +50,6 @@ input:
     verb: GET
     headers:
       Content-Type: application/octet-stream
-    host: ""
     rate_limit: ""
     timeout: 5s
     retry_period: 1s
@@ -495,7 +494,6 @@ pipeline:
         verb: POST
         headers:
           Content-Type: application/octet-stream
-        host: ""
         rate_limit: ""
         timeout: 5s
         retry_period: 1s
@@ -696,7 +694,6 @@ output:
     verb: POST
     headers:
       Content-Type: application/octet-stream
-    host: ""
     rate_limit: ""
     timeout: 5s
     retry_period: 1s
