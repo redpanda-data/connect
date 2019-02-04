@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.4.1 - 2019-02-04
+
+### Fixed
+
+- The `headers` field in `http` configs now detects and applies `host` keys.
+
 ## 1.4.0 - 2019-02-04
 
 ### Added
