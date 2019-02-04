@@ -642,6 +642,7 @@ http:
     drop_on: []
     headers:
       Content-Type: application/octet-stream
+    host: ""
     max_retry_backoff: 300s
     oauth:
       access_token: ""
