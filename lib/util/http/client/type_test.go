@@ -162,6 +162,10 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 			t.Errorf("Wrong header value: %v != %v", act, exp)
 		}
 
+		if exp, act := "simpleHost.com", r.Host; exp != act {
+			t.Errorf("Wrong host value: %v ! %v", act, exp)
+		}
+
 		msg := message.New(nil)
 		defer func() {
 			resultChan <- msg
@@ -180,6 +184,7 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 	conf.URL = ts.URL + "/${!json_field:foo.bar}"
 	conf.Headers["static"] = "foo"
 	conf.Headers["dynamic"] = "hdr-${!json_field:foo.baz}"
+	conf.Host = "simpleHost.com"
 
 	h, err := New(
 		conf,

@@ -49,6 +49,7 @@ type Config struct {
 	URL         string            `json:"url" yaml:"url"`
 	Verb        string            `json:"verb" yaml:"verb"`
 	Headers     map[string]string `json:"headers" yaml:"headers"`
+	Host        string            `json:"host" yaml:"host"`
 	RateLimit   string            `json:"rate_limit" yaml:"rate_limit"`
 	Timeout     string            `json:"timeout" yaml:"timeout"`
 	Retry       string            `json:"retry_period" yaml:"retry_period"`
@@ -68,6 +69,7 @@ func NewConfig() Config {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
+		Host:       "",
 		RateLimit:  "",
 		Timeout:    "5s",
 		Retry:      "1s",
@@ -91,6 +93,7 @@ type Type struct {
 
 	url     *text.InterpolatedString
 	headers map[string]*text.InterpolatedString
+	host    *text.InterpolatedString
 
 	conf          Config
 	retryThrottle *throttle.Type
@@ -127,6 +130,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
 		headers:   map[string]*text.InterpolatedString{},
+		host:      nil,
 	}
 
 	if tout := conf.Timeout; len(tout) > 0 {
@@ -155,6 +159,10 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 
 	for k, v := range conf.Headers {
 		h.headers[k] = text.NewInterpolatedString(v)
+	}
+
+	if conf.Host != "" {
+		h.host = text.NewInterpolatedString(conf.Host)
 	}
 
 	for _, opt := range opts {
@@ -298,12 +306,18 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 			for k, v := range h.headers {
 				req.Header.Add(k, v.Get(msg))
 			}
+			if h.host != nil {
+				req.Host = h.host.Get(msg)
+			}
 		}
 	} else if msg.Len() == 1 {
 		body := bytes.NewBuffer(msg.Get(0).Get())
 		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
 			for k, v := range h.headers {
 				req.Header.Add(k, v.Get(msg))
+			}
+			if h.host != nil {
+				req.Host = h.host.Get(msg)
 			}
 		}
 	} else {
@@ -327,6 +341,9 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
 			for k, v := range h.headers {
 				req.Header.Add(k, v.Get(msg))
+			}
+			if h.host != nil {
+				req.Host = h.host.Get(msg)
 			}
 			req.Header.Del("Content-Type")
 			req.Header.Add("Content-Type", writer.FormDataContentType())
