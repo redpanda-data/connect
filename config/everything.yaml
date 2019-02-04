@@ -944,6 +944,7 @@ metrics:
   http_server: {}
   prometheus:
     push_url: ""
+    push_interval: ""
   statsd:
     address: localhost:4040
     flush_period: 100ms

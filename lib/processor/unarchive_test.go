@@ -215,6 +215,37 @@ fourth
 	}
 }
 
+func TestUnarchiveJSONDocuments(t *testing.T) {
+	conf := NewConfig()
+	conf.Unarchive.Format = "json_documents"
+
+	exp := [][]byte{
+		[]byte(`{"foo":"bar"}`),
+		[]byte(`5`),
+		[]byte(`"testing 123"`),
+		[]byte(`["root","is","an","array"]`),
+		[]byte(`{"bar":"baz"}`),
+		[]byte(`true`),
+	}
+
+	proc, err := NewUnarchive(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New([][]byte{
+		[]byte(`{"foo":"bar"} 5 "testing 123" ["root", "is", "an", "array"] {"bar": "baz"} true`),
+	}))
+	if len(msgs) != 1 {
+		t.Error("Unarchive failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
 func TestUnarchiveJSONArray(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "json_array"

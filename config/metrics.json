@@ -46,7 +46,8 @@
 		"prefix": "benthos",
 		"http_server": {},
 		"prometheus": {
-			"push_url": ""
+			"push_url": "",
+			"push_interval": ""
 		},
 		"statsd": {
 			"address": "localhost:4040",

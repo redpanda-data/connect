@@ -125,14 +125,17 @@ type Manager interface {
 
 //------------------------------------------------------------------------------
 
-// Closable defines a type that can be safely closed down and cleaned up.
+// Closable defines a type that can be safely closed down and cleaned up. This
+// interface is required for many components within Benthos, but if your
+// implementation is stateless and does not require shutting down then this
+// interface can be implemented with empty shims.
 type Closable interface {
-	// CloseAsync triggers a closure of this object but does not block until
-	// completion.
+	// CloseAsync triggers the shut down of this component but should not block
+	// the calling goroutine.
 	CloseAsync()
 
-	// WaitForClose is a blocking call to wait until the object has finished
-	// closing down and cleaning up resources.
+	// WaitForClose is a blocking call to wait until the component has finished
+	// shutting down and cleaning up resources.
 	WaitForClose(timeout time.Duration) error
 }
 

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.4.0 - 2019-02-04
+
+### Added
+
+- New `json_documents` format added to the `unarchive` processor.
+- Field `push_interval` added to the `prometheus` metrics type.
+
 ## 1.3.2 - 2019-01-31
 
 ### Fixed

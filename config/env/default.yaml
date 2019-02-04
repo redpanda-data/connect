@@ -630,6 +630,7 @@ logger:
 metrics:
   prefix: ${METRICS_PREFIX:benthos}
   prometheus:
+    push_interval: ${METRICS_PROMETHEUS_PUSH_INTERVAL}
     push_url: ${METRICS_PROMETHEUS_PUSH_URL}
   statsd:
     address: ${METRICS_STATSD_ADDRESS:localhost:4040}

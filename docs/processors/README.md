@@ -1461,11 +1461,15 @@ unarchive:
 
 Unarchives messages according to the selected archive format into multiple
 messages within a batch. Supported archive formats are:
-`tar`, `zip`, `binary`, `lines` and `json_array`.
+`tar`, `zip`, `binary`, `lines`, `json_documents` and `json_array`.
 
 When a message is unarchived the new messages replaces the original message in
 the batch. Messages that are selected but fail to unarchive (invalid format)
 will remain unchanged in the message batch but will be flagged as having failed.
+
+The `json_documents` format attempts to parse the message as a stream
+of concatenated JSON documents. Each parsed document is expanded into a new
+message.
 
 The `json_array` format attempts to parse the message as a JSON array
 and for each element of the array expands its contents into a new message.

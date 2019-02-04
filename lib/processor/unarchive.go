@@ -24,6 +24,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -42,11 +43,15 @@ func init() {
 		description: `
 Unarchives messages according to the selected archive format into multiple
 messages within a batch. Supported archive formats are:
-` + "`tar`, `zip`, `binary`, `lines` and `json_array`." + `
+` + "`tar`, `zip`, `binary`, `lines`, `json_documents` and `json_array`." + `
 
 When a message is unarchived the new messages replaces the original message in
 the batch. Messages that are selected but fail to unarchive (invalid format)
 will remain unchanged in the message batch but will be flagged as having failed.
+
+The ` + "`json_documents`" + ` format attempts to parse the message as a stream
+of concatenated JSON documents. Each parsed document is expanded into a new
+message.
 
 The ` + "`json_array`" + ` format attempts to parse the message as a JSON array
 and for each element of the array expands its contents into a new message.
@@ -159,6 +164,25 @@ func linesUnarchive(part types.Part) ([]types.Part, error) {
 	return parts, nil
 }
 
+func jsonDocumentsUnarchive(part types.Part) ([]types.Part, error) {
+	var parts []types.Part
+	dec := json.NewDecoder(bytes.NewReader(part.Get()))
+	for {
+		var m interface{}
+		if err := dec.Decode(&m); err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+		newPart := message.NewPart(nil)
+		if err := newPart.SetJSON(m); err != nil {
+			return nil, fmt.Errorf("failed to set JSON contents of message: %v", err)
+		}
+		parts = append(parts, newPart)
+	}
+	return parts, nil
+}
+
 func jsonArrayUnarchive(part types.Part) ([]types.Part, error) {
 	jDoc, err := part.JSON()
 	if err != nil {
@@ -191,6 +215,8 @@ func strToUnarchiver(str string) (unarchiveFunc, error) {
 		return binaryUnarchive, nil
 	case "lines":
 		return linesUnarchive, nil
+	case "json_documents":
+		return jsonDocumentsUnarchive, nil
 	case "json_array":
 		return jsonArrayUnarchive, nil
 	}
