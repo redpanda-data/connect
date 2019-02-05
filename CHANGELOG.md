@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `switch` processor.
+
 ## 1.4.1 - 2019-02-04
 
 ### Fixed

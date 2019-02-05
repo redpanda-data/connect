@@ -589,6 +589,7 @@ pipeline:
       parts: []
       name: cat
       args: []
+    switch: []
     text:
       parts: []
       operator: trim_space

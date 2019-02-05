@@ -81,10 +81,11 @@ used.
 35. [`sleep`](#sleep)
 36. [`split`](#split)
 37. [`subprocess`](#subprocess)
-38. [`text`](#text)
-39. [`throttle`](#throttle)
-40. [`try`](#try)
-41. [`unarchive`](#unarchive)
+38. [`switch`](#switch)
+39. [`text`](#text)
+40. [`throttle`](#throttle)
+41. [`try`](#try)
+42. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -1330,6 +1331,36 @@ pipes for each line.
 
 Benthos will attempt to keep the process alive for as long as the pipeline is
 running. If the process exits early it will be restarted.
+
+## `switch`
+
+``` yaml
+type: switch
+switch: []
+```
+
+Switch is a processor that lists child case objects each containing a condition
+and processors. Each batch of messages is tested against the condition of each
+child case until a condition passes, whereby the processors of that case will be
+executed on the batch.
+
+Each case may specify a boolean `fallthrough` field indicating whether
+the next case should be executed after it (the default is `false`.)
+
+A case takes this form:
+
+``` yaml
+- condition:
+    type: foo
+  processors:
+  - type: foo
+  fallthrough: false
+```
+
+In order to switch each message of a batch individually use this processor with
+the [`process_batch`](#process_batch) processor.
+
+You can find a [full list of conditions here](../conditions).
 
 ## `text`
 

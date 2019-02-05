@@ -92,6 +92,7 @@ const (
 	TypeSleep        = "sleep"
 	TypeSplit        = "split"
 	TypeSubprocess   = "subprocess"
+	TypeSwitch       = "switch"
 	TypeText         = "text"
 	TypeTry          = "try"
 	TypeThrottle     = "throttle"
@@ -140,6 +141,7 @@ type Config struct {
 	Sleep        SleepConfig        `json:"sleep" yaml:"sleep"`
 	Split        SplitConfig        `json:"split" yaml:"split"`
 	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
+	Switch       SwitchConfig       `json:"switch" yaml:"switch"`
 	Text         TextConfig         `json:"text" yaml:"text"`
 	Try          TryConfig          `json:"try" yaml:"try"`
 	Throttle     ThrottleConfig     `json:"throttle" yaml:"throttle"`
@@ -187,6 +189,7 @@ func NewConfig() Config {
 		Sleep:        NewSleepConfig(),
 		Split:        NewSplitConfig(),
 		Subprocess:   NewSubprocessConfig(),
+		Switch:       NewSwitchConfig(),
 		Text:         NewTextConfig(),
 		Try:          NewTryConfig(),
 		Throttle:     NewThrottleConfig(),
