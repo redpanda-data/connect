@@ -5,9 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.5.0 - 2019-02-07
+
 ### Added
 
 - New `switch` processor.
+
+### Fixed
+
+- Printing configs now sanitises resource sections.
 
 ## 1.4.1 - 2019-02-04
 

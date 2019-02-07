@@ -108,6 +108,12 @@ func (c Type) Sanitised() (*SanitisedConfig, error) {
 		return nil, err
 	}
 
+	var mgrConf interface{}
+	mgrConf, err = manager.SanitiseConfig(c.Manager)
+	if err != nil {
+		return nil, err
+	}
+
 	var metConf interface{}
 	metConf, err = metrics.SanitiseConfig(c.Metrics)
 	if err != nil {
@@ -120,7 +126,7 @@ func (c Type) Sanitised() (*SanitisedConfig, error) {
 		Buffer:             bufConf,
 		Pipeline:           pipeConf,
 		Output:             outConf,
-		Manager:            c.Manager,
+		Manager:            mgrConf,
 		Logger:             c.Logger,
 		Metrics:            metConf,
 		SystemCloseTimeout: c.SystemCloseTimeout,
