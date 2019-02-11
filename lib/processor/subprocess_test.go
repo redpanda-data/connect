@@ -108,3 +108,46 @@ func TestSubprocessWithCat(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestSubprocessLineBreaks(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = TypeSubprocess
+	conf.Subprocess.Name = "sed"
+	conf.Subprocess.Args = []string{`s/\(^$\)\|\(foo\)/bar/`, "-u"}
+
+	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Skipf("Not sure if this is due to missing executable: %v", err)
+	}
+
+	exp := [][]byte{
+		[]byte("hello bar\nbar world"),
+		[]byte("hello bar bar world"),
+		[]byte("hello bar\nbar world\n"),
+		[]byte("bar"),
+		[]byte("hello bar\nbar\nbar world\n"),
+	}
+	msgIn := message.New([][]byte{
+		[]byte("hello foo\nfoo world"),
+		[]byte("hello foo bar world"),
+		[]byte("hello foo\nfoo world\n"),
+		[]byte(""),
+		[]byte("hello foo\n\nfoo world\n"),
+	})
+	msgs, res := proc.ProcessMessage(msgIn)
+	if len(msgs) != 1 {
+		t.Fatal("Wrong count of messages")
+	}
+	if res != nil {
+		t.Fatalf("Non-nil result: %v", res.Error())
+	}
+
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong results: %s != %s", act, exp)
+	}
+
+	proc.CloseAsync()
+	if err := proc.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}

@@ -52,11 +52,19 @@ response is returned over stdout then its contents will replace the message. If
 a response is instead returned from stderr will be logged and the message will
 continue unchanged and will be marked as failed.
 
-NOTE: it is required that processes executed in this way flush their stdout
-pipes for each line.
+#### Subprocess requirements
+
+It is required that subprocesses flush their stdout and stderr pipes for each
+line.
 
 Benthos will attempt to keep the process alive for as long as the pipeline is
-running. If the process exits early it will be restarted.`,
+running. If the process exits early it will be restarted.
+
+#### Messages containing line breaks
+
+If a message contains line breaks each line of the message is piped to the
+subprocess and flushed, and a response is expected from the subprocess before
+another line is fed in.`,
 	}
 }
 
@@ -312,7 +320,12 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	proc := func(i int) error {
 		results := [][]byte{}
-		for _, p := range bytes.Split(result.Get(i).Get(), []byte("\n")) {
+		splitMsg := bytes.Split(result.Get(i).Get(), []byte("\n"))
+		for j, p := range splitMsg {
+			if len(p) == 0 && len(splitMsg) > 1 && j == (len(splitMsg)-1) {
+				results = append(results, []byte(""))
+				continue
+			}
 			res, err := e.subproc.Send(p)
 			if err == types.ErrTypeClosed {
 				return err

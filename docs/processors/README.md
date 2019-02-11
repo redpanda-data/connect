@@ -1326,11 +1326,19 @@ response is returned over stdout then its contents will replace the message. If
 a response is instead returned from stderr will be logged and the message will
 continue unchanged and will be marked as failed.
 
-NOTE: it is required that processes executed in this way flush their stdout
-pipes for each line.
+#### Subprocess requirements
+
+It is required that subprocesses flush their stdout and stderr pipes for each
+line.
 
 Benthos will attempt to keep the process alive for as long as the pipeline is
 running. If the process exits early it will be restarted.
+
+#### Messages containing line breaks
+
+If a message contains line breaks each line of the message is piped to the
+subprocess and flushed, and a response is expected from the subprocess before
+another line is fed in.
 
 ## `switch`
 

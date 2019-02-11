@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.5.1 - 2019-02-11
+
+### Fixed
+
+- The `subprocess` processor no longer sends unexpected empty lines when
+  messages end with a line break.
+
 ## 1.5.0 - 2019-02-07
 
 ### Added
