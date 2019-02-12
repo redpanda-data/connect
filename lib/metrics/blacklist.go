@@ -186,7 +186,7 @@ func (h *Blacklist) GetTimer(path string) StatTimer {
 // GetTimerVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *Blacklist) GetTimerVec(path string, n []string) StatTimerVec {
-	if h.rejectPath(path)(path) {
+	if h.rejectPath(path) {
 		return fakeTimerVec(func() StatTimer {
 			return DudStat{}
 		})
@@ -205,13 +205,14 @@ func (h *Blacklist) GetGauge(path string) StatGauge {
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *Blacklist) GetGaugeVec(path string, n []string) StatGaugeVec {
-	if h.allowPath(path) {
-		return h.s.GetGaugeVec(path, n)
+	if h.rejectPath(path) {
+		return fakeGaugeVec(func() StatGauge {
+			return DudStat{}
+		})
+
 	}
 
-	return fakeGaugeVec(func() StatGauge {
-		return DudStat{}
-	})
+	return h.s.GetGaugeVec(path, n)
 }
 
 // SetLogger sets the logger used to print connection errors.
