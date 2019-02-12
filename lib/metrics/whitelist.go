@@ -71,8 +71,9 @@ type dummyWhitelistConfig struct {
 // MarshalJSON prints an empty object instead of nil.
 func (w WhitelistConfig) MarshalJSON() ([]byte, error) {
 	dummy := dummyWhitelistConfig{
-		Paths: w.Paths,
-		Child: w.Child,
+		Paths:    w.Paths,
+		Patterns: w.Patterns,
+		Child:    w.Child,
 	}
 
 	if w.Child == nil {
@@ -85,8 +86,9 @@ func (w WhitelistConfig) MarshalJSON() ([]byte, error) {
 // MarshalYAML prints an empty object instead of nil.
 func (w WhitelistConfig) MarshalYAML() (interface{}, error) {
 	dummy := dummyWhitelistConfig{
-		Paths: w.Paths,
-		Child: w.Child,
+		Paths:    w.Paths,
+		Patterns: w.Patterns,
+		Child:    w.Child,
 	}
 	if w.Child == nil {
 		dummy.Child = struct{}{}
@@ -239,7 +241,7 @@ func (h *Whitelist) HandlerFunc() http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		// w.WriteHeader(400)
+		w.WriteHeader(400)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("The child of this whitelist does not support HTTP metrics."))
 	}
