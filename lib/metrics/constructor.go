@@ -56,6 +56,7 @@ const (
 	TypeHTTPServer = "http_server"
 	TypePrometheus = "prometheus"
 	TypeStatsd     = "statsd"
+	TypeWhiteList  = "whitelist"
 )
 
 //------------------------------------------------------------------------------
@@ -68,6 +69,7 @@ type Config struct {
 	HTTP       struct{}         `json:"http_server" yaml:"http_server"`
 	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Statsd     StatsdConfig     `json:"statsd" yaml:"statsd"`
+	Whitelist  WhitelistConfig  `json:"whitelist" yaml:"whitelist"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -78,6 +80,7 @@ func NewConfig() Config {
 		HTTP:       struct{}{},
 		Prometheus: NewPrometheusConfig(),
 		Statsd:     NewStatsdConfig(),
+		Whitelist:  NewWhitelistConfig(),
 	}
 }
 
