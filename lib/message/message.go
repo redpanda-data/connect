@@ -31,9 +31,8 @@ import (
 // Type is the standard implementation of types.Message, containing a multiple
 // part message.
 type Type struct {
-	createdAt   time.Time
-	parts       []types.Part
-	resultCache map[string]bool
+	createdAt time.Time
+	parts     []types.Part
 }
 
 // New initializes a new message from a 2D byte slice, the slice can be nil.
@@ -54,42 +53,26 @@ func New(bslice [][]byte) *Type {
 // the new copy and JSON parts can be get/set without impacting other message
 // copies. However, it is still unsafe to edit the raw content of message parts.
 func (m *Type) Copy() types.Message {
-	var newResultCache map[string]bool
-	if len(m.resultCache) > 0 {
-		newResultCache = make(map[string]bool, len(m.resultCache))
-		for k, v := range m.resultCache {
-			newResultCache[k] = v
-		}
-	}
 	parts := make([]types.Part, len(m.parts))
 	for i, v := range m.parts {
 		parts[i] = v.Copy()
 	}
 	return &Type{
-		createdAt:   m.createdAt,
-		parts:       parts,
-		resultCache: newResultCache,
+		createdAt: m.createdAt,
+		parts:     parts,
 	}
 }
 
 // DeepCopy creates a new deep copy of the message. This can be considered an
 // entirely new object that is safe to use anywhere.
 func (m *Type) DeepCopy() types.Message {
-	var newResultCache map[string]bool
-	if len(m.resultCache) > 0 {
-		newResultCache = make(map[string]bool, len(m.resultCache))
-		for k, v := range m.resultCache {
-			newResultCache[k] = v
-		}
-	}
 	parts := make([]types.Part, len(m.parts))
 	for i, v := range m.parts {
 		parts[i] = v.DeepCopy()
 	}
 	return &Type{
-		createdAt:   m.createdAt,
-		parts:       parts,
-		resultCache: newResultCache,
+		createdAt: m.createdAt,
+		parts:     parts,
 	}
 }
 
@@ -112,13 +95,11 @@ func (m *Type) Get(index int) types.Part {
 // SetAll changes the entire set of message parts.
 func (m *Type) SetAll(parts []types.Part) {
 	m.parts = parts
-	m.resultCache = nil
 }
 
 // Append adds a new message part to the message.
 func (m *Type) Append(b ...types.Part) int {
 	m.parts = append(m.parts, b...)
-	m.resultCache = nil
 	return len(m.parts) - 1
 }
 
