@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -118,8 +119,18 @@ func NewWhitelist(config Config, opts ...func(Type)) (Type, error) {
 // allowPath checks whether or not a given path is in the allowed set of
 // paths for the Whitelist metrics stat.
 func (h *Whitelist) allowPath(path string) bool {
-	for _, v := range h.paths {
-		if strings.HasPrefix(path, v) {
+	for _, p := range h.paths {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	for _, pat := range h.patterns {
+		matched, err := regexp.MatchString(pat, path)
+		if err != nil {
+			// TODO: how should we really handle this?
+			return false
+		}
+		if matched {
 			return true
 		}
 	}
