@@ -1,7 +1,8 @@
 package metrics
 
 import (
-	"fmt"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -29,20 +30,54 @@ Extensive docs to come.`,
 
 //------------------------------------------------------------------------------
 
-type metricsList []Config
-
 // WhitelistConfig is a list of configs...
 type WhitelistConfig struct {
-	Paths []string    `json:"paths" yaml:"paths"`
-	Child metricsList `json:"child" yaml:"child"`
+	Paths    []string `json:"paths" yaml:"paths"`
+	Patterns []string `json:"patterns" yaml:"patterns"`
+	Child    *Config  `json:"child" yaml:"child"`
 }
 
 // NewWhitelistConfig returns the default configuration for a whitelist
 func NewWhitelistConfig() WhitelistConfig {
 	return WhitelistConfig{
-		Paths: []string{},
-		Child: metricsList{},
+		Paths:    []string{},
+		Patterns: []string{},
+		Child:    nil,
 	}
+}
+
+//------------------------------------------------------------------------------
+
+type dummyWhitelistConfig struct {
+	Paths    []string    `json:"paths" yaml:"paths"`
+	Patterns []string    `json:"patterns" yaml:"patterns"`
+	Child    interface{} `json:"child" yaml:"child"`
+}
+
+// MarshalJSON prints an empty object instead of nil.
+func (w WhitelistConfig) MarshalJSON() ([]byte, error) {
+	dummy := dummyWhitelistConfig{
+		Paths: w.Paths,
+		Child: w.Child,
+	}
+
+	if w.Child == nil {
+		dummy.Child = struct{}{}
+	}
+
+	return json.Marshal(dummy)
+}
+
+// MarshalYAML prints an empty object instead of nil.
+func (w WhitelistConfig) MarshalYAML() (interface{}, error) {
+	dummy := dummyWhitelistConfig{
+		Paths: w.Paths,
+		Child: w.Child,
+	}
+	if w.Child == nil {
+		dummy.Child = struct{}{}
+	}
+	return dummy, nil
 }
 
 //------------------------------------------------------------------------------
@@ -50,27 +85,26 @@ func NewWhitelistConfig() WhitelistConfig {
 // Whitelist is a statistics object that wraps a separate statistics object
 // and only permits statistics that pass through the whitelist to be recorded.
 type Whitelist struct {
-	paths []string
-	s     Type
+	paths    []string
+	patterns []string
+	s        Type
 }
 
 // NewWhitelist creates and returns a new Whitelist object
 func NewWhitelist(config Config, opts ...func(Type)) (Type, error) {
-
-	var child Type
-	var err error
-	if config.Whitelist.Child[0].Type == "none" {
-		return DudType{}, nil
+	if config.Whitelist.Child == nil {
+		return nil, errors.New("cannot create a whitelist metric without a child")
 	}
-	if c, ok := constructors[config.Whitelist.Child[0].Type]; ok {
-		child, err = c.constructor(config.Whitelist.Child[0], opts...)
+	if c, ok := constructors[config.Whitelist.Child.Type]; ok {
+		child, err := c.constructor(*config.Whitelist.Child, opts...)
 		if err != nil {
 			return nil, err
 		}
 
 		w := &Whitelist{
-			s:     child,
-			paths: config.Whitelist.Paths,
+			paths:    config.Whitelist.Paths,
+			patterns: config.Whitelist.Patterns,
+			s:        child,
 		}
 
 		return w, nil
@@ -84,7 +118,6 @@ func NewWhitelist(config Config, opts ...func(Type)) (Type, error) {
 // allowPath checks whether or not a given path is in the allowed set of
 // paths for the Whitelist metrics stat.
 func (h *Whitelist) allowPath(path string) bool {
-	fmt.Printf("%s\n", path)
 	for _, v := range h.paths {
 		if strings.HasPrefix(path, v) {
 			return true
