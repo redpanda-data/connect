@@ -57,6 +57,7 @@ const (
 	TypePrometheus = "prometheus"
 	TypeStatsd     = "statsd"
 	TypeWhiteList  = "whitelist"
+	TypeBlackList  = "blacklist"
 )
 
 //------------------------------------------------------------------------------
@@ -70,6 +71,7 @@ type Config struct {
 	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Statsd     StatsdConfig     `json:"statsd" yaml:"statsd"`
 	Whitelist  WhitelistConfig  `json:"whitelist" yaml:"whitelist"`
+	Blacklist  BlacklistConfig  `json:"blacklist" yaml:"blacklist"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -81,6 +83,7 @@ func NewConfig() Config {
 		Prometheus: NewPrometheusConfig(),
 		Statsd:     NewStatsdConfig(),
 		Whitelist:  NewWhitelistConfig(),
+		Blacklist:  NewBlacklistConfig(),
 	}
 }
 
