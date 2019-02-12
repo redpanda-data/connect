@@ -21,9 +21,22 @@ func init() {
 	constructors[TypeWhiteList] = typeSpec{
 		constructor: NewWhitelist,
 		description: `
-Whitelist metrics
+Whitelist a certain set of paths around a child metric collector.
 
-Extensive docs to come.`,
+### Patterns and paths
+
+Whitelists can be one of two options, paths or regular expression patterns.
+A metric path's eligibility is strictly additive - it only has to pass a
+single path or a single pattern for it to be included.
+
+An entry in a Whitelist's ` + "`paths`" + `field will check using prefix
+matching. This can be used, for example to allow all metrics from the ` +
+			"`output`" + `stats object to be pushed to the child metric collector.
+
+An entry in a Whitelist's ` + "`patterns`" + `field will check using Go's
+` + "`regexp.MatchString`" + ` function, so any submatch in the final path will
+result in the metric being allowed. To anchor a pattern to the start or end of
+the word, you might use the ` + "`^`" + ` or ` + "`$`" + ` regex operators.`,
 	}
 }
 
