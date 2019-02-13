@@ -3,6 +3,7 @@ package metrics
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -102,7 +103,7 @@ func (w WhitelistConfig) MarshalYAML() (interface{}, error) {
 // and only permits statistics that pass through the whitelist to be recorded.
 type Whitelist struct {
 	paths    []string
-	patterns []string
+	patterns []*regexp.Regexp
 	s        Type
 }
 
@@ -118,9 +119,16 @@ func NewWhitelist(config Config, opts ...func(Type)) (Type, error) {
 		}
 
 		w := &Whitelist{
-			paths:    config.Whitelist.Paths,
-			patterns: config.Whitelist.Patterns,
-			s:        child,
+			paths: config.Whitelist.Paths,
+			s:     child,
+		}
+		w.patterns = make([]*regexp.Regexp, len(config.Whitelist.Patterns))
+		for i, p := range config.Whitelist.Patterns {
+			re, err := regexp.Compile(p)
+			if err != nil {
+				return nil, fmt.Errorf("Invalid regular expression: %s", p)
+			}
+			w.patterns[i] = re
 		}
 
 		return w, nil
@@ -139,17 +147,11 @@ func (h *Whitelist) allowPath(path string) bool {
 			return true
 		}
 	}
-	for _, pat := range h.patterns {
-		matched, err := regexp.MatchString(pat, path)
-		if err != nil {
-			// TODO: how should we really handle this?
-			return false
-		}
-		if matched {
+	for _, re := range h.patterns {
+		if re.MatchString(path) {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -160,7 +162,6 @@ func (h *Whitelist) GetCounter(path string) StatCounter {
 	if h.allowPath(path) {
 		return h.s.GetCounter(path)
 	}
-
 	return DudStat{}
 }
 
@@ -170,7 +171,6 @@ func (h *Whitelist) GetCounterVec(path string, n []string) StatCounterVec {
 	if h.allowPath(path) {
 		return h.s.GetCounterVec(path, n)
 	}
-
 	return fakeCounterVec(func() StatCounter {
 		return DudStat{}
 	})
@@ -181,7 +181,6 @@ func (h *Whitelist) GetTimer(path string) StatTimer {
 	if h.allowPath(path) {
 		return h.s.GetTimer(path)
 	}
-
 	return DudStat{}
 }
 
@@ -191,7 +190,6 @@ func (h *Whitelist) GetTimerVec(path string, n []string) StatTimerVec {
 	if h.allowPath(path) {
 		return h.s.GetTimerVec(path, n)
 	}
-
 	return fakeTimerVec(func() StatTimer {
 		return DudStat{}
 	})
@@ -211,7 +209,6 @@ func (h *Whitelist) GetGaugeVec(path string, n []string) StatGaugeVec {
 	if h.allowPath(path) {
 		return h.s.GetGaugeVec(path, n)
 	}
-
 	return fakeGaugeVec(func() StatGauge {
 		return DudStat{}
 	})
@@ -234,8 +231,6 @@ func (h *Whitelist) Close() error {
 // HandlerFunc returns an http.HandlerFunc for accessing metrics for appropriate
 // child types
 func (h *Whitelist) HandlerFunc() http.HandlerFunc {
-
-	// If we want to expose a JSON stats endpoint we register the endpoints.
 	if wHandlerFunc, ok := h.s.(WithHandlerFunc); ok {
 		return wHandlerFunc.HandlerFunc()
 	}

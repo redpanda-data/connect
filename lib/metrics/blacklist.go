@@ -3,6 +3,7 @@ package metrics
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -103,7 +104,7 @@ func (w BlacklistConfig) MarshalYAML() (interface{}, error) {
 // and only permits statistics that pass through the Blacklist to be recorded.
 type Blacklist struct {
 	paths    []string
-	patterns []string
+	patterns []*regexp.Regexp
 	s        Type
 }
 
@@ -118,13 +119,22 @@ func NewBlacklist(config Config, opts ...func(Type)) (Type, error) {
 			return nil, err
 		}
 
-		w := &Blacklist{
-			paths:    config.Blacklist.Paths,
-			patterns: config.Blacklist.Patterns,
-			s:        child,
+		b := &Blacklist{
+			paths: config.Blacklist.Paths,
+			s:     child,
 		}
 
-		return w, nil
+		b.patterns = make([]*regexp.Regexp, len(config.Blacklist.Patterns))
+
+		for i, p := range config.Blacklist.Patterns {
+			re, err := regexp.Compile(p)
+			if err != nil {
+				return nil, fmt.Errorf("Invalid regular expression: %s", p)
+			}
+			b.patterns[i] = re
+		}
+
+		return b, nil
 	}
 
 	return nil, ErrInvalidMetricOutputType
@@ -141,16 +151,10 @@ func (h *Blacklist) rejectPath(path string) bool {
 		}
 	}
 	for _, pat := range h.patterns {
-		matched, err := regexp.MatchString(pat, path)
-		if err != nil {
-			// TODO: how should we really handle this?
-			return false
-		}
-		if matched {
+		if pat.MatchString(path) {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -209,9 +213,7 @@ func (h *Blacklist) GetGaugeVec(path string, n []string) StatGaugeVec {
 		return fakeGaugeVec(func() StatGauge {
 			return DudStat{}
 		})
-
 	}
-
 	return h.s.GetGaugeVec(path, n)
 }
 
@@ -232,8 +234,6 @@ func (h *Blacklist) Close() error {
 // HandlerFunc returns an http.HandlerFunc for accessing metrics for appropriate
 // child types
 func (h *Blacklist) HandlerFunc() http.HandlerFunc {
-
-	// If we want to expose a JSON stats endpoint we register the endpoints.
 	if wHandlerFunc, ok := h.s.(WithHandlerFunc); ok {
 		return wHandlerFunc.HandlerFunc()
 	}
