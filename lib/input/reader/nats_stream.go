@@ -42,6 +42,7 @@ type NATSStreamConfig struct {
 	ClientID        string   `json:"client_id" yaml:"client_id"`
 	QueueID         string   `json:"queue" yaml:"queue"`
 	DurableName     string   `json:"durable_name" yaml:"durable_name"`
+	UnsubOnClose    bool     `json:"unsubscribe_on_close" yaml:"unsubscribe_on_close"`
 	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	Subject         string   `json:"subject" yaml:"subject"`
 	MaxInflight     int      `json:"max_inflight" yaml:"max_inflight"`
@@ -50,11 +51,13 @@ type NATSStreamConfig struct {
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
 func NewNATSStreamConfig() NATSStreamConfig {
 	return NATSStreamConfig{
-		URLs:            []string{stan.DefaultNatsURL},
-		ClusterID:       "test-cluster",
-		ClientID:        "benthos_client",
-		QueueID:         "benthos_queue",
-		DurableName:     "benthos_offset",
+		URLs:        []string{stan.DefaultNatsURL},
+		ClusterID:   "test-cluster",
+		ClientID:    "benthos_client",
+		QueueID:     "benthos_queue",
+		DurableName: "benthos_offset",
+		// TODO: V2 Make this false by default
+		UnsubOnClose:    true,
 		StartFromOldest: true,
 		Subject:         "benthos_messages",
 		MaxInflight:     1024,
@@ -109,7 +112,9 @@ func (n *NATSStream) disconnect() {
 	defer n.cMut.Unlock()
 
 	if n.natsSub != nil {
-		n.natsSub.Unsubscribe()
+		if n.conf.UnsubOnClose {
+			n.natsSub.Unsubscribe()
+		}
 		n.natsConn.Close()
 
 		n.natsSub = nil

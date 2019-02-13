@@ -656,6 +656,7 @@ nats_stream:
   queue: benthos_queue
   start_from_oldest: true
   subject: benthos_messages
+  unsubscribe_on_close: true
   urls:
   - nats://localhost:4222
 ```
@@ -667,6 +668,11 @@ semantics.
 Tracking and persisting offsets through a durable name is also optional and
 works with or without a queue. If a durable name is not provided then subjects
 are consumed from the most recently published message.
+
+When a consumer closes its connection it unsubscribes, when all consumers of a
+durable queue do this the offsets are deleted. In order to avoid this you can
+stop the consumers from unsubscribing by setting the field
+`unsubscribe_on_close` to `false`.
 
 ### Metadata
 
