@@ -26,45 +26,45 @@ import (
 	"time"
 )
 
-func TestWhitelistPaths(t *testing.T) {
+func TestBlacklistPaths(t *testing.T) {
 
 	child := &HTTP{
 		local:      NewLocal(),
 		timestamp:  time.Now(),
 		pathPrefix: "",
 	}
-
-	w := &Whitelist{
+	b := &Blacklist{
 		paths:    []string{"output", "input", "metrics"},
 		patterns: []*regexp.Regexp{},
 		s:        child,
 	}
 
 	// acceptable paths
-	acceptable := []string{"output.broker", "input.test", "metrics.status"}
-	for _, v := range acceptable {
-		w.GetCounter(v)
-		if _, ok := child.local.flatCounters[v]; !ok {
-			t.Errorf("Whitelist should set a stat in child for allowed path")
+	blacklistedStats := []string{"output.broker", "input.test", "metrics.status"}
+	for _, v := range blacklistedStats {
+		b.GetCounter(v)
+		if _, ok := child.local.flatCounters[v]; ok {
+			t.Errorf("Blacklist should not set a stat in child for allowed path")
 		}
 	}
 
-	unacceptable := []string{"processor.value", "logs.info", "test.test"}
-	for _, v := range unacceptable {
-		w.GetCounter(v)
-		if _, ok := child.local.flatCounters[v]; ok {
-			t.Errorf("Whitelist should not a set in child for allowed path")
+	allowedStats := []string{"processor.value", "logs.info", "test.test"}
+	for _, v := range allowedStats {
+		b.GetCounter(v)
+		if _, ok := child.local.flatCounters[v]; !ok {
+			t.Errorf("Blacklist should set a stat in child for allowed path")
 		}
 	}
 }
 
-func TestWhitelistPatterns(t *testing.T) {
+func TestBlacklistPatterns(t *testing.T) {
+
 	child := &HTTP{
 		local:      NewLocal(),
 		timestamp:  time.Now(),
 		pathPrefix: "",
 	}
-	w := &Whitelist{
+	b := &Blacklist{
 		paths: []string{},
 		s:     child,
 	}
@@ -79,20 +79,20 @@ func TestWhitelistPatterns(t *testing.T) {
 		}
 		testExpressions[i] = re
 	}
-	w.patterns = testExpressions
+	b.patterns = testExpressions
 
-	acceptable := []string{"output.broker.connection", "input", "output.broker"}
-	for _, v := range acceptable {
-		w.GetCounter(v)
-		if _, ok := child.local.flatCounters[v]; !ok {
-			t.Errorf("Whitelist should set a stat in child that matches an expression")
+	blacklistedStats := []string{"output.broker.connection", "input", "output.broker"}
+	for _, v := range blacklistedStats {
+		b.GetCounter(v)
+		if _, ok := child.local.flatCounters[v]; ok {
+			t.Errorf("Blacklist should not set a stat in child that matches an expression")
 		}
 	}
-	unacceptable := []string{"output", "input.connection", "benthos"}
-	for _, v := range unacceptable {
-		w.GetCounter(v)
-		if _, ok := child.local.flatCounters[v]; ok {
-			t.Errorf("Whitelist should not set in child that does not match an expression")
+	allowedStats := []string{"output", "input.connection", "benthos"}
+	for _, v := range allowedStats {
+		b.GetCounter(v)
+		if _, ok := child.local.flatCounters[v]; !ok {
+			t.Errorf("Blacklist should set in child that does not match an expression")
 		}
 	}
 }
