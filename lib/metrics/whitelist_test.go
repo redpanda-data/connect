@@ -40,20 +40,19 @@ func TestWhitelistPaths(t *testing.T) {
 		s:        child,
 	}
 
-	// acceptable paths
-	acceptable := []string{"output.broker", "input.test", "metrics.status"}
-	for _, v := range acceptable {
+	whitelistedStats := []string{"output.broker", "input.test", "metrics.status"}
+	for _, v := range whitelistedStats {
 		w.GetCounter(v)
 		if _, ok := child.local.flatCounters[v]; !ok {
-			t.Errorf("Whitelist should set a stat in child for allowed path")
+			t.Errorf("Whitelist should set a stat in child for allowed path: %s", v)
 		}
 	}
 
-	unacceptable := []string{"processor.value", "logs.info", "test.test"}
-	for _, v := range unacceptable {
+	rejectedStats := []string{"processor.value", "logs.info", "test.test"}
+	for _, v := range rejectedStats {
 		w.GetCounter(v)
 		if _, ok := child.local.flatCounters[v]; ok {
-			t.Errorf("Whitelist should not a set in child for allowed path")
+			t.Errorf("Whitelist should not set a stat in child for unallowed path: %s", v)
 		}
 	}
 }
@@ -81,18 +80,18 @@ func TestWhitelistPatterns(t *testing.T) {
 	}
 	w.patterns = testExpressions
 
-	acceptable := []string{"output.broker.connection", "input", "output.broker"}
-	for _, v := range acceptable {
+	whitelistedStats := []string{"output.broker.connection", "input", "output.broker"}
+	for _, v := range whitelistedStats {
 		w.GetCounter(v)
 		if _, ok := child.local.flatCounters[v]; !ok {
-			t.Errorf("Whitelist should set a stat in child that matches an expression")
+			t.Errorf("Whitelist should set a stat in child that matches an expression: %s", v)
 		}
 	}
-	unacceptable := []string{"output", "input.connection", "benthos"}
-	for _, v := range unacceptable {
+	rejectedStats := []string{"output", "input.connection", "benthos"}
+	for _, v := range rejectedStats {
 		w.GetCounter(v)
 		if _, ok := child.local.flatCounters[v]; ok {
-			t.Errorf("Whitelist should not set in child that does not match an expression")
+			t.Errorf("Whitelist should not set a stat in child that does not match an expression: %s", v)
 		}
 	}
 }

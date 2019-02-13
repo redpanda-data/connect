@@ -44,7 +44,7 @@ func TestBlacklistPaths(t *testing.T) {
 	for _, v := range blacklistedStats {
 		b.GetCounter(v)
 		if _, ok := child.local.flatCounters[v]; ok {
-			t.Errorf("Blacklist should not set a stat in child for allowed path")
+			t.Errorf("Blacklist should not set a stat in child for disallowed path: %s", v)
 		}
 	}
 
@@ -52,7 +52,7 @@ func TestBlacklistPaths(t *testing.T) {
 	for _, v := range allowedStats {
 		b.GetCounter(v)
 		if _, ok := child.local.flatCounters[v]; !ok {
-			t.Errorf("Blacklist should set a stat in child for allowed path")
+			t.Errorf("Blacklist should set a stat in child for allowed path: %s", v)
 		}
 	}
 }
@@ -85,14 +85,14 @@ func TestBlacklistPatterns(t *testing.T) {
 	for _, v := range blacklistedStats {
 		b.GetCounter(v)
 		if _, ok := child.local.flatCounters[v]; ok {
-			t.Errorf("Blacklist should not set a stat in child that matches an expression")
+			t.Errorf("Blacklist should not set a stat in child that matches an expression: %s", v)
 		}
 	}
 	allowedStats := []string{"output", "input.connection", "benthos"}
 	for _, v := range allowedStats {
 		b.GetCounter(v)
 		if _, ok := child.local.flatCounters[v]; !ok {
-			t.Errorf("Blacklist should set in child that does not match an expression")
+			t.Errorf("Blacklist should set a stat in child that does not match an expression: %s", v)
 		}
 	}
 }
