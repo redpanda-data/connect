@@ -159,6 +159,7 @@ input:
         queue: ${INPUT_NATS_STREAM_QUEUE:benthos_queue}
         start_from_oldest: ${INPUT_NATS_STREAM_START_FROM_OLDEST:true}
         subject: ${INPUT_NATS_STREAM_SUBJECT:benthos_messages}
+        unsubscribe_on_close: ${INPUT_NATS_STREAM_UNSUBSCRIBE_ON_CLOSE:true}
         urls:
         - ${INPUT_NATS_STREAM_URLS:nats://localhost:4222}
       nsq:

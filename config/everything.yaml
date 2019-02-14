@@ -166,6 +166,7 @@ input:
     client_id: benthos_client
     queue: benthos_queue
     durable_name: benthos_offset
+    unsubscribe_on_close: true
     start_from_oldest: true
     subject: benthos_messages
     max_inflight: 1024

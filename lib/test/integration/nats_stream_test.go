@@ -75,6 +75,9 @@ func TestNATSStreamIntegration(t *testing.T) {
 	t.Run("TestNATSStreamSinglePart", func(te *testing.T) {
 		testNATSStreamSinglePart(url, te)
 	})
+	t.Run("TestNATSStreamResumeDurable", func(te *testing.T) {
+		testNATSStreamResumeDurable(url, te)
+	})
 	t.Run("TestNATSStreamMultiplePart", func(te *testing.T) {
 		testNATSStreamMultiplePart(url, te)
 	})
@@ -171,6 +174,111 @@ func testNATSStreamSinglePart(url string, t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func testNATSStreamResumeDurable(url string, t *testing.T) {
+	subject := "benthos_test_resume_durable"
+
+	inConf := reader.NewNATSStreamConfig()
+	inConf.ClientID = "benthos_test_durable_client"
+	inConf.URLs = []string{url}
+	inConf.Subject = subject
+	inConf.UnsubOnClose = false
+
+	outConf := writer.NewNATSStreamConfig()
+	outConf.URLs = []string{url}
+	outConf.Subject = subject
+
+	mInput, mOutput, err := createNATSStreamInputOutput(inConf, outConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		mInput.CloseAsync()
+		if cErr := mInput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+		mOutput.CloseAsync()
+		if cErr := mOutput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	testMsgs := map[string]struct{}{}
+	N := 50
+	i := 0
+	for ; i < (N / 2); i++ {
+		str := fmt.Sprintf("hello world: %v", i)
+		testMsgs[str] = struct{}{}
+		msg := message.New([][]byte{
+			[]byte(str),
+		})
+		msg.Get(0).Metadata().Set("foo", "bar")
+		msg.Get(0).Metadata().Set("root_foo", "bar2")
+		if gerr := mOutput.Write(msg); gerr != nil {
+			t.Fatal(gerr)
+		}
+	}
+
+	for len(testMsgs) > 0 {
+		var actM types.Message
+		actM, err = mInput.Read()
+		if err != nil {
+			t.Error(err)
+		} else {
+			act := string(actM.Get(0).Get())
+			if _, exists := testMsgs[act]; !exists {
+				t.Errorf("Unexpected message: %v", act)
+			}
+			delete(testMsgs, act)
+		}
+		if err = mInput.Acknowledge(nil); err != nil {
+			t.Error(err)
+		}
+	}
+
+	mInput.CloseAsync()
+	if cErr := mInput.WaitForClose(time.Second); cErr != nil {
+		t.Error(cErr)
+	}
+
+	for ; i < N; i++ {
+		str := fmt.Sprintf("hello world: %v", i+N)
+		testMsgs[str] = struct{}{}
+		msg := message.New([][]byte{
+			[]byte(str),
+		})
+		msg.Get(0).Metadata().Set("foo", "bar")
+		msg.Get(0).Metadata().Set("root_foo", "bar2")
+		if gerr := mOutput.Write(msg); gerr != nil {
+			t.Fatal(gerr)
+		}
+	}
+
+	if mInput, err = reader.NewNATSStream(inConf, log.Noop(), metrics.Noop()); err != nil {
+		t.Fatal(err)
+	}
+	if err = mInput.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	for len(testMsgs) > 1 {
+		var actM types.Message
+		actM, err = mInput.Read()
+		if err != nil {
+			t.Error(err)
+		} else {
+			act := string(actM.Get(0).Get())
+			if _, exists := testMsgs[act]; !exists {
+				t.Errorf("Unexpected message: %v", act)
+			}
+			delete(testMsgs, act)
+		}
+		if err = mInput.Acknowledge(nil); err != nil {
+			t.Error(err)
+		}
+	}
 }
 
 func testNATSStreamMultiplePart(url string, t *testing.T) {

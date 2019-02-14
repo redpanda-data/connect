@@ -168,6 +168,7 @@ INPUT_NATS_STREAM_MAX_INFLIGHT              = 1024
 INPUT_NATS_STREAM_QUEUE                     = benthos_queue
 INPUT_NATS_STREAM_START_FROM_OLDEST         = true
 INPUT_NATS_STREAM_SUBJECT                   = benthos_messages
+INPUT_NATS_STREAM_UNSUBSCRIBE_ON_CLOSE      = true
 INPUT_NATS_STREAM_URLS                      = nats://localhost:4222
 INPUT_NATS_SUBJECT                          = benthos_messages
 INPUT_NATS_URLS                             = nats://localhost:4222
