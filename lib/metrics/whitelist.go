@@ -1,3 +1,23 @@
+// Copyright (c) 2019 Daniel Rubenstein
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, sub to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 package metrics
 
 import (
@@ -10,11 +30,6 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 )
-
-// WhitelistConfig allows for the placement of filtering rules to only allow
-// select metrics to be displayed or retrieved. It consists of a set of
-// prefixes (direct string comparison) that are checked, and a standard
-// metrics configuration that is wrapped by the whitelist.
 
 //------------------------------------------------------------------------------
 
@@ -41,11 +56,12 @@ the word, you might use the ` + "`^`" + ` or ` + "`$`" + ` regex operators.`,
 	}
 }
 
-//
-
 //------------------------------------------------------------------------------
 
-// WhitelistConfig is a list of configs...
+// WhitelistConfig allows for the placement of filtering rules to only allow
+// select metrics to be displayed or retrieved. It consists of a set of
+// prefixes (direct string comparison) that are checked, and a standard
+// metrics configuration that is wrapped by the whitelist.
 type WhitelistConfig struct {
 	Paths    []string `json:"paths" yaml:"paths"`
 	Patterns []string `json:"patterns" yaml:"patterns"`
@@ -112,8 +128,8 @@ func NewWhitelist(config Config, opts ...func(Type)) (Type, error) {
 	if config.Whitelist.Child == nil {
 		return nil, errors.New("cannot create a whitelist metric without a child")
 	}
-	if c, ok := constructors[config.Whitelist.Child.Type]; ok {
-		child, err := c.constructor(*config.Whitelist.Child, opts...)
+	if _, ok := constructors[config.Whitelist.Child.Type]; ok {
+		child, err := New(*config.Whitelist.Child, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +142,7 @@ func NewWhitelist(config Config, opts ...func(Type)) (Type, error) {
 		for i, p := range config.Whitelist.Patterns {
 			re, err := regexp.Compile(p)
 			if err != nil {
-				return nil, fmt.Errorf("Invalid regular expression: %s", p)
+				return nil, fmt.Errorf("Invalid regular expression: '%s': %v", p, err)
 			}
 			w.patterns[i] = re
 		}
@@ -222,8 +238,7 @@ func (h *Whitelist) SetLogger(log log.Modular) {
 // Close stops the Statsd object from aggregating metrics and cleans up
 // resources.
 func (h *Whitelist) Close() error {
-	h.s.Close()
-	return nil
+	return h.s.Close()
 }
 
 //------------------------------------------------------------------------------
@@ -236,7 +251,7 @@ func (h *Whitelist) HandlerFunc() http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(400)
+		w.WriteHeader(501)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("The child of this whitelist does not support HTTP metrics."))
 	}

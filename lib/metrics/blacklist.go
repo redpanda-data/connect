@@ -1,3 +1,23 @@
+// Copyright (c) 2019 Ashley Jeffs
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, sub to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 package metrics
 
 import (
@@ -10,12 +30,6 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 )
-
-// BlacklistConfig allows for the placement of filtering rules to only allow
-// metrics that are not matched to be displayed or retrieved. It has a set of
-// prefixes (direct string comparison) that are checked as well as a set of
-// regular expressions for more precise control over metrics. It also has a
-// metrics configuration that is wrapped by the Blacklist.
 
 //------------------------------------------------------------------------------
 
@@ -42,11 +56,13 @@ the word, you might use the ` + "`^`" + ` or ` + "`$`" + ` regex operators.`,
 	}
 }
 
-//
-
 //------------------------------------------------------------------------------
 
-// BlacklistConfig is a list of configs...
+// BlacklistConfig allows for the placement of filtering rules to only allow
+// metrics that are not matched to be displayed or retrieved. It has a set of
+// prefixes (direct string comparison) that are checked as well as a set of
+// regular expressions for more precise control over metrics. It also has a
+// metrics configuration that is wrapped by the Blacklist.
 type BlacklistConfig struct {
 	Paths    []string `json:"paths" yaml:"paths"`
 	Patterns []string `json:"patterns" yaml:"patterns"`
@@ -113,8 +129,8 @@ func NewBlacklist(config Config, opts ...func(Type)) (Type, error) {
 	if config.Blacklist.Child == nil {
 		return nil, errors.New("cannot create a Blacklist metric without a child")
 	}
-	if c, ok := constructors[config.Blacklist.Child.Type]; ok {
-		child, err := c.constructor(*config.Blacklist.Child, opts...)
+	if _, ok := constructors[config.Blacklist.Child.Type]; ok {
+		child, err := New(*config.Blacklist.Child, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +145,7 @@ func NewBlacklist(config Config, opts ...func(Type)) (Type, error) {
 		for i, p := range config.Blacklist.Patterns {
 			re, err := regexp.Compile(p)
 			if err != nil {
-				return nil, fmt.Errorf("Invalid regular expression: %s", p)
+				return nil, fmt.Errorf("Invalid regular expression: '%s': %v", p, err)
 			}
 			b.patterns[i] = re
 		}
@@ -225,8 +241,7 @@ func (h *Blacklist) SetLogger(log log.Modular) {
 // Close stops the Statsd object from aggregating metrics and cleans up
 // resources.
 func (h *Blacklist) Close() error {
-	h.s.Close()
-	return nil
+	return h.s.Close()
 }
 
 //------------------------------------------------------------------------------
@@ -239,7 +254,7 @@ func (h *Blacklist) HandlerFunc() http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(400)
+		w.WriteHeader(501)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("The child of this Blacklist does not support HTTP metrics."))
 	}
