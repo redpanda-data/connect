@@ -943,6 +943,10 @@ logger:
 metrics:
   type: http_server
   prefix: benthos
+  blacklist:
+    paths: []
+    patterns: []
+    child: {}
   http_server: {}
   prometheus:
     push_url: ""
@@ -951,5 +955,9 @@ metrics:
     address: localhost:4040
     flush_period: 100ms
     network: udp
+  whitelist:
+    paths: []
+    patterns: []
+    child: {}
 shutdown_timeout: 20s
 

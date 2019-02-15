@@ -196,8 +196,8 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [processors]: docs/processors/README.md
 [outputs]: docs/outputs/README.md
 
-[metrics]: docs/metrics.md
-[metrics-config]: config/metrics.yaml#L35
+[metrics]: docs/metrics/README.md
+[metrics-config]: config/metrics
 [config-interp]: docs/config_interpolation.md
 [compose-examples]: resources/docker/compose_examples
 [streams-api]: docs/api/streams.md

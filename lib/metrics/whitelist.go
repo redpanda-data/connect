@@ -34,25 +34,29 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors[TypeWhiteList] = typeSpec{
+	Constructors[TypeWhiteList] = TypeSpec{
 		constructor: NewWhitelist,
 		description: `
-Whitelist a certain set of paths around a child metric collector.
+Whitelist metric paths within Benthos so that only matching metric paths are
+aggregated by a child metric target.
 
-### Patterns and paths
+Whitelists can either be path prefixes or regular expression patterns, if either
+a path prefix or regular expression matches a metric path it will be included.
 
-Whitelists can be one of two options, paths or regular expression patterns.
-A metric path's eligibility is strictly additive - it only has to pass a
-single path or a single pattern for it to be included.
+The ` + "`prefix`" + ` field in a metrics config is ignored by this type. Please
+configure a prefix at the child level.
 
-An entry in a Whitelist's ` + "`paths`" + `field will check using prefix
-matching. This can be used, for example to allow all metrics from the ` +
-			"`output`" + `stats object to be pushed to the child metric collector.
+### Paths
 
-An entry in a Whitelist's ` + "`patterns`" + `field will check using Go's
-` + "`regexp.MatchString`" + ` function, so any submatch in the final path will
-result in the metric being allowed. To anchor a pattern to the start or end of
-the word, you might use the ` + "`^`" + ` or ` + "`$`" + ` regex operators.`,
+An entry in the ` + "`paths`" + ` field will check using prefix matching. This
+can be used, for example, to allow the child specific metrics paths from an
+output broker with the path ` + "`output.broker`" + `.
+
+### Patterns
+
+An entry in the ` + "`patterns`" + ` field will be parsed as an RE2 regular
+expression and tested against each metric path. This can be used, for example,
+to allow all latency based metrics with the pattern ` + "`.*\\.latency`" + `.`,
 	}
 }
 
@@ -128,29 +132,27 @@ func NewWhitelist(config Config, opts ...func(Type)) (Type, error) {
 	if config.Whitelist.Child == nil {
 		return nil, errors.New("cannot create a whitelist metric without a child")
 	}
-	if _, ok := constructors[config.Whitelist.Child.Type]; ok {
-		child, err := New(*config.Whitelist.Child, opts...)
-		if err != nil {
-			return nil, err
-		}
 
-		w := &Whitelist{
-			paths: config.Whitelist.Paths,
-			s:     child,
-		}
-		w.patterns = make([]*regexp.Regexp, len(config.Whitelist.Patterns))
-		for i, p := range config.Whitelist.Patterns {
-			re, err := regexp.Compile(p)
-			if err != nil {
-				return nil, fmt.Errorf("Invalid regular expression: '%s': %v", p, err)
-			}
-			w.patterns[i] = re
-		}
-
-		return w, nil
+	child, err := New(*config.Whitelist.Child, opts...)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, ErrInvalidMetricOutputType
+	w := &Whitelist{
+		paths:    config.Whitelist.Paths,
+		patterns: make([]*regexp.Regexp, len(config.Whitelist.Patterns)),
+		s:        child,
+	}
+
+	for i, p := range config.Whitelist.Patterns {
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return nil, fmt.Errorf("invalid regular expression: '%s': %v", p, err)
+		}
+		w.patterns[i] = re
+	}
+
+	return w, nil
 }
 
 //------------------------------------------------------------------------------
@@ -252,7 +254,8 @@ func (h *Whitelist) HandlerFunc() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(501)
-		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("The child of this whitelist does not support HTTP metrics."))
 	}
 }
+
+//------------------------------------------------------------------------------

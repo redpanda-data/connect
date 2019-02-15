@@ -1,13 +1,13 @@
-Metrics
-=======
-
-Benthos exposes lots of metrics, and depending on your configuration can target
-either Statsd, Prometheus, or for debugging purposes implements an HTTP endpoint
-where metrics are returned as a JSON structure. By default the debugging
-endpoint is chosen.
+Metric Paths
+============
 
 This document lists some of the most useful metrics exposed by Benthos, there
-are lots of more granular metrics available that may not appear here.
+are lots of more granular metrics available that may not appear here which will
+depend on your pipeline configuration.
+
+Paths are listed here in dot notation, which is how they will appear if
+aggregated by Statsd. Other metrics destinations such as Prometheus will display
+these metrics with other notations (underscores instead of dots.)
 
 ## Input
 
@@ -35,8 +35,8 @@ are lots of more granular metrics available that may not appear here.
 
 ## Processors
 
-Processor metrics are prefixed by the area of the Benthos stream they reside in
-and their index. For example, processors in the `pipeline` section will be
+Processor metrics are prefixed by the area of the Benthos pipeline they reside
+in and their index. For example, processors in the `pipeline` section will be
 prefixed with `pipeline.processor.N`, where N is the index.
 
 - `pipeline.processor.0.count`

@@ -42,27 +42,11 @@
 		}
 	},
 	"metrics": {
-		"type": "http_server",
+		"type": "prometheus",
 		"prefix": "benthos",
-		"blacklist": {
-			"paths": [],
-			"patterns": [],
-			"child": {}
-		},
-		"http_server": {},
 		"prometheus": {
-			"push_url": "",
-			"push_interval": ""
-		},
-		"statsd": {
-			"address": "localhost:4040",
-			"flush_period": "100ms",
-			"network": "udp"
-		},
-		"whitelist": {
-			"paths": [],
-			"patterns": [],
-			"child": {}
+			"push_interval": "",
+			"push_url": ""
 		}
 	},
 	"shutdown_timeout": "20s"

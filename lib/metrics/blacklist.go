@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Ashley Jeffs
+// Copyright (c) 2019 Daniel Rubenstein
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -34,25 +34,30 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors[TypeBlackList] = typeSpec{
+	Constructors[TypeBlackList] = TypeSpec{
 		constructor: NewBlacklist,
 		description: `
-Blacklist a certain set of paths around a child metric collector.
+Blacklist metric paths within Benthos so that they are not aggregated by a child
+metric target.
 
-### Patterns and paths
+Blacklists can either be path prefixes or regular expression patterns, if either
+a path prefix or regular expression matches a metric path it will be excluded.
 
-Blacklists can be one of two options, paths or regular expression patterns.
-A metric path's eligibility is strictly additive - it only has to pass a
-single path or a single pattern for it to be not included.
+The ` + "`prefix`" + ` field in a metrics config is ignored by this type. Please
+configure a prefix at the child level.
 
-An entry in a Blacklist's ` + "`paths`" + `field will check using prefix
-matching. This can be used, for example to allow none of the  metrics from the
-` + "`output`" + `stats object to be pushed to the child metric collector.
+### Paths
 
-An entry in a Blacklist's ` + "`patterns`" + `field will check using Go's
-` + "`regexp.MatchString`" + ` function, so any submatch in the final path will
-result in the metric being allowed. To anchor a pattern to the start or end of
-the word, you might use the ` + "`^`" + ` or ` + "`$`" + ` regex operators.`,
+An entry in the ` + "`paths`" + ` field will check using prefix matching. This
+can be used, for example, to allow none of the child specific metrics paths from
+an output broker with the path ` + "`output.broker`" + `.
+
+### Patterns
+
+An entry in the ` + "`patterns`" + ` field will be parsed as an RE2 regular
+expression and tested against each metric path. This can be used, for example,
+to allow none of the latency based metrics with the pattern
+` + "`.*\\.latency`" + `.`,
 	}
 }
 
@@ -129,31 +134,27 @@ func NewBlacklist(config Config, opts ...func(Type)) (Type, error) {
 	if config.Blacklist.Child == nil {
 		return nil, errors.New("cannot create a Blacklist metric without a child")
 	}
-	if _, ok := constructors[config.Blacklist.Child.Type]; ok {
-		child, err := New(*config.Blacklist.Child, opts...)
-		if err != nil {
-			return nil, err
-		}
 
-		b := &Blacklist{
-			paths: config.Blacklist.Paths,
-			s:     child,
-		}
-
-		b.patterns = make([]*regexp.Regexp, len(config.Blacklist.Patterns))
-
-		for i, p := range config.Blacklist.Patterns {
-			re, err := regexp.Compile(p)
-			if err != nil {
-				return nil, fmt.Errorf("Invalid regular expression: '%s': %v", p, err)
-			}
-			b.patterns[i] = re
-		}
-
-		return b, nil
+	child, err := New(*config.Blacklist.Child, opts...)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, ErrInvalidMetricOutputType
+	b := &Blacklist{
+		paths:    config.Blacklist.Paths,
+		patterns: make([]*regexp.Regexp, len(config.Blacklist.Patterns)),
+		s:        child,
+	}
+
+	for i, p := range config.Blacklist.Patterns {
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return nil, fmt.Errorf("invalid regular expression: '%s': %v", p, err)
+		}
+		b.patterns[i] = re
+	}
+
+	return b, nil
 }
 
 //------------------------------------------------------------------------------
@@ -255,7 +256,8 @@ func (h *Blacklist) HandlerFunc() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(501)
-		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("The child of this Blacklist does not support HTTP metrics."))
 	}
 }
+
+//------------------------------------------------------------------------------

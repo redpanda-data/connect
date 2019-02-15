@@ -461,6 +461,24 @@ func main() {
 		createJSON(t, filepath.Join(configsDir, "conditions", t+".json"), sanit)
 	}
 
+	// Create metrics configs for all types.
+	for t := range metrics.Constructors {
+		conf := config.New()
+		conf.Input.Processors = nil
+		conf.Output.Processors = nil
+		conf.Pipeline.Processors = nil
+
+		conf.Metrics.Type = t
+
+		sanit, err := conf.Sanitised()
+		if err != nil {
+			panic(err)
+		}
+
+		createYAML(t, filepath.Join(configsDir, "metrics", t+".yaml"), sanit)
+		createJSON(t, filepath.Join(configsDir, "metrics", t+".json"), sanit)
+	}
+
 	// Create buffers config
 	{
 		t := "buffers"

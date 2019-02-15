@@ -32,9 +32,11 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors[TypeStatsd] = typeSpec{
+	Constructors[TypeStatsd] = TypeSpec{
 		constructor: NewStatsd,
-		description: `Use the statsd protocol.`,
+		description: `
+Push metrics over a TCP or UDP connection using the
+[StatsD protocol](https://github.com/statsd/statsd).`,
 	}
 }
 

@@ -133,6 +133,10 @@ config with a websocket input and output and a jmespath processor.`[1:],
 		"list-rate-limits", false,
 		"Print a list of available rate_limit options, then exit",
 	)
+	printMetrics = flag.Bool(
+		"list-metrics", false,
+		"Print a list of available metrics options, then exit",
+	)
 	pluginsDir = flag.String(
 		"plugins-dir", "/usr/lib/benthos/plugins",
 		"EXPERIMENTAL: Specify a directory containing Benthos plugins",
@@ -289,7 +293,7 @@ func bootstrap() (config.Type, []string) {
 
 	// If we only want to print our inputs or outputs we should exit afterwards
 	if *printInputs || *printOutputs || *printBuffers || *printProcessors ||
-		*printConditions || *printCaches || *printRateLimits {
+		*printConditions || *printCaches || *printRateLimits || *printMetrics {
 		if *printInputs {
 			fmt.Println(input.Descriptions())
 		}
@@ -310,6 +314,9 @@ func bootstrap() (config.Type, []string) {
 		}
 		if *printCaches {
 			fmt.Println(cache.Descriptions())
+		}
+		if *printMetrics {
+			fmt.Println(metrics.Descriptions())
 		}
 		os.Exit(0)
 	}

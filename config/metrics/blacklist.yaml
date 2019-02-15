@@ -32,22 +32,10 @@ logger:
   static_fields:
     '@service': benthos
 metrics:
-  type: http_server
-  prefix: benthos
+  type: blacklist
   blacklist:
+    child: {}
     paths: []
     patterns: []
-    child: {}
-  http_server: {}
-  prometheus:
-    push_url: ""
-    push_interval: ""
-  statsd:
-    address: localhost:4040
-    flush_period: 100ms
-    network: udp
-  whitelist:
-    paths: []
-    patterns: []
-    child: {}
+  prefix: benthos
 shutdown_timeout: 20s

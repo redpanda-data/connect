@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- New `blacklist` metrics target.
+- New `whitelist` metrics target.
+- Improved generated metrics documentation and config examples.
 - The `nats_stream` input now has a field `unsubscribe_on_close` that when
   disabled allows durable subscription offsets to persist even when all
   connections are closed.

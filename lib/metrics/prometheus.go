@@ -37,10 +37,12 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	constructors[TypePrometheus] = typeSpec{
+	Constructors[TypePrometheus] = TypeSpec{
 		constructor: NewPrometheus,
 		description: `
-Host endpoints for Prometheus scraping.
+Host endpoints (` + "`/metrics` and `/stats`" + `) for Prometheus scraping.
+Metrics paths will differ from [the list](paths.md) in that dot separators will
+instead be underscores.
 
 ### Push Gateway
 

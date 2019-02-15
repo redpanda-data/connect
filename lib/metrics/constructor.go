@@ -29,6 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/util/config"
+	yaml "gopkg.in/yaml.v2"
 )
 
 //------------------------------------------------------------------------------
@@ -40,38 +41,42 @@ var (
 
 //------------------------------------------------------------------------------
 
-// typeSpec is a constructor and a usage description for each metric output
+// TypeSpec is a constructor and a usage description for each metric output
 // type.
-type typeSpec struct {
-	constructor func(conf Config, opts ...func(Type)) (Type, error)
-	description string
+type TypeSpec struct {
+	constructor        func(conf Config, opts ...func(Type)) (Type, error)
+	description        string
+	sanitiseConfigFunc func(conf Config) (interface{}, error)
 }
 
-var constructors = map[string]typeSpec{}
+// Constructors is a map of all metrics types with their specs.
+var Constructors = map[string]TypeSpec{}
 
 //------------------------------------------------------------------------------
 
 // String constants representing each metric type.
 const (
+	TypeBlackList  = "blacklist"
 	TypeHTTPServer = "http_server"
 	TypePrometheus = "prometheus"
 	TypeStatsd     = "statsd"
 	TypeWhiteList  = "whitelist"
-	TypeBlackList  = "blacklist"
 )
 
 //------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all metric output
 // types.
+//
+// TODO: V2 move field prefix into specific implementations.
 type Config struct {
 	Type       string           `json:"type" yaml:"type"`
 	Prefix     string           `json:"prefix" yaml:"prefix"`
+	Blacklist  BlacklistConfig  `json:"blacklist" yaml:"blacklist"`
 	HTTP       struct{}         `json:"http_server" yaml:"http_server"`
 	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Statsd     StatsdConfig     `json:"statsd" yaml:"statsd"`
 	Whitelist  WhitelistConfig  `json:"whitelist" yaml:"whitelist"`
-	Blacklist  BlacklistConfig  `json:"blacklist" yaml:"blacklist"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -79,11 +84,11 @@ func NewConfig() Config {
 	return Config{
 		Type:       "http_server",
 		Prefix:     "benthos",
+		Blacklist:  NewBlacklistConfig(),
 		HTTP:       struct{}{},
 		Prometheus: NewPrometheusConfig(),
 		Statsd:     NewStatsdConfig(),
 		Whitelist:  NewWhitelistConfig(),
-		Blacklist:  NewBlacklistConfig(),
 	}
 }
 
@@ -101,11 +106,49 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	}
 
 	outputMap := config.Sanitised{}
-	outputMap["type"] = hashMap["type"]
-	outputMap[conf.Type] = hashMap[conf.Type]
+
+	t := conf.Type
+	outputMap["type"] = t
+	if sfunc := Constructors[t].sanitiseConfigFunc; sfunc != nil {
+		if outputMap[t], err = sfunc(conf); err != nil {
+			return nil, err
+		}
+	} else {
+		outputMap[t] = hashMap[t]
+	}
 	outputMap["prefix"] = hashMap["prefix"]
 
 	return outputMap, nil
+}
+
+//------------------------------------------------------------------------------
+
+// UnmarshalJSON ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (c *Config) UnmarshalJSON(bytes []byte) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	if err := json.Unmarshal(bytes, &aliased); err != nil {
+		return err
+	}
+
+	*c = Config(aliased)
+	return nil
+}
+
+// UnmarshalYAML ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	if err := unmarshal(&aliased); err != nil {
+		return err
+	}
+
+	*c = Config(aliased)
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -119,29 +162,52 @@ func OptSetLogger(log log.Modular) func(Type) {
 
 //------------------------------------------------------------------------------
 
+var header = "This document was generated with `benthos --list-metrics`" + `
+
+A metrics type represents a destination for Benthos metrics to be aggregated
+such as Statsd, Prometheus, or for debugging purposes an HTTP endpoint that
+exposes a JSON object of metrics.
+
+Benthos exposes lots of metrics and their paths will depend on your pipeline
+configuration. However, there are some critical metrics that will always be
+present that are outlined in [this document](paths.md).`
+
 // Descriptions returns a formatted string of collated descriptions of each
 // type.
 func Descriptions() string {
 	// Order our input types alphabetically
 	names := []string{}
-	for name := range constructors {
+	for name := range Constructors {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	buf := bytes.Buffer{}
-	buf.WriteString("METRIC TARGETS\n")
-	buf.WriteString(strings.Repeat("=", 80))
+	buf.WriteString("Metric Target Types\n")
+	buf.WriteString(strings.Repeat("=", 19))
 	buf.WriteString("\n\n")
-	buf.WriteString("This document has been generated with `benthos --list-metrics`.")
+	buf.WriteString(header)
 	buf.WriteString("\n\n")
 
 	// Append each description
 	for i, name := range names {
+		var confBytes []byte
+
+		conf := NewConfig()
+		conf.Type = name
+		if confSanit, err := SanitiseConfig(conf); err == nil {
+			confBytes, _ = yaml.Marshal(confSanit)
+		}
+
 		buf.WriteString("## ")
 		buf.WriteString("`" + name + "`")
 		buf.WriteString("\n")
-		buf.WriteString(constructors[name].description)
+		if confBytes != nil {
+			buf.WriteString("\n``` yaml\n")
+			buf.Write(confBytes)
+			buf.WriteString("```\n")
+		}
+		buf.WriteString(Constructors[name].description)
 		if i != (len(names) - 1) {
 			buf.WriteString("\n\n")
 		}
@@ -154,7 +220,7 @@ func New(conf Config, opts ...func(Type)) (Type, error) {
 	if conf.Type == "none" {
 		return DudType{}, nil
 	}
-	if c, ok := constructors[conf.Type]; ok {
+	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, opts...)
 	}
 	return nil, ErrInvalidMetricOutputType
