@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	jmespath "github.com/jmespath/go-jmespath"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -153,14 +154,13 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int) {
-		jsonPart, err := newMsg.Get(index).JSON()
+	proc := func(index int, span opentracing.Span, part types.Part) error {
+		jsonPart, err := part.JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
-			FlagFail(newMsg.Get(index))
-			return
+			return err
 		}
 
 		var result interface{}
@@ -168,27 +168,19 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			p.mErrJMES.Incr(1)
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to search json: %v\n", err)
-			FlagFail(newMsg.Get(index))
-			return
+			return err
 		}
 
 		if err = newMsg.Get(index).SetJSON(result); err != nil {
 			p.mErrJSONS.Incr(1)
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to convert jmespath result into part: %v\n", err)
-			FlagFail(newMsg.Get(index))
+			return err
 		}
+		return nil
 	}
 
-	if len(p.parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			proc(i)
-		}
-	} else {
-		for _, i := range p.parts {
-			proc(i)
-		}
-	}
+	IteratePartsWithSpan(TypeJMESPath, p.parts, newMsg, proc)
 
 	msgs := [1]types.Message{newMsg}
 

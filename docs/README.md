@@ -14,6 +14,8 @@ Documentation
 - [Conditions](./conditions/README.md)
 - [Caches](./caches/README.md)
 - [Rate Limits](./rate_limits/README.md)
+- [Metrics](./metrics/README.md)
+- [Tracers](./tracers/README.md)
 
 ## Other Sections
 

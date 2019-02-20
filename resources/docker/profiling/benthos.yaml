@@ -44,3 +44,8 @@ logger:
 metrics:
   type: prometheus
   prefix: benthos
+
+tracer:
+  type: jaeger
+  jaeger:
+    agent_address: 'jaeger:6831'

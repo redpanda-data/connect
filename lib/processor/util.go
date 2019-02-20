@@ -21,8 +21,11 @@
 package processor
 
 import (
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -153,6 +156,47 @@ func HasFailed(part types.Part) bool {
 // ClearFail removes any existing failure flags from a message part.
 func ClearFail(part types.Part) {
 	part.Metadata().Delete(FailFlagKey)
+}
+
+//------------------------------------------------------------------------------
+
+// IteratePartsWithSpan iterates the parts of a message according to a slice of
+// indexes (if empty all parts are iterated) and calls a func for each part
+// along with a tracing span for that part. If an error is returned the part is
+// flagged as failed and the span has the error logged.
+func IteratePartsWithSpan(
+	operationName string, parts []int, msg types.Message,
+	iter func(int, opentracing.Span, types.Part) error,
+) {
+	exec := func(i int) {
+		part := msg.Get(i)
+		span := tracing.GetSpan(part)
+		if span == nil {
+			span = opentracing.StartSpan(operationName)
+		} else {
+			span = opentracing.StartSpan(
+				operationName,
+				opentracing.ChildOf(span.Context()),
+			)
+		}
+		if err := iter(i, span, part); err != nil {
+			FlagFail(part)
+			span.LogFields(
+				olog.String("event", "error"),
+				olog.String("type", err.Error()),
+			)
+		}
+		span.Finish()
+	}
+	if len(parts) == 0 {
+		for i := 0; i < msg.Len(); i++ {
+			exec(i)
+		}
+	} else {
+		for _, i := range parts {
+			exec(i)
+		}
+	}
 }
 
 //------------------------------------------------------------------------------

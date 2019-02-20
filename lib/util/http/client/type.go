@@ -40,6 +40,8 @@ import (
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 	"github.com/Jeffail/benthos/lib/util/tls"
+	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -445,10 +447,33 @@ func (h *Type) checkStatus(code int) (succeeded bool, retStrat retryStrategy) {
 func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 	h.mCount.Incr(1)
 
+	var spans []opentracing.Span
+	if msg != nil {
+		spans = make([]opentracing.Span, msg.Len())
+		msg.Iter(func(i int, p types.Part) error {
+			spans[i], _ = opentracing.StartSpanFromContext(message.GetContext(p), "http_request")
+			return nil
+		})
+		defer func() {
+			for _, s := range spans {
+				s.Finish()
+			}
+		}()
+	}
+	logErr := func(e error) {
+		for _, s := range spans {
+			s.LogFields(
+				olog.String("event", "error"),
+				olog.String("type", e.Error()),
+			)
+		}
+	}
+
 	var req *http.Request
 	if req, err = h.CreateRequest(msg); err != nil {
 		h.mErrReq.Incr(1)
 		h.mErr.Incr(1)
+		logErr(err)
 		return nil, err
 	}
 
@@ -478,11 +503,13 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 	for i < j && err != nil {
 		h.mErrRes.Incr(1)
 		h.mErr.Incr(1)
+		logErr(err)
 
 		req, err = h.CreateRequest(msg)
 		if err != nil {
 			h.mErrReq.Incr(1)
 			h.mErr.Incr(1)
+			logErr(err)
 			continue
 		}
 		if rateLimited {
@@ -517,6 +544,7 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 	if err != nil {
 		h.mErrRes.Incr(1)
 		h.mErr.Incr(1)
+		logErr(err)
 		return nil, err
 	}
 

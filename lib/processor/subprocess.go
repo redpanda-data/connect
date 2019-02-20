@@ -32,9 +32,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -319,6 +321,9 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	result := msg.Copy()
 
 	proc := func(i int) error {
+		span := tracing.CreateChildSpan(TypeSubprocess, result.Get(i))
+		defer span.Finish()
+
 		results := [][]byte{}
 		splitMsg := bytes.Split(result.Get(i).Get(), []byte("\n"))
 		for j, p := range splitMsg {
@@ -333,6 +338,10 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 			if err != nil {
 				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
 				e.mErr.Incr(1)
+				span.LogFields(
+					olog.String("event", "error"),
+					olog.String("type", err.Error()),
+				)
 				results = append(results, p)
 			} else {
 				results = append(results, res)

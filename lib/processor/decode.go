@@ -31,6 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -123,31 +124,22 @@ func (c *Decode) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	c.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(i int) {
-		part := msg.Get(i).Get()
-		newPart, err := c.fn(part)
-		if err == nil {
-			newMsg.Get(i).Set(newPart)
-		} else {
+	proc := func(i int, span opentracing.Span, part types.Part) error {
+		newBytes, err := c.fn(part.Get())
+		if err != nil {
 			c.log.Errorf("Failed to decode message part: %v\n", err)
 			c.mErr.Incr(1)
-			FlagFail(newMsg.Get(i))
+			return err
 		}
-	}
-
-	if len(c.conf.Parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			proc(i)
-		}
-	} else {
-		for _, i := range c.conf.Parts {
-			proc(i)
-		}
+		part.Set(newBytes)
+		return nil
 	}
 
 	if newMsg.Len() == 0 {
 		return nil, response.NewAck()
 	}
+
+	IteratePartsWithSpan(TypeDecode, c.conf.Parts, newMsg, proc)
 
 	c.mBatchSent.Incr(1)
 	c.mSent.Incr(int64(newMsg.Len()))

@@ -31,8 +31,10 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -291,6 +293,10 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			newMsg.Append(msg.Get(i).Copy())
 			return nil
 		}
+
+		span := tracing.CreateChildSpan(TypeUnarchive, part)
+		defer span.Finish()
+
 		newParts, err := d.unarchive(part)
 		if err == nil {
 			newMsg.Append(newParts...)
@@ -299,6 +305,10 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			d.log.Errorf("Failed to unarchive message part: %v\n", err)
 			newMsg.Append(part)
 			FlagFail(newMsg.Get(-1))
+			span.LogFields(
+				olog.String("event", "error"),
+				olog.String("type", err.Error()),
+			)
 		}
 		return nil
 	})

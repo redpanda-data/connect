@@ -34,6 +34,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -180,31 +181,22 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	d.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int) {
-		part := msg.Get(index).Get()
-		newPart, err := d.decomp(part)
-		if err == nil {
-			newMsg.Get(index).Set(newPart)
-		} else {
+	proc := func(i int, span opentracing.Span, part types.Part) error {
+		newBytes, err := d.decomp(part.Get())
+		if err != nil {
 			d.mErr.Incr(1)
 			d.log.Errorf("Failed to decompress message part: %v\n", err)
-			FlagFail(newMsg.Get(index))
+			return err
 		}
-	}
-
-	if len(d.conf.Parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			proc(i)
-		}
-	} else {
-		for _, i := range d.conf.Parts {
-			proc(i)
-		}
+		part.Set(newBytes)
+		return nil
 	}
 
 	if newMsg.Len() == 0 {
 		return nil, response.NewAck()
 	}
+
+	IteratePartsWithSpan(TypeDecompress, d.conf.Parts, newMsg, proc)
 
 	d.mBatchSent.Incr(1)
 	d.mSent.Incr(int64(newMsg.Len()))

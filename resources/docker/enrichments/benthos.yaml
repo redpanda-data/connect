@@ -20,6 +20,7 @@ pipeline:
   - type: batch
     batch:
       count: 10 # Batch size, determines how many requests are made in parallel
+
   - type: process_dag
     process_dag:
       sometimes_404:
@@ -94,3 +95,8 @@ logger:
 metrics:
   type: prometheus
   prefix: benthos
+
+tracer:
+  type: jaeger
+  jaeger:
+    agent_address: 'jaeger:6831'

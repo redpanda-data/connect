@@ -26,13 +26,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/OneOfOne/xxhash"
-
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
+	"github.com/OneOfOne/xxhash"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -222,6 +223,13 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	extractedHash := false
 	hasher := d.hasherFunc()
 
+	spans := tracing.CreateChildSpans(TypeDedupe, msg)
+	defer func() {
+		for _, s := range spans {
+			s.Finish()
+		}
+	}()
+
 	key := d.keyBytes
 	if len(key) > 0 && d.interpolateKey {
 		key = text.ReplaceFunctionVariables(msg, key)
@@ -255,11 +263,23 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			d.mErrCache.Incr(1)
 			d.mErr.Incr(1)
 			d.log.Errorf("Cache error: %v\n", err)
+			for _, s := range spans {
+				s.LogFields(
+					olog.String("event", "error"),
+					olog.String("type", err.Error()),
+				)
+			}
 			if d.conf.Dedupe.DropOnCacheErr {
 				d.mDropped.Incr(1)
 				return nil, response.NewAck()
 			}
 		} else {
+			for _, s := range spans {
+				s.LogFields(
+					olog.String("event", "dropped"),
+					olog.String("type", "deduplicated"),
+				)
+			}
 			d.mDropped.Incr(1)
 			return nil, response.NewAck()
 		}

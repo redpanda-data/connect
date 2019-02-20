@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -66,6 +67,7 @@ type Single interface {
 type SingleWrapper struct {
 	stats metrics.Type
 	log   log.Modular
+	conf  Config
 
 	buffer      Single
 	errThrottle *throttle.Type
@@ -94,6 +96,7 @@ func NewSingleWrapper(
 	m := SingleWrapper{
 		stats:             stats,
 		log:               log,
+		conf:              conf,
 		buffer:            buffer,
 		running:           1,
 		consuming:         1,
@@ -134,7 +137,7 @@ func (m *SingleWrapper) inputLoop() {
 		case <-m.stopConsumingChan:
 			return
 		}
-		backlog, err := m.buffer.PushMessage(tr.Payload)
+		backlog, err := m.buffer.PushMessage(tracing.WithSiblingSpans("buffer_"+m.conf.Type, tr.Payload))
 		if err == nil {
 			mWriteCount.Incr(1)
 			mWriteBacklog.Set(int64(backlog))
@@ -193,6 +196,9 @@ func (m *SingleWrapper) outputLoop() {
 		}
 
 		if msg != nil {
+			// It's possible that the buffer wiped our previous root span.
+			tracing.InitSpans("buffer_"+m.conf.Type, msg)
+
 			select {
 			case m.messagesOut <- types.NewTransaction(msg, m.responsesOut):
 			case <-m.closeChan:
@@ -204,6 +210,7 @@ func (m *SingleWrapper) outputLoop() {
 			}
 			if res.Error() == nil {
 				mLatency.Timing(time.Since(msg.CreatedAt()).Nanoseconds())
+				tracing.FinishSpans(msg)
 				msg = nil
 				backlog, _ := m.buffer.ShiftMessage()
 				mBacklog.Set(int64(backlog))

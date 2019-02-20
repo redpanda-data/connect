@@ -35,6 +35,7 @@ import (
 	"github.com/Jeffail/gabs"
 	"github.com/benhoyt/goawk/interp"
 	"github.com/benhoyt/goawk/parser"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -344,10 +345,8 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	a.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int) {
+	proc := func(i int, span opentracing.Span, part types.Part) error {
 		var outBuf, errBuf bytes.Buffer
-
-		part := newMsg.Get(index)
 
 		// Function overrides
 		a.functions["metadata_get"] = func(k string) string {
@@ -399,8 +398,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			if err != nil {
 				a.mErr.Incr(1)
 				a.log.Errorf("Failed to parse part into json: %v\n", err)
-				FlagFail(part)
-				return
+				return err
 			}
 
 			for k, v := range flattenForAWK("", jsonPart) {
@@ -423,16 +421,14 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		if exitStatus, err := interp.ExecProgram(a.program, config); err != nil {
 			a.mErr.Incr(1)
 			a.log.Errorf("Non-fatal execution error: %v\n", err)
-			FlagFail(part)
-			return
+			return err
 		} else if exitStatus != 0 {
 			a.mErr.Incr(1)
-			a.log.Errorf(
-				"Non-fatal execution error: %v\n",
-				fmt.Errorf("awk interpreter returned non-zero exit code: %d", exitStatus),
+			err = fmt.Errorf(
+				"non-fatal execution error: awk interpreter returned non-zero exit code: %d", exitStatus,
 			)
-			FlagFail(part)
-			return
+			a.log.Errorf("AWK: %v\n", err)
+			return err
 		}
 
 		if errMsg, err := ioutil.ReadAll(&errBuf); err != nil {
@@ -440,14 +436,14 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		} else if len(errMsg) > 0 {
 			a.mErr.Incr(1)
 			a.log.Errorf("Execution error: %s\n", errMsg)
-			FlagFail(part)
+			return errors.New(string(errMsg))
 		}
 
 		resMsg, err := ioutil.ReadAll(&outBuf)
 		if err != nil {
 			a.mErr.Incr(1)
 			a.log.Errorf("Read output error: %v\n", err)
-			FlagFail(part)
+			return err
 		}
 
 		if len(resMsg) > 0 {
@@ -457,17 +453,10 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			}
 			part.Set(resMsg)
 		}
+		return nil
 	}
 
-	if len(a.parts) == 0 {
-		for i := 0; i < newMsg.Len(); i++ {
-			proc(i)
-		}
-	} else {
-		for _, i := range a.parts {
-			proc(i)
-		}
-	}
+	IteratePartsWithSpan(TypeAWK, a.parts, newMsg, proc)
 
 	msgs := [1]types.Message{newMsg}
 

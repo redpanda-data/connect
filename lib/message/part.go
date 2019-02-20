@@ -135,7 +135,7 @@ func (p *Part) Set(data []byte) types.Part {
 	return p
 }
 
-// SetMetadata sets the metadata of a message part
+// SetMetadata sets the metadata of a message part.
 func (p *Part) SetMetadata(meta types.Metadata) types.Part {
 	p.metadata = meta
 	return p

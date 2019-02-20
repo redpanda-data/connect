@@ -96,6 +96,12 @@ Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for
 debugging purposes an HTTP endpoint that returns a JSON formatted object. The
 target can be specified [via config][metrics-config].
 
+### Tracing
+
+Benthos also [emits opentracing events][tracers] to a tracer of your choice
+(currently only Jaeger is supported) which can be used to visualise the
+processors within a pipeline.
+
 ## Configuration
 
 The configuration file for a Benthos stream is made up of four main sections;
@@ -197,6 +203,7 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [outputs]: docs/outputs/README.md
 
 [metrics]: docs/metrics/README.md
+[tracers]: docs/tracers/README.md
 [metrics-config]: config/metrics
 [config-interp]: docs/config_interpolation.md
 [compose-examples]: resources/docker/compose_examples

@@ -53,5 +53,9 @@
 		"http_server": {},
 		"prefix": "benthos"
 	},
+	"tracer": {
+		"type": "none",
+		"none": {}
+	},
 	"shutdown_timeout": "20s"
 }

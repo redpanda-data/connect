@@ -26,9 +26,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -226,14 +228,26 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 	var procs []types.Processor
 	fellthrough := false
 
-	for _, switchCase := range s.cases {
+	spans := tracing.CreateChildSpans(TypeSwitch, msg)
+
+	for i, switchCase := range s.cases {
 		if !fellthrough && !switchCase.condition.Check(msg) {
 			continue
 		}
 		procs = append(procs, switchCase.processors...)
+		for _, s := range spans {
+			s.LogFields(
+				olog.String("event", "case_match"),
+				olog.String("value", strconv.Itoa(i)),
+			)
+		}
 		if fellthrough = switchCase.fallThrough; !fellthrough {
 			break
 		}
+	}
+
+	for _, s := range spans {
+		s.Finish()
 	}
 
 	msgs, res = ExecuteAll(procs, msg)

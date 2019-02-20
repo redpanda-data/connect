@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
@@ -113,6 +114,13 @@ func NewSleep(
 // resulting messages or a response to be sent back to the message source.
 func (s *Sleep) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.mCount.Incr(1)
+
+	spans := tracing.CreateChildSpans(TypeSleep, msg)
+	defer func() {
+		for _, span := range spans {
+			span.Finish()
+		}
+	}()
 
 	period := s.duration
 	if s.isInterpolated {

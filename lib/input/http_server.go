@@ -35,10 +35,12 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/message/metadata"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 	"github.com/gorilla/websocket"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -258,6 +260,15 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	message.SetAllMetadata(msg, meta)
 
+	// Try to either extract parent span from headers, or create a new one.
+	carrier := opentracing.HTTPHeadersCarrier(r.Header)
+	if clientSpanContext, serr := opentracing.GlobalTracer().Extract(opentracing.HTTPHeaders, carrier); serr == nil {
+		tracing.InitSpansFromParent("input_http_server_post", clientSpanContext, msg)
+	} else {
+		tracing.InitSpans("input_http_server_post", msg)
+	}
+	defer tracing.FinishSpans(msg)
+
 	h.mCount.Incr(1)
 	h.mPartsCount.Incr(int64(msg.Len()))
 
@@ -348,6 +359,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		for _, c := range r.Cookies() {
 			meta.Set(c.Name, c.Value)
 		}
+		tracing.InitSpans("input_http_server_websocket", msg)
 
 		select {
 		case h.transactions <- types.NewTransaction(msg, resChan):
@@ -372,6 +384,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		case <-h.closeChan:
 			return
 		}
+		tracing.FinishSpans(msg)
 	}
 }
 

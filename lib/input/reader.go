@@ -26,6 +26,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
@@ -184,6 +185,7 @@ func (r *Reader) loop() {
 			mRcvd.Incr(1)
 		}
 
+		tracing.InitSpans("input_"+r.typeStr, msg)
 		select {
 		case r.transactions <- types.NewTransaction(msg, r.responses):
 		case <-r.closeChan:
@@ -212,6 +214,7 @@ func (r *Reader) loop() {
 		case <-r.closeChan:
 			return
 		}
+		tracing.FinishSpans(msg)
 	}
 }
 
