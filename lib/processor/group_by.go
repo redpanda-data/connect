@@ -22,14 +22,17 @@ package processor
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -238,19 +241,36 @@ func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	}
 	groupless := message.New(nil)
 
+	spans := tracing.CreateChildSpans(TypeGroupBy, msg)
+
 	msg.Iter(func(i int, p types.Part) error {
 		for j, group := range g.groups {
 			if group.Condition.Check(message.Lock(msg, i)) {
+				groupStr := strconv.Itoa(j)
+				spans[i].LogFields(
+					olog.String("event", "grouped"),
+					olog.String("type", groupStr),
+				)
+				spans[i].SetTag("group", groupStr)
 				groups[j].Append(p.Copy())
 				g.mGroupPass[j].Incr(1)
 				return nil
 			}
 		}
 
+		spans[i].LogFields(
+			olog.String("event", "grouped"),
+			olog.String("type", "default"),
+		)
+		spans[i].SetTag("group", "default")
 		groupless.Append(p.Copy())
 		g.mGroupDefault.Incr(1)
 		return nil
 	})
+
+	for _, s := range spans {
+		s.Finish()
+	}
 
 	msgs := []types.Message{}
 	for i, gmsg := range groups {

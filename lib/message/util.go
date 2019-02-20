@@ -56,6 +56,16 @@ func GetAllBytes(m types.Message) [][]byte {
 
 //------------------------------------------------------------------------------
 
+// MetaPartCopy creates a new empty message part by copying any meta fields
+// (metadata, context, etc) from a reference part.
+func MetaPartCopy(p types.Part) types.Part {
+	newPart := WithContext(GetContext(p), NewPart(nil))
+	newPart.SetMetadata(p.Metadata().Copy())
+	return newPart
+}
+
+//------------------------------------------------------------------------------
+
 func cloneMap(oldMap map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	newMap := make(map[string]interface{}, len(oldMap))

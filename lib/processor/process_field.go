@@ -27,6 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/gabs"
@@ -150,11 +151,12 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		}
 	}
 
-	reqMsg := message.New(make([][]byte, len(targetParts)))
+	reqMsg := message.New(nil)
 	gParts := make([]*gabs.Container, len(targetParts))
 
 	for i, index := range targetParts {
-		reqMsg.Get(i).Set([]byte(""))
+		reqPart := message.MetaPartCopy(payload.Get(index))
+		reqPart.Set([]byte(""))
 		var err error
 		var jObj interface{}
 		if jObj, err = payload.Get(index).JSON(); err != nil {
@@ -170,13 +172,15 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		gTarget := gParts[i].S(p.path...)
 		switch t := gTarget.Data().(type) {
 		case string:
-			reqMsg.Get(i).Set([]byte(t))
+			reqPart.Set([]byte(t))
 		default:
-			reqMsg.Get(i).SetJSON(gTarget.Data())
+			reqPart.SetJSON(gTarget.Data())
 		}
+		reqMsg.Append(reqPart)
 	}
 
-	resultMsgs, _ := ExecuteAll(p.children, reqMsg)
+	propMsg := tracing.WithChildSpans(TypeProcessField, reqMsg)
+	resultMsgs, _ := ExecuteAll(p.children, propMsg)
 	resMsg := message.New(nil)
 	for _, rMsg := range resultMsgs {
 		rMsg.Iter(func(i int, p types.Part) error {
@@ -184,6 +188,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 			return nil
 		})
 	}
+	defer tracing.FinishSpans(propMsg)
 
 	if exp, act := len(targetParts), resMsg.Len(); exp != act {
 		p.mBatchSent.Incr(1)
@@ -191,7 +196,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		p.mErr.Incr(1)
 		p.mErrMisalignedBatch.Incr(1)
 		p.log.Errorf("Misaligned processor result batch. Expected %v messages, received %v\n", exp, act)
-		resMsg.Iter(func(i int, p types.Part) error {
+		payload.Iter(func(i int, p types.Part) error {
 			FlagFail(p)
 			return nil
 		})

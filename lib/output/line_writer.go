@@ -29,6 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -122,6 +123,9 @@ func (w *LineWriter) loop() {
 		case <-w.closeChan:
 			return
 		}
+
+		spans := tracing.CreateChildSpans("output_"+w.typeStr, ts.Payload)
+
 		var err error
 		if ts.Payload.Len() == 1 {
 			_, err = fmt.Fprintf(w.handle, "%s%s", ts.Payload.Get(0).Get(), delim)
@@ -136,6 +140,11 @@ func (w *LineWriter) loop() {
 			mSent.Incr(1)
 			mPartsSent.Incr(int64(ts.Payload.Len()))
 		}
+
+		for _, s := range spans {
+			s.Finish()
+		}
+
 		select {
 		case ts.ResponseChan <- response.NewError(err):
 		case <-w.closeChan:

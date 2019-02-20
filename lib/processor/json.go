@@ -32,6 +32,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Jeffail/gabs"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -540,22 +541,20 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		valueBytes = text.ReplaceFunctionVariablesEscaped(msg, valueBytes)
 	}
 
-	proc := func(index int) {
-		jsonPart, err := newMsg.Get(index).JSON()
+	proc := func(index int, span opentracing.Span, part types.Part) error {
+		jsonPart, err := part.JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
-			FlagFail(newMsg.Get(index))
-			return
+			return err
 		}
 
 		var data interface{}
 		if data, err = p.operator(jsonPart, json.RawMessage(valueBytes)); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)
-			FlagFail(newMsg.Get(index))
-			return
+			return err
 		}
 
 		switch t := data.(type) {
@@ -568,20 +567,13 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 				p.mErrJSONS.Incr(1)
 				p.mErr.Incr(1)
 				p.log.Debugf("Failed to convert json into part: %v\n", err)
-				FlagFail(newMsg.Get(index))
+				return err
 			}
 		}
+		return nil
 	}
 
-	if len(p.parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			proc(i)
-		}
-	} else {
-		for _, i := range p.parts {
-			proc(i)
-		}
-	}
+	IteratePartsWithSpan(TypeJSON, p.parts, newMsg, proc)
 
 	msgs := [1]types.Message{newMsg}
 

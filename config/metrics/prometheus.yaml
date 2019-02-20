@@ -37,4 +37,7 @@ metrics:
   prometheus:
     push_interval: ""
     push_url: ""
+tracer:
+  type: none
+  none: {}
 shutdown_timeout: 20s

@@ -25,6 +25,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/gabs"
@@ -106,6 +107,13 @@ func NewMergeJSON(
 func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
+	spans := tracing.CreateChildSpans(TypeMergeJSON, msg)
+	defer func() {
+		for _, s := range spans {
+			s.Finish()
+		}
+	}()
+
 	newPart := gabs.New()
 	mergeFunc := func(index int) {
 		jsonPart, err := msg.Get(index).JSON()
@@ -167,6 +175,7 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		p.mErrJSONS.Incr(1)
 		p.mErr.Incr(1)
 		p.log.Debugf("Failed to marshal merged part into json: %v\n", err)
+		FlagFail(newMsg.Get(i))
 	}
 	newMsg.Get(i).SetMetadata(firstMetadata)
 

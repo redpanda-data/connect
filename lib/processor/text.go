@@ -32,6 +32,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -316,27 +317,19 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
 	}
 
-	proc := func(index int) {
-		data := newMsg.Get(index).Get()
+	proc := func(index int, span opentracing.Span, part types.Part) error {
+		data := part.Get()
 		var err error
 		if data, err = t.operator(data, valueBytes); err != nil {
 			t.mErr.Incr(1)
 			t.log.Debugf("Failed to apply operator: %v\n", err)
-			FlagFail(newMsg.Get(index))
-			return
+			return err
 		}
-		newMsg.Get(index).Set(data)
+		part.Set(data)
+		return nil
 	}
 
-	if len(t.parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			proc(i)
-		}
-	} else {
-		for _, i := range t.parts {
-			proc(i)
-		}
-	}
+	IteratePartsWithSpan(TypeText, t.parts, newMsg, proc)
 
 	msgs := [1]types.Message{newMsg}
 

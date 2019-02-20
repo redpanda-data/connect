@@ -27,11 +27,14 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/lambda"
+	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -181,6 +184,9 @@ func (l *Type) Invoke(msg types.Message) (types.Message, error) {
 	response := msg.Copy()
 
 	if err := msg.Iter(func(i int, p types.Part) error {
+		s, _ := opentracing.StartSpanFromContext(message.GetContext(p), "lambda_invoke")
+		defer s.Finish()
+
 		remainingRetries := l.conf.NumRetries
 		for {
 			l.waitForAccess()
@@ -198,6 +204,10 @@ func (l *Type) Invoke(msg types.Message) (types.Message, error) {
 				return nil
 			}
 			l.mErr.Incr(1)
+			s.LogFields(
+				olog.String("event", "error"),
+				olog.String("type", err.Error()),
+			)
 			remainingRetries--
 			if remainingRetries < 0 {
 				return err

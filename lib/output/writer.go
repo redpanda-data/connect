@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output/writer"
 	"github.com/Jeffail/benthos/lib/response"
@@ -134,6 +135,7 @@ func (w *Writer) loop() {
 			return
 		}
 
+		spans := tracing.CreateChildSpans("output_"+w.typeStr, ts.Payload)
 		err := w.writer.Write(ts.Payload)
 
 		// If our writer says it is not connected.
@@ -182,6 +184,11 @@ func (w *Writer) loop() {
 			mPartsSent.Incr(int64(ts.Payload.Len()))
 			throt.Reset()
 		}
+
+		for _, s := range spans {
+			s.Finish()
+		}
+
 		select {
 		case ts.ResponseChan <- response.NewError(err):
 		case <-w.closeChan:

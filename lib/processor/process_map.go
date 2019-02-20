@@ -29,6 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/message/mapper"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
@@ -282,7 +283,10 @@ func NewProcessMap(
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	alignedResult, err := p.CreateResult(msg)
+	propMsg := tracing.WithChildSpans(TypeProcessMap, msg)
+	alignedResult, err := p.CreateResult(propMsg)
+	defer tracing.FinishSpans(propMsg)
+
 	if err != nil {
 		result := msg.Copy()
 		result.Iter(func(i int, p types.Part) error {

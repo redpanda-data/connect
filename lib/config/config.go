@@ -36,6 +36,7 @@ import (
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/stream"
+	"github.com/Jeffail/benthos/lib/tracer"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"gopkg.in/yaml.v2"
 )
@@ -49,6 +50,7 @@ type Type struct {
 	Manager            manager.Config `json:"resources" yaml:"resources"`
 	Logger             log.Config     `json:"logger" yaml:"logger"`
 	Metrics            metrics.Config `json:"metrics" yaml:"metrics"`
+	Tracer             tracer.Config  `json:"tracer" yaml:"tracer"`
 	SystemCloseTimeout string         `json:"shutdown_timeout" yaml:"shutdown_timeout"`
 }
 
@@ -63,6 +65,7 @@ func New() Type {
 		Manager:            manager.NewConfig(),
 		Logger:             log.NewConfig(),
 		Metrics:            metricsConf,
+		Tracer:             tracer.NewConfig(),
 		SystemCloseTimeout: "20s",
 	}
 }
@@ -78,6 +81,7 @@ type SanitisedConfig struct {
 	Manager            interface{} `json:"resources" yaml:"resources"`
 	Logger             interface{} `json:"logger" yaml:"logger"`
 	Metrics            interface{} `json:"metrics" yaml:"metrics"`
+	Tracer             interface{} `json:"tracer" yaml:"tracer"`
 	SystemCloseTimeout interface{} `json:"shutdown_timeout" yaml:"shutdown_timeout"`
 }
 
@@ -120,6 +124,12 @@ func (c Type) Sanitised() (*SanitisedConfig, error) {
 		return nil, err
 	}
 
+	var tracConf interface{}
+	tracConf, err = tracer.SanitiseConfig(c.Tracer)
+	if err != nil {
+		return nil, err
+	}
+
 	return &SanitisedConfig{
 		HTTP:               c.HTTP,
 		Input:              inConf,
@@ -129,6 +139,7 @@ func (c Type) Sanitised() (*SanitisedConfig, error) {
 		Manager:            mgrConf,
 		Logger:             c.Logger,
 		Metrics:            metConf,
+		Tracer:             tracConf,
 		SystemCloseTimeout: c.SystemCloseTimeout,
 	}, nil
 }

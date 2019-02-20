@@ -332,14 +332,14 @@ partLoop:
 			}
 		}
 
-		mappedMsg.Append(message.NewPart(nil))
-		if err = mappedMsg.Get(-1).SetJSON(destObj.Data()); err != nil {
+		mappedPart := message.MetaPartCopy(msg.Get(i))
+		if err = mappedPart.SetJSON(destObj.Data()); err != nil {
 			t.mReqErr.Incr(1)
 			t.mReqErrJSON.Incr(1)
 			t.log.Errorf("Failed to marshal request map result in message part '%v'. Map contents: '%v'\n", i, destObj.String())
 			failed = append(failed, i)
 		} else {
-			mappedMsg.Get(-1).SetMetadata(msg.Get(i).Metadata().Copy())
+			mappedMsg.Append(mappedPart)
 		}
 	}
 
@@ -423,11 +423,12 @@ partLoop:
 		}
 
 		if len(t.resMap) == 0 && len(t.resOptMap) == 0 {
-			newPart := response.Get(i).Copy()
+			newPart := message.MetaPartCopy(parts[i])
+			newPart.Set(response.Get(i).Get())
 
 			// Overwrite payload parts with new parts metadata.
-			metadata := parts[i].Metadata()
-			newPart.Metadata().Iter(func(k, v string) error {
+			metadata := newPart.Metadata()
+			response.Get(i).Metadata().Iter(func(k, v string) error {
 				metadata.Set(k, v)
 				return nil
 			})

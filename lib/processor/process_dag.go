@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/quipo/dependencysolver"
@@ -203,6 +204,8 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		return nil
 	})
 
+	propMsg := tracing.WithChildSpans(TypeProcessDAG, result)
+
 	for _, layer := range p.dag {
 		results := make([]types.Message, len(layer))
 		errors := make([]error, len(layer))
@@ -211,7 +214,9 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		wg.Add(len(layer))
 		for i, eid := range layer {
 			go func(id string, index int) {
-				results[index], errors[index] = p.children[id].CreateResult(result)
+				inputMsg := tracing.WithChildSpans(id, propMsg)
+				results[index], errors[index] = p.children[id].CreateResult(inputMsg)
+				tracing.FinishSpans(inputMsg)
 				wg.Done()
 			}(eid, i)
 		}
@@ -236,6 +241,8 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 			}
 		}
 	}
+
+	tracing.FinishSpans(propMsg)
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(result.Len()))

@@ -5,10 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.6.0 - 2019-02-20
+
 ### Added
 
 - New `blacklist` metrics target.
 - New `whitelist` metrics target.
+- Initial support for opentracing, including a new `tracer` root component.
 - Improved generated metrics documentation and config examples.
 - The `nats_stream` input now has a field `unsubscribe_on_close` that when
   disabled allows durable subscription offsets to persist even when all

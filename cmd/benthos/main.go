@@ -49,6 +49,7 @@ import (
 	"github.com/Jeffail/benthos/lib/ratelimit"
 	"github.com/Jeffail/benthos/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
+	"github.com/Jeffail/benthos/lib/tracer"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -136,6 +137,10 @@ config with a websocket input and output and a jmespath processor.`[1:],
 	printMetrics = flag.Bool(
 		"list-metrics", false,
 		"Print a list of available metrics options, then exit",
+	)
+	printTracers = flag.Bool(
+		"list-tracers", false,
+		"Print a list of available tracer options, then exit",
 	)
 	pluginsDir = flag.String(
 		"plugins-dir", "/usr/lib/benthos/plugins",
@@ -293,7 +298,8 @@ func bootstrap() (config.Type, []string) {
 
 	// If we only want to print our inputs or outputs we should exit afterwards
 	if *printInputs || *printOutputs || *printBuffers || *printProcessors ||
-		*printConditions || *printCaches || *printRateLimits || *printMetrics {
+		*printConditions || *printCaches || *printRateLimits ||
+		*printMetrics || *printTracers {
 		if *printInputs {
 			fmt.Println(input.Descriptions())
 		}
@@ -317,6 +323,9 @@ func bootstrap() (config.Type, []string) {
 		}
 		if *printMetrics {
 			fmt.Println(metrics.Descriptions())
+		}
+		if *printTracers {
+			fmt.Println(tracer.Descriptions())
 		}
 		os.Exit(0)
 	}
@@ -387,6 +396,14 @@ func main() {
 			logger.Errorf("Failed to cleanly close metrics aggregator: %v\n", sCloseErr)
 		}
 	}()
+
+	// Create our tracer type.
+	var trac tracer.Type
+	if trac, err = tracer.New(config.Tracer); err != nil {
+		logger.Errorf("Failed to initialise tracer: %v\n", err)
+		os.Exit(1)
+	}
+	defer trac.Close()
 
 	// Create HTTP API with a sanitised service config.
 	sanConf, err := config.Sanitised()

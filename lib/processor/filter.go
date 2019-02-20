@@ -25,10 +25,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -108,7 +110,20 @@ func NewFilter(
 func (c *Filter) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
 
-	if !c.condition.Check(msg) {
+	spans := tracing.CreateChildSpans(TypeFilter, msg)
+
+	filterRes := c.condition.Check(msg)
+	for _, s := range spans {
+		if !filterRes {
+			s.LogFields(
+				olog.String("event", "dropped"),
+				olog.String("type", "filtered"),
+			)
+		}
+		s.SetTag("result", filterRes)
+		s.Finish()
+	}
+	if !filterRes {
 		c.mDropped.Incr(int64(msg.Len()))
 		return nil, response.NewAck()
 	}

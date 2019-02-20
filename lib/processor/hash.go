@@ -32,6 +32,7 @@ import (
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/OneOfOne/xxhash"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -156,31 +157,22 @@ func (c *Hash) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	newMsg := msg.Copy()
 
-	proc := func(index int) {
-		part := msg.Get(index).Get()
-		newPart, err := c.fn(part)
+	proc := func(index int, span opentracing.Span, part types.Part) error {
+		newPart, err := c.fn(part.Get())
 		if err == nil {
 			newMsg.Get(index).Set(newPart)
 		} else {
 			c.log.Debugf("Failed to hash message part: %v\n", err)
 			c.mErr.Incr(1)
-			FlagFail(msg.Get(index))
 		}
-	}
-
-	if len(c.conf.Parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			proc(i)
-		}
-	} else {
-		for _, i := range c.conf.Parts {
-			proc(i)
-		}
+		return err
 	}
 
 	if newMsg.Len() == 0 {
 		return nil, response.NewAck()
 	}
+
+	IteratePartsWithSpan(TypeHash, c.conf.Parts, newMsg, proc)
 
 	c.mBatchSent.Incr(1)
 	c.mSent.Incr(int64(newMsg.Len()))

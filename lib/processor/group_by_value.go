@@ -25,10 +25,12 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -134,8 +136,15 @@ func (g *GroupByValue) ProcessMessage(msg types.Message) ([]types.Message, types
 	groupKeys := []string{}
 	groupMap := map[string]types.Message{}
 
+	spans := tracing.CreateChildSpans(TypeGroupByValue, msg)
+
 	msg.Iter(func(i int, p types.Part) error {
 		v := g.value.Get(message.Lock(msg, i))
+		spans[i].LogFields(
+			olog.String("event", "grouped"),
+			olog.String("type", v),
+		)
+		spans[i].SetTag("group", v)
 		if group, exists := groupMap[v]; exists {
 			group.Append(p)
 		} else {
@@ -147,6 +156,10 @@ func (g *GroupByValue) ProcessMessage(msg types.Message) ([]types.Message, types
 		}
 		return nil
 	})
+
+	for _, s := range spans {
+		s.Finish()
+	}
 
 	msgs := []types.Message{}
 	for _, key := range groupKeys {

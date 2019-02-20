@@ -32,6 +32,7 @@ import (
 	"github.com/Jeffail/benthos/lib/input/reader"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/http/client"
@@ -319,6 +320,7 @@ func (h *HTTPClient) loop() {
 		}
 
 		if msgOut != nil {
+			tracing.InitSpans("input_http_client", msgOut)
 			select {
 			case h.transactions <- types.NewTransaction(msgOut, resOut):
 			case <-h.closeChan:
@@ -332,6 +334,7 @@ func (h *HTTPClient) loop() {
 				if res.Error() != nil {
 					mSendErr.Incr(1)
 				} else {
+					tracing.FinishSpans(msgOut)
 					msgOut = nil
 					mSendSucc.Incr(1)
 				}

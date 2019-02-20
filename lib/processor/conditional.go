@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
@@ -166,7 +167,10 @@ func (c *Conditional) ProcessMessage(msg types.Message) (msgs []types.Message, r
 
 	var procs []types.Processor
 
-	if c.cond.Check(msg) {
+	spans := tracing.CreateChildSpans(TypeConditional, msg)
+
+	condResult := c.cond.Check(msg)
+	if condResult {
 		c.mCondPassed.Incr(1)
 		c.log.Traceln("Condition passed")
 		procs = c.children
@@ -174,6 +178,10 @@ func (c *Conditional) ProcessMessage(msg types.Message) (msgs []types.Message, r
 		c.mCondFailed.Incr(1)
 		c.log.Traceln("Condition failed")
 		procs = c.elseChildren
+	}
+	for _, s := range spans {
+		s.SetTag("result", condResult)
+		s.Finish()
 	}
 
 	resultMsgs, resultRes := ExecuteAll(procs, msg)

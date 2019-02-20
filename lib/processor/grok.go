@@ -21,12 +21,14 @@
 package processor
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/opentracing/opentracing-go"
 	"github.com/trivago/grok"
 )
 
@@ -138,15 +140,14 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	g.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int) {
-		body := msg.Get(index).Get()
+	proc := func(index int, span opentracing.Span, part types.Part) error {
+		body := part.Get()
 
 		var values map[string]interface{}
 		for _, compiler := range g.gparsers {
 			var err error
 			if values, err = compiler.ParseTyped(body); err != nil {
 				g.log.Debugf("Failed to parse body: %v\n", err)
-				FlagFail(newMsg.Get(index))
 				continue
 			}
 			if len(values) > 0 {
@@ -158,27 +159,20 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			g.mErrGrok.Incr(1)
 			g.mErr.Incr(1)
 			g.log.Debugf("No matches found for payload: %s\n", body)
-			FlagFail(newMsg.Get(index))
-			return
+			return errors.New("no pattern matches found")
 		}
 
 		if err := newMsg.Get(index).SetJSON(values); err != nil {
 			g.mErrJSONS.Incr(1)
 			g.mErr.Incr(1)
 			g.log.Debugf("Failed to convert grok result into json: %v\n", err)
-			FlagFail(newMsg.Get(index))
+			return err
 		}
+
+		return nil
 	}
 
-	if len(g.parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			proc(i)
-		}
-	} else {
-		for _, i := range g.parts {
-			proc(i)
-		}
-	}
+	IteratePartsWithSpan(TypeGrok, g.parts, newMsg, proc)
 
 	msgs := [1]types.Message{newMsg}
 

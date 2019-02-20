@@ -38,4 +38,7 @@ metrics:
     address: localhost:4040
     flush_period: 100ms
     network: udp
+tracer:
+  type: none
+  none: {}
 shutdown_timeout: 20s

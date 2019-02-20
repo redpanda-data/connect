@@ -13,6 +13,12 @@ services:
     ports:
       - 4195:4195
 
+  jaeger:
+    image: jaegertracing/all-in-one
+    ports:
+      - 6831:6831/udp
+      - 16686:16686
+
   prometheus:
     image: prom/prometheus
     volumes:

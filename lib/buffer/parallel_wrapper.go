@@ -27,6 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/buffer/parallel"
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -64,6 +65,7 @@ type Parallel interface {
 type ParallelWrapper struct {
 	stats metrics.Type
 	log   log.Modular
+	conf  Config
 
 	buffer      Parallel
 	errThrottle *throttle.Type
@@ -91,6 +93,7 @@ func NewParallelWrapper(
 	m := ParallelWrapper{
 		stats:             stats,
 		log:               log,
+		conf:              conf,
 		buffer:            buffer,
 		running:           1,
 		consuming:         1,
@@ -129,7 +132,7 @@ func (m *ParallelWrapper) inputLoop() {
 		case <-m.stopConsumingChan:
 			return
 		}
-		backlog, err := m.buffer.PushMessage(tr.Payload)
+		backlog, err := m.buffer.PushMessage(tracing.WithSiblingSpans("buffer_"+m.conf.Type, tr.Payload))
 		if err == nil {
 			mWriteCount.Incr(1)
 			mWriteBacklog.Set(int64(backlog))
@@ -176,6 +179,9 @@ func (m *ParallelWrapper) outputLoop() {
 			continue
 		}
 
+		// It's possible that the buffer wiped our previous root span.
+		tracing.InitSpans("buffer_"+m.conf.Type, msg)
+
 		mReadCount.Incr(1)
 		m.errThrottle.Reset()
 
@@ -192,6 +198,7 @@ func (m *ParallelWrapper) outputLoop() {
 			if open && res.Error() == nil {
 				mSendSuccess.Incr(1)
 				mLatency.Timing(time.Since(msg.CreatedAt()).Nanoseconds())
+				tracing.FinishSpans(msg)
 				doAck = true
 			} else {
 				mSendErr.Incr(1)

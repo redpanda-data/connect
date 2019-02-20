@@ -29,6 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -193,23 +194,16 @@ func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
 	}
 
-	proc := func(index int) {
-		if err := p.operator(newMsg.Get(index).Metadata(), valueBytes); err != nil {
+	proc := func(index int, span opentracing.Span, part types.Part) error {
+		if err := p.operator(part.Metadata(), valueBytes); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)
-			FlagFail(newMsg.Get(index))
+			return err
 		}
+		return nil
 	}
 
-	if len(p.parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			proc(i)
-		}
-	} else {
-		for _, i := range p.parts {
-			proc(i)
-		}
-	}
+	IteratePartsWithSpan(TypeMetadata, p.parts, newMsg, proc)
 
 	msgs := [1]types.Message{newMsg}
 
