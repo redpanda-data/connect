@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - The `nats_stream` input now has a field `unsubscribe_on_close` that when
   disabled allows durable subscription offsets to persist even when all
   connections are closed.
+- Metadata field `nats_stream_sequence` added to `nats_stream` input.
 
 ## 1.5.1 - 2019-02-11
 

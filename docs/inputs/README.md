@@ -680,6 +680,7 @@ This input adds the following metadata fields to each message:
 
 ```
 - nats_stream_subject
+- nats_stream_sequence
 ```
 
 You can access these metadata fields using
