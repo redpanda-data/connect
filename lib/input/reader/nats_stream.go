@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,7 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/gofrs/uuid"
-	"github.com/nats-io/go-nats-streaming"
+	stan "github.com/nats-io/go-nats-streaming"
 )
 
 //------------------------------------------------------------------------------
@@ -220,6 +221,7 @@ func (n *NATSStream) Read() (types.Message, error) {
 	}
 	bmsg := message.New([][]byte{msg.Data})
 	bmsg.Get(0).Metadata().Set("nats_stream_subject", msg.Subject)
+	bmsg.Get(0).Metadata().Set("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
 
 	return bmsg, nil
 }
