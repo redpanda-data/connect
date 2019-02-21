@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.6.1 - 2019-02-21
+
+### Added
+
+- Field `max_batch_count` added to `s3` input.
+- Field `max_number_of_messages` added to `sqs` input.
+
 ## 1.6.0 - 2019-02-20
 
 ### Added

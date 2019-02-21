@@ -202,6 +202,7 @@ input:
         download_manager:
           enabled: ${INPUT_S3_DOWNLOAD_MANAGER_ENABLED:true}
         endpoint: ${INPUT_S3_ENDPOINT}
+        max_batch_count: ${INPUT_S3_MAX_BATCH_COUNT:1}
         prefix: ${INPUT_S3_PREFIX}
         region: ${INPUT_S3_REGION:eu-west-1}
         retries: ${INPUT_S3_RETRIES:3}
@@ -218,6 +219,7 @@ input:
           secret: ${INPUT_SQS_CREDENTIALS_SECRET}
           token: ${INPUT_SQS_CREDENTIALS_TOKEN}
         endpoint: ${INPUT_SQS_ENDPOINT}
+        max_number_of_messages: ${INPUT_SQS_MAX_NUMBER_OF_MESSAGES:1}
         region: ${INPUT_SQS_REGION:eu-west-1}
         timeout: ${INPUT_SQS_TIMEOUT:5s}
         url: ${INPUT_SQS_URL}

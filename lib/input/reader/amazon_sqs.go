@@ -38,17 +38,19 @@ import (
 
 // AmazonSQSConfig contains configuration values for the input type.
 type AmazonSQSConfig struct {
-	sess.Config `json:",inline" yaml:",inline"`
-	URL         string `json:"url" yaml:"url"`
-	Timeout     string `json:"timeout" yaml:"timeout"`
+	sess.Config         `json:",inline" yaml:",inline"`
+	URL                 string `json:"url" yaml:"url"`
+	Timeout             string `json:"timeout" yaml:"timeout"`
+	MaxNumberOfMessages int64  `json:"max_number_of_messages" yaml:"max_number_of_messages"`
 }
 
 // NewAmazonSQSConfig creates a new Config with default values.
 func NewAmazonSQSConfig() AmazonSQSConfig {
 	return AmazonSQSConfig{
-		Config:  sess.NewConfig(),
-		URL:     "",
-		Timeout: "5s",
+		Config:              sess.NewConfig(),
+		URL:                 "",
+		Timeout:             "5s",
+		MaxNumberOfMessages: 1,
 	}
 }
 
@@ -116,7 +118,7 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 
 	output, err := a.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(a.conf.URL),
-		MaxNumberOfMessages: aws.Int64(1),
+		MaxNumberOfMessages: aws.Int64(a.conf.MaxNumberOfMessages),
 		WaitTimeSeconds:     aws.Int64(int64(a.timeout.Seconds())),
 	})
 	if err != nil {
@@ -152,14 +154,27 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 // Acknowledge confirms whether or not our unacknowledged messages have been
 // successfully propagated or not.
 func (a *AmazonSQS) Acknowledge(err error) error {
-	if _, err := a.sqs.DeleteMessageBatch(&sqs.DeleteMessageBatchInput{
-		QueueUrl: aws.String(a.conf.URL),
-		Entries:  a.pendingHandles,
-	}); err != nil {
-		return err
-	}
+	for len(a.pendingHandles) > 0 {
+		input := sqs.DeleteMessageBatchInput{
+			QueueUrl: aws.String(a.conf.URL),
+			Entries:  a.pendingHandles,
+		}
 
-	a.pendingHandles = nil
+		// trim input entries to max size
+		if len(a.pendingHandles) > 10 {
+			input.Entries, a.pendingHandles = a.pendingHandles[:10], a.pendingHandles[10:]
+		} else {
+			a.pendingHandles = nil
+		}
+
+		if res, serr := a.sqs.DeleteMessageBatch(&input); serr != nil {
+			a.log.Errorf("Failed to delete consumed SQS messages: %v\n", serr)
+		} else {
+			for _, fail := range res.Failed {
+				a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", fail.Id, fail.Code)
+			}
+		}
+	}
 	return nil
 }
 

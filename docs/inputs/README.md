@@ -803,6 +803,7 @@ s3:
   download_manager:
     enabled: true
   endpoint: ""
+  max_batch_count: 1
   prefix: ""
   region: eu-west-1
   retries: 3
@@ -873,6 +874,7 @@ sqs:
     secret: ""
     token: ""
   endpoint: ""
+  max_number_of_messages: 1
   region: eu-west-1
   timeout: 5s
   url: ""

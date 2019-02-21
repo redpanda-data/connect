@@ -253,6 +253,7 @@ input:
     sqs_body_path: Records.s3.object.key
     sqs_envelope_path: ""
     sqs_max_messages: 10
+    max_batch_count: 1
     timeout: 5s
   sqs:
     credentials:
@@ -265,6 +266,7 @@ input:
     region: eu-west-1
     url: ""
     timeout: 5s
+    max_number_of_messages: 1
   stdin:
     multipart: false
     max_buffer: 1000000

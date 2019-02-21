@@ -21,6 +21,7 @@
 				"enabled": true
 			},
 			"endpoint": "",
+			"max_batch_count": 1,
 			"prefix": "",
 			"region": "eu-west-1",
 			"retries": 3,

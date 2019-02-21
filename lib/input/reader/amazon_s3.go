@@ -61,6 +61,7 @@ type AmazonS3Config struct {
 	SQSBodyPath     string                  `json:"sqs_body_path" yaml:"sqs_body_path"`
 	SQSEnvelopePath string                  `json:"sqs_envelope_path" yaml:"sqs_envelope_path"`
 	SQSMaxMessages  int64                   `json:"sqs_max_messages" yaml:"sqs_max_messages"`
+	MaxBatchCount   int                     `json:"max_batch_count" yaml:"max_batch_count"`
 	Timeout         string                  `json:"timeout" yaml:"timeout"`
 }
 
@@ -79,6 +80,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		SQSBodyPath:     "Records.s3.object.key",
 		SQSEnvelopePath: "",
 		SQSMaxMessages:  10,
+		MaxBatchCount:   1,
 		Timeout:         "5s",
 	}
 }
@@ -134,6 +136,9 @@ func NewAmazonS3(
 		if timeout, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
 		}
+	}
+	if conf.MaxBatchCount < 1 {
+		return nil, fmt.Errorf("max_batch_count '%v' must be > 0", conf.MaxBatchCount)
 	}
 	s := &AmazonS3{
 		conf:        conf,
@@ -305,10 +310,20 @@ messageLoop:
 	}
 
 	// Discard any SQS messages not associated with a target file.
-	a.sqs.DeleteMessageBatch(&sqs.DeleteMessageBatchInput{
-		QueueUrl: aws.String(a.conf.SQSURL),
-		Entries:  dudMessageHandles,
-	})
+	for len(dudMessageHandles) > 0 {
+		input := sqs.DeleteMessageBatchInput{
+			QueueUrl: aws.String(a.conf.SQSURL),
+			Entries:  dudMessageHandles,
+		}
+
+		// trim input entries to max size
+		if len(dudMessageHandles) > 10 {
+			input.Entries, dudMessageHandles = dudMessageHandles[:10], dudMessageHandles[10:]
+		} else {
+			dudMessageHandles = nil
+		}
+		a.sqs.DeleteMessageBatch(&input)
+	}
 
 	if len(a.targetKeys) == 0 {
 		return types.ErrTimeout
@@ -351,6 +366,8 @@ func (a *AmazonS3) read() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
+	timeoutAt := time.Now().Add(a.timeout)
+
 	if len(a.targetKeys) == 0 {
 		if a.sqs != nil {
 			if err := a.readSQSEvents(); err != nil {
@@ -365,38 +382,51 @@ func (a *AmazonS3) read() (types.Message, error) {
 		return nil, types.ErrTimeout
 	}
 
-	target := a.targetKeys[0]
+	msg := message.New(nil)
 
-	obj, err := a.s3.GetObject(&s3.GetObjectInput{
-		Bucket: aws.String(a.conf.Bucket),
-		Key:    aws.String(target.s3Key),
-	})
-	if err != nil {
-		target.attempts--
-		if target.attempts == 0 {
-			a.popTargetKey()
-		} else {
-			a.targetKeys[0] = target
+	for len(a.targetKeys) > 0 && msg.Len() < a.conf.MaxBatchCount && time.Until(timeoutAt) > 0 {
+		target := a.targetKeys[0]
+
+		obj, err := a.s3.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(a.conf.Bucket),
+			Key:    aws.String(target.s3Key),
+		})
+		if err != nil {
+			target.attempts--
+			if target.attempts == 0 {
+				// Remove the target file from our list.
+				a.popTargetKey()
+				a.log.Errorf("Failed to download file '%s' from bucket '%s' after '%v' attempts: %v\n", target.s3Key, a.conf.Bucket, a.conf.Retries, err)
+			} else {
+				a.targetKeys[0] = target
+				if msg.Len() == 0 {
+					return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
+				}
+				a.log.Errorf("Failed to download file '%s' from bucket '%s': %v\n", target.s3Key, a.conf.Bucket, err)
+				break
+			}
+			continue
 		}
-		return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
-	}
 
-	a.popTargetKey()
+		a.popTargetKey()
 
-	defer obj.Body.Close()
+		bytes, err := ioutil.ReadAll(obj.Body)
+		obj.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
+		}
 
-	bytes, err := ioutil.ReadAll(obj.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
+		part := message.NewPart(bytes)
+		meta := part.Metadata()
+		for k, v := range obj.Metadata {
+			meta.Set(k, *v)
+		}
+		meta.Set("s3_key", target.s3Key)
+		meta.Set("s3_bucket", a.conf.Bucket)
+		addS3Metadata(part, obj)
+
+		msg.Append(part)
 	}
-	msg := message.New([][]byte{bytes})
-	meta := msg.Get(0).Metadata()
-	for k, v := range obj.Metadata {
-		meta.Set(k, *v)
-	}
-	meta.Set("s3_key", target.s3Key)
-	meta.Set("s3_bucket", a.conf.Bucket)
-	addS3Metadata(msg.Get(0), obj)
 
 	return msg, nil
 }
@@ -408,6 +438,8 @@ func (a *AmazonS3) readFromMgr() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
+	timeoutAt := time.Now().Add(a.timeout)
+
 	if len(a.targetKeys) == 0 {
 		if a.sqs != nil {
 			if err := a.readSQSEvents(); err != nil {
@@ -422,30 +454,43 @@ func (a *AmazonS3) readFromMgr() (types.Message, error) {
 		return nil, types.ErrTimeout
 	}
 
-	target := a.targetKeys[0]
+	msg := message.New(nil)
 
-	buff := &aws.WriteAtBuffer{}
+	for len(a.targetKeys) > 0 && msg.Len() < a.conf.MaxBatchCount && time.Until(timeoutAt) > 0 {
+		target := a.targetKeys[0]
 
-	// Write the contents of S3 Object to the file
-	if _, err := a.downloader.Download(buff, &s3.GetObjectInput{
-		Bucket: aws.String(a.conf.Bucket),
-		Key:    aws.String(target.s3Key),
-	}); err != nil {
-		target.attempts--
-		if target.attempts == 0 {
-			a.popTargetKey()
-		} else {
-			a.targetKeys[0] = target
+		buff := &aws.WriteAtBuffer{}
+
+		// Write the contents of S3 Object to the file
+		if _, err := a.downloader.Download(buff, &s3.GetObjectInput{
+			Bucket: aws.String(a.conf.Bucket),
+			Key:    aws.String(target.s3Key),
+		}); err != nil {
+			target.attempts--
+			if target.attempts == 0 {
+				// Remove the target file from our list.
+				a.popTargetKey()
+				a.log.Errorf("Failed to download file '%s' from bucket '%s' after '%v' attempts: %v\n", target.s3Key, a.conf.Bucket, a.conf.Retries, err)
+			} else {
+				a.targetKeys[0] = target
+				if msg.Len() == 0 {
+					return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
+				}
+				a.log.Errorf("Failed to download file '%s' from bucket '%s': %v\n", target.s3Key, a.conf.Bucket, err)
+				break
+			}
+			continue
 		}
-		return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
+
+		a.popTargetKey()
+
+		part := message.NewPart(buff.Bytes())
+		part.Metadata().
+			Set("s3_key", target.s3Key).
+			Set("s3_bucket", a.conf.Bucket)
+
+		msg.Append(part)
 	}
-
-	a.popTargetKey()
-
-	msg := message.New([][]byte{buff.Bytes()})
-	msg.Get(0).Metadata().
-		Set("s3_key", target.s3Key).
-		Set("s3_bucket", a.conf.Bucket)
 
 	return msg, nil
 }

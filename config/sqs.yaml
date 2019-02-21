@@ -14,6 +14,7 @@ input:
       secret: ""
       token: ""
     endpoint: ""
+    max_number_of_messages: 1
     region: eu-west-1
     timeout: 5s
     url: ""
