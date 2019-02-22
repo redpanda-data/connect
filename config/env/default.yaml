@@ -634,6 +634,7 @@ metrics:
   prefix: ${METRICS_PREFIX:benthos}
   prometheus:
     push_interval: ${METRICS_PROMETHEUS_PUSH_INTERVAL}
+    push_job_name: ${METRICS_PROMETHEUS_PUSH_JOB_NAME:benthos_push}
     push_url: ${METRICS_PROMETHEUS_PUSH_URL}
   statsd:
     address: ${METRICS_STATSD_ADDRESS:localhost:4040}

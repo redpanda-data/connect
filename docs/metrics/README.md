@@ -79,6 +79,7 @@ type: prometheus
 prefix: benthos
 prometheus:
   push_interval: ""
+  push_job_name: benthos_push
   push_url: ""
 ```
 

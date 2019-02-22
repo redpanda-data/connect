@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `push_job_name` added to `prometheus` metrics type.
+
 ## 1.6.1 - 2019-02-21
 
 ### Added

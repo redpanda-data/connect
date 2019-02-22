@@ -62,6 +62,7 @@ not include the "/metrics/jobs/..." path in the push URL.`,
 type PrometheusConfig struct {
 	PushURL      string `json:"push_url" yaml:"push_url"`
 	PushInterval string `json:"push_interval" yaml:"push_interval"`
+	PushJobName  string `json:"push_job_name" yaml:"push_job_name"`
 }
 
 // NewPrometheusConfig creates an PrometheusConfig struct with default values.
@@ -69,6 +70,7 @@ func NewPrometheusConfig() PrometheusConfig {
 	return PrometheusConfig{
 		PushURL:      "",
 		PushInterval: "",
+		PushJobName:  "benthos_push",
 	}
 }
 
@@ -207,7 +209,7 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 				case <-p.closedChan:
 					return
 				case <-time.After(interval):
-					if err = push.New(p.config.PushURL, "benthos_push").Gatherer(prometheus.DefaultGatherer).Push(); err != nil {
+					if err = push.New(p.config.PushURL, p.config.PushJobName).Gatherer(prometheus.DefaultGatherer).Push(); err != nil {
 						p.log.Errorf("Failed to push metrics: %v\n", err)
 					}
 				}
@@ -397,7 +399,7 @@ func (p *Prometheus) Close() error {
 		close(p.closedChan)
 	}
 	if len(p.config.PushURL) > 0 {
-		return push.New(p.config.PushURL, "benthos_push").Gatherer(prometheus.DefaultGatherer).Push()
+		return push.New(p.config.PushURL, p.config.PushJobName).Gatherer(prometheus.DefaultGatherer).Push()
 	}
 	return nil
 }

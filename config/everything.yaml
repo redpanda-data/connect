@@ -953,6 +953,7 @@ metrics:
   prometheus:
     push_url: ""
     push_interval: ""
+    push_job_name: benthos_push
   statsd:
     address: localhost:4040
     flush_period: 100ms
