@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - Field `push_job_name` added to `prometheus` metrics type.
 - New `rename` metrics target.
 
+### Fixed
+
+- Removed potential race condition in `process_dag` with raw bytes conditions.
+
 ## 1.6.1 - 2019-02-21
 
 ### Added

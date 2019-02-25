@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/message/mapper"
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -283,12 +282,16 @@ func NewProcessMap(
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	propMsg := tracing.WithChildSpans(TypeProcessMap, msg)
-	alignedResult, err := p.CreateResult(propMsg)
-	defer tracing.FinishSpans(propMsg)
+	propMsg, propSpans := tracing.WithChildSpans(TypeProcessMap, msg.Copy())
+	defer func() {
+		for _, s := range propSpans {
+			s.Finish()
+		}
+	}()
 
+	result := msg.Copy()
+	err := p.CreateResult(propMsg)
 	if err != nil {
-		result := msg.Copy()
 		result.Iter(func(i int, p types.Part) error {
 			FlagFail(p)
 			return nil
@@ -298,8 +301,7 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	}
 
 	var failed []int
-	result := msg.Copy()
-	if failed, err = p.OverlayResult(result, alignedResult); err != nil {
+	if failed, err = p.OverlayResult(result, propMsg); err != nil {
 		result.Iter(func(i int, p types.Part) error {
 			FlagFail(p)
 			return nil
@@ -327,53 +329,66 @@ func (p *ProcessMap) TargetsProvided() []string {
 	return p.mapper.TargetsProvided()
 }
 
-// CreateResult performs reduction and child processors to a payload and returns
-// the result. The resulting message should have the same dimension as the
-// payload, where reduced indexes are nil. This result can be overlayed onto the
-// original message in order to complete the map.
-func (p *ProcessMap) CreateResult(msg types.Message) (types.Message, error) {
+// CreateResult performs reduction and child processors to a payload. The size
+// of the payload will remain unchanged, where reduced indexes are nil. This
+// result can be overlayed onto the original message in order to complete the
+// map.
+func (p *ProcessMap) CreateResult(msg types.Message) error {
 	p.mCount.Incr(1)
 
-	mapMsg := msg
 	if len(p.parts) > 0 {
-		mapMsg = message.New(make([][]byte, msg.Len()))
+		parts := make([]types.Part, msg.Len())
 		for _, sel := range p.parts {
-			mapMsg.Get(sel).Set(msg.Get(sel).Get())
+			index := sel
+			if index < 0 {
+				index = msg.Len() + index
+			}
+			if index < 0 || index >= msg.Len() {
+				continue
+			}
+			parts[index] = msg.Get(index)
 		}
+		msg.SetAll(parts)
 	}
 
-	mappedMsg, skipped, failed := p.mapper.MapRequests(mapMsg)
-	if mappedMsg.Len() == 0 {
+	originalLen := msg.Len()
+
+	skipped, failed := p.mapper.MapRequests(msg)
+	if msg.Len() == 0 {
 		p.mSkipped.Incr(1)
 		p.mSkippedParts.Incr(int64(msg.Len()))
-		parts := make([]types.Part, msg.Len())
-		mapMsg.SetAll(parts)
 		for _, i := range failed {
-			FlagFail(mapMsg.Get(i))
+			FlagFail(msg.Get(i))
 		}
-		return mapMsg, nil
+		return nil
 	}
 
-	procResults, err := processMap(mappedMsg, p.children)
+	procResults, err := processMap(msg, p.children)
 	if err != nil {
 		p.mErrProc.Incr(1)
 		p.mErr.Incr(1)
 		p.log.Errorf("Processors failed: %v\n", err)
-		return nil, err
+		return err
 	}
 
 	var alignedResult types.Message
-	if alignedResult, err = p.mapper.AlignResult(msg.Len(), skipped, failed, procResults); err != nil {
+	if alignedResult, err = p.mapper.AlignResult(originalLen, skipped, failed, procResults); err != nil {
 		p.mErrPost.Incr(1)
 		p.mErr.Incr(1)
 		p.log.Errorf("Postmap failed: %v\n", err)
-		return nil, err
+		return err
 	}
 
 	for _, i := range failed {
 		FlagFail(alignedResult.Get(i))
 	}
-	return alignedResult, nil
+
+	alignedParts := make([]types.Part, alignedResult.Len())
+	for i := range alignedParts {
+		alignedParts[i] = alignedResult.Get(i)
+	}
+	msg.SetAll(alignedParts)
+	return nil
 }
 
 // OverlayResult attempts to merge the result of a process_map with the original

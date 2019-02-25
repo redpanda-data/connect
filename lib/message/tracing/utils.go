@@ -66,7 +66,8 @@ func CreateChildSpans(operationName string, msg types.Message) []opentracing.Spa
 // WithChildSpans takes a message, extracts spans per message part, creates new
 // child spans, and returns a new message with those spans embedded. The
 // original message is unchanged.
-func WithChildSpans(operationName string, msg types.Message) types.Message {
+func WithChildSpans(operationName string, msg types.Message) (types.Message, []opentracing.Span) {
+	spans := make([]opentracing.Span, msg.Len())
 	parts := make([]types.Part, msg.Len())
 	msg.Iter(func(i int, part types.Part) error {
 		ctx := message.GetContext(part)
@@ -81,12 +82,13 @@ func WithChildSpans(operationName string, msg types.Message) types.Message {
 		}
 		ctx = opentracing.ContextWithSpan(ctx, span)
 		parts[i] = message.WithContext(ctx, part)
+		spans[i] = span
 		return nil
 	})
 
 	newMsg := message.New(nil)
 	newMsg.SetAll(parts)
-	return newMsg
+	return newMsg, spans
 }
 
 // WithSiblingSpans takes a message, extracts spans per message part, creates

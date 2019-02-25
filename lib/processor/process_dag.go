@@ -30,6 +30,7 @@ import (
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/opentracing/opentracing-go"
 	"github.com/quipo/dependencysolver"
 )
 
@@ -199,12 +200,13 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	result := msg.Copy()
 	result.Iter(func(i int, p types.Part) error {
+		_ = p.Get()
 		_, _ = p.JSON()
 		_ = p.Metadata()
 		return nil
 	})
 
-	propMsg := tracing.WithChildSpans(TypeProcessDAG, result)
+	propMsg, propSpans := tracing.WithChildSpans(TypeProcessDAG, result)
 
 	for _, layer := range p.dag {
 		results := make([]types.Message, len(layer))
@@ -214,9 +216,12 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		wg.Add(len(layer))
 		for i, eid := range layer {
 			go func(id string, index int) {
-				inputMsg := tracing.WithChildSpans(id, propMsg)
-				results[index], errors[index] = p.children[id].CreateResult(inputMsg)
-				tracing.FinishSpans(inputMsg)
+				var resSpans []opentracing.Span
+				results[index], resSpans = tracing.WithChildSpans(id, propMsg.Copy())
+				errors[index] = p.children[id].CreateResult(results[index])
+				for _, s := range resSpans {
+					s.Finish()
+				}
 				wg.Done()
 			}(eid, i)
 		}
@@ -242,7 +247,9 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		}
 	}
 
-	tracing.FinishSpans(propMsg)
+	for _, s := range propSpans {
+		s.Finish()
+	}
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(result.Len()))

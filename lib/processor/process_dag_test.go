@@ -27,6 +27,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/processor/condition"
 )
 
 func createProcMapConf(inPath string, outPath string, deps ...string) DepProcessMapConfig {
@@ -84,6 +85,136 @@ func TestProcessDAGSimple(t *testing.T) {
 	}
 	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
+func TestProcessDAGParallel(t *testing.T) {
+	condConf := condition.NewConfig()
+	condConf.Type = condition.TypeText
+	condConf.Text.Operator = "contains"
+	condConf.Text.Arg = "foo"
+
+	procConf := NewConfig()
+	procConf.Type = TypeMetadata
+	procConf.Metadata.Operator = "set"
+	procConf.Metadata.Key = "A"
+	procConf.Metadata.Value = "foo: ${!json_field:foo}"
+
+	fooConf := NewProcessMapConfig()
+	fooConf.Conditions = []condition.Config{condConf}
+	fooConf.Premap["."] = "."
+	fooConf.Postmap["tmp.A"] = "."
+	fooConf.Processors = []Config{procConf}
+
+	condConf = condition.NewConfig()
+	condConf.Type = condition.TypeText
+	condConf.Text.Operator = "contains"
+	condConf.Text.Arg = "bar"
+
+	procConf = NewConfig()
+	procConf.Type = TypeMetadata
+	procConf.Metadata.Operator = "set"
+	procConf.Metadata.Key = "A"
+	procConf.Metadata.Value = "bar: ${!json_field:bar}"
+
+	barConf := NewProcessMapConfig()
+	barConf.Conditions = []condition.Config{condConf}
+	barConf.Premap["."] = "."
+	barConf.Postmap["tmp.A"] = "."
+	barConf.Processors = []Config{procConf}
+
+	condConf = condition.NewConfig()
+	condConf.Type = condition.TypeText
+	condConf.Text.Operator = "contains"
+	condConf.Text.Arg = "baz"
+
+	procConf = NewConfig()
+	procConf.Type = TypeMetadata
+	procConf.Metadata.Operator = "set"
+	procConf.Metadata.Key = "B"
+	procConf.Metadata.Value = "${!metadata:A}"
+
+	bazConf := NewProcessMapConfig()
+	bazConf.Conditions = []condition.Config{condConf}
+	bazConf.Premap["."] = "tmp.A"
+	bazConf.Postmap["tmp.B"] = "."
+	bazConf.Processors = []Config{procConf}
+
+	condConf = condition.NewConfig()
+	condConf.Type = condition.TypeText
+	condConf.Text.Operator = "contains"
+	condConf.Text.Arg = "qux"
+
+	procConf = NewConfig()
+	procConf.Type = TypeMetadata
+	procConf.Metadata.Operator = "set"
+	procConf.Metadata.Key = "B"
+	procConf.Metadata.Value = "${!metadata:A}"
+
+	quxConf := NewProcessMapConfig()
+	quxConf.Conditions = []condition.Config{condConf}
+	quxConf.Premap["."] = "tmp.A"
+	quxConf.Postmap["tmp.B"] = "."
+	quxConf.Processors = []Config{procConf}
+
+	conf := NewConfig()
+	conf.Type = TypeProcessDAG
+	conf.ProcessDAG["foo"] = DepProcessMapConfig{
+		ProcessMapConfig: fooConf,
+	}
+	conf.ProcessDAG["bar"] = DepProcessMapConfig{
+		ProcessMapConfig: barConf,
+	}
+	conf.ProcessDAG["baz"] = DepProcessMapConfig{
+		ProcessMapConfig: bazConf,
+	}
+	conf.ProcessDAG["qux"] = DepProcessMapConfig{
+		ProcessMapConfig: quxConf,
+	}
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	expParts := [][]byte{
+		[]byte(`{"foo":"1","qux":"2","tmp":{"A":{"foo":"1","qux":"2"},"B":{"foo":"1","qux":"2"}}}`),
+		[]byte(`{"bar":"3","qux":"4","tmp":{"A":{"bar":"3","qux":"4"},"B":{"bar":"3","qux":"4"}}}`),
+		[]byte(`{"baz":"6","foo":"5","tmp":{"A":{"baz":"6","foo":"5"},"B":{"baz":"6","foo":"5"}}}`),
+		[]byte(`{"bar":"7","baz":"8","tmp":{"A":{"bar":"7","baz":"8"},"B":{"bar":"7","baz":"8"}}}`),
+		[]byte(`{"foo":"9","tmp":{"A":{"foo":"9"}}}`),
+		[]byte(`{"bar":"10","tmp":{"A":{"bar":"10"}}}`),
+		[]byte(`{"foo":"11","qux":"12","tmp":{"A":{"foo":"11","qux":"12"},"B":{"foo":"11","qux":"12"}}}`),
+		[]byte(`{"bar":"13","qux":"14","tmp":{"A":{"bar":"13","qux":"14"},"B":{"bar":"13","qux":"14"}}}`),
+		[]byte(`{"baz":"16","foo":"15","tmp":{"A":{"baz":"16","foo":"15"},"B":{"baz":"16","foo":"15"}}}`),
+		[]byte(`{"bar":"17","baz":"18","tmp":{"A":{"bar":"17","baz":"18"},"B":{"bar":"17","baz":"18"}}}`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{
+		[]byte(`{"foo":"1","qux":"2"}`),
+		[]byte(`{"bar":"3","qux":"4"}`),
+		[]byte(`{"foo":"5","baz":"6"}`),
+		[]byte(`{"bar":"7","baz":"8"}`),
+		[]byte(`{"foo":"9"}`),
+		[]byte(`{"bar":"10"}`),
+		[]byte(`{"foo":"11","qux":"12"}`),
+		[]byte(`{"bar":"13","qux":"14"}`),
+		[]byte(`{"foo":"15","baz":"16"}`),
+		[]byte(`{"bar":"17","baz":"18"}`),
+		[]byte(`{"baz":"19"}`),
+		[]byte(`{"qux":"20"}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+
+	actParts := message.GetAllBytes(msg[0])
+	for i, exp := range expParts {
+		if len(actParts) <= i {
+			t.Errorf("Missing result part index '%v': %s", i, exp)
+		}
+		if actStr, expStr := string(actParts[i]), string(exp); actStr != expStr {
+			t.Errorf("Wrong part result: %v != %v", actStr, expStr)
+		}
 	}
 }
 

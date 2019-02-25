@@ -252,15 +252,13 @@ func getGabs(msg types.Message, index int) (*gabs.Container, error) {
 }
 
 // MapRequests takes a single payload (of potentially multiple parts, where
-// parts can potentially be nil) and attempts to create a new payload of mapped
-// messages.
+// parts can potentially be nil) and maps the parts.
 //
 // Two arrays are also returned, the first containing all message part indexes
 // that were skipped due to either failed conditions or for being empty. The
 // second contains only message part indexes that failed their map stage.
-func (t *Type) MapRequests(payload types.Message) (mappedMsg types.Message, skipped, failed []int) {
-	mappedMsg = message.New(nil)
-	msg := payload
+func (t *Type) MapRequests(msg types.Message) (skipped, failed []int) {
+	var mappedParts []types.Part
 
 partLoop:
 	for i := 0; i < msg.Len(); i++ {
@@ -277,7 +275,7 @@ partLoop:
 		}
 
 		if len(t.reqMap) == 0 && len(t.reqOptMap) == 0 {
-			mappedMsg.Append(msg.Get(i).Copy())
+			mappedParts = append(mappedParts, msg.Get(i))
 			continue partLoop
 		}
 
@@ -285,7 +283,7 @@ partLoop:
 		if err != nil {
 			t.mReqErr.Incr(1)
 			t.mReqErrJSON.Incr(1)
-			t.log.Debugf("Failed to parse message part '%v': %v. Failed part: %q\n", i, err, msg.Get(i).Copy().Get())
+			t.log.Debugf("Failed to parse message part '%v': %v. Failed part: %q\n", i, err, msg.Get(i).Get())
 
 			// Skip if message part fails JSON parse.
 			failed = append(failed, i)
@@ -332,23 +330,23 @@ partLoop:
 			}
 		}
 
-		mappedPart := message.MetaPartCopy(msg.Get(i))
-		if err = mappedPart.SetJSON(destObj.Data()); err != nil {
+		if err = msg.Get(i).SetJSON(destObj.Data()); err != nil {
 			t.mReqErr.Incr(1)
 			t.mReqErrJSON.Incr(1)
 			t.log.Errorf("Failed to marshal request map result in message part '%v'. Map contents: '%v'\n", i, destObj.String())
 			failed = append(failed, i)
 		} else {
-			mappedMsg.Append(mappedPart)
+			mappedParts = append(mappedParts, msg.Get(i))
 		}
 	}
 
+	msg.SetAll(mappedParts)
 	return
 }
 
 // AlignResult takes the original length of a mapped payload, a slice of skipped
 // message part indexes, a slice of failed message part indexes, and a
-// post-mapped, post-processed slice of resuling messages, and attempts to
+// post-mapped, post-processed slice of resulting messages, and attempts to
 // create a new payload where the results are realigned and ready to map back
 // into the original.
 func (t *Type) AlignResult(length int, skipped, failed []int, result []types.Message) (types.Message, error) {
@@ -433,7 +431,6 @@ partLoop:
 				return nil
 			})
 
-			newPart.SetMetadata(metadata)
 			parts[i] = newPart
 			continue partLoop
 		}
@@ -516,7 +513,6 @@ partLoop:
 			metadata.Set(k, v)
 			return nil
 		})
-		parts[i].SetMetadata(metadata)
 	}
 
 	payload.SetAll(parts)

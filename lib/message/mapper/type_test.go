@@ -340,7 +340,8 @@ func TestTypeMapRequests(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		res, skipped, failed := e.MapRequests(message.New(test.input))
+		res := message.New(test.input)
+		skipped, failed := e.MapRequests(res)
 		if err != nil {
 			t.Errorf("Test '%v' failed: %v", test.name, err)
 			continue
@@ -398,7 +399,8 @@ func TestMapRequestsParallel(t *testing.T) {
 			<-launchChan
 			defer wg.Done()
 
-			res, skipped, failed := e.MapRequests(inputMsg)
+			res := inputMsg.Copy()
+			skipped, failed := e.MapRequests(res)
 			if err != nil {
 				t.Errorf("failed: %v", err)
 			}
@@ -607,10 +609,10 @@ func TestTypeMapRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := message.New([][]byte{
+	res := message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"zip":"old"}`),
 	})
-	res, _, _ := e.MapRequests(msg)
+	e.MapRequests(res)
 	if exp, act := `{"foo":{"bar":1},"zip":"old"}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -622,18 +624,18 @@ func TestTypeMapRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg = message.New([][]byte{
+	res = message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"zip":"old"}`),
 	})
-	res, _, _ = e.MapRequests(msg)
+	e.MapRequests(res)
 	if exp, act := `{"bar":1}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	msg = message.New([][]byte{
+	res = message.New([][]byte{
 		[]byte(`{"zip":"old"}`),
 	})
-	_, skipped, failed := e.MapRequests(msg)
+	skipped, failed := e.MapRequests(res)
 	if exp, act := []int(nil), skipped; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -649,10 +651,10 @@ func TestTypeMapRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg = message.New([][]byte{
+	res = message.New([][]byte{
 		[]byte(`{"foo":{"bar":1,"preserve":true},"baz":"baz value"}`),
 	})
-	res, _, _ = e.MapRequests(msg)
+	e.MapRequests(res)
 	if exp, act := `{"bar":"baz value","preserve":true}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -665,10 +667,10 @@ func TestTypeMapRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg = message.New([][]byte{
+	res = message.New([][]byte{
 		[]byte(`{"foo":{"bar":1,"preserve":true},"baz":"baz value"}`),
 	})
-	res, _, _ = e.MapRequests(msg)
+	e.MapRequests(res)
 	if exp, act := `{"bar":"baz value","foo":{"baz":"baz value","foo":{"bar":1,"preserve":true}}}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -695,20 +697,20 @@ func TestTypeMapRequestMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := message.New([][]byte{
+	res := message.New([][]byte{
 		[]byte(`{"test":"foo message"}`),
 		[]byte(`{"test":"bar message"}`),
 		[]byte(`{"test":"foo message"}`),
 		[]byte(`{"test":"baz bar message"}`),
 		[]byte(`{"test":"foo message"}`),
 	})
-	msg.Get(0).Metadata().Set("test", "foo")
-	msg.Get(1).Metadata().Set("test", "bar")
-	msg.Get(2).Metadata().Set("test", "foo")
-	msg.Get(3).Metadata().Set("test", "baz")
-	msg.Get(5).Metadata().Set("test", "foo")
+	res.Get(0).Metadata().Set("test", "foo")
+	res.Get(1).Metadata().Set("test", "bar")
+	res.Get(2).Metadata().Set("test", "foo")
+	res.Get(3).Metadata().Set("test", "baz")
+	res.Get(5).Metadata().Set("test", "foo")
 
-	res, skipped, _ := e.MapRequests(msg)
+	skipped, _ := e.MapRequests(res)
 	if exp, act := 2, res.Len(); exp != act {
 		t.Errorf("Unexpected value: %v != %v", act, exp)
 	}
@@ -740,18 +742,18 @@ func TestTypeMapOptRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := message.New([][]byte{
+	res := message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"zip":"old"}`),
 	})
-	res, _, _ := e.MapRequests(msg)
+	e.MapRequests(res)
 	if exp, act := `{"bar":1}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	msg = message.New([][]byte{
+	res = message.New([][]byte{
 		[]byte(`{"zip":"old"}`),
 	})
-	res, _, _ = e.MapRequests(msg)
+	e.MapRequests(res)
 	if exp, act := `{}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -763,10 +765,10 @@ func TestTypeMapOptRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg = message.New([][]byte{
+	res = message.New([][]byte{
 		[]byte(`{"foo":{"bar":1},"zip":"old"}`),
 	})
-	res, _, _ = e.MapRequests(msg)
+	e.MapRequests(res)
 	if exp, act := `{"foo":{"bar":1}}`, string(res.Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -1055,7 +1057,7 @@ func BenchmarkMapRequests(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	_, skipped, failed := e.MapRequests(msg)
+	skipped, failed := e.MapRequests(msg)
 	if err != nil {
 		b.Errorf("failed: %v", err)
 	}
