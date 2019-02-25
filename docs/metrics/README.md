@@ -28,6 +28,10 @@ metric target.
 Blacklists can either be path prefixes or regular expression patterns, if either
 a path prefix or regular expression matches a metric path it will be excluded.
 
+Metrics must be matched using dot notation even if the chosen output uses a
+different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
+even when sending metrics to Prometheus.
+
 The `prefix` field in a metrics config is ignored by this type. Please
 configure a prefix at the child level.
 
@@ -97,6 +101,44 @@ once Benthos shuts down. It is also possible to specify a
 The Push Gateway This is useful for when Benthos instances are short lived. Do
 not include the "/metrics/jobs/..." path in the push URL.
 
+## `rename`
+
+``` yaml
+type: rename
+prefix: benthos
+rename:
+  by_regexp: []
+  child: {}
+```
+
+Rename metric paths as they are registered.
+
+Metrics must be matched using dot notation even if the chosen output uses a
+different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
+even when sending metrics to Prometheus.
+
+The `prefix` field in a metrics config is ignored by this type. Please
+configure a prefix at the child level.
+
+### `by_regexp`
+
+An array of objects of the form `{"pattern":"foo","value":"bar"}`
+where each pattern will be parsed as RE2 regular expressions, these expressions
+are tested against each metric path, where all occurrences will be replaced with
+the specified value. Inside the value $ signs are interpreted as submatch
+expansions, e.g. $1 represents the first submatch.
+
+To replace the paths 'foo.bar.zap' and 'foo.baz.zap' with 'zip.bar' and
+'zip.baz' respectively we could use this config:
+
+``` yaml
+type: rename
+rename:
+  by_regexp:
+  - pattern: "foo\\.([a-z]*)\\.zap"
+    value: "zip.$1"
+```
+
 ## `statsd`
 
 ``` yaml
@@ -127,6 +169,10 @@ aggregated by a child metric target.
 
 Whitelists can either be path prefixes or regular expression patterns, if either
 a path prefix or regular expression matches a metric path it will be included.
+
+Metrics must be matched using dot notation even if the chosen output uses a
+different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
+even when sending metrics to Prometheus.
 
 The `prefix` field in a metrics config is ignored by this type. Please
 configure a prefix at the child level.

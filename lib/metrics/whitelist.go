@@ -43,6 +43,10 @@ aggregated by a child metric target.
 Whitelists can either be path prefixes or regular expression patterns, if either
 a path prefix or regular expression matches a metric path it will be included.
 
+Metrics must be matched using dot notation even if the chosen output uses a
+different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
+even when sending metrics to Prometheus.
+
 The ` + "`prefix`" + ` field in a metrics config is ignored by this type. Please
 configure a prefix at the child level.
 
@@ -57,6 +61,22 @@ output broker with the path ` + "`output.broker`" + `.
 An entry in the ` + "`patterns`" + ` field will be parsed as an RE2 regular
 expression and tested against each metric path. This can be used, for example,
 to allow all latency based metrics with the pattern ` + "`.*\\.latency`" + `.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			var childSanit interface{}
+			var err error
+			if conf.Whitelist.Child != nil {
+				if childSanit, err = SanitiseConfig(*conf.Whitelist.Child); err != nil {
+					return nil, err
+				}
+			} else {
+				childSanit = struct{}{}
+			}
+			return map[string]interface{}{
+				"paths":    conf.Whitelist.Paths,
+				"patterns": conf.Whitelist.Patterns,
+				"child":    childSanit,
+			}, nil
+		},
 	}
 }
 

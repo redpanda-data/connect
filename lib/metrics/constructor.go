@@ -59,6 +59,7 @@ const (
 	TypeBlackList  = "blacklist"
 	TypeHTTPServer = "http_server"
 	TypePrometheus = "prometheus"
+	TypeRename     = "rename"
 	TypeStatsd     = "statsd"
 	TypeWhiteList  = "whitelist"
 )
@@ -75,6 +76,7 @@ type Config struct {
 	Blacklist  BlacklistConfig  `json:"blacklist" yaml:"blacklist"`
 	HTTP       struct{}         `json:"http_server" yaml:"http_server"`
 	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
+	Rename     RenameConfig     `json:"rename" yaml:"rename"`
 	Statsd     StatsdConfig     `json:"statsd" yaml:"statsd"`
 	Whitelist  WhitelistConfig  `json:"whitelist" yaml:"whitelist"`
 }
@@ -87,6 +89,7 @@ func NewConfig() Config {
 		Blacklist:  NewBlacklistConfig(),
 		HTTP:       struct{}{},
 		Prometheus: NewPrometheusConfig(),
+		Rename:     NewRenameConfig(),
 		Statsd:     NewStatsdConfig(),
 		Whitelist:  NewWhitelistConfig(),
 	}
