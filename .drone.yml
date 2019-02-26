@@ -1,0 +1,9 @@
+pipeline:
+  build:
+    image: golang:1.11
+    environment:
+      - GOPATH=/drone
+      - GO111MODULE=on
+    commands:
+      - make VERSION=${DRONE_TAG}
+      - make VERSION=${DRONE_TAG} test
