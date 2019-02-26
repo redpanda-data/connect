@@ -158,7 +158,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			h.mErr.Incr(1)
 			h.mErrHTTP.Incr(1)
 			h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.Client.URL, err)
-			responseMsg = msg
+			responseMsg = msg.Copy()
 			responseMsg.Iter(func(i int, p types.Part) error {
 				FlagFail(p)
 				return nil

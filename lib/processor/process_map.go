@@ -209,15 +209,13 @@ type ProcessMap struct {
 
 	log log.Modular
 
-	mCount        metrics.StatCounter
-	mSkipped      metrics.StatCounter
-	mSkippedParts metrics.StatCounter
-	mErr          metrics.StatCounter
-	mErrPre       metrics.StatCounter
-	mErrProc      metrics.StatCounter
-	mErrPost      metrics.StatCounter
-	mSent         metrics.StatCounter
-	mBatchSent    metrics.StatCounter
+	mCount     metrics.StatCounter
+	mErr       metrics.StatCounter
+	mErrPre    metrics.StatCounter
+	mErrProc   metrics.StatCounter
+	mErrPost   metrics.StatCounter
+	mSent      metrics.StatCounter
+	mBatchSent metrics.StatCounter
 }
 
 // NewProcessMap returns a ProcessField processor.
@@ -249,16 +247,14 @@ func NewProcessMap(
 
 		children: children,
 
-		log:           log,
-		mCount:        stats.GetCounter("count"),
-		mSkipped:      stats.GetCounter("skipped"),
-		mSkippedParts: stats.GetCounter("parts.skipped"),
-		mErr:          stats.GetCounter("error"),
-		mErrPre:       stats.GetCounter("error.premap"),
-		mErrProc:      stats.GetCounter("error.processors"),
-		mErrPost:      stats.GetCounter("error.postmap"),
-		mSent:         stats.GetCounter("sent"),
-		mBatchSent:    stats.GetCounter("batch.sent"),
+		log:        log,
+		mCount:     stats.GetCounter("count"),
+		mErr:       stats.GetCounter("error"),
+		mErrPre:    stats.GetCounter("error.premap"),
+		mErrProc:   stats.GetCounter("error.processors"),
+		mErrPost:   stats.GetCounter("error.postmap"),
+		mSent:      stats.GetCounter("sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
 	var err error
@@ -355,8 +351,7 @@ func (p *ProcessMap) CreateResult(msg types.Message) error {
 
 	skipped, failed := p.mapper.MapRequests(msg)
 	if msg.Len() == 0 {
-		p.mSkipped.Incr(1)
-		p.mSkippedParts.Incr(int64(msg.Len()))
+		msg.SetAll(make([]types.Part, originalLen))
 		for _, i := range failed {
 			FlagFail(msg.Get(i))
 		}
