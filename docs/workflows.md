@@ -197,6 +197,10 @@ from the payload, therefore we add a condition that performs this check.
 ``` yaml
 dependencies:
 - tmp.enrichments.qux
+conditions:
+- type: jmespath
+  jmespath:
+    query: 'tmp.enrichments.qux == `null`'
 processors:
 - type: http
   http:
