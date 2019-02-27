@@ -39,8 +39,11 @@ func createProcMapConf(inPath string, outPath string, deps ...string) DepProcess
 	conf.Postmap[outPath] = "."
 	conf.Processors = append(conf.Processors, procConf)
 
+	depsConf := NewDAGDepsConfig()
+	depsConf.Dependencies = deps
+
 	return DepProcessMapConfig{
-		Dependencies:     deps,
+		DAGDepsConfig:    depsConf,
 		ProcessMapConfig: conf,
 	}
 }

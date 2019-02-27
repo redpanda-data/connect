@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.7.1 - 2019-02-27
+
+### Fixed
+
+- Field `dependencies` of children of the `process_dag` processor now correctly
+  parsed from config files.
+
 ## 1.7.0 - 2019-02-26
 
 ### Added

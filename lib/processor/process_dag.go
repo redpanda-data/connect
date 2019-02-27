@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -115,11 +116,60 @@ executed in parallel, and once they are both finished we may proceed onto baz.`,
 
 //------------------------------------------------------------------------------
 
+// DAGDepsConfig is a config containing dependency based configuration values
+// for a ProcessDAG child.
+type DAGDepsConfig struct {
+	Dependencies []string `json:"dependencies" yaml:"dependencies"`
+}
+
+// NewDAGDepsConfig returns a default DAGDepsConfig.
+func NewDAGDepsConfig() DAGDepsConfig {
+	return DAGDepsConfig{
+		Dependencies: []string{},
+	}
+}
+
+// UnmarshalJSON ensures that when parsing configs that are in a slice the
+// default values are still applied.
+func (p *DAGDepsConfig) UnmarshalJSON(bytes []byte) error {
+	type confAlias DAGDepsConfig
+	aliased := confAlias(NewDAGDepsConfig())
+
+	if err := json.Unmarshal(bytes, &aliased); err != nil {
+		return err
+	}
+
+	*p = DAGDepsConfig(aliased)
+	return nil
+}
+
+// UnmarshalYAML ensures that when parsing configs that are in a slice the
+// default values are still applied.
+func (p *DAGDepsConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type confAlias DAGDepsConfig
+	aliased := confAlias(NewDAGDepsConfig())
+
+	if err := unmarshal(&aliased); err != nil {
+		return err
+	}
+
+	*p = DAGDepsConfig(aliased)
+	return nil
+}
+
 // DepProcessMapConfig contains a superset of a ProcessMap config and some DAG
 // specific fields.
 type DepProcessMapConfig struct {
-	Dependencies     []string `json:"dependencies" yaml:"dependencies"`
+	DAGDepsConfig    `json:",inline" yaml:",inline"`
 	ProcessMapConfig `json:",inline" yaml:",inline"`
+}
+
+// NewDepProcessMapConfig returns a default DepProcessMapConfig.
+func NewDepProcessMapConfig() DepProcessMapConfig {
+	return DepProcessMapConfig{
+		DAGDepsConfig:    NewDAGDepsConfig(),
+		ProcessMapConfig: NewProcessMapConfig(),
+	}
 }
 
 //------------------------------------------------------------------------------
