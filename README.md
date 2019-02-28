@@ -2,7 +2,7 @@
 
 [![godoc for Jeffail/benthos][godoc-badge]][godoc-url]
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
-[![Build Status][travis-badge]][travis-url]
+[![Build Status][drone-badge]][drone-url]
 
 Benthos is a high performance and resilient message streaming service, able to
 connect various sources and sinks and perform arbitrary
@@ -220,8 +220,8 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [godoc-url]: https://godoc.org/github.com/Jeffail/benthos/lib/stream
 [goreport-badge]: https://goreportcard.com/badge/github.com/Jeffail/benthos
 [goreport-url]: https://goreportcard.com/report/Jeffail/benthos
-[travis-badge]: https://travis-ci.org/Jeffail/benthos.svg?branch=master
-[travis-url]: https://travis-ci.org/Jeffail/benthos
+[drone-badge]: https://cloud.drone.io/api/badges/Jeffail/benthos/status.svg
+[drone-url]: https://cloud.drone.io/Jeffail/benthos
 
 [aws]: https://aws.amazon.com/
 [zmq]: http://zeromq.org/
