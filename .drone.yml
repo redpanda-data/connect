@@ -1,8 +1,8 @@
-pipeline:
-  clone:
-    image: plugins/git
-    tags: true
+clone:
+  image: plugins/git
+  tags: true
 
+pipeline:
   test:
     image: golang:1.12
     environment:
@@ -15,6 +15,6 @@ pipeline:
     image: golang:1.12
     secrets: [ github_token ]
     commands:
-      curl -sL https://git.io/goreleaser | bash
+      - curl -sL https://git.io/goreleaser | bash
     when:
       event: tag
