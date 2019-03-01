@@ -1,9 +1,20 @@
 pipeline:
-  build:
-    image: golang:1.11
+  clone:
+    image: plugins/git
+    tags: true
+
+  test:
+    image: golang:1.12
     environment:
       - GOPATH=/drone
       - GO111MODULE=on
     commands:
-      - make VERSION=${DRONE_TAG}
-      - make VERSION=${DRONE_TAG} test
+      - make test
+
+  release:
+    image: golang:1.12
+    secrets: [ github_token ]
+    commands:
+      curl -sL https://git.io/goreleaser | bash
+    when:
+      event: tag
