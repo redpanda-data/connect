@@ -293,7 +293,7 @@ func TestKinesisWriteMessageThrottling(t *testing.T) {
 		t.Error(err)
 	}
 	if exp, act := msg.Len(), len(calls); act != exp {
-		t.Errorf("Expected kinesis.PutRecords to have call count %d, got %d", exp, calls)
+		t.Errorf("Expected kinesis.PutRecords to have call count %d, got %d", exp, act)
 	}
 	for i, c := range calls {
 		if exp, act := msg.Len()-i, len(c); act != exp {

@@ -8,6 +8,7 @@ input:
     input:
       type: file
       file:
+        multipart: true
         path: /sample_data.txt
     restart_input: true
     condition:
@@ -17,9 +18,9 @@ input:
 pipeline:
   threads: 1
   processors:
-  - type: batch
-    batch:
-      count: 10 # Batch size, determines how many requests are made in parallel
+  - type: split
+    split:
+      size: 5
 
   - type: process_dag
     process_dag:

@@ -350,6 +350,7 @@ PROCESSOR_SAMPLE_RETAIN                              = 10
 PROCESSOR_SAMPLE_SEED                                = 0
 PROCESSOR_SELECT_PARTS_PARTS                         = 0
 PROCESSOR_SLEEP_DURATION                             = 100us
+PROCESSOR_SPLIT_BYTE_SIZE                            = 0
 PROCESSOR_SPLIT_SIZE                                 = 1
 PROCESSOR_SUBPROCESS_NAME                            = cat
 PROCESSOR_TEXT_ARG

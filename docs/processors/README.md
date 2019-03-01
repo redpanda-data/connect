@@ -1292,20 +1292,19 @@ of functions [here](../config_interpolation.md#functions).
 ``` yaml
 type: split
 split:
+  byte_size: 0
   size: 1
 ```
 
 Breaks message batches (synonymous with multiple part messages) into smaller
-batches, targeting a specific batch size of discrete message parts (default size
-is 1 message.)
+batches. The size of the resulting batches are determined either by a discrete
+size or, if the field `byte_size` is non-zero, then by total size in
+bytes (which ever limit is reached first).
 
-For each batch, if there is a remainder of parts after splitting a batch, the
-remainder is also sent as a single batch. For example, if your target size was
-10, and the processor received a batch of 95 message parts, the result would be
-9 batches of 10 messages followed by a batch of 5 messages.
-
-The split processor should *always* be positioned at the end of a list of
-processors.
+If there is a remainder of messages after splitting a batch the remainder is
+also sent as a single batch. For example, if your target size was 10, and the
+processor received a batch of 95 message parts, the result would be 9 batches of
+10 messages followed by a batch of 5 messages.
 
 ## `subprocess`
 

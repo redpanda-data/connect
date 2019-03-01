@@ -393,6 +393,7 @@ pipeline:
     sleep:
       duration: ${PROCESSOR_SLEEP_DURATION:100us}
     split:
+      byte_size: ${PROCESSOR_SPLIT_BYTE_SIZE:0}
       size: ${PROCESSOR_SPLIT_SIZE:1}
     subprocess:
       name: ${PROCESSOR_SUBPROCESS_NAME:cat}

@@ -588,6 +588,7 @@ pipeline:
       duration: 100us
     split:
       size: 1
+      byte_size: 0
     subprocess:
       parts: []
       name: cat

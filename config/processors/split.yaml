@@ -17,6 +17,7 @@ pipeline:
   processors:
   - type: split
     split:
+      byte_size: 0
       size: 1
   threads: 1
 output:
