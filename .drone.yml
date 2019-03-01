@@ -1,20 +1,26 @@
-clone:
-  image: plugins/git
-  tags: true
+kind: pipeline
+name: default
 
-pipeline:
-  test:
-    image: golang:1.12
-    environment:
-      - GOPATH=/drone
-      - GO111MODULE=on
-    commands:
-      - make test
+steps:
+- name: fetch
+  image: docker:git
+  commands:
+  - git fetch --tags
 
-  release:
-    image: golang:1.12
-    secrets: [ github_token ]
-    commands:
-      - curl -sL https://git.io/goreleaser | bash
-    when:
-      event: tag
+- name: test
+  image: golang:1.12
+  environment:
+    GOPATH: /drone
+    GO111MODULE: on
+  commands:
+    - make test
+
+- name: release
+  image: golang:1.12
+  environment:
+    GITHUB_TOKEN:
+      from_secret: github_token
+  commands:
+    - curl -sL https://git.io/goreleaser | bash
+  when:
+    event: tag
