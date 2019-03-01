@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.7.2 - 2019-03-01
+
+### Added
+
+- Field `byte_size` added to `split` processor.
+
 ## 1.7.1 - 2019-02-27
 
 ### Fixed
