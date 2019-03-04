@@ -26,8 +26,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/go-redis/redis"
 )
 
@@ -55,8 +57,10 @@ type RedisPubSub struct {
 	log   log.Modular
 	stats metrics.Type
 
-	url  *url.URL
-	conf RedisPubSubConfig
+	url             *url.URL
+	conf            RedisPubSubConfig
+	channelBytes    []byte
+	interpolatePath bool
 
 	client  *redis.Client
 	connMut sync.RWMutex
@@ -68,11 +72,15 @@ func NewRedisPubSub(
 	log log.Modular,
 	stats metrics.Type,
 ) (*RedisPubSub, error) {
+	channelBytes := []byte(conf.Channel)
+	interpolatePath := text.ContainsFunctionVariables(channelBytes)
 
 	r := &RedisPubSub{
-		log:   log,
-		stats: stats,
-		conf:  conf,
+		log:             log,
+		stats:           stats,
+		conf:            conf,
+		channelBytes:    channelBytes,
+		interpolatePath: interpolatePath,
 	}
 
 	var err error
@@ -124,7 +132,11 @@ func (r *RedisPubSub) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		if err := client.Publish(r.conf.Channel, p.Get()).Err(); err != nil {
+		channel := string(r.channelBytes)
+		if r.interpolatePath {
+			channel = string(text.ReplaceFunctionVariables(message.Lock(msg, i), r.channelBytes))
+		}
+		if err := client.Publish(channel, p.Get()).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return types.ErrNotConnected

@@ -34,7 +34,10 @@ func init() {
 		constructor: NewRedisPubSub,
 		description: `
 Publishes messages through the Redis PubSub model. It is not possible to
-guarantee that messages have been received.`,
+guarantee that messages have been received.
+
+This output will interpolate functions within the channel field, you
+can find a list of functions [here](../config_interpolation.md#functions).`,
 	}
 }
 
