@@ -20,12 +20,12 @@ Documentation
 ## Other Sections
 
 - [Core Concepts](./concepts.md) describes various Benthos concepts such as:
-  - Configuration
-  - Mutating And Filtering Content
-  - Content Based Multiplexing
-  - Sharing Resources Across Processors
-  - Maximising IO Throughput
-  - Maximising CPU Utilisation
+    - Configuration
+    - Mutating And Filtering Content
+    - Content Based Multiplexing
+    - Sharing Resources Across Processors
+    - Maximising IO Throughput
+    - Maximising CPU Utilisation
 - [Message Batching](./batching.md) explains how multiple part messages and
   message batching works within Benthos.
 - [Error Handling](./error_handling.md) explains how you can handle errors from

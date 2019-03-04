@@ -88,3 +88,6 @@ docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --list-metrics > ./docs/metrics/README.md; true
 	@$(PATHINSTBIN)/benthos --list-tracers > ./docs/tracers/README.md; true
 	@go run $(GO_FLAGS) ./cmd/tools/benthos_config_gen/main.go
+
+docs-site:
+	mkdocs build -f ./.mkdocs.yml -d ./tmp/$(VERSION)

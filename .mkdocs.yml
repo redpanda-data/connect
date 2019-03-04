@@ -1,0 +1,21 @@
+site_name: Benthos Documentation
+nav:
+  - Home: /
+  - 'Core Concepts': 'concepts.md'
+  - Components:
+    - 'Inputs': 'inputs'
+    - 'Buffers': 'buffers'
+    - 'Processors': 'processors'
+    - 'Conditions': 'conditions'
+    - 'Outputs': 'outputs'
+    - 'Caches': 'caches'
+    - 'Rate Limits': 'rate_limits'
+    - 'Metrics': 'metrics'
+    - 'Tracers': 'tracers'
+  - Guides:
+    - 'Pipeline': 'pipeline.md'
+    - 'Message Batching': 'batching.md'
+    - 'Error Handling': 'error_handling.md'
+    - 'Workflows': 'workflows.md'
+    - 'Config Cheats': 'configuration.md'
+    - 'Config Interpolation': 'config_interpolation.md'
