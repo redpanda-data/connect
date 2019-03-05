@@ -15,12 +15,31 @@ steps:
   commands:
     - make test
 
+- name: release
+  image: golang:1.12
+  environment:
+    GITHUB_TOKEN:
+      from_secret: github_token
+  commands:
+    - curl -sL https://git.io/goreleaser | bash
+  when:
+    event: tag
+
 - name: docker-tags
   image: golang:1.12
   commands:
     - make docker-tags
   when:
     event: tag
+
+- name: docker-dr
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile
+    dry_run: true
+  when:
+    event: [ push, pull_request ]
 
 - name: docker
   image: plugins/docker
@@ -40,6 +59,15 @@ steps:
   when:
     event: tag
 
+- name: docker-cgo-dr
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile.cgo
+    dry_run: true
+  when:
+    event: [ push, pull_request ]
+
 - name: docker-cgo
   image: plugins/docker
   settings:
@@ -48,15 +76,5 @@ steps:
     username: jeffail
     password:
       from_secret: docker_password
-  when:
-    event: tag
-
-- name: release
-  image: golang:1.12
-  environment:
-    GITHUB_TOKEN:
-      from_secret: github_token
-  commands:
-    - curl -sL https://git.io/goreleaser | bash
   when:
     event: tag

@@ -1,4 +1,4 @@
-FROM golang:latest AS deps
+FROM golang:1.12 AS deps
 
 WORKDIR /go/src/github.com/Jeffail/benthos/
 COPY go.mod go.sum /go/src/github.com/Jeffail/benthos/
@@ -6,7 +6,7 @@ COPY go.mod go.sum /go/src/github.com/Jeffail/benthos/
 ENV GO111MODULE on
 RUN go mod download
 
-FROM golang:latest AS build
+FROM golang:1.12 AS build
 
 RUN useradd -u 10001 benthos
 
