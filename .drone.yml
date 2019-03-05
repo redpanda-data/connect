@@ -6,6 +6,7 @@ steps:
   image: docker:git
   commands:
   - git fetch --tags
+  - git fetch origin gh-pages
 
 - name: test
   image: golang:1.12
@@ -76,5 +77,26 @@ steps:
     username: jeffail
     password:
       from_secret: docker_password
+  when:
+    event: tag
+
+- name: gen-docs
+  image: python
+  commands:
+  - pip install mkdocs
+  - make docs-site
+  when:
+    event: tag
+
+- name: push-docs
+  image: docker:git
+  commands:
+  - git checkout gh-pages
+  - cp -R ./tmp/**/* .
+  - rm -rf ./tmp
+  - git add -A
+  - git commit -m 'Update to $DRONE_TAG'
+  - git push origin gh-pages
+  - git checkout master
   when:
     event: tag
