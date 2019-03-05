@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.7.3 - 2019-03-05
+
+### Added
+
+- Function interpolation for field `channel` added to `redis_pubsub` output.
+
 ## 1.7.2 - 2019-03-01
 
 ### Added

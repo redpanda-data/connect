@@ -57,10 +57,9 @@ type RedisPubSub struct {
 	log   log.Modular
 	stats metrics.Type
 
-	url             *url.URL
-	conf            RedisPubSubConfig
-	channelBytes    []byte
-	interpolatePath bool
+	url        *url.URL
+	conf       RedisPubSubConfig
+	channelStr *text.InterpolatedString
 
 	client  *redis.Client
 	connMut sync.RWMutex
@@ -72,15 +71,11 @@ func NewRedisPubSub(
 	log log.Modular,
 	stats metrics.Type,
 ) (*RedisPubSub, error) {
-	channelBytes := []byte(conf.Channel)
-	interpolatePath := text.ContainsFunctionVariables(channelBytes)
-
 	r := &RedisPubSub{
-		log:             log,
-		stats:           stats,
-		conf:            conf,
-		channelBytes:    channelBytes,
-		interpolatePath: interpolatePath,
+		log:        log,
+		stats:      stats,
+		conf:       conf,
+		channelStr: text.NewInterpolatedString(conf.Channel),
 	}
 
 	var err error
@@ -132,10 +127,7 @@ func (r *RedisPubSub) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		channel := string(r.channelBytes)
-		if r.interpolatePath {
-			channel = string(text.ReplaceFunctionVariables(message.Lock(msg, i), r.channelBytes))
-		}
+		channel := r.channelStr.Get(message.Lock(msg, i))
 		if err := client.Publish(channel, p.Get()).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
