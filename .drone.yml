@@ -15,6 +15,7 @@ steps:
     GO111MODULE: on
   commands:
     - make test
+    - git checkout -- ./go.sum ./go.mod
 
 - name: release
   image: golang:1.12
@@ -22,35 +23,8 @@ steps:
     GITHUB_TOKEN:
       from_secret: github_token
   commands:
-    - git checkout -- ./go.sum ./go.mod
     - curl -sL https://git.io/goreleaser | bash
-  when:
-    event: tag
-
-- name: docker-tags
-  image: golang:1.12
-  commands:
-    - make docker-tags
-  when:
-    event: tag
-
-- name: docker-dr
-  image: plugins/docker
-  settings:
-    repo: jeffail/benthos
-    dockerfile: resources/docker/Dockerfile
-    dry_run: true
-  when:
-    event: [ push, pull_request ]
-
-- name: docker
-  image: plugins/docker
-  settings:
-    repo: jeffail/benthos
-    dockerfile: resources/docker/Dockerfile
-    username: jeffail
-    password:
-      from_secret: docker_password
+    - git checkout -- ./go.sum ./go.mod
   when:
     event: tag
 
@@ -75,6 +49,33 @@ steps:
   settings:
     repo: jeffail/benthos
     dockerfile: resources/docker/Dockerfile.cgo
+    username: jeffail
+    password:
+      from_secret: docker_password
+  when:
+    event: tag
+
+- name: docker-tags
+  image: golang:1.12
+  commands:
+    - make docker-tags
+  when:
+    event: tag
+
+- name: docker-dr
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile
+    dry_run: true
+  when:
+    event: [ push, pull_request ]
+
+- name: docker
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile
     username: jeffail
     password:
       from_secret: docker_password
