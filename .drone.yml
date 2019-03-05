@@ -22,6 +22,7 @@ steps:
     GITHUB_TOKEN:
       from_secret: github_token
   commands:
+    - git checkout -- ./go.sum ./go.mod
     - curl -sL https://git.io/goreleaser | bash
   when:
     event: tag
