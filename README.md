@@ -187,10 +187,10 @@ install libzmq4 and use the compile time flag when building Benthos:
 make TAGS=ZMQ4
 ```
 
-Or to build a docker image with ZMQ support:
+Or to build a docker image using CGO, which includes ZMQ:
 
 ``` shell
-make docker-zmq
+make docker-cgo
 ```
 
 ## Contributing

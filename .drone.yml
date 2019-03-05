@@ -15,6 +15,42 @@ steps:
   commands:
     - make test
 
+- name: docker-tags
+  image: golang:1.12
+  commands:
+    - make docker-tags
+  when:
+    event: tag
+
+- name: docker
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile
+    username: jeffail
+    password:
+      from_secret: docker_password
+  when:
+    event: tag
+
+- name: docker-cgo-tags
+  image: golang:1.12
+  commands:
+    - make docker-cgo-tags
+  when:
+    event: tag
+
+- name: docker-cgo
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile.cgo
+    username: jeffail
+    password:
+      from_secret: docker_password
+  when:
+    event: tag
+
 - name: release
   image: golang:1.12
   environment:

@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker docker-deps docker-zmq docker-push clean docs test test-race test-integration fmt lint install
+.PHONY: all deps rpm docker docker-deps docker-cgo docker-push clean docs test test-race test-integration fmt lint install
 
 TAGS =
 
@@ -31,6 +31,12 @@ $(PATHINSTBIN)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/*/*.go)
 
 $(APPS): %: $(PATHINSTBIN)/%
 
+docker-tags:
+	@echo "latest,$(VERSION),${VER_MAJOR}.${VER_MINOR},${VER_MAJOR}" > .tags
+
+docker-cgo-tags:
+	@echo "latest-cgo,$(VERSION)-cgo,${VER_MAJOR}.${VER_MINOR}-cgo,${VER_MAJOR}-cgo" > .tags
+
 docker:
 	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VERSION)
 	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:$(VER_MAJOR)
@@ -41,15 +47,15 @@ docker-deps:
 	@docker build -f ./resources/docker/Dockerfile --target deps . -t jeffail/benthos:$(VERSION)-deps
 	@docker tag jeffail/benthos:$(VERSION)-deps jeffail/benthos:latest-deps
 
-docker-zmq:
-	@docker build -f ./resources/docker/Dockerfile.zmq . -t jeffail/benthos:$(VERSION)-zmq
-	@docker tag jeffail/benthos:$(VERSION)-zmq jeffail/benthos:latest-zmq
+docker-cgo:
+	@docker build -f ./resources/docker/Dockerfile.cgo . -t jeffail/benthos:$(VERSION)-cgo
+	@docker tag jeffail/benthos:$(VERSION)-cgo jeffail/benthos:latest-cgo
 
 docker-push:
 	@docker push jeffail/benthos:$(VERSION)-deps; true
 	@docker push jeffail/benthos:latest-deps; true
-	@docker push jeffail/benthos:$(VERSION)-zmq; true
-	@docker push jeffail/benthos:latest-zmq; true
+	@docker push jeffail/benthos:$(VERSION)-cgo; true
+	@docker push jeffail/benthos:latest-cgo; true
 	@docker push jeffail/benthos:$(VERSION); true
 	@docker push jeffail/benthos:$(VER_MAJOR); true
 	@docker push jeffail/benthos:$(VER_MAJOR).$(VER_MINOR); true
