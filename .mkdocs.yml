@@ -1,4 +1,4 @@
-site_name: Benthos Documentation
+site_name: Benthos
 nav:
   - Home: /
   - Concepts: 'concepts.md'
