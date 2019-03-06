@@ -1,6 +1,9 @@
 Documentation
 =============
 
+If you haven't used Benthos before check out the
+[getting started guide](./getting_started.md)
+
 ## Core Components
 
 - [Inputs](./inputs/README.md)

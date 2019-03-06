@@ -1,7 +1,7 @@
 site_name: Benthos Documentation
 nav:
   - Home: /
-  - 'Core Concepts': 'concepts.md'
+  - Concepts: 'concepts.md'
   - Components:
     - 'Inputs': 'inputs'
     - 'Buffers': 'buffers'
@@ -13,6 +13,7 @@ nav:
     - 'Metrics': 'metrics'
     - 'Tracers': 'tracers'
   - Guides:
+    - 'Getting Started': 'getting_started.md'
     - 'Pipeline': 'pipeline.md'
     - 'Message Batching': 'batching.md'
     - 'Error Handling': 'error_handling.md'
