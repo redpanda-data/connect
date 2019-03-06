@@ -93,6 +93,8 @@ steps:
 - name: push-docs
   image: docker:git
   commands:
+  - git config --global user.email "ash@jeffail.uk"
+  - git config --global user.name "Ashley Jeffs" 
   - git checkout gh-pages
   - cp -R ./tmp/**/* .
   - rm -rf ./tmp
