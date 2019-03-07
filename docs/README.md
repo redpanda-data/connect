@@ -1,20 +1,20 @@
 Documentation
 =============
 
-If you haven't used Benthos before check out the
-[getting started guide](./getting_started.md)
+Welcome to the Benthos documentation site, if you haven't used Benthos before
+check out the [getting started guide](./getting_started.md).
 
 ## Core Components
 
 - [Inputs](./inputs/README.md)
 - [Buffers](./buffers/README.md)
 - [Pipeline](./pipeline.md)
+- [Processors](./processors/README.md)
+- [Conditions](./conditions/README.md)
 - [Outputs](./outputs/README.md)
 
 ## Other Components
 
-- [Processors](./processors/README.md)
-- [Conditions](./conditions/README.md)
 - [Caches](./caches/README.md)
 - [Rate Limits](./rate_limits/README.md)
 - [Metrics](./metrics/README.md)

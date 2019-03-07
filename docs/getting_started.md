@@ -25,7 +25,7 @@ docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 ### Download an Archive
 
 Otherwise you can pull an archive containing Benthos from the
-[Releases page](https://github.com/Jeffail/benthos/releases).
+[releases page](https://github.com/Jeffail/benthos/releases).
 
 ``` sh
 curl -L https://github.com/Jeffail/benthos/releases/download/${VERSION}/benthos_${VERSION}_linux_amd64.tar.gz | tar xz
@@ -60,8 +60,34 @@ And then point Benthos to your config:
 benthos -c ./yourconfig.yaml
 ```
 
-You can write messages in the terminal and they will be sent to your chosen
-Kafka topic, how exciting!
+With this config you can write messages in the terminal and they will be sent to
+your chosen Kafka topic, how exciting!
 
-Now that you are a Benthos expert the world is your oyster,
-[check out all the other cool stuff you can do](./README.md).
+Next, we might want to add some processing steps in order to mutate the
+messages. For example, we could add a [`text`](./processors/README.md#text)
+processor that converts all text into upper case:
+
+``` yaml
+input:
+  type: stdin
+buffer:
+  type: none
+pipeline:
+  threads: 1
+  processors:
+  - type: text
+    text:
+      operator: to_upper
+output:
+  type: kafka
+  kafka:
+    addresses:
+    - localhost:9092
+    topic: benthos_stream
+```
+
+Very useful! You can add as many [processing steps](./processors/README.md) as
+you like.
+
+Now that you are a Benthos expert check out all the other
+[cool stuff you can do](./README.md).

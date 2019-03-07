@@ -2,3 +2,4 @@ target
 vendor
 tmp
 .tags
+go.sum
