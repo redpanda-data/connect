@@ -159,6 +159,10 @@ func (r *Reader) loop() {
 					r.connThrot.Reset()
 					break
 				}
+				// Add throttle if error is coming from Read() and not Connect() directly
+				if !r.connThrot.Retry() {
+					return
+				}
 			}
 		}
 
