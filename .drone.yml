@@ -30,8 +30,6 @@ steps:
   image: golang
   commands:
     - make docker-cgo-tags
-  when:
-    event: tag
 
 - name: docker-cgo-dr
   image: plugins/docker
@@ -57,8 +55,6 @@ steps:
   image: golang
   commands:
     - make docker-tags
-  when:
-    event: tag
 
 - name: docker-dr
   image: plugins/docker
