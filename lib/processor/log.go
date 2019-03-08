@@ -54,7 +54,24 @@ log:
 ` + "```" + `
 
 The ` + "`level`" + ` field determines the log level of the printed events and
-can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.`,
+can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.
+
+### Structured Fields
+
+It's also possible to output a map of structured fields, this only works when
+the service log is set to output as JSON. The field values are function
+interpolated, meaning it's possible to output structured fields containing
+message contents and metadata, e.g.:
+
+` + "``` yaml" + `
+type: log
+log:
+  level: DEBUG
+  message: "foo"
+  fields:
+    id: "${!json_field:id}"
+    kafka_topic: "${!metadata:kafka_topic}"
+` + "```" + ``,
 	}
 }
 
@@ -62,14 +79,16 @@ can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.`,
 
 // LogConfig contains configuration fields for the Log processor.
 type LogConfig struct {
-	Level   string `json:"level" yaml:"level"`
-	Message string `json:"message" yaml:"message"`
+	Level   string            `json:"level" yaml:"level"`
+	Fields  map[string]string `json:"fields" yaml:"fields"`
+	Message string            `json:"message" yaml:"message"`
 }
 
 // NewLogConfig returns a LogConfig with default values.
 func NewLogConfig() LogConfig {
 	return LogConfig{
 		Level:   "INFO",
+		Fields:  map[string]string{},
 		Message: "",
 	}
 }
@@ -81,17 +100,32 @@ type Log struct {
 	log     log.Modular
 	level   string
 	message *text.InterpolatedString
-	printFn func(msg string)
+	fields  map[string]*text.InterpolatedString
+	printFn func(logger log.Modular, msg string)
 }
 
 // NewLog returns a Log processor.
 func NewLog(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr types.Manager, logger log.Modular, stats metrics.Type,
 ) (Type, error) {
 	l := &Log{
-		log:     log,
+		log:     logger,
 		level:   conf.Log.Level,
+		fields:  map[string]*text.InterpolatedString{},
 		message: text.NewInterpolatedString(conf.Log.Message),
+	}
+	if len(conf.Log.Fields) > 0 {
+		staticFields := map[string]string{}
+		for k, v := range conf.Log.Fields {
+			if text.ContainsFunctionVariables([]byte(v)) {
+				l.fields[k] = text.NewInterpolatedString(v)
+			} else {
+				staticFields[k] = v
+			}
+		}
+		if len(staticFields) > 0 {
+			l.log = log.WithFields(l.log, staticFields)
+		}
 	}
 	var err error
 	if l.printFn, err = l.levelToLogFn(l.level); err != nil {
@@ -102,18 +136,28 @@ func NewLog(
 
 //------------------------------------------------------------------------------
 
-func (l *Log) levelToLogFn(level string) (func(msg string), error) {
+func (l *Log) levelToLogFn(level string) (func(logger log.Modular, msg string), error) {
 	switch level {
 	case "TRACE":
-		return l.log.Traceln, nil
+		return func(logger log.Modular, msg string) {
+			logger.Traceln(msg)
+		}, nil
 	case "DEBUG":
-		return l.log.Debugln, nil
+		return func(logger log.Modular, msg string) {
+			logger.Debugln(msg)
+		}, nil
 	case "INFO":
-		return l.log.Infoln, nil
+		return func(logger log.Modular, msg string) {
+			logger.Infoln(msg)
+		}, nil
 	case "WARN":
-		return l.log.Warnln, nil
+		return func(logger log.Modular, msg string) {
+			logger.Warnln(msg)
+		}, nil
 	case "ERROR":
-		return l.log.Errorln, nil
+		return func(logger log.Modular, msg string) {
+			logger.Errorln(msg)
+		}, nil
 	}
 	return nil, fmt.Errorf("log level not recognised: %v", level)
 }
@@ -122,8 +166,16 @@ func (l *Log) levelToLogFn(level string) (func(msg string), error) {
 
 // ProcessMessage logs an event and returns the message unchanged.
 func (l *Log) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+	targetLog := l.log
+	if len(l.fields) > 0 {
+		interpFields := make(map[string]string, len(l.fields))
+		for k, vi := range l.fields {
+			interpFields[k] = vi.Get(msg)
+		}
+		targetLog = log.WithFields(targetLog, interpFields)
+	}
 	msgs := [1]types.Message{msg}
-	l.printFn(l.message.Get(msg))
+	l.printFn(targetLog, l.message.Get(msg))
 	return msgs[:], nil
 }
 

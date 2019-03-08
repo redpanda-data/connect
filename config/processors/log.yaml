@@ -17,6 +17,7 @@ pipeline:
   processors:
   - type: log
     log:
+      fields: {}
       level: INFO
       message: ""
   threads: 1

@@ -550,6 +550,7 @@ pipeline:
       parallel: false
     log:
       level: INFO
+      fields: {}
       message: ""
     merge_json:
       parts: []

@@ -86,8 +86,39 @@ func TestStaticFields(t *testing.T) {
 	logger2.Warnln("Warning message root.foo module")
 
 	expected := `{"@service":"benthos_service","@system":"foo","level":"WARN","component":"root","message":"Warning message root module"}
-{"@service":"benthos_service","@system":"foo","level":"WARN","component":"root","message":"Warning message root module\n"}
+{"@service":"benthos_service","@system":"foo","level":"WARN","component":"root","message":"Warning message root module"}
 {"@service":"benthos_service","@system":"foo","level":"WARN","component":"root.foo","message":"Warning message root.foo module"}
+`
+
+	if expected != buf.data {
+		t.Errorf("%v != %v", expected, buf.data)
+	}
+}
+
+func TestStaticFieldsOverride(t *testing.T) {
+	loggerConfig := NewConfig()
+	loggerConfig.AddTimeStamp = false
+	loggerConfig.JSONFormat = true
+	loggerConfig.Prefix = "root"
+	loggerConfig.LogLevel = "WARN"
+	loggerConfig.StaticFields = map[string]string{
+		"@service": "benthos_service",
+		"@system":  "foo",
+	}
+
+	buf := LogBuffer{data: ""}
+
+	logger := New(&buf, loggerConfig)
+	logger.Warnf("Warning message root module")
+
+	logger2 := WithFields(logger, map[string]string{"foo": "bar", "@service": "fooserve"})
+	logger2.Warnln("Warning message foo fields")
+
+	logger.Warnf("Warning message root module\n")
+
+	expected := `{"@service":"benthos_service","@system":"foo","level":"WARN","component":"root","message":"Warning message root module"}
+{"@service":"fooserve","@system":"foo","foo":"bar","level":"WARN","component":"root","message":"Warning message foo fields"}
+{"@service":"benthos_service","@system":"foo","level":"WARN","component":"root","message":"Warning message root module"}
 `
 
 	if expected != buf.data {
@@ -113,7 +144,7 @@ func TestStaticFieldsEmpty(t *testing.T) {
 	logger2.Warnln("Warning message root.foo module")
 
 	expected := `{"level":"WARN","component":"root","message":"Warning message root module"}
-{"level":"WARN","component":"root","message":"Warning message root module\n"}
+{"level":"WARN","component":"root","message":"Warning message root module"}
 {"level":"WARN","component":"root.foo","message":"Warning message root.foo module"}
 `
 

@@ -898,6 +898,7 @@ can read about these patterns [here](../error_handling.md).
 ``` yaml
 type: log
 log:
+  fields: {}
   level: INFO
   message: ""
 ```
@@ -921,6 +922,23 @@ log:
 
 The `level` field determines the log level of the printed events and
 can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.
+
+### Structured Fields
+
+It's also possible to output a map of structured fields, this only works when
+the service log is set to output as JSON. The field values are function
+interpolated, meaning it's possible to output structured fields containing
+message contents and metadata, e.g.:
+
+``` yaml
+type: log
+log:
+  level: DEBUG
+  message: "foo"
+  fields:
+    id: "${!json_field:id}"
+    kafka_topic: "${!metadata:kafka_topic}"
+```
 
 ## `merge_json`
 

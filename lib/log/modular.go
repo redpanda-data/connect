@@ -162,10 +162,10 @@ func (l *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // Logger is an object with support for levelled logging and modular components.
 type Logger struct {
-	stream      io.Writer
-	config      Config
-	level       int
-	extraFields string
+	stream          io.Writer
+	config          Config
+	level           int
+	staticFieldsRaw string
 }
 
 // New creates and returns a new logger object.
@@ -179,12 +179,14 @@ func New(stream io.Writer, config Config) Modular {
 	if len(config.StaticFields) > 0 {
 		jBytes, _ := json.Marshal(config.StaticFields)
 		if len(jBytes) > 2 {
-			logger.extraFields = string(jBytes[1:len(jBytes)-1]) + ","
+			logger.staticFieldsRaw = string(jBytes[1:len(jBytes)-1]) + ","
 		}
 	}
 
 	return &logger
 }
+
+//------------------------------------------------------------------------------
 
 // Noop creates and returns a new logger object that writes nothing.
 func Noop() Modular {
@@ -202,11 +204,49 @@ func (l *Logger) NewModule(prefix string) Modular {
 	config.Prefix = fmt.Sprintf("%v%v", config.Prefix, prefix)
 
 	return &Logger{
-		stream:      l.stream,
-		config:      config,
-		level:       l.level,
-		extraFields: l.extraFields,
+		stream:          l.stream,
+		config:          config,
+		level:           l.level,
+		staticFieldsRaw: l.staticFieldsRaw,
 	}
+}
+
+// WithFields returns a logger with new fields added to the JSON formatted
+// output.
+func (l *Logger) WithFields(fields map[string]string) Modular {
+	newConfig := l.config
+	newConfig.StaticFields = fields
+	for k, v := range l.config.StaticFields {
+		if _, exists := fields[k]; !exists {
+			newConfig.StaticFields[k] = v
+		}
+	}
+	var staticFieldsRaw string
+	if len(newConfig.StaticFields) > 0 {
+		jBytes, _ := json.Marshal(newConfig.StaticFields)
+		if len(jBytes) > 2 {
+			staticFieldsRaw = string(jBytes[1:len(jBytes)-1]) + ","
+		}
+	}
+	return &Logger{
+		stream:          l.stream,
+		config:          newConfig,
+		level:           l.level,
+		staticFieldsRaw: staticFieldsRaw,
+	}
+}
+
+// WithFields attempts to cast the Modular implementation into an interface that
+// implements WithFields, and if successful returns the result.
+//
+// TODO: V2 Remove this in favour of extending the interface.
+func WithFields(l Modular, fields map[string]string) Modular {
+	if wf, ok := l.(interface {
+		WithFields(fields map[string]string) Modular
+	}); ok {
+		return wf.WithFields(fields)
+	}
+	return l
 }
 
 //------------------------------------------------------------------------------
@@ -214,18 +254,19 @@ func (l *Logger) NewModule(prefix string) Modular {
 // writeFormatted prints a log message with any configured extras prepended.
 func (l *Logger) writeFormatted(message string, level string, other ...interface{}) {
 	if l.config.JSONFormat {
+		message = strings.TrimSuffix(message, "\n")
 		if l.config.AddTimeStamp {
 			fmt.Fprintf(
 				l.stream,
 				"{\"@timestamp\":\"%v\",%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
-				time.Now().Format(time.RFC3339), l.extraFields, level, l.config.Prefix,
+				time.Now().Format(time.RFC3339), l.staticFieldsRaw, level, l.config.Prefix,
 				strconv.QuoteToASCII(fmt.Sprintf(message, other...)),
 			)
 		} else {
 			fmt.Fprintf(
 				l.stream,
 				"{%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
-				l.extraFields, level, l.config.Prefix,
+				l.staticFieldsRaw, level, l.config.Prefix,
 				strconv.QuoteToASCII(fmt.Sprintf(message, other...)),
 			)
 		}
@@ -249,13 +290,13 @@ func (l *Logger) writeLine(message string, level string) {
 		if l.config.AddTimeStamp {
 			fmt.Fprintf(l.stream,
 				"{\"@timestamp\":\"%v\",%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
-				time.Now().Format(time.RFC3339), l.extraFields, level,
+				time.Now().Format(time.RFC3339), l.staticFieldsRaw, level,
 				l.config.Prefix, strconv.QuoteToASCII(message),
 			)
 		} else {
 			fmt.Fprintf(l.stream,
 				"{%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
-				l.extraFields, level, l.config.Prefix,
+				l.staticFieldsRaw, level, l.config.Prefix,
 				strconv.QuoteToASCII(message),
 			)
 		}
