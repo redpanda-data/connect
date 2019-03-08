@@ -149,17 +149,12 @@ func (r *Reader) loop() {
 
 					r.log.Errorf("Failed to reconnect to %v: %v\n", r.typeStr, err)
 					mFailedConn.Incr(1)
-
-					if !r.connThrot.Retry() {
-						return
-					}
 				} else if msg, err = r.reader.Read(); err != types.ErrNotConnected {
 					mConn.Incr(1)
 					atomic.StoreInt32(&r.connected, 1)
 					r.connThrot.Reset()
 					break
 				}
-				// Add throttle if error is coming from Read() and not Connect() directly
 				if !r.connThrot.Retry() {
 					return
 				}

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.7.9 - 2019-03-08
+
+### Fixed
+
+- Removed unnecessary subscription check from `gcp_pubsub` input.
+
 ## 1.7.7 - 2019-03-08
 
 ### Added
