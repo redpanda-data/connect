@@ -22,7 +22,6 @@ package reader
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -104,16 +103,6 @@ func (c *GCPPubSub) Connect() error {
 	sub := c.client.Subscription(c.conf.SubscriptionID)
 	sub.ReceiveSettings.MaxOutstandingMessages = c.conf.MaxOutstandingMessages
 	sub.ReceiveSettings.MaxOutstandingBytes = c.conf.MaxOutstandingBytes
-
-	existsCtx, existsCancel := context.WithTimeout(context.Background(), time.Second*5)
-	exists, err := sub.Exists(existsCtx)
-	existsCancel()
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return fmt.Errorf("subscription '%v' does not exist", c.conf.SubscriptionID)
-	}
 
 	subCtx, cancel := context.WithCancel(context.Background())
 	msgsChan := make(chan *pubsub.Message)
