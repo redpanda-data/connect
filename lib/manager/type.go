@@ -298,7 +298,7 @@ func (t *Type) GetPlugin(name string) (interface{}, error) {
 
 // CloseAsync triggers the shut down of all resource types that implement the
 // lifetime interface types.Closable.
-// TODO: Simplify this in V2.
+// TODO: V2 Simplify this.
 func (t *Type) CloseAsync() {
 	for _, c := range t.caches {
 		if closer, ok := c.(types.Closable); ok {
@@ -324,7 +324,7 @@ func (t *Type) CloseAsync() {
 
 // WaitForClose blocks until either all closable resource types are shut down or
 // a timeout occurs.
-// TODO: Simplify this in V2.
+// TODO: V2 Simplify this.
 func (t *Type) WaitForClose(timeout time.Duration) error {
 	timesOut := time.Now().Add(timeout)
 	for k, c := range t.caches {
