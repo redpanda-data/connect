@@ -34,9 +34,12 @@ curl -L https://github.com/Jeffail/benthos/releases/download/${VERSION}/benthos_
 
 ## Run
 
-A Benthos stream pipeline is configured with a single config file made up of
-four main sections; input, buffer, pipeline, output. If we were to pipe stdin
-directly to Kafka it would look like this:
+A Benthos stream pipeline is configured with a single config file, you can
+generate a fresh one with `benthos --print-yaml` or `benthos --print-json`.
+
+The main sections that make up a pipeline are `input`, `buffer`, `pipeline` and
+`output`. If we were to pipe stdin directly to Kafka those sections might look
+like this:
 
 ``` yaml
 input:
@@ -54,7 +57,7 @@ output:
     topic: benthos_stream
 ```
 
-And then point Benthos to your config:
+You can execute this config with:
 
 ``` sh
 benthos -c ./yourconfig.yaml

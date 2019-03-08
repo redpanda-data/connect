@@ -182,7 +182,7 @@ stream.`[1:],
 
 //------------------------------------------------------------------------------
 
-// bootstrap reads cmd args and either parses and config file or prints helper
+// bootstrap reads cmd args and either parses a config file or prints helper
 // text and exits.
 func bootstrap() (config.Type, []string) {
 	conf := config.New()
