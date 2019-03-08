@@ -27,7 +27,7 @@ steps:
     event: tag
 
 - name: docker-cgo-tags
-  image: docker:git
+  image: golang
   commands:
     - make docker-cgo-tags
   when:
@@ -54,7 +54,7 @@ steps:
     event: tag
 
 - name: docker-tags
-  image: docker:git
+  image: golang
   commands:
     - make docker-tags
   when:
