@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -41,6 +42,7 @@ type mockMsgProcessor struct {
 	dropChan          chan bool
 	hasClosedAsync    bool
 	hasWaitedForClose bool
+	mut               sync.Mutex
 }
 
 func (m *mockMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
@@ -57,12 +59,16 @@ func (m *mockMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, t
 
 // CloseAsync shuts down the processor and stops processing requests.
 func (m *mockMsgProcessor) CloseAsync() {
+	m.mut.Lock()
 	m.hasClosedAsync = true
+	m.mut.Unlock()
 }
 
 // WaitForClose blocks until the processor has closed down.
 func (m *mockMsgProcessor) WaitForClose(timeout time.Duration) error {
+	m.mut.Lock()
 	m.hasWaitedForClose = true
+	m.mut.Unlock()
 	return nil
 }
 
@@ -196,6 +202,7 @@ type mockMultiMsgProcessor struct {
 	N                 int
 	hasClosedAsync    bool
 	hasWaitedForClose bool
+	mut               sync.Mutex
 }
 
 func (m *mockMultiMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
@@ -211,12 +218,16 @@ func (m *mockMultiMsgProcessor) ProcessMessage(msg types.Message) ([]types.Messa
 
 // CloseAsync shuts down the processor and stops processing requests.
 func (m *mockMultiMsgProcessor) CloseAsync() {
+	m.mut.Lock()
 	m.hasClosedAsync = true
+	m.mut.Unlock()
 }
 
 // WaitForClose blocks until the processor has closed down.
 func (m *mockMultiMsgProcessor) WaitForClose(timeout time.Duration) error {
+	m.mut.Lock()
 	m.hasWaitedForClose = true
+	m.mut.Unlock()
 	return nil
 }
 

@@ -192,6 +192,15 @@ func (w *Writer) loop() {
 		select {
 		case ts.ResponseChan <- response.NewError(err):
 		case <-w.closeChan:
+			// The pipeline is terminating but we still want to attempt to
+			// propagate an acknowledgement from in-transit messages.
+			//
+			// TODO: Replace this timer with a value linked to our service
+			// shutdown timer.
+			select {
+			case ts.ResponseChan <- response.NewError(err):
+			case <-time.After(time.Second):
+			}
 			return
 		}
 	}

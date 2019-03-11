@@ -124,7 +124,7 @@ func TestTypeProcsAndPipes(t *testing.T) {
 		}
 	}
 
-	if err := mgr.Stop(time.Second); err != nil {
+	if err := mgr.Stop(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 }
@@ -180,7 +180,7 @@ func TestTypeBasicOperations(t *testing.T) {
 		t.Error("Expected error on duplicate delete")
 	}
 
-	if err := mgr.Stop(time.Second); err != nil {
+	if err := mgr.Stop(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 

@@ -191,27 +191,38 @@ func (r *Reader) loop() {
 			return
 		}
 
+		var res types.Response
+		var open bool
 		select {
-		case res, open := <-r.responses:
-			if !open {
+		case res, open = <-r.responses:
+		case <-r.closeChan:
+			// The pipeline is terminating but we still want to attempt to
+			// propagate an acknowledgement from in-transit messages.
+			//
+			// TODO: Replace this timer with a value linked to our service
+			// shutdown timer.
+			select {
+			case res, open = <-r.responses:
+			case <-time.After(time.Second):
 				return
 			}
-			if res.Error() != nil {
-				mSendError.Incr(1)
-			} else {
-				mSendSuccess.Incr(1)
-			}
-			if res.Error() != nil || !res.SkipAck() {
-				if err = r.reader.Acknowledge(res.Error()); err != nil {
-					mAckError.Incr(1)
-				} else {
-					tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
-					mLatency.Timing(tTaken)
-					mAckSuccess.Incr(1)
-				}
-			}
-		case <-r.closeChan:
+		}
+		if !open {
 			return
+		}
+		if res.Error() != nil {
+			mSendError.Incr(1)
+		} else {
+			mSendSuccess.Incr(1)
+		}
+		if res.Error() != nil || !res.SkipAck() {
+			if err = r.reader.Acknowledge(res.Error()); err != nil {
+				mAckError.Incr(1)
+			} else {
+				tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
+				mLatency.Timing(tTaken)
+				mAckSuccess.Incr(1)
+			}
 		}
 		tracing.FinishSpans(msg)
 	}

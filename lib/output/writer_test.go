@@ -437,7 +437,7 @@ func TestWriterCantReconnect(t *testing.T) {
 		}
 	}()
 
-	if err = w.WaitForClose(time.Second); err != nil {
+	if err = w.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 }

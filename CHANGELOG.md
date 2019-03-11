@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.7.10 - 2019-03-11
+
+### Fixed
+
+- Always allow acknowledgement flush during graceful termination.
+
 ## 1.7.9 - 2019-03-08
 
 ### Fixed

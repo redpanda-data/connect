@@ -261,7 +261,7 @@ func testReadUntilEarlyClose(inConf Config, t *testing.T) {
 	}
 
 	in.CloseAsync()
-	if err = in.WaitForClose(time.Second); err != nil {
+	if err = in.WaitForClose(time.Second * 5); err != nil {
 		t.Fatal(err)
 	}
 }
