@@ -13,7 +13,6 @@ require (
 	github.com/aws/aws-sdk-go v1.17.10
 	github.com/benhoyt/goawk v1.4.1
 	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737
-	github.com/bsm/sarama-cluster v2.1.15+incompatible
 	github.com/cenkalti/backoff v2.1.1+incompatible
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect

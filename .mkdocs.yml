@@ -1,4 +1,9 @@
 site_name: Benthos
+theme:
+  name: mkdocs
+  highlightjs: true
+  hljs_languages:
+    - yaml
 nav:
   - Home: /
   - Concepts: 'concepts.md'
@@ -20,3 +25,4 @@ nav:
     - 'Workflows': 'workflows.md'
     - 'Config Cheats': 'configuration.md'
     - 'Config Interpolation': 'config_interpolation.md'
+    - 'Interesting Examples': 'examples'

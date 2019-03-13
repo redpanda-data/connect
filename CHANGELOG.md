@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Switched underlying `kafka_balanced` implementation to sarama consumer.
+
 ## 1.7.10 - 2019-03-11
 
 ### Fixed

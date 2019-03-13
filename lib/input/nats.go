@@ -43,7 +43,7 @@ nats://derek:pass@localhost:4222
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+` + "``` text" + `
 - nats_subject
 ` + "```" + `
 

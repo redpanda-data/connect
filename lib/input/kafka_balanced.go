@@ -48,7 +48,7 @@ be split into individual messages with the ` + "`split`" + ` processor.
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+` + "``` text" + `
 - kafka_key
 - kafka_topic
 - kafka_partition

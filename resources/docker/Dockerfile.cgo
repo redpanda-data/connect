@@ -1,7 +1,7 @@
 FROM golang:1.12 AS deps
 
 WORKDIR /go/src/github.com/Jeffail/benthos/
-COPY go.mod go.sum /go/src/github.com/Jeffail/benthos/
+COPY go.mod /go/src/github.com/Jeffail/benthos/
 
 ENV GO111MODULE on
 RUN go mod download

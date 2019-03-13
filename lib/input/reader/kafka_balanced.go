@@ -21,7 +21,9 @@
 package reader
 
 import (
+	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -34,7 +36,6 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	btls "github.com/Jeffail/benthos/lib/util/tls"
 	"github.com/Shopify/sarama"
-	cluster "github.com/bsm/sarama-cluster"
 )
 
 //------------------------------------------------------------------------------
@@ -72,24 +73,24 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 // KafkaBalanced is an input type that reads from a Kafka cluster by balancing
 // partitions across other consumers of the same consumer group.
 type KafkaBalanced struct {
-	consumer *cluster.Consumer
-	version  sarama.KafkaVersion
-	cMut     sync.Mutex
+	version      sarama.KafkaVersion
+	tlsConf      *tls.Config
+	addresses    []string
+	topics       []string
+	commitPeriod time.Duration
 
-	tlsConf *tls.Config
+	cMut    sync.Mutex
+	group   sarama.ConsumerGroup
+	session sarama.ConsumerGroupSession
+	msgChan chan *sarama.ConsumerMessage
 
-	offsetLastCommitted time.Time
-	offsets             map[string]map[int32]int64
-	commitPeriod        time.Duration
+	offsets map[string]map[int32]int64
 
-	mRcvErr     metrics.StatCounter
 	mRebalanced metrics.StatCounter
 
-	addresses []string
-	topics    []string
-	conf      KafkaBalancedConfig
-	stats     metrics.Type
-	log       log.Modular
+	conf  KafkaBalancedConfig
+	stats metrics.Type
+	log   log.Modular
 }
 
 // NewKafkaBalanced creates a new KafkaBalanced input type.
@@ -99,10 +100,12 @@ func NewKafkaBalanced(
 	k := KafkaBalanced{
 		conf:        conf,
 		stats:       stats,
-		mRcvErr:     stats.GetCounter("recv.error"),
-		mRebalanced: stats.GetCounter("rebalanced"),
-		offsets:     map[string]map[int32]int64{},
 		log:         log,
+		offsets:     map[string]map[int32]int64{},
+		mRebalanced: stats.GetCounter("rebalanced"),
+	}
+	if conf.MaxBatchCount < 1 {
+		return nil, errors.New("max_batch_count must be greater than or equal to 1")
 	}
 	if conf.TLS.Enabled {
 		var err error
@@ -139,88 +142,39 @@ func NewKafkaBalanced(
 
 //------------------------------------------------------------------------------
 
-// closeClients closes the kafka clients, this interrupts Read().
-func (k *KafkaBalanced) closeClients() {
+// Setup is run at the beginning of a new session, before ConsumeClaim.
+func (k *KafkaBalanced) Setup(sesh sarama.ConsumerGroupSession) error {
 	k.cMut.Lock()
-	defer k.cMut.Unlock()
-	if k.consumer != nil {
-		k.consumer.CommitOffsets()
-		k.consumer.Close()
+	k.session = sesh
+	k.cMut.Unlock()
+	k.mRebalanced.Incr(1)
+	return nil
+}
 
-		// Drain all channels
-		for range k.consumer.Messages() {
-		}
-		for range k.consumer.Notifications() {
-		}
-		for range k.consumer.Errors() {
-		}
-
-		k.consumer = nil
+// Cleanup is run at the end of a session, once all ConsumeClaim goroutines have
+// exited but before the offsets are committed for the very last time.
+func (k *KafkaBalanced) Cleanup(sesh sarama.ConsumerGroupSession) error {
+	k.cMut.Lock()
+	k.session = nil
+	if k.msgChan != nil {
+		close(k.msgChan)
+		k.msgChan = nil
 	}
+	k.cMut.Unlock()
+	return nil
+}
+
+// ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
+// Once the Messages() channel is closed, the Handler must finish its processing
+// loop and exit.
+func (k *KafkaBalanced) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	for msg := range claim.Messages() {
+		k.msgChan <- msg
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
-
-// Connect establishes a KafkaBalanced connection.
-func (k *KafkaBalanced) Connect() error {
-	k.cMut.Lock()
-	defer k.cMut.Unlock()
-
-	if k.consumer != nil {
-		return nil
-	}
-
-	config := cluster.NewConfig()
-	config.ClientID = k.conf.ClientID
-	config.Net.DialTimeout = time.Second
-	config.Version = k.version
-	config.Consumer.Return.Errors = true
-	config.Group.Return.Notifications = true
-	config.Net.TLS.Enable = k.conf.TLS.Enabled
-	if k.conf.TLS.Enabled {
-		config.Net.TLS.Config = k.tlsConf
-	}
-
-	if k.conf.StartFromOldest {
-		config.Consumer.Offsets.Initial = sarama.OffsetOldest
-	}
-
-	var consumer *cluster.Consumer
-	var err error
-
-	if consumer, err = cluster.NewConsumer(
-		k.addresses,
-		k.conf.ConsumerGroup,
-		k.topics,
-		config,
-	); err != nil {
-		return err
-	}
-
-	go func() {
-		for {
-			select {
-			case err, open := <-consumer.Errors():
-				if !open {
-					return
-				}
-				if err != nil {
-					k.log.Errorf("KafkaBalanced message recv error: %v\n", err)
-					k.mRcvErr.Incr(1)
-				}
-			case _, open := <-consumer.Notifications():
-				if !open {
-					return
-				}
-				k.mRebalanced.Incr(1)
-			}
-		}
-	}()
-
-	k.consumer = consumer
-	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.addresses)
-	return nil
-}
 
 func (k *KafkaBalanced) setOffset(topic string, partition int32, offset int64) {
 	var topicMap map[int32]int64
@@ -232,17 +186,86 @@ func (k *KafkaBalanced) setOffset(topic string, partition int32, offset int64) {
 	topicMap[partition] = offset
 }
 
-// Read attempts to read a message from a KafkaBalanced topic.
-func (k *KafkaBalanced) Read() (types.Message, error) {
-	var consumer *cluster.Consumer
-
+func (k *KafkaBalanced) closeGroup() {
 	k.cMut.Lock()
-	if k.consumer != nil {
-		consumer = k.consumer
-	}
+	group := k.group
+	k.group = nil
 	k.cMut.Unlock()
 
-	if consumer == nil {
+	if group != nil {
+		group.Close()
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// Connect establishes a KafkaBalanced connection.
+func (k *KafkaBalanced) Connect() error {
+	k.cMut.Lock()
+	defer k.cMut.Unlock()
+	if k.msgChan != nil {
+		return nil
+	}
+
+	config := sarama.NewConfig()
+	config.ClientID = k.conf.ClientID
+	config.Net.DialTimeout = time.Second
+	config.Version = k.version
+	config.Consumer.Return.Errors = true
+	config.Consumer.Offsets.CommitInterval = k.commitPeriod
+	config.Net.TLS.Enable = k.conf.TLS.Enabled
+	if k.conf.TLS.Enabled {
+		config.Net.TLS.Config = k.tlsConf
+	}
+	if k.conf.StartFromOldest {
+		config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	}
+
+	// Start a new consumer group
+	group, err := sarama.NewConsumerGroup(k.addresses, k.conf.ConsumerGroup, config)
+	if err != nil {
+		return err
+	}
+
+	// Handle errors
+	go func() {
+		for {
+			gerr, open := <-group.Errors()
+			if !open {
+				return
+			}
+			if gerr != nil {
+				k.log.Errorf("KafkaBalanced message recv error: %v\n", gerr)
+			}
+		}
+	}()
+
+	// Handle session
+	go func() {
+		ctx := context.Background()
+		gerr := group.Consume(ctx, k.topics, k)
+		if gerr != nil {
+			k.log.Errorf("KafkaBalanced group session error: %v\n", gerr)
+			k.Cleanup(nil)
+		}
+		group.Close()
+	}()
+
+	k.msgChan = make(chan *sarama.ConsumerMessage, k.conf.MaxBatchCount)
+	k.group = group
+	k.offsets = map[string]map[int32]int64{}
+
+	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.addresses)
+	return nil
+}
+
+// Read attempts to read a message from a KafkaBalanced topic.
+func (k *KafkaBalanced) Read() (types.Message, error) {
+	k.cMut.Lock()
+	msgChan := k.msgChan
+	k.cMut.Unlock()
+
+	if msgChan == nil {
 		return nil, types.ErrNotConnected
 	}
 
@@ -265,20 +288,18 @@ func (k *KafkaBalanced) Read() (types.Message, error) {
 		k.setOffset(data.Topic, data.Partition, data.Offset)
 	}
 
-	data, open := <-consumer.Messages()
+	data, open := <-msgChan
 	if !open {
-		k.closeClients()
-		return nil, types.ErrTypeClosed
+		return nil, types.ErrNotConnected
 	}
 	addPart(data)
 
 batchLoop:
 	for i := 1; i < k.conf.MaxBatchCount; i++ {
 		select {
-		case data, open = <-consumer.Messages():
+		case data, open = <-msgChan:
 			if !open {
-				k.closeClients()
-				return nil, types.ErrTypeClosed
+				return nil, types.ErrNotConnected
 			}
 			addPart(data)
 		default:
@@ -297,39 +318,21 @@ batchLoop:
 func (k *KafkaBalanced) Acknowledge(err error) error {
 	if err == nil {
 		k.cMut.Lock()
-		if k.consumer != nil {
+		if k.session != nil {
 			for topic, v := range k.offsets {
 				for part, offset := range v {
-					k.consumer.MarkPartitionOffset(topic, part, offset, "")
+					k.session.MarkOffset(topic, part, offset+1, "")
 				}
 			}
 		}
 		k.cMut.Unlock()
 	}
-
-	if time.Since(k.offsetLastCommitted) < k.commitPeriod {
-		return nil
-	}
-
-	var commitErr error
-	k.cMut.Lock()
-	if k.consumer != nil {
-		commitErr = k.consumer.CommitOffsets()
-	} else {
-		commitErr = types.ErrNotConnected
-	}
-	k.cMut.Unlock()
-
-	if commitErr == nil {
-		k.offsetLastCommitted = time.Now()
-	}
-
-	return commitErr
+	return nil
 }
 
 // CloseAsync shuts down the KafkaBalanced input and stops processing requests.
 func (k *KafkaBalanced) CloseAsync() {
-	go k.closeClients()
+	go k.closeGroup()
 }
 
 // WaitForClose blocks until the KafkaBalanced input has closed down.

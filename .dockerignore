@@ -4,3 +4,4 @@ LICENSE
 README.md
 target/bin/benthos
 target/dist
+go.sum

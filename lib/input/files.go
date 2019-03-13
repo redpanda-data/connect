@@ -42,7 +42,7 @@ each file found will become a message.
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+` + "``` text" + `
 - path
 ` + "```" + `
 

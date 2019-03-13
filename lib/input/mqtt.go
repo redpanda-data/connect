@@ -39,7 +39,7 @@ Subscribe to topics on MQTT brokers.
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+` + "``` text" + `
 - mqtt_duplicate
 - mqtt_qos
 - mqtt_retained

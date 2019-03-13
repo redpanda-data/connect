@@ -113,7 +113,7 @@ settings can be enabled in the `tls` section.
 
 This input adds the following metadata fields to each message:
 
-```
+``` text
 - amqp_content_type
 - amqp_content_encoding
 - amqp_delivery_mode
@@ -247,7 +247,7 @@ each file found will become a message.
 
 This input adds the following metadata fields to each message:
 
-```
+``` text
 - path
 ```
 
@@ -287,7 +287,7 @@ message payload.
 
 This input adds the following metadata fields to each message:
 
-```
+``` text
 - hdfs_name
 - hdfs_path
 ```
@@ -376,7 +376,7 @@ HTTP server.
 
 This input adds the following metadata fields to each message:
 
-```
+``` text
 - http_server_user_agent
 - All headers (only first values are taken)
 - All cookies
@@ -460,7 +460,7 @@ client_certs:
 
 This input adds the following metadata fields to each message:
 
-```
+``` text
 - kafka_key
 - kafka_topic
 - kafka_partition
@@ -524,7 +524,7 @@ client_certs:
 
 This input adds the following metadata fields to each message:
 
-```
+``` text
 - kafka_key
 - kafka_topic
 - kafka_partition
@@ -585,7 +585,7 @@ Subscribe to topics on MQTT brokers.
 
 This input adds the following metadata fields to each message:
 
-```
+``` text
 - mqtt_duplicate
 - mqtt_qos
 - mqtt_retained
@@ -637,7 +637,7 @@ nats://derek:pass@localhost:4222
 
 This input adds the following metadata fields to each message:
 
-```
+``` text
 - nats_subject
 ```
 
@@ -678,7 +678,7 @@ stop the consumers from unsubscribing by setting the field
 
 This input adds the following metadata fields to each message:
 
-```
+``` text
 - nats_stream_subject
 - nats_stream_sequence
 ```

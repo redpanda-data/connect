@@ -61,7 +61,7 @@ settings can be enabled in the ` + "`tls`" + ` section.
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+` + "``` text" + `
 - amqp_content_type
 - amqp_content_encoding
 - amqp_delivery_mode

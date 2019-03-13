@@ -50,7 +50,7 @@ stop the consumers from unsubscribing by setting the field
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+` + "``` text" + `
 - nats_stream_subject
 - nats_stream_sequence
 ` + "```" + `
