@@ -25,6 +25,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -156,10 +157,6 @@ func (k *KafkaBalanced) Setup(sesh sarama.ConsumerGroupSession) error {
 func (k *KafkaBalanced) Cleanup(sesh sarama.ConsumerGroupSession) error {
 	k.cMut.Lock()
 	k.session = nil
-	if k.msgChan != nil {
-		close(k.msgChan)
-		k.msgChan = nil
-	}
 	k.cMut.Unlock()
 	return nil
 }
@@ -168,6 +165,7 @@ func (k *KafkaBalanced) Cleanup(sesh sarama.ConsumerGroupSession) error {
 // Once the Messages() channel is closed, the Handler must finish its processing
 // loop and exit.
 func (k *KafkaBalanced) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	k.log.Debugf("Consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
 	for msg := range claim.Messages() {
 		k.msgChan <- msg
 	}
@@ -243,12 +241,21 @@ func (k *KafkaBalanced) Connect() error {
 	// Handle session
 	go func() {
 		ctx := context.Background()
-		gerr := group.Consume(ctx, k.topics, k)
-		if gerr != nil {
-			k.log.Errorf("KafkaBalanced group session error: %v\n", gerr)
-			k.Cleanup(nil)
+		for {
+			gerr := group.Consume(ctx, k.topics, k)
+			if gerr != nil {
+				if gerr != io.EOF {
+					k.log.Errorf("KafkaBalanced group session error: %v\n", gerr)
+				}
+				break
+			}
 		}
-		group.Close()
+		k.cMut.Lock()
+		if k.msgChan != nil {
+			close(k.msgChan)
+			k.msgChan = nil
+		}
+		k.cMut.Unlock()
 	}()
 
 	k.msgChan = make(chan *sarama.ConsumerMessage, k.conf.MaxBatchCount)

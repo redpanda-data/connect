@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.8.0 - 2019-03-14
+
+### Added
+
+- Function interpolation for field `subject` added to `nats` output.
+
 ### Changed
 
 - Switched underlying `kafka_balanced` implementation to sarama consumer.
