@@ -26,8 +26,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/lib/util/text"
 	nats "github.com/nats-io/go-nats"
 )
 
@@ -56,15 +58,17 @@ type NATS struct {
 	natsConn *nats.Conn
 	connMut  sync.RWMutex
 
-	urls string
-	conf NATSConfig
+	urls       string
+	conf       NATSConfig
+	subjectStr *text.InterpolatedString
 }
 
 // NewNATS creates a new NATS output type.
 func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (Type, error) {
 	n := NATS{
-		log:  log,
-		conf: conf,
+		log:        log,
+		conf:       conf,
+		subjectStr: text.NewInterpolatedString(conf.Subject),
 	}
 	n.urls = strings.Join(conf.URLs, ",")
 
@@ -101,7 +105,9 @@ func (n *NATS) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		err := conn.Publish(n.conf.Subject, p.Get())
+		subject := n.subjectStr.Get(message.Lock(msg, i))
+		n.log.Debugf("Writing NATS message to topic %s", subject)
+		err := conn.Publish(subject, p.Get())
 		if err == nats.ErrConnectionClosed {
 			conn.Close()
 			n.connMut.Lock()
