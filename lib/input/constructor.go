@@ -277,36 +277,21 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 var header = "This document was generated with `benthos --list-inputs`" + `
 
-An input is a source of data piped through an array of
+An input is a source of data piped through an array of optional
 [processors](../processors). Only one input is configured at the root of a
-Benthos config. However, the input can be a [broker](#broker) which combines
-multiple inputs. For example, if we wanted three inputs, a 'foo' a 'bar' and a
-'baz' we could use the 'broker' input type at our root:
+Benthos config. However, the root input can be a [broker](#broker) which
+combines multiple inputs.
+
+An input config section looks like this:
 
 ` + "``` yaml" + `
 input:
-  type: broker
-  broker:
-    inputs:
-    - type: foo
-      foo:
-        foo_field_1: value1
-    - type: bar
-      bar:
-        bar_field_1: value2
-        bar_field_2: value3
-    - type: baz
-      baz:
-        baz_field_1: value4
-      processors:
-      - type: baz_processor
+  type: foo
+  foo:
+    bar: baz
   processors:
-  - type: some_processor
-` + "```" + `
-
-Note that in this example we have specified a processor at the broker level
-which will be applied to _all_ inputs, and we also have a processor at the baz
-level which is only applied to messages from the baz input.`
+  - type: qux
+` + "```" + ``
 
 // Descriptions returns a formatted string of descriptions for each type.
 func Descriptions() string {

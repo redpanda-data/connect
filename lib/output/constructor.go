@@ -288,9 +288,38 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 var header = "This document was generated with `benthos --list-outputs`" + `
 
 An output is a sink where we wish to send our consumed data after applying an
-array of [processors](../processors). Only one output is configured at the root
-of a Benthos config. However, the output can be a [broker](#broker) which
-combines multiple outputs under a specific pattern.
+optional array of [processors](../processors). Only one output is configured at
+the root of a Benthos config. However, the output can be a [broker](#broker)
+which combines multiple outputs under a chosen brokering pattern.
+
+An output config section looks like this:
+
+` + "``` yaml" + `
+output:
+  type: foo
+  foo:
+    bar: baz
+  processors:
+  - type: qux
+` + "```" + `
+
+### Back Pressure
+
+Benthos outputs apply back pressure to components upstream. This means if your
+output target starts blocking traffic Benthos will gracefully stop consuming
+until the issue is resolved.
+
+### Retries
+
+When a Benthos output fails to send a message the error is propagated back up to
+the input, where depending on the protocol it will either be pushed back to the
+source as a Noack (AMQP) or will be reattempted indefinitely with the commit
+witheld until success (Kafka).
+
+It's possible to instead have Benthos indefinitely retry an output until success
+with a [` + "`retry`" + `](#retry) output. Some other outputs, such as the
+[` + "`broker`" + `](#broker), might also retry indefinitely depending on their
+configuration.
 
 ### Multiplexing Outputs
 

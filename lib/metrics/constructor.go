@@ -171,6 +171,16 @@ A metrics type represents a destination for Benthos metrics to be aggregated
 such as Statsd, Prometheus, or for debugging purposes an HTTP endpoint that
 exposes a JSON object of metrics.
 
+A metrics config section looks like this:
+
+` + "``` yaml" + `
+metrics:
+  type: foo
+  prefix: benthos
+  foo:
+    bar: baz
+` + "```" + `
+
 Benthos exposes lots of metrics and their paths will depend on your pipeline
 configuration. However, there are some critical metrics that will always be
 present that are outlined in [this document](paths.md).`

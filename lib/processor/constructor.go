@@ -295,14 +295,28 @@ func (m *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 var header = "This document was generated with `benthos --list-processors`." + `
 
-Benthos processors are functions that will be applied to each message passing
-through a pipeline. The function signature allows a processor to mutate or drop
-messages depending on the content of the message.
+Benthos processors are functions applied to messages passing through a pipeline.
+The function signature allows a processor to mutate or drop messages depending
+on the content of the message.
 
 Processors are set via config, and depending on where in the config they are
 placed they will be run either immediately after a specific input (set in the
 input section), on all messages (set in the pipeline section) or before a
-specific output (set in the output section).
+specific output (set in the output section). Most processors apply to all
+messages and can be placed in the pipeline section:
+
+` + "``` yaml" + `
+pipeline:
+  threads: 1
+  processors:
+  - type: foo
+    foo:
+      bar: baz
+` + "```" + `
+
+The ` + "`threads`" + ` field in the pipeline section determines how many
+parallel processing threads are created. You can read more about parallel
+processing in the [pipeline guide][1].
 
 By organising processors you can configure complex behaviours in your pipeline.
 You can [find some examples here][0].
@@ -335,7 +349,8 @@ In this case the ` + "[`process_batch`](#process_batch)" + ` processor can be
 used.`
 
 var footer = `
-[0]: ../examples/README.md`
+[0]: ../examples/README.md
+[1]: ../pipeline.md`
 
 // Descriptions returns a formatted string of collated descriptions of each
 // type.

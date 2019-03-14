@@ -149,15 +149,13 @@ input:
       - type: dedupe
         dedupe:
           cache: foobar
-          hash: none
-          parts: [0]
+          hash: xxhash
     - type: bar
       processors:
       - type: dedupe
         dedupe:
           cache: foobar
-          hash: none
-          parts: [0]
+          hash: xxhash
     - type: baz
 resources:
   caches:

@@ -16,6 +16,15 @@ extracting a root span from the source of the message (HTTP headers). This is
 a work in progress and should eventually expand so that all inputs have a way of
 doing so.
 
+A tracer config section looks like this:
+
+``` yaml
+tracer:
+  type: foo
+  foo:
+    bar: baz
+```
+
 WARNING: Although the configuration spec of this component is stable the format
 of spans, tags and logs created by Benthos is subject to change as it is tuned
 for improvement.
