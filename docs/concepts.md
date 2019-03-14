@@ -22,7 +22,7 @@ being:
 
 There are also sections for `metrics`, `logging` and `http` server options.
 Config examples for every input, output and processor type can be found
-[here](../config).
+[here](https://github.com/Jeffail/benthos/tree/master/config).
 
 Benthos provides lots of tooling to try and make writing configuration easier,
 you can read about them [here](./configuration.md).
