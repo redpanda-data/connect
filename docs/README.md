@@ -24,6 +24,7 @@ check out the [getting started guide](./getting_started.md).
 
 - [Core Concepts](./concepts.md) describes various Benthos concepts such as:
     - Configuration
+    - Monitoring
     - Mutating And Filtering Content
     - Content Based Multiplexing
     - Sharing Resources Across Processors

@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `cache` processor.
+- New `all` condition.
+- New `any` condition.
 
 ## 1.8.0 - 2019-03-14
 

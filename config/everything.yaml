@@ -184,7 +184,9 @@ input:
     restart_input: false
     condition:
       type: text
+      all: {}
       and: []
+      any: {}
       bounds_check:
         max_parts: 100
         min_parts: 1
@@ -313,7 +315,9 @@ pipeline:
       count: 0
       condition:
         type: static
+        all: {}
         and: []
+        any: {}
         bounds_check:
           max_parts: 100
           min_parts: 1
@@ -364,7 +368,9 @@ pipeline:
     conditional:
       condition:
         type: text
+        all: {}
         and: []
+        any: {}
         bounds_check:
           max_parts: 100
           min_parts: 1
@@ -415,7 +421,9 @@ pipeline:
       parts: []
     filter:
       type: text
+      all: {}
       and: []
+      any: {}
       bounds_check:
         max_parts: 100
         min_parts: 1
@@ -448,7 +456,9 @@ pipeline:
       xor: []
     filter_parts:
       type: text
+      all: {}
       and: []
+      any: {}
       bounds_check:
         max_parts: 100
         min_parts: 1
@@ -906,7 +916,9 @@ resources:
   conditions:
     example:
       type: text
+      all: {}
       and: []
+      any: {}
       bounds_check:
         max_parts: 100
         min_parts: 1

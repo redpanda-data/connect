@@ -80,19 +80,32 @@ duplicate condition configs by using the [resource condition][resource].
 
 ### Contents
 
-1. [`and`](#and)
-2. [`bounds_check`](#bounds_check)
-3. [`check_field`](#check_field)
-4. [`count`](#count)
-5. [`jmespath`](#jmespath)
-6. [`metadata`](#metadata)
-7. [`not`](#not)
-8. [`or`](#or)
-9. [`processor_failed`](#processor_failed)
-10. [`resource`](#resource)
-11. [`static`](#static)
-12. [`text`](#text)
-13. [`xor`](#xor)
+1. [`all`](#all)
+2. [`and`](#and)
+3. [`any`](#any)
+4. [`bounds_check`](#bounds_check)
+5. [`check_field`](#check_field)
+6. [`count`](#count)
+7. [`jmespath`](#jmespath)
+8. [`metadata`](#metadata)
+9. [`not`](#not)
+10. [`or`](#or)
+11. [`processor_failed`](#processor_failed)
+12. [`resource`](#resource)
+13. [`static`](#static)
+14. [`text`](#text)
+15. [`xor`](#xor)
+
+## `all`
+
+``` yaml
+type: all
+all: {}
+```
+
+All is a condition that tests a child condition against each message of a batch
+individually. If all messages pass the child condition then this condition also
+passes.
 
 ## `and`
 
@@ -102,6 +115,17 @@ and: []
 ```
 
 And is a condition that returns the logical AND of its children conditions.
+
+## `any`
+
+``` yaml
+type: any
+any: {}
+```
+
+Any is a condition that tests a child condition against each message of a batch
+individually. If any message passes the child condition then this condition also
+passes.
 
 ## `bounds_check`
 

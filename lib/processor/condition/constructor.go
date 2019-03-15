@@ -55,7 +55,9 @@ var Constructors = map[string]TypeSpec{}
 
 // String constants representing each condition type.
 var (
+	TypeAll             = "all"
 	TypeAnd             = "and"
+	TypeAny             = "any"
 	TypeBoundsCheck     = "bounds_check"
 	TypeCheckField      = "check_field"
 	TypeCount           = "count"
@@ -75,7 +77,9 @@ var (
 // Config is the all encompassing configuration struct for all condition types.
 type Config struct {
 	Type            string                `json:"type" yaml:"type"`
+	All             AllConfig             `json:"all" yaml:"all"`
 	And             AndConfig             `json:"and" yaml:"and"`
+	Any             AnyConfig             `json:"any" yaml:"any"`
 	BoundsCheck     BoundsCheckConfig     `json:"bounds_check" yaml:"bounds_check"`
 	CheckField      CheckFieldConfig      `json:"check_field" yaml:"check_field"`
 	Count           CountConfig           `json:"count" yaml:"count"`
