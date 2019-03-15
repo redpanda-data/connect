@@ -62,44 +62,45 @@ used.
 2. [`awk`](#awk)
 3. [`batch`](#batch)
 4. [`bounds_check`](#bounds_check)
-5. [`catch`](#catch)
-6. [`compress`](#compress)
-7. [`conditional`](#conditional)
-8. [`decode`](#decode)
-9. [`decompress`](#decompress)
-10. [`dedupe`](#dedupe)
-11. [`encode`](#encode)
-12. [`filter`](#filter)
-13. [`filter_parts`](#filter_parts)
-14. [`grok`](#grok)
-15. [`group_by`](#group_by)
-16. [`group_by_value`](#group_by_value)
-17. [`hash`](#hash)
-18. [`hash_sample`](#hash_sample)
-19. [`http`](#http)
-20. [`insert_part`](#insert_part)
-21. [`jmespath`](#jmespath)
-22. [`json`](#json)
-23. [`lambda`](#lambda)
-24. [`log`](#log)
-25. [`merge_json`](#merge_json)
-26. [`metadata`](#metadata)
-27. [`metric`](#metric)
-28. [`noop`](#noop)
-29. [`process_batch`](#process_batch)
-30. [`process_dag`](#process_dag)
-31. [`process_field`](#process_field)
-32. [`process_map`](#process_map)
-33. [`sample`](#sample)
-34. [`select_parts`](#select_parts)
-35. [`sleep`](#sleep)
-36. [`split`](#split)
-37. [`subprocess`](#subprocess)
-38. [`switch`](#switch)
-39. [`text`](#text)
-40. [`throttle`](#throttle)
-41. [`try`](#try)
-42. [`unarchive`](#unarchive)
+5. [`cache`](#cache)
+6. [`catch`](#catch)
+7. [`compress`](#compress)
+8. [`conditional`](#conditional)
+9. [`decode`](#decode)
+10. [`decompress`](#decompress)
+11. [`dedupe`](#dedupe)
+12. [`encode`](#encode)
+13. [`filter`](#filter)
+14. [`filter_parts`](#filter_parts)
+15. [`grok`](#grok)
+16. [`group_by`](#group_by)
+17. [`group_by_value`](#group_by_value)
+18. [`hash`](#hash)
+19. [`hash_sample`](#hash_sample)
+20. [`http`](#http)
+21. [`insert_part`](#insert_part)
+22. [`jmespath`](#jmespath)
+23. [`json`](#json)
+24. [`lambda`](#lambda)
+25. [`log`](#log)
+26. [`merge_json`](#merge_json)
+27. [`metadata`](#metadata)
+28. [`metric`](#metric)
+29. [`noop`](#noop)
+30. [`process_batch`](#process_batch)
+31. [`process_dag`](#process_dag)
+32. [`process_field`](#process_field)
+33. [`process_map`](#process_map)
+34. [`sample`](#sample)
+35. [`select_parts`](#select_parts)
+36. [`sleep`](#sleep)
+37. [`split`](#split)
+38. [`subprocess`](#subprocess)
+39. [`switch`](#switch)
+40. [`text`](#text)
+41. [`throttle`](#throttle)
+42. [`try`](#try)
+43. [`unarchive`](#unarchive)
 
 ## `archive`
 
@@ -251,6 +252,89 @@ bounds_check:
 
 Checks whether each message batch fits within certain boundaries, and drops
 batches that do not.
+
+## `cache`
+
+``` yaml
+type: cache
+cache:
+  cache: ""
+  key: ""
+  operator: set
+  parts: []
+  value: ""
+```
+
+Performs operations against a [cache resource](../caches) for each message of a
+batch, allowing you to store or retrieve data within message payloads.
+
+This processor will interpolate functions within the `key` and `value`
+fields individually for each message of the batch. This allows you to specify
+dynamic keys and values based on the contents of the message payloads and
+metadata. You can find a list of functions
+[here](../config_interpolation.md#functions).
+
+### Operators
+
+#### `set`
+
+Set a key in the cache to a value. If the key already exists the contents are
+overridden.
+
+#### `add`
+
+Set a key in the cache to a value. If the key already exists the action fails
+with a 'key already exists' error, which can be detected with
+[processor error handling](../error_handling.md).
+
+#### `get`
+
+Retrieve the contents of a cached key and replace the original message payload
+with the result. If the key does not exist the action fails with an error, which
+can be detected with [processor error handling](../error_handling.md).
+
+### Examples
+
+The `cache` processor can be used in combination with other processors
+in order to solve a variety of data stream problems.
+
+#### Deduplication
+
+Deduplication can be done using the add operator with a key extracted from the
+message payload, since it fails when a key already exists we can remove the
+duplicates using a
+[`processor_failed`](../conditions/README.md#processor_failed)
+condition:
+
+``` yaml
+- type: cache
+  cache:
+    cache: TODO
+    operator: add
+    key: "${!json_field:message.id}"
+    value: "storeme"
+- type: filter_parts
+  filter_parts:
+    type: processor_failed
+```
+
+#### Hydration
+
+It's possible to enrich payloads with content previously stored in a cache by
+using the [`process_dag`](#process_dag) processor:
+
+``` yaml
+- type: process_map
+  process_map:
+    processors:
+    - type: cache
+      cache:
+        cache: TODO
+        operator: get
+        key: "${!json_field:message.document_id}"
+    postmap:
+      message.document: .
+```
 
 ## `catch`
 
@@ -796,7 +880,7 @@ If the path is empty or "." the root of the data will be targeted.
 This processor will interpolate functions within the 'value' field, you can find
 a list of functions [here](../config_interpolation.md#functions).
 
-### Operations
+### Operators
 
 #### `append`
 
@@ -991,7 +1075,7 @@ you can find a list of functions [here](../config_interpolation.md#functions).
 This allows you to set the contents of a metadata field using values taken from
 the message payload.
 
-### Operations
+### Operators
 
 #### `set`
 
@@ -1417,7 +1501,7 @@ Performs text based mutations on payloads.
 This processor will interpolate functions within the `value` field,
 you can find a list of functions [here](../config_interpolation.md#functions).
 
-### Operations
+### Operators
 
 #### `append`
 

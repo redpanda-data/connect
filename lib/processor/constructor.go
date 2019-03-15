@@ -59,6 +59,7 @@ const (
 	TypeAWK          = "awk"
 	TypeBatch        = "batch"
 	TypeBoundsCheck  = "bounds_check"
+	TypeCache        = "cache"
 	TypeCatch        = "catch"
 	TypeCompress     = "compress"
 	TypeConditional  = "conditional"
@@ -108,6 +109,7 @@ type Config struct {
 	AWK          AWKConfig          `json:"awk" yaml:"awk"`
 	Batch        BatchConfig        `json:"batch" yaml:"batch"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
+	Cache        CacheConfig        `json:"cache" yaml:"cache"`
 	Catch        CatchConfig        `json:"catch" yaml:"catch"`
 	Compress     CompressConfig     `json:"compress" yaml:"compress"`
 	Conditional  ConditionalConfig  `json:"conditional" yaml:"conditional"`
@@ -156,6 +158,7 @@ func NewConfig() Config {
 		AWK:          NewAWKConfig(),
 		Batch:        NewBatchConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),
+		Cache:        NewCacheConfig(),
 		Catch:        NewCatchConfig(),
 		Compress:     NewCompressConfig(),
 		Conditional:  NewConditionalConfig(),

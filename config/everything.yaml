@@ -350,6 +350,12 @@ pipeline:
       min_parts: 1
       max_part_size: 1073741824
       min_part_size: 1
+    cache:
+      cache: ""
+      parts: []
+      operator: set
+      key: ""
+      value: ""
     catch: []
     compress:
       algorithm: gzip

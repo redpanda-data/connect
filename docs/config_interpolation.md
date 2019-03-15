@@ -16,8 +16,8 @@ config section supports functions you should read its respective documentation.
 
 You can use environment variables to replace Benthos config values using
 `${variable-name}` or `${variable-name:default-value}` syntax. A good example of
-this is the [environment variable config](../config/env/default.yaml), which
-creates environment variables for each default field value in a standard
+this is the [environment variable config][env_var_config], which creates
+environment variables for each default field value in a standard
 single-in-single-out bridge config.
 
 ## Example
@@ -145,3 +145,5 @@ allowing you to specify multiple unique counters in your configuration.
 
 Resolves to the hostname of the machine running Benthos. E.g.
 `foo ${!hostname} bar` might resolve to `foo glados bar`.
+
+[env_var_config]: https://github.com/Jeffail/benthos/blob/master/config/env/default.yaml

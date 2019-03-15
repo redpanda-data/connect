@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `cache` processor.
+
 ## 1.8.0 - 2019-03-14
 
 ### Added

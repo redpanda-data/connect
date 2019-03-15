@@ -148,9 +148,17 @@ func FlagFail(part types.Part) {
 	part.Metadata().Set(FailFlagKey, "true")
 }
 
+// FlagErr marks a message part as having failed at a processing step with an
+// error message. If the error is nil the message part remains unchanged.
+func FlagErr(part types.Part, err error) {
+	if err != nil {
+		part.Metadata().Set(FailFlagKey, err.Error())
+	}
+}
+
 // HasFailed checks whether a message part has failed a processing step.
 func HasFailed(part types.Part) bool {
-	return part.Metadata().Get(FailFlagKey) == "true"
+	return len(part.Metadata().Get(FailFlagKey)) > 0
 }
 
 // ClearFail removes any existing failure flags from a message part.
@@ -180,7 +188,7 @@ func IteratePartsWithSpan(
 			)
 		}
 		if err := iter(i, span, part); err != nil {
-			FlagFail(part)
+			FlagErr(part, err)
 			span.LogFields(
 				olog.String("event", "error"),
 				olog.String("type", err.Error()),

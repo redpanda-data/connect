@@ -49,7 +49,7 @@ you can find a list of functions [here](../config_interpolation.md#functions).
 This allows you to set the contents of a metadata field using values taken from
 the message payload.
 
-### Operations
+### Operators
 
 #### ` + "`set`" + `
 

@@ -49,7 +49,7 @@ If the path is empty or "." the root of the data will be targeted.
 This processor will interpolate functions within the 'value' field, you can find
 a list of functions [here](../config_interpolation.md#functions).
 
-### Operations
+### Operators
 
 #### ` + "`append`" + `
 

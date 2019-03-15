@@ -46,7 +46,7 @@ Performs text based mutations on payloads.
 This processor will interpolate functions within the ` + "`value`" + ` field,
 you can find a list of functions [here](../config_interpolation.md#functions).
 
-### Operations
+### Operators
 
 #### ` + "`append`" + `
 
