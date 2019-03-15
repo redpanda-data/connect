@@ -38,7 +38,19 @@ func init() {
 		description: `
 All is a condition that tests a child condition against each message of a batch
 individually. If all messages pass the child condition then this condition also
-passes.`,
+passes.
+
+For example, if we wanted to check that all messages of a batch contain the word
+'foo' we could use this config:
+
+` + "``` yaml" + `
+type: all
+all:
+  type: text
+  text:
+    operator: contains
+    arg: foo
+` + "```" + ``,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			if conf.All.Config == nil {
 				return struct{}{}, nil
