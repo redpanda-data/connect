@@ -11,7 +11,7 @@ For example, if we had processing stages A, B, C and D, where stage A could
 result in either stage B or C being next, always followed by D, it might look
 something like this:
 
-```
+``` text
      /--> B --\
 A --|          |--> D
      \--> C --/
@@ -23,7 +23,7 @@ on a condition on the result of A. However, this method of flow control quickly
 becomes unfeasible as the DAG gets more complicated, imagine expressing this
 flow using conditional or switch processors:
 
-```
+``` text
       /--> B -------------|--> D
      /                   /
 A --|          /--> E --|
@@ -68,34 +68,50 @@ attempt to recover a fallback version of the goal enrichment.
 
 The enrichment stages can be described as:
 
-- A) Perform an HTTP request to `fooserve` with the full message payload as the
-  contents. The response can be one of the following:
+---
+
+A) Perform an HTTP request to `fooserve` with the full message payload as the
+contents. The response can be one of the following:
+
   1. 200: `{"type":"bar","bar":{"some":"fields"}}`
   2. 200: `{"type":"baz","baz":{"some":"fields"}}`
   3. 400: Bad request
 
-- B) Perform an HTTP request to `barserve` with the object `bar` taken from the
-  output of stage A response 1. The response can be one of the following:
+---
+
+B) Perform an HTTP request to `barserve` with the object `bar` taken from the
+output of stage A response 1. The response can be one of the following:
+
   1. 200: `{"type":"baz","baz":{"some":"fields"}}`
   2. 400: Bad request
 
-- C) Perform an HTTP request to `bazserve` with the object `baz` taken either
-  from the output of stage A response 2 or stage B response 1. The response can
-  be one of the following:
+---
+
+C) Perform an HTTP request to `bazserve` with the object `baz` taken either from
+the output of stage A response 2 or stage B response 1. The response can be one
+of the following:
+
   1. 200: `{"type":"qux","qux":{"some":"fields"}}`
   2. 400: Bad request
 
-- D) If any previous stage returns a 400 then we perform an HTTP request to
-  `recoverserve` with the full message payload as the contents. The response
-  will always be the following:
+---
+
+D) If any previous stage returns a 400 then we perform an HTTP request to
+`recoverserve` with the full message payload as the contents. The response will
+always be the following:
+
   1. 200: `{"type":"qux","qux":{"default":"fields"}}`
 
-- E) Place the final contents (the object at `qux`) in the document at
-  `tmp.enrichments.qux`.
+---
+
+E) Place the final contents (the object at `qux`) in the document at
+`tmp.enrichments.qux`.
+
+---
 
 A diagram for this flow might look like this:
 
-```
+``` text
       /--------|--> C --|----------------|-> E
      /        /          \              /
 A --|--> B --|            \            /
