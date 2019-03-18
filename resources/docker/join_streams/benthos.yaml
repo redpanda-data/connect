@@ -1,0 +1,137 @@
+http:
+  address: 0.0.0.0:4195
+  debug_endpoints: true
+
+input:
+  type: broker
+  broker:
+    inputs:
+    - type: kafka
+      kafka:
+        addresses:
+        - kafka:9092
+        topic: data_source
+        target_version: 1.1.0
+        max_batch_count: 20
+
+    - type: ditto
+      kafka:
+        topic: retry_queue
+      processors:
+      - type: awk
+        awk:
+          codec: json
+          program: |
+            {
+              delay_for = 30 - (timestamp_unix() - int(metadata_get("last_attempt_at")))
+              if ( delay_for < 0 )
+                delay_for = 0
+
+              retryAttemptsStr = metadata_get("retry_attempts")
+              retryAttempts = 1
+              if ( length(retryAttemptsStr) > 0 ) {
+                retryAttempts = int(retryAttemptsStr) + 1
+              }
+              metadata_set("retry_attempts", retryAttempts)
+              metadata_set("delay_for_s", delay_for)
+            }
+      - type: sleep
+        sleep:
+          duration: "${!metadata:delay_for_s}s"
+
+pipeline:
+  processors:
+  - type: metadata
+    metadata:
+      operator: set
+      key: output_topic
+      value: output_sink
+
+  - type: process_dag
+    process_dag:
+      articles:
+        conditions:
+        - type: jmespath
+          jmespath:
+            query: "type == 'article'"
+        processors:
+        - type: cache
+          cache:
+            cache: article_cache
+            operator: set
+            key: "${!json_field:article.id}"
+            value: "${!content}"
+
+      likes:
+        conditions:
+        - type: jmespath
+          jmespath:
+            query: "type == 'like'"
+        processors:
+        - type: cache
+          cache:
+            cache: article_cache
+            operator: get
+            key: "${!json_field:like.article_id}"
+        postmap:
+          article: article
+
+  # This will catch any of the previous cache operations failing and allows us
+  # to redirect these failed documents to a retry queue topic.
+  - type: catch
+    catch:
+    - type: metadata
+      metadata:
+        operator: set
+        key: output_topic
+        value: retry_queue
+    - type: metadata
+      metadata:
+        operator: set
+        key: last_attempt_at
+        value: "${!timestamp_unix}"
+    - type: conditional
+      conditional:
+        condition:
+          type: not
+          not:
+            type: metadata
+            metadata:
+              operator: greater_than
+              key: retry_attempts
+              arg: 3
+        else_processors:
+        - type: log
+          log:
+            level: ERROR
+            message: "Dropping message '${!content}' due to running out of retry attempts"
+        - type: filter
+          filter:
+            type: static
+            static: false
+
+output:
+  type: kafka
+  kafka:
+    addresses:
+    - kafka:9092
+    topic: ${!metadata:output_topic}
+    target_version: 1.1.0
+
+resources:
+  caches:
+    article_cache:
+      type: memory
+
+tracer:
+  type: jaeger
+  jaeger:
+    agent_address: 'jaeger:6831'
+
+logger:
+  prefix: service
+  level: INFO
+
+metrics:
+  type: prometheus
+  prefix: benthos
