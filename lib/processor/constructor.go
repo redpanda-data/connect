@@ -98,6 +98,7 @@ const (
 	TypeTry          = "try"
 	TypeThrottle     = "throttle"
 	TypeUnarchive    = "unarchive"
+	TypeWhile        = "while"
 )
 
 //------------------------------------------------------------------------------
@@ -148,6 +149,7 @@ type Config struct {
 	Try          TryConfig          `json:"try" yaml:"try"`
 	Throttle     ThrottleConfig     `json:"throttle" yaml:"throttle"`
 	Unarchive    UnarchiveConfig    `json:"unarchive" yaml:"unarchive"`
+	While        WhileConfig        `json:"while" yaml:"while"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -197,6 +199,7 @@ func NewConfig() Config {
 		Try:          NewTryConfig(),
 		Throttle:     NewThrottleConfig(),
 		Unarchive:    NewUnarchiveConfig(),
+		While:        NewWhileConfig(),
 	}
 }
 

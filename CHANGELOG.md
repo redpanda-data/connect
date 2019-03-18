@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.10.0 - 2019-03-18
+
+### Added
+
+- New `while` processor.
+
 ## 1.9.0 - 2019-03-17
 
 ### Added

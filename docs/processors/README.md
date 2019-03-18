@@ -101,6 +101,7 @@ used.
 41. [`throttle`](#throttle)
 42. [`try`](#try)
 43. [`unarchive`](#unarchive)
+44. [`while`](#while)
 
 ## `archive`
 
@@ -1631,6 +1632,32 @@ and for each element of the array expands its contents into a new message.
 For the unarchive formats that contain file information (tar, zip), a metadata
 field is added to each message called `archive_filename` with the
 extracted filename.
+
+## `while`
+
+``` yaml
+type: while
+while:
+  at_least_once: false
+  condition:
+    type: text
+    text:
+      arg: ""
+      operator: equals_cs
+      part: 0
+  processors: []
+```
+
+While is a processor that has a condition and a list of child processors. The
+child processors are executed continously on a message batch for as long as the
+child condition resolves to true. The field `at_least_once`, if true,
+ensures that the child processors are always executed at least one time (like a
+do .. while loop.)
+
+If following a loop execution the number of messages in a batch is reduced to
+zero the loop is exited regardless of the condition result.
+
+You can find a [full list of conditions here](../conditions).
 
 [0]: ../examples/README.md
 [1]: ../pipeline.md

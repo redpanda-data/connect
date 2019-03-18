@@ -622,6 +622,44 @@ pipeline:
     unarchive:
       format: binary
       parts: []
+    while:
+      at_least_once: false
+      condition:
+        type: text
+        all: {}
+        and: []
+        any: {}
+        bounds_check:
+          max_parts: 100
+          min_parts: 1
+          max_part_size: 1073741824
+          min_part_size: 1
+        check_field:
+          parts: []
+          path: ""
+          condition: {}
+        count:
+          arg: 100
+        jmespath:
+          part: 0
+          query: ""
+        not: {}
+        metadata:
+          operator: equals_cs
+          part: 0
+          key: ""
+          arg: ""
+        or: []
+        processor_failed:
+          part: 0
+        resource: ""
+        static: true
+        text:
+          operator: equals_cs
+          part: 0
+          arg: ""
+        xor: []
+      processors: []
 output:
   type: stdout
   amqp:
