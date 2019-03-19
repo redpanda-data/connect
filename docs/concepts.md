@@ -217,17 +217,17 @@ can act as a runtime optimisation as well as a config optimisation.
 
 ## Maximising IO Throughput
 
-This section assumes your Benthos instance is doing minimal or zero processing,
-and therefore has minimal reliance on your CPU resource. Even if this is not the
-case the following still applies to an extent, but you should also refer to
-[the next section regarding CPU utilisation](#maximising-cpu-utilisation)
+This section outlines a few common throughput issues and ways in which they can
+be solved within Benthos.
 
-Building a high throughput platform is an endless topic, instead this section
-outlines a few common throughput issues and ways in which they can be solved
-within Benthos.
+It is assumed here that your Benthos instance is performing only minor
+processing steps, and therefore has minimal reliance on your CPU resource. If
+this is not the case the following still applies to an extent, but you should
+also refer to
+[the next section regarding CPU utilisation](#maximising-cpu-utilisation).
 
-Before venturing into Benthos configurations you should first take an in-depth
-look at your sources and sinks. Benthos is generally much simpler
+Firstly, before venturing into Benthos configurations, you should take an
+in-depth look at your sources and sinks. Benthos is generally much simpler
 architecturally than the inputs and outputs it supports. Spend some time
 understanding how to squeeze the most out of these services and it will make it
 easier (or unnecessary) to tune your bridge within Benthos.
@@ -236,10 +236,11 @@ easier (or unnecessary) to tune your bridge within Benthos.
 
 If Benthos isn't reading fast enough from your source it might not necessarily
 be due to a slow consumer. If the sink is slow this can cause back pressure that
-throttles the amount Benthos can read. Try replacing the output with `stdout`
-and pipe it to `/dev/null` (or use `file` with the path set to `/dev/null`). If
-you notice that the input suddenly speeds up then the issue is likely with the
-output, in which case [try the next section](#benthos-writes-too-slowly).
+throttles the amount Benthos can read. Try consuming a test feed with the output
+replaced with `stdout` and pipe it to `/dev/null` (or use `file` with the path
+set to `/dev/null`). If you notice that the input consumption suddenly speeds up
+then the issue is likely with the output, in which case
+[try the next section](#benthos-writes-too-slowly).
 
 If the `/dev/null` output pipe didn't help then take a quick look at the basic
 configuration fields for the input source type. Sometimes there are fields for
@@ -280,7 +281,7 @@ Read the [broker documentation][broker-input] for more tips on simplifying
 broker configs.
 
 If your source doesn't support multiple parallel consumers then unfortunately
-your options are limited. A logical next step might be to look at your
+your options are more limited. A logical next step might be to look at your
 network/disk configuration to see if that's a potential cause of contention.
 
 ### Benthos Writes Too Slowly
@@ -338,37 +339,8 @@ Therefore, provided the input is able to send messages and acknowledge them
 outside of lock-step (or doesn't support acknowledgement at all), you can
 improve throughput without losing delivery guarantees.
 
-#### Level out input spikes with a buffer
-
-There are many reasons why an input source might have spikes or inconsistent
-throughput rates. It is possible that your output is capable of keeping up with
-the long term average flow of data, but fails to keep up when an intermittent
-spike occurs.
-
-In situations like these it is sometimes a better use of your hardware and
-resources to level out the flow of data rather than try and match the peak
-throughput. This would depend on the frequency and duration of the spikes as
-well as your latency requirements, and is therefore a matter of judgement.
-
-Leveling out the flow of data can be done within Benthos using a
-[buffer][buffers]. Buffers allow an input source to store a bounded amount of
-data temporarily, which a consumer can work through at its own pace. Buffers
-always have a fixed capacity, which when full will proceed to block the input
-just like a busy output would.
-
-Therefore, it's still important to have an output that can keep up with the flow
-of data, the difference that a buffer makes is that the output only needs to
-keep up with the _average_ flow of data versus the instantaneous flow of data.
-
-If your input usually produces 10 msgs/s, but occasionally spikes to 100 msgs/s,
-and your output can handle up to 50 msgs/s, it might be possible to configure a
-buffer large enough to store spikes in their entirety. As long as the average
-flow of messages from the input remains below 50 msgs/s then your bridge should
-be able to continue indefinitely without ever blocking the input source.
-
-Benthos offers [a range of buffer strategies][buffers] and it is worth studying
-them all in order to find the correct combination of resilience, throughput and
-capacity that you need.
+NOTE: For most input types you can specify a target batch count instead of using
+a `batch` processor, which is a preferable approach to batching.
 
 #### Increase the number of parallel output sinks
 
@@ -415,6 +387,39 @@ consumer as a separate object in the `outputs` array.
 Read the [broker documentation][broker-output] for more tips on simplifying
 broker configs.
 
+#### Level out input spikes with a buffer
+
+There are many reasons why an input source might have spikes or inconsistent
+throughput rates. It is possible that your output is capable of keeping up with
+the long term average flow of data, but fails to keep up when an intermittent
+spike occurs.
+
+In situations like these it is sometimes a better use of your hardware and
+resources to level out the flow of data rather than try and match the peak
+throughput. This would depend on the frequency and duration of the spikes as
+well as your latency requirements, and is therefore a matter of judgement.
+
+Leveling out the flow of data can be done within Benthos using a
+[buffer][buffers]. Buffers allow an input source to store a bounded amount of
+data temporarily, which a consumer can work through at its own pace. Buffers
+always have a fixed capacity, which when full will proceed to block the input
+just like a busy output would.
+
+Therefore, it's still important to have an output that can keep up with the flow
+of data, the difference that a buffer makes is that the output only needs to
+keep up with the _average_ flow of data versus the instantaneous flow of data.
+
+For example, if your input usually produces 10 msgs/s, but occasionally spikes
+to 100 msgs/s, and your output can handle up to 50 msgs/s, it might be possible
+to configure a buffer large enough to store spikes in their entirety. As long as
+the average flow of messages from the input remains below 50 msgs/s then your
+bridge should be able to continue indefinitely without ever blocking the input
+source.
+
+Benthos offers [a range of buffer strategies][buffers] and it is worth studying
+them all in order to find the correct combination of resilience, throughput and
+capacity that you need.
+
 ## Maximising CPU Utilisation
 
 Some [processors][processors] within Benthos are relatively heavy on your CPU,
@@ -435,9 +440,7 @@ work across logical CPUs.
 The other way to create parallel processor threads is to configure them inside
 the [pipeline][pipeline] configuration block, where we can explicitly set any
 number of parallel processor threads independent of how many inputs or outputs
-we want to use. If the number of inputs is less than or close to the number of
-processing threads then it is also important to use a [buffer][buffers] in order
-to decouple those inputs.
+we want to use.
 
 Please refer [to the documentation regarding pipelines][pipeline] for some
 examples.
