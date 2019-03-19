@@ -624,6 +624,7 @@ pipeline:
       parts: []
     while:
       at_least_once: false
+      max_loops: 0
       condition:
         type: text
         all: {}

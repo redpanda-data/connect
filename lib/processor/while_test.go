@@ -98,6 +98,41 @@ func TestWhileWithCountALO(t *testing.T) {
 	}
 }
 
+func TestWhileMaxLoops(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "while"
+	conf.While.MaxLoops = 3
+	conf.While.Condition.Type = "static"
+	conf.While.Condition.Static = true
+
+	procConf := NewConfig()
+	procConf.Type = "insert_part"
+	procConf.InsertPart.Content = "foo"
+	procConf.InsertPart.Index = 0
+
+	conf.While.Processors = append(conf.While.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := [][]byte{
+		[]byte(`foo`),
+		[]byte(`foo`),
+		[]byte(`foo`),
+		[]byte(`bar`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{[]byte("bar")}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
 func TestWhileWithStaticTrue(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "while"

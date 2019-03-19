@@ -66,6 +66,7 @@ successful with a [`while`][while] processor:
     - type: while
       while:
         at_least_once: true
+        max_loops: 0 # Set this greater than zero to cap the number of attempts
         condition:
           type: processor_failed
         processors:

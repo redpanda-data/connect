@@ -411,33 +411,6 @@ pipeline:
     type: ${PROCESSOR_TYPE:noop}
     unarchive:
       format: ${PROCESSOR_UNARCHIVE_FORMAT:binary}
-    while:
-      at_least_once: ${PROCESSOR_WHILE_AT_LEAST_ONCE:false}
-      condition:
-        bounds_check:
-          max_part_size: ${PROCESSOR_WHILE_CONDITION_BOUNDS_CHECK_MAX_PART_SIZE:1073741824}
-          max_parts: ${PROCESSOR_WHILE_CONDITION_BOUNDS_CHECK_MAX_PARTS:100}
-          min_part_size: ${PROCESSOR_WHILE_CONDITION_BOUNDS_CHECK_MIN_PART_SIZE:1}
-          min_parts: ${PROCESSOR_WHILE_CONDITION_BOUNDS_CHECK_MIN_PARTS:1}
-        count:
-          arg: ${PROCESSOR_WHILE_CONDITION_COUNT_ARG:100}
-        jmespath:
-          part: ${PROCESSOR_WHILE_CONDITION_JMESPATH_PART:0}
-          query: ${PROCESSOR_WHILE_CONDITION_JMESPATH_QUERY}
-        metadata:
-          arg: ${PROCESSOR_WHILE_CONDITION_METADATA_ARG}
-          key: ${PROCESSOR_WHILE_CONDITION_METADATA_KEY}
-          operator: ${PROCESSOR_WHILE_CONDITION_METADATA_OPERATOR:equals_cs}
-          part: ${PROCESSOR_WHILE_CONDITION_METADATA_PART:0}
-        processor_failed:
-          part: ${PROCESSOR_WHILE_CONDITION_PROCESSOR_FAILED_PART:0}
-        resource: ${PROCESSOR_WHILE_CONDITION_RESOURCE}
-        static: ${PROCESSOR_WHILE_CONDITION_STATIC:true}
-        text:
-          arg: ${PROCESSOR_WHILE_CONDITION_TEXT_ARG}
-          operator: ${PROCESSOR_WHILE_CONDITION_TEXT_OPERATOR:equals_cs}
-          part: ${PROCESSOR_WHILE_CONDITION_TEXT_PART:0}
-        type: ${PROCESSOR_WHILE_CONDITION_TYPE:text}
   threads: ${PROCESSOR_THREADS:1}
 output:
   broker:

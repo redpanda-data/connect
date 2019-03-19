@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.10.1 - 2019-03-19
+
+### Added
+
+- Field `max_loops` added to `while` processor.
+
 ## 1.10.0 - 2019-03-18
 
 ### Added

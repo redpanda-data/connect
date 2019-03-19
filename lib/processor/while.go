@@ -41,9 +41,13 @@ func init() {
 		description: `
 While is a processor that has a condition and a list of child processors. The
 child processors are executed continously on a message batch for as long as the
-child condition resolves to true. The field ` + "`at_least_once`" + `, if true,
-ensures that the child processors are always executed at least one time (like a
-do .. while loop.)
+child condition resolves to true.
+
+The field ` + "`at_least_once`" + `, if true, ensures that the child processors
+are always executed at least one time (like a do .. while loop.)
+
+The field ` + "`max_loops`" + `, if greater than zero, caps the number of loops
+for a message batch to this value.
 
 If following a loop execution the number of messages in a batch is reduced to
 zero the loop is exited regardless of the condition result.
@@ -61,8 +65,9 @@ You can find a [full list of conditions here](../conditions).`,
 				}
 			}
 			return map[string]interface{}{
-				"condition":     condSanit,
 				"at_least_once": conf.While.AtLeastOnce,
+				"max_loops":     conf.While.MaxLoops,
+				"condition":     condSanit,
 				"processors":    procConfs,
 			}, nil
 		},
@@ -75,6 +80,7 @@ You can find a [full list of conditions here](../conditions).`,
 // processor.
 type WhileConfig struct {
 	AtLeastOnce bool             `json:"at_least_once" yaml:"at_least_once"`
+	MaxLoops    int              `json:"max_loops" yaml:"max_loops"`
 	Condition   condition.Config `json:"condition" yaml:"condition"`
 	Processors  []Config         `json:"processors" yaml:"processors"`
 }
@@ -83,6 +89,7 @@ type WhileConfig struct {
 func NewWhileConfig() WhileConfig {
 	return WhileConfig{
 		AtLeastOnce: false,
+		MaxLoops:    0,
 		Condition:   condition.NewConfig(),
 		Processors:  []Config{},
 	}
@@ -94,6 +101,7 @@ func NewWhileConfig() WhileConfig {
 // condition resolves to true.
 type While struct {
 	running     int32
+	maxLoops    int
 	atLeastOnce bool
 	cond        condition.Type
 	children    []types.Processor
@@ -130,6 +138,7 @@ func NewWhile(
 
 	return &While{
 		running:     1,
+		maxLoops:    conf.While.MaxLoops,
 		atLeastOnce: conf.While.AtLeastOnce,
 		cond:        cond,
 		children:    children,
@@ -154,10 +163,15 @@ func (w *While) ProcessMessage(msg types.Message) (msgs []types.Message, res typ
 	spans := tracing.CreateChildSpans(TypeWhile, msg)
 	msgs = []types.Message{msg}
 
+	loops := 0
 	condResult := w.atLeastOnce || w.cond.Check(msg)
 	for condResult {
 		if atomic.LoadInt32(&w.running) != 1 {
 			return nil, response.NewError(types.ErrTypeClosed)
+		}
+		if w.maxLoops > 0 && loops >= w.maxLoops {
+			w.log.Traceln("Reached max loops count")
+			break
 		}
 
 		w.mLoop.Incr(1)
@@ -171,6 +185,7 @@ func (w *While) ProcessMessage(msg types.Message) (msgs []types.Message, res typ
 			return
 		}
 		condResult = w.cond.Check(msg)
+		loops++
 	}
 
 	for _, s := range spans {

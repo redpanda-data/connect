@@ -31,6 +31,7 @@
 							"part": 0
 						}
 					},
+					"max_loops": 0,
 					"processors": []
 				}
 			}

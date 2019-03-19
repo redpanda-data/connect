@@ -1645,14 +1645,19 @@ while:
       arg: ""
       operator: equals_cs
       part: 0
+  max_loops: 0
   processors: []
 ```
 
 While is a processor that has a condition and a list of child processors. The
 child processors are executed continously on a message batch for as long as the
-child condition resolves to true. The field `at_least_once`, if true,
-ensures that the child processors are always executed at least one time (like a
-do .. while loop.)
+child condition resolves to true.
+
+The field `at_least_once`, if true, ensures that the child processors
+are always executed at least one time (like a do .. while loop.)
+
+The field `max_loops`, if greater than zero, caps the number of loops
+for a message batch to this value.
 
 If following a loop execution the number of messages in a batch is reduced to
 zero the loop is exited regardless of the condition result.
