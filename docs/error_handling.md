@@ -55,6 +55,28 @@ processor:
         - type: foo # Recover here
 ```
 
+### Attempt Until Success
+
+It's possible to reattempt a processor for a particular message until it is
+successful with a [`while`][while] processor:
+
+``` yaml
+  - type: process_batch
+    process_batch:
+    - type: while
+      while:
+        at_least_once: true
+        condition:
+          type: processor_failed
+        processors:
+        - type: foo # Attempt this processor until success
+```
+
+This loop will block the pipeline and prevent the blocking message from being
+acknowledged. It is therefore usually a good idea in practice to build your
+condition with an exit strategy after N failed attempts so that the pipeline can
+unblock itself without intervention.
+
 ### Drop Failed Messages
 
 In order to filter out any failed messages from your pipeline you can simply use
@@ -121,6 +143,7 @@ output:
 [processors]: ./processors/README.md
 [processor_failed]: ./conditions/README.md#processor_failed
 [filter_parts]: ./processors/README.md#filter_parts
+[while]: ./processors/README.md#while
 [process_batch]: ./processors/README.md#process_batch
 [conditional]: ./processors/README.md#conditional
 [catch]: ./processors/README.md#catch
