@@ -22,8 +22,8 @@ processing pipelines.
 ### Example 1: Single consumer multiple processing threads
 
 Sometimes a source of data can only have a single consuming client. In these
-cirumstances it is still possible to have the single stream of data processed on
-parallel processing threads by using a [buffer][buffers].
+circumstances it is still possible to have the single stream of data processed
+on parallel processing threads by using a [buffer][buffers].
 
 For example, say we have an input stream `foo` with only a single connected
 client. Our goal is to read the stream as fast as possible, perform mutations on
@@ -61,7 +61,7 @@ output:
 With this config the pipeline within our Benthos instance would look something
 like the following:
 
-```
+``` text
 foo -> memory buffer ---> processor ---> bar
           ( 5MB )    \--> processor -/
                      \--> processor -/
@@ -109,7 +109,7 @@ output:
 With this config the pipeline within our Benthos instance would look something
 like the following:
 
-```
+``` text
 baz -\
 baz -\
 baz ---> processor ---> bar

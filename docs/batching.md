@@ -15,7 +15,7 @@ requests.
 
 This behaviour means that not only can multiple part message protocols be easily
 matched with single part protocols, but also the concept of multiple part
-messages and message batches are interchangable within Benthos.
+messages and message batches are interchangeable within Benthos.
 
 ## Creating Batches
 
@@ -30,7 +30,7 @@ Alternatively, there are also [processors][processors] within Benthos that can
 expand and contract batches, these are the [`batch`][batch] and [`split`][split]
 processors.
 
-The `batch` processor continously reads messages until a target size has been
+The `batch` processor continuously reads messages until a target size has been
 reached, then the batch continues through the pipeline.
 
 As messages are read and stored in a batch the input they originated from is
