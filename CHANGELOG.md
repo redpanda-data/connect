@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.10.2 - 2019-03-21
+
+### Fixed
+
+- The `while` processor now correctly checks conditions against the first batch
+  of the result of last processor loop.
+
 ## 1.10.1 - 2019-03-19
 
 ### Added

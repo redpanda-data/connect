@@ -50,7 +50,9 @@ The field ` + "`max_loops`" + `, if greater than zero, caps the number of loops
 for a message batch to this value.
 
 If following a loop execution the number of messages in a batch is reduced to
-zero the loop is exited regardless of the condition result.
+zero the loop is exited regardless of the condition result. If following a loop
+execution there are more than 1 message batches the condition is checked against
+the first batch only.
 
 You can find a [full list of conditions here](../conditions).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
@@ -184,7 +186,7 @@ func (w *While) ProcessMessage(msg types.Message) (msgs []types.Message, res typ
 		if len(msgs) == 0 {
 			return
 		}
-		condResult = w.cond.Check(msg)
+		condResult = w.cond.Check(msgs[0])
 		loops++
 	}
 
