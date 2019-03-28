@@ -113,6 +113,11 @@ third message part in the batch.
 Message metadata can be modified using the
 [metadata processor](./processors/README.md#metadata).
 
+### `uuid_v4`
+
+Generates a new RFC-4122 UUID each time it is invoked and prints a string
+representation.
+
 ### `timestamp_unix_nano`
 
 Resolves to the current unix timestamp in nanoseconds. E.g.

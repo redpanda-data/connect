@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.10.3 - 2019-03-28
+
+### Added
+
+- New config interpolation function `uuid_v4`.
+
 ## 1.10.2 - 2019-03-21
 
 ### Fixed

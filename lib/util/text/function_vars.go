@@ -32,6 +32,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/gabs"
+	"github.com/gofrs/uuid"
 )
 
 //------------------------------------------------------------------------------
@@ -124,7 +125,7 @@ var functionRegex *regexp.Regexp
 
 func init() {
 	var err error
-	functionRegex, err = regexp.Compile(`\${![a-z_]+(:[^}]+)?}`)
+	functionRegex, err = regexp.Compile(`\${![a-z0-9_]+(:[^}]+)?}`)
 	if err != nil {
 		panic(err)
 	}
@@ -183,6 +184,13 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 	"json_field":           jsonFieldFunction,
 	"metadata":             metadataFunction,
 	"metadata_json_object": metadataMapFunction,
+	"uuid_v4": func(_ Message, _ string) []byte {
+		u4, err := uuid.NewV4()
+		if err != nil {
+			panic(err)
+		}
+		return []byte(u4.String())
+	},
 }
 
 // ContainsFunctionVariables returns true if inBytes contains function variable

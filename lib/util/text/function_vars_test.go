@@ -379,3 +379,15 @@ func TestCountersFunction(t *testing.T) {
 		}
 	}
 }
+
+func TestUUIDV4Function(t *testing.T) {
+	results := map[string]struct{}{}
+
+	for i := 0; i < 100; i++ {
+		result := string(ReplaceFunctionVariables(nil, []byte(`${!uuid_v4}`)))
+		if _, exists := results[result]; exists {
+			t.Errorf("Duplicate UUID generated: %v", result)
+		}
+		results[result] = struct{}{}
+	}
+}
