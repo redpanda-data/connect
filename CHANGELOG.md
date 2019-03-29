@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.10.4 - 2019-03-29
+
+### Added
+
+- More `kafka_balanced` input config fields for consumer group timeouts.
+
 ## 1.10.3 - 2019-03-28
 
 ### Added

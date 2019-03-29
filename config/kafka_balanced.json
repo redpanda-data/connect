@@ -14,6 +14,11 @@
 			"client_id": "benthos_kafka_input",
 			"commit_period": "1s",
 			"consumer_group": "benthos_consumer_group",
+			"group": {
+				"heartbeat_interval": "3s",
+				"rebalance_timeout": "60s",
+				"session_timeout": "10s"
+			},
 			"max_batch_count": 1,
 			"start_from_oldest": true,
 			"target_version": "1.0.0",

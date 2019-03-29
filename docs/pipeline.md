@@ -12,14 +12,66 @@ advantageous to use the pipeline section as it allows you to set an explicit
 number of parallel threads of execution which should ideally match the number of
 available logical CPU cores.
 
-If [a buffer is chosen][buffers] these processors are applied to messages read
-from it. It is therefore possible to use buffers as a way of distributing
-messages from a single input across multiple parallel processing threads.
+The following patterns allow you to achieve a distribution of work across these
+processing threads for different input arrangments.
 
-The following are some examples of how to get good performance out of your
-processing pipelines.
+### Multiple Consumers
 
-### Example 1: Single consumer multiple processing threads
+Sometimes our source of data can have many multiple connected clients and will
+distribute a stream of messages amongst them. In these circumstances it is
+possible to fully utilise a set of parallel processing threads without a buffer,
+provided that the number of consumers is greater than the number of threads.
+Ideally the number of consumers would be significantly higher than the number of
+threads in order to compensate for occasional IO stalls.
+
+For example, imagine we are consuming from a source `baz`, which is
+[At-Least-Once][search-alo] and supports multiple connected clients. Our goal is
+to read the stream as fast as possible, perform mutations on the JSON payload
+using the [jmespath processor][jmespath-processor], and write the resulting
+stream to `bar`.
+
+We also wish to take advantage of the delivery guarantees of the source and
+therefore want acknowledgements to flow directly from our output sink to the
+input source, and therefore need to avoid using a buffer.
+
+For this purpose we would be able to utilise our processing threads without the
+need for a buffer. We choose four processing threads to match our 4 CPU cores,
+and choose to use eight parallel consumers of the input `baz`.
+
+``` yaml
+input:
+  type: broker
+  broker:
+    copies: 8
+    inputs:
+    - type: baz
+buffer:
+  type: none
+pipeline:
+  threads: 4
+  processors:
+  - type: jmespath
+    jmespath:
+      query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
+output:
+  type: bar
+```
+
+With this config the pipeline within our Benthos instance would look something
+like the following:
+
+``` text
+baz -\
+baz -\
+baz ---> processor ---> bar
+baz ---> processor -/
+baz ---> processor -/
+baz ---> processor -/
+baz -/
+baz -/
+```
+
+### Single Consumer
 
 Sometimes a source of data can only have a single consuming client. In these
 circumstances it is still possible to have the single stream of data processed
@@ -66,58 +118,6 @@ foo -> memory buffer ---> processor ---> bar
           ( 5MB )    \--> processor -/
                      \--> processor -/
                      \--> processor -/
-```
-
-### Example 2: Multiple consumer multiple processing threads
-
-Sometimes our source of data can have many multiple connected clients and will
-distribute a stream of messages amongst them. In these circumstances it is
-possible to fully utilise a set of parallel processing threads without a buffer,
-provided that the number of consumers is greater than the number of threads.
-Ideally the number of consumers would be significantly higher than the number of
-threads in order to compensate for IO blocking.
-
-For example, imagine we have a similar requirement to example 1 but are
-consuming from an input `baz`, which is [At-Least-Once][search-alo] and supports
-multiple connected clients. We wish to take advantage of the delivery guarantees
-of the source and therefore want acknowledgements to flow directly from our
-output sink all the way up the pipeline to the input source.
-
-For this purpose we would be able to utilise our processing threads without the
-need for a buffer. We choose four processing threads like before, and choose to
-use eight parallel consumers of the input `baz`.
-
-``` yaml
-input:
-  type: broker
-  broker:
-    copies: 8
-    inputs:
-    - type: baz
-buffer:
-  type: none
-pipeline:
-  threads: 4
-  processors:
-  - type: jmespath
-    jmespath:
-      query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
-output:
-  type: bar
-```
-
-With this config the pipeline within our Benthos instance would look something
-like the following:
-
-``` text
-baz -\
-baz -\
-baz ---> processor ---> bar
-baz ---> processor -/
-baz ---> processor -/
-baz ---> processor -/
-baz -/
-baz -/
 ```
 
 [processors]: ./processors

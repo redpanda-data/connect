@@ -110,6 +110,10 @@ input:
     - localhost:9092
     client_id: benthos_kafka_input
     consumer_group: benthos_consumer_group
+    group:
+      session_timeout: 10s
+      heartbeat_interval: 3s
+      rebalance_timeout: 60s
     commit_period: 1s
     topics:
     - benthos_stream

@@ -41,17 +41,35 @@ import (
 
 //------------------------------------------------------------------------------
 
+// KafkaBalancedGroupConfig contains config fields for Kafka consumer groups.
+type KafkaBalancedGroupConfig struct {
+	SessionTimeout    string `json:"session_timeout" yaml:"session_timeout"`
+	HeartbeatInterval string `json:"heartbeat_interval" yaml:"heartbeat_interval"`
+	RebalanceTimeout  string `json:"rebalance_timeout" yaml:"rebalance_timeout"`
+}
+
+// NewKafkaBalancedGroupConfig returns a KafkaBalancedGroupConfig with default
+// values.
+func NewKafkaBalancedGroupConfig() KafkaBalancedGroupConfig {
+	return KafkaBalancedGroupConfig{
+		SessionTimeout:    "10s",
+		HeartbeatInterval: "3s",
+		RebalanceTimeout:  "60s",
+	}
+}
+
 // KafkaBalancedConfig contains configuration for the KafkaBalanced input type.
 type KafkaBalancedConfig struct {
-	Addresses       []string    `json:"addresses" yaml:"addresses"`
-	ClientID        string      `json:"client_id" yaml:"client_id"`
-	ConsumerGroup   string      `json:"consumer_group" yaml:"consumer_group"`
-	CommitPeriod    string      `json:"commit_period" yaml:"commit_period"`
-	Topics          []string    `json:"topics" yaml:"topics"`
-	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
-	TargetVersion   string      `json:"target_version" yaml:"target_version"`
-	MaxBatchCount   int         `json:"max_batch_count" yaml:"max_batch_count"`
-	TLS             btls.Config `json:"tls" yaml:"tls"`
+	Addresses       []string                 `json:"addresses" yaml:"addresses"`
+	ClientID        string                   `json:"client_id" yaml:"client_id"`
+	ConsumerGroup   string                   `json:"consumer_group" yaml:"consumer_group"`
+	Group           KafkaBalancedGroupConfig `json:"group" yaml:"group"`
+	CommitPeriod    string                   `json:"commit_period" yaml:"commit_period"`
+	Topics          []string                 `json:"topics" yaml:"topics"`
+	StartFromOldest bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TargetVersion   string                   `json:"target_version" yaml:"target_version"`
+	MaxBatchCount   int                      `json:"max_batch_count" yaml:"max_batch_count"`
+	TLS             btls.Config              `json:"tls" yaml:"tls"`
 }
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
@@ -60,6 +78,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Addresses:       []string{"localhost:9092"},
 		ClientID:        "benthos_kafka_input",
 		ConsumerGroup:   "benthos_consumer_group",
+		Group:           NewKafkaBalancedGroupConfig(),
 		CommitPeriod:    "1s",
 		Topics:          []string{"benthos_stream"},
 		StartFromOldest: true,
@@ -74,11 +93,15 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 // KafkaBalanced is an input type that reads from a Kafka cluster by balancing
 // partitions across other consumers of the same consumer group.
 type KafkaBalanced struct {
-	version      sarama.KafkaVersion
-	tlsConf      *tls.Config
-	addresses    []string
-	topics       []string
-	commitPeriod time.Duration
+	version   sarama.KafkaVersion
+	tlsConf   *tls.Config
+	addresses []string
+	topics    []string
+
+	commitPeriod      time.Duration
+	sessionTimeout    time.Duration
+	heartbeatInterval time.Duration
+	rebalanceTimeout  time.Duration
 
 	cMut    sync.Mutex
 	group   sarama.ConsumerGroup
@@ -134,6 +157,25 @@ func NewKafkaBalanced(
 			return nil, fmt.Errorf("failed to parse commit period string: %v", err)
 		}
 	}
+	if tout := conf.Group.SessionTimeout; len(tout) > 0 {
+		var err error
+		if k.sessionTimeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse session timeout string: %v", err)
+		}
+	}
+	if tout := conf.Group.HeartbeatInterval; len(tout) > 0 {
+		var err error
+		if k.heartbeatInterval, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse heartbeat interval string: %v", err)
+		}
+	}
+	if tout := conf.Group.RebalanceTimeout; len(tout) > 0 {
+		var err error
+		if k.rebalanceTimeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse rebalance timeout string: %v", err)
+		}
+	}
+
 	var err error
 	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
 		return nil, err
@@ -211,6 +253,10 @@ func (k *KafkaBalanced) Connect() error {
 	config.Version = k.version
 	config.Consumer.Return.Errors = true
 	config.Consumer.Offsets.CommitInterval = k.commitPeriod
+	config.Consumer.Group.Session.Timeout = k.sessionTimeout
+	config.Consumer.Group.Heartbeat.Interval = k.heartbeatInterval
+	config.Consumer.Group.Rebalance.Timeout = k.rebalanceTimeout
+
 	config.Net.TLS.Enable = k.conf.TLS.Enabled
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
