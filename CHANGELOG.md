@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.10.5 - 2019-03-29
+
+### Fixed
+
+- Improved `kafka_balanced` consumer group connection behaviour.
+
 ## 1.10.4 - 2019-03-29
 
 ### Added

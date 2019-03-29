@@ -103,10 +103,10 @@ type KafkaBalanced struct {
 	heartbeatInterval time.Duration
 	rebalanceTimeout  time.Duration
 
-	cMut    sync.Mutex
-	group   sarama.ConsumerGroup
-	session sarama.ConsumerGroupSession
-	msgChan chan *sarama.ConsumerMessage
+	cMut          sync.Mutex
+	groupCancelFn context.CancelFunc
+	session       sarama.ConsumerGroupSession
+	msgChan       chan *sarama.ConsumerMessage
 
 	offsets map[string]map[int32]int64
 
@@ -122,11 +122,12 @@ func NewKafkaBalanced(
 	conf KafkaBalancedConfig, log log.Modular, stats metrics.Type,
 ) (*KafkaBalanced, error) {
 	k := KafkaBalanced{
-		conf:        conf,
-		stats:       stats,
-		log:         log,
-		offsets:     map[string]map[int32]int64{},
-		mRebalanced: stats.GetCounter("rebalanced"),
+		conf:          conf,
+		stats:         stats,
+		groupCancelFn: func() {},
+		log:           log,
+		offsets:       map[string]map[int32]int64{},
+		mRebalanced:   stats.GetCounter("rebalanced"),
 	}
 	if conf.MaxBatchCount < 1 {
 		return nil, errors.New("max_batch_count must be greater than or equal to 1")
@@ -208,10 +209,18 @@ func (k *KafkaBalanced) Cleanup(sesh sarama.ConsumerGroupSession) error {
 // loop and exit.
 func (k *KafkaBalanced) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	k.log.Debugf("Consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
-	for msg := range claim.Messages() {
-		k.msgChan <- msg
+	for {
+		select {
+		case msg, open := <-claim.Messages():
+			if !open {
+				return nil
+			}
+			k.msgChan <- msg
+		case <-sess.Context().Done():
+			k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
+			return nil
+		}
 	}
-	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -228,12 +237,11 @@ func (k *KafkaBalanced) setOffset(topic string, partition int32, offset int64) {
 
 func (k *KafkaBalanced) closeGroup() {
 	k.cMut.Lock()
-	group := k.group
-	k.group = nil
+	cancelFn := k.groupCancelFn
 	k.cMut.Unlock()
 
-	if group != nil {
-		group.Close()
+	if cancelFn != nil {
+		cancelFn()
 	}
 }
 
@@ -256,6 +264,13 @@ func (k *KafkaBalanced) Connect() error {
 	config.Consumer.Group.Session.Timeout = k.sessionTimeout
 	config.Consumer.Group.Heartbeat.Interval = k.heartbeatInterval
 	config.Consumer.Group.Rebalance.Timeout = k.rebalanceTimeout
+
+	if config.Net.ReadTimeout <= k.sessionTimeout {
+		config.Net.ReadTimeout = k.sessionTimeout * 2
+	}
+	if config.Net.ReadTimeout <= k.rebalanceTimeout {
+		config.Net.ReadTimeout = k.rebalanceTimeout * 2
+	}
 
 	config.Net.TLS.Enable = k.conf.TLS.Enabled
 	if k.conf.TLS.Enabled {
@@ -280,22 +295,45 @@ func (k *KafkaBalanced) Connect() error {
 			}
 			if gerr != nil {
 				k.log.Errorf("KafkaBalanced message recv error: %v\n", gerr)
+				if cerr, ok := gerr.(*sarama.ConsumerError); ok {
+					if cerr.Err == sarama.ErrUnknownMemberId {
+						// Sarama doesn't seem to recover from this error.
+						go k.closeGroup()
+					}
+				}
 			}
 		}
 	}()
 
 	// Handle session
 	go func() {
-		ctx := context.Background()
+	groupLoop:
 		for {
+			ctx, doneFn := context.WithCancel(context.Background())
+
+			k.cMut.Lock()
+			k.groupCancelFn = doneFn
+			k.cMut.Unlock()
+
+			k.log.Debugln("Starting consumer group")
 			gerr := group.Consume(ctx, k.topics, k)
+			select {
+			case <-ctx.Done():
+				break groupLoop
+			default:
+			}
+			doneFn()
 			if gerr != nil {
 				if gerr != io.EOF {
 					k.log.Errorf("KafkaBalanced group session error: %v\n", gerr)
 				}
-				break
+				break groupLoop
 			}
 		}
+		k.log.Debugln("Closing consumer group")
+
+		group.Close()
+
 		k.cMut.Lock()
 		if k.msgChan != nil {
 			close(k.msgChan)
@@ -305,7 +343,6 @@ func (k *KafkaBalanced) Connect() error {
 	}()
 
 	k.msgChan = make(chan *sarama.ConsumerMessage, k.conf.MaxBatchCount)
-	k.group = group
 	k.offsets = map[string]map[int32]int64{}
 
 	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.addresses)
