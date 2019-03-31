@@ -472,24 +472,25 @@ dedupe:
 ```
 
 Caches should be configured as a resource, for more information check out the
-[documentation here](../caches).
+[documentation here](../caches/README.md).
+
+When using this processor with an output target that might fail you should
+always wrap the output within a [`retry`](../outputs/README.md#retry)
+block. This ensures that during outages your messages aren't reprocessed after
+failures, which would result in messages being dropped.
 
 ### Delivery Guarantees
 
-Performing a deduplication step on a payload in transit voids any at-least-once
-guarantees that the payload previously had, as it's impossible to fully
-guarantee that the message is propagated to the next destination. If the message
-is reprocessed due to output failure or a service restart then it will be lost
-due to failing the deduplication step on the second attempt.
+Performing deduplication on a stream using a distributed cache voids any
+at-least-once guarantees that it previously had. This is because the cache will
+preserve message signatures even if the message fails to leave the Benthos
+pipeline, which would cause message loss in the event of an outage at the output
+sink followed by a restart of the Benthos instance.
 
-You can avoid reprocessing payloads on failed sends by using either the
-[`retry`](../outputs/README.md#retry) output type or the
-[`broker`](../outputs/README.md#broker) output type using the 'try'
-pattern. However, if the service is restarted between retry attempts then the
-message can still be lost.
-
-It is worth strongly considering the delivery guarantees that your pipeline is
-meant to provide when using this processor.
+If you intend to preserve at-least-once delivery guarantees you can avoid this
+problem by using a memory based cache. This is a compromise that can achieve
+effective deduplication but parallel deployments of the pipeline as well as
+service restarts increase the chances of duplicates passing undetected.
 
 ## `encode`
 

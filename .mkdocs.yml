@@ -19,10 +19,11 @@ nav:
     - 'Tracers': 'tracers/README.md'
   - Guides:
     - 'Getting Started': 'getting_started.md'
+    - 'Cookbooks': 'cookbooks/README.md'
     - 'Pipeline': 'pipeline.md'
     - 'Message Batching': 'batching.md'
     - 'Error Handling': 'error_handling.md'
     - 'Workflows': 'workflows.md'
     - 'Config Cheats': 'configuration.md'
     - 'Config Interpolation': 'config_interpolation.md'
-    - 'Interesting Examples': 'examples/README.md'
+    - 'Applied Examples': 'examples/README.md'

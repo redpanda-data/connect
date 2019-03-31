@@ -113,8 +113,8 @@ output:
       foo:
         foo_field_1: value1
       processors:
-      - type: filter
-        filter:
+      - type: filter_parts
+        filter_parts:
           type: text
           text:
             operator: contains
@@ -123,8 +123,8 @@ output:
       bar:
         bar_field_1: value2
       processors:
-      - type: filter
-        filter:
+      - type: filter_parts
+        filter_parts:
           type: not
           not:
             type: text
@@ -452,7 +452,7 @@ examples.
 [broker-input]: ./inputs/README.md#broker
 [broker-output]: ./outputs/README.md#broker
 [switch-output]: ./outputs/README.md#switch
-[filter-processor]: ./processors/README.md#filter
+[filter-processor]: ./processors/README.md#filter_parts
 [conditions]: ./conditions/README.md
 [caches]: ./caches/README.md
 [rate-limits]: ./rate_limits/README.md

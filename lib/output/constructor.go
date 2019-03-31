@@ -325,14 +325,15 @@ configuration.
 
 It is possible to perform
 [content based multiplexing](../concepts.md#content-based-multiplexing) of
-messages to specific outputs either by using the ` + "`switch`" + ` output or a
-broker with the ` + "`fan_out`" + ` pattern and a
-[filter processor](../processors/README.md#filter) on each output, which
-is a processor that drops messages if the condition does not pass. Conditions
-are content aware logical operators that can be combined using boolean logic.
+messages to specific outputs either by using the ` + "[`switch`](#switch)" + `
+output, or a ` + "[`broker`](#broker)" + ` with the ` + "`fan_out`" + ` pattern
+and a [filter processor](../processors/README.md#filter_parts) on each output,
+which is a processor that drops messages if the condition does not pass.
+Conditions are content aware logical operators that can be combined using
+boolean logic.
 
 For more information regarding conditions, including a full list of available
-conditions please [read the docs here](../conditions/README.md)
+conditions please [read the docs here](../conditions/README.md).
 
 ### Dead Letter Queues
 
