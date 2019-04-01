@@ -17,6 +17,7 @@ input:
       rebalance_timeout: 60s
       session_timeout: 10s
     max_batch_count: 1
+    max_processing_period: 100ms
     start_from_oldest: true
     target_version: 1.0.0
     tls:

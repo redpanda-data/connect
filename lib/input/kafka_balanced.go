@@ -42,6 +42,9 @@ The field ` + "`max_batch_count`" + ` specifies the maximum number of prefetched
 messages to be batched together. When more than one message is batched they can
 be split into individual messages with the ` + "`split`" + ` processor.
 
+The field ` + "`max_processing_period`" + ` should be set above the maximum
+estimated time taken to process a message.
+
 ` + tls.Documentation + `
 
 ### Metadata

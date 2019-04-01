@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `max_processing_period` added to `kafka` and `kafka_balanced` inputs.
+
 ## 1.10.5 - 2019-03-29
 
 ### Fixed

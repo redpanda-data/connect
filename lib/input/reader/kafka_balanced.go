@@ -60,31 +60,33 @@ func NewKafkaBalancedGroupConfig() KafkaBalancedGroupConfig {
 
 // KafkaBalancedConfig contains configuration for the KafkaBalanced input type.
 type KafkaBalancedConfig struct {
-	Addresses       []string                 `json:"addresses" yaml:"addresses"`
-	ClientID        string                   `json:"client_id" yaml:"client_id"`
-	ConsumerGroup   string                   `json:"consumer_group" yaml:"consumer_group"`
-	Group           KafkaBalancedGroupConfig `json:"group" yaml:"group"`
-	CommitPeriod    string                   `json:"commit_period" yaml:"commit_period"`
-	Topics          []string                 `json:"topics" yaml:"topics"`
-	StartFromOldest bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
-	TargetVersion   string                   `json:"target_version" yaml:"target_version"`
-	MaxBatchCount   int                      `json:"max_batch_count" yaml:"max_batch_count"`
-	TLS             btls.Config              `json:"tls" yaml:"tls"`
+	Addresses           []string                 `json:"addresses" yaml:"addresses"`
+	ClientID            string                   `json:"client_id" yaml:"client_id"`
+	ConsumerGroup       string                   `json:"consumer_group" yaml:"consumer_group"`
+	Group               KafkaBalancedGroupConfig `json:"group" yaml:"group"`
+	CommitPeriod        string                   `json:"commit_period" yaml:"commit_period"`
+	MaxProcessingPeriod string                   `json:"max_processing_period" yaml:"max_processing_period"`
+	Topics              []string                 `json:"topics" yaml:"topics"`
+	StartFromOldest     bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
+	MaxBatchCount       int                      `json:"max_batch_count" yaml:"max_batch_count"`
+	TLS                 btls.Config              `json:"tls" yaml:"tls"`
 }
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
 func NewKafkaBalancedConfig() KafkaBalancedConfig {
 	return KafkaBalancedConfig{
-		Addresses:       []string{"localhost:9092"},
-		ClientID:        "benthos_kafka_input",
-		ConsumerGroup:   "benthos_consumer_group",
-		Group:           NewKafkaBalancedGroupConfig(),
-		CommitPeriod:    "1s",
-		Topics:          []string{"benthos_stream"},
-		StartFromOldest: true,
-		TargetVersion:   sarama.V1_0_0_0.String(),
-		MaxBatchCount:   1,
-		TLS:             btls.NewConfig(),
+		Addresses:           []string{"localhost:9092"},
+		ClientID:            "benthos_kafka_input",
+		ConsumerGroup:       "benthos_consumer_group",
+		Group:               NewKafkaBalancedGroupConfig(),
+		CommitPeriod:        "1s",
+		MaxProcessingPeriod: "100ms",
+		Topics:              []string{"benthos_stream"},
+		StartFromOldest:     true,
+		TargetVersion:       sarama.V1_0_0_0.String(),
+		MaxBatchCount:       1,
+		TLS:                 btls.NewConfig(),
 	}
 }
 
@@ -102,6 +104,7 @@ type KafkaBalanced struct {
 	sessionTimeout    time.Duration
 	heartbeatInterval time.Duration
 	rebalanceTimeout  time.Duration
+	maxProcPeriod     time.Duration
 
 	cMut          sync.Mutex
 	groupCancelFn context.CancelFunc
@@ -174,6 +177,12 @@ func NewKafkaBalanced(
 		var err error
 		if k.rebalanceTimeout, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse rebalance timeout string: %v", err)
+		}
+	}
+	if tout := conf.MaxProcessingPeriod; len(tout) > 0 {
+		var err error
+		if k.maxProcPeriod, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse max processing period string: %v", err)
 		}
 	}
 
@@ -260,6 +269,7 @@ func (k *KafkaBalanced) Connect() error {
 	config.Net.DialTimeout = time.Second
 	config.Version = k.version
 	config.Consumer.Return.Errors = true
+	config.Consumer.MaxProcessingTime = k.maxProcPeriod
 	config.Consumer.Offsets.CommitInterval = k.commitPeriod
 	config.Consumer.Group.Session.Timeout = k.sessionTimeout
 	config.Consumer.Group.Heartbeat.Interval = k.heartbeatInterval

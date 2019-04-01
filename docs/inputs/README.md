@@ -398,6 +398,7 @@ kafka:
   commit_period: 1s
   consumer_group: benthos_consumer_group
   max_batch_count: 1
+  max_processing_period: 100ms
   partition: 0
   start_from_oldest: true
   target_version: 1.0.0
@@ -417,6 +418,9 @@ you wish to balance partitions across a consumer group look at the
 The field `max_batch_count` specifies the maximum number of prefetched
 messages to be batched together. When more than one message is batched they can
 be split into individual messages with the `split` processor.
+
+The field `max_processing_period` should be set above the maximum
+estimated time taken to process a message.
 
 The target version by default will be the oldest supported, as it is expected
 that the server will be backwards compatible. In order to support newer client
@@ -472,6 +476,7 @@ kafka_balanced:
     rebalance_timeout: 60s
     session_timeout: 10s
   max_batch_count: 1
+  max_processing_period: 100ms
   start_from_oldest: true
   target_version: 1.0.0
   tls:
@@ -490,6 +495,9 @@ across any members of the consumer group.
 The field `max_batch_count` specifies the maximum number of prefetched
 messages to be batched together. When more than one message is batched they can
 be split into individual messages with the `split` processor.
+
+The field `max_processing_period` should be set above the maximum
+estimated time taken to process a message.
 
 ### TLS
 

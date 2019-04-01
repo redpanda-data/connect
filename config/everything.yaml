@@ -95,6 +95,7 @@ input:
     client_id: benthos_kafka_input
     consumer_group: benthos_consumer_group
     commit_period: 1s
+    max_processing_period: 100ms
     topic: benthos_stream
     partition: 0
     start_from_oldest: true
@@ -115,6 +116,7 @@ input:
       heartbeat_interval: 3s
       rebalance_timeout: 60s
     commit_period: 1s
+    max_processing_period: 100ms
     topics:
     - benthos_stream
     start_from_oldest: true

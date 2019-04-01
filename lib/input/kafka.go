@@ -43,6 +43,9 @@ The field ` + "`max_batch_count`" + ` specifies the maximum number of prefetched
 messages to be batched together. When more than one message is batched they can
 be split into individual messages with the ` + "`split`" + ` processor.
 
+The field ` + "`max_processing_period`" + ` should be set above the maximum
+estimated time taken to process a message.
+
 The target version by default will be the oldest supported, as it is expected
 that the server will be backwards compatible. In order to support newer client
 features you should increase this version up to the known version of the target

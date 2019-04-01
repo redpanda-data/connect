@@ -40,31 +40,33 @@ import (
 
 // KafkaConfig contains configuration fields for the Kafka input type.
 type KafkaConfig struct {
-	Addresses       []string    `json:"addresses" yaml:"addresses"`
-	ClientID        string      `json:"client_id" yaml:"client_id"`
-	ConsumerGroup   string      `json:"consumer_group" yaml:"consumer_group"`
-	CommitPeriod    string      `json:"commit_period" yaml:"commit_period"`
-	Topic           string      `json:"topic" yaml:"topic"`
-	Partition       int32       `json:"partition" yaml:"partition"`
-	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
-	TargetVersion   string      `json:"target_version" yaml:"target_version"`
-	MaxBatchCount   int         `json:"max_batch_count" yaml:"max_batch_count"`
-	TLS             btls.Config `json:"tls" yaml:"tls"`
+	Addresses           []string    `json:"addresses" yaml:"addresses"`
+	ClientID            string      `json:"client_id" yaml:"client_id"`
+	ConsumerGroup       string      `json:"consumer_group" yaml:"consumer_group"`
+	CommitPeriod        string      `json:"commit_period" yaml:"commit_period"`
+	MaxProcessingPeriod string      `json:"max_processing_period" yaml:"max_processing_period"`
+	Topic               string      `json:"topic" yaml:"topic"`
+	Partition           int32       `json:"partition" yaml:"partition"`
+	StartFromOldest     bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TargetVersion       string      `json:"target_version" yaml:"target_version"`
+	MaxBatchCount       int         `json:"max_batch_count" yaml:"max_batch_count"`
+	TLS                 btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
 func NewKafkaConfig() KafkaConfig {
 	return KafkaConfig{
-		Addresses:       []string{"localhost:9092"},
-		ClientID:        "benthos_kafka_input",
-		ConsumerGroup:   "benthos_consumer_group",
-		CommitPeriod:    "1s",
-		Topic:           "benthos_stream",
-		Partition:       0,
-		StartFromOldest: true,
-		TargetVersion:   sarama.V1_0_0_0.String(),
-		MaxBatchCount:   1,
-		TLS:             btls.NewConfig(),
+		Addresses:           []string{"localhost:9092"},
+		ClientID:            "benthos_kafka_input",
+		ConsumerGroup:       "benthos_consumer_group",
+		CommitPeriod:        "1s",
+		MaxProcessingPeriod: "100ms",
+		Topic:               "benthos_stream",
+		Partition:           0,
+		StartFromOldest:     true,
+		TargetVersion:       sarama.V1_0_0_0.String(),
+		MaxBatchCount:       1,
+		TLS:                 btls.NewConfig(),
 	}
 }
 
@@ -83,6 +85,7 @@ type Kafka struct {
 
 	offsetLastCommitted time.Time
 	commitPeriod        time.Duration
+	maxProcPeriod       time.Duration
 
 	mRcvErr metrics.StatCounter
 
@@ -132,6 +135,13 @@ func NewKafka(
 		var err error
 		if k.commitPeriod, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse commit period string: %v", err)
+		}
+	}
+
+	if tout := conf.MaxProcessingPeriod; len(tout) > 0 {
+		var err error
+		if k.maxProcPeriod, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse max processing period string: %v", err)
 		}
 	}
 	return &k, nil
@@ -193,6 +203,7 @@ func (k *Kafka) Connect() error {
 	config.ClientID = k.conf.ClientID
 	config.Net.DialTimeout = time.Second
 	config.Consumer.Return.Errors = true
+	config.Consumer.MaxProcessingTime = k.maxProcPeriod
 	config.Net.TLS.Enable = k.conf.TLS.Enabled
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf

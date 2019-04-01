@@ -15,6 +15,7 @@
 			"commit_period": "1s",
 			"consumer_group": "benthos_consumer_group",
 			"max_batch_count": 1,
+			"max_processing_period": "100ms",
 			"partition": 0,
 			"start_from_oldest": true,
 			"target_version": "1.0.0",
