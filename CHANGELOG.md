@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 1.10.6 - 2019-03-29
+## 1.10.6 - 2019-04-02
 
 ### Added
 
