@@ -76,6 +76,11 @@ type Memory struct {
 	ttl            time.Duration
 	compInterval   time.Duration
 	lastCompaction time.Time
+
+	stats        metrics.Type
+	mCompactions metrics.StatCounter
+	mKeys        metrics.StatGauge
+
 	sync.RWMutex
 }
 
@@ -93,6 +98,9 @@ func NewMemory(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 		ttl:            time.Second * time.Duration(conf.Memory.TTL),
 		compInterval:   interval,
 		lastCompaction: time.Now(),
+		stats:          stats,
+		mCompactions:   stats.GetCounter("compaction"),
+		mKeys:          stats.GetGauge("keys"),
 	}, nil
 }
 
@@ -102,11 +110,13 @@ func (m *Memory) compaction() {
 	if time.Since(m.lastCompaction) < m.compInterval {
 		return
 	}
+	m.mCompactions.Incr(1)
 	for k, v := range m.items {
 		if time.Since(v.ts) >= m.ttl {
 			delete(m.items, k)
 		}
 	}
+	m.lastCompaction = time.Now()
 }
 
 // Get attempts to locate and return a cached value by its key, returns an error
@@ -126,6 +136,7 @@ func (m *Memory) Set(key string, value []byte) error {
 	m.Lock()
 	m.compaction()
 	m.items[key] = item{value: value, ts: time.Now()}
+	m.mKeys.Set(int64(len(m.items)))
 	m.Unlock()
 	return nil
 }
@@ -138,6 +149,7 @@ func (m *Memory) SetMulti(items map[string][]byte) error {
 	for k, v := range items {
 		m.items[k] = item{value: v, ts: time.Now()}
 	}
+	m.mKeys.Set(int64(len(m.items)))
 	m.Unlock()
 	return nil
 }
@@ -152,6 +164,7 @@ func (m *Memory) Add(key string, value []byte) error {
 	}
 	m.compaction()
 	m.items[key] = item{value: value, ts: time.Now()}
+	m.mKeys.Set(int64(len(m.items)))
 	m.Unlock()
 	return nil
 }
@@ -161,6 +174,7 @@ func (m *Memory) Delete(key string) error {
 	m.Lock()
 	m.compaction()
 	delete(m.items, key)
+	m.mKeys.Set(int64(len(m.items)))
 	m.Unlock()
 	return nil
 }

@@ -5,9 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.10.6 - 2019-03-29
+
 ### Added
 
 - Field `max_processing_period` added to `kafka` and `kafka_balanced` inputs.
+
+### Fixed
+
+- Compaction intervals are now respected by the `memory` cache type.
 
 ## 1.10.5 - 2019-03-29
 
