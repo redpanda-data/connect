@@ -133,7 +133,7 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 	for _, addr := range conf.Addresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
 			if len(splitAddr) > 0 {
-				k.addresses = append(k.addresses, splitAddr)
+				k.addresses = append(k.addresses, strings.TrimSpace(splitAddr))
 			}
 		}
 	}

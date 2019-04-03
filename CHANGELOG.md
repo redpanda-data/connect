@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.10.7 - 2019-04-03
+
+### Added
+
+- Comma separated `kafka` address and topic values are now trimmed for
+  whitespace.
+
 ## 1.10.6 - 2019-04-02
 
 ### Added
