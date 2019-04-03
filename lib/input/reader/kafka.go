@@ -125,8 +125,8 @@ func NewKafka(
 
 	for _, addr := range conf.Addresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
-			if len(splitAddr) > 0 {
-				k.addresses = append(k.addresses, strings.TrimSpace(splitAddr))
+			if trimmed := strings.TrimSpace(splitAddr); len(trimmed) > 0 {
+				k.addresses = append(k.addresses, trimmed)
 			}
 		}
 	}

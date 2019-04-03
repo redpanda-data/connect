@@ -143,15 +143,15 @@ func NewKafkaBalanced(
 	}
 	for _, addr := range conf.Addresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
-			if len(splitAddr) > 0 {
-				k.addresses = append(k.addresses, strings.TrimSpace(splitAddr))
+			if trimmed := strings.TrimSpace(splitAddr); len(trimmed) > 0 {
+				k.addresses = append(k.addresses, trimmed)
 			}
 		}
 	}
 	for _, t := range conf.Topics {
 		for _, splitTopics := range strings.Split(t, ",") {
-			if len(splitTopics) > 0 {
-				k.topics = append(k.topics, strings.TrimSpace(splitTopics))
+			if trimmed := strings.TrimSpace(splitTopics); len(trimmed) > 0 {
+				k.topics = append(k.topics, trimmed)
 			}
 		}
 	}
