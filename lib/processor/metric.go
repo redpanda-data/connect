@@ -23,6 +23,7 @@ package processor
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -189,7 +190,14 @@ func NewMetric(
 		return nil, errors.New("path must not be empty")
 	}
 
-	for n, v := range conf.Metric.Labels {
+	labelNames := make([]string, 0, len(conf.Metric.Labels))
+	for n := range conf.Metric.Labels {
+		labelNames = append(labelNames, n)
+	}
+	sort.Strings(labelNames)
+
+	for _, n := range labelNames {
+		v := conf.Metric.Labels[n]
 		m.labels = append(m.labels, label{
 			name:             n,
 			value:            v,

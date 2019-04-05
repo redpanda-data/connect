@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.10.9 - 2019-04-05
+
+### Fixed
+
+- The `metric` processor no longer mixes label keys when processing across
+  parallel pipelines.
+
 ## 1.10.8 - 2019-04-03
 
 ### Added
