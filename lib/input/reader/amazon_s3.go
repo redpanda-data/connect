@@ -22,6 +22,7 @@ package reader
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"strconv"
@@ -59,6 +60,7 @@ type AmazonS3Config struct {
 	DeleteObjects   bool                    `json:"delete_objects" yaml:"delete_objects"`
 	SQSURL          string                  `json:"sqs_url" yaml:"sqs_url"`
 	SQSBodyPath     string                  `json:"sqs_body_path" yaml:"sqs_body_path"`
+	SQSBucketPath   string                  `json:"sqs_bucket_path" yaml:"sqs_bucket_path"`
 	SQSEnvelopePath string                  `json:"sqs_envelope_path" yaml:"sqs_envelope_path"`
 	SQSMaxMessages  int64                   `json:"sqs_max_messages" yaml:"sqs_max_messages"`
 	MaxBatchCount   int                     `json:"max_batch_count" yaml:"max_batch_count"`
@@ -78,6 +80,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		DeleteObjects:   false,
 		SQSURL:          "",
 		SQSBodyPath:     "Records.s3.object.key",
+		SQSBucketPath:   "",
 		SQSEnvelopePath: "",
 		SQSMaxMessages:  10,
 		MaxBatchCount:   1,
@@ -89,6 +92,7 @@ func NewAmazonS3Config() AmazonS3Config {
 
 type objKey struct {
 	s3Key     string
+	s3Bucket  string
 	attempts  int
 	sqsHandle *sqs.DeleteMessageBatchRequestEntry
 }
@@ -98,8 +102,9 @@ type objKey struct {
 type AmazonS3 struct {
 	conf AmazonS3Config
 
-	sqsBodyPath []string
-	sqsEnvPath  []string
+	sqsBodyPath   []string
+	sqsEnvPath    []string
+	sqsBucketPath []string
 
 	readKeys   []objKey
 	targetKeys []objKey
@@ -122,9 +127,16 @@ func NewAmazonS3(
 	log log.Modular,
 	stats metrics.Type,
 ) (*AmazonS3, error) {
+	if len(conf.Bucket) == 0 {
+		return nil, errors.New("a bucket must be specified (even with an SQS bucket path configured)")
+	}
 	var path []string
 	if len(conf.SQSBodyPath) > 0 {
 		path = strings.Split(conf.SQSBodyPath, ".")
+	}
+	var bucketPath []string
+	if len(conf.SQSBucketPath) > 0 {
+		bucketPath = strings.Split(conf.SQSBucketPath, ".")
 	}
 	var envPath []string
 	if len(conf.SQSEnvelopePath) > 0 {
@@ -141,12 +153,13 @@ func NewAmazonS3(
 		return nil, fmt.Errorf("max_batch_count '%v' must be > 0", conf.MaxBatchCount)
 	}
 	s := &AmazonS3{
-		conf:        conf,
-		sqsBodyPath: path,
-		sqsEnvPath:  envPath,
-		log:         log,
-		stats:       stats,
-		timeout:     timeout,
+		conf:          conf,
+		sqsBodyPath:   path,
+		sqsEnvPath:    envPath,
+		sqsBucketPath: bucketPath,
+		log:           log,
+		stats:         stats,
+		timeout:       timeout,
 	}
 	if conf.DownloadManager.Enabled {
 		s.readMethod = s.readFromMgr
@@ -278,11 +291,24 @@ messageLoop:
 			}
 		}
 
+		var buckets []string
+		switch t := gObj.S(a.sqsBucketPath...).Data().(type) {
+		case string:
+			buckets = []string{t}
+		case []interface{}:
+			buckets = digStrsFromSlices(t)
+		}
+
 		switch t := gObj.S(a.sqsBodyPath...).Data().(type) {
 		case string:
 			if strings.HasPrefix(t, a.conf.Prefix) {
+				bucket := ""
+				if len(buckets) > 0 {
+					bucket = buckets[0]
+				}
 				a.targetKeys = append(a.targetKeys, objKey{
 					s3Key:     t,
+					s3Bucket:  bucket,
 					attempts:  a.conf.Retries,
 					sqsHandle: msgHandle,
 				})
@@ -298,9 +324,14 @@ messageLoop:
 			if len(newTargets) == 0 {
 				dudMessageHandles = append(dudMessageHandles, msgHandle)
 			} else {
-				for _, target := range newTargets {
+				for i, target := range newTargets {
+					bucket := ""
+					if len(buckets) > i {
+						bucket = buckets[i]
+					}
 					a.targetKeys = append(a.targetKeys, objKey{
 						s3Key:    target,
+						s3Bucket: bucket,
 						attempts: a.conf.Retries,
 					})
 				}
@@ -387,8 +418,12 @@ func (a *AmazonS3) read() (types.Message, error) {
 	for len(a.targetKeys) > 0 && msg.Len() < a.conf.MaxBatchCount && time.Until(timeoutAt) > 0 {
 		target := a.targetKeys[0]
 
+		bucket := a.conf.Bucket
+		if len(target.s3Bucket) > 0 {
+			bucket = target.s3Bucket
+		}
 		obj, err := a.s3.GetObject(&s3.GetObjectInput{
-			Bucket: aws.String(a.conf.Bucket),
+			Bucket: aws.String(bucket),
 			Key:    aws.String(target.s3Key),
 		})
 		if err != nil {
@@ -396,13 +431,13 @@ func (a *AmazonS3) read() (types.Message, error) {
 			if target.attempts == 0 {
 				// Remove the target file from our list.
 				a.popTargetKey()
-				a.log.Errorf("Failed to download file '%s' from bucket '%s' after '%v' attempts: %v\n", target.s3Key, a.conf.Bucket, a.conf.Retries, err)
+				a.log.Errorf("Failed to download file '%s' from bucket '%s' after '%v' attempts: %v\n", target.s3Key, bucket, a.conf.Retries, err)
 			} else {
 				a.targetKeys[0] = target
 				if msg.Len() == 0 {
-					return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
+					return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, bucket, err)
 				}
-				a.log.Errorf("Failed to download file '%s' from bucket '%s': %v\n", target.s3Key, a.conf.Bucket, err)
+				a.log.Errorf("Failed to download file '%s' from bucket '%s': %v\n", target.s3Key, bucket, err)
 				break
 			}
 			continue
@@ -413,7 +448,7 @@ func (a *AmazonS3) read() (types.Message, error) {
 		bytes, err := ioutil.ReadAll(obj.Body)
 		obj.Body.Close()
 		if err != nil {
-			return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
+			return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, bucket, err)
 		}
 
 		part := message.NewPart(bytes)
@@ -422,7 +457,7 @@ func (a *AmazonS3) read() (types.Message, error) {
 			meta.Set(k, *v)
 		}
 		meta.Set("s3_key", target.s3Key)
-		meta.Set("s3_bucket", a.conf.Bucket)
+		meta.Set("s3_bucket", bucket)
 		addS3Metadata(part, obj)
 
 		msg.Append(part)
@@ -461,22 +496,27 @@ func (a *AmazonS3) readFromMgr() (types.Message, error) {
 
 		buff := &aws.WriteAtBuffer{}
 
+		bucket := a.conf.Bucket
+		if len(target.s3Bucket) > 0 {
+			bucket = target.s3Bucket
+		}
+
 		// Write the contents of S3 Object to the file
 		if _, err := a.downloader.Download(buff, &s3.GetObjectInput{
-			Bucket: aws.String(a.conf.Bucket),
+			Bucket: aws.String(bucket),
 			Key:    aws.String(target.s3Key),
 		}); err != nil {
 			target.attempts--
 			if target.attempts == 0 {
 				// Remove the target file from our list.
 				a.popTargetKey()
-				a.log.Errorf("Failed to download file '%s' from bucket '%s' after '%v' attempts: %v\n", target.s3Key, a.conf.Bucket, a.conf.Retries, err)
+				a.log.Errorf("Failed to download file '%s' from bucket '%s' after '%v' attempts: %v\n", target.s3Key, bucket, a.conf.Retries, err)
 			} else {
 				a.targetKeys[0] = target
 				if msg.Len() == 0 {
-					return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, a.conf.Bucket, err)
+					return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, bucket, err)
 				}
-				a.log.Errorf("Failed to download file '%s' from bucket '%s': %v\n", target.s3Key, a.conf.Bucket, err)
+				a.log.Errorf("Failed to download file '%s' from bucket '%s': %v\n", target.s3Key, bucket, err)
 				break
 			}
 			continue
@@ -487,7 +527,7 @@ func (a *AmazonS3) readFromMgr() (types.Message, error) {
 		part := message.NewPart(buff.Bytes())
 		part.Metadata().
 			Set("s3_key", target.s3Key).
-			Set("s3_bucket", a.conf.Bucket)
+			Set("s3_bucket", bucket)
 
 		msg.Append(part)
 	}
@@ -502,8 +542,12 @@ func (a *AmazonS3) Acknowledge(err error) error {
 		deleteHandles := []*sqs.DeleteMessageBatchRequestEntry{}
 		for _, key := range a.readKeys {
 			if a.conf.DeleteObjects {
+				bucket := a.conf.Bucket
+				if len(key.s3Bucket) > 0 {
+					bucket = key.s3Bucket
+				}
 				if _, serr := a.s3.DeleteObject(&s3.DeleteObjectInput{
-					Bucket: aws.String(a.conf.Bucket),
+					Bucket: aws.String(bucket),
 					Key:    aws.String(key.s3Key),
 				}); serr != nil {
 					a.log.Errorf("Failed to delete consumed object: %v\n", serr)

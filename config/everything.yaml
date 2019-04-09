@@ -259,6 +259,7 @@ input:
     delete_objects: false
     sqs_url: ""
     sqs_body_path: Records.s3.object.key
+    sqs_bucket_path: ""
     sqs_envelope_path: ""
     sqs_max_messages: 10
     max_batch_count: 1

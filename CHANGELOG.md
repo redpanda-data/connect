@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `sqs_bucket_path` field added to `s3` input.
+
 ## 1.10.9 - 2019-04-05
 
 ### Fixed
