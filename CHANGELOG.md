@@ -5,9 +5,18 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.10.10 - 2019-04-10
+
 ### Added
 
 - New `sqs_bucket_path` field added to `s3` input.
+
+### Fixed
+
+- The `sqs` input now rejects messages that fail by resetting the visibility
+  timeout.
+- The `sqs` input no longer fails to delete consumed messages when the batch
+  contains duplicate message IDs.
 
 ## 1.10.9 - 2019-04-05
 

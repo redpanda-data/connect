@@ -46,11 +46,7 @@ func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewReader(
-		"sqs",
-		reader.NewPreserver(s),
-		log, stats,
-	)
+	return NewReader("sqs", s, log, stats)
 }
 
 //------------------------------------------------------------------------------

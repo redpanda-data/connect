@@ -61,7 +61,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 type AmazonSQS struct {
 	conf AmazonSQSConfig
 
-	pendingHandles []*sqs.DeleteMessageBatchRequestEntry
+	pendingHandles map[string]string
 
 	session *session.Session
 	sqs     *sqs.SQS
@@ -85,10 +85,11 @@ func NewAmazonSQS(
 		}
 	}
 	return &AmazonSQS{
-		conf:    conf,
-		log:     log,
-		stats:   stats,
-		timeout: timeout,
+		conf:           conf,
+		log:            log,
+		stats:          stats,
+		timeout:        timeout,
+		pendingHandles: map[string]string{},
 	}, nil
 }
 
@@ -133,10 +134,7 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 
 	for _, sqsMsg := range output.Messages {
 		if sqsMsg.ReceiptHandle != nil {
-			a.pendingHandles = append(a.pendingHandles, &sqs.DeleteMessageBatchRequestEntry{
-				Id:            sqsMsg.MessageId,
-				ReceiptHandle: sqsMsg.ReceiptHandle,
-			})
+			a.pendingHandles[*sqsMsg.MessageId] = *sqsMsg.ReceiptHandle
 		}
 
 		if sqsMsg.Body != nil {
@@ -154,24 +152,57 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 // Acknowledge confirms whether or not our unacknowledged messages have been
 // successfully propagated or not.
 func (a *AmazonSQS) Acknowledge(err error) error {
-	for len(a.pendingHandles) > 0 {
-		input := sqs.DeleteMessageBatchInput{
-			QueueUrl: aws.String(a.conf.URL),
-			Entries:  a.pendingHandles,
-		}
+	if err == nil {
+		for len(a.pendingHandles) > 0 {
+			input := sqs.DeleteMessageBatchInput{
+				QueueUrl: aws.String(a.conf.URL),
+			}
 
-		// trim input entries to max size
-		if len(a.pendingHandles) > 10 {
-			input.Entries, a.pendingHandles = a.pendingHandles[:10], a.pendingHandles[10:]
-		} else {
-			a.pendingHandles = nil
-		}
+		delHandleLoop:
+			for k, v := range a.pendingHandles {
+				input.Entries = append(input.Entries, &sqs.DeleteMessageBatchRequestEntry{
+					Id:            aws.String(k),
+					ReceiptHandle: aws.String(v),
+				})
+				delete(a.pendingHandles, k)
+				if len(input.Entries) == 10 {
+					break delHandleLoop
+				}
+			}
 
-		if res, serr := a.sqs.DeleteMessageBatch(&input); serr != nil {
-			a.log.Errorf("Failed to delete consumed SQS messages: %v\n", serr)
-		} else {
-			for _, fail := range res.Failed {
-				a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", fail.Id, fail.Code)
+			if res, serr := a.sqs.DeleteMessageBatch(&input); serr != nil {
+				a.log.Errorf("Failed to delete consumed SQS messages: %v\n", serr)
+			} else {
+				for _, fail := range res.Failed {
+					a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", fail.Id, fail.Code)
+				}
+			}
+		}
+	} else {
+		for len(a.pendingHandles) > 0 {
+			input := sqs.ChangeMessageVisibilityBatchInput{
+				QueueUrl: aws.String(a.conf.URL),
+			}
+
+		visHandleLoop:
+			for k, v := range a.pendingHandles {
+				input.Entries = append(input.Entries, &sqs.ChangeMessageVisibilityBatchRequestEntry{
+					Id:                aws.String(k),
+					ReceiptHandle:     aws.String(v),
+					VisibilityTimeout: aws.Int64(0),
+				})
+				delete(a.pendingHandles, k)
+				if len(input.Entries) == 10 {
+					break visHandleLoop
+				}
+			}
+
+			if res, serr := a.sqs.ChangeMessageVisibilityBatch(&input); serr != nil {
+				a.log.Errorf("Failed to change consumed SQS message visibility: %v\n", serr)
+			} else {
+				for _, fail := range res.Failed {
+					a.log.Errorf("Failed to change consumed SQS message '%v' visibility, response code: %v\n", fail.Id, fail.Code)
+				}
 			}
 		}
 	}
