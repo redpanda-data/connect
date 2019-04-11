@@ -5,7 +5,7 @@ theme:
   hljs_languages:
     - yaml
 nav:
-  - Home: /
+  - Home: 'https://www.benthos.dev'
   - Concepts: 'concepts.md'
   - Components:
     - 'Inputs': 'inputs/README.md'
