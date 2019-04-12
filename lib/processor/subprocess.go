@@ -100,6 +100,8 @@ type Subprocess struct {
 	conf    SubprocessConfig
 	subproc *subprocWrapper
 
+	mut sync.Mutex
+
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter
 	mSent      metrics.StatCounter
@@ -317,6 +319,8 @@ func (s *subprocWrapper) Send(line []byte) ([]byte, error) {
 // ProcessMessage logs an event and returns the message unchanged.
 func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	e.mCount.Incr(1)
+	e.mut.Lock()
+	defer e.mut.Unlock()
 
 	result := msg.Copy()
 

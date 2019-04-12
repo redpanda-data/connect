@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `parallel` processor.
+
 ## 1.10.10 - 2019-04-10
 
 ### Added

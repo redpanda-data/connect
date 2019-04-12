@@ -87,21 +87,22 @@ used.
 27. [`metadata`](#metadata)
 28. [`metric`](#metric)
 29. [`noop`](#noop)
-30. [`process_batch`](#process_batch)
-31. [`process_dag`](#process_dag)
-32. [`process_field`](#process_field)
-33. [`process_map`](#process_map)
-34. [`sample`](#sample)
-35. [`select_parts`](#select_parts)
-36. [`sleep`](#sleep)
-37. [`split`](#split)
-38. [`subprocess`](#subprocess)
-39. [`switch`](#switch)
-40. [`text`](#text)
-41. [`throttle`](#throttle)
-42. [`try`](#try)
-43. [`unarchive`](#unarchive)
-44. [`while`](#while)
+30. [`parallel`](#parallel)
+31. [`process_batch`](#process_batch)
+32. [`process_dag`](#process_dag)
+33. [`process_field`](#process_field)
+34. [`process_map`](#process_map)
+35. [`sample`](#sample)
+36. [`select_parts`](#select_parts)
+37. [`sleep`](#sleep)
+38. [`split`](#split)
+39. [`subprocess`](#subprocess)
+40. [`switch`](#switch)
+41. [`text`](#text)
+42. [`throttle`](#throttle)
+43. [`try`](#try)
+44. [`unarchive`](#unarchive)
+45. [`while`](#while)
 
 ## `archive`
 
@@ -1176,6 +1177,23 @@ type: noop
 
 Noop is a no-op processor that does nothing, the message passes through
 unchanged.
+
+## `parallel`
+
+``` yaml
+type: parallel
+parallel:
+  cap: 0
+  processors: []
+```
+
+A processor that applies a list of child processors to messages of a batch as
+though they were each a batch of one message (similar to the
+[`process_batch`](#process_batch) processor), but where each message
+is processed in parallel.
+
+The field `cap`, if greater than zero, caps the maximum number of
+parallel processing threads.
 
 ## `process_batch`
 

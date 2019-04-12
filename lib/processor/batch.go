@@ -22,6 +22,7 @@ package processor
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -131,6 +132,7 @@ type Batch struct {
 	parts     []types.Part
 
 	lastBatch time.Time
+	mut       sync.Mutex
 
 	mCount       metrics.StatCounter
 	mSent        metrics.StatCounter
@@ -189,6 +191,8 @@ func NewBatch(
 // resulting messages or a response to be sent back to the message source.
 func (c *Batch) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	c.mCount.Incr(1)
+	c.mut.Lock()
+	defer c.mut.Unlock()
 
 	// Add new parts to the buffer.
 	msg.Iter(func(i int, b types.Part) error {

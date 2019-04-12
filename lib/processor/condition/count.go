@@ -21,6 +21,8 @@
 package condition
 
 import (
+	"sync"
+
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
@@ -69,6 +71,8 @@ type Count struct {
 	arg int
 	ctr int
 
+	mut sync.Mutex
+
 	mCount metrics.StatCounter
 	mTrue  metrics.StatCounter
 	mFalse metrics.StatCounter
@@ -92,6 +96,9 @@ func NewCount(
 
 // Check attempts to check a message part against a configured condition.
 func (c *Count) Check(msg types.Message) bool {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+
 	c.mCount.Incr(1)
 	c.ctr++
 	if c.ctr < c.arg {
