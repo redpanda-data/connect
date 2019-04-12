@@ -289,7 +289,7 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	err := p.CreateResult(propMsg)
 	if err != nil {
 		result.Iter(func(i int, p types.Part) error {
-			FlagFail(p)
+			FlagErr(p, err)
 			return nil
 		})
 		msgs := [1]types.Message{result}
@@ -299,14 +299,14 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	var failed []int
 	if failed, err = p.OverlayResult(result, propMsg); err != nil {
 		result.Iter(func(i int, p types.Part) error {
-			FlagFail(p)
+			FlagErr(p, err)
 			return nil
 		})
 		msgs := [1]types.Message{result}
 		return msgs[:], nil
 	}
 	for _, i := range failed {
-		FlagFail(result.Get(i))
+		FlagErr(result.Get(i), errors.New("failed to overlay result from map processors"))
 	}
 
 	msgs := [1]types.Message{result}

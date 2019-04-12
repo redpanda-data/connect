@@ -396,6 +396,8 @@ pipeline:
       path: ${PROCESSOR_METRIC_PATH}
       type: ${PROCESSOR_METRIC_TYPE:counter}
       value: ${PROCESSOR_METRIC_VALUE}
+    parallel:
+      cap: ${PROCESSOR_PARALLEL_CAP:0}
     sample:
       retain: ${PROCESSOR_SAMPLE_RETAIN:10}
       seed: ${PROCESSOR_SAMPLE_SEED:0}

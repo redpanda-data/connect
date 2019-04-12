@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.11.0 - 2019-04-12
+
+### Added
+
+- New `parallel` processor.
+
+### Fixed
+
+- The `dynamodb` cache `get` call now correctly reports key not found versus
+  general request error.
+
 ## 1.10.10 - 2019-04-10
 
 ### Added

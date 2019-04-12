@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -134,6 +135,7 @@ type AWK struct {
 	conf  AWKConfig
 	log   log.Modular
 	stats metrics.Type
+	mut   sync.Mutex
 
 	functions map[string]interface{}
 
@@ -345,17 +347,24 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	a.mCount.Incr(1)
 	newMsg := msg.Copy()
 
+	a.mut.Lock()
+	customFuncs := make(map[string]interface{}, len(a.functions))
+	for k, v := range a.functions {
+		customFuncs[k] = v
+	}
+	a.mut.Unlock()
+
 	proc := func(i int, span opentracing.Span, part types.Part) error {
 		var outBuf, errBuf bytes.Buffer
 
 		// Function overrides
-		a.functions["metadata_get"] = func(k string) string {
+		customFuncs["metadata_get"] = func(k string) string {
 			return part.Metadata().Get(k)
 		}
-		a.functions["metadata_set"] = func(k, v string) {
+		customFuncs["metadata_set"] = func(k, v string) {
 			part.Metadata().Set(k, v)
 		}
-		a.functions["json_get"] = func(path string) (string, error) {
+		customFuncs["json_get"] = func(path string) (string, error) {
 			var gPart *gabs.Container
 			jsonPart, err := part.JSON()
 			if err == nil {
@@ -373,7 +382,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			}
 			return gTarget.String(), nil
 		}
-		a.functions["json_set"] = func(path, v string) (int, error) {
+		customFuncs["json_set"] = func(path, v string) (int, error) {
 			var gPart *gabs.Container
 			jsonPart, err := part.JSON()
 			if err == nil {
@@ -390,7 +399,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		config := &interp.Config{
 			Output: &outBuf,
 			Error:  &errBuf,
-			Funcs:  a.functions,
+			Funcs:  customFuncs,
 		}
 
 		if a.conf.Codec == "json" {

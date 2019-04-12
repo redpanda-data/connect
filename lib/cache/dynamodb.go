@@ -226,7 +226,7 @@ func (d *DynamoDB) Get(key string) ([]byte, error) {
 	boff := d.boffPool.Get().(backoff.BackOff)
 
 	result, err := d.get(key)
-	for err != nil && err != types.ErrCacheNotFound {
+	for err != nil && err != types.ErrKeyNotFound {
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			break
@@ -237,7 +237,7 @@ func (d *DynamoDB) Get(key string) ([]byte, error) {
 	}
 	if err == nil {
 		d.mGetSuccess.Incr(1)
-	} else if err == types.ErrCacheNotFound {
+	} else if err == types.ErrKeyNotFound {
 		d.mGetNotFound.Incr(1)
 	} else {
 		d.mGetFailed.Incr(1)
@@ -267,8 +267,8 @@ func (d *DynamoDB) get(key string) ([]byte, error) {
 
 	val, ok := res.Item[d.conf.DataKey]
 	if !ok || val.B == nil {
-		d.log.Warnf("cache key not found: %s", key)
-		return nil, types.ErrCacheNotFound
+		d.log.Warnf("key not found: %s", key)
+		return nil, types.ErrKeyNotFound
 	}
 	return val.B, nil
 }

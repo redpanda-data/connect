@@ -22,6 +22,7 @@ package processor
 
 import (
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -68,6 +69,7 @@ type Sample struct {
 
 	retain float64
 	gen    *rand.Rand
+	mut    sync.Mutex
 
 	mCount     metrics.StatCounter
 	mDropped   metrics.StatCounter
@@ -100,6 +102,8 @@ func NewSample(
 // resulting messages or a response to be sent back to the message source.
 func (s *Sample) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.mCount.Incr(1)
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	if s.gen.Float64() > s.retain {
 		s.mDropped.Incr(1)
 		return nil, response.NewAck()

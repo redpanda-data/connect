@@ -84,6 +84,7 @@ const (
 	TypeMetadata     = "metadata"
 	TypeMetric       = "metric"
 	TypeNoop         = "noop"
+	TypeParallel     = "parallel"
 	TypeProcessBatch = "process_batch"
 	TypeProcessDAG   = "process_dag"
 	TypeProcessField = "process_field"
@@ -135,6 +136,7 @@ type Config struct {
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
 	ProcessBatch ProcessBatchConfig `json:"process_batch" yaml:"process_batch"`
 	ProcessDAG   ProcessDAGConfig   `json:"process_dag" yaml:"process_dag"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
@@ -185,6 +187,7 @@ func NewConfig() Config {
 		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),
 		Plugin:       nil,
+		Parallel:     NewParallelConfig(),
 		ProcessBatch: NewProcessBatchConfig(),
 		ProcessDAG:   NewProcessDAGConfig(),
 		ProcessField: NewProcessFieldConfig(),

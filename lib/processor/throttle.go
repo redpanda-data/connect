@@ -22,6 +22,7 @@ package processor
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -71,6 +72,8 @@ type Throttle struct {
 	duration  time.Duration
 	lastBatch time.Time
 
+	mut sync.Mutex
+
 	mCount     metrics.StatCounter
 	mSent      metrics.StatCounter
 	mBatchSent metrics.StatCounter
@@ -104,6 +107,8 @@ func NewThrottle(
 // resulting messages or a response to be sent back to the message source.
 func (m *Throttle) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	m.mCount.Incr(1)
+	m.mut.Lock()
+	defer m.mut.Unlock()
 
 	spans := tracing.CreateChildSpans(TypeThrottle, msg)
 

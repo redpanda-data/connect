@@ -588,6 +588,9 @@ pipeline:
       path: ""
       labels: {}
       value: ""
+    parallel:
+      cap: 0
+      processors: []
     process_batch: []
     process_dag: {}
     process_field:
