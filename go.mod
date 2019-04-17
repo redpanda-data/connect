@@ -10,6 +10,7 @@ require (
 	github.com/Shopify/sarama v1.21.0
 	github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da // indirect
 	github.com/armon/go-radix v1.0.0
+	github.com/aws/aws-lambda-go v1.10.0 // indirect
 	github.com/aws/aws-sdk-go v1.17.10
 	github.com/benhoyt/goawk v1.4.1
 	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737
