@@ -66,6 +66,7 @@ func NewConfig() Config {
 // GetSession attempts to create an AWS session based on Config.
 func (c Config) GetSession() (*session.Session, error) {
 	awsConf := aws.NewConfig()
+	awsConf.S3ForcePathStyle = aws.Bool(true)
 	if len(c.Region) > 0 {
 		awsConf = awsConf.WithRegion(c.Region)
 	}

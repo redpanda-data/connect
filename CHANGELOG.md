@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Operators `quote` and `unquote` added to the `text` processor.
+
+### Changed
+
+- All AWS `s3` components now enforce path style syntax for bucket URLs. This
+  improves compatibility with third party endpoints.
+
 ## 1.11.0 - 2019-04-12
 
 ### Added
