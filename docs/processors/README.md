@@ -1543,6 +1543,11 @@ Extract the matching section of the argument regular expression in a message.
 
 Prepends text to the beginning of the payload.
 
+#### `quote`
+
+Returns a doubled-quoted string, using escape sequences (\t, \n, \xFF, \u0100)
+for control characters and other non-printable characters.
+
 #### `replace`
 
 Replaces all occurrences of the argument in a message with a value.
@@ -1576,6 +1581,10 @@ Removes all leading and trailing occurrences of characters within the arg field.
 #### `trim_space`
 
 Removes all leading and trailing whitespace from the payload.
+
+#### `unquote`
+
+Unquotes a single, double, or back-quoted string literal
 
 ## `throttle`
 
