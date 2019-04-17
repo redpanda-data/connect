@@ -27,20 +27,18 @@ Here's the config (omitting our input and output sections for brevity):
 ``` yaml
 pipeline:
   processors:
-  - type: process_batch
-    process_batch:
-    - type: cache
-      cache:
-        cache: dupes
-        key: "${!json_field:document.id}_${!json_field:document.user.id}"
-        operator: add
-        value: "x"
-    - type: catch
-      catch:
-      - type: metric
-        metric:
-          type: counter
-          path: duplicate_id
+  - type: cache
+    cache:
+      cache: dupes
+      key: "${!json_field:document.id}_${!json_field:document.user.id}"
+      operator: add
+      value: "x"
+  - type: catch
+    catch:
+    - type: metric
+      metric:
+        type: counter
+        path: duplicate_id
 
 resources:
   caches:
@@ -106,28 +104,26 @@ this:
 ``` yaml
 pipeline:
   processors:
-  - type: process_batch
-    process_batch:
-    - type: process_map
-      process_map:
-        processors:
-        - type: hash
-          hash:
-            algorithm: xxhash64
-        - type: cache
-          cache:
-            cache: dupes
-            key: "${!content}"
-            operator: add
-            value: "x"
-        postmap_optional:
-          will: never.exist
-    - type: catch
-      catch:
-      - type: metric
-        metric:
-          type: counter
-          path: duplicate_hash
+  - type: process_map
+    process_map:
+      processors:
+      - type: hash
+        hash:
+          algorithm: xxhash64
+      - type: cache
+        cache:
+          cache: dupes
+          key: "${!content}"
+          operator: add
+          value: "x"
+      postmap_optional:
+        will: never.exist
+  - type: catch
+    catch:
+    - type: metric
+      metric:
+        type: counter
+        path: duplicate_hash
 ```
 
 [dedupe-proc]: ../processors/README.md#dedupe
