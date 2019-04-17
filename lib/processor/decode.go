@@ -25,6 +25,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -41,7 +42,7 @@ func init() {
 		constructor: NewDecode,
 		description: `
 Decodes messages according to the selected scheme. Supported available schemes
-are: base64.`,
+are: base64, quoted.`,
 	}
 }
 
@@ -70,11 +71,19 @@ func base64Decode(b []byte) ([]byte, error) {
 	return ioutil.ReadAll(e)
 }
 
+func quotedDecode(b []byte) ([]byte, error) {
+	s, err := strconv.Unquote(string(b))
+	return []byte(s), err
+}
+
 func strToDecoder(str string) (decodeFunc, error) {
 	switch str {
 	case "base64":
 		return base64Decode, nil
+	case "quoted":
+		return quotedDecode, nil
 	}
+
 	return nil, fmt.Errorf("decode scheme not recognised: %v", str)
 }
 

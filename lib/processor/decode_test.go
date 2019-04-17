@@ -25,6 +25,7 @@ import (
 	"encoding/base64"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -72,6 +73,42 @@ func TestDecodeBase64(t *testing.T) {
 
 	if reflect.DeepEqual(input, exp) {
 		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewDecode(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Decode failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestDecodeQuoted(t *testing.T) {
+	conf := NewConfig()
+
+	conf.Decode.Scheme = "quoted"
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+
+	exp := [][]byte{
+		[]byte(`"hello world"`),
+		[]byte(`{"hello": "world"}`),
+		[]byte(`hello, said the "world"`),
+		[]byte(`"hello", world`),
+		[]byte(`world`),
+	}
+
+	input := [][]byte{}
+	for i := range exp {
+		input = append(input, []byte(strconv.Quote(string(exp[i]))))
 	}
 
 	proc, err := NewDecode(conf, nil, testLog, metrics.DudType{})
