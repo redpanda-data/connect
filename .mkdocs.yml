@@ -5,7 +5,7 @@ theme:
   hljs_languages:
     - yaml
 nav:
-  - Home: /
+  - Home: '/'
   - Cookbooks: 'cookbooks/README.md'
   - Components:
     - 'Inputs': 'inputs/README.md'
@@ -19,8 +19,7 @@ nav:
     - 'Tracers': 'tracers/README.md'
   - Guides:
     - 'Getting Started': 'getting_started.md'
-    - 'Cookbooks': 'cookbooks/README.md'
-    - 'Pipeline': 'pipeline.md'
+    - 'Processing Pipelines': 'pipeline.md'
     - 'Message Batching': 'batching.md'
     - 'Error Handling': 'error_handling.md'
     - 'Workflows': 'workflows.md'
