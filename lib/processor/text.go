@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -68,6 +69,11 @@ Extract the matching section of the argument regular expression in a message.
 
 Prepends text to the beginning of the payload.
 
+#### ` + "`quote`" + `
+
+Returns a doubled-quoted string, using escape sequences (\t, \n, \xFF, \u0100)
+for control characters and other non-printable characters.
+
 #### ` + "`replace`" + `
 
 Replaces all occurrences of the argument in a message with a value.
@@ -100,7 +106,11 @@ Removes all leading and trailing occurrences of characters within the arg field.
 
 #### ` + "`trim_space`" + `
 
-Removes all leading and trailing whitespace from the payload.`,
+Removes all leading and trailing whitespace from the payload.
+
+#### ` + "`unquote`" + `
+
+Unquotes a single, double, or back-quoted string literal`,
 	}
 }
 
@@ -159,6 +169,12 @@ func newTextPrependOperator() textOperator {
 			return body, nil
 		}
 		return append(value[:], body...), nil
+	}
+}
+
+func newTextQuoteOperator() textOperator {
+	return func(body []byte, value []byte) ([]byte, error) {
+		return []byte(strconv.Quote(string(body))), nil
 	}
 }
 
@@ -226,6 +242,16 @@ func newTextStripHTMLOperator(arg string) textOperator {
 	}
 }
 
+func newTextUnquoteOperator() textOperator {
+	return func(body []byte, value []byte) ([]byte, error) {
+		res, err := strconv.Unquote(string(body))
+		if err != nil {
+			return nil, err
+		}
+		return []byte(res), err
+	}
+}
+
 func getTextOperator(opStr string, arg string) (textOperator, error) {
 	switch opStr {
 	case "append":
@@ -238,6 +264,8 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 		return newTextFindRegexpOperator(arg)
 	case "prepend":
 		return newTextPrependOperator(), nil
+	case "quote":
+		return newTextQuoteOperator(), nil
 	case "replace":
 		return newTextReplaceOperator(arg), nil
 	case "replace_regexp":
@@ -254,6 +282,8 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 		return newTextTrimOperator(arg), nil
 	case "trim_space":
 		return newTextTrimSpaceOperator(), nil
+	case "unquote":
+		return newTextUnquoteOperator(), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
