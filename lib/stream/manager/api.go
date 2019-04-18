@@ -35,6 +35,7 @@ import (
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/stream"
+	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Jeffail/gabs"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v2"
@@ -234,7 +235,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 
 		confOut = stream.NewConfig()
-		err = yaml.Unmarshal(confBytes, &confOut)
+		err = yaml.Unmarshal(text.ReplaceEnvVariables(confBytes), &confOut)
 		return
 	}
 	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {

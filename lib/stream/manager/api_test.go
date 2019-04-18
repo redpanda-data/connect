@@ -239,6 +239,47 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	if exp, act := http.StatusNotFound, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
+
+	testVar := "__TEST_INPUT_TYPE"
+	originalEnv, orignalSet := os.LookupEnv(testVar)
+	defer func() {
+		_ = os.Unsetenv(testVar)
+		if orignalSet {
+			_ = os.Setenv(testVar, originalEnv)
+		}
+	}()
+	_ = os.Setenv(testVar, "http_server")
+	newConf = harmlessConf()
+	newConf.Input.Type = "${__TEST_INPUT_TYPE}"
+
+	request = genRequest("POST", "/streams/fooEnv", newConf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	request = genRequest("GET", "/streams/fooEnv", conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+	info = parseGetBody(response.Body)
+	// replace the env var with the expected value in the struct
+	// because we will be comparing it to the rendered version.
+	newConf.Input.Type = "http_server"
+	if !info.Active {
+		t.Error("Stream not active")
+	} else if act, exp := info.Config, newConf; !reflect.DeepEqual(act, exp) {
+		t.Errorf("Unexpected config: %v != %v", act, exp)
+	}
+	request = genRequest("DELETE", "/streams/fooEnv", conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if exp, act := http.StatusOK, response.Code; exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
 }
 
 func TestTypeAPIPatch(t *testing.T) {
