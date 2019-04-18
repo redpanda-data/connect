@@ -227,9 +227,11 @@ Stores message parts as items in a cache. Caches are configured within the
 types:
 
 - dynamodb
+- file
 - memcached
 - memory
 - redis
+- s3
 
 Like follows:
 ``` yaml

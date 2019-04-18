@@ -45,9 +45,11 @@ cache is the same for both inputs.
 ### Contents
 
 1. [`dynamodb`](#dynamodb)
-2. [`memcached`](#memcached)
-3. [`memory`](#memory)
-4. [`redis`](#redis)
+2. [`file`](#file)
+3. [`memcached`](#memcached)
+4. [`memory`](#memory)
+5. [`redis`](#redis)
+6. [`s3`](#s3)
 
 ## `dynamodb`
 
@@ -85,6 +87,20 @@ DynamoDB table. An optional TTL duration (`ttl`) and field
 
 Strong read consistency can be enabled using the `consistent_read`
 configuration field.
+
+## `file`
+
+``` yaml
+type: file
+file:
+  directory: ""
+```
+
+The file cache stores each item in a directory as a file, where an item ID is
+the path relative to the configured directory.
+
+This type currently offers no form of item expiry or garbage collection, and is
+intended to be used for development and debugging purposes only.
 
 ## `memcached`
 
@@ -134,4 +150,29 @@ redis:
 
 Use a Redis instance as a cache. The expiration can be set to zero or an empty
 string in order to set no expiration.
+
+## `s3`
+
+``` yaml
+type: s3
+s3:
+  bucket: ""
+  content_type: application/octet-stream
+  credentials:
+    id: ""
+    role: ""
+    role_external_id: ""
+    secret: ""
+    token: ""
+  endpoint: ""
+  region: eu-west-1
+  retries: 3
+  timeout: 5s
+```
+
+The s3 cache stores each item in an S3 bucket as a file, where an item ID is
+the path of the item within the bucket.
+
+It is not possible to atomically upload S3 objects exclusively when the target
+does not already exist, therefore this cache is not suitable for deduplication.
 

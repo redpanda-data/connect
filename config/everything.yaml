@@ -946,6 +946,8 @@ resources:
           initial_interval: 1s
           max_interval: 5s
           max_elapsed_time: 30s
+      file:
+        directory: ""
       memcached:
         addresses:
         - localhost:11211
@@ -962,6 +964,19 @@ resources:
         expiration: 24h
         retries: 3
         retry_period: 500ms
+      s3:
+        credentials:
+          id: ""
+          secret: ""
+          token: ""
+          role: ""
+          role_external_id: ""
+        endpoint: ""
+        region: eu-west-1
+        bucket: ""
+        content_type: application/octet-stream
+        timeout: 5s
+        retries: 3
   conditions:
     example:
       type: text

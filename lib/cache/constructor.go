@@ -50,9 +50,11 @@ var Constructors = map[string]TypeSpec{}
 // String constants representing each cache type.
 const (
 	TypeDynamoDB  = "dynamodb"
+	TypeFile      = "file"
 	TypeMemcached = "memcached"
 	TypeMemory    = "memory"
 	TypeRedis     = "redis"
+	TypeS3        = "s3"
 )
 
 //------------------------------------------------------------------------------
@@ -61,9 +63,11 @@ const (
 type Config struct {
 	Type      string          `json:"type" yaml:"type"`
 	DynamoDB  DynamoDBConfig  `json:"dynamodb" yaml:"dynamodb"`
+	File      FileConfig      `json:"file" yaml:"file"`
 	Memcached MemcachedConfig `json:"memcached" yaml:"memcached"`
 	Memory    MemoryConfig    `json:"memory" yaml:"memory"`
 	Redis     RedisConfig     `json:"redis" yaml:"redis"`
+	S3        S3Config        `json:"s3" yaml:"s3"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -71,9 +75,11 @@ func NewConfig() Config {
 	return Config{
 		Type:      "memory",
 		DynamoDB:  NewDynamoDBConfig(),
+		File:      NewFileConfig(),
 		Memcached: NewMemcachedConfig(),
 		Memory:    NewMemoryConfig(),
 		Redis:     NewRedisConfig(),
+		S3:        NewS3Config(),
 	}
 }
 

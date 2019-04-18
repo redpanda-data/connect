@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- New `s3` cache implementation.
+- New `file` cache implementation.
 - Operators `quote` and `unquote` added to the `text` processor.
 
 ### Changed
