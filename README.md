@@ -156,6 +156,12 @@ cd benthos
 make
 ```
 
+### Plugins
+
+It's pretty easy to write your own custom plugins for Benthos, take a look at
+[this repo][plugin-repo] for examples and build instructions.
+
+
 ### Docker Builds
 
 There's a multi-stage `Dockerfile` for creating a Benthos docker image which
@@ -215,6 +221,7 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [config-doc]: docs/configuration.md
 
 [releases]: https://github.com/Jeffail/benthos/releases
+[plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
 
 [godoc-badge]: https://godoc.org/github.com/Jeffail/benthos/lib/stream?status.svg
 [godoc-url]: https://godoc.org/github.com/Jeffail/benthos/lib/stream
