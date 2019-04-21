@@ -5,11 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.12.0 - 2019-04-21
+
 ### Added
 
 - New `s3` cache implementation.
 - New `file` cache implementation.
 - Operators `quote` and `unquote` added to the `text` processor.
+- Configs sent via the streams mode HTTP API are now interpolated with
+  environment variable substitutes.
 
 ### Changed
 
