@@ -15,6 +15,7 @@ builds:
     goarch: [ amd64 ]
 archives:
   - id: benthos
+    builds: [ benthos ]
     format: tar.gz
     files:
       - README.md
@@ -25,6 +26,7 @@ archives:
       - docs/*
       - docs/**/*
   - id: benthos-lambda
+    builds: [ benthos-lambda ]
     format: zip
     name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 dist: target/dist
