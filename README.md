@@ -27,6 +27,11 @@ to persist messages during transit.
 When running a Benthos stream with a [buffer][buffers] there are various options
 for choosing a level of resiliency that meets your needs.
 
+### Serverless
+
+There are [specialised distributions][serverless] of Benthos for serverless
+deployment.
+
 ## Supported Sources & Sinks
 
 - [AWS (DynamoDB, Kinesis, S3, SQS)][aws]
@@ -219,6 +224,7 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [examples-docs]: docs/examples/README.md
 [env-config]: config/env/README.md
 [config-doc]: docs/configuration.md
+[serverless]: docs/serverless/README.md
 
 [releases]: https://github.com/Jeffail/benthos/releases
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example

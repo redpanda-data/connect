@@ -5,6 +5,7 @@ TAGS =
 INSTALL_DIR    = $(GOPATH)/bin
 DEST_DIR       = ./target
 PATHINSTBIN    = $(DEST_DIR)/bin
+PATHINSTSERVERLESS = $(DEST_DIR)/serverless
 PATHINSTDOCKER = $(DEST_DIR)/docker
 
 VERSION   := $(shell git describe --tags || echo "v0.0.0")
@@ -30,6 +31,16 @@ $(PATHINSTBIN)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/*/*.go)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
 $(APPS): %: $(PATHINSTBIN)/%
+
+SERVERLESS = benthos-lambda
+serverless: $(SERVERLESS)
+
+$(PATHINSTSERVERLESS)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/serverless/*/*.go)
+	@mkdir -p $(dir $@)
+	@GOOS=linux go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/serverless/$*
+	@zip -m $@.zip $@
+
+$(SERVERLESS): %: $(PATHINSTSERVERLESS)/%
 
 docker-tags:
 	@echo "latest,$(VERSION),${VER_MAJOR}.${VER_MINOR},${VER_MAJOR}" > .tags
