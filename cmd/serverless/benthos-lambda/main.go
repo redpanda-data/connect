@@ -179,7 +179,7 @@ func handleAsyncRequest(ctx context.Context, msg types.Message) (interface{}, er
 	select {
 	case transactionChan <- types.NewTransaction(msg, resChan):
 	case <-ctx.Done():
-		return nil, errors.New("Request cancelled")
+		return nil, errors.New("request cancelled")
 	}
 
 	select {
@@ -188,7 +188,7 @@ func handleAsyncRequest(ctx context.Context, msg types.Message) (interface{}, er
 			return nil, res.Error()
 		}
 	case <-ctx.Done():
-		return nil, errors.New("Request cancelled")
+		return nil, errors.New("request cancelled")
 	}
 
 	return map[string]interface{}{"message": "request successful"}, nil
@@ -200,7 +200,7 @@ func handleSyncRequest(ctx context.Context, msg types.Message) (interface{}, err
 	select {
 	case transactionChan <- types.NewTransaction(msg, resChan):
 	case <-ctx.Done():
-		return nil, errors.New("Request cancelled")
+		return nil, errors.New("request cancelled")
 	}
 
 	var tResult types.Transaction
@@ -215,7 +215,7 @@ func handleSyncRequest(ctx context.Context, msg types.Message) (interface{}, err
 			tResult.ResponseChan <- response.NewAck()
 		}()
 	case <-ctx.Done():
-		return nil, errors.New("Request cancelled")
+		return nil, errors.New("request cancelled")
 	}
 
 	if tResult.Payload.Len() == 1 {

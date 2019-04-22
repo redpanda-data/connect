@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.13.0 - 2019-04-22
+
+### Added
+
+- New `benthos-lambda` distribution for running Benthos as a lambda function.
+
 ## 1.12.0 - 2019-04-21
 
 ### Added

@@ -91,6 +91,7 @@ test-integration:
 clean:
 	rm -rf $(PATHINSTBIN)
 	rm -rf $(DEST_DIR)/dist
+	rm -rf $(DEST_DIR)/serverless
 	rm -rf $(PATHINSTDOCKER)
 
 docs: $(APPS)
