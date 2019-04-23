@@ -19,6 +19,7 @@ nav:
     - 'Tracers': 'tracers/README.md'
   - Guides:
     - 'Getting Started': 'getting_started.md'
+    - 'Serverless': 'serverless/README.md'
     - 'Processing Pipelines': 'pipeline.md'
     - 'Message Batching': 'batching.md'
     - 'Error Handling': 'error_handling.md'

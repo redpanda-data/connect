@@ -32,6 +32,11 @@ curl -L https://github.com/Jeffail/benthos/releases/download/${VERSION}/benthos_
 ./benthos -c ./yourconfig.yaml
 ```
 
+### Serverless
+
+For information about serverless deployments of Benthos check out the serverless
+section [here](./serverless/README.md).
+
 ## Run
 
 A Benthos stream pipeline is configured with a single config file, you can
