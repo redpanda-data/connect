@@ -66,6 +66,9 @@ aws lambda create-function \
   --function-name benthos-example
 ```
 
+There is also an example [SAM template][sam-template] and
+[Terraform resource][tf-example] in the repo to copy from.
+
 ## Invoke
 
 ``` sh
@@ -85,3 +88,5 @@ zip benthos-lambda.zip benthos-lambda
 ```
 
 [releases]: https://github.com/Jeffail/benthos/releases
+[sam-template]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda-sam.yaml
+[tf-example]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda.tf
