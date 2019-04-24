@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.14.1 - 2019-04-24
+
+### Changed
+
+- Changed docker tag format from `vX.Y.Z` to `X.Y.Z`.
+
 ## 1.14.0 - 2019-04-24
 
 ### Added

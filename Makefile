@@ -9,9 +9,10 @@ PATHINSTSERVERLESS = $(DEST_DIR)/serverless
 PATHINSTDOCKER = $(DEST_DIR)/docker
 
 VERSION   := $(shell git describe --tags || echo "v0.0.0")
-VER_MAJOR := $(shell echo $(VERSION) | cut -f1 -d.)
-VER_MINOR := $(shell echo $(VERSION) | cut -f2 -d.)
-VER_PATCH := $(shell echo $(VERSION) | cut -f3 -d.)
+VER_CUT   := $(shell echo $(VERSION) | cut -c2-)
+VER_MAJOR := $(shell echo $(VER_CUT) | cut -f1 -d.)
+VER_MINOR := $(shell echo $(VER_CUT) | cut -f2 -d.)
+VER_PATCH := $(shell echo $(VER_CUT) | cut -f3 -d.)
 DATE      := $(shell date +"%Y-%m-%dT%H:%M:%SZ")
 
 VER_FLAGS = -X main.Version=$(VERSION) \
@@ -43,34 +44,22 @@ $(PATHINSTSERVERLESS)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/s
 $(SERVERLESS): %: $(PATHINSTSERVERLESS)/%
 
 docker-tags:
-	@echo "latest,$(VERSION),${VER_MAJOR}.${VER_MINOR},${VER_MAJOR}" > .tags
+	@echo "latest,$(VER_CUT),v$(VER_MAJOR).$(VER_MINOR),$(VER_MAJOR).$(VER_MINOR),v$(VER_MAJOR),$(VER_MAJOR)" > .tags
 
 docker-cgo-tags:
-	@echo "latest-cgo,$(VERSION)-cgo,${VER_MAJOR}.${VER_MINOR}-cgo,${VER_MAJOR}-cgo" > .tags
+	@echo "latest-cgo,$(VER_CUT)-cgo,v$(VER_MAJOR).$(VER_MINOR)-cgo,$(VER_MAJOR).$(VER_MINOR)-cgo,v$(VER_MAJOR)-cgo,$(VER_MAJOR)-cgo" > .tags
 
 docker:
-	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VERSION)
-	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:$(VER_MAJOR)
-	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:$(VER_MAJOR).$(VER_MINOR)
-	@docker tag jeffail/benthos:$(VERSION) jeffail/benthos:latest
+	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VER_CUT)
+	@docker tag jeffail/benthos:$(VER_CUT) jeffail/benthos:latest
 
 docker-deps:
-	@docker build -f ./resources/docker/Dockerfile --target deps . -t jeffail/benthos:$(VERSION)-deps
-	@docker tag jeffail/benthos:$(VERSION)-deps jeffail/benthos:latest-deps
+	@docker build -f ./resources/docker/Dockerfile --target deps . -t jeffail/benthos:$(VER_CUT)-deps
+	@docker tag jeffail/benthos:$(VER_CUT)-deps jeffail/benthos:latest-deps
 
 docker-cgo:
-	@docker build -f ./resources/docker/Dockerfile.cgo . -t jeffail/benthos:$(VERSION)-cgo
-	@docker tag jeffail/benthos:$(VERSION)-cgo jeffail/benthos:latest-cgo
-
-docker-push:
-	@docker push jeffail/benthos:$(VERSION)-deps; true
-	@docker push jeffail/benthos:latest-deps; true
-	@docker push jeffail/benthos:$(VERSION)-cgo; true
-	@docker push jeffail/benthos:latest-cgo; true
-	@docker push jeffail/benthos:$(VERSION); true
-	@docker push jeffail/benthos:$(VER_MAJOR); true
-	@docker push jeffail/benthos:$(VER_MAJOR).$(VER_MINOR); true
-	@docker push jeffail/benthos:latest; true
+	@docker build -f ./resources/docker/Dockerfile.cgo . -t jeffail/benthos:$(VER_CUT)-cgo
+	@docker tag jeffail/benthos:$(VER_CUT)-cgo jeffail/benthos:latest-cgo
 
 fmt:
 	@go list -f {{.Dir}} ./... | xargs -I{} gofmt -w -s {}
