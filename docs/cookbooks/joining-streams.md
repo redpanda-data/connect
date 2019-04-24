@@ -106,9 +106,7 @@ pipeline:
 
 # Drop all articles after they are cached.
 output:
-  type: file
-  file:
-    path: /dev/null
+  type: drop
 
 resources:
   caches:

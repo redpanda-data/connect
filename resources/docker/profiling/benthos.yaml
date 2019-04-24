@@ -33,9 +33,7 @@ output:
     pattern: greedy
     copies: 1
     outputs:
-    - type: file
-      file:
-        path: /dev/null
+    - type: drop
 
 logger:
   prefix: service

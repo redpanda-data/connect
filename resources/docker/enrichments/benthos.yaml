@@ -85,9 +85,7 @@ pipeline:
               query: 'root.title.content != null'
 
 output:
-  type: file
-  file:
-    path: /dev/null
+  type: drop
 
 logger:
   prefix: service

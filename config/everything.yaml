@@ -696,6 +696,7 @@ output:
   cache:
     target: ""
     key: ${!count:items}-${!timestamp_unix_nano}
+  drop: {}
   dynamic:
     outputs: {}
     prefix: ""

@@ -237,12 +237,11 @@ easier (or unnecessary) to tune your bridge within Benthos.
 If Benthos isn't reading fast enough from your source it might not necessarily
 be due to a slow consumer. If the sink is slow this can cause back pressure that
 throttles the amount Benthos can read. Try consuming a test feed with the output
-replaced with `stdout` and pipe it to `/dev/null` (or use `file` with the path
-set to `/dev/null`). If you notice that the input consumption suddenly speeds up
-then the issue is likely with the output, in which case
+replaced with `drop`. If you notice that the input consumption suddenly speeds
+up then the issue is likely with the output, in which case
 [try the next section](#benthos-writes-too-slowly).
 
-If the `/dev/null` output pipe didn't help then take a quick look at the basic
+If the `drop` output pipe didn't help then take a quick look at the basic
 configuration fields for the input source type. Sometimes there are fields for
 setting a number of background prefetches or similar concepts that can increase
 your throughput. For example, increasing the value of `prefetch_count` for an

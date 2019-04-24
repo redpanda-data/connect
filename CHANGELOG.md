@@ -5,9 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.14.0 - 2019-04-24
+
 ### Added
 
-- Interpolation function `timestamp_utc` added.
+- Output `broker` pattern `fan_out_sequential`.
+- Output type `drop` for dropping all messages.
+- New interpolation function `timestamp_utc`.
 
 ## 1.13.0 - 2019-04-22
 

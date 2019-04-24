@@ -63,6 +63,7 @@ const (
 	TypeAMQP          = "amqp"
 	TypeBroker        = "broker"
 	TypeCache         = "cache"
+	TypeDrop          = "drop"
 	TypeDynamic       = "dynamic"
 	TypeDynamoDB      = "dynamodb"
 	TypeElasticsearch = "elasticsearch"
@@ -100,6 +101,7 @@ type Config struct {
 	AMQP          writer.AMQPConfig          `json:"amqp" yaml:"amqp"`
 	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
 	Cache         writer.CacheConfig         `json:"cache" yaml:"cache"`
+	Drop          writer.DropConfig          `json:"drop" yaml:"drop"`
 	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
 	DynamoDB      writer.DynamoDBConfig      `json:"dynamodb" yaml:"dynamodb"`
 	Elasticsearch writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
@@ -138,6 +140,7 @@ func NewConfig() Config {
 		AMQP:          writer.NewAMQPConfig(),
 		Broker:        NewBrokerConfig(),
 		Cache:         writer.NewCacheConfig(),
+		Drop:          writer.NewDropConfig(),
 		Dynamic:       NewDynamicConfig(),
 		DynamoDB:      writer.NewDynamoDBConfig(),
 		Elasticsearch: writer.NewElasticsearchConfig(),

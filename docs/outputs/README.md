@@ -61,32 +61,33 @@ a [`broker`](#broker) output with the 'try' pattern.
 1. [`amqp`](#amqp)
 2. [`broker`](#broker)
 3. [`cache`](#cache)
-4. [`dynamic`](#dynamic)
-5. [`dynamodb`](#dynamodb)
-6. [`elasticsearch`](#elasticsearch)
-7. [`file`](#file)
-8. [`files`](#files)
-9. [`gcp_pubsub`](#gcp_pubsub)
-10. [`hdfs`](#hdfs)
-11. [`http_client`](#http_client)
-12. [`http_server`](#http_server)
-13. [`inproc`](#inproc)
-14. [`kafka`](#kafka)
-15. [`kinesis`](#kinesis)
-16. [`mqtt`](#mqtt)
-17. [`nanomsg`](#nanomsg)
-18. [`nats`](#nats)
-19. [`nats_stream`](#nats_stream)
-20. [`nsq`](#nsq)
-21. [`redis_list`](#redis_list)
-22. [`redis_pubsub`](#redis_pubsub)
-23. [`redis_streams`](#redis_streams)
-24. [`retry`](#retry)
-25. [`s3`](#s3)
-26. [`sqs`](#sqs)
-27. [`stdout`](#stdout)
-28. [`switch`](#switch)
-29. [`websocket`](#websocket)
+4. [`drop`](#drop)
+5. [`dynamic`](#dynamic)
+6. [`dynamodb`](#dynamodb)
+7. [`elasticsearch`](#elasticsearch)
+8. [`file`](#file)
+9. [`files`](#files)
+10. [`gcp_pubsub`](#gcp_pubsub)
+11. [`hdfs`](#hdfs)
+12. [`http_client`](#http_client)
+13. [`http_server`](#http_server)
+14. [`inproc`](#inproc)
+15. [`kafka`](#kafka)
+16. [`kinesis`](#kinesis)
+17. [`mqtt`](#mqtt)
+18. [`nanomsg`](#nanomsg)
+19. [`nats`](#nats)
+20. [`nats_stream`](#nats_stream)
+21. [`nsq`](#nsq)
+22. [`redis_list`](#redis_list)
+23. [`redis_pubsub`](#redis_pubsub)
+24. [`redis_streams`](#redis_streams)
+25. [`retry`](#retry)
+26. [`s3`](#s3)
+27. [`sqs`](#sqs)
+28. [`stdout`](#stdout)
+29. [`switch`](#switch)
+30. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -167,9 +168,17 @@ and can be chosen from the following:
 #### `fan_out`
 
 With the fan out pattern all outputs will be sent every message that passes
-through Benthos. If an output applies back pressure it will block all subsequent
-messages, and if an output fails to send a message it will be retried
-continuously until completion or service shut down.
+through Benthos in parallel.
+
+If an output applies back pressure it will block all subsequent messages, and if
+an output fails to send a message it will be retried continuously until
+completion or service shut down.
+
+#### `fan_out_sequential`
+
+Similar to the fan out pattern except outputs are written to sequentially,
+meaning an output is only written to once the preceding output has confirmed
+receipt of the same message.
 
 #### `round_robin`
 
@@ -253,6 +262,15 @@ resources:
 In order to create a unique `key` value per item you should use
 function interpolations described [here](../config_interpolation.md#functions).
 When sending batched messages the interpolations are performed per message part.
+
+## `drop`
+
+``` yaml
+type: drop
+drop: {}
+```
+
+Drops all messages.
 
 ## `dynamic`
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2019 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,6 @@ package broker
 import (
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -36,19 +35,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-func TestFanOutInterfaces(t *testing.T) {
-	f := &FanOut{}
-	if types.Consumer(f) == nil {
-		t.Errorf("FanOut: nil types.Consumer")
-	}
-	if types.Closable(f) == nil {
-		t.Errorf("FanOut: nil types.Closable")
-	}
-}
-
-//------------------------------------------------------------------------------
-
-func TestBasicFanOut(t *testing.T) {
+func TestBasicFanOutSequential(t *testing.T) {
 	nOutputs, nMsgs := 10, 1000
 
 	outputs := []types.Output{}
@@ -62,9 +49,7 @@ func TestBasicFanOut(t *testing.T) {
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
+	oTM, err := NewFanOutSequential(outputs, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -99,8 +84,6 @@ func TestBasicFanOut(t *testing.T) {
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
-		}
-		for j := 0; j < nOutputs; j++ {
 			select {
 			case resChanSlice[j] <- response.NewAck():
 			case <-time.After(time.Second):
@@ -126,7 +109,7 @@ func TestBasicFanOut(t *testing.T) {
 	}
 }
 
-func TestFanOutAtLeastOnce(t *testing.T) {
+func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
@@ -134,9 +117,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
+	oTM, err := NewFanOutSequential(outputs, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -144,9 +125,6 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	if err = oTM.Consume(readChan); err != nil {
 		t.Error(err)
 		return
-	}
-	if err = oTM.Consume(readChan); err == nil {
-		t.Error("Expected error on duplicate receive call")
 	}
 
 	select {
@@ -163,15 +141,15 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts2 = <-mockTwo.TChan:
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for mockOne")
-		return
-	}
-	select {
 	case ts1.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
+		return
+	}
+	select {
+	case ts2 = <-mockTwo.TChan:
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for mockOne")
 		return
 	}
 	select {
@@ -213,16 +191,15 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	}
 }
 
-func TestFanOutShutDownFromErrorResponse(t *testing.T) {
-	outputs := []types.Output{}
-	mockOutput := &MockOutputType{}
-	outputs = append(outputs, mockOutput)
+func TestFanOutSequentialBlock(t *testing.T) {
+	mockOne := MockOutputType{}
+	mockTwo := MockOutputType{}
+
+	outputs := []types.Output{&mockOne, &mockTwo}
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
+	oTM, err := NewFanOutSequential(outputs, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -233,181 +210,68 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.New(nil), resChan):
+	case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg send")
-	}
-
-	var ts types.Transaction
-	var open bool
-	select {
-	case ts, open = <-mockOutput.TChan:
-		if !open {
-			t.Error("fan out output closed early")
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg rcv")
-	}
-
-	select {
-	case ts.ResponseChan <- response.NewError(errors.New("test")):
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for res send")
-	}
-
-	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
-
-	select {
-	case _, open := <-mockOutput.TChan:
-		if open {
-			t.Error("fan out output still open after closure")
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg rcv")
-	}
-}
-
-func TestFanOutShutDownFromReceive(t *testing.T) {
-	outputs := []types.Output{}
-	mockOutput := &MockOutputType{}
-	outputs = append(outputs, mockOutput)
-	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
-
-	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
-	if err != nil {
-		t.Error(err)
+		t.Error("Timed out waiting for broker send")
 		return
 	}
-	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
+	var ts1, ts2 types.Transaction
+	select {
+	case ts1 = <-mockOne.TChan:
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for mockOne")
+		return
+	}
+	select {
+	case ts1.ResponseChan <- response.NewError(errors.New("this is a test")):
+	case <-time.After(time.Second):
+		t.Error("Timed out responding to broker")
+		return
+	}
+	select {
+	case ts1 = <-mockOne.TChan:
+	case ts2 = <-mockTwo.TChan:
+		t.Error("Received premature message to mockTwo")
+	case <-resChan:
+		t.Error("Received premature response from broker")
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for mockOne")
+		return
+	}
+	select {
+	case ts1.ResponseChan <- response.NewAck():
+	case <-time.After(time.Second):
+		t.Error("Timed out responding to broker")
 		return
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.New(nil), resChan):
+	case ts2 = <-mockTwo.TChan:
 	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg send")
-	}
-
-	select {
-	case _, open := <-mockOutput.TChan:
-		if !open {
-			t.Error("fan out output closed early")
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg rcv")
-	}
-
-	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
-
-	select {
-	case _, open := <-mockOutput.TChan:
-		if open {
-			t.Error("fan out output still open after closure")
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg rcv")
-	}
-}
-
-func TestFanOutShutDownFromSend(t *testing.T) {
-	outputs := []types.Output{}
-	mockOutput := &MockOutputType{}
-	outputs = append(outputs, mockOutput)
-	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
-
-	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
-	if err != nil {
-		t.Error(err)
+		t.Error("Timed out waiting for mockOne")
 		return
 	}
-	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
-		return
-	}
-
 	select {
-	case readChan <- types.NewTransaction(message.New(nil), resChan):
+	case ts2.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg send")
+		t.Error("Timed out responding to broker")
+		return
 	}
-
-	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
-
 	select {
-	case _, open := <-mockOutput.TChan:
-		if open {
-			t.Error("fan out output still open after closure")
-		}
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg rcv")
-	}
-}
-
-//------------------------------------------------------------------------------
-
-func BenchmarkBasicFanOut(b *testing.B) {
-	nOutputs, nMsgs := 3, b.N
-
-	outputs := []types.Output{}
-	mockOutputs := []*MockOutputType{}
-
-	for i := 0; i < nOutputs; i++ {
-		mockOutputs = append(mockOutputs, &MockOutputType{})
-		outputs = append(outputs, mockOutputs[i])
-	}
-
-	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
-
-	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
-	)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err != nil {
-		b.Error(err)
-		return
-	}
-
-	content := [][]byte{[]byte("hello world")}
-	rChanSlice := make([]chan<- types.Response, nOutputs)
-
-	b.StartTimer()
-
-	for i := 0; i < nMsgs; i++ {
-		readChan <- types.NewTransaction(message.New(content), resChan)
-		for j := 0; j < nOutputs; j++ {
-			ts := <-mockOutputs[j].TChan
-			rChanSlice[i] = ts.ResponseChan
-		}
-		for j := 0; j < nOutputs; j++ {
-			rChanSlice[j] <- response.NewAck()
-		}
-		res := <-resChan
+	case res := <-resChan:
 		if res.Error() != nil {
-			b.Errorf("Received unexpected errors from broker: %v", res.Error())
+			t.Errorf("Fan out returned error %v", res.Error())
 		}
+	case <-time.After(time.Second):
+		t.Errorf("Timed out responding to broker")
+		return
 	}
 
-	b.StopTimer()
+	close(readChan)
+
+	if err := oTM.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
 }
 
 //------------------------------------------------------------------------------

@@ -75,9 +75,17 @@ and can be chosen from the following:
 #### ` + "`fan_out`" + `
 
 With the fan out pattern all outputs will be sent every message that passes
-through Benthos. If an output applies back pressure it will block all subsequent
-messages, and if an output fails to send a message it will be retried
-continuously until completion or service shut down.
+through Benthos in parallel.
+
+If an output applies back pressure it will block all subsequent messages, and if
+an output fails to send a message it will be retried continuously until
+completion or service shut down.
+
+#### ` + "`fan_out_sequential`" + `
+
+Similar to the fan out pattern except outputs are written to sequentially,
+meaning an output is only written to once the preceding output has confirmed
+receipt of the same message.
 
 #### ` + "`round_robin`" + `
 
@@ -209,6 +217,8 @@ func NewBroker(
 	switch conf.Broker.Pattern {
 	case "fan_out":
 		b, err = broker.NewFanOut(outputs, log, stats)
+	case "fan_out_sequential":
+		b, err = broker.NewFanOutSequential(outputs, log, stats)
 	case "round_robin":
 		b, err = broker.NewRoundRobin(outputs, stats)
 	case "greedy":
