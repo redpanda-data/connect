@@ -157,6 +157,12 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 		}
 		return []byte(time.Now().Format(arg))
 	},
+	"timestamp_utc": func(_ Message, arg string) []byte {
+		if len(arg) == 0 {
+			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
+		}
+		return []byte(time.Now().In(time.UTC).Format(arg))
+	},
 	"hostname": func(_ Message, arg string) []byte {
 		hn, _ := os.Hostname()
 		return []byte(hn)

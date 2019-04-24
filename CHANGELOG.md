@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Interpolation function `timestamp_utc` added.
+
 ## 1.13.0 - 2019-04-22
 
 ### Added

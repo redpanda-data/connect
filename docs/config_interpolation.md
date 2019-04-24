@@ -140,6 +140,11 @@ A fractional second is represented by adding a period and zeros to the end of
 the seconds section of layout string, as in `15:04:05.000` to format a time
 stamp with millisecond precision.
 
+### `timestamp_utc`
+
+The equivalent of `timestamp` except the time is printed as UTC instead of the
+local timezone.
+
 ### `count`
 
 The `count` function is a counter starting at 1 which increments after each time
