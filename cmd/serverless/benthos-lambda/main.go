@@ -48,13 +48,11 @@ import (
 var transactionChan chan types.Transaction
 var closeFn func()
 
-// syncMode set to true when an output isn't configured and we're returning the
-// processing result directly back to the caller.
-var syncMode bool
-
 // outputTransactionChan is the transaction channel extracted from the
 // processing pipeline when we're in sync mode.
 var outputTransactionChan <-chan types.Transaction
+
+var requestHandler func(ctx context.Context, msg types.Message) (interface{}, error)
 
 func init() {
 	// A list of default config paths to check for if not explicitly defined
@@ -125,15 +123,16 @@ func init() {
 				conf.Output, manager,
 				logger.NewModule(".output"), metrics.Namespaced(stats, "output"),
 			)
+			requestHandler = handleAsyncRequest
 		} else {
-			syncMode = true
+			requestHandler = handleSyncRequest
 		}
 	}
 	if err == nil {
 		err = pipelineLayer.Consume(transactionChan)
 	}
 	if err == nil {
-		if syncMode {
+		if outputLayer == nil {
 			outputTransactionChan = pipelineLayer.TransactionChan()
 		} else {
 			err = outputLayer.Consume(pipelineLayer.TransactionChan())
@@ -148,8 +147,13 @@ func init() {
 		exitTimeout := time.Second * 30
 		timesOut := time.Now().Add(exitTimeout)
 		pipelineLayer.CloseAsync()
-		outputLayer.CloseAsync()
-		if err = outputLayer.WaitForClose(exitTimeout); err != nil {
+		if outputLayer != nil {
+			outputLayer.CloseAsync()
+			if err = outputLayer.WaitForClose(exitTimeout); err != nil {
+				os.Exit(1)
+			}
+		}
+		if err = pipelineLayer.WaitForClose(time.Until(timesOut)); err != nil {
 			os.Exit(1)
 		}
 
@@ -248,10 +252,7 @@ func handleRequest(ctx context.Context, obj interface{}) (interface{}, error) {
 	}
 	msg.Append(part)
 
-	if syncMode {
-		return handleSyncRequest(ctx, msg)
-	}
-	return handleAsyncRequest(ctx, msg)
+	return requestHandler(ctx, msg)
 }
 
 func main() {

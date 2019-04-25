@@ -156,7 +156,7 @@ pipeline:
         # We only need the article section of our parent document.
         article: article
   
-  # Reduce document into only fields we wish to cache.
+  # Reduce comment into only fields we wish to cache.
   - type: process_map
     process_map:
       premap:
@@ -174,7 +174,7 @@ pipeline:
         # Dummy map since we don't need to map the result back.
         foo: will.never.exist
 
-# Drop all articles after they are cached.
+# Sent resulting documents to our hydrated topic.
 output:
   type: kafka
   kafka:
@@ -289,7 +289,7 @@ pipeline:
         key: last_attempted
         value: ${!timestamp_unix}
 
-# Drop all articles after they are cached.
+# Sent resulting documents either to our hydrated topic or the retry topic.
 output:
   type: kafka
   kafka:

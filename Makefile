@@ -39,7 +39,7 @@ serverless: $(SERVERLESS)
 $(PATHINSTSERVERLESS)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/serverless/*/*.go)
 	@mkdir -p $(dir $@)
 	@GOOS=linux go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/serverless/$*
-	@zip -m $@.zip $@
+	@zip -m -j $@.zip $@
 
 $(SERVERLESS): %: $(PATHINSTSERVERLESS)/%
 

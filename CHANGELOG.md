@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.14.3 - 2019-04-25
+
+### Fixed
+
+- Removed potential `benthos-lambda` panic on shut down.
+
 ## 1.14.2 - 2019-04-25
 
 ### Fixed
