@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.14.2 - 2019-04-25
+
+### Fixed
+
+- The `redis` cache no longer incorrectly returns a "key not found" error
+  instead of connection errors.
+
 ## 1.14.1 - 2019-04-24
 
 ### Changed

@@ -265,7 +265,7 @@ func (r *Redis) Add(key string, value []byte) error {
 	key = r.prefix + key
 
 	set, err := r.client.SetNX(key, value, r.ttl).Result()
-	if !set {
+	if err == nil && !set {
 		r.mAddFailedDupe.Incr(1)
 
 		latency := int64(time.Since(tStarted))
@@ -278,7 +278,7 @@ func (r *Redis) Add(key string, value []byte) error {
 		r.log.Errorf("Add command failed: %v\n", err)
 		<-time.After(r.retryPeriod)
 		r.mAddRetry.Incr(1)
-		if set, err = r.client.SetNX(key, value, r.ttl).Result(); !set {
+		if set, err = r.client.SetNX(key, value, r.ttl).Result(); err == nil && !set {
 			r.mAddFailedDupe.Incr(1)
 
 			latency := int64(time.Since(tStarted))
