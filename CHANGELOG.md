@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- The main docker image is now based on busybox.
+
 ## 1.14.3 - 2019-04-25
 
 ### Fixed

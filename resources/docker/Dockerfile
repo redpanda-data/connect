@@ -18,11 +18,11 @@ COPY . /go/src/github.com/Jeffail/benthos/
 ENV GO111MODULE on
 RUN CGO_ENABLED=0 GOOS=linux make
 
-FROM scratch AS package
+FROM busybox AS package
 
 LABEL maintainer="Ashley Jeffs <ash@jeffail.uk>"
 
-WORKDIR /root/
+WORKDIR /
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /etc/passwd /etc/passwd
@@ -33,4 +33,6 @@ USER benthos
 
 EXPOSE 4195
 
-ENTRYPOINT ["./benthos", "-c", "/benthos.yaml"]
+ENTRYPOINT ["/benthos"]
+
+CMD ["-c", "/benthos.yaml"]
