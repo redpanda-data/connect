@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.15.0 - 2019-04-26
+
 ### Changed
 
 - The main docker image is now based on busybox.
+- Lint rule added for `batch` processors outside of the input section.
 
 ## 1.14.3 - 2019-04-25
 

@@ -1,4 +1,6 @@
 site_name: Benthos
+site_description: A stream processor specialising in dull tasks.
+site_author: Ashley Jeffs
 theme:
   name: mkdocs
   highlightjs: true

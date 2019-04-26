@@ -23,11 +23,29 @@ package config
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
 
 //------------------------------------------------------------------------------
+
+// Rules regarding object key/value combinations for paths.
+var keyValueRules = []func(path, key string, value interface{}) []string{
+	// Check for batch processor outside of input section.
+	func(path, key string, value interface{}) []string {
+		valueStr, ok := value.(string)
+		if !ok {
+			return nil
+		}
+		if key == "type" && valueStr == "batch" {
+			if !strings.HasPrefix(path, "input.") {
+				return []string{fmt.Sprintf("%v: Type 'batch' is unsafe outside of the 'input' section, for more information read https://docs.benthos.dev/processors/#batch", path)}
+			}
+		}
+		return nil
+	},
+}
 
 func lintWalkObj(path string, raw, processed map[interface{}]interface{}) []string {
 	lints := []string{}
@@ -49,6 +67,9 @@ func lintWalkObj(path string, raw, processed map[interface{}]interface{}) []stri
 			newPath = fmt.Sprintf("%v.%v", path, k)
 		} else {
 			newPath = fmt.Sprintf("%v", k)
+		}
+		for _, rule := range keyValueRules {
+			lints = append(lints, rule(newPath, k, y)...)
 		}
 		if l := lintWalk(newPath, y, x); len(l) > 0 {
 			lints = append(lints, l...)
