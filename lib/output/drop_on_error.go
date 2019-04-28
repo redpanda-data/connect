@@ -52,11 +52,11 @@ message is dropped entirely:
 output:
   type: drop_on_error
   drop_on_error:
-	type: retry
-	retry:
-	  max_retries: 2
-	  output:
-	    type: foo
+    type: retry
+    retry:
+      max_retries: 2
+      output:
+        type: foo
 ` + "```" + ``,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			if conf.DropOnError.Config == nil {
