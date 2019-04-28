@@ -64,6 +64,7 @@ const (
 	TypeBroker        = "broker"
 	TypeCache         = "cache"
 	TypeDrop          = "drop"
+	TypeDropOnError   = "drop_on_error"
 	TypeDynamic       = "dynamic"
 	TypeDynamoDB      = "dynamodb"
 	TypeElasticsearch = "elasticsearch"
@@ -102,6 +103,7 @@ type Config struct {
 	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
 	Cache         writer.CacheConfig         `json:"cache" yaml:"cache"`
 	Drop          writer.DropConfig          `json:"drop" yaml:"drop"`
+	DropOnError   DropOnErrorConfig          `json:"drop_on_error" yaml:"drop_on_error"`
 	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
 	DynamoDB      writer.DynamoDBConfig      `json:"dynamodb" yaml:"dynamodb"`
 	Elasticsearch writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
@@ -141,6 +143,7 @@ func NewConfig() Config {
 		Broker:        NewBrokerConfig(),
 		Cache:         writer.NewCacheConfig(),
 		Drop:          writer.NewDropConfig(),
+		DropOnError:   NewDropOnErrorConfig(),
 		Dynamic:       NewDynamicConfig(),
 		DynamoDB:      writer.NewDynamoDBConfig(),
 		Elasticsearch: writer.NewElasticsearchConfig(),

@@ -697,6 +697,7 @@ output:
     target: ""
     key: ${!count:items}-${!timestamp_unix_nano}
   drop: {}
+  drop_on_error: {}
   dynamic:
     outputs: {}
     prefix: ""

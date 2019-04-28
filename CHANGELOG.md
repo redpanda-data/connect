@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New output `drop_on_error`.
+
 ## 1.15.0 - 2019-04-26
 
 ### Changed

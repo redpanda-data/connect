@@ -62,32 +62,33 @@ a [`broker`](#broker) output with the 'try' pattern.
 2. [`broker`](#broker)
 3. [`cache`](#cache)
 4. [`drop`](#drop)
-5. [`dynamic`](#dynamic)
-6. [`dynamodb`](#dynamodb)
-7. [`elasticsearch`](#elasticsearch)
-8. [`file`](#file)
-9. [`files`](#files)
-10. [`gcp_pubsub`](#gcp_pubsub)
-11. [`hdfs`](#hdfs)
-12. [`http_client`](#http_client)
-13. [`http_server`](#http_server)
-14. [`inproc`](#inproc)
-15. [`kafka`](#kafka)
-16. [`kinesis`](#kinesis)
-17. [`mqtt`](#mqtt)
-18. [`nanomsg`](#nanomsg)
-19. [`nats`](#nats)
-20. [`nats_stream`](#nats_stream)
-21. [`nsq`](#nsq)
-22. [`redis_list`](#redis_list)
-23. [`redis_pubsub`](#redis_pubsub)
-24. [`redis_streams`](#redis_streams)
-25. [`retry`](#retry)
-26. [`s3`](#s3)
-27. [`sqs`](#sqs)
-28. [`stdout`](#stdout)
-29. [`switch`](#switch)
-30. [`websocket`](#websocket)
+5. [`drop_on_error`](#drop_on_error)
+6. [`dynamic`](#dynamic)
+7. [`dynamodb`](#dynamodb)
+8. [`elasticsearch`](#elasticsearch)
+9. [`file`](#file)
+10. [`files`](#files)
+11. [`gcp_pubsub`](#gcp_pubsub)
+12. [`hdfs`](#hdfs)
+13. [`http_client`](#http_client)
+14. [`http_server`](#http_server)
+15. [`inproc`](#inproc)
+16. [`kafka`](#kafka)
+17. [`kinesis`](#kinesis)
+18. [`mqtt`](#mqtt)
+19. [`nanomsg`](#nanomsg)
+20. [`nats`](#nats)
+21. [`nats_stream`](#nats_stream)
+22. [`nsq`](#nsq)
+23. [`redis_list`](#redis_list)
+24. [`redis_pubsub`](#redis_pubsub)
+25. [`redis_streams`](#redis_streams)
+26. [`retry`](#retry)
+27. [`s3`](#s3)
+28. [`sqs`](#sqs)
+29. [`stdout`](#stdout)
+30. [`switch`](#switch)
+31. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -271,6 +272,33 @@ drop: {}
 ```
 
 Drops all messages.
+
+## `drop_on_error`
+
+``` yaml
+type: drop_on_error
+drop_on_error: {}
+```
+
+Attempts to write messages to a child output and if the write fails for any
+reason the message is dropped instead of being reattempted. This output can be
+combined with a child `retry` output in order to set an explicit
+number of retry attempts before dropping a message.
+
+For example, the following configuration attempts to send to a hypothetical
+output type `foo` three times, but if all three attempts fail the
+message is dropped entirely:
+
+``` yaml
+output:
+  type: drop_on_error
+  drop_on_error:
+    type: retry
+    retry:
+      max_retries: 2
+      output:
+        type: foo
+```
 
 ## `dynamic`
 
