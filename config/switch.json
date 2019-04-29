@@ -24,7 +24,8 @@
 	"output": {
 		"type": "switch",
 		"switch": {
-			"outputs": []
+			"outputs": [],
+			"retry_until_success": true
 		}
 	},
 	"resources": {

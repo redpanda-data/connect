@@ -909,6 +909,7 @@ output:
   stdout:
     delimiter: ""
   switch:
+    retry_until_success: true
     outputs: []
   websocket:
     url: ws://localhost:4195/post/ws

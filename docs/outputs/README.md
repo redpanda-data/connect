@@ -885,6 +885,7 @@ baz\n\n
 type: switch
 switch:
   outputs: []
+  retry_until_success: true
 ```
 
 The switch output type allows you to configure multiple conditional output
@@ -904,6 +905,7 @@ output only.
 output:
   type: switch
   switch:
+    retry_until_success: true
     outputs:
     - output:
         type: foo
@@ -939,10 +941,17 @@ output:
 The switch output requires a minimum of two outputs. If no condition is defined
 for an output, it behaves like a static `true` condition. If
 `fallthrough` is set to `true`, the switch output will
-continue evaluating additional outputs after finding a match. If an output
-applies back pressure it will block all subsequent messages, and if an output
-fails to send a message, it will be retried continuously until completion or
-service shut down. Messages that do not match any outputs will be dropped.
+continue evaluating additional outputs after finding a match.
+
+Messages that do not match any outputs will be dropped. If an output applies
+back pressure it will block all subsequent messages.
+
+If an output fails to send a message it will be retried continuously until
+completion or service shut down. You can change this behaviour so that when an
+output returns an error the switch output also returns an error by setting
+`retry_until_success` to `false`. This allows you to
+wrap the switch with a `try` broker, but care must be taken to ensure
+duplicate messages aren't introduced during error conditions.
 
 ## `websocket`
 

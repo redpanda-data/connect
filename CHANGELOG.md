@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New output `drop_on_error`.
+- Field `retry_until_success` added to `switch` output.
 
 ## 1.15.0 - 2019-04-26
 
