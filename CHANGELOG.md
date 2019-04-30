@@ -5,10 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.16.0 - 2019-04-30
+
 ### Added
 
 - New output `drop_on_error`.
 - Field `retry_until_success` added to `switch` output.
+
+### Fixed
+
+- Improved error and output logging for `subprocess` processor when the process
+  exits unexpectedly.
 
 ## 1.15.0 - 2019-04-26
 
