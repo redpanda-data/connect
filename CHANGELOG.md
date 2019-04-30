@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `hash` processor now supports `sha1`.
+
 ## 1.16.0 - 2019-04-30
 
 ### Added

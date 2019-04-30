@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"os"
@@ -41,6 +42,46 @@ func TestHashBadAlgo(t *testing.T) {
 	_, err := NewHash(conf, nil, log.Noop(), metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
+	}
+}
+
+func TestHashSha1(t *testing.T) {
+	conf := NewConfig()
+	conf.Hash.Algorithm = "sha1"
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		h := sha1.New()
+		h.Write(input[i])
+		exp = append(exp, h.Sum(nil))
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewHash(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Hash failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 }
 

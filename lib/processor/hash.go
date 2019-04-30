@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"fmt"
@@ -42,7 +43,7 @@ func init() {
 		constructor: NewHash,
 		description: `
 Hashes messages according to the selected algorithm. Supported algorithms are:
-sha256, sha512, xxhash64.
+sha256, sha512, sha1, xxhash64.
 
 This processor is mostly useful when combined with the
 ` + "[`process_field`](#process_field)" + ` processor as it allows you to hash a
@@ -80,6 +81,12 @@ func NewHashConfig() HashConfig {
 
 type hashFunc func(bytes []byte) ([]byte, error)
 
+func sha1Hash(b []byte) ([]byte, error) {
+	hasher := sha1.New()
+	hasher.Write(b)
+	return hasher.Sum(nil), nil
+}
+
 func sha256Hash(b []byte) ([]byte, error) {
 	hasher := sha256.New()
 	hasher.Write(b)
@@ -100,6 +107,8 @@ func xxhash64Hash(b []byte) ([]byte, error) {
 
 func strToHashr(str string) (hashFunc, error) {
 	switch str {
+	case "sha1":
+		return sha1Hash, nil
 	case "sha256":
 		return sha256Hash, nil
 	case "sha512":
