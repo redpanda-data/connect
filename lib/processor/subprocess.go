@@ -122,7 +122,7 @@ func NewSubprocess(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
-	if e.subproc, err = newSubprocWrapper(conf.Subprocess.Name, conf.Subprocess.Args); err != nil {
+	if e.subproc, err = newSubprocWrapper(conf.Subprocess.Name, conf.Subprocess.Args, log); err != nil {
 		return nil, err
 	}
 	return e, nil
@@ -147,7 +147,7 @@ type subprocWrapper struct {
 	closedChan chan struct{}
 }
 
-func newSubprocWrapper(name string, args []string) (*subprocWrapper, error) {
+func newSubprocWrapper(name string, args []string, log log.Modular) (*subprocWrapper, error) {
 	s := &subprocWrapper{
 		name:       name,
 		args:       args,
@@ -165,6 +165,23 @@ func newSubprocWrapper(name string, args []string) (*subprocWrapper, error) {
 		for {
 			select {
 			case <-s.cmdExitChan:
+				log.Warnln("Subprocess exited")
+
+				// Flush channels
+				var msgBytes []byte
+				for stdoutMsg := range s.stdoutChan {
+					msgBytes = append(msgBytes, stdoutMsg...)
+				}
+				if len(msgBytes) > 0 {
+					log.Infoln(string(msgBytes))
+				}
+				msgBytes = nil
+				for stderrMsg := range s.stderrChan {
+					msgBytes = append(msgBytes, stderrMsg...)
+				}
+				if len(msgBytes) > 0 {
+					log.Errorln(string(msgBytes))
+				}
 				s.restart()
 			case <-s.closeChan:
 				return
