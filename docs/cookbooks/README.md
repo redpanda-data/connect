@@ -9,6 +9,12 @@ patterns in stream processing.
 This cookbook demonstrates how to merge JSON events from parallel streams using
 content based rules and a cache of your choice.
 
+### [Enrichments](./enrichments.md)
+
+This cookbook demonstrates how to enrich a stream of JSON documents with
+HTTP services. This method also works with AWS Lambda functions, subprocesses,
+etc.
+
 ### [Duplicate Monitoring](./duplicate-monitoring.md)
 
 Benthos has a [deduplication processor](../processors/README.md#dedupe) which
