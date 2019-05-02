@@ -104,7 +104,7 @@ target can be specified [via config][metrics-config].
 ### Tracing
 
 Benthos also [emits opentracing events][tracers] to a tracer of your choice
-(currently only Jaeger is supported) which can be used to visualise the
+(currently only [Jaeger][jaeger] is supported) which can be used to visualise the
 processors within a pipeline.
 
 ## Configuration
@@ -250,3 +250,4 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [hdfs]: https://hadoop.apache.org/
 [gcp]: https://cloud.google.com/
 [memcached]: https://memcached.org/
+[jaeger]: https://www.jaegertracing.io/

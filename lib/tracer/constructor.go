@@ -147,7 +147,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 var header = "This document was generated with `benthos --list-tracers`" + `
 
 A tracer type represents a destination for Benthos to send opentracing events to
-such as Jaeger.
+such as [Jaeger](https://www.jaegertracing.io/).
 
 When a tracer is configured all messages will be allocated a root span during
 ingestion that represents their journey through a Benthos pipeline. Many Benthos
