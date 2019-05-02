@@ -4,7 +4,7 @@ Tracer Types
 This document was generated with `benthos --list-tracers`
 
 A tracer type represents a destination for Benthos to send opentracing events to
-such as Jaeger.
+such as [Jaeger](https://www.jaegertracing.io/).
 
 When a tracer is configured all messages will be allocated a root span during
 ingestion that represents their journey through a Benthos pipeline. Many Benthos
@@ -43,7 +43,7 @@ jaeger:
   tags: {}
 ```
 
-Send spans to a Jaeger agent.
+Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.
 
 Available sampler types are: const, probabilistic, ratelimiting and remote.
 
