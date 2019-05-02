@@ -189,8 +189,8 @@ func AddExamples(conf *Type, examples ...string) {
 		condConf := condition.NewConfig()
 		condConf.Type = conditionType
 		procConf := processor.NewConfig()
-		procConf.Type = "filter"
-		procConf.Filter.Type = conditionType
+		procConf.Type = "filter_parts"
+		procConf.FilterParts.Type = conditionType
 		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
 	}
 	if len(outputType) > 0 {
