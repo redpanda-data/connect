@@ -63,7 +63,7 @@ any:
 
 // AnyConfig is a configuration struct containing fields for the Any condition.
 type AnyConfig struct {
-	*Config
+	*Config `yaml:",inline" json:",inline"`
 }
 
 // NewAnyConfig returns a AnyConfig with default values.

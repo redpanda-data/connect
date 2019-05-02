@@ -51,6 +51,7 @@ managing these more complex configuration files.
 
 - [Enabling Discovery](#enabling-discovery)
 - [Help With Debugging](#help-with-debugging)
+- [Fragmenting Your Configuration](#fragmenting-your-configuration)
 
 ## Enabling Discovery
 
@@ -228,5 +229,120 @@ benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[1]'
 benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[0].filter'
 ```
 
+## Fragmenting Your Configuration
+
+WARNING: THIS FEATURE IS EXPERIMENTAL AND SUBJECT TO CHANGE
+
+It's possible to break a large configuration file into smaller parts with
+[JSON references][json-references]. Benthos doesn't yet support the full
+specification as it only resolves file path URIs and it ignores fragments, but
+this still allows you to break your configs down significantly.
+
+For example, suppose we have a configuration snippet saved under
+`./config/foo.yaml`:
+
+``` yaml
+type: process_map
+process_map:
+  premap:
+    id: foo.id
+  processors:
+  - type: parallel
+    parallel:
+      processors:
+      - type: cache
+        cache:
+          operator: get
+          key: ${!json_field:id}
+          cache: objects
+  postmap:
+    result: .
+```
+
+And we wished to use this fragment within a larger configuration file. We can do
+so by adding an object with a key `$ref` and a string value which is a path to
+our snippet:
+
+``` yaml
+input:
+  type: foo
+  foo: {}
+
+pipeline:
+  processors:
+  - type: decompress
+    decompress:
+      algorithm: gzip
+
+  - "$ref": "./foo.yaml"
+
+output:
+  type: bar
+  bar: {}
+
+resources:
+  caches:
+    objects:
+      type: baz
+      baz: {}
+```
+
+The path of a reference is relative to the configuration file containing the
+reference, and so if this configuration file were saved as `./config/bar.yaml`
+then the path would resolve and we would end up with:
+
+``` yaml
+input:
+  type: foo
+  foo: {}
+
+pipeline:
+  processors:
+  - type: decompress
+    decompress:
+      algorithm: gzip
+
+  - type: process_map
+    process_map:
+      premap:
+        id: foo.id
+      processors:
+      - type: parallel
+        parallel:
+          processors:
+          - type: cache
+            cache:
+              operator: get
+              key: ${!json_field:id}
+              cache: objects
+      postmap:
+        result: .
+
+output:
+  type: bar
+  bar: {}
+
+resources:
+  caches:
+    objects:
+      type: baz
+      baz: {}
+```
+
+These references can be nested. Also, environment variable interpolations within
+a configuration snippet are resolved _before_ references are resolved, therefore
+it's possible to use them to specify which snippet to load:
+
+``` yaml
+pipeline:
+  processors:
+  - type: decompress
+    decompress:
+      algorithm: gzip
+
+  - "$ref": "./${TARGET_SNIPPET}"
+```
+
 [processors]: ./processors/README.md
 [conditions]: ./conditions/README.md
+[json-references]: https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03

@@ -72,7 +72,7 @@ output:
 // DropOnErrorConfig contains configuration values for the DropOnError output
 // type.
 type DropOnErrorConfig struct {
-	*Config
+	*Config `yaml:",inline" json:",inline"`
 }
 
 // NewDropOnErrorConfig creates a new DropOnErrorConfig with default values.

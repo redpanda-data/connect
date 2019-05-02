@@ -76,7 +76,7 @@ Or, the same example as JSON:
 
 // NotConfig is a configuration struct containing fields for the Not condition.
 type NotConfig struct {
-	*Config
+	*Config `yaml:",inline" json:",inline"`
 }
 
 // NewNotConfig returns a NotConfig with default values.
