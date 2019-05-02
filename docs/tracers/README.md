@@ -43,7 +43,7 @@ jaeger:
   tags: {}
 ```
 
-Send spans to a Jaeger agent.
+Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.
 
 Available sampler types are: const, probabilistic, ratelimiting and remote.
 
