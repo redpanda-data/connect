@@ -238,6 +238,17 @@ It's possible to break a large configuration file into smaller parts with
 specification as it only resolves local or file path URIs, but this still allows
 you to break your configs down significantly.
 
+To reference a config snippet use the `$ref` keyword:
+
+``` yaml
+local_reference:
+  $ref: '#/path/to/field'
+file_reference:
+  $ref: './foo.yaml'
+file_field_reference:
+  $ref: './foo.yaml#/path/to/field'
+```
+
 For example, suppose we have a configuration snippet saved under
 `./config/foo.yaml`:
 
@@ -247,14 +258,11 @@ process_map:
   premap:
     id: foo.id
   processors:
-  - type: parallel
-    parallel:
-      processors:
-      - type: cache
-        cache:
-          operator: get
-          key: ${!json_field:id}
-          cache: objects
+  - type: cache
+    cache:
+      operator: get
+      key: ${!json_field:id}
+      cache: objects
   postmap:
     result: .
 ```
@@ -271,12 +279,6 @@ pipeline:
       algorithm: gzip
 
   - "$ref": "./foo.yaml"
-
-resources:
-  caches:
-    objects:
-      type: baz
-      baz: {}
 ```
 
 The path of a reference is relative to the configuration file containing the
@@ -295,27 +297,18 @@ pipeline:
       premap:
         id: foo.id
       processors:
-      - type: parallel
-        parallel:
-          processors:
-          - type: cache
-            cache:
-              operator: get
-              key: ${!json_field:id}
-              cache: objects
+      - type: cache
+        cache:
+          operator: get
+          key: ${!json_field:id}
+          cache: objects
       postmap:
         result: .
-
-resources:
-  caches:
-    objects:
-      type: baz
-      baz: {}
 ```
 
 These references can be nested. Also, environment variable interpolations within
-a configuration snippet are resolved _before_ references are resolved, therefore
-it's possible to use them to specify which snippet to load:
+configurations are resolved _before_ references are resolved. Therefore, it's
+possible to use them to specify which snippet to load:
 
 ``` yaml
 pipeline:
@@ -326,6 +319,9 @@ pipeline:
 
   - "$ref": "./${TARGET_SNIPPET}"
 ```
+
+Running the above with `TARGET_SNIPPET=foo.yaml benthos -c ./config/bar.yaml`
+would be the equivalent to the previous example.
 
 Finally, we can extract a specific field from our reference using a fragment
 within the reference URI following the [JSON Pointer][json-pointer] format. For
@@ -350,14 +346,11 @@ pipeline:
     decompress:
       algorithm: gzip
 
-  - type: parallel
-    parallel:
-      processors:
-      - type: cache
-        cache:
-          operator: get
-          key: ${!json_field:id}
-          cache: objects
+  - type: cache
+    cache:
+      operator: get
+      key: ${!json_field:id}
+      cache: objects
 ```
 
 [processors]: ./processors/README.md
