@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - The `hash` processor now supports `sha1`.
 
+### Changed
+
+- Docker builds now use a locally cached `vendor` for dependencies.
+
 ## 1.16.0 - 2019-04-30
 
 ### Added
