@@ -321,11 +321,10 @@ pipeline:
 ```
 
 Running the above with `TARGET_SNIPPET=foo.yaml benthos -c ./config/bar.yaml`
-would be the equivalent to the previous example.
+would be equivalent to the previous example.
 
 Finally, we can extract a specific field from our reference using a fragment
-within the reference URI following the [JSON Pointer][json-pointer] format. For
-example, the following:
+following the [JSON Pointer][json-pointer] format. For example, the following:
 
 ``` yaml
 pipeline:
