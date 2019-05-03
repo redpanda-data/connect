@@ -14,6 +14,7 @@ steps:
     GOPATH: /drone
     GO111MODULE: on
   commands:
+    - make deps
     - make test
 
 - name: release

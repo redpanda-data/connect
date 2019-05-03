@@ -1,12 +1,12 @@
-.PHONY: all deps rpm docker docker-deps docker-cgo docker-push clean docs test test-race test-integration fmt lint install
+.PHONY: all deps rpm docker docker-cgo docker-push clean docs test test-race test-integration fmt lint install
 
 TAGS =
 
-INSTALL_DIR    = $(GOPATH)/bin
-DEST_DIR       = ./target
-PATHINSTBIN    = $(DEST_DIR)/bin
+INSTALL_DIR        = $(GOPATH)/bin
+DEST_DIR           = ./target
+PATHINSTBIN        = $(DEST_DIR)/bin
 PATHINSTSERVERLESS = $(DEST_DIR)/serverless
-PATHINSTDOCKER = $(DEST_DIR)/docker
+PATHINSTDOCKER     = $(DEST_DIR)/docker
 
 VERSION   := $(shell git describe --tags || echo "v0.0.0")
 VER_CUT   := $(shell echo $(VERSION) | cut -c2-)
@@ -26,6 +26,10 @@ all: $(APPS)
 
 install: $(APPS)
 	@cp $(PATHINSTBIN)/* $(INSTALL_DIR)/
+
+deps:
+	@go mod tidy
+	@go mod vendor
 
 $(PATHINSTBIN)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/*/*.go)
 	@mkdir -p $(dir $@)
@@ -49,15 +53,11 @@ docker-tags:
 docker-cgo-tags:
 	@echo "latest-cgo,$(VER_CUT)-cgo,v$(VER_MAJOR).$(VER_MINOR)-cgo,$(VER_MAJOR).$(VER_MINOR)-cgo,v$(VER_MAJOR)-cgo,$(VER_MAJOR)-cgo" > .tags
 
-docker:
+docker: deps
 	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VER_CUT)
 	@docker tag jeffail/benthos:$(VER_CUT) jeffail/benthos:latest
 
-docker-deps:
-	@docker build -f ./resources/docker/Dockerfile --target deps . -t jeffail/benthos:$(VER_CUT)-deps
-	@docker tag jeffail/benthos:$(VER_CUT)-deps jeffail/benthos:latest-deps
-
-docker-cgo:
+docker-cgo: deps
 	@docker build -f ./resources/docker/Dockerfile.cgo . -t jeffail/benthos:$(VER_CUT)-cgo
 	@docker tag jeffail/benthos:$(VER_CUT)-cgo jeffail/benthos:latest-cgo
 
