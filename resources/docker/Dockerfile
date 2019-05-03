@@ -1,22 +1,12 @@
-FROM golang:1.12 AS deps
-
-WORKDIR /go/src/github.com/Jeffail/benthos/
-COPY go.mod /go/src/github.com/Jeffail/benthos/
-
-ENV GO111MODULE on
-RUN go mod download
-
 FROM golang:1.12 AS build
 
 RUN useradd -u 10001 benthos
-
-COPY --from=deps /go/pkg /go/pkg
 
 WORKDIR /go/src/github.com/Jeffail/benthos/
 COPY . /go/src/github.com/Jeffail/benthos/
 
 ENV GO111MODULE on
-RUN CGO_ENABLED=0 GOOS=linux make
+RUN CGO_ENABLED=0 GOOS=linux GOFLAGS=-mod=vendor make
 
 FROM busybox AS package
 
