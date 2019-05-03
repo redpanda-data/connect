@@ -235,8 +235,8 @@ WARNING: THIS FEATURE IS EXPERIMENTAL AND SUBJECT TO CHANGE
 
 It's possible to break a large configuration file into smaller parts with
 [JSON references][json-references]. Benthos doesn't yet support the full
-specification as it only resolves file path URIs and it ignores fragments, but
-this still allows you to break your configs down significantly.
+specification as it only resolves local or file path URIs, but this still allows
+you to break your configs down significantly.
 
 For example, suppose we have a configuration snippet saved under
 `./config/foo.yaml`:
@@ -264,10 +264,6 @@ so by adding an object with a key `$ref` and a string value which is a path to
 our snippet:
 
 ``` yaml
-input:
-  type: foo
-  foo: {}
-
 pipeline:
   processors:
   - type: decompress
@@ -275,10 +271,6 @@ pipeline:
       algorithm: gzip
 
   - "$ref": "./foo.yaml"
-
-output:
-  type: bar
-  bar: {}
 
 resources:
   caches:
@@ -292,10 +284,6 @@ reference, and so if this configuration file were saved as `./config/bar.yaml`
 then the path would resolve and we would end up with:
 
 ``` yaml
-input:
-  type: foo
-  foo: {}
-
 pipeline:
   processors:
   - type: decompress
@@ -318,10 +306,6 @@ pipeline:
       postmap:
         result: .
 
-output:
-  type: bar
-  bar: {}
-
 resources:
   caches:
     objects:
@@ -343,6 +327,40 @@ pipeline:
   - "$ref": "./${TARGET_SNIPPET}"
 ```
 
+Finally, we can extract a specific field from our reference using a fragment
+within the reference URI following the [JSON Pointer][json-pointer] format. For
+example, the following:
+
+``` yaml
+pipeline:
+  processors:
+  - type: decompress
+    decompress:
+      algorithm: gzip
+
+  - "$ref": "./foo.yaml#/process_map/processors/0"
+```
+
+Would result in the following expansion:
+
+``` yaml
+pipeline:
+  processors:
+  - type: decompress
+    decompress:
+      algorithm: gzip
+
+  - type: parallel
+    parallel:
+      processors:
+      - type: cache
+        cache:
+          operator: get
+          key: ${!json_field:id}
+          cache: objects
+```
+
 [processors]: ./processors/README.md
 [conditions]: ./conditions/README.md
 [json-references]: https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03
+[json-pointer]: https://tools.ietf.org/html/rfc6901

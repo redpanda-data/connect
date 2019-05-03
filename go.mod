@@ -3,7 +3,7 @@ module github.com/Jeffail/benthos
 require (
 	cloud.google.com/go v0.36.0
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
-	github.com/Jeffail/gabs v1.2.0
+	github.com/Jeffail/gabs v1.3.0
 	github.com/Microsoft/go-winio v0.4.12 // indirect
 	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
 	github.com/OneOfOne/xxhash v1.2.4
