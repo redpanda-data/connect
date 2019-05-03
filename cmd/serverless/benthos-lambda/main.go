@@ -232,7 +232,7 @@ func handleSyncRequest(ctx context.Context, msg types.Message) (interface{}, err
 
 	var results []interface{}
 	if err := tResult.Payload.Iter(func(i int, p types.Part) error {
-		jResult, err := tResult.Payload.Get(0).JSON()
+		jResult, err := p.JSON()
 		if err != nil {
 			return fmt.Errorf("failed to marshal json response: %v", err)
 		}
