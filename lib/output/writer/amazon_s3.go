@@ -46,6 +46,7 @@ type AmazonS3Config struct {
 	ForcePathStyleURLs bool   `json:"force_path_style_urls" yaml:"force_path_style_urls"`
 	Path               string `json:"path" yaml:"path"`
 	ContentType        string `json:"content_type" yaml:"content_type"`
+	ContentEncoding    string `json:"content_encoding" yaml:"content_encoding"`
 	Timeout            string `json:"timeout" yaml:"timeout"`
 }
 
@@ -57,6 +58,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		ForcePathStyleURLs: false,
 		Path:               "${!count:files}-${!timestamp_unix_nano}.txt",
 		ContentType:        "application/octet-stream",
+		ContentEncoding:    "",
 		Timeout:            "5s",
 	}
 }
@@ -68,7 +70,9 @@ func NewAmazonS3Config() AmazonS3Config {
 type AmazonS3 struct {
 	conf AmazonS3Config
 
-	path *text.InterpolatedString
+	path            *text.InterpolatedString
+	contentType     *text.InterpolatedString
+	contentEncoding *text.InterpolatedString
 
 	session  *session.Session
 	uploader *s3manager.Uploader
@@ -92,11 +96,13 @@ func NewAmazonS3(
 		}
 	}
 	return &AmazonS3{
-		conf:    conf,
-		log:     log,
-		stats:   stats,
-		path:    text.NewInterpolatedString(conf.Path),
-		timeout: timeout,
+		conf:            conf,
+		log:             log,
+		stats:           stats,
+		path:            text.NewInterpolatedString(conf.Path),
+		contentType:     text.NewInterpolatedString(conf.ContentType),
+		contentEncoding: text.NewInterpolatedString(conf.ContentEncoding),
+		timeout:         timeout,
 	}, nil
 }
 
@@ -138,12 +144,20 @@ func (a *AmazonS3) Write(msg types.Message) error {
 			return nil
 		})
 
+		lMsg := message.Lock(msg, i)
+
+		var contentEncoding *string
+		if ce := a.contentEncoding.Get(lMsg); len(ce) > 0 {
+			contentEncoding = aws.String(ce)
+		}
+
 		if _, err := a.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
-			Bucket:      &a.conf.Bucket,
-			Key:         aws.String(a.path.Get(message.Lock(msg, i))),
-			Body:        bytes.NewReader(p.Get()),
-			ContentType: &a.conf.ContentType,
-			Metadata:    metadata,
+			Bucket:          &a.conf.Bucket,
+			Key:             aws.String(a.path.Get(lMsg)),
+			Body:            bytes.NewReader(p.Get()),
+			ContentType:     aws.String(a.contentType.Get(lMsg)),
+			ContentEncoding: contentEncoding,
+			Metadata:        metadata,
 		}); err != nil {
 			return err
 		}

@@ -892,6 +892,7 @@ output:
     force_path_style_urls: false
     path: ${!count:files}-${!timestamp_unix_nano}.txt
     content_type: application/octet-stream
+    content_encoding: ""
     timeout: 5s
   sqs:
     credentials:

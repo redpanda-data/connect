@@ -9,6 +9,13 @@ All notable changes to this project will be documented in this file.
 
 - The `hash` processor now supports `sha1`.
 - Field `force_path_style_urls` added to `s3` components.
+- Field `content_type` of the `s3` output is now interpolated.
+- Field `content_encoding` added to `s3` output.
+
+### Fixed
+
+- The `benthos-lambda` distribution now correctly returns all message parts in
+  synchronous execution.
 
 ### Changed
 

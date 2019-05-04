@@ -597,6 +597,7 @@ output:
         url: ${OUTPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
       s3:
         bucket: ${OUTPUT_S3_BUCKET}
+        content_encoding: ${OUTPUT_S3_CONTENT_ENCODING}
         content_type: ${OUTPUT_S3_CONTENT_TYPE:application/octet-stream}
         credentials:
           id: ${OUTPUT_S3_CREDENTIALS_ID}
