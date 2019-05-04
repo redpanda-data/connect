@@ -165,6 +165,7 @@ s3:
     secret: ""
     token: ""
   endpoint: ""
+  force_path_style_urls: false
   region: eu-west-1
   retries: 3
   timeout: 5s

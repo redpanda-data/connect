@@ -64,9 +64,8 @@ func NewConfig() Config {
 //------------------------------------------------------------------------------
 
 // GetSession attempts to create an AWS session based on Config.
-func (c Config) GetSession() (*session.Session, error) {
+func (c Config) GetSession(opts ...func(*aws.Config)) (*session.Session, error) {
 	awsConf := aws.NewConfig()
-	awsConf.S3ForcePathStyle = aws.Bool(true)
 	if len(c.Region) > 0 {
 		awsConf = awsConf.WithRegion(c.Region)
 	}
@@ -81,6 +80,10 @@ func (c Config) GetSession() (*session.Session, error) {
 			c.Credentials.Secret,
 			c.Credentials.Token,
 		))
+	}
+
+	for _, opt := range opts {
+		opt(awsConf)
 	}
 
 	sess, err := session.NewSession(awsConf)

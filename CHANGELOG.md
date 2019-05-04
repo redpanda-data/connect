@@ -8,10 +8,12 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - The `hash` processor now supports `sha1`.
+- Field `force_path_style_urls` added to `s3` components.
 
 ### Changed
 
 - Docker builds now use a locally cached `vendor` for dependencies.
+- All `s3` components no longer default to enforcing path style URLs.
 
 ## 1.16.0 - 2019-04-30
 

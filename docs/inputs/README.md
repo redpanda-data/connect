@@ -800,6 +800,7 @@ s3:
   download_manager:
     enabled: true
   endpoint: ""
+  force_path_style_urls: false
   max_batch_count: 1
   prefix: ""
   region: eu-west-1

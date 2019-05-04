@@ -57,21 +57,23 @@ does not already exist, therefore this cache is not suitable for deduplication.`
 
 // S3Config contains config fields for the S3 cache type.
 type S3Config struct {
-	sess.Config `json:",inline" yaml:",inline"`
-	Bucket      string `json:"bucket" yaml:"bucket"`
-	ContentType string `json:"content_type" yaml:"content_type"`
-	Timeout     string `json:"timeout" yaml:"timeout"`
-	Retries     int    `json:"retries" yaml:"retries"`
+	sess.Config        `json:",inline" yaml:",inline"`
+	Bucket             string `json:"bucket" yaml:"bucket"`
+	ForcePathStyleURLs bool   `json:"force_path_style_urls" yaml:"force_path_style_urls"`
+	ContentType        string `json:"content_type" yaml:"content_type"`
+	Timeout            string `json:"timeout" yaml:"timeout"`
+	Retries            int    `json:"retries" yaml:"retries"`
 }
 
 // NewS3Config creates a S3Config populated with default values.
 func NewS3Config() S3Config {
 	return S3Config{
-		Config:      sess.NewConfig(),
-		Bucket:      "",
-		ContentType: "application/octet-stream",
-		Timeout:     "5s",
-		Retries:     3,
+		Config:             sess.NewConfig(),
+		Bucket:             "",
+		ForcePathStyleURLs: false,
+		ContentType:        "application/octet-stream",
+		Timeout:            "5s",
+		Retries:            3,
 	}
 }
 
@@ -126,7 +128,9 @@ func NewS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse timeout: %v", err)
 	}
-	sess, err := conf.S3.GetSession()
+	sess, err := conf.S3.GetSession(func(c *aws.Config) {
+		c.S3ForcePathStyle = aws.Bool(conf.S3.ForcePathStyleURLs)
+	})
 	if err != nil {
 		return nil, err
 	}

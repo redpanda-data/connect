@@ -206,6 +206,7 @@ INPUT_S3_CREDENTIALS_TOKEN
 INPUT_S3_DELETE_OBJECTS                       = false
 INPUT_S3_DOWNLOAD_MANAGER_ENABLED             = true
 INPUT_S3_ENDPOINT
+INPUT_S3_FORCE_PATH_STYLE_URLS                = false
 INPUT_S3_MAX_BATCH_COUNT                      = 1
 INPUT_S3_PREFIX
 INPUT_S3_REGION                               = eu-west-1
@@ -513,6 +514,7 @@ OUTPUT_S3_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_S3_CREDENTIALS_SECRET
 OUTPUT_S3_CREDENTIALS_TOKEN
 OUTPUT_S3_ENDPOINT
+OUTPUT_S3_FORCE_PATH_STYLE_URLS                       = false
 OUTPUT_S3_PATH                                        = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_S3_REGION                                      = eu-west-1
 OUTPUT_S3_TIMEOUT                                     = 5s

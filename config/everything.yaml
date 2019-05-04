@@ -254,6 +254,7 @@ input:
     bucket: ""
     prefix: ""
     retries: 3
+    force_path_style_urls: false
     download_manager:
       enabled: true
     delete_objects: false
@@ -888,6 +889,7 @@ output:
     endpoint: ""
     region: eu-west-1
     bucket: ""
+    force_path_style_urls: false
     path: ${!count:files}-${!timestamp_unix_nano}.txt
     content_type: application/octet-stream
     timeout: 5s
@@ -977,6 +979,7 @@ resources:
         endpoint: ""
         region: eu-west-1
         bucket: ""
+        force_path_style_urls: false
         content_type: application/octet-stream
         timeout: 5s
         retries: 3

@@ -827,6 +827,7 @@ s3:
     secret: ""
     token: ""
   endpoint: ""
+  force_path_style_urls: false
   path: ${!count:files}-${!timestamp_unix_nano}.txt
   region: eu-west-1
   timeout: 5s

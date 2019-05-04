@@ -41,21 +41,23 @@ import (
 
 // AmazonS3Config contains configuration fields for the AmazonS3 output type.
 type AmazonS3Config struct {
-	sess.Config `json:",inline" yaml:",inline"`
-	Bucket      string `json:"bucket" yaml:"bucket"`
-	Path        string `json:"path" yaml:"path"`
-	ContentType string `json:"content_type" yaml:"content_type"`
-	Timeout     string `json:"timeout" yaml:"timeout"`
+	sess.Config        `json:",inline" yaml:",inline"`
+	Bucket             string `json:"bucket" yaml:"bucket"`
+	ForcePathStyleURLs bool   `json:"force_path_style_urls" yaml:"force_path_style_urls"`
+	Path               string `json:"path" yaml:"path"`
+	ContentType        string `json:"content_type" yaml:"content_type"`
+	Timeout            string `json:"timeout" yaml:"timeout"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
 	return AmazonS3Config{
-		Config:      sess.NewConfig(),
-		Bucket:      "",
-		Path:        "${!count:files}-${!timestamp_unix_nano}.txt",
-		ContentType: "application/octet-stream",
-		Timeout:     "5s",
+		Config:             sess.NewConfig(),
+		Bucket:             "",
+		ForcePathStyleURLs: false,
+		Path:               "${!count:files}-${!timestamp_unix_nano}.txt",
+		ContentType:        "application/octet-stream",
+		Timeout:            "5s",
 	}
 }
 
@@ -104,7 +106,9 @@ func (a *AmazonS3) Connect() error {
 		return nil
 	}
 
-	sess, err := a.conf.GetSession()
+	sess, err := a.conf.GetSession(func(c *aws.Config) {
+		c.S3ForcePathStyle = aws.Bool(a.conf.ForcePathStyleURLs)
+	})
 	if err != nil {
 		return err
 	}
