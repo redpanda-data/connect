@@ -21,10 +21,6 @@
 package config
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"path/filepath"
-
 	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/buffer"
 	"github.com/Jeffail/benthos/lib/input"
@@ -37,7 +33,6 @@ import (
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/tracer"
-	"github.com/Jeffail/benthos/lib/util/text"
 	"gopkg.in/yaml.v2"
 )
 
@@ -203,24 +198,13 @@ func AddExamples(conf *Type, examples ...string) {
 // Read will attempt to read a configuration file path into a structure. Returns
 // an array of lint messages or an error.
 func Read(path string, replaceEnvs bool, config *Type) ([]string, error) {
-	configBytes, err := ioutil.ReadFile(path)
+	configBytes, err := readWithJSONRefs(path, replaceEnvs)
 	if err != nil {
 		return nil, err
 	}
 
-	if replaceEnvs {
-		configBytes = text.ReplaceEnvVariables(configBytes)
-	}
-
-	ext := filepath.Ext(path)
-	if ".js" == ext || ".json" == ext {
-		if err = json.Unmarshal(configBytes, config); err != nil {
-			return nil, err
-		}
-	} else { // if ".yml" == ext || ".yaml" == ext {
-		if err = yaml.Unmarshal(configBytes, config); err != nil {
-			return nil, err
-		}
+	if err = yaml.Unmarshal(configBytes, config); err != nil {
+		return nil, err
 	}
 
 	return Lint(configBytes, *config)

@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- JSON references are now supported in configuration files.
+
 ## 1.17.0 - 2019-05-04
 
 ### Added

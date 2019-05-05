@@ -23,6 +23,7 @@ package config
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Jeffail/gabs"
@@ -45,6 +46,14 @@ func CheckTagsOfType(v reflect.Type, checkedTypes map[string]struct{}, t *testin
 			field := v.Field(i)
 			jTag := field.Tag.Get("json")
 			yTag := field.Tag.Get("yaml")
+
+			if len(yTag) == 0 {
+				t.Errorf("Empty field tag in type %v", tPath)
+			}
+
+			if strings.ToLower(yTag) != yTag {
+				t.Errorf("Non-lower case field tag in type %v: %v", tPath, yTag)
+			}
 
 			if jTag != yTag {
 				t.Errorf("Mismatched config tags in type %v: json(%v) != yaml(%v)", tPath, jTag, yTag)

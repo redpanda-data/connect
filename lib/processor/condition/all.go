@@ -23,9 +23,8 @@ package condition
 import (
 	"encoding/json"
 
-	"github.com/Jeffail/benthos/lib/message"
-
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -64,7 +63,7 @@ all:
 
 // AllConfig is a configuration struct containing fields for the All condition.
 type AllConfig struct {
-	*Config
+	*Config `yaml:",inline" json:",inline"`
 }
 
 // NewAllConfig returns a AllConfig with default values.
