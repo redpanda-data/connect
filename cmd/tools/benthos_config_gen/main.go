@@ -66,18 +66,6 @@ func createYAML(t, path string, sanit interface{}) {
 	fmt.Printf("Generated '%v' config at: %v\n", t, path)
 }
 
-func createJSON(t, path string, sanit interface{}) {
-	resBytes, err := json.MarshalIndent(sanit, "", "	")
-	if err != nil {
-		panic(err)
-	}
-
-	if err = ioutil.WriteFile(path, resBytes, 0644); err != nil {
-		panic(err)
-	}
-	fmt.Printf("Generated '%v' config at: %v\n", t, path)
-}
-
 func envify(rootPath string, conf interface{}, paths map[string]string) (newConf interface{}) {
 	genBytes, err := json.Marshal(conf)
 	if err != nil {
@@ -414,7 +402,6 @@ func main() {
 		}
 
 		createYAML(t, filepath.Join(configsDir, t+".yaml"), sanit)
-		createJSON(t, filepath.Join(configsDir, t+".json"), sanit)
 	}
 
 	// Create processor configs for all types.
@@ -434,7 +421,6 @@ func main() {
 		}
 
 		createYAML(t, filepath.Join(configsDir, "processors", t+".yaml"), sanit)
-		createJSON(t, filepath.Join(configsDir, "processors", t+".json"), sanit)
 	}
 
 	// Create condition configs for all types.
@@ -460,7 +446,6 @@ func main() {
 		}
 
 		createYAML(t, filepath.Join(configsDir, "conditions", t+".yaml"), sanit)
-		createJSON(t, filepath.Join(configsDir, "conditions", t+".json"), sanit)
 	}
 
 	// Create metrics configs for all types.
@@ -478,7 +463,6 @@ func main() {
 		}
 
 		createYAML(t, filepath.Join(configsDir, "metrics", t+".yaml"), sanit)
-		createJSON(t, filepath.Join(configsDir, "metrics", t+".json"), sanit)
 	}
 
 	// Create tracer configs for all types.
@@ -496,7 +480,6 @@ func main() {
 		}
 
 		createYAML(t, filepath.Join(configsDir, "tracers", t+".yaml"), sanit)
-		createJSON(t, filepath.Join(configsDir, "tracers", t+".json"), sanit)
 	}
 
 	// Create buffers config
@@ -514,7 +497,6 @@ func main() {
 		sanit.Buffer = conf.Buffer
 
 		createYAML(t, filepath.Join(configsDir, t+".yaml"), sanit)
-		createJSON(t, filepath.Join(configsDir, t+".json"), sanit)
 	}
 
 	// Create Environment Vars Config
