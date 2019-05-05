@@ -231,8 +231,6 @@ benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[0].filter'
 
 ## Fragmenting Your Configuration
 
-WARNING: THIS FEATURE IS EXPERIMENTAL AND SUBJECT TO CHANGE
-
 It's possible to break a large configuration file into smaller parts with
 [JSON references][json-references]. Benthos doesn't yet support the full
 specification as it only resolves local or file path URIs, but this still allows
