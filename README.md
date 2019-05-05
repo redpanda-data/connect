@@ -58,11 +58,12 @@ deployment.
 Documentation for Benthos components, concepts and recommendations can be found
 in the [docs directory.][general-docs]
 
-For building your own stream processors using Benthos as a framework check out
-the [stream package][godoc-url], which also includes some examples.
+For guidance on how to configure more advanced stream processing concepts such
+as stream joins, enrichment workflows, etc, check out the
+[cookbooks section.][cookbooks]
 
-For some applied examples of Benthos such as streaming and deduplicating the
-Twitter firehose to Kafka [check out the examples section][examples-docs].
+For guidance on building your own custom plugins check out
+[this example repo.][plugin-repo]
 
 ## Run
 
@@ -131,8 +132,8 @@ output:
 
 There are also sections for setting logging, metrics and HTTP server options.
 
-Benthos provides lots of tools for making configuration discovery and debugging
-easy. You can read about them [here][config-doc].
+Benthos provides lots of tools for making configuration discovery, debugging and
+organisation easy. You can [read about them here][config-doc].
 
 You can also find runnable example configs demonstrating each input, output,
 buffer and processor option [here](config).
@@ -225,6 +226,7 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [env-config]: config/env/README.md
 [config-doc]: docs/configuration.md
 [serverless]: docs/serverless/README.md
+[cookbooks]: docs/cookbooks/README.md
 
 [releases]: https://github.com/Jeffail/benthos/releases
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
