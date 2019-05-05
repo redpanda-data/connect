@@ -1,0 +1,14 @@
+input:
+  type: stdin
+  stdin:
+    multipart: true
+
+pipeline:
+  processors:
+  - type: process_field
+    process_field:
+      path: document.content
+      processors:
+      - type: text
+        text:
+          operator: to_upper
