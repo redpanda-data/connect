@@ -9,11 +9,11 @@ patterns in stream processing.
 This cookbook demonstrates how to merge JSON events from parallel streams using
 content based rules and a cache of your choice.
 
-### [Enrichments](./enrichments.md)
+### [Enrichment Workflows](./enrichments.md)
 
 This cookbook demonstrates how to enrich a stream of JSON documents with
-HTTP services. This method also works with AWS Lambda functions, subprocesses,
-etc.
+HTTP services following a dynamic workflow. This method also works with AWS
+Lambda functions, subprocesses, etc.
 
 ### [Duplicate Monitoring](./duplicate-monitoring.md)
 

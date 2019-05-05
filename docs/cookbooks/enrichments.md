@@ -1,5 +1,5 @@
-Enrichments
-===========
+Enrichment Workflows
+====================
 
 This cookbook demonstrates how to enrich a stream of JSON documents with
 HTTP services. This method also works with AWS Lambda functions, subprocesses,
