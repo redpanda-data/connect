@@ -37,20 +37,11 @@ $ echo '{"document":{"type":"foo","content":"foo type 1"}}
 {"document":{"type":"bar","content":"bar type 2"}}' | benthos -c ./modules/group.yaml
 ```
 
-And it's also possible to use the processors defined in these modules using a
-reference:
-
-``` yaml
-pipeline:
-  processors:
-  - $ref: ./modules/filter.yaml
-```
-
 ## Using References
 
 Finally, let's take a look at our [main configuration](./pipeline.yaml), which
-uses JSON references in order to combine a set of our modules. The config itself
-is tiny:
+uses [JSON references][json-refs] in order to extract and combine sections of
+our modules. The config itself is tiny:
 
 ``` yaml
 pipeline:
@@ -75,7 +66,7 @@ pipeline:
   - $ref: ./modules/${MODULE:filter}.yaml#/pipeline/processors/0
 ```
 
-And then we can execute this config with:
+And then we can execute this config with something like:
 
 ``` sh
 $ MODULE=mutate benthos -c ./pipeline.yaml
