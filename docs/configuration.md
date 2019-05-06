@@ -138,9 +138,11 @@ pipeline:
       cache: objects
 ```
 
-These references can be nested. Also, environment variable interpolations within
-configurations are resolved _before_ references are resolved. Therefore, it's
-possible to use them to specify which snippet to load:
+These references can be nested. 
+
+It is further possible to use environment variables to specify which snippet 
+to load. This works because environment variable interpolations within 
+configurations are resolved _before_ references are resolved.
 
 ``` yaml
 pipeline:
@@ -242,7 +244,7 @@ benthos --print-yaml --all > conf.yaml
 And simply delete all lines for sections you aren't interested in, then you are
 left with the full set of fields you want.
 
-Alternatively, using tools such as `jq` you can extract specific type fields:
+Alternatively, using tools such as [jq][jq] you can extract specific type fields:
 
 ``` sh
 # Get a list of all input types:
@@ -321,7 +323,7 @@ config.
 
 If your configuration is complex, and the behaviour that you notice implies a
 certain section is at fault, then you can drill down into that section by using
-tools such as `jq`:
+tools such as [jq][jq]:
 
 ``` sh
 # Check the second processor config
@@ -335,4 +337,4 @@ benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[0].filter'
 [conditions]: ./conditions/README.md
 [config-interp]: ./config_interpolation.md
 [json-references]: https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03
-[json-pointer]: https://tools.ietf.org/html/rfc6901
+[jq]: https://stedolan.github.io/jq/
