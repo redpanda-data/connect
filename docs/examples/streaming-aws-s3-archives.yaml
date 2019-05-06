@@ -24,9 +24,8 @@ pipeline:
     unarchive:
       format: tar
   - type: split
-  - type: batch
-    batch:
-      count: 10 # The size of message batches to send to Kafka
+    split:
+      size: 10 # The size of message batches to send to Kafka
 
 output:
   type: kafka

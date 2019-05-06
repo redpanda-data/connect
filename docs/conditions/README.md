@@ -49,12 +49,6 @@ condition:
 The above example could be summarised as 'text contains "hello world" and also
 either contains "foo" or does _not_ contain "bar"'.
 
-Conditions can be extremely useful for creating filters on an output. By using a
-fan out output broker with 'filter' processors on the brokered outputs it is
-possible to build
-[curated data streams](../concepts.md#content-based-multiplexing) that filter on
-the content of each message.
-
 ### Batching and Multipart Messages
 
 All conditions can be applied to a multipart message, which is synonymous with a

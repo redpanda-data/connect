@@ -1,5 +1,5 @@
-Pipeline
-========
+Processing Pipelines
+====================
 
 Within a Benthos configuration, in between `input` and `output`, is a `pipeline`
 section. This section describes an array of [processors][processors] that are to

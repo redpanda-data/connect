@@ -1,8 +1,11 @@
 site_name: Benthos
 site_description: A stream processor specialising in dull tasks.
 site_author: Ashley Jeffs
+repo_url: https://github.com/Jeffail/benthos
+google_analytics: ['UA-135959729-3', 'docs.benthos.dev']
 theme:
   name: mkdocs
+  custom_dir: resources/mkdocs/custom
   highlightjs: true
   hljs_languages:
     - yaml
@@ -27,5 +30,7 @@ nav:
     - 'Processing Pipelines': 'pipeline.md'
     - 'Message Batching': 'batching.md'
     - 'Error Handling': 'error_handling.md'
+    - 'Performance Tuning': 'performance_tuning.md'
+    - 'Monitoring': 'monitoring.md'
     - 'Workflows': 'workflows.md'
     - 'Applied Examples': 'examples/README.md'
