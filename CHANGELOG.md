@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.18.0 - 2019-05-06
+
 ### Added
 
 - JSON references are now supported in configuration files.
