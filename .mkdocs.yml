@@ -33,4 +33,5 @@ nav:
     - 'Performance Tuning': 'performance_tuning.md'
     - 'Monitoring': 'monitoring.md'
     - 'Workflows': 'workflows.md'
+    - 'Streams Mode': 'streams/README.md'
     - 'Applied Examples': 'examples/README.md'

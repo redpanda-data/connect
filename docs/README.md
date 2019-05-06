@@ -43,5 +43,9 @@ improving the performance of your Benthos pipelines.
 [Monitoring](./monitoring.md) explains how to hook Benthos up to your choice of
 monitoring and tracing tools.
 
+[Streams Mode](./streams/README.md) outlines a mode of running Benthos where
+multiple isolated stream pipelines can run in isolation within the same service
+and be managed using a REST API.
+
 [Workflows](./workflows.md) explains how Benthos can be configured to easily
 support complex processor flows using automatic DAG resolution.
