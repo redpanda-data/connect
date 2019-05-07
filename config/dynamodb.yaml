@@ -30,6 +30,7 @@ output:
       secret: ""
       token: ""
     endpoint: ""
+    json_map_columns: {}
     max_retries: 3
     region: eu-west-1
     string_columns: {}

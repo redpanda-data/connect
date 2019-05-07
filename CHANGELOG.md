@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.19.0 - 2019-05-07
+
+### Added
+
+- Field `json_map_columns` added to `dynamodb` output.
+
 ## 1.18.0 - 2019-05-06
 
 ### Added

@@ -338,6 +338,7 @@ dynamodb:
     secret: ""
     token: ""
   endpoint: ""
+  json_map_columns: {}
   max_retries: 3
   region: eu-west-1
   string_columns: {}
@@ -346,22 +347,43 @@ dynamodb:
   ttl_key: ""
 ```
 
-Inserts messages into a DynamoDB table. Columns are populated by writing a map
-of key/value pairs, where the values are
-[function interpolated](../config_interpolation.md#functions) strings calculated
-per message of a batch. This allows you to populate columns by extracting
+Inserts items into a DynamoDB table.
+
+The field `string_columns` is a map of column names to string values,
+where the values are
+[function interpolated](../config_interpolation.md#functions) per message of a
+batch. This allows you to populate string columns of an item by extracting
 fields within the document payload or metadata like follows:
 
 ``` yaml
-type: dynamodb
-dynamodb:
-  table: foo
-  string_columns:
-    id: ${!json_field:id}
-    title: ${!json_field:body.title}
-    topic: ${!metadata:kafka_topic}
-    full_content: ${!content}
+string_columns:
+  id: ${!json_field:id}
+  title: ${!json_field:body.title}
+  topic: ${!metadata:kafka_topic}
+  full_content: ${!content}
 ```
+
+The field `json_map_columns` is a map of column names to json paths,
+where the path is extracted from each document and converted into a map value.
+Both an empty path and the path `.` are interpreted as the root of the
+document. This allows you to populate map columns of an item like follows:
+
+``` yaml
+json_map_columns:
+  user: path.to.user
+  whole_document: .
+```
+
+A column name can be empty:
+
+``` yaml
+json_map_columns:
+  "": .
+```
+
+In which case the top level document fields will be written at the root of the
+item, potentially overwriting previously defined column values. If a path is not
+found within a document the column will not be populated.
 
 ## `elasticsearch`
 
