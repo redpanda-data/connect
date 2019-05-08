@@ -171,7 +171,7 @@ via REST HTTP endpoints. In streams mode the stream fields of a config file
 files inside the --streams-dir directory will be parsed as stream configs.`[1:],
 	)
 	streamsDir = flag.String(
-		"streams-dir", "/benthos/streams",
+		"streams-dir", "",
 		`
 When running Benthos in streams mode any files in this directory with a .json or
 .yaml extension will be parsed as a stream configuration (input, buffer,
@@ -435,9 +435,11 @@ func main() {
 			strmmgr.OptSetStats(stats),
 		)
 		var streamConfs map[string]stream.Config
-		if streamConfs, err = strmmgr.LoadStreamConfigsFromDirectory(true, *streamsDir); err != nil {
-			logger.Errorf("Failed to load stream configs: %v\n", err)
-			os.Exit(1)
+		if len(*streamsDir) > 0 {
+			if streamConfs, err = strmmgr.LoadStreamConfigsFromDirectory(true, *streamsDir); err != nil {
+				logger.Errorf("Failed to load stream configs: %v\n", err)
+				os.Exit(1)
+			}
 		}
 		dataStream = streamMgr
 		for id, conf := range streamConfs {

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.19.1 - 2019-05-08
+
+### Fixed
+
+- Benthos in streams mode no longer tries to load directory `/benthos/streams`
+  by default.
+
 ## 1.19.0 - 2019-05-07
 
 ### Added
