@@ -56,7 +56,8 @@ deployment.
 ## Documentation
 
 Documentation for Benthos components, concepts and recommendations can be found
-in the [docs directory.][general-docs]
+on the [documentation site][general-docs], or within the repo at the
+[docs directory][docs-dir].
 
 For guidance on how to configure more advanced stream processing concepts such
 as stream joins, enrichment workflows, etc, check out the
@@ -209,24 +210,25 @@ make docker-cgo
 
 Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 
-[inputs]: docs/inputs/README.md
-[buffers]: docs/buffers/README.md
-[processors]: docs/processors/README.md
-[outputs]: docs/outputs/README.md
+[inputs]: https://docs.benthos.dev/inputs/
+[buffers]: https://docs.benthos.dev/buffers/
+[processors]: https://docs.benthos.dev/processors/
+[outputs]: https://docs.benthos.dev/outputs/
 
-[metrics]: docs/metrics/README.md
-[tracers]: docs/tracers/README.md
+[metrics]: https://docs.benthos.dev/metrics/
+[tracers]: https://docs.benthos.dev/tracers/
 [metrics-config]: config/metrics
-[config-interp]: docs/config_interpolation.md
+[config-interp]: https://docs.benthos.dev/config_interpolation/
 [compose-examples]: resources/docker/compose_examples
-[streams-api]: docs/api/streams.md
-[streams-mode]: docs/streams/README.md
-[general-docs]: docs/README.md
-[examples-docs]: docs/examples/README.md
+[streams-api]: https://docs.benthos.dev/api/streams/
+[streams-mode]: https://docs.benthos.dev/streams/
+[general-docs]: https://docs.benthos.dev
+[examples-docs]: https://docs.benthos.dev/examples/
 [env-config]: config/env/README.md
-[config-doc]: docs/configuration.md
-[serverless]: docs/serverless/README.md
-[cookbooks]: docs/cookbooks/README.md
+[config-doc]: https://docs.benthos.dev/configuration/
+[serverless]: https://docs.benthos.dev/serverless/
+[cookbooks]: https://docs.benthos.dev/cookbooks/
+[docs-dir]: docs/README.md
 
 [releases]: https://github.com/Jeffail/benthos/releases
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
