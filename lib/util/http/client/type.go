@@ -338,19 +338,23 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 		}
 
 		writer.Close()
-		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
-			for k, v := range h.headers {
-				req.Header.Add(k, v.Get(msg))
+		if err == nil {
+			if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
+				for k, v := range h.headers {
+					req.Header.Add(k, v.Get(msg))
+				}
+				if h.host != nil {
+					req.Host = h.host.Get(msg)
+				}
+				req.Header.Del("Content-Type")
+				req.Header.Add("Content-Type", writer.FormDataContentType())
 			}
-			if h.host != nil {
-				req.Host = h.host.Get(msg)
-			}
-			req.Header.Del("Content-Type")
-			req.Header.Add("Content-Type", writer.FormDataContentType())
 		}
 	}
 
-	err = h.conf.Config.Sign(req)
+	if err == nil {
+		err = h.conf.Config.Sign(req)
+	}
 	return
 }
 

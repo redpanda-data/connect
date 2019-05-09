@@ -71,6 +71,22 @@ func TestHTTPClientRetries(t *testing.T) {
 	}
 }
 
+func TestHTTPClientBadRequest(t *testing.T) {
+	conf := NewConfig()
+	conf.URL = "htp://notvalid:1111"
+	conf.Verb = "notvalid\n"
+	conf.NumRetries = 3
+
+	h, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := h.Send(message.New([][]byte{[]byte("test")})); err == nil {
+		t.Error("Expected error from malformed URL")
+	}
+}
+
 func TestHTTPClientSendBasic(t *testing.T) {
 	nTestLoops := 1000
 
