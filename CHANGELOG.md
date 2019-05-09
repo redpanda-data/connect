@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.19.2 - 2019-05-09
+
+### Added
+
+- New `encode` and `decode` scheme `hex`.
+
+### Fixed
+
+- Fixed potential panic when attempting an invalid HTTP client configuration.
+
 ## 1.19.1 - 2019-05-08
 
 ### Fixed

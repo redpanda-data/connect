@@ -23,6 +23,7 @@ package processor
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -41,7 +42,7 @@ func init() {
 		constructor: NewDecode,
 		description: `
 Decodes messages according to the selected scheme. Supported available schemes
-are: base64.`,
+are: hex, base64.`,
 	}
 }
 
@@ -70,10 +71,17 @@ func base64Decode(b []byte) ([]byte, error) {
 	return ioutil.ReadAll(e)
 }
 
+func hexDecode(b []byte) ([]byte, error) {
+	e := hex.NewDecoder(bytes.NewReader(b))
+	return ioutil.ReadAll(e)
+}
+
 func strToDecoder(str string) (decodeFunc, error) {
 	switch str {
 	case "base64":
 		return base64Decode, nil
+	case "hex":
+		return hexDecode, nil
 	}
 	return nil, fmt.Errorf("decode scheme not recognised: %v", str)
 }

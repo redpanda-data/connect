@@ -23,6 +23,7 @@ package processor
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"os"
 	"reflect"
 	"testing"
@@ -75,6 +76,49 @@ func TestDecodeBase64(t *testing.T) {
 	}
 
 	proc, err := NewDecode(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Decode failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestDecodeHex(t *testing.T) {
+	conf := NewConfig()
+	conf.Decode.Scheme = "hex"
+
+	exp := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	input := [][]byte{}
+
+	for i := range exp {
+		var buf bytes.Buffer
+
+		zw := hex.NewEncoder(&buf)
+		zw.Write(exp[i])
+
+		input = append(input, buf.Bytes())
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewDecode(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
