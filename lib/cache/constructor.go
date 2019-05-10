@@ -131,6 +131,26 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
+	var raw interface{}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
+		var inferredType string
+		for _, tc := range typeCandidates {
+			if _, exists := Constructors[tc]; exists {
+				if len(inferredType) > 0 {
+					return fmt.Errorf("unable to infer type, multiple candidates '%v' and '%v'", inferredType, tc)
+				}
+				inferredType = tc
+			}
+		}
+		if len(inferredType) == 0 {
+			return fmt.Errorf("unable to infer type, candidates were: %v", typeCandidates)
+		}
+		aliased.Type = inferredType
+	}
+
 	*c = Config(aliased)
 	return nil
 }

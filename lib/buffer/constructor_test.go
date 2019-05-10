@@ -28,6 +28,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func TestConstructorDescription(t *testing.T) {
@@ -42,6 +43,44 @@ func TestConstructorBadType(t *testing.T) {
 
 	if _, err := New(conf, log.New(os.Stdout, logConfig), metrics.DudType{}); err == nil {
 		t.Error("Expected error, received nil for invalid type")
+	}
+}
+
+func TestConstructorConfigYAMLInference(t *testing.T) {
+	conf := []Config{}
+
+	if err := yaml.Unmarshal([]byte(`[
+		{
+			"memory": {
+				"value": "foo"
+			},
+			"mmap_file": {
+				"query": "foo"
+			}
+		}
+	]`), &conf); err == nil {
+		t.Error("Expected error from multi candidates")
+	}
+
+	if err := yaml.Unmarshal([]byte(`[
+		{
+			"memory": {
+				"limit": 10
+			}
+		}
+	]`), &conf); err != nil {
+		t.Error(err)
+	}
+
+	if exp, act := 1, len(conf); exp != act {
+		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
+		return
+	}
+	if exp, act := TypeMemory, conf[0].Type; exp != act {
+		t.Errorf("Wrong inferred type: %v != %v", act, exp)
+	}
+	if exp, act := 10, conf[0].Memory.Limit; exp != act {
+		t.Errorf("Wrong default operator: %v != %v", act, exp)
 	}
 }
 

@@ -48,14 +48,26 @@ func TestConstructorBadType(t *testing.T) {
 	}
 }
 
-func TestConstructorConfigDefaults(t *testing.T) {
+func TestConstructorConfigYAMLInference(t *testing.T) {
 	conf := []Config{}
 
-	if err := json.Unmarshal([]byte(`[
+	if err := yaml.Unmarshal([]byte(`[
 		{
-			"type": "text",
 			"text": {
-				"part": 1
+				"value": "foo"
+			},
+			"jmespath": {
+				"query": "foo"
+			}
+		}
+	]`), &conf); err == nil {
+		t.Error("Expected error from multi candidates")
+	}
+
+	if err := yaml.Unmarshal([]byte(`[
+		{
+			"text": {
+				"arg": "foo"
 			}
 		}
 	]`), &conf); err != nil {
@@ -66,11 +78,14 @@ func TestConstructorConfigDefaults(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
+	if exp, act := TypeText, conf[0].Type; exp != act {
+		t.Errorf("Wrong inferred type: %v != %v", act, exp)
+	}
 	if exp, act := "equals_cs", conf[0].Text.Operator; exp != act {
 		t.Errorf("Wrong default operator: %v != %v", act, exp)
 	}
-	if exp, act := 1, conf[0].Text.Part; exp != act {
-		t.Errorf("Wrong default part: %v != %v", act, exp)
+	if exp, act := "foo", conf[0].Text.Arg; exp != act {
+		t.Errorf("Wrong arg: %v != %v", act, exp)
 	}
 }
 
