@@ -45,12 +45,13 @@ func init() {
 	Constructors[TypeSQL] = TypeSpec{
 		constructor: NewSQL,
 		description: `
-SQL is a processor that runs a query against a target database and replaces the
-message with the result.
+SQL is a processor that runs a query against a target database for each message
+of a batch and, for queries that return rows, replaces the message with the
+result.
 
 If a query contains arguments they can be set as an array of strings supporting
-[interpolation functions](../config_interpolation.md#functions) in the
-` + "`args`" + `field:
+[interpolation functions](../config_interpolation.md#functions) executed per
+message of the batch in the ` + "`args`" + ` field:
 
 ` + "``` yaml" + `
 type: sql
