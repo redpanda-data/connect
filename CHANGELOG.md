@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.20.1 - 2019-05-09
+
+### Fixed
+
+- Corrected `result_codec` field in `sql` processor config.
+
 ## 1.20.0 - 2019-05-09
 
 ### Added

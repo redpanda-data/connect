@@ -414,7 +414,7 @@ pipeline:
       driver: ${PROCESSOR_SQL_DRIVER:mysql}
       dsn: ${PROCESSOR_SQL_DSN}
       query: ${PROCESSOR_SQL_QUERY}
-      response_codec: ${PROCESSOR_SQL_RESPONSE_CODEC:none}
+      result_codec: ${PROCESSOR_SQL_RESULT_CODEC:none}
     subprocess:
       name: ${PROCESSOR_SUBPROCESS_NAME:cat}
     text:

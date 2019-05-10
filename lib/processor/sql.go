@@ -93,23 +93,23 @@ The following is a list of supported drivers and their respective DSN formats:
 
 // SQLConfig contains configuration fields for the SQL processor.
 type SQLConfig struct {
-	Parts         []int    `json:"parts" yaml:"parts"`
-	Driver        string   `json:"driver" yaml:"driver"`
-	DSN           string   `json:"dsn" yaml:"dsn"`
-	Query         string   `json:"query" yaml:"query"`
-	Args          []string `json:"args" yaml:"args"`
-	ResponseCodec string   `json:"response_codec" yaml:"response_codec"`
+	Parts       []int    `json:"parts" yaml:"parts"`
+	Driver      string   `json:"driver" yaml:"driver"`
+	DSN         string   `json:"dsn" yaml:"dsn"`
+	Query       string   `json:"query" yaml:"query"`
+	Args        []string `json:"args" yaml:"args"`
+	ResultCodec string   `json:"result_codec" yaml:"result_codec"`
 }
 
 // NewSQLConfig returns a SQLConfig with default values.
 func NewSQLConfig() SQLConfig {
 	return SQLConfig{
-		Parts:         []int{},
-		Driver:        "mysql",
-		DSN:           "",
-		Query:         "",
-		Args:          []string{},
-		ResponseCodec: "none",
+		Parts:       []int{},
+		Driver:      "mysql",
+		DSN:         "",
+		Query:       "",
+		Args:        []string{},
+		ResultCodec: "none",
 	}
 }
 
@@ -125,7 +125,7 @@ type SQL struct {
 	db       *sql.DB
 	dbMux    sync.Mutex
 	args     []*text.InterpolatedString
-	resCodec sqlResponseCodec
+	resCodec sqlResultCodec
 
 	queryStr *text.InterpolatedString
 	query    *sql.Stmt
@@ -144,7 +144,7 @@ type SQL struct {
 func NewSQL(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	resCodec, err := strToSQLResponseCodec(conf.SQL.ResponseCodec)
+	resCodec, err := strToSQLResultCodec(conf.SQL.ResultCodec)
 	if err != nil {
 		return nil, err
 	}
@@ -191,9 +191,9 @@ func NewSQL(
 
 //------------------------------------------------------------------------------
 
-type sqlResponseCodec func(rows *sql.Rows, p types.Part) error
+type sqlResultCodec func(rows *sql.Rows, p types.Part) error
 
-func sqlResponseJSONCodec(rows *sql.Rows, p types.Part) error {
+func sqlResultJSONCodec(rows *sql.Rows, p types.Part) error {
 	columnNames, err := rows.Columns()
 	if err != nil {
 		return err
@@ -230,14 +230,14 @@ func sqlResponseJSONCodec(rows *sql.Rows, p types.Part) error {
 	return p.SetJSON(jArray)
 }
 
-func strToSQLResponseCodec(codec string) (sqlResponseCodec, error) {
+func strToSQLResultCodec(codec string) (sqlResultCodec, error) {
 	switch codec {
 	case "json":
-		return sqlResponseJSONCodec, nil
+		return sqlResultJSONCodec, nil
 	case "none":
 		return nil, nil
 	}
-	return nil, fmt.Errorf("unrecognised response codec: %v", codec)
+	return nil, fmt.Errorf("unrecognised result codec: %v", codec)
 }
 
 //------------------------------------------------------------------------------

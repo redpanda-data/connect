@@ -1458,7 +1458,7 @@ sql:
   dsn: ""
   parts: []
   query: ""
-  response_codec: none
+  result_codec: none
 ```
 
 SQL is a processor that runs a query against a target database and replaces the

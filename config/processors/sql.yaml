@@ -22,7 +22,7 @@ pipeline:
       dsn: ""
       parts: []
       query: ""
-      response_codec: none
+      result_codec: none
   threads: 1
 output:
   type: stdout
