@@ -98,7 +98,6 @@ The following is a list of supported drivers and their respective DSN formats:
 
 // SQLConfig contains configuration fields for the SQL processor.
 type SQLConfig struct {
-	Parts       []int    `json:"parts" yaml:"parts"`
 	Driver      string   `json:"driver" yaml:"driver"`
 	DSN         string   `json:"dsn" yaml:"dsn"`
 	Query       string   `json:"query" yaml:"query"`
@@ -109,7 +108,6 @@ type SQLConfig struct {
 // NewSQLConfig returns a SQLConfig with default values.
 func NewSQLConfig() SQLConfig {
 	return SQLConfig{
-		Parts:       []int{},
 		Driver:      "mysql",
 		DSN:         "",
 		Query:       "",
@@ -126,7 +124,6 @@ type SQL struct {
 	stats metrics.Type
 
 	conf     SQLConfig
-	parts    []int
 	db       *sql.DB
 	dbMux    sync.Mutex
 	args     []*text.InterpolatedString
@@ -165,7 +162,6 @@ func NewSQL(
 		log:        log,
 		stats:      stats,
 		conf:       conf.SQL,
-		parts:      conf.SQL.Parts,
 		db:         db,
 		args:       args,
 		queryStr:   text.NewInterpolatedString(""),

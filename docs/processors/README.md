@@ -1456,7 +1456,6 @@ sql:
   args: []
   driver: mysql
   dsn: ""
-  parts: []
   query: ""
   result_codec: none
 ```
