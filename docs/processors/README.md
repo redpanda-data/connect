@@ -96,13 +96,14 @@ used.
 36. [`select_parts`](#select_parts)
 37. [`sleep`](#sleep)
 38. [`split`](#split)
-39. [`subprocess`](#subprocess)
-40. [`switch`](#switch)
-41. [`text`](#text)
-42. [`throttle`](#throttle)
-43. [`try`](#try)
-44. [`unarchive`](#unarchive)
-45. [`while`](#while)
+39. [`sql`](#sql)
+40. [`subprocess`](#subprocess)
+41. [`switch`](#switch)
+42. [`text`](#text)
+43. [`throttle`](#throttle)
+44. [`try`](#try)
+45. [`unarchive`](#unarchive)
+46. [`while`](#while)
 
 ## `archive`
 
@@ -426,7 +427,7 @@ decode:
 ```
 
 Decodes messages according to the selected scheme. Supported available schemes
-are: base64.
+are: hex, base64.
 
 ## `decompress`
 
@@ -508,7 +509,7 @@ encode:
 ```
 
 Encodes messages according to the selected scheme. Supported schemes are:
-base64.
+hex, base64.
 
 ## `filter`
 
@@ -1446,6 +1447,61 @@ If there is a remainder of messages after splitting a batch the remainder is
 also sent as a single batch. For example, if your target size was 10, and the
 processor received a batch of 95 message parts, the result would be 9 batches of
 10 messages followed by a batch of 5 messages.
+
+## `sql`
+
+``` yaml
+type: sql
+sql:
+  args: []
+  driver: mysql
+  dsn: ""
+  parts: []
+  query: ""
+  response_codec: none
+```
+
+SQL is a processor that runs a query against a target database and replaces the
+message with the result.
+
+If a query contains arguments they can be set as an array of strings supporting
+[interpolation functions](../config_interpolation.md#functions) in the
+`args`field:
+
+``` yaml
+type: sql
+sql:
+  driver: mysql
+  dsn: foouser:foopassword@tcp(localhost:3306)/foodb
+  query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+  args:
+  - ${!json_field:document.foo}
+  - ${!json_field:document.bar}
+  - ${!metadata:kafka_topic}
+```
+
+### Result Codecs
+
+When a query returns rows they are serialised according to a chosen codec, and
+the message contents are replaced with the serialised result.
+
+#### `none`
+
+The result of the query is ignored and the message remains unchanged. If your
+query does not return rows then this is the appropriate codec.
+
+#### `json`
+
+The resulting rows are serialised into an array of JSON objects, where each
+object represents a row, where the key is the column name and the value is that
+columns value in the row.
+
+### Drivers
+
+The following is a list of supported drivers and their respective DSN formats:
+
+- `mysql`: `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]`
+- `postgres`: `postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`
 
 ## `subprocess`
 

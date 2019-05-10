@@ -410,6 +410,11 @@ pipeline:
     split:
       byte_size: ${PROCESSOR_SPLIT_BYTE_SIZE:0}
       size: ${PROCESSOR_SPLIT_SIZE:1}
+    sql:
+      driver: ${PROCESSOR_SQL_DRIVER:mysql}
+      dsn: ${PROCESSOR_SQL_DSN}
+      query: ${PROCESSOR_SQL_QUERY}
+      response_codec: ${PROCESSOR_SQL_RESPONSE_CODEC:none}
     subprocess:
       name: ${PROCESSOR_SUBPROCESS_NAME:cat}
     text:

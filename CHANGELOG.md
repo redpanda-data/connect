@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 1.19.3 - 2019-05-10
+## 1.20.0 - 2019-05-09
+
+### Added
+
+- New `sql` processor.
 
 ### Fixed
 

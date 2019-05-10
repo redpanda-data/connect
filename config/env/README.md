@@ -364,6 +364,10 @@ PROCESSOR_SELECT_PARTS_PARTS                         = 0
 PROCESSOR_SLEEP_DURATION                             = 100us
 PROCESSOR_SPLIT_BYTE_SIZE                            = 0
 PROCESSOR_SPLIT_SIZE                                 = 1
+PROCESSOR_SQL_DRIVER                                 = mysql
+PROCESSOR_SQL_DSN
+PROCESSOR_SQL_QUERY
+PROCESSOR_SQL_RESPONSE_CODEC                         = none
 PROCESSOR_SUBPROCESS_NAME                            = cat
 PROCESSOR_TEXT_ARG
 PROCESSOR_TEXT_OPERATOR                              = trim_space
