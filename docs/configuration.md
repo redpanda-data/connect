@@ -106,8 +106,9 @@ pipeline:
       cache: objects
 ```
 
-And we wished to use this snippet within a larger configuration file `./config/bar.yaml`. We can do
-so by adding an object with a key `$ref` and a string value which is the path to our snippet:
+And we wished to use this snippet within a larger configuration file
+`./config/bar.yaml`. We can do so by adding an object with a key `$ref` and a
+string value which is the path to our snippet:
 
 ``` yaml
 pipeline:
@@ -119,7 +120,8 @@ pipeline:
   - "$ref": "./foo.yaml#/pipeline/processors/0"
 ```
 
-When Benthos loads this config, it will resolve the reference, resulting in this configuration:
+When Benthos loads this config, it will resolve the reference, resulting in this
+configuration:
 
 ``` yaml
 pipeline:
@@ -135,8 +137,9 @@ pipeline:
       cache: objects
 ```
 
-Note that the path of a reference is relative to the configuration file containing the
-reference, therefore the path used above is `./foo.yaml` and not `./config/foo.yaml`.
+Note that the path of a reference is relative to the configuration file
+containing the reference, therefore the path used above is `./foo.yaml` and not
+`./config/foo.yaml`.
 
 If you like, these references can even be nested. 
 
@@ -244,7 +247,8 @@ benthos --print-yaml --all > conf.yaml
 And simply delete all lines for sections you aren't interested in, then you are
 left with the full set of fields you want.
 
-Alternatively, using tools such as [jq][jq] you can extract specific type fields:
+Alternatively, using tools such as [jq][jq] you can extract specific type
+fields:
 
 ``` sh
 # Get a list of all input types:
@@ -272,7 +276,8 @@ error messages.
 
 However, with validation it can be hard to capture all problems, and the user
 usually understands their intentions better than the service. In order to help
-expose and diagnose config errors Benthos provides two mechanisms, linting and echoing.
+expose and diagnose config errors Benthos provides two mechanisms, linting and
+echoing.
 
 ### Linting
 
