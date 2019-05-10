@@ -49,7 +49,7 @@ and managing these more complex configuration files.
 ## Contents
 
 - [Customising Your Configuration](#customising-your-configuration)
-- [Fragmenting Your Configuration](#fragmenting-your-configuration)
+- [Reusing Configuration Snippets](#reusing-configuration-snippets)
 - [Enabling Discovery](#enabling-discovery)
 - [Help With Debugging](#help-with-debugging)
 
@@ -73,7 +73,7 @@ input:
 This is very useful for sharing configuration files across different deployment
 environments.
 
-## Fragmenting Your Configuration
+## Reusing Configuration Snippets
 
 It's possible to break a large configuration file into smaller parts with
 [JSON references][json-references]. Benthos doesn't yet support the full
@@ -106,9 +106,8 @@ pipeline:
       cache: objects
 ```
 
-And we wished to use this fragment within a larger configuration file. We can do
-so by adding an object with a key `$ref` and a string value which is a path to
-our snippet:
+And we wished to use this snippet within a larger configuration file `./config/bar.yaml`. We can do
+so by adding an object with a key `$ref` and a string value which is the path to our snippet:
 
 ``` yaml
 pipeline:
@@ -120,9 +119,7 @@ pipeline:
   - "$ref": "./foo.yaml#/pipeline/processors/0"
 ```
 
-The path of a reference is relative to the configuration file containing the
-reference, and so if this configuration file were saved as `./config/bar.yaml`
-then the path would resolve and we would end up with:
+When Benthos loads this config, it will resolve the reference, resulting in this configuration:
 
 ``` yaml
 pipeline:
@@ -138,9 +135,14 @@ pipeline:
       cache: objects
 ```
 
-These references can be nested. Also, environment variable interpolations within
-configurations are resolved _before_ references are resolved. Therefore, it's
-possible to use them to specify which snippet to load:
+Note that the path of a reference is relative to the configuration file containing the
+reference, therefore the path used above is `./foo.yaml` and not `./config/foo.yaml`.
+
+If you like, these references can even be nested. 
+
+It is further possible to use environment variables to specify which snippet 
+to load. This works because environment variable interpolations within 
+configurations are resolved _before_ references are resolved.
 
 ``` yaml
 pipeline:
@@ -242,7 +244,7 @@ benthos --print-yaml --all > conf.yaml
 And simply delete all lines for sections you aren't interested in, then you are
 left with the full set of fields you want.
 
-Alternatively, using tools such as `jq` you can extract specific type fields:
+Alternatively, using tools such as [jq][jq] you can extract specific type fields:
 
 ``` sh
 # Get a list of all input types:
@@ -321,7 +323,7 @@ config.
 
 If your configuration is complex, and the behaviour that you notice implies a
 certain section is at fault, then you can drill down into that section by using
-tools such as `jq`:
+tools such as [jq][jq]:
 
 ``` sh
 # Check the second processor config
@@ -335,4 +337,4 @@ benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[0].filter'
 [conditions]: ./conditions/README.md
 [config-interp]: ./config_interpolation.md
 [json-references]: https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03
-[json-pointer]: https://tools.ietf.org/html/rfc6901
+[jq]: https://stedolan.github.io/jq/
