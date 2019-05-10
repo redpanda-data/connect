@@ -27,12 +27,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
+
+	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
-	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 
 	// SQL Drivers
 	_ "github.com/go-sql-driver/mysql"
@@ -46,12 +48,14 @@ func init() {
 		constructor: NewSQL,
 		description: `
 SQL is a processor that runs a query against a target database for each message
-of a batch and, for queries that return rows, replaces the message with the
-result.
+batch and, for queries that return rows, replaces the batch with the result.
+
+In order to execute an SQL query for each message of the batch use this
+processor within a ` + "[`process_batch`](#process_batch)" + ` processor.
 
 If a query contains arguments they can be set as an array of strings supporting
-[interpolation functions](../config_interpolation.md#functions) executed per
-message of the batch in the ` + "`args`" + ` field:
+[interpolation functions](../config_interpolation.md#functions) in the
+` + "`args`" + ` field:
 
 ` + "``` yaml" + `
 type: sql
@@ -68,14 +72,14 @@ sql:
 ### Result Codecs
 
 When a query returns rows they are serialised according to a chosen codec, and
-the message contents are replaced with the serialised result.
+the batch contents are replaced with the serialised result.
 
 #### ` + "`none`" + `
 
-The result of the query is ignored and the message remains unchanged. If your
-query does not return rows then this is the appropriate codec.
+The result of the query is ignored and the message batch remains unchanged. If
+your query does not return rows then this is the appropriate codec.
 
-#### ` + "`json`" + `
+#### ` + "`json_array`" + `
 
 The resulting rows are serialised into an array of JSON objects, where each
 object represents a row, where the key is the column name and the value is that
@@ -192,9 +196,9 @@ func NewSQL(
 
 //------------------------------------------------------------------------------
 
-type sqlResultCodec func(rows *sql.Rows, p types.Part) error
+type sqlResultCodec func(rows *sql.Rows, msg types.Message) error
 
-func sqlResultJSONCodec(rows *sql.Rows, p types.Part) error {
+func sqlResultJSONArrayCodec(rows *sql.Rows, msg types.Message) error {
 	columnNames, err := rows.Columns()
 	if err != nil {
 		return err
@@ -228,13 +232,19 @@ func sqlResultJSONCodec(rows *sql.Rows, p types.Part) error {
 		}
 		jArray = append(jArray, jObj)
 	}
-	return p.SetJSON(jArray)
+	if msg.Len() > 0 {
+		p := msg.Get(0)
+		msg.SetAll([]types.Part{p})
+		return msg.Get(0).SetJSON(jArray)
+	}
+	msg.Append(message.NewPart(nil))
+	return msg.Get(0).SetJSON(jArray)
 }
 
 func strToSQLResultCodec(codec string) (sqlResultCodec, error) {
 	switch codec {
-	case "json":
-		return sqlResultJSONCodec, nil
+	case "json_array":
+		return sqlResultJSONArrayCodec, nil
 	case "none":
 		return nil, nil
 	}
@@ -270,32 +280,43 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	s.mCount.Incr(1)
 	result := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
-		lMsg := message.Lock(result, index)
-		args := make([]interface{}, len(s.args))
-		for i, v := range s.args {
-			args[i] = v.Get(lMsg)
-		}
-		if s.resCodec == nil {
-			err := s.doExecute(s.queryStr.Get(lMsg), args...)
-			if err != nil {
-				s.log.Errorf("Failed to execute query: %v\n", err)
-			}
-			return err
-		}
-		rows, err := s.doQuery(s.queryStr.Get(lMsg), args...)
-		if err != nil {
-			s.log.Errorf("Failed to execute query: %v\n", err)
-			return fmt.Errorf("query failed: %v", err)
-		}
-		defer rows.Close()
-		if err = s.resCodec(rows, part); err != nil {
-			s.log.Errorf("Failed to apply result codec: %v\n", err)
-		}
-		return err
-	}
+	spans := tracing.CreateChildSpans(TypeSQL, result)
 
-	IteratePartsWithSpan(TypeSQL, s.parts, result, proc)
+	args := make([]interface{}, len(s.args))
+	for i, v := range s.args {
+		args[i] = v.Get(result)
+	}
+	var err error
+	if s.resCodec == nil {
+		if err = s.doExecute(s.queryStr.Get(result), args...); err != nil {
+			err = fmt.Errorf("failed to execute query: %v", err)
+		}
+	} else {
+		var rows *sql.Rows
+		if rows, err = s.doQuery(s.queryStr.Get(result), args...); err == nil {
+			defer rows.Close()
+			if err = s.resCodec(rows, result); err != nil {
+				err = fmt.Errorf("failed to apply result codec: %v", err)
+			}
+		} else {
+			err = fmt.Errorf("failed to execute query: %v", err)
+		}
+	}
+	if err != nil {
+		result.Iter(func(i int, p types.Part) error {
+			FlagFail(p)
+			spans[i].LogFields(
+				olog.String("event", "error"),
+				olog.String("type", err.Error()),
+			)
+			return nil
+		})
+		s.log.Errorf("SQL error: %v\n", err)
+		s.mErr.Incr(1)
+	}
+	for _, s := range spans {
+		s.Finish()
+	}
 
 	s.mSent.Incr(int64(result.Len()))
 	s.mBatchSent.Incr(1)

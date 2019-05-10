@@ -5,13 +5,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 1.20.1 - 2019-05-09
+## 1.20.2 - 2019-05-10
+
+### Changed
+
+- The `sql` processor now executes across the batch, documentation updated to
+  clarify.
+
+## 1.20.1 - 2019-05-10
 
 ### Fixed
 
 - Corrected `result_codec` field in `sql` processor config.
 
-## 1.20.0 - 2019-05-09
+## 1.20.0 - 2019-05-10
 
 ### Added
 

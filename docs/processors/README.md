@@ -1462,12 +1462,14 @@ sql:
 ```
 
 SQL is a processor that runs a query against a target database for each message
-of a batch and, for queries that return rows, replaces the message with the
-result.
+batch and, for queries that return rows, replaces the batch with the result.
+
+In order to execute an SQL query for each message of the batch use this
+processor within a [`process_batch`](#process_batch) processor.
 
 If a query contains arguments they can be set as an array of strings supporting
-[interpolation functions](../config_interpolation.md#functions) executed per
-message of the batch in the `args` field:
+[interpolation functions](../config_interpolation.md#functions) in the
+`args` field:
 
 ``` yaml
 type: sql
@@ -1484,14 +1486,14 @@ sql:
 ### Result Codecs
 
 When a query returns rows they are serialised according to a chosen codec, and
-the message contents are replaced with the serialised result.
+the batch contents are replaced with the serialised result.
 
 #### `none`
 
-The result of the query is ignored and the message remains unchanged. If your
-query does not return rows then this is the appropriate codec.
+The result of the query is ignored and the message batch remains unchanged. If
+your query does not return rows then this is the appropriate codec.
 
-#### `json`
+#### `json_array`
 
 The resulting rows are serialised into an array of JSON objects, where each
 object represents a row, where the key is the column name and the value is that
