@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.19.3 - 2019-05-10
+
+### Fixed
+
+- Using `json_map_columns` with the `dynamodb` output should now correctly store
+  `null` and array values within the target JSON structure.
+
 ## 1.19.2 - 2019-05-09
 
 ### Added

@@ -168,6 +168,14 @@ func walkJSON(root interface{}) *dynamodb.AttributeValue {
 		return &dynamodb.AttributeValue{
 			M: m,
 		}
+	case []interface{}:
+		l := make([]*dynamodb.AttributeValue, len(v))
+		for i, v2 := range v {
+			l[i] = walkJSON(v2)
+		}
+		return &dynamodb.AttributeValue{
+			L: l,
+		}
 	case string:
 		return &dynamodb.AttributeValue{
 			S: aws.String(v),
@@ -187,6 +195,10 @@ func walkJSON(root interface{}) *dynamodb.AttributeValue {
 	case bool:
 		return &dynamodb.AttributeValue{
 			BOOL: aws.Bool(v),
+		}
+	case nil:
+		return &dynamodb.AttributeValue{
+			NULL: aws.Bool(true),
 		}
 	}
 	return &dynamodb.AttributeValue{
