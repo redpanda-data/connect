@@ -36,10 +36,10 @@ func init() {
 	Constructors[TypeTry] = TypeSpec{
 		constructor: NewTry,
 		description: `
-Behaves similarly to the ` + "[`process_batch`](#process_batch)" + ` processor,
-where a list of child processors are applied to individual messages of a batch.
-However, if a processor fails for a message then that message will skip all
-following processors.
+Behaves similarly to the ` + "[`for_each`](#for_each)" + ` processor, where a
+list of child processors are applied to individual messages of a batch. However,
+if a processor fails for a message then that message will skip all following
+processors.
 
 For example, with the following config:
 

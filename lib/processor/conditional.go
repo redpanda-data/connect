@@ -44,7 +44,7 @@ the ` + "`else_processors`" + ` are applied. This processor is useful for
 applying processors based on the content of message batches.
 
 In order to conditionally process each message of a batch individually use this
-processor with the ` + "[`process_batch`](#process_batch)" + ` processor.
+processor with the ` + "[`for_each`](#for_each)" + ` processor.
 
 You can find a [full list of conditions here](../conditions).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.20.3 - 2019-05-11
+
+### Added
+
+- New `for_each` processor with the same behaviour as `process_batch`,
+  `process_batch` is now considered an alias for `for_each`.
+
 ## 1.20.2 - 2019-05-10
 
 ### Changed

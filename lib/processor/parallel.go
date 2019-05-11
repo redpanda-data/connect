@@ -41,8 +41,8 @@ func init() {
 		description: `
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message (similar to the
-` + "[`process_batch`](#process_batch)" + ` processor), but where each message
-is processed in parallel.
+` + "[`for_each`](#for_each)" + ` processor), but where each message is
+processed in parallel.
 
 The field ` + "`cap`" + `, if greater than zero, caps the maximum number of
 parallel processing threads.`,

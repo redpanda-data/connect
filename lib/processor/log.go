@@ -42,7 +42,7 @@ interpolations described [here](../config_interpolation.md#functions) which
 allows you to log the contents and metadata of a messages within a batch.
 
 In order to print a log message per message of a batch place it within a
-` + "[`process_batch`](#process_batch)" + ` processor.
+` + "[`for_each`](#for_each)" + ` processor.
 
 For example, if we wished to create a debug log event for each message in a
 pipeline in order to expose the JSON field ` + "`foo.bar`" + ` as well as the
@@ -50,8 +50,8 @@ metadata field ` + "`kafka_partition`" + ` we can achieve that with the
 following config:
 
 ` + "``` yaml" + `
-type: process_batch
-process_batch:
+type: for_each
+for_each:
 - type: log
   log:
     level: DEBUG

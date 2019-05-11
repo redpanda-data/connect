@@ -53,8 +53,7 @@ element will be selected, and so on.
 
 Some processors such as `filter` and `dedupe` act across an entire
 batch, when instead we'd like to perform them on individual messages of a batch.
-In this case the [`process_batch`](#process_batch) processor can be
-used.
+In this case the [`for_each`](#for_each) processor can be used.
 
 ### Contents
 
@@ -72,38 +71,39 @@ used.
 12. [`encode`](#encode)
 13. [`filter`](#filter)
 14. [`filter_parts`](#filter_parts)
-15. [`grok`](#grok)
-16. [`group_by`](#group_by)
-17. [`group_by_value`](#group_by_value)
-18. [`hash`](#hash)
-19. [`hash_sample`](#hash_sample)
-20. [`http`](#http)
-21. [`insert_part`](#insert_part)
-22. [`jmespath`](#jmespath)
-23. [`json`](#json)
-24. [`lambda`](#lambda)
-25. [`log`](#log)
-26. [`merge_json`](#merge_json)
-27. [`metadata`](#metadata)
-28. [`metric`](#metric)
-29. [`noop`](#noop)
-30. [`parallel`](#parallel)
-31. [`process_batch`](#process_batch)
-32. [`process_dag`](#process_dag)
-33. [`process_field`](#process_field)
-34. [`process_map`](#process_map)
-35. [`sample`](#sample)
-36. [`select_parts`](#select_parts)
-37. [`sleep`](#sleep)
-38. [`split`](#split)
-39. [`sql`](#sql)
-40. [`subprocess`](#subprocess)
-41. [`switch`](#switch)
-42. [`text`](#text)
-43. [`throttle`](#throttle)
-44. [`try`](#try)
-45. [`unarchive`](#unarchive)
-46. [`while`](#while)
+15. [`for_each`](#for_each)
+16. [`grok`](#grok)
+17. [`group_by`](#group_by)
+18. [`group_by_value`](#group_by_value)
+19. [`hash`](#hash)
+20. [`hash_sample`](#hash_sample)
+21. [`http`](#http)
+22. [`insert_part`](#insert_part)
+23. [`jmespath`](#jmespath)
+24. [`json`](#json)
+25. [`lambda`](#lambda)
+26. [`log`](#log)
+27. [`merge_json`](#merge_json)
+28. [`metadata`](#metadata)
+29. [`metric`](#metric)
+30. [`noop`](#noop)
+31. [`parallel`](#parallel)
+32. [`process_batch`](#process_batch)
+33. [`process_dag`](#process_dag)
+34. [`process_field`](#process_field)
+35. [`process_map`](#process_map)
+36. [`sample`](#sample)
+37. [`select_parts`](#select_parts)
+38. [`sleep`](#sleep)
+39. [`split`](#split)
+40. [`sql`](#sql)
+41. [`subprocess`](#subprocess)
+42. [`switch`](#switch)
+43. [`text`](#text)
+44. [`throttle`](#throttle)
+45. [`try`](#try)
+46. [`unarchive`](#unarchive)
+47. [`while`](#while)
 
 ## `archive`
 
@@ -351,10 +351,10 @@ type: catch
 catch: []
 ```
 
-Behaves similarly to the [`process_batch`](#process_batch) processor,
-where a list of child processors are applied to individual messages of a batch.
-However, processors are only applied to messages that failed a processing step
-prior to the catch.
+Behaves similarly to the [`for_each`](#for_each) processor, where a
+list of child processors are applied to individual messages of a batch. However,
+processors are only applied to messages that failed a processing step prior to
+the catch.
 
 For example, with the following config:
 
@@ -413,7 +413,7 @@ the `else_processors` are applied. This processor is useful for
 applying processors based on the content of message batches.
 
 In order to conditionally process each message of a batch individually use this
-processor with the [`process_batch`](#process_batch) processor.
+processor with the [`for_each`](#for_each) processor.
 
 You can find a [full list of conditions here](../conditions).
 
@@ -460,7 +460,7 @@ none or xxhash.
 
 This processor acts across an entire batch, in order to deduplicate individual
 messages within a batch use this processor with the
-[`process_batch`](#process_batch) processor.
+[`for_each`](#for_each) processor.
 
 Optionally, the `key` field can be populated in order to hash on a
 function interpolated string rather than the full contents of messages. This
@@ -549,6 +549,22 @@ batch.
 
 This processor is useful if you are combining messages into batches using the
 [`batch`](#batch) processor and wish to remove specific parts.
+
+## `for_each`
+
+``` yaml
+type: for_each
+for_each: []
+```
+
+A processor that applies a list of child processors to messages of a batch as
+though they were each a batch of one message. This is useful for forcing batch
+wide processors such as [`dedupe`](#dedupe) or interpolations such as
+the `value` field of the `metadata` processor to execute on
+individual message parts of a batch instead.
+
+Please note that most processors already process per message of a batch, and
+this processor is not needed in those cases.
 
 ## `grok`
 
@@ -731,7 +747,7 @@ results in dropping half of the input stream, and setting `retain_min`
 to `50.0` and `retain_max` to `100.1` will drop the _other_ half.
 
 In order to sample individual messages of a batch use this processor with the
-[`process_batch`](#process_batch) processor.
+[`for_each`](#for_each) processor.
 
 ## `http`
 
@@ -1016,7 +1032,7 @@ interpolations described [here](../config_interpolation.md#functions) which
 allows you to log the contents and metadata of a messages within a batch.
 
 In order to print a log message per message of a batch place it within a
-[`process_batch`](#process_batch) processor.
+[`for_each`](#for_each) processor.
 
 For example, if we wished to create a debug log event for each message in a
 pipeline in order to expose the JSON field `foo.bar` as well as the
@@ -1024,8 +1040,8 @@ metadata field `kafka_partition` we can achieve that with the
 following config:
 
 ``` yaml
-type: process_batch
-process_batch:
+type: for_each
+for_each:
 - type: log
   log:
     level: DEBUG
@@ -1090,12 +1106,12 @@ This allows you to set the contents of a metadata field using values taken from
 the message payload.
 
 Value interpolations are resolved once per batch. In order to resolve them per
-message of a batch place it within a [`process_batch`](#process_batch)
+message of a batch place it within a [`for_each`](#for_each)
 processor:
 
 ``` yaml
-type: process_batch
-process_batch:
+type: for_each
+for_each:
 - type: metadata
   metadata:
     operator: set
@@ -1131,11 +1147,11 @@ metric:
 
 Expose custom metrics by extracting values from message batches. This processor
 executes once per batch, in order to execute once per message place it within a
-[`process_batch`](#process_batch) processor:
+[`for_each`](#for_each) processor:
 
 ``` yaml
-type: process_batch
-process_batch:
+type: for_each
+for_each:
 - type: metric
   metric:
     type: counter_by
@@ -1226,8 +1242,8 @@ parallel:
 
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message (similar to the
-[`process_batch`](#process_batch) processor), but where each message
-is processed in parallel.
+[`for_each`](#for_each) processor), but where each message is
+processed in parallel.
 
 The field `cap`, if greater than zero, caps the maximum number of
 parallel processing threads.
@@ -1239,13 +1255,8 @@ type: process_batch
 process_batch: []
 ```
 
-A processor that applies a list of child processors to messages of a batch as
-though they were each a batch of one message. This is useful for forcing batch
-wide processors such as [`dedupe`](#dedupe) to apply to individual
-message parts of a batch instead.
-
-Please note that most processors already process per message of a batch, and
-this processor is not needed in those cases.
+Alias for the [`for_each`](#for_each) processor, which should be used
+instead.
 
 ## `process_dag`
 
@@ -1462,11 +1473,11 @@ of functions [here](../config_interpolation.md#functions).
 
 This processor executes once per message batch. In order to execute once for
 each message of a batch place it within a
-[`process_batch`](#process_batch) processor:
+[`for_each`](#for_each) processor:
 
 ``` yaml
-type: process_batch
-process_batch:
+type: for_each
+for_each:
 - type: sleep
   sleep:
     duration: ${!metadata:sleep_for}
@@ -1507,7 +1518,7 @@ SQL is a processor that runs a query against a target database for each message
 batch and, for queries that return rows, replaces the batch with the result.
 
 In order to execute an SQL query for each message of the batch use this
-processor within a [`process_batch`](#process_batch) processor.
+processor within a [`for_each`](#for_each) processor.
 
 If a query contains arguments they can be set as an array of strings supporting
 [interpolation functions](../config_interpolation.md#functions) in the
@@ -1607,7 +1618,7 @@ A case takes this form:
 ```
 
 In order to switch each message of a batch individually use this processor with
-the [`process_batch`](#process_batch) processor.
+the [`for_each`](#for_each) processor.
 
 You can find a [full list of conditions here](../conditions).
 
@@ -1629,11 +1640,11 @@ you can find a list of functions [here](../config_interpolation.md#functions).
 
 Value interpolations are resolved once per message batch, in order to resolve it
 for each message of the batch place it within a
-[`process_batch`](#process_batch) processor:
+[`for_each`](#for_each) processor:
 
 ``` yaml
-type: process_batch
-process_batch:
+type: for_each
+for_each:
 - type: text
   text:
     operator: set
@@ -1727,10 +1738,10 @@ type: try
 try: []
 ```
 
-Behaves similarly to the [`process_batch`](#process_batch) processor,
-where a list of child processors are applied to individual messages of a batch.
-However, if a processor fails for a message then that message will skip all
-following processors.
+Behaves similarly to the [`for_each`](#for_each) processor, where a
+list of child processors are applied to individual messages of a batch. However,
+if a processor fails for a message then that message will skip all following
+processors.
 
 For example, with the following config:
 

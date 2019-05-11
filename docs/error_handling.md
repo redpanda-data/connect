@@ -42,11 +42,11 @@ Failed messages can be fed into their own processor steps with a
 Once messages finish the catch block they will have their failure flags removed
 and are treated like regular messages. If this behaviour is not desired then it
 is possible to simulate a catch block with a [`conditional`][conditional]
-processor:
+processor placed within a [`for_each`][for_each] processor:
 
 ``` yaml
-  - type: process_batch
-    process_batch:
+  - type: for_each
+    for_each:
     - type: conditional
       conditional:
         condition:
@@ -61,8 +61,8 @@ It's possible to reattempt a processor for a particular message until it is
 successful with a [`while`][while] processor:
 
 ``` yaml
-  - type: process_batch
-    process_batch:
+  - type: for_each
+    for_each:
     - type: while
       while:
         at_least_once: true
@@ -145,7 +145,7 @@ output:
 [processor_failed]: ./conditions/README.md#processor_failed
 [filter_parts]: ./processors/README.md#filter_parts
 [while]: ./processors/README.md#while
-[process_batch]: ./processors/README.md#process_batch
+[for_each]: ./processors/README.md#for_each
 [conditional]: ./processors/README.md#conditional
 [catch]: ./processors/README.md#catch
 [try]: ./processors/README.md#try

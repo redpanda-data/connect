@@ -50,12 +50,12 @@ This allows you to set the contents of a metadata field using values taken from
 the message payload.
 
 Value interpolations are resolved once per batch. In order to resolve them per
-message of a batch place it within a ` + "[`process_batch`](#process_batch)" + `
+message of a batch place it within a ` + "[`for_each`](#for_each)" + `
 processor:
 
 ` + "``` yaml" + `
-type: process_batch
-process_batch:
+type: for_each
+for_each:
 - type: metadata
   metadata:
     operator: set

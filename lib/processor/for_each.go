@@ -33,20 +33,37 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors[TypeProcessBatch] = TypeSpec{
-		constructor: NewProcessBatch,
+	Constructors[TypeForEach] = TypeSpec{
+		constructor: NewForEach,
 		description: `
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message. This is useful for forcing batch
-wide processors such as ` + "[`dedupe`](#dedupe)" + ` to apply to individual
-message parts of a batch instead.
+wide processors such as ` + "[`dedupe`](#dedupe)" + ` or interpolations such as
+the ` + "`value`" + ` field of the ` + "`metadata`" + ` processor to execute on
+individual message parts of a batch instead.
 
 Please note that most processors already process per message of a batch, and
 this processor is not needed in those cases.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
-			procConfs := make([]interface{}, len(conf.ProcessBatch))
-			for i, pConf := range conf.ProcessBatch {
+			procConfs := make([]interface{}, len(conf.ForEach))
+			for i, pConf := range conf.ForEach {
+				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
+					return nil, err
+				}
+			}
+			return procConfs, nil
+		},
+	}
+	Constructors[TypeProcessBatch] = TypeSpec{
+		constructor: NewProcessBatch,
+		description: `
+Alias for the ` + "[`for_each`](#for_each)" + ` processor, which should be used
+instead.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			var err error
+			procConfs := make([]interface{}, len(conf.ForEach))
+			for i, pConf := range conf.ForEach {
 				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
 					return nil, err
 				}
@@ -58,20 +75,20 @@ this processor is not needed in those cases.`,
 
 //------------------------------------------------------------------------------
 
-// ProcessBatchConfig is a config struct containing fields for the ProcessBatch
+// ForEachConfig is a config struct containing fields for the ForEach
 // processor.
-type ProcessBatchConfig []Config
+type ForEachConfig []Config
 
-// NewProcessBatchConfig returns a default ProcessBatchConfig.
-func NewProcessBatchConfig() ProcessBatchConfig {
+// NewForEachConfig returns a default ForEachConfig.
+func NewForEachConfig() ForEachConfig {
 	return []Config{}
 }
 
 //------------------------------------------------------------------------------
 
-// ProcessBatch is a processor that applies a list of child processors to each
+// ForEach is a processor that applies a list of child processors to each
 // message of a batch individually.
-type ProcessBatch struct {
+type ForEach struct {
 	children []types.Processor
 
 	log log.Modular
@@ -82,7 +99,31 @@ type ProcessBatch struct {
 	mBatchSent metrics.StatCounter
 }
 
-// NewProcessBatch returns a ProcessBatch processor.
+// NewForEach returns a ForEach processor.
+func NewForEach(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
+	var children []types.Processor
+	for i, pconf := range conf.ForEach {
+		prefix := fmt.Sprintf("%v", i)
+		proc, err := New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
+		if err != nil {
+			return nil, err
+		}
+		children = append(children, proc)
+	}
+	return &ForEach{
+		children: children,
+		log:      log,
+
+		mCount:     stats.GetCounter("count"),
+		mErr:       stats.GetCounter("error"),
+		mSent:      stats.GetCounter("sent"),
+		mBatchSent: stats.GetCounter("batch.sent"),
+	}, nil
+}
+
+// NewProcessBatch returns a ForEach processor.
 func NewProcessBatch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
@@ -95,7 +136,7 @@ func NewProcessBatch(
 		}
 		children = append(children, proc)
 	}
-	return &ProcessBatch{
+	return &ForEach{
 		children: children,
 		log:      log,
 
@@ -110,7 +151,7 @@ func NewProcessBatch(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *ProcessBatch) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *ForEach) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
 	resultMsgs := make([]types.Message, msg.Len())
@@ -142,14 +183,14 @@ func (p *ProcessBatch) ProcessMessage(msg types.Message) ([]types.Message, types
 }
 
 // CloseAsync shuts down the processor and stops processing requests.
-func (p *ProcessBatch) CloseAsync() {
+func (p *ForEach) CloseAsync() {
 	for _, c := range p.children {
 		c.CloseAsync()
 	}
 }
 
 // WaitForClose blocks until the processor has closed down.
-func (p *ProcessBatch) WaitForClose(timeout time.Duration) error {
+func (p *ForEach) WaitForClose(timeout time.Duration) error {
 	stopBy := time.Now().Add(timeout)
 	for _, c := range p.children {
 		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
