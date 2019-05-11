@@ -40,7 +40,19 @@ func init() {
 	Constructors[TypeMetric] = TypeSpec{
 		constructor: NewMetric,
 		description: `
-Creates metrics by extracting values from messages.
+Expose custom metrics by extracting values from message batches. This processor
+executes once per batch, in order to execute once per message place it within a
+` + "[`process_batch`](#process_batch)" + ` processor:
+
+` + "``` yaml" + `
+type: process_batch
+process_batch:
+- type: metric
+  metric:
+    type: counter_by
+    path: count.custom.field
+    value: ${!json_field:field.some.value}
+` + "```" + `
 
 The ` + "`path`" + ` field should be a dot separated path of the metric to be
 set and will automatically be converted into the correct format of the

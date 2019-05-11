@@ -1010,10 +1010,13 @@ log:
   message: ""
 ```
 
-Log is a processor that prints a log event each time it processes a message. The
-message is then sent onwards unchanged. The log message can be set using
-function interpolations described [here](../config_interpolation.md#functions)
-which allows you to log the contents and metadata of a message.
+Log is a processor that prints a log event each time it processes a batch. The
+batch is then sent onwards unchanged. The log message can be set using function
+interpolations described [here](../config_interpolation.md#functions) which
+allows you to log the contents and metadata of a messages within a batch.
+
+In order to print a log message per message of a batch place it within a
+[`process_batch`](#process_batch) processor.
 
 For example, if we wished to create a debug log event for each message in a
 pipeline in order to expose the JSON field `foo.bar` as well as the
@@ -1021,10 +1024,12 @@ metadata field `kafka_partition` we can achieve that with the
 following config:
 
 ``` yaml
-type: log
-log:
-  level: DEBUG
-  message: "field: ${!json_field:foo.bar}, part: ${!metadata:kafka_partition}"
+type: process_batch
+process_batch:
+- type: log
+  log:
+    level: DEBUG
+    message: "field: ${!json_field:foo.bar}, part: ${!metadata:kafka_partition}"
 ```
 
 The `level` field determines the log level of the printed events and
@@ -1084,6 +1089,20 @@ you can find a list of functions [here](../config_interpolation.md#functions).
 This allows you to set the contents of a metadata field using values taken from
 the message payload.
 
+Value interpolations are resolved once per batch. In order to resolve them per
+message of a batch place it within a [`process_batch`](#process_batch)
+processor:
+
+``` yaml
+type: process_batch
+process_batch:
+- type: metadata
+  metadata:
+    operator: set
+    key: foo
+    value: ${!json_field:document.foo}
+```
+
 ### Operators
 
 #### `set`
@@ -1110,7 +1129,19 @@ metric:
   value: ""
 ```
 
-Creates metrics by extracting values from messages.
+Expose custom metrics by extracting values from message batches. This processor
+executes once per batch, in order to execute once per message place it within a
+[`process_batch`](#process_batch) processor:
+
+``` yaml
+type: process_batch
+process_batch:
+- type: metric
+  metric:
+    type: counter_by
+    path: count.custom.field
+    value: ${!json_field:field.some.value}
+```
 
 The `path` field should be a dot separated path of the metric to be
 set and will automatically be converted into the correct format of the
@@ -1429,6 +1460,18 @@ Sleep for a period of time specified as a duration string. This processor will
 interpolate functions within the `duration` field, you can find a list
 of functions [here](../config_interpolation.md#functions).
 
+This processor executes once per message batch. In order to execute once for
+each message of a batch place it within a
+[`process_batch`](#process_batch) processor:
+
+``` yaml
+type: process_batch
+process_batch:
+- type: sleep
+  sleep:
+    duration: ${!metadata:sleep_for}
+```
+
 ## `split`
 
 ``` yaml
@@ -1583,6 +1626,19 @@ Performs text based mutations on payloads.
 
 This processor will interpolate functions within the `value` field,
 you can find a list of functions [here](../config_interpolation.md#functions).
+
+Value interpolations are resolved once per message batch, in order to resolve it
+for each message of the batch place it within a
+[`process_batch`](#process_batch) processor:
+
+``` yaml
+type: process_batch
+process_batch:
+- type: text
+  text:
+    operator: set
+    value: ${!json_field:document.content}
+```
 
 ### Operators
 
