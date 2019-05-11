@@ -1,5 +1,4 @@
 input:
-  type: s3
   s3:
     region: eu-west-1 # TODO
     bucket: "TODO"
@@ -17,18 +16,14 @@ input:
 pipeline:
   threads: 4 # Try to match the number of available logical CPU cores
   processors:
-  - type: decompress
-    decompress:
+  - decompress:
       algorithm: gzip
-  - type: unarchive
-    unarchive:
+  - unarchive:
       format: tar
-  - type: split
-    split:
+  - split:
       size: 10 # The size of message batches to send to Kafka
 
 output:
-  type: kafka
   kafka:
     addresses:
     - localhost:9092

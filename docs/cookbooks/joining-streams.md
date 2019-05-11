@@ -81,7 +81,6 @@ In this example I'm targeting Redis, but you can choose any of the supported
 
 ``` yaml
 input:
-  type: kafka_balanced
   kafka_balanced:
     addresses:
     - TODO
@@ -92,13 +91,11 @@ input:
 pipeline:
   processors:
   # Reduce document into only fields we wish to cache.
-  - type: jmespath
-    jmespath:
+  - jmespath:
       query: '{"article": article}'
 
   # Store reduced articles into our cache.
-  - type: cache
-    cache:
+  - cache:
       operator: set
       cache: hydration_cache
       key: "${!json_field:article.id}"
@@ -111,7 +108,6 @@ output:
 resources:
   caches:
     hydration_cache:
-      type: redis
       redis:
         expiration: 168h
         retries: 3
@@ -131,7 +127,6 @@ control over how results are mapped back into the document.
 
 ``` yaml
 input:
-  type: kafka_balanced
   kafka_balanced:
     addresses:
     - TODO
@@ -142,13 +137,11 @@ input:
 pipeline:
   processors:
   # Attempt to obtain parent event from cache.
-  - type: process_map
-    process_map:
+  - process_map:
       premap:
         parent_id: comment.parent_id
       processors:
-      - type: cache
-        cache:
+      - cache:
           operator: get
           cache: hydration_cache
           key: "${!json_field:parent_id}"
@@ -157,15 +150,13 @@ pipeline:
         article: article
   
   # Reduce comment into only fields we wish to cache.
-  - type: process_map
-    process_map:
+  - process_map:
       premap:
         comment.id: comment.id
         article: article
       processors:
       # Store reduced comment into our cache.
-      - type: cache
-        cache:
+      - cache:
           operator: set
           cache: hydration_cache
           key: "${!json_field:comment.id}"
@@ -176,7 +167,6 @@ pipeline:
 
 # Sent resulting documents to our hydrated topic.
 output:
-  type: kafka
   kafka:
     addresses:
     - TODO
@@ -185,7 +175,6 @@ output:
 resources:
   caches:
     hydration_cache:
-      type: redis
       redis:
         expiration: 168h
         retries: 3
@@ -216,19 +205,16 @@ Our config (omitting the caching sections for brevity) now looks like this:
 
 ``` yaml
 input:
-  type: broker
   broker:
     inputs:
-    - type: kafka_balanced
-      kafka_balanced:
+    - kafka_balanced:
         addresses:
         - TODO
         topics:
         - comments
         consumer_group: benthos_comments_group
 
-    - type: kafka_balanced
-      kafka_balanced:
+    - kafka_balanced:
         addresses:
         - TODO
         topics:
@@ -237,10 +223,8 @@ input:
 
       processors:
       # Calcuate time until next retry attempt and sleep for that duration.
-      - type: for_each
-        for_each:
-        - type: awk
-          awk:
+      - for_each:
+        - awk:
             program: |
              {
                delay_for = 3600 - (timestamp_unix() - metadata_get("last_attempted"));
@@ -248,50 +232,41 @@ input:
                  delay_for = 0;
                metadata_set("delay_for_s", delay_for);
              }
-        - type: sleep
-          sleep:
+        - sleep:
             duration: "${!metadata:delay_for_s}s"
 
 pipeline:
   processors:
-  - type: try
-    try:
+  - try:
     # Attempt to obtain parent event from cache.
-    - type: process_map
-      process_map:
+    - process_map:
         {} # Omitted
 
     # Reduce document into only fields we wish to cache.
-    - type: process_map
-      process_map:
+    - process_map:
         {} # Omitted
 
     # If we've reached this point then both processors succeeded.
-    - type: metadata
-      metadata:
+    - metadata:
         operator: set
         key: output_topic
         value: comments_hydrated
 
-  - type: catch
-    catch:
+  - catch:
     # If we reach here then a processing stage failed.
-    - type: metadata
-      metadata:
+    - metadata:
         operator: set
         key: output_topic
         value: comments_retry
 
     # Add current timestamp.
-    - type: metadata
-      metadata:
+    - metadata:
         operator: set
         key: last_attempted
         value: ${!timestamp_unix}
 
 # Sent resulting documents either to our hydrated topic or the retry topic.
 output:
-  type: kafka
   kafka:
     addresses:
     - TODO

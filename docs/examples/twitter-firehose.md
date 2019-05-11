@@ -25,7 +25,6 @@ attached to the input is a `bounds_check` filter that removes any empty lines.
 
 ``` yaml
 input:
-  type: http_client
   http_client:
     url: https://gnip-stream.twitter.com/stream/firehose/accounts/foo/publishers/twitter/prod.json?partition=1
     verb: GET
@@ -38,8 +37,8 @@ input:
       enabled: true
       max_buffer: 10_000_000 # 10MB - The max supported length of a single line
   processors:
-  - type: bounds_check # Filter out keep alives (empty message)
-    bounds_check:
+  # Filter out keep alives (empty message)
+  - bounds_check:
       min_part_size: 2
 ```
 
@@ -51,7 +50,6 @@ small window of automatic backfill.
 
 ``` yaml
 buffer:
-  type: memory
   memory:
     limit: 500_000_000
 ```
@@ -66,13 +64,11 @@ layer of deduplication processors.
 pipeline:
   threads: 16 # Determines the max number of concurrent calls to dedupe cache
   processors:
-  - type: filter # Filter out non-json objects and error messages
-    filter:
-      type: jmespath
+  # Filter out non-json objects and error messages
+  - filter:
       jmespath:
         query: "keys(@) | length(@) > `0` && !contains(@, 'error')"
-  - type: dedupe
-    dedupe:
+  - dedupe:
       cache: dedupe
       drop_on_err: false # Prefer occasional duplicates over lost messages
       key: "${!json_field:id_str}" # Dedupe based on 'id_str' field of tweets
@@ -99,7 +95,6 @@ The output section is a standard Kafka connection.
 
 ``` yaml
 output:
-  type: kafka
   kafka:
     addresses:
     - localhost:9092 # TODO
@@ -117,7 +112,6 @@ pipeline.
 resources:
   caches:
     dedupe:
-      type: memcached
       memcached:
         addresses:
         - localhost:11211 # TODO

@@ -75,7 +75,6 @@ document we will use the [`process_map`][procmap-proc] processor, with a child
 
 ``` yaml
 input:
-  type: kafka_balanced
   kafka_balanced:
     addresses:
     - TODO
@@ -86,13 +85,11 @@ input:
 
 pipeline:
   processors:
-  - type: process_map
-    process_map:
+  - process_map:
       premap:
         text: article.content
       processors:
-      - type: http
-        http:
+      - http:
           parallel: true
           request:
             url: http://localhost:4197/claims
@@ -101,7 +98,6 @@ pipeline:
         tmp.claims: claims
 
 output:
-  type: kafka
   kafka:
     addresses:
     - TODO
@@ -151,22 +147,18 @@ and [`unarchive`][unarchive-proc] processors in our
 [`process_map`][procmap-proc] flow, like this:
 
 ``` yaml
-  - type: process_map
-    process_map:
+  - process_map:
       premap:
         text: article.content
       processors:
-      - type: archive
-        archive:
+      - archive:
           format: json_array
-      - type: http
-        http:
+      - http:
           parallel: false
           request:
             url: http://localhost:4198/hyperbole
             verb: POST
-      - type: unarchive
-        unarchive:
+      - unarchive:
           format: json_array
       postmap:
         tmp.hyperbole_rank: hyperbole_rank
@@ -216,15 +208,13 @@ original document at the path `article.fake_news_score`. Our
 [`process_map`][procmap-proc] block for this enrichment would look like this:
 
 ``` yaml
-  - type: process_map
-    process_map:
+  - process_map:
       premap:
         text: article.content
         claims: tmp.claims
         hyperbole_rank: tmp.hyperbole_rank
       processors:
-      - type: http
-        http:
+      - http:
           parallel: true
           request:
             url: http://localhost:4199/fakenews
@@ -259,7 +249,6 @@ final pipeline configuration look like this:
 
 ``` yaml
 input:
-  type: kafka_balanced
   kafka_balanced:
     addresses:
     - TODO
@@ -270,14 +259,12 @@ input:
 
 pipeline:
   processors:
-  - type: process_dag
-    process_dag:
+  - process_dag:
       claims:
         premap:
           text: article.content
         processors:
-        - type: http
-          http:
+        - http:
             parallel: true
             request:
               url: http://localhost:4197/claims
@@ -289,17 +276,14 @@ pipeline:
         premap:
           text: article.content
         processors:
-        - type: archive
-          archive:
+        - archive:
             format: json_array
-        - type: http
-          http:
+        - http:
             parallel: false
             request:
               url: http://localhost:4198/hyperbole
               verb: POST
-        - type: unarchive
-          unarchive:
+        - unarchive:
             format: json_array
         postmap:
           tmp.hyperbole_rank: hyperbole_rank
@@ -310,8 +294,7 @@ pipeline:
           claims: tmp.claims
           hyperbole_rank: tmp.hyperbole_rank
         processors:
-        - type: http
-          http:
+        - http:
             parallel: true
             request:
               url: http://localhost:4199/fakenews
@@ -319,21 +302,17 @@ pipeline:
         postmap:
           article.fake_news_score: fake_news_rank
 
-  - type: catch
-    catch:
-    - type: log
-      log:
+  - catch:
+    - log:
         fields:
           content: "${!content}"
         message: "Enrichments failed due to: ${!metadata:benthos_processing_failed}"
 
-  - type: json
-    json:
+  - json:
       operator: delete
       path: tmp
 
 output:
-  type: kafka
   kafka:
     addresses:
     - TODO

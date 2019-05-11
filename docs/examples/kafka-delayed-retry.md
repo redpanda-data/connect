@@ -17,7 +17,6 @@ mechanism.
 
 ``` yaml
 input:
-  type: kafka_balanced
   kafka_balanced:
     addresses:
     - TODO
@@ -28,30 +27,25 @@ input:
 
 pipeline:
   processors:
-  - type: metadata
-    metadata:
+  - metadata:
       operator: set
       set: output_topic
       value: enriched-queue
 
-  - type: http
-    http:
+  - http:
       parallel: true
       request:
         url: TODO
         verb: POST
         retries: 3
 
-  - type: catch
-    catch:
-    - type: metadata
-      metadata:
+  - catch:
+    - metadata:
         operator: set
         set: output_topic
         value: retry-queue
 
 output:
-  type: kafka
   kafka:
     addresses:
     - TODO
@@ -92,7 +86,6 @@ period:
 
 ``` yaml
 input:
-  type: kafka_balanced
   kafka_balanced:
     addresses:
     - TODO
@@ -103,8 +96,7 @@ input:
 
 pipeline:
   processors:
-  - type: awk
-    awk:
+  - awk:
       codec: json
       program: |
         {
