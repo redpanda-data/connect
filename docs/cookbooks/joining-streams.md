@@ -237,8 +237,8 @@ input:
 
       processors:
       # Calcuate time until next retry attempt and sleep for that duration.
-      - type: process_batch
-        process_batch:
+      - type: for_each
+        for_each:
         - type: awk
           awk:
             program: |
