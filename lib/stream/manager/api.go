@@ -260,7 +260,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			Pipeline: aliasedPipe(confIn.Pipeline),
 			Output:   aliasedOut(confIn.Output),
 		}
-		if err = json.Unmarshal(patchBytes, &aliasedConf); err != nil {
+		if err = yaml.Unmarshal(patchBytes, &aliasedConf); err != nil {
 			return
 		}
 		confOut = stream.Config{
