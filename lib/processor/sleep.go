@@ -44,11 +44,11 @@ of functions [here](../config_interpolation.md#functions).
 
 This processor executes once per message batch. In order to execute once for
 each message of a batch place it within a
-` + "[`process_batch`](#process_batch)" + ` processor:
+` + "[`for_each`](#for_each)" + ` processor:
 
 ` + "``` yaml" + `
-type: process_batch
-process_batch:
+type: for_each
+for_each:
 - type: sleep
   sleep:
     duration: ${!metadata:sleep_for}

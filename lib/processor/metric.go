@@ -42,11 +42,11 @@ func init() {
 		description: `
 Expose custom metrics by extracting values from message batches. This processor
 executes once per batch, in order to execute once per message place it within a
-` + "[`process_batch`](#process_batch)" + ` processor:
+` + "[`for_each`](#for_each)" + ` processor:
 
 ` + "``` yaml" + `
-type: process_batch
-process_batch:
+type: for_each
+for_each:
 - type: metric
   metric:
     type: counter_by

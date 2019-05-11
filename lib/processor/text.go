@@ -49,11 +49,11 @@ you can find a list of functions [here](../config_interpolation.md#functions).
 
 Value interpolations are resolved once per message batch, in order to resolve it
 for each message of the batch place it within a
-` + "[`process_batch`](#process_batch)" + ` processor:
+` + "[`for_each`](#for_each)" + ` processor:
 
 ` + "``` yaml" + `
-type: process_batch
-process_batch:
+type: for_each
+for_each:
 - type: text
   text:
     operator: set

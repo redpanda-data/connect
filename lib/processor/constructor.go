@@ -69,6 +69,7 @@ const (
 	TypeEncode       = "encode"
 	TypeFilter       = "filter"
 	TypeFilterParts  = "filter_parts"
+	TypeForEach      = "for_each"
 	TypeGrok         = "grok"
 	TypeGroupBy      = "group_by"
 	TypeGroupByValue = "group_by_value"
@@ -122,6 +123,7 @@ type Config struct {
 	Encode       EncodeConfig       `json:"encode" yaml:"encode"`
 	Filter       FilterConfig       `json:"filter" yaml:"filter"`
 	FilterParts  FilterPartsConfig  `json:"filter_parts" yaml:"filter_parts"`
+	ForEach      ForEachConfig      `json:"for_each" yaml:"for_each"`
 	Grok         GrokConfig         `json:"grok" yaml:"grok"`
 	GroupBy      GroupByConfig      `json:"group_by" yaml:"group_by"`
 	GroupByValue GroupByValueConfig `json:"group_by_value" yaml:"group_by_value"`
@@ -138,7 +140,7 @@ type Config struct {
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
-	ProcessBatch ProcessBatchConfig `json:"process_batch" yaml:"process_batch"`
+	ProcessBatch ForEachConfig      `json:"process_batch" yaml:"process_batch"`
 	ProcessDAG   ProcessDAGConfig   `json:"process_dag" yaml:"process_dag"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
@@ -174,6 +176,7 @@ func NewConfig() Config {
 		Encode:       NewEncodeConfig(),
 		Filter:       NewFilterConfig(),
 		FilterParts:  NewFilterPartsConfig(),
+		ForEach:      NewForEachConfig(),
 		Grok:         NewGrokConfig(),
 		GroupBy:      NewGroupByConfig(),
 		GroupByValue: NewGroupByValueConfig(),
@@ -190,7 +193,7 @@ func NewConfig() Config {
 		Metric:       NewMetricConfig(),
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),
-		ProcessBatch: NewProcessBatchConfig(),
+		ProcessBatch: NewForEachConfig(),
 		ProcessDAG:   NewProcessDAGConfig(),
 		ProcessField: NewProcessFieldConfig(),
 		ProcessMap:   NewProcessMapConfig(),
@@ -357,8 +360,7 @@ element will be selected, and so on.
 
 Some processors such as ` + "`filter` and `dedupe`" + ` act across an entire
 batch, when instead we'd like to perform them on individual messages of a batch.
-In this case the ` + "[`process_batch`](#process_batch)" + ` processor can be
-used.`
+In this case the ` + "[`for_each`](#for_each)" + ` processor can be used.`
 
 var footer = `
 [0]: ../examples/README.md
