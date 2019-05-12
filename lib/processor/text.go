@@ -52,10 +52,8 @@ for each message of the batch place it within a
 ` + "[`for_each`](#for_each)" + ` processor:
 
 ` + "``` yaml" + `
-type: for_each
 for_each:
-- type: text
-  text:
+- text:
     operator: set
     value: ${!json_field:document.content}
 ` + "```" + `

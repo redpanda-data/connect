@@ -142,19 +142,15 @@ listing them:
 
 ``` yaml
 output:
-  type: broker
   broker:
     pattern: fan_out
     outputs:
-    - type: foo
-      foo:
+    - foo:
         foo_field_1: value1
-    - type: bar
-      bar:
+    - bar:
         bar_field_1: value2
         bar_field_2: value3
-    - type: baz
-      baz:
+    - baz:
         baz_field_1: value4
       processors:
       - type: baz_processor
@@ -243,16 +239,15 @@ types:
 - s3
 
 Like follows:
+
 ``` yaml
 output:
-  type: cache
   cache:
     target: foo
     key: ${!json_field:document.id}
 resources:
   caches:
     foo:
-      type: memcached
       memcached:
         addresses:
         - localhost:11211
@@ -290,9 +285,7 @@ message is dropped entirely:
 
 ``` yaml
 output:
-  type: drop_on_error
   drop_on_error:
-    type: retry
     retry:
       max_retries: 2
       output:
@@ -930,33 +923,27 @@ output only.
 
 ``` yaml
 output:
-  type: switch
   switch:
     retry_until_success: true
     outputs:
     - output:
-        type: foo
         foo:
           foo_field_1: value1
       condition:
-        type: text
         text:
           operator: contains
           arg: foo
       fallthrough: true
     - output:
-        type: bar
         bar:
           bar_field_1: value2
           bar_field_2: value3
       condition:
-        type: text
         text:
           operator: contains
           arg: bar
       fallthrough: true
     - output:
-        type: baz
         baz:
           baz_field_1: value4
         processors:

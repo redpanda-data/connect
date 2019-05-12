@@ -44,8 +44,7 @@ processors.
 For example, with the following config:
 
 ` + "``` yaml" + `
-- type: try
-  try:
+- try:
   - type: foo
   - type: bar
   - type: baz

@@ -45,30 +45,23 @@ the same condition twice by referring to it as a resource, like this:
 
 ` + "``` yaml" + `
 output:
-  type: broker
   broker:
     pattern: fan_out
     outputs:
-    - type: foo
-      foo:
+    - foo:
         processors:
-        - type: filter
-          filter:
+        - filter:
             type: resource
             resource: foobar
-    - type: bar
-      bar:
+    - bar:
         processors:
-        - type: filter
-          filter:
-            type: not
+        - filter:
             not:
               type: resource
               resource: foobar
 resources:
   conditions:
     foobar:
-      type: text
       text:
         operator: equals_cs
         part: 1

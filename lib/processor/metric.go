@@ -45,10 +45,8 @@ executes once per batch, in order to execute once per message place it within a
 ` + "[`for_each`](#for_each)" + ` processor:
 
 ` + "``` yaml" + `
-type: for_each
 for_each:
-- type: metric
-  metric:
+- metric:
     type: counter_by
     path: count.custom.field
     value: ${!json_field:field.some.value}
@@ -83,7 +81,6 @@ For example, the following configuration will increment the value of the
 ` + "`count.custom.field` metric by the contents of `field.some.value`" + `:
 
 ` + "``` yaml" + `
-type: metric
 metric:
   type: counter_by
   path: count.custom.field
@@ -99,7 +96,6 @@ For example, the following configuration will set the value of the
 ` + "`gauge.custom.field` metric to the contents of `field.some.value`" + `:
 
 ` + "``` yaml" + `
-type: metric
 metric:
   type: gauge
   path: gauge.custom.field

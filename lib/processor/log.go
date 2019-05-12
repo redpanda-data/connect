@@ -50,10 +50,8 @@ metadata field ` + "`kafka_partition`" + ` we can achieve that with the
 following config:
 
 ` + "``` yaml" + `
-type: for_each
 for_each:
-- type: log
-  log:
+- log:
     level: DEBUG
     message: "field: ${!json_field:foo.bar}, part: ${!metadata:kafka_partition}"
 ` + "```" + `
@@ -69,7 +67,6 @@ interpolated, meaning it's possible to output structured fields containing
 message contents and metadata, e.g.:
 
 ` + "``` yaml" + `
-type: log
 log:
   level: DEBUG
   message: "foo"

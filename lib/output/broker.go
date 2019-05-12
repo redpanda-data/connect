@@ -49,19 +49,15 @@ listing them:
 
 ` + "``` yaml" + `
 output:
-  type: broker
   broker:
     pattern: fan_out
     outputs:
-    - type: foo
-      foo:
+    - foo:
         foo_field_1: value1
-    - type: bar
-      bar:
+    - bar:
         bar_field_1: value2
         bar_field_2: value3
-    - type: baz
-      baz:
+    - baz:
         baz_field_1: value4
       processors:
       - type: baz_processor

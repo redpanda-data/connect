@@ -45,8 +45,7 @@ For example, with the following config:
 
 ` + "``` yaml" + `
 - type: foo
-- type: catch
-  catch:
+- catch:
   - type: bar
   - type: baz
 ` + "```" + `

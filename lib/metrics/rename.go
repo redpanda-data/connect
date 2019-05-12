@@ -57,7 +57,6 @@ To replace the paths 'foo.bar.zap' and 'foo.baz.zap' with 'zip.bar' and
 'zip.baz' respectively we could use this config:
 
 ` + "``` yaml" + `
-type: rename
 rename:
   by_regexp:
   - pattern: "foo\\.([a-z]*)\\.zap"

@@ -229,21 +229,15 @@ And using boolean condition types we can combine multiple conditions together:
 
 ` + "``` yaml" + `
 condition:
-  type: and
   and:
-  - type: text
-    text:
+  - text:
       operator: contains
       arg: hello world
-  - type: or
-    or:
-    - type: text
-      text:
+  - or:
+    - text:
         operator: contains
         arg: foo
-    - type: not
-      not:
-        type: text
+    - not:
         text:
           operator: contains
           arg: bar

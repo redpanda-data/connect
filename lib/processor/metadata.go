@@ -54,10 +54,8 @@ message of a batch place it within a ` + "[`for_each`](#for_each)" + `
 processor:
 
 ` + "``` yaml" + `
-type: for_each
 for_each:
-- type: metadata
-  metadata:
+- metadata:
     operator: set
     key: foo
     value: ${!json_field:document.foo}

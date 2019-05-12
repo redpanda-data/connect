@@ -52,16 +52,15 @@ types:
 
 ` + cachesList + `
 Like follows:
+
 ` + "``` yaml" + `
 output:
-  type: cache
   cache:
     target: foo
     key: ${!json_field:document.id}
 resources:
   caches:
     foo:
-      type: memcached
       memcached:
         addresses:
         - localhost:11211

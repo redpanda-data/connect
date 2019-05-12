@@ -54,8 +54,7 @@ specific field of a document like this:
 process_field:
   path: foo.bar
   processors:
-  - type: hash
-    hash:
+  - hash:
       algorithm: sha256
 ` + "```" + ``,
 	}

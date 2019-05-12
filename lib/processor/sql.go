@@ -50,23 +50,23 @@ func init() {
 SQL is a processor that runs a query against a target database for each message
 batch and, for queries that return rows, replaces the batch with the result.
 
-In order to execute an SQL query for each message of the batch use this
-processor within a ` + "[`for_each`](#for_each)" + ` processor.
-
 If a query contains arguments they can be set as an array of strings supporting
 [interpolation functions](../config_interpolation.md#functions) in the
-` + "`args`" + ` field:
+` + "`args`" + ` field.
+
+In order to execute an SQL query for each message of the batch use this
+processor within a ` + "[`for_each`](#for_each)" + ` processor:
 
 ` + "``` yaml" + `
-type: sql
-sql:
-  driver: mysql
-  dsn: foouser:foopassword@tcp(localhost:3306)/foodb
-  query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-  args:
-  - ${!json_field:document.foo}
-  - ${!json_field:document.bar}
-  - ${!metadata:kafka_topic}
+for_each:
+- sql:
+    driver: mysql
+    dsn: foouser:foopassword@tcp(localhost:3306)/foodb
+    query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+    args:
+    - ${!json_field:document.foo}
+    - ${!json_field:document.bar}
+    - ${!metadata:kafka_topic}
 ` + "```" + `
 
 ### Result Codecs

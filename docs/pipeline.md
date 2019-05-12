@@ -40,7 +40,6 @@ and choose to use eight parallel consumers of the input `baz`.
 
 ``` yaml
 input:
-  type: broker
   broker:
     copies: 8
     inputs:
@@ -50,8 +49,7 @@ buffer:
 pipeline:
   threads: 4
   processors:
-  - type: jmespath
-    jmespath:
+  - jmespath:
       query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
 output:
   type: bar
@@ -97,14 +95,12 @@ fit four messages of the stream at any given time.
 input:
   type: foo
 buffer:
-  type: memory
   memory:
     limit: 5000000
 pipeline:
   threads: 4
   processors:
-  - type: jmespath
-    jmespath:
+  - jmespath:
       query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
 output:
   type: bar

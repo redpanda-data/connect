@@ -26,21 +26,15 @@ And using boolean condition types we can combine multiple conditions together:
 
 ``` yaml
 condition:
-  type: and
   and:
-  - type: text
-    text:
+  - text:
       operator: contains
       arg: hello world
-  - type: or
-    or:
-    - type: text
-      text:
+  - or:
+    - text:
         operator: contains
         arg: foo
-    - type: not
-      not:
-        type: text
+    - not:
         text:
           operator: contains
           arg: bar
@@ -137,9 +131,7 @@ For example, if we wanted to check that at least one message of a batch contains
 the word 'foo' we could use this config:
 
 ``` yaml
-type: any
 any:
-  type: text
   text:
     operator: contains
     arg: foo
@@ -247,7 +239,6 @@ Checks whether the contents of a metadata key matches one of the defined enum
 values.
 
 ```yaml
-type: metadata
 metadata:
   operator: enum
   part: 0
@@ -265,7 +256,6 @@ Checks whether the contents of a metadata key matches an argument. This operator
 is case insensitive.
 
 ```yaml
-type: metadata
 metadata:
   operator: equals
   part: 0
@@ -279,7 +269,6 @@ Checks whether the contents of a metadata key matches an argument. This operator
 is case sensitive.
 
 ```yaml
-type: metadata
 metadata:
   operator: equals_cs
   part: 0
@@ -292,7 +281,6 @@ metadata:
 Checks whether a metadata key exists.
 
 ```yaml
-type: metadata
 metadata:
   operator: exists
   part: 0
@@ -306,7 +294,6 @@ number, is greater than an argument. Returns false if the metadata value cannot
 be parsed into a number.
 
 ```yaml
-type: metadata
 metadata:
   operator: greater_than
   part: 0
@@ -320,7 +307,6 @@ Checks whether the contents of a metadata key match one of the provided prefixes
 The arg field can either be a singular prefix string or a list of prefixes.
 
 ```yaml
-type: metadata
 metadata:
   operator: has_prefix
   part: 0
@@ -338,7 +324,6 @@ number, is less than an argument. Returns false if the metadata value cannot be
 parsed into a number.
 
 ```yaml
-type: metadata
 metadata:
   operator: less_than
   part: 0
@@ -352,7 +337,6 @@ Checks whether any section of the contents of a metadata key matches a regular
 expression (RE2 syntax).
 
 ```yaml
-type: metadata
 metadata:
   operator: regexp_partial
   part: 0
@@ -366,7 +350,6 @@ Checks whether the contents of a metadata key exactly matches a regular expressi
 (RE2 syntax).
 
 ```yaml
-type: metadata
 metadata:
   operator: regexp_partial
   part: 0
@@ -451,30 +434,23 @@ the same condition twice by referring to it as a resource, like this:
 
 ``` yaml
 output:
-  type: broker
   broker:
     pattern: fan_out
     outputs:
-    - type: foo
-      foo:
+    - foo:
         processors:
-        - type: filter
-          filter:
+        - filter:
             type: resource
             resource: foobar
-    - type: bar
-      bar:
+    - bar:
         processors:
-        - type: filter
-          filter:
-            type: not
+        - filter:
             not:
               type: resource
               resource: foobar
 resources:
   conditions:
     foobar:
-      type: text
       text:
         operator: equals_cs
         part: 1

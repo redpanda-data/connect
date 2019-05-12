@@ -50,13 +50,11 @@ their grouping.
 Each group is configured in a list with a condition and a list of processors:
 
 ` + "``` yaml" + `
-type: group_by
 group_by:
-  - condition:
-      type: static
-      static: true
-    processors:
-      - type: noop
+- condition:
+    static: true
+  processors:
+  - type: noop
 ` + "```" + `
 
 Messages are added to the first group that passes and can only belong to a
@@ -72,33 +70,26 @@ with a ` + "[`switch`](../outputs/README.md#switch)" + ` output:
 ` + "``` yaml" + `
 pipeline:
   processors:
-  - type: group_by
-    group_by:
+  - group_by:
     - condition:
-        type: text
         text:
           operator: contains
           arg: "this is a foo"
       processors:
-      - type: archive
-        archive:
+      - archive:
           format: tar
-      - type: compress
-        compress:
+      - compress:
           algorithm: gzip
-      - type: metadata
-        metadata:
+      - metadata:
           operator: set
           key: grouping
           value: foo
 output:
-  type: switch
   switch:
     outputs:
     - output:
         type: foo_output
       condition:
-        type: metadata
         metadata:
           operator: equals
           key: grouping

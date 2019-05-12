@@ -44,7 +44,6 @@ started with:
 
 ``` yaml
 input:
-  type: foo
   foo:
     field1: etc
 ```
@@ -53,12 +52,10 @@ You could change to:
 
 ``` yaml
 input:
-  type: broker
   broker:
     copies: 4
     inputs:
-    - type: foo
-      foo:
+    - foo:
         field1: etc
 ```
 
@@ -113,8 +110,7 @@ config:
 input:
   type: foo
   processors:
-  - type: batch
-    batch:
+  - batch:
       count: 8
 output:
   type: kafka
@@ -149,7 +145,6 @@ pattern. For example, if you started with:
 
 ``` yaml
 output:
-  type: foo
   foo:
     field1: etc
 ```
@@ -158,13 +153,11 @@ You could change to:
 
 ``` yaml
 output:
-  type: broker
   broker:
     pattern: greedy
     copies: 4
     outputs:
-    - type: foo
-      foo:
+    - foo:
         field1: etc
 ```
 
