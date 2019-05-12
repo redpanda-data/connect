@@ -149,9 +149,7 @@ func NewDynamic(
 	}
 
 	dynAPI.OnUpdate(func(id string, c []byte) error {
-		type confAlias Config
-		newConf := confAlias(NewConfig())
-		newConf.Processors = nil // Remove default processors
+		newConf := NewConfig()
 		if err := yaml.Unmarshal(c, &newConf); err != nil {
 			return err
 		}
