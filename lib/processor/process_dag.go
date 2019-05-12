@@ -213,7 +213,7 @@ func NewProcessDAG(
 
 		child, err := NewProcessMap(v.ProcessMapConfig, mgr, nsLog, nsStats)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create child process_map: %v", err)
+			return nil, fmt.Errorf("failed to create child process_map '%v': %v", k, err)
 		}
 
 		children[k] = child

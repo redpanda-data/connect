@@ -48,10 +48,35 @@ and managing these more complex configuration files.
 
 ## Contents
 
+- [Concise Configuration](#concise-configuration)
 - [Customising Your Configuration](#customising-your-configuration)
 - [Reusing Configuration Snippets](#reusing-configuration-snippets)
 - [Enabling Discovery](#enabling-discovery)
 - [Help With Debugging](#help-with-debugging)
+
+## Concise Configuration
+
+It's often possible to make your configuration files more concise but less
+explicit by omitting the `type` field in components as well as any fields that
+are default. For example, the above configuration could be written as:
+
+``` yaml
+input:
+  kafka_balanced:
+    addresses: [ TODO ]
+    topics: [ foo, bar ]
+    consumer_group: foogroup
+
+pipeline:
+  processors:
+  - jmespath:
+      query: '{ message: @, meta: { link_count: length(links) } }'
+
+output:
+  s3:
+    bucket: TODO
+    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+```
 
 ## Customising Your Configuration
 
