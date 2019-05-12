@@ -30,7 +30,6 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/util/config"
-	yaml "gopkg.in/yaml.v2"
 )
 
 //------------------------------------------------------------------------------
@@ -230,7 +229,7 @@ func Descriptions() string {
 		conf := NewConfig()
 		conf.Type = name
 		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = yaml.Marshal(confSanit)
+			confBytes, _ = config.MarshalYAML(confSanit)
 		}
 
 		buf.WriteString("## ")

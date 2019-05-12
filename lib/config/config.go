@@ -33,7 +33,7 @@ import (
 	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/tracer"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------

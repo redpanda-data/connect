@@ -28,7 +28,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/broker"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------

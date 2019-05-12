@@ -24,7 +24,7 @@ import (
 	"reflect"
 	"testing"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -93,17 +93,19 @@ func TestConfigLints(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		config := New()
-		if err := yaml.Unmarshal([]byte(test.conf), &config); err != nil {
-			t.Fatal(err)
-		}
-		lints, err := Lint([]byte(test.conf), config)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if exp, act := test.lints, lints; !reflect.DeepEqual(exp, act) {
-			t.Errorf("Wrong lint results: %v != %v", act, exp)
-		}
+		t.Run(test.name, func(tt *testing.T) {
+			config := New()
+			if err := yaml.Unmarshal([]byte(test.conf), &config); err != nil {
+				tt.Fatal(err)
+			}
+			lints, err := Lint([]byte(test.conf), config)
+			if err != nil {
+				tt.Fatal(err)
+			}
+			if exp, act := test.lints, lints; !reflect.DeepEqual(exp, act) {
+				tt.Errorf("Wrong lint results: %v != %v", act, exp)
+			}
+		})
 	}
 }
 

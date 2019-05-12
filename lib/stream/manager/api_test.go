@@ -37,7 +37,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/gabs"
 	"github.com/gorilla/mux"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 func router(m *Type) *mux.Router {

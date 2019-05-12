@@ -50,7 +50,7 @@ import (
 	"github.com/Jeffail/benthos/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
 	"github.com/Jeffail/benthos/lib/tracer"
-	yaml "gopkg.in/yaml.v2"
+	uconfig "github.com/Jeffail/benthos/lib/util/config"
 )
 
 //------------------------------------------------------------------------------
@@ -287,7 +287,7 @@ func bootstrap() (config.Type, []string) {
 			}
 			os.Exit(0)
 		} else {
-			if configYAML, err := yaml.Marshal(outConf); err == nil {
+			if configYAML, err := uconfig.MarshalYAML(outConf); err == nil {
 				fmt.Println(string(configYAML))
 			} else {
 				fmt.Fprintln(os.Stderr, fmt.Sprintf("Configuration marshal error: %v", err))

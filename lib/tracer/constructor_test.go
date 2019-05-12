@@ -25,7 +25,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/util/config"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 func TestSanitise(t *testing.T) {

@@ -29,7 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 func TestAnyConfigMarshalJSON(t *testing.T) {

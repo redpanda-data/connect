@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -70,14 +70,14 @@ func TestConfigRefs(t *testing.T) {
 	}
 
 	exp := `a:
-  bar: baz
+    bar: baz
 b:
-- foo
-- c:
-  - 9
-  - 8
-  - 7
-- bar
+  - foo
+  - c:
+      - 9
+      - 8
+      - 7
+  - bar
 d: bar
 `
 	if act := string(res); exp != act {
@@ -124,12 +124,12 @@ func TestConfigRefsRootExpansion(t *testing.T) {
 	}
 
 	exp := `a:
-  bar: baz
+    bar: baz
 b:
-  c:
-  - 9
-  - 8
-  - 7
+    c:
+      - 9
+      - 8
+      - 7
 `
 	if act := string(res); exp != act {
 		t.Errorf("Wrong config result: %v != %v", act, exp)
@@ -188,7 +188,7 @@ func TestJSONPointer(t *testing.T) {
 		{
 			path: "/a",
 			value: `nested1:
-  value1: 5
+    value1: 5
 `,
 		},
 		{
@@ -300,7 +300,7 @@ func TestLocalRefs(t *testing.T) {
 	}
 
 	exp := `a:
-  bar: baz
+    bar: baz
 b: baz
 c: baz
 `

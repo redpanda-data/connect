@@ -24,7 +24,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 func TestSanitisedJSON(t *testing.T) {

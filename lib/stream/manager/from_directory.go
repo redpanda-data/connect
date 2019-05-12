@@ -29,7 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/util/text"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------

@@ -38,7 +38,7 @@ import (
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Jeffail/gabs"
 	"github.com/gorilla/mux"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------

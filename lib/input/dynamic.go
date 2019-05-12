@@ -32,6 +32,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -151,7 +152,7 @@ func NewDynamic(
 		type confAlias Config
 		newConf := confAlias(NewConfig())
 		newConf.Processors = nil // Remove default processors
-		if err := json.Unmarshal(c, &newConf); err != nil {
+		if err := yaml.Unmarshal(c, &newConf); err != nil {
 			return err
 		}
 		ns := fmt.Sprintf("dynamic.inputs.%v", id)
