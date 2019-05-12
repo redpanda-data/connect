@@ -153,8 +153,10 @@ output:
     - baz:
         baz_field_1: value4
       processors:
+      # Processor only applied to messages sent to baz.
       - type: baz_processor
   processors:
+  # Processor applied to messages sent to any brokered output.
   - type: some_processor
 ```
 
