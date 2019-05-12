@@ -21,7 +21,6 @@
 package cache
 
 import (
-	"encoding/json"
 	"os"
 	"testing"
 
@@ -86,32 +85,6 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 	}
 	if exp, act := "foo", conf[0].Memcached.Prefix; exp != act {
 		t.Errorf("Wrong value: %v != %v", act, exp)
-	}
-}
-
-func TestConstructorConfigDefaults(t *testing.T) {
-	conf := []Config{}
-
-	if err := json.Unmarshal([]byte(`[
-		{
-			"type": "memory",
-			"memory": {
-				"ttl": 16
-			}
-		}
-	]`), &conf); err != nil {
-		t.Error(err)
-	}
-
-	if exp, act := 1, len(conf); exp != act {
-		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
-		return
-	}
-	if exp, act := "60s", conf[0].Memory.CompactionInterval; exp != act {
-		t.Errorf("Wrong default compaction interval: %v != %v", act, exp)
-	}
-	if exp, act := 16, conf[0].Memory.TTL; exp != act {
-		t.Errorf("Wrong overridden ttl: %v != %v", act, exp)
 	}
 }
 
