@@ -69,7 +69,7 @@ const (
 // Config is the all encompassing configuration struct for all metric output
 // types.
 //
-// TODO: V2 move field prefix into specific implementations.
+// TODO: V3 move field prefix into specific implementations.
 type Config struct {
 	Type       string           `json:"type" yaml:"type"`
 	Prefix     string           `json:"prefix" yaml:"prefix"`

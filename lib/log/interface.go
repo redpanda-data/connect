@@ -26,8 +26,7 @@ package log
 type Modular interface {
 	NewModule(prefix string) Modular
 
-	// TODO: V2
-	// WithFields(fields map[string]string) Modular
+	WithFields(fields map[string]string) Modular
 
 	Fatalf(format string, v ...interface{})
 	Errorf(format string, v ...interface{})

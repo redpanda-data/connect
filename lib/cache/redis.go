@@ -336,4 +336,13 @@ func (r *Redis) Delete(key string) error {
 	return err
 }
 
+// CloseAsync shuts down the cache.
+func (r *Redis) CloseAsync() {
+}
+
+// WaitForClose blocks until the cache has closed down.
+func (r *Redis) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
 //-----------------------------------------------------------------------------

@@ -50,8 +50,7 @@ type Cache interface {
 	// Delete attempts to remove a key. Returns an error if a failure occurs.
 	Delete(key string) error
 
-	// TODO: V2 Add this in
-	// Closable
+	Closable
 }
 
 //------------------------------------------------------------------------------
@@ -65,8 +64,7 @@ type RateLimit interface {
 	// requesting again.
 	Access() (time.Duration, error)
 
-	// TODO: V2 Add this in
-	// Closable
+	Closable
 }
 
 //------------------------------------------------------------------------------
@@ -110,9 +108,8 @@ type Manager interface {
 	// GetRateLimit attempts to find a service wide rate limit by its name.
 	GetRateLimit(name string) (RateLimit, error)
 
-	// TODO: V2 Add this in
 	// GetPlugin attempts to find a service wide resource plugin by its name.
-	// GetPlugin(name string) (interface{}, error)
+	GetPlugin(name string) (interface{}, error)
 
 	// GetPipe attempts to find a service wide transaction chan by its name.
 	GetPipe(name string) (<-chan Transaction, error)

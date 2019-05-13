@@ -29,7 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/cache"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor/condition"
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/ratelimit"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
@@ -298,12 +298,9 @@ func (t *Type) GetPlugin(name string) (interface{}, error) {
 
 // CloseAsync triggers the shut down of all resource types that implement the
 // lifetime interface types.Closable.
-// TODO: V2 Simplify this.
 func (t *Type) CloseAsync() {
 	for _, c := range t.caches {
-		if closer, ok := c.(types.Closable); ok {
-			closer.CloseAsync()
-		}
+		c.CloseAsync()
 	}
 	for _, c := range t.conditions {
 		if closer, ok := c.(types.Closable); ok {
@@ -316,22 +313,17 @@ func (t *Type) CloseAsync() {
 		}
 	}
 	for _, c := range t.rateLimits {
-		if closer, ok := c.(types.Closable); ok {
-			closer.CloseAsync()
-		}
+		c.CloseAsync()
 	}
 }
 
 // WaitForClose blocks until either all closable resource types are shut down or
 // a timeout occurs.
-// TODO: V2 Simplify this.
 func (t *Type) WaitForClose(timeout time.Duration) error {
 	timesOut := time.Now().Add(timeout)
 	for k, c := range t.caches {
-		if closer, ok := c.(types.Closable); ok {
-			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
-				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
-			}
+		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}
 	}
 	for k, c := range t.conditions {
@@ -342,10 +334,8 @@ func (t *Type) WaitForClose(timeout time.Duration) error {
 		}
 	}
 	for k, c := range t.rateLimits {
-		if closer, ok := c.(types.Closable); ok {
-			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
-				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
-			}
+		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}
 	}
 	for k, c := range t.plugins {

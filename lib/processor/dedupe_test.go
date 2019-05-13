@@ -335,6 +335,11 @@ func (e errCache) Add(key string, value []byte) error {
 func (e errCache) Delete(key string) error {
 	return errors.New("test err")
 }
+func (e errCache) CloseAsync() {
+}
+func (e errCache) WaitForClose(timeout time.Duration) error {
+	return nil
+}
 
 func TestDedupeCacheErrors(t *testing.T) {
 	conf := NewConfig()

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+#### Configuration
+
+- Benthos now attempts to infer the `type` of config sections whenever the field
+  is omitted, for more information please read this overview:
+  [Concise Configuration](https://docs.benthos.dev/configuration/#concise-configuration).
+- Field `unsubscribe_on_close` of the `nats_stream` input is now `false` by
+  default.
+
+#### Go API
+
+- Package `github.com/Jeffail/benthos/lib/processor/condition` changed to
+  `github.com/Jeffail/benthos/lib/condition`.
+- Interface `types.Cache` now has `types.Closable` embedded.
+- Interface `types.RateLimit` now has `types.Closable` embedded.
+- Add method `GetPlugin` to interface `types.Manager`.
+- Add method `WithFields` to interface `log.Modular`.
+
 ## 1.20.4 - 2019-05-13
 
 ### Fixed

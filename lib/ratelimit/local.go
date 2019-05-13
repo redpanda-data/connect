@@ -122,4 +122,13 @@ func (r *Local) Access() (time.Duration, error) {
 	return 0, nil
 }
 
+// CloseAsync shuts down the rate limit.
+func (r *Local) CloseAsync() {
+}
+
+// WaitForClose blocks until the rate limit has closed down.
+func (r *Local) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
 //------------------------------------------------------------------------------
