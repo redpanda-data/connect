@@ -98,6 +98,22 @@ input:
 This is very useful for sharing configuration files across different deployment
 environments.
 
+It's also possible to use `type` fields for environment variable based feature
+toggles. For example, the following config:
+
+``` yaml
+type: ${FEATURE:noop}
+jmespath:
+  query: '{ enveloped: @ }'
+text:
+  operator: set
+  text: "Wrapped: ${!content}"
+```
+
+Allows us to use the env var `FEATURE` to choose between two different processor
+steps (or neither.)
+
+
 ## Reusing Configuration Snippets
 
 It's possible to break a large configuration file into smaller parts with
