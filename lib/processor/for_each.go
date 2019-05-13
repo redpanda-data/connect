@@ -62,8 +62,8 @@ Alias for the ` + "[`for_each`](#for_each)" + ` processor, which should be used
 instead.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
-			procConfs := make([]interface{}, len(conf.ForEach))
-			for i, pConf := range conf.ForEach {
+			procConfs := make([]interface{}, len(conf.ProcessBatch))
+			for i, pConf := range conf.ProcessBatch {
 				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
 					return nil, err
 				}

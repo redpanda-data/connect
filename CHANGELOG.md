@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.20.4 - 2019-05-13
+
+### Fixed
+
+- Ensure `process_batch` processor gets normalised correctly.
+
 ## 1.20.3 - 2019-05-11
 
 ### Added
