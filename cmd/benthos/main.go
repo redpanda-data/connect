@@ -28,8 +28,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"plugin"
 	"runtime/pprof"
 	"strings"
 	"syscall"
@@ -38,6 +36,7 @@ import (
 	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/buffer"
 	"github.com/Jeffail/benthos/lib/cache"
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/config"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/log"
@@ -45,7 +44,6 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/processor"
-	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/ratelimit"
 	"github.com/Jeffail/benthos/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
@@ -92,10 +90,6 @@ Set whether all fields should be shown when printing configuration via
 Parse config files in strict mode, where any linting errors will cause Benthos
 to fail`[1:],
 	)
-	swapEnvs = flag.Bool(
-		"swap-envs", true,
-		"Swap ${FOO} patterns in config file with environment variables",
-	)
 	examples = flag.String(
 		"example", "",
 		`
@@ -141,26 +135,6 @@ config with a websocket input and output and a jmespath processor.`[1:],
 	printTracers = flag.Bool(
 		"list-tracers", false,
 		"Print a list of available tracer options, then exit",
-	)
-	pluginsDir = flag.String(
-		"plugins-dir", "/usr/lib/benthos/plugins",
-		"EXPERIMENTAL: Specify a directory containing Benthos plugins",
-	)
-	printInputPlugins = flag.Bool(
-		"list-input-plugins", false,
-		"Print a list of loaded input plugins, then exit",
-	)
-	printOutputPlugins = flag.Bool(
-		"list-output-plugins", false,
-		"Print a list of loaded output plugins, then exit",
-	)
-	printProcessorPlugins = flag.Bool(
-		"list-processor-plugins", false,
-		"Print a list of loaded processor plugins, then exit",
-	)
-	printConditionPlugins = flag.Bool(
-		"list-condition-plugins", false,
-		"Print a list of loaded condition plugins, then exit",
 	)
 	streamsMode = flag.Bool(
 		"streams", false,
@@ -209,25 +183,10 @@ func bootstrap() (config.Type, []string) {
 		os.Exit(0)
 	}
 
-	if len(*pluginsDir) > 0 {
-		filepath.Walk(*pluginsDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return err
-			}
-			if filepath.Ext(path) == ".so" {
-				if _, err = plugin.Open(path); err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to load plugin '%s': %v\n", path, err)
-					return err
-				}
-			}
-			return nil
-		})
-	}
-
 	var lints []string
 	if len(*configPath) > 0 {
 		var err error
-		if lints, err = config.Read(*configPath, *swapEnvs, &conf); err != nil {
+		if lints, err = config.Read(*configPath, true, &conf); err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			os.Exit(1)
 		}
@@ -237,7 +196,7 @@ func bootstrap() (config.Type, []string) {
 			if _, err := os.Stat(path); err == nil {
 				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
 
-				if lints, err = config.Read(path, *swapEnvs, &conf); err != nil {
+				if lints, err = config.Read(path, true, &conf); err != nil {
 					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 					os.Exit(1)
 				}
@@ -326,22 +285,6 @@ func bootstrap() (config.Type, []string) {
 		}
 		if *printTracers {
 			fmt.Println(tracer.Descriptions())
-		}
-		os.Exit(0)
-	}
-
-	if *printInputPlugins || *printOutputPlugins || *printProcessorPlugins || *printConditionPlugins {
-		if *printInputPlugins {
-			fmt.Println(input.PluginDescriptions())
-		}
-		if *printOutputPlugins {
-			fmt.Println(output.PluginDescriptions())
-		}
-		if *printProcessorPlugins {
-			fmt.Println(processor.PluginDescriptions())
-		}
-		if *printConditionPlugins {
-			fmt.Println(condition.PluginDescriptions())
 		}
 		os.Exit(0)
 	}

@@ -15,6 +15,12 @@ All notable changes to this project will be documented in this file.
 - Field `unsubscribe_on_close` of the `nats_stream` input is now `false` by
   default.
 
+#### Service
+
+- The following commandline flags have been removed: `swap-envs`, `plugins-dir`,
+  `list-input-plugins`, `list-output-plugins`, `list-processor-plugins`,
+  `list-condition-plugins`.
+
 #### Go API
 
 - Package `github.com/Jeffail/benthos/lib/processor/condition` changed to
