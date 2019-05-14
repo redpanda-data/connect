@@ -49,3 +49,13 @@ and be managed using a REST API.
 
 [Workflows](./workflows.md) explains how Benthos can be configured to easily
 support complex processor flows using automatic DAG resolution.
+
+[Migration](./migration/README.md) outlines migration guides for upgrading to a
+major version release of Benthos.
+
+## Previous Versions
+
+Previous versions of this documentation can be found for each prior major
+release at:
+
+- [Version 1](https://docs.benthos.dev/archive/v1/)

@@ -647,7 +647,7 @@ nats_stream:
   queue: benthos_queue
   start_from_oldest: true
   subject: benthos_messages
-  unsubscribe_on_close: true
+  unsubscribe_on_close: false
   urls:
   - nats://localhost:4222
 ```

@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.0.0 - 2019-05-14
+
 ### Changed
+
+This is a major version released due to a series of minor breaking changes, you
+can read the [full migration guide here](https://docs.benthos.dev/migration/v2/).
 
 #### Configuration
 
