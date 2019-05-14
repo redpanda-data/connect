@@ -7,6 +7,11 @@ All notable changes to this project will be documented in this file.
 
 ## 2.0.0 - 2019-05-14
 
+### Added
+
+- API for creating `cache` implementations.
+- API for creating `rate_limit` implementations.
+
 ### Changed
 
 This is a major version released due to a series of minor breaking changes, you

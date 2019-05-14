@@ -66,6 +66,7 @@ type Config struct {
 	File      FileConfig      `json:"file" yaml:"file"`
 	Memcached MemcachedConfig `json:"memcached" yaml:"memcached"`
 	Memory    MemoryConfig    `json:"memory" yaml:"memory"`
+	Plugin    interface{}     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Redis     RedisConfig     `json:"redis" yaml:"redis"`
 	S3        S3Config        `json:"s3" yaml:"s3"`
 }
@@ -78,6 +79,7 @@ func NewConfig() Config {
 		File:      NewFileConfig(),
 		Memcached: NewMemcachedConfig(),
 		Memory:    NewMemoryConfig(),
+		Plugin:    nil,
 		Redis:     NewRedisConfig(),
 		S3:        NewS3Config(),
 	}
@@ -98,9 +100,18 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	}
 
 	outputMap := config.Sanitised{}
-
 	outputMap["type"] = conf.Type
-	outputMap[conf.Type] = hashMap[conf.Type]
+
+	if _, exists := hashMap[conf.Type]; exists {
+		outputMap[conf.Type] = hashMap[conf.Type]
+	}
+	if spec, exists := pluginSpecs[conf.Type]; exists {
+		if spec.confSanitiser != nil {
+			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
+		} else {
+			outputMap["plugin"] = hashMap["plugin"]
+		}
+	}
 
 	return outputMap, nil
 }
@@ -135,6 +146,21 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
 		}
 		aliased.Type = inferredType
+	}
+
+	if spec, exists := pluginSpecs[aliased.Type]; exists {
+		confBytes, err := yaml.Marshal(aliased.Plugin)
+		if err != nil {
+			return fmt.Errorf("line %v: %v", value.Line, err)
+		}
+
+		conf := spec.confConstructor()
+		if err = yaml.Unmarshal(confBytes, conf); err != nil {
+			return fmt.Errorf("line %v: %v", value.Line, err)
+		}
+		aliased.Plugin = conf
+	} else {
+		aliased.Plugin = nil
 	}
 
 	*c = Config(aliased)
@@ -242,10 +268,17 @@ func New(
 ) (types.Cache, error) {
 	if c, ok := Constructors[conf.Type]; ok {
 		cache, err := c.constructor(conf, mgr, log.NewModule("."+conf.Type), stats)
-		for err != nil {
+		if err != nil {
 			return nil, fmt.Errorf("failed to create cache '%v': %v", conf.Type, err)
 		}
 		return cache, nil
+	}
+	if c, ok := pluginSpecs[conf.Type]; ok {
+		rl, err := c.constructor(conf.Plugin, mgr, log.NewModule("."+conf.Type), stats)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cache '%v': %v", conf.Type, err)
+		}
+		return rl, nil
 	}
 	return nil, types.ErrInvalidCacheType
 }

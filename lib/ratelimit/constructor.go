@@ -56,15 +56,17 @@ const (
 
 // Config is the all encompassing configuration struct for all cache types.
 type Config struct {
-	Type  string      `json:"type" yaml:"type"`
-	Local LocalConfig `json:"local" yaml:"local"`
+	Type   string      `json:"type" yaml:"type"`
+	Local  LocalConfig `json:"local" yaml:"local"`
+	Plugin interface{} `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:  "local",
-		Local: NewLocalConfig(),
+		Type:   "local",
+		Local:  NewLocalConfig(),
+		Plugin: nil,
 	}
 }
 
@@ -83,9 +85,18 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	}
 
 	outputMap := config.Sanitised{}
-
 	outputMap["type"] = conf.Type
-	outputMap[conf.Type] = hashMap[conf.Type]
+
+	if _, exists := hashMap[conf.Type]; exists {
+		outputMap[conf.Type] = hashMap[conf.Type]
+	}
+	if spec, exists := pluginSpecs[conf.Type]; exists {
+		if spec.confSanitiser != nil {
+			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
+		} else {
+			outputMap["plugin"] = hashMap["plugin"]
+		}
+	}
 
 	return outputMap, nil
 }
@@ -120,6 +131,21 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
 		}
 		aliased.Type = inferredType
+	}
+
+	if spec, exists := pluginSpecs[aliased.Type]; exists {
+		confBytes, err := yaml.Marshal(aliased.Plugin)
+		if err != nil {
+			return fmt.Errorf("line %v: %v", value.Line, err)
+		}
+
+		conf := spec.confConstructor()
+		if err = yaml.Unmarshal(confBytes, conf); err != nil {
+			return fmt.Errorf("line %v: %v", value.Line, err)
+		}
+		aliased.Plugin = conf
+	} else {
+		aliased.Plugin = nil
 	}
 
 	*c = Config(aliased)
@@ -223,7 +249,14 @@ func New(
 ) (types.RateLimit, error) {
 	if c, ok := Constructors[conf.Type]; ok {
 		rl, err := c.constructor(conf, mgr, log, stats)
-		for err != nil {
+		if err != nil {
+			return nil, fmt.Errorf("failed to create rate limit '%v': %v", conf.Type, err)
+		}
+		return rl, nil
+	}
+	if c, ok := pluginSpecs[conf.Type]; ok {
+		rl, err := c.constructor(conf.Plugin, mgr, log.NewModule("."+conf.Type), stats)
+		if err != nil {
 			return nil, fmt.Errorf("failed to create rate limit '%v': %v", conf.Type, err)
 		}
 		return rl, nil
