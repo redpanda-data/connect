@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ashley Jeffs
+// Copyright (c) 2019 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,17 +18,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package condition
+package cache
 
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 type mockPluginConf struct {
@@ -49,7 +50,7 @@ func TestYAMLPlugin(t *testing.T) {
 	errTest := errors.New("test err")
 
 	RegisterPlugin("foo", newMockPluginConf,
-		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Condition, error) {
+		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Cache, error) {
 			mConf, ok := conf.(*mockPluginConf)
 			if !ok {
 				t.Fatalf("failed to cast config: %T", conf)
@@ -76,7 +77,7 @@ plugin:
 	}
 
 	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != errTest {
+	if !strings.Contains(err.Error(), "test err") {
 		t.Errorf("Wrong error returned: %v != %v", err, errTest)
 	}
 }
@@ -95,13 +96,13 @@ func TestPluginDescriptions(t *testing.T) {
 		}
 	})
 
-	exp := `Condition Plugins
-=================
+	exp := `Cache Plugins
+=============
 
 This document has been generated, do not edit it directly.
 
-This document lists any condition plugins that this flavour of Benthos offers
-beyond the standard set.
+This document lists any cache plugins that this flavour of Benthos offers beyond
+the standard set.
 
 ### Contents
 
@@ -138,50 +139,11 @@ plugin:
 	}
 }
 
-func TestJSONPlugin(t *testing.T) {
-	errTest := errors.New("test err")
-
-	RegisterPlugin("foo", newMockPluginConf,
-		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Condition, error) {
-			mConf, ok := conf.(*mockPluginConf)
-			if !ok {
-				t.Fatalf("failed to cast config: %T", conf)
-			}
-			if exp, act := "default", mConf.Foo; exp != act {
-				t.Errorf("Wrong config value: %v != %v", act, exp)
-			}
-			if exp, act := "custom", mConf.Bar; exp != act {
-				t.Errorf("Wrong config value: %v != %v", act, exp)
-			}
-			if exp, act := 10, mConf.Baz; exp != act {
-				t.Errorf("Wrong config value: %v != %v", act, exp)
-			}
-			return nil, errTest
-		})
-
-	confStr := `{
-  "type": "foo",
-  "plugin": {
-    "bar": "custom"
-  }
-}`
-
-	conf := NewConfig()
-	if err := json.Unmarshal([]byte(confStr), &conf); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != errTest {
-		t.Errorf("Wrong error returned: %v != %v", err, errTest)
-	}
-}
-
 func TestYAMLPluginNilConf(t *testing.T) {
 	errTest := errors.New("test err")
 
 	RegisterPlugin("foo", func() interface{} { return &struct{}{} },
-		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Condition, error) {
+		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Cache, error) {
 			return nil, errTest
 		})
 
@@ -195,7 +157,7 @@ plugin:
 	}
 
 	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != errTest {
+	if !strings.Contains(err.Error(), "test err") {
 		t.Errorf("Wrong error returned: %v != %v", err, errTest)
 	}
 }
@@ -204,7 +166,7 @@ func TestJSONPluginNilConf(t *testing.T) {
 	errTest := errors.New("test err")
 
 	RegisterPlugin("foo", func() interface{} { return &struct{}{} },
-		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Condition, error) {
+		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Cache, error) {
 			return nil, errTest
 		})
 
@@ -221,7 +183,7 @@ func TestJSONPluginNilConf(t *testing.T) {
 	}
 
 	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != errTest {
+	if !strings.Contains(err.Error(), "test err") {
 		t.Errorf("Wrong error returned: %v != %v", err, errTest)
 	}
 }

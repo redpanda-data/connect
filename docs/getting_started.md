@@ -55,7 +55,6 @@ pipeline:
   threads: 1
   processors: []
 output:
-  type: kafka
   kafka:
     addresses:
     - localhost:9092
@@ -69,7 +68,8 @@ benthos -c ./yourconfig.yaml
 ```
 
 With this config you can write messages in the terminal and they will be sent to
-your chosen Kafka topic, how exciting!
+your chosen Kafka topic, how exciting! You can find out more about Benthos
+configuration files [here](./configuration.md).
 
 Next, we might want to add some processing steps in order to mutate the
 messages. For example, we could add a [`text`](./processors/README.md#text)
@@ -83,11 +83,9 @@ buffer:
 pipeline:
   threads: 1
   processors:
-  - type: text
-    text:
+  - text:
       operator: to_upper
 output:
-  type: kafka
   kafka:
     addresses:
     - localhost:9092

@@ -1,10 +1,8 @@
 input:
-  type: broker
   broker:
     count: 8 # Try cranking this value up if your CPUs aren't maxed out
     inputs:
-    - type: kafka_balanced
-      kafka_balanced:
+    - kafka_balanced:
         addresses:
         - localhost:9092 # TODO
         client_id: benthos_mutator_1
@@ -15,8 +13,7 @@ input:
 pipeline:
   threads: 4 # This should exactly match the number of logical CPUs
   processors:
-  - type: jmespath
-    jmespath:
+  - jmespath:
       query: |
         {
           content: content,
@@ -27,7 +24,6 @@ pipeline:
           language: max_by(language, &confidence).code
         }
 output:
-  type: kafka
   kafka:
     addresses:
     - localhost:9092 # TODO

@@ -47,10 +47,8 @@ each message of a batch place it within a
 ` + "[`for_each`](#for_each)" + ` processor:
 
 ` + "``` yaml" + `
-type: for_each
 for_each:
-- type: sleep
-  sleep:
+- sleep:
     duration: ${!metadata:sleep_for}
 ` + "```" + ``,
 	}

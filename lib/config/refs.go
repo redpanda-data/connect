@@ -30,7 +30,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/lib/util/text"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -39,10 +39,6 @@ import (
 // generic parse, replaces any JSON reference fields, marshals the result back
 // into bytes and returns it so that it can be unmarshalled into a typed
 // structure.
-//
-// CAVEATS:
-// - Currently only supports paths ("$ref": "path/to/file.yaml")
-// - Ignores fragments
 func readWithJSONRefs(path string, replaceEnvs bool) ([]byte, error) {
 	configBytes, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -93,7 +89,12 @@ func jsonPointer(path string, object interface{}) (interface{}, error) {
 
 	for target := 0; target < len(hierarchy); target++ {
 		pathSeg := hierarchy[target]
-		if mmap, ok := object.(map[interface{}]interface{}); ok {
+		if mmap, ok := object.(map[string]interface{}); ok {
+			object, ok = mmap[pathSeg]
+			if !ok {
+				return nil, fmt.Errorf("failed to resolve JSON pointer: index '%v' value '%v' was not found", target, pathSeg)
+			}
+		} else if mmap, ok := object.(map[interface{}]interface{}); ok {
 			object, ok = mmap[pathSeg]
 			if !ok {
 				return nil, fmt.Errorf("failed to resolve JSON pointer: index '%v' value '%v' was not found", target, pathSeg)
@@ -125,6 +126,12 @@ var refLimit = 1000
 func getRefVal(obj interface{}) interface{} {
 	switch x := obj.(type) {
 	case map[interface{}]interface{}:
+		for k, v := range x {
+			if k == "$ref" {
+				return v
+			}
+		}
+	case map[string]interface{}:
 		for k, v := range x {
 			if k == "$ref" {
 				return v
@@ -193,6 +200,22 @@ func expandRefVal(path string, level int, root, v interface{}) (interface{}, err
 
 func refWalk(path string, level int, root, obj interface{}) (refFound bool, err error) {
 	switch x := obj.(type) {
+	case map[string]interface{}:
+		for k, v := range x {
+			if rv := getRefVal(v); rv != nil {
+				if x[k], err = expandRefVal(path, level, root, rv); err != nil {
+					return
+				}
+				refFound = true
+			} else {
+				var rFound bool
+				if rFound, err = refWalk(path, level, root, v); err != nil {
+					return
+				} else if rFound {
+					refFound = true
+				}
+			}
+		}
 	case map[interface{}]interface{}:
 		for k, v := range x {
 			if rv := getRefVal(v); rv != nil {

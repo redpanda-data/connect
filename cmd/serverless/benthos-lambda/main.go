@@ -40,7 +40,7 @@ import (
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/aws/aws-lambda-go/lambda"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------

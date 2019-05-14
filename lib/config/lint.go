@@ -25,7 +25,7 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -78,14 +78,38 @@ func lintWalkObj(path string, raw, processed map[interface{}]interface{}) []stri
 	return lints
 }
 
+func mapToObjMap(m map[string]interface{}) map[interface{}]interface{} {
+	om := make(map[interface{}]interface{}, len(m))
+	for k, v := range m {
+		om[k] = v
+	}
+	return om
+}
+
+func getObjMap(v interface{}) (map[interface{}]interface{}, bool) {
+	switch t := v.(type) {
+	case map[interface{}]interface{}:
+		return t, true
+	case map[string]interface{}:
+		return mapToObjMap(t), true
+	}
+	return nil, false
+}
+
 func lintWalk(path string, raw, processed interface{}) []string {
 	switch x := processed.(type) {
 	case map[interface{}]interface{}:
-		y, ok := raw.(map[interface{}]interface{})
+		y, ok := getObjMap(raw)
 		if !ok {
 			return []string{fmt.Sprintf("%v: wrong type detected. Expected object but found %T", path, raw)}
 		}
 		return lintWalkObj(path, y, x)
+	case map[string]interface{}:
+		y, ok := getObjMap(raw)
+		if !ok {
+			return []string{fmt.Sprintf("%v: wrong type detected. Expected object but found %T", path, raw)}
+		}
+		return lintWalkObj(path, y, mapToObjMap(x))
 	case []interface{}:
 		y, ok := raw.([]interface{})
 		if !ok {

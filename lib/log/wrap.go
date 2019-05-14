@@ -60,6 +60,11 @@ func (l *wrapped) NewModule(prefix string) Modular {
 
 //------------------------------------------------------------------------------
 
+// WithFields is a no-op.
+func (l *wrapped) WithFields(fields map[string]string) Modular {
+	return l
+}
+
 // Fatalf prints a fatal message to the console. Does NOT cause panic.
 func (l *wrapped) Fatalf(format string, v ...interface{}) {
 	if LogFatal <= l.level {

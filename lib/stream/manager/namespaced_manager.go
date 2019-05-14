@@ -65,13 +65,7 @@ func (n *NamespacedManager) GetRateLimit(name string) (types.RateLimit, error) {
 
 // GetPlugin attempts to find a service wide resource plugin by its name.
 func (n *NamespacedManager) GetPlugin(name string) (interface{}, error) {
-	// TODO: V2 Simplify after types.Manager is updated.
-	if pluginProvider, ok := n.mgr.(interface {
-		GetPlugin(name string) (interface{}, error)
-	}); ok {
-		return pluginProvider.GetPlugin(name)
-	}
-	return nil, types.ErrPluginNotFound
+	return n.mgr.GetPlugin(name)
 }
 
 // GetPipe returns a named pipe transaction channel.

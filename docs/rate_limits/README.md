@@ -16,8 +16,7 @@ input:
 pipeline:
   threads: 8
   processors:
-  - type: http
-    http:
+  - http:
       request:
         url: http://foo.bar/baz
         rate_limit: foobar

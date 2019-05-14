@@ -490,4 +490,13 @@ func (d *DynamoDB) putItemInput(key string, value []byte) *dynamodb.PutItemInput
 	return &input
 }
 
+// CloseAsync shuts down the cache.
+func (d *DynamoDB) CloseAsync() {
+}
+
+// WaitForClose blocks until the cache has closed down.
+func (d *DynamoDB) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
 //------------------------------------------------------------------------------

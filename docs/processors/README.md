@@ -315,14 +315,12 @@ duplicates using a
 condition:
 
 ``` yaml
-- type: cache
-  cache:
+- cache:
     cache: TODO
     operator: add
     key: "${!json_field:message.id}"
     value: "storeme"
-- type: filter_parts
-  filter_parts:
+- filter_parts:
     type: processor_failed
 ```
 
@@ -332,11 +330,9 @@ It's possible to enrich payloads with content previously stored in a cache by
 using the [`process_dag`](#process_dag) processor:
 
 ``` yaml
-- type: process_map
-  process_map:
+- process_map:
     processors:
-    - type: cache
-      cache:
+    - cache:
         cache: TODO
         operator: get
         key: "${!json_field:message.document_id}"
@@ -360,8 +356,7 @@ For example, with the following config:
 
 ``` yaml
 - type: foo
-- type: catch
-  catch:
+- catch:
   - type: bar
   - type: baz
 ```
@@ -604,13 +599,11 @@ their grouping.
 Each group is configured in a list with a condition and a list of processors:
 
 ``` yaml
-type: group_by
 group_by:
-  - condition:
-      type: static
-      static: true
-    processors:
-      - type: noop
+- condition:
+    static: true
+  processors:
+  - type: noop
 ```
 
 Messages are added to the first group that passes and can only belong to a
@@ -626,33 +619,26 @@ with a [`switch`](../outputs/README.md#switch) output:
 ``` yaml
 pipeline:
   processors:
-  - type: group_by
-    group_by:
+  - group_by:
     - condition:
-        type: text
         text:
           operator: contains
           arg: "this is a foo"
       processors:
-      - type: archive
-        archive:
+      - archive:
           format: tar
-      - type: compress
-        compress:
+      - compress:
           algorithm: gzip
-      - type: metadata
-        metadata:
+      - metadata:
           operator: set
           key: grouping
           value: foo
 output:
-  type: switch
   switch:
     outputs:
     - output:
         type: foo_output
       condition:
-        type: metadata
         metadata:
           operator: equals
           key: grouping
@@ -686,17 +672,13 @@ path we could achieve that with the following:
 ``` yaml
 pipeline:
   processors:
-  - type: group_by_value
-    group_by_value:
+  - group_by_value:
       value: ${!metadata:kafka_key}
-  - type: archive
-    archive:
+  - archive:
       format: tar
-  - type: compress
-    compress:
+  - compress:
       algorithm: gzip
 output:
-  type: s3
   s3:
     bucket: TODO
     path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz
@@ -723,8 +705,7 @@ specific field of a document like this:
 process_field:
   path: foo.bar
   processors:
-  - type: hash
-    hash:
+  - hash:
       algorithm: sha256
 ```
 
@@ -1040,10 +1021,8 @@ metadata field `kafka_partition` we can achieve that with the
 following config:
 
 ``` yaml
-type: for_each
 for_each:
-- type: log
-  log:
+- log:
     level: DEBUG
     message: "field: ${!json_field:foo.bar}, part: ${!metadata:kafka_partition}"
 ```
@@ -1059,7 +1038,6 @@ interpolated, meaning it's possible to output structured fields containing
 message contents and metadata, e.g.:
 
 ``` yaml
-type: log
 log:
   level: DEBUG
   message: "foo"
@@ -1110,10 +1088,8 @@ message of a batch place it within a [`for_each`](#for_each)
 processor:
 
 ``` yaml
-type: for_each
 for_each:
-- type: metadata
-  metadata:
+- metadata:
     operator: set
     key: foo
     value: ${!json_field:document.foo}
@@ -1150,10 +1126,8 @@ executes once per batch, in order to execute once per message place it within a
 [`for_each`](#for_each) processor:
 
 ``` yaml
-type: for_each
 for_each:
-- type: metric
-  metric:
+- metric:
     type: counter_by
     path: count.custom.field
     value: ${!json_field:field.some.value}
@@ -1188,7 +1162,6 @@ For example, the following configuration will increment the value of the
 `count.custom.field` metric by the contents of `field.some.value`:
 
 ``` yaml
-type: metric
 metric:
   type: counter_by
   path: count.custom.field
@@ -1204,7 +1177,6 @@ For example, the following configuration will set the value of the
 `gauge.custom.field` metric to the contents of `field.some.value`:
 
 ``` yaml
-type: metric
 metric:
   type: gauge
   path: gauge.custom.field
@@ -1286,14 +1258,12 @@ document with - foo, bar and baz - where baz relies on the result of both foo
 and bar, we might express that relationship here like so:
 
 ``` yaml
-type: process_dag
 process_dag:
   foo:
     premap:
       .: .
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://foo/enrich
     postmap:
@@ -1302,8 +1272,7 @@ process_dag:
     premap:
       .: msg.sub.path
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://bar/enrich
     postmap:
@@ -1313,8 +1282,7 @@ process_dag:
       foo_obj: foo_result
       bar_obj: bar_result
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://baz/enrich
     postmap:
@@ -1476,10 +1444,8 @@ each message of a batch place it within a
 [`for_each`](#for_each) processor:
 
 ``` yaml
-type: for_each
 for_each:
-- type: sleep
-  sleep:
+- sleep:
     duration: ${!metadata:sleep_for}
 ```
 
@@ -1517,23 +1483,23 @@ sql:
 SQL is a processor that runs a query against a target database for each message
 batch and, for queries that return rows, replaces the batch with the result.
 
-In order to execute an SQL query for each message of the batch use this
-processor within a [`for_each`](#for_each) processor.
-
 If a query contains arguments they can be set as an array of strings supporting
 [interpolation functions](../config_interpolation.md#functions) in the
-`args` field:
+`args` field.
+
+In order to execute an SQL query for each message of the batch use this
+processor within a [`for_each`](#for_each) processor:
 
 ``` yaml
-type: sql
-sql:
-  driver: mysql
-  dsn: foouser:foopassword@tcp(localhost:3306)/foodb
-  query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-  args:
-  - ${!json_field:document.foo}
-  - ${!json_field:document.bar}
-  - ${!metadata:kafka_topic}
+for_each:
+- sql:
+    driver: mysql
+    dsn: foouser:foopassword@tcp(localhost:3306)/foodb
+    query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+    args:
+    - ${!json_field:document.foo}
+    - ${!json_field:document.bar}
+    - ${!metadata:kafka_topic}
 ```
 
 ### Result Codecs
@@ -1643,10 +1609,8 @@ for each message of the batch place it within a
 [`for_each`](#for_each) processor:
 
 ``` yaml
-type: for_each
 for_each:
-- type: text
-  text:
+- text:
     operator: set
     value: ${!json_field:document.content}
 ```
@@ -1746,8 +1710,7 @@ processors.
 For example, with the following config:
 
 ``` yaml
-- type: try
-  try:
+- try:
   - type: foo
   - type: bar
   - type: baz

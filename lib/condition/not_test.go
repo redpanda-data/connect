@@ -7,7 +7,7 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright anyice and this permission anyice shall be included in
+// The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -24,19 +24,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
-func TestAnyConfigMarshalJSON(t *testing.T) {
+func TestNotConfigMarshalJSON(t *testing.T) {
 	conf := NewConfig()
-	conf.Type = "any"
+	conf.Type = "not"
 
-	exp := []byte(`"any":{}`)
+	exp := []byte(`"not":{}`)
 
 	act, err := json.Marshal(conf)
 	if err != nil {
@@ -48,14 +49,14 @@ func TestAnyConfigMarshalJSON(t *testing.T) {
 	}
 
 	cConf := NewConfig()
-	conf.Any.Config = &cConf
+	conf.Not.Config = &cConf
 
 	var cMarshalled []byte
 	if cMarshalled, err = json.Marshal(cConf); err != nil {
 		t.Fatal(err)
 	}
 
-	exp = []byte(fmt.Sprintf(`"any":%s`, cMarshalled))
+	exp = []byte(fmt.Sprintf(`"not":%s`, cMarshalled))
 
 	act, err = json.Marshal(conf)
 	if err != nil {
@@ -67,11 +68,11 @@ func TestAnyConfigMarshalJSON(t *testing.T) {
 	}
 }
 
-func TestAnyConfigMarshalYAML(t *testing.T) {
+func TestNotConfigMarshalYAML(t *testing.T) {
 	conf := NewConfig()
-	conf.Type = "any"
+	conf.Type = "not"
 
-	exp := []byte(`any: {}`)
+	exp := []byte(`not: {}`)
 
 	act, err := yaml.Marshal(conf)
 	if err != nil {
@@ -83,13 +84,13 @@ func TestAnyConfigMarshalYAML(t *testing.T) {
 	}
 }
 
-func TestAnyConfigDefaultsJSON(t *testing.T) {
+func TestNotConfigDefaultsJSON(t *testing.T) {
 	conf := []Config{}
 
 	if err := json.Unmarshal([]byte(`[
 		{
-			"type": "any",
-			"any": {
+			"type": "not",
+			"not": {
 				"type": "text",
 				"text": {
 					"part": 1
@@ -104,24 +105,24 @@ func TestAnyConfigDefaultsJSON(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := "text", conf[0].Any.Type; exp != act {
+	if exp, act := "text", conf[0].Not.Type; exp != act {
 		t.Errorf("Wrong type: %v != %v", act, exp)
 	}
-	if exp, act := "equals_cs", conf[0].Any.Text.Operator; exp != act {
+	if exp, act := "equals_cs", conf[0].Not.Text.Operator; exp != act {
 		t.Errorf("Wrong default operator: %v != %v", act, exp)
 	}
-	if exp, act := 1, conf[0].Any.Text.Part; exp != act {
+	if exp, act := 1, conf[0].Not.Text.Part; exp != act {
 		t.Errorf("Wrong default part: %v != %v", act, exp)
 	}
 }
 
-func TestAnyConfigDefaultsYAML(t *testing.T) {
+func TestNotConfigDefaultsYAML(t *testing.T) {
 	conf := []Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
-			"type": "any",
-			"any": {
+			"type": "not",
+			"not": {
 				"type": "text",
 				"text": {
 					"part": 1
@@ -136,20 +137,24 @@ func TestAnyConfigDefaultsYAML(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := "text", conf[0].Any.Type; exp != act {
+	if exp, act := "text", conf[0].Not.Type; exp != act {
 		t.Errorf("Wrong type: %v != %v", act, exp)
 	}
-	if exp, act := "equals_cs", conf[0].Any.Text.Operator; exp != act {
+	if exp, act := "equals_cs", conf[0].Not.Text.Operator; exp != act {
 		t.Errorf("Wrong default operator: %v != %v", act, exp)
 	}
-	if exp, act := 1, conf[0].Any.Text.Part; exp != act {
+	if exp, act := 1, conf[0].Not.Text.Part; exp != act {
 		t.Errorf("Wrong default part: %v != %v", act, exp)
 	}
 }
 
-func TestAnyCheck(t *testing.T) {
+func TestNotCheck(t *testing.T) {
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testMet := metrics.DudType{}
+
 	type fields struct {
 		operator string
+		part     int
 		arg      string
 	}
 	tests := []struct {
@@ -162,12 +167,11 @@ func TestAnyCheck(t *testing.T) {
 			name: "equals_cs foo pos",
 			fields: fields{
 				operator: "equals_cs",
+				part:     0,
 				arg:      "foo",
 			},
 			arg: [][]byte{
-				[]byte("bar"),
 				[]byte("foo"),
-				[]byte("baz"),
 			},
 			want: true,
 		},
@@ -175,10 +179,11 @@ func TestAnyCheck(t *testing.T) {
 			name: "equals_cs foo neg",
 			fields: fields{
 				operator: "equals_cs",
+				part:     0,
 				arg:      "foo",
 			},
 			arg: [][]byte{
-				[]byte("any foo"),
+				[]byte("not foo"),
 			},
 			want: false,
 		},
@@ -186,6 +191,7 @@ func TestAnyCheck(t *testing.T) {
 			name: "equals foo pos",
 			fields: fields{
 				operator: "equals",
+				part:     0,
 				arg:      "fOo",
 			},
 			arg: [][]byte{
@@ -197,6 +203,7 @@ func TestAnyCheck(t *testing.T) {
 			name: "equals foo pos 2",
 			fields: fields{
 				operator: "equals",
+				part:     0,
 				arg:      "foo",
 			},
 			arg: [][]byte{
@@ -208,6 +215,7 @@ func TestAnyCheck(t *testing.T) {
 			name: "equals foo neg",
 			fields: fields{
 				operator: "equals",
+				part:     0,
 				arg:      "fOo",
 			},
 			arg: [][]byte{
@@ -219,6 +227,7 @@ func TestAnyCheck(t *testing.T) {
 			name: "contains_cs foo pos",
 			fields: fields{
 				operator: "contains_cs",
+				part:     0,
 				arg:      "foo",
 			},
 			arg: [][]byte{
@@ -230,6 +239,7 @@ func TestAnyCheck(t *testing.T) {
 			name: "contains_cs foo neg",
 			fields: fields{
 				operator: "contains_cs",
+				part:     0,
 				arg:      "foo",
 			},
 			arg: [][]byte{
@@ -241,6 +251,7 @@ func TestAnyCheck(t *testing.T) {
 			name: "contains foo pos",
 			fields: fields{
 				operator: "contains",
+				part:     0,
 				arg:      "fOo",
 			},
 			arg: [][]byte{
@@ -252,6 +263,7 @@ func TestAnyCheck(t *testing.T) {
 			name: "contains foo pos 2",
 			fields: fields{
 				operator: "contains",
+				part:     0,
 				arg:      "foo",
 			},
 			arg: [][]byte{
@@ -263,6 +275,7 @@ func TestAnyCheck(t *testing.T) {
 			name: "contains foo neg",
 			fields: fields{
 				operator: "contains",
+				part:     0,
 				arg:      "fOo",
 			},
 			arg: [][]byte{
@@ -274,6 +287,7 @@ func TestAnyCheck(t *testing.T) {
 			name: "equals_cs foo pos from neg index",
 			fields: fields{
 				operator: "equals_cs",
+				part:     -1,
 				arg:      "foo",
 			},
 			arg: [][]byte{
@@ -286,21 +300,47 @@ func TestAnyCheck(t *testing.T) {
 			name: "equals_cs foo neg from neg index",
 			fields: fields{
 				operator: "equals_cs",
+				part:     -2,
 				arg:      "foo",
 			},
 			arg: [][]byte{
 				[]byte("bar"),
 				[]byte("foo"),
 			},
-			want: true,
+			want: false,
 		},
 		{
 			name: "equals_cs neg empty msg",
 			fields: fields{
 				operator: "equals_cs",
+				part:     0,
 				arg:      "foo",
 			},
 			arg:  [][]byte{},
+			want: false,
+		},
+		{
+			name: "equals_cs neg oob",
+			fields: fields{
+				operator: "equals_cs",
+				part:     1,
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("foo"),
+			},
+			want: false,
+		},
+		{
+			name: "equals_cs neg oob neg index",
+			fields: fields{
+				operator: "equals_cs",
+				part:     -2,
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("foo"),
+			},
 			want: false,
 		},
 	}
@@ -309,20 +349,39 @@ func TestAnyCheck(t *testing.T) {
 			conf := NewConfig()
 			conf.Type = "text"
 			conf.Text.Operator = tt.fields.operator
+			conf.Text.Part = tt.fields.part
 			conf.Text.Arg = tt.fields.arg
 
 			nConf := NewConfig()
-			nConf.Type = "any"
-			nConf.Any.Config = &conf
+			nConf.Type = "not"
+			nConf.Not.Config = &conf
 
-			c, err := New(nConf, nil, log.Noop(), metrics.Noop())
+			c, err := New(nConf, nil, testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
 			}
-			if got := c.Check(message.New(tt.arg)); got != tt.want {
-				t.Errorf("Text.Check() = %v, want %v", got, tt.want)
+			if got := c.Check(message.New(tt.arg)); got == tt.want {
+				t.Errorf("Text.Check() = %v, want %v", got, !tt.want)
 			}
 		})
+	}
+}
+
+func TestNotBadOperator(t *testing.T) {
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testMet := metrics.DudType{}
+
+	cConf := NewConfig()
+	cConf.Type = "text"
+	cConf.Text.Operator = "NOT_EXIST"
+
+	conf := NewConfig()
+	conf.Type = "not"
+	conf.Not.Config = &cConf
+
+	_, err := NewNot(conf, nil, testLog, testMet)
+	if err == nil {
+		t.Error("expected error from bad operator")
 	}
 }

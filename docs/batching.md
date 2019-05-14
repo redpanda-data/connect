@@ -43,14 +43,12 @@ section. Like this, for example:
 
 ``` yaml
 input:
-  type: broker
   broker:
     inputs:
     - type: foo
     - type: bar
   processors:
-  - type: batch
-    batch:
+  - batch:
       byte_size: 20_000_000
 ```
 
@@ -85,13 +83,10 @@ this with the [`for_each`][for_each] processor:
 input:
   type: foo
   processors:
-  - type: batch
-    batch:
+  - batch:
       byte_size: 20_000_000
-  - type: for_each
-    for_each:
-    - type: dedupe
-      dedupe:
+  - for_each:
+    - dedupe:
         cache: foocache
         key: ${!json_field:foo.bar}
 ```

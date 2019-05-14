@@ -30,7 +30,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/stream"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 func TestFromDirectory(t *testing.T) {

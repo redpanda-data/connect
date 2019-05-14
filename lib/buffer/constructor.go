@@ -32,7 +32,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -93,6 +93,42 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	outputMap[conf.Type] = hashMap[conf.Type]
 
 	return outputMap, nil
+}
+
+//------------------------------------------------------------------------------
+
+// UnmarshalYAML ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (c *Config) UnmarshalYAML(value *yaml.Node) error {
+	type confAlias Config
+	aliased := confAlias(NewConfig())
+
+	if err := value.Decode(&aliased); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+
+	var raw interface{}
+	if err := value.Decode(&raw); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
+		var inferredType string
+		for _, tc := range typeCandidates {
+			if _, exists := Constructors[tc]; exists {
+				if len(inferredType) > 0 {
+					return fmt.Errorf("line %v: unable to infer type, multiple candidates '%v' and '%v'", value.Line, inferredType, tc)
+				}
+				inferredType = tc
+			}
+		}
+		if len(inferredType) == 0 {
+			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
+		}
+		aliased.Type = inferredType
+	}
+
+	*c = Config(aliased)
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -158,7 +194,7 @@ func Descriptions() string {
 		conf := NewConfig()
 		conf.Type = name
 		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = yaml.Marshal(confSanit)
+			confBytes, _ = config.MarshalYAML(confSanit)
 		}
 
 		buf.WriteString("## ")

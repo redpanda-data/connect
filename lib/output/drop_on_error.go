@@ -50,9 +50,7 @@ message is dropped entirely:
 
 ` + "``` yaml" + `
 output:
-  type: drop_on_error
   drop_on_error:
-    type: retry
     retry:
       max_retries: 2
       output:

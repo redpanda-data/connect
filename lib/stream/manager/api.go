@@ -38,7 +38,7 @@ import (
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Jeffail/gabs"
 	"github.com/gorilla/mux"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -260,7 +260,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			Pipeline: aliasedPipe(confIn.Pipeline),
 			Output:   aliasedOut(confIn.Output),
 		}
-		if err = json.Unmarshal(patchBytes, &aliasedConf); err != nil {
+		if err = yaml.Unmarshal(patchBytes, &aliasedConf); err != nil {
 			return
 		}
 		confOut = stream.Config{

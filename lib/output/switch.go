@@ -29,7 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor/condition"
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
@@ -67,33 +67,27 @@ output only.
 
 ` + "``` yaml" + `
 output:
-  type: switch
   switch:
     retry_until_success: true
     outputs:
     - output:
-        type: foo
         foo:
           foo_field_1: value1
       condition:
-        type: text
         text:
           operator: contains
           arg: foo
       fallthrough: true
     - output:
-        type: bar
         bar:
           bar_field_1: value2
           bar_field_2: value3
       condition:
-        type: text
         text:
           operator: contains
           arg: bar
       fallthrough: true
     - output:
-        type: baz
         baz:
           baz_field_1: value4
         processors:

@@ -141,27 +141,21 @@ Adding more input types allows you to merge streams from multiple sources into
 one. For example, reading from both RabbitMQ and Kafka:
 
 ``` yaml
-type: broker
-broker:
-  copies: 1
-  inputs:
-  - type: amqp
-    amqp:
-      url: amqp://guest:guest@localhost:5672/
-      consumer_tag: benthos-consumer
-      exchange: benthos-exchange
-      exchange_type: direct
-      key: benthos-key
-      queue: benthos-queue
-  - type: kafka
-    kafka:
-      addresses:
-      - localhost:9092
-      client_id: benthos_kafka_input
-      consumer_group: benthos_consumer_group
-      partition: 0
-      topic: benthos_stream
-
+input:
+  broker:
+    copies: 1
+    inputs:
+    - amqp:
+        url: amqp://guest:guest@localhost:5672/
+        consumer_tag: benthos-consumer
+        queue: benthos-queue
+    - kafka:
+        addresses:
+        - localhost:9092
+        client_id: benthos_kafka_input
+        consumer_group: benthos_consumer_group
+        partition: 0
+        topic: benthos_stream
 ```
 
 If the number of copies is greater than zero the list will be copied that number
@@ -653,7 +647,7 @@ nats_stream:
   queue: benthos_queue
   start_from_oldest: true
   subject: benthos_messages
-  unsubscribe_on_close: true
+  unsubscribe_on_close: false
   urls:
   - nats://localhost:4222
 ```

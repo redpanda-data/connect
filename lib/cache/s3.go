@@ -300,4 +300,13 @@ func (s *S3) Delete(key string) error {
 	return err
 }
 
+// CloseAsync shuts down the cache.
+func (s *S3) CloseAsync() {
+}
+
+// WaitForClose blocks until the cache has closed down.
+func (s *S3) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
 //------------------------------------------------------------------------------

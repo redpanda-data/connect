@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ashley Jeffs
+// Copyright (c) 2019 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package condition
+package cache
 
 import (
 	"bytes"
@@ -29,13 +29,13 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	yaml "gopkg.in/yaml.v2"
+	"github.com/Jeffail/benthos/lib/util/config"
 )
 
 //------------------------------------------------------------------------------
 
-// PluginConstructor is a func that constructs a Benthos condition plugin. These
-// are plugins that are specific to certain use cases, experimental, private or
+// PluginConstructor is a func that constructs a Benthos cache plugin. These are
+// plugins that are specific to certain use cases, experimental, private or
 // otherwise unfit for widespread general use. Any number of plugins can be
 // specified when using Benthos as a framework.
 //
@@ -46,7 +46,7 @@ type PluginConstructor func(
 	manager types.Manager,
 	logger log.Modular,
 	metrics metrics.Type,
-) (types.Condition, error)
+) (types.Cache, error)
 
 // PluginConfigConstructor is a func that returns a pointer to a new and fully
 // populated configuration struct for a plugin type. It is valid to return a
@@ -70,11 +70,11 @@ type pluginSpec struct {
 	description     string
 }
 
-// pluginSpecs is a map of all condition plugin type specs.
+// pluginSpecs is a map of all cache plugin type specs.
 var pluginSpecs = map[string]pluginSpec{}
 
 // RegisterPlugin registers a plugin by a unique name so that it can be
-// constucted similar to regular conditions. A constructor for both the plugin
+// constucted similar to regular caches. A constructor for both the plugin
 // itself as well as its configuration struct must be provided.
 //
 // WARNING: This API is experimental and could (is likely) to change.
@@ -106,8 +106,8 @@ func DocumentPlugin(
 
 var pluginHeader = `This document has been generated, do not edit it directly.
 
-This document lists any condition plugins that this flavour of Benthos offers
-beyond the standard set.`
+This document lists any cache plugins that this flavour of Benthos offers beyond
+the standard set.`
 
 // PluginDescriptions generates and returns a markdown formatted document
 // listing each registered plugin and an example configuration for it.
@@ -120,8 +120,8 @@ func PluginDescriptions() string {
 	sort.Strings(names)
 
 	buf := bytes.Buffer{}
-	buf.WriteString("Condition Plugins\n")
-	buf.WriteString(strings.Repeat("=", 17))
+	buf.WriteString("Cache Plugins\n")
+	buf.WriteString(strings.Repeat("=", 13))
 	buf.WriteString("\n\n")
 	buf.WriteString(pluginHeader)
 	buf.WriteString("\n\n")
@@ -145,7 +145,7 @@ func PluginDescriptions() string {
 		conf.Type = name
 		conf.Plugin = pluginSpecs[name].confConstructor()
 		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = yaml.Marshal(confSanit)
+			confBytes, _ = config.MarshalYAML(confSanit)
 		}
 
 		buf.WriteString("## ")

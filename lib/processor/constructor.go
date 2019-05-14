@@ -31,7 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -249,53 +249,45 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 
 //------------------------------------------------------------------------------
 
-// UnmarshalJSON ensures that when parsing configs that are in a slice the
-// default values are still applied.
-func (m *Config) UnmarshalJSON(bytes []byte) error {
-	type confAlias Config
-	aliased := confAlias(NewConfig())
-
-	if err := json.Unmarshal(bytes, &aliased); err != nil {
-		return err
-	}
-
-	if spec, exists := pluginSpecs[aliased.Type]; exists {
-		dummy := struct {
-			Conf interface{} `json:"plugin"`
-		}{
-			Conf: spec.confConstructor(),
-		}
-		if err := json.Unmarshal(bytes, &dummy); err != nil {
-			return fmt.Errorf("failed to parse plugin config: %v", err)
-		}
-		aliased.Plugin = dummy.Conf
-	} else {
-		aliased.Plugin = nil
-	}
-
-	*m = Config(aliased)
-	return nil
-}
-
 // UnmarshalYAML ensures that when parsing configs that are in a slice the
 // default values are still applied.
-func (m *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (m *Config) UnmarshalYAML(value *yaml.Node) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
-	if err := unmarshal(&aliased); err != nil {
-		return err
+	if err := value.Decode(&aliased); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+
+	var raw interface{}
+	if err := value.Decode(&raw); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
+		var inferredType string
+		for _, tc := range typeCandidates {
+			if _, exists := Constructors[tc]; exists {
+				if len(inferredType) > 0 {
+					return fmt.Errorf("line %v: unable to infer type, multiple candidates '%v' and '%v'", value.Line, inferredType, tc)
+				}
+				inferredType = tc
+			}
+		}
+		if len(inferredType) == 0 {
+			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
+		}
+		aliased.Type = inferredType
 	}
 
 	if spec, exists := pluginSpecs[aliased.Type]; exists {
 		confBytes, err := yaml.Marshal(aliased.Plugin)
 		if err != nil {
-			return err
+			return fmt.Errorf("line %v: %v", value.Line, err)
 		}
 
 		conf := spec.confConstructor()
 		if err = yaml.Unmarshal(confBytes, conf); err != nil {
-			return err
+			return fmt.Errorf("line %v: %v", value.Line, err)
 		}
 		aliased.Plugin = conf
 	} else {
@@ -396,7 +388,7 @@ func Descriptions() string {
 		conf := NewConfig()
 		conf.Type = name
 		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = yaml.Marshal(confSanit)
+			confBytes, _ = config.MarshalYAML(confSanit)
 		}
 
 		buf.WriteString("## ")

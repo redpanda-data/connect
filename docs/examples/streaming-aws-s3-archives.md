@@ -19,7 +19,6 @@ The full config for this [example can be found here][example].
 
 ``` yaml
 input:
-  type: s3
   s3:
     region: eu-west-1 # TODO
     bucket: TODO
@@ -53,12 +52,10 @@ parallel consumers:
 
 ``` yaml
 input:
-  type: broker
   broker:
     copies: 8 # Increase this to gain more parallel consumers
     inputs:
-    - type: s3
-      s3:
+    - s3:
       ... etc
 ```
 
@@ -71,14 +68,11 @@ automatically be distributed amongst them via the SQS queue.
 pipeline:
   threads: 4 # Try to match the number of available logical CPU cores
   processors:
-  - type: decompress
-    decompress:
+  - decompress:
       algorithm: gzip
-  - type: unarchive
-    unarchive:
+  - unarchive:
       format: tar
-  - type: split
-    split:
+  - split:
       size: 10 # The size of message batches to send to Kafka
 ```
 

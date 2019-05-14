@@ -34,8 +34,7 @@ Failed messages can be fed into their own processor steps with a
 [`catch`][catch] processor:
 
 ``` yaml
-  - type: catch
-    catch:
+  - catch:
     - type: foo # Recover here
 ```
 
@@ -45,10 +44,8 @@ is possible to simulate a catch block with a [`conditional`][conditional]
 processor placed within a [`for_each`][for_each] processor:
 
 ``` yaml
-  - type: for_each
-    for_each:
-    - type: conditional
-      conditional:
+  - for_each:
+    - conditional:
         condition:
           type: processor_failed
         processors:
@@ -61,10 +58,8 @@ It's possible to reattempt a processor for a particular message until it is
 successful with a [`while`][while] processor:
 
 ``` yaml
-  - type: for_each
-    for_each:
-    - type: while
-      while:
+  - for_each:
+    - while:
         at_least_once: true
         max_loops: 0 # Set this greater than zero to cap the number of attempts
         condition:
@@ -84,8 +79,7 @@ In order to filter out any failed messages from your pipeline you can simply use
 a [`filter_parts`][filter_parts] processor:
 
 ``` yaml
-  - type: filter_parts
-    filter_parts:
+  - filter_parts:
       type: processor_failed
 ```
 
@@ -100,12 +94,10 @@ It is possible to send failed messages to different destinations using either a
 ``` yaml
 pipeline:
   processors:
-  - type: group_by
-    group_by:
+  - group_by:
     - condition:
         type: processor_failed
 output:
-  type: switch
   switch:
     outputs:
     - output:
@@ -123,19 +115,16 @@ Alternatively, using a `broker` output looks like this:
 
 ``` yaml
 output:
-  type: broker
   broker:
     pattern: fan_out
     outputs:
     - type: foo # Dead letter queue
       processors:
-      - type: filter_parts
-        filter_parts:
+      - filter_parts:
           type: processor_failed
     - type: bar # Everything else
       processors:
-      - type: filter_parts
-        filter_parts:
+      - filter_parts:
           type: not
           not:
             type: processor_failed

@@ -87,7 +87,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421 // indirect
 	golang.org/x/sys v0.0.0-20190305064518-30e92a19ae4a // indirect
 	google.golang.org/genproto v0.0.0-20190227213309-4f5b463f9597 // indirect
-	gopkg.in/yaml.v2 v2.2.2
+	gopkg.in/yaml.v3 v3.0.0-20190502103701-55513cacd4ae
 	gotest.tools v2.2.0+incompatible // indirect
 	nanomsg.org/go-mangos v1.4.0
 )

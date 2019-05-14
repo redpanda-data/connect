@@ -24,12 +24,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/util/config"
-	yaml "gopkg.in/yaml.v2"
 )
 
 //------------------------------------------------------------------------------
@@ -69,7 +69,7 @@ const (
 // Config is the all encompassing configuration struct for all metric output
 // types.
 //
-// TODO: V2 move field prefix into specific implementations.
+// TODO: V3 move field prefix into specific implementations.
 type Config struct {
 	Type       string           `json:"type" yaml:"type"`
 	Prefix     string           `json:"prefix" yaml:"prefix"`
@@ -150,6 +150,26 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
+	var raw interface{}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
+		var inferredType string
+		for _, tc := range typeCandidates {
+			if _, exists := Constructors[tc]; exists {
+				if len(inferredType) > 0 {
+					return fmt.Errorf("unable to infer type, multiple candidates '%v' and '%v'", inferredType, tc)
+				}
+				inferredType = tc
+			}
+		}
+		if len(inferredType) == 0 {
+			return fmt.Errorf("unable to infer type, candidates were: %v", typeCandidates)
+		}
+		aliased.Type = inferredType
+	}
+
 	*c = Config(aliased)
 	return nil
 }
@@ -209,7 +229,7 @@ func Descriptions() string {
 		conf := NewConfig()
 		conf.Type = name
 		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = yaml.Marshal(confSanit)
+			confBytes, _ = config.MarshalYAML(confSanit)
 		}
 
 		buf.WriteString("## ")

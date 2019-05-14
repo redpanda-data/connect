@@ -21,12 +21,11 @@
 package ratelimit
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 func TestConstructorDescription(t *testing.T) {
@@ -44,10 +43,10 @@ func TestConstructorBadType(t *testing.T) {
 	}
 }
 
-func TestConstructorConfigDefaults(t *testing.T) {
+func TestConstructorConfigDefaultsYAML(t *testing.T) {
 	conf := []Config{}
 
-	if err := json.Unmarshal([]byte(`[
+	if err := yaml.Unmarshal([]byte(`[
 		{
 			"type": "local",
 			"local": {
@@ -70,12 +69,11 @@ func TestConstructorConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestConstructorConfigDefaultsYAML(t *testing.T) {
+func TestConstructorConfigYAMLInference(t *testing.T) {
 	conf := []Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
-			"type": "local",
 			"local": {
 				"count": 50
 			}
@@ -87,6 +85,9 @@ func TestConstructorConfigDefaultsYAML(t *testing.T) {
 	if exp, act := 1, len(conf); exp != act {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
+	}
+	if exp, act := TypeLocal, conf[0].Type; exp != act {
+		t.Errorf("Wrong inferred type: %v != %v", act, exp)
 	}
 	if exp, act := "1s", conf[0].Local.Interval; exp != act {
 		t.Errorf("Wrong default interval: %v != %v", act, exp)

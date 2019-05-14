@@ -62,14 +62,12 @@ document with - foo, bar and baz - where baz relies on the result of both foo
 and bar, we might express that relationship here like so:
 
 ` + "``` yaml" + `
-type: process_dag
 process_dag:
   foo:
     premap:
       .: .
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://foo/enrich
     postmap:
@@ -78,8 +76,7 @@ process_dag:
     premap:
       .: msg.sub.path
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://bar/enrich
     postmap:
@@ -89,8 +86,7 @@ process_dag:
       foo_obj: foo_result
       bar_obj: bar_result
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://baz/enrich
     postmap:
@@ -213,7 +209,7 @@ func NewProcessDAG(
 
 		child, err := NewProcessMap(v.ProcessMapConfig, mgr, nsLog, nsStats)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create child process_map: %v", err)
+			return nil, fmt.Errorf("failed to create child process_map '%v': %v", k, err)
 		}
 
 		children[k] = child

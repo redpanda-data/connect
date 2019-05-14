@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker docker-cgo docker-push clean docs test test-race test-integration fmt lint install
+.PHONY: all deps rpm docker docker-cgo docker-push clean docs test test-race test-integration fmt lint install docs-site
 
 TAGS =
 
@@ -94,3 +94,6 @@ docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --list-metrics > ./docs/metrics/README.md; true
 	@$(PATHINSTBIN)/benthos --list-tracers > ./docs/tracers/README.md; true
 	@go run $(GO_FLAGS) ./cmd/tools/benthos_config_gen/main.go
+
+docs-site:
+	mkdocs gh-deploy --dirty -f ./.mkdocs.yml

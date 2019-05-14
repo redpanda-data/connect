@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.0.0 - 2019-05-14
+
+### Added
+
+- API for creating `cache` implementations.
+- API for creating `rate_limit` implementations.
+
+### Changed
+
+This is a major version released due to a series of minor breaking changes, you
+can read the [full migration guide here](https://docs.benthos.dev/migration/v2/).
+
+#### Configuration
+
+- Benthos now attempts to infer the `type` of config sections whenever the field
+  is omitted, for more information please read this overview:
+  [Concise Configuration](https://docs.benthos.dev/configuration/#concise-configuration).
+- Field `unsubscribe_on_close` of the `nats_stream` input is now `false` by
+  default.
+
+#### Service
+
+- The following commandline flags have been removed: `swap-envs`, `plugins-dir`,
+  `list-input-plugins`, `list-output-plugins`, `list-processor-plugins`,
+  `list-condition-plugins`.
+
+#### Go API
+
+- Package `github.com/Jeffail/benthos/lib/processor/condition` changed to
+  `github.com/Jeffail/benthos/lib/condition`.
+- Interface `types.Cache` now has `types.Closable` embedded.
+- Interface `types.RateLimit` now has `types.Closable` embedded.
+- Add method `GetPlugin` to interface `types.Manager`.
+- Add method `WithFields` to interface `log.Modular`.
+
 ## 1.20.4 - 2019-05-13
 
 ### Fixed

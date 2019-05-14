@@ -26,7 +26,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/message/metadata"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------

@@ -31,6 +31,9 @@ steps:
   image: golang
   commands:
     - make docker-cgo-tags
+  when:
+    branch:
+      exclude: [ beta ]
 
 - name: docker-cgo-dr
   image: plugins/docker
@@ -40,6 +43,8 @@ steps:
     dry_run: true
   when:
     event: [ push, pull_request ]
+    branch:
+      exclude: [ beta ]
 
 - name: docker-cgo
   image: plugins/docker
@@ -56,6 +61,9 @@ steps:
   image: golang
   commands:
     - make docker-tags
+  when:
+    branch:
+      exclude: [ beta ]
 
 - name: docker-dr
   image: plugins/docker
@@ -65,6 +73,8 @@ steps:
     dry_run: true
   when:
     event: [ push, pull_request ]
+    branch:
+      exclude: [ beta ]
 
 - name: docker
   image: plugins/docker
@@ -76,3 +86,15 @@ steps:
       from_secret: docker_password
   when:
     event: tag
+
+- name: docker-beta
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile
+    username: jeffail
+    password:
+      from_secret: docker_password
+    tags: [ beta ]
+  when:
+    branch: [ beta ]
