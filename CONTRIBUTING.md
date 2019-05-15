@@ -55,7 +55,9 @@ Please always make sure a pull request has been:
 - Formatted with `make fmt`
 
 And if your change has an impact on documentation then make sure it is generated
-with `make docs`.
+with `make docs`. If you install [mkdocs](https://www.mkdocs.org/) then you can
+also test that the documentation is formatted correctly with:
+`mkdocs serve -f ./.mkdocs.yml`.
 
 ### Plugins
 

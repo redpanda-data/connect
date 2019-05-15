@@ -48,10 +48,10 @@ $(PATHINSTSERVERLESS)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/s
 $(SERVERLESS): %: $(PATHINSTSERVERLESS)/%
 
 docker-tags:
-	@echo "latest,$(VER_CUT),v$(VER_MAJOR).$(VER_MINOR),$(VER_MAJOR).$(VER_MINOR),v$(VER_MAJOR),$(VER_MAJOR)" > .tags
+	@echo "latest,$(VER_CUT),$(VER_MAJOR).$(VER_MINOR),$(VER_MAJOR)" > .tags
 
 docker-cgo-tags:
-	@echo "latest-cgo,$(VER_CUT)-cgo,v$(VER_MAJOR).$(VER_MINOR)-cgo,$(VER_MAJOR).$(VER_MINOR)-cgo,v$(VER_MAJOR)-cgo,$(VER_MAJOR)-cgo" > .tags
+	@echo "latest-cgo,$(VER_CUT)-cgo,$(VER_MAJOR).$(VER_MINOR)-cgo,$(VER_MAJOR)-cgo" > .tags
 
 docker: deps
 	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VER_CUT)
