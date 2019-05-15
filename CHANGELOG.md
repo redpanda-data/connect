@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Config linting now reports line numbers.
+
 ## 2.0.0 - 2019-05-14
 
 ### Added

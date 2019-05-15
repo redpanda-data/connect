@@ -31,23 +31,23 @@ import (
 //------------------------------------------------------------------------------
 
 // Rules regarding object key/value combinations for paths.
-var keyValueRules = []func(path, key string, value interface{}) []string{
+var keyValueRules = []func(line int, path, key string, value interface{}) []string{
 	// Check for batch processor outside of input section.
-	func(path, key string, value interface{}) []string {
+	func(line int, path, key string, value interface{}) []string {
 		valueStr, ok := value.(string)
 		if !ok {
 			return nil
 		}
 		if key == "type" && valueStr == "batch" {
 			if !strings.HasPrefix(path, "input.") {
-				return []string{fmt.Sprintf("%v: Type 'batch' is unsafe outside of the 'input' section, for more information read https://docs.benthos.dev/processors/#batch", path)}
+				return []string{fmt.Sprintf("line %v: path '%v': Type 'batch' is unsafe outside of the 'input' section, for more information read https://docs.benthos.dev/processors/#batch", line, path)}
 			}
 		}
 		return nil
 	},
 }
 
-func lintWalkObj(path string, raw, processed map[interface{}]interface{}) []string {
+func lintWalkObj(path string, rawNode *yaml.Node, raw, processed map[interface{}]interface{}) []string {
 	lints := []string{}
 
 	keys := []string{}
@@ -56,10 +56,15 @@ func lintWalkObj(path string, raw, processed map[interface{}]interface{}) []stri
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
+		keyNode := getNodeChildOfKey(rawNode, k)
+		line := 0
+		if keyNode != nil {
+			line = keyNode.Line
+		}
 		y := raw[k]
 		x, exists := processed[k]
 		if !exists {
-			lints = append(lints, fmt.Sprintf("%v: Key '%v' found but is ignored", path, k))
+			lints = append(lints, fmt.Sprintf("line %v: path '%v': Key '%v' found but is ignored", line, path, k))
 			continue
 		}
 		var newPath string
@@ -69,9 +74,9 @@ func lintWalkObj(path string, raw, processed map[interface{}]interface{}) []stri
 			newPath = fmt.Sprintf("%v", k)
 		}
 		for _, rule := range keyValueRules {
-			lints = append(lints, rule(newPath, k, y)...)
+			lints = append(lints, rule(line, newPath, k, y)...)
 		}
-		if l := lintWalk(newPath, y, x); len(l) > 0 {
+		if l := lintWalk(newPath, keyNode, y, x); len(l) > 0 {
 			lints = append(lints, l...)
 		}
 	}
@@ -96,31 +101,69 @@ func getObjMap(v interface{}) (map[interface{}]interface{}, bool) {
 	return nil, false
 }
 
-func lintWalk(path string, raw, processed interface{}) []string {
+func getNodeChildOfKey(node *yaml.Node, key string) *yaml.Node {
+	if node == nil {
+		return nil
+	}
+	returnNode := false
+	if node.Kind == yaml.DocumentNode && len(node.Content) == 1 {
+		node = node.Content[0]
+	}
+	for _, n := range node.Content {
+		if n.Value == key {
+			returnNode = true
+			continue
+		}
+		if returnNode {
+			return n
+		}
+	}
+	return nil
+}
+
+func getNodeChildOfIndex(node *yaml.Node, index int) *yaml.Node {
+	if node == nil {
+		return nil
+	}
+	if node.Kind == yaml.DocumentNode && len(node.Content) == 1 {
+		node = node.Content[0]
+	}
+	if len(node.Content) <= index {
+		return nil
+	}
+	return node.Content[index]
+}
+
+func lintWalk(path string, rawNode *yaml.Node, raw, processed interface{}) []string {
+	line := 0
+	if rawNode != nil {
+		line = rawNode.Line
+	}
 	switch x := processed.(type) {
 	case map[interface{}]interface{}:
 		y, ok := getObjMap(raw)
 		if !ok {
-			return []string{fmt.Sprintf("%v: wrong type detected. Expected object but found %T", path, raw)}
+			return []string{fmt.Sprintf("line %v: path '%v': wrong type detected. Expected object but found %T", line, path, raw)}
 		}
-		return lintWalkObj(path, y, x)
+		return lintWalkObj(path, rawNode, y, x)
 	case map[string]interface{}:
 		y, ok := getObjMap(raw)
 		if !ok {
-			return []string{fmt.Sprintf("%v: wrong type detected. Expected object but found %T", path, raw)}
+			return []string{fmt.Sprintf("line %v: path '%v': wrong type detected. Expected object but found %T", line, path, raw)}
 		}
-		return lintWalkObj(path, y, mapToObjMap(x))
+		return lintWalkObj(path, rawNode, y, mapToObjMap(x))
 	case []interface{}:
 		y, ok := raw.([]interface{})
 		if !ok {
-			return []string{fmt.Sprintf("%v: wrong type detected. Expected array but found %T", path, raw)}
+			return []string{fmt.Sprintf("line %v: path '%v': wrong type detected. Expected array but found %T", line, path, raw)}
 		}
 		lints := []string{}
 		for i, v := range y {
 			if i >= len(x) {
 				break
 			}
-			if l := lintWalk(fmt.Sprintf("%v[%v]", path, i), v, x[i]); len(l) > 0 {
+			indexNode := getNodeChildOfIndex(rawNode, i)
+			if l := lintWalk(fmt.Sprintf("%v[%v]", path, i), indexNode, v, x[i]); len(l) > 0 {
 				lints = append(lints, l...)
 			}
 		}
@@ -138,7 +181,16 @@ func lintWalk(path string, raw, processed interface{}) []string {
 // results.
 func Lint(rawBytes []byte, config Type) ([]string, error) {
 	var raw, processed interface{}
+	var rawNode yaml.Node
 	if err := yaml.Unmarshal(rawBytes, &raw); err != nil {
+		return nil, err
+	}
+	/*
+		if err := rawNode.Decode(&rawNode); err != nil {
+			return nil, err
+		}
+	*/
+	if err := yaml.Unmarshal(rawBytes, &rawNode); err != nil {
 		return nil, err
 	}
 	sanit, err := config.Sanitised()
@@ -150,7 +202,7 @@ func Lint(rawBytes []byte, config Type) ([]string, error) {
 	} else if err = yaml.Unmarshal(processedBytes, &processed); err != nil {
 		return nil, err
 	}
-	return lintWalk("", raw, processed), nil
+	return lintWalk("", &rawNode, raw, processed), nil
 }
 
 //------------------------------------------------------------------------------

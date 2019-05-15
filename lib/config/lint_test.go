@@ -47,7 +47,7 @@ func TestConfigLints(t *testing.T) {
 			conf: `input:
   type: stdin
   kafka: {}`,
-			lints: []string{"input: Key 'kafka' found but is ignored"},
+			lints: []string{"line 3: path 'input': Key 'kafka' found but is ignored"},
 		},
 		{
 			name: "broker object type",
@@ -57,7 +57,7 @@ func TestConfigLints(t *testing.T) {
     inputs:
     - type: stdin
       kafka: {}`,
-			lints: []string{"input.broker.inputs[0]: Key 'kafka' found but is ignored"},
+			lints: []string{"line 6: path 'input.broker.inputs[0]': Key 'kafka' found but is ignored"},
 		},
 		{
 			name: "broker object multiple types",
@@ -73,8 +73,8 @@ func TestConfigLints(t *testing.T) {
     - type: stdin
       stdin: {}`,
 			lints: []string{
-				"input.broker.inputs[0]: Key 'kafka' found but is ignored",
-				"input.broker.inputs[1]: Key 'stdin' found but is ignored",
+				"line 6: path 'input.broker.inputs[0]': Key 'kafka' found but is ignored",
+				"line 9: path 'input.broker.inputs[1]': Key 'stdin' found but is ignored",
 			},
 		},
 		{
@@ -85,9 +85,23 @@ func TestConfigLints(t *testing.T) {
     inputs:
     - type: stdin
       stdin:
-        thisismadeup: true`,
+        thisismadeup: true
+        multipart: true`,
 			lints: []string{
-				"input.broker.inputs[0].stdin: Key 'thisismadeup' found but is ignored",
+				"line 7: path 'input.broker.inputs[0].stdin': Key 'thisismadeup' found but is ignored",
+			},
+		},
+		{
+			name: "batch processor outside of input",
+			conf: `input:
+  type: amqp
+  amqp: {}
+pipeline:
+  processors:
+  - type: batch
+    batch: {}`,
+			lints: []string{
+				"line 6: path 'pipeline.processors[0].type': Type 'batch' is unsafe outside of the 'input' section, for more information read https://docs.benthos.dev/processors/#batch",
 			},
 		},
 	}
