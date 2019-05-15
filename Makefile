@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker docker-cgo docker-push clean docs test test-race test-integration fmt lint install docs-site
+.PHONY: all deps rpm docker docker-cgo docker-push clean docs test test-race test-integration fmt lint install deploy-docs
 
 TAGS =
 
@@ -95,5 +95,18 @@ docs: $(APPS)
 	@$(PATHINSTBIN)/benthos --list-tracers > ./docs/tracers/README.md; true
 	@go run $(GO_FLAGS) ./cmd/tools/benthos_config_gen/main.go
 
-docs-site:
-	mkdocs gh-deploy --dirty -f ./.mkdocs.yml
+deploy-docs:
+	@git diff-index --quiet HEAD -- || ( echo "Failed: Branch must be clean"; false )
+	@mkdocs build -f ./.mkdocs.yml
+	@git fetch origin gh-pages
+	@git checkout gh-pages ./archive
+	@git reset HEAD
+	@mv ./archive ./site/
+	@git checkout gh-pages
+	@ls -1 | grep -v "site" | xargs rm -rf
+	@mv site/* .
+	@rmdir ./site
+	@git add -A
+	@git commit -m 'Deployed ${VERSION} with MkDocs'
+	@git push origin gh-pages
+	@git checkout master
