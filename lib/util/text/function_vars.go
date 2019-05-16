@@ -122,11 +122,14 @@ func contentFunction(msg Message, arg string) []byte {
 //------------------------------------------------------------------------------
 
 var functionRegex *regexp.Regexp
+var escapedFunctionRegex *regexp.Regexp
 
 func init() {
 	var err error
-	functionRegex, err = regexp.Compile(`\${![a-z0-9_]+(:[^}]+)?}`)
-	if err != nil {
+	if functionRegex, err = regexp.Compile(`\${![a-z0-9_]+(:[^}]+)?}`); err != nil {
+		panic(err)
+	}
+	if escapedFunctionRegex, err = regexp.Compile(`\${({![a-z0-9_]+(:[^}]+)?})}`); err != nil {
 		panic(err)
 	}
 }
@@ -202,7 +205,7 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 // ContainsFunctionVariables returns true if inBytes contains function variable
 // replace patterns.
 func ContainsFunctionVariables(inBytes []byte) bool {
-	return functionRegex.Find(inBytes) != nil
+	return functionRegex.Find(inBytes) != nil || escapedFunctionRegex.Find(inBytes) != nil
 }
 
 func escapeBytes(in []byte) []byte {
@@ -241,7 +244,7 @@ func ReplaceFunctionVariablesEscaped(msg Message, inBytes []byte) []byte {
 }
 
 func replaceFunctionVariables(msg Message, escape bool, inBytes []byte) []byte {
-	return functionRegex.ReplaceAllFunc(inBytes, func(content []byte) []byte {
+	replaced := functionRegex.ReplaceAllFunc(inBytes, func(content []byte) []byte {
 		if len(content) > 4 {
 			if colonIndex := bytes.IndexByte(content, ':'); colonIndex == -1 {
 				targetFunc := string(content[3 : len(content)-1])
@@ -264,6 +267,8 @@ func replaceFunctionVariables(msg Message, escape bool, inBytes []byte) []byte {
 		}
 		return content
 	})
+	replaced = escapedFunctionRegex.ReplaceAll(replaced, []byte(`$$$1`))
+	return replaced
 }
 
 //------------------------------------------------------------------------------

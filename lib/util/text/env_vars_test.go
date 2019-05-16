@@ -35,6 +35,8 @@ func TestEnvVarDetection(t *testing.T) {
 		"foo ${BENTHOS_TEST_FOO baz ${or_this":      false,
 		"nothing $ here boss {}":                    false,
 		"foo ${BENTHOS_TEST_FOO:barthisdoesntend":   false,
+		"foo ${{BENTHOS_TEST_FOO:bar}} baz":         true,
+		"foo ${{BENTHOS_TEST_FOO:bar} baz":          false,
 	}
 
 	for in, exp := range tests {
@@ -65,6 +67,8 @@ func TestEnvSwapping(t *testing.T) {
 		"foo ${BENTHOS_TEST_FOO:${!metadata:foo}} baz":                             "foo ${!metadata:foo} baz",
 		"foo ${BENTHOS_TEST_FOO:${!metadata:foo}${!metadata:bar}} baz":             "foo ${!metadata:foo}${!metadata:bar} baz",
 		"foo ${BENTHOS_TEST_FOO:${!count:foo}-${!timestamp_unix_nano}.tar.gz} baz": "foo ${!count:foo}-${!timestamp_unix_nano}.tar.gz baz",
+		"foo ${{BENTHOS_TEST_FOO:bar}} baz":                                        "foo ${BENTHOS_TEST_FOO:bar} baz",
+		"foo ${{BENTHOS_TEST_FOO}} baz":                                            "foo ${BENTHOS_TEST_FOO} baz",
 	}
 
 	for in, exp := range tests {

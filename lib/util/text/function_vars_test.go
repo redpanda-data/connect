@@ -44,6 +44,11 @@ func TestFunctionVarDetection(t *testing.T) {
 		"foo ${!foo_bar:arg1} baz ${!foo_baz:arg2}": true,
 		"foo $!foo:arg2} baz $!but_not_this:}":      false,
 		"nothing $ here boss {!:argnope}":           false,
+		"foo ${{!foo_bar}} baz":                     true,
+		"foo ${{!foo_bar:default}} baz":             true,
+		"foo ${{!foo_bar:default} baz":              false,
+		"foo {{!foo_bar:default}} baz":              false,
+		"foo {{!}} baz":                             false,
 	}
 
 	for in, exp := range tests {
@@ -358,6 +363,22 @@ func TestFunctionSwapping(t *testing.T) {
 	}
 	if !strings.Contains(tStamp, "UTC") {
 		t.Errorf("Non-UTC timezone detected: %v", tStamp)
+	}
+}
+
+func TestFunctionEscape(t *testing.T) {
+	tests := map[string]string{
+		"foo ${{!echo:bar}} bar":      "foo ${!echo:bar} bar",
+		"foo ${{!notafunction}} bar":  "foo ${!notafunction} bar",
+		"foo ${{{!notafunction}} bar": "foo ${{{!notafunction}} bar",
+		"foo ${!notafunction}} bar":   "foo ${!notafunction}} bar",
+	}
+
+	for input, exp := range tests {
+		act := string(ReplaceFunctionVariables(nil, []byte(input)))
+		if exp != act {
+			t.Errorf("Wrong results for input (%v): %v != %v", input, act, exp)
+		}
 	}
 }
 
