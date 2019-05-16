@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.1.0 - 2019-05-16
+
 ### Added
 
 - Config linting now reports line numbers.
+- Config interpolations now support escaping.
 
 ## 2.0.0 - 2019-05-14
 
