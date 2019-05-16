@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/config"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/log"
@@ -37,7 +38,6 @@ import (
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
-	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/tracer"
 	yaml "gopkg.in/yaml.v3"
 )

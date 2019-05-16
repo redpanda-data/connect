@@ -25,10 +25,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/condition"
 )
 
 func TestBatchBasic(t *testing.T) {

@@ -23,6 +23,7 @@ package config
 import (
 	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/buffer"
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/manager"
@@ -30,7 +31,6 @@ import (
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
-	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/tracer"
 	"gopkg.in/yaml.v3"
