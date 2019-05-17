@@ -59,10 +59,10 @@ const (
 
 // Config is the all encompassing configuration struct for all buffer types.
 type Config struct {
-	Type   string                  `json:"type" yaml:"type"`
-	Memory single.MemoryConfig     `json:"memory" yaml:"memory"`
-	Mmap   single.MmapBufferConfig `json:"mmap_file" yaml:"mmap_file"`
-	None   struct{}                `json:"none" yaml:"none"`
+	Type   string              `json:"type" yaml:"type"`
+	Memory single.MemoryConfig `json:"memory" yaml:"memory"`
+	Mmap   MmapBufferConfig    `json:"mmap_file,omitempty" yaml:"mmap_file,omitempty"`
+	None   struct{}            `json:"none" yaml:"none"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -70,7 +70,7 @@ func NewConfig() Config {
 	return Config{
 		Type:   "none",
 		Memory: single.NewMemoryConfig(),
-		Mmap:   single.NewMmapBufferConfig(),
+		Mmap:   NewMmapBufferConfig(),
 		None:   struct{}{},
 	}
 }

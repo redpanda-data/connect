@@ -1,4 +1,4 @@
-.PHONY: all deps rpm docker docker-cgo docker-push clean docs test test-race test-integration fmt lint install deploy-docs
+.PHONY: all serverless deps docker docker-cgo clean docs test test-race test-integration fmt lint install deploy-docs
 
 TAGS =
 

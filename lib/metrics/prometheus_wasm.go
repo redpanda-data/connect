@@ -5,7 +5,7 @@
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// furnished to do so, sub to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
@@ -18,7 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// Package condition contains logical operators that, based on their
-// configuration, return boolean values from messages under certain
-// circumstances.
-package condition
+// +build wasm
+
+package metrics
+
+import "errors"
+
+//------------------------------------------------------------------------------
+
+// NewPrometheus creates and returns a new Prometheus object.
+func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
+	return nil, errors.New("Prometheus metrics are disabled in WASM builds")
+}
+
+//------------------------------------------------------------------------------

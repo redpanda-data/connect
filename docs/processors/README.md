@@ -1525,6 +1525,9 @@ The following is a list of supported drivers and their respective DSN formats:
 - `mysql`: `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]`
 - `postgres`: `postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`
 
+Please note that the `postgres` driver enforces SSL by default, you
+can override this with the parameter `sslmode=disable` if required.
+
 ## `subprocess`
 
 ``` yaml

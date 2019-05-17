@@ -63,6 +63,8 @@ mmap_file:
   retry_period: 1s
 ```
 
+DEPRECATED: This buffer type is due to be removed in V3.
+
 The mmap file buffer type uses memory mapped files to perform low-latency,
 file-persisted buffering of messages.
 

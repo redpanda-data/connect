@@ -27,9 +27,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/message"
-
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
@@ -38,7 +37,6 @@ import (
 
 	// SQL Drivers
 	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq"
 )
 
 //------------------------------------------------------------------------------
@@ -90,7 +88,10 @@ columns value in the row.
 The following is a list of supported drivers and their respective DSN formats:
 
 - ` + "`mysql`: `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]`" + `
-- ` + "`postgres`: `postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`" + ``,
+- ` + "`postgres`: `postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`" + `
+
+Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you
+can override this with the parameter ` + "`sslmode=disable`" + ` if required.`,
 	}
 }
 
