@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.1.1 - 2019-05-17
+
+### Added
+
+- Experimental support for WASM builds.
+
 ## 2.1.0 - 2019-05-16
 
 ### Added
