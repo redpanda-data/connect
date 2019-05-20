@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.2.0 - 2019-05-20
+
+### Added
+
+- Core service logic has been moved into new package `service`, making it easier
+  to maintain plugin builds that match upstream Benthos.
+
 ## 2.1.1 - 2019-05-17
 
 ### Added
