@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 2.2.0 - 2019-05-20
+## 2.1.2 - 2019-05-20
 
 ### Added
 
