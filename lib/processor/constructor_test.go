@@ -23,10 +23,12 @@ package processor
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/types"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -45,6 +47,32 @@ func TestConstructorBadType(t *testing.T) {
 
 	if _, err := New(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{}); err == nil {
 		t.Error("Expected error, received nil for invalid type")
+	}
+}
+
+func TestConstructorBlockType(t *testing.T) {
+	Constructors["footype"] = TypeSpec{
+		constructor: func(
+			conf Config,
+			mgr types.Manager,
+			log log.Modular,
+			stats metrics.Type,
+		) (Type, error) {
+			return nil, nil
+		},
+	}
+
+	conf := NewConfig()
+	conf.Type = "footype"
+
+	Block("footype", "because testing")
+
+	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err == nil {
+		t.Fatal("Expected error, received nil for blocked type")
+	}
+	if !strings.Contains(err.Error(), "because testing") {
+		t.Errorf("Unexpected error: %v", err)
 	}
 }
 

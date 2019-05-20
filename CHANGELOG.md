@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.1.3 - 2019-05-20
+
+### Added
+
+- Add experimental function for blocking processor constructors.
+
 ## 2.1.2 - 2019-05-20
 
 ### Added
