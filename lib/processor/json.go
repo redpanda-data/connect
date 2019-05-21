@@ -213,7 +213,7 @@ type JSONConfig struct {
 func NewJSONConfig() JSONConfig {
 	return JSONConfig{
 		Parts:    []int{},
-		Operator: "get",
+		Operator: "clean",
 		Path:     "",
 		Value:    rawJSONValue(`""`),
 	}

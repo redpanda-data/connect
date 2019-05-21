@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- The `json` processor now defaults to an executable operator (clean).
+
 ## 2.1.3 - 2019-05-20
 
 ### Added
