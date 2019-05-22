@@ -45,6 +45,30 @@ type TypeSpec struct {
 // Constructors is a map of all cache types with their specs.
 var Constructors = map[string]TypeSpec{}
 
+// Block replaces the constructor of a Benthos cache such that its construction
+// will always return an error. This is useful for building strict pipelines
+// where certain caches should not be available. NOTE: This does not remove the
+// cache from the configuration spec, and normalisation will still work the same
+// for blocked caches.
+//
+// EXPERIMENTAL: This function is experimental and therefore subject to change
+// outside of major version releases.
+func Block(typeStr, reason string) {
+	ctor, ok := Constructors[typeStr]
+	if !ok {
+		return
+	}
+	ctor.constructor = func(
+		conf Config,
+		mgr types.Manager,
+		log log.Modular,
+		stats metrics.Type,
+	) (types.Cache, error) {
+		return nil, fmt.Errorf("cache '%v' is blocked due to: %v", typeStr, reason)
+	}
+	Constructors[typeStr] = ctor
+}
+
 //------------------------------------------------------------------------------
 
 // String constants representing each cache type.

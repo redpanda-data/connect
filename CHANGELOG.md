@@ -5,12 +5,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.2.0 - 2019-05-22
+
 ### Added
 
 - The `kafka` and `kafka_balanced` inputs now set a `kafka_lag` metadata field
   to incoming messages.
 - The `awk` processor now has a variety of typed `json_set` functions
   `json_set_int`, `json_set_float` and `json_set_bool`.
+- Go API: Add experimental function for blocking cache and ratelimit
+  constructors.
 
 ### Fixed
 
