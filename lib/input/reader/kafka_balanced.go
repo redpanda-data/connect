@@ -92,6 +92,11 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 
 //------------------------------------------------------------------------------
 
+type consumerMessage struct {
+	*sarama.ConsumerMessage
+	highWaterMark int64
+}
+
 // KafkaBalanced is an input type that reads from a Kafka cluster by balancing
 // partitions across other consumers of the same consumer group.
 type KafkaBalanced struct {
@@ -109,7 +114,7 @@ type KafkaBalanced struct {
 	cMut          sync.Mutex
 	groupCancelFn context.CancelFunc
 	session       sarama.ConsumerGroupSession
-	msgChan       chan *sarama.ConsumerMessage
+	msgChan       chan consumerMessage
 
 	offsets map[string]map[int32]int64
 
@@ -224,7 +229,10 @@ func (k *KafkaBalanced) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sar
 			if !open {
 				return nil
 			}
-			k.msgChan <- msg
+			k.msgChan <- consumerMessage{
+				ConsumerMessage: msg,
+				highWaterMark:   claim.HighWaterMarkOffset(),
+			}
 		case <-sess.Context().Done():
 			k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
 			return nil
@@ -352,7 +360,7 @@ func (k *KafkaBalanced) Connect() error {
 		k.cMut.Unlock()
 	}()
 
-	k.msgChan = make(chan *sarama.ConsumerMessage, k.conf.MaxBatchCount)
+	k.msgChan = make(chan consumerMessage, k.conf.MaxBatchCount)
 	k.offsets = map[string]map[int32]int64{}
 
 	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.addresses)
@@ -370,17 +378,24 @@ func (k *KafkaBalanced) Read() (types.Message, error) {
 	}
 
 	msg := message.New(nil)
-	addPart := func(data *sarama.ConsumerMessage) {
+	addPart := func(data consumerMessage) {
 		part := message.NewPart(data.Value)
 
 		meta := part.Metadata()
 		for _, hdr := range data.Headers {
 			meta.Set(string(hdr.Key), string(hdr.Value))
 		}
+
+		lag := data.highWaterMark - data.Offset - 1
+		if lag < 0 {
+			lag = 0
+		}
+
 		meta.Set("kafka_key", string(data.Key))
 		meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
 		meta.Set("kafka_topic", data.Topic)
 		meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
+		meta.Set("kafka_lag", strconv.FormatInt(lag, 10))
 		meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
 
 		msg.Append(part)

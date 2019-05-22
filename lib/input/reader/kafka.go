@@ -294,6 +294,8 @@ func (k *Kafka) Read() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
+	hwm := partConsumer.HighWaterMarkOffset()
+
 	msg := message.New(nil)
 	addPart := func(data *sarama.ConsumerMessage) {
 		k.offset = data.Offset + 1
@@ -303,10 +305,17 @@ func (k *Kafka) Read() (types.Message, error) {
 		for _, hdr := range data.Headers {
 			meta.Set(string(hdr.Key), string(hdr.Value))
 		}
+
+		lag := hwm - data.Offset
+		if lag < 0 {
+			lag = 0
+		}
+
 		meta.Set("kafka_key", string(data.Key))
 		meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
 		meta.Set("kafka_topic", data.Topic)
-		meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
+		meta.Set("kafka_offset", strconv.FormatInt(data.Offset, 10))
+		meta.Set("kafka_lag", strconv.FormatInt(lag, 10))
 		meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
 
 		msg.Append(part)

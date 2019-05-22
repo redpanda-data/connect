@@ -872,7 +872,7 @@ messages with boolean queries please instead use the
 ``` yaml
 type: json
 json:
-  operator: get
+  operator: clean
   parts: []
   path: ""
   value: ""

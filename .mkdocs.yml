@@ -22,6 +22,7 @@ nav:
     - 'Rate Limits': 'rate_limits/README.md'
     - 'Metrics': 'metrics/README.md'
     - 'Tracers': 'tracers/README.md'
+    - 'Logger': 'logger/README.md'
   - Guides:
     - 'Getting Started': 'getting_started.md'
     - 'Serverless': 'serverless/README.md'

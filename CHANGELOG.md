@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `kafka` and `kafka_balanced` inputs now set a `kafka_lag` metadata field
+  to incoming messages.
+
 ### Fixed
 
 - The `json` processor now defaults to an executable operator (clean).

@@ -367,7 +367,7 @@ pipeline:
     jmespath:
       query: ${PROCESSOR_JMESPATH_QUERY}
     json:
-      operator: ${PROCESSOR_JSON_OPERATOR:get}
+      operator: ${PROCESSOR_JSON_OPERATOR:clean}
       path: ${PROCESSOR_JSON_PATH}
       value: ${PROCESSOR_JSON_VALUE}
     lambda:
