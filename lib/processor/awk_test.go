@@ -233,6 +233,27 @@ func TestAWK(t *testing.T) {
 			output:  `not json content`,
 		},
 		{
+			name:    "json set int 1",
+			codec:   "none",
+			program: `{ json_set_int("obj.foo", 5) }`,
+			input:   `{}`,
+			output:  `{"obj":{"foo":5}}`,
+		},
+		{
+			name:    "json set float 1",
+			codec:   "none",
+			program: `{ json_set_float("obj.foo", 5.3) }`,
+			input:   `{}`,
+			output:  `{"obj":{"foo":5.3}}`,
+		},
+		{
+			name:    "json set bool 1",
+			codec:   "none",
+			program: `{ json_set_bool("obj.foo", "foo" == "foo") }`,
+			input:   `{}`,
+			output:  `{"obj":{"foo":true}}`,
+		},
+		{
 			name: "metadata get 2",
 			metadata: map[string]string{
 				"meta.foo": "12",

@@ -287,6 +287,18 @@ var awkFunctionsMap = map[string]interface{}{
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
+	"json_set_int": func(path string, value int) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
+	"json_set_float": func(path string, value float64) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
+	"json_set_bool": func(path string, value bool) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
 	"create_json_object": func(vals ...string) string {
 		pairs := map[string]string{}
 		for i := 0; i < len(vals)-1; i += 2 {
@@ -382,7 +394,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			}
 			return gTarget.String(), nil
 		}
-		customFuncs["json_set"] = func(path, v string) (int, error) {
+		setJSON := func(path string, v interface{}) (int, error) {
 			var gPart *gabs.Container
 			jsonPart, err := part.JSON()
 			if err == nil {
@@ -394,6 +406,18 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			gPart.SetP(v, path)
 			part.SetJSON(gPart.Data())
 			return 0, nil
+		}
+		customFuncs["json_set"] = func(path, v string) (int, error) {
+			return setJSON(path, v)
+		}
+		customFuncs["json_set_int"] = func(path string, v int) (int, error) {
+			return setJSON(path, v)
+		}
+		customFuncs["json_set_float"] = func(path string, v float64) (int, error) {
+			return setJSON(path, v)
+		}
+		customFuncs["json_set_bool"] = func(path string, v bool) (int, error) {
+			return setJSON(path, v)
 		}
 
 		config := &interp.Config{

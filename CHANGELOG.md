@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - The `kafka` and `kafka_balanced` inputs now set a `kafka_lag` metadata field
   to incoming messages.
+- The `awk` processor now has a variety of typed `json_set` functions
+  `json_set_int`, `json_set_float` and `json_set_bool`.
 
 ### Fixed
 
