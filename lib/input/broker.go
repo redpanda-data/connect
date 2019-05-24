@@ -249,7 +249,7 @@ func NewBroker(
 				pipelines...,
 			)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to create input '%v' type '%v': %v", i, iConf.Type, err)
 			}
 		}
 	}

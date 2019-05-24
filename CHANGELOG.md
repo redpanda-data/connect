@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Improved construction error messages for `broker` and `switch` input and
+  outputs.
+
 ## 2.2.0 - 2019-05-22
 
 ### Added

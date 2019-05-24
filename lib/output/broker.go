@@ -206,7 +206,7 @@ func NewBroker(
 				metrics.Combine(stats, metrics.Namespaced(stats, ns)),
 				pipes...)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Type, err)
 			}
 		}
 	}

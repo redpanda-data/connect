@@ -262,14 +262,14 @@ func NewSwitch(
 			logger.NewModule("."+ns+".output"),
 			metrics.Combine(stats, metrics.Namespaced(stats, ns+".output")),
 		); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Output.Type, err)
 		}
 		if o.conditions[i], err = condition.New(
 			oConf.Condition, mgr,
 			logger.NewModule("."+ns+".condition"),
 			metrics.Namespaced(stats, ns+".condition"),
 		); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create output '%v' condition '%v': %v", i, oConf.Condition.Type, err)
 		}
 		o.fallthroughs[i] = oConf.Fallthrough
 	}
