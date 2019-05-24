@@ -65,6 +65,7 @@ successful with a [`while`][while] processor:
         condition:
           type: processor_failed
         processors:
+        - type: catch # Wipe any previous error
         - type: foo # Attempt this processor until success
 ```
 
