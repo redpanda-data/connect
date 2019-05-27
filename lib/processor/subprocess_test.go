@@ -136,7 +136,7 @@ func TestSubprocessLineBreaks(t *testing.T) {
 	})
 	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
-		t.Fatal("Wrong count of messages")
+		t.Fatalf("Wrong count of messages %d", len(msgs))
 	}
 	if res != nil {
 		t.Fatalf("Non-nil result: %v", res.Error())
