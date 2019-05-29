@@ -5,10 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.2.1 - 2019-05-29
+
 ### Fixed
 
 - Improved construction error messages for `broker` and `switch` input and
   outputs.
+
+### Changed
+
+- Plugins that don't use a configuration structure can now return nil in their
+  sanitise functions in order to have the plugin section omitted.
 
 ## 2.2.0 - 2019-05-22
 

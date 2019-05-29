@@ -260,10 +260,14 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 			outputMap[conf.Type] = hashMap[conf.Type]
 		}
 		if spec, exists := pluginSpecs[conf.Type]; exists {
+			var plugSanit interface{}
 			if spec.confSanitiser != nil {
-				outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
+				plugSanit = spec.confSanitiser(conf.Plugin)
 			} else {
-				outputMap["plugin"] = hashMap["plugin"]
+				plugSanit = hashMap["plugin"]
+			}
+			if plugSanit != nil {
+				outputMap["plugin"] = plugSanit
 			}
 		}
 	}
