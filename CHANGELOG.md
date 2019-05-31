@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Ability to combine sync and async responses in serverless distributions.
+
 ### Changed
 
 - The `insert_part`, `merge_json` and `unarchive` processors now propagate
