@@ -181,23 +181,14 @@ func (e *Elasticsearch) Connect() error {
 		opts = append(opts, elastic.SetHttpClient(signingClient))
 	}
 
-	var err error
-	if e.client, err = elastic.NewClient(opts...); err != nil {
+	client, err := elastic.NewClient(opts...)
+	if err != nil {
 		return err
 	}
 
-	if err == nil && !e.interpolatedIndex {
-		var indexExists bool
-		indexExists, err = e.client.IndexExists(e.conf.Index).Do(context.Background())
-		if err == nil && !indexExists {
-			err = fmt.Errorf("index '%v' does not exist", e.conf.Index)
-		}
-	}
-
-	if err == nil {
-		e.log.Infof("Sending messages to Elasticsearch index at urls: %s\n", e.urls)
-	}
-	return err
+	e.client = client
+	e.log.Infof("Sending messages to Elasticsearch index at urls: %s\n", e.urls)
+	return nil
 }
 
 func shouldRetry(s int) bool {
@@ -205,6 +196,13 @@ func shouldRetry(s int) bool {
 		return true
 	}
 	return false
+}
+
+type pendingBulkIndex struct {
+	Index    string
+	Pipeline string
+	Type     string
+	Doc      interface{}
 }
 
 // Write will attempt to write a message to Elasticsearch, wait for
@@ -232,8 +230,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 
 	e.backoff.Reset()
 
-	b := e.client.Bulk()
-	docs := []interface{}{}
+	requests := map[string]*pendingBulkIndex{}
 	msg.Iter(func(i int, part types.Part) error {
 		jObj, ierr := part.JSON()
 		if ierr != nil {
@@ -241,21 +238,29 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
 			return nil
 		}
-		docs = append(docs, jObj)
-		b.Add(
-			elastic.NewBulkIndexRequest().
-				Index(e.indexStr.Get(message.Lock(msg, i))).
-				Pipeline(e.pipelineStr.Get(message.Lock(msg, i))).
-				Type(e.conf.Type).
-				Id(e.idStr.Get(message.Lock(msg, i))).
-				Doc(jObj),
-		)
+		lMsg := message.Lock(msg, i)
+		requests[e.idStr.Get(lMsg)] = &pendingBulkIndex{
+			Index:    e.indexStr.Get(lMsg),
+			Pipeline: e.pipelineStr.Get(lMsg),
+			Type:     e.conf.Type,
+			Doc:      jObj,
+		}
 		return nil
 	})
 
-	for b.NumberOfActions() != 0 {
-		wait := e.backoff.NextBackOff()
+	b := e.client.Bulk()
+	for k, v := range requests {
+		b.Add(
+			elastic.NewBulkIndexRequest().
+				Index(v.Index).
+				Pipeline(v.Pipeline).
+				Type(v.Type).
+				Id(k).
+				Doc(v.Doc),
+		)
+	}
 
+	for b.NumberOfActions() != 0 {
 		result, err := b.Do(context.Background())
 		if err != nil {
 			return err
@@ -263,15 +268,27 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 
 		failed := result.Failed()
 		if len(failed) == 0 {
-			return nil
+			e.backoff.Reset()
+			continue
 		}
 
+		wait := e.backoff.NextBackOff()
 		for i := 0; i < len(failed); i++ {
 			if !shouldRetry(failed[i].Status) {
-				e.log.Errorf("elasticsearch message rejected with code [%s]: %v\n", failed[i].Status, failed[i].Error.Reason)
+				e.log.Errorf("Elasticsearch message '%v' rejected with code [%s]: %v\n", failed[i].Id, failed[i].Status, failed[i].Error.Reason)
 				return fmt.Errorf("failed to send %v parts from message: %v", len(failed), failed[0].Error.Reason)
 			}
-			e.log.Errorf("elasticsearch message failed with code [%s]: %v\n", failed[i].Status, failed[i].Error.Reason)
+			e.log.Errorf("Elasticsearch message '%v' failed with code [%s]: %v\n", failed[i].Id, failed[i].Status, failed[i].Error.Reason)
+			id := failed[i].Id
+			req := requests[id]
+			b.Add(
+				elastic.NewBulkIndexRequest().
+					Index(req.Index).
+					Pipeline(req.Pipeline).
+					Type(req.Type).
+					Id(id).
+					Doc(req.Doc),
+			)
 		}
 		if wait == backoff.Stop {
 			return fmt.Errorf("failed to send %v parts from message: %v", len(failed), failed[0].Error.Reason)

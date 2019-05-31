@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.2.3 - 2019-05-31
+
+### Fixed
+
+- Output `elasticsearch` no longer reports index not found errors on connect.
+
 ## 2.2.2 - 2019-05-30
 
 ### Fixed
