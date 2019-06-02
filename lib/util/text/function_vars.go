@@ -193,6 +193,9 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 	"json_field":           jsonFieldFunction,
 	"metadata":             metadataFunction,
 	"metadata_json_object": metadataMapFunction,
+	"batch_size": func(m Message, _ string) []byte {
+		return strconv.AppendInt(nil, int64(m.Len()), 10)
+	},
 	"uuid_v4": func(_ Message, _ string) []byte {
 		u4, err := uuid.NewV4()
 		if err != nil {

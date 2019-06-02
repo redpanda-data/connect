@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.2.4 - 2019-06-02
+
+### Added
+
+- New interpolation function `batch_size`.
+
 ## 2.2.3 - 2019-05-31
 
 ### Fixed

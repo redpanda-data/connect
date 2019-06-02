@@ -89,6 +89,10 @@ part by default. It is possible to specify a target part index with an integer
 argument, e.g. `${!content:2}` would print the contents of the third message
 part.
 
+### `batch_size`
+
+Resolves to the size of a message batch.
+
 ### `json_field`
 
 Resolves to the value of a JSON field within the message payload located by a

@@ -194,6 +194,29 @@ func TestContentFunctionIndex(t *testing.T) {
 	}
 }
 
+func TestBatchSizeFunction(t *testing.T) {
+	act := string(ReplaceFunctionVariables(
+		message.New(make([][]byte, 0)), []byte(`${!batch_size} bar baz`),
+	))
+	if exp := "0 bar baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		message.New(make([][]byte, 1)), []byte(`${!batch_size} bar baz`),
+	))
+	if exp := "1 bar baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		message.New(make([][]byte, 2)), []byte(`${!batch_size} bar baz`),
+	))
+	if exp := "2 bar baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
 func TestJSONFunction(t *testing.T) {
 	type testCase struct {
 		name   string
