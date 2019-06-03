@@ -22,14 +22,12 @@ package manager
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Jeffail/benthos/lib/config"
 	"github.com/Jeffail/benthos/lib/stream"
-	"github.com/Jeffail/benthos/lib/util/text"
-	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -77,26 +75,13 @@ func LoadStreamConfigsFromDirectory(replaceEnvVars bool, dir string) (map[string
 			return fmt.Errorf("stream id (%v) collision from file: %v", id, path)
 		}
 
-		file, openerr := os.Open(path)
-		if openerr != nil {
-			return fmt.Errorf("failed to read stream file '%v': %v", path, openerr)
-		}
-		defer file.Close()
-
-		streamBytes, readerr := ioutil.ReadAll(file)
-		if readerr != nil {
-			return readerr
-		}
-		if replaceEnvVars {
-			streamBytes = text.ReplaceEnvVariables(streamBytes)
-		}
-
-		conf := stream.NewConfig()
-		if readerr = yaml.Unmarshal(streamBytes, &conf); readerr != nil {
+		conf := config.New()
+		if _, readerr := config.Read(path, true, &conf); readerr != nil {
+			// TODO: Read and report linting errors.
 			return readerr
 		}
 
-		streamMap[id] = conf
+		streamMap[id] = conf.Config
 		return nil
 	})
 

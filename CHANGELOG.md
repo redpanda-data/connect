@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Reduced allocations under most JSON related processors.
+- Streams mode API now logs linting errors.
 
 ## 2.2.4 - 2019-06-02
 

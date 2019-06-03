@@ -21,6 +21,7 @@
 package manager
 
 import (
+	"github.com/Jeffail/benthos/lib/config"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -236,6 +237,15 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 
 		confOut = stream.NewConfig()
 		err = yaml.Unmarshal(text.ReplaceEnvVariables(confBytes), &confOut)
+		if err == nil {
+			lConfig := config.New()
+			lConfig.Config = confOut
+			if lints, lintErr := config.Lint(confBytes, lConfig); lintErr == nil {
+				for _, lint := range lints {
+					m.logger.Infof("Stream '%v' config: %v\n", id, lint)
+				}
+			}
+		}
 		return
 	}
 	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {
