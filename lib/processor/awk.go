@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/gabs"
@@ -358,6 +359,7 @@ func flattenForAWK(path string, data interface{}) map[string]string {
 func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	a.mCount.Incr(1)
 	newMsg := msg.Copy()
+	mutableJSONParts := make([]interface{}, newMsg.Len())
 
 	a.mut.Lock()
 	customFuncs := make(map[string]interface{}, len(a.functions))
@@ -396,7 +398,16 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		}
 		setJSON := func(path string, v interface{}) (int, error) {
 			var gPart *gabs.Container
-			jsonPart, err := part.JSON()
+			var err error
+			jsonPart := mutableJSONParts[i]
+			if jsonPart == nil {
+				if jsonPart, err = part.JSON(); err == nil {
+					jsonPart, err = message.CopyJSON(jsonPart)
+				}
+				if err == nil {
+					mutableJSONParts[i] = jsonPart
+				}
+			}
 			if err == nil {
 				gPart, err = gabs.Consume(jsonPart)
 			}

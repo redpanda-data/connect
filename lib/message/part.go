@@ -52,17 +52,10 @@ func (p *Part) Copy() types.Part {
 	if p.metadata != nil {
 		clonedMeta = p.metadata.Copy()
 	}
-	var clonedJSON interface{}
-	if p.jsonCache != nil {
-		var err error
-		if clonedJSON, err = cloneGeneric(p.jsonCache); err != nil {
-			clonedJSON = nil
-		}
-	}
 	return &Part{
 		data:      p.data,
 		metadata:  clonedMeta,
-		jsonCache: clonedJSON,
+		jsonCache: p.jsonCache,
 	}
 }
 

@@ -252,7 +252,8 @@ func getGabs(msg types.Message, index int) (*gabs.Container, error) {
 }
 
 // MapRequests takes a single payload (of potentially multiple parts, where
-// parts can potentially be nil) and maps the parts.
+// parts can potentially be nil) and maps the parts according to the request
+// mapping.
 //
 // Two arrays are also returned, the first containing all message part indexes
 // that were skipped due to either failed conditions or for being empty. The

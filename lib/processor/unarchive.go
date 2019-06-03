@@ -198,7 +198,7 @@ func jsonArrayUnarchive(part types.Part) ([]types.Part, error) {
 
 	parts := make([]types.Part, len(jArray))
 	for i, ele := range jArray {
-		newPart := message.NewPart(nil).SetMetadata(part.Metadata().Copy())
+		newPart := part.Copy()
 		if err = newPart.SetJSON(ele); err != nil {
 			return nil, fmt.Errorf("failed to marshal element into new message: %v", err)
 		}

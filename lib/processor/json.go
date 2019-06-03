@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/text"
@@ -543,6 +544,9 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	proc := func(index int, span opentracing.Span, part types.Part) error {
 		jsonPart, err := part.JSON()
+		if err == nil {
+			jsonPart, err = message.CopyJSON(jsonPart)
+		}
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.mErr.Incr(1)

@@ -117,6 +117,9 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	newPart := gabs.New()
 	mergeFunc := func(index int) {
 		jsonPart, err := msg.Get(index).JSON()
+		if err == nil {
+			jsonPart, err = message.CopyJSON(jsonPart)
+		}
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.mErr.Incr(1)

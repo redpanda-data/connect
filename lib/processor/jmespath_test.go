@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/gabs"
 )
 
 func TestJMESPathAllParts(t *testing.T) {
@@ -102,6 +103,37 @@ func TestJMESPathValidation(t *testing.T) {
 	}
 	if exp, act := "{}", string(message.GetAllBytes(msgs[0])[0]); exp != act {
 		t.Errorf("Wrong output from bad index: %v != %v", act, exp)
+	}
+}
+
+func TestJMESPathMutation(t *testing.T) {
+	conf := NewConfig()
+	conf.JMESPath.Query = "{foo: merge(foo, {bar:'baz'})}"
+
+	jSet, err := NewJMESPath(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ogObj := gabs.New()
+	ogObj.Set("is this", "foo", "original", "content")
+	ogExp := ogObj.String()
+
+	msgIn := message.New(make([][]byte, 1))
+	msgIn.Get(0).SetJSON(ogObj.Data())
+	msgs, res := jSet.ProcessMessage(msgIn)
+	if len(msgs) != 1 {
+		t.Fatal("No passthrough for bad input data")
+	}
+	if res != nil {
+		t.Fatal("Non-nil result")
+	}
+	if exp, act := `{"foo":{"bar":"baz","original":{"content":"is this"}}}`, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+		t.Errorf("Wrong output: %v != %v", act, exp)
+	}
+
+	if exp, act := ogExp, ogObj.String(); exp != act {
+		t.Errorf("Original contents were mutated: %v != %v", act, exp)
 	}
 }
 

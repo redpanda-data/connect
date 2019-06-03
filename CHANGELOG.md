@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Reduced allocations under most JSON related processors.
+
 ## 2.2.4 - 2019-06-02
 
 ### Added

@@ -244,7 +244,7 @@ func NewProcessDAG(
 func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
-	result := msg.Copy()
+	result := msg.DeepCopy()
 	result.Iter(func(i int, p types.Part) error {
 		_ = p.Get()
 		_, _ = p.JSON()

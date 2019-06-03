@@ -155,11 +155,12 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	gParts := make([]*gabs.Container, len(targetParts))
 
 	for i, index := range targetParts {
-		reqPart := message.MetaPartCopy(payload.Get(index))
-		reqPart.Set([]byte(""))
-		var err error
-		var jObj interface{}
-		if jObj, err = payload.Get(index).JSON(); err != nil {
+		reqPart := payload.Get(index).Copy()
+		jObj, err := reqPart.JSON()
+		if err == nil {
+			jObj, err = message.CopyJSON(jObj)
+		}
+		if err != nil {
 			p.mErrJSONParse.Incr(1)
 			p.mErr.Incr(1)
 			p.log.Errorf("Failed to decode part: %v\n", err)
