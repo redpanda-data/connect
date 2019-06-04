@@ -117,13 +117,18 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	msgs, res = h.ProcessMessage(message.New([][]byte{[]byte("baz")}))
+	// Check metadata persists.
+	msg := message.New([][]byte{[]byte("baz")})
+	msg.Get(0).Metadata().Set("foo", "bar")
+	msgs, res = h.ProcessMessage(msg)
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
+	} else if exp, act := "bar", msgs[0].Get(0).Metadata().Get("foo"); exp != act {
+		t.Errorf("Metadata not preserved: %v != %v", act, exp)
 	}
 }
 
@@ -146,19 +151,23 @@ func TestHTTPClientParallel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.New([][]byte{
+	inputMsg := message.New([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
 		[]byte("qux"),
 		[]byte("quz"),
-	}))
+	})
+	inputMsg.Get(0).Metadata().Set("foo", "bar")
+	msgs, res := h.ProcessMessage(inputMsg)
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 5, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
+	} else if exp, act := "bar", msgs[0].Get(0).Metadata().Get("foo"); exp != act {
+		t.Errorf("Metadata not preserved: %v != %v", act, exp)
 	}
 }
 

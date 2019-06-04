@@ -153,8 +153,8 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	if !h.parallel || msg.Len() == 1 {
 		// Easy, just do a single request.
-		var err error
-		if responseMsg, err = h.client.Send(msg); err != nil {
+		resultMsg, err := h.client.Send(msg)
+		if err != nil {
 			h.mErr.Incr(1)
 			h.mErrHTTP.Incr(1)
 			h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.Client.URL, err)
@@ -163,6 +163,19 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 				FlagFail(p)
 				return nil
 			})
+		} else {
+			parts := make([]types.Part, resultMsg.Len())
+			resultMsg.Iter(func(i int, p types.Part) error {
+				if i < msg.Len() {
+					parts[i] = msg.Get(i).Copy()
+				} else {
+					parts[i] = msg.Get(0).Copy()
+				}
+				parts[i].Set(p.Get())
+				return nil
+			})
+			responseMsg = message.New(nil)
+			responseMsg.Append(parts...)
 		}
 	} else {
 		// Hard, need to do parallel requests limited by max parallelism.
@@ -186,7 +199,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 						err = fmt.Errorf("unexpected response size: %v", result.Len())
 					}
 					if err == nil {
-						results[index] = result.Get(0)
+						results[index].Set(result.Get(0).Get())
 					} else {
 						FlagFail(results[index])
 					}

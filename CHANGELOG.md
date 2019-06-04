@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.3.1 - 2019-06-04
+
+### Fixed
+
+- The `http` processor now preserves message metadata and contexts.
+- Any `http` components that create requests with messages containing empty
+  bodies now correctly function in WASM.
+
 ## 2.3.0 - 2019-06-04
 
 ### Added

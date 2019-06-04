@@ -311,7 +311,10 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 			}
 		}
 	} else if msg.Len() == 1 {
-		body := bytes.NewBuffer(msg.Get(0).Get())
+		var body io.Reader
+		if msgBytes := msg.Get(0).Get(); len(msgBytes) > 0 {
+			body = bytes.NewBuffer(msgBytes)
+		}
 		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
 			for k, v := range h.headers {
 				req.Header.Add(k, v.Get(msg))
