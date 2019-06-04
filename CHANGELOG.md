@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.3.0 - 2019-06-04
+
 ### Added
 
 - New `fetch_buffer_cap` field for `kafka` and `kafka_balanced` inputs.
