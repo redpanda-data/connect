@@ -45,6 +45,7 @@ type KafkaConfig struct {
 	ConsumerGroup       string      `json:"consumer_group" yaml:"consumer_group"`
 	CommitPeriod        string      `json:"commit_period" yaml:"commit_period"`
 	MaxProcessingPeriod string      `json:"max_processing_period" yaml:"max_processing_period"`
+	FetchBufferCap      int         `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
 	Topic               string      `json:"topic" yaml:"topic"`
 	Partition           int32       `json:"partition" yaml:"partition"`
 	StartFromOldest     bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
@@ -61,6 +62,7 @@ func NewKafkaConfig() KafkaConfig {
 		ConsumerGroup:       "benthos_consumer_group",
 		CommitPeriod:        "1s",
 		MaxProcessingPeriod: "100ms",
+		FetchBufferCap:      256,
 		Topic:               "benthos_stream",
 		Partition:           0,
 		StartFromOldest:     true,
@@ -204,6 +206,7 @@ func (k *Kafka) Connect() error {
 	config.Net.DialTimeout = time.Second
 	config.Consumer.Return.Errors = true
 	config.Consumer.MaxProcessingTime = k.maxProcPeriod
+	config.ChannelBufferSize = k.conf.FetchBufferCap
 	config.Net.TLS.Enable = k.conf.TLS.Enabled
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf

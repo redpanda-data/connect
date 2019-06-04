@@ -33,8 +33,12 @@ func init() {
 	Constructors[TypeGCPPubSub] = TypeSpec{
 		constructor: NewGCPPubSub,
 		description: `
-Consumes messages from a GCP Cloud Pub/Sub subscription. Attributes from each
-message are added as metadata, which can be accessed using
+Consumes messages from a GCP Cloud Pub/Sub subscription.
+
+The field ` + "`max_batch_count`" + ` specifies the maximum number of prefetched
+messages to be batched together.
+
+Attributes from each message are added as metadata, which can be accessed using
 [function interpolation](../config_interpolation.md#metadata).`,
 	}
 }

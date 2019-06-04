@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `fetch_buffer_cap` field for `kafka` and `kafka_balanced` inputs.
+- Input `gcp_pubsub` now has the field `max_batch_count`.
+
 ### Changed
 
 - Reduced allocations under most JSON related processors.

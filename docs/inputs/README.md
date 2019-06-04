@@ -238,14 +238,19 @@ You can access these metadata fields using
 ``` yaml
 type: gcp_pubsub
 gcp_pubsub:
+  max_batch_count: 1
   max_outstanding_bytes: 1e+09
   max_outstanding_messages: 1000
   project: ""
   subscription: ""
 ```
 
-Consumes messages from a GCP Cloud Pub/Sub subscription. Attributes from each
-message are added as metadata, which can be accessed using
+Consumes messages from a GCP Cloud Pub/Sub subscription.
+
+The field `max_batch_count` specifies the maximum number of prefetched
+messages to be batched together.
+
+Attributes from each message are added as metadata, which can be accessed using
 [function interpolation](../config_interpolation.md#metadata).
 
 ## `hdfs`
@@ -391,6 +396,7 @@ kafka:
   client_id: benthos_kafka_input
   commit_period: 1s
   consumer_group: benthos_consumer_group
+  fetch_buffer_cap: 256
   max_batch_count: 1
   max_processing_period: 100ms
   partition: 0
@@ -470,6 +476,7 @@ kafka_balanced:
   client_id: benthos_kafka_input
   commit_period: 1s
   consumer_group: benthos_consumer_group
+  fetch_buffer_cap: 256
   group:
     heartbeat_interval: 3s
     rebalance_timeout: 60s

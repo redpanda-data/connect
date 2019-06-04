@@ -12,6 +12,7 @@ input:
     client_id: benthos_kafka_input
     commit_period: 1s
     consumer_group: benthos_consumer_group
+    fetch_buffer_cap: 256
     max_batch_count: 1
     max_processing_period: 100ms
     partition: 0

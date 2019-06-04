@@ -21,7 +21,6 @@
 package manager
 
 import (
-	"github.com/Jeffail/benthos/lib/config"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,6 +31,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/buffer"
+	"github.com/Jeffail/benthos/lib/config"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"

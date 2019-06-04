@@ -66,6 +66,7 @@ type KafkaBalancedConfig struct {
 	Group               KafkaBalancedGroupConfig `json:"group" yaml:"group"`
 	CommitPeriod        string                   `json:"commit_period" yaml:"commit_period"`
 	MaxProcessingPeriod string                   `json:"max_processing_period" yaml:"max_processing_period"`
+	FetchBufferCap      int                      `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
 	Topics              []string                 `json:"topics" yaml:"topics"`
 	StartFromOldest     bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
@@ -82,6 +83,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Group:               NewKafkaBalancedGroupConfig(),
 		CommitPeriod:        "1s",
 		MaxProcessingPeriod: "100ms",
+		FetchBufferCap:      256,
 		Topics:              []string{"benthos_stream"},
 		StartFromOldest:     true,
 		TargetVersion:       sarama.V1_0_0_0.String(),
@@ -282,6 +284,7 @@ func (k *KafkaBalanced) Connect() error {
 	config.Consumer.Group.Session.Timeout = k.sessionTimeout
 	config.Consumer.Group.Heartbeat.Interval = k.heartbeatInterval
 	config.Consumer.Group.Rebalance.Timeout = k.rebalanceTimeout
+	config.ChannelBufferSize = k.conf.FetchBufferCap
 
 	if config.Net.ReadTimeout <= k.sessionTimeout {
 		config.Net.ReadTimeout = k.sessionTimeout * 2
