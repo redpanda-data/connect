@@ -161,6 +161,32 @@ func TestPartCopyDirtyJSON(t *testing.T) {
 	}
 }
 
+func TestPartJSONMarshal(t *testing.T) {
+	p := NewPart(nil)
+	if err := p.SetJSON(map[string]interface{}{
+		"foo": "contains <some> tags & 😊 emojis",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := `{"foo":"contains <some> tags & 😊 emojis"}`, string(p.Get()); exp != act {
+		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
+	}
+
+	if err := p.SetJSON(nil); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := `null`, string(p.Get()); exp != act {
+		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
+	}
+
+	if err := p.SetJSON("<foo>"); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := `"<foo>"`, string(p.Get()); exp != act {
+		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
+	}
+}
+
 func TestPartDeepCopy(t *testing.T) {
 	p := NewPart([]byte(`{"hello":"world"}`))
 	p.Metadata().

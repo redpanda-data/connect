@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.3.2 - 2019-06-05
+
+### Fixed
+
+- JSON processors no longer escape `&`, `<`, and `>` characters by default.
+
 ## 2.3.1 - 2019-06-04
 
 ### Fixed
