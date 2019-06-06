@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- The `insert_part`, `merge_json` and `unarchive` processors now propagate
+  message contexts.
+
 ## 2.3.2 - 2019-06-05
 
 ### Fixed

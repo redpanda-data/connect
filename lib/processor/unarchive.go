@@ -106,9 +106,10 @@ func tarUnarchive(part types.Part) ([]types.Part, error) {
 			return nil, err
 		}
 
-		newParts = append(newParts,
-			message.NewPart(newPartBuf.Bytes()).
-				SetMetadata(part.Metadata().Copy().Set("archive_filename", h.Name)))
+		newPart := part.Copy()
+		newPart.Set(newPartBuf.Bytes())
+		newPart.Metadata().Set("archive_filename", h.Name)
+		newParts = append(newParts, newPart)
 	}
 
 	return newParts, nil
@@ -135,9 +136,10 @@ func zipUnarchive(part types.Part) ([]types.Part, error) {
 			return nil, err
 		}
 
-		newParts = append(newParts,
-			message.NewPart(newPartBuf.Bytes()).
-				SetMetadata(part.Metadata().Copy().Set("archive_filename", f.Name)))
+		newPart := part.Copy()
+		newPart.Set(newPartBuf.Bytes())
+		newPart.Metadata().Set("archive_filename", f.Name)
+		newParts = append(newParts, newPart)
 	}
 
 	return newParts, nil
@@ -150,7 +152,9 @@ func binaryUnarchive(part types.Part) ([]types.Part, error) {
 	}
 	parts := make([]types.Part, msg.Len())
 	msg.Iter(func(i int, p types.Part) error {
-		parts[i] = p.SetMetadata(part.Metadata().Copy())
+		newPart := part.Copy()
+		newPart.Set(p.Get())
+		parts[i] = newPart
 		return nil
 	})
 
@@ -161,7 +165,9 @@ func linesUnarchive(part types.Part) ([]types.Part, error) {
 	lines := bytes.Split(part.Get(), []byte("\n"))
 	parts := make([]types.Part, len(lines))
 	for i, l := range lines {
-		parts[i] = message.NewPart(l).SetMetadata(part.Metadata().Copy())
+		newPart := part.Copy()
+		newPart.Set(l)
+		parts[i] = newPart
 	}
 	return parts, nil
 }
@@ -176,7 +182,7 @@ func jsonDocumentsUnarchive(part types.Part) ([]types.Part, error) {
 		} else if err != nil {
 			return nil, err
 		}
-		newPart := message.NewPart(nil)
+		newPart := part.Copy()
 		if err := newPart.SetJSON(m); err != nil {
 			return nil, fmt.Errorf("failed to set JSON contents of message: %v", err)
 		}
