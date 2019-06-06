@@ -123,3 +123,4 @@ zip benthos-lambda.zip benthos-lambda
 [releases]: https://github.com/Jeffail/benthos/releases
 [sam-template]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda-sam.yaml
 [tf-example]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda.tf
+[output-broker]: ../outputs/README.md#broker
