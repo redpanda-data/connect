@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.4.0 - 2019-06-06
+
 ### Added
 
 - Ability to combine sync and async responses in serverless distributions.
