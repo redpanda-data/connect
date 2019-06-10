@@ -36,25 +36,27 @@ with [`whitelist`][whitelist] or [`blacklist`][blacklist] rules:
 
 ``` yaml
 # Only register metrics for the stream `foo`. Others will be ignored.
-whitelist:
-  paths:
-  - foo
-  child:
-    type: prometheus
-    prefix: benthos
+metrics:
+  whitelist:
+    paths:
+    - foo
+    child:
+      type: prometheus
+      prefix: benthos
 ```
 
 Or, use [`rename`][rename] rules to set the same prefix for groups of streams:
 
 ``` yaml
 # Rename all stream metric prefixes of the form `foo_<uuid_v4>` to just `foo`.
-rename:
-  by_regexp:
-  - pattern: "foo_[0-9\\-a-zA-Z]+\\.(.*)"
-    value: "foo.$1"
-  child:
-    type: prometheus
-    prefix: benthos
+metrics:
+  rename:
+    by_regexp:
+    - pattern: "foo_[0-9\\-a-zA-Z]+\\.(.*)"
+      value: "foo.$1"
+    child:
+      type: prometheus
+      prefix: benthos
 ```
 
 [static-files]: using_config_files.md
