@@ -61,7 +61,12 @@ rename:
   by_regexp:
   - pattern: "foo\\.([a-z]*)\\.zap"
     value: "zip.$1"
-` + "```" + ``,
+` + "```" + `
+
+### Debugging
+
+In order to see logs breaking down which metrics are registered and whether they
+are renamed enable logging at the TRACE level.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var childSanit interface{}
 			var err error
@@ -146,6 +151,7 @@ type renameByRegexp struct {
 type Rename struct {
 	byRegexp []renameByRegexp
 	s        Type
+	log      log.Modular
 }
 
 // NewRename creates and returns a new Rename object
@@ -154,13 +160,18 @@ func NewRename(config Config, opts ...func(Type)) (Type, error) {
 		return nil, errors.New("cannot create a rename metric without a child")
 	}
 
-	child, err := New(*config.Rename.Child, opts...)
+	child, err := New(*config.Rename.Child)
 	if err != nil {
 		return nil, err
 	}
 
 	r := &Rename{
-		s: child,
+		s:   child,
+		log: log.Noop(),
+	}
+
+	for _, opt := range opts {
+		opt(r)
 	}
 
 	for _, p := range config.Rename.ByRegexp {
@@ -182,8 +193,17 @@ func NewRename(config Config, opts ...func(Type)) (Type, error) {
 // renamePath checks whether or not a given path is in the allowed set of
 // paths for the Rename metrics stat.
 func (r *Rename) renamePath(path string) string {
+	renamed := false
 	for _, rr := range r.byRegexp {
-		path = rr.expression.ReplaceAllString(path, rr.value)
+		newPath := rr.expression.ReplaceAllString(path, rr.value)
+		if newPath != path {
+			renamed = true
+			r.log.Tracef("Renamed metric path '%v' to '%v' as per regexp '%v'\n", path, newPath, rr.expression.String())
+		}
+		path = newPath
+	}
+	if !renamed {
+		r.log.Tracef("Registered metric path '%v' unchanged\n", path)
 	}
 	return path
 }
@@ -225,6 +245,7 @@ func (r *Rename) GetGaugeVec(path string, n []string) StatGaugeVec {
 
 // SetLogger sets the logger used to print connection errors.
 func (r *Rename) SetLogger(log log.Modular) {
+	r.log = log.NewModule(".rename")
 	r.s.SetLogger(log)
 }
 

@@ -60,7 +60,12 @@ output broker with the path ` + "`output.broker`" + `.
 
 An entry in the ` + "`patterns`" + ` field will be parsed as an RE2 regular
 expression and tested against each metric path. This can be used, for example,
-to allow all latency based metrics with the pattern ` + "`.*\\.latency`" + `.`,
+to allow all latency based metrics with the pattern ` + "`.*\\.latency`" + `.
+
+### Debugging
+
+In order to see logs breaking down which metrics are registered and whether they
+pass your whitelists enable logging at the TRACE level.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var childSanit interface{}
 			var err error
@@ -145,6 +150,7 @@ type Whitelist struct {
 	paths    []string
 	patterns []*regexp.Regexp
 	s        Type
+	log      log.Modular
 }
 
 // NewWhitelist creates and returns a new Whitelist object
@@ -153,7 +159,7 @@ func NewWhitelist(config Config, opts ...func(Type)) (Type, error) {
 		return nil, errors.New("cannot create a whitelist metric without a child")
 	}
 
-	child, err := New(*config.Whitelist.Child, opts...)
+	child, err := New(*config.Whitelist.Child)
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +168,11 @@ func NewWhitelist(config Config, opts ...func(Type)) (Type, error) {
 		paths:    config.Whitelist.Paths,
 		patterns: make([]*regexp.Regexp, len(config.Whitelist.Patterns)),
 		s:        child,
+		log:      log.Noop(),
+	}
+
+	for _, opt := range opts {
+		opt(w)
 	}
 
 	for i, p := range config.Whitelist.Patterns {
@@ -182,14 +193,17 @@ func NewWhitelist(config Config, opts ...func(Type)) (Type, error) {
 func (h *Whitelist) allowPath(path string) bool {
 	for _, p := range h.paths {
 		if strings.HasPrefix(path, p) {
+			h.log.Tracef("Allowing metric path '%v' as per whitelisted path prefix '%v'\n", path, p)
 			return true
 		}
 	}
 	for _, re := range h.patterns {
 		if re.MatchString(path) {
+			h.log.Tracef("Allowing metric path '%v' as per whitelisted pattern '%v'\n", path, re.String())
 			return true
 		}
 	}
+	h.log.Tracef("Rejecting metric path '%v'\n", path)
 	return false
 }
 
@@ -254,6 +268,7 @@ func (h *Whitelist) GetGaugeVec(path string, n []string) StatGaugeVec {
 
 // SetLogger sets the logger used to print connection errors.
 func (h *Whitelist) SetLogger(log log.Modular) {
+	h.log = log.NewModule(".whitelist")
 	h.s.SetLogger(log)
 }
 

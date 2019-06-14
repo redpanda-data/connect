@@ -58,6 +58,11 @@ expression and tested against each metric path. This can be used, for example,
 to allow none of the latency based metrics with the pattern
 `.*\.latency`.
 
+### Debugging
+
+In order to see logs breaking down which metrics are registered and whether they
+are blocked by your blacklists enable logging at the TRACE level.
+
 ## `http_server`
 
 ``` yaml
@@ -148,6 +153,11 @@ rename:
     value: "zip.$1"
 ```
 
+### Debugging
+
+In order to see logs breaking down which metrics are registered and whether they
+are renamed enable logging at the TRACE level.
+
 ## `statsd`
 
 ``` yaml
@@ -197,3 +207,8 @@ output broker with the path `output.broker`.
 An entry in the `patterns` field will be parsed as an RE2 regular
 expression and tested against each metric path. This can be used, for example,
 to allow all latency based metrics with the pattern `.*\.latency`.
+
+### Debugging
+
+In order to see logs breaking down which metrics are registered and whether they
+pass your whitelists enable logging at the TRACE level.

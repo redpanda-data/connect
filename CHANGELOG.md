@@ -5,10 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.5.0 - 2019-06-14
+
 ### Added
 
 - The `s3` input now sets `s3_content_encoding` metadata (when not using the
   download manager.)
+- New trace logging for the `rename`, `blacklist` and `whitelist` metric
+  components to assist with debugging.
 
 ## 2.4.0 - 2019-06-06
 
