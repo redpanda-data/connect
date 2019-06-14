@@ -45,7 +45,7 @@ metrics:
       prefix: benthos
 ```
 
-Or, use [`rename`][rename] rules to set the same prefix for groups of streams:
+Or use [`rename`][rename] rules to set the same prefix for groups of streams:
 
 ``` yaml
 # Rename all stream metric prefixes of the form `foo_<uuid_v4>` to just `foo`.

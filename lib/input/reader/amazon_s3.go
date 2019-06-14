@@ -393,6 +393,9 @@ func addS3Metadata(p types.Part, obj *s3.GetObjectOutput) {
 	if obj.ContentType != nil {
 		meta.Set("s3_content_type", *obj.ContentType)
 	}
+	if obj.ContentEncoding != nil {
+		meta.Set("s3_content_encoding", *obj.ContentEncoding)
+	}
 }
 
 // read attempts to read a new message from the target S3 bucket.

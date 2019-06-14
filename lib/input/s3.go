@@ -78,6 +78,7 @@ This input adds the following metadata fields to each message:
 - s3_last_modified_unix*
 - s3_last_modified (RFC3339)*
 - s3_content_type*
+- s3_content_encoding*
 - All user defined metadata*
 
 * Only added when NOT using download manager

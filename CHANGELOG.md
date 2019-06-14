@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `s3` input now sets `s3_content_encoding` metadata (when not using the
+  download manager.)
+
 ## 2.4.0 - 2019-06-06
 
 ### Added
