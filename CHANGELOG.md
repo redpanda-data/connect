@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `sync_response` output type, with experimental support added to the
   `http_server` input.
+- SASL authentication fields added to all Kafka components.
 
 ## 2.5.0 - 2019-06-14
 

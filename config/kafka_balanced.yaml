@@ -20,7 +20,7 @@ input:
     max_batch_count: 1
     max_processing_period: 100ms
     sasl:
-      enable: false
+      enabled: false
       password: ""
       user: ""
     start_from_oldest: true

@@ -51,6 +51,14 @@ type KafkaConfig struct {
 	AckReplicas          bool        `json:"ack_replicas" yaml:"ack_replicas"`
 	TargetVersion        string      `json:"target_version" yaml:"target_version"`
 	TLS                  btls.Config `json:"tls" yaml:"tls"`
+	SASL                 SASLConfig  `json:"sasl" yaml:"sasl"`
+}
+
+// SASLConfig contains configuration for SASL based authentication.
+type SASLConfig struct {
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
+	User     string `json:"user" yaml:"user"`
+	Password string `json:"password" yaml:"password"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -197,6 +205,11 @@ func (k *Kafka) Connect() error {
 	config.Net.TLS.Enable = k.conf.TLS.Enabled
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
+	}
+	if k.conf.SASL.Enabled {
+		config.Net.SASL.Enable = true
+		config.Net.SASL.User = k.conf.SASL.User
+		config.Net.SASL.Password = k.conf.SASL.Password
 	}
 
 	if k.conf.RoundRobinPartitions {

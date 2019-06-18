@@ -427,6 +427,10 @@ kafka:
   max_batch_count: 1
   max_processing_period: 100ms
   partition: 0
+  sasl:
+    enabled: false
+    password: ""
+    user: ""
   start_from_oldest: true
   target_version: 1.0.0
   tls:
@@ -511,7 +515,7 @@ kafka_balanced:
   max_batch_count: 1
   max_processing_period: 100ms
   sasl:
-    enable: false
+    enabled: false
     password: ""
     user: ""
   start_from_oldest: true

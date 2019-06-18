@@ -52,6 +52,7 @@ type KafkaConfig struct {
 	TargetVersion       string      `json:"target_version" yaml:"target_version"`
 	MaxBatchCount       int         `json:"max_batch_count" yaml:"max_batch_count"`
 	TLS                 btls.Config `json:"tls" yaml:"tls"`
+	SASL                SASLConfig  `json:"sasl" yaml:"sasl"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -210,6 +211,11 @@ func (k *Kafka) Connect() error {
 	config.Net.TLS.Enable = k.conf.TLS.Enabled
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
+	}
+	if k.conf.SASL.Enabled {
+		config.Net.SASL.Enable = true
+		config.Net.SASL.User = k.conf.SASL.User
+		config.Net.SASL.Password = k.conf.SASL.Password
 	}
 
 	k.client, err = sarama.NewClient(k.addresses, config)

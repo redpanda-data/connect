@@ -75,9 +75,9 @@ type KafkaBalancedConfig struct {
 	SASL                SASLConfig               `json:"sasl" yaml:"sasl"`
 }
 
-// SASLConfig contains configuration for SASL based authentication
+// SASLConfig contains configuration for SASL based authentication.
 type SASLConfig struct {
-	Enable   bool   `json:"enable" yaml:"enable"`
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
 	User     string `json:"user" yaml:"user"`
 	Password string `json:"password" yaml:"password"`
 }
@@ -309,7 +309,7 @@ func (k *KafkaBalanced) Connect() error {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	if k.conf.SASL.Enable {
+	if k.conf.SASL.Enabled {
 		config.Net.SASL.Enable = true
 		config.Net.SASL.User = k.conf.SASL.User
 		config.Net.SASL.Password = k.conf.SASL.Password

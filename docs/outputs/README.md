@@ -597,6 +597,10 @@ kafka:
   key: ""
   max_msg_bytes: 1e+06
   round_robin_partitions: false
+  sasl:
+    enabled: false
+    password: ""
+    user: ""
   target_version: 1.0.0
   timeout: 5s
   tls:
