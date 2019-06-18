@@ -72,6 +72,14 @@ type KafkaBalancedConfig struct {
 	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
 	MaxBatchCount       int                      `json:"max_batch_count" yaml:"max_batch_count"`
 	TLS                 btls.Config              `json:"tls" yaml:"tls"`
+	SASL                SASLConfig               `json:"sasl" yaml:"sasl"`
+}
+
+// SASLConfig contains configuration for SASL based authentication
+type SASLConfig struct {
+	Enable   bool   `json:"enable" yaml:"enable"`
+	User     string `json:"user" yaml:"user"`
+	Password string `json:"password" yaml:"password"`
 }
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
@@ -299,6 +307,12 @@ func (k *KafkaBalanced) Connect() error {
 	}
 	if k.conf.StartFromOldest {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	}
+
+	if k.conf.SASL.Enable {
+		config.Net.SASL.Enable = true
+		config.Net.SASL.User = k.conf.SASL.User
+		config.Net.SASL.Password = k.conf.SASL.Password
 	}
 
 	// Start a new consumer group
