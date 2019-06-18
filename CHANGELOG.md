@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.6.0 - 2019-06-18
+
 ### Added
 
 - New `sync_response` output type, with experimental support added to the
