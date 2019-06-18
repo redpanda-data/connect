@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `sync_response` output type, with experimental support added to the
+  `http_server` input.
+
 ## 2.5.0 - 2019-06-14
 
 ### Added

@@ -21,6 +21,7 @@
 package input
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -35,6 +37,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/message/metadata"
+	"github.com/Jeffail/benthos/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
@@ -54,6 +57,33 @@ which is enabled when key and cert files are specified.
 
 You can leave the 'address' config field blank in order to use the instance wide
 HTTP server.
+
+### Endpoints
+
+The following fields specify endpoints that are registered for sending messages:
+
+#### ` + "`path` (defaults to `/post`)" + `
+
+This endpoint expects POST requests where the entire request body is consumed as
+a single message.
+
+If the request contains a multipart ` + "`content-type`" + ` header as per
+[rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the
+multiple parts are consumed as a batch of messages, where each body part is a
+message of the batch.
+
+EXPERIMENTAL: It's possible to return a message body from this endpoint using
+[synchronous responses](../sync_responses.md). This feature is considered
+experimental and therefore subject to change outside of major version releases.
+
+#### ` + "`ws_path` (defaults to `/post/ws`)" + `
+
+Creates a websocket connection, where payloads received on the socket are passed
+through the pipeline as a batch of one message.
+
+EXPERIMENTAL: It's possible to return a message body from this websocket using
+[synchronous responses](../sync_responses.md). This feature is considered
+experimental and therefore subject to change outside of major version releases.
 
 ### Metadata
 
@@ -121,6 +151,9 @@ type HTTPServer struct {
 	mPartsCount metrics.StatCounter
 	mRcvd       metrics.StatCounter
 	mPartsRcvd  metrics.StatCounter
+	mSyncCount  metrics.StatCounter
+	mSyncErr    metrics.StatCounter
+	mSyncSucc   metrics.StatCounter
 	mWSCount    metrics.StatCounter
 	mTimeout    metrics.StatCounter
 	mErr        metrics.StatCounter
@@ -193,34 +226,12 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 //------------------------------------------------------------------------------
 
-func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
-	if atomic.LoadInt32(&h.running) != 1 {
-		http.Error(w, "Server closing", http.StatusServiceUnavailable)
-		return
-	}
-
-	if r.Method != "POST" {
-		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
-		return
-	}
-
+func extractMessageFromRequest(r *http.Request) (types.Message, error) {
 	msg := message.New(nil)
-	var err error
 
-	defer func() {
-		if err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			h.log.Warnf("Request read failed: %v\n", err)
-			return
-		}
-	}()
-
-	var mediaType string
-	var params map[string]string
-	if mediaType, params, err = mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil {
-		return
+	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		return nil, err
 	}
 
 	if strings.HasPrefix(mediaType, "multipart/") {
@@ -232,18 +243,18 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 					err = nil
 					break
 				}
-				return
+				return nil, err
 			}
 			var msgBytes []byte
 			if msgBytes, err = ioutil.ReadAll(p); err != nil {
-				return
+				return nil, err
 			}
 			msg.Append(message.NewPart(msgBytes))
 		}
 	} else {
 		var msgBytes []byte
 		if msgBytes, err = ioutil.ReadAll(r.Body); err != nil {
-			return
+			return nil, err
 		}
 		msg.Append(message.NewPart(msgBytes))
 	}
@@ -267,7 +278,40 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		tracing.InitSpans("input_http_server_post", msg)
 	}
+
+	return msg, nil
+}
+
+func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if atomic.LoadInt32(&h.running) != 1 {
+		http.Error(w, "Server closing", http.StatusServiceUnavailable)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var err error
+	defer func() {
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			h.log.Warnf("Request read failed: %v\n", err)
+			return
+		}
+	}()
+
+	msg, err := extractMessageFromRequest(r)
+	if err != nil {
+		return
+	}
 	defer tracing.FinishSpans(msg)
+
+	store := roundtrip.NewResultStore()
+	roundtrip.AddResultStore(msg, store)
 
 	h.mCount.Incr(1)
 	h.mPartsCount.Incr(int64(msg.Len()))
@@ -314,6 +358,35 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		}()
 		return
 	}
+
+	var parts []types.Part
+	for _, responseMsg := range store.Get() {
+		responseMsg.Iter(func(i int, part types.Part) error {
+			parts = append(parts, part)
+			return nil
+		})
+	}
+	if plen := len(parts); plen == 1 {
+		// TODO: Extract proper headers
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Write(parts[0].Get())
+	} else if plen > 1 {
+		writer := multipart.NewWriter(w)
+		var merr error
+		for i := 0; i < plen && merr == nil; i++ {
+			var part io.Writer
+			if part, merr = writer.CreatePart(textproto.MIMEHeader{
+				"Content-Type": []string{"application/octet-stream"},
+			}); merr == nil {
+				_, merr = io.Copy(part, bytes.NewReader(parts[i].Get()))
+			}
+		}
+		if merr != nil {
+			h.log.Errorf("Failed to return sync response: %v\n", merr)
+		}
+	}
+
+	return
 }
 
 func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -361,6 +434,9 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		tracing.InitSpans("input_http_server_websocket", msg)
 
+		store := roundtrip.NewResultStore()
+		roundtrip.AddResultStore(msg, store)
+
 		select {
 		case h.transactions <- types.NewTransaction(msg, resChan):
 		case <-h.closeChan:
@@ -384,6 +460,15 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		case <-h.closeChan:
 			return
 		}
+
+		for _, responseMsg := range store.Get() {
+			if err := responseMsg.Iter(func(i int, part types.Part) error {
+				return ws.WriteMessage(websocket.TextMessage, part.Get())
+			}); err != nil {
+				h.log.Errorf("Failed to send sync response over websocket: %v\n", err)
+			}
+		}
+
 		tracing.FinishSpans(msg)
 	}
 }

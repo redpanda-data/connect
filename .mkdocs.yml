@@ -33,6 +33,7 @@ nav:
     - 'Error Handling': 'error_handling.md'
     - 'Performance Tuning': 'performance_tuning.md'
     - 'Monitoring': 'monitoring.md'
+    - 'Synchronous Responses': 'sync_responses.md'
     - 'Workflows': 'workflows.md'
     - 'Streams Mode': 'streams/README.md'
     - 'Applied Examples': 'examples/README.md'

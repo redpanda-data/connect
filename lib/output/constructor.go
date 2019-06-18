@@ -90,6 +90,7 @@ const (
 	TypeSQS           = "sqs"
 	TypeSTDOUT        = "stdout"
 	TypeSwitch        = "switch"
+	TypeSyncResponse  = "sync_response"
 	TypeWebsocket     = "websocket"
 	TypeZMQ4          = "zmq4"
 )
@@ -130,6 +131,7 @@ type Config struct {
 	SQS           writer.AmazonSQSConfig     `json:"sqs" yaml:"sqs"`
 	STDOUT        STDOUTConfig               `json:"stdout" yaml:"stdout"`
 	Switch        SwitchConfig               `json:"switch" yaml:"switch"`
+	SyncResponse  struct{}                   `json:"sync_response" yaml:"sync_response"`
 	Websocket     writer.WebsocketConfig     `json:"websocket" yaml:"websocket"`
 	ZMQ4          *writer.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors    []processor.Config         `json:"processors" yaml:"processors"`
@@ -170,6 +172,7 @@ func NewConfig() Config {
 		SQS:           writer.NewAmazonSQSConfig(),
 		STDOUT:        NewSTDOUTConfig(),
 		Switch:        NewSwitchConfig(),
+		SyncResponse:  struct{}{},
 		Websocket:     writer.NewWebsocketConfig(),
 		ZMQ4:          writer.NewZMQ4Config(),
 		Processors:    []processor.Config{},

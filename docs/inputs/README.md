@@ -356,6 +356,33 @@ which is enabled when key and cert files are specified.
 You can leave the 'address' config field blank in order to use the instance wide
 HTTP server.
 
+### Endpoints
+
+The following fields specify endpoints that are registered for sending messages:
+
+#### `path` (defaults to `/post`)
+
+This endpoint expects POST requests where the entire request body is consumed as
+a single message.
+
+If the request contains a multipart `content-type` header as per
+[rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the
+multiple parts are consumed as a batch of messages, where each body part is a
+message of the batch.
+
+EXPERIMENTAL: It's possible to return a message body from this endpoint using
+[synchronous responses](../sync_responses.md). This feature is considered
+experimental and therefore subject to change outside of major version releases.
+
+#### `ws_path` (defaults to `/post/ws`)
+
+Creates a websocket connection, where payloads received on the socket are passed
+through the pipeline as a batch of one message.
+
+EXPERIMENTAL: It's possible to return a message body from this websocket using
+[synchronous responses](../sync_responses.md). This feature is considered
+experimental and therefore subject to change outside of major version releases.
+
 ### Metadata
 
 This input adds the following metadata fields to each message:
