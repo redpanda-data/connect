@@ -68,6 +68,7 @@ output:
       consumer_secret: ""
       enabled: false
       request_url: ""
+    propagate_response: false
     rate_limit: ""
     retries: 3
     retry_period: 1s

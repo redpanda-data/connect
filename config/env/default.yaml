@@ -522,6 +522,7 @@ output:
           consumer_secret: ${OUTPUT_HTTP_CLIENT_OAUTH_CONSUMER_SECRET}
           enabled: ${OUTPUT_HTTP_CLIENT_OAUTH_ENABLED:false}
           request_url: ${OUTPUT_HTTP_CLIENT_OAUTH_REQUEST_URL}
+        propagate_response: ${OUTPUT_HTTP_CLIENT_PROPAGATE_RESPONSE:false}
         rate_limit: ${OUTPUT_HTTP_CLIENT_RATE_LIMIT}
         retries: ${OUTPUT_HTTP_CLIENT_RETRIES:3}
         retry_period: ${OUTPUT_HTTP_CLIENT_RETRY_PERIOD:1s}

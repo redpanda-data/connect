@@ -35,6 +35,7 @@ import (
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -122,6 +123,59 @@ func TestHTTPClientBasic(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 			return
+		}
+	}
+
+	h.CloseAsync()
+	if err = h.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHTTPClientSyncResponse(t *testing.T) {
+	nTestLoops := 1000
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		w.Write([]byte("echo: "))
+		w.Write(b)
+	}))
+	defer ts.Close()
+
+	conf := NewHTTPClientConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.PropagateResponse = true
+
+	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+
+		resultStore := roundtrip.NewResultStore()
+		testMsg := message.New([][]byte{[]byte(testStr)})
+		roundtrip.AddResultStore(testMsg, resultStore)
+
+		if err = h.Write(testMsg); err != nil {
+			t.Error(err)
+		}
+
+		resMsgs := resultStore.Get()
+		if len(resMsgs) != 1 {
+			t.Fatalf("Wrong count of result msgs: %v != 1", len(resMsgs))
+		}
+		resMsg := resMsgs[0]
+		if resMsg.Len() != 1 {
+			t.Fatalf("Wrong # parts: %v != %v", resMsg.Len(), 1)
+		}
+		if exp, actual := "echo: "+testStr, string(resMsg.Get(0).Get()); exp != actual {
+			t.Fatalf("Wrong result, %v != %v", exp, actual)
 		}
 	}
 

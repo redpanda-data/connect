@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Output `http_client` is now able to propagate responses from each request back
+  to inputs supporting sync responses.
+
 ## 2.6.0 - 2019-06-18
 
 ### Added

@@ -23,11 +23,13 @@ package input
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
@@ -42,10 +44,9 @@ func TestHTTPBasic(t *testing.T) {
 	conf.HTTPServer.Address = "localhost:1243"
 	conf.HTTPServer.Path = "/testpost"
 
-	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	<-time.After(time.Millisecond * 1000)
@@ -53,20 +54,27 @@ func TestHTTPBasic(t *testing.T) {
 	// Test both single and multipart messages.
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
+		testResponse := fmt.Sprintf("response%v", i)
 		// Send it as single part
-		go func() {
-			if res, err := http.Post(
+		go func(input, output string) {
+			res, err := http.Post(
 				"http://localhost:1243/testpost",
 				"application/octet-stream",
-				bytes.NewBuffer([]byte(testStr)),
-			); err != nil {
-				t.Error(err)
-				return
+				bytes.NewBuffer([]byte(input)),
+			)
+			if err != nil {
+				t.Fatal(err)
 			} else if res.StatusCode != 200 {
-				t.Errorf("Wrong error code returned: %v", res.StatusCode)
-				return
+				t.Fatalf("Wrong error code returned: %v", res.StatusCode)
 			}
-		}()
+			resBytes, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if exp, act := output, string(resBytes); exp != act {
+				t.Errorf("Wrong sync response: %v != %v", act, exp)
+			}
+		}(testStr, testResponse)
 
 		var ts types.Transaction
 		select {
@@ -74,6 +82,8 @@ func TestHTTPBasic(t *testing.T) {
 			if res := string(ts.Payload.Get(0).Get()); res != testStr {
 				t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 			}
+			ts.Payload.Get(0).Set([]byte(testResponse))
+			roundtrip.SetAsResponse(ts.Payload)
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
@@ -106,11 +116,9 @@ func TestHTTPBasic(t *testing.T) {
 				"multipart/mixed; boundary=foo",
 				bytes.NewBuffer([]byte(testStr)),
 			); err != nil {
-				t.Error(err)
-				return
+				t.Fatal(err)
 			} else if res.StatusCode != 200 {
-				t.Errorf("Wrong error code returned: %v", res.StatusCode)
-				return
+				t.Fatalf("Wrong error code returned: %v", res.StatusCode)
 			}
 		}()
 
@@ -135,13 +143,6 @@ func TestHTTPBasic(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	/*
-		// TODO: For some reason it seems shutting down a server can block
-		// forever.
-		if err := h.WaitForClose(time.Second * 5); err != nil {
-			t.Error(err)
-		}
-	*/
 }
 
 func TestHTTPBadRequests(t *testing.T) {

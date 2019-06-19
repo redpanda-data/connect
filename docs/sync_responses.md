@@ -35,9 +35,10 @@ Input (HTTP Server) -> Processors -> Output (Sync Response)
            <------- Response Body ---------
 ```
 
-Such responses can be triggered by configuring a [`sync_response`][sync-res]
-output, which allows you to mutate payloads using Benthos processors and then
-send them back to the input source:
+## Routing Processed Messages Back
+
+It's possible to route the result of any Benthos processing pipeline directly
+back to an input with a [`sync_response`][sync-res] output:
 
 ``` yaml
 input:
@@ -78,5 +79,52 @@ Using the above example, sending a request 'foo bar' to the path `/post` passes
 the message unchanged to the Kafka topic `foo_topic` and also returns the
 response 'FOO BAR'.
 
+NOTE: It's safe to use these mechanisms even when combining multiple inputs with
+a broker, a response payload will always be routed back to the original source
+of the message.
+
+## Routing Output Responses Back
+
+Some outputs, such as [`http_client`][http-client-output], have the potential to
+propagate payloads received from their destination after sending a message back
+to the input:
+
+``` yaml
+input:
+  http_server:
+    path: /post
+output:
+  http_client:
+    url: http://localhost:4196/post
+    verb: POST
+    propagate_result: true
+```
+
+With the above example a message received from the endpoint `/post` would be
+sent unchanged to the address `http://localhost:4196/post`, and then the
+response from that request would get returned back. This basically turns Benthos
+into a proxy server with the potential to mutate payloads between requests.
+
+The following config turns Benthos into an HTTP proxy server that also sends all
+request payloads to a Kafka topic:
+
+``` yaml
+input:
+  http_server:
+    path: /post
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+    - kafka:
+        addresses: [ TODO:9092 ]
+        topic: foo_topic
+    - http_client:
+        url: http://localhost:4196/post
+        verb: POST
+        propagate_result: true
+```
+
 [sync-res]: ./outputs/README.md#sync_response
+[http-client-output]: ./outputs/README.md#http_client
 [output-broker]: ./outputs/README.md#broker
