@@ -5,10 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.7.0 - 2019-06-20
+
 ### Added
 
 - Output `http_client` is now able to propagate responses from each request back
   to inputs supporting sync responses.
+- Added support for Gzip compression to `http_server` output sync responses.
+- New `check_interpolation` condition.
 
 ## 2.6.0 - 2019-06-18
 

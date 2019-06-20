@@ -41,6 +41,7 @@ import (
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	httputil "github.com/Jeffail/benthos/lib/util/http"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 	"github.com/gorilla/websocket"
 	"github.com/opentracing/opentracing-go"
@@ -58,6 +59,12 @@ which is enabled when key and cert files are specified.
 You can leave the 'address' config field blank in order to use the instance wide
 HTTP server.
 
+### Responses
+
+EXPERIMENTAL: It's possible to return a response for each message received using
+[synchronous responses](../sync_responses.md). This feature is considered
+experimental and therefore subject to change outside of major version releases.
+
 ### Endpoints
 
 The following fields specify endpoints that are registered for sending messages:
@@ -72,18 +79,10 @@ If the request contains a multipart ` + "`content-type`" + ` header as per
 multiple parts are consumed as a batch of messages, where each body part is a
 message of the batch.
 
-EXPERIMENTAL: It's possible to return a message body from this endpoint using
-[synchronous responses](../sync_responses.md). This feature is considered
-experimental and therefore subject to change outside of major version releases.
-
 #### ` + "`ws_path` (defaults to `/post/ws`)" + `
 
 Creates a websocket connection, where payloads received on the socket are passed
 through the pipeline as a batch of one message.
-
-EXPERIMENTAL: It's possible to return a message body from this websocket using
-[synchronous responses](../sync_responses.md). This feature is considered
-experimental and therefore subject to change outside of major version releases.
 
 ### Metadata
 
@@ -208,16 +207,26 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mAsyncSucc:  stats.GetCounter("send.async_success"),
 	}
 
+	postHdlr := httputil.GzipHandler(h.postHandler)
+	wsHdlr := httputil.GzipHandler(h.wsHandler)
 	if mux != nil {
-		mux.HandleFunc(h.conf.HTTPServer.Path, h.postHandler)
-		mux.HandleFunc(h.conf.HTTPServer.WSPath, h.wsHandler)
+		if len(h.conf.HTTPServer.Path) > 0 {
+			mux.HandleFunc(h.conf.HTTPServer.Path, postHdlr)
+		}
+		if len(h.conf.HTTPServer.WSPath) > 0 {
+			mux.HandleFunc(h.conf.HTTPServer.WSPath, wsHdlr)
+		}
 	} else {
-		mgr.RegisterEndpoint(
-			h.conf.HTTPServer.Path, "Post a message into Benthos.", h.postHandler,
-		)
-		mgr.RegisterEndpoint(
-			h.conf.HTTPServer.WSPath, "Post messages via websocket into Benthos.", h.wsHandler,
-		)
+		if len(h.conf.HTTPServer.Path) > 0 {
+			mgr.RegisterEndpoint(
+				h.conf.HTTPServer.Path, "Post a message into Benthos.", postHdlr,
+			)
+		}
+		if len(h.conf.HTTPServer.WSPath) > 0 {
+			mgr.RegisterEndpoint(
+				h.conf.HTTPServer.WSPath, "Post messages via websocket into Benthos.", wsHdlr,
+			)
+		}
 	}
 
 	go h.loop()
@@ -367,18 +376,20 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if plen := len(parts); plen == 1 {
-		// TODO: Extract proper headers
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Write(parts[0].Get())
+		payload := parts[0].Get()
+		w.Header().Set("Content-Type", http.DetectContentType(payload))
+		w.Write(payload)
 	} else if plen > 1 {
 		writer := multipart.NewWriter(w)
 		var merr error
 		for i := 0; i < plen && merr == nil; i++ {
+			payload := parts[i].Get()
+
 			var part io.Writer
 			if part, merr = writer.CreatePart(textproto.MIMEHeader{
-				"Content-Type": []string{"application/octet-stream"},
+				"Content-Type": []string{http.DetectContentType(payload)},
 			}); merr == nil {
-				_, merr = io.Copy(part, bytes.NewReader(parts[i].Get()))
+				_, merr = io.Copy(part, bytes.NewReader(payload))
 			}
 		}
 		if merr != nil {
