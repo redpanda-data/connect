@@ -29,6 +29,8 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	radix "github.com/armon/go-radix"
+	"github.com/spf13/cast"
 )
 
 //------------------------------------------------------------------------------
@@ -37,56 +39,84 @@ func init() {
 	Constructors[TypeText] = TypeSpec{
 		constructor: NewText,
 		description: `
-Text is a condition that checks the contents of a message part as plain text
-against a logical operator and an argument.
+Text is a condition that checks the contents of a message as plain text against
+a logical operator and an argument.
+
+It's possible to use the ` + "[`check_field`](#check_field)" + ` and
+` + "[`check_interpolation`](#check_interpolation)" + ` conditions to check a
+text condition against arbitrary metadata or fields of messages. For example,
+you can test a text condition against a JSON field ` + "`foo.bar`" + ` with:
+
+` + "``` yaml" + `
+check_field:
+  path: foo.bar
+  condition:
+    text:
+      operator: enum
+      arg:
+      - foo
+      - bar
+` + "```" + `
 
 Available logical operators are:
 
 ### ` + "`equals_cs`" + `
 
-Checks whether the part equals the argument (case sensitive.)
+Checks whether the content equals the argument (case sensitive.)
 
 ### ` + "`equals`" + `
 
-Checks whether the part equals the argument under unicode case-folding (case
+Checks whether the content equals the argument under unicode case-folding (case
 insensitive.)
 
 ### ` + "`contains_cs`" + `
 
-Checks whether the part contains the argument (case sensitive.)
+Checks whether the content contains the argument (case sensitive.)
 
 ### ` + "`contains`" + `
 
-Checks whether the part contains the argument under unicode case-folding (case
-insensitive.)
+Checks whether the content contains the argument under unicode case-folding
+(case insensitive.)
 
 ### ` + "`prefix_cs`" + `
 
-Checks whether the part begins with the argument (case sensitive.)
+Checks whether the content begins with the argument (case sensitive.)
 
 ### ` + "`prefix`" + `
 
-Checks whether the part begins with the argument under unicode case-folding
+Checks whether the content begins with the argument under unicode case-folding
 (case insensitive.)
 
 ### ` + "`suffix_cs`" + `
 
-Checks whether the part ends with the argument (case sensitive.)
+Checks whether the content ends with the argument (case sensitive.)
 
 ### ` + "`suffix`" + `
 
-Checks whether the part ends with the argument under unicode case-folding (case
-insensitive.)
+Checks whether the content ends with the argument under unicode case-folding
+(case insensitive.)
 
 ### ` + "`regexp_partial`" + `
 
-Checks whether any section of the message part matches a regular expression (RE2
+Checks whether any section of the content matches a regular expression (RE2
 syntax).
 
 ### ` + "`regexp_exact`" + `
 
-Checks whether the message part exactly matches a regular expression (RE2
-syntax).`,
+Checks whether the content exactly matches a regular expression (RE2 syntax).
+
+### ` + "`enum`" + `
+
+Checks whether the content matches any entry of a list of arguments, the field
+` + "`arg`" + ` must be an array for this operator, e.g.:
+
+` + "``` yaml" + `
+text:
+  operator: enum
+  arg:
+  - foo
+  - bar
+` + "```" + ``,
 	}
 }
 
@@ -100,9 +130,9 @@ var (
 // TextConfig is a configuration struct containing fields for the text
 // condition.
 type TextConfig struct {
-	Operator string `json:"operator" yaml:"operator"`
-	Part     int    `json:"part" yaml:"part"`
-	Arg      string `json:"arg" yaml:"arg"`
+	Operator string      `json:"operator" yaml:"operator"`
+	Part     int         `json:"part" yaml:"part"`
+	Arg      interface{} `json:"arg" yaml:"arg"`
 }
 
 // NewTextConfig returns a TextConfig with default values.
@@ -189,28 +219,57 @@ func textRegexpExactOperator(arg []byte) (textOperator, error) {
 	}, nil
 }
 
-func strToTextOperator(str, arg string) (textOperator, error) {
+func textEnumOperator(arg interface{}) (textOperator, error) {
+	entries, err := cast.ToStringSliceE(arg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse argument as string slice: %v", err)
+	}
+	tree := radix.New()
+	for _, entry := range entries {
+		tree.Insert(entry, struct{}{})
+	}
+	return func(c []byte) bool {
+		_, ok := tree.Get(string(c))
+		return ok
+	}, nil
+}
+
+func strToTextOperator(str string, arg interface{}) (textOperator, error) {
+	bytesArgErr := func(ctor func([]byte) (textOperator, error)) (textOperator, error) {
+		str, ok := arg.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string as operator argument, received: %T", arg)
+		}
+		return ctor([]byte(str))
+	}
+	bytesArg := func(ctor func([]byte) textOperator) (textOperator, error) {
+		return bytesArgErr(func(b []byte) (textOperator, error) {
+			return ctor(b), nil
+		})
+	}
 	switch str {
 	case "equals_cs":
-		return textEqualsOperator([]byte(arg)), nil
+		return bytesArg(textEqualsOperator)
 	case "equals":
-		return textEqualsFoldOperator([]byte(arg)), nil
+		return bytesArg(textEqualsFoldOperator)
 	case "contains_cs":
-		return textContainsOperator([]byte(arg)), nil
+		return bytesArg(textContainsOperator)
 	case "contains":
-		return textContainsFoldOperator([]byte(arg)), nil
+		return bytesArg(textContainsFoldOperator)
 	case "prefix_cs":
-		return textPrefixOperator([]byte(arg)), nil
+		return bytesArg(textPrefixOperator)
 	case "prefix":
-		return textPrefixFoldOperator([]byte(arg)), nil
+		return bytesArg(textPrefixFoldOperator)
 	case "suffix_cs":
-		return textSuffixOperator([]byte(arg)), nil
+		return bytesArg(textSuffixOperator)
 	case "suffix":
-		return textSuffixFoldOperator([]byte(arg)), nil
+		return bytesArg(textSuffixFoldOperator)
 	case "regexp_partial":
-		return textRegexpPartialOperator([]byte(arg))
+		return bytesArgErr(textRegexpPartialOperator)
 	case "regexp_exact":
-		return textRegexpExactOperator([]byte(arg))
+		return bytesArgErr(textRegexpExactOperator)
+	case "enum":
+		return textEnumOperator(arg)
 	}
 	return nil, ErrInvalidTextOperator
 }

@@ -64,6 +64,7 @@ var (
 	TypeCount              = "count"
 	TypeJMESPath           = "jmespath"
 	TypeNot                = "not"
+	TypeNumber             = "number"
 	TypeMetadata           = "metadata"
 	TypeOr                 = "or"
 	TypeProcessorFailed    = "processor_failed"
@@ -87,6 +88,7 @@ type Config struct {
 	Count              CountConfig              `json:"count" yaml:"count"`
 	JMESPath           JMESPathConfig           `json:"jmespath" yaml:"jmespath"`
 	Not                NotConfig                `json:"not" yaml:"not"`
+	Number             NumberConfig             `json:"number" yaml:"number"`
 	Metadata           MetadataConfig           `json:"metadata" yaml:"metadata"`
 	Or                 OrConfig                 `json:"or" yaml:"or"`
 	Plugin             interface{}              `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -108,6 +110,7 @@ func NewConfig() Config {
 		Count:              NewCountConfig(),
 		JMESPath:           NewJMESPathConfig(),
 		Not:                NewNotConfig(),
+		Number:             NewNumberConfig(),
 		Metadata:           NewMetadataConfig(),
 		Or:                 NewOrConfig(),
 		Plugin:             nil,

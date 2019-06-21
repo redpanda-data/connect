@@ -78,12 +78,13 @@ duplicate condition configs by using the [resource condition][resource].
 8. [`jmespath`](#jmespath)
 9. [`metadata`](#metadata)
 10. [`not`](#not)
-11. [`or`](#or)
-12. [`processor_failed`](#processor_failed)
-13. [`resource`](#resource)
-14. [`static`](#static)
-15. [`text`](#text)
-16. [`xor`](#xor)
+11. [`number`](#number)
+12. [`or`](#or)
+13. [`processor_failed`](#processor_failed)
+14. [`resource`](#resource)
+15. [`static`](#static)
+16. [`text`](#text)
+17. [`xor`](#xor)
 
 ## `all`
 
@@ -181,11 +182,11 @@ For example, you could use this to test against the size of a message batch:
 
 ``` yaml
 check_interpolation:
-  value: "${!batch_size}"
+  value: ${!batch_size}
   condition:
-    text:
-      operator: equals
-      arg: "1"
+    number:
+      operator: greater_than
+      arg: 1
 ```
 
 ## `count`
@@ -420,6 +421,49 @@ Or, the same example as JSON:
 }
 ```
 
+## `number`
+
+``` yaml
+type: number
+number:
+  arg: 0
+  operator: equals
+  part: 0
+```
+
+Number is a condition that checks the contents of a message parsed as a 64-bit
+floating point number against a logical operator and an argument.
+
+It's possible to use the [`check_field`](#check_field) and
+[`check_interpolation`](#check_interpolation) conditions to check a
+number condition against arbitrary metadata or fields of messages. For example,
+you can test a number condition against the size of a message batch with:
+
+``` yaml
+check_interpolation:
+  value: ${!batch_size}
+  condition:
+    number:
+      operator: greater_than
+      arg: 1
+```
+
+Available logical operators are:
+
+### `equals`
+
+Checks whether the value equals the argument.
+
+### `greater_than`
+
+Checks whether the value is greater than the argument. Returns false if the
+value cannot be parsed as a number.
+
+### `less_than`
+
+Checks whether the value is less than the argument. Returns false if the value
+cannot be parsed as a number.
+
 ## `or`
 
 ``` yaml
@@ -501,56 +545,84 @@ text:
   part: 0
 ```
 
-Text is a condition that checks the contents of a message part as plain text
-against a logical operator and an argument.
+Text is a condition that checks the contents of a message as plain text against
+a logical operator and an argument.
+
+It's possible to use the [`check_field`](#check_field) and
+[`check_interpolation`](#check_interpolation) conditions to check a
+text condition against arbitrary metadata or fields of messages. For example,
+you can test a text condition against a JSON field `foo.bar` with:
+
+``` yaml
+check_field:
+  path: foo.bar
+  condition:
+    text:
+      operator: enum
+      arg:
+      - foo
+      - bar
+```
 
 Available logical operators are:
 
 ### `equals_cs`
 
-Checks whether the part equals the argument (case sensitive.)
+Checks whether the content equals the argument (case sensitive.)
 
 ### `equals`
 
-Checks whether the part equals the argument under unicode case-folding (case
+Checks whether the content equals the argument under unicode case-folding (case
 insensitive.)
 
 ### `contains_cs`
 
-Checks whether the part contains the argument (case sensitive.)
+Checks whether the content contains the argument (case sensitive.)
 
 ### `contains`
 
-Checks whether the part contains the argument under unicode case-folding (case
-insensitive.)
+Checks whether the content contains the argument under unicode case-folding
+(case insensitive.)
 
 ### `prefix_cs`
 
-Checks whether the part begins with the argument (case sensitive.)
+Checks whether the content begins with the argument (case sensitive.)
 
 ### `prefix`
 
-Checks whether the part begins with the argument under unicode case-folding
+Checks whether the content begins with the argument under unicode case-folding
 (case insensitive.)
 
 ### `suffix_cs`
 
-Checks whether the part ends with the argument (case sensitive.)
+Checks whether the content ends with the argument (case sensitive.)
 
 ### `suffix`
 
-Checks whether the part ends with the argument under unicode case-folding (case
-insensitive.)
+Checks whether the content ends with the argument under unicode case-folding
+(case insensitive.)
 
 ### `regexp_partial`
 
-Checks whether any section of the message part matches a regular expression (RE2
+Checks whether any section of the content matches a regular expression (RE2
 syntax).
 
 ### `regexp_exact`
 
-Checks whether the message part exactly matches a regular expression (RE2
-syntax).
+Checks whether the content exactly matches a regular expression (RE2 syntax).
+
+### `enum`
+
+Checks whether the content matches any entry of a list of arguments, the field
+`arg` must be an array for this operator, e.g.:
+
+``` yaml
+text:
+  operator: enum
+  arg:
+  - foo
+  - bar
+```
 
 ## `xor`
 

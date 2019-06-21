@@ -45,11 +45,11 @@ For example, you could use this to test against the size of a message batch:
 
 ` + "``` yaml" + `
 check_interpolation:
-  value: "${!batch_size}"
+  value: ${!batch_size}
   condition:
-    text:
-      operator: equals
-      arg: "1"
+    number:
+      operator: greater_than
+      arg: 1
 ` + "```" + ``,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var condConf interface{} = struct{}{}

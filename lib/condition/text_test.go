@@ -21,7 +21,6 @@
 package condition
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -30,13 +29,10 @@ import (
 )
 
 func TestTextCheck(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
-
 	type fields struct {
 		operator string
 		part     int
-		arg      string
+		arg      interface{}
 	}
 	tests := []struct {
 		name   string
@@ -440,6 +436,50 @@ func TestTextCheck(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "enum 1",
+			fields: fields{
+				operator: "enum",
+				arg:      []string{"foo", "bar"},
+			},
+			arg: [][]byte{
+				[]byte("foo"),
+			},
+			want: true,
+		},
+		{
+			name: "enum 2",
+			fields: fields{
+				operator: "enum",
+				arg:      []string{"foo", "bar"},
+			},
+			arg: [][]byte{
+				[]byte("bar"),
+			},
+			want: true,
+		},
+		{
+			name: "enum 3",
+			fields: fields{
+				operator: "enum",
+				arg:      []string{"foo", "bar"},
+			},
+			arg: [][]byte{
+				[]byte("baz"),
+			},
+			want: false,
+		},
+		{
+			name: "enum 4",
+			fields: fields{
+				operator: "enum",
+				arg:      "foo",
+			},
+			arg: [][]byte{
+				[]byte("foo"),
+			},
+			want: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -449,7 +489,7 @@ func TestTextCheck(t *testing.T) {
 			conf.Text.Part = tt.fields.part
 			conf.Text.Arg = tt.fields.arg
 
-			c, err := NewText(conf, nil, testLog, testMet)
+			c, err := NewText(conf, nil, log.Noop(), metrics.Noop())
 			if err != nil {
 				t.Error(err)
 				return
@@ -462,14 +502,35 @@ func TestTextCheck(t *testing.T) {
 }
 
 func TestTextBadOperator(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
-
 	conf := NewConfig()
 	conf.Type = "text"
 	conf.Text.Operator = "NOT_EXIST"
 
-	_, err := NewText(conf, nil, testLog, testMet)
+	_, err := NewText(conf, nil, log.Noop(), metrics.Noop())
+	if err == nil {
+		t.Error("expected error from bad operator")
+	}
+}
+
+func TestTextBadArg(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "text"
+	conf.Text.Operator = "equals"
+	conf.Text.Arg = 10
+
+	_, err := NewText(conf, nil, log.Noop(), metrics.Noop())
+	if err == nil {
+		t.Error("expected error from bad operator")
+	}
+}
+
+func TestTextBadEnumArg(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "text"
+	conf.Text.Operator = "enum"
+	conf.Text.Arg = []int{1, 2}
+
+	_, err := NewText(conf, nil, log.Noop(), metrics.Noop())
 	if err == nil {
 		t.Error("expected error from bad operator")
 	}
