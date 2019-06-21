@@ -179,7 +179,7 @@ the result against a child condition.
 
 For example, you could use this to test against the size of a message batch:
 
-``` yaml,
+``` yaml
 check_interpolation:
   value: "${!batch_size}"
   condition:
