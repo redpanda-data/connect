@@ -73,16 +73,17 @@ duplicate condition configs by using the [resource condition][resource].
 3. [`any`](#any)
 4. [`bounds_check`](#bounds_check)
 5. [`check_field`](#check_field)
-6. [`count`](#count)
-7. [`jmespath`](#jmespath)
-8. [`metadata`](#metadata)
-9. [`not`](#not)
-10. [`or`](#or)
-11. [`processor_failed`](#processor_failed)
-12. [`resource`](#resource)
-13. [`static`](#static)
-14. [`text`](#text)
-15. [`xor`](#xor)
+6. [`check_interpolation`](#check_interpolation)
+7. [`count`](#count)
+8. [`jmespath`](#jmespath)
+9. [`metadata`](#metadata)
+10. [`not`](#not)
+11. [`or`](#or)
+12. [`processor_failed`](#processor_failed)
+13. [`resource`](#resource)
+14. [`static`](#static)
+15. [`text`](#text)
+16. [`xor`](#xor)
 
 ## `all`
 
@@ -162,6 +163,30 @@ check_field:
 
 Extracts the value of a field within messages (currently only JSON format is
 supported) and then tests the extracted value against a child condition.
+
+## `check_interpolation`
+
+``` yaml
+type: check_interpolation
+check_interpolation:
+  condition: {}
+  value: ""
+```
+
+Resolves a string containing
+[function interpolations](../config_interpolation.md#functions) and then tests
+the result against a child condition.
+
+For example, you could use this to test against the size of a message batch:
+
+``` yaml,
+check_interpolation:
+  value: "${!batch_size}"
+  condition:
+    text:
+      operator: equals
+      arg: "1"
+```
 
 ## `count`
 

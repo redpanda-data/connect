@@ -288,6 +288,8 @@ pipeline:
           max_parts: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PARTS:100}
           min_part_size: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PART_SIZE:1}
           min_parts: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PARTS:1}
+        check_interpolation:
+          value: ${PROCESSOR_BATCH_CONDITION_CHECK_INTERPOLATION_VALUE}
         count:
           arg: ${PROCESSOR_BATCH_CONDITION_COUNT_ARG:100}
         jmespath:
