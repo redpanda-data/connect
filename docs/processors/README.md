@@ -1303,12 +1303,17 @@ process_field:
   parts: []
   path: ""
   processors: []
+  result_type: string
 ```
 
 A processor that extracts the value of a field within payloads (currently only
 JSON format is supported) then applies a list of processors to the extracted
 value, and finally sets the field within the original payloads to the processed
 result.
+
+The result, according to the config field `result_type`, can be
+marshalled into any of the following types: string (default), int, float, bool,
+object, array.
 
 If the number of messages resulting from the processing steps does not match the
 original count then this processor fails and the messages continue unchanged.
