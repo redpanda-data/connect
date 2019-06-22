@@ -137,6 +137,41 @@ func TestProcessFieldString(t *testing.T) {
 	}
 }
 
+func TestProcessFieldDiscard(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_field"
+	conf.ProcessField.Path = "foo.bar"
+	conf.ProcessField.Parts = []int{}
+	conf.ProcessField.ResultType = "discard"
+
+	procConf := NewConfig()
+	procConf.Type = "encode"
+
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	exp := [][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
 func TestProcessFieldCodecs(t *testing.T) {
 	type testCase struct {
 		name   string
@@ -186,6 +221,12 @@ func TestProcessFieldCodecs(t *testing.T) {
 			codec:  "object",
 			input:  `{"target":"{\"foo\":{\"bar\":\"baz\"}}"}`,
 			output: `{"target":{"foo":{"bar":"baz"}}}`,
+		},
+		{
+			name:   "object 2",
+			codec:  "object",
+			input:  `{"target":"null"}`,
+			output: `{"target":null}`,
 		},
 		{
 			name:   "array 1",

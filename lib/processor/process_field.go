@@ -58,8 +58,10 @@ process_field:
 ` + "```" + `
 
 The result, according to the config field ` + "`result_type`" + `, can be
-marshalled into any of the following types: string (default), int, float, bool,
-object, array.
+marshalled into any of the following types:
+` + "`string` (default), `int`, `float`, `bool`, `object` (including null)," + `
+` + " `array` and `discard`" + `. The discard type is a special case that
+discards the result of the processing steps entirely.
 
 It's therefore possible to use this processor without any child processors as a
 way of casting string values into other types. For example, with an input JSON
@@ -203,6 +205,10 @@ func processFieldResultObjectMarshaller(p types.Part) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	// We consider null as an object
+	if jVal == nil {
+		return nil, nil
+	}
 	if jObj, ok := jVal.(map[string]interface{}); ok {
 		return jObj, nil
 	}
@@ -234,6 +240,8 @@ func stringToProcessFieldResultMarshaller(str string) (processFieldResultMarshal
 		return processFieldResultObjectMarshaller, nil
 	case "array":
 		return processFieldResultArrayMarshaller, nil
+	case "discard":
+		return nil, nil
 	}
 	return nil, fmt.Errorf("unrecognised result_type: %v", str)
 }
@@ -295,6 +303,12 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		})
 	}
 	defer tracing.FinishSpans(propMsg)
+
+	if p.resultCodec == nil {
+		p.mBatchSent.Incr(1)
+		p.mSent.Incr(int64(payload.Len()))
+		return
+	}
 
 	if exp, act := len(targetParts), resMsg.Len(); exp != act {
 		p.mBatchSent.Incr(1)

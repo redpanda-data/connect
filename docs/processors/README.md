@@ -1324,8 +1324,10 @@ process_field:
 ```
 
 The result, according to the config field `result_type`, can be
-marshalled into any of the following types: string (default), int, float, bool,
-object, array.
+marshalled into any of the following types:
+`string` (default), `int`, `float`, `bool`, `object` (including null),
+ `array` and `discard`. The discard type is a special case that
+discards the result of the processing steps entirely.
 
 It's therefore possible to use this processor without any child processors as a
 way of casting string values into other types. For example, with an input JSON
