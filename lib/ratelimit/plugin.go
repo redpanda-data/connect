@@ -99,9 +99,15 @@ func DocumentPlugin(
 	pluginSpecs[typeString] = spec
 }
 
+// PluginCount returns the number of registered plugins. This does NOT count the
+// standard set of components.
+func PluginCount() int {
+	return len(pluginSpecs)
+}
+
 //------------------------------------------------------------------------------
 
-var pluginHeader = `This document has been generated, do not edit it directly.
+var pluginHeader = "This document was generated with `benthos --list-rate-limit-plugins`." + `
 
 This document lists any rate limit plugins that this flavour of Benthos offers
 beyond the standard set.`

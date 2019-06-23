@@ -152,7 +152,53 @@ When running Benthos in streams mode any files in this directory with a .json or
 pipeline, output), where the filename less the extension will be the id of the
 stream.`[1:],
 	)
+	// Plugin Flags
+	printInputPlugins     bool
+	printOutputPlugins    bool
+	printProcessorPlugins bool
+	printConditionPlugins bool
+	printCachePlugins     bool
+	printRateLimitPlugins bool
 )
+
+func registerPluginFlags() {
+	if input.PluginCount() > 0 {
+		flag.BoolVar(
+			&printInputPlugins, "list-input-plugins", false,
+			"Print a list of available input plugins, then exit",
+		)
+	}
+	if output.PluginCount() > 0 {
+		flag.BoolVar(
+			&printOutputPlugins, "list-output-plugins", false,
+			"Print a list of available output plugins, then exit",
+		)
+	}
+	if processor.PluginCount() > 0 {
+		flag.BoolVar(
+			&printProcessorPlugins, "list-processor-plugins", false,
+			"Print a list of available processor plugins, then exit",
+		)
+	}
+	if condition.PluginCount() > 0 {
+		flag.BoolVar(
+			&printConditionPlugins, "list-condition-plugins", false,
+			"Print a list of available condition plugins, then exit",
+		)
+	}
+	if cache.PluginCount() > 0 {
+		flag.BoolVar(
+			&printCachePlugins, "list-cache-plugins", false,
+			"Print a list of available cache plugins, then exit",
+		)
+	}
+	if ratelimit.PluginCount() > 0 {
+		flag.BoolVar(
+			&printRateLimitPlugins, "list-rate-limit-plugins", false,
+			"Print a list of available ratelimit plugins, then exit",
+		)
+	}
+}
 
 //------------------------------------------------------------------------------
 
@@ -258,7 +304,9 @@ func bootstrap() (config.Type, []string) {
 	// If we only want to print our inputs or outputs we should exit afterwards
 	if *printInputs || *printOutputs || *printBuffers || *printProcessors ||
 		*printConditions || *printCaches || *printRateLimits ||
-		*printMetrics || *printTracers {
+		*printMetrics || *printTracers || printInputPlugins ||
+		printOutputPlugins || printProcessorPlugins || printConditionPlugins ||
+		printCachePlugins || printRateLimitPlugins {
 		if *printInputs {
 			fmt.Println(input.Descriptions())
 		}
@@ -286,6 +334,24 @@ func bootstrap() (config.Type, []string) {
 		if *printTracers {
 			fmt.Println(tracer.Descriptions())
 		}
+		if printInputPlugins {
+			fmt.Println(input.PluginDescriptions())
+		}
+		if printProcessorPlugins {
+			fmt.Println(processor.PluginDescriptions())
+		}
+		if printConditionPlugins {
+			fmt.Println(condition.PluginDescriptions())
+		}
+		if printRateLimitPlugins {
+			fmt.Println(ratelimit.PluginDescriptions())
+		}
+		if printOutputPlugins {
+			fmt.Println(output.PluginDescriptions())
+		}
+		if printCachePlugins {
+			fmt.Println(cache.PluginDescriptions())
+		}
 		os.Exit(0)
 	}
 
@@ -300,6 +366,8 @@ type stoppableStreams interface {
 // call blocks until either the pipeline shuts down or a termination signal is
 // received.
 func Run() {
+	registerPluginFlags()
+
 	// Bootstrap by reading cmd flags and configuration file.
 	config, lints := bootstrap()
 

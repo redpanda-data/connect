@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - Field `result_type` added to `process_field` processor for marshalling results
   into non-string types.
 - Go API: Plugin APIs now allow nil config constructors.
+- Registering plugins automatically adds plugin documentation flags to the main
+  Benthos service.
 
 ## 2.7.0 - 2019-06-20
 
