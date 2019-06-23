@@ -138,16 +138,16 @@ of the batch.
 ``` yaml
 type: avro
 avro:
-  codec: ""
   encoding: textual
   operator: to_json
   parts: []
+  schema: ""
 ```
 
 EXPERIMENTAL: This processor is considered experimental and is therefore subject
 to change outside of major version releases.
 
-Performs Avro based operations on messages based on a codec. Supported encoding
+Performs Avro based operations on messages based on a schema. Supported encoding
 types are textual, binary and single.
 
 ### Operators

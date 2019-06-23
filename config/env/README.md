@@ -271,9 +271,9 @@ PROCESSOR_THREADS                                    = 1
 PROCESSOR_TYPE                                       = noop
 PROCESSOR_ARCHIVE_FORMAT                             = binary
 PROCESSOR_ARCHIVE_PATH                               = ${!count:files}-${!timestamp_unix_nano}.txt
-PROCESSOR_AVRO_CODEC
 PROCESSOR_AVRO_ENCODING                              = textual
 PROCESSOR_AVRO_OPERATOR                              = to_json
+PROCESSOR_AVRO_SCHEMA
 PROCESSOR_AWK_CODEC                                  = text
 PROCESSOR_AWK_PROGRAM                                = BEGIN { x = 0 } { print $0, x; x++ }
 PROCESSOR_BATCH_BYTE_SIZE                            = 0

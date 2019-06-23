@@ -17,10 +17,10 @@ pipeline:
   processors:
   - type: avro
     avro:
-      codec: ""
       encoding: textual
       operator: to_json
       parts: []
+      schema: ""
   threads: 1
 output:
   type: stdout

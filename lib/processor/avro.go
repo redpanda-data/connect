@@ -40,7 +40,7 @@ func init() {
 EXPERIMENTAL: This processor is considered experimental and is therefore subject
 to change outside of major version releases.
 
-Performs Avro based operations on messages based on a codec. Supported encoding
+Performs Avro based operations on messages based on a schema. Supported encoding
 types are textual, binary and single.
 
 ### Operators
@@ -65,7 +65,7 @@ type AvroConfig struct {
 	Parts    []int  `json:"parts" yaml:"parts"`
 	Operator string `json:"operator" yaml:"operator"`
 	Encoding string `json:"encoding" yaml:"encoding"`
-	Codec    string `json:"codec" yaml:"codec"`
+	Schema   string `json:"schema" yaml:"schema"`
 }
 
 // NewAvroConfig returns a AvroConfig with default values.
@@ -74,7 +74,7 @@ func NewAvroConfig() AvroConfig {
 		Parts:    []int{},
 		Operator: "to_json",
 		Encoding: "textual",
-		Codec:    "",
+		Schema:   "",
 	}
 }
 
@@ -131,7 +131,7 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 			}
 			var textual []byte
 			if textual, err = codec.TextualFromNative(nil, jObj); err != nil {
-				return fmt.Errorf("failed to convert JSON to Avro codec: %v", err)
+				return fmt.Errorf("failed to convert JSON to Avro schema: %v", err)
 			}
 			part.Set(textual)
 			return nil
@@ -144,7 +144,7 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 			}
 			var binary []byte
 			if binary, err = codec.BinaryFromNative(nil, jObj); err != nil {
-				return fmt.Errorf("failed to convert JSON to Avro codec: %v", err)
+				return fmt.Errorf("failed to convert JSON to Avro schema: %v", err)
 			}
 			part.Set(binary)
 			return nil
@@ -157,7 +157,7 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 			}
 			var single []byte
 			if single, err = codec.SingleFromNative(nil, jObj); err != nil {
-				return fmt.Errorf("failed to convert JSON to Avro codec: %v", err)
+				return fmt.Errorf("failed to convert JSON to Avro schema: %v", err)
 			}
 			part.Set(single)
 			return nil
@@ -209,9 +209,9 @@ func NewAvro(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
-	codec, err := goavro.NewCodec(conf.Avro.Codec)
+	codec, err := goavro.NewCodec(conf.Avro.Schema)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse codec: %v", err)
+		return nil, fmt.Errorf("failed to parse schema: %v", err)
 	}
 
 	if a.operator, err = strToAvroOperator(conf.Avro.Operator, conf.Avro.Encoding, codec); err != nil {

@@ -32,7 +32,7 @@ import (
 )
 
 func TestAvroBasic(t *testing.T) {
-	codec := `{
+	schema := `{
 	"namespace": "foo.namespace.com",
 	"type":	"record",
 	"name": "identity",
@@ -136,7 +136,7 @@ func TestAvroBasic(t *testing.T) {
 			conf.Type = TypeAvro
 			conf.Avro.Operator = test.operator
 			conf.Avro.Encoding = test.encoding
-			conf.Avro.Codec = codec
+			conf.Avro.Schema = schema
 
 			proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 			if err != nil {
