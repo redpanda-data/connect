@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `number` condition.
 - New `number` processor.
+- New `avro` processor.
 - Operator `enum` added to `text` condition.
 - Field `result_type` added to `process_field` processor for marshalling results
   into non-string types.

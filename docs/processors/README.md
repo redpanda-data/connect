@@ -58,53 +58,54 @@ In this case the [`for_each`](#for_each) processor can be used.
 ### Contents
 
 1. [`archive`](#archive)
-2. [`awk`](#awk)
-3. [`batch`](#batch)
-4. [`bounds_check`](#bounds_check)
-5. [`cache`](#cache)
-6. [`catch`](#catch)
-7. [`compress`](#compress)
-8. [`conditional`](#conditional)
-9. [`decode`](#decode)
-10. [`decompress`](#decompress)
-11. [`dedupe`](#dedupe)
-12. [`encode`](#encode)
-13. [`filter`](#filter)
-14. [`filter_parts`](#filter_parts)
-15. [`for_each`](#for_each)
-16. [`grok`](#grok)
-17. [`group_by`](#group_by)
-18. [`group_by_value`](#group_by_value)
-19. [`hash`](#hash)
-20. [`hash_sample`](#hash_sample)
-21. [`http`](#http)
-22. [`insert_part`](#insert_part)
-23. [`jmespath`](#jmespath)
-24. [`json`](#json)
-25. [`lambda`](#lambda)
-26. [`log`](#log)
-27. [`merge_json`](#merge_json)
-28. [`metadata`](#metadata)
-29. [`metric`](#metric)
-30. [`noop`](#noop)
-31. [`number`](#number)
-32. [`parallel`](#parallel)
-33. [`process_batch`](#process_batch)
-34. [`process_dag`](#process_dag)
-35. [`process_field`](#process_field)
-36. [`process_map`](#process_map)
-37. [`sample`](#sample)
-38. [`select_parts`](#select_parts)
-39. [`sleep`](#sleep)
-40. [`split`](#split)
-41. [`sql`](#sql)
-42. [`subprocess`](#subprocess)
-43. [`switch`](#switch)
-44. [`text`](#text)
-45. [`throttle`](#throttle)
-46. [`try`](#try)
-47. [`unarchive`](#unarchive)
-48. [`while`](#while)
+2. [`avro`](#avro)
+3. [`awk`](#awk)
+4. [`batch`](#batch)
+5. [`bounds_check`](#bounds_check)
+6. [`cache`](#cache)
+7. [`catch`](#catch)
+8. [`compress`](#compress)
+9. [`conditional`](#conditional)
+10. [`decode`](#decode)
+11. [`decompress`](#decompress)
+12. [`dedupe`](#dedupe)
+13. [`encode`](#encode)
+14. [`filter`](#filter)
+15. [`filter_parts`](#filter_parts)
+16. [`for_each`](#for_each)
+17. [`grok`](#grok)
+18. [`group_by`](#group_by)
+19. [`group_by_value`](#group_by_value)
+20. [`hash`](#hash)
+21. [`hash_sample`](#hash_sample)
+22. [`http`](#http)
+23. [`insert_part`](#insert_part)
+24. [`jmespath`](#jmespath)
+25. [`json`](#json)
+26. [`lambda`](#lambda)
+27. [`log`](#log)
+28. [`merge_json`](#merge_json)
+29. [`metadata`](#metadata)
+30. [`metric`](#metric)
+31. [`noop`](#noop)
+32. [`number`](#number)
+33. [`parallel`](#parallel)
+34. [`process_batch`](#process_batch)
+35. [`process_dag`](#process_dag)
+36. [`process_field`](#process_field)
+37. [`process_map`](#process_map)
+38. [`sample`](#sample)
+39. [`select_parts`](#select_parts)
+40. [`sleep`](#sleep)
+41. [`split`](#split)
+42. [`sql`](#sql)
+43. [`subprocess`](#subprocess)
+44. [`switch`](#switch)
+45. [`text`](#text)
+46. [`throttle`](#throttle)
+47. [`try`](#try)
+48. [`unarchive`](#unarchive)
+49. [`while`](#while)
 
 ## `archive`
 
@@ -131,6 +132,36 @@ the result to an array, which becomes the contents of the resulting message.
 
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.
+
+## `avro`
+
+``` yaml
+type: avro
+avro:
+  codec: ""
+  encoding: textual
+  operator: to_json
+  parts: []
+```
+
+EXPERIMENTAL: This processor is considered experimental and is therefore subject
+to change outside of major version releases.
+
+Performs Avro based operations on messages based on a codec. Supported encoding
+types are textual, binary and single.
+
+### Operators
+
+#### `to_json`
+
+Converts Avro documents into a JSON structure. This makes it easier to
+manipulate the contents of the document within Benthos. The encoding field
+specifies how the source documents are encoded.
+
+#### `from_json`
+
+Attempts to convert JSON documents into Avro documents according to the
+specified encoding.
 
 ## `awk`
 

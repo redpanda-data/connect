@@ -29,7 +29,6 @@ require (
 	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/golang/protobuf v1.3.0 // indirect
-	github.com/golang/snappy v0.0.1 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
 	github.com/gorilla/mux v1.7.0
 	github.com/gorilla/websocket v1.4.0
@@ -43,6 +42,7 @@ require (
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/lib/pq v1.0.0
+	github.com/linkedin/goavro/v2 v2.9.0
 	github.com/mailru/easyjson v0.0.0-20190221075403-6243d8e04c3f // indirect
 	github.com/microcosm-cc/bluemonday v1.0.2
 	github.com/nats-io/gnatsd v1.4.1 // indirect

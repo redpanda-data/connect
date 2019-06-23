@@ -277,6 +277,10 @@ pipeline:
   - archive:
       format: ${PROCESSOR_ARCHIVE_FORMAT:binary}
       path: ${PROCESSOR_ARCHIVE_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+    avro:
+      codec: ${PROCESSOR_AVRO_CODEC}
+      encoding: ${PROCESSOR_AVRO_ENCODING:textual}
+      operator: ${PROCESSOR_AVRO_OPERATOR:to_json}
     awk:
       codec: ${PROCESSOR_AWK_CODEC:text}
       program: ${PROCESSOR_AWK_PROGRAM:BEGIN { x = 0 } { print $0, x; x++ }}

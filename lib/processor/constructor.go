@@ -80,6 +80,7 @@ func Block(typeStr, reason string) {
 // String constants representing each processor type.
 const (
 	TypeArchive      = "archive"
+	TypeAvro         = "avro"
 	TypeAWK          = "awk"
 	TypeBatch        = "batch"
 	TypeBoundsCheck  = "bounds_check"
@@ -135,6 +136,7 @@ const (
 type Config struct {
 	Type         string             `json:"type" yaml:"type"`
 	Archive      ArchiveConfig      `json:"archive" yaml:"archive"`
+	Avro         AvroConfig         `json:"avro" yaml:"avro"`
 	AWK          AWKConfig          `json:"awk" yaml:"awk"`
 	Batch        BatchConfig        `json:"batch" yaml:"batch"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
@@ -189,6 +191,7 @@ func NewConfig() Config {
 	return Config{
 		Type:         "bounds_check",
 		Archive:      NewArchiveConfig(),
+		Avro:         NewAvroConfig(),
 		AWK:          NewAWKConfig(),
 		Batch:        NewBatchConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),
