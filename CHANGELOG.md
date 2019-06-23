@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `number` condition.
+- New `number` processor.
 - Operator `enum` added to `text` condition.
 - Field `result_type` added to `process_field` processor for marshalling results
   into non-string types.

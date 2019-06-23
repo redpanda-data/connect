@@ -109,6 +109,7 @@ const (
 	TypeMetadata     = "metadata"
 	TypeMetric       = "metric"
 	TypeNoop         = "noop"
+	TypeNumber       = "number"
 	TypeParallel     = "parallel"
 	TypeProcessBatch = "process_batch"
 	TypeProcessDAG   = "process_dag"
@@ -162,6 +163,7 @@ type Config struct {
 	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
+	Number       NumberConfig       `json:"number" yaml:"number"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
 	ProcessBatch ForEachConfig      `json:"process_batch" yaml:"process_batch"`
@@ -215,6 +217,7 @@ func NewConfig() Config {
 		MergeJSON:    NewMergeJSONConfig(),
 		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),
+		Number:       NewNumberConfig(),
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),
 		ProcessBatch: NewForEachConfig(),
