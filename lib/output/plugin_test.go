@@ -93,6 +93,9 @@ func TestPluginDescriptions(t *testing.T) {
 			"bar": mConf.Bar,
 		}
 	})
+	RegisterPlugin("foo_no_conf", nil, nil)
+	DocumentPlugin("foo_no_conf", "This is a plugin without config.", nil)
+	RegisterPlugin("foo_no_conf_no_desc", nil, nil)
 
 	exp := `Output Plugins
 ==============
@@ -106,6 +109,8 @@ beyond the standard set.
 
 1. [` + "`bar`" + `](#bar)
 2. [` + "`foo`" + `](#foo)
+3. [` + "`foo_no_conf`" + `](#foo_no_conf)
+4. [` + "`foo_no_conf_no_desc`" + `](#foo_no_conf_no_desc)
 
 ## ` + "`bar`" + `
 
@@ -127,6 +132,12 @@ plugin:
   baz: 10
   foo: default
 ` + "```" + `
+
+## ` + "`foo_no_conf`" + `
+
+This is a plugin without config.
+
+## ` + "`foo_no_conf_no_desc`" + `
 `
 
 	act := PluginDescriptions()

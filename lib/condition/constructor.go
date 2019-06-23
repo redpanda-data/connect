@@ -193,7 +193,7 @@ func (m *Config) UnmarshalYAML(value *yaml.Node) error {
 		aliased.Type = inferredType
 	}
 
-	if spec, exists := pluginSpecs[aliased.Type]; exists {
+	if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
 		confBytes, err := yaml.Marshal(aliased.Plugin)
 		if err != nil {
 			return fmt.Errorf("line %v: %v", value.Line, err)

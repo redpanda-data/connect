@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Operator `enum` added to `text` condition.
 - Field `result_type` added to `process_field` processor for marshalling results
   into non-string types.
+- Go API: Plugin APIs now allow nil config constructors.
 
 ## 2.7.0 - 2019-06-20
 

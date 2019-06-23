@@ -49,9 +49,7 @@ type PluginConstructor func(
 ) (types.Cache, error)
 
 // PluginConfigConstructor is a func that returns a pointer to a new and fully
-// populated configuration struct for a plugin type. It is valid to return a
-// pointer to an empty struct (&struct{}{}) if no configuration fields are
-// needed.
+// populated configuration struct for a plugin type.
 type PluginConfigConstructor func() interface{}
 
 // PluginConfigSanitiser is a function that takes a configuration object for a
@@ -74,10 +72,9 @@ type pluginSpec struct {
 var pluginSpecs = map[string]pluginSpec{}
 
 // RegisterPlugin registers a plugin by a unique name so that it can be
-// constucted similar to regular caches. A constructor for both the plugin
-// itself as well as its configuration struct must be provided.
-//
-// WARNING: This API is experimental and could (is likely) to change.
+// constructed similar to regular caches. If configuration is not needed for
+// this plugin then configConstructor can be nil. A constructor for the plugin
+// itself must be provided.
 func RegisterPlugin(
 	typeString string,
 	configConstructor PluginConfigConstructor,
@@ -141,11 +138,13 @@ func PluginDescriptions() string {
 	for i, name := range names {
 		var confBytes []byte
 
-		conf := NewConfig()
-		conf.Type = name
-		conf.Plugin = pluginSpecs[name].confConstructor()
-		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = config.MarshalYAML(confSanit)
+		if confCtor := pluginSpecs[name].confConstructor; confCtor != nil {
+			conf := NewConfig()
+			conf.Type = name
+			conf.Plugin = confCtor()
+			if confSanit, err := SanitiseConfig(conf); err == nil {
+				confBytes, _ = config.MarshalYAML(confSanit)
+			}
 		}
 
 		buf.WriteString("## ")
