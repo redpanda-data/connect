@@ -102,7 +102,7 @@ func TestPluginDescriptions(t *testing.T) {
 	exp := `Cache Plugins
 =============
 
-This document has been generated, do not edit it directly.
+This document was generated with `+"`benthos --list-cache-plugins`"+`.
 
 This document lists any cache plugins that this flavour of Benthos offers beyond
 the standard set.
