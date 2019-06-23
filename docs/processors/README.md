@@ -87,23 +87,24 @@ In this case the [`for_each`](#for_each) processor can be used.
 28. [`metadata`](#metadata)
 29. [`metric`](#metric)
 30. [`noop`](#noop)
-31. [`parallel`](#parallel)
-32. [`process_batch`](#process_batch)
-33. [`process_dag`](#process_dag)
-34. [`process_field`](#process_field)
-35. [`process_map`](#process_map)
-36. [`sample`](#sample)
-37. [`select_parts`](#select_parts)
-38. [`sleep`](#sleep)
-39. [`split`](#split)
-40. [`sql`](#sql)
-41. [`subprocess`](#subprocess)
-42. [`switch`](#switch)
-43. [`text`](#text)
-44. [`throttle`](#throttle)
-45. [`try`](#try)
-46. [`unarchive`](#unarchive)
-47. [`while`](#while)
+31. [`number`](#number)
+32. [`parallel`](#parallel)
+33. [`process_batch`](#process_batch)
+34. [`process_dag`](#process_dag)
+35. [`process_field`](#process_field)
+36. [`process_map`](#process_map)
+37. [`sample`](#sample)
+38. [`select_parts`](#select_parts)
+39. [`sleep`](#sleep)
+40. [`split`](#split)
+41. [`sql`](#sql)
+42. [`subprocess`](#subprocess)
+43. [`switch`](#switch)
+44. [`text`](#text)
+45. [`throttle`](#throttle)
+46. [`try`](#try)
+47. [`unarchive`](#unarchive)
+48. [`while`](#while)
 
 ## `archive`
 
@@ -1205,6 +1206,52 @@ type: noop
 
 Noop is a no-op processor that does nothing, the message passes through
 unchanged.
+
+## `number`
+
+``` yaml
+type: number
+number:
+  operator: add
+  parts: []
+  value: 0
+```
+
+Parses message contents into a 64-bit floating point number and performs an
+operator on it. In order to execute this processor on a sub field of a document
+use it with the [`process_field`](#process_field) processor.
+
+The value field can either be a number or a string type. If it is a string type
+then this processor will interpolate functions within it, you can find a list of
+functions [here](../config_interpolation.md#functions).
+
+For example, if we wanted to subtract the current unix timestamp from the field
+'foo' of a JSON document `{"foo":1561219142}` we could use the
+following config:
+
+``` yaml
+process_field:
+  path: foo
+  result_type: float
+  processors:
+  - number:
+      operator: subtract
+      value: "${!timestamp_unix}"
+```
+
+Value interpolations are resolved once per message batch, in order to resolve it
+for each message of the batch place it within a
+[`for_each`](#for_each) processor.
+
+### Operators
+
+#### `add`
+
+Adds a value.
+
+#### `subtract`
+
+Subtracts a value.
 
 ## `parallel`
 

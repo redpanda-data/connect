@@ -370,6 +370,8 @@ PROCESSOR_METADATA_VALUE                             = ${!hostname}
 PROCESSOR_METRIC_PATH
 PROCESSOR_METRIC_TYPE                                = counter
 PROCESSOR_METRIC_VALUE
+PROCESSOR_NUMBER_OPERATOR                            = add
+PROCESSOR_NUMBER_VALUE                               = 0
 PROCESSOR_PARALLEL_CAP                               = 0
 PROCESSOR_SAMPLE_RETAIN                              = 10
 PROCESSOR_SAMPLE_SEED                                = 0

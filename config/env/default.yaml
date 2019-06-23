@@ -414,6 +414,9 @@ pipeline:
       path: ${PROCESSOR_METRIC_PATH}
       type: ${PROCESSOR_METRIC_TYPE:counter}
       value: ${PROCESSOR_METRIC_VALUE}
+    number:
+      operator: ${PROCESSOR_NUMBER_OPERATOR:add}
+      value: ${PROCESSOR_NUMBER_VALUE:0}
     parallel:
       cap: ${PROCESSOR_PARALLEL_CAP:0}
     sample:

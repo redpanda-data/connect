@@ -90,7 +90,7 @@ type NumberConfig struct {
 func NewNumberConfig() NumberConfig {
 	return NumberConfig{
 		Parts:    []int{},
-		Operator: "trim_space",
+		Operator: "add",
 		Value:    0,
 	}
 }
