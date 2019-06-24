@@ -116,7 +116,7 @@ func TestPluginDescriptions(t *testing.T) {
 	exp := `Processor Plugins
 =================
 
-This document was generated with `+"`benthos --list-processor-plugins`"+`.
+This document was generated with ` + "`benthos --list-processor-plugins`" + `.
 
 This document lists any processor plugins that this flavour of Benthos offers
 beyond the standard set.

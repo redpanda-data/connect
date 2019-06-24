@@ -101,7 +101,7 @@ func TestPluginDescriptions(t *testing.T) {
 	exp := `Condition Plugins
 =================
 
-This document was generated with `+"`benthos --list-condition-plugins`"+`.
+This document was generated with ` + "`benthos --list-condition-plugins`" + `.
 
 This document lists any condition plugins that this flavour of Benthos offers
 beyond the standard set.

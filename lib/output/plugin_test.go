@@ -100,7 +100,7 @@ func TestPluginDescriptions(t *testing.T) {
 	exp := `Output Plugins
 ==============
 
-This document was generated with `+"`benthos --list-output-plugins`"+`.
+This document was generated with ` + "`benthos --list-output-plugins`" + `.
 
 This document lists any output plugins that this flavour of Benthos offers
 beyond the standard set.
