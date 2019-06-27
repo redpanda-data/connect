@@ -106,7 +106,8 @@ a [`filter_parts`][filter_parts] processor:
 
 ``` yaml
   - filter_parts:
-      type: processor_failed
+      not:
+        type: processor_failed
 ```
 
 This will remove any failed messages from a batch.
@@ -151,7 +152,6 @@ output:
     - type: bar # Everything else
       processors:
       - filter_parts:
-          type: not
           not:
             type: processor_failed
 ```
