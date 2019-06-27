@@ -166,7 +166,7 @@ func TestAvroBasic(t *testing.T) {
 				tt.Logf("Part 0: %v", strconv.Quote(string(act[0])))
 			}
 			msgs[0].Iter(func(i int, part types.Part) error {
-				if fail := part.Metadata().Get("benthos_processing_failed"); len(fail) > 0 {
+				if fail := part.Metadata().Get(FailFlagKey); len(fail) > 0 {
 					tt.Error(fail)
 				}
 				return nil

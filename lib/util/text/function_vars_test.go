@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestFunctionVarDetection(t *testing.T) {
@@ -82,6 +83,25 @@ func TestMetadataFunction(t *testing.T) {
 		msg, []byte(`foo ${!metadata} bar`),
 	))
 	if exp := `foo  bar`; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
+func TestErrorFunction(t *testing.T) {
+	msg := message.New([][]byte{[]byte("foo"), []byte("bar")})
+	msg.Get(0).Metadata().Set(types.FailFlagKey, "test error")
+
+	act := string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!error} baz`),
+	))
+	if exp := "foo test error baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!error:1} baz`),
+	))
+	if exp := "foo  baz"; act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }

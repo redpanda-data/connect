@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- New interpolation function `error`.
+
 ## 2.8.0 - 2019-06-24
 
 ### Added

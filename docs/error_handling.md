@@ -52,6 +52,31 @@ processor placed within a [`for_each`][for_each] processor:
         - type: foo # Recover here
 ```
 
+### Logging Errors
+
+When an error occurs there will occasionally be useful information stored within
+the error flag that can be exposed with the interpolation function
+[`error`](./config_interpolation.md#error). This allows you to expose the
+information with processors.
+
+For example, when catching failed processors you can [`log`][log] the messages:
+
+``` yaml
+  - catch:
+    - log:
+        message: "Processing failed due to: ${!error}"
+```
+
+Or perhaps augment the message payload with the error message:
+
+``` yaml
+  - catch:
+    - json:
+        operator: set
+        path: meta.error
+        value: ${!error}
+```
+
 ### Attempt Until Success
 
 It's possible to reattempt a processor for a particular message until it is
@@ -139,6 +164,7 @@ output:
 [conditional]: ./processors/README.md#conditional
 [catch]: ./processors/README.md#catch
 [try]: ./processors/README.md#try
+[log]: ./processors/README.md#log
 [group_by]: ./processors/README.md#group_by
 [switch]: ./outputs/README.md#switch
 [broker]: ./outputs/README.md#broker

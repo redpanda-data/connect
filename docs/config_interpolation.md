@@ -89,6 +89,16 @@ part by default. It is possible to specify a target part index with an integer
 argument, e.g. `${!content:2}` would print the contents of the third message
 part.
 
+### `error`
+
+If an error has occurred during the processing of a message part this function
+resolves to the reported cause of the error. For more information about error
+handling patterns read [here](./error_handling.md).
+
+When applied to a batch of message parts this function targets the first message
+part by default. It is possible to specify a target part index with an integer
+argument, e.g. `${!error:2}` would print the error of the third message part.
+
 ### `batch_size`
 
 Resolves to the size of a message batch.

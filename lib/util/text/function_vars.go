@@ -108,6 +108,17 @@ func metadataMapFunction(msg Message, arg string) []byte {
 	return result
 }
 
+func errorFunction(msg Message, arg string) []byte {
+	part := 0
+	if len(arg) > 0 {
+		partB, err := strconv.ParseInt(arg, 10, 64)
+		if err == nil {
+			part = int(partB)
+		}
+	}
+	return []byte(msg.Get(part).Metadata().Get(types.FailFlagKey))
+}
+
 func contentFunction(msg Message, arg string) []byte {
 	part := 0
 	if len(arg) > 0 {
@@ -189,6 +200,7 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 
 		return []byte(strconv.FormatUint(count, 10))
 	},
+	"error":                errorFunction,
 	"content":              contentFunction,
 	"json_field":           jsonFieldFunction,
 	"metadata":             metadataFunction,

@@ -26,6 +26,13 @@ import (
 
 //------------------------------------------------------------------------------
 
+// FailFlagKey is a metadata key used for flagging processor errors in Benthos.
+// If a message part has any non-empty value for this metadata key then it will
+// be interpretted as having failed a processor step somewhere in the pipeline.
+var FailFlagKey = "benthos_processing_failed"
+
+//------------------------------------------------------------------------------
+
 // Metadata is an interface representing the metadata of a message part within
 // a batch.
 type Metadata interface {
