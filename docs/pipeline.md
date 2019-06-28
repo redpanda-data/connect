@@ -116,8 +116,8 @@ foo -> memory buffer ---> processor ---> bar
                      \--> processor -/
 ```
 
-[processors]: ./processors
+[processors]: ./processors/README.md
 [jmespath-processor]: ./processors/README.md#jmespath
-[buffers]: ./buffers
+[buffers]: ./buffers/README.md
 [search-amo]: https://duckduckgo.com/?q=at+most+once
 [search-alo]: https://duckduckgo.com/?q=at+least+once
