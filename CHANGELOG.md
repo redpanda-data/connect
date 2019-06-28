@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- The `filter` and `filter_parts` config sections now correctly marshall when
+  printing with `--all`.
+
 ## 2.8.2 - 2019-06-28
 
 ### Added

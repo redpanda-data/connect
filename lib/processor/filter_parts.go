@@ -71,6 +71,13 @@ func NewFilterPartsConfig() FilterPartsConfig {
 
 //------------------------------------------------------------------------------
 
+// MarshalYAML prints the child condition instead of {}.
+func (f FilterPartsConfig) MarshalYAML() (interface{}, error) {
+	return f.Config, nil
+}
+
+//------------------------------------------------------------------------------
+
 // FilterParts is a processor that checks each part from a message against a
 // condition and removes the part if the condition returns false.
 type FilterParts struct {

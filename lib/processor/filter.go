@@ -66,6 +66,13 @@ func NewFilterConfig() FilterConfig {
 
 //------------------------------------------------------------------------------
 
+// MarshalYAML prints the child condition instead of {}.
+func (f FilterConfig) MarshalYAML() (interface{}, error) {
+	return f.Config, nil
+}
+
+//------------------------------------------------------------------------------
+
 // Filter is a processor that checks each message against a condition and
 // rejects the message if a condition returns false.
 type Filter struct {
