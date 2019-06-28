@@ -216,6 +216,14 @@ func OptSetServiceName(name string) func() {
 	}
 }
 
+// OptOverrideConfigDefaults creates an opt func that allows the provided func
+// to override config struct default values before the user config is parsed.
+func OptOverrideConfigDefaults(fn func(c *config.Type)) func() {
+	return func() {
+		fn(&conf)
+	}
+}
+
 // OptSetVersionStamp creates an opt func for setting the version and date built
 // stamps that Benthos returns via --version and the /version endpoint. The
 // traditional way of setting these values is via the build flags:

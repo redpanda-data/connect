@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.8.3 - 2019-06-28
+
+### Added
+
+- Go API: Add `RunWithOpts` opt `OptOverrideConfigDefaults`.
+
 ### Fixed
 
 - The `filter` and `filter_parts` config sections now correctly marshall when
