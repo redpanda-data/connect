@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.8.2 - 2019-06-28
+
+### Added
+
+- Go API: A new service method `RunWithOpts` has been added in order to
+  accomodate service customisations with opt funcs.
+
 ## 2.8.1 - 2019-06-28
 
 - New interpolation function `error`.

@@ -48,6 +48,7 @@ import (
 	"github.com/Jeffail/benthos/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
 	"github.com/Jeffail/benthos/lib/tracer"
+	"github.com/Jeffail/benthos/lib/types"
 	uconfig "github.com/Jeffail/benthos/lib/util/config"
 )
 
@@ -202,11 +203,36 @@ func registerPluginFlags() {
 
 //------------------------------------------------------------------------------
 
+var conf = config.New()
+
+// OptSetServiceName creates an opt func that allows the default service name
+// config fields such as metrics and logging prefixes to be overidden.
+func OptSetServiceName(name string) func() {
+	return func() {
+		conf.HTTP.RootPath = "/" + name
+		conf.Logger.Prefix = name
+		conf.Logger.StaticFields["@service"] = name
+		conf.Metrics.Prefix = name
+	}
+}
+
+// OptSetVersionStamp creates an opt func for setting the version and date built
+// stamps that Benthos returns via --version and the /version endpoint. The
+// traditional way of setting these values is via the build flags:
+// -X github.com/Jeffail/benthos/lib/service.Version=$(VERSION) and
+// -X github.com/Jeffail/benthos/lib/service.DateBuilt=$(DATE)
+func OptSetVersionStamp(version, dateBuilt string) func() {
+	return func() {
+		Version = version
+		DateBuilt = dateBuilt
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // bootstrap reads cmd args and either parses a config file or prints helper
 // text and exits.
 func bootstrap() (config.Type, []string) {
-	conf := config.New()
-
 	// A list of default config paths to check for if not explicitly defined
 	defaultPaths := []string{
 		"/benthos.yaml",
@@ -358,8 +384,43 @@ func bootstrap() (config.Type, []string) {
 	return conf, lints
 }
 
+//------------------------------------------------------------------------------
+
 type stoppableStreams interface {
 	Stop(timeout time.Duration) error
+}
+
+// ManagerInitFunc is a function to be called once the Benthos service manager,
+// which manages resources shared across all components, is initialised. This is
+// a useful time to add additional resources that might be required for custom
+// plugins. If a non-nil error is returned the service will terminate.
+//
+// EXPERIMENTAL: This type is considered experimental and is therefore subject
+// to change outside of major version releases.
+type ManagerInitFunc func(manager types.Manager, logger log.Modular, stats metrics.Type) error
+
+var onManagerInit ManagerInitFunc = func(manager types.Manager, logger log.Modular, stats metrics.Type) error {
+	return nil
+}
+
+// OptOnManagerInit creates an opt func that allows you to specify a function to
+// be called once the service manager is constructed.
+//
+// EXPERIMENTAL: This func is considered experimental and is therefore subject
+// to change outside of major version releases.
+func OptOnManagerInit(fn ManagerInitFunc) func() {
+	return func() {
+		onManagerInit = fn
+	}
+}
+
+// RunWithOpts runs the Benthos service after first applying opt funcs, which
+// are used for specify service customisations.
+func RunWithOpts(opts ...func()) {
+	for _, opt := range opts {
+		opt()
+	}
+	Run()
 }
 
 // Run the Benthos service, if the pipeline is started successfully then this
@@ -373,7 +434,6 @@ func Run() {
 
 	// Logging and stats aggregation.
 	var logger log.Modular
-
 	// Note: Only log to Stderr if one of our outputs is stdout.
 	if config.Output.Type == "stdout" {
 		logger = log.New(os.Stderr, config.Logger)
@@ -397,8 +457,8 @@ func Run() {
 	}
 
 	// Create our metrics type.
-	var stats metrics.Type
 	var err error
+	var stats metrics.Type
 	stats, err = metrics.New(config.Metrics, metrics.OptSetLogger(logger))
 	for err != nil {
 		logger.Errorf("Failed to connect to metrics aggregator: %v\n", err)
@@ -434,6 +494,10 @@ func Run() {
 	manager, err := manager.New(config.Manager, httpServer, logger, stats)
 	if err != nil {
 		logger.Errorf("Failed to create resource: %v\n", err)
+		os.Exit(1)
+	}
+	if err = onManagerInit(manager, logger, stats); err != nil {
+		logger.Errorf("Failed to initialise manager: %v\n", err)
 		os.Exit(1)
 	}
 
