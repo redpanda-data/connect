@@ -379,16 +379,6 @@ func TestAWK(t *testing.T) {
 			output:  `1545134252`,
 		},
 		{
-			name: "parse metadata datestring 4",
-			metadata: map[string]string{
-				"foostamp": "2018-12-18T11:57:32.123",
-			},
-			codec:   "text",
-			program: `{ foo = foostamp; print timestamp_unix_nano(foo) }`,
-			input:   `foo`,
-			output:  `1545134252123000064`,
-		},
-		{
 			name: "format metadata unix custom 1",
 			metadata: map[string]string{
 				"foostamp": "1545134252",
