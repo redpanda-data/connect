@@ -51,29 +51,29 @@ The enrichment stages can be described as:
 
 A) Perform an HTTP request to `fooserve` with the full message payload as the contents. The response can be one of the following:
 
-1.	200: `{"type":"bar","bar":{"some":"fields"}}`
-2.	200: `{"type":"baz","baz":{"some":"fields"}}`
-3.	400: Bad request
+1. 200: `{"type":"bar","bar":{"some":"fields"}}`
+2. 200: `{"type":"baz","baz":{"some":"fields"}}`
+3. 400: Bad request
 
 ---
 
 B) Perform an HTTP request to `barserve` with the object `bar` taken from the output of stage A response 1. The response can be one of the following:
 
-1.	200: `{"type":"baz","baz":{"some":"fields"}}`
-2.	400: Bad request
+1. 200: `{"type":"baz","baz":{"some":"fields"}}`
+2. 400: Bad request
 
 ---
 
 C) Perform an HTTP request to `bazserve` with the object `baz` taken either from the output of stage A response 2 or stage B response 1. The response can be one of the following:
 
-1.	200: `{"type":"qux","qux":{"some":"fields"}}`
-2.	400: Bad request
+1. 200: `{"type":"qux","qux":{"some":"fields"}}`
+2. 400: Bad request
 
 ---
 
 D) If any previous stage returns a 400 then we perform an HTTP request to `recoverserve` with the full message payload as the contents. The response will always be the following:
 
-1.	200: `{"type":"qux","qux":{"default":"fields"}}`
+1. 200: `{"type":"qux","qux":{"default":"fields"}}`
 
 ---
 

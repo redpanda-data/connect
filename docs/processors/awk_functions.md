@@ -6,10 +6,10 @@ The Benthos [AWK processor](./README.md#awk) comes with custom functions listed 
 Contents
 --------
 
-1.	[JSON Functions](#json-functions)
-2.	[Metadata Functions](#metadata-functions)
-3.	[Date Functions](#date-functions)
-4.	[Logging Functions](#logging-functions)
+1. [JSON Functions](#json-functions)
+2. [Metadata Functions](#metadata-functions)
+3. [Date Functions](#date-functions)
+4. [Logging Functions](#logging-functions)
 
 JSON Functions
 --------------

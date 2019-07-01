@@ -4,8 +4,8 @@ Performance Tuning
 Contents
 --------
 
-1.	[Maximising IO Throughput](#maximising-io-throughput)
-2.	[Maximising CPU Utilisation](#maximising-cpu-utilisation)
+1. [Maximising IO Throughput](#maximising-io-throughput)
+2. [Maximising CPU Utilisation](#maximising-cpu-utilisation)
 
 Maximising IO Throughput
 ------------------------

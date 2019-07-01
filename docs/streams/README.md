@@ -5,9 +5,9 @@ A Benthos stream consists of four components; an input, an optional buffer, proc
 
 Alternatively, Benthos can be run in `--streams` mode, where a single running Benthos instance is able to run multiple entirely isolated streams. Adding streams in this mode can be done in two ways:
 
-1.	[Static configuration files](using_config_files.md) allows you to maintain a directory of static stream configuration files that will be traversed by Benthos.
+1. [Static configuration files](using_config_files.md) allows you to maintain a directory of static stream configuration files that will be traversed by Benthos.
 
-2.	An [HTTP REST API](using_REST_API.md) allows you to dynamically create, read the status of, update, and delete streams at runtime.
+2. An [HTTP REST API](using_REST_API.md) allows you to dynamically create, read the status of, update, and delete streams at runtime.
 
 These two methods can be used in combination, i.e. it's possible to update and delete streams that were created with static files.
 

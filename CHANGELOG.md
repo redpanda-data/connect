@@ -22,7 +22,7 @@ Unreleased
 
 ### Added
 
-- Go API: A new service method `RunWithOpts` has been added in order to accomodate service customisations with opt funcs.
+- Go API: A new service method `RunWithOpts` has been added in order to accommodate service customisations with opt funcs.
 
 2.8.1 - 2019-06-28
 ------------------
@@ -1504,8 +1504,8 @@ Changed
 - New `batch` processor for combining payloads up to a number of bytes.
 - New `conditional` processor, allows you to configure a chain of processors to only be run if the payload passes a `condition`.
 - New `--stream` mode features:
-	- POST verb for `/streams` path now supported.
-	- New `--streams-dir` flag for parsing a directory of stream configs.
+  + POST verb for `/streams` path now supported.
+  + New `--streams-dir` flag for parsing a directory of stream configs.
 
 ### Changed
 

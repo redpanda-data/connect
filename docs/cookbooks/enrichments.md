@@ -201,8 +201,8 @@ Since the dependency graph of our enrichments is simple it would be sufficient t
 
 However, if we configure our enrichments within a [`process_dag`](../processors/README.md#process_dag) processor we can use Benthos to automatically detect our dependency graph, giving us two key benefits:
 
-1.	Enrichments at the same level of a dependency graph (claims and hyperbole) will be executed in parallel.
-2.	When introducing more enrichments to our pipeline the added complexity of resolving the dependency graph is handled automatically by Benthos.
+1. Enrichments at the same level of a dependency graph (claims and hyperbole) will be executed in parallel.
+2. When introducing more enrichments to our pipeline the added complexity of resolving the dependency graph is handled automatically by Benthos.
 
 You can read more about workflows and the advantages of this method [in this article](../workflows.md).
 
