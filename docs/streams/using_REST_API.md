@@ -1,26 +1,23 @@
 Streams Via REST API
 ====================
 
-By using the Benthos `--streams` mode REST API you can dynamically control which
-streams are active at runtime. The full spec for the Benthos streams mode REST
-API can be [found here][http-interface].
+By using the Benthos `--streams` mode REST API you can dynamically control which streams are active at runtime. The full spec for the Benthos streams mode REST API can be [found here](../api/streams.md).
 
-Note that stream configs created and updated using this API do *not* benefit
-from [environment variable interpolation][interpolation] (function interpolation
+Note that stream configs created and updated using this API do *not* benefit from [environment variable interpolation][interpolation](function interpolation
 will still work).
 
-## Walkthrough
+Walkthrough
+-----------
 
 Start by running Benthos in streams mode:
 
-``` bash
+```bash
 $ benthos --streams
 ```
 
-On a separate terminal we can add our first stream `foo` by `POST`ing a JSON or
-YAML config to the `/streams/foo` endpoint:
+On a separate terminal we can add our first stream `foo` by `POST`ing a JSON or YAML config to the `/streams/foo` endpoint:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams/foo -X POST --data-binary @- <<EOF
 input:
   type: http_server
@@ -37,10 +34,9 @@ output:
 EOF
 ```
 
-Now we can check the full set of streams loaded by `GET`ing the `/streams`
-endpoint:
+Now we can check the full set of streams loaded by `GET`ing the `/streams` endpoint:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams | jq '.'
 {
   "foo": {
@@ -53,7 +49,7 @@ $ curl http://localhost:4195/streams | jq '.'
 
 Good, now let's add another stream `bar` the same way:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams/bar -X POST --data-binary @- <<EOF
 input:
   type: kafka
@@ -79,7 +75,7 @@ EOF
 
 And check the set again:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams | jq '.'
 {
   "bar": {
@@ -95,10 +91,9 @@ $ curl http://localhost:4195/streams | jq '.'
 }
 ```
 
-It's also possible to get the configuration of a loaded stream by `GET`ing the
-path `/streams/{id}`:
+It's also possible to get the configuration of a loaded stream by `GET`ing the path `/streams/{id}`:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams/foo | jq '.'
 {
   "active": true,
@@ -126,10 +121,9 @@ $ curl http://localhost:4195/streams/foo | jq '.'
 }
 ```
 
-Next, we might want to update stream `foo` by `PUT`ing a new config to the path
-`/streams/foo`:
+Next, we might want to update stream `foo` by `PUT`ing a new config to the path `/streams/foo`:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams/foo -X PUT --data-binary @- <<EOF
 input:
   type: http_server
@@ -146,10 +140,9 @@ output:
 EOF
 ```
 
-We have removed the memory buffer with this change, let's check that the config
-has actually been updated:
+We have removed the memory buffer with this change, let's check that the config has actually been updated:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams/foo | jq '.'
 {
   "active": true,
@@ -174,16 +167,15 @@ $ curl http://localhost:4195/streams/foo | jq '.'
 }
 ```
 
-Good, we are done with stream `bar` now, so let's delete it by `DELETE`ing the
-`/streams/bar` endpoint:
+Good, we are done with stream `bar` now, so let's delete it by `DELETE`ing the `/streams/bar` endpoint:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams/bar -X DELETE
 ```
 
 And let's `GET` the `/streams` endpoint to see the new set:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams | jq '.'
 {
   "foo": {
@@ -194,14 +186,11 @@ $ curl http://localhost:4195/streams | jq '.'
 }
 ```
 
-Great. Another useful feature is `POST`ing to `/streams`, this allows us to set
-the entire set of streams with a single request.
+Great. Another useful feature is `POST`ing to `/streams`, this allows us to set the entire set of streams with a single request.
 
-The payload is a map of stream ids to configurations and this will become the
-exclusive set of active streams. If there are existing streams that are not on
-the list they will be removed.
+The payload is a map of stream ids to configurations and this will become the exclusive set of active streams. If there are existing streams that are not on the list they will be removed.
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams -X POST --data-binary @- <<EOF
 bar:
   input:
@@ -220,7 +209,7 @@ EOF
 
 Let's check our new set of streams:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams | jq '.'
 {
   "bar": {
@@ -237,5 +226,3 @@ $ curl http://localhost:4195/streams | jq '.'
 ```
 
 Done.
-
-[http-interface]: ../api/streams.md

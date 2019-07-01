@@ -1,10 +1,9 @@
 Logger
 ======
 
-Benthos logging prints to stdout (or stderr if your output is stdout), and is
-formatted as JSON by default.
+Benthos logging prints to stdout (or stderr if your output is stdout), and is formatted as JSON by default.
 
-``` yaml
+```yaml
 logger:
   prefix: benthos
   level: INFO
@@ -14,5 +13,4 @@ logger:
     '@service': benthos
 ```
 
-Possible log levels are `OFF`, `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`,
-`TRACE` and `ALL`,
+Possible log levels are `OFF`, `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE` and `ALL`,

@@ -1,52 +1,48 @@
 Getting Started
 ===============
 
-## Install
+Install
+-------
 
 ### Build With Go
 
 If you have Go version 1.11 or above you can build and install Benthos with:
 
-``` sh
+```sh
 go install github.com/Jeffail/benthos/cmd/benthos
 benthos -c ./yourconfig.yaml
 ```
 
 ### Pull With Docker
 
-If you have docker installed you can pull the latest official Benthos image
-with:
+If you have docker installed you can pull the latest official Benthos image with:
 
-``` sh
+```sh
 docker pull jeffail/benthos
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 ```
 
 ### Download an Archive
 
-Otherwise you can pull an archive containing Benthos from the
-[releases page](https://github.com/Jeffail/benthos/releases).
+Otherwise you can pull an archive containing Benthos from the [releases page](https://github.com/Jeffail/benthos/releases).
 
-``` sh
+```sh
 curl -L https://github.com/Jeffail/benthos/releases/download/${VERSION}/benthos_${VERSION}_linux_amd64.tar.gz | tar xz
 ./benthos -c ./yourconfig.yaml
 ```
 
 ### Serverless
 
-For information about serverless deployments of Benthos check out the serverless
-section [here](./serverless/README.md).
+For information about serverless deployments of Benthos check out the serverless section [here](./serverless/README.md).
 
-## Run
+Run
+---
 
-A Benthos stream pipeline is configured with a single config file, you can
-generate a fresh one with `benthos --print-yaml` or `benthos --print-json`.
+A Benthos stream pipeline is configured with a single config file, you can generate a fresh one with `benthos --print-yaml` or `benthos --print-json`.
 
-The main sections that make up a pipeline are `input`, `buffer`, `pipeline` and
-`output`. If we were to pipe stdin directly to Kafka those sections might look
-like this:
+The main sections that make up a pipeline are `input`, `buffer`, `pipeline` and `output`. If we were to pipe stdin directly to Kafka those sections might look like this:
 
-``` yaml
+```yaml
 input:
   type: stdin
 buffer:
@@ -63,19 +59,15 @@ output:
 
 You can execute this config with:
 
-``` sh
+```sh
 benthos -c ./yourconfig.yaml
 ```
 
-With this config you can write messages in the terminal and they will be sent to
-your chosen Kafka topic, how exciting! You can find out more about Benthos
-configuration files [here](./configuration.md).
+With this config you can write messages in the terminal and they will be sent to your chosen Kafka topic, how exciting! You can find out more about Benthos configuration files [here](./configuration.md).
 
-Next, we might want to add some processing steps in order to mutate the
-messages. For example, we could add a [`text`](./processors/README.md#text)
-processor that converts all text into upper case:
+Next, we might want to add some processing steps in order to mutate the messages. For example, we could add a [`text`](./processors/README.md#text) processor that converts all text into upper case:
 
-``` yaml
+```yaml
 input:
   type: stdin
 buffer:
@@ -92,8 +84,6 @@ output:
     topic: benthos_stream
 ```
 
-Very useful! You can add as many [processing steps](./processors/README.md) as
-you like.
+Very useful! You can add as many [processing steps](./processors/README.md) as you like.
 
-Now that you are a Benthos expert check out all the other
-[cool stuff you can do](./README.md).
+Now that you are a Benthos expert check out all the other [cool stuff you can do](./README.md).

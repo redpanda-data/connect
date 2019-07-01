@@ -1,19 +1,16 @@
 Streams Via Config Files
 ========================
 
-When running Benthos in `--streams` mode it's possible to create streams with
-their own static configurations by setting the `--streams-dir` flag to a
-directory containing a config file for each stream (`/benthos/streams` by
-default).
+When running Benthos in `--streams` mode it's possible to create streams with their own static configurations by setting the `--streams-dir` flag to a directory containing a config file for each stream (`/benthos/streams` by default).
 
-Note that stream configs loaded in this way can benefit from
-[interpolation][interpolation].
+Note that stream configs loaded in this way can benefit from [interpolation](../config_interpolation.md).
 
-## Walkthrough
+Walkthrough
+-----------
 
 Make a directory of stream configs:
 
-``` bash
+```bash
 $ mkdir ./streams
 
 $ cat > ./streams/foo.yaml <<EOF
@@ -56,13 +53,13 @@ EOF
 
 Run Benthos in streams mode, pointing to our directory of streams:
 
-``` bash
+```bash
 $ benthos --streams --streams-dir ./streams
 ```
 
 On a separate terminal you can query the set of streams loaded:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams | jq '.'
 {
   "bar": {
@@ -80,7 +77,7 @@ $ curl http://localhost:4195/streams | jq '.'
 
 You can also query a specific stream to see the loaded configuration:
 
-``` bash
+```bash
 $ curl http://localhost:4195/streams/foo | jq '.'
 {
   "active": true,
@@ -130,8 +127,4 @@ $ curl http://localhost:4195/streams/foo | jq '.'
 }
 ```
 
-There are other endpoints [in the REST API][rest-api] for creating, updating and
-deleting streams.
-
-[rest-api]: using_REST_API.md
-[interpolation]: ../config_interpolation.md
+There are other endpoints [in the REST API](using_REST_API.md) for creating, updating and deleting streams.

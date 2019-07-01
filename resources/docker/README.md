@@ -1,11 +1,9 @@
 Benthos Docker
 ==============
 
-This is a multi stage Dockerfile that builds Benthos and then copies it to a
-scratch image. The image comes with a config that allows you to configure simple
-bridges using [environment variables](../../config/env/README.md) like this:
+This is a multi stage Dockerfile that builds Benthos and then copies it to a scratch image. The image comes with a config that allows you to configure simple bridges using [environment variables](../../config/env/README.md) like this:
 
-``` sh
+```sh
 docker run \
 	-e "INPUT_TYPE=kafka_balanced" \
 	-e "INPUT_KAFKA_ADDRESSES=foo:6379" \
@@ -16,6 +14,6 @@ docker run \
 
 Alternatively, you can run the image using a custom config file:
 
-``` sh
+```sh
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml benthos
 ```

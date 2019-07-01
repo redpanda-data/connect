@@ -1,14 +1,12 @@
 JSON References
 ===============
 
-This directory showcases some of the capabilities of using
-[JSON References][json-refs] in order to build modular Benthos configurations
-that can be run and tested in isolation.
+This directory showcases some of the capabilities of using [JSON References](https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03) in order to build modular Benthos configurations that can be run and tested in isolation.
 
-## Modules
+Modules
+-------
 
-The first config files to check out are within [`./modules`](./modules). These
-config files each perform a single action:
+The first config files to check out are within [`./modules`](./modules). These config files each perform a single action:
 
 ### [`./modules/group.yaml`](./modules/group.yaml)
 
@@ -20,15 +18,13 @@ Removes JSON documents where the content does not contain the string `2`.
 
 ### [`./modules/mutate.yaml`](./modules/mutate.yaml)
 
-Modifies JSON documents by converting the entire contents of the field
-`document.content` to upper case.
+Modifies JSON documents by converting the entire contents of the field `document.content` to upper case.
 
 #### Run
 
-Each of these modules are functioning Benthos configuration files that you can
-run:
+Each of these modules are functioning Benthos configuration files that you can run:
 
-``` sh
+```sh
 $ echo '{"document":{"type":"foo","content":"foo type 1"}}
 {"document":{"type":"bar","content":"bar type 1"}}
 {"document":{"type":"foo","content":"foo type 2"}}
@@ -37,13 +33,12 @@ $ echo '{"document":{"type":"foo","content":"foo type 1"}}
 {"document":{"type":"bar","content":"bar type 2"}}' | benthos -c ./modules/group.yaml
 ```
 
-## Using References
+Using References
+----------------
 
-Finally, let's take a look at our [main configuration](./pipeline.yaml), which
-uses [JSON references][json-refs] in order to extract and combine sections of
-our modules. The config itself is tiny:
+Finally, let's take a look at our [main configuration](./pipeline.yaml), which uses [JSON references](https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03) in order to extract and combine sections of our modules. The config itself is tiny:
 
-``` yaml
+```yaml
 pipeline:
   processors:
   - $ref: ./modules/group.yaml#/pipeline/processors/0
@@ -51,12 +46,9 @@ pipeline:
   - $ref: ./modules/mutate.yaml#/pipeline/processors/0
 ```
 
-And in this case we have simply chained the processor from each module. We might
-instead wish to select the module that is referenced at the moment when we
-execute Benthos, in which case we can set the reference using environment
-variables:
+And in this case we have simply chained the processor from each module. We might instead wish to select the module that is referenced at the moment when we execute Benthos, in which case we can set the reference using environment variables:
 
-``` yaml
+```yaml
 pipeline:
   processors:
   # Always group
@@ -68,8 +60,6 @@ pipeline:
 
 And then we can execute this config with something like:
 
-``` sh
+```sh
 $ MODULE=mutate benthos -c ./pipeline.yaml
 ```
-
-[json-refs]: https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03
