@@ -31,10 +31,19 @@ You can help us out by doing the following before raising a new issue:
 - Try and reduce your enhancement into a single, concise and deliverable request, rather than a general idea
 - Explain your own use cases as the basis of the request
 
+Adding Documentation
+--------------------
+
+Contributions to the Benthos documentation are extremely welcome. Some of the Benthos documentation is generated and should not be edited directly, these documents have a warning at the top underneath the title that explain this.
+
+### Testing Documentation
+
+Once you are happy with your changes you can test them with any markdown renderer. If you install [mkdocs](https://www.mkdocs.org/) then you can also test that the documentation site is formatted correctly with: `mkdocs serve -f ./.mkdocs.yml`.
+
 Adding Features
 ---------------
 
-Pull requests are always welcome. However, before going through the trouble of implementing a change it's worth creating an issue. This allows us to discuss the changes and make sure they are a good fit for the project.
+Pull requests for features are always welcome. However, before going through the trouble of implementing a change it's worth creating an issue. This allows us to discuss the changes and make sure they are a good fit for the project.
 
 Please always make sure a pull request has been:
 
@@ -42,7 +51,7 @@ Please always make sure a pull request has been:
 - Linted with `make lint`
 - Formatted with `make fmt`
 
-And if your change has an impact on documentation then make sure it is generated with `make docs`. If you install [mkdocs](https://www.mkdocs.org/) then you can also test that the documentation is formatted correctly with: `mkdocs serve -f ./.mkdocs.yml`.
+And if your change has an impact on documentation then make sure it is generated with `make docs`.
 
 ### Plugins
 
