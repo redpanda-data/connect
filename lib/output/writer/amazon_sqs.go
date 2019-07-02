@@ -23,6 +23,7 @@ package writer
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -77,6 +78,9 @@ type AmazonSQS struct {
 	session *session.Session
 	sqs     *sqs.SQS
 
+	closer    sync.Once
+	closeChan chan struct{}
+
 	log   log.Modular
 	stats metrics.Type
 }
@@ -88,9 +92,10 @@ func NewAmazonSQS(
 	stats metrics.Type,
 ) (*AmazonSQS, error) {
 	s := &AmazonSQS{
-		conf:  conf,
-		log:   log,
-		stats: stats,
+		conf:      conf,
+		log:       log,
+		stats:     stats,
+		closeChan: make(chan struct{}),
 	}
 
 	var err error
@@ -156,6 +161,11 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 			if wait == backoff.Stop {
 				return err
 			}
+			select {
+			case <-time.After(wait):
+			case <-a.closeChan:
+				return err
+			}
 			continue
 		}
 
@@ -181,7 +191,11 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 			if wait == backoff.Stop {
 				break
 			}
-			time.After(wait)
+			select {
+			case <-time.After(wait):
+			case <-a.closeChan:
+				return err
+			}
 		}
 
 		// add remaining records to batch
@@ -203,6 +217,9 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
 func (a *AmazonSQS) CloseAsync() {
+	a.closer.Do(func() {
+		close(a.closeChan)
+	})
 }
 
 // WaitForClose will block until either the reader is closed or a specified

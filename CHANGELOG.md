@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- SQS output now correctly waits between retry attempts and escapes error loops
+  during shutdown.
+
 ## 2.8.3 - 2019-06-28
 
 ### Added
