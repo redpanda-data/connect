@@ -31,6 +31,12 @@ In order to set non-string values use one of the following typed varieties:
 - `json_set_float(path, value)`
 - `json_set_bool(path, value)`
 
+### `json_delete(path)`
+
+Attempts to delete a JSON field from the input message payload identified by a
+dot separated path. This function is always available even when the `json` codec
+is not used.
+
 ### `create_json_object(key1, val1, key2, val2, ...)`
 
 Generates a valid JSON object of key value pair arguments. The arguments are

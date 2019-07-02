@@ -271,6 +271,27 @@ func TestAWK(t *testing.T) {
 			output:  `not json content`,
 		},
 		{
+			name:    "json delete 1",
+			codec:   "none",
+			program: `{ json_delete("obj.foo") }`,
+			input:   `{"obj":{"foo":"hello world","bar":"baz"}}`,
+			output:  `{"obj":{"bar":"baz"}}`,
+		},
+		{
+			name:    "json delete 2",
+			codec:   "none",
+			program: `{ json_delete("obj.foo") }`,
+			input:   `not json content`,
+			output:  `not json content`,
+		},
+		{
+			name:    "json delete 3",
+			codec:   "none",
+			program: `{ json_delete("obj") }`,
+			input:   `{"obj":{"foo":"hello world"}}`,
+			output:  `{}`,
+		},
+		{
 			name:  "json set, get and set again",
 			codec: "none",
 			program: `{

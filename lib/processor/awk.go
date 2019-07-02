@@ -300,6 +300,10 @@ var awkFunctionsMap = map[string]interface{}{
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
+	"json_delete": func(path string) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
 	"create_json_object": func(vals ...string) string {
 		pairs := map[string]string{}
 		for i := 0; i < len(vals)-1; i += 2 {
@@ -396,7 +400,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			}
 			return gTarget.String(), nil
 		}
-		setJSON := func(path string, v interface{}) (int, error) {
+		getJSON := func() (*gabs.Container, error) {
 			var gPart *gabs.Container
 			var err error
 			jsonPart := mutableJSONParts[i]
@@ -412,7 +416,14 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 				gPart, err = gabs.Consume(jsonPart)
 			}
 			if err != nil {
-				return 0, fmt.Errorf("failed to parse message into json: %v", err)
+				return nil, fmt.Errorf("failed to parse message into json: %v", err)
+			}
+			return gPart, nil
+		}
+		setJSON := func(path string, v interface{}) (int, error) {
+			gPart, err := getJSON()
+			if err != nil {
+				return 0, err
 			}
 			gPart.SetP(v, path)
 			part.SetJSON(gPart.Data())
@@ -429,6 +440,15 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		}
 		customFuncs["json_set_bool"] = func(path string, v bool) (int, error) {
 			return setJSON(path, v)
+		}
+		customFuncs["json_delete"] = func(path string) (int, error) {
+			gObj, err := getJSON()
+			if err != nil {
+				return 0, err
+			}
+			gObj.DeleteP(path)
+			part.SetJSON(gObj.Data())
+			return 0, nil
 		}
 
 		config := &interp.Config{

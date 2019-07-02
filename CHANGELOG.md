@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.8.4 - 2019-07-02
+
+### Added
+
+- New `json_delete` function added to the `awk` processor.
+
 ### Fixed
 
 - SQS output now correctly waits between retry attempts and escapes error loops
