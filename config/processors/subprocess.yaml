@@ -18,6 +18,7 @@ pipeline:
   - type: subprocess
     subprocess:
       args: []
+      max_buffer: 65536
       name: cat
       parts: []
   threads: 1

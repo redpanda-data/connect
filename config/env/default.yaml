@@ -440,6 +440,7 @@ pipeline:
       query: ${PROCESSOR_SQL_QUERY}
       result_codec: ${PROCESSOR_SQL_RESULT_CODEC:none}
     subprocess:
+      max_buffer: ${PROCESSOR_SUBPROCESS_MAX_BUFFER:65536}
       name: ${PROCESSOR_SUBPROCESS_NAME:cat}
     text:
       arg: ${PROCESSOR_TEXT_ARG}

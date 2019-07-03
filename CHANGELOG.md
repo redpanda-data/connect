@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.8.5 - 2019-07-03
+
+### Added
+
+- Field `max_buffer` added to `subprocess` processor.
+
+### Fixed
+
+- The `subprocess` processor now correctly logs and recovers subprocess pipeline
+  related errors (such as exceeding buffer limits.)
+
 ## 2.8.4 - 2019-07-02
 
 ### Added

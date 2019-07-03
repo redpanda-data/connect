@@ -51,8 +51,12 @@ newline.
 
 The subprocess must then either return a line over stdout or stderr. If a
 response is returned over stdout then its contents will replace the message. If
-a response is instead returned from stderr will be logged and the message will
-continue unchanged and will be marked as failed.
+a response is instead returned from stderr it will be logged and the message
+will continue unchanged and will be [marked as failed](../error_handling.md).
+
+The field ` + "`max_buffer`" + ` defines the maximum response size able to be
+read from the subprocess. This value should be set significantly above the real
+expected maximum response size.
 
 #### Subprocess requirements
 
@@ -74,17 +78,19 @@ another line is fed in.`,
 
 // SubprocessConfig contains configuration fields for the Subprocess processor.
 type SubprocessConfig struct {
-	Parts []int    `json:"parts" yaml:"parts"`
-	Name  string   `json:"name" yaml:"name"`
-	Args  []string `json:"args" yaml:"args"`
+	Parts     []int    `json:"parts" yaml:"parts"`
+	Name      string   `json:"name" yaml:"name"`
+	Args      []string `json:"args" yaml:"args"`
+	MaxBuffer int      `json:"max_buffer" yaml:"max_buffer"`
 }
 
 // NewSubprocessConfig returns a SubprocessConfig with default values.
 func NewSubprocessConfig() SubprocessConfig {
 	return SubprocessConfig{
-		Parts: []int{},
-		Name:  "cat",
-		Args:  []string{},
+		Parts:     []int{},
+		Name:      "cat",
+		Args:      []string{},
+		MaxBuffer: bufio.MaxScanTokenSize,
 	}
 }
 
@@ -122,7 +128,7 @@ func NewSubprocess(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
-	if e.subproc, err = newSubprocWrapper(conf.Subprocess.Name, conf.Subprocess.Args, log); err != nil {
+	if e.subproc, err = newSubprocWrapper(conf.Subprocess.Name, conf.Subprocess.Args, e.conf.MaxBuffer, log); err != nil {
 		return nil, err
 	}
 	return e, nil
@@ -131,8 +137,11 @@ func NewSubprocess(
 //------------------------------------------------------------------------------
 
 type subprocWrapper struct {
-	name string
-	args []string
+	name   string
+	args   []string
+	maxBuf int
+
+	logger log.Modular
 
 	cmdMut      sync.Mutex
 	cmdExitChan chan struct{}
@@ -147,10 +156,12 @@ type subprocWrapper struct {
 	closedChan chan struct{}
 }
 
-func newSubprocWrapper(name string, args []string, log log.Modular) (*subprocWrapper, error) {
+func newSubprocWrapper(name string, args []string, maxBuf int, log log.Modular) (*subprocWrapper, error) {
 	s := &subprocWrapper{
 		name:       name,
 		args:       args,
+		maxBuf:     maxBuf,
+		logger:     log,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
@@ -166,6 +177,7 @@ func newSubprocWrapper(name string, args []string, log log.Modular) (*subprocWra
 			select {
 			case <-s.cmdExitChan:
 				log.Warnln("Subprocess exited")
+				s.stop()
 
 				// Flush channels
 				var msgBytes []byte
@@ -182,7 +194,8 @@ func newSubprocWrapper(name string, args []string, log log.Modular) (*subprocWra
 				if len(msgBytes) > 0 {
 					log.Errorln(string(msgBytes))
 				}
-				s.restart()
+
+				s.start()
 			case <-s.closeChan:
 				return
 			}
@@ -239,8 +252,14 @@ func (s *subprocWrapper) start() error {
 		}()
 
 		scanner := bufio.NewScanner(cmdStdout)
+		if s.maxBuf != bufio.MaxScanTokenSize {
+			scanner.Buffer(nil, s.maxBuf)
+		}
 		for scanner.Scan() {
 			stdoutChan <- scanner.Bytes()
+		}
+		if err := scanner.Err(); err != nil {
+			s.logger.Errorf("Failed to read subprocess output: %v\n", err)
 		}
 	}()
 	go func() {
@@ -255,20 +274,22 @@ func (s *subprocWrapper) start() error {
 		}()
 
 		scanner := bufio.NewScanner(cmdStderr)
+		if s.maxBuf != bufio.MaxScanTokenSize {
+			scanner.Buffer(nil, s.maxBuf)
+		}
 		for scanner.Scan() {
 			stderrChan <- scanner.Bytes()
+		}
+		if err := scanner.Err(); err != nil {
+			s.logger.Errorf("Failed to read subprocess error output: %v\n", err)
 		}
 	}()
 
 	s.cmdExitChan = cmdExitChan
 	s.stdoutChan = stdoutChan
 	s.stderrChan = stderrChan
+	s.logger.Infoln("Subprocess started")
 	return nil
-}
-
-func (s *subprocWrapper) restart() error {
-	s.stop()
-	return s.start()
 }
 
 func (s *subprocWrapper) stop() error {
@@ -353,9 +374,6 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 				continue
 			}
 			res, err := e.subproc.Send(p)
-			if err == types.ErrTypeClosed {
-				return err
-			}
 			if err != nil {
 				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
 				e.mErr.Incr(1)

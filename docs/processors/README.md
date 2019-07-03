@@ -1645,6 +1645,7 @@ can override this with the parameter `sslmode=disable` if required.
 type: subprocess
 subprocess:
   args: []
+  max_buffer: 65536
   name: cat
   parts: []
 ```
@@ -1655,8 +1656,12 @@ newline.
 
 The subprocess must then either return a line over stdout or stderr. If a
 response is returned over stdout then its contents will replace the message. If
-a response is instead returned from stderr will be logged and the message will
-continue unchanged and will be marked as failed.
+a response is instead returned from stderr it will be logged and the message
+will continue unchanged and will be [marked as failed](../error_handling.md).
+
+The field `max_buffer` defines the maximum response size able to be
+read from the subprocess. This value should be set significantly above the real
+expected maximum response size.
 
 #### Subprocess requirements
 
