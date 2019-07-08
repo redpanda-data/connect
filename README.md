@@ -124,28 +124,6 @@ the processors within a pipeline.
 
 ## Configuration
 
-The configuration file for a Benthos stream is made up of four main sections;
-input, buffer, pipeline, output. If we were to pipe stdin directly to Kafka it
-would might look like this:
-
-``` yaml
-input:
-  type: stdin
-buffer:
-  type: none
-pipeline:
-  threads: 1
-  processors: []
-output:
-  type: kafka
-  kafka:
-    addresses:
-    - localhost:9092
-    topic: benthos_stream
-```
-
-There are also sections for setting logging, metrics and HTTP server options.
-
 Benthos provides lots of tools for making configuration discovery, debugging and
 organisation easy. You can [read about them here][config-doc].
 
