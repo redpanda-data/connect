@@ -33,9 +33,9 @@ output:
 
 ### Delivery Guarantees
 
-Benthos is crash resilient by default. When connecting to at-least-once sources
-and sinks it guarantees at-least-once delivery without needing to persist
-messages during transit.
+Benthos implements transaction based resiliency with back pressure. When
+connecting to at-least-once sources and sinks it guarantees at-least-once
+delivery without needing to persist messages during transit.
 
 When running a Benthos stream with a [buffer][buffers] there are various options
 for choosing a level of resiliency that meets your needs.
