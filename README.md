@@ -4,32 +4,45 @@
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
 [![Build Status][drone-badge]][drone-url]
 
-Benthos is a high performance and resilient message streaming service, able to
-connect various sources and sinks and perform arbitrary
+Benthos is a high performance and resilient stream processor, able to connect
+various [sources][inputs] and [sinks][outputs] and perform arbitrary
 [actions, transformations and filters][processors] on payloads. It is easy to
 deploy and monitor, and ready to drop into your pipeline either as a static
-binary or a docker image. It can also be used as a [framework][godoc-url] for
-building your own resilient stream processors in Go.
+binary or a docker image.
 
-A Benthos stream consists of four layers: [inputs][inputs], optional
-[buffer][buffers], [processor][processors] workers and [outputs][outputs].
-Inputs and outputs can be combined in a range of broker patterns. It is possible
-to run multiple isolated streams within a single Benthos instance using
-[`--streams` mode][streams-mode], and perform CRUD operations on the running
-streams via [REST endpoints][streams-api].
+Stream pipelines are defined in a single config file, allowing you to declare
+connectors and a list of processing stages:
+
+``` yaml
+input:
+  kafka_balanced:
+    addresses: [ TODO ]
+    topics: [ foo, bar ]
+    consumer_group: foogroup
+
+pipeline:
+  processors:
+  - jmespath:
+      query: '{ message: @, meta: { link_count: length(links) } }'
+
+output:
+  s3:
+    bucket: TODO
+    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+```
 
 ### Delivery Guarantees
 
 Benthos is crash resilient by default. When connecting to at-least-once sources
-and sinks without a buffer it guarantees at-least-once delivery without needing
-to persist messages during transit.
+and sinks it guarantees at-least-once delivery without needing to persist
+messages during transit.
 
 When running a Benthos stream with a [buffer][buffers] there are various options
 for choosing a level of resiliency that meets your needs.
 
 ### Serverless
 
-There are [specialised distributions][serverless] of Benthos for serverless
+There are also [specialised distributions][serverless] of Benthos for serverless
 deployment.
 
 ## Supported Sources & Sinks
@@ -113,7 +126,7 @@ the processors within a pipeline.
 
 The configuration file for a Benthos stream is made up of four main sections;
 input, buffer, pipeline, output. If we were to pipe stdin directly to Kafka it
-would look like this:
+would might look like this:
 
 ``` yaml
 input:
