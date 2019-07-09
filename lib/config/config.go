@@ -198,7 +198,7 @@ func AddExamples(conf *Type, examples ...string) {
 // Read will attempt to read a configuration file path into a structure. Returns
 // an array of lint messages or an error.
 func Read(path string, replaceEnvs bool, config *Type) ([]string, error) {
-	configBytes, err := readWithJSONRefs(path, replaceEnvs)
+	configBytes, err := ReadWithJSONPointers(path, replaceEnvs)
 	if err != nil {
 		return nil, err
 	}

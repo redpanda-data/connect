@@ -35,7 +35,7 @@ import (
 
 type mockProvider map[string][]types.Processor
 
-func (m mockProvider) Provide(ptr string) ([]types.Processor, error) {
+func (m mockProvider) Provide(ptr string, env map[string]string) ([]types.Processor, error) {
 	if procs, ok := m[ptr]; ok {
 		return procs, nil
 	}

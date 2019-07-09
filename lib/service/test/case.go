@@ -41,6 +41,7 @@ type InputPart struct {
 // Case contains a definition of a single Benthos config test case.
 type Case struct {
 	Name             string            `yaml:"name"`
+	Environment      map[string]string `yaml:"environment"`
 	TargetProcessors string            `yaml:"target_processors"`
 	InputBatch       []InputPart       `yaml:"input_batch"`
 	OutputBatches    [][]ConditionsMap `yaml:"output_batches"`
@@ -52,6 +53,7 @@ type Case struct {
 func NewCase() Case {
 	return Case{
 		Name:             "Benthos Test Case",
+		Environment:      map[string]string{},
 		TargetProcessors: "/pipeline/processors",
 		InputBatch:       []InputPart{{Content: "A sample document"}},
 		OutputBatches: [][]ConditionsMap{
@@ -90,13 +92,13 @@ type CaseFailure struct {
 // ProcProvider returns compiled processors extracted from a Benthos config
 // using a JSON Pointer.
 type ProcProvider interface {
-	Provide(jsonPtr string) ([]types.Processor, error)
+	Provide(jsonPtr string, environment map[string]string) ([]types.Processor, error)
 }
 
 // Execute attempts to execute a test case against a Benthos configuration.
 func (c *Case) Execute(provider ProcProvider) (failures []CaseFailure, err error) {
 	var procSet []types.Processor
-	if procSet, err = provider.Provide(c.TargetProcessors); err != nil {
+	if procSet, err = provider.Provide(c.TargetProcessors, c.Environment); err != nil {
 		return nil, fmt.Errorf("failed to initialise processors '%v': %v", c.TargetProcessors, err)
 	}
 

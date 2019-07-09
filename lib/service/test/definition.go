@@ -20,8 +20,6 @@
 
 package test
 
-import "github.com/Jeffail/benthos/lib/types"
-
 //------------------------------------------------------------------------------
 
 // Definition of a group of tests for a Benthos config file.
@@ -37,11 +35,5 @@ func ExampleDefinition() Definition {
 		Cases:    []Case{NewCase()},
 	}
 }
-
-//------------------------------------------------------------------------------
-
-type targetProcessorsCtor func() ([]types.Processor, error)
-
-type targetProcessorsCtors map[string]targetProcessorsCtor
 
 //------------------------------------------------------------------------------

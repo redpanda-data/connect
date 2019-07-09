@@ -64,7 +64,7 @@ func TestConfigRefs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := readWithJSONRefs(rootPath, true)
+	res, err := ReadWithJSONPointers(rootPath, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestConfigRefsRootExpansion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := readWithJSONRefs(rootPath, true)
+	res, err := ReadWithJSONPointers(rootPath, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestJSONPointer(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.path, func(tt *testing.T) {
-			result, err := jsonPointer(test.path, root)
+			result, err := JSONPointer(test.path, root)
 			if len(test.err) > 0 {
 				if err == nil {
 					tt.Errorf("Expected error: %v", test.err)
@@ -294,7 +294,7 @@ func TestLocalRefs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := readWithJSONRefs(rootPath, true)
+	res, err := ReadWithJSONPointers(rootPath, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +333,7 @@ func TestRecursiveRefs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = readWithJSONRefs(fooPath, true)
+	_, err = ReadWithJSONPointers(fooPath, true)
 	if exp, act := ErrExceededRefLimit, err; exp != act {
 		t.Errorf("Wrong error returned: %v != %v", act, exp)
 	}
@@ -357,7 +357,7 @@ func TestConfigNoRefs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := readWithJSONRefs(rootPath, true)
+	res, err := ReadWithJSONPointers(rootPath, true)
 	if err != nil {
 		t.Fatal(err)
 	}
