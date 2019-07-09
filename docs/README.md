@@ -1,8 +1,7 @@
 Documentation
 =============
 
-Welcome to the Benthos documentation site, if you haven't used Benthos before
-check out the [getting started guide](./getting_started.md).
+Welcome to the Benthos documentation site, if you haven't used Benthos before check out the [getting started guide](./getting_started.md).
 
 ## Core Components
 
@@ -22,40 +21,30 @@ check out the [getting started guide](./getting_started.md).
 
 ## Guides
 
-[Configuration](./configuration.md) explains some config file basics, as well as
-tools provided by Benthos that make writing and managing them easier.
+[Configuration](./configuration.md) explains some config file basics, as well as tools provided by Benthos that make writing and managing them easier.
 
-[Config Interpolation](./config_interpolation.md) explains how to incorporate
-environment variables and dynamic values into your config files.
+[Configuration Testing](./configuration_testing.md) explains how to write and execute unit tests for your configuration files.
 
-[Processing Pipelines](./pipeline.md) explains how processing threads are
-orchestrated within Benthos and how to fully utilise them.
+[Config Interpolation](./config_interpolation.md) explains how to incorporate environment variables and dynamic values into your config files.
 
-[Message Batching](./batching.md) explains how multiple part messages and
-message batching works within Benthos.
+[Processing Pipelines](./pipeline.md) explains how processing threads are orchestrated within Benthos and how to fully utilise them.
 
-[Error Handling](./error_handling.md) explains how you can handle errors from
-processors in order to recover or reroute the data.
+[Message Batching](./batching.md) explains how multiple part messages and message batching works within Benthos.
 
-[Performance Tuning](./performance_tuning.md) advises on ways of diagnosing and
-improving the performance of your Benthos pipelines.
+[Error Handling](./error_handling.md) explains how you can handle errors from processors in order to recover or reroute the data.
 
-[Monitoring](./monitoring.md) explains how to hook Benthos up to your choice of
-monitoring and tracing tools.
+[Performance Tuning](./performance_tuning.md) advises on ways of diagnosing and improving the performance of your Benthos pipelines.
 
-[Streams Mode](./streams/README.md) outlines a mode of running Benthos where
-multiple isolated stream pipelines can run in isolation within the same service
-and be managed using a REST API.
+[Monitoring](./monitoring.md) explains how to hook Benthos up to your choice of monitoring and tracing tools.
 
-[Workflows](./workflows.md) explains how Benthos can be configured to easily
-support complex processor flows using automatic DAG resolution.
+[Streams Mode](./streams/README.md) outlines a mode of running Benthos where multiple isolated stream pipelines can run in isolation within the same service and be managed using a REST API.
 
-[Migration](./migration/README.md) outlines migration guides for upgrading to a
-major version release of Benthos.
+[Workflows](./workflows.md) explains how Benthos can be configured to easily support complex processor flows using automatic DAG resolution.
+
+[Migration](./migration/README.md) outlines migration guides for upgrading to a major version release of Benthos.
 
 ## Previous Versions
 
-Previous versions of this documentation can be found for each prior major
-release at:
+Previous versions of this documentation can be found for each prior major release at:
 
 - [Version 1](https://docs.benthos.dev/archive/v1/)
