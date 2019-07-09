@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -169,6 +170,101 @@ func TestProcessFieldDiscard(t *testing.T) {
 	}
 	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
+func TestProcessFieldDiscardWithMetadata(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_field"
+	conf.ProcessField.Path = "foo.bar"
+	conf.ProcessField.Parts = []int{}
+	conf.ProcessField.ResultType = "discard"
+
+	procConf := NewConfig()
+	procConf.Type = TypeMetadata
+	procConf.Metadata.Operator = "set"
+	procConf.Metadata.Key = "foo"
+	procConf.Metadata.Value = "${!content}"
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	procConf = NewConfig()
+	procConf.Type = TypeEncode
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := [][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "encode me", msg[0].Get(0).Metadata().Get("foo"); exp != act {
+		t.Errorf("Unexpected metadata value: %v != %v", act, exp)
+	}
+	if exp, act := "encode me", msg[0].Get(1).Metadata().Get("foo"); exp != act {
+		t.Errorf("Unexpected metadata value: %v != %v", act, exp)
+	}
+}
+
+func TestProcessFieldDiscardMisaligned(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_field"
+	conf.ProcessField.Path = "foo.bar"
+	conf.ProcessField.Parts = []int{}
+	conf.ProcessField.ResultType = "discard"
+
+	procConf := NewConfig()
+	procConf.Type = TypeMetadata
+	procConf.Metadata.Operator = "set"
+	procConf.Metadata.Key = "foo"
+	procConf.Metadata.Value = "${!content}"
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	procConf = NewConfig()
+	procConf.Type = TypeFilterParts
+	procConf.FilterParts.Type = condition.TypeText
+	procConf.FilterParts.Text.Operator = "equals"
+	procConf.FilterParts.Text.Arg = "encode me"
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := [][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "", msg[0].Get(0).Metadata().Get("foo"); exp != act {
+		t.Errorf("Unexpected metadata value: %v != %v", act, exp)
+	}
+	if exp, act := "", msg[0].Get(1).Metadata().Get("foo"); exp != act {
+		t.Errorf("Unexpected metadata value: %v != %v", act, exp)
 	}
 }
 

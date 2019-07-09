@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- The `process_field` processor now propagates metadata to the original payload
+  with the `result_type` set to discard. This allows proper error propagation.
+
 ## 2.8.5 - 2019-07-03
 
 ### Added

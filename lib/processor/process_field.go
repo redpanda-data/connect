@@ -305,6 +305,18 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	defer tracing.FinishSpans(propMsg)
 
 	if p.resultCodec == nil {
+		// With no result codec, if our results are inline with our original
+		// batch we copy the metadata only.
+		if len(targetParts) == resMsg.Len() {
+			for i, index := range targetParts {
+				tPart := payload.Get(index)
+				tPartMeta := tPart.Metadata()
+				resMsg.Get(i).Metadata().Iter(func(k, v string) error {
+					tPartMeta.Set(k, v)
+					return nil
+				})
+			}
+		}
 		p.mBatchSent.Incr(1)
 		p.mSent.Incr(int64(payload.Len()))
 		return
