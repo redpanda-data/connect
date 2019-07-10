@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.8.6 - 2019-07-10
+
+### Added
+
+- All errors caught by processors should now be accessible via the `${!error}`
+  interpolation function, rather than just flagged as `true`.
+
 ### Fixed
 
 - The `process_field` processor now propagates metadata to the original payload

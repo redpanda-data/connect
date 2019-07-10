@@ -301,7 +301,7 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	}
 	if err != nil {
 		result.Iter(func(i int, p types.Part) error {
-			FlagFail(p)
+			FlagErr(p, err)
 			spans[i].LogFields(
 				olog.String("event", "error"),
 				olog.String("type", err.Error()),

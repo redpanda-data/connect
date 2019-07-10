@@ -352,8 +352,9 @@ func (p *ProcessMap) CreateResult(msg types.Message) error {
 	skipped, failed := p.mapper.MapRequests(msg)
 	if msg.Len() == 0 {
 		msg.SetAll(make([]types.Part, originalLen))
+		errMapFailed := errors.New("mapping failed for this message")
 		for _, i := range failed {
-			FlagFail(msg.Get(i))
+			FlagErr(msg.Get(i), errMapFailed)
 		}
 		return nil
 	}

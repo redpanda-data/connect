@@ -310,7 +310,7 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			d.mErr.Incr(1)
 			d.log.Errorf("Failed to unarchive message part: %v\n", err)
 			newMsg.Append(part)
-			FlagFail(newMsg.Get(-1))
+			FlagErr(newMsg.Get(-1), err)
 			span.LogFields(
 				olog.String("event", "error"),
 				olog.String("type", err.Error()),

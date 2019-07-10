@@ -160,7 +160,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.Client.URL, err)
 			responseMsg = msg.Copy()
 			responseMsg.Iter(func(i int, p types.Part) error {
-				FlagFail(p)
+				FlagErr(p, err)
 				return nil
 			})
 		} else {
@@ -201,7 +201,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 					if err == nil {
 						results[index].Set(result.Get(0).Get())
 					} else {
-						FlagFail(results[index])
+						FlagErr(results[index], err)
 					}
 					resChan <- err
 				}

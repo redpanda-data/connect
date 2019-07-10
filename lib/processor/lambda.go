@@ -144,7 +144,7 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			l.log.Errorf("Lambda function '%v' failed: %v\n", l.conf.Lambda.Config.Function, err)
 			responseMsg = msg
 			responseMsg.Iter(func(i int, p types.Part) error {
-				FlagFail(p)
+				FlagErr(p, err)
 				return nil
 			})
 		}
@@ -168,7 +168,7 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 					l.mErr.Incr(1)
 					l.mErrLambda.Incr(1)
 					l.log.Errorf("Lambda parallel request to '%v' failed: %v\n", l.conf.Lambda.Config.Function, err)
-					FlagFail(parts[index])
+					FlagErr(parts[index], err)
 				} else {
 					parts[index] = result.Get(0)
 				}

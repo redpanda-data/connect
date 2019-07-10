@@ -178,7 +178,7 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		p.mErrJSONS.Incr(1)
 		p.mErr.Incr(1)
 		p.log.Debugf("Failed to marshal merged part into json: %v\n", err)
-		FlagFail(newMsg.Get(i))
+		FlagErr(newMsg.Get(i), err)
 	}
 
 	msgs := [1]types.Message{newMsg}

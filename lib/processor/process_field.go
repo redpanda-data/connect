@@ -328,8 +328,9 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 		p.mErr.Incr(1)
 		p.mErrMisalignedBatch.Incr(1)
 		p.log.Errorf("Misaligned processor result batch. Expected %v messages, received %v\n", exp, act)
+		partsErr := fmt.Errorf("mismatched processor result, expected %v, received %v messages", exp, act)
 		payload.Iter(func(i int, p types.Part) error {
-			FlagFail(p)
+			FlagErr(p, partsErr)
 			return nil
 		})
 		return
