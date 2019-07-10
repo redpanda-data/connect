@@ -141,8 +141,7 @@ output_batches:
   - content_equals: "foo bar"
   - content_equals: "bar baz"
     metadata_equals:
-      key: foo
-      value: bar
+      foo: bar
 `,
 			expected: []CaseFailure{
 				{

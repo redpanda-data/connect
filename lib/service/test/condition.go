@@ -59,7 +59,7 @@ func (c *ConditionsMap) UnmarshalYAML(value *yaml.Node) error {
 			}
 			cond = val
 		case "metadata_equals":
-			val := &MetadataEqualsCondition{}
+			val := MetadataEqualsCondition{}
 			if err := v.Decode(&val); err != nil {
 				return fmt.Errorf("line %v: %v", v.Line, err)
 			}
@@ -106,15 +106,14 @@ func (c ContentEqualsCondition) Check(p types.Part) error {
 
 // MetadataEqualsCondition checks whether a metadata keys contents matches a
 // value.
-type MetadataEqualsCondition struct {
-	Key   string `yaml:"key"`
-	Value string `yaml:"value"`
-}
+type MetadataEqualsCondition map[string]string
 
 // Check this condition against a message part.
-func (m *MetadataEqualsCondition) Check(p types.Part) error {
-	if exp, act := m.Value, p.Metadata().Get(m.Key); exp != act {
-		return fmt.Errorf("metadata key '%v' mismatch, expected '%v', got '%v'", m.Key, exp, act)
+func (m MetadataEqualsCondition) Check(p types.Part) error {
+	for k, v := range m {
+		if exp, act := v, p.Metadata().Get(k); exp != act {
+			return fmt.Errorf("metadata key '%v' mismatch, expected '%v', got '%v'", k, exp, act)
+		}
 	}
 	return nil
 }

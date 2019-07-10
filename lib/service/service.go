@@ -45,6 +45,7 @@ import (
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/ratelimit"
+	"github.com/Jeffail/benthos/lib/service/test"
 	"github.com/Jeffail/benthos/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
 	"github.com/Jeffail/benthos/lib/tracer"
@@ -84,6 +85,13 @@ Set whether all fields should be shown when printing configuration via
 	)
 	lintConfig = flag.Bool(
 		"lint", false, "Lint the target configuration file, then exit",
+	)
+	runTests = flag.String(
+		"test", "",
+		`
+Execute unit tests, then exit. The argument may point to a config file, test
+definition or directory. When combining this flag with -lint each tested config
+will also be linted.`[1:],
 	)
 	strictConfig = flag.Bool(
 		"strict", false,
@@ -261,6 +269,14 @@ func bootstrap() (config.Type, []string) {
 	if *showVersion {
 		fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
 		os.Exit(0)
+	}
+
+	if len(*runTests) > 0 {
+		if test.Run(*runTests, *lintConfig) {
+			os.Exit(0)
+		} else {
+			os.Exit(1)
+		}
 	}
 
 	var lints []string

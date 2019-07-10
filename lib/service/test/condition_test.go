@@ -34,8 +34,7 @@ func TestConditionUnmarshal(t *testing.T) {
 tests:
   content_equals: "foo bar"
   metadata_equals:
-    key: foo
-    value: bar`
+    foo: bar`
 
 	tests := struct {
 		Tests ConditionsMap
@@ -49,9 +48,8 @@ tests:
 
 	exp := ConditionsMap{
 		"content_equals": ContentEqualsCondition("foo bar"),
-		"metadata_equals": &MetadataEqualsCondition{
-			Key:   "foo",
-			Value: "bar",
+		"metadata_equals": MetadataEqualsCondition{
+			"foo": "bar",
 		},
 	}
 
@@ -88,8 +86,7 @@ func TestConditionCheckAll(t *testing.T) {
 	conds := ConditionsMap{
 		"content_equals": ContentEqualsCondition("foo bar"),
 		"metadata_equals": &MetadataEqualsCondition{
-			Key:   "foo",
-			Value: "bar",
+			"foo": "bar",
 		},
 	}
 
@@ -178,8 +175,7 @@ func TestContentCondition(t *testing.T) {
 
 func TestMetadataEqualsCondition(t *testing.T) {
 	cond := MetadataEqualsCondition{
-		Key:   "foo",
-		Value: "bar",
+		"foo": "bar",
 	}
 
 	type testCase struct {

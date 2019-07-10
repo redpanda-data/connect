@@ -89,6 +89,11 @@ type CaseFailure struct {
 	Reason   string
 }
 
+// String returns a string representation of the case failure.
+func (c CaseFailure) String() string {
+	return fmt.Sprintf("%v [line %v]: %v", c.Name, c.TestLine, c.Reason)
+}
+
 // ProcProvider returns compiled processors extracted from a Benthos config
 // using a JSON Pointer.
 type ProcProvider interface {
