@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- All http client components output now set a metric `response_timeout`.
+- All http client components output now set a metric `request_timeout`.
 
 ## 2.8.6 - 2019-07-10
 
