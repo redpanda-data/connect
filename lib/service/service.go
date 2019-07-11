@@ -97,7 +97,7 @@ execute all tests found under the directory 'foo'. When combining this flag with
 -lint each tested config will also be linted.`[1:],
 	)
 	generateTests = flag.String(
-		"generate-tests", "",
+		"gen-test", "",
 		`
 EXPERIMENTAL: This flag is subject to change outside of major version releases.
 
