@@ -89,9 +89,22 @@ Set whether all fields should be shown when printing configuration via
 	runTests = flag.String(
 		"test", "",
 		`
+EXPERIMENTAL: This flag is subject to change outside of major version releases.
+
 Execute unit tests, then exit. The argument may point to a config file, test
-definition or directory. When combining this flag with -lint each tested config
-will also be linted.`[1:],
+definition or directory, and supports '...' wildcards, e.g. './foo/...' would
+execute all tests found under the directory 'foo'. When combining this flag with
+-lint each tested config will also be linted.`[1:],
+	)
+	generateTests = flag.String(
+		"generate-tests", "",
+		`
+EXPERIMENTAL: This flag is subject to change outside of major version releases.
+
+Generate unit test definition files for Benthos configs, then exit. The argument
+may point to a config file or directory and supports '...' wildcards, e.g.
+'./foo/...' would generate tests for all Benthos configs found under the
+directory 'foo'.`[1:],
 	)
 	strictConfig = flag.Bool(
 		"strict", false,
@@ -277,6 +290,14 @@ func bootstrap() (config.Type, []string) {
 		} else {
 			os.Exit(1)
 		}
+	}
+
+	if len(*generateTests) > 0 {
+		if err := test.Generate(*generateTests); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to generate config tests: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
 	}
 
 	var lints []string

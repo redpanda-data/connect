@@ -146,10 +146,7 @@ func lintTarget(path string) ([]string, error) {
 
 //------------------------------------------------------------------------------
 
-// Run executes the test command for a specified path. The path can either be a
-// config file, a config files test definition file, a directory, or the special
-// pattern './...'.
-func Run(path string, lint bool) bool {
+func resolveTestPath(path string) (string, bool) {
 	recurse := false
 	if path == "./..." || path == "..." {
 		recurse = true
@@ -159,6 +156,15 @@ func Run(path string, lint bool) bool {
 		recurse = true
 		path = strings.TrimSuffix(path, "/...")
 	}
+	return path, recurse
+}
+
+// Run executes the test command for a specified path. The path can either be a
+// config file, a config files test definition file, a directory, or the
+// wildcard pattern './...'.
+func Run(path string, lint bool) bool {
+	var recurse bool
+	path, recurse = resolveTestPath(path)
 	targets, err := getTestTargets(path, recurse)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to obtain test targets: %v\n", err)

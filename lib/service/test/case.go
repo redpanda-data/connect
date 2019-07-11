@@ -52,14 +52,24 @@ type Case struct {
 // NewCase returns a default test case.
 func NewCase() Case {
 	return Case{
-		Name:             "Benthos Test Case",
+		Name:             "Example test case",
 		Environment:      map[string]string{},
 		TargetProcessors: "/pipeline/processors",
-		InputBatch:       []InputPart{{Content: "A sample document"}},
+		InputBatch: []InputPart{
+			{
+				Content: "A sample document",
+				Metadata: map[string]string{
+					"example_key": "some value",
+				},
+			},
+		},
 		OutputBatches: [][]ConditionsMap{
 			{
 				ConditionsMap{
 					"content_equals": ContentEqualsCondition("A SAMPLE DOCUMENT"),
+					"metadata_equals": MetadataEqualsCondition{
+						"example_key": "some other value now",
+					},
 				},
 			},
 		},
