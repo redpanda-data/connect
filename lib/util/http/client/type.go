@@ -26,6 +26,7 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/textproto"
 	"strings"
@@ -103,15 +104,16 @@ type Type struct {
 	stats metrics.Type
 	mgr   types.Manager
 
-	mCount    metrics.StatCounter
-	mErr      metrics.StatCounter
-	mErrReq   metrics.StatCounter
-	mErrRes   metrics.StatCounter
-	mLimited  metrics.StatCounter
-	mLimitFor metrics.StatCounter
-	mLimitErr metrics.StatCounter
-	mSucc     metrics.StatCounter
-	mLatency  metrics.StatTimer
+	mCount         metrics.StatCounter
+	mErr           metrics.StatCounter
+	mErrReq        metrics.StatCounter
+	mErrReqTimeout metrics.StatCounter
+	mErrRes        metrics.StatCounter
+	mLimited       metrics.StatCounter
+	mLimitFor      metrics.StatCounter
+	mLimitErr      metrics.StatCounter
+	mSucc          metrics.StatCounter
+	mLatency       metrics.StatTimer
 
 	mCodes   map[int]metrics.StatCounter
 	codesMut sync.RWMutex
@@ -172,6 +174,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	h.mCount = h.stats.GetCounter("count")
 	h.mErr = h.stats.GetCounter("error")
 	h.mErrReq = h.stats.GetCounter("error.request")
+	h.mErrReqTimeout = h.stats.GetCounter("request_timeout")
 	h.mErrRes = h.stats.GetCounter("error.response")
 	h.mLimited = h.stats.GetCounter("rate_limit.count")
 	h.mLimitFor = h.stats.GetCounter("rate_limit.total_ms")
@@ -504,6 +507,8 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 				res.Body.Close()
 			}
 		}
+	} else if err, ok := err.(net.Error); ok && err.Timeout() {
+		h.mErrReqTimeout.Incr(1)
 	}
 
 	i, j := 0, numRetries
@@ -544,6 +549,8 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 					res.Body.Close()
 				}
 			}
+		} else if err, ok := err.(net.Error); ok && err.Timeout() {
+			h.mErrReqTimeout.Incr(1)
 		}
 		i++
 	}
