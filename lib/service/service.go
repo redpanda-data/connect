@@ -45,6 +45,7 @@ import (
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/ratelimit"
+	"github.com/Jeffail/benthos/lib/service/test"
 	"github.com/Jeffail/benthos/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
 	"github.com/Jeffail/benthos/lib/tracer"
@@ -84,6 +85,26 @@ Set whether all fields should be shown when printing configuration via
 	)
 	lintConfig = flag.Bool(
 		"lint", false, "Lint the target configuration file, then exit",
+	)
+	runTests = flag.String(
+		"test", "",
+		`
+EXPERIMENTAL: This flag is subject to change outside of major version releases.
+
+Execute unit tests, then exit. The argument may point to a config file, test
+definition or directory, and supports '...' wildcards, e.g. './foo/...' would
+execute all tests found under the directory 'foo'. When combining this flag with
+-lint each tested config will also be linted.`[1:],
+	)
+	generateTests = flag.String(
+		"gen-test", "",
+		`
+EXPERIMENTAL: This flag is subject to change outside of major version releases.
+
+Generate unit test definition files for Benthos configs, then exit. The argument
+may point to a config file or directory and supports '...' wildcards, e.g.
+'./foo/...' would generate tests for all Benthos configs found under the
+directory 'foo'.`[1:],
 	)
 	strictConfig = flag.Bool(
 		"strict", false,
@@ -260,6 +281,22 @@ func bootstrap() (config.Type, []string) {
 	// If the user wants the version we print it.
 	if *showVersion {
 		fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
+		os.Exit(0)
+	}
+
+	if len(*runTests) > 0 {
+		if test.Run(*runTests, *lintConfig) {
+			os.Exit(0)
+		} else {
+			os.Exit(1)
+		}
+	}
+
+	if len(*generateTests) > 0 {
+		if err := test.Generate(*generateTests); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to generate config tests: %v\n", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 

@@ -35,11 +35,10 @@ import (
 
 //------------------------------------------------------------------------------
 
-// readWithJSONRefs takes a config file path, reads the contents, performs a
-// generic parse, replaces any JSON reference fields, marshals the result back
-// into bytes and returns it so that it can be unmarshalled into a typed
-// structure.
-func readWithJSONRefs(path string, replaceEnvs bool) ([]byte, error) {
+// ReadWithJSONPointers takes a config file path, reads the contents, performs a
+// generic parse, resolves any JSON Pointers, marshals the result back into
+// bytes and returns it so that it can be unmarshalled into a typed structure.
+func ReadWithJSONPointers(path string, replaceEnvs bool) ([]byte, error) {
 	configBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -70,10 +69,10 @@ func readWithJSONRefs(path string, replaceEnvs bool) ([]byte, error) {
 
 //------------------------------------------------------------------------------
 
-// jsonPointer parses a JSON pointer path (https://tools.ietf.org/html/rfc6901)
+// JSONPointer parses a JSON pointer path (https://tools.ietf.org/html/rfc6901)
 // and either returns an interface{} containing the result or an error if the
 // referenced item could not be found.
-func jsonPointer(path string, object interface{}) (interface{}, error) {
+func JSONPointer(path string, object interface{}) (interface{}, error) {
 	if len(path) < 1 {
 		return nil, errors.New("failed to resolve JSON pointer: path must not be empty")
 	}
@@ -184,7 +183,7 @@ func expandRefVal(path string, level int, root, v interface{}) (interface{}, err
 		path = rPath
 	}
 	if len(u.Fragment) > 0 {
-		if nextObj, err = jsonPointer(u.Fragment, root); err != nil {
+		if nextObj, err = JSONPointer(u.Fragment, root); err != nil {
 			return nil, fmt.Errorf("failed to resolve $ref fragment '%v' in config '%v': %v", u.Fragment, path, err)
 		}
 	}
