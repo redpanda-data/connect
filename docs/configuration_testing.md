@@ -66,7 +66,7 @@ The field `environment` allows you to define an object of key/value pairs that s
 
 The field `input_batch` lists one or more messages to be fed into the targeted processors as a batch. Each message of the batch may have its raw content defined as well as metadata key/value pairs.
 
-The field `output_batches` lists any number of batches of messages which are expected to result from the target processors. Each batch lists any number of messages, each one defining [`conditions`](#output_conditions) to describe the expected contents of the message.
+The field `output_batches` lists any number of batches of messages which are expected to result from the target processors. Each batch lists any number of messages, each one defining [`conditions`](#output-conditions) to describe the expected contents of the message.
 
 If the number of batches defined does not match the resulting number of batches the test will fail. If the number of messages defined in each batch does not match the number in the resulting batches the test will fail. If any condition of a message fails then the test fails.
 
