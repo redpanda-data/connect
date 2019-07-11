@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- New (experimental) command flags `--test` and `--gen-test` added.
 - All http client components output now set a metric `request_timeout`.
 
 ## 2.8.6 - 2019-07-10
