@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.9.0 - 2019-07-12
+
 ### Added
 
 - New (experimental) command flags `--test` and `--gen-test` added.
