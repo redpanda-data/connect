@@ -439,9 +439,6 @@ type stoppableStreams interface {
 // which manages resources shared across all components, is initialised. This is
 // a useful time to add additional resources that might be required for custom
 // plugins. If a non-nil error is returned the service will terminate.
-//
-// EXPERIMENTAL: This type is considered experimental and is therefore subject
-// to change outside of major version releases.
 type ManagerInitFunc func(manager types.Manager, logger log.Modular, stats metrics.Type) error
 
 var onManagerInit ManagerInitFunc = func(manager types.Manager, logger log.Modular, stats metrics.Type) error {
@@ -450,9 +447,6 @@ var onManagerInit ManagerInitFunc = func(manager types.Manager, logger log.Modul
 
 // OptOnManagerInit creates an opt func that allows you to specify a function to
 // be called once the service manager is constructed.
-//
-// EXPERIMENTAL: This func is considered experimental and is therefore subject
-// to change outside of major version releases.
 func OptOnManagerInit(fn ManagerInitFunc) func() {
 	return func() {
 		onManagerInit = fn

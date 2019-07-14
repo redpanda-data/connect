@@ -80,6 +80,7 @@ func NewHTTPClient(
 		client.OptSetCloseChan(h.closeChan),
 		client.OptSetLogger(h.log),
 		client.OptSetManager(mgr),
+		// TODO: V3 change the metric path to 'client'
 		client.OptSetStats(metrics.Namespaced(h.stats, "output.http_client")),
 	); err != nil {
 		return nil, err

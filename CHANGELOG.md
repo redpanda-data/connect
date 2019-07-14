@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Go API: Removed experimental `Block` functions for the cache and rate limit
+  packages.
+
 ## 2.9.0 - 2019-07-12
 
 ### Added
