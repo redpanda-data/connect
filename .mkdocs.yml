@@ -1,5 +1,5 @@
 site_name: Benthos
-site_description: A stream processor specialising in dull tasks.
+site_description: A stream processor specialising in mundane tasks.
 site_author: Ashley Jeffs
 repo_url: https://github.com/Jeffail/benthos
 google_analytics: ['UA-135959729-3', 'docs.benthos.dev']
@@ -7,8 +7,11 @@ theme:
   name: mkdocs
   custom_dir: resources/mkdocs/custom
   highlightjs: true
+  hljs_style: monokai
   hljs_languages:
     - yaml
+extra_css:
+  - style/blobfish.css
 nav:
   - Home: '/'
   - Cookbooks: 'cookbooks/README.md'

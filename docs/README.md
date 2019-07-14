@@ -1,5 +1,6 @@
-Documentation
-=============
+<p align="center">
+    <a href="https://www.benthos.dev"><img src="./images/logo_dark.svg" style="margin:0;" width="300" alt="Benthos"></a>
+</p>
 
 Welcome to the Benthos documentation site, if you haven't used Benthos before check out the [getting started guide](./getting_started.md).
 
