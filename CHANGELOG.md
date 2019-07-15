@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New rate limit and websocket message fields added to `http_server` input.
+
 ### Changed
 
 - Go API: Removed experimental `Block` functions for the cache and rate limit

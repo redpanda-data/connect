@@ -346,8 +346,11 @@ http_server:
   cert_file: ""
   key_file: ""
   path: /post
+  rate_limit: ""
   timeout: 5s
   ws_path: /post/ws
+  ws_rate_limit_message: ""
+  ws_welcome_message: ""
 ```
 
 Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
@@ -355,6 +358,14 @@ which is enabled when key and cert files are specified.
 
 You can leave the 'address' config field blank in order to use the instance wide
 HTTP server.
+
+The field `rate_limit` allows you to specify an optional
+[`rate_limit` resource](../rate_limits/README.md), which will be
+applied to each HTTP request made and each websocket payload received.
+
+When the rate limit is breached HTTP requests will have a 429 response returned
+with a Retry-After header. Websocket payloads will be dropped and an optional
+response payload will be sent as per `ws_rate_limit_message`.
 
 ### Responses
 
@@ -380,6 +391,13 @@ message of the batch.
 
 Creates a websocket connection, where payloads received on the socket are passed
 through the pipeline as a batch of one message.
+
+You may specify an optional `ws_welcome_message`, which is a static
+payload to be sent to all clients once a websocket connection is first
+established.
+
+It's also possible to specify a `ws_rate_limit_message`, which is a
+static payload to be sent to clients that have triggered the servers rate limit.
 
 ### Metadata
 

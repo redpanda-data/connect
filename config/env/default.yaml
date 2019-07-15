@@ -82,8 +82,11 @@ input:
         cert_file: ${INPUT_HTTP_SERVER_CERT_FILE}
         key_file: ${INPUT_HTTP_SERVER_KEY_FILE}
         path: ${INPUT_HTTP_SERVER_PATH:/post}
+        rate_limit: ${INPUT_HTTP_SERVER_RATE_LIMIT}
         timeout: ${INPUT_HTTP_SERVER_TIMEOUT:5s}
         ws_path: ${INPUT_HTTP_SERVER_WS_PATH:/post/ws}
+        ws_rate_limit_message: ${INPUT_HTTP_SERVER_WS_RATE_LIMIT_MESSAGE}
+        ws_welcome_message: ${INPUT_HTTP_SERVER_WS_WELCOME_MESSAGE}
       inproc: ${INPUT_INPROC}
       kafka:
         addresses:
