@@ -13,6 +13,7 @@ input:
       enabled: false
       password: ""
       username: ""
+    copy_response_headers: false
     drop_on: []
     headers:
       Content-Type: application/octet-stream
@@ -57,6 +58,7 @@ output:
       enabled: false
       password: ""
       username: ""
+    copy_response_headers: false
     drop_on: []
     headers:
       Content-Type: application/octet-stream

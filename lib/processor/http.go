@@ -22,6 +22,7 @@ package processor
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
@@ -64,6 +65,14 @@ In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
 can use the ` + "[`process_map`](#process_map)" + ` or
  ` + "[`process_field`](#process_field)" + ` processors.
+
+### Metadata
+
+If the request returns a response code this processor sets a metadata field
+` + "`http_processor_response_code`" + ` on all resulting messages.
+
+If the field ` + "`copy_response_headers` is set to `true`" + ` then any headers
+in the response will also be set in the resulting message as metadata.
  
 ### Error Handling
 
@@ -155,11 +164,18 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		// Easy, just do a single request.
 		resultMsg, err := h.client.Send(msg)
 		if err != nil {
+			var codeStr string
+			if hErr, ok := err.(types.ErrUnexpectedHTTPRes); ok {
+				codeStr = strconv.Itoa(hErr.Code)
+			}
 			h.mErr.Incr(1)
 			h.mErrHTTP.Incr(1)
 			h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.Client.URL, err)
 			responseMsg = msg.Copy()
 			responseMsg.Iter(func(i int, p types.Part) error {
+				if len(codeStr) > 0 {
+					p.Metadata().Set("http_processor_response_code", codeStr)
+				}
 				FlagErr(p, err)
 				return nil
 			})
@@ -172,6 +188,10 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 					parts[i] = msg.Get(0).Copy()
 				}
 				parts[i].Set(p.Get())
+				p.Metadata().Iter(func(k, v string) error {
+					parts[i].Metadata().Set(k, v)
+					return nil
+				})
 				return nil
 			})
 			responseMsg = message.New(nil)
@@ -200,7 +220,14 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 					}
 					if err == nil {
 						results[index].Set(result.Get(0).Get())
+						result.Get(0).Metadata().Iter(func(k, v string) error {
+							results[index].Metadata().Set(k, v)
+							return nil
+						})
 					} else {
+						if hErr, ok := err.(types.ErrUnexpectedHTTPRes); ok {
+							results[index].Metadata().Set("http_processor_response_code", strconv.Itoa(hErr.Code))
+						}
 						FlagErr(results[index], err)
 					}
 					resChan <- err

@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -322,6 +323,93 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 	}
 }
 
+func TestHTTPClientReceive(t *testing.T) {
+	nTestLoops := 1000
+
+	j := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testStr := fmt.Sprintf("test%v", j)
+		j++
+		w.Header().Set("foo-bar", "baz-0")
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(testStr + "PART-A"))
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.URL = ts.URL + "/testpost"
+
+	h, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", j)
+		resMsg, err := h.Send(nil)
+		if err != nil {
+			t.Error(err)
+		}
+
+		if resMsg.Len() != 1 {
+			t.Fatalf("Wrong # parts: %v != %v", resMsg.Len(), 2)
+		}
+		if exp, actual := testStr+"PART-A", string(resMsg.Get(0).Get()); exp != actual {
+			t.Fatalf("Wrong result, %v != %v", exp, actual)
+		}
+		if exp, act := "", resMsg.Get(0).Metadata().Get("foo-bar"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+	}
+}
+
+func TestHTTPClientReceiveHeaders(t *testing.T) {
+	nTestLoops := 1000
+
+	j := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testStr := fmt.Sprintf("test%v", j)
+		j++
+		w.Header().Set("foo-bar", "baz-0")
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(testStr + "PART-A"))
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.CopyResponseHeaders = true
+
+	h, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", j)
+		resMsg, err := h.Send(nil)
+		if err != nil {
+			t.Error(err)
+		}
+
+		if resMsg.Len() != 1 {
+			t.Fatalf("Wrong # parts: %v != %v", resMsg.Len(), 2)
+		}
+		if exp, actual := testStr+"PART-A", string(resMsg.Get(0).Get()); exp != actual {
+			t.Fatalf("Wrong result, %v != %v", exp, actual)
+		}
+		if exp, act := "baz-0", resMsg.Get(0).Metadata().Get("foo-bar"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+	}
+}
+
 func TestHTTPClientReceiveMultipart(t *testing.T) {
 	nTestLoops := 1000
 
@@ -342,6 +430,7 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 			var err error
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
 				"Content-Type": []string{"application/octet-stream"},
+				"foo-bar":      []string{"baz-" + strconv.Itoa(i), "ignored"},
 			}); err == nil {
 				_, err = io.Copy(part, bytes.NewReader(msg.Get(i).Get()))
 			}
@@ -352,6 +441,7 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 		writer.Close()
 
 		w.Header().Add("Content-Type", writer.FormDataContentType())
+		w.WriteHeader(http.StatusCreated)
 		w.Write(body.Bytes())
 	}))
 	defer ts.Close()
@@ -372,16 +462,101 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 		}
 
 		if resMsg.Len() != 2 {
-			t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 2)
-			return
+			t.Fatalf("Wrong # parts: %v != %v", resMsg.Len(), 2)
 		}
 		if exp, actual := testStr+"PART-A", string(resMsg.Get(0).Get()); exp != actual {
-			t.Errorf("Wrong result, %v != %v", exp, actual)
-			return
+			t.Fatalf("Wrong result, %v != %v", exp, actual)
 		}
 		if exp, actual := testStr+"PART-B", string(resMsg.Get(1).Get()); exp != actual {
-			t.Errorf("Wrong result, %v != %v", exp, actual)
-			return
+			t.Fatalf("Wrong result, %v != %v", exp, actual)
+		}
+		if exp, act := "", resMsg.Get(0).Metadata().Get("foo-bar"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+		if exp, act := "", resMsg.Get(1).Metadata().Get("foo-bar"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+		if exp, act := "201", resMsg.Get(1).Metadata().Get("http_processor_response_code"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+	}
+}
+
+func TestHTTPClientReceiveMultipartWithHeaders(t *testing.T) {
+	nTestLoops := 1000
+
+	j := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testStr := fmt.Sprintf("test%v", j)
+		j++
+		msg := message.New([][]byte{
+			[]byte(testStr + "PART-A"),
+			[]byte(testStr + "PART-B"),
+		})
+
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+
+		for i := 0; i < msg.Len(); i++ {
+			var part io.Writer
+			var err error
+			if part, err = writer.CreatePart(textproto.MIMEHeader{
+				"Content-Type": []string{"application/octet-stream"},
+				"foo-bar":      []string{"baz-" + strconv.Itoa(i), "ignored"},
+			}); err == nil {
+				_, err = io.Copy(part, bytes.NewReader(msg.Get(i).Get()))
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		writer.Close()
+
+		w.Header().Add("Content-Type", writer.FormDataContentType())
+		w.WriteHeader(http.StatusCreated)
+		w.Write(body.Bytes())
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.CopyResponseHeaders = true
+
+	h, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", j)
+		resMsg, err := h.Send(nil)
+		if err != nil {
+			t.Error(err)
+		}
+
+		if resMsg.Len() != 2 {
+			t.Fatalf("Wrong # parts: %v != %v", resMsg.Len(), 2)
+		}
+		if exp, actual := testStr+"PART-A", string(resMsg.Get(0).Get()); exp != actual {
+			t.Fatalf("Wrong result, %v != %v", exp, actual)
+		}
+		if exp, actual := testStr+"PART-B", string(resMsg.Get(1).Get()); exp != actual {
+			t.Fatalf("Wrong result, %v != %v", exp, actual)
+		}
+		if exp, act := "baz-0", resMsg.Get(0).Metadata().Get("foo-bar"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+		if exp, act := "baz-1", resMsg.Get(1).Metadata().Get("foo-bar"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
+		}
+		if exp, act := "201", resMsg.Get(1).Metadata().Get("http_processor_response_code"); exp != act {
+			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
 	}
 }

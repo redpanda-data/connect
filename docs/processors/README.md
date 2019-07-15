@@ -776,6 +776,7 @@ http:
       enabled: false
       password: ""
       username: ""
+    copy_response_headers: false
     drop_on: []
     headers:
       Content-Type: application/octet-stream
@@ -826,6 +827,14 @@ In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
 can use the [`process_map`](#process_map) or
  [`process_field`](#process_field) processors.
+
+### Metadata
+
+If the request returns a response code this processor sets a metadata field
+`http_processor_response_code` on all resulting messages.
+
+If the field `copy_response_headers` is set to `true` then any headers
+in the response will also be set in the resulting message as metadata.
  
 ### Error Handling
 

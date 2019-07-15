@@ -290,6 +290,7 @@ http_client:
     enabled: false
     password: ""
     username: ""
+  copy_response_headers: false
   drop_on: []
   headers:
     Content-Type: application/octet-stream

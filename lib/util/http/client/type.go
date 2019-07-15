@@ -29,6 +29,7 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -49,18 +50,19 @@ import (
 
 // Config is a configuration struct for an HTTP client.
 type Config struct {
-	URL         string            `json:"url" yaml:"url"`
-	Verb        string            `json:"verb" yaml:"verb"`
-	Headers     map[string]string `json:"headers" yaml:"headers"`
-	RateLimit   string            `json:"rate_limit" yaml:"rate_limit"`
-	Timeout     string            `json:"timeout" yaml:"timeout"`
-	Retry       string            `json:"retry_period" yaml:"retry_period"`
-	MaxBackoff  string            `json:"max_retry_backoff" yaml:"max_retry_backoff"`
-	NumRetries  int               `json:"retries" yaml:"retries"`
-	BackoffOn   []int             `json:"backoff_on" yaml:"backoff_on"`
-	DropOn      []int             `json:"drop_on" yaml:"drop_on"`
-	TLS         tls.Config        `json:"tls" yaml:"tls"`
-	auth.Config `json:",inline" yaml:",inline"`
+	URL                 string            `json:"url" yaml:"url"`
+	Verb                string            `json:"verb" yaml:"verb"`
+	Headers             map[string]string `json:"headers" yaml:"headers"`
+	CopyResponseHeaders bool              `json:"copy_response_headers" yaml:"copy_response_headers"`
+	RateLimit           string            `json:"rate_limit" yaml:"rate_limit"`
+	Timeout             string            `json:"timeout" yaml:"timeout"`
+	Retry               string            `json:"retry_period" yaml:"retry_period"`
+	MaxBackoff          string            `json:"max_retry_backoff" yaml:"max_retry_backoff"`
+	NumRetries          int               `json:"retries" yaml:"retries"`
+	BackoffOn           []int             `json:"backoff_on" yaml:"backoff_on"`
+	DropOn              []int             `json:"drop_on" yaml:"drop_on"`
+	TLS                 tls.Config        `json:"tls" yaml:"tls"`
+	auth.Config         `json:",inline" yaml:",inline"`
 }
 
 // NewConfig creates a new Config with default values.
@@ -71,15 +73,16 @@ func NewConfig() Config {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
-		RateLimit:  "",
-		Timeout:    "5s",
-		Retry:      "1s",
-		MaxBackoff: "300s",
-		NumRetries: 3,
-		BackoffOn:  []int{429},
-		DropOn:     []int{},
-		TLS:        tls.NewConfig(),
-		Config:     auth.NewConfig(),
+		CopyResponseHeaders: false,
+		RateLimit:           "",
+		Timeout:             "5s",
+		Retry:               "1s",
+		MaxBackoff:          "300s",
+		NumRetries:          3,
+		BackoffOn:           []int{429},
+		DropOn:              []int{},
+		TLS:                 tls.NewConfig(),
+		Config:              auth.NewConfig(),
 	}
 }
 
@@ -407,8 +410,17 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 				return
 			}
 
-			resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
+			index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
 			bufferIndex += bytesRead
+
+			if h.conf.CopyResponseHeaders {
+				meta := resMsg.Get(index).Metadata()
+				for k, values := range p.Header {
+					if len(values) > 0 {
+						meta.Set(strings.ToLower(k), values[0])
+					}
+				}
+			}
 		}
 	} else {
 		var bytesRead int64
@@ -420,9 +432,21 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 		}
 		if bytesRead > 0 {
 			resMsg = message.New([][]byte{buffer.Bytes()[:bytesRead]})
+			if h.conf.CopyResponseHeaders {
+				meta := resMsg.Get(0).Metadata()
+				for k, values := range res.Header {
+					if len(values) > 0 {
+						meta.Set(strings.ToLower(k), values[0])
+					}
+				}
+			}
 		}
 	}
 
+	resMsg.Iter(func(i int, p types.Part) error {
+		p.Metadata().Set("http_processor_response_code", strconv.Itoa(res.StatusCode))
+		return nil
+	})
 	res.Body.Close()
 	return
 }
