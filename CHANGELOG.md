@@ -10,8 +10,8 @@ All notable changes to this project will be documented in this file.
 - New rate limit and websocket message fields added to `http_server` input.
 - The `http` processor now optionally copies headers from response into
   resulting message metadata.
-- The `http` processor now sets a `http_processor_response_code` metadata value
-  into resulting messages.
+- The `http` processor now sets a `http_status_code` metadata value into
+  resulting messages (provided one is received.)
 
 ### Changed
 

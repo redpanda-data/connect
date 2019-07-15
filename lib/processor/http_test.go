@@ -69,7 +69,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	if !HasFailed(msgs[0].Get(0)) {
 		t.Error("Failed message part not flagged")
 	}
-	if exp, act := "403", msgs[0].Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+	if exp, act := "403", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 
@@ -111,7 +111,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	} else if exp, act := "", msgs[0].Get(0).Metadata().Get("foobar"); exp != act {
 		t.Errorf("Wrong metadata value: %v != %v", act, exp)
@@ -124,7 +124,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	} else if exp, act := "", msgs[0].Get(0).Metadata().Get("foobar"); exp != act {
 		t.Errorf("Wrong metadata value: %v != %v", act, exp)
@@ -142,7 +142,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	} else if exp, act := "bar", msgs[0].Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Metadata not preserved: %v != %v", act, exp)
-	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	} else if exp, act := "", msgs[0].Get(0).Metadata().Get("foobar"); exp != act {
 		t.Errorf("Wrong metadata value: %v != %v", act, exp)
@@ -183,7 +183,7 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	} else if exp, act := "baz", msgs[0].Get(0).Metadata().Get("foobar"); exp != act {
 		t.Errorf("Wrong metadata value: %v != %v", act, exp)
@@ -227,7 +227,7 @@ func TestHTTPClientParallel(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	} else if exp, act := "bar", msgs[0].Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Metadata not preserved: %v != %v", act, exp)
-	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 }
@@ -279,7 +279,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 	if !HasFailed(msgs[0].Get(2)) {
 		t.Error("Expected failed flag")
 	}
-	if exp, act := "403", msgs[0].Get(2).Metadata().Get("http_processor_response_code"); exp != act {
+	if exp, act := "403", msgs[0].Get(2).Metadata().Get("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 	for _, i := range []int{0, 1, 3, 4} {
@@ -289,7 +289,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 		if HasFailed(msgs[0].Get(i)) {
 			t.Error("Did not expect failed flag")
 		}
-		if exp, act := "200", msgs[0].Get(i).Metadata().Get("http_processor_response_code"); exp != act {
+		if exp, act := "200", msgs[0].Get(i).Metadata().Get("http_status_code"); exp != act {
 			t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 		}
 	}

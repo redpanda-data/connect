@@ -32,6 +32,8 @@ import (
 )
 
 func TestMemoryBasic(t *testing.T) {
+	t.Skip("DEPRECATED")
+
 	n := 100
 
 	block := NewMemory(MemoryConfig{Limit: 100000})
@@ -67,6 +69,8 @@ func TestMemoryBasic(t *testing.T) {
 }
 
 func TestMemoryBacklogCounter(t *testing.T) {
+	t.Skip("DEPRECATED")
+
 	block := NewMemory(MemoryConfig{Limit: 100000})
 
 	if _, err := block.PushMessage(message.New(
@@ -112,6 +116,8 @@ func TestMemoryBacklogCounter(t *testing.T) {
 }
 
 func TestMemoryNearLimit(t *testing.T) {
+	t.Skip("DEPRECATED")
+
 	n, iter := 50, 5
 
 	block := NewMemory(MemoryConfig{Limit: 2285})
@@ -150,6 +156,8 @@ func TestMemoryNearLimit(t *testing.T) {
 }
 
 func TestMemoryLoopingRandom(t *testing.T) {
+	t.Skip("DEPRECATED")
+
 	n, iter := 50, 5
 
 	block := NewMemory(MemoryConfig{Limit: 8000})
@@ -191,6 +199,8 @@ func TestMemoryLoopingRandom(t *testing.T) {
 }
 
 func TestMemoryLockStep(t *testing.T) {
+	t.Skip("DEPRECATED")
+
 	n := 10000
 
 	block := NewMemory(MemoryConfig{Limit: 1000})
@@ -237,6 +247,8 @@ func TestMemoryLockStep(t *testing.T) {
 }
 
 func TestMemoryClose(t *testing.T) {
+	t.Skip("DEPRECATED")
+
 	// Test reader block
 
 	block := NewMemory(MemoryConfig{Limit: 20})
@@ -305,6 +317,8 @@ func TestMemoryClose(t *testing.T) {
 }
 
 func TestMemoryRejectLargeMessage(t *testing.T) {
+	t.Skip("DEPRECATED")
+
 	tMsg := message.New(make([][]byte, 1))
 	tMsg.Get(0).Set([]byte("hello world this message is too long!"))
 

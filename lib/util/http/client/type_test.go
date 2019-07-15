@@ -360,7 +360,7 @@ func TestHTTPClientReceive(t *testing.T) {
 		if exp, act := "", resMsg.Get(0).Metadata().Get("foo-bar"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
-		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_status_code"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
 	}
@@ -404,7 +404,7 @@ func TestHTTPClientReceiveHeaders(t *testing.T) {
 		if exp, act := "baz-0", resMsg.Get(0).Metadata().Get("foo-bar"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
-		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_status_code"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
 	}
@@ -473,13 +473,13 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 		if exp, act := "", resMsg.Get(0).Metadata().Get("foo-bar"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
-		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_status_code"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
 		if exp, act := "", resMsg.Get(1).Metadata().Get("foo-bar"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
-		if exp, act := "201", resMsg.Get(1).Metadata().Get("http_processor_response_code"); exp != act {
+		if exp, act := "201", resMsg.Get(1).Metadata().Get("http_status_code"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
 	}
@@ -549,13 +549,13 @@ func TestHTTPClientReceiveMultipartWithHeaders(t *testing.T) {
 		if exp, act := "baz-0", resMsg.Get(0).Metadata().Get("foo-bar"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
-		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_processor_response_code"); exp != act {
+		if exp, act := "201", resMsg.Get(0).Metadata().Get("http_status_code"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
 		if exp, act := "baz-1", resMsg.Get(1).Metadata().Get("foo-bar"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
-		if exp, act := "201", resMsg.Get(1).Metadata().Get("http_processor_response_code"); exp != act {
+		if exp, act := "201", resMsg.Get(1).Metadata().Get("http_status_code"); exp != act {
 			t.Fatalf("Wrong metadata value: %v != %v", act, exp)
 		}
 	}

@@ -444,7 +444,7 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 	}
 
 	resMsg.Iter(func(i int, p types.Part) error {
-		p.Metadata().Set("http_processor_response_code", strconv.Itoa(res.StatusCode))
+		p.Metadata().Set("http_status_code", strconv.Itoa(res.StatusCode))
 		return nil
 	})
 	res.Body.Close()

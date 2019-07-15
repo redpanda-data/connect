@@ -831,7 +831,7 @@ can use the [`process_map`](#process_map) or
 ### Metadata
 
 If the request returns a response code this processor sets a metadata field
-`http_processor_response_code` on all resulting messages.
+`http_status_code` on all resulting messages.
 
 If the field `copy_response_headers` is set to `true` then any headers
 in the response will also be set in the resulting message as metadata.

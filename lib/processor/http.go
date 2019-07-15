@@ -69,7 +69,7 @@ can use the ` + "[`process_map`](#process_map)" + ` or
 ### Metadata
 
 If the request returns a response code this processor sets a metadata field
-` + "`http_processor_response_code`" + ` on all resulting messages.
+` + "`http_status_code`" + ` on all resulting messages.
 
 If the field ` + "`copy_response_headers` is set to `true`" + ` then any headers
 in the response will also be set in the resulting message as metadata.
@@ -174,7 +174,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			responseMsg = msg.Copy()
 			responseMsg.Iter(func(i int, p types.Part) error {
 				if len(codeStr) > 0 {
-					p.Metadata().Set("http_processor_response_code", codeStr)
+					p.Metadata().Set("http_status_code", codeStr)
 				}
 				FlagErr(p, err)
 				return nil
@@ -226,7 +226,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 						})
 					} else {
 						if hErr, ok := err.(types.ErrUnexpectedHTTPRes); ok {
-							results[index].Metadata().Set("http_processor_response_code", strconv.Itoa(hErr.Code))
+							results[index].Metadata().Set("http_status_code", strconv.Itoa(hErr.Code))
 						}
 						FlagErr(results[index], err)
 					}
