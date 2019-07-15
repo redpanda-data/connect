@@ -8,11 +8,11 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 a, a code {
-    color: #8bf900;
+    color: #60daff;
 }
 
 a:hover, a:focus, a code:hover, a code:focus {
-    color: #c6ff80;
+    color: #4ba9c5;
 }
 
 pre, .rst-content tt, code {
