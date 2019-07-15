@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.9.1 - 2019-07-15
+
 ### Added
 
 - New rate limit and websocket message fields added to `http_server` input.
