@@ -45,7 +45,7 @@ func isBenthosConfig(path string) (bool, error) {
 	return false, nil
 }
 
-func generateDefinitions(targetPath string, recurse bool) error {
+func generateDefinitions(targetPath, testSuffix string, recurse bool) error {
 	defaultDefBytes, err := yaml.Marshal(ExampleDefinition())
 	if err != nil {
 		return fmt.Errorf("failed to generate default test definition: %v", err)
@@ -57,7 +57,7 @@ func generateDefinitions(targetPath string, recurse bool) error {
 		return fmt.Errorf("failed to inspect target file '%v': %v", targetPath, err)
 	}
 	if !info.IsDir() {
-		_, definitionPath := getBothPaths(targetPath)
+		_, definitionPath := getBothPaths(targetPath, testSuffix)
 		if _, err = os.Stat(definitionPath); err != nil {
 			if !os.IsNotExist(err) {
 				return fmt.Errorf("unable to access existing test definition file '%v': %v", definitionPath, err)
@@ -82,7 +82,7 @@ func generateDefinitions(targetPath string, recurse bool) error {
 			return filepath.SkipDir
 		}
 
-		configPath, definitionPath := getBothPaths(path)
+		configPath, definitionPath := getBothPaths(path, testSuffix)
 		if _, exists := seenConfigs[configPath]; exists {
 			return nil
 		}
@@ -112,10 +112,10 @@ func generateDefinitions(targetPath string, recurse bool) error {
 
 // Generate executes the generate-tests command for a specified path. The path
 // can either be a config file, a directory, or the special pattern './...'.
-func Generate(path string) error {
+func Generate(path, testSuffix string) error {
 	var recurse bool
 	path, recurse = resolveTestPath(path)
-	return generateDefinitions(path, recurse)
+	return generateDefinitions(path, testSuffix, recurse)
 }
 
 //------------------------------------------------------------------------------

@@ -225,11 +225,13 @@ func registerPluginFlags() {
 //------------------------------------------------------------------------------
 
 var conf = config.New()
+var testSuffix = "_benthos_test"
 
 // OptSetServiceName creates an opt func that allows the default service name
 // config fields such as metrics and logging prefixes to be overidden.
 func OptSetServiceName(name string) func() {
 	return func() {
+		testSuffix = fmt.Sprintf("_%v_test", name)
 		conf.HTTP.RootPath = "/" + name
 		conf.Logger.Prefix = name
 		conf.Logger.StaticFields["@service"] = name
@@ -285,7 +287,7 @@ func bootstrap() (config.Type, []string) {
 	}
 
 	if len(*runTests) > 0 {
-		if test.Run(*runTests, *lintConfig) {
+		if test.Run(*runTests, testSuffix, *lintConfig) {
 			os.Exit(0)
 		} else {
 			os.Exit(1)
@@ -293,7 +295,7 @@ func bootstrap() (config.Type, []string) {
 	}
 
 	if len(*generateTests) > 0 {
-		if err := test.Generate(*generateTests); err != nil {
+		if err := test.Generate(*generateTests, testSuffix); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to generate config tests: %v\n", err)
 			os.Exit(1)
 		}

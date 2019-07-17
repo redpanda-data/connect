@@ -68,7 +68,7 @@ tests:
 	}
 	defaultDef := string(defaultDefBytes)
 
-	if err = Generate(testDir); err != nil {
+	if err = Generate(testDir, "_benthos_test"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -116,7 +116,7 @@ pipeline:
 	}
 	defaultDef := string(defaultDefBytes)
 
-	if err = Generate(filepath.Join(testDir, "foo.yaml")); err != nil {
+	if err = Generate(filepath.Join(testDir, "foo.yaml"), "_benthos_test"); err != nil {
 		t.Fatal(err)
 	}
 

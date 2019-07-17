@@ -94,7 +94,7 @@ func TestGetBothPaths(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("Test case %v", i), func(tt *testing.T) {
-			cPath, dPath := getBothPaths(test.input)
+			cPath, dPath := getBothPaths(test.input, "_benthos_test")
 			if exp, act := test.output[0], cPath; exp != act {
 				tt.Errorf("Wrong config path: %v != %v", act, exp)
 			}
@@ -115,7 +115,7 @@ func TestGetTargetsSingle(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	paths, err := getTestTargets(filepath.Join(testDir, "foo.yaml"), false)
+	paths, err := getTestTargets(filepath.Join(testDir, "foo.yaml"), "_benthos_test", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestGetTargetsSingle(t *testing.T) {
 		t.Errorf("Wrong path returned: %v != %v", act, exp)
 	}
 
-	paths, err = getTestTargets(filepath.Join(testDir, "foo_benthos_test.yaml"), false)
+	paths, err = getTestTargets(filepath.Join(testDir, "foo_benthos_test.yaml"), "_benthos_test", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,13 +148,13 @@ func TestGetTargetsSingleError(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	if _, err = getTestTargets(filepath.Join(testDir, "foo.yaml"), false); err == nil {
+	if _, err = getTestTargets(filepath.Join(testDir, "foo.yaml"), "_benthos_test", false); err == nil {
 		t.Error("Expected error")
 	}
-	if _, err = getTestTargets(filepath.Join(testDir, "bar_benthos_test.yaml"), false); err == nil {
+	if _, err = getTestTargets(filepath.Join(testDir, "bar_benthos_test.yaml"), "_benthos_test", false); err == nil {
 		t.Error("Expected error")
 	}
-	if _, err = getTestTargets("/does/not/exist/foo.yaml", false); err == nil {
+	if _, err = getTestTargets("/does/not/exist/foo.yaml", "_benthos_test", false); err == nil {
 		t.Error("Expected error")
 	}
 }
@@ -175,7 +175,7 @@ func TestGetTargetsDir(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	paths, err := getTestTargets(testDir, false)
+	paths, err := getTestTargets(testDir, "_benthos_test", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestGetTargetsDir(t *testing.T) {
 		t.Errorf("Wrong path returned: %v != %v", act, exp)
 	}
 
-	paths, err = getTestTargets(testDir, true)
+	paths, err = getTestTargets(testDir, "_benthos_test", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestGetTargetsDirError(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	if _, err = getTestTargets(testDir, false); err == nil {
+	if _, err = getTestTargets(testDir, "_benthos_test", false); err == nil {
 		t.Error("Expected error")
 	}
 }
@@ -236,7 +236,7 @@ func TestGetTargetsDirRecurseError(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	if _, err = getTestTargets(testDir, true); err == nil {
+	if _, err = getTestTargets(testDir, "_benthos_test", true); err == nil {
 		t.Error("Expected error")
 	}
 }
@@ -280,15 +280,15 @@ tests:
 	}
 	defer os.RemoveAll(testDir)
 
-	if !Run(filepath.Join(testDir, "foo.yaml"), false) {
+	if !Run(filepath.Join(testDir, "foo.yaml"), "_benthos_test", false) {
 		t.Error("Unexpected result")
 	}
 
-	if Run(filepath.Join(testDir, "foo.yaml"), true) {
+	if Run(filepath.Join(testDir, "foo.yaml"), "_benthos_test", true) {
 		t.Error("Unexpected result")
 	}
 
-	if Run(testDir, true) {
+	if Run(testDir, "_benthos_test", true) {
 		t.Error("Unexpected result")
 	}
 }

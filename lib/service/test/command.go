@@ -34,29 +34,29 @@ import (
 
 //------------------------------------------------------------------------------
 
-func getBothPaths(fullPath string) (configPath string, definitionPath string) {
+func getBothPaths(fullPath, testSuffix string) (configPath string, definitionPath string) {
 	path, file := filepath.Split(fullPath)
 	ext := filepath.Ext(file)
 	filename := strings.TrimSuffix(file, ext)
-	if strings.HasSuffix(filename, "_benthos_test") {
+	if strings.HasSuffix(filename, testSuffix) {
 		definitionPath = filepath.Clean(fullPath)
-		configPath = filepath.Join(path, strings.TrimSuffix(filename, "_benthos_test")+ext)
+		configPath = filepath.Join(path, strings.TrimSuffix(filename, testSuffix)+ext)
 	} else {
 		configPath = filepath.Clean(fullPath)
-		definitionPath = filepath.Join(path, filename+"_benthos_test"+ext)
+		definitionPath = filepath.Join(path, filename+testSuffix+ext)
 	}
 	return
 }
 
 // Searches for test definition targets.
-func getTestTargets(targetPath string, recurse bool) ([]string, error) {
+func getTestTargets(targetPath, testSuffix string, recurse bool) ([]string, error) {
 	targetPath = filepath.Clean(targetPath)
 	info, err := os.Stat(targetPath)
 	if err != nil {
 		return nil, err
 	}
 	if !info.IsDir() {
-		configPath, definitionPath := getBothPaths(targetPath)
+		configPath, definitionPath := getBothPaths(targetPath, testSuffix)
 		if _, err = os.Stat(configPath); err != nil {
 			return nil, fmt.Errorf("unable to access target config file '%v': %v", configPath, err)
 		}
@@ -78,7 +78,7 @@ func getTestTargets(targetPath string, recurse bool) ([]string, error) {
 			return filepath.SkipDir
 		}
 
-		configPath, definitionPath := getBothPaths(path)
+		configPath, definitionPath := getBothPaths(path, testSuffix)
 		if _, exists := pathMap[definitionPath]; exists {
 			return nil
 		}
@@ -109,8 +109,8 @@ func getTestTargets(targetPath string, recurse bool) ([]string, error) {
 }
 
 // Executes a test definition and either returns fails or returns an error.
-func testTarget(path string) ([]string, error) {
-	confPath, _ := getBothPaths(path)
+func testTarget(path, testSuffix string) ([]string, error) {
+	confPath, _ := getBothPaths(path, testSuffix)
 	var definition Definition
 	defBytes, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -134,8 +134,8 @@ func testTarget(path string) ([]string, error) {
 
 // Lints the config target of a test definition and either returns linting
 // errors (false for failed) or returns an error.
-func lintTarget(path string) ([]string, error) {
-	confPath, _ := getBothPaths(path)
+func lintTarget(path, testSuffix string) ([]string, error) {
+	confPath, _ := getBothPaths(path, testSuffix)
 	dummyConf := config.New()
 	lints, err := config.Read(confPath, true, &dummyConf)
 	if err != nil {
@@ -162,10 +162,10 @@ func resolveTestPath(path string) (string, bool) {
 // Run executes the test command for a specified path. The path can either be a
 // config file, a config files test definition file, a directory, or the
 // wildcard pattern './...'.
-func Run(path string, lint bool) bool {
+func Run(path, testSuffix string, lint bool) bool {
 	var recurse bool
 	path, recurse = resolveTestPath(path)
-	targets, err := getTestTargets(path, recurse)
+	targets, err := getTestTargets(path, testSuffix, recurse)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to obtain test targets: %v\n", err)
 		return false
@@ -176,12 +176,12 @@ func Run(path string, lint bool) bool {
 		var lints []string
 		var fails []string
 		if lint {
-			if lints, err = lintTarget(target); err != nil {
+			if lints, err = lintTarget(target, testSuffix); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to execute test target '%v': %v\n", target, err)
 				return false
 			}
 		}
-		if fails, err = testTarget(target); err != nil {
+		if fails, err = testTarget(target, testSuffix); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute test target '%v': %v\n", target, err)
 			return false
 		}
