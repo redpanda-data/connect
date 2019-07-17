@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.9.2 - 2019-07-17
+
+### Changed
+
+- Go API: It's now possible to specify a custom config unit test file path
+  suffix.
+
 ## 2.9.1 - 2019-07-15
 
 ### Added
