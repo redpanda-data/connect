@@ -171,7 +171,7 @@ rename:
 
 These labels will only be injected into metrics registered without pre-existing
 labels. Therefore it's currently not possible to combine labels registered from
-the [`metric` processor](processors/README.md#metric) with labels
+the [`metric` processor](../processors/README.md#metric) with labels
 set via renaming.
 
 ### Debugging
