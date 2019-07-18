@@ -30,6 +30,7 @@ nav:
     - 'Getting Started': 'getting_started.md'
     - 'Serverless': 'serverless/README.md'
     - 'Configuration': 'configuration.md'
+    - 'Configuration Testing': 'configuration_testing.md'
     - 'Config Interpolation': 'config_interpolation.md'
     - 'Processing Pipelines': 'pipeline.md'
     - 'Message Batching': 'batching.md'

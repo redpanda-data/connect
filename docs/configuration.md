@@ -46,6 +46,11 @@ This is powerful but can potentially lead to large and cumbersome configuration
 files. This document outlines tooling provided by Benthos to help with writing
 and managing these more complex configuration files.
 
+### Testing
+
+For guidance on how to write and run unit tests for your configuration files
+read [this guide](configuration_testing.md).
+
 ## Contents
 
 - [Concise Configuration](#concise-configuration)
