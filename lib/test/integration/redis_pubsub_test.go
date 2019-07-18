@@ -79,6 +79,9 @@ func TestRedisPubSubIntegration(t *testing.T) {
 	t.Run("TestRedisPubSubSinglePart", func(te *testing.T) {
 		testRedisPubSubSinglePart(url, te)
 	})
+	t.Run("TestRedisPubSubSinglePartGlobs", func(te *testing.T) {
+		testRedisPubSubSinglePartGlobs(url, te)
+	})
 	t.Run("TestRedisPubSubMultiplePart", func(te *testing.T) {
 		testRedisPubSubMultiplePart(url, te)
 	})
@@ -109,6 +112,76 @@ func testRedisPubSubSinglePart(url string, t *testing.T) {
 	inConf := reader.NewRedisPubSubConfig()
 	inConf.URL = url
 	inConf.Channels = []string{"benthos_test_pubsub_single_part"}
+
+	outConf := writer.NewRedisPubSubConfig()
+	outConf.URL = url
+	outConf.Channel = "benthos_test_pubsub_single_part"
+
+	mInput, mOutput, err := createRedisPubSubInputOutput(inConf, outConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		mInput.CloseAsync()
+		if cErr := mInput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+		mOutput.CloseAsync()
+		if cErr := mOutput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	N := 10
+
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+
+	testMsgs := map[string]struct{}{}
+	for i := 0; i < N; i++ {
+		str := fmt.Sprintf("hello world: %v", i)
+		testMsgs[str] = struct{}{}
+		go func(testStr string) {
+			msg := message.New([][]byte{
+				[]byte(testStr),
+			})
+			msg.Get(0).Metadata().Set("foo", "bar")
+			msg.Get(0).Metadata().Set("root_foo", "bar2")
+			if gerr := mOutput.Write(msg); gerr != nil {
+				t.Fatal(gerr)
+			}
+			wg.Done()
+		}(str)
+	}
+
+	lMsgs := len(testMsgs)
+	for lMsgs > 0 {
+		var actM types.Message
+		actM, err = mInput.Read()
+		if err != nil {
+			t.Error(err)
+		} else {
+			act := string(actM.Get(0).Get())
+			if _, exists := testMsgs[act]; !exists {
+				t.Errorf("Unexpected message: %v", act)
+			}
+			delete(testMsgs, act)
+		}
+		if err = mInput.Acknowledge(nil); err != nil {
+			t.Error(err)
+		}
+		lMsgs = len(testMsgs)
+	}
+
+	wg.Wait()
+}
+
+func testRedisPubSubSinglePartGlobs(url string, t *testing.T) {
+	inConf := reader.NewRedisPubSubConfig()
+	inConf.URL = url
+	inConf.UsePatterns = true
+	inConf.Channels = []string{"benthos_test_*_single_part"}
 
 	outConf := writer.NewRedisPubSubConfig()
 	outConf.URL = url

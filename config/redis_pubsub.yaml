@@ -10,6 +10,7 @@ input:
     channels:
     - benthos_chan
     url: tcp://localhost:6379
+    use_patterns: false
 buffer:
   type: none
   none: {}

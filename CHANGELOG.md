@@ -5,9 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.9.3 - 2019-07-18
+
 ### Added
 
 - Allow extracting metric `rename` submatches into labels.
+- Field `use_patterns` added to `redis_pubsub` input for subscribing to channels
+  using glob-style patterns.
 
 ## 2.9.2 - 2019-07-17
 

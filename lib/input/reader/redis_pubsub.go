@@ -37,16 +37,16 @@ import (
 // RedisPubSubConfig contains configuration fields for the RedisPubSub input
 // type.
 type RedisPubSubConfig struct {
-	URL      string   `json:"url" yaml:"url"`
-	Channels []string `json:"channels" yaml:"channels"`
-	UsePatterns bool  `json:"use_patterns" yaml:"use_patterns"`
+	URL         string   `json:"url" yaml:"url"`
+	Channels    []string `json:"channels" yaml:"channels"`
+	UsePatterns bool     `json:"use_patterns" yaml:"use_patterns"`
 }
 
 // NewRedisPubSubConfig creates a new RedisPubSubConfig with default values.
 func NewRedisPubSubConfig() RedisPubSubConfig {
 	return RedisPubSubConfig{
-		URL:      "tcp://localhost:6379",
-		Channels: []string{"benthos_chan"},
+		URL:         "tcp://localhost:6379",
+		Channels:    []string{"benthos_chan"},
 		UsePatterns: false,
 	}
 }
