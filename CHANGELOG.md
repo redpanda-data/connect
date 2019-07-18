@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Allow extracting metric `rename` submatches into labels.
+
 ## 2.9.2 - 2019-07-17
 
 ### Changed

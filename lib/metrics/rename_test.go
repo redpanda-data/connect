@@ -78,6 +78,9 @@ func TestRenamePatterns(t *testing.T) {
 			{
 				Pattern: test.pattern,
 				Value:   test.value,
+				Labels: map[string]string{
+					"testlabel": "$0",
+				},
 			},
 		}
 
@@ -98,8 +101,14 @@ func TestRenamePatterns(t *testing.T) {
 
 		for k := range test.paths {
 			m.GetCounter(k)
+			m.GetGauge(k)
+			m.GetTimer(k)
 		}
 		if exp, act := len(test.paths), len(child.local.flatCounters); exp != act {
+			t.Errorf("Wrong count of metrics registered: %v != %v", act, exp)
+			continue
+		}
+		if exp, act := len(test.paths), len(child.local.flatTimings); exp != act {
 			t.Errorf("Wrong count of metrics registered: %v != %v", act, exp)
 			continue
 		}
@@ -107,6 +116,15 @@ func TestRenamePatterns(t *testing.T) {
 			if _, ok := child.local.flatCounters[exp]; !ok {
 				t.Errorf("Path '%v' missing from aggregator: %v", exp, child.local.flatCounters)
 			}
+		}
+		for _, exp := range test.paths {
+			if _, ok := child.local.flatTimings[exp]; !ok {
+				t.Errorf("Path '%v' missing from aggregator: %v", exp, child.local.flatTimings)
+			}
+		}
+
+		if err := m.Close(); err != nil {
+			t.Error(err)
 		}
 	}
 }

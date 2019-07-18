@@ -47,21 +47,42 @@ configure a prefix at the child level.
 
 ### ` + "`by_regexp`" + `
 
-An array of objects of the form ` + "`{\"pattern\":\"foo\",\"value\":\"bar\"}`" + `
-where each pattern will be parsed as RE2 regular expressions, these expressions
-are tested against each metric path, where all occurrences will be replaced with
-the specified value. Inside the value $ signs are interpreted as submatch
-expansions, e.g. $1 represents the first submatch.
+An array of objects of the form:
 
-To replace the paths 'foo.bar.zap' and 'foo.baz.zap' with 'zip.bar' and
-'zip.baz' respectively we could use this config:
+` + "```yaml" + `
+  - pattern: "foo\\.([a-z]*)\\.([a-z]*)"
+    value: "foo.$1"
+    labels:
+      bar: $2
+` + "```" + `
 
-` + "``` yaml" + `
+Where each pattern will be parsed as an RE2 regular expression, these
+expressions are tested against each metric path, where all occurrences will be
+replaced with the specified value. Inside the value $ signs are interpreted as
+submatch expansions, e.g. $1 represents the first submatch.
+
+The field ` + "`labels`" + ` may contain any number of key/value pairs to be
+added to a metric as labels, where the value may contain submatches from the
+provided pattern. This allows you to extract (left-most) matched segments of the
+renamed path into the label values.
+
+For example, in order to replace the paths 'foo.bar.0.zap' and 'foo.baz.1.zap'
+with 'zip.bar' and 'zip.baz' respectively, and store the respective values '0'
+and '1' under the label key 'index' we could use this config:
+
+` + "```yaml" + `
 rename:
   by_regexp:
-  - pattern: "foo\\.([a-z]*)\\.zap"
+  - pattern: "foo\\.([a-z]*)\\.([a-z]*)\\.zap"
     value: "zip.$1"
+    labels:
+      index: $2
 ` + "```" + `
+
+These labels will only be injected into metrics registered without pre-existing
+labels. Therefore it's currently not possible to combine labels registered from
+the ` + "[`metric` processor](processors/README.md#metric)" + ` with labels
+set via renaming.
 
 ### Debugging
 
@@ -90,8 +111,9 @@ are renamed enable logging at the TRACE level.`,
 // RenameByRegexpConfig contains config fields for a rename by regular
 // expression pattern.
 type RenameByRegexpConfig struct {
-	Pattern string `json:"pattern" yaml:"pattern"`
-	Value   string `json:"value" yaml:"value"`
+	Pattern string            `json:"pattern" yaml:"pattern"`
+	Value   string            `json:"value" yaml:"value"`
+	Labels  map[string]string `json:"to_label" yaml:"to_label"`
 }
 
 // RenameConfig contains config fields for the Rename metric type.
@@ -144,6 +166,7 @@ func (w RenameConfig) MarshalYAML() (interface{}, error) {
 type renameByRegexp struct {
 	expression *regexp.Regexp
 	value      string
+	labels     map[string]string
 }
 
 // Rename is a statistics object that wraps a separate statistics object
@@ -182,6 +205,7 @@ func NewRename(config Config, opts ...func(Type)) (Type, error) {
 		r.byRegexp = append(r.byRegexp, renameByRegexp{
 			expression: re,
 			value:      p.Value,
+			labels:     p.Labels,
 		})
 	}
 
@@ -192,55 +216,99 @@ func NewRename(config Config, opts ...func(Type)) (Type, error) {
 
 // renamePath checks whether or not a given path is in the allowed set of
 // paths for the Rename metrics stat.
-func (r *Rename) renamePath(path string) string {
+func (r *Rename) renamePath(path string) (string, map[string]string) {
 	renamed := false
+	labels := map[string]string{}
 	for _, rr := range r.byRegexp {
 		newPath := rr.expression.ReplaceAllString(path, rr.value)
 		if newPath != path {
 			renamed = true
 			r.log.Tracef("Renamed metric path '%v' to '%v' as per regexp '%v'\n", path, newPath, rr.expression.String())
 		}
+		if rr.labels != nil && len(rr.labels) > 0 {
+			// Extract only the matching segment of the path (left-most)
+			leftPath := rr.expression.FindString(path)
+			if len(leftPath) > 0 {
+				for k, v := range rr.labels {
+					v = rr.expression.ReplaceAllString(leftPath, v)
+					labels[k] = v
+					r.log.Tracef("Renamed label '%v' to '%v' as per regexp '%v'\n", k, v, rr.expression.String())
+				}
+			}
+		}
 		path = newPath
 	}
 	if !renamed {
 		r.log.Tracef("Registered metric path '%v' unchanged\n", path)
 	}
-	return path
+	return path, labels
 }
 
 //------------------------------------------------------------------------------
 
 // GetCounter returns a stat counter object for a path.
 func (r *Rename) GetCounter(path string) StatCounter {
-	return r.s.GetCounter(r.renamePath(path))
+	rpath, labels := r.renamePath(path)
+	if len(labels) == 0 {
+		return r.s.GetCounter(rpath)
+	}
+	names, values := make([]string, 0, len(labels)), make([]string, 0, len(labels))
+	for k, v := range labels {
+		names = append(names, k)
+		values = append(values, v)
+	}
+	return r.s.GetCounterVec(rpath, names).With(values...)
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
 // discarded.
 func (r *Rename) GetCounterVec(path string, n []string) StatCounterVec {
-	return r.s.GetCounterVec(r.renamePath(path), n)
+	rpath, _ := r.renamePath(path)
+	return r.s.GetCounterVec(rpath, n)
 }
 
 // GetTimer returns a stat timer object for a path.
 func (r *Rename) GetTimer(path string) StatTimer {
-	return r.s.GetTimer(r.renamePath(path))
+	rpath, labels := r.renamePath(path)
+	if len(labels) == 0 {
+		return r.s.GetTimer(rpath)
+	}
+
+	names, values := make([]string, 0, len(labels)), make([]string, 0, len(labels))
+	for k, v := range labels {
+		names = append(names, k)
+		values = append(values, v)
+	}
+	return r.s.GetTimerVec(rpath, names).With(values...)
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
 // discarded.
 func (r *Rename) GetTimerVec(path string, n []string) StatTimerVec {
-	return r.s.GetTimerVec(r.renamePath(path), n)
+	rpath, _ := r.renamePath(path)
+	return r.s.GetTimerVec(rpath, n)
 }
 
 // GetGauge returns a stat gauge object for a path.
 func (r *Rename) GetGauge(path string) StatGauge {
-	return r.s.GetGauge(r.renamePath(path))
+	rpath, labels := r.renamePath(path)
+	if len(labels) == 0 {
+		return r.s.GetGauge(rpath)
+	}
+
+	names, values := make([]string, 0, len(labels)), make([]string, 0, len(labels))
+	for k, v := range labels {
+		names = append(names, k)
+		values = append(values, v)
+	}
+	return r.s.GetGaugeVec(rpath, names).With(values...)
 }
 
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
 func (r *Rename) GetGaugeVec(path string, n []string) StatGaugeVec {
-	return r.s.GetGaugeVec(r.renamePath(path), n)
+	rpath, _ := r.renamePath(path)
+	return r.s.GetGaugeVec(rpath, n)
 }
 
 // SetLogger sets the logger used to print connection errors.

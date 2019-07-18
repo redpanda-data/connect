@@ -137,21 +137,42 @@ configure a prefix at the child level.
 
 ### `by_regexp`
 
-An array of objects of the form `{"pattern":"foo","value":"bar"}`
-where each pattern will be parsed as RE2 regular expressions, these expressions
-are tested against each metric path, where all occurrences will be replaced with
-the specified value. Inside the value $ signs are interpreted as submatch
-expansions, e.g. $1 represents the first submatch.
+An array of objects of the form:
 
-To replace the paths 'foo.bar.zap' and 'foo.baz.zap' with 'zip.bar' and
-'zip.baz' respectively we could use this config:
+```yaml
+  - pattern: "foo\\.([a-z]*)\\.([a-z]*)"
+    value: "foo.$1"
+    labels:
+      bar: $2
+```
 
-``` yaml
+Where each pattern will be parsed as an RE2 regular expression, these
+expressions are tested against each metric path, where all occurrences will be
+replaced with the specified value. Inside the value $ signs are interpreted as
+submatch expansions, e.g. $1 represents the first submatch.
+
+The field `labels` may contain any number of key/value pairs to be
+added to a metric as labels, where the value may contain submatches from the
+provided pattern. This allows you to extract (left-most) matched segments of the
+renamed path into the label values.
+
+For example, in order to replace the paths 'foo.bar.0.zap' and 'foo.baz.1.zap'
+with 'zip.bar' and 'zip.baz' respectively, and store the respective values '0'
+and '1' under the label key 'index' we could use this config:
+
+```yaml
 rename:
   by_regexp:
-  - pattern: "foo\\.([a-z]*)\\.zap"
+  - pattern: "foo\\.([a-z]*)\\.([a-z]*)\\.zap"
     value: "zip.$1"
+    labels:
+      index: $2
 ```
+
+These labels will only be injected into metrics registered without pre-existing
+labels. Therefore it's currently not possible to combine labels registered from
+the [`metric` processor](processors/README.md#metric) with labels
+set via renaming.
 
 ### Debugging
 
