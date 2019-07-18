@@ -52,7 +52,7 @@ An array of objects of the form:
 ` + "```yaml" + `
   - pattern: "foo\\.([a-z]*)\\.([a-z]*)"
     value: "foo.$1"
-    labels:
+    to_label:
       bar: $2
 ` + "```" + `
 
@@ -61,7 +61,7 @@ expressions are tested against each metric path, where all occurrences will be
 replaced with the specified value. Inside the value $ signs are interpreted as
 submatch expansions, e.g. $1 represents the first submatch.
 
-The field ` + "`labels`" + ` may contain any number of key/value pairs to be
+The field ` + "`to_label`" + ` may contain any number of key/value pairs to be
 added to a metric as labels, where the value may contain submatches from the
 provided pattern. This allows you to extract (left-most) matched segments of the
 renamed path into the label values.
@@ -75,7 +75,7 @@ rename:
   by_regexp:
   - pattern: "foo\\.([a-z]*)\\.([a-z]*)\\.zap"
     value: "zip.$1"
-    labels:
+    to_label:
       index: $2
 ` + "```" + `
 
