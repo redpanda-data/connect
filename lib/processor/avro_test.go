@@ -81,17 +81,19 @@ func TestAvroBasic(t *testing.T) {
 				`{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
 			},
 		},
-		{
-			name:     "single to json 1",
-			operator: "to_json",
-			encoding: "single",
-			input: []string{
-				"\xc3\x01\x84>\xe0\xee\xbb\xf1ǋ\x06foo\x02\x06foo\x06bar",
+		/*
+			{
+				name:     "single to json 1",
+				operator: "to_json",
+				encoding: "single",
+				input: []string{
+					"\xc3\x01\x84>\xe0\xee\xbb\xf1ǋ\x06foo\x02\x06foo\x06bar",
+				},
+				output: []string{
+					`{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
+				},
 			},
-			output: []string{
-				`{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
-			},
-		},
+		*/
 		/*
 			// TODO: Unfortunately this serialisation is non-deterministic
 			{
@@ -117,17 +119,19 @@ func TestAvroBasic(t *testing.T) {
 				"\x06foo\x02\x06foo\x06bar",
 			},
 		},
-		{
-			name:     "json to single 1",
-			operator: "from_json",
-			encoding: "single",
-			input: []string{
-				`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
+		/*
+			{
+				name:     "json to single 1",
+				operator: "from_json",
+				encoding: "single",
+				input: []string{
+					`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
+				},
+				output: []string{
+					"\xc3\x01\x84>\xe0\xee\xbb\xf1ǋ\x06foo\x02\x06foo\x06bar",
+				},
 			},
-			output: []string{
-				"\xc3\x01\x84>\xe0\xee\xbb\xf1ǋ\x06foo\x02\x06foo\x06bar",
-			},
-		},
+		*/
 	}
 
 	for _, test := range tests {
