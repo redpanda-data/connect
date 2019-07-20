@@ -109,7 +109,7 @@ func getTestTargets(targetPath, testSuffix string, recurse bool) ([]string, erro
 }
 
 // Executes a test definition and either returns fails or returns an error.
-func testTarget(path, testSuffix string) ([]string, error) {
+func testTarget(path, testSuffix string) ([]CaseFailure, error) {
 	confPath, _ := getBothPaths(path, testSuffix)
 	var definition Definition
 	defBytes, err := ioutil.ReadFile(path)
@@ -119,17 +119,7 @@ func testTarget(path, testSuffix string) ([]string, error) {
 	if err := yaml.Unmarshal(defBytes, &definition); err != nil {
 		return nil, fmt.Errorf("failed to parse test definition '%v': %v", path, err)
 	}
-
-	var failures []CaseFailure
-	if failures, err = definition.Execute(confPath); err != nil {
-		return nil, err
-	}
-
-	var failStrs []string
-	for _, fail := range failures {
-		failStrs = append(failStrs, fail.String())
-	}
-	return failStrs, nil
+	return definition.Execute(confPath)
 }
 
 // Lints the config target of a test definition and either returns linting
@@ -174,7 +164,7 @@ func Run(path, testSuffix string, lint bool) bool {
 	failed := false
 	for _, target := range targets {
 		var lints []string
-		var fails []string
+		var fails []CaseFailure
 		if lint {
 			if lints, err = lintTarget(target, testSuffix); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to execute test target '%v': %v\n", target, err)
@@ -189,10 +179,13 @@ func Run(path, testSuffix string, lint bool) bool {
 			failed = true
 			fmt.Printf("Test '%v' failed\n", target)
 			for _, lint := range lints {
-				fmt.Printf("\tLint: %v\n", lint)
+				fmt.Printf("  Lint: %v\n", lint)
 			}
-			for _, fail := range fails {
-				fmt.Printf("\tFail: %v\n", fail)
+			if len(fails) > 0 {
+				fmt.Printf("  %v [line %v]:\n", fails[0].Name, fails[0].TestLine)
+				for _, fail := range fails {
+					fmt.Printf("    %v\n", fail.Reason)
+				}
 			}
 		} else {
 			fmt.Printf("Test '%v' succeeded\n", target)
