@@ -47,7 +47,8 @@ their postmap targets for provided fields and their premap targets for required
 fields.
 
 The DAG is then used to execute the children in the necessary order with the
-maximum parallelism possible.
+maximum parallelism possible. You can read more about workflows in Benthos
+[in this document](../workflows.md).
 
 The field ` + "`dependencies`" + ` is an optional array of fields that a child
 depends on. This is useful for when fields are required but don't appear within
@@ -276,18 +277,22 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		for i, id := range layer {
 			if err := errors[i]; err != nil {
 				p.log.Errorf("Failed to perform child '%v': %v\n", id, err)
+				result.Iter(func(i int, p types.Part) error {
+					FlagErr(p, err)
+					return nil
+				})
 				continue
 			}
 			if failed, err := p.children[id].OverlayResult(result, results[i]); err != nil {
 				p.log.Errorf("Failed to overlay child '%v': %v\n", id, err)
 				result.Iter(func(i int, p types.Part) error {
-					FlagFail(p)
+					FlagErr(p, err)
 					return nil
 				})
 				continue
 			} else {
 				for _, j := range failed {
-					FlagFail(result.Get(j))
+					FlagErr(result.Get(j), fmt.Errorf("enrichment '%v' postmap failed", id))
 				}
 			}
 		}

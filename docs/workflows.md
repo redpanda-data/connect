@@ -316,7 +316,15 @@ output:
   type: stdout # TODO
 ```
 
+## Error Handling
+
+Workflow stages can fail if any mandatory post mappings are unresolvable with
+result payloads, or if a processor within the stage fails. When these failures
+occur there are many mechanisms within Benthos that allow you to capture and/or
+recover from them outlined [in this document][error-handling].
+
 [dag_wiki]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
 [conditional]: processors/README.md#conditional
 [process_dag]: processors/README.md#process_dag
 [process_map]: processors/README.md#process_map
+[error-handling]: ../error_handling.md

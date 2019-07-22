@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Improved error messages attached to payloads that fail `process_dag`
+  post mappings.
+
 ## 2.9.3 - 2019-07-18
 
 ### Added
