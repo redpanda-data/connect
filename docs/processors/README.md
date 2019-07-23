@@ -1333,7 +1333,8 @@ their postmap targets for provided fields and their premap targets for required
 fields.
 
 The DAG is then used to execute the children in the necessary order with the
-maximum parallelism possible.
+maximum parallelism possible. You can read more about workflows in Benthos
+[in this document](../workflows.md).
 
 The field `dependencies` is an optional array of fields that a child
 depends on. This is useful for when fields are required but don't appear within

@@ -327,4 +327,4 @@ recover from them outlined [in this document][error-handling].
 [conditional]: processors/README.md#conditional
 [process_dag]: processors/README.md#process_dag
 [process_map]: processors/README.md#process_map
-[error-handling]: ../error_handling.md
+[error-handling]: error_handling.md
