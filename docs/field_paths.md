@@ -17,7 +17,7 @@ For example, if we had the following JSON structure:
 
 The query path `foo.bar` would return `21`.
 
-The characters '~' (%x7E) and '.' (%x2E) have special meaning in Benthos paths. Therefore '~' needs to be encoded as '~0' and '.' needs to be encoded as '~1' when these characters appear within a key.
+The characters `~` (%x7E) and `.` (%x2E) have special meaning in Benthos paths. Therefore `~` needs to be encoded as `~0` and `.` needs to be encoded as `~1` when these characters appear within a key.
 
 For example, if we had the following JSON structure:
 
