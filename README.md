@@ -146,6 +146,12 @@ Or pull the docker image:
 docker pull jeffail/benthos
 ```
 
+On macOS, Benthos can be installed via Homebrew:
+
+```shell
+brew install benthos
+```
+
 Build with Go (1.11 or later):
 
 ``` shell
