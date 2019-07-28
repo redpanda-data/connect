@@ -205,7 +205,9 @@ make docker-cgo
 
 ## Contributing
 
-Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
+Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come
+and chat in the [#benthos Gophers slack channel][benthos-slack-chan]
+([get an invite][gophers-slack-invite]), and watch your back.
 
 [inputs]: https://docs.benthos.dev/inputs/
 [buffers]: https://docs.benthos.dev/buffers/
@@ -236,6 +238,9 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [goreport-url]: https://goreportcard.com/report/Jeffail/benthos
 [drone-badge]: https://cloud.drone.io/api/badges/Jeffail/benthos/status.svg
 [drone-url]: https://cloud.drone.io/Jeffail/benthos
+
+[benthos-slack-chan]: https://app.slack.com/client/T029RQSE6/CLWCBK7FY
+[gophers-slack-invite]: https://gophersinvite.herokuapp.com/
 
 [aws]: https://aws.amazon.com/
 [zmq]: http://zeromq.org/
