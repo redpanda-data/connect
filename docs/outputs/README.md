@@ -85,11 +85,12 @@ a [`broker`](#broker) output with the 'try' pattern.
 26. [`redis_streams`](#redis_streams)
 27. [`retry`](#retry)
 28. [`s3`](#s3)
-29. [`sqs`](#sqs)
-30. [`stdout`](#stdout)
-31. [`switch`](#switch)
-32. [`sync_response`](#sync_response)
-33. [`websocket`](#websocket)
+29. [`sns`](#sns)
+30. [`sqs`](#sqs)
+31. [`stdout`](#stdout)
+32. [`switch`](#switch)
+33. [`sync_response`](#sync_response)
+34. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -924,6 +925,25 @@ calculated per message of a batch.
 
 The fields `content_type` and `content_encoding` can also be set
 dynamically using function interpolation.
+
+## `sns`
+
+``` yaml
+type: sns
+sns:
+  credentials:
+    id: ""
+    role: ""
+    role_external_id: ""
+    secret: ""
+    token: ""
+  endpoint: ""
+  region: eu-west-1
+  timeout: 5s
+  topic_arn: ""
+```
+
+Sends messages to an AWS SNS topic.
 
 ## `sqs`
 

@@ -37,7 +37,7 @@ import (
 	"github.com/ory/dockertest"
 )
 
-func TestS3Integration(t *testing.T) {
+func TestAWSIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -58,20 +58,21 @@ func TestS3Integration(t *testing.T) {
 	endpoint := fmt.Sprintf("http://localhost:%v", resource.GetPort("4572/tcp"))
 	bucket := "mybucket"
 
-	client := s3.New(session.Must(session.NewSession(&aws.Config{
+	s3Client := s3.New(session.Must(session.NewSession(&aws.Config{
 		S3ForcePathStyle: aws.Bool(true),
 		Credentials:      credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		Endpoint:         aws.String(endpoint),
 		Region:           aws.String("eu-west-1"),
 	})))
+
 	if err = pool.Retry(func() error {
-		_, berr := client.CreateBucket(&s3.CreateBucketInput{
+		_, berr := s3Client.CreateBucket(&s3.CreateBucketInput{
 			Bucket: &bucket,
 		})
 		if berr != nil {
 			return berr
 		}
-		return client.WaitUntilBucketExists(&s3.HeadBucketInput{
+		return s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
 			Bucket: &bucket,
 		})
 	}); err != nil {
