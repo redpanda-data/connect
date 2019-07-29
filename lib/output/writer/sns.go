@@ -21,75 +21,73 @@
 package writer
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	sess "github.com/Jeffail/benthos/lib/util/aws/session"
-	"github.com/Jeffail/benthos/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sns"
-	"github.com/cenkalti/backoff"
 )
 
 //------------------------------------------------------------------------------
 
-// AmazonSNSConfig contains configuration fields for the output AmazonSNS type.
-type AmazonSNSConfig struct {
-	TopicArn       string `json:"topic_arn" yaml:"topic_arn"`
-	sessionConfig  `json:",inline" yaml:",inline"`
-	retries.Config `json:",inline" yaml:",inline"`
+// SNSConfig contains configuration fields for the output SNS type.
+type SNSConfig struct {
+	TopicArn      string `json:"topic_arn" yaml:"topic_arn"`
+	sessionConfig `json:",inline" yaml:",inline"`
+	Timeout       string `json:"timeout" yaml:"timeout"`
 }
 
-// NewAmazonSNSConfig creates a new Config with default values.
-func NewAmazonSNSConfig() AmazonSNSConfig {
-	rConf := retries.NewConfig()
-	rConf.Backoff.InitialInterval = "1s"
-	rConf.Backoff.MaxInterval = "5s"
-	rConf.Backoff.MaxElapsedTime = "30s"
-	return AmazonSNSConfig{
+// NewSNSConfig creates a new Config with default values.
+func NewSNSConfig() SNSConfig {
+	return SNSConfig{
 		sessionConfig: sessionConfig{
 			Config: sess.NewConfig(),
 		},
 		TopicArn: "",
-		Config:   rConf,
+		Timeout:  "5s",
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// AmazonSNS is a benthos writer.Type implementation that writes messages to an
+// SNS is a benthos writer.Type implementation that writes messages to an
 // Amazon SNS queue.
-type AmazonSNS struct {
-	conf AmazonSNSConfig
+type SNS struct {
+	conf SNSConfig
 
-	backoff backoff.BackOff
 	session *session.Session
 	sns     *sns.SNS
+
+	tout time.Duration
 
 	log   log.Modular
 	stats metrics.Type
 }
 
-// NewAmazonSNS creates a new Amazon SNS writer.Type.
-func NewAmazonSNS(conf AmazonSNSConfig, log log.Modular, stats metrics.Type) (*AmazonSNS, error) {
-	s := &AmazonSNS{
+// NewSNS creates a new Amazon SNS writer.Type.
+func NewSNS(conf SNSConfig, log log.Modular, stats metrics.Type) (*SNS, error) {
+	s := &SNS{
 		conf:  conf,
 		log:   log,
 		stats: stats,
 	}
-
-	var err error
-	if s.backoff, err = conf.Config.Get(); err != nil {
-		return nil, err
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if s.tout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
+		}
 	}
 	return s, nil
 }
 
 // Connect attempts to establish a connection to the target SNS queue.
-func (a *AmazonSNS) Connect() error {
+func (a *SNS) Connect() error {
 	if a.session != nil {
 		return nil
 	}
@@ -107,31 +105,33 @@ func (a *AmazonSNS) Connect() error {
 }
 
 // Write attempts to write message contents to a target SNS.
-func (a *AmazonSNS) Write(msg types.Message) error {
+func (a *SNS) Write(msg types.Message) error {
 	if a.session == nil {
 		return types.ErrNotConnected
 	}
+
+	ctx, cancel := context.WithTimeout(
+		aws.BackgroundContext(), a.tout,
+	)
+	defer cancel()
 
 	return msg.Iter(func(i int, p types.Part) error {
 		message := &sns.PublishInput{
 			TopicArn: aws.String(a.conf.TopicArn),
 			Message:  aws.String(string(p.Get())),
 		}
-		_, err := a.sns.Publish(message)
-		if err != nil {
-			return err
-		}
-		return nil
+		_, err := a.sns.PublishWithContext(ctx, message)
+		return err
 	})
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *AmazonSNS) CloseAsync() {
+func (a *SNS) CloseAsync() {
 }
 
 // WaitForClose will block until either the reader is closed or a specified
 // timeout occurs.
-func (a *AmazonSNS) WaitForClose(time.Duration) error {
+func (a *SNS) WaitForClose(time.Duration) error {
 	return nil
 }
 

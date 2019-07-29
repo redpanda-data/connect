@@ -557,6 +557,15 @@ OUTPUT_S3_FORCE_PATH_STYLE_URLS                       = false
 OUTPUT_S3_PATH                                        = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_S3_REGION                                      = eu-west-1
 OUTPUT_S3_TIMEOUT                                     = 5s
+OUTPUT_SNS_CREDENTIALS_ID
+OUTPUT_SNS_CREDENTIALS_ROLE
+OUTPUT_SNS_CREDENTIALS_ROLE_EXTERNAL_ID
+OUTPUT_SNS_CREDENTIALS_SECRET
+OUTPUT_SNS_CREDENTIALS_TOKEN
+OUTPUT_SNS_ENDPOINT
+OUTPUT_SNS_REGION                                     = eu-west-1
+OUTPUT_SNS_TIMEOUT                                    = 5s
+OUTPUT_SNS_TOPIC_ARN
 OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL                   = 1s
 OUTPUT_SQS_BACKOFF_MAX_ELAPSED_TIME                   = 30s
 OUTPUT_SQS_BACKOFF_MAX_INTERVAL                       = 5s

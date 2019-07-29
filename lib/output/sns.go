@@ -33,8 +33,7 @@ func init() {
 	Constructors[TypeSNS] = TypeSpec{
 		constructor: NewAmazonSNS,
 		description: `
-		Sends messages to an SNS queue. Message parts are sent to the provided TopicARN as separate messages.
-		`,
+Sends messages to an AWS SNS topic.`,
 	}
 }
 
@@ -42,7 +41,7 @@ func init() {
 
 // NewAmazonSNS creates a new AmazonSNS output type.
 func NewAmazonSNS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	s, err := writer.NewAmazonSNS(conf.SNS, log, stats)
+	s, err := writer.NewSNS(conf.SNS, log, stats)
 	if err != nil {
 		return nil, err
 	}
