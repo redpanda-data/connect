@@ -532,6 +532,10 @@ OUTPUT_NATS_URLS                                      = nats://localhost:4222
 OUTPUT_NSQ_NSQD_TCP_ADDRESS                           = localhost:4150
 OUTPUT_NSQ_TOPIC                                      = benthos_messages
 OUTPUT_NSQ_USER_AGENT                                 = benthos_producer
+OUTPUT_REDIS_HASH_KEY
+OUTPUT_REDIS_HASH_URL                                 = tcp://localhost:6379
+OUTPUT_REDIS_HASH_WALK_JSON_OBJECT                    = false
+OUTPUT_REDIS_HASH_WALK_METADATA                       = false
 OUTPUT_REDIS_LIST_KEY                                 = benthos_list
 OUTPUT_REDIS_LIST_URL                                 = tcp://localhost:6379
 OUTPUT_REDIS_PUBSUB_CHANNEL                           = benthos_chan

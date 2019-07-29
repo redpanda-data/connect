@@ -626,6 +626,11 @@ output:
         nsqd_tcp_address: ${OUTPUT_NSQ_NSQD_TCP_ADDRESS:localhost:4150}
         topic: ${OUTPUT_NSQ_TOPIC:benthos_messages}
         user_agent: ${OUTPUT_NSQ_USER_AGENT:benthos_producer}
+      redis_hash:
+        key: ${OUTPUT_REDIS_HASH_KEY}
+        url: ${OUTPUT_REDIS_HASH_URL:tcp://localhost:6379}
+        walk_json_object: ${OUTPUT_REDIS_HASH_WALK_JSON_OBJECT:false}
+        walk_metadata: ${OUTPUT_REDIS_HASH_WALK_METADATA:false}
       redis_list:
         key: ${OUTPUT_REDIS_LIST_KEY:benthos_list}
         url: ${OUTPUT_REDIS_LIST_URL:tcp://localhost:6379}
