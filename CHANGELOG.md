@@ -5,11 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.10.0 - 2019-07-29
+
 ### Added
 
 - Improved error messages attached to payloads that fail `process_dag`
   post mappings.
 - New `redis_hash` output.
+- New `sns` output.
 
 ## 2.9.3 - 2019-07-18
 

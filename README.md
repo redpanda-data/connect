@@ -47,7 +47,7 @@ deployment.
 
 ## Supported Sources & Sinks
 
-- [AWS (DynamoDB, Kinesis, S3, SQS)][aws]
+- [AWS (DynamoDB, Kinesis, S3, SQS, SNS)][aws]
 - [Elasticsearch][elasticsearch] (output only)
 - File
 - [GCP (pub/sub)][gcp]
@@ -61,7 +61,7 @@ deployment.
 - [NATS Streaming][natsstreaming]
 - [NSQ][nsq]
 - [RabbitMQ (AMQP 0.91)][rabbitmq]
-- [Redis (streams, list, pubsub)][redis]
+- [Redis (streams, list, pubsub, hashes)][redis]
 - Stdin/Stdout
 - Websocket
 - [ZMQ4][zmq]
