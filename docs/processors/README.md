@@ -1041,6 +1041,13 @@ attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](../error_handling.md).
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ## `log`
 
 ``` yaml

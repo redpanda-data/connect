@@ -626,6 +626,13 @@ table name. Offsets will then be tracked per `client_id` per
 `shard_id`. When using this mode you should create a table with
 `namespace` as the primary key and `shard_id` as a sort key.
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ## `mqtt`
 
 ``` yaml
@@ -923,6 +930,13 @@ at-least-once crash resiliency, but also means that if the S3 item takes longer
 to process than the visibility timeout of your queue then the same items might
 be processed multiple times.
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -962,6 +976,13 @@ sqs:
 
 Receive messages from an Amazon SQS URL, only the body is extracted into
 messages.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 
 ## `stdin`
 

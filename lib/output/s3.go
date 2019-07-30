@@ -41,7 +41,14 @@ interpolations described [here](../config_interpolation.md#functions), which are
 calculated per message of a batch.
 
 The fields ` + "`content_type` and `content_encoding`" + ` can also be set
-dynamically using function interpolation.`,
+dynamically using function interpolation.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).`,
 	}
 }
 

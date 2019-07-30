@@ -383,6 +383,13 @@ In which case the top level document fields will be written at the root of the
 item, potentially overwriting previously defined column values. If a path is not
 found within a document the column will not be populated.
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ## `elasticsearch`
 
 ``` yaml
@@ -423,6 +430,13 @@ support creating the target index.
 Both the `id` and `index` fields can be dynamically set using function
 interpolations described [here](../config_interpolation.md#functions). When
 sending batched messages these interpolations are performed per message part.
+
+### AWS Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 
 ## `file`
 
@@ -694,6 +708,13 @@ fields can be dynamically set using function interpolations described
 [here](../config_interpolation.md#functions). When sending batched messages the
 interpolations are performed per message part.
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ## `mqtt`
 
 ``` yaml
@@ -926,6 +947,13 @@ calculated per message of a batch.
 The fields `content_type` and `content_encoding` can also be set
 dynamically using function interpolation.
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ## `sns`
 
 ``` yaml
@@ -944,6 +972,13 @@ sns:
 ```
 
 Sends messages to an AWS SNS topic.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 
 ## `sqs`
 
@@ -967,6 +1002,13 @@ sqs:
 ```
 
 Sends messages to an SQS queue.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 
 ## `stdout`
 

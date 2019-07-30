@@ -33,7 +33,14 @@ func init() {
 	Constructors[TypeSNS] = TypeSpec{
 		constructor: NewAmazonSNS,
 		description: `
-Sends messages to an AWS SNS topic.`,
+Sends messages to an AWS SNS topic.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).`,
 	}
 }
 

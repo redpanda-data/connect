@@ -38,7 +38,14 @@ Receive messages from a Kinesis stream.
 It's possible to use DynamoDB for persisting shard iterators by setting the
 table name. Offsets will then be tracked per ` + "`client_id`" + ` per
 ` + "`shard_id`" + `. When using this mode you should create a table with
-` + "`namespace`" + ` as the primary key and ` + "`shard_id`" + ` as a sort key.`,
+` + "`namespace`" + ` as the primary key and ` + "`shard_id`" + ` as a sort key.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).`,
 	}
 }
 

@@ -27,8 +27,6 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/s3"
-
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
@@ -36,6 +34,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
@@ -49,7 +48,14 @@ The s3 cache stores each item in an S3 bucket as a file, where an item ID is
 the path of the item within the bucket.
 
 It is not possible to atomically upload S3 objects exclusively when the target
-does not already exist, therefore this cache is not suitable for deduplication.`,
+does not already exist, therefore this cache is not suitable for deduplication.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).`,
 	}
 }
 

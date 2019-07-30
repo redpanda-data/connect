@@ -54,7 +54,14 @@ DynamoDB table. An optional TTL duration (` + "`ttl`" + `) and field
 (` + "`ttl_key`" + `) can be specified if the backing table has TTL enabled.
 
 Strong read consistency can be enabled using the ` + "`consistent_read`" + `
-configuration field.`,
+configuration field.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).`,
 	}
 }
 

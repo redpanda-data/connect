@@ -69,7 +69,14 @@ json_map_columns:
 
 In which case the top level document fields will be written at the root of the
 item, potentially overwriting previously defined column values. If a path is not
-found within a document the column will not be populated.`,
+found within a document the column will not be populated.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).`,
 	}
 }
 

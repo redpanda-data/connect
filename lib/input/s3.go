@@ -68,6 +68,13 @@ at-least-once crash resiliency, but also means that if the S3 item takes longer
 to process than the visibility timeout of your queue then the same items might
 be processed multiple times.
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ### Metadata
 
 This input adds the following metadata fields to each message:
