@@ -5,11 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New beta input `kinesis_balanced`.
+
 ## 2.10.0 - 2019-07-29
 
 ### Added
 
-- Improved error messages attached to payloads that fail `process_dag`
+- Improved error messages attached to payloads that fail `process_dag`.
   post mappings.
 - New `redis_hash` output.
 - New `sns` output.

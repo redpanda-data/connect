@@ -35,7 +35,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-// KinesisConfig is configuration values for the input type.
+// KinesisBalancedConfig is configuration values for the input type.
 type KinesisBalancedConfig struct {
 	sess.Config           `json:",inline" yaml:",inline"`
 	Stream                string `json:"stream" yaml:"stream"`
@@ -43,10 +43,11 @@ type KinesisBalancedConfig struct {
 	DynamoDBBillingMode   string `json:"dynamodb_billing_mode" yaml:"dynamodb_billing_mode"`
 	DynamoDBReadCapacity  int64  `json:"dynamodb_read_provision" yaml:"dynamodb_read_provision"`
 	DynamoDBWriteCapacity int64  `json:"dynamodb_write_provision" yaml:"dynamodb_write_provision"`
+	MaxBatchCount         int    `json:"max_batch_count" yaml:"max_batch_count"`
 	StartFromOldest       bool   `json:"start_from_oldest" yaml:"start_from_oldest"`
 }
 
-// NewKinesisConfig creates a new Config with default values.
+// NewKinesisBalancedConfig creates a new Config with default values.
 func NewKinesisBalancedConfig() KinesisBalancedConfig {
 	return KinesisBalancedConfig{
 		Stream:                "",
@@ -54,14 +55,15 @@ func NewKinesisBalancedConfig() KinesisBalancedConfig {
 		DynamoDBBillingMode:   "",
 		DynamoDBReadCapacity:  0,
 		DynamoDBWriteCapacity: 0,
+		MaxBatchCount:         1,
 		StartFromOldest:       true,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// Kinesis is a benthos reader.Type implementation that reads messages from an
-// Amazon Kinesis stream.
+// KinesisBalanced is a benthos reader.Type implementation that reads messages
+// from an Amazon Kinesis stream.
 type KinesisBalanced struct {
 	conf KinesisBalancedConfig
 
@@ -77,7 +79,7 @@ type KinesisBalanced struct {
 	shardID string
 }
 
-// NewKinesis creates a new Amazon Kinesis stream reader.Type.
+// NewKinesisBalanced creates a new Amazon Kinesis stream reader.Type.
 func NewKinesisBalanced(
 	conf KinesisBalancedConfig,
 	log log.Modular,
@@ -127,14 +129,47 @@ func (k *KinesisBalanced) Connect() error {
 	return err
 }
 
+func (k *KinesisBalanced) setMetadata(record *gokini.Records, p types.Part) {
+	met := p.Metadata()
+	met.Set("kinesis_shard", k.shardID)
+	met.Set("kinesis_partition_key", record.PartitionKey)
+	met.Set("kinesis_sequence_number", record.SequenceNumber)
+}
+
 // Read attempts to read a new message from the target Kinesis stream.
 func (k *KinesisBalanced) Read() (types.Message, error) {
+	msg := message.New(nil)
+
 	record := <-k.records
 	if record == nil {
-		return nil, fmt.Errorf("Shard %s has closed", k.shardID)
+		return nil, fmt.Errorf("shard '%s' has closed", k.shardID)
 	}
 	k.lastSequence = &record.SequenceNumber
-	return message.New([][]byte{record.Data}), nil
+	{
+		part := message.NewPart(record.Data)
+		k.setMetadata(record, part)
+		msg.Append(part)
+	}
+
+batchLoop:
+	for i := 1; i < k.conf.MaxBatchCount; i++ {
+		select {
+		case record := <-k.records:
+			if record != nil {
+				k.lastSequence = &record.SequenceNumber
+				part := message.NewPart(record.Data)
+				k.setMetadata(record, part)
+				msg.Append(part)
+			} else {
+				break batchLoop
+			}
+		default:
+			// Drained the buffer
+			break batchLoop
+		}
+	}
+
+	return msg, nil
 }
 
 // Acknowledge confirms whether or not our unacknowledged messages have been

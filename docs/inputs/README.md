@@ -34,19 +34,20 @@ input:
 11. [`kafka`](#kafka)
 12. [`kafka_balanced`](#kafka_balanced)
 13. [`kinesis`](#kinesis)
-14. [`mqtt`](#mqtt)
-15. [`nanomsg`](#nanomsg)
-16. [`nats`](#nats)
-17. [`nats_stream`](#nats_stream)
-18. [`nsq`](#nsq)
-19. [`read_until`](#read_until)
-20. [`redis_list`](#redis_list)
-21. [`redis_pubsub`](#redis_pubsub)
-22. [`redis_streams`](#redis_streams)
-23. [`s3`](#s3)
-24. [`sqs`](#sqs)
-25. [`stdin`](#stdin)
-26. [`websocket`](#websocket)
+14. [`kinesis_balanced`](#kinesis_balanced)
+15. [`mqtt`](#mqtt)
+16. [`nanomsg`](#nanomsg)
+17. [`nats`](#nats)
+18. [`nats_stream`](#nats_stream)
+19. [`nsq`](#nsq)
+20. [`read_until`](#read_until)
+21. [`redis_list`](#redis_list)
+22. [`redis_pubsub`](#redis_pubsub)
+23. [`redis_streams`](#redis_streams)
+24. [`s3`](#s3)
+25. [`sqs`](#sqs)
+26. [`stdin`](#stdin)
+27. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -632,6 +633,54 @@ By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
+
+## `kinesis_balanced`
+
+``` yaml
+type: kinesis_balanced
+kinesis_balanced:
+  credentials:
+    id: ""
+    role: ""
+    role_external_id: ""
+    secret: ""
+    token: ""
+  dynamodb_billing_mode: ""
+  dynamodb_read_provision: 0
+  dynamodb_table: ""
+  dynamodb_write_provision: 0
+  endpoint: ""
+  max_batch_count: 1
+  region: ""
+  start_from_oldest: true
+  stream: ""
+```
+
+BETA: This input is a beta component and is subject to change outside of major
+version releases.
+
+Receives messages from a Kinesis stream and automatically balances shards across
+consumers.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```text
+- kinesis_shard
+- kinesis_partition_key
+- kinesis_sequence_number
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
 
 ## `mqtt`
 

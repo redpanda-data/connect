@@ -61,104 +61,107 @@ var Constructors = map[string]TypeSpec{}
 
 // String constants representing each input type.
 const (
-	TypeAMQP          = "amqp"
-	TypeBroker        = "broker"
-	TypeDynamic       = "dynamic"
-	TypeFile          = "file"
-	TypeFiles         = "files"
-	TypeGCPPubSub     = "gcp_pubsub"
-	TypeHDFS          = "hdfs"
-	TypeHTTPClient    = "http_client"
-	TypeHTTPServer    = "http_server"
-	TypeInproc        = "inproc"
-	TypeKafka         = "kafka"
-	TypeKafkaBalanced = "kafka_balanced"
-	TypeKinesis       = "kinesis"
-	TypeMQTT          = "mqtt"
-	TypeNanomsg       = "nanomsg"
-	TypeNATS          = "nats"
-	TypeNATSStream    = "nats_stream"
-	TypeNSQ           = "nsq"
-	TypeReadUntil     = "read_until"
-	TypeRedisList     = "redis_list"
-	TypeRedisPubSub   = "redis_pubsub"
-	TypeRedisStreams  = "redis_streams"
-	TypeS3            = "s3"
-	TypeSQS           = "sqs"
-	TypeSTDIN         = "stdin"
-	TypeWebsocket     = "websocket"
-	TypeZMQ4          = "zmq4"
+	TypeAMQP            = "amqp"
+	TypeBroker          = "broker"
+	TypeDynamic         = "dynamic"
+	TypeFile            = "file"
+	TypeFiles           = "files"
+	TypeGCPPubSub       = "gcp_pubsub"
+	TypeHDFS            = "hdfs"
+	TypeHTTPClient      = "http_client"
+	TypeHTTPServer      = "http_server"
+	TypeInproc          = "inproc"
+	TypeKafka           = "kafka"
+	TypeKafkaBalanced   = "kafka_balanced"
+	TypeKinesis         = "kinesis"
+	TypeKinesisBalanced = "kinesis_balanced"
+	TypeMQTT            = "mqtt"
+	TypeNanomsg         = "nanomsg"
+	TypeNATS            = "nats"
+	TypeNATSStream      = "nats_stream"
+	TypeNSQ             = "nsq"
+	TypeReadUntil       = "read_until"
+	TypeRedisList       = "redis_list"
+	TypeRedisPubSub     = "redis_pubsub"
+	TypeRedisStreams    = "redis_streams"
+	TypeS3              = "s3"
+	TypeSQS             = "sqs"
+	TypeSTDIN           = "stdin"
+	TypeWebsocket       = "websocket"
+	TypeZMQ4            = "zmq4"
 )
 
 //------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all input types.
 type Config struct {
-	Type          string                     `json:"type" yaml:"type"`
-	AMQP          reader.AMQPConfig          `json:"amqp" yaml:"amqp"`
-	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
-	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
-	File          FileConfig                 `json:"file" yaml:"file"`
-	Files         reader.FilesConfig         `json:"files" yaml:"files"`
-	GCPPubSub     reader.GCPPubSubConfig     `json:"gcp_pubsub" yaml:"gcp_pubsub"`
-	HDFS          reader.HDFSConfig          `json:"hdfs" yaml:"hdfs"`
-	HTTPClient    HTTPClientConfig           `json:"http_client" yaml:"http_client"`
-	HTTPServer    HTTPServerConfig           `json:"http_server" yaml:"http_server"`
-	Inproc        InprocConfig               `json:"inproc" yaml:"inproc"`
-	Kafka         reader.KafkaConfig         `json:"kafka" yaml:"kafka"`
-	KafkaBalanced reader.KafkaBalancedConfig `json:"kafka_balanced" yaml:"kafka_balanced"`
-	Kinesis       reader.KinesisConfig       `json:"kinesis" yaml:"kinesis"`
-	MQTT          reader.MQTTConfig          `json:"mqtt" yaml:"mqtt"`
-	Nanomsg       reader.ScaleProtoConfig    `json:"nanomsg" yaml:"nanomsg"`
-	NATS          reader.NATSConfig          `json:"nats" yaml:"nats"`
-	NATSStream    reader.NATSStreamConfig    `json:"nats_stream" yaml:"nats_stream"`
-	NSQ           reader.NSQConfig           `json:"nsq" yaml:"nsq"`
-	Plugin        interface{}                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	ReadUntil     ReadUntilConfig            `json:"read_until" yaml:"read_until"`
-	RedisList     reader.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub   reader.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
-	RedisStreams  reader.RedisStreamsConfig  `json:"redis_streams" yaml:"redis_streams"`
-	S3            reader.AmazonS3Config      `json:"s3" yaml:"s3"`
-	SQS           reader.AmazonSQSConfig     `json:"sqs" yaml:"sqs"`
-	STDIN         STDINConfig                `json:"stdin" yaml:"stdin"`
-	Websocket     reader.WebsocketConfig     `json:"websocket" yaml:"websocket"`
-	ZMQ4          *reader.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	Processors    []processor.Config         `json:"processors" yaml:"processors"`
+	Type            string                       `json:"type" yaml:"type"`
+	AMQP            reader.AMQPConfig            `json:"amqp" yaml:"amqp"`
+	Broker          BrokerConfig                 `json:"broker" yaml:"broker"`
+	Dynamic         DynamicConfig                `json:"dynamic" yaml:"dynamic"`
+	File            FileConfig                   `json:"file" yaml:"file"`
+	Files           reader.FilesConfig           `json:"files" yaml:"files"`
+	GCPPubSub       reader.GCPPubSubConfig       `json:"gcp_pubsub" yaml:"gcp_pubsub"`
+	HDFS            reader.HDFSConfig            `json:"hdfs" yaml:"hdfs"`
+	HTTPClient      HTTPClientConfig             `json:"http_client" yaml:"http_client"`
+	HTTPServer      HTTPServerConfig             `json:"http_server" yaml:"http_server"`
+	Inproc          InprocConfig                 `json:"inproc" yaml:"inproc"`
+	Kafka           reader.KafkaConfig           `json:"kafka" yaml:"kafka"`
+	KafkaBalanced   reader.KafkaBalancedConfig   `json:"kafka_balanced" yaml:"kafka_balanced"`
+	Kinesis         reader.KinesisConfig         `json:"kinesis" yaml:"kinesis"`
+	KinesisBalanced reader.KinesisBalancedConfig `json:"kinesis_balanced" yaml:"kinesis_balanced"`
+	MQTT            reader.MQTTConfig            `json:"mqtt" yaml:"mqtt"`
+	Nanomsg         reader.ScaleProtoConfig      `json:"nanomsg" yaml:"nanomsg"`
+	NATS            reader.NATSConfig            `json:"nats" yaml:"nats"`
+	NATSStream      reader.NATSStreamConfig      `json:"nats_stream" yaml:"nats_stream"`
+	NSQ             reader.NSQConfig             `json:"nsq" yaml:"nsq"`
+	Plugin          interface{}                  `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	ReadUntil       ReadUntilConfig              `json:"read_until" yaml:"read_until"`
+	RedisList       reader.RedisListConfig       `json:"redis_list" yaml:"redis_list"`
+	RedisPubSub     reader.RedisPubSubConfig     `json:"redis_pubsub" yaml:"redis_pubsub"`
+	RedisStreams    reader.RedisStreamsConfig    `json:"redis_streams" yaml:"redis_streams"`
+	S3              reader.AmazonS3Config        `json:"s3" yaml:"s3"`
+	SQS             reader.AmazonSQSConfig       `json:"sqs" yaml:"sqs"`
+	STDIN           STDINConfig                  `json:"stdin" yaml:"stdin"`
+	Websocket       reader.WebsocketConfig       `json:"websocket" yaml:"websocket"`
+	ZMQ4            *reader.ZMQ4Config           `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Processors      []processor.Config           `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:          "stdin",
-		AMQP:          reader.NewAMQPConfig(),
-		Broker:        NewBrokerConfig(),
-		Dynamic:       NewDynamicConfig(),
-		File:          NewFileConfig(),
-		Files:         reader.NewFilesConfig(),
-		GCPPubSub:     reader.NewGCPPubSubConfig(),
-		HDFS:          reader.NewHDFSConfig(),
-		HTTPClient:    NewHTTPClientConfig(),
-		HTTPServer:    NewHTTPServerConfig(),
-		Inproc:        NewInprocConfig(),
-		Kafka:         reader.NewKafkaConfig(),
-		KafkaBalanced: reader.NewKafkaBalancedConfig(),
-		Kinesis:       reader.NewKinesisConfig(),
-		MQTT:          reader.NewMQTTConfig(),
-		Nanomsg:       reader.NewScaleProtoConfig(),
-		NATS:          reader.NewNATSConfig(),
-		NATSStream:    reader.NewNATSStreamConfig(),
-		NSQ:           reader.NewNSQConfig(),
-		Plugin:        nil,
-		ReadUntil:     NewReadUntilConfig(),
-		RedisList:     reader.NewRedisListConfig(),
-		RedisPubSub:   reader.NewRedisPubSubConfig(),
-		RedisStreams:  reader.NewRedisStreamsConfig(),
-		S3:            reader.NewAmazonS3Config(),
-		SQS:           reader.NewAmazonSQSConfig(),
-		STDIN:         NewSTDINConfig(),
-		Websocket:     reader.NewWebsocketConfig(),
-		ZMQ4:          reader.NewZMQ4Config(),
-		Processors:    []processor.Config{},
+		Type:            "stdin",
+		AMQP:            reader.NewAMQPConfig(),
+		Broker:          NewBrokerConfig(),
+		Dynamic:         NewDynamicConfig(),
+		File:            NewFileConfig(),
+		Files:           reader.NewFilesConfig(),
+		GCPPubSub:       reader.NewGCPPubSubConfig(),
+		HDFS:            reader.NewHDFSConfig(),
+		HTTPClient:      NewHTTPClientConfig(),
+		HTTPServer:      NewHTTPServerConfig(),
+		Inproc:          NewInprocConfig(),
+		Kafka:           reader.NewKafkaConfig(),
+		KafkaBalanced:   reader.NewKafkaBalancedConfig(),
+		Kinesis:         reader.NewKinesisConfig(),
+		KinesisBalanced: reader.NewKinesisBalancedConfig(),
+		MQTT:            reader.NewMQTTConfig(),
+		Nanomsg:         reader.NewScaleProtoConfig(),
+		NATS:            reader.NewNATSConfig(),
+		NATSStream:      reader.NewNATSStreamConfig(),
+		NSQ:             reader.NewNSQConfig(),
+		Plugin:          nil,
+		ReadUntil:       NewReadUntilConfig(),
+		RedisList:       reader.NewRedisListConfig(),
+		RedisPubSub:     reader.NewRedisPubSubConfig(),
+		RedisStreams:    reader.NewRedisStreamsConfig(),
+		S3:              reader.NewAmazonS3Config(),
+		SQS:             reader.NewAmazonSQSConfig(),
+		STDIN:           NewSTDINConfig(),
+		Websocket:       reader.NewWebsocketConfig(),
+		ZMQ4:            reader.NewZMQ4Config(),
+		Processors:      []processor.Config{},
 	}
 }
 

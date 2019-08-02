@@ -152,6 +152,22 @@ input:
         start_from_oldest: ${INPUT_KINESIS_START_FROM_OLDEST:true}
         stream: ${INPUT_KINESIS_STREAM}
         timeout: ${INPUT_KINESIS_TIMEOUT:5s}
+      kinesis_balanced:
+        credentials:
+          id: ${INPUT_KINESIS_BALANCED_CREDENTIALS_ID}
+          role: ${INPUT_KINESIS_BALANCED_CREDENTIALS_ROLE}
+          role_external_id: ${INPUT_KINESIS_BALANCED_CREDENTIALS_ROLE_EXTERNAL_ID}
+          secret: ${INPUT_KINESIS_BALANCED_CREDENTIALS_SECRET}
+          token: ${INPUT_KINESIS_BALANCED_CREDENTIALS_TOKEN}
+        dynamodb_billing_mode: ${INPUT_KINESIS_BALANCED_DYNAMODB_BILLING_MODE}
+        dynamodb_read_provision: ${INPUT_KINESIS_BALANCED_DYNAMODB_READ_PROVISION:0}
+        dynamodb_table: ${INPUT_KINESIS_BALANCED_DYNAMODB_TABLE}
+        dynamodb_write_provision: ${INPUT_KINESIS_BALANCED_DYNAMODB_WRITE_PROVISION:0}
+        endpoint: ${INPUT_KINESIS_BALANCED_ENDPOINT}
+        max_batch_count: ${INPUT_KINESIS_BALANCED_MAX_BATCH_COUNT:1}
+        region: ${INPUT_KINESIS_BALANCED_REGION}
+        start_from_oldest: ${INPUT_KINESIS_BALANCED_START_FROM_OLDEST:true}
+        stream: ${INPUT_KINESIS_BALANCED_STREAM}
       mqtt:
         client_id: ${INPUT_MQTT_CLIENT_ID:benthos_input}
         qos: ${INPUT_MQTT_QOS:1}
