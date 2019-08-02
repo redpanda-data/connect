@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	sess "github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/patrobinson/gokini"
 )
@@ -36,6 +37,7 @@ import (
 
 // KinesisConfig is configuration values for the input type.
 type KinesisBalancedConfig struct {
+	sess.Config           `json:",inline" yaml:",inline"`
 	Stream                string `json:"stream" yaml:"stream"`
 	DynamoDBTable         string `json:"dynamodb_table" yaml:"dynamodb_table"`
 	DynamoDBBillingMode   string `json:"dynamodb_billing_mode" yaml:"dynamodb_billing_mode"`
@@ -86,6 +88,10 @@ func NewKinesisBalanced(
 		log:   log,
 		stats: stats,
 	}
+	sess, err := conf.GetSession()
+	if err != nil {
+		return nil, err
+	}
 	kc := &gokini.KinesisConsumer{
 		StreamName:                  conf.Stream,
 		ShardIteratorType:           "TRIM_HORIZON",
@@ -93,6 +99,7 @@ func NewKinesisBalanced(
 		TableName:                   conf.DynamoDBTable,
 		EmptyRecordBackoffMs:        1000,
 		DisableAutomaticCheckpoints: true,
+		Session:                     sess,
 	}
 	if !consumer.conf.StartFromOldest {
 		kc.ShardIteratorType = "LATEST"
