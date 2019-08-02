@@ -53,56 +53,59 @@ element will be selected, and so on.
 
 Some processors such as `filter` and `dedupe` act across an entire
 batch, when instead we'd like to perform them on individual messages of a batch.
-In this case the [`process_batch`](#process_batch) processor can be
-used.
+In this case the [`for_each`](#for_each) processor can be used.
 
 ### Contents
 
 1. [`archive`](#archive)
-2. [`awk`](#awk)
-3. [`batch`](#batch)
-4. [`bounds_check`](#bounds_check)
-5. [`cache`](#cache)
-6. [`catch`](#catch)
-7. [`compress`](#compress)
-8. [`conditional`](#conditional)
-9. [`decode`](#decode)
-10. [`decompress`](#decompress)
-11. [`dedupe`](#dedupe)
-12. [`encode`](#encode)
-13. [`filter`](#filter)
-14. [`filter_parts`](#filter_parts)
-15. [`grok`](#grok)
-16. [`group_by`](#group_by)
-17. [`group_by_value`](#group_by_value)
-18. [`hash`](#hash)
-19. [`hash_sample`](#hash_sample)
-20. [`http`](#http)
-21. [`insert_part`](#insert_part)
-22. [`jmespath`](#jmespath)
-23. [`json`](#json)
-24. [`lambda`](#lambda)
-25. [`log`](#log)
-26. [`merge_json`](#merge_json)
-27. [`metadata`](#metadata)
-28. [`metric`](#metric)
-29. [`noop`](#noop)
-30. [`parallel`](#parallel)
-31. [`process_batch`](#process_batch)
-32. [`process_dag`](#process_dag)
-33. [`process_field`](#process_field)
-34. [`process_map`](#process_map)
-35. [`sample`](#sample)
-36. [`select_parts`](#select_parts)
-37. [`sleep`](#sleep)
-38. [`split`](#split)
-39. [`subprocess`](#subprocess)
-40. [`switch`](#switch)
-41. [`text`](#text)
-42. [`throttle`](#throttle)
-43. [`try`](#try)
-44. [`unarchive`](#unarchive)
-45. [`while`](#while)
+2. [`avro`](#avro)
+3. [`awk`](#awk)
+4. [`batch`](#batch)
+5. [`bounds_check`](#bounds_check)
+6. [`cache`](#cache)
+7. [`catch`](#catch)
+8. [`compress`](#compress)
+9. [`conditional`](#conditional)
+10. [`decode`](#decode)
+11. [`decompress`](#decompress)
+12. [`dedupe`](#dedupe)
+13. [`encode`](#encode)
+14. [`filter`](#filter)
+15. [`filter_parts`](#filter_parts)
+16. [`for_each`](#for_each)
+17. [`grok`](#grok)
+18. [`group_by`](#group_by)
+19. [`group_by_value`](#group_by_value)
+20. [`hash`](#hash)
+21. [`hash_sample`](#hash_sample)
+22. [`http`](#http)
+23. [`insert_part`](#insert_part)
+24. [`jmespath`](#jmespath)
+25. [`json`](#json)
+26. [`lambda`](#lambda)
+27. [`log`](#log)
+28. [`merge_json`](#merge_json)
+29. [`metadata`](#metadata)
+30. [`metric`](#metric)
+31. [`noop`](#noop)
+32. [`number`](#number)
+33. [`parallel`](#parallel)
+34. [`process_batch`](#process_batch)
+35. [`process_dag`](#process_dag)
+36. [`process_field`](#process_field)
+37. [`process_map`](#process_map)
+38. [`sample`](#sample)
+39. [`select_parts`](#select_parts)
+40. [`sleep`](#sleep)
+41. [`split`](#split)
+42. [`sql`](#sql)
+43. [`subprocess`](#subprocess)
+44. [`switch`](#switch)
+45. [`text`](#text)
+46. [`throttle`](#throttle)
+47. [`try`](#try)
+48. [`unarchive`](#unarchive)
+49. [`while`](#while)
 
 ## `archive`
 
@@ -129,6 +132,36 @@ the result to an array, which becomes the contents of the resulting message.
 
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.
+
+## `avro`
+
+``` yaml
+type: avro
+avro:
+  encoding: textual
+  operator: to_json
+  parts: []
+  schema: ""
+```
+
+EXPERIMENTAL: This processor is considered experimental and is therefore subject
+to change outside of major version releases.
+
+Performs Avro based operations on messages based on a schema. Supported encoding
+types are textual, binary and single.
+
+### Operators
+
+#### `to_json`
+
+Converts Avro documents into a JSON structure. This makes it easier to
+manipulate the contents of the document within Benthos. The encoding field
+specifies how the source documents are encoded.
+
+#### `from_json`
+
+Attempts to convert JSON documents into Avro documents according to the
+specified encoding.
 
 ## `awk`
 
@@ -237,9 +270,14 @@ messages then the parts will be sent as a batch of single part messages. If the
 output supports neither multipart or batches of messages then Benthos falls back
 to sending them individually.
 
-If a Benthos stream contains multiple brokered inputs or outputs then the batch
-operator should *always* be applied directly after an input in order to avoid
-unexpected behaviour and message ordering.
+### WARNING
+
+The batch processor should *always* be positioned within the `input`
+section - ideally before any other processor - in order to avoid unexpected
+acknowledgment behaviour and message ordering.
+
+For more information about batching in Benthos please check out
+[this document](../batching.md).
 
 ## `bounds_check`
 
@@ -309,14 +347,12 @@ duplicates using a
 condition:
 
 ``` yaml
-- type: cache
-  cache:
+- cache:
     cache: TODO
     operator: add
     key: "${!json_field:message.id}"
     value: "storeme"
-- type: filter_parts
-  filter_parts:
+- filter_parts:
     type: processor_failed
 ```
 
@@ -326,11 +362,9 @@ It's possible to enrich payloads with content previously stored in a cache by
 using the [`process_dag`](#process_dag) processor:
 
 ``` yaml
-- type: process_map
-  process_map:
+- process_map:
     processors:
-    - type: cache
-      cache:
+    - cache:
         cache: TODO
         operator: get
         key: "${!json_field:message.document_id}"
@@ -345,17 +379,16 @@ type: catch
 catch: []
 ```
 
-Behaves similarly to the [`process_batch`](#process_batch) processor,
-where a list of child processors are applied to individual messages of a batch.
-However, processors are only applied to messages that failed a processing step
-prior to the catch.
+Behaves similarly to the [`for_each`](#for_each) processor, where a
+list of child processors are applied to individual messages of a batch. However,
+processors are only applied to messages that failed a processing step prior to
+the catch.
 
 For example, with the following config:
 
 ``` yaml
 - type: foo
-- type: catch
-  catch:
+- catch:
   - type: bar
   - type: baz
 ```
@@ -407,7 +440,7 @@ the `else_processors` are applied. This processor is useful for
 applying processors based on the content of message batches.
 
 In order to conditionally process each message of a batch individually use this
-processor with the [`process_batch`](#process_batch) processor.
+processor with the [`for_each`](#for_each) processor.
 
 You can find a [full list of conditions here](../conditions).
 
@@ -421,7 +454,7 @@ decode:
 ```
 
 Decodes messages according to the selected scheme. Supported available schemes
-are: base64.
+are: hex, base64.
 
 ## `decompress`
 
@@ -454,7 +487,7 @@ none or xxhash.
 
 This processor acts across an entire batch, in order to deduplicate individual
 messages within a batch use this processor with the
-[`process_batch`](#process_batch) processor.
+[`for_each`](#for_each) processor.
 
 Optionally, the `key` field can be populated in order to hash on a
 function interpolated string rather than the full contents of messages. This
@@ -503,7 +536,7 @@ encode:
 ```
 
 Encodes messages according to the selected scheme. Supported schemes are:
-base64.
+hex, base64.
 
 ## `filter`
 
@@ -544,6 +577,22 @@ batch.
 This processor is useful if you are combining messages into batches using the
 [`batch`](#batch) processor and wish to remove specific parts.
 
+## `for_each`
+
+``` yaml
+type: for_each
+for_each: []
+```
+
+A processor that applies a list of child processors to messages of a batch as
+though they were each a batch of one message. This is useful for forcing batch
+wide processors such as [`dedupe`](#dedupe) or interpolations such as
+the `value` field of the `metadata` processor to execute on
+individual message parts of a batch instead.
+
+Please note that most processors already process per message of a batch, and
+this processor is not needed in those cases.
+
 ## `grok`
 
 ``` yaml
@@ -582,13 +631,11 @@ their grouping.
 Each group is configured in a list with a condition and a list of processors:
 
 ``` yaml
-type: group_by
 group_by:
-  - condition:
-      type: static
-      static: true
-    processors:
-      - type: noop
+- condition:
+    static: true
+  processors:
+  - type: noop
 ```
 
 Messages are added to the first group that passes and can only belong to a
@@ -604,33 +651,26 @@ with a [`switch`](../outputs/README.md#switch) output:
 ``` yaml
 pipeline:
   processors:
-  - type: group_by
-    group_by:
+  - group_by:
     - condition:
-        type: text
         text:
           operator: contains
           arg: "this is a foo"
       processors:
-      - type: archive
-        archive:
+      - archive:
           format: tar
-      - type: compress
-        compress:
+      - compress:
           algorithm: gzip
-      - type: metadata
-        metadata:
+      - metadata:
           operator: set
           key: grouping
           value: foo
 output:
-  type: switch
   switch:
     outputs:
     - output:
         type: foo_output
       condition:
-        type: metadata
         metadata:
           operator: equals
           key: grouping
@@ -664,17 +704,13 @@ path we could achieve that with the following:
 ``` yaml
 pipeline:
   processors:
-  - type: group_by_value
-    group_by_value:
+  - group_by_value:
       value: ${!metadata:kafka_key}
-  - type: archive
-    archive:
+  - archive:
       format: tar
-  - type: compress
-    compress:
+  - compress:
       algorithm: gzip
 output:
-  type: s3
   s3:
     bucket: TODO
     path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz
@@ -690,7 +726,7 @@ hash:
 ```
 
 Hashes messages according to the selected algorithm. Supported algorithms are:
-sha256, sha512, xxhash64.
+sha256, sha512, sha1, xxhash64.
 
 This processor is mostly useful when combined with the
 [`process_field`](#process_field) processor as it allows you to hash a
@@ -701,8 +737,7 @@ specific field of a document like this:
 process_field:
   path: foo.bar
   processors:
-  - type: hash
-    hash:
+  - hash:
       algorithm: sha256
 ```
 
@@ -725,7 +760,7 @@ results in dropping half of the input stream, and setting `retain_min`
 to `50.0` and `retain_max` to `100.1` will drop the _other_ half.
 
 In order to sample individual messages of a batch use this processor with the
-[`process_batch`](#process_batch) processor.
+[`for_each`](#for_each) processor.
 
 ## `http`
 
@@ -741,6 +776,7 @@ http:
       enabled: false
       password: ""
       username: ""
+    copy_response_headers: false
     drop_on: []
     headers:
       Content-Type: application/octet-stream
@@ -791,6 +827,14 @@ In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
 can use the [`process_map`](#process_map) or
  [`process_field`](#process_field) processors.
+
+### Metadata
+
+If the request returns a response code this processor sets a metadata field
+`http_status_code` on all resulting messages.
+
+If the field `copy_response_headers` is set to `true` then any headers
+in the response will also be set in the resulting message as metadata.
  
 ### Error Handling
 
@@ -816,6 +860,9 @@ counting backwards starting from -1. E.g. if index = -1 then the new message
 will become the last of the batch, if index = -2 then the new message will be
 inserted before the last message, and so on. If the negative index is greater
 than the length of the existing batch it will be inserted at the beginning.
+
+The new message will have metadata copied from the first pre-existing message of
+the batch.
 
 This processor will interpolate functions within the 'content' field, you can
 find a list of functions [here](../config_interpolation.md#functions).
@@ -869,7 +916,7 @@ messages with boolean queries please instead use the
 ``` yaml
 type: json
 json:
-  operator: get
+  operator: clean
   parts: []
   path: ""
   value: ""
@@ -994,6 +1041,13 @@ attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](../error_handling.md).
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ## `log`
 
 ``` yaml
@@ -1004,10 +1058,13 @@ log:
   message: ""
 ```
 
-Log is a processor that prints a log event each time it processes a message. The
-message is then sent onwards unchanged. The log message can be set using
-function interpolations described [here](../config_interpolation.md#functions)
-which allows you to log the contents and metadata of a message.
+Log is a processor that prints a log event each time it processes a batch. The
+batch is then sent onwards unchanged. The log message can be set using function
+interpolations described [here](../config_interpolation.md#functions) which
+allows you to log the contents and metadata of a messages within a batch.
+
+In order to print a log message per message of a batch place it within a
+[`for_each`](#for_each) processor.
 
 For example, if we wished to create a debug log event for each message in a
 pipeline in order to expose the JSON field `foo.bar` as well as the
@@ -1015,10 +1072,10 @@ metadata field `kafka_partition` we can achieve that with the
 following config:
 
 ``` yaml
-type: log
-log:
-  level: DEBUG
-  message: "field: ${!json_field:foo.bar}, part: ${!metadata:kafka_partition}"
+for_each:
+- log:
+    level: DEBUG
+    message: "field: ${!json_field:foo.bar}, part: ${!metadata:kafka_partition}"
 ```
 
 The `level` field determines the log level of the printed events and
@@ -1032,7 +1089,6 @@ interpolated, meaning it's possible to output structured fields containing
 message contents and metadata, e.g.:
 
 ``` yaml
-type: log
 log:
   level: DEBUG
   message: "foo"
@@ -1078,6 +1134,18 @@ you can find a list of functions [here](../config_interpolation.md#functions).
 This allows you to set the contents of a metadata field using values taken from
 the message payload.
 
+Value interpolations are resolved once per batch. In order to resolve them per
+message of a batch place it within a [`for_each`](#for_each)
+processor:
+
+``` yaml
+for_each:
+- metadata:
+    operator: set
+    key: foo
+    value: ${!json_field:document.foo}
+```
+
 ### Operators
 
 #### `set`
@@ -1104,7 +1172,17 @@ metric:
   value: ""
 ```
 
-Creates metrics by extracting values from messages.
+Expose custom metrics by extracting values from message batches. This processor
+executes once per batch, in order to execute once per message place it within a
+[`for_each`](#for_each) processor:
+
+``` yaml
+for_each:
+- metric:
+    type: counter_by
+    path: count.custom.field
+    value: ${!json_field:field.some.value}
+```
 
 The `path` field should be a dot separated path of the metric to be
 set and will automatically be converted into the correct format of the
@@ -1135,7 +1213,6 @@ For example, the following configuration will increment the value of the
 `count.custom.field` metric by the contents of `field.some.value`:
 
 ``` yaml
-type: metric
 metric:
   type: counter_by
   path: count.custom.field
@@ -1151,7 +1228,6 @@ For example, the following configuration will set the value of the
 `gauge.custom.field` metric to the contents of `field.some.value`:
 
 ``` yaml
-type: metric
 metric:
   type: gauge
   path: gauge.custom.field
@@ -1178,6 +1254,52 @@ type: noop
 Noop is a no-op processor that does nothing, the message passes through
 unchanged.
 
+## `number`
+
+``` yaml
+type: number
+number:
+  operator: add
+  parts: []
+  value: 0
+```
+
+Parses message contents into a 64-bit floating point number and performs an
+operator on it. In order to execute this processor on a sub field of a document
+use it with the [`process_field`](#process_field) processor.
+
+The value field can either be a number or a string type. If it is a string type
+then this processor will interpolate functions within it, you can find a list of
+functions [here](../config_interpolation.md#functions).
+
+For example, if we wanted to subtract the current unix timestamp from the field
+'foo' of a JSON document `{"foo":1561219142}` we could use the
+following config:
+
+``` yaml
+process_field:
+  path: foo
+  result_type: float
+  processors:
+  - number:
+      operator: subtract
+      value: "${!timestamp_unix}"
+```
+
+Value interpolations are resolved once per message batch, in order to resolve it
+for each message of the batch place it within a
+[`for_each`](#for_each) processor.
+
+### Operators
+
+#### `add`
+
+Adds a value.
+
+#### `subtract`
+
+Subtracts a value.
+
 ## `parallel`
 
 ``` yaml
@@ -1189,8 +1311,8 @@ parallel:
 
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message (similar to the
-[`process_batch`](#process_batch) processor), but where each message
-is processed in parallel.
+[`for_each`](#for_each) processor), but where each message is
+processed in parallel.
 
 The field `cap`, if greater than zero, caps the maximum number of
 parallel processing threads.
@@ -1202,13 +1324,8 @@ type: process_batch
 process_batch: []
 ```
 
-A processor that applies a list of child processors to messages of a batch as
-though they were each a batch of one message. This is useful for forcing batch
-wide processors such as [`dedupe`](#dedupe) to apply to individual
-message parts of a batch instead.
-
-Please note that most processors already process per message of a batch, and
-this processor is not needed in those cases.
+Alias for the [`for_each`](#for_each) processor, which should be used
+instead.
 
 ## `process_dag`
 
@@ -1223,7 +1340,8 @@ their postmap targets for provided fields and their premap targets for required
 fields.
 
 The DAG is then used to execute the children in the necessary order with the
-maximum parallelism possible.
+maximum parallelism possible. You can read more about workflows in Benthos
+[in this document](../workflows.md).
 
 The field `dependencies` is an optional array of fields that a child
 depends on. This is useful for when fields are required but don't appear within
@@ -1238,14 +1356,12 @@ document with - foo, bar and baz - where baz relies on the result of both foo
 and bar, we might express that relationship here like so:
 
 ``` yaml
-type: process_dag
 process_dag:
   foo:
     premap:
       .: .
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://foo/enrich
     postmap:
@@ -1254,8 +1370,7 @@ process_dag:
     premap:
       .: msg.sub.path
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://bar/enrich
     postmap:
@@ -1265,8 +1380,7 @@ process_dag:
       foo_obj: foo_result
       bar_obj: bar_result
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://baz/enrich
     postmap:
@@ -1284,12 +1398,42 @@ process_field:
   parts: []
   path: ""
   processors: []
+  result_type: string
 ```
 
 A processor that extracts the value of a field within payloads (currently only
 JSON format is supported) then applies a list of processors to the extracted
-value, and finally sets the field within the original payloads to the processed
+value and finally sets the field within the original payloads to the processed
 result.
+
+For example, with an input document `{"foo":"hello world"}` it's
+possible to uppercase the value of the field foo with a [`text`](#text)
+child processor:
+
+``` yaml
+process_field:
+  path: foo
+  processors:
+  - text:
+      operator: to_upper
+```
+
+The result, according to the config field `result_type`, can be
+marshalled into any of the following types:
+`string` (default), `int`, `float`, `bool`, `object` (including null),
+ `array` and `discard`. The discard type is a special case that
+discards the result of the processing steps entirely.
+
+It's therefore possible to use this processor without any child processors as a
+way of casting string values into other types. For example, with an input JSON
+document `{"foo":"10"}` it's possible to cast the value of the
+field foo to an integer type with:
+
+``` yaml
+process_field:
+  path: foo
+  result_type: int
+```
 
 If the number of messages resulting from the processing steps does not match the
 original count then this processor fails and the messages continue unchanged.
@@ -1423,6 +1567,16 @@ Sleep for a period of time specified as a duration string. This processor will
 interpolate functions within the `duration` field, you can find a list
 of functions [here](../config_interpolation.md#functions).
 
+This processor executes once per message batch. In order to execute once for
+each message of a batch place it within a
+[`for_each`](#for_each) processor:
+
+``` yaml
+for_each:
+- sleep:
+    duration: ${!metadata:sleep_for}
+```
+
 ## `split`
 
 ``` yaml
@@ -1442,12 +1596,73 @@ also sent as a single batch. For example, if your target size was 10, and the
 processor received a batch of 95 message parts, the result would be 9 batches of
 10 messages followed by a batch of 5 messages.
 
+## `sql`
+
+``` yaml
+type: sql
+sql:
+  args: []
+  driver: mysql
+  dsn: ""
+  query: ""
+  result_codec: none
+```
+
+SQL is a processor that runs a query against a target database for each message
+batch and, for queries that return rows, replaces the batch with the result.
+
+If a query contains arguments they can be set as an array of strings supporting
+[interpolation functions](../config_interpolation.md#functions) in the
+`args` field.
+
+In order to execute an SQL query for each message of the batch use this
+processor within a [`for_each`](#for_each) processor:
+
+``` yaml
+for_each:
+- sql:
+    driver: mysql
+    dsn: foouser:foopassword@tcp(localhost:3306)/foodb
+    query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+    args:
+    - ${!json_field:document.foo}
+    - ${!json_field:document.bar}
+    - ${!metadata:kafka_topic}
+```
+
+### Result Codecs
+
+When a query returns rows they are serialised according to a chosen codec, and
+the batch contents are replaced with the serialised result.
+
+#### `none`
+
+The result of the query is ignored and the message batch remains unchanged. If
+your query does not return rows then this is the appropriate codec.
+
+#### `json_array`
+
+The resulting rows are serialised into an array of JSON objects, where each
+object represents a row, where the key is the column name and the value is that
+columns value in the row.
+
+### Drivers
+
+The following is a list of supported drivers and their respective DSN formats:
+
+- `mysql`: `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]`
+- `postgres`: `postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`
+
+Please note that the `postgres` driver enforces SSL by default, you
+can override this with the parameter `sslmode=disable` if required.
+
 ## `subprocess`
 
 ``` yaml
 type: subprocess
 subprocess:
   args: []
+  max_buffer: 65536
   name: cat
   parts: []
 ```
@@ -1458,8 +1673,12 @@ newline.
 
 The subprocess must then either return a line over stdout or stderr. If a
 response is returned over stdout then its contents will replace the message. If
-a response is instead returned from stderr will be logged and the message will
-continue unchanged and will be marked as failed.
+a response is instead returned from stderr it will be logged and the message
+will continue unchanged and will be [marked as failed](../error_handling.md).
+
+The field `max_buffer` defines the maximum response size able to be
+read from the subprocess. This value should be set significantly above the real
+expected maximum response size.
 
 #### Subprocess requirements
 
@@ -1501,7 +1720,7 @@ A case takes this form:
 ```
 
 In order to switch each message of a batch individually use this processor with
-the [`process_batch`](#process_batch) processor.
+the [`for_each`](#for_each) processor.
 
 You can find a [full list of conditions here](../conditions).
 
@@ -1520,6 +1739,17 @@ Performs text based mutations on payloads.
 
 This processor will interpolate functions within the `value` field,
 you can find a list of functions [here](../config_interpolation.md#functions).
+
+Value interpolations are resolved once per message batch, in order to resolve it
+for each message of the batch place it within a
+[`for_each`](#for_each) processor:
+
+``` yaml
+for_each:
+- text:
+    operator: set
+    value: ${!json_field:document.content}
+```
 
 ### Operators
 
@@ -1608,16 +1838,15 @@ type: try
 try: []
 ```
 
-Behaves similarly to the [`process_batch`](#process_batch) processor,
-where a list of child processors are applied to individual messages of a batch.
-However, if a processor fails for a message then that message will skip all
-following processors.
+Behaves similarly to the [`for_each`](#for_each) processor, where a
+list of child processors are applied to individual messages of a batch. However,
+if a processor fails for a message then that message will skip all following
+processors.
 
 For example, with the following config:
 
 ``` yaml
-- type: try
-  try:
+- try:
   - type: foo
   - type: bar
   - type: baz

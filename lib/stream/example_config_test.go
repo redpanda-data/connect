@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/types"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 // CustomProcessor is a types.Processor implementation that does nothing.

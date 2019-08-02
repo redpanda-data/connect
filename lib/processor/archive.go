@@ -310,7 +310,7 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	newPart, err := d.archive(d.createHeaderFunc(msg), msg)
 	if err != nil {
 		newMsg.Iter(func(i int, p types.Part) error {
-			FlagFail(p)
+			FlagErr(p, err)
 			spans[i].LogFields(
 				olog.String("event", "error"),
 				olog.String("type", err.Error()),

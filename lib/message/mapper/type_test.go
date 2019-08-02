@@ -25,11 +25,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/gabs"
 )
 
 func TestTypeDeps(t *testing.T) {
@@ -358,11 +359,104 @@ func TestTypeMapRequests(t *testing.T) {
 	}
 }
 
+func TestMapRequestsOverride(t *testing.T) {
+	inputObj := gabs.New()
+	inputObj.Set("baz", "foo", "bar")
+	inputObj.Set("qux", "foo", "baz", "test")
+	expInput := inputObj.String()
+
+	inputMsg := message.New(make([][]byte, 1))
+	inputMsg.Get(0).SetJSON(inputObj.Data())
+
+	e, err := New(OptSetReqMap(map[string]string{
+		"new":     "foo.baz",
+		"new.bar": "foo.bar",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := inputMsg.Copy()
+	skipped, failed := e.MapRequests(res)
+	if act, exp := failed, []int(nil); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong failed slice: %v != %v", act, exp)
+	}
+	if act, exp := skipped, []int(nil); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong skipped slice: %v != %v", act, exp)
+	}
+
+	expMsg := [][]byte{
+		[]byte(`{"new":{"bar":"baz","test":"qux"}}`),
+	}
+	if act, exp := message.GetAllBytes(res), expMsg; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong output: %s != %s", act, exp)
+	}
+
+	if actInput := inputObj.String(); actInput != expInput {
+		t.Errorf("Input object changed: %v != %v", actInput, expInput)
+	}
+}
+
+/*
+TODO: Eventually support this.
+func TestMapRequestsOverlayOverride(t *testing.T) {
+	inputObj := gabs.New()
+	inputObj.Set("baz", "foo", "bar")
+	inputObj.Set("qux", "foo", "baz", "test")
+	expInput := inputObj.String()
+
+	inputMsg := message.New(make([][]byte, 1))
+	inputMsg.Get(0).SetJSON(inputObj.Data())
+
+	e, err := New(OptSetReqMap(map[string]string{
+		".":     ".",
+	}), OptSetResMap(map[string]string{
+		".": ".",
+		"foo.new": ".",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := inputMsg.Copy()
+	skipped, failed := e.MapRequests(request)
+	if act, exp := failed, []int(nil); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong failed slice: %v != %v", act, exp)
+	}
+	if act, exp := skipped, []int(nil); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong skipped slice: %v != %v", act, exp)
+	}
+
+	expMsg := [][]byte{
+		[]byte(`{"foo":{"bar":"baz","baz":{"test":"qux"}}}`),
+	}
+	if act, exp := message.GetAllBytes(request), expMsg; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong output: %s != %s", act, exp)
+	}
+
+	result := inputMsg.DeepCopy()
+	if _, err = e.MapResponses(result, request); err != nil {
+		t.Fatal(err)
+	}
+
+	expMsg = [][]byte{
+		[]byte(`{"foo":{"bar":"baz","baz":{"test":"qux"},"double":{"new":{"foo":{"bar":"baz","baz":{"test":"qux"},"double":{"new":{"test":"qux"}}}}}}}`),
+	}
+	if act, exp := message.GetAllBytes(result), expMsg; !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong output: %s != %s", act, exp)
+	}
+
+	if actInput := inputObj.String(); actInput != expInput {
+		t.Errorf("Input object changed: %v != %v", actInput, expInput)
+	}
+}
+*/
+
 func TestMapRequestsParallel(t *testing.T) {
 	N := 100
 
 	inputMsg := message.New([][]byte{
-		[]byte(`{"foo":{"bar":"baz"}}`),
+		[]byte(`{"foo":{"bar":"baz","baz":{"test":"qux"}}}`),
 	})
 	inputMsg.Iter(func(i int, p types.Part) error {
 		_, _ = p.JSON()
@@ -370,7 +464,7 @@ func TestMapRequestsParallel(t *testing.T) {
 		return nil
 	})
 	expMsg := [][]byte{
-		[]byte(`{"new":{"bar":"baz"}}`),
+		[]byte(`{"new":{"bar":"baz","test":"qux"}}`),
 	}
 
 	wg := sync.WaitGroup{}
@@ -389,6 +483,7 @@ func TestMapRequestsParallel(t *testing.T) {
 		}
 
 		e, err := New(OptSetReqMap(map[string]string{
+			"new":     "foo.baz",
 			"new.bar": "foo.bar",
 		}), OptSetConditions([]types.Condition{cond}))
 		if err != nil {

@@ -29,7 +29,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	yaml "gopkg.in/yaml.v2"
+	"github.com/Jeffail/benthos/lib/util/config"
 )
 
 //------------------------------------------------------------------------------
@@ -49,9 +49,7 @@ type PluginConstructor func(
 ) (types.Output, error)
 
 // PluginConfigConstructor is a func that returns a pointer to a new and fully
-// populated configuration struct for a plugin type. It is valid to return a
-// pointer to an empty struct (&struct{}{}) if no configuration fields are
-// needed.
+// populated configuration struct for a plugin type.
 type PluginConfigConstructor func() interface{}
 
 // PluginConfigSanitiser is a function that takes a configuration object for a
@@ -74,10 +72,9 @@ type pluginSpec struct {
 var pluginSpecs = map[string]pluginSpec{}
 
 // RegisterPlugin registers a plugin by a unique name so that it can be
-// constucted similar to regular outputs. A constructor for both the plugin
-// itself as well as its configuration struct must be provided.
-//
-// WARNING: This API is experimental and could (is likely) to change.
+// constructed similar to regular outputs. If configuration is not needed for
+// this plugin then configConstructor can be nil. A constructor for the plugin
+// itself must be provided.
 func RegisterPlugin(
 	typeString string,
 	configConstructor PluginConfigConstructor,
@@ -102,9 +99,15 @@ func DocumentPlugin(
 	pluginSpecs[typeString] = spec
 }
 
+// PluginCount returns the number of registered plugins. This does NOT count the
+// standard set of components.
+func PluginCount() int {
+	return len(pluginSpecs)
+}
+
 //------------------------------------------------------------------------------
 
-var pluginHeader = `This document has been generated, do not edit it directly.
+var pluginHeader = "This document was generated with `benthos --list-output-plugins`." + `
 
 This document lists any output plugins that this flavour of Benthos offers
 beyond the standard set.`
@@ -141,11 +144,13 @@ func PluginDescriptions() string {
 	for i, name := range names {
 		var confBytes []byte
 
-		conf := NewConfig()
-		conf.Type = name
-		conf.Plugin = pluginSpecs[name].confConstructor()
-		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = yaml.Marshal(confSanit)
+		if confCtor := pluginSpecs[name].confConstructor; confCtor != nil {
+			conf := NewConfig()
+			conf.Type = name
+			conf.Plugin = confCtor()
+			if confSanit, err := SanitiseConfig(conf); err == nil {
+				confBytes, _ = config.MarshalYAML(confSanit)
+			}
 		}
 
 		buf.WriteString("## ")

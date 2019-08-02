@@ -55,17 +55,16 @@ Please always make sure a pull request has been:
 - Formatted with `make fmt`
 
 And if your change has an impact on documentation then make sure it is generated
-with `make docs`.
+with `make docs`. If you install [mkdocs](https://www.mkdocs.org/) then you can
+also test that the documentation is formatted correctly with:
+`mkdocs serve -f ./.mkdocs.yml`.
 
 ### Plugins
 
 The core components within Benthos (inputs, processors, conditions and outputs)
-are all easily pluggable. However, these components are carefully vetted and
-there are no plans to add niche or user specific plugins to the main project.
+are all easily pluggable. If you are interested in adding new components please
+raise a ticket and we can discuss whether it's a good fit for the project.
 
-There are general plans for allowing a separate tier of implementations of these
-components into the main project, but until these plans are finalised and
-implemented please keep your plugins on a fork.
-
-However, if your component implementations are generally useful please raise an
-issue and we can discuss adding it into the main project.
+If not then it's still easy to build your own version of Benthos with custom
+components. For guidance take a look at
+[this example repo](https://github.com/benthosdev/benthos-plugin-example).

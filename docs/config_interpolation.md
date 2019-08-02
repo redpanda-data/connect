@@ -20,6 +20,12 @@ this is the [environment variable config][env_var_config], which creates
 environment variables for each default field value in a standard
 single-in-single-out bridge config.
 
+### Escaping
+
+If a literal string is required that matches this pattern (`${foo}`) you can
+escape it with double brackets. For example, the string `${{foo}}` is read as
+the literal `${foo}`.
+
 ## Example
 
 Let's say you plan to bridge a Kafka deployment to a RabbitMQ exchange but we
@@ -58,9 +64,20 @@ KAFKA_BROKERS="foo:9092,bar:9092" \
 
 ## Functions
 
+Some string fields within a Benthos config support function interpolations,
+these are context specific functions that are executed every time the string is
+used. To find out if a field supports function interpolation refer to its
+documentation.
+
 The syntax for functions is `${!function-name}`, or `${!function-name:arg}` if
-the function takes an argument, where `function-name` should be replaced with
-one of the following function names:
+the function takes an argument, where `function-name` should be replaced with a
+valid function.
+
+If a literal string is required that matches this pattern (`${!foo}`) then,
+similarly to environment variables, you can escape it with double brackets. For
+example, the string `${{!foo}}` would be read as the literal `${!foo}`.
+
+Benthos supports the following functions:
 
 ### `content`
 
@@ -71,6 +88,20 @@ When applied to a batch of message parts this function targets the first message
 part by default. It is possible to specify a target part index with an integer
 argument, e.g. `${!content:2}` would print the contents of the third message
 part.
+
+### `error`
+
+If an error has occurred during the processing of a message part this function
+resolves to the reported cause of the error. For more information about error
+handling patterns read [here](./error_handling.md).
+
+When applied to a batch of message parts this function targets the first message
+part by default. It is possible to specify a target part index with an integer
+argument, e.g. `${!error:2}` would print the error of the third message part.
+
+### `batch_size`
+
+Resolves to the size of a message batch.
 
 ### `json_field`
 

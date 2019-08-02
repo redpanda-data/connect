@@ -24,6 +24,8 @@ import (
 	"regexp"
 	"testing"
 	"time"
+
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestWhitelistPaths(t *testing.T) {
@@ -38,6 +40,7 @@ func TestWhitelistPaths(t *testing.T) {
 		paths:    []string{"output", "input", "metrics"},
 		patterns: []*regexp.Regexp{},
 		s:        child,
+		log:      log.Noop(),
 	}
 
 	whitelistedStats := []string{"output.broker", "input.test", "metrics.status"}
@@ -66,6 +69,7 @@ func TestWhitelistPatterns(t *testing.T) {
 	w := &Whitelist{
 		paths: []string{},
 		s:     child,
+		log:   log.Noop(),
 	}
 
 	testPatterns := []string{"^output.broker", "^input$"}

@@ -38,7 +38,14 @@ support creating the target index.
 
 Both the ` + "`id` and `index`" + ` fields can be dynamically set using function
 interpolations described [here](../config_interpolation.md#functions). When
-sending batched messages these interpolations are performed per message part.`,
+sending batched messages these interpolations are performed per message part.
+
+### AWS Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).`,
 	}
 }
 

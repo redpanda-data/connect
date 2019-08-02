@@ -22,6 +22,7 @@ package processor
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,8 +42,37 @@ func init() {
 		description: `
 A processor that extracts the value of a field within payloads (currently only
 JSON format is supported) then applies a list of processors to the extracted
-value, and finally sets the field within the original payloads to the processed
+value and finally sets the field within the original payloads to the processed
 result.
+
+For example, with an input document ` + "`{\"foo\":\"hello world\"}`" + ` it's
+possible to uppercase the value of the field foo with a ` + "[`text`](#text)" + `
+child processor:
+
+` + "``` yaml" + `
+process_field:
+  path: foo
+  processors:
+  - text:
+      operator: to_upper
+` + "```" + `
+
+The result, according to the config field ` + "`result_type`" + `, can be
+marshalled into any of the following types:
+` + "`string` (default), `int`, `float`, `bool`, `object` (including null)," + `
+` + " `array` and `discard`" + `. The discard type is a special case that
+discards the result of the processing steps entirely.
+
+It's therefore possible to use this processor without any child processors as a
+way of casting string values into other types. For example, with an input JSON
+document ` + "`{\"foo\":\"10\"}`" + ` it's possible to cast the value of the
+field foo to an integer type with:
+
+` + "``` yaml" + `
+process_field:
+  path: foo
+  result_type: int
+` + "```" + `
 
 If the number of messages resulting from the processing steps does not match the
 original count then this processor fails and the messages continue unchanged.
@@ -56,9 +86,10 @@ Therefore, you should avoid using batch and filter type processors in this list.
 				}
 			}
 			return map[string]interface{}{
-				"parts":      conf.ProcessField.Parts,
-				"path":       conf.ProcessField.Path,
-				"processors": procConfs,
+				"parts":       conf.ProcessField.Parts,
+				"path":        conf.ProcessField.Path,
+				"result_type": conf.ProcessField.ResultType,
+				"processors":  procConfs,
 			}, nil
 		},
 	}
@@ -71,6 +102,7 @@ Therefore, you should avoid using batch and filter type processors in this list.
 type ProcessFieldConfig struct {
 	Parts      []int    `json:"parts" yaml:"parts"`
 	Path       string   `json:"path" yaml:"path"`
+	ResultType string   `json:"result_type" yaml:"result_type"`
 	Processors []Config `json:"processors" yaml:"processors"`
 }
 
@@ -79,6 +111,7 @@ func NewProcessFieldConfig() ProcessFieldConfig {
 	return ProcessFieldConfig{
 		Parts:      []int{},
 		Path:       "",
+		ResultType: "string",
 		Processors: []Config{},
 	}
 }
@@ -91,6 +124,8 @@ type ProcessField struct {
 	parts    []int
 	path     []string
 	children []types.Processor
+
+	resultCodec processFieldResultMarshaller
 
 	log log.Modular
 
@@ -116,10 +151,15 @@ func NewProcessField(
 		}
 		children = append(children, proc)
 	}
+	marshaller, err := stringToProcessFieldResultMarshaller(conf.ProcessField.ResultType)
+	if err != nil {
+		return nil, err
+	}
 	return &ProcessField{
-		parts:    conf.ProcessField.Parts,
-		path:     strings.Split(conf.ProcessField.Path, "."),
-		children: children,
+		parts:       conf.ProcessField.Parts,
+		path:        strings.Split(conf.ProcessField.Path, "."),
+		children:    children,
+		resultCodec: marshaller,
 
 		log: log,
 
@@ -131,6 +171,79 @@ func NewProcessField(
 		mSent:               stats.GetCounter("sent"),
 		mBatchSent:          stats.GetCounter("batch.sent"),
 	}, nil
+}
+
+//------------------------------------------------------------------------------
+
+type processFieldResultMarshaller func(p types.Part) (interface{}, error)
+
+func processFieldResultStringMarshaller(p types.Part) (interface{}, error) {
+	return string(p.Get()), nil
+}
+
+func processFieldResultIntMarshaller(p types.Part) (interface{}, error) {
+	return strconv.Atoi(string(p.Get()))
+}
+
+func processFieldResultFloatMarshaller(p types.Part) (interface{}, error) {
+	return strconv.ParseFloat(string(p.Get()), 64)
+}
+
+func processFieldResultBoolMarshaller(p types.Part) (interface{}, error) {
+	str := string(p.Get())
+	if str == "true" {
+		return true, nil
+	}
+	if str == "false" {
+		return false, nil
+	}
+	return nil, fmt.Errorf("value '%v' could not be parsed as bool", str)
+}
+
+func processFieldResultObjectMarshaller(p types.Part) (interface{}, error) {
+	jVal, err := p.JSON()
+	if err != nil {
+		return nil, err
+	}
+	// We consider null as an object
+	if jVal == nil {
+		return nil, nil
+	}
+	if jObj, ok := jVal.(map[string]interface{}); ok {
+		return jObj, nil
+	}
+	return nil, fmt.Errorf("failed to parse JSON type '%T' into object", jVal)
+}
+
+func processFieldResultArrayMarshaller(p types.Part) (interface{}, error) {
+	jVal, err := p.JSON()
+	if err != nil {
+		return nil, err
+	}
+	if jArray, ok := jVal.([]interface{}); ok {
+		return jArray, nil
+	}
+	return nil, fmt.Errorf("failed to parse JSON type '%T' into array", jVal)
+}
+
+func stringToProcessFieldResultMarshaller(str string) (processFieldResultMarshaller, error) {
+	switch str {
+	case "string":
+		return processFieldResultStringMarshaller, nil
+	case "int":
+		return processFieldResultIntMarshaller, nil
+	case "float":
+		return processFieldResultFloatMarshaller, nil
+	case "bool":
+		return processFieldResultBoolMarshaller, nil
+	case "object":
+		return processFieldResultObjectMarshaller, nil
+	case "array":
+		return processFieldResultArrayMarshaller, nil
+	case "discard":
+		return nil, nil
+	}
+	return nil, fmt.Errorf("unrecognised result_type: %v", str)
 }
 
 //------------------------------------------------------------------------------
@@ -155,11 +268,12 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	gParts := make([]*gabs.Container, len(targetParts))
 
 	for i, index := range targetParts {
-		reqPart := message.MetaPartCopy(payload.Get(index))
-		reqPart.Set([]byte(""))
-		var err error
-		var jObj interface{}
-		if jObj, err = payload.Get(index).JSON(); err != nil {
+		reqPart := payload.Get(index).Copy()
+		jObj, err := reqPart.JSON()
+		if err == nil {
+			jObj, err = message.CopyJSON(jObj)
+		}
+		if err != nil {
 			p.mErrJSONParse.Incr(1)
 			p.mErr.Incr(1)
 			p.log.Errorf("Failed to decode part: %v\n", err)
@@ -190,21 +304,47 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	}
 	defer tracing.FinishSpans(propMsg)
 
+	if p.resultCodec == nil {
+		// With no result codec, if our results are inline with our original
+		// batch we copy the metadata only.
+		if len(targetParts) == resMsg.Len() {
+			for i, index := range targetParts {
+				tPart := payload.Get(index)
+				tPartMeta := tPart.Metadata()
+				resMsg.Get(i).Metadata().Iter(func(k, v string) error {
+					tPartMeta.Set(k, v)
+					return nil
+				})
+			}
+		}
+		p.mBatchSent.Incr(1)
+		p.mSent.Incr(int64(payload.Len()))
+		return
+	}
+
 	if exp, act := len(targetParts), resMsg.Len(); exp != act {
 		p.mBatchSent.Incr(1)
 		p.mSent.Incr(int64(payload.Len()))
 		p.mErr.Incr(1)
 		p.mErrMisalignedBatch.Incr(1)
 		p.log.Errorf("Misaligned processor result batch. Expected %v messages, received %v\n", exp, act)
+		partsErr := fmt.Errorf("mismatched processor result, expected %v, received %v messages", exp, act)
 		payload.Iter(func(i int, p types.Part) error {
-			FlagFail(p)
+			FlagErr(p, partsErr)
 			return nil
 		})
 		return
 	}
 
 	for i, index := range targetParts {
-		gParts[i].Set(string(resMsg.Get(i).Get()), p.path...)
+		resVal, rErr := p.resultCodec(resMsg.Get(i))
+		if rErr != nil {
+			p.log.Errorf("Failed to marshal result: %v\n", rErr)
+			FlagErr(resMsg.Get(i), rErr)
+			continue
+		}
+
+		gParts[i].Set(resVal, p.path...)
 		tPart := payload.Get(index)
 		tPart.SetJSON(gParts[i].Data())
 		tPartMeta := tPart.Metadata()

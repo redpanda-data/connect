@@ -28,7 +28,7 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 type mockPluginConf struct {
@@ -47,6 +47,7 @@ func newMockPluginConf() interface{} {
 
 func TestYAMLPlugin(t *testing.T) {
 	errTest := errors.New("test err")
+	errTest2 := errors.New("test err 2")
 
 	RegisterPlugin("foo", newMockPluginConf,
 		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Processor, error) {
@@ -66,6 +67,11 @@ func TestYAMLPlugin(t *testing.T) {
 			return nil, errTest
 		})
 
+	RegisterPlugin("foo_no_conf", nil,
+		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Processor, error) {
+			return nil, errTest2
+		})
+
 	confStr := `type: foo
 plugin:
   bar: custom`
@@ -75,9 +81,18 @@ plugin:
 		t.Fatal(err)
 	}
 
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != errTest {
+	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err != errTest {
 		t.Errorf("Wrong error returned: %v != %v", err, errTest)
+	}
+
+	confStr = `type: foo_no_conf`
+	conf = NewConfig()
+	if err := yaml.Unmarshal([]byte(confStr), &conf); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err != errTest2 {
+		t.Errorf("Wrong error returned: %v != %v", err, errTest2)
 	}
 }
 
@@ -94,11 +109,14 @@ func TestPluginDescriptions(t *testing.T) {
 			"bar": mConf.Bar,
 		}
 	})
+	RegisterPlugin("foo_no_conf", nil, nil)
+	DocumentPlugin("foo_no_conf", "This is a plugin without config.", nil)
+	RegisterPlugin("foo_no_conf_no_desc", nil, nil)
 
 	exp := `Processor Plugins
 =================
 
-This document has been generated, do not edit it directly.
+This document was generated with ` + "`benthos --list-processor-plugins`" + `.
 
 This document lists any processor plugins that this flavour of Benthos offers
 beyond the standard set.
@@ -107,6 +125,8 @@ beyond the standard set.
 
 1. [` + "`bar`" + `](#bar)
 2. [` + "`foo`" + `](#foo)
+3. [` + "`foo_no_conf`" + `](#foo_no_conf)
+4. [` + "`foo_no_conf_no_desc`" + `](#foo_no_conf_no_desc)
 
 ## ` + "`bar`" + `
 
@@ -128,6 +148,12 @@ plugin:
   baz: 10
   foo: default
 ` + "```" + `
+
+## ` + "`foo_no_conf`" + `
+
+This is a plugin without config.
+
+## ` + "`foo_no_conf_no_desc`" + `
 `
 
 	act := PluginDescriptions()
@@ -135,45 +161,6 @@ plugin:
 		t.Logf("Expected:\n%v\n", exp)
 		t.Logf("Actual:\n%v\n", act)
 		t.Error("Wrong descriptions")
-	}
-}
-
-func TestJSONPlugin(t *testing.T) {
-	errTest := errors.New("test err")
-
-	RegisterPlugin("foo", newMockPluginConf,
-		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Processor, error) {
-			mConf, ok := conf.(*mockPluginConf)
-			if !ok {
-				t.Fatalf("failed to cast config: %T", conf)
-			}
-			if exp, act := "default", mConf.Foo; exp != act {
-				t.Errorf("Wrong config value: %v != %v", act, exp)
-			}
-			if exp, act := "custom", mConf.Bar; exp != act {
-				t.Errorf("Wrong config value: %v != %v", act, exp)
-			}
-			if exp, act := 10, mConf.Baz; exp != act {
-				t.Errorf("Wrong config value: %v != %v", act, exp)
-			}
-			return nil, errTest
-		})
-
-	confStr := `{
-  "type": "foo",
-  "plugin": {
-    "bar": "custom"
-  }
-}`
-
-	conf := NewConfig()
-	if err := json.Unmarshal([]byte(confStr), &conf); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != errTest {
-		t.Errorf("Wrong error returned: %v != %v", err, errTest)
 	}
 }
 

@@ -49,6 +49,18 @@ you can find a list of functions [here](../config_interpolation.md#functions).
 This allows you to set the contents of a metadata field using values taken from
 the message payload.
 
+Value interpolations are resolved once per batch. In order to resolve them per
+message of a batch place it within a ` + "[`for_each`](#for_each)" + `
+processor:
+
+` + "``` yaml" + `
+for_each:
+- metadata:
+    operator: set
+    key: foo
+    value: ${!json_field:document.foo}
+` + "```" + `
+
 ### Operators
 
 #### ` + "`set`" + `

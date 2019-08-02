@@ -31,7 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -66,6 +66,7 @@ type Config struct {
 	File      FileConfig      `json:"file" yaml:"file"`
 	Memcached MemcachedConfig `json:"memcached" yaml:"memcached"`
 	Memory    MemoryConfig    `json:"memory" yaml:"memory"`
+	Plugin    interface{}     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Redis     RedisConfig     `json:"redis" yaml:"redis"`
 	S3        S3Config        `json:"s3" yaml:"s3"`
 }
@@ -78,6 +79,7 @@ func NewConfig() Config {
 		File:      NewFileConfig(),
 		Memcached: NewMemcachedConfig(),
 		Memory:    NewMemoryConfig(),
+		Plugin:    nil,
 		Redis:     NewRedisConfig(),
 		S3:        NewS3Config(),
 	}
@@ -98,37 +100,71 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	}
 
 	outputMap := config.Sanitised{}
-
 	outputMap["type"] = conf.Type
-	outputMap[conf.Type] = hashMap[conf.Type]
+
+	if _, exists := hashMap[conf.Type]; exists {
+		outputMap[conf.Type] = hashMap[conf.Type]
+	}
+	if spec, exists := pluginSpecs[conf.Type]; exists {
+		var plugSanit interface{}
+		if spec.confSanitiser != nil {
+			plugSanit = spec.confSanitiser(conf.Plugin)
+		} else {
+			plugSanit = hashMap["plugin"]
+		}
+		if plugSanit != nil {
+			outputMap["plugin"] = plugSanit
+		}
+	}
 
 	return outputMap, nil
 }
 
 //------------------------------------------------------------------------------
 
-// UnmarshalJSON ensures that when parsing configs that are in a map or slice
-// the default values are still applied.
-func (c *Config) UnmarshalJSON(bytes []byte) error {
-	type confAlias Config
-	aliased := confAlias(NewConfig())
-
-	if err := json.Unmarshal(bytes, &aliased); err != nil {
-		return err
-	}
-
-	*c = Config(aliased)
-	return nil
-}
-
 // UnmarshalYAML ensures that when parsing configs that are in a map or slice
 // the default values are still applied.
-func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
-	if err := unmarshal(&aliased); err != nil {
-		return err
+	if err := value.Decode(&aliased); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+
+	var raw interface{}
+	if err := value.Decode(&raw); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
+		var inferredType string
+		for _, tc := range typeCandidates {
+			if _, exists := Constructors[tc]; exists {
+				if len(inferredType) > 0 {
+					return fmt.Errorf("line %v: unable to infer type, multiple candidates '%v' and '%v'", value.Line, inferredType, tc)
+				}
+				inferredType = tc
+			}
+		}
+		if len(inferredType) == 0 {
+			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
+		}
+		aliased.Type = inferredType
+	}
+
+	if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
+		confBytes, err := yaml.Marshal(aliased.Plugin)
+		if err != nil {
+			return fmt.Errorf("line %v: %v", value.Line, err)
+		}
+
+		conf := spec.confConstructor()
+		if err = yaml.Unmarshal(confBytes, conf); err != nil {
+			return fmt.Errorf("line %v: %v", value.Line, err)
+		}
+		aliased.Plugin = conf
+	} else {
+		aliased.Plugin = nil
 	}
 
 	*c = Config(aliased)
@@ -207,7 +243,7 @@ func Descriptions() string {
 		conf := NewConfig()
 		conf.Type = name
 		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = yaml.Marshal(confSanit)
+			confBytes, _ = config.MarshalYAML(confSanit)
 		}
 
 		buf.WriteString("## ")
@@ -236,10 +272,17 @@ func New(
 ) (types.Cache, error) {
 	if c, ok := Constructors[conf.Type]; ok {
 		cache, err := c.constructor(conf, mgr, log.NewModule("."+conf.Type), stats)
-		for err != nil {
+		if err != nil {
 			return nil, fmt.Errorf("failed to create cache '%v': %v", conf.Type, err)
 		}
 		return cache, nil
+	}
+	if c, ok := pluginSpecs[conf.Type]; ok {
+		rl, err := c.constructor(conf.Plugin, mgr, log.NewModule("."+conf.Type), stats)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cache '%v': %v", conf.Type, err)
+		}
+		return rl, nil
 	}
 	return nil, types.ErrInvalidCacheType
 }

@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+// +build !wasm
+
 package buffer
 
 import (
@@ -28,10 +30,13 @@ import (
 
 //------------------------------------------------------------------------------
 
+// TODO: V3 Remove this buffer type entirely.
 func init() {
 	Constructors[TypeMMAP] = TypeSpec{
 		constructor: NewMmapFile,
 		description: `
+DEPRECATED: This buffer type is due to be removed in V3.
+
 The mmap file buffer type uses memory mapped files to perform low-latency,
 file-persisted buffering of messages.
 
@@ -51,10 +56,19 @@ preferably all buffers altogether.`,
 
 //------------------------------------------------------------------------------
 
+// MmapBufferConfig is config options for a memory-map based buffer reader.
+type MmapBufferConfig single.MmapCacheConfig
+
+// NewMmapBufferConfig creates a MmapBufferConfig oject with default values.
+func NewMmapBufferConfig() MmapBufferConfig {
+	return MmapBufferConfig(single.NewMmapCacheConfig())
+}
+
 // NewMmapFile creates a buffer held in memory and persisted to file through
 // memory map.
 func NewMmapFile(config Config, log log.Modular, stats metrics.Type) (Type, error) {
-	b, err := single.NewMmapBuffer(config.Mmap, log, stats)
+	log.Warnf("The mmap_file buffer is deprecated and scheduled for removal in version 3.")
+	b, err := single.NewMmapBuffer(single.MmapBufferConfig(config.Mmap), log, stats)
 	if err != nil {
 		return nil, err
 	}

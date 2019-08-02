@@ -41,6 +41,7 @@ type GCPPubSubConfig struct {
 	SubscriptionID         string `json:"subscription" yaml:"subscription"`
 	MaxOutstandingMessages int    `json:"max_outstanding_messages" yaml:"max_outstanding_messages"`
 	MaxOutstandingBytes    int    `json:"max_outstanding_bytes" yaml:"max_outstanding_bytes"`
+	MaxBatchCount          int    `json:"max_batch_count" yaml:"max_batch_count"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
@@ -50,6 +51,7 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 		SubscriptionID:         "",
 		MaxOutstandingMessages: pubsub.DefaultReceiveSettings.MaxOutstandingMessages,
 		MaxOutstandingBytes:    pubsub.DefaultReceiveSettings.MaxOutstandingBytes,
+		MaxBatchCount:          1,
 	}
 }
 
@@ -105,7 +107,7 @@ func (c *GCPPubSub) Connect() error {
 	sub.ReceiveSettings.MaxOutstandingBytes = c.conf.MaxOutstandingBytes
 
 	subCtx, cancel := context.WithCancel(context.Background())
-	msgsChan := make(chan *pubsub.Message)
+	msgsChan := make(chan *pubsub.Message, c.conf.MaxBatchCount)
 
 	c.subscription = sub
 	c.msgsChan = msgsChan
@@ -142,14 +144,34 @@ func (c *GCPPubSub) Read() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
+	msg := message.New(nil)
+
 	gmsg, open := <-msgsChan
 	if !open {
 		return nil, types.ErrNotConnected
 	}
 	c.pendingMsgs = append(c.pendingMsgs, gmsg)
+	part := message.NewPart(gmsg.Data)
+	part.SetMetadata(metadata.New(gmsg.Attributes))
+	msg.Append(part)
 
-	msg := message.New([][]byte{gmsg.Data})
-	msg.Get(0).SetMetadata(metadata.New(gmsg.Attributes))
+batchLoop:
+	for msg.Len() < c.conf.MaxBatchCount {
+		select {
+		case gmsg, open = <-msgsChan:
+		default:
+			// Drained the buffer
+			break batchLoop
+		}
+		if !open {
+			return nil, types.ErrNotConnected
+		}
+		c.pendingMsgs = append(c.pendingMsgs, gmsg)
+		part := message.NewPart(gmsg.Data)
+		part.SetMetadata(metadata.New(gmsg.Attributes))
+		msg.Append(part)
+	}
+
 	return msg, nil
 }
 

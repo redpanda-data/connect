@@ -39,12 +39,11 @@ configuration.
 
 ### Multiplexing Outputs
 
-It is possible to perform
-[content based multiplexing](../concepts.md#content-based-multiplexing) of
-messages to specific outputs either by using the [`switch`](#switch)
-output, or a [`broker`](#broker) with the `fan_out` pattern
-and a [filter processor](../processors/README.md#filter_parts) on each output,
-which is a processor that drops messages if the condition does not pass.
+It is possible to perform content based multiplexing of messages to specific
+outputs either by using the [`switch`](#switch) output, or a
+[`broker`](#broker) with the `fan_out` pattern and a
+[filter processor](../processors/README.md#filter_parts) on each output, which
+is a processor that drops messages if the condition does not pass.
 Conditions are content aware logical operators that can be combined using
 boolean logic.
 
@@ -61,32 +60,37 @@ a [`broker`](#broker) output with the 'try' pattern.
 1. [`amqp`](#amqp)
 2. [`broker`](#broker)
 3. [`cache`](#cache)
-4. [`dynamic`](#dynamic)
-5. [`dynamodb`](#dynamodb)
-6. [`elasticsearch`](#elasticsearch)
-7. [`file`](#file)
-8. [`files`](#files)
-9. [`gcp_pubsub`](#gcp_pubsub)
-10. [`hdfs`](#hdfs)
-11. [`http_client`](#http_client)
-12. [`http_server`](#http_server)
-13. [`inproc`](#inproc)
-14. [`kafka`](#kafka)
-15. [`kinesis`](#kinesis)
-16. [`mqtt`](#mqtt)
-17. [`nanomsg`](#nanomsg)
-18. [`nats`](#nats)
-19. [`nats_stream`](#nats_stream)
-20. [`nsq`](#nsq)
-21. [`redis_list`](#redis_list)
-22. [`redis_pubsub`](#redis_pubsub)
-23. [`redis_streams`](#redis_streams)
-24. [`retry`](#retry)
-25. [`s3`](#s3)
-26. [`sqs`](#sqs)
-27. [`stdout`](#stdout)
-28. [`switch`](#switch)
-29. [`websocket`](#websocket)
+4. [`drop`](#drop)
+5. [`drop_on_error`](#drop_on_error)
+6. [`dynamic`](#dynamic)
+7. [`dynamodb`](#dynamodb)
+8. [`elasticsearch`](#elasticsearch)
+9. [`file`](#file)
+10. [`files`](#files)
+11. [`gcp_pubsub`](#gcp_pubsub)
+12. [`hdfs`](#hdfs)
+13. [`http_client`](#http_client)
+14. [`http_server`](#http_server)
+15. [`inproc`](#inproc)
+16. [`kafka`](#kafka)
+17. [`kinesis`](#kinesis)
+18. [`mqtt`](#mqtt)
+19. [`nanomsg`](#nanomsg)
+20. [`nats`](#nats)
+21. [`nats_stream`](#nats_stream)
+22. [`nsq`](#nsq)
+23. [`redis_hash`](#redis_hash)
+24. [`redis_list`](#redis_list)
+25. [`redis_pubsub`](#redis_pubsub)
+26. [`redis_streams`](#redis_streams)
+27. [`retry`](#retry)
+28. [`s3`](#s3)
+29. [`sns`](#sns)
+30. [`sqs`](#sqs)
+31. [`stdout`](#stdout)
+32. [`switch`](#switch)
+33. [`sync_response`](#sync_response)
+34. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -141,23 +145,21 @@ listing them:
 
 ``` yaml
 output:
-  type: broker
   broker:
     pattern: fan_out
     outputs:
-    - type: foo
-      foo:
+    - foo:
         foo_field_1: value1
-    - type: bar
-      bar:
+    - bar:
         bar_field_1: value2
         bar_field_2: value3
-    - type: baz
-      baz:
+    - baz:
         baz_field_1: value4
       processors:
+      # Processor only applied to messages sent to baz.
       - type: baz_processor
   processors:
+  # Processor applied to messages sent to any brokered output.
   - type: some_processor
 ```
 
@@ -167,9 +169,17 @@ and can be chosen from the following:
 #### `fan_out`
 
 With the fan out pattern all outputs will be sent every message that passes
-through Benthos. If an output applies back pressure it will block all subsequent
-messages, and if an output fails to send a message it will be retried
-continuously until completion or service shut down.
+through Benthos in parallel.
+
+If an output applies back pressure it will block all subsequent messages, and if
+an output fails to send a message it will be retried continuously until
+completion or service shut down.
+
+#### `fan_out_sequential`
+
+Similar to the fan out pattern except outputs are written to sequentially,
+meaning an output is only written to once the preceding output has confirmed
+receipt of the same message.
 
 #### `round_robin`
 
@@ -234,16 +244,15 @@ types:
 - s3
 
 Like follows:
+
 ``` yaml
 output:
-  type: cache
   cache:
     target: foo
     key: ${!json_field:document.id}
 resources:
   caches:
     foo:
-      type: memcached
       memcached:
         addresses:
         - localhost:11211
@@ -253,6 +262,40 @@ resources:
 In order to create a unique `key` value per item you should use
 function interpolations described [here](../config_interpolation.md#functions).
 When sending batched messages the interpolations are performed per message part.
+
+## `drop`
+
+``` yaml
+type: drop
+drop: {}
+```
+
+Drops all messages.
+
+## `drop_on_error`
+
+``` yaml
+type: drop_on_error
+drop_on_error: {}
+```
+
+Attempts to write messages to a child output and if the write fails for any
+reason the message is dropped instead of being reattempted. This output can be
+combined with a child `retry` output in order to set an explicit
+number of retry attempts before dropping a message.
+
+For example, the following configuration attempts to send to a hypothetical
+output type `foo` three times, but if all three attempts fail the
+message is dropped entirely:
+
+``` yaml
+output:
+  drop_on_error:
+    retry:
+      max_retries: 2
+      output:
+        type: foo
+```
 
 ## `dynamic`
 
@@ -293,6 +336,7 @@ dynamodb:
     secret: ""
     token: ""
   endpoint: ""
+  json_map_columns: {}
   max_retries: 3
   region: eu-west-1
   string_columns: {}
@@ -301,22 +345,50 @@ dynamodb:
   ttl_key: ""
 ```
 
-Inserts messages into a DynamoDB table. Columns are populated by writing a map
-of key/value pairs, where the values are
-[function interpolated](../config_interpolation.md#functions) strings calculated
-per message of a batch. This allows you to populate columns by extracting
+Inserts items into a DynamoDB table.
+
+The field `string_columns` is a map of column names to string values,
+where the values are
+[function interpolated](../config_interpolation.md#functions) per message of a
+batch. This allows you to populate string columns of an item by extracting
 fields within the document payload or metadata like follows:
 
 ``` yaml
-type: dynamodb
-dynamodb:
-  table: foo
-  string_columns:
-    id: ${!json_field:id}
-    title: ${!json_field:body.title}
-    topic: ${!metadata:kafka_topic}
-    full_content: ${!content}
+string_columns:
+  id: ${!json_field:id}
+  title: ${!json_field:body.title}
+  topic: ${!metadata:kafka_topic}
+  full_content: ${!content}
 ```
+
+The field `json_map_columns` is a map of column names to json paths,
+where the path is extracted from each document and converted into a map value.
+Both an empty path and the path `.` are interpreted as the root of the
+document. This allows you to populate map columns of an item like follows:
+
+``` yaml
+json_map_columns:
+  user: path.to.user
+  whole_document: .
+```
+
+A column name can be empty:
+
+``` yaml
+json_map_columns:
+  "": .
+```
+
+In which case the top level document fields will be written at the root of the
+item, potentially overwriting previously defined column values. If a path is not
+found within a document the column will not be populated.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 
 ## `elasticsearch`
 
@@ -358,6 +430,13 @@ support creating the target index.
 Both the `id` and `index` fields can be dynamically set using function
 interpolations described [here](../config_interpolation.md#functions). When
 sending batched messages these interpolations are performed per message part.
+
+### AWS Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 
 ## `file`
 
@@ -435,6 +514,7 @@ http_client:
     enabled: false
     password: ""
     username: ""
+  copy_response_headers: false
   drop_on: []
   headers:
     Content-Type: application/octet-stream
@@ -446,6 +526,7 @@ http_client:
     consumer_secret: ""
     enabled: false
     request_url: ""
+  propagate_response: false
   rate_limit: ""
   retries: 3
   retry_period: 1s
@@ -478,6 +559,16 @@ interpolations described [here](../config_interpolation.md#functions).
 The body of the HTTP request is the raw contents of the message payload. If the
 message has multiple parts the request will be sent according to
 [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html)
+
+### Propagating Responses
+
+EXPERIMENTAL: It's possible to propagate the response from each HTTP request
+back to the input source by setting `propagate_response` to `true`.
+Only inputs that support [synchronous responses](../sync_responses.md) are able
+to make use of these propagated responses.
+
+This feature is considered experimental and is therefore subject to change
+outside of major version releases.
 
 ## `http_server`
 
@@ -534,6 +625,10 @@ kafka:
   key: ""
   max_msg_bytes: 1e+06
   round_robin_partitions: false
+  sasl:
+    enabled: false
+    password: ""
+    user: ""
   target_version: 1.0.0
   timeout: 5s
   tls:
@@ -613,6 +708,13 @@ fields can be dynamically set using function interpolations described
 [here](../config_interpolation.md#functions). When sending batched messages the
 interpolations are performed per message part.
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ## `mqtt`
 
 ``` yaml
@@ -688,6 +790,53 @@ Publish to an NSQ topic. The `topic` field can be dynamically set
 using function interpolations described
 [here](../config_interpolation.md#functions). When sending batched messages
 these interpolations are performed per message part.
+
+## `redis_hash`
+
+``` yaml
+type: redis_hash
+redis_hash:
+  fields: {}
+  key: ""
+  url: tcp://localhost:6379
+  walk_json_object: false
+  walk_metadata: false
+```
+
+Sets Redis hash objects using the HMSET command.
+
+The field `key` supports
+[interpolation functions](../config_interpolation.md#functions) evaluated per
+message of a batch, allowing you to create a unique key for each message.
+
+The field `fields` allows you to specify an explicit map of field
+names to interpolated values, also evaluated per message of a batch:
+
+```yaml
+redis_hash:
+  url: tcp://localhost:6379
+  key: ${!json_field:id}
+  fields:
+    topic: ${!metadata:kafka_topic}
+    partition: ${!metadata:kafka_partition}
+    content: ${!json_field:document.text}
+```
+
+If the field `walk_metadata` is set to `true` then Benthos
+will walk all metadata fields of messages and add them to the list of hash
+fields to set. 
+
+If the field `walk_json_object` is set to `true` then
+Benthos will walk each message as a JSON object, extracting keys and the string
+representation of their value and adds them to the list of hash fields to set.
+
+The order of hash field extraction is as follows:
+
+1. Metadata (if enabled)
+2. JSON object (if enabled)
+3. Explicit fields
+
+Where latter stages will overwrite matching field names of a former stage.
 
 ## `redis_list`
 
@@ -773,6 +922,7 @@ use the [`broker`](#broker) output type with the pattern 'try'.
 type: s3
 s3:
   bucket: ""
+  content_encoding: ""
   content_type: application/octet-stream
   credentials:
     id: ""
@@ -781,16 +931,54 @@ s3:
     secret: ""
     token: ""
   endpoint: ""
+  force_path_style_urls: false
   path: ${!count:files}-${!timestamp_unix_nano}.txt
   region: eu-west-1
   timeout: 5s
 ```
 
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
-with the path specified with the `path` field. In order to have a
-different path for each object you should use function interpolations described
-[here](../config_interpolation.md#functions), which are calculated per message
-of a batch.
+with the path specified with the `path` field.
+
+In order to have a different path for each object you should use function
+interpolations described [here](../config_interpolation.md#functions), which are
+calculated per message of a batch.
+
+The fields `content_type` and `content_encoding` can also be set
+dynamically using function interpolation.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
+## `sns`
+
+``` yaml
+type: sns
+sns:
+  credentials:
+    id: ""
+    role: ""
+    role_external_id: ""
+    secret: ""
+    token: ""
+  endpoint: ""
+  region: eu-west-1
+  timeout: 5s
+  topic_arn: ""
+```
+
+Sends messages to an AWS SNS topic.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 
 ## `sqs`
 
@@ -814,6 +1002,13 @@ sqs:
 ```
 
 Sends messages to an SQS queue.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 
 ## `stdout`
 
@@ -839,6 +1034,7 @@ baz\n\n
 type: switch
 switch:
   outputs: []
+  retry_until_success: true
 ```
 
 The switch output type allows you to configure multiple conditional output
@@ -856,32 +1052,27 @@ output only.
 
 ``` yaml
 output:
-  type: switch
   switch:
+    retry_until_success: true
     outputs:
     - output:
-        type: foo
         foo:
           foo_field_1: value1
       condition:
-        type: text
         text:
           operator: contains
           arg: foo
       fallthrough: true
     - output:
-        type: bar
         bar:
           bar_field_1: value2
           bar_field_2: value3
       condition:
-        type: text
         text:
           operator: contains
           arg: bar
       fallthrough: true
     - output:
-        type: baz
         baz:
           baz_field_1: value4
         processors:
@@ -893,10 +1084,62 @@ output:
 The switch output requires a minimum of two outputs. If no condition is defined
 for an output, it behaves like a static `true` condition. If
 `fallthrough` is set to `true`, the switch output will
-continue evaluating additional outputs after finding a match. If an output
-applies back pressure it will block all subsequent messages, and if an output
-fails to send a message, it will be retried continuously until completion or
-service shut down. Messages that do not match any outputs will be dropped.
+continue evaluating additional outputs after finding a match.
+
+Messages that do not match any outputs will be dropped. If an output applies
+back pressure it will block all subsequent messages.
+
+If an output fails to send a message it will be retried continuously until
+completion or service shut down. You can change this behaviour so that when an
+output returns an error the switch output also returns an error by setting
+`retry_until_success` to `false`. This allows you to
+wrap the switch with a `try` broker, but care must be taken to ensure
+duplicate messages aren't introduced during error conditions.
+
+## `sync_response`
+
+``` yaml
+type: sync_response
+sync_response: {}
+```
+
+EXPERIMENTAL: This component is considered experimental and is therefore subject
+to change outside of major version releases.
+
+Returns the final message payload back to the input origin of the message, where
+it is dealt with according to that specific input type.
+
+For most inputs this mechanism is ignored entirely, in which case the sync
+response is dropped without penalty. It is therefore safe to use this output
+even when combining input types that might not have support for sync responses.
+An example of an input able to utilise this is the `http_server`.
+
+It is safe to combine this output with others using broker types. For example,
+with the `http_server` input we could send the payload to a Kafka
+topic and also send a modified payload back with:
+
+``` yaml
+input:
+  http_server:
+    path: /post
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+    - kafka:
+        addresses: [ TODO:9092 ]
+        topic: foo_topic
+    - type: sync_response
+      processors:
+      - text:
+          operator: to_upper
+```
+
+Using the above example and posting the message 'hello world' to the endpoint
+`/post` Benthos would send it unchanged to the topic
+`foo_topic` and also respond with 'HELLO WORLD'.
+
+For more information please read [Synchronous Responses](../sync_responses.md).
 
 ## `websocket`
 

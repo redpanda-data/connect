@@ -141,27 +141,21 @@ Adding more input types allows you to merge streams from multiple sources into
 one. For example, reading from both RabbitMQ and Kafka:
 
 ``` yaml
-type: broker
-broker:
-  copies: 1
-  inputs:
-  - type: amqp
-    amqp:
-      url: amqp://guest:guest@localhost:5672/
-      consumer_tag: benthos-consumer
-      exchange: benthos-exchange
-      exchange_type: direct
-      key: benthos-key
-      queue: benthos-queue
-  - type: kafka
-    kafka:
-      addresses:
-      - localhost:9092
-      client_id: benthos_kafka_input
-      consumer_group: benthos_consumer_group
-      partition: 0
-      topic: benthos_stream
-
+input:
+  broker:
+    copies: 1
+    inputs:
+    - amqp:
+        url: amqp://guest:guest@localhost:5672/
+        consumer_tag: benthos-consumer
+        queue: benthos-queue
+    - kafka:
+        addresses:
+        - localhost:9092
+        client_id: benthos_kafka_input
+        consumer_group: benthos_consumer_group
+        partition: 0
+        topic: benthos_stream
 ```
 
 If the number of copies is greater than zero the list will be copied that number
@@ -244,14 +238,19 @@ You can access these metadata fields using
 ``` yaml
 type: gcp_pubsub
 gcp_pubsub:
+  max_batch_count: 1
   max_outstanding_bytes: 1e+09
   max_outstanding_messages: 1000
   project: ""
   subscription: ""
 ```
 
-Consumes messages from a GCP Cloud Pub/Sub subscription. Attributes from each
-message are added as metadata, which can be accessed using
+Consumes messages from a GCP Cloud Pub/Sub subscription.
+
+The field `max_batch_count` specifies the maximum number of prefetched
+messages to be batched together.
+
+Attributes from each message are added as metadata, which can be accessed using
 [function interpolation](../config_interpolation.md#metadata).
 
 ## `hdfs`
@@ -291,6 +290,7 @@ http_client:
     enabled: false
     password: ""
     username: ""
+  copy_response_headers: false
   drop_on: []
   headers:
     Content-Type: application/octet-stream
@@ -347,8 +347,11 @@ http_server:
   cert_file: ""
   key_file: ""
   path: /post
+  rate_limit: ""
   timeout: 5s
   ws_path: /post/ws
+  ws_rate_limit_message: ""
+  ws_welcome_message: ""
 ```
 
 Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
@@ -356,6 +359,46 @@ which is enabled when key and cert files are specified.
 
 You can leave the 'address' config field blank in order to use the instance wide
 HTTP server.
+
+The field `rate_limit` allows you to specify an optional
+[`rate_limit` resource](../rate_limits/README.md), which will be
+applied to each HTTP request made and each websocket payload received.
+
+When the rate limit is breached HTTP requests will have a 429 response returned
+with a Retry-After header. Websocket payloads will be dropped and an optional
+response payload will be sent as per `ws_rate_limit_message`.
+
+### Responses
+
+EXPERIMENTAL: It's possible to return a response for each message received using
+[synchronous responses](../sync_responses.md). This feature is considered
+experimental and therefore subject to change outside of major version releases.
+
+### Endpoints
+
+The following fields specify endpoints that are registered for sending messages:
+
+#### `path` (defaults to `/post`)
+
+This endpoint expects POST requests where the entire request body is consumed as
+a single message.
+
+If the request contains a multipart `content-type` header as per
+[rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the
+multiple parts are consumed as a batch of messages, where each body part is a
+message of the batch.
+
+#### `ws_path` (defaults to `/post/ws`)
+
+Creates a websocket connection, where payloads received on the socket are passed
+through the pipeline as a batch of one message.
+
+You may specify an optional `ws_welcome_message`, which is a static
+payload to be sent to all clients once a websocket connection is first
+established.
+
+It's also possible to specify a `ws_rate_limit_message`, which is a
+static payload to be sent to clients that have triggered the servers rate limit.
 
 ### Metadata
 
@@ -397,9 +440,14 @@ kafka:
   client_id: benthos_kafka_input
   commit_period: 1s
   consumer_group: benthos_consumer_group
+  fetch_buffer_cap: 256
   max_batch_count: 1
   max_processing_period: 100ms
   partition: 0
+  sasl:
+    enabled: false
+    password: ""
+    user: ""
   start_from_oldest: true
   target_version: 1.0.0
   tls:
@@ -454,9 +502,14 @@ This input adds the following metadata fields to each message:
 - kafka_topic
 - kafka_partition
 - kafka_offset
+- kafka_lag
 - kafka_timestamp_unix
 - All existing message headers (version 0.11+)
 ```
+
+The field `kafka_lag` is the calculated difference between the high
+water mark offset of the partition at the time of ingestion and the current
+message offset.
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
@@ -471,12 +524,17 @@ kafka_balanced:
   client_id: benthos_kafka_input
   commit_period: 1s
   consumer_group: benthos_consumer_group
+  fetch_buffer_cap: 256
   group:
     heartbeat_interval: 3s
     rebalance_timeout: 60s
     session_timeout: 10s
   max_batch_count: 1
   max_processing_period: 100ms
+  sasl:
+    enabled: false
+    password: ""
+    user: ""
   start_from_oldest: true
   target_version: 1.0.0
   tls:
@@ -526,9 +584,14 @@ This input adds the following metadata fields to each message:
 - kafka_topic
 - kafka_partition
 - kafka_offset
+- kafka_lag
 - kafka_timestamp_unix
 - All existing message headers (version 0.11+)
 ```
+
+The field `kafka_lag` is the calculated difference between the high
+water mark offset of the partition at the time of ingestion and the current
+message offset.
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
@@ -562,6 +625,13 @@ It's possible to use DynamoDB for persisting shard iterators by setting the
 table name. Offsets will then be tracked per `client_id` per
 `shard_id`. When using this mode you should create a table with
 `namespace` as the primary key and `shard_id` as a sort key.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 
 ## `mqtt`
 
@@ -653,7 +723,7 @@ nats_stream:
   queue: benthos_queue
   start_from_oldest: true
   subject: benthos_messages
-  unsubscribe_on_close: true
+  unsubscribe_on_close: false
   urls:
   - nats://localhost:4222
 ```
@@ -751,10 +821,22 @@ redis_pubsub:
   channels:
   - benthos_chan
   url: tcp://localhost:6379
+  use_patterns: false
 ```
 
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple
 channels using this input.
+
+In order to subscribe to channels using the `PSUBSCRIBE` command set
+the field `use_patterns` to `true`, then you can include glob-style
+patterns in your channel names. For example:
+
+- `h?llo` subscribes to hello, hallo and hxllo
+- `h*llo` subscribes to hllo and heeeello
+- `h[ae]llo` subscribes to hello and hallo, but not hillo
+
+Use `\` to escape special characters if you want to match them
+verbatim.
 
 ## `redis_streams`
 
@@ -800,6 +882,7 @@ s3:
   download_manager:
     enabled: true
   endpoint: ""
+  force_path_style_urls: false
   max_batch_count: 1
   prefix: ""
   region: eu-west-1
@@ -847,6 +930,13 @@ at-least-once crash resiliency, but also means that if the S3 item takes longer
 to process than the visibility timeout of your queue then the same items might
 be processed multiple times.
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -857,6 +947,7 @@ This input adds the following metadata fields to each message:
 - s3_last_modified_unix*
 - s3_last_modified (RFC3339)*
 - s3_content_type*
+- s3_content_encoding*
 - All user defined metadata*
 
 * Only added when NOT using download manager
@@ -885,6 +976,13 @@ sqs:
 
 Receive messages from an Amazon SQS URL, only the body is extracted into
 messages.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 
 ## `stdin`
 

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/http/client"
@@ -34,13 +35,15 @@ import (
 // HTTPClientConfig contains configuration fields for the HTTPClient output
 // type.
 type HTTPClientConfig struct {
-	client.Config `json:",inline" yaml:",inline"`
+	client.Config     `json:",inline" yaml:",inline"`
+	PropagateResponse bool `json:"propagate_response" yaml:"propagate_response"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		Config: client.NewConfig(),
+		Config:            client.NewConfig(),
+		PropagateResponse: false,
 	}
 }
 
@@ -77,6 +80,7 @@ func NewHTTPClient(
 		client.OptSetCloseChan(h.closeChan),
 		client.OptSetLogger(h.log),
 		client.OptSetManager(mgr),
+		// TODO: V3 change the metric path to 'client'
 		client.OptSetStats(metrics.Namespaced(h.stats, "output.http_client")),
 	); err != nil {
 		return nil, err
@@ -95,7 +99,22 @@ func (h *HTTPClient) Connect() error {
 // Write attempts to send a message to an HTTP server, this attempt may include
 // retries, and if all retries fail an error is returned.
 func (h *HTTPClient) Write(msg types.Message) error {
-	_, err := h.client.Send(msg)
+	resultMsg, err := h.client.Send(msg)
+	if err == nil && h.conf.PropagateResponse {
+		msgCopy := msg.Copy()
+		parts := make([]types.Part, resultMsg.Len())
+		resultMsg.Iter(func(i int, p types.Part) error {
+			if i < msgCopy.Len() {
+				parts[i] = msgCopy.Get(i)
+			} else {
+				parts[i] = msgCopy.Get(0)
+			}
+			parts[i].Set(p.Get())
+			return nil
+		})
+		msgCopy.SetAll(parts)
+		roundtrip.SetAsResponse(msgCopy)
+	}
 	return err
 }
 

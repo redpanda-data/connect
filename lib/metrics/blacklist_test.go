@@ -24,6 +24,8 @@ import (
 	"regexp"
 	"testing"
 	"time"
+
+	"github.com/Jeffail/benthos/lib/log"
 )
 
 func TestBlacklistPaths(t *testing.T) {
@@ -37,6 +39,7 @@ func TestBlacklistPaths(t *testing.T) {
 		paths:    []string{"output", "input", "metrics"},
 		patterns: []*regexp.Regexp{},
 		s:        child,
+		log:      log.Noop(),
 	}
 
 	// acceptable paths
@@ -67,6 +70,7 @@ func TestBlacklistPatterns(t *testing.T) {
 	b := &Blacklist{
 		paths: []string{},
 		s:     child,
+		log:   log.Noop(),
 	}
 
 	testPatterns := []string{"^output.broker", "^input$"}

@@ -24,7 +24,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -104,6 +103,14 @@ func TestElasticIntegration(t *testing.T) {
 		}
 	}()
 
+	t.Run("TestElasticNoIndex", func(te *testing.T) {
+		testElasticNoIndex(urls, client, te)
+	})
+
+	t.Run("TestElasticErrorHandling", func(te *testing.T) {
+		testElasticErrorHandling(urls, client, te)
+	})
+
 	t.Run("TestElasticConnect", func(te *testing.T) {
 		testElasticConnect(urls, client, te)
 	})
@@ -117,13 +124,96 @@ func TestElasticIntegration(t *testing.T) {
 	})
 }
 
+func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
+	conf := NewElasticsearchConfig()
+	conf.Index = "does_not_exist"
+	conf.ID = "foo-${!count:noIndexTest}"
+	conf.URLs = urls
+	conf.MaxRetries = 1
+	conf.Backoff.MaxElapsedTime = "1s"
+
+	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = m.Connect(); err != nil {
+		t.Error(err)
+	}
+
+	defer func() {
+		m.CloseAsync()
+		if cErr := m.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	if err = m.Write(message.New([][]byte{[]byte(`{"user":"1","message":"hello world"}`)})); err != nil {
+		t.Error(err)
+	}
+
+	if err = m.Write(message.New([][]byte{
+		[]byte(`{"user":"2","message":"hello world"}`),
+		[]byte(`{"user":"3","message":"hello world"}`),
+	})); err != nil {
+		t.Error(err)
+	}
+
+	for i := 0; i < 3; i++ {
+		id := fmt.Sprintf("foo-%v", i+1)
+		get, err := client.Get().
+			Index("does_not_exist").
+			Type("doc").
+			Id(id).
+			Do(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to get doc '%v': %v", id, err)
+		}
+		if !get.Found {
+			t.Errorf("document %v not found", i)
+		}
+	}
+}
+
+func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.T) {
+	conf := NewElasticsearchConfig()
+	conf.Index = "test_conn_index?"
+	conf.ID = "foo-static"
+	conf.URLs = urls
+	conf.Backoff.MaxInterval = "1s"
+
+	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = m.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		m.CloseAsync()
+		if cErr := m.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	if err = m.Write(message.New([][]byte{[]byte(`{"message":true}`)})); err == nil {
+		t.Error("Expected error")
+	}
+
+	if err = m.Write(message.New([][]byte{[]byte(`{"message":"foo"}`), []byte(`{"message":"bar"}`)})); err == nil {
+		t.Error("Expected error")
+	}
+}
+
 func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 	conf := NewElasticsearchConfig()
 	conf.Index = "test_conn_index"
 	conf.ID = "foo-${!count:foo}"
 	conf.URLs = urls
 
-	m, err := NewElasticsearch(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +274,7 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 	conf.ID = "bar-${!count:bar}"
 	conf.URLs = urls
 
-	m, err := NewElasticsearch(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

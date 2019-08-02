@@ -27,7 +27,8 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	yaml "gopkg.in/yaml.v2"
+	"github.com/Jeffail/benthos/lib/util/config"
+	yaml "gopkg.in/yaml.v3"
 )
 
 func TestJSONValidation(t *testing.T) {
@@ -770,21 +771,21 @@ value:
 `,
 	}
 
-	for _, config := range tests {
+	for _, testconfig := range tests {
 		conf := NewConfig()
-		if err := yaml.Unmarshal([]byte(config), &conf.JSON); err != nil {
+		if err := yaml.Unmarshal([]byte(testconfig), &conf.JSON); err != nil {
 			t.Error(err)
 			continue
 		}
 
-		if act, err := yaml.Marshal(conf.JSON); err != nil {
+		if act, err := config.MarshalYAML(conf.JSON); err != nil {
 			t.Error(err)
-		} else if string(act) != config {
-			t.Errorf("Marshalled config does not match: %v != %v", string(act), config)
+		} else if string(act) != testconfig {
+			t.Errorf("Marshalled config does not match: %v != %v", string(act), testconfig)
 		}
 
 		if _, err := NewJSON(conf, nil, tLog, tStats); err != nil {
-			t.Errorf("Error creating proc '%v': %v", config, err)
+			t.Errorf("Error creating proc '%v': %v", testconfig, err)
 		}
 	}
 }

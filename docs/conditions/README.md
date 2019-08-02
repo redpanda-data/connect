@@ -26,21 +26,15 @@ And using boolean condition types we can combine multiple conditions together:
 
 ``` yaml
 condition:
-  type: and
   and:
-  - type: text
-    text:
+  - text:
       operator: contains
       arg: hello world
-  - type: or
-    or:
-    - type: text
-      text:
+  - or:
+    - text:
         operator: contains
         arg: foo
-    - type: not
-      not:
-        type: text
+    - not:
         text:
           operator: contains
           arg: bar
@@ -48,12 +42,6 @@ condition:
 
 The above example could be summarised as 'text contains "hello world" and also
 either contains "foo" or does _not_ contain "bar"'.
-
-Conditions can be extremely useful for creating filters on an output. By using a
-fan out output broker with 'filter' processors on the brokered outputs it is
-possible to build
-[curated data streams](../concepts.md#content-based-multiplexing) that filter on
-the content of each message.
 
 ### Batching and Multipart Messages
 
@@ -85,16 +73,18 @@ duplicate condition configs by using the [resource condition][resource].
 3. [`any`](#any)
 4. [`bounds_check`](#bounds_check)
 5. [`check_field`](#check_field)
-6. [`count`](#count)
-7. [`jmespath`](#jmespath)
-8. [`metadata`](#metadata)
-9. [`not`](#not)
-10. [`or`](#or)
-11. [`processor_failed`](#processor_failed)
-12. [`resource`](#resource)
-13. [`static`](#static)
-14. [`text`](#text)
-15. [`xor`](#xor)
+6. [`check_interpolation`](#check_interpolation)
+7. [`count`](#count)
+8. [`jmespath`](#jmespath)
+9. [`metadata`](#metadata)
+10. [`not`](#not)
+11. [`number`](#number)
+12. [`or`](#or)
+13. [`processor_failed`](#processor_failed)
+14. [`resource`](#resource)
+15. [`static`](#static)
+16. [`text`](#text)
+17. [`xor`](#xor)
 
 ## `all`
 
@@ -143,9 +133,7 @@ For example, if we wanted to check that at least one message of a batch contains
 the word 'foo' we could use this config:
 
 ``` yaml
-type: any
 any:
-  type: text
   text:
     operator: contains
     arg: foo
@@ -176,6 +164,30 @@ check_field:
 
 Extracts the value of a field within messages (currently only JSON format is
 supported) and then tests the extracted value against a child condition.
+
+## `check_interpolation`
+
+``` yaml
+type: check_interpolation
+check_interpolation:
+  condition: {}
+  value: ""
+```
+
+Resolves a string containing
+[function interpolations](../config_interpolation.md#functions) and then tests
+the result against a child condition.
+
+For example, you could use this to test against the size of a message batch:
+
+``` yaml
+check_interpolation:
+  value: ${!batch_size}
+  condition:
+    number:
+      operator: greater_than
+      arg: 1
+```
 
 ## `count`
 
@@ -253,7 +265,6 @@ Checks whether the contents of a metadata key matches one of the defined enum
 values.
 
 ```yaml
-type: metadata
 metadata:
   operator: enum
   part: 0
@@ -271,7 +282,6 @@ Checks whether the contents of a metadata key matches an argument. This operator
 is case insensitive.
 
 ```yaml
-type: metadata
 metadata:
   operator: equals
   part: 0
@@ -285,7 +295,6 @@ Checks whether the contents of a metadata key matches an argument. This operator
 is case sensitive.
 
 ```yaml
-type: metadata
 metadata:
   operator: equals_cs
   part: 0
@@ -298,7 +307,6 @@ metadata:
 Checks whether a metadata key exists.
 
 ```yaml
-type: metadata
 metadata:
   operator: exists
   part: 0
@@ -312,7 +320,6 @@ number, is greater than an argument. Returns false if the metadata value cannot
 be parsed into a number.
 
 ```yaml
-type: metadata
 metadata:
   operator: greater_than
   part: 0
@@ -326,7 +333,6 @@ Checks whether the contents of a metadata key match one of the provided prefixes
 The arg field can either be a singular prefix string or a list of prefixes.
 
 ```yaml
-type: metadata
 metadata:
   operator: has_prefix
   part: 0
@@ -344,7 +350,6 @@ number, is less than an argument. Returns false if the metadata value cannot be
 parsed into a number.
 
 ```yaml
-type: metadata
 metadata:
   operator: less_than
   part: 0
@@ -358,7 +363,6 @@ Checks whether any section of the contents of a metadata key matches a regular
 expression (RE2 syntax).
 
 ```yaml
-type: metadata
 metadata:
   operator: regexp_partial
   part: 0
@@ -372,7 +376,6 @@ Checks whether the contents of a metadata key exactly matches a regular expressi
 (RE2 syntax).
 
 ```yaml
-type: metadata
 metadata:
   operator: regexp_partial
   part: 0
@@ -418,6 +421,49 @@ Or, the same example as JSON:
 }
 ```
 
+## `number`
+
+``` yaml
+type: number
+number:
+  arg: 0
+  operator: equals
+  part: 0
+```
+
+Number is a condition that checks the contents of a message parsed as a 64-bit
+floating point number against a logical operator and an argument.
+
+It's possible to use the [`check_field`](#check_field) and
+[`check_interpolation`](#check_interpolation) conditions to check a
+number condition against arbitrary metadata or fields of messages. For example,
+you can test a number condition against the size of a message batch with:
+
+``` yaml
+check_interpolation:
+  value: ${!batch_size}
+  condition:
+    number:
+      operator: greater_than
+      arg: 1
+```
+
+Available logical operators are:
+
+### `equals`
+
+Checks whether the value equals the argument.
+
+### `greater_than`
+
+Checks whether the value is greater than the argument. Returns false if the
+value cannot be parsed as a number.
+
+### `less_than`
+
+Checks whether the value is less than the argument. Returns false if the value
+cannot be parsed as a number.
+
 ## `or`
 
 ``` yaml
@@ -457,30 +503,23 @@ the same condition twice by referring to it as a resource, like this:
 
 ``` yaml
 output:
-  type: broker
   broker:
     pattern: fan_out
     outputs:
-    - type: foo
-      foo:
+    - foo:
         processors:
-        - type: filter
-          filter:
+        - filter:
             type: resource
             resource: foobar
-    - type: bar
-      bar:
+    - bar:
         processors:
-        - type: filter
-          filter:
-            type: not
+        - filter:
             not:
               type: resource
               resource: foobar
 resources:
   conditions:
     foobar:
-      type: text
       text:
         operator: equals_cs
         part: 1
@@ -506,56 +545,84 @@ text:
   part: 0
 ```
 
-Text is a condition that checks the contents of a message part as plain text
-against a logical operator and an argument.
+Text is a condition that checks the contents of a message as plain text against
+a logical operator and an argument.
+
+It's possible to use the [`check_field`](#check_field) and
+[`check_interpolation`](#check_interpolation) conditions to check a
+text condition against arbitrary metadata or fields of messages. For example,
+you can test a text condition against a JSON field `foo.bar` with:
+
+``` yaml
+check_field:
+  path: foo.bar
+  condition:
+    text:
+      operator: enum
+      arg:
+      - foo
+      - bar
+```
 
 Available logical operators are:
 
 ### `equals_cs`
 
-Checks whether the part equals the argument (case sensitive.)
+Checks whether the content equals the argument (case sensitive.)
 
 ### `equals`
 
-Checks whether the part equals the argument under unicode case-folding (case
+Checks whether the content equals the argument under unicode case-folding (case
 insensitive.)
 
 ### `contains_cs`
 
-Checks whether the part contains the argument (case sensitive.)
+Checks whether the content contains the argument (case sensitive.)
 
 ### `contains`
 
-Checks whether the part contains the argument under unicode case-folding (case
-insensitive.)
+Checks whether the content contains the argument under unicode case-folding
+(case insensitive.)
 
 ### `prefix_cs`
 
-Checks whether the part begins with the argument (case sensitive.)
+Checks whether the content begins with the argument (case sensitive.)
 
 ### `prefix`
 
-Checks whether the part begins with the argument under unicode case-folding
+Checks whether the content begins with the argument under unicode case-folding
 (case insensitive.)
 
 ### `suffix_cs`
 
-Checks whether the part ends with the argument (case sensitive.)
+Checks whether the content ends with the argument (case sensitive.)
 
 ### `suffix`
 
-Checks whether the part ends with the argument under unicode case-folding (case
-insensitive.)
+Checks whether the content ends with the argument under unicode case-folding
+(case insensitive.)
 
 ### `regexp_partial`
 
-Checks whether any section of the message part matches a regular expression (RE2
+Checks whether any section of the content matches a regular expression (RE2
 syntax).
 
 ### `regexp_exact`
 
-Checks whether the message part exactly matches a regular expression (RE2
-syntax).
+Checks whether the content exactly matches a regular expression (RE2 syntax).
+
+### `enum`
+
+Checks whether the content matches any entry of a list of arguments, the field
+`arg` must be an array for this operator, e.g.:
+
+``` yaml
+text:
+  operator: enum
+  arg:
+  - foo
+  - bar
+```
 
 ## `xor`
 

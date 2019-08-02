@@ -24,10 +24,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	olog "github.com/opentracing/opentracing-go/log"
@@ -62,6 +62,13 @@ func NewFilterConfig() FilterConfig {
 	return FilterConfig{
 		Config: condition.NewConfig(),
 	}
+}
+
+//------------------------------------------------------------------------------
+
+// MarshalYAML prints the child condition instead of {}.
+func (f FilterConfig) MarshalYAML() (interface{}, error) {
+	return f.Config, nil
 }
 
 //------------------------------------------------------------------------------

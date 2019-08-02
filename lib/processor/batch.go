@@ -25,10 +25,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -68,9 +68,15 @@ messages then the parts will be sent as a batch of single part messages. If the
 output supports neither multipart or batches of messages then Benthos falls back
 to sending them individually.
 
-If a Benthos stream contains multiple brokered inputs or outputs then the batch
-operator should *always* be applied directly after an input in order to avoid
-unexpected behaviour and message ordering.`,
+### WARNING
+
+The batch processor should *always* be positioned within the ` + "`input`" + `
+section - ideally before any other processor - in order to avoid unexpected
+acknowledgment behaviour and message ordering.
+
+For more information about batching in Benthos please check out
+[this document](../batching.md).`,
+
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			condSanit, err := condition.SanitiseConfig(conf.Batch.Condition)
 			if err != nil {

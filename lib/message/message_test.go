@@ -543,7 +543,7 @@ func TestMessageCrossContaminateJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg2 := msg1.Copy()
+	msg2 := msg1.DeepCopy()
 
 	jMap1, ok := jCont1.(map[string]interface{})
 	if !ok {

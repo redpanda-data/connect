@@ -26,8 +26,10 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/textproto"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -48,18 +50,19 @@ import (
 
 // Config is a configuration struct for an HTTP client.
 type Config struct {
-	URL         string            `json:"url" yaml:"url"`
-	Verb        string            `json:"verb" yaml:"verb"`
-	Headers     map[string]string `json:"headers" yaml:"headers"`
-	RateLimit   string            `json:"rate_limit" yaml:"rate_limit"`
-	Timeout     string            `json:"timeout" yaml:"timeout"`
-	Retry       string            `json:"retry_period" yaml:"retry_period"`
-	MaxBackoff  string            `json:"max_retry_backoff" yaml:"max_retry_backoff"`
-	NumRetries  int               `json:"retries" yaml:"retries"`
-	BackoffOn   []int             `json:"backoff_on" yaml:"backoff_on"`
-	DropOn      []int             `json:"drop_on" yaml:"drop_on"`
-	TLS         tls.Config        `json:"tls" yaml:"tls"`
-	auth.Config `json:",inline" yaml:",inline"`
+	URL                 string            `json:"url" yaml:"url"`
+	Verb                string            `json:"verb" yaml:"verb"`
+	Headers             map[string]string `json:"headers" yaml:"headers"`
+	CopyResponseHeaders bool              `json:"copy_response_headers" yaml:"copy_response_headers"`
+	RateLimit           string            `json:"rate_limit" yaml:"rate_limit"`
+	Timeout             string            `json:"timeout" yaml:"timeout"`
+	Retry               string            `json:"retry_period" yaml:"retry_period"`
+	MaxBackoff          string            `json:"max_retry_backoff" yaml:"max_retry_backoff"`
+	NumRetries          int               `json:"retries" yaml:"retries"`
+	BackoffOn           []int             `json:"backoff_on" yaml:"backoff_on"`
+	DropOn              []int             `json:"drop_on" yaml:"drop_on"`
+	TLS                 tls.Config        `json:"tls" yaml:"tls"`
+	auth.Config         `json:",inline" yaml:",inline"`
 }
 
 // NewConfig creates a new Config with default values.
@@ -70,15 +73,16 @@ func NewConfig() Config {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
-		RateLimit:  "",
-		Timeout:    "5s",
-		Retry:      "1s",
-		MaxBackoff: "300s",
-		NumRetries: 3,
-		BackoffOn:  []int{429},
-		DropOn:     []int{},
-		TLS:        tls.NewConfig(),
-		Config:     auth.NewConfig(),
+		CopyResponseHeaders: false,
+		RateLimit:           "",
+		Timeout:             "5s",
+		Retry:               "1s",
+		MaxBackoff:          "300s",
+		NumRetries:          3,
+		BackoffOn:           []int{429},
+		DropOn:              []int{},
+		TLS:                 tls.NewConfig(),
+		Config:              auth.NewConfig(),
 	}
 }
 
@@ -103,15 +107,16 @@ type Type struct {
 	stats metrics.Type
 	mgr   types.Manager
 
-	mCount    metrics.StatCounter
-	mErr      metrics.StatCounter
-	mErrReq   metrics.StatCounter
-	mErrRes   metrics.StatCounter
-	mLimited  metrics.StatCounter
-	mLimitFor metrics.StatCounter
-	mLimitErr metrics.StatCounter
-	mSucc     metrics.StatCounter
-	mLatency  metrics.StatTimer
+	mCount         metrics.StatCounter
+	mErr           metrics.StatCounter
+	mErrReq        metrics.StatCounter
+	mErrReqTimeout metrics.StatCounter
+	mErrRes        metrics.StatCounter
+	mLimited       metrics.StatCounter
+	mLimitFor      metrics.StatCounter
+	mLimitErr      metrics.StatCounter
+	mSucc          metrics.StatCounter
+	mLatency       metrics.StatTimer
 
 	mCodes   map[int]metrics.StatCounter
 	codesMut sync.RWMutex
@@ -172,6 +177,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	h.mCount = h.stats.GetCounter("count")
 	h.mErr = h.stats.GetCounter("error")
 	h.mErrReq = h.stats.GetCounter("error.request")
+	h.mErrReqTimeout = h.stats.GetCounter("request_timeout")
 	h.mErrRes = h.stats.GetCounter("error.response")
 	h.mLimited = h.stats.GetCounter("rate_limit.count")
 	h.mLimitFor = h.stats.GetCounter("rate_limit.total_ms")
@@ -311,7 +317,10 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 			}
 		}
 	} else if msg.Len() == 1 {
-		body := bytes.NewBuffer(msg.Get(0).Get())
+		var body io.Reader
+		if msgBytes := msg.Get(0).Get(); len(msgBytes) > 0 {
+			body = bytes.NewBuffer(msgBytes)
+		}
 		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
 			for k, v := range h.headers {
 				req.Header.Add(k, v.Get(msg))
@@ -338,19 +347,23 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 		}
 
 		writer.Close()
-		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
-			for k, v := range h.headers {
-				req.Header.Add(k, v.Get(msg))
+		if err == nil {
+			if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
+				for k, v := range h.headers {
+					req.Header.Add(k, v.Get(msg))
+				}
+				if h.host != nil {
+					req.Host = h.host.Get(msg)
+				}
+				req.Header.Del("Content-Type")
+				req.Header.Add("Content-Type", writer.FormDataContentType())
 			}
-			if h.host != nil {
-				req.Host = h.host.Get(msg)
-			}
-			req.Header.Del("Content-Type")
-			req.Header.Add("Content-Type", writer.FormDataContentType())
 		}
 	}
 
-	err = h.conf.Config.Sign(req)
+	if err == nil {
+		err = h.conf.Config.Sign(req)
+	}
 	return
 }
 
@@ -397,8 +410,17 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 				return
 			}
 
-			resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
+			index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
 			bufferIndex += bytesRead
+
+			if h.conf.CopyResponseHeaders {
+				meta := resMsg.Get(index).Metadata()
+				for k, values := range p.Header {
+					if len(values) > 0 {
+						meta.Set(strings.ToLower(k), values[0])
+					}
+				}
+			}
 		}
 	} else {
 		var bytesRead int64
@@ -410,9 +432,21 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 		}
 		if bytesRead > 0 {
 			resMsg = message.New([][]byte{buffer.Bytes()[:bytesRead]})
+			if h.conf.CopyResponseHeaders {
+				meta := resMsg.Get(0).Metadata()
+				for k, values := range res.Header {
+					if len(values) > 0 {
+						meta.Set(strings.ToLower(k), values[0])
+					}
+				}
+			}
 		}
 	}
 
+	resMsg.Iter(func(i int, p types.Part) error {
+		p.Metadata().Set("http_status_code", strconv.Itoa(res.StatusCode))
+		return nil
+	})
 	res.Body.Close()
 	return
 }
@@ -497,6 +531,8 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 				res.Body.Close()
 			}
 		}
+	} else if err, ok := err.(net.Error); ok && err.Timeout() {
+		h.mErrReqTimeout.Incr(1)
 	}
 
 	i, j := 0, numRetries
@@ -537,6 +573,8 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 					res.Body.Close()
 				}
 			}
+		} else if err, ok := err.(net.Error); ok && err.Timeout() {
+			h.mErrReqTimeout.Incr(1)
 		}
 		i++
 	}

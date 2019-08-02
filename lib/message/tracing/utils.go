@@ -21,8 +21,6 @@
 package tracing
 
 import (
-	"context"
-
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/opentracing/opentracing-go"
@@ -141,7 +139,7 @@ func InitSpans(operationName string, msg types.Message) {
 			return nil
 		}
 		span := opentracing.StartSpan(operationName)
-		ctx := opentracing.ContextWithSpan(context.Background(), span)
+		ctx := opentracing.ContextWithSpan(message.GetContext(p), span)
 		tracedParts[i] = message.WithContext(ctx, p)
 		return nil
 	})
@@ -158,7 +156,7 @@ func InitSpansFromParent(operationName string, parent opentracing.SpanContext, m
 			return nil
 		}
 		span := opentracing.StartSpan(operationName, opentracing.ChildOf(parent))
-		ctx := opentracing.ContextWithSpan(context.Background(), span)
+		ctx := opentracing.ContextWithSpan(message.GetContext(p), span)
 		tracedParts[i] = message.WithContext(ctx, p)
 		return nil
 	})

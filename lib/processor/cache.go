@@ -80,14 +80,12 @@ duplicates using a
 condition:
 
 ` + "``` yaml" + `
-- type: cache
-  cache:
+- cache:
     cache: TODO
     operator: add
     key: "${!json_field:message.id}"
     value: "storeme"
-- type: filter_parts
-  filter_parts:
+- filter_parts:
     type: processor_failed
 ` + "```" + `
 
@@ -97,11 +95,9 @@ It's possible to enrich payloads with content previously stored in a cache by
 using the [` + "`process_dag`" + `](#process_dag) processor:
 
 ` + "``` yaml" + `
-- type: process_map
-  process_map:
+- process_map:
     processors:
-    - type: cache
-      cache:
+    - cache:
         cache: TODO
         operator: get
         key: "${!json_field:message.document_id}"

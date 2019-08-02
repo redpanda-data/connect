@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/buffer"
+	"github.com/Jeffail/benthos/lib/config"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
@@ -38,7 +39,7 @@ import (
 	"github.com/Jeffail/benthos/lib/util/text"
 	"github.com/Jeffail/gabs"
 	"github.com/gorilla/mux"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -236,6 +237,15 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 
 		confOut = stream.NewConfig()
 		err = yaml.Unmarshal(text.ReplaceEnvVariables(confBytes), &confOut)
+		if err == nil {
+			lConfig := config.New()
+			lConfig.Config = confOut
+			if lints, lintErr := config.Lint(confBytes, lConfig); lintErr == nil {
+				for _, lint := range lints {
+					m.logger.Infof("Stream '%v' config: %v\n", id, lint)
+				}
+			}
+		}
 		return
 	}
 	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {
@@ -260,7 +270,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			Pipeline: aliasedPipe(confIn.Pipeline),
 			Output:   aliasedOut(confIn.Output),
 		}
-		if err = json.Unmarshal(patchBytes, &aliasedConf); err != nil {
+		if err = yaml.Unmarshal(patchBytes, &aliasedConf); err != nil {
 			return
 		}
 		confOut = stream.Config{

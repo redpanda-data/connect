@@ -130,6 +130,44 @@ func TestAWKBadDateString(t *testing.T) {
 	}
 }
 
+func TestAWKJSONParts(t *testing.T) {
+	conf := NewConfig()
+	conf.AWK.Parts = []int{}
+	conf.AWK.Codec = "none"
+	conf.AWK.Program = `{
+		json_set("foo.bar", json_get("init.val"));
+		json_set("foo.bar", json_get("foo.bar") " extra");
+	}`
+
+	a, err := NewAWK(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgIn := message.New([][]byte{
+		[]byte(`{"init":{"val":"first"}}`),
+		[]byte(`{"init":{"val":"second"}}`),
+		[]byte(`{"init":{"val":"third"}}`),
+		[]byte(`{"init":{"val":"fourth"}}`),
+	})
+	msgs, res := a.ProcessMessage(msgIn)
+	if len(msgs) != 1 {
+		t.Fatal("No passthrough on error")
+	}
+	if res != nil {
+		t.Fatalf("Non-nil result: %v", res.Error())
+	}
+	exp := [][]byte{
+		[]byte(`{"foo":{"bar":"first extra"},"init":{"val":"first"}}`),
+		[]byte(`{"foo":{"bar":"second extra"},"init":{"val":"second"}}`),
+		[]byte(`{"foo":{"bar":"third extra"},"init":{"val":"third"}}`),
+		[]byte(`{"foo":{"bar":"fourth extra"},"init":{"val":"fourth"}}`),
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong output from json functions: %s != %s", act, exp)
+	}
+}
+
 func TestAWK(t *testing.T) {
 	type jTest struct {
 		name          string
@@ -233,6 +271,58 @@ func TestAWK(t *testing.T) {
 			output:  `not json content`,
 		},
 		{
+			name:    "json delete 1",
+			codec:   "none",
+			program: `{ json_delete("obj.foo") }`,
+			input:   `{"obj":{"foo":"hello world","bar":"baz"}}`,
+			output:  `{"obj":{"bar":"baz"}}`,
+		},
+		{
+			name:    "json delete 2",
+			codec:   "none",
+			program: `{ json_delete("obj.foo") }`,
+			input:   `not json content`,
+			output:  `not json content`,
+		},
+		{
+			name:    "json delete 3",
+			codec:   "none",
+			program: `{ json_delete("obj") }`,
+			input:   `{"obj":{"foo":"hello world"}}`,
+			output:  `{}`,
+		},
+		{
+			name:  "json set, get and set again",
+			codec: "none",
+			program: `{
+				 json_set("obj.foo", "hello world");
+				 json_set("obj.foo", json_get("obj.foo") " 123");
+			}`,
+			input:  `{"obj":{"foo":"nope"}}`,
+			output: `{"obj":{"foo":"hello world 123"}}`,
+		},
+		{
+			name:    "json set int 1",
+			codec:   "none",
+			program: `{ json_set_int("obj.foo", 5) }`,
+			input:   `{}`,
+			output:  `{"obj":{"foo":5}}`,
+		},
+		{
+			name:    "json set float 1",
+			codec:   "none",
+			program: `{ json_set_float("obj.foo", 5.3) }`,
+			input:   `{}`,
+			output:  `{"obj":{"foo":5.3}}`,
+		},
+		{
+			name:    "json set bool 1",
+			codec:   "none",
+			program: `{ json_set_bool("obj.foo", "foo" == "foo") }`,
+			input:   `{}`,
+			output:  `{"obj":{"foo":true}}`,
+		},
+		{
 			name: "metadata get 2",
 			metadata: map[string]string{
 				"meta.foo": "12",
@@ -308,16 +398,6 @@ func TestAWK(t *testing.T) {
 			program: `{ print timestamp_unix(foostamp) }`,
 			input:   `foo`,
 			output:  `1545134252`,
-		},
-		{
-			name: "parse metadata datestring 4",
-			metadata: map[string]string{
-				"foostamp": "2018-12-18T11:57:32.123",
-			},
-			codec:   "text",
-			program: `{ foo = foostamp; print timestamp_unix_nano(foo) }`,
-			input:   `foo`,
-			output:  `1545134252123000064`,
 		},
 		{
 			name: "format metadata unix custom 1",

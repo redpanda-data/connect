@@ -52,28 +52,30 @@ type S3DownloadManagerConfig struct {
 
 // AmazonS3Config contains configuration values for the AmazonS3 input type.
 type AmazonS3Config struct {
-	sess.Config     `json:",inline" yaml:",inline"`
-	Bucket          string                  `json:"bucket" yaml:"bucket"`
-	Prefix          string                  `json:"prefix" yaml:"prefix"`
-	Retries         int                     `json:"retries" yaml:"retries"`
-	DownloadManager S3DownloadManagerConfig `json:"download_manager" yaml:"download_manager"`
-	DeleteObjects   bool                    `json:"delete_objects" yaml:"delete_objects"`
-	SQSURL          string                  `json:"sqs_url" yaml:"sqs_url"`
-	SQSBodyPath     string                  `json:"sqs_body_path" yaml:"sqs_body_path"`
-	SQSBucketPath   string                  `json:"sqs_bucket_path" yaml:"sqs_bucket_path"`
-	SQSEnvelopePath string                  `json:"sqs_envelope_path" yaml:"sqs_envelope_path"`
-	SQSMaxMessages  int64                   `json:"sqs_max_messages" yaml:"sqs_max_messages"`
-	MaxBatchCount   int                     `json:"max_batch_count" yaml:"max_batch_count"`
-	Timeout         string                  `json:"timeout" yaml:"timeout"`
+	sess.Config        `json:",inline" yaml:",inline"`
+	Bucket             string                  `json:"bucket" yaml:"bucket"`
+	Prefix             string                  `json:"prefix" yaml:"prefix"`
+	Retries            int                     `json:"retries" yaml:"retries"`
+	ForcePathStyleURLs bool                    `json:"force_path_style_urls" yaml:"force_path_style_urls"`
+	DownloadManager    S3DownloadManagerConfig `json:"download_manager" yaml:"download_manager"`
+	DeleteObjects      bool                    `json:"delete_objects" yaml:"delete_objects"`
+	SQSURL             string                  `json:"sqs_url" yaml:"sqs_url"`
+	SQSBodyPath        string                  `json:"sqs_body_path" yaml:"sqs_body_path"`
+	SQSBucketPath      string                  `json:"sqs_bucket_path" yaml:"sqs_bucket_path"`
+	SQSEnvelopePath    string                  `json:"sqs_envelope_path" yaml:"sqs_envelope_path"`
+	SQSMaxMessages     int64                   `json:"sqs_max_messages" yaml:"sqs_max_messages"`
+	MaxBatchCount      int                     `json:"max_batch_count" yaml:"max_batch_count"`
+	Timeout            string                  `json:"timeout" yaml:"timeout"`
 }
 
 // NewAmazonS3Config creates a new AmazonS3Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
 	return AmazonS3Config{
-		Config:  sess.NewConfig(),
-		Bucket:  "",
-		Prefix:  "",
-		Retries: 3,
+		Config:             sess.NewConfig(),
+		Bucket:             "",
+		Prefix:             "",
+		Retries:            3,
+		ForcePathStyleURLs: false,
 		DownloadManager: S3DownloadManagerConfig{
 			Enabled: true,
 		},
@@ -176,7 +178,9 @@ func (a *AmazonS3) Connect() error {
 		return nil
 	}
 
-	sess, err := a.conf.GetSession()
+	sess, err := a.conf.GetSession(func(c *aws.Config) {
+		c.S3ForcePathStyle = aws.Bool(a.conf.ForcePathStyleURLs)
+	})
 	if err != nil {
 		return err
 	}
@@ -388,6 +392,9 @@ func addS3Metadata(p types.Part, obj *s3.GetObjectOutput) {
 	}
 	if obj.ContentType != nil {
 		meta.Set("s3_content_type", *obj.ContentType)
+	}
+	if obj.ContentEncoding != nil {
+		meta.Set("s3_content_encoding", *obj.ContentEncoding)
 	}
 }
 

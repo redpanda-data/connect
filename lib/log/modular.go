@@ -238,15 +238,8 @@ func (l *Logger) WithFields(fields map[string]string) Modular {
 
 // WithFields attempts to cast the Modular implementation into an interface that
 // implements WithFields, and if successful returns the result.
-//
-// TODO: V2 Remove this in favour of extending the interface.
 func WithFields(l Modular, fields map[string]string) Modular {
-	if wf, ok := l.(interface {
-		WithFields(fields map[string]string) Modular
-	}); ok {
-		return wf.WithFields(fields)
-	}
-	return l
+	return l.WithFields(fields)
 }
 
 //------------------------------------------------------------------------------

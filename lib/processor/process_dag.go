@@ -47,7 +47,8 @@ their postmap targets for provided fields and their premap targets for required
 fields.
 
 The DAG is then used to execute the children in the necessary order with the
-maximum parallelism possible.
+maximum parallelism possible. You can read more about workflows in Benthos
+[in this document](../workflows.md).
 
 The field ` + "`dependencies`" + ` is an optional array of fields that a child
 depends on. This is useful for when fields are required but don't appear within
@@ -62,14 +63,12 @@ document with - foo, bar and baz - where baz relies on the result of both foo
 and bar, we might express that relationship here like so:
 
 ` + "``` yaml" + `
-type: process_dag
 process_dag:
   foo:
     premap:
       .: .
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://foo/enrich
     postmap:
@@ -78,8 +77,7 @@ process_dag:
     premap:
       .: msg.sub.path
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://bar/enrich
     postmap:
@@ -89,8 +87,7 @@ process_dag:
       foo_obj: foo_result
       bar_obj: bar_result
     processors:
-    - type: http
-      http:
+    - http:
         request:
           url: http://baz/enrich
     postmap:
@@ -213,7 +210,7 @@ func NewProcessDAG(
 
 		child, err := NewProcessMap(v.ProcessMapConfig, mgr, nsLog, nsStats)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create child process_map: %v", err)
+			return nil, fmt.Errorf("failed to create child process_map '%v': %v", k, err)
 		}
 
 		children[k] = child
@@ -248,7 +245,7 @@ func NewProcessDAG(
 func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
-	result := msg.Copy()
+	result := msg.DeepCopy()
 	result.Iter(func(i int, p types.Part) error {
 		_ = p.Get()
 		_, _ = p.JSON()
@@ -280,18 +277,22 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		for i, id := range layer {
 			if err := errors[i]; err != nil {
 				p.log.Errorf("Failed to perform child '%v': %v\n", id, err)
+				result.Iter(func(i int, p types.Part) error {
+					FlagErr(p, err)
+					return nil
+				})
 				continue
 			}
 			if failed, err := p.children[id].OverlayResult(result, results[i]); err != nil {
 				p.log.Errorf("Failed to overlay child '%v': %v\n", id, err)
 				result.Iter(func(i int, p types.Part) error {
-					FlagFail(p)
+					FlagErr(p, err)
 					return nil
 				})
 				continue
 			} else {
 				for _, j := range failed {
-					FlagFail(result.Get(j))
+					FlagErr(result.Get(j), fmt.Errorf("enrichment '%v' postmap failed", id))
 				}
 			}
 		}

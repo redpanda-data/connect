@@ -72,6 +72,8 @@ func TestSubprocessWithSed(t *testing.T) {
 }
 
 func TestSubprocessWithCat(t *testing.T) {
+	t.Skip("disabled for now")
+
 	conf := NewConfig()
 	conf.Type = TypeSubprocess
 	conf.Subprocess.Name = "cat"
@@ -110,6 +112,8 @@ func TestSubprocessWithCat(t *testing.T) {
 }
 
 func TestSubprocessLineBreaks(t *testing.T) {
+	t.Skip("disabled for now")
+
 	conf := NewConfig()
 	conf.Type = TypeSubprocess
 	conf.Subprocess.Name = "sed"

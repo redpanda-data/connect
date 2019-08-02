@@ -61,7 +61,12 @@ an output broker with the path ` + "`output.broker`" + `.
 An entry in the ` + "`patterns`" + ` field will be parsed as an RE2 regular
 expression and tested against each metric path. This can be used, for example,
 to allow none of the latency based metrics with the pattern
-` + "`.*\\.latency`" + `.`,
+` + "`.*\\.latency`" + `.
+
+### Debugging
+
+In order to see logs breaking down which metrics are registered and whether they
+are blocked by your blacklists enable logging at the TRACE level.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var childSanit interface{}
 			var err error
@@ -147,6 +152,7 @@ type Blacklist struct {
 	paths    []string
 	patterns []*regexp.Regexp
 	s        Type
+	log      log.Modular
 }
 
 // NewBlacklist creates and returns a new Blacklist object
@@ -155,7 +161,7 @@ func NewBlacklist(config Config, opts ...func(Type)) (Type, error) {
 		return nil, errors.New("cannot create a Blacklist metric without a child")
 	}
 
-	child, err := New(*config.Blacklist.Child, opts...)
+	child, err := New(*config.Blacklist.Child)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +170,11 @@ func NewBlacklist(config Config, opts ...func(Type)) (Type, error) {
 		paths:    config.Blacklist.Paths,
 		patterns: make([]*regexp.Regexp, len(config.Blacklist.Patterns)),
 		s:        child,
+		log:      log.Noop(),
+	}
+
+	for _, opt := range opts {
+		opt(b)
 	}
 
 	for i, p := range config.Blacklist.Patterns {
@@ -184,14 +195,17 @@ func NewBlacklist(config Config, opts ...func(Type)) (Type, error) {
 func (h *Blacklist) rejectPath(path string) bool {
 	for _, p := range h.paths {
 		if strings.HasPrefix(path, p) {
+			h.log.Tracef("Rejecting metric path '%v' according to blacklisted path prefix '%v'\n", path, p)
 			return true
 		}
 	}
 	for _, pat := range h.patterns {
 		if pat.MatchString(path) {
+			h.log.Tracef("Rejecting metric path '%v' according to blacklisted pattern '%v'\n", path, pat.String())
 			return true
 		}
 	}
+	h.log.Tracef("Allowing metric path '%v'\n", path)
 	return false
 }
 
@@ -256,6 +270,7 @@ func (h *Blacklist) GetGaugeVec(path string, n []string) StatGaugeVec {
 
 // SetLogger sets the logger used to print connection errors.
 func (h *Blacklist) SetLogger(log log.Modular) {
+	h.log = log.NewModule(".blacklist")
 	h.s.SetLogger(log)
 }
 

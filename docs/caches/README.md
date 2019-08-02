@@ -88,6 +88,13 @@ DynamoDB table. An optional TTL duration (`ttl`) and field
 Strong read consistency can be enabled using the `consistent_read`
 configuration field.
 
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
 ## `file`
 
 ``` yaml
@@ -165,6 +172,7 @@ s3:
     secret: ""
     token: ""
   endpoint: ""
+  force_path_style_urls: false
   region: eu-west-1
   retries: 3
   timeout: 5s
@@ -175,4 +183,11 @@ the path of the item within the bucket.
 
 It is not possible to atomically upload S3 objects exclusively when the target
 does not already exist, therefore this cache is not suitable for deduplication.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
 

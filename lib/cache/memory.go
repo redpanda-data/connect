@@ -179,4 +179,13 @@ func (m *Memory) Delete(key string) error {
 	return nil
 }
 
+// CloseAsync shuts down the cache.
+func (m *Memory) CloseAsync() {
+}
+
+// WaitForClose blocks until the cache has closed down.
+func (m *Memory) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
 //------------------------------------------------------------------------------

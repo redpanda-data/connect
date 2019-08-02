@@ -34,7 +34,7 @@ import (
 	"github.com/Jeffail/benthos/lib/processor"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -63,6 +63,8 @@ const (
 	TypeAMQP          = "amqp"
 	TypeBroker        = "broker"
 	TypeCache         = "cache"
+	TypeDrop          = "drop"
+	TypeDropOnError   = "drop_on_error"
 	TypeDynamic       = "dynamic"
 	TypeDynamoDB      = "dynamodb"
 	TypeElasticsearch = "elasticsearch"
@@ -80,14 +82,17 @@ const (
 	TypeNATS          = "nats"
 	TypeNATSStream    = "nats_stream"
 	TypeNSQ           = "nsq"
+	TypeRedisHash     = "redis_hash"
 	TypeRedisList     = "redis_list"
 	TypeRedisPubSub   = "redis_pubsub"
 	TypeRedisStreams  = "redis_streams"
 	TypeRetry         = "retry"
 	TypeS3            = "s3"
+	TypeSNS           = "sns"
 	TypeSQS           = "sqs"
 	TypeSTDOUT        = "stdout"
 	TypeSwitch        = "switch"
+	TypeSyncResponse  = "sync_response"
 	TypeWebsocket     = "websocket"
 	TypeZMQ4          = "zmq4"
 )
@@ -100,6 +105,8 @@ type Config struct {
 	AMQP          writer.AMQPConfig          `json:"amqp" yaml:"amqp"`
 	Broker        BrokerConfig               `json:"broker" yaml:"broker"`
 	Cache         writer.CacheConfig         `json:"cache" yaml:"cache"`
+	Drop          writer.DropConfig          `json:"drop" yaml:"drop"`
+	DropOnError   DropOnErrorConfig          `json:"drop_on_error" yaml:"drop_on_error"`
 	Dynamic       DynamicConfig              `json:"dynamic" yaml:"dynamic"`
 	DynamoDB      writer.DynamoDBConfig      `json:"dynamodb" yaml:"dynamodb"`
 	Elasticsearch writer.ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
@@ -118,14 +125,17 @@ type Config struct {
 	NATSStream    writer.NATSStreamConfig    `json:"nats_stream" yaml:"nats_stream"`
 	NSQ           writer.NSQConfig           `json:"nsq" yaml:"nsq"`
 	Plugin        interface{}                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	RedisHash     writer.RedisHashConfig     `json:"redis_hash" yaml:"redis_hash"`
 	RedisList     writer.RedisListConfig     `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub   writer.RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
 	RedisStreams  writer.RedisStreamsConfig  `json:"redis_streams" yaml:"redis_streams"`
 	Retry         RetryConfig                `json:"retry" yaml:"retry"`
 	S3            writer.AmazonS3Config      `json:"s3" yaml:"s3"`
+	SNS           writer.SNSConfig           `json:"sns" yaml:"sns"`
 	SQS           writer.AmazonSQSConfig     `json:"sqs" yaml:"sqs"`
 	STDOUT        STDOUTConfig               `json:"stdout" yaml:"stdout"`
 	Switch        SwitchConfig               `json:"switch" yaml:"switch"`
+	SyncResponse  struct{}                   `json:"sync_response" yaml:"sync_response"`
 	Websocket     writer.WebsocketConfig     `json:"websocket" yaml:"websocket"`
 	ZMQ4          *writer.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors    []processor.Config         `json:"processors" yaml:"processors"`
@@ -138,6 +148,8 @@ func NewConfig() Config {
 		AMQP:          writer.NewAMQPConfig(),
 		Broker:        NewBrokerConfig(),
 		Cache:         writer.NewCacheConfig(),
+		Drop:          writer.NewDropConfig(),
+		DropOnError:   NewDropOnErrorConfig(),
 		Dynamic:       NewDynamicConfig(),
 		DynamoDB:      writer.NewDynamoDBConfig(),
 		Elasticsearch: writer.NewElasticsearchConfig(),
@@ -156,14 +168,17 @@ func NewConfig() Config {
 		NATSStream:    writer.NewNATSStreamConfig(),
 		NSQ:           writer.NewNSQConfig(),
 		Plugin:        nil,
+		RedisHash:     writer.NewRedisHashConfig(),
 		RedisList:     writer.NewRedisListConfig(),
 		RedisPubSub:   writer.NewRedisPubSubConfig(),
 		RedisStreams:  writer.NewRedisStreamsConfig(),
 		Retry:         NewRetryConfig(),
 		S3:            writer.NewAmazonS3Config(),
+		SNS:           writer.NewSNSConfig(),
 		SQS:           writer.NewAmazonSQSConfig(),
 		STDOUT:        NewSTDOUTConfig(),
 		Switch:        NewSwitchConfig(),
+		SyncResponse:  struct{}{},
 		Websocket:     writer.NewWebsocketConfig(),
 		ZMQ4:          writer.NewZMQ4Config(),
 		Processors:    []processor.Config{},
@@ -198,10 +213,14 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 			outputMap[t] = hashMap[t]
 		}
 		if spec, exists := pluginSpecs[conf.Type]; exists {
+			var plugSanit interface{}
 			if spec.confSanitiser != nil {
-				outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
+				plugSanit = spec.confSanitiser(conf.Plugin)
 			} else {
-				outputMap["plugin"] = hashMap["plugin"]
+				plugSanit = hashMap["plugin"]
+			}
+			if plugSanit != nil {
+				outputMap["plugin"] = plugSanit
 			}
 		}
 	}
@@ -226,53 +245,45 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 
 //------------------------------------------------------------------------------
 
-// UnmarshalJSON ensures that when parsing configs that are in a map or slice
-// the default values are still applied.
-func (c *Config) UnmarshalJSON(bytes []byte) error {
-	type confAlias Config
-	aliased := confAlias(NewConfig())
-
-	if err := json.Unmarshal(bytes, &aliased); err != nil {
-		return err
-	}
-
-	if spec, exists := pluginSpecs[aliased.Type]; exists {
-		dummy := struct {
-			Conf interface{} `json:"plugin"`
-		}{
-			Conf: spec.confConstructor(),
-		}
-		if err := json.Unmarshal(bytes, &dummy); err != nil {
-			return fmt.Errorf("failed to parse plugin config: %v", err)
-		}
-		aliased.Plugin = dummy.Conf
-	} else {
-		aliased.Plugin = nil
-	}
-
-	*c = Config(aliased)
-	return nil
-}
-
 // UnmarshalYAML ensures that when parsing configs that are in a map or slice
 // the default values are still applied.
-func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
-	if err := unmarshal(&aliased); err != nil {
-		return err
+	if err := value.Decode(&aliased); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
-	if spec, exists := pluginSpecs[aliased.Type]; exists {
+	var raw interface{}
+	if err := value.Decode(&raw); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
+		var inferredType string
+		for _, tc := range typeCandidates {
+			if _, exists := Constructors[tc]; exists {
+				if len(inferredType) > 0 {
+					return fmt.Errorf("line %v: unable to infer type, multiple candidates '%v' and '%v'", value.Line, inferredType, tc)
+				}
+				inferredType = tc
+			}
+		}
+		if len(inferredType) == 0 {
+			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
+		}
+		aliased.Type = inferredType
+	}
+
+	if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
 		confBytes, err := yaml.Marshal(aliased.Plugin)
 		if err != nil {
-			return err
+			return fmt.Errorf("line %v: %v", value.Line, err)
 		}
 
 		conf := spec.confConstructor()
 		if err = yaml.Unmarshal(confBytes, conf); err != nil {
-			return err
+			return fmt.Errorf("line %v: %v", value.Line, err)
 		}
 		aliased.Plugin = conf
 	} else {
@@ -323,12 +334,11 @@ configuration.
 
 ### Multiplexing Outputs
 
-It is possible to perform
-[content based multiplexing](../concepts.md#content-based-multiplexing) of
-messages to specific outputs either by using the ` + "[`switch`](#switch)" + `
-output, or a ` + "[`broker`](#broker)" + ` with the ` + "`fan_out`" + ` pattern
-and a [filter processor](../processors/README.md#filter_parts) on each output,
-which is a processor that drops messages if the condition does not pass.
+It is possible to perform content based multiplexing of messages to specific
+outputs either by using the ` + "[`switch`](#switch)" + ` output, or a
+` + "[`broker`](#broker)" + ` with the ` + "`fan_out`" + ` pattern and a
+[filter processor](../processors/README.md#filter_parts) on each output, which
+is a processor that drops messages if the condition does not pass.
 Conditions are content aware logical operators that can be combined using
 boolean logic.
 
@@ -370,7 +380,7 @@ func Descriptions() string {
 		conf := NewConfig()
 		conf.Type = name
 		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = yaml.Marshal(confSanit)
+			confBytes, _ = config.MarshalYAML(confSanit)
 		}
 
 		buf.WriteString("## ")

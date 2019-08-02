@@ -1,5 +1,5 @@
-Pipeline
-========
+Processing Pipelines
+====================
 
 Within a Benthos configuration, in between `input` and `output`, is a `pipeline`
 section. This section describes an array of [processors][processors] that are to
@@ -40,7 +40,6 @@ and choose to use eight parallel consumers of the input `baz`.
 
 ``` yaml
 input:
-  type: broker
   broker:
     copies: 8
     inputs:
@@ -50,8 +49,7 @@ buffer:
 pipeline:
   threads: 4
   processors:
-  - type: jmespath
-    jmespath:
+  - jmespath:
       query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
 output:
   type: bar
@@ -97,14 +95,12 @@ fit four messages of the stream at any given time.
 input:
   type: foo
 buffer:
-  type: memory
   memory:
     limit: 5000000
 pipeline:
   threads: 4
   processors:
-  - type: jmespath
-    jmespath:
+  - jmespath:
       query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
 output:
   type: bar
@@ -120,8 +116,8 @@ foo -> memory buffer ---> processor ---> bar
                      \--> processor -/
 ```
 
-[processors]: ./processors
+[processors]: ./processors/README.md
 [jmespath-processor]: ./processors/README.md#jmespath
-[buffers]: ./buffers
+[buffers]: ./buffers/README.md
 [search-amo]: https://duckduckgo.com/?q=at+most+once
 [search-alo]: https://duckduckgo.com/?q=at+least+once

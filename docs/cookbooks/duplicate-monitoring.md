@@ -27,23 +27,19 @@ Here's the config (omitting our input and output sections for brevity):
 ``` yaml
 pipeline:
   processors:
-  - type: cache
-    cache:
+  - cache:
       cache: dupes
       key: "${!json_field:document.id}_${!json_field:document.user.id}"
       operator: add
       value: "x"
-  - type: catch
-    catch:
-    - type: metric
-      metric:
+  - catch:
+    - metric:
         type: counter
         path: duplicate_id
 
 resources:
   caches:
     dupes:
-      type: memory
       memory:
         ttl: 300
 
@@ -73,8 +69,7 @@ counts with extra information. For example, we could label our counters with the
 source Kafka topic and partition:
 
 ``` yaml
-      - type: metric
-        metric:
+      - metric:
           type: counter
           path: duplicate_id
           labels:
@@ -104,24 +99,19 @@ this:
 ``` yaml
 pipeline:
   processors:
-  - type: process_map
-    process_map:
+  - process_map:
       processors:
-      - type: hash
-        hash:
+      - hash:
           algorithm: xxhash64
-      - type: cache
-        cache:
+      - cache:
           cache: dupes
           key: "${!content}"
           operator: add
           value: "x"
       postmap_optional:
         will: never.exist
-  - type: catch
-    catch:
-    - type: metric
-      metric:
+  - catch:
+    - metric:
         type: counter
         path: duplicate_hash
 ```

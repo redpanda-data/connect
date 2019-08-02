@@ -33,6 +33,7 @@ input:
       files:
         path: ${INPUT_FILES_PATH}
       gcp_pubsub:
+        max_batch_count: ${INPUT_GCP_PUBSUB_MAX_BATCH_COUNT:1}
         max_outstanding_bytes: ${INPUT_GCP_PUBSUB_MAX_OUTSTANDING_BYTES:1000000000}
         max_outstanding_messages: ${INPUT_GCP_PUBSUB_MAX_OUTSTANDING_MESSAGES:1000}
         project: ${INPUT_GCP_PUBSUB_PROJECT}
@@ -49,6 +50,7 @@ input:
           enabled: ${INPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED:false}
           password: ${INPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD}
           username: ${INPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME}
+        copy_response_headers: ${INPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS:false}
         headers:
           Content-Type: ${INPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
         max_retry_backoff: ${INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
@@ -81,8 +83,11 @@ input:
         cert_file: ${INPUT_HTTP_SERVER_CERT_FILE}
         key_file: ${INPUT_HTTP_SERVER_KEY_FILE}
         path: ${INPUT_HTTP_SERVER_PATH:/post}
+        rate_limit: ${INPUT_HTTP_SERVER_RATE_LIMIT}
         timeout: ${INPUT_HTTP_SERVER_TIMEOUT:5s}
         ws_path: ${INPUT_HTTP_SERVER_WS_PATH:/post/ws}
+        ws_rate_limit_message: ${INPUT_HTTP_SERVER_WS_RATE_LIMIT_MESSAGE}
+        ws_welcome_message: ${INPUT_HTTP_SERVER_WS_WELCOME_MESSAGE}
       inproc: ${INPUT_INPROC}
       kafka:
         addresses:
@@ -90,9 +95,14 @@ input:
         client_id: ${INPUT_KAFKA_CLIENT_ID:benthos_kafka_input}
         commit_period: ${INPUT_KAFKA_COMMIT_PERIOD:1s}
         consumer_group: ${INPUT_KAFKA_CONSUMER_GROUP:benthos_consumer_group}
+        fetch_buffer_cap: ${INPUT_KAFKA_FETCH_BUFFER_CAP:256}
         max_batch_count: ${INPUT_KAFKA_MAX_BATCH_COUNT:1}
         max_processing_period: ${INPUT_KAFKA_MAX_PROCESSING_PERIOD:100ms}
         partition: ${INPUT_KAFKA_PARTITION:0}
+        sasl:
+          enabled: ${INPUT_KAFKA_SASL_ENABLED:false}
+          password: ${INPUT_KAFKA_SASL_PASSWORD}
+          user: ${INPUT_KAFKA_SASL_USER}
         start_from_oldest: ${INPUT_KAFKA_START_FROM_OLDEST:true}
         target_version: ${INPUT_KAFKA_TARGET_VERSION:1.0.0}
         tls:
@@ -106,12 +116,17 @@ input:
         client_id: ${INPUT_KAFKA_BALANCED_CLIENT_ID:benthos_kafka_input}
         commit_period: ${INPUT_KAFKA_BALANCED_COMMIT_PERIOD:1s}
         consumer_group: ${INPUT_KAFKA_BALANCED_CONSUMER_GROUP:benthos_consumer_group}
+        fetch_buffer_cap: ${INPUT_KAFKA_BALANCED_FETCH_BUFFER_CAP:256}
         group:
           heartbeat_interval: ${INPUT_KAFKA_BALANCED_GROUP_HEARTBEAT_INTERVAL:3s}
           rebalance_timeout: ${INPUT_KAFKA_BALANCED_GROUP_REBALANCE_TIMEOUT:60s}
           session_timeout: ${INPUT_KAFKA_BALANCED_GROUP_SESSION_TIMEOUT:10s}
         max_batch_count: ${INPUT_KAFKA_BALANCED_MAX_BATCH_COUNT:1}
         max_processing_period: ${INPUT_KAFKA_BALANCED_MAX_PROCESSING_PERIOD:100ms}
+        sasl:
+          enabled: ${INPUT_KAFKA_BALANCED_SASL_ENABLED:false}
+          password: ${INPUT_KAFKA_BALANCED_SASL_PASSWORD}
+          user: ${INPUT_KAFKA_BALANCED_SASL_USER}
         start_from_oldest: ${INPUT_KAFKA_BALANCED_START_FROM_OLDEST:true}
         target_version: ${INPUT_KAFKA_BALANCED_TARGET_VERSION:1.0.0}
         tls:
@@ -165,7 +180,7 @@ input:
         queue: ${INPUT_NATS_STREAM_QUEUE:benthos_queue}
         start_from_oldest: ${INPUT_NATS_STREAM_START_FROM_OLDEST:true}
         subject: ${INPUT_NATS_STREAM_SUBJECT:benthos_messages}
-        unsubscribe_on_close: ${INPUT_NATS_STREAM_UNSUBSCRIBE_ON_CLOSE:true}
+        unsubscribe_on_close: ${INPUT_NATS_STREAM_UNSUBSCRIBE_ON_CLOSE:false}
         urls:
         - ${INPUT_NATS_STREAM_URLS:nats://localhost:4222}
       nsq:
@@ -185,6 +200,7 @@ input:
         channels:
         - ${INPUT_REDIS_PUBSUB_CHANNELS:benthos_chan}
         url: ${INPUT_REDIS_PUBSUB_URL:tcp://localhost:6379}
+        use_patterns: ${INPUT_REDIS_PUBSUB_USE_PATTERNS:false}
       redis_streams:
         body_key: ${INPUT_REDIS_STREAMS_BODY_KEY:body}
         client_id: ${INPUT_REDIS_STREAMS_CLIENT_ID:benthos_consumer}
@@ -208,6 +224,7 @@ input:
         download_manager:
           enabled: ${INPUT_S3_DOWNLOAD_MANAGER_ENABLED:true}
         endpoint: ${INPUT_S3_ENDPOINT}
+        force_path_style_urls: ${INPUT_S3_FORCE_PATH_STYLE_URLS:false}
         max_batch_count: ${INPUT_S3_MAX_BATCH_COUNT:1}
         prefix: ${INPUT_S3_PREFIX}
         region: ${INPUT_S3_REGION:eu-west-1}
@@ -265,6 +282,10 @@ pipeline:
   - archive:
       format: ${PROCESSOR_ARCHIVE_FORMAT:binary}
       path: ${PROCESSOR_ARCHIVE_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+    avro:
+      encoding: ${PROCESSOR_AVRO_ENCODING:textual}
+      operator: ${PROCESSOR_AVRO_OPERATOR:to_json}
+      schema: ${PROCESSOR_AVRO_SCHEMA}
     awk:
       codec: ${PROCESSOR_AWK_CODEC:text}
       program: ${PROCESSOR_AWK_PROGRAM:BEGIN { x = 0 } { print $0, x; x++ }}
@@ -276,6 +297,8 @@ pipeline:
           max_parts: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PARTS:100}
           min_part_size: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PART_SIZE:1}
           min_parts: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PARTS:1}
+        check_interpolation:
+          value: ${PROCESSOR_BATCH_CONDITION_CHECK_INTERPOLATION_VALUE}
         count:
           arg: ${PROCESSOR_BATCH_CONDITION_COUNT_ARG:100}
         jmespath:
@@ -286,6 +309,10 @@ pipeline:
           key: ${PROCESSOR_BATCH_CONDITION_METADATA_KEY}
           operator: ${PROCESSOR_BATCH_CONDITION_METADATA_OPERATOR:equals_cs}
           part: ${PROCESSOR_BATCH_CONDITION_METADATA_PART:0}
+        number:
+          arg: ${PROCESSOR_BATCH_CONDITION_NUMBER_ARG:0}
+          operator: ${PROCESSOR_BATCH_CONDITION_NUMBER_OPERATOR:equals}
+          part: ${PROCESSOR_BATCH_CONDITION_NUMBER_PART:0}
         processor_failed:
           part: ${PROCESSOR_BATCH_CONDITION_PROCESSOR_FAILED_PART:0}
         resource: ${PROCESSOR_BATCH_CONDITION_RESOURCE}
@@ -340,6 +367,7 @@ pipeline:
           enabled: ${PROCESSOR_HTTP_REQUEST_BASIC_AUTH_ENABLED:false}
           password: ${PROCESSOR_HTTP_REQUEST_BASIC_AUTH_PASSWORD}
           username: ${PROCESSOR_HTTP_REQUEST_BASIC_AUTH_USERNAME}
+        copy_response_headers: ${PROCESSOR_HTTP_REQUEST_COPY_RESPONSE_HEADERS:false}
         headers:
           Content-Type: ${PROCESSOR_HTTP_REQUEST_HEADERS_CONTENT_TYPE:application/octet-stream}
         max_retry_backoff: ${PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF:300s}
@@ -366,7 +394,7 @@ pipeline:
     jmespath:
       query: ${PROCESSOR_JMESPATH_QUERY}
     json:
-      operator: ${PROCESSOR_JSON_OPERATOR:get}
+      operator: ${PROCESSOR_JSON_OPERATOR:clean}
       path: ${PROCESSOR_JSON_PATH}
       value: ${PROCESSOR_JSON_VALUE}
     lambda:
@@ -396,6 +424,9 @@ pipeline:
       path: ${PROCESSOR_METRIC_PATH}
       type: ${PROCESSOR_METRIC_TYPE:counter}
       value: ${PROCESSOR_METRIC_VALUE}
+    number:
+      operator: ${PROCESSOR_NUMBER_OPERATOR:add}
+      value: ${PROCESSOR_NUMBER_VALUE:0}
     parallel:
       cap: ${PROCESSOR_PARALLEL_CAP:0}
     sample:
@@ -409,7 +440,13 @@ pipeline:
     split:
       byte_size: ${PROCESSOR_SPLIT_BYTE_SIZE:0}
       size: ${PROCESSOR_SPLIT_SIZE:1}
+    sql:
+      driver: ${PROCESSOR_SQL_DRIVER:mysql}
+      dsn: ${PROCESSOR_SQL_DSN}
+      query: ${PROCESSOR_SQL_QUERY}
+      result_codec: ${PROCESSOR_SQL_RESULT_CODEC:none}
     subprocess:
+      max_buffer: ${PROCESSOR_SUBPROCESS_MAX_BUFFER:65536}
       name: ${PROCESSOR_SUBPROCESS_NAME:cat}
     text:
       arg: ${PROCESSOR_TEXT_ARG}
@@ -495,6 +532,7 @@ output:
           enabled: ${OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED:false}
           password: ${OUTPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD}
           username: ${OUTPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME}
+        copy_response_headers: ${OUTPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS:false}
         headers:
           Content-Type: ${OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
         max_retry_backoff: ${OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
@@ -505,6 +543,7 @@ output:
           consumer_secret: ${OUTPUT_HTTP_CLIENT_OAUTH_CONSUMER_SECRET}
           enabled: ${OUTPUT_HTTP_CLIENT_OAUTH_ENABLED:false}
           request_url: ${OUTPUT_HTTP_CLIENT_OAUTH_REQUEST_URL}
+        propagate_response: ${OUTPUT_HTTP_CLIENT_PROPAGATE_RESPONSE:false}
         rate_limit: ${OUTPUT_HTTP_CLIENT_RATE_LIMIT}
         retries: ${OUTPUT_HTTP_CLIENT_RETRIES:3}
         retry_period: ${OUTPUT_HTTP_CLIENT_RETRY_PERIOD:1s}
@@ -533,6 +572,10 @@ output:
         key: ${OUTPUT_KAFKA_KEY}
         max_msg_bytes: ${OUTPUT_KAFKA_MAX_MSG_BYTES:1000000}
         round_robin_partitions: ${OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS:false}
+        sasl:
+          enabled: ${OUTPUT_KAFKA_SASL_ENABLED:false}
+          password: ${OUTPUT_KAFKA_SASL_PASSWORD}
+          user: ${OUTPUT_KAFKA_SASL_USER}
         target_version: ${OUTPUT_KAFKA_TARGET_VERSION:1.0.0}
         timeout: ${OUTPUT_KAFKA_TIMEOUT:5s}
         tls:
@@ -583,6 +626,11 @@ output:
         nsqd_tcp_address: ${OUTPUT_NSQ_NSQD_TCP_ADDRESS:localhost:4150}
         topic: ${OUTPUT_NSQ_TOPIC:benthos_messages}
         user_agent: ${OUTPUT_NSQ_USER_AGENT:benthos_producer}
+      redis_hash:
+        key: ${OUTPUT_REDIS_HASH_KEY}
+        url: ${OUTPUT_REDIS_HASH_URL:tcp://localhost:6379}
+        walk_json_object: ${OUTPUT_REDIS_HASH_WALK_JSON_OBJECT:false}
+        walk_metadata: ${OUTPUT_REDIS_HASH_WALK_METADATA:false}
       redis_list:
         key: ${OUTPUT_REDIS_LIST_KEY:benthos_list}
         url: ${OUTPUT_REDIS_LIST_URL:tcp://localhost:6379}
@@ -596,6 +644,7 @@ output:
         url: ${OUTPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
       s3:
         bucket: ${OUTPUT_S3_BUCKET}
+        content_encoding: ${OUTPUT_S3_CONTENT_ENCODING}
         content_type: ${OUTPUT_S3_CONTENT_TYPE:application/octet-stream}
         credentials:
           id: ${OUTPUT_S3_CREDENTIALS_ID}
@@ -604,9 +653,21 @@ output:
           secret: ${OUTPUT_S3_CREDENTIALS_SECRET}
           token: ${OUTPUT_S3_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_S3_ENDPOINT}
+        force_path_style_urls: ${OUTPUT_S3_FORCE_PATH_STYLE_URLS:false}
         path: ${OUTPUT_S3_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
         region: ${OUTPUT_S3_REGION:eu-west-1}
         timeout: ${OUTPUT_S3_TIMEOUT:5s}
+      sns:
+        credentials:
+          id: ${OUTPUT_SNS_CREDENTIALS_ID}
+          role: ${OUTPUT_SNS_CREDENTIALS_ROLE}
+          role_external_id: ${OUTPUT_SNS_CREDENTIALS_ROLE_EXTERNAL_ID}
+          secret: ${OUTPUT_SNS_CREDENTIALS_SECRET}
+          token: ${OUTPUT_SNS_CREDENTIALS_TOKEN}
+        endpoint: ${OUTPUT_SNS_ENDPOINT}
+        region: ${OUTPUT_SNS_REGION:eu-west-1}
+        timeout: ${OUTPUT_SNS_TIMEOUT:5s}
+        topic_arn: ${OUTPUT_SNS_TOPIC_ARN}
       sqs:
         backoff:
           initial_interval: ${OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL:1s}

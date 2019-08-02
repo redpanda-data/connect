@@ -301,4 +301,13 @@ func (m *Memcached) Delete(key string) error {
 	return err
 }
 
+// CloseAsync shuts down the cache.
+func (m *Memcached) CloseAsync() {
+}
+
+// WaitForClose blocks until the cache has closed down.
+func (m *Memcached) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
 //-----------------------------------------------------------------------------

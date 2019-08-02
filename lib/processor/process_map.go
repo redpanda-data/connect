@@ -26,11 +26,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message/mapper"
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
 )
 
@@ -352,8 +352,9 @@ func (p *ProcessMap) CreateResult(msg types.Message) error {
 	skipped, failed := p.mapper.MapRequests(msg)
 	if msg.Len() == 0 {
 		msg.SetAll(make([]types.Part, originalLen))
+		errMapFailed := errors.New("mapping failed for this message")
 		for _, i := range failed {
-			FlagFail(msg.Get(i))
+			FlagErr(msg.Get(i), errMapFailed)
 		}
 		return nil
 	}

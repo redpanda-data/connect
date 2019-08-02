@@ -40,7 +40,17 @@ func init() {
 	Constructors[TypeMetric] = TypeSpec{
 		constructor: NewMetric,
 		description: `
-Creates metrics by extracting values from messages.
+Expose custom metrics by extracting values from message batches. This processor
+executes once per batch, in order to execute once per message place it within a
+` + "[`for_each`](#for_each)" + ` processor:
+
+` + "``` yaml" + `
+for_each:
+- metric:
+    type: counter_by
+    path: count.custom.field
+    value: ${!json_field:field.some.value}
+` + "```" + `
 
 The ` + "`path`" + ` field should be a dot separated path of the metric to be
 set and will automatically be converted into the correct format of the
@@ -71,7 +81,6 @@ For example, the following configuration will increment the value of the
 ` + "`count.custom.field` metric by the contents of `field.some.value`" + `:
 
 ` + "``` yaml" + `
-type: metric
 metric:
   type: counter_by
   path: count.custom.field
@@ -87,7 +96,6 @@ For example, the following configuration will set the value of the
 ` + "`gauge.custom.field` metric to the contents of `field.some.value`" + `:
 
 ` + "``` yaml" + `
-type: metric
 metric:
   type: gauge
   path: gauge.custom.field
@@ -137,10 +145,15 @@ type Metric struct {
 
 	interpolateValue bool
 
-	labels   labels
-	mCounter metrics.StatCounterVec
-	mGauge   metrics.StatGaugeVec
-	mTimer   metrics.StatTimerVec
+	labels labels
+
+	mCounter metrics.StatCounter
+	mGauge   metrics.StatGauge
+	mTimer   metrics.StatTimer
+
+	mCounterVec metrics.StatCounterVec
+	mGaugeVec   metrics.StatGaugeVec
+	mTimerVec   metrics.StatTimerVec
 
 	handler func(string, types.Message) error
 }
@@ -207,19 +220,39 @@ func NewMetric(
 
 	switch strings.ToLower(conf.Metric.Type) {
 	case "counter":
-		m.mCounter = stats.GetCounterVec(conf.Metric.Path, m.labels.names())
+		if len(m.labels) > 0 {
+			m.mCounterVec = stats.GetCounterVec(conf.Metric.Path, m.labels.names())
+		} else {
+			m.mCounter = stats.GetCounter(conf.Metric.Path)
+		}
 		m.handler = m.handleCounter
 	case "counter_parts":
-		m.mCounter = stats.GetCounterVec(conf.Metric.Path, m.labels.names())
+		if len(m.labels) > 0 {
+			m.mCounterVec = stats.GetCounterVec(conf.Metric.Path, m.labels.names())
+		} else {
+			m.mCounter = stats.GetCounter(conf.Metric.Path)
+		}
 		m.handler = m.handleCounterParts
 	case "counter_by":
-		m.mCounter = stats.GetCounterVec(conf.Metric.Path, m.labels.names())
+		if len(m.labels) > 0 {
+			m.mCounterVec = stats.GetCounterVec(conf.Metric.Path, m.labels.names())
+		} else {
+			m.mCounter = stats.GetCounter(conf.Metric.Path)
+		}
 		m.handler = m.handleCounterBy
 	case "gauge":
-		m.mGauge = stats.GetGaugeVec(conf.Metric.Path, m.labels.names())
+		if len(m.labels) > 0 {
+			m.mGaugeVec = stats.GetGaugeVec(conf.Metric.Path, m.labels.names())
+		} else {
+			m.mGauge = stats.GetGauge(conf.Metric.Path)
+		}
 		m.handler = m.handleGauge
 	case "timing":
-		m.mTimer = stats.GetTimerVec(conf.Metric.Path, m.labels.names())
+		if len(m.labels) > 0 {
+			m.mTimerVec = stats.GetTimerVec(conf.Metric.Path, m.labels.names())
+		} else {
+			m.mTimer = stats.GetTimer(conf.Metric.Path)
+		}
 		m.handler = m.handleTimer
 	default:
 		return nil, fmt.Errorf("metric type unrecognised: %v", conf.Metric.Type)
@@ -229,7 +262,11 @@ func NewMetric(
 }
 
 func (m *Metric) handleCounter(val string, msg types.Message) error {
-	m.mCounter.With(m.labels.values(msg)...).Incr(1)
+	if len(m.labels) > 0 {
+		m.mCounterVec.With(m.labels.values(msg)...).Incr(1)
+	} else {
+		m.mCounter.Incr(1)
+	}
 	return nil
 }
 
@@ -237,7 +274,11 @@ func (m *Metric) handleCounterParts(val string, msg types.Message) error {
 	if msg.Len() == 0 {
 		return nil
 	}
-	m.mCounter.With(m.labels.values(msg)...).Incr(int64(msg.Len()))
+	if len(m.labels) > 0 {
+		m.mCounterVec.With(m.labels.values(msg)...).Incr(int64(msg.Len()))
+	} else {
+		m.mCounter.Incr(int64(msg.Len()))
+	}
 	return nil
 }
 
@@ -249,7 +290,11 @@ func (m *Metric) handleCounterBy(val string, msg types.Message) error {
 	if i < 0 {
 		return errors.New("value is negative")
 	}
-	m.mCounter.With(m.labels.values(msg)...).Incr(i)
+	if len(m.labels) > 0 {
+		m.mCounterVec.With(m.labels.values(msg)...).Incr(i)
+	} else {
+		m.mCounter.Incr(i)
+	}
 	return nil
 }
 
@@ -261,7 +306,11 @@ func (m *Metric) handleGauge(val string, msg types.Message) error {
 	if i < 0 {
 		return errors.New("value is negative")
 	}
-	m.mGauge.With(m.labels.values(msg)...).Set(i)
+	if len(m.labels) > 0 {
+		m.mGaugeVec.With(m.labels.values(msg)...).Set(i)
+	} else {
+		m.mGauge.Set(i)
+	}
 	return nil
 }
 
@@ -273,7 +322,11 @@ func (m *Metric) handleTimer(val string, msg types.Message) error {
 	if i < 0 {
 		return errors.New("value is negative")
 	}
-	m.mTimer.With(m.labels.values(msg)...).Timing(i)
+	if len(m.labels) > 0 {
+		m.mTimerVec.With(m.labels.values(msg)...).Timing(i)
+	} else {
+		m.mTimer.Timing(i)
+	}
 	return nil
 }
 

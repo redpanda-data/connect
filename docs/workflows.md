@@ -130,8 +130,7 @@ since we aren't sure which will be present.
 
 ``` yaml
 processors:
-- type: http
-  http:
+- http:
     parallel: true
     request:
       url: http://fooserve/enrich
@@ -159,8 +158,7 @@ stage.
 premap:
   .: tmp.enrichments.bar
 processors:
-- type: http
-  http:
+- http:
     parallel: true
     request:
       url: http://barserve/enrich
@@ -184,8 +182,7 @@ provide this target they will both be run before this stage.
 premap:
   .: tmp.enrichments.baz
 processors:
-- type: http
-  http:
+- http:
     parallel: true
     request:
       url: http://bazserve/enrich
@@ -214,12 +211,10 @@ from the payload, therefore we add a condition that performs this check.
 dependencies:
 - tmp.enrichments.qux
 conditions:
-- type: jmespath
-  jmespath:
+- jmespath:
     query: 'tmp.enrichments.qux == `null`'
 processors:
-- type: http
-  http:
+- http:
     parallel: true
     request:
       url: http://recoverserve/enrich
@@ -246,12 +241,10 @@ input:
 
 pipeline:
   processors:
-  - type: process_dag
-    process_dag:
+  - process_dag:
       A:
         processors:
-        - type: http
-          http:
+        - http:
             parallel: true
             request:
               url: http://fooserve/enrich
@@ -269,8 +262,7 @@ pipeline:
         premap:
           .: tmp.enrichments.bar
         processors:
-        - type: http
-          http:
+        - http:
             parallel: true
             request:
               url: http://barserve/enrich
@@ -287,8 +279,7 @@ pipeline:
         premap:
           .: tmp.enrichments.baz
         processors:
-        - type: http
-          http:
+        - http:
             parallel: true
             request:
               url: http://bazserve/enrich
@@ -305,12 +296,10 @@ pipeline:
         dependencies:
         - tmp.enrichments.qux
         conditions:
-        - type: jmespath
-          jmespath:
+        - jmespath:
             query: 'tmp.enrichments.qux == `null`'
         processors:
-        - type: http
-          http:
+        - http:
             parallel: true
             request:
               url: http://recoverserve/enrich
@@ -327,7 +316,15 @@ output:
   type: stdout # TODO
 ```
 
+## Error Handling
+
+Workflow stages can fail if any mandatory post mappings are unresolvable with
+result payloads, or if a processor within the stage fails. When these failures
+occur there are many mechanisms within Benthos that allow you to capture and/or
+recover from them outlined [in this document][error-handling].
+
 [dag_wiki]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
 [conditional]: processors/README.md#conditional
 [process_dag]: processors/README.md#process_dag
 [process_map]: processors/README.md#process_map
+[error-handling]: error_handling.md

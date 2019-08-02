@@ -43,14 +43,12 @@ section. Like this, for example:
 
 ``` yaml
 input:
-  type: broker
   broker:
     inputs:
     - type: foo
     - type: bar
   processors:
-  - type: batch
-    batch:
+  - batch:
       byte_size: 20_000_000
 ```
 
@@ -79,19 +77,16 @@ For example, imagine we batch our messages for the purpose of throughput
 optimisation but also need to perform deduplication on the payloads. The
 `dedupe` processor works batch wide, so in this case we need to force the
 processor to work as though each batched message is its own batch. We can do
-this with the [`process_batch`][process_batch] processor:
+this with the [`for_each`][for_each] processor:
 
 ``` yaml
 input:
   type: foo
   processors:
-  - type: batch
-    batch:
+  - batch:
       byte_size: 20_000_000
-  - type: process_batch
-    process_batch:
-    - type: dedupe
-      dedupe:
+  - for_each:
+    - dedupe:
         cache: foocache
         key: ${!json_field:foo.bar}
 ```
@@ -105,6 +100,6 @@ continue as their own batch.
 [split]: ./processors/README.md#split
 [archive]: ./processors/README.md#archive
 [unarchive]: ./processors/README.md#unarchive
-[process_batch]: ./processors/README.md#process_batch
+[for_each]: ./processors/README.md#for_each
 [kafka]: ./inputs/README.md#kafka
 [kafka_balanced]: ./inputs/README.md#kafka_balanced

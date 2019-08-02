@@ -23,6 +23,7 @@ package processor
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -40,7 +41,7 @@ func init() {
 		constructor: NewEncode,
 		description: `
 Encodes messages according to the selected scheme. Supported schemes are:
-base64.`,
+hex, base64.`,
 	}
 }
 
@@ -74,10 +75,22 @@ func base64Encode(b []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func hexEncode(b []byte) ([]byte, error) {
+	var buf bytes.Buffer
+
+	e := hex.NewEncoder(&buf)
+	if _, err := e.Write(b); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 func strToEncoder(str string) (encodeFunc, error) {
 	switch str {
 	case "base64":
 		return base64Encode, nil
+	case "hex":
+		return hexEncode, nil
 	}
 	return nil, fmt.Errorf("encode scheme not recognised: %v", str)
 }

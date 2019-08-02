@@ -141,7 +141,7 @@ func ExecuteCatchAll(procs []types.Processor, msgs ...types.Message) ([]types.Me
 // FailFlagKey is a metadata key used for flagging processor errors in Benthos.
 // If a message part has any non-empty value for this metadata key then it will
 // be interpretted as having failed a processor step somewhere in the pipeline.
-var FailFlagKey = "benthos_processing_failed"
+var FailFlagKey = types.FailFlagKey
 
 // FlagFail marks a message part as having failed at a processing step.
 func FlagFail(part types.Part) {

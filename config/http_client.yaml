@@ -13,6 +13,7 @@ input:
       enabled: false
       password: ""
       username: ""
+    copy_response_headers: false
     drop_on: []
     headers:
       Content-Type: application/octet-stream
@@ -57,6 +58,7 @@ output:
       enabled: false
       password: ""
       username: ""
+    copy_response_headers: false
     drop_on: []
     headers:
       Content-Type: application/octet-stream
@@ -68,6 +70,7 @@ output:
       consumer_secret: ""
       enabled: false
       request_url: ""
+    propagate_response: false
     rate_limit: ""
     retries: 3
     retry_period: 1s

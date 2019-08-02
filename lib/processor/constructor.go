@@ -31,7 +31,7 @@ import (
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/config"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -51,11 +51,36 @@ type TypeSpec struct {
 // Constructors is a map of all processor types with their specs.
 var Constructors = map[string]TypeSpec{}
 
+// Block replaces the constructor of a Benthos processor such that its
+// construction will always return an error. This is useful for building strict
+// pipelines where certain processors should not be available. NOTE: This does
+// not remove the processor from the configuration spec, and normalisation will
+// still work the same for blocked processors.
+//
+// EXPERIMENTAL: This function is experimental and therefore subject to change
+// outside of major version releases.
+func Block(typeStr, reason string) {
+	ctor, ok := Constructors[typeStr]
+	if !ok {
+		return
+	}
+	ctor.constructor = func(
+		conf Config,
+		mgr types.Manager,
+		log log.Modular,
+		stats metrics.Type,
+	) (Type, error) {
+		return nil, fmt.Errorf("processor '%v' is blocked due to: %v", typeStr, reason)
+	}
+	Constructors[typeStr] = ctor
+}
+
 //------------------------------------------------------------------------------
 
 // String constants representing each processor type.
 const (
 	TypeArchive      = "archive"
+	TypeAvro         = "avro"
 	TypeAWK          = "awk"
 	TypeBatch        = "batch"
 	TypeBoundsCheck  = "bounds_check"
@@ -69,6 +94,7 @@ const (
 	TypeEncode       = "encode"
 	TypeFilter       = "filter"
 	TypeFilterParts  = "filter_parts"
+	TypeForEach      = "for_each"
 	TypeGrok         = "grok"
 	TypeGroupBy      = "group_by"
 	TypeGroupByValue = "group_by_value"
@@ -84,6 +110,7 @@ const (
 	TypeMetadata     = "metadata"
 	TypeMetric       = "metric"
 	TypeNoop         = "noop"
+	TypeNumber       = "number"
 	TypeParallel     = "parallel"
 	TypeProcessBatch = "process_batch"
 	TypeProcessDAG   = "process_dag"
@@ -93,6 +120,7 @@ const (
 	TypeSelectParts  = "select_parts"
 	TypeSleep        = "sleep"
 	TypeSplit        = "split"
+	TypeSQL          = "sql"
 	TypeSubprocess   = "subprocess"
 	TypeSwitch       = "switch"
 	TypeText         = "text"
@@ -108,6 +136,7 @@ const (
 type Config struct {
 	Type         string             `json:"type" yaml:"type"`
 	Archive      ArchiveConfig      `json:"archive" yaml:"archive"`
+	Avro         AvroConfig         `json:"avro" yaml:"avro"`
 	AWK          AWKConfig          `json:"awk" yaml:"awk"`
 	Batch        BatchConfig        `json:"batch" yaml:"batch"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
@@ -121,6 +150,7 @@ type Config struct {
 	Encode       EncodeConfig       `json:"encode" yaml:"encode"`
 	Filter       FilterConfig       `json:"filter" yaml:"filter"`
 	FilterParts  FilterPartsConfig  `json:"filter_parts" yaml:"filter_parts"`
+	ForEach      ForEachConfig      `json:"for_each" yaml:"for_each"`
 	Grok         GrokConfig         `json:"grok" yaml:"grok"`
 	GroupBy      GroupByConfig      `json:"group_by" yaml:"group_by"`
 	GroupByValue GroupByValueConfig `json:"group_by_value" yaml:"group_by_value"`
@@ -135,9 +165,10 @@ type Config struct {
 	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
+	Number       NumberConfig       `json:"number" yaml:"number"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
-	ProcessBatch ProcessBatchConfig `json:"process_batch" yaml:"process_batch"`
+	ProcessBatch ForEachConfig      `json:"process_batch" yaml:"process_batch"`
 	ProcessDAG   ProcessDAGConfig   `json:"process_dag" yaml:"process_dag"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
@@ -145,6 +176,7 @@ type Config struct {
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Sleep        SleepConfig        `json:"sleep" yaml:"sleep"`
 	Split        SplitConfig        `json:"split" yaml:"split"`
+	SQL          SQLConfig          `json:"sql" yaml:"sql"`
 	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
 	Switch       SwitchConfig       `json:"switch" yaml:"switch"`
 	Text         TextConfig         `json:"text" yaml:"text"`
@@ -159,6 +191,7 @@ func NewConfig() Config {
 	return Config{
 		Type:         "bounds_check",
 		Archive:      NewArchiveConfig(),
+		Avro:         NewAvroConfig(),
 		AWK:          NewAWKConfig(),
 		Batch:        NewBatchConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),
@@ -172,6 +205,7 @@ func NewConfig() Config {
 		Encode:       NewEncodeConfig(),
 		Filter:       NewFilterConfig(),
 		FilterParts:  NewFilterPartsConfig(),
+		ForEach:      NewForEachConfig(),
 		Grok:         NewGrokConfig(),
 		GroupBy:      NewGroupByConfig(),
 		GroupByValue: NewGroupByValueConfig(),
@@ -186,9 +220,10 @@ func NewConfig() Config {
 		MergeJSON:    NewMergeJSONConfig(),
 		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),
+		Number:       NewNumberConfig(),
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),
-		ProcessBatch: NewProcessBatchConfig(),
+		ProcessBatch: NewForEachConfig(),
 		ProcessDAG:   NewProcessDAGConfig(),
 		ProcessField: NewProcessFieldConfig(),
 		ProcessMap:   NewProcessMapConfig(),
@@ -196,6 +231,7 @@ func NewConfig() Config {
 		SelectParts:  NewSelectPartsConfig(),
 		Sleep:        NewSleepConfig(),
 		Split:        NewSplitConfig(),
+		SQL:          NewSQLConfig(),
 		Subprocess:   NewSubprocessConfig(),
 		Switch:       NewSwitchConfig(),
 		Text:         NewTextConfig(),
@@ -230,10 +266,14 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 			outputMap[conf.Type] = hashMap[conf.Type]
 		}
 		if spec, exists := pluginSpecs[conf.Type]; exists {
+			var plugSanit interface{}
 			if spec.confSanitiser != nil {
-				outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
+				plugSanit = spec.confSanitiser(conf.Plugin)
 			} else {
-				outputMap["plugin"] = hashMap["plugin"]
+				plugSanit = hashMap["plugin"]
+			}
+			if plugSanit != nil {
+				outputMap["plugin"] = plugSanit
 			}
 		}
 	}
@@ -243,53 +283,45 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 
 //------------------------------------------------------------------------------
 
-// UnmarshalJSON ensures that when parsing configs that are in a slice the
-// default values are still applied.
-func (m *Config) UnmarshalJSON(bytes []byte) error {
-	type confAlias Config
-	aliased := confAlias(NewConfig())
-
-	if err := json.Unmarshal(bytes, &aliased); err != nil {
-		return err
-	}
-
-	if spec, exists := pluginSpecs[aliased.Type]; exists {
-		dummy := struct {
-			Conf interface{} `json:"plugin"`
-		}{
-			Conf: spec.confConstructor(),
-		}
-		if err := json.Unmarshal(bytes, &dummy); err != nil {
-			return fmt.Errorf("failed to parse plugin config: %v", err)
-		}
-		aliased.Plugin = dummy.Conf
-	} else {
-		aliased.Plugin = nil
-	}
-
-	*m = Config(aliased)
-	return nil
-}
-
 // UnmarshalYAML ensures that when parsing configs that are in a slice the
 // default values are still applied.
-func (m *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (m *Config) UnmarshalYAML(value *yaml.Node) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
-	if err := unmarshal(&aliased); err != nil {
-		return err
+	if err := value.Decode(&aliased); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
-	if spec, exists := pluginSpecs[aliased.Type]; exists {
+	var raw interface{}
+	if err := value.Decode(&raw); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
+		var inferredType string
+		for _, tc := range typeCandidates {
+			if _, exists := Constructors[tc]; exists {
+				if len(inferredType) > 0 {
+					return fmt.Errorf("line %v: unable to infer type, multiple candidates '%v' and '%v'", value.Line, inferredType, tc)
+				}
+				inferredType = tc
+			}
+		}
+		if len(inferredType) == 0 {
+			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
+		}
+		aliased.Type = inferredType
+	}
+
+	if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
 		confBytes, err := yaml.Marshal(aliased.Plugin)
 		if err != nil {
-			return err
+			return fmt.Errorf("line %v: %v", value.Line, err)
 		}
 
 		conf := spec.confConstructor()
 		if err = yaml.Unmarshal(confBytes, conf); err != nil {
-			return err
+			return fmt.Errorf("line %v: %v", value.Line, err)
 		}
 		aliased.Plugin = conf
 	} else {
@@ -354,8 +386,7 @@ element will be selected, and so on.
 
 Some processors such as ` + "`filter` and `dedupe`" + ` act across an entire
 batch, when instead we'd like to perform them on individual messages of a batch.
-In this case the ` + "[`process_batch`](#process_batch)" + ` processor can be
-used.`
+In this case the ` + "[`for_each`](#for_each)" + ` processor can be used.`
 
 var footer = `
 [0]: ../examples/README.md
@@ -391,7 +422,7 @@ func Descriptions() string {
 		conf := NewConfig()
 		conf.Type = name
 		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = yaml.Marshal(confSanit)
+			confBytes, _ = config.MarshalYAML(confSanit)
 		}
 
 		buf.WriteString("## ")

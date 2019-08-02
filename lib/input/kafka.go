@@ -62,9 +62,14 @@ This input adds the following metadata fields to each message:
 - kafka_topic
 - kafka_partition
 - kafka_offset
+- kafka_lag
 - kafka_timestamp_unix
 - All existing message headers (version 0.11+)
 ` + "```" + `
+
+The field ` + "`kafka_lag`" + ` is the calculated difference between the high
+water mark offset of the partition at the time of ingestion and the current
+message offset.
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).`,

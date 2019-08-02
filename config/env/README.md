@@ -71,6 +71,7 @@ INPUT_FILE_DELIMITER
 INPUT_FILE_MAX_BUFFER                         = 1000000
 INPUT_FILE_MULTIPART                          = false
 INPUT_FILE_PATH
+INPUT_GCP_PUBSUB_MAX_BATCH_COUNT              = 1
 INPUT_GCP_PUBSUB_MAX_OUTSTANDING_BYTES        = 1000000000
 INPUT_GCP_PUBSUB_MAX_OUTSTANDING_MESSAGES     = 1000
 INPUT_GCP_PUBSUB_PROJECT
@@ -82,6 +83,7 @@ INPUT_HTTP_CLIENT_BACKOFF_ON                  = 429
 INPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED          = false
 INPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
 INPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME
+INPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS       = false
 INPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE        = application/octet-stream
 INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF           = 300s
 INPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN
@@ -109,19 +111,26 @@ INPUT_HTTP_SERVER_ADDRESS
 INPUT_HTTP_SERVER_CERT_FILE
 INPUT_HTTP_SERVER_KEY_FILE
 INPUT_HTTP_SERVER_PATH                        = /post
+INPUT_HTTP_SERVER_RATE_LIMIT
 INPUT_HTTP_SERVER_TIMEOUT                     = 5s
 INPUT_HTTP_SERVER_WS_PATH                     = /post/ws
+INPUT_HTTP_SERVER_WS_RATE_LIMIT_MESSAGE
+INPUT_HTTP_SERVER_WS_WELCOME_MESSAGE
 INPUT_INPROC
 INPUT_KAFKA_ADDRESSES                         = localhost:9092
 INPUT_KAFKA_BALANCED_ADDRESSES                = localhost:9092
 INPUT_KAFKA_BALANCED_CLIENT_ID                = benthos_kafka_input
 INPUT_KAFKA_BALANCED_COMMIT_PERIOD            = 1s
 INPUT_KAFKA_BALANCED_CONSUMER_GROUP           = benthos_consumer_group
+INPUT_KAFKA_BALANCED_FETCH_BUFFER_CAP         = 256
 INPUT_KAFKA_BALANCED_GROUP_HEARTBEAT_INTERVAL = 3s
 INPUT_KAFKA_BALANCED_GROUP_REBALANCE_TIMEOUT  = 60s
 INPUT_KAFKA_BALANCED_GROUP_SESSION_TIMEOUT    = 10s
 INPUT_KAFKA_BALANCED_MAX_BATCH_COUNT          = 1
 INPUT_KAFKA_BALANCED_MAX_PROCESSING_PERIOD    = 100ms
+INPUT_KAFKA_BALANCED_SASL_ENABLED             = false
+INPUT_KAFKA_BALANCED_SASL_PASSWORD
+INPUT_KAFKA_BALANCED_SASL_USER
 INPUT_KAFKA_BALANCED_START_FROM_OLDEST        = true
 INPUT_KAFKA_BALANCED_TARGET_VERSION           = 1.0.0
 INPUT_KAFKA_BALANCED_TLS_ENABLED              = false
@@ -131,9 +140,13 @@ INPUT_KAFKA_BALANCED_TOPICS                   = benthos_stream
 INPUT_KAFKA_CLIENT_ID                         = benthos_kafka_input
 INPUT_KAFKA_COMMIT_PERIOD                     = 1s
 INPUT_KAFKA_CONSUMER_GROUP                    = benthos_consumer_group
+INPUT_KAFKA_FETCH_BUFFER_CAP                  = 256
 INPUT_KAFKA_MAX_BATCH_COUNT                   = 1
 INPUT_KAFKA_MAX_PROCESSING_PERIOD             = 100ms
 INPUT_KAFKA_PARTITION                         = 0
+INPUT_KAFKA_SASL_ENABLED                      = false
+INPUT_KAFKA_SASL_PASSWORD
+INPUT_KAFKA_SASL_USER
 INPUT_KAFKA_START_FROM_OLDEST                 = true
 INPUT_KAFKA_TARGET_VERSION                    = 1.0.0
 INPUT_KAFKA_TLS_ENABLED                       = false
@@ -173,7 +186,7 @@ INPUT_NATS_STREAM_MAX_INFLIGHT                = 1024
 INPUT_NATS_STREAM_QUEUE                       = benthos_queue
 INPUT_NATS_STREAM_START_FROM_OLDEST           = true
 INPUT_NATS_STREAM_SUBJECT                     = benthos_messages
-INPUT_NATS_STREAM_UNSUBSCRIBE_ON_CLOSE        = true
+INPUT_NATS_STREAM_UNSUBSCRIBE_ON_CLOSE        = false
 INPUT_NATS_STREAM_URLS                        = nats://localhost:4222
 INPUT_NATS_SUBJECT                            = benthos_messages
 INPUT_NATS_URLS                               = nats://localhost:4222
@@ -188,6 +201,7 @@ INPUT_REDIS_LIST_TIMEOUT                      = 5s
 INPUT_REDIS_LIST_URL                          = tcp://localhost:6379
 INPUT_REDIS_PUBSUB_CHANNELS                   = benthos_chan
 INPUT_REDIS_PUBSUB_URL                        = tcp://localhost:6379
+INPUT_REDIS_PUBSUB_USE_PATTERNS               = false
 INPUT_REDIS_STREAMS_BODY_KEY                  = body
 INPUT_REDIS_STREAMS_CLIENT_ID                 = benthos_consumer
 INPUT_REDIS_STREAMS_COMMIT_PERIOD             = 1s
@@ -206,6 +220,7 @@ INPUT_S3_CREDENTIALS_TOKEN
 INPUT_S3_DELETE_OBJECTS                       = false
 INPUT_S3_DOWNLOAD_MANAGER_ENABLED             = true
 INPUT_S3_ENDPOINT
+INPUT_S3_FORCE_PATH_STYLE_URLS                = false
 INPUT_S3_MAX_BATCH_COUNT                      = 1
 INPUT_S3_PREFIX
 INPUT_S3_REGION                               = eu-west-1
@@ -261,6 +276,9 @@ PROCESSOR_THREADS                                    = 1
 PROCESSOR_TYPE                                       = noop
 PROCESSOR_ARCHIVE_FORMAT                             = binary
 PROCESSOR_ARCHIVE_PATH                               = ${!count:files}-${!timestamp_unix_nano}.txt
+PROCESSOR_AVRO_ENCODING                              = textual
+PROCESSOR_AVRO_OPERATOR                              = to_json
+PROCESSOR_AVRO_SCHEMA
 PROCESSOR_AWK_CODEC                                  = text
 PROCESSOR_AWK_PROGRAM                                = BEGIN { x = 0 } { print $0, x; x++ }
 PROCESSOR_BATCH_BYTE_SIZE                            = 0
@@ -268,6 +286,7 @@ PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PARTS     = 100
 PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PART_SIZE = 1073741824
 PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PARTS     = 1
 PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PART_SIZE = 1
+PROCESSOR_BATCH_CONDITION_CHECK_INTERPOLATION_VALUE
 PROCESSOR_BATCH_CONDITION_COUNT_ARG                  = 100
 PROCESSOR_BATCH_CONDITION_JMESPATH_PART              = 0
 PROCESSOR_BATCH_CONDITION_JMESPATH_QUERY
@@ -275,6 +294,9 @@ PROCESSOR_BATCH_CONDITION_METADATA_ARG
 PROCESSOR_BATCH_CONDITION_METADATA_KEY
 PROCESSOR_BATCH_CONDITION_METADATA_OPERATOR          = equals_cs
 PROCESSOR_BATCH_CONDITION_METADATA_PART              = 0
+PROCESSOR_BATCH_CONDITION_NUMBER_ARG                 = 0
+PROCESSOR_BATCH_CONDITION_NUMBER_OPERATOR            = equals
+PROCESSOR_BATCH_CONDITION_NUMBER_PART                = 0
 PROCESSOR_BATCH_CONDITION_PROCESSOR_FAILED_PART      = 0
 PROCESSOR_BATCH_CONDITION_RESOURCE
 PROCESSOR_BATCH_CONDITION_STATIC                     = false
@@ -312,6 +334,7 @@ PROCESSOR_HTTP_REQUEST_BACKOFF_ON                    = 429
 PROCESSOR_HTTP_REQUEST_BASIC_AUTH_ENABLED            = false
 PROCESSOR_HTTP_REQUEST_BASIC_AUTH_PASSWORD
 PROCESSOR_HTTP_REQUEST_BASIC_AUTH_USERNAME
+PROCESSOR_HTTP_REQUEST_COPY_RESPONSE_HEADERS         = false
 PROCESSOR_HTTP_REQUEST_HEADERS_CONTENT_TYPE          = application/octet-stream
 PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF             = 300s
 PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN
@@ -332,7 +355,7 @@ PROCESSOR_HTTP_REQUEST_VERB                          = POST
 PROCESSOR_INSERT_PART_CONTENT
 PROCESSOR_INSERT_PART_INDEX                          = -1
 PROCESSOR_JMESPATH_QUERY
-PROCESSOR_JSON_OPERATOR                              = get
+PROCESSOR_JSON_OPERATOR                              = clean
 PROCESSOR_JSON_PATH
 PROCESSOR_JSON_VALUE
 PROCESSOR_LAMBDA_CREDENTIALS_ID
@@ -356,6 +379,8 @@ PROCESSOR_METADATA_VALUE                             = ${!hostname}
 PROCESSOR_METRIC_PATH
 PROCESSOR_METRIC_TYPE                                = counter
 PROCESSOR_METRIC_VALUE
+PROCESSOR_NUMBER_OPERATOR                            = add
+PROCESSOR_NUMBER_VALUE                               = 0
 PROCESSOR_PARALLEL_CAP                               = 0
 PROCESSOR_SAMPLE_RETAIN                              = 10
 PROCESSOR_SAMPLE_SEED                                = 0
@@ -363,6 +388,11 @@ PROCESSOR_SELECT_PARTS_PARTS                         = 0
 PROCESSOR_SLEEP_DURATION                             = 100us
 PROCESSOR_SPLIT_BYTE_SIZE                            = 0
 PROCESSOR_SPLIT_SIZE                                 = 1
+PROCESSOR_SQL_DRIVER                                 = mysql
+PROCESSOR_SQL_DSN
+PROCESSOR_SQL_QUERY
+PROCESSOR_SQL_RESULT_CODEC                           = none
+PROCESSOR_SUBPROCESS_MAX_BUFFER                      = 65536
 PROCESSOR_SUBPROCESS_NAME                            = cat
 PROCESSOR_TEXT_ARG
 PROCESSOR_TEXT_OPERATOR                              = trim_space
@@ -428,6 +458,7 @@ OUTPUT_HTTP_CLIENT_BACKOFF_ON                         = 429
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED                 = false
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME
+OUTPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS              = false
 OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE               = application/octet-stream
 OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF                  = 300s
 OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN
@@ -436,6 +467,7 @@ OUTPUT_HTTP_CLIENT_OAUTH_CONSUMER_KEY
 OUTPUT_HTTP_CLIENT_OAUTH_CONSUMER_SECRET
 OUTPUT_HTTP_CLIENT_OAUTH_ENABLED                      = false
 OUTPUT_HTTP_CLIENT_OAUTH_REQUEST_URL
+OUTPUT_HTTP_CLIENT_PROPAGATE_RESPONSE                 = false
 OUTPUT_HTTP_CLIENT_RATE_LIMIT
 OUTPUT_HTTP_CLIENT_RETRIES                            = 3
 OUTPUT_HTTP_CLIENT_RETRY_PERIOD                       = 1s
@@ -460,6 +492,9 @@ OUTPUT_KAFKA_COMPRESSION                              = none
 OUTPUT_KAFKA_KEY
 OUTPUT_KAFKA_MAX_MSG_BYTES                            = 1000000
 OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS                   = false
+OUTPUT_KAFKA_SASL_ENABLED                             = false
+OUTPUT_KAFKA_SASL_PASSWORD
+OUTPUT_KAFKA_SASL_USER
 OUTPUT_KAFKA_TARGET_VERSION                           = 1.0.0
 OUTPUT_KAFKA_TIMEOUT                                  = 5s
 OUTPUT_KAFKA_TLS_ENABLED                              = false
@@ -497,6 +532,10 @@ OUTPUT_NATS_URLS                                      = nats://localhost:4222
 OUTPUT_NSQ_NSQD_TCP_ADDRESS                           = localhost:4150
 OUTPUT_NSQ_TOPIC                                      = benthos_messages
 OUTPUT_NSQ_USER_AGENT                                 = benthos_producer
+OUTPUT_REDIS_HASH_KEY
+OUTPUT_REDIS_HASH_URL                                 = tcp://localhost:6379
+OUTPUT_REDIS_HASH_WALK_JSON_OBJECT                    = false
+OUTPUT_REDIS_HASH_WALK_METADATA                       = false
 OUTPUT_REDIS_LIST_KEY                                 = benthos_list
 OUTPUT_REDIS_LIST_URL                                 = tcp://localhost:6379
 OUTPUT_REDIS_PUBSUB_CHANNEL                           = benthos_chan
@@ -506,6 +545,7 @@ OUTPUT_REDIS_STREAMS_MAX_LENGTH                       = 0
 OUTPUT_REDIS_STREAMS_STREAM                           = benthos_stream
 OUTPUT_REDIS_STREAMS_URL                              = tcp://localhost:6379
 OUTPUT_S3_BUCKET
+OUTPUT_S3_CONTENT_ENCODING
 OUTPUT_S3_CONTENT_TYPE                                = application/octet-stream
 OUTPUT_S3_CREDENTIALS_ID
 OUTPUT_S3_CREDENTIALS_ROLE
@@ -513,9 +553,19 @@ OUTPUT_S3_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_S3_CREDENTIALS_SECRET
 OUTPUT_S3_CREDENTIALS_TOKEN
 OUTPUT_S3_ENDPOINT
+OUTPUT_S3_FORCE_PATH_STYLE_URLS                       = false
 OUTPUT_S3_PATH                                        = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_S3_REGION                                      = eu-west-1
 OUTPUT_S3_TIMEOUT                                     = 5s
+OUTPUT_SNS_CREDENTIALS_ID
+OUTPUT_SNS_CREDENTIALS_ROLE
+OUTPUT_SNS_CREDENTIALS_ROLE_EXTERNAL_ID
+OUTPUT_SNS_CREDENTIALS_SECRET
+OUTPUT_SNS_CREDENTIALS_TOKEN
+OUTPUT_SNS_ENDPOINT
+OUTPUT_SNS_REGION                                     = eu-west-1
+OUTPUT_SNS_TIMEOUT                                    = 5s
+OUTPUT_SNS_TOPIC_ARN
 OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL                   = 1s
 OUTPUT_SQS_BACKOFF_MAX_ELAPSED_TIME                   = 30s
 OUTPUT_SQS_BACKOFF_MAX_INTERVAL                       = 5s

@@ -21,6 +21,7 @@
 package message
 
 import (
+	"bytes"
 	"encoding/json"
 
 	"github.com/Jeffail/benthos/lib/message/metadata"
@@ -52,17 +53,10 @@ func (p *Part) Copy() types.Part {
 	if p.metadata != nil {
 		clonedMeta = p.metadata.Copy()
 	}
-	var clonedJSON interface{}
-	if p.jsonCache != nil {
-		var err error
-		if clonedJSON, err = cloneGeneric(p.jsonCache); err != nil {
-			clonedJSON = nil
-		}
-	}
 	return &Part{
 		data:      p.data,
 		metadata:  clonedMeta,
-		jsonCache: clonedJSON,
+		jsonCache: p.jsonCache,
 	}
 }
 
@@ -96,11 +90,16 @@ func (p *Part) DeepCopy() types.Part {
 // Get returns the body of the message part.
 func (p *Part) Get() []byte {
 	if p.data == nil && p.jsonCache != nil {
-		partBytes, err := json.Marshal(p.jsonCache)
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		err := enc.Encode(p.jsonCache)
 		if err != nil {
 			return nil
 		}
-		p.data = partBytes
+		if buf.Len() > 1 {
+			p.data = buf.Bytes()[:buf.Len()-1]
+		}
 	}
 	return p.data
 }

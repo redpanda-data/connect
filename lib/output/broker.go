@@ -49,23 +49,21 @@ listing them:
 
 ` + "``` yaml" + `
 output:
-  type: broker
   broker:
     pattern: fan_out
     outputs:
-    - type: foo
-      foo:
+    - foo:
         foo_field_1: value1
-    - type: bar
-      bar:
+    - bar:
         bar_field_1: value2
         bar_field_2: value3
-    - type: baz
-      baz:
+    - baz:
         baz_field_1: value4
       processors:
+      # Processor only applied to messages sent to baz.
       - type: baz_processor
   processors:
+  # Processor applied to messages sent to any brokered output.
   - type: some_processor
 ` + "```" + `
 
@@ -75,9 +73,17 @@ and can be chosen from the following:
 #### ` + "`fan_out`" + `
 
 With the fan out pattern all outputs will be sent every message that passes
-through Benthos. If an output applies back pressure it will block all subsequent
-messages, and if an output fails to send a message it will be retried
-continuously until completion or service shut down.
+through Benthos in parallel.
+
+If an output applies back pressure it will block all subsequent messages, and if
+an output fails to send a message it will be retried continuously until
+completion or service shut down.
+
+#### ` + "`fan_out_sequential`" + `
+
+Similar to the fan out pattern except outputs are written to sequentially,
+meaning an output is only written to once the preceding output has confirmed
+receipt of the same message.
 
 #### ` + "`round_robin`" + `
 
@@ -200,7 +206,7 @@ func NewBroker(
 				metrics.Combine(stats, metrics.Namespaced(stats, ns)),
 				pipes...)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Type, err)
 			}
 		}
 	}
@@ -209,6 +215,8 @@ func NewBroker(
 	switch conf.Broker.Pattern {
 	case "fan_out":
 		b, err = broker.NewFanOut(outputs, log, stats)
+	case "fan_out_sequential":
+		b, err = broker.NewFanOutSequential(outputs, log, stats)
 	case "round_robin":
 		b, err = broker.NewRoundRobin(outputs, stats)
 	case "greedy":

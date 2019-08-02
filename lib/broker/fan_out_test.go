@@ -74,6 +74,10 @@ func TestBasicFanOut(t *testing.T) {
 		return
 	}
 
+	if !oTM.Connected() {
+		t.Error("Not connected")
+	}
+
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {

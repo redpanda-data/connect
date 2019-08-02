@@ -19,7 +19,6 @@ The full config for this [example can be found here][example].
 
 ``` yaml
 input:
-  type: s3
   s3:
     region: eu-west-1 # TODO
     bucket: TODO
@@ -53,12 +52,10 @@ parallel consumers:
 
 ``` yaml
 input:
-  type: broker
   broker:
     copies: 8 # Increase this to gain more parallel consumers
     inputs:
-    - type: s3
-      s3:
+    - s3:
       ... etc
 ```
 
@@ -71,28 +68,17 @@ automatically be distributed amongst them via the SQS queue.
 pipeline:
   threads: 4 # Try to match the number of available logical CPU cores
   processors:
-  - type: decompress
-    decompress:
+  - decompress:
       algorithm: gzip
-  - type: unarchive
-    unarchive:
+  - unarchive:
       format: tar
-  - type: split
-  - type: batch
-    batch:
-      count: 10 # The size of message batches to send to Kafka
+  - split:
+      size: 10 # The size of message batches to send to Kafka
 ```
 
 The processors in this example start off with a simple decompress and unarchive
 of the payload. This results in a single payload of multiple documents. The
-split processor turns this payload into individual messages.
-
-The final processor is optional. It is a batch stage that bundles the individual
-messages back into batches to be sent to the Kafka topic, increasing the
-throughput. If the batch processor is used it should be a factor of the number
-of messages inside the S3 archives. The size also needs to be low enough so that
-the overall size of the batch doesn't exceed the maximum bytes of a Kafka
-request.
+split processor turns this payload into smaller batches.
 
 These processors are heavy on CPU, which is why they are configured inside the
 pipeline section. This allows you to explicitly set the number of parallel

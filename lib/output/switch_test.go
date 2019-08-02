@@ -27,10 +27,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 )
@@ -134,6 +134,84 @@ func TestSwitchNoConditions(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Errorf("Timed out responding to broker")
 			return
+		}
+	}
+
+	s.CloseAsync()
+
+	if err := s.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestSwitchNoRetries(t *testing.T) {
+	nOutputs, nMsgs := 10, 1000
+
+	conf := NewConfig()
+	conf.Switch.RetryUntilSuccess = false
+	mockOutputs := []*MockOutputType{}
+	for i := 0; i < nOutputs; i++ {
+		conf.Switch.Outputs = append(conf.Switch.Outputs, NewSwitchConfigOutput())
+		conf.Switch.Outputs[i].Fallthrough = true
+		mockOutputs = append(mockOutputs, &MockOutputType{})
+	}
+
+	s, err := newSwitch(conf, mockOutputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	readChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+
+	if err = s.Consume(readChan); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < nMsgs; i++ {
+		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
+		select {
+		case readChan <- types.NewTransaction(message.New(content), resChan):
+		case <-time.After(time.Second):
+			t.Fatal("Timed out waiting for broker send")
+		}
+		resChanSlice := []chan<- types.Response{}
+		for j := 0; j < nOutputs; j++ {
+			var ts types.Transaction
+			select {
+			case ts = <-mockOutputs[j].TChan:
+				if string(ts.Payload.Get(0).Get()) != string(content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+				}
+				resChanSlice = append(resChanSlice, ts.ResponseChan)
+			case <-time.After(time.Second):
+				t.Fatal("Timed out waiting for broker propagate")
+			}
+		}
+		for j := 0; j < nOutputs; j++ {
+			var res types.Response
+			if j == 1 {
+				res = response.NewError(errors.New("test"))
+			} else {
+				res = response.NewAck()
+			}
+			select {
+			case resChanSlice[j] <- res:
+			case <-time.After(time.Second):
+				t.Fatal("Timed out responding to broker")
+			}
+		}
+		select {
+		case res := <-resChan:
+			if res.Error() == nil {
+				t.Error("Received nil error from broker")
+			} else {
+				if exp, act := "test", res.Error().Error(); exp != act {
+					t.Errorf("Wrong error message from broker: %v != %v", act, exp)
+				}
+			}
+		case <-time.After(time.Second):
+			t.Fatal("Timed out responding to broker")
 		}
 	}
 

@@ -58,7 +58,14 @@ can use the ` + "[`process_map`](#process_map)" + ` or
 When all retry attempts for a message are exhausted the processor cancels the
 attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
-can read about these patterns [here](../error_handling.md).`,
+can read about these patterns [here](../error_handling.md).
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).`,
 	}
 }
 
@@ -144,7 +151,7 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			l.log.Errorf("Lambda function '%v' failed: %v\n", l.conf.Lambda.Config.Function, err)
 			responseMsg = msg
 			responseMsg.Iter(func(i int, p types.Part) error {
-				FlagFail(p)
+				FlagErr(p, err)
 				return nil
 			})
 		}
@@ -168,7 +175,7 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 					l.mErr.Incr(1)
 					l.mErrLambda.Incr(1)
 					l.log.Errorf("Lambda parallel request to '%v' failed: %v\n", l.conf.Lambda.Config.Function, err)
-					FlagFail(parts[index])
+					FlagErr(parts[index], err)
 				} else {
 					parts[index] = result.Get(0)
 				}

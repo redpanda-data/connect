@@ -33,8 +33,8 @@ pipeline:
             request:
               url: "http://httpbin/status/200,200,404"
             parallel: true
-        - type: process_batch
-          process_batch:
+        - type: for_each
+          for_each:
           - type: insert_part
             insert_part:
               index: 0
@@ -85,9 +85,7 @@ pipeline:
               query: 'root.title.content != null'
 
 output:
-  type: file
-  file:
-    path: /dev/null
+  type: drop
 
 logger:
   prefix: service

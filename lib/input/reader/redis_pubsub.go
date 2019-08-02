@@ -37,15 +37,17 @@ import (
 // RedisPubSubConfig contains configuration fields for the RedisPubSub input
 // type.
 type RedisPubSubConfig struct {
-	URL      string   `json:"url" yaml:"url"`
-	Channels []string `json:"channels" yaml:"channels"`
+	URL         string   `json:"url" yaml:"url"`
+	Channels    []string `json:"channels" yaml:"channels"`
+	UsePatterns bool     `json:"use_patterns" yaml:"use_patterns"`
 }
 
 // NewRedisPubSubConfig creates a new RedisPubSubConfig with default values.
 func NewRedisPubSubConfig() RedisPubSubConfig {
 	return RedisPubSubConfig{
-		URL:      "tcp://localhost:6379",
-		Channels: []string{"benthos_chan"},
+		URL:         "tcp://localhost:6379",
+		Channels:    []string{"benthos_chan"},
+		UsePatterns: false,
 	}
 }
 
@@ -111,7 +113,11 @@ func (r *RedisPubSub) Connect() error {
 	r.log.Infof("Receiving Redis pub/sub messages from channels: %v\n", r.conf.Channels)
 
 	r.client = client
-	r.pubsub = r.client.Subscribe(r.conf.Channels...)
+	if r.conf.UsePatterns {
+		r.pubsub = r.client.PSubscribe(r.conf.Channels...)
+	} else {
+		r.pubsub = r.client.Subscribe(r.conf.Channels...)
+	}
 	return nil
 }
 

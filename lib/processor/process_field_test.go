@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -134,6 +135,238 @@ func TestProcessFieldString(t *testing.T) {
 	}
 	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
+func TestProcessFieldDiscard(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_field"
+	conf.ProcessField.Path = "foo.bar"
+	conf.ProcessField.Parts = []int{}
+	conf.ProcessField.ResultType = "discard"
+
+	procConf := NewConfig()
+	procConf.Type = "encode"
+
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	exp := [][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+}
+
+func TestProcessFieldDiscardWithMetadata(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_field"
+	conf.ProcessField.Path = "foo.bar"
+	conf.ProcessField.Parts = []int{}
+	conf.ProcessField.ResultType = "discard"
+
+	procConf := NewConfig()
+	procConf.Type = TypeMetadata
+	procConf.Metadata.Operator = "set"
+	procConf.Metadata.Key = "foo"
+	procConf.Metadata.Value = "${!content}"
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	procConf = NewConfig()
+	procConf.Type = TypeEncode
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := [][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "encode me", msg[0].Get(0).Metadata().Get("foo"); exp != act {
+		t.Errorf("Unexpected metadata value: %v != %v", act, exp)
+	}
+	if exp, act := "encode me", msg[0].Get(1).Metadata().Get("foo"); exp != act {
+		t.Errorf("Unexpected metadata value: %v != %v", act, exp)
+	}
+}
+
+func TestProcessFieldDiscardMisaligned(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_field"
+	conf.ProcessField.Path = "foo.bar"
+	conf.ProcessField.Parts = []int{}
+	conf.ProcessField.ResultType = "discard"
+
+	procConf := NewConfig()
+	procConf.Type = TypeMetadata
+	procConf.Metadata.Operator = "set"
+	procConf.Metadata.Key = "foo"
+	procConf.Metadata.Value = "${!content}"
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	procConf = NewConfig()
+	procConf.Type = TypeFilterParts
+	procConf.FilterParts.Type = condition.TypeText
+	procConf.FilterParts.Text.Operator = "equals"
+	procConf.FilterParts.Text.Arg = "encode me"
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := [][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{
+		[]byte(`{"foo":{"bar":"encode me"}}`),
+		[]byte(`{"foo":{"bar":"encode me too"}}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if exp, act := "", msg[0].Get(0).Metadata().Get("foo"); exp != act {
+		t.Errorf("Unexpected metadata value: %v != %v", act, exp)
+	}
+	if exp, act := "", msg[0].Get(1).Metadata().Get("foo"); exp != act {
+		t.Errorf("Unexpected metadata value: %v != %v", act, exp)
+	}
+}
+
+func TestProcessFieldCodecs(t *testing.T) {
+	type testCase struct {
+		name   string
+		codec  string
+		input  string
+		output string
+	}
+	tests := []testCase{
+		{
+			name:   "string 1",
+			codec:  "string",
+			input:  `{"target":"foobar"}`,
+			output: `{"target":"foobar"}`,
+		},
+		{
+			name:   "int 1",
+			codec:  "int",
+			input:  `{"target":"5"}`,
+			output: `{"target":5}`,
+		},
+		{
+			name:   "float 1",
+			codec:  "float",
+			input:  `{"target":"5.67"}`,
+			output: `{"target":5.67}`,
+		},
+		{
+			name:   "bool 1",
+			codec:  "bool",
+			input:  `{"target":"true"}`,
+			output: `{"target":true}`,
+		},
+		{
+			name:   "bool 2",
+			codec:  "bool",
+			input:  `{"target":"false"}`,
+			output: `{"target":false}`,
+		},
+		{
+			name:   "object 1",
+			codec:  "object",
+			input:  `{"target":"{}"}`,
+			output: `{"target":{}}`,
+		},
+		{
+			name:   "object 2",
+			codec:  "object",
+			input:  `{"target":"{\"foo\":{\"bar\":\"baz\"}}"}`,
+			output: `{"target":{"foo":{"bar":"baz"}}}`,
+		},
+		{
+			name:   "object 2",
+			codec:  "object",
+			input:  `{"target":"null"}`,
+			output: `{"target":null}`,
+		},
+		{
+			name:   "array 1",
+			codec:  "array",
+			input:  `{"target":"[]"}`,
+			output: `{"target":[]}`,
+		},
+		{
+			name:   "array 2",
+			codec:  "array",
+			input:  `{"target":"[1,2,\"foo\"]"}`,
+			output: `{"target":[1,2,"foo"]}`,
+		},
+	}
+
+	procConf := NewConfig()
+	procConf.Type = "noop"
+
+	for _, test := range tests {
+		t.Run(test.name, func(tt *testing.T) {
+			conf := NewConfig()
+			conf.Type = "process_field"
+			conf.ProcessField.Path = "target"
+			conf.ProcessField.ResultType = test.codec
+			conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+			c, err := New(conf, nil, log.Noop(), metrics.Noop())
+			if err != nil {
+				tt.Fatal(err)
+			}
+
+			exp := [][]byte{
+				[]byte(test.output),
+			}
+			msg, res := c.ProcessMessage(message.New([][]byte{
+				[]byte(test.input),
+			}))
+			if res != nil {
+				tt.Error(res.Error())
+			}
+			if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
+				tt.Errorf("Wrong result: %s != %s", act, exp)
+			}
+		})
 	}
 }
 

@@ -11,8 +11,11 @@ input:
     cert_file: ""
     key_file: ""
     path: /post
+    rate_limit: ""
     timeout: 5s
     ws_path: /post/ws
+    ws_rate_limit_message: ""
+    ws_welcome_message: ""
 buffer:
   type: none
   none: {}

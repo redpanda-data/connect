@@ -25,11 +25,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor/condition"
-	yaml "gopkg.in/yaml.v2"
+	"github.com/Jeffail/benthos/lib/util/config"
 )
 
 func TestSwitchCases(t *testing.T) {
@@ -230,7 +230,7 @@ func TestSwitchSanitised(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sanitBytes, err := yaml.Marshal(sanit)
+	sanitBytes, err := config.MarshalYAML(sanit)
 	if err != nil {
 		t.Fatal(err)
 	}

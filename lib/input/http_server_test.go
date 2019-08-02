@@ -23,50 +23,78 @@ package input
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/manager"
+	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/lib/ratelimit"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
+	"github.com/gorilla/websocket"
 )
+
+type apiRegMutWrapper struct {
+	mut *http.ServeMux
+}
+
+func (a apiRegMutWrapper) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
+	a.mut.HandleFunc(path, h)
+}
 
 func TestHTTPBasic(t *testing.T) {
 	t.Parallel()
 
 	nTestLoops := 100
 
-	conf := NewConfig()
-	conf.HTTPServer.Address = "localhost:1243"
-	conf.HTTPServer.Path = "/testpost"
-
-	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.DudType{})
+	reg := apiRegMutWrapper{mut: &http.ServeMux{}}
+	mgr, err := manager.New(manager.NewConfig(), reg, log.Noop(), metrics.Noop())
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
-	<-time.After(time.Millisecond * 1000)
+	conf := NewConfig()
+	conf.HTTPServer.Path = "/testpost"
+
+	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(reg.mut)
+	defer server.Close()
 
 	// Test both single and multipart messages.
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
+		testResponse := fmt.Sprintf("response%v", i)
 		// Send it as single part
-		go func() {
-			if res, err := http.Post(
-				"http://localhost:1243/testpost",
+		go func(input, output string) {
+			res, err := http.Post(
+				server.URL+"/testpost",
 				"application/octet-stream",
-				bytes.NewBuffer([]byte(testStr)),
-			); err != nil {
-				t.Error(err)
-				return
+				bytes.NewBuffer([]byte(input)),
+			)
+			if err != nil {
+				t.Fatal(err)
 			} else if res.StatusCode != 200 {
-				t.Errorf("Wrong error code returned: %v", res.StatusCode)
-				return
+				t.Fatalf("Wrong error code returned: %v", res.StatusCode)
 			}
-		}()
+			resBytes, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if exp, act := output, string(resBytes); exp != act {
+				t.Errorf("Wrong sync response: %v != %v", act, exp)
+			}
+		}(testStr, testResponse)
 
 		var ts types.Transaction
 		select {
@@ -74,6 +102,8 @@ func TestHTTPBasic(t *testing.T) {
 			if res := string(ts.Payload.Get(0).Get()); res != testStr {
 				t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 			}
+			ts.Payload.Get(0).Set([]byte(testResponse))
+			roundtrip.SetAsResponse(ts.Payload)
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
@@ -102,15 +132,13 @@ func TestHTTPBasic(t *testing.T) {
 		// Send it as multi part
 		go func() {
 			if res, err := http.Post(
-				"http://localhost:1243/testpost",
+				server.URL+"/testpost",
 				"multipart/mixed; boundary=foo",
 				bytes.NewBuffer([]byte(testStr)),
 			); err != nil {
-				t.Error(err)
-				return
+				t.Fatal(err)
 			} else if res.StatusCode != 200 {
-				t.Errorf("Wrong error code returned: %v", res.StatusCode)
-				return
+				t.Fatalf("Wrong error code returned: %v", res.StatusCode)
 			}
 		}()
 
@@ -135,31 +163,29 @@ func TestHTTPBasic(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	/*
-		// TODO: For some reason it seems shutting down a server can block
-		// forever.
-		if err := h.WaitForClose(time.Second * 5); err != nil {
-			t.Error(err)
-		}
-	*/
 }
 
 func TestHTTPBadRequests(t *testing.T) {
 	t.Parallel()
 
-	conf := NewConfig()
-	conf.HTTPServer.Address = "localhost:1233"
-	conf.HTTPServer.Path = "/testpost"
-
-	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.DudType{})
+	reg := apiRegMutWrapper{mut: &http.ServeMux{}}
+	mgr, err := manager.New(manager.NewConfig(), reg, log.Noop(), metrics.Noop())
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
-	<-time.After(time.Millisecond * 1000)
+	conf := NewConfig()
+	conf.HTTPServer.Path = "/testpost"
 
-	res, err := http.Get("http://localhost:1233/testpost")
+	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(reg.mut)
+	defer server.Close()
+
+	res, err := http.Get(server.URL + "/testpost")
 	if err != nil {
 		t.Error(err)
 		return
@@ -177,31 +203,281 @@ func TestHTTPBadRequests(t *testing.T) {
 func TestHTTPTimeout(t *testing.T) {
 	t.Parallel()
 
+	reg := apiRegMutWrapper{mut: &http.ServeMux{}}
+	mgr, err := manager.New(manager.NewConfig(), reg, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	conf := NewConfig()
-	conf.HTTPServer.Address = "localhost:1232"
 	conf.HTTPServer.Path = "/testpost"
 	conf.HTTPServer.Timeout = "1ms"
 
-	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
-	<-time.After(time.Millisecond * 1000)
+	server := httptest.NewServer(reg.mut)
+	defer server.Close()
 
 	var res *http.Response
 	res, err = http.Post(
-		"http://localhost:1232/testpost",
+		server.URL+"/testpost",
 		"application/octet-stream",
 		bytes.NewBuffer([]byte("hello world")),
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	if exp, act := http.StatusRequestTimeout, res.StatusCode; exp != act {
 		t.Errorf("Unexpected status code: %v != %v", exp, act)
+	}
+
+	h.CloseAsync()
+	if err := h.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHTTPRateLimit(t *testing.T) {
+	t.Parallel()
+
+	reg := apiRegMutWrapper{mut: &http.ServeMux{}}
+
+	rlConf := ratelimit.NewConfig()
+	rlConf.Type = ratelimit.TypeLocal
+	rlConf.Local.Count = 1
+	rlConf.Local.Interval = "60s"
+
+	mgrConf := manager.NewConfig()
+	mgrConf.RateLimits["foorl"] = rlConf
+	mgr, err := manager.New(mgrConf, reg, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf := NewConfig()
+	conf.HTTPServer.Path = "/testpost"
+	conf.HTTPServer.RateLimit = "foorl"
+
+	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(reg.mut)
+	defer server.Close()
+
+	go func() {
+		var ts types.Transaction
+		select {
+		case ts = <-h.TransactionChan():
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for message")
+		}
+		select {
+		case ts.ResponseChan <- response.NewAck():
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for response")
+		}
+	}()
+
+	var res *http.Response
+	res, err = http.Post(
+		server.URL+"/testpost",
+		"application/octet-stream",
+		bytes.NewBuffer([]byte("hello world")),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := http.StatusOK, res.StatusCode; exp != act {
+		t.Errorf("Unexpected status code: %v != %v", exp, act)
+	}
+
+	res, err = http.Post(
+		server.URL+"/testpost",
+		"application/octet-stream",
+		bytes.NewBuffer([]byte("hello world")),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := http.StatusTooManyRequests, res.StatusCode; exp != act {
+		t.Errorf("Unexpected status code: %v != %v", exp, act)
+	}
+
+	h.CloseAsync()
+	if err := h.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHTTPServerWebsockets(t *testing.T) {
+	t.Parallel()
+
+	reg := apiRegMutWrapper{mut: &http.ServeMux{}}
+
+	mgr, err := manager.New(manager.NewConfig(), reg, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf := NewConfig()
+	conf.HTTPServer.WSPath = "/testws"
+
+	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(reg.mut)
+	defer server.Close()
+
+	purl, err := url.Parse(server.URL + "/testws")
+	if err != nil {
+		t.Fatal(err)
+	}
+	purl.Scheme = "ws"
+
+	var client *websocket.Conn
+	if client, _, err = websocket.DefaultDialer.Dial(purl.String(), http.Header{}); err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		if err = client.WriteMessage(
+			websocket.BinaryMessage, []byte("hello world 1"),
+		); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	var ts types.Transaction
+	select {
+	case ts = <-h.TransactionChan():
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for message")
+	}
+	if exp, act := `[hello world 1]`, fmt.Sprintf("%s", message.GetAllBytes(ts.Payload)); exp != act {
+		t.Errorf("Unexpected message: %v != %v", act, exp)
+	}
+	select {
+	case ts.ResponseChan <- response.NewAck():
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for response")
+	}
+
+	go func() {
+		if err = client.WriteMessage(
+			websocket.BinaryMessage, []byte("hello world 2"),
+		); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	select {
+	case ts = <-h.TransactionChan():
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for message")
+	}
+	if exp, act := `[hello world 2]`, fmt.Sprintf("%s", message.GetAllBytes(ts.Payload)); exp != act {
+		t.Errorf("Unexpected message: %v != %v", act, exp)
+	}
+	select {
+	case ts.ResponseChan <- response.NewAck():
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for response")
+	}
+
+	h.CloseAsync()
+	if err := h.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHTTPServerWSRateLimit(t *testing.T) {
+	t.Parallel()
+
+	reg := apiRegMutWrapper{mut: &http.ServeMux{}}
+
+	rlConf := ratelimit.NewConfig()
+	rlConf.Type = ratelimit.TypeLocal
+	rlConf.Local.Count = 1
+	rlConf.Local.Interval = "60s"
+
+	mgrConf := manager.NewConfig()
+	mgrConf.RateLimits["foorl"] = rlConf
+	mgr, err := manager.New(mgrConf, reg, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf := NewConfig()
+	conf.HTTPServer.WSPath = "/testws"
+	conf.HTTPServer.WSWelcomeMessage = "test welcome"
+	conf.HTTPServer.WSRateLimitMessage = "test rate limited"
+	conf.HTTPServer.RateLimit = "foorl"
+
+	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(reg.mut)
+	defer server.Close()
+
+	purl, err := url.Parse(server.URL + "/testws")
+	if err != nil {
+		t.Fatal(err)
+	}
+	purl.Scheme = "ws"
+
+	var client *websocket.Conn
+	if client, _, err = websocket.DefaultDialer.Dial(purl.String(), http.Header{}); err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		var ts types.Transaction
+		select {
+		case ts = <-h.TransactionChan():
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for message")
+		}
+		select {
+		case ts.ResponseChan <- response.NewAck():
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for response")
+		}
+	}()
+
+	var msgBytes []byte
+	if _, msgBytes, err = client.ReadMessage(); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := "test welcome", string(msgBytes); exp != act {
+		t.Errorf("Unexpected welcome message: %v != %v", act, exp)
+	}
+
+	if err = client.WriteMessage(
+		websocket.BinaryMessage, []byte("hello world"),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = client.WriteMessage(
+		websocket.BinaryMessage, []byte("hello world"),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, msgBytes, err = client.ReadMessage(); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := "test rate limited", string(msgBytes); exp != act {
+		t.Errorf("Unexpected rate limit message: %v != %v", act, exp)
 	}
 
 	h.CloseAsync()

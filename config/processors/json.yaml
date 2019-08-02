@@ -17,7 +17,7 @@ pipeline:
   processors:
   - type: json
     json:
-      operator: get
+      operator: clean
       parts: []
       path: ""
       value: ""

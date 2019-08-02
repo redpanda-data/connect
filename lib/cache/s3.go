@@ -27,8 +27,6 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/s3"
-
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
@@ -36,6 +34,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
@@ -49,7 +48,14 @@ The s3 cache stores each item in an S3 bucket as a file, where an item ID is
 the path of the item within the bucket.
 
 It is not possible to atomically upload S3 objects exclusively when the target
-does not already exist, therefore this cache is not suitable for deduplication.`,
+does not already exist, therefore this cache is not suitable for deduplication.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).`,
 	}
 }
 
@@ -57,21 +63,23 @@ does not already exist, therefore this cache is not suitable for deduplication.`
 
 // S3Config contains config fields for the S3 cache type.
 type S3Config struct {
-	sess.Config `json:",inline" yaml:",inline"`
-	Bucket      string `json:"bucket" yaml:"bucket"`
-	ContentType string `json:"content_type" yaml:"content_type"`
-	Timeout     string `json:"timeout" yaml:"timeout"`
-	Retries     int    `json:"retries" yaml:"retries"`
+	sess.Config        `json:",inline" yaml:",inline"`
+	Bucket             string `json:"bucket" yaml:"bucket"`
+	ForcePathStyleURLs bool   `json:"force_path_style_urls" yaml:"force_path_style_urls"`
+	ContentType        string `json:"content_type" yaml:"content_type"`
+	Timeout            string `json:"timeout" yaml:"timeout"`
+	Retries            int    `json:"retries" yaml:"retries"`
 }
 
 // NewS3Config creates a S3Config populated with default values.
 func NewS3Config() S3Config {
 	return S3Config{
-		Config:      sess.NewConfig(),
-		Bucket:      "",
-		ContentType: "application/octet-stream",
-		Timeout:     "5s",
-		Retries:     3,
+		Config:             sess.NewConfig(),
+		Bucket:             "",
+		ForcePathStyleURLs: false,
+		ContentType:        "application/octet-stream",
+		Timeout:            "5s",
+		Retries:            3,
 	}
 }
 
@@ -126,7 +134,9 @@ func NewS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse timeout: %v", err)
 	}
-	sess, err := conf.S3.GetSession()
+	sess, err := conf.S3.GetSession(func(c *aws.Config) {
+		c.S3ForcePathStyle = aws.Bool(conf.S3.ForcePathStyleURLs)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -294,6 +304,15 @@ func (s *S3) Delete(key string) error {
 		}
 	}
 	return err
+}
+
+// CloseAsync shuts down the cache.
+func (s *S3) CloseAsync() {
+}
+
+// WaitForClose blocks until the cache has closed down.
+func (s *S3) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

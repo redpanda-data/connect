@@ -5,9 +5,421 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.10.0 - 2019-07-29
+
 ### Added
 
-- Interpolation function `timestamp_utc` added.
+- Improved error messages attached to payloads that fail `process_dag`
+  post mappings.
+- New `redis_hash` output.
+- New `sns` output.
+
+## 2.9.3 - 2019-07-18
+
+### Added
+
+- Allow extracting metric `rename` submatches into labels.
+- Field `use_patterns` added to `redis_pubsub` input for subscribing to channels
+  using glob-style patterns.
+
+## 2.9.2 - 2019-07-17
+
+### Changed
+
+- Go API: It's now possible to specify a custom config unit test file path
+  suffix.
+
+## 2.9.1 - 2019-07-15
+
+### Added
+
+- New rate limit and websocket message fields added to `http_server` input.
+- The `http` processor now optionally copies headers from response into
+  resulting message metadata.
+- The `http` processor now sets a `http_status_code` metadata value into
+  resulting messages (provided one is received.)
+
+### Changed
+
+- Go API: Removed experimental `Block` functions from the cache and rate limit
+  packages.
+
+## 2.9.0 - 2019-07-12
+
+### Added
+
+- New (experimental) command flags `--test` and `--gen-test` added.
+- All http client components output now set a metric `request_timeout`.
+
+## 2.8.6 - 2019-07-10
+
+### Added
+
+- All errors caught by processors should now be accessible via the `${!error}`
+  interpolation function, rather than just flagged as `true`.
+
+### Fixed
+
+- The `process_field` processor now propagates metadata to the original payload
+  with the `result_type` set to discard. This allows proper error propagation.
+
+## 2.8.5 - 2019-07-03
+
+### Added
+
+- Field `max_buffer` added to `subprocess` processor.
+
+### Fixed
+
+- The `subprocess` processor now correctly logs and recovers subprocess pipeline
+  related errors (such as exceeding buffer limits.)
+
+## 2.8.4 - 2019-07-02
+
+### Added
+
+- New `json_delete` function added to the `awk` processor.
+
+### Fixed
+
+- SQS output now correctly waits between retry attempts and escapes error loops
+  during shutdown.
+
+## 2.8.3 - 2019-06-28
+
+### Added
+
+- Go API: Add `RunWithOpts` opt `OptOverrideConfigDefaults`.
+
+### Fixed
+
+- The `filter` and `filter_parts` config sections now correctly marshall when
+  printing with `--all`.
+
+## 2.8.2 - 2019-06-28
+
+### Added
+
+- Go API: A new service method `RunWithOpts` has been added in order to
+  accomodate service customisations with opt funcs.
+
+## 2.8.1 - 2019-06-28
+
+- New interpolation function `error`.
+
+## 2.8.0 - 2019-06-24
+
+### Added
+
+- New `number` condition.
+- New `number` processor.
+- New `avro` processor.
+- Operator `enum` added to `text` condition.
+- Field `result_type` added to `process_field` processor for marshalling results
+  into non-string types.
+- Go API: Plugin APIs now allow nil config constructors.
+- Registering plugins automatically adds plugin documentation flags to the main
+  Benthos service.
+
+## 2.7.0 - 2019-06-20
+
+### Added
+
+- Output `http_client` is now able to propagate responses from each request back
+  to inputs supporting sync responses.
+- Added support for Gzip compression to `http_server` output sync responses.
+- New `check_interpolation` condition.
+
+## 2.6.0 - 2019-06-18
+
+### Added
+
+- New `sync_response` output type, with experimental support added to the
+  `http_server` input.
+- SASL authentication fields added to all Kafka components.
+
+## 2.5.0 - 2019-06-14
+
+### Added
+
+- The `s3` input now sets `s3_content_encoding` metadata (when not using the
+  download manager.)
+- New trace logging for the `rename`, `blacklist` and `whitelist` metric
+  components to assist with debugging.
+
+## 2.4.0 - 2019-06-06
+
+### Added
+
+- Ability to combine sync and async responses in serverless distributions.
+
+### Changed
+
+- The `insert_part`, `merge_json` and `unarchive` processors now propagate
+  message contexts.
+
+## 2.3.2 - 2019-06-05
+
+### Fixed
+
+- JSON processors no longer escape `&`, `<`, and `>` characters by default.
+
+## 2.3.1 - 2019-06-04
+
+### Fixed
+
+- The `http` processor now preserves message metadata and contexts.
+- Any `http` components that create requests with messages containing empty
+  bodies now correctly function in WASM.
+
+## 2.3.0 - 2019-06-04
+
+### Added
+
+- New `fetch_buffer_cap` field for `kafka` and `kafka_balanced` inputs.
+- Input `gcp_pubsub` now has the field `max_batch_count`.
+
+### Changed
+
+- Reduced allocations under most JSON related processors.
+- Streams mode API now logs linting errors.
+
+## 2.2.4 - 2019-06-02
+
+### Added
+
+- New interpolation function `batch_size`.
+
+## 2.2.3 - 2019-05-31
+
+### Fixed
+
+- Output `elasticsearch` no longer reports index not found errors on connect.
+
+## 2.2.2 - 2019-05-30
+
+### Fixed
+
+- Input reader no longer overrides message contexts for opentracing spans.
+
+## 2.2.1 - 2019-05-29
+
+### Fixed
+
+- Improved construction error messages for `broker` and `switch` input and
+  outputs.
+
+### Changed
+
+- Plugins that don't use a configuration structure can now return nil in their
+  sanitise functions in order to have the plugin section omitted.
+
+## 2.2.0 - 2019-05-22
+
+### Added
+
+- The `kafka` and `kafka_balanced` inputs now set a `kafka_lag` metadata field
+  to incoming messages.
+- The `awk` processor now has a variety of typed `json_set` functions
+  `json_set_int`, `json_set_float` and `json_set_bool`.
+- Go API: Add experimental function for blocking cache and ratelimit
+  constructors.
+
+### Fixed
+
+- The `json` processor now defaults to an executable operator (clean).
+
+## 2.1.3 - 2019-05-20
+
+### Added
+
+- Add experimental function for blocking processor constructors.
+
+## 2.1.2 - 2019-05-20
+
+### Added
+
+- Core service logic has been moved into new package `service`, making it easier
+  to maintain plugin builds that match upstream Benthos.
+
+## 2.1.1 - 2019-05-17
+
+### Added
+
+- Experimental support for WASM builds.
+
+## 2.1.0 - 2019-05-16
+
+### Added
+
+- Config linting now reports line numbers.
+- Config interpolations now support escaping.
+
+## 2.0.0 - 2019-05-14
+
+### Added
+
+- API for creating `cache` implementations.
+- API for creating `rate_limit` implementations.
+
+### Changed
+
+This is a major version released due to a series of minor breaking changes, you
+can read the [full migration guide here](https://docs.benthos.dev/migration/v2/).
+
+#### Configuration
+
+- Benthos now attempts to infer the `type` of config sections whenever the field
+  is omitted, for more information please read this overview:
+  [Concise Configuration](https://docs.benthos.dev/configuration/#concise-configuration).
+- Field `unsubscribe_on_close` of the `nats_stream` input is now `false` by
+  default.
+
+#### Service
+
+- The following commandline flags have been removed: `swap-envs`, `plugins-dir`,
+  `list-input-plugins`, `list-output-plugins`, `list-processor-plugins`,
+  `list-condition-plugins`.
+
+#### Go API
+
+- Package `github.com/Jeffail/benthos/lib/processor/condition` changed to
+  `github.com/Jeffail/benthos/lib/condition`.
+- Interface `types.Cache` now has `types.Closable` embedded.
+- Interface `types.RateLimit` now has `types.Closable` embedded.
+- Add method `GetPlugin` to interface `types.Manager`.
+- Add method `WithFields` to interface `log.Modular`.
+
+## 1.20.4 - 2019-05-13
+
+### Fixed
+
+- Ensure `process_batch` processor gets normalised correctly.
+
+## 1.20.3 - 2019-05-11
+
+### Added
+
+- New `for_each` processor with the same behaviour as `process_batch`,
+  `process_batch` is now considered an alias for `for_each`.
+
+## 1.20.2 - 2019-05-10
+
+### Changed
+
+- The `sql` processor now executes across the batch, documentation updated to
+  clarify.
+
+## 1.20.1 - 2019-05-10
+
+### Fixed
+
+- Corrected `result_codec` field in `sql` processor config.
+
+## 1.20.0 - 2019-05-10
+
+### Added
+
+- New `sql` processor.
+
+### Fixed
+
+- Using `json_map_columns` with the `dynamodb` output should now correctly store
+  `null` and array values within the target JSON structure.
+
+## 1.19.2 - 2019-05-09
+
+### Added
+
+- New `encode` and `decode` scheme `hex`.
+
+### Fixed
+
+- Fixed potential panic when attempting an invalid HTTP client configuration.
+
+## 1.19.1 - 2019-05-08
+
+### Fixed
+
+- Benthos in streams mode no longer tries to load directory `/benthos/streams`
+  by default.
+
+## 1.19.0 - 2019-05-07
+
+### Added
+
+- Field `json_map_columns` added to `dynamodb` output.
+
+## 1.18.0 - 2019-05-06
+
+### Added
+
+- JSON references are now supported in configuration files.
+
+## 1.17.0 - 2019-05-04
+
+### Added
+
+- The `hash` processor now supports `sha1`.
+- Field `force_path_style_urls` added to `s3` components.
+- Field `content_type` of the `s3` output is now interpolated.
+- Field `content_encoding` added to `s3` output.
+
+### Fixed
+
+- The `benthos-lambda` distribution now correctly returns all message parts in
+  synchronous execution.
+
+### Changed
+
+- Docker builds now use a locally cached `vendor` for dependencies.
+- All `s3` components no longer default to enforcing path style URLs.
+
+## 1.16.0 - 2019-04-30
+
+### Added
+
+- New output `drop_on_error`.
+- Field `retry_until_success` added to `switch` output.
+
+### Fixed
+
+- Improved error and output logging for `subprocess` processor when the process
+  exits unexpectedly.
+
+## 1.15.0 - 2019-04-26
+
+### Changed
+
+- The main docker image is now based on busybox.
+- Lint rule added for `batch` processors outside of the input section.
+
+## 1.14.3 - 2019-04-25
+
+### Fixed
+
+- Removed potential `benthos-lambda` panic on shut down.
+
+## 1.14.2 - 2019-04-25
+
+### Fixed
+
+- The `redis` cache no longer incorrectly returns a "key not found" error
+  instead of connection errors.
+
+## 1.14.1 - 2019-04-24
+
+### Changed
+
+- Changed docker tag format from `vX.Y.Z` to `X.Y.Z`.
+
+## 1.14.0 - 2019-04-24
+
+### Added
+
+- Output `broker` pattern `fan_out_sequential`.
+- Output type `drop` for dropping all messages.
+- New interpolation function `timestamp_utc`.
 
 ## 1.13.0 - 2019-04-22
 

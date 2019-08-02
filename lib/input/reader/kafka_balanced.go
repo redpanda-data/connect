@@ -66,11 +66,20 @@ type KafkaBalancedConfig struct {
 	Group               KafkaBalancedGroupConfig `json:"group" yaml:"group"`
 	CommitPeriod        string                   `json:"commit_period" yaml:"commit_period"`
 	MaxProcessingPeriod string                   `json:"max_processing_period" yaml:"max_processing_period"`
+	FetchBufferCap      int                      `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
 	Topics              []string                 `json:"topics" yaml:"topics"`
 	StartFromOldest     bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
 	MaxBatchCount       int                      `json:"max_batch_count" yaml:"max_batch_count"`
 	TLS                 btls.Config              `json:"tls" yaml:"tls"`
+	SASL                SASLConfig               `json:"sasl" yaml:"sasl"`
+}
+
+// SASLConfig contains configuration for SASL based authentication.
+type SASLConfig struct {
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
+	User     string `json:"user" yaml:"user"`
+	Password string `json:"password" yaml:"password"`
 }
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
@@ -82,6 +91,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Group:               NewKafkaBalancedGroupConfig(),
 		CommitPeriod:        "1s",
 		MaxProcessingPeriod: "100ms",
+		FetchBufferCap:      256,
 		Topics:              []string{"benthos_stream"},
 		StartFromOldest:     true,
 		TargetVersion:       sarama.V1_0_0_0.String(),
@@ -91,6 +101,11 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 }
 
 //------------------------------------------------------------------------------
+
+type consumerMessage struct {
+	*sarama.ConsumerMessage
+	highWaterMark int64
+}
 
 // KafkaBalanced is an input type that reads from a Kafka cluster by balancing
 // partitions across other consumers of the same consumer group.
@@ -109,7 +124,7 @@ type KafkaBalanced struct {
 	cMut          sync.Mutex
 	groupCancelFn context.CancelFunc
 	session       sarama.ConsumerGroupSession
-	msgChan       chan *sarama.ConsumerMessage
+	msgChan       chan consumerMessage
 
 	offsets map[string]map[int32]int64
 
@@ -224,7 +239,10 @@ func (k *KafkaBalanced) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sar
 			if !open {
 				return nil
 			}
-			k.msgChan <- msg
+			k.msgChan <- consumerMessage{
+				ConsumerMessage: msg,
+				highWaterMark:   claim.HighWaterMarkOffset(),
+			}
 		case <-sess.Context().Done():
 			k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
 			return nil
@@ -274,6 +292,7 @@ func (k *KafkaBalanced) Connect() error {
 	config.Consumer.Group.Session.Timeout = k.sessionTimeout
 	config.Consumer.Group.Heartbeat.Interval = k.heartbeatInterval
 	config.Consumer.Group.Rebalance.Timeout = k.rebalanceTimeout
+	config.ChannelBufferSize = k.conf.FetchBufferCap
 
 	if config.Net.ReadTimeout <= k.sessionTimeout {
 		config.Net.ReadTimeout = k.sessionTimeout * 2
@@ -288,6 +307,12 @@ func (k *KafkaBalanced) Connect() error {
 	}
 	if k.conf.StartFromOldest {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	}
+
+	if k.conf.SASL.Enabled {
+		config.Net.SASL.Enable = true
+		config.Net.SASL.User = k.conf.SASL.User
+		config.Net.SASL.Password = k.conf.SASL.Password
 	}
 
 	// Start a new consumer group
@@ -352,7 +377,7 @@ func (k *KafkaBalanced) Connect() error {
 		k.cMut.Unlock()
 	}()
 
-	k.msgChan = make(chan *sarama.ConsumerMessage, k.conf.MaxBatchCount)
+	k.msgChan = make(chan consumerMessage, k.conf.MaxBatchCount)
 	k.offsets = map[string]map[int32]int64{}
 
 	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.addresses)
@@ -370,17 +395,24 @@ func (k *KafkaBalanced) Read() (types.Message, error) {
 	}
 
 	msg := message.New(nil)
-	addPart := func(data *sarama.ConsumerMessage) {
+	addPart := func(data consumerMessage) {
 		part := message.NewPart(data.Value)
 
 		meta := part.Metadata()
 		for _, hdr := range data.Headers {
 			meta.Set(string(hdr.Key), string(hdr.Value))
 		}
+
+		lag := data.highWaterMark - data.Offset - 1
+		if lag < 0 {
+			lag = 0
+		}
+
 		meta.Set("kafka_key", string(data.Key))
 		meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
 		meta.Set("kafka_topic", data.Topic)
 		meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
+		meta.Set("kafka_lag", strconv.FormatInt(lag, 10))
 		meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
 
 		msg.Append(part)

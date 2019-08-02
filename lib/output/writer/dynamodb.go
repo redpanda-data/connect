@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -33,6 +34,7 @@ import (
 	"github.com/Jeffail/benthos/lib/util/aws/session"
 	"github.com/Jeffail/benthos/lib/util/retries"
 	"github.com/Jeffail/benthos/lib/util/text"
+	"github.com/Jeffail/gabs"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
@@ -46,6 +48,7 @@ type DynamoDBConfig struct {
 	sessionConfig  `json:",inline" yaml:",inline"`
 	Table          string            `json:"table" yaml:"table"`
 	StringColumns  map[string]string `json:"string_columns" yaml:"string_columns"`
+	JSONMapColumns map[string]string `json:"json_map_columns" yaml:"json_map_columns"`
 	TTL            string            `json:"ttl" yaml:"ttl"`
 	TTLKey         string            `json:"ttl_key" yaml:"ttl_key"`
 	retries.Config `json:",inline" yaml:",inline"`
@@ -62,11 +65,12 @@ func NewDynamoDBConfig() DynamoDBConfig {
 		sessionConfig: sessionConfig{
 			Config: session.NewConfig(),
 		},
-		Table:         "",
-		StringColumns: map[string]string{},
-		TTL:           "",
-		TTLKey:        "",
-		Config:        rConf,
+		Table:          "",
+		StringColumns:  map[string]string{},
+		JSONMapColumns: map[string]string{},
+		TTL:            "",
+		TTLKey:         "",
+		Config:         rConf,
 	}
 }
 
@@ -81,9 +85,10 @@ type DynamoDB struct {
 	stats   metrics.Type
 	backoff backoff.BackOff
 
-	table      *string
-	ttl        time.Duration
-	strColumns map[string]*text.InterpolatedString
+	table          *string
+	ttl            time.Duration
+	strColumns     map[string]*text.InterpolatedString
+	jsonMapColumns map[string]string
 }
 
 // NewDynamoDB creates a new Amazon SQS writer.Type.
@@ -97,18 +102,25 @@ func NewDynamoDB(
 		return nil, fmt.Errorf("failed to parse retry fields: %v", err)
 	}
 	db := &DynamoDB{
-		conf:       conf,
-		log:        log,
-		stats:      stats,
-		table:      aws.String(conf.Table),
-		backoff:    boff,
-		strColumns: map[string]*text.InterpolatedString{},
+		conf:           conf,
+		log:            log,
+		stats:          stats,
+		table:          aws.String(conf.Table),
+		backoff:        boff,
+		strColumns:     map[string]*text.InterpolatedString{},
+		jsonMapColumns: map[string]string{},
 	}
-	if len(conf.StringColumns) == 0 {
+	if len(conf.StringColumns) == 0 && len(conf.JSONMapColumns) == 0 {
 		return nil, errors.New("you must provide at least one column")
 	}
 	for k, v := range conf.StringColumns {
 		db.strColumns[k] = text.NewInterpolatedString(v)
+	}
+	for k, v := range conf.JSONMapColumns {
+		if v == "." {
+			v = ""
+		}
+		db.jsonMapColumns[k] = v
 	}
 	if conf.TTL != "" {
 		ttl, err := time.ParseDuration(conf.TTL)
@@ -146,6 +158,65 @@ func (d *DynamoDB) Connect() error {
 	return nil
 }
 
+func walkJSON(root interface{}) *dynamodb.AttributeValue {
+	switch v := root.(type) {
+	case map[string]interface{}:
+		m := make(map[string]*dynamodb.AttributeValue, len(v))
+		for k, v2 := range v {
+			m[k] = walkJSON(v2)
+		}
+		return &dynamodb.AttributeValue{
+			M: m,
+		}
+	case []interface{}:
+		l := make([]*dynamodb.AttributeValue, len(v))
+		for i, v2 := range v {
+			l[i] = walkJSON(v2)
+		}
+		return &dynamodb.AttributeValue{
+			L: l,
+		}
+	case string:
+		return &dynamodb.AttributeValue{
+			S: aws.String(v),
+		}
+	case json.Number:
+		return &dynamodb.AttributeValue{
+			N: aws.String(v.String()),
+		}
+	case float64:
+		return &dynamodb.AttributeValue{
+			N: aws.String(strconv.FormatFloat(v, 'f', -1, 64)),
+		}
+	case int:
+		return &dynamodb.AttributeValue{
+			N: aws.String(strconv.Itoa(v)),
+		}
+	case bool:
+		return &dynamodb.AttributeValue{
+			BOOL: aws.Bool(v),
+		}
+	case nil:
+		return &dynamodb.AttributeValue{
+			NULL: aws.Bool(true),
+		}
+	}
+	return &dynamodb.AttributeValue{
+		S: aws.String(fmt.Sprintf("%v", root)),
+	}
+}
+
+func jsonToMap(path string, root interface{}) (*dynamodb.AttributeValue, error) {
+	gObj, err := gabs.Consume(root)
+	if err != nil {
+		return nil, err
+	}
+	if len(path) > 0 {
+		gObj = gObj.Path(path)
+	}
+	return walkJSON(gObj.Data()), nil
+}
+
 // Write attempts to write message contents to a target SQS.
 func (d *DynamoDB) Write(msg types.Message) error {
 	if d.client == nil {
@@ -164,6 +235,26 @@ func (d *DynamoDB) Write(msg types.Message) error {
 			s := v.Get(message.Lock(msg, i))
 			items[k] = &dynamodb.AttributeValue{
 				S: &s,
+			}
+		}
+		if len(d.jsonMapColumns) > 0 {
+			jRoot, err := p.JSON()
+			if err != nil {
+				d.log.Errorf("Failed to extract JSON maps from document: %v", err)
+			} else {
+				for k, v := range d.jsonMapColumns {
+					if attr, err := jsonToMap(v, jRoot); err == nil {
+						if len(k) == 0 {
+							for ak, av := range attr.M {
+								items[ak] = av
+							}
+						} else {
+							items[k] = attr
+						}
+					} else {
+						d.log.Warnf("Unable to extract JSON map path '%v' from document: %v", v, err)
+					}
+				}
 			}
 		}
 		writeReqs = append(writeReqs, &dynamodb.WriteRequest{

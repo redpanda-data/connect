@@ -36,17 +36,16 @@ func init() {
 	Constructors[TypeCatch] = TypeSpec{
 		constructor: NewCatch,
 		description: `
-Behaves similarly to the ` + "[`process_batch`](#process_batch)" + ` processor,
-where a list of child processors are applied to individual messages of a batch.
-However, processors are only applied to messages that failed a processing step
-prior to the catch.
+Behaves similarly to the ` + "[`for_each`](#for_each)" + ` processor, where a
+list of child processors are applied to individual messages of a batch. However,
+processors are only applied to messages that failed a processing step prior to
+the catch.
 
 For example, with the following config:
 
 ` + "``` yaml" + `
 - type: foo
-- type: catch
-  catch:
+- catch:
   - type: bar
   - type: baz
 ` + "```" + `

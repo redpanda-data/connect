@@ -34,25 +34,47 @@ Failed messages can be fed into their own processor steps with a
 [`catch`][catch] processor:
 
 ``` yaml
-  - type: catch
-    catch:
+  - catch:
     - type: foo # Recover here
 ```
 
 Once messages finish the catch block they will have their failure flags removed
 and are treated like regular messages. If this behaviour is not desired then it
 is possible to simulate a catch block with a [`conditional`][conditional]
-processor:
+processor placed within a [`for_each`][for_each] processor:
 
 ``` yaml
-  - type: process_batch
-    process_batch:
-    - type: conditional
-      conditional:
+  - for_each:
+    - conditional:
         condition:
           type: processor_failed
         processors:
         - type: foo # Recover here
+```
+
+### Logging Errors
+
+When an error occurs there will occasionally be useful information stored within
+the error flag that can be exposed with the interpolation function
+[`error`](./config_interpolation.md#error). This allows you to expose the
+information with processors.
+
+For example, when catching failed processors you can [`log`][log] the messages:
+
+``` yaml
+  - catch:
+    - log:
+        message: "Processing failed due to: ${!error}"
+```
+
+Or perhaps augment the message payload with the error message:
+
+``` yaml
+  - catch:
+    - json:
+        operator: set
+        path: meta.error
+        value: ${!error}
 ```
 
 ### Attempt Until Success
@@ -61,15 +83,14 @@ It's possible to reattempt a processor for a particular message until it is
 successful with a [`while`][while] processor:
 
 ``` yaml
-  - type: process_batch
-    process_batch:
-    - type: while
-      while:
+  - for_each:
+    - while:
         at_least_once: true
         max_loops: 0 # Set this greater than zero to cap the number of attempts
         condition:
           type: processor_failed
         processors:
+        - type: catch # Wipe any previous error
         - type: foo # Attempt this processor until success
 ```
 
@@ -84,9 +105,9 @@ In order to filter out any failed messages from your pipeline you can simply use
 a [`filter_parts`][filter_parts] processor:
 
 ``` yaml
-  - type: filter_parts
-    filter_parts:
-      type: processor_failed
+  - filter_parts:
+      not:
+        type: processor_failed
 ```
 
 This will remove any failed messages from a batch.
@@ -100,12 +121,10 @@ It is possible to send failed messages to different destinations using either a
 ``` yaml
 pipeline:
   processors:
-  - type: group_by
-    group_by:
+  - group_by:
     - condition:
         type: processor_failed
 output:
-  type: switch
   switch:
     outputs:
     - output:
@@ -123,20 +142,16 @@ Alternatively, using a `broker` output looks like this:
 
 ``` yaml
 output:
-  type: broker
   broker:
     pattern: fan_out
     outputs:
     - type: foo # Dead letter queue
       processors:
-      - type: filter_parts
-        filter_parts:
+      - filter_parts:
           type: processor_failed
     - type: bar # Everything else
       processors:
-      - type: filter_parts
-        filter_parts:
-          type: not
+      - filter_parts:
           not:
             type: processor_failed
 ```
@@ -145,10 +160,11 @@ output:
 [processor_failed]: ./conditions/README.md#processor_failed
 [filter_parts]: ./processors/README.md#filter_parts
 [while]: ./processors/README.md#while
-[process_batch]: ./processors/README.md#process_batch
+[for_each]: ./processors/README.md#for_each
 [conditional]: ./processors/README.md#conditional
 [catch]: ./processors/README.md#catch
 [try]: ./processors/README.md#try
+[log]: ./processors/README.md#log
 [group_by]: ./processors/README.md#group_by
 [switch]: ./outputs/README.md#switch
 [broker]: ./outputs/README.md#broker

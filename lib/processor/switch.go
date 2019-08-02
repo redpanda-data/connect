@@ -25,10 +25,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/types"
 	olog "github.com/opentracing/opentracing-go/log"
 )
@@ -58,7 +58,7 @@ A case takes this form:
 ` + "```" + `
 
 In order to switch each message of a batch individually use this processor with
-the ` + "[`process_batch`](#process_batch)" + ` processor.
+the ` + "[`for_each`](#for_each)" + ` processor.
 
 You can find a [full list of conditions here](../conditions).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {

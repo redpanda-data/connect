@@ -53,17 +53,13 @@ path we could achieve that with the following:
 ` + "``` yaml" + `
 pipeline:
   processors:
-  - type: group_by_value
-    group_by_value:
+  - group_by_value:
       value: ${!metadata:kafka_key}
-  - type: archive
-    archive:
+  - archive:
       format: tar
-  - type: compress
-    compress:
+  - compress:
       algorithm: gzip
 output:
-  type: s3
   s3:
     bucket: TODO
     path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz

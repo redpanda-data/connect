@@ -26,6 +26,13 @@ import (
 
 //------------------------------------------------------------------------------
 
+// FailFlagKey is a metadata key used for flagging processor errors in Benthos.
+// If a message part has any non-empty value for this metadata key then it will
+// be interpretted as having failed a processor step somewhere in the pipeline.
+var FailFlagKey = "benthos_processing_failed"
+
+//------------------------------------------------------------------------------
+
 // Metadata is an interface representing the metadata of a message part within
 // a batch.
 type Metadata interface {
@@ -60,6 +67,16 @@ type Part interface {
 	// Metadata returns the metadata of a part.
 	Metadata() Metadata
 
+	// GetContext returns the underlying context attached to this message part,
+	// or context.Background if one has not already been attached.
+	// TODO: V3 Add this.
+	// GetContext() context.Context
+
+	// WithContext returns the underlying message part with a new context
+	// attached.
+	// TODO: V3 Add this.
+	// WithContext(ctx context.Context) Part
+
 	// JSON attempts to parse the part as a JSON document and either returns the
 	// result or an error. The resulting document is also cached such that
 	// subsequent calls do not reparse the same data. If changes are made to the
@@ -67,10 +84,12 @@ type Part interface {
 	// representation will not reflect the changes.
 	JSON() (interface{}, error)
 
-	// Set changes the underlying byte slice.
+	// Set changes the underlying byte slice. Returns the edited message part
+	// for daisy-chaining further calls.
 	Set(d []byte) Part
 
-	// SetMetadata changes the underlying metadata to a new object.
+	// SetMetadata changes the underlying metadata to a new object. Returns the
+	// edited message part for daisy-chaining further calls.
 	SetMetadata(m Metadata) Part
 
 	// SetJSON attempts to marshal a JSON document into a byte slice and stores

@@ -27,9 +27,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/response"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/benthos/lib/util/throttle"
@@ -67,32 +67,27 @@ output only.
 
 ` + "``` yaml" + `
 output:
-  type: switch
   switch:
+    retry_until_success: true
     outputs:
     - output:
-        type: foo
         foo:
           foo_field_1: value1
       condition:
-        type: text
         text:
           operator: contains
           arg: foo
       fallthrough: true
     - output:
-        type: bar
         bar:
           bar_field_1: value2
           bar_field_2: value3
       condition:
-        type: text
         text:
           operator: contains
           arg: bar
       fallthrough: true
     - output:
-        type: baz
         baz:
           baz_field_1: value4
         processors:
@@ -104,10 +99,17 @@ output:
 The switch output requires a minimum of two outputs. If no condition is defined
 for an output, it behaves like a static ` + "`true`" + ` condition. If
 ` + "`fallthrough`" + ` is set to ` + "`true`" + `, the switch output will
-continue evaluating additional outputs after finding a match. If an output
-applies back pressure it will block all subsequent messages, and if an output
-fails to send a message, it will be retried continuously until completion or
-service shut down. Messages that do not match any outputs will be dropped.`,
+continue evaluating additional outputs after finding a match.
+
+Messages that do not match any outputs will be dropped. If an output applies
+back pressure it will block all subsequent messages.
+
+If an output fails to send a message it will be retried continuously until
+completion or service shut down. You can change this behaviour so that when an
+output returns an error the switch output also returns an error by setting
+` + "`retry_until_success`" + ` to ` + "`false`" + `. This allows you to
+wrap the switch with a ` + "`try`" + ` broker, but care must be taken to ensure
+duplicate messages aren't introduced during error conditions.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			outSlice := []interface{}{}
 			for _, out := range conf.Switch.Outputs {
@@ -127,7 +129,8 @@ service shut down. Messages that do not match any outputs will be dropped.`,
 				outSlice = append(outSlice, sanit)
 			}
 			return map[string]interface{}{
-				"outputs": outSlice,
+				"retry_until_success": conf.Switch.RetryUntilSuccess,
+				"outputs":             outSlice,
 			}, nil
 		},
 	}
@@ -137,13 +140,15 @@ service shut down. Messages that do not match any outputs will be dropped.`,
 
 // SwitchConfig contains configuration fields for the Switch output type.
 type SwitchConfig struct {
-	Outputs []SwitchConfigOutput `json:"outputs" yaml:"outputs"`
+	RetryUntilSuccess bool                 `json:"retry_until_success" yaml:"retry_until_success"`
+	Outputs           []SwitchConfigOutput `json:"outputs" yaml:"outputs"`
 }
 
 // NewSwitchConfig creates a new SwitchConfig with default values.
 func NewSwitchConfig() SwitchConfig {
 	return SwitchConfig{
-		Outputs: []SwitchConfigOutput{},
+		RetryUntilSuccess: true,
+		Outputs:           []SwitchConfigOutput{},
 	}
 }
 
@@ -214,9 +219,10 @@ type Switch struct {
 	outputTsChans  []chan types.Transaction
 	outputResChans []chan types.Response
 
-	outputs      []types.Output
-	conditions   []types.Condition
-	fallthroughs []bool
+	retryUntilSuccess bool
+	outputs           []types.Output
+	conditions        []types.Condition
+	fallthroughs      []bool
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
@@ -236,15 +242,16 @@ func NewSwitch(
 	}
 
 	o := &Switch{
-		running:      1,
-		stats:        stats,
-		logger:       logger,
-		transactions: nil,
-		outputs:      make([]types.Output, lOutputs),
-		conditions:   make([]types.Condition, lOutputs),
-		fallthroughs: make([]bool, lOutputs),
-		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		running:           1,
+		stats:             stats,
+		logger:            logger,
+		transactions:      nil,
+		outputs:           make([]types.Output, lOutputs),
+		conditions:        make([]types.Condition, lOutputs),
+		fallthroughs:      make([]bool, lOutputs),
+		retryUntilSuccess: conf.Switch.RetryUntilSuccess,
+		closedChan:        make(chan struct{}),
+		closeChan:         make(chan struct{}),
 	}
 
 	var err error
@@ -255,14 +262,14 @@ func NewSwitch(
 			logger.NewModule("."+ns+".output"),
 			metrics.Combine(stats, metrics.Namespaced(stats, ns+".output")),
 		); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Output.Type, err)
 		}
 		if o.conditions[i], err = condition.New(
 			oConf.Condition, mgr,
 			logger.NewModule("."+ns+".condition"),
 			metrics.Namespaced(stats, ns+".condition"),
 		); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create output '%v' condition '%v': %v", i, oConf.Condition.Type, err)
 		}
 		o.fallthroughs[i] = oConf.Fallthrough
 	}
@@ -364,6 +371,9 @@ func (o *Switch) loop() {
 			continue
 		}
 
+		var oResponse types.Response
+
+	outputsLoop:
 		for len(outputTargets) > 0 {
 			for _, i := range outputTargets {
 				msgCopy := ts.Payload.Copy()
@@ -378,11 +388,15 @@ func (o *Switch) loop() {
 				select {
 				case res := <-o.outputResChans[i]:
 					if res.Error() != nil {
-						newTargets = append(newTargets, i)
-						o.logger.Errorf("Failed to dispatch switch message: %v\n", res.Error())
-						mOutputErr.Incr(1)
-						if !o.throt.Retry() {
-							return
+						if o.retryUntilSuccess {
+							newTargets = append(newTargets, i)
+							o.logger.Errorf("Failed to dispatch switch message: %v\n", res.Error())
+							mOutputErr.Incr(1)
+							if !o.throt.Retry() {
+								return
+							}
+						} else {
+							oResponse = res
 						}
 					} else {
 						o.throt.Reset()
@@ -393,9 +407,15 @@ func (o *Switch) loop() {
 				}
 			}
 			outputTargets = newTargets
+			if oResponse != nil {
+				break outputsLoop
+			}
+		}
+		if oResponse == nil {
+			oResponse = response.NewAck()
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- oResponse:
 		case <-o.closeChan:
 			return
 		}

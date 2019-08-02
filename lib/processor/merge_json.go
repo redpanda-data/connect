@@ -117,6 +117,9 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	newPart := gabs.New()
 	mergeFunc := func(index int) {
 		jsonPart, err := msg.Get(index).JSON()
+		if err == nil {
+			jsonPart, err = message.CopyJSON(jsonPart)
+		}
 		if err != nil {
 			p.mErrJSONP.Incr(1)
 			p.mErr.Incr(1)
@@ -142,12 +145,12 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		newMsg = message.New(nil)
 	}
 
-	var firstMetadata types.Metadata
+	var firstPartCopy types.Part
 	if len(p.parts) == 0 {
 		for i := 0; i < msg.Len(); i++ {
 			mergeFunc(i)
 		}
-		firstMetadata = msg.Get(0).Metadata().Copy()
+		firstPartCopy = msg.Get(0).Copy()
 	} else {
 		targetParts := make(map[int]struct{}, len(p.parts))
 		for _, part := range p.parts {
@@ -167,17 +170,16 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			}
 			return nil
 		})
-		firstMetadata = msg.Get(p.parts[0]).Metadata().Copy()
+		firstPartCopy = msg.Get(p.parts[0]).Copy()
 	}
 
-	i := newMsg.Append(message.NewPart(nil))
+	i := newMsg.Append(firstPartCopy)
 	if err := newMsg.Get(i).SetJSON(newPart.Data()); err != nil {
 		p.mErrJSONS.Incr(1)
 		p.mErr.Incr(1)
 		p.log.Debugf("Failed to marshal merged part into json: %v\n", err)
-		FlagFail(newMsg.Get(i))
+		FlagErr(newMsg.Get(i), err)
 	}
-	newMsg.Get(i).SetMetadata(firstMetadata)
 
 	msgs := [1]types.Message{newMsg}
 

@@ -45,12 +45,14 @@ type KafkaConfig struct {
 	ConsumerGroup       string      `json:"consumer_group" yaml:"consumer_group"`
 	CommitPeriod        string      `json:"commit_period" yaml:"commit_period"`
 	MaxProcessingPeriod string      `json:"max_processing_period" yaml:"max_processing_period"`
+	FetchBufferCap      int         `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
 	Topic               string      `json:"topic" yaml:"topic"`
 	Partition           int32       `json:"partition" yaml:"partition"`
 	StartFromOldest     bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion       string      `json:"target_version" yaml:"target_version"`
 	MaxBatchCount       int         `json:"max_batch_count" yaml:"max_batch_count"`
 	TLS                 btls.Config `json:"tls" yaml:"tls"`
+	SASL                SASLConfig  `json:"sasl" yaml:"sasl"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -61,6 +63,7 @@ func NewKafkaConfig() KafkaConfig {
 		ConsumerGroup:       "benthos_consumer_group",
 		CommitPeriod:        "1s",
 		MaxProcessingPeriod: "100ms",
+		FetchBufferCap:      256,
 		Topic:               "benthos_stream",
 		Partition:           0,
 		StartFromOldest:     true,
@@ -204,9 +207,15 @@ func (k *Kafka) Connect() error {
 	config.Net.DialTimeout = time.Second
 	config.Consumer.Return.Errors = true
 	config.Consumer.MaxProcessingTime = k.maxProcPeriod
+	config.ChannelBufferSize = k.conf.FetchBufferCap
 	config.Net.TLS.Enable = k.conf.TLS.Enabled
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
+	}
+	if k.conf.SASL.Enabled {
+		config.Net.SASL.Enable = true
+		config.Net.SASL.User = k.conf.SASL.User
+		config.Net.SASL.Password = k.conf.SASL.Password
 	}
 
 	k.client, err = sarama.NewClient(k.addresses, config)
@@ -294,6 +303,8 @@ func (k *Kafka) Read() (types.Message, error) {
 		return nil, types.ErrNotConnected
 	}
 
+	hwm := partConsumer.HighWaterMarkOffset()
+
 	msg := message.New(nil)
 	addPart := func(data *sarama.ConsumerMessage) {
 		k.offset = data.Offset + 1
@@ -303,10 +314,17 @@ func (k *Kafka) Read() (types.Message, error) {
 		for _, hdr := range data.Headers {
 			meta.Set(string(hdr.Key), string(hdr.Value))
 		}
+
+		lag := hwm - data.Offset
+		if lag < 0 {
+			lag = 0
+		}
+
 		meta.Set("kafka_key", string(data.Key))
 		meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
 		meta.Set("kafka_topic", data.Topic)
-		meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
+		meta.Set("kafka_offset", strconv.FormatInt(data.Offset, 10))
+		meta.Set("kafka_lag", strconv.FormatInt(lag, 10))
 		meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
 
 		msg.Append(part)

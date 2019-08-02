@@ -20,6 +20,7 @@ output:
   type: switch
   switch:
     outputs: []
+    retry_until_success: true
 resources:
   caches: {}
   conditions: {}

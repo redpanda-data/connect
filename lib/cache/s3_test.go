@@ -67,6 +67,7 @@ func TestS3Integration(t *testing.T) {
 	conf.S3.Credentials.Token = "xxxxx"
 	conf.S3.Region = "eu-west-1"
 	conf.S3.Bucket = bucket
+	conf.S3.ForcePathStyleURLs = true
 
 	t.Run("testS3GetAndSet", func(t *testing.T) {
 		testS3GetAndSet(t, conf)

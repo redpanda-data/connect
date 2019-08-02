@@ -27,12 +27,11 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v2"
-
 	"github.com/Jeffail/benthos/lib/broker"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -57,27 +56,21 @@ Adding more input types allows you to merge streams from multiple sources into
 one. For example, reading from both RabbitMQ and Kafka:
 
 ` + "``` yaml" + `
-type: broker
-broker:
-  copies: 1
-  inputs:
-  - type: amqp
-    amqp:
-      url: amqp://guest:guest@localhost:5672/
-      consumer_tag: benthos-consumer
-      exchange: benthos-exchange
-      exchange_type: direct
-      key: benthos-key
-      queue: benthos-queue
-  - type: kafka
-    kafka:
-      addresses:
-      - localhost:9092
-      client_id: benthos_kafka_input
-      consumer_group: benthos_consumer_group
-      partition: 0
-      topic: benthos_stream
-
+input:
+  broker:
+    copies: 1
+    inputs:
+    - amqp:
+        url: amqp://guest:guest@localhost:5672/
+        consumer_tag: benthos-consumer
+        queue: benthos-queue
+    - kafka:
+        addresses:
+        - localhost:9092
+        client_id: benthos_kafka_input
+        consumer_group: benthos_consumer_group
+        partition: 0
+        topic: benthos_stream
 ` + "```" + `
 
 If the number of copies is greater than zero the list will be copied that number
@@ -256,7 +249,7 @@ func NewBroker(
 				pipelines...,
 			)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to create input '%v' type '%v': %v", i, iConf.Type, err)
 			}
 		}
 	}

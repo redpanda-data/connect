@@ -21,12 +21,9 @@
 package config
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"path/filepath"
-
 	"github.com/Jeffail/benthos/lib/api"
 	"github.com/Jeffail/benthos/lib/buffer"
+	"github.com/Jeffail/benthos/lib/condition"
 	"github.com/Jeffail/benthos/lib/input"
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/manager"
@@ -34,11 +31,9 @@ import (
 	"github.com/Jeffail/benthos/lib/output"
 	"github.com/Jeffail/benthos/lib/pipeline"
 	"github.com/Jeffail/benthos/lib/processor"
-	"github.com/Jeffail/benthos/lib/processor/condition"
 	"github.com/Jeffail/benthos/lib/stream"
 	"github.com/Jeffail/benthos/lib/tracer"
-	"github.com/Jeffail/benthos/lib/util/text"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -189,8 +184,8 @@ func AddExamples(conf *Type, examples ...string) {
 		condConf := condition.NewConfig()
 		condConf.Type = conditionType
 		procConf := processor.NewConfig()
-		procConf.Type = "filter"
-		procConf.Filter.Type = conditionType
+		procConf.Type = "filter_parts"
+		procConf.FilterParts.Type = conditionType
 		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
 	}
 	if len(outputType) > 0 {
@@ -203,24 +198,13 @@ func AddExamples(conf *Type, examples ...string) {
 // Read will attempt to read a configuration file path into a structure. Returns
 // an array of lint messages or an error.
 func Read(path string, replaceEnvs bool, config *Type) ([]string, error) {
-	configBytes, err := ioutil.ReadFile(path)
+	configBytes, err := ReadWithJSONPointers(path, replaceEnvs)
 	if err != nil {
 		return nil, err
 	}
 
-	if replaceEnvs {
-		configBytes = text.ReplaceEnvVariables(configBytes)
-	}
-
-	ext := filepath.Ext(path)
-	if ".js" == ext || ".json" == ext {
-		if err = json.Unmarshal(configBytes, config); err != nil {
-			return nil, err
-		}
-	} else { // if ".yml" == ext || ".yaml" == ext {
-		if err = yaml.Unmarshal(configBytes, config); err != nil {
-			return nil, err
-		}
+	if err = yaml.Unmarshal(configBytes, config); err != nil {
+		return nil, err
 	}
 
 	return Lint(configBytes, *config)

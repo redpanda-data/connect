@@ -21,6 +21,7 @@
 package input
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -28,6 +29,8 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -35,9 +38,11 @@ import (
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/message/metadata"
+	"github.com/Jeffail/benthos/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
+	httputil "github.com/Jeffail/benthos/lib/util/http"
 	"github.com/Jeffail/benthos/lib/util/throttle"
 	"github.com/gorilla/websocket"
 	"github.com/opentracing/opentracing-go"
@@ -54,6 +59,46 @@ which is enabled when key and cert files are specified.
 
 You can leave the 'address' config field blank in order to use the instance wide
 HTTP server.
+
+The field ` + "`rate_limit`" + ` allows you to specify an optional
+` + "[`rate_limit` resource](../rate_limits/README.md)" + `, which will be
+applied to each HTTP request made and each websocket payload received.
+
+When the rate limit is breached HTTP requests will have a 429 response returned
+with a Retry-After header. Websocket payloads will be dropped and an optional
+response payload will be sent as per ` + "`ws_rate_limit_message`" + `.
+
+### Responses
+
+EXPERIMENTAL: It's possible to return a response for each message received using
+[synchronous responses](../sync_responses.md). This feature is considered
+experimental and therefore subject to change outside of major version releases.
+
+### Endpoints
+
+The following fields specify endpoints that are registered for sending messages:
+
+#### ` + "`path` (defaults to `/post`)" + `
+
+This endpoint expects POST requests where the entire request body is consumed as
+a single message.
+
+If the request contains a multipart ` + "`content-type`" + ` header as per
+[rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the
+multiple parts are consumed as a batch of messages, where each body part is a
+message of the batch.
+
+#### ` + "`ws_path` (defaults to `/post/ws`)" + `
+
+Creates a websocket connection, where payloads received on the socket are passed
+through the pipeline as a batch of one message.
+
+You may specify an optional ` + "`ws_welcome_message`" + `, which is a static
+payload to be sent to all clients once a websocket connection is first
+established.
+
+It's also possible to specify a ` + "`ws_rate_limit_message`" + `, which is a
+static payload to be sent to clients that have triggered the servers rate limit.
 
 ### Metadata
 
@@ -74,23 +119,29 @@ You can access these metadata fields using
 
 // HTTPServerConfig contains configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
-	Address  string `json:"address" yaml:"address"`
-	Path     string `json:"path" yaml:"path"`
-	WSPath   string `json:"ws_path" yaml:"ws_path"`
-	Timeout  string `json:"timeout" yaml:"timeout"`
-	CertFile string `json:"cert_file" yaml:"cert_file"`
-	KeyFile  string `json:"key_file" yaml:"key_file"`
+	Address            string `json:"address" yaml:"address"`
+	Path               string `json:"path" yaml:"path"`
+	WSPath             string `json:"ws_path" yaml:"ws_path"`
+	WSWelcomeMessage   string `json:"ws_welcome_message" yaml:"ws_welcome_message"`
+	WSRateLimitMessage string `json:"ws_rate_limit_message" yaml:"ws_rate_limit_message"`
+	Timeout            string `json:"timeout" yaml:"timeout"`
+	RateLimit          string `json:"rate_limit" yaml:"rate_limit"`
+	CertFile           string `json:"cert_file" yaml:"cert_file"`
+	KeyFile            string `json:"key_file" yaml:"key_file"`
 }
 
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
 	return HTTPServerConfig{
-		Address:  "",
-		Path:     "/post",
-		WSPath:   "/post/ws",
-		Timeout:  "5s",
-		CertFile: "",
-		KeyFile:  "",
+		Address:            "",
+		Path:               "/post",
+		WSPath:             "/post/ws",
+		WSWelcomeMessage:   "",
+		WSRateLimitMessage: "",
+		Timeout:            "5s",
+		RateLimit:          "",
+		CertFile:           "",
+		KeyFile:            "",
 	}
 }
 
@@ -108,6 +159,8 @@ type HTTPServer struct {
 	stats metrics.Type
 	log   log.Modular
 
+	ratelimit types.RateLimit
+
 	mux     *http.ServeMux
 	server  *http.Server
 	timeout time.Duration
@@ -117,18 +170,23 @@ type HTTPServer struct {
 	closeChan  chan struct{}
 	closedChan chan struct{}
 
-	mCount      metrics.StatCounter
-	mPartsCount metrics.StatCounter
-	mRcvd       metrics.StatCounter
-	mPartsRcvd  metrics.StatCounter
-	mWSCount    metrics.StatCounter
-	mTimeout    metrics.StatCounter
-	mErr        metrics.StatCounter
-	mWSErr      metrics.StatCounter
-	mSucc       metrics.StatCounter
-	mWSSucc     metrics.StatCounter
-	mAsyncErr   metrics.StatCounter
-	mAsyncSucc  metrics.StatCounter
+	mCount         metrics.StatCounter
+	mRateLimited   metrics.StatCounter
+	mWSRateLimited metrics.StatCounter
+	mPartsCount    metrics.StatCounter
+	mRcvd          metrics.StatCounter
+	mPartsRcvd     metrics.StatCounter
+	mSyncCount     metrics.StatCounter
+	mSyncErr       metrics.StatCounter
+	mSyncSucc      metrics.StatCounter
+	mWSCount       metrics.StatCounter
+	mTimeout       metrics.StatCounter
+	mErr           metrics.StatCounter
+	mWSErr         metrics.StatCounter
+	mSucc          metrics.StatCounter
+	mWSSucc        metrics.StatCounter
+	mAsyncErr      metrics.StatCounter
+	mAsyncSucc     metrics.StatCounter
 }
 
 // NewHTTPServer creates a new HTTPServer input type.
@@ -149,42 +207,63 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		}
 	}
 
+	var ratelimit types.RateLimit
+	if len(conf.HTTPServer.RateLimit) > 0 {
+		var err error
+		if ratelimit, err = mgr.GetRateLimit(conf.HTTPServer.RateLimit); err != nil {
+			return nil, fmt.Errorf("unable to locate rate_limit resource '%v': %v", conf.HTTPServer.RateLimit, err)
+		}
+	}
+
 	h := HTTPServer{
 		running:      1,
 		conf:         conf,
 		stats:        stats,
 		log:          log,
 		mux:          mux,
+		ratelimit:    ratelimit,
 		server:       server,
 		timeout:      timeout,
 		transactions: make(chan types.Transaction),
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 
-		mCount:      stats.GetCounter("count"),
-		mPartsCount: stats.GetCounter("parts.count"),
-		mRcvd:       stats.GetCounter("batch.received"),
-		mPartsRcvd:  stats.GetCounter("received"),
-		mWSCount:    stats.GetCounter("ws.count"),
-		mTimeout:    stats.GetCounter("send.timeout"),
-		mErr:        stats.GetCounter("send.error"),
-		mWSErr:      stats.GetCounter("ws.send.error"),
-		mSucc:       stats.GetCounter("send.success"),
-		mWSSucc:     stats.GetCounter("ws.send.success"),
-		mAsyncErr:   stats.GetCounter("send.async_error"),
-		mAsyncSucc:  stats.GetCounter("send.async_success"),
+		mCount:         stats.GetCounter("count"),
+		mRateLimited:   stats.GetCounter("rate_limited"),
+		mWSRateLimited: stats.GetCounter("ws.rate_limited"),
+		mPartsCount:    stats.GetCounter("parts.count"),
+		mRcvd:          stats.GetCounter("batch.received"),
+		mPartsRcvd:     stats.GetCounter("received"),
+		mWSCount:       stats.GetCounter("ws.count"),
+		mTimeout:       stats.GetCounter("send.timeout"),
+		mErr:           stats.GetCounter("send.error"),
+		mWSErr:         stats.GetCounter("ws.send.error"),
+		mSucc:          stats.GetCounter("send.success"),
+		mWSSucc:        stats.GetCounter("ws.send.success"),
+		mAsyncErr:      stats.GetCounter("send.async_error"),
+		mAsyncSucc:     stats.GetCounter("send.async_success"),
 	}
 
+	postHdlr := httputil.GzipHandler(h.postHandler)
+	wsHdlr := httputil.GzipHandler(h.wsHandler)
 	if mux != nil {
-		mux.HandleFunc(h.conf.HTTPServer.Path, h.postHandler)
-		mux.HandleFunc(h.conf.HTTPServer.WSPath, h.wsHandler)
+		if len(h.conf.HTTPServer.Path) > 0 {
+			mux.HandleFunc(h.conf.HTTPServer.Path, postHdlr)
+		}
+		if len(h.conf.HTTPServer.WSPath) > 0 {
+			mux.HandleFunc(h.conf.HTTPServer.WSPath, wsHdlr)
+		}
 	} else {
-		mgr.RegisterEndpoint(
-			h.conf.HTTPServer.Path, "Post a message into Benthos.", h.postHandler,
-		)
-		mgr.RegisterEndpoint(
-			h.conf.HTTPServer.WSPath, "Post messages via websocket into Benthos.", h.wsHandler,
-		)
+		if len(h.conf.HTTPServer.Path) > 0 {
+			mgr.RegisterEndpoint(
+				h.conf.HTTPServer.Path, "Post a message into Benthos.", postHdlr,
+			)
+		}
+		if len(h.conf.HTTPServer.WSPath) > 0 {
+			mgr.RegisterEndpoint(
+				h.conf.HTTPServer.WSPath, "Post messages via websocket into Benthos.", wsHdlr,
+			)
+		}
 	}
 
 	go h.loop()
@@ -193,34 +272,12 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 //------------------------------------------------------------------------------
 
-func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
-	if atomic.LoadInt32(&h.running) != 1 {
-		http.Error(w, "Server closing", http.StatusServiceUnavailable)
-		return
-	}
-
-	if r.Method != "POST" {
-		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
-		return
-	}
-
+func extractMessageFromRequest(r *http.Request) (types.Message, error) {
 	msg := message.New(nil)
-	var err error
 
-	defer func() {
-		if err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			h.log.Warnf("Request read failed: %v\n", err)
-			return
-		}
-	}()
-
-	var mediaType string
-	var params map[string]string
-	if mediaType, params, err = mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil {
-		return
+	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		return nil, err
 	}
 
 	if strings.HasPrefix(mediaType, "multipart/") {
@@ -232,18 +289,18 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 					err = nil
 					break
 				}
-				return
+				return nil, err
 			}
 			var msgBytes []byte
 			if msgBytes, err = ioutil.ReadAll(p); err != nil {
-				return
+				return nil, err
 			}
 			msg.Append(message.NewPart(msgBytes))
 		}
 	} else {
 		var msgBytes []byte
 		if msgBytes, err = ioutil.ReadAll(r.Body); err != nil {
-			return
+			return nil, err
 		}
 		msg.Append(message.NewPart(msgBytes))
 	}
@@ -267,7 +324,53 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		tracing.InitSpans("input_http_server_post", msg)
 	}
+
+	return msg, nil
+}
+
+func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	if atomic.LoadInt32(&h.running) != 1 {
+		http.Error(w, "Server closing", http.StatusServiceUnavailable)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.ratelimit != nil {
+		if tUntil, err := h.ratelimit.Access(); err != nil {
+			http.Error(w, "Server error", http.StatusBadGateway)
+			h.log.Warnf("Failed to access rate limit: %v\n", err)
+			return
+		} else if tUntil > 0 {
+			w.Header().Add("Retry-After", strconv.Itoa(int(tUntil.Seconds())))
+			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+			h.mRateLimited.Incr(1)
+			return
+		}
+	}
+
+	var err error
+	defer func() {
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			h.log.Warnf("Request read failed: %v\n", err)
+			return
+		}
+	}()
+
+	msg, err := extractMessageFromRequest(r)
+	if err != nil {
+		return
+	}
 	defer tracing.FinishSpans(msg)
+
+	store := roundtrip.NewResultStore()
+	roundtrip.AddResultStore(msg, store)
 
 	h.mCount.Incr(1)
 	h.mPartsCount.Incr(int64(msg.Len()))
@@ -314,6 +417,37 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		}()
 		return
 	}
+
+	var parts []types.Part
+	for _, responseMsg := range store.Get() {
+		responseMsg.Iter(func(i int, part types.Part) error {
+			parts = append(parts, part)
+			return nil
+		})
+	}
+	if plen := len(parts); plen == 1 {
+		payload := parts[0].Get()
+		w.Header().Set("Content-Type", http.DetectContentType(payload))
+		w.Write(payload)
+	} else if plen > 1 {
+		writer := multipart.NewWriter(w)
+		var merr error
+		for i := 0; i < plen && merr == nil; i++ {
+			payload := parts[i].Get()
+
+			var part io.Writer
+			if part, merr = writer.CreatePart(textproto.MIMEHeader{
+				"Content-Type": []string{http.DetectContentType(payload)},
+			}); merr == nil {
+				_, merr = io.Copy(part, bytes.NewReader(payload))
+			}
+		}
+		if merr != nil {
+			h.log.Errorf("Failed to return sync response: %v\n", merr)
+		}
+	}
+
+	return
 }
 
 func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -337,6 +471,12 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	resChan := make(chan types.Response)
 	throt := throttle.New(throttle.OptCloseChan(h.closeChan))
 
+	if welMsg := h.conf.HTTPServer.WSWelcomeMessage; len(welMsg) > 0 {
+		if err = ws.WriteMessage(websocket.BinaryMessage, []byte(welMsg)); err != nil {
+			h.log.Errorf("Failed to send welcome message: %v\n", err)
+		}
+	}
+
 	var msgBytes []byte
 	for atomic.LoadInt32(&h.running) == 1 {
 		if msgBytes == nil {
@@ -345,6 +485,21 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			h.mWSCount.Incr(1)
 			h.mCount.Incr(1)
+		}
+
+		if h.ratelimit != nil {
+			if tUntil, err := h.ratelimit.Access(); err != nil || tUntil > 0 {
+				if err != nil {
+					h.log.Warnf("Failed to access rate limit: %v\n", err)
+				}
+				if rlMsg := h.conf.HTTPServer.WSRateLimitMessage; len(rlMsg) > 0 {
+					if err = ws.WriteMessage(websocket.BinaryMessage, []byte(rlMsg)); err != nil {
+						h.log.Errorf("Failed to send rate limit message: %v\n", err)
+					}
+				}
+				h.mWSRateLimited.Incr(1)
+				continue
+			}
 		}
 
 		msg := message.New([][]byte{msgBytes})
@@ -360,6 +515,9 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			meta.Set(c.Name, c.Value)
 		}
 		tracing.InitSpans("input_http_server_websocket", msg)
+
+		store := roundtrip.NewResultStore()
+		roundtrip.AddResultStore(msg, store)
 
 		select {
 		case h.transactions <- types.NewTransaction(msg, resChan):
@@ -384,6 +542,15 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		case <-h.closeChan:
 			return
 		}
+
+		for _, responseMsg := range store.Get() {
+			if err := responseMsg.Iter(func(i int, part types.Part) error {
+				return ws.WriteMessage(websocket.TextMessage, part.Get())
+			}); err != nil {
+				h.log.Errorf("Failed to send sync response over websocket: %v\n", err)
+			}
+		}
+
 		tracing.FinishSpans(msg)
 	}
 }

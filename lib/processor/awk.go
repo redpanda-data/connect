@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/types"
 	"github.com/Jeffail/gabs"
@@ -287,6 +288,22 @@ var awkFunctionsMap = map[string]interface{}{
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
+	"json_set_int": func(path string, value int) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
+	"json_set_float": func(path string, value float64) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
+	"json_set_bool": func(path string, value bool) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
+	"json_delete": func(path string) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
 	"create_json_object": func(vals ...string) string {
 		pairs := map[string]string{}
 		for i := 0; i < len(vals)-1; i += 2 {
@@ -346,6 +363,7 @@ func flattenForAWK(path string, data interface{}) map[string]string {
 func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	a.mCount.Incr(1)
 	newMsg := msg.Copy()
+	mutableJSONParts := make([]interface{}, newMsg.Len())
 
 	a.mut.Lock()
 	customFuncs := make(map[string]interface{}, len(a.functions))
@@ -382,17 +400,54 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			}
 			return gTarget.String(), nil
 		}
-		customFuncs["json_set"] = func(path, v string) (int, error) {
+		getJSON := func() (*gabs.Container, error) {
 			var gPart *gabs.Container
-			jsonPart, err := part.JSON()
+			var err error
+			jsonPart := mutableJSONParts[i]
+			if jsonPart == nil {
+				if jsonPart, err = part.JSON(); err == nil {
+					jsonPart, err = message.CopyJSON(jsonPart)
+				}
+				if err == nil {
+					mutableJSONParts[i] = jsonPart
+				}
+			}
 			if err == nil {
 				gPart, err = gabs.Consume(jsonPart)
 			}
 			if err != nil {
-				return 0, fmt.Errorf("failed to parse message into json: %v", err)
+				return nil, fmt.Errorf("failed to parse message into json: %v", err)
+			}
+			return gPart, nil
+		}
+		setJSON := func(path string, v interface{}) (int, error) {
+			gPart, err := getJSON()
+			if err != nil {
+				return 0, err
 			}
 			gPart.SetP(v, path)
 			part.SetJSON(gPart.Data())
+			return 0, nil
+		}
+		customFuncs["json_set"] = func(path, v string) (int, error) {
+			return setJSON(path, v)
+		}
+		customFuncs["json_set_int"] = func(path string, v int) (int, error) {
+			return setJSON(path, v)
+		}
+		customFuncs["json_set_float"] = func(path string, v float64) (int, error) {
+			return setJSON(path, v)
+		}
+		customFuncs["json_set_bool"] = func(path string, v bool) (int, error) {
+			return setJSON(path, v)
+		}
+		customFuncs["json_delete"] = func(path string) (int, error) {
+			gObj, err := getJSON()
+			if err != nil {
+				return 0, err
+			}
+			gObj.DeleteP(path)
+			part.SetJSON(gObj.Data())
 			return 0, nil
 		}
 

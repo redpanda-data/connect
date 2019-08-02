@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/metrics"
@@ -120,6 +121,15 @@ func (f *File) Add(key string, value []byte) error {
 // Delete attempts to remove a key.
 func (f *File) Delete(key string) error {
 	return os.Remove(filepath.Join(f.dir, key))
+}
+
+// CloseAsync shuts down the cache.
+func (f *File) CloseAsync() {
+}
+
+// WaitForClose blocks until the cache has closed down.
+func (f *File) WaitForClose(timeout time.Duration) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------

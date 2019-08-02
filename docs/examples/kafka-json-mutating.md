@@ -78,12 +78,10 @@ increase the throughput of the output in case it becomes the bottleneck.
 
 ``` yaml
 input:
-  type: broker
   broker:
     count: 8 # Try cranking this value up if your CPUs aren't maxed out
     inputs:
-    - type: kafka_balanced
-      kafka_balanced:
+    - kafka_balanced:
         addresses:
         - localhost:9092 # TODO
         client_id: benthos_mutator_1
@@ -115,8 +113,7 @@ throughput to prevent it from bottlenecking the pipeline.
 pipeline:
   threads: 4 # This should match the number of logical CPUs
   processors:
-  - type: jmespath
-    jmespath:
+  - jmespath:
       query: |
         {
           content: content,

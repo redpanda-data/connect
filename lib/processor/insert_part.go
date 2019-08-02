@@ -45,6 +45,9 @@ will become the last of the batch, if index = -2 then the new message will be
 inserted before the last message, and so on. If the negative index is greater
 than the length of the existing batch it will be inserted at the beginning.
 
+The new message will have metadata copied from the first pre-existing message of
+the batch.
+
 This processor will interpolate functions within the 'content' field, you can
 find a list of functions [here](../config_interpolation.md#functions).`,
 	}
@@ -109,11 +112,11 @@ func NewInsertPart(
 func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
-	var newPart []byte
+	var newPartBytes []byte
 	if p.interpolate {
-		newPart = text.ReplaceFunctionVariables(msg, p.part)
+		newPartBytes = text.ReplaceFunctionVariables(msg, p.part)
 	} else {
-		newPart = p.part
+		newPartBytes = p.part
 	}
 
 	index := p.conf.InsertPart.Index
@@ -128,15 +131,17 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	}
 
 	newMsg := message.New(nil)
+	newPart := msg.Get(0).Copy()
+	newPart.Set(newPartBytes)
 	msg.Iter(func(i int, p types.Part) error {
 		if i == index {
-			newMsg.Append(message.NewPart(newPart))
+			newMsg.Append(newPart)
 		}
 		newMsg.Append(p.Copy())
 		return nil
 	})
 	if index == msg.Len() {
-		newMsg.Append(message.NewPart(newPart))
+		newMsg.Append(newPart)
 	}
 
 	p.mBatchSent.Incr(1)

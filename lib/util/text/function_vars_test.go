@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/message"
+	"github.com/Jeffail/benthos/lib/types"
 )
 
 func TestFunctionVarDetection(t *testing.T) {
@@ -44,6 +45,11 @@ func TestFunctionVarDetection(t *testing.T) {
 		"foo ${!foo_bar:arg1} baz ${!foo_baz:arg2}": true,
 		"foo $!foo:arg2} baz $!but_not_this:}":      false,
 		"nothing $ here boss {!:argnope}":           false,
+		"foo ${{!foo_bar}} baz":                     true,
+		"foo ${{!foo_bar:default}} baz":             true,
+		"foo ${{!foo_bar:default} baz":              false,
+		"foo {{!foo_bar:default}} baz":              false,
+		"foo {{!}} baz":                             false,
 	}
 
 	for in, exp := range tests {
@@ -77,6 +83,25 @@ func TestMetadataFunction(t *testing.T) {
 		msg, []byte(`foo ${!metadata} bar`),
 	))
 	if exp := `foo  bar`; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
+func TestErrorFunction(t *testing.T) {
+	msg := message.New([][]byte{[]byte("foo"), []byte("bar")})
+	msg.Get(0).Metadata().Set(types.FailFlagKey, "test error")
+
+	act := string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!error} baz`),
+	))
+	if exp := "foo test error baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!error:1} baz`),
+	))
+	if exp := "foo  baz"; act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -185,6 +210,29 @@ func TestContentFunctionIndex(t *testing.T) {
 		msg, []byte(`foo ${!content:1} baz`),
 	))
 	if exp := "foo bar baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
+func TestBatchSizeFunction(t *testing.T) {
+	act := string(ReplaceFunctionVariables(
+		message.New(make([][]byte, 0)), []byte(`${!batch_size} bar baz`),
+	))
+	if exp := "0 bar baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		message.New(make([][]byte, 1)), []byte(`${!batch_size} bar baz`),
+	))
+	if exp := "1 bar baz"; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		message.New(make([][]byte, 2)), []byte(`${!batch_size} bar baz`),
+	))
+	if exp := "2 bar baz"; act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -358,6 +406,22 @@ func TestFunctionSwapping(t *testing.T) {
 	}
 	if !strings.Contains(tStamp, "UTC") {
 		t.Errorf("Non-UTC timezone detected: %v", tStamp)
+	}
+}
+
+func TestFunctionEscape(t *testing.T) {
+	tests := map[string]string{
+		"foo ${{!echo:bar}} bar":      "foo ${!echo:bar} bar",
+		"foo ${{!notafunction}} bar":  "foo ${!notafunction} bar",
+		"foo ${{{!notafunction}} bar": "foo ${{{!notafunction}} bar",
+		"foo ${!notafunction}} bar":   "foo ${!notafunction}} bar",
+	}
+
+	for input, exp := range tests {
+		act := string(ReplaceFunctionVariables(nil, []byte(input)))
+		if exp != act {
+			t.Errorf("Wrong results for input (%v): %v != %v", input, act, exp)
+		}
 	}
 }
 

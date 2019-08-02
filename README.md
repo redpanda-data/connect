@@ -4,37 +4,50 @@
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
 [![Build Status][drone-badge]][drone-url]
 
-Benthos is a high performance and resilient message streaming service, able to
-connect various sources and sinks and perform arbitrary
+Benthos is a high performance and resilient stream processor, able to connect
+various [sources][inputs] and [sinks][outputs] and perform arbitrary
 [actions, transformations and filters][processors] on payloads. It is easy to
 deploy and monitor, and ready to drop into your pipeline either as a static
-binary or a docker image. It can also be used as a [framework][godoc-url] for
-building your own resilient stream processors in Go.
+binary or a docker image.
 
-A Benthos stream consists of four layers: [inputs][inputs], optional
-[buffer][buffers], [processor][processors] workers and [outputs][outputs].
-Inputs and outputs can be combined in a range of broker patterns. It is possible
-to run multiple isolated streams within a single Benthos instance using
-[`--streams` mode][streams-mode], and perform CRUD operations on the running
-streams via [REST endpoints][streams-api].
+Stream pipelines are defined in a single config file, allowing you to declare
+connectors and a list of processing stages:
+
+``` yaml
+input:
+  kafka_balanced:
+    addresses: [ TODO ]
+    topics: [ foo, bar ]
+    consumer_group: foogroup
+
+pipeline:
+  processors:
+  - jmespath:
+      query: '{ message: @, meta: { link_count: length(links) } }'
+
+output:
+  s3:
+    bucket: TODO
+    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+```
 
 ### Delivery Guarantees
 
-Benthos is crash resilient by default. When connecting to at-least-once sources
-and sinks without a buffer it guarantees at-least-once delivery without needing
-to persist messages during transit.
+Benthos implements transaction based resiliency with back pressure. When
+connecting to at-least-once sources and sinks it guarantees at-least-once
+delivery without needing to persist messages during transit.
 
 When running a Benthos stream with a [buffer][buffers] there are various options
 for choosing a level of resiliency that meets your needs.
 
 ### Serverless
 
-There are [specialised distributions][serverless] of Benthos for serverless
+There are also [specialised distributions][serverless] of Benthos for serverless
 deployment.
 
 ## Supported Sources & Sinks
 
-- [AWS (DynamoDB, Kinesis, S3, SQS)][aws]
+- [AWS (DynamoDB, Kinesis, S3, SQS, SNS)][aws]
 - [Elasticsearch][elasticsearch] (output only)
 - File
 - [GCP (pub/sub)][gcp]
@@ -48,7 +61,7 @@ deployment.
 - [NATS Streaming][natsstreaming]
 - [NSQ][nsq]
 - [RabbitMQ (AMQP 0.91)][rabbitmq]
-- [Redis (streams, list, pubsub)][redis]
+- [Redis (streams, list, pubsub, hashes)][redis]
 - Stdin/Stdout
 - Websocket
 - [ZMQ4][zmq]
@@ -56,13 +69,15 @@ deployment.
 ## Documentation
 
 Documentation for Benthos components, concepts and recommendations can be found
-in the [docs directory.][general-docs]
+on the [documentation site][general-docs], or within the repo at the
+[docs directory][docs-dir].
 
-For building your own stream processors using Benthos as a framework check out
-the [stream package][godoc-url], which also includes some examples.
+For guidance on how to configure more advanced stream processing concepts such
+as stream joins, enrichment workflows, etc, check out the
+[cookbooks section.][cookbooks]
 
-For some applied examples of Benthos such as streaming and deduplicating the
-Twitter firehose to Kafka [check out the examples section][examples-docs].
+For guidance on building your own custom plugins check out
+[this example repo.][plugin-repo]
 
 ## Run
 
@@ -104,35 +119,13 @@ target can be specified [via config][metrics-config].
 ### Tracing
 
 Benthos also [emits opentracing events][tracers] to a tracer of your choice
-(currently only Jaeger is supported) which can be used to visualise the
-processors within a pipeline.
+(currently only [Jaeger][jaeger] is supported) which can be used to visualise
+the processors within a pipeline.
 
 ## Configuration
 
-The configuration file for a Benthos stream is made up of four main sections;
-input, buffer, pipeline, output. If we were to pipe stdin directly to Kafka it
-would look like this:
-
-``` yaml
-input:
-  type: stdin
-buffer:
-  type: none
-pipeline:
-  threads: 1
-  processors: []
-output:
-  type: kafka
-  kafka:
-    addresses:
-    - localhost:9092
-    topic: benthos_stream
-```
-
-There are also sections for setting logging, metrics and HTTP server options.
-
-Benthos provides lots of tools for making configuration discovery and debugging
-easy. You can read about them [here][config-doc].
+Benthos provides lots of tools for making configuration discovery, debugging and
+organisation easy. You can [read about them here][config-doc].
 
 You can also find runnable example configs demonstrating each input, output,
 buffer and processor option [here](config).
@@ -151,6 +144,12 @@ Or pull the docker image:
 
 ``` shell
 docker pull jeffail/benthos
+```
+
+On macOS, Benthos can be installed via Homebrew:
+
+```shell
+brew install benthos
 ```
 
 Build with Go (1.11 or later):
@@ -206,25 +205,29 @@ make docker-cgo
 
 ## Contributing
 
-Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
+Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come
+and chat in the [#benthos Gophers slack channel][benthos-slack-chan]
+([get an invite][gophers-slack-invite]), and watch your back.
 
-[inputs]: docs/inputs/README.md
-[buffers]: docs/buffers/README.md
-[processors]: docs/processors/README.md
-[outputs]: docs/outputs/README.md
+[inputs]: https://docs.benthos.dev/inputs/
+[buffers]: https://docs.benthos.dev/buffers/
+[processors]: https://docs.benthos.dev/processors/
+[outputs]: https://docs.benthos.dev/outputs/
 
-[metrics]: docs/metrics/README.md
-[tracers]: docs/tracers/README.md
+[metrics]: https://docs.benthos.dev/metrics/
+[tracers]: https://docs.benthos.dev/tracers/
 [metrics-config]: config/metrics
-[config-interp]: docs/config_interpolation.md
+[config-interp]: https://docs.benthos.dev/config_interpolation/
 [compose-examples]: resources/docker/compose_examples
-[streams-api]: docs/api/streams.md
-[streams-mode]: docs/streams/README.md
-[general-docs]: docs/README.md
-[examples-docs]: docs/examples/README.md
+[streams-api]: https://docs.benthos.dev/api/streams/
+[streams-mode]: https://docs.benthos.dev/streams/
+[general-docs]: https://docs.benthos.dev
+[examples-docs]: https://docs.benthos.dev/examples/
 [env-config]: config/env/README.md
-[config-doc]: docs/configuration.md
-[serverless]: docs/serverless/README.md
+[config-doc]: https://docs.benthos.dev/configuration/
+[serverless]: https://docs.benthos.dev/serverless/
+[cookbooks]: https://docs.benthos.dev/cookbooks/
+[docs-dir]: docs/README.md
 
 [releases]: https://github.com/Jeffail/benthos/releases
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
@@ -235,6 +238,9 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [goreport-url]: https://goreportcard.com/report/Jeffail/benthos
 [drone-badge]: https://cloud.drone.io/api/badges/Jeffail/benthos/status.svg
 [drone-url]: https://cloud.drone.io/Jeffail/benthos
+
+[benthos-slack-chan]: https://app.slack.com/client/T029RQSE6/CLWCBK7FY
+[gophers-slack-invite]: https://gophersinvite.herokuapp.com/
 
 [aws]: https://aws.amazon.com/
 [zmq]: http://zeromq.org/
@@ -250,3 +256,4 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [hdfs]: https://hadoop.apache.org/
 [gcp]: https://cloud.google.com/
 [memcached]: https://memcached.org/
+[jaeger]: https://www.jaegertracing.io/
