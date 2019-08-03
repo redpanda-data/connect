@@ -21,6 +21,7 @@ output:
   sns:
     credentials:
       id: ""
+      profile: ""
       role: ""
       role_external_id: ""
       secret: ""

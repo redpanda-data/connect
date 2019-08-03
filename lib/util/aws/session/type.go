@@ -31,6 +31,7 @@ import (
 
 // CredentialsConfig contains configuration params for AWS credentials.
 type CredentialsConfig struct {
+	Profile    string `json:"profile" yaml:"profile"`
 	ID         string `json:"id" yaml:"id"`
 	Secret     string `json:"secret" yaml:"secret"`
 	Token      string `json:"token" yaml:"token"`
@@ -50,6 +51,7 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Credentials: CredentialsConfig{
+			Profile:    "",
 			ID:         "",
 			Secret:     "",
 			Token:      "",
@@ -74,7 +76,11 @@ func (c Config) GetSession(opts ...func(*aws.Config)) (*session.Session, error) 
 		awsConf = awsConf.WithEndpoint(c.Endpoint)
 	}
 
-	if len(c.Credentials.ID) > 0 {
+	if len(c.Credentials.Profile) > 0 {
+		awsConf = awsConf.WithCredentials(credentials.NewSharedCredentials(
+			"", c.Credentials.Profile,
+		))
+	} else if len(c.Credentials.ID) > 0 {
 		awsConf = awsConf.WithCredentials(credentials.NewStaticCredentials(
 			c.Credentials.ID,
 			c.Credentials.Secret,

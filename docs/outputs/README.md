@@ -331,6 +331,7 @@ dynamodb:
     max_interval: 5s
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""
@@ -398,6 +399,7 @@ elasticsearch:
   aws:
     credentials:
       id: ""
+      profile: ""
       role: ""
       role_external_id: ""
       secret: ""
@@ -689,6 +691,7 @@ kinesis:
     max_interval: 5s
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""
@@ -926,6 +929,7 @@ s3:
   content_type: application/octet-stream
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""
@@ -961,6 +965,7 @@ type: sns
 sns:
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""
@@ -991,6 +996,7 @@ sqs:
     max_interval: 5s
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""

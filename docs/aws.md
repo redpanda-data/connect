@@ -5,6 +5,7 @@ There are many components within Benthos which utilise AWS services. You will fi
 
 ```yaml
 credentials:
+  profile: ""
   id: ""
   secret: ""
   token: ""
@@ -21,6 +22,17 @@ The first thing to make clear is that _all_ of these fields are optional. When a
 ## Explicit Credentials
 
 By explicitly setting the credentials you are using at the component level it's possible to connect to components using different accounts within the same Benthos process.
+
+### Selecting a Profile
+
+If you are using your shared credentials file but wish to explicitly select a profile set the `profile` field:
+
+```yaml
+credentials:
+  profile: foo
+```
+
+### Manual
 
 If you are using long term credentials for your account you only need to set the fields `id` and `secret`:
 

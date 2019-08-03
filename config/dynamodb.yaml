@@ -25,6 +25,7 @@ output:
       max_interval: 5s
     credentials:
       id: ""
+      profile: ""
       role: ""
       role_external_id: ""
       secret: ""

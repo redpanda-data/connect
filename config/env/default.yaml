@@ -140,6 +140,7 @@ input:
         commit_period: ${INPUT_KINESIS_COMMIT_PERIOD:1s}
         credentials:
           id: ${INPUT_KINESIS_CREDENTIALS_ID}
+          profile: ${INPUT_KINESIS_CREDENTIALS_PROFILE}
           role: ${INPUT_KINESIS_CREDENTIALS_ROLE}
           role_external_id: ${INPUT_KINESIS_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${INPUT_KINESIS_CREDENTIALS_SECRET}
@@ -155,6 +156,7 @@ input:
       kinesis_balanced:
         credentials:
           id: ${INPUT_KINESIS_BALANCED_CREDENTIALS_ID}
+          profile: ${INPUT_KINESIS_BALANCED_CREDENTIALS_PROFILE}
           role: ${INPUT_KINESIS_BALANCED_CREDENTIALS_ROLE}
           role_external_id: ${INPUT_KINESIS_BALANCED_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${INPUT_KINESIS_BALANCED_CREDENTIALS_SECRET}
@@ -165,7 +167,7 @@ input:
         dynamodb_write_provision: ${INPUT_KINESIS_BALANCED_DYNAMODB_WRITE_PROVISION:0}
         endpoint: ${INPUT_KINESIS_BALANCED_ENDPOINT}
         max_batch_count: ${INPUT_KINESIS_BALANCED_MAX_BATCH_COUNT:1}
-        region: ${INPUT_KINESIS_BALANCED_REGION}
+        region: ${INPUT_KINESIS_BALANCED_REGION:eu-west-1}
         start_from_oldest: ${INPUT_KINESIS_BALANCED_START_FROM_OLDEST:true}
         stream: ${INPUT_KINESIS_BALANCED_STREAM}
       mqtt:
@@ -232,6 +234,7 @@ input:
         bucket: ${INPUT_S3_BUCKET}
         credentials:
           id: ${INPUT_S3_CREDENTIALS_ID}
+          profile: ${INPUT_S3_CREDENTIALS_PROFILE}
           role: ${INPUT_S3_CREDENTIALS_ROLE}
           role_external_id: ${INPUT_S3_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${INPUT_S3_CREDENTIALS_SECRET}
@@ -254,6 +257,7 @@ input:
       sqs:
         credentials:
           id: ${INPUT_SQS_CREDENTIALS_ID}
+          profile: ${INPUT_SQS_CREDENTIALS_PROFILE}
           role: ${INPUT_SQS_CREDENTIALS_ROLE}
           role_external_id: ${INPUT_SQS_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${INPUT_SQS_CREDENTIALS_SECRET}
@@ -416,6 +420,7 @@ pipeline:
     lambda:
       credentials:
         id: ${PROCESSOR_LAMBDA_CREDENTIALS_ID}
+        profile: ${PROCESSOR_LAMBDA_CREDENTIALS_PROFILE}
         role: ${PROCESSOR_LAMBDA_CREDENTIALS_ROLE}
         role_external_id: ${PROCESSOR_LAMBDA_CREDENTIALS_ROLE_EXTERNAL_ID}
         secret: ${PROCESSOR_LAMBDA_CREDENTIALS_SECRET}
@@ -503,6 +508,7 @@ output:
         aws:
           credentials:
             id: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ID}
+            profile: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_PROFILE}
             role: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ROLE}
             role_external_id: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ROLE_EXTERNAL_ID}
             secret: ${OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_SECRET}
@@ -606,6 +612,7 @@ output:
           max_interval: ${OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL:5s}
         credentials:
           id: ${OUTPUT_KINESIS_CREDENTIALS_ID}
+          profile: ${OUTPUT_KINESIS_CREDENTIALS_PROFILE}
           role: ${OUTPUT_KINESIS_CREDENTIALS_ROLE}
           role_external_id: ${OUTPUT_KINESIS_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${OUTPUT_KINESIS_CREDENTIALS_SECRET}
@@ -664,6 +671,7 @@ output:
         content_type: ${OUTPUT_S3_CONTENT_TYPE:application/octet-stream}
         credentials:
           id: ${OUTPUT_S3_CREDENTIALS_ID}
+          profile: ${OUTPUT_S3_CREDENTIALS_PROFILE}
           role: ${OUTPUT_S3_CREDENTIALS_ROLE}
           role_external_id: ${OUTPUT_S3_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${OUTPUT_S3_CREDENTIALS_SECRET}
@@ -676,6 +684,7 @@ output:
       sns:
         credentials:
           id: ${OUTPUT_SNS_CREDENTIALS_ID}
+          profile: ${OUTPUT_SNS_CREDENTIALS_PROFILE}
           role: ${OUTPUT_SNS_CREDENTIALS_ROLE}
           role_external_id: ${OUTPUT_SNS_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${OUTPUT_SNS_CREDENTIALS_SECRET}
@@ -691,6 +700,7 @@ output:
           max_interval: ${OUTPUT_SQS_BACKOFF_MAX_INTERVAL:5s}
         credentials:
           id: ${OUTPUT_SQS_CREDENTIALS_ID}
+          profile: ${OUTPUT_SQS_CREDENTIALS_PROFILE}
           role: ${OUTPUT_SQS_CREDENTIALS_ROLE}
           role_external_id: ${OUTPUT_SQS_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${OUTPUT_SQS_CREDENTIALS_SECRET}

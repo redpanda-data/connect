@@ -63,6 +63,7 @@ dynamodb:
   consistent_read: false
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""
@@ -167,6 +168,7 @@ s3:
   content_type: application/octet-stream
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""

@@ -10,6 +10,7 @@ input:
     bucket: ""
     credentials:
       id: ""
+      profile: ""
       role: ""
       role_external_id: ""
       secret: ""
@@ -43,6 +44,7 @@ output:
     content_type: application/octet-stream
     credentials:
       id: ""
+      profile: ""
       role: ""
       role_external_id: ""
       secret: ""

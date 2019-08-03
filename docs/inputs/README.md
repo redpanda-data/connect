@@ -606,6 +606,7 @@ kinesis:
   commit_period: 1s
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""
@@ -641,6 +642,7 @@ type: kinesis_balanced
 kinesis_balanced:
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""
@@ -651,7 +653,7 @@ kinesis_balanced:
   dynamodb_write_provision: 0
   endpoint: ""
   max_batch_count: 1
-  region: ""
+  region: eu-west-1
   start_from_oldest: true
   stream: ""
 ```
@@ -923,6 +925,7 @@ s3:
   bucket: ""
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""
@@ -1012,6 +1015,7 @@ type: sqs
 sqs:
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""

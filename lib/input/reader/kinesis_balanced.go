@@ -49,7 +49,9 @@ type KinesisBalancedConfig struct {
 
 // NewKinesisBalancedConfig creates a new Config with default values.
 func NewKinesisBalancedConfig() KinesisBalancedConfig {
+	s := sess.NewConfig()
 	return KinesisBalancedConfig{
+		Config:                s,
 		Stream:                "",
 		DynamoDBTable:         "",
 		DynamoDBBillingMode:   "",

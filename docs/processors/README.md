@@ -1007,6 +1007,7 @@ type: lambda
 lambda:
   credentials:
     id: ""
+    profile: ""
     role: ""
     role_external_id: ""
     secret: ""

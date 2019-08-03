@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.11.0 - 2019-08-03
+
 ### Added
 
 - New beta input `kinesis_balanced`.
+- Field `profile` added to AWS components credentials config.
 
 ## 2.10.0 - 2019-07-29
 

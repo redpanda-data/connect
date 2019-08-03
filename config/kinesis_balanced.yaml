@@ -9,6 +9,7 @@ input:
   kinesis_balanced:
     credentials:
       id: ""
+      profile: ""
       role: ""
       role_external_id: ""
       secret: ""
@@ -19,7 +20,7 @@ input:
     dynamodb_write_provision: 0
     endpoint: ""
     max_batch_count: 1
-    region: ""
+    region: eu-west-1
     start_from_oldest: true
     stream: ""
 buffer:
