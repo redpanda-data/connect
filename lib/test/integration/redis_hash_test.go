@@ -22,10 +22,10 @@ package integration
 
 import (
 	"fmt"
+	"net/url"
+	"reflect"
 	"testing"
 	"time"
-	"reflect"
-	"net/url"
 
 	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message"
@@ -114,8 +114,8 @@ func testRedisHashSinglePart(surl string, t *testing.T) {
 		t.Fatal(err)
 	}
 	client := redis.NewClient(&redis.Options{
-		Addr:     purl.Host,
-		Network:  purl.Scheme,
+		Addr:    purl.Host,
+		Network: purl.Scheme,
 	})
 
 	if _, err = client.Ping().Result(); err != nil {
@@ -127,14 +127,14 @@ func testRedisHashSinglePart(surl string, t *testing.T) {
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("id%v", i)
 		testIds[id] = struct{}{}
-			msg := message.New([][]byte{
-				[]byte("not this content"),
-			})
-			msg.Get(0).Metadata().Set("key", id)
-			msg.Get(0).Metadata().Set("example_key", "test-"+id)
-			if gerr := mOutput.Write(msg); gerr != nil {
-				t.Fatal(gerr)
-			}
+		msg := message.New([][]byte{
+			[]byte("not this content"),
+		})
+		msg.Get(0).Metadata().Set("key", id)
+		msg.Get(0).Metadata().Set("example_key", "test-"+id)
+		if gerr := mOutput.Write(msg); gerr != nil {
+			t.Fatal(gerr)
+		}
 	}
 
 	for k := range testIds {
@@ -143,7 +143,7 @@ func testRedisHashSinglePart(surl string, t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		if exp := "test-"+k; exp != res {
+		if exp := "test-" + k; exp != res {
 			t.Errorf("Wrong result: %v != %v", res, exp)
 		}
 	}
@@ -177,8 +177,8 @@ func testRedisHashOverrides(surl string, t *testing.T) {
 		t.Fatal(err)
 	}
 	client := redis.NewClient(&redis.Options{
-		Addr:     purl.Host,
-		Network:  purl.Scheme,
+		Addr:    purl.Host,
+		Network: purl.Scheme,
 	})
 
 	if _, err = client.Ping().Result(); err != nil {
@@ -190,16 +190,16 @@ func testRedisHashOverrides(surl string, t *testing.T) {
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("idoverrides%v", i)
 		testIds[id] = struct{}{}
-			msg := message.New([][]byte{
-				[]byte(fmt.Sprintf(`{"bar":"%v","baz":"%v"}`, id+"- json obj bar", id+"- json obj baz")),
-			})
-			msg.Get(0).Metadata().Set("key", id)
-			msg.Get(0).Metadata().Set("foo", id+"- metadata foo")
-			msg.Get(0).Metadata().Set("bar", id+"- metadata bar")
-			msg.Get(0).Metadata().Set("baz", id+"- metadata baz")
-			if gerr := mOutput.Write(msg); gerr != nil {
-				t.Fatal(gerr)
-			}
+		msg := message.New([][]byte{
+			[]byte(fmt.Sprintf(`{"bar":"%v","baz":"%v"}`, id+"- json obj bar", id+"- json obj baz")),
+		})
+		msg.Get(0).Metadata().Set("key", id)
+		msg.Get(0).Metadata().Set("foo", id+"- metadata foo")
+		msg.Get(0).Metadata().Set("bar", id+"- metadata bar")
+		msg.Get(0).Metadata().Set("baz", id+"- metadata baz")
+		if gerr := mOutput.Write(msg); gerr != nil {
+			t.Fatal(gerr)
+		}
 	}
 
 	for k := range testIds {
@@ -210,8 +210,8 @@ func testRedisHashOverrides(surl string, t *testing.T) {
 		}
 		if exp := map[string]string{
 			"key": k,
-			"foo": k+"- metadata foo",
-			"bar": k+"- json obj bar",
+			"foo": k + "- metadata foo",
+			"bar": k + "- json obj bar",
 			"baz": "true baz",
 		}; !reflect.DeepEqual(exp, res) {
 			t.Errorf("Wrong result: %v != %v", res, exp)
@@ -245,8 +245,8 @@ func testRedisHashMultiplePart(surl string, t *testing.T) {
 		t.Fatal(err)
 	}
 	client := redis.NewClient(&redis.Options{
-		Addr:     purl.Host,
-		Network:  purl.Scheme,
+		Addr:    purl.Host,
+		Network: purl.Scheme,
 	})
 
 	if _, err = client.Ping().Result(); err != nil {
@@ -277,7 +277,7 @@ func testRedisHashMultiplePart(surl string, t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		if exp := "test-"+k; exp != res {
+		if exp := "test-" + k; exp != res {
 			t.Errorf("Wrong result: %v != %v", res, exp)
 		}
 	}

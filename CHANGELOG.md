@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.11.1 - 2019-08-05
+
+### Fixed
+
+- Prevent concurrent access race condition on nested parallel `process_map`
+  processors.
+
 ## 2.11.0 - 2019-08-03
 
 ### Added

@@ -285,7 +285,7 @@ func (p *ProcessMap) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		}
 	}()
 
-	result := msg.Copy()
+	result := msg.DeepCopy()
 	err := p.CreateResult(propMsg)
 	if err != nil {
 		result.Iter(func(i int, p types.Part) error {
