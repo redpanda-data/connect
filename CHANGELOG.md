@@ -5,8 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.11.2 - 2019-08-06
+
 ### Added
 
+- Field `clean_session` added to `mqtt` input.
 - The `http_server` input now adds request query parameters to messages as
   metadata.
 
