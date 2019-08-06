@@ -408,6 +408,7 @@ This input adds the following metadata fields to each message:
 ``` text
 - http_server_user_agent
 - All headers (only first values are taken)
+- All query parameters
 - All cookies
 ```
 

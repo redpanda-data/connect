@@ -107,6 +107,7 @@ This input adds the following metadata fields to each message:
 ` + "``` text" + `
 - http_server_user_agent
 - All headers (only first values are taken)
+- All query parameters
 - All cookies
 ` + "```" + `
 
@@ -312,6 +313,11 @@ func extractMessageFromRequest(r *http.Request) (types.Message, error) {
 			meta.Set(k, v[0])
 		}
 	}
+	for k, v := range r.URL.Query() {
+		if len(v) > 0 {
+			meta.Set(k, v[0])
+		}
+	}
 	for _, c := range r.Cookies() {
 		meta.Set(c.Name, c.Value)
 	}
@@ -507,6 +513,11 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		meta := msg.Get(0).Metadata()
 		meta.Set("http_server_user_agent", r.UserAgent())
 		for k, v := range r.Header {
+			if len(v) > 0 {
+				meta.Set(k, v[0])
+			}
+		}
+		for k, v := range r.URL.Query() {
 			if len(v) > 0 {
 				meta.Set(k, v[0])
 			}

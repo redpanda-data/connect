@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `http_server` input now adds request query parameters to messages as
+  metadata.
+
 ## 2.11.1 - 2019-08-05
 
 ### Fixed
