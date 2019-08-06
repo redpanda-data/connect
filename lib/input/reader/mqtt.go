@@ -37,21 +37,21 @@ import (
 
 // MQTTConfig contains configuration fields for the MQTT input type.
 type MQTTConfig struct {
-	CleanSession bool     `json:"clean_session" yaml:"clean_session"`
 	URLs         []string `json:"urls" yaml:"urls"`
 	QoS          uint8    `json:"qos" yaml:"qos"`
 	Topics       []string `json:"topics" yaml:"topics"`
 	ClientID     string   `json:"client_id" yaml:"client_id"`
+	CleanSession bool     `json:"clean_session" yaml:"clean_session"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
 func NewMQTTConfig() MQTTConfig {
 	return MQTTConfig{
-		CleanSession: false,
 		URLs:         []string{"tcp://localhost:1883"},
 		QoS:          1,
 		Topics:       []string{"benthos_topic"},
 		ClientID:     "benthos_input",
+		CleanSession: false,
 	}
 }
 
