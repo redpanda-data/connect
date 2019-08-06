@@ -37,19 +37,21 @@ import (
 
 // MQTTConfig contains configuration fields for the MQTT input type.
 type MQTTConfig struct {
-	URLs     []string `json:"urls" yaml:"urls"`
-	QoS      uint8    `json:"qos" yaml:"qos"`
-	Topics   []string `json:"topics" yaml:"topics"`
-	ClientID string   `json:"client_id" yaml:"client_id"`
+	URLs         []string `json:"urls" yaml:"urls"`
+	QoS          uint8    `json:"qos" yaml:"qos"`
+	Topics       []string `json:"topics" yaml:"topics"`
+	ClientID     string   `json:"client_id" yaml:"client_id"`
+	CleanSession bool     `json:"clean_session" yaml:"clean_session"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
 func NewMQTTConfig() MQTTConfig {
 	return MQTTConfig{
-		URLs:     []string{"tcp://localhost:1883"},
-		QoS:      1,
-		Topics:   []string{"benthos_topic"},
-		ClientID: "benthos_input",
+		URLs:         []string{"tcp://localhost:1883"},
+		QoS:          1,
+		Topics:       []string{"benthos_topic"},
+		ClientID:     "benthos_input",
+		CleanSession: true,
 	}
 }
 
@@ -108,6 +110,7 @@ func (m *MQTT) Connect() error {
 	conf := mqtt.NewClientOptions().
 		SetAutoReconnect(true).
 		SetClientID(m.conf.ClientID).
+		SetCleanSession(m.conf.CleanSession).
 		SetOnConnectHandler(func(c mqtt.Client) {
 			for _, topic := range m.conf.Topics {
 				tok := c.Subscribe(topic, byte(m.conf.QoS), m.msgHandler)

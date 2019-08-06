@@ -184,6 +184,7 @@ INPUT_KINESIS_SHARD                                 = 0
 INPUT_KINESIS_START_FROM_OLDEST                     = true
 INPUT_KINESIS_STREAM
 INPUT_KINESIS_TIMEOUT                               = 5s
+INPUT_MQTT_CLEAN_SESSION                            = true
 INPUT_MQTT_CLIENT_ID                                = benthos_input
 INPUT_MQTT_QOS                                      = 1
 INPUT_MQTT_TOPICS                                   = benthos_topic

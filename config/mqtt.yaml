@@ -7,6 +7,7 @@ http:
 input:
   type: mqtt
   mqtt:
+    clean_session: true
     client_id: benthos_input
     qos: 1
     topics:
