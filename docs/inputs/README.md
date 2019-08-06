@@ -689,7 +689,7 @@ You can access these metadata fields using
 ``` yaml
 type: mqtt
 mqtt:
-  clean_session: false
+  clean_session: true
   client_id: benthos_input
   qos: 1
   topics:
