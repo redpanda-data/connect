@@ -51,7 +51,7 @@ func NewMQTTConfig() MQTTConfig {
 		QoS:          1,
 		Topics:       []string{"benthos_topic"},
 		ClientID:     "benthos_input",
-		CleanSession: false,
+		CleanSession: true,
 	}
 }
 

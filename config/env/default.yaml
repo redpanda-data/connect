@@ -171,6 +171,7 @@ input:
         start_from_oldest: ${INPUT_KINESIS_BALANCED_START_FROM_OLDEST:true}
         stream: ${INPUT_KINESIS_BALANCED_STREAM}
       mqtt:
+        clean_session: ${INPUT_MQTT_CLEAN_SESSION:false}
         client_id: ${INPUT_MQTT_CLIENT_ID:benthos_input}
         qos: ${INPUT_MQTT_QOS:1}
         topics:
