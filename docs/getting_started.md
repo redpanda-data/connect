@@ -3,13 +3,12 @@ Getting Started
 
 ## Install
 
-### Build With Go
+### Homebrew
 
-If you have Go version 1.11 or above you can build and install Benthos with:
+On macOS, Benthos can be installed via Homebrew:
 
-``` sh
-go install github.com/Jeffail/benthos/cmd/benthos
-benthos -c ./yourconfig.yaml
+```shell
+brew install benthos
 ```
 
 ### Pull With Docker
@@ -17,7 +16,7 @@ benthos -c ./yourconfig.yaml
 If you have docker installed you can pull the latest official Benthos image
 with:
 
-``` sh
+```sh
 docker pull jeffail/benthos
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 ```
@@ -27,9 +26,18 @@ docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 Otherwise you can pull an archive containing Benthos from the
 [releases page](https://github.com/Jeffail/benthos/releases).
 
-``` sh
+```sh
 curl -L https://github.com/Jeffail/benthos/releases/download/${VERSION}/benthos_${VERSION}_linux_amd64.tar.gz | tar xz
 ./benthos -c ./yourconfig.yaml
+```
+
+### Build With Go
+
+If you have Go version 1.11 or above you can build and install Benthos with:
+
+```sh
+go install github.com/Jeffail/benthos/cmd/benthos
+benthos -c ./yourconfig.yaml
 ```
 
 ### Serverless
@@ -46,7 +54,7 @@ The main sections that make up a pipeline are `input`, `buffer`, `pipeline` and
 `output`. If we were to pipe stdin directly to Kafka those sections might look
 like this:
 
-``` yaml
+```yaml
 input:
   type: stdin
 buffer:
@@ -63,7 +71,7 @@ output:
 
 You can execute this config with:
 
-``` sh
+```sh
 benthos -c ./yourconfig.yaml
 ```
 
@@ -75,7 +83,7 @@ Next, we might want to add some processing steps in order to mutate the
 messages. For example, we could add a [`text`](./processors/README.md#text)
 processor that converts all text into upper case:
 
-``` yaml
+```yaml
 input:
   type: stdin
 buffer:
