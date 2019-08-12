@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `codec` added to `process_field` processor.
+
 ## 2.11.2 - 2019-08-06
 
 ### Added

@@ -17,6 +17,7 @@ pipeline:
   processors:
   - type: process_field
     process_field:
+      codec: json
       parts: []
       path: ""
       processors: []

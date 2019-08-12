@@ -104,6 +104,96 @@ func TestProcessFieldAllParts(t *testing.T) {
 	}
 }
 
+func TestProcessFieldBadCodec(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_field"
+	conf.ProcessField.Path = "foo.bar"
+	conf.ProcessField.Parts = []int{}
+
+	procConf := NewConfig()
+	procConf.Type = "json"
+	procConf.JSON.Operator = "select"
+	procConf.JSON.Path = "baz"
+
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	exp := [][]byte{
+		[]byte(`bar didnt exist`),
+		[]byte(`{"foo":{"bar":"put me at the root"}}`),
+	}
+
+	msg, res := c.ProcessMessage(message.New([][]byte{
+		[]byte(`bar didnt exist`),
+		[]byte(`{"foo":{"bar":{"baz":"put me at the root"}}}`),
+	}))
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
+		t.Errorf("Wrong result: %s != %s", act, exp)
+	}
+	if !HasFailed(msg[0].Get(0)) {
+		t.Error("Expected failed flag on part 0")
+	}
+	if HasFailed(msg[0].Get(1)) {
+		t.Error("Unexpected failed flag on part 1")
+	}
+}
+
+func TestProcessFieldMetadata(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_field"
+	conf.ProcessField.Codec = "metadata"
+	conf.ProcessField.Path = "foo"
+	conf.ProcessField.Parts = []int{}
+
+	procConf := NewConfig()
+	procConf.Type = TypeText
+	procConf.Text.Operator = "to_upper"
+
+	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expParts := [][]byte{
+		[]byte(`this stays unchanged`),
+		[]byte(`this also stays unchanged`),
+	}
+
+	inputMsg := message.New(expParts)
+	inputMsg.Get(0).Metadata().Set("foo", "uppercase me").Set("bar", "leave me alone")
+	inputMsg.Get(1).Metadata().Set("foo", "uppercase me as well").Set("bar", "leave me alone as well")
+
+	msg, res := c.ProcessMessage(inputMsg)
+	if res != nil {
+		t.Error(res.Error())
+	}
+	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, expParts) {
+		t.Errorf("Wrong result: %s != %s", act, expParts)
+	}
+	if exp, act := "UPPERCASE ME", msg[0].Get(0).Metadata().Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := "leave me alone", msg[0].Get(0).Metadata().Get("bar"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := "UPPERCASE ME AS WELL", msg[0].Get(1).Metadata().Get("foo"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if exp, act := "leave me alone as well", msg[0].Get(1).Metadata().Get("bar"); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
 func TestProcessFieldString(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "process_field"

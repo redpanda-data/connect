@@ -40,22 +40,16 @@ func init() {
 	Constructors[TypeProcessField] = TypeSpec{
 		constructor: NewProcessField,
 		description: `
-A processor that extracts the value of a field within payloads (currently only
-JSON format is supported) then applies a list of processors to the extracted
-value and finally sets the field within the original payloads to the processed
-result.
+A processor that extracts the value of a field within payloads according to a
+specified codec, applies a list of processors to the extracted value and finally
+sets the field within the original payloads to the processed result.
 
-For example, with an input document ` + "`{\"foo\":\"hello world\"}`" + ` it's
-possible to uppercase the value of the field foo with a ` + "[`text`](#text)" + `
-child processor:
+### Codecs
 
-` + "``` yaml" + `
-process_field:
-  path: foo
-  processors:
-  - text:
-      operator: to_upper
-` + "```" + `
+#### ` + "`json` (default)" + `
+
+Parses the payload as a JSON document, extracts and sets the field using a dot
+notation path.
 
 The result, according to the config field ` + "`result_type`" + `, can be
 marshalled into any of the following types:
@@ -63,15 +57,36 @@ marshalled into any of the following types:
 ` + " `array` and `discard`" + `. The discard type is a special case that
 discards the result of the processing steps entirely.
 
-It's therefore possible to use this processor without any child processors as a
-way of casting string values into other types. For example, with an input JSON
+It's therefore possible to use this codec without any child processors as a way
+of casting string values into other types. For example, with an input JSON
 document ` + "`{\"foo\":\"10\"}`" + ` it's possible to cast the value of the
 field foo to an integer type with:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 process_field:
   path: foo
   result_type: int
+` + "```" + `
+
+#### ` + "`metadata`" + `
+
+Extracts and sets a metadata value identified by the path field. If the field
+` + "`result_type` is set to `discard`" + ` then the result of the processing stages
+is discarded and the original metadata value is left unchanged.
+
+### Usage
+
+For example, with an input JSON document ` + "`{\"foo\":\"hello world\"}`" + `
+it's possible to uppercase the value of the field 'foo' by using the JSON codec
+and a ` + "[`text`](#text)" + ` child processor:
+
+` + "```yaml" + `
+process_field:
+  codec: json
+  path: foo
+  processors:
+  - text:
+      operator: to_upper
 ` + "```" + `
 
 If the number of messages resulting from the processing steps does not match the
@@ -87,6 +102,7 @@ Therefore, you should avoid using batch and filter type processors in this list.
 			}
 			return map[string]interface{}{
 				"parts":       conf.ProcessField.Parts,
+				"codec":       conf.ProcessField.Codec,
 				"path":        conf.ProcessField.Path,
 				"result_type": conf.ProcessField.ResultType,
 				"processors":  procConfs,
@@ -101,6 +117,7 @@ Therefore, you should avoid using batch and filter type processors in this list.
 // processor.
 type ProcessFieldConfig struct {
 	Parts      []int    `json:"parts" yaml:"parts"`
+	Codec      string   `json:"codec" yaml:"codec"`
 	Path       string   `json:"path" yaml:"path"`
 	ResultType string   `json:"result_type" yaml:"result_type"`
 	Processors []Config `json:"processors" yaml:"processors"`
@@ -110,6 +127,7 @@ type ProcessFieldConfig struct {
 func NewProcessFieldConfig() ProcessFieldConfig {
 	return ProcessFieldConfig{
 		Parts:      []int{},
+		Codec:      "json",
 		Path:       "",
 		ResultType: "string",
 		Processors: []Config{},
@@ -118,6 +136,12 @@ func NewProcessFieldConfig() ProcessFieldConfig {
 
 //------------------------------------------------------------------------------
 
+type processFieldCodec interface {
+	CreateRequest(types.Part) (types.Part, error)
+	ExtractResult(from, to types.Part) error
+	Discard() bool
+}
+
 // ProcessField is a processor that applies a list of child processors to a
 // field extracted from the original payload.
 type ProcessField struct {
@@ -125,13 +149,13 @@ type ProcessField struct {
 	path     []string
 	children []types.Processor
 
-	resultCodec processFieldResultMarshaller
+	codec processFieldCodec
 
 	log log.Modular
 
 	mCount              metrics.StatCounter
 	mErr                metrics.StatCounter
-	mErrJSONParse       metrics.StatCounter
+	mErrParse           metrics.StatCounter
 	mErrMisaligned      metrics.StatCounter
 	mErrMisalignedBatch metrics.StatCounter
 	mSent               metrics.StatCounter
@@ -151,21 +175,21 @@ func NewProcessField(
 		}
 		children = append(children, proc)
 	}
-	marshaller, err := stringToProcessFieldResultMarshaller(conf.ProcessField.ResultType)
+	codec, err := stringToProcessFieldCodec(conf.ProcessField.Path, conf.ProcessField.Codec, conf.ProcessField.ResultType)
 	if err != nil {
 		return nil, err
 	}
 	return &ProcessField{
-		parts:       conf.ProcessField.Parts,
-		path:        strings.Split(conf.ProcessField.Path, "."),
-		children:    children,
-		resultCodec: marshaller,
+		parts:    conf.ProcessField.Parts,
+		path:     strings.Split(conf.ProcessField.Path, "."),
+		children: children,
+		codec:    codec,
 
 		log: log,
 
 		mCount:              stats.GetCounter("count"),
 		mErr:                stats.GetCounter("error"),
-		mErrJSONParse:       stats.GetCounter("error.json_parse"),
+		mErrParse:           stats.GetCounter("error.parse"),
 		mErrMisaligned:      stats.GetCounter("error.misaligned"),
 		mErrMisalignedBatch: stats.GetCounter("error.misaligned_messages"),
 		mSent:               stats.GetCounter("sent"),
@@ -175,21 +199,94 @@ func NewProcessField(
 
 //------------------------------------------------------------------------------
 
-type processFieldResultMarshaller func(p types.Part) (interface{}, error)
+type processFieldJSONCodec struct {
+	path             []string
+	resultMarshaller func(p types.Part) (interface{}, error)
+}
 
-func processFieldResultStringMarshaller(p types.Part) (interface{}, error) {
+func newProcessFieldJSONCodec(path, resultStr string) (*processFieldJSONCodec, error) {
+	var resultMarshaller func(p types.Part) (interface{}, error)
+	switch resultStr {
+	case "string":
+		resultMarshaller = processFieldJSONResultStringMarshaller
+	case "int":
+		resultMarshaller = processFieldJSONResultIntMarshaller
+	case "float":
+		resultMarshaller = processFieldJSONResultFloatMarshaller
+	case "bool":
+		resultMarshaller = processFieldJSONResultBoolMarshaller
+	case "object":
+		resultMarshaller = processFieldJSONResultObjectMarshaller
+	case "array":
+		resultMarshaller = processFieldJSONResultArrayMarshaller
+	case "discard":
+		resultMarshaller = nil
+	default:
+		return nil, fmt.Errorf("unrecognised json codec result_type: %v", resultStr)
+	}
+	return &processFieldJSONCodec{
+		path:             strings.Split(path, "."),
+		resultMarshaller: resultMarshaller,
+	}, nil
+}
+
+func (p *processFieldJSONCodec) CreateRequest(source types.Part) (types.Part, error) {
+	reqPart := source.Copy()
+	jObj, err := reqPart.JSON()
+	if err != nil {
+		return nil, err
+	}
+	var gObj *gabs.Container
+	if gObj, err = gabs.Consume(jObj); err != nil {
+		return nil, err
+	}
+	gTarget := gObj.S(p.path...)
+	switch t := gTarget.Data().(type) {
+	case string:
+		reqPart.Set([]byte(t))
+	default:
+		reqPart.SetJSON(gTarget.Data())
+	}
+	return reqPart, nil
+}
+
+func (p *processFieldJSONCodec) ExtractResult(from, to types.Part) error {
+	resVal, err := p.resultMarshaller(from)
+	if err != nil {
+		return err
+	}
+	jObj, err := to.JSON()
+	if err == nil {
+		jObj, err = message.CopyJSON(jObj)
+	}
+	if err != nil {
+		return err
+	}
+	var gObj *gabs.Container
+	if gObj, err = gabs.Consume(jObj); err != nil {
+		return err
+	}
+	gObj.Set(resVal, p.path...)
+	return to.SetJSON(gObj.Data())
+}
+
+func (p *processFieldJSONCodec) Discard() bool {
+	return p.resultMarshaller == nil
+}
+
+func processFieldJSONResultStringMarshaller(p types.Part) (interface{}, error) {
 	return string(p.Get()), nil
 }
 
-func processFieldResultIntMarshaller(p types.Part) (interface{}, error) {
+func processFieldJSONResultIntMarshaller(p types.Part) (interface{}, error) {
 	return strconv.Atoi(string(p.Get()))
 }
 
-func processFieldResultFloatMarshaller(p types.Part) (interface{}, error) {
+func processFieldJSONResultFloatMarshaller(p types.Part) (interface{}, error) {
 	return strconv.ParseFloat(string(p.Get()), 64)
 }
 
-func processFieldResultBoolMarshaller(p types.Part) (interface{}, error) {
+func processFieldJSONResultBoolMarshaller(p types.Part) (interface{}, error) {
 	str := string(p.Get())
 	if str == "true" {
 		return true, nil
@@ -200,7 +297,7 @@ func processFieldResultBoolMarshaller(p types.Part) (interface{}, error) {
 	return nil, fmt.Errorf("value '%v' could not be parsed as bool", str)
 }
 
-func processFieldResultObjectMarshaller(p types.Part) (interface{}, error) {
+func processFieldJSONResultObjectMarshaller(p types.Part) (interface{}, error) {
 	jVal, err := p.JSON()
 	if err != nil {
 		return nil, err
@@ -215,7 +312,7 @@ func processFieldResultObjectMarshaller(p types.Part) (interface{}, error) {
 	return nil, fmt.Errorf("failed to parse JSON type '%T' into object", jVal)
 }
 
-func processFieldResultArrayMarshaller(p types.Part) (interface{}, error) {
+func processFieldJSONResultArrayMarshaller(p types.Part) (interface{}, error) {
 	jVal, err := p.JSON()
 	if err != nil {
 		return nil, err
@@ -226,24 +323,45 @@ func processFieldResultArrayMarshaller(p types.Part) (interface{}, error) {
 	return nil, fmt.Errorf("failed to parse JSON type '%T' into array", jVal)
 }
 
-func stringToProcessFieldResultMarshaller(str string) (processFieldResultMarshaller, error) {
-	switch str {
-	case "string":
-		return processFieldResultStringMarshaller, nil
-	case "int":
-		return processFieldResultIntMarshaller, nil
-	case "float":
-		return processFieldResultFloatMarshaller, nil
-	case "bool":
-		return processFieldResultBoolMarshaller, nil
-	case "object":
-		return processFieldResultObjectMarshaller, nil
-	case "array":
-		return processFieldResultArrayMarshaller, nil
-	case "discard":
-		return nil, nil
+//------------------------------------------------------------------------------
+
+type processFieldMetadataCodec struct {
+	key     string
+	discard bool
+}
+
+func newProcessFieldMetadataCodec(path, resultStr string) (*processFieldMetadataCodec, error) {
+	return &processFieldMetadataCodec{
+		key:     path,
+		discard: resultStr == "discard",
+	}, nil
+}
+
+func (p *processFieldMetadataCodec) CreateRequest(source types.Part) (types.Part, error) {
+	reqPart := source.Copy()
+	reqPart.Set([]byte(reqPart.Metadata().Get(p.key)))
+	return reqPart, nil
+}
+
+func (p *processFieldMetadataCodec) ExtractResult(from, to types.Part) error {
+	to.Metadata().Set(p.key, string(from.Get()))
+	return nil
+}
+
+func (p *processFieldMetadataCodec) Discard() bool {
+	return p.discard
+}
+
+//------------------------------------------------------------------------------
+
+func stringToProcessFieldCodec(path, codecStr, resultStr string) (processFieldCodec, error) {
+	switch codecStr {
+	case "json":
+		return newProcessFieldJSONCodec(path, resultStr)
+	case "metadata":
+		return newProcessFieldMetadataCodec(path, resultStr)
 	}
-	return nil, fmt.Errorf("unrecognised result_type: %v", str)
+	return nil, fmt.Errorf("unrecognised codec: %v", codecStr)
 }
 
 //------------------------------------------------------------------------------
@@ -265,30 +383,15 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	}
 
 	reqMsg := message.New(nil)
-	gParts := make([]*gabs.Container, len(targetParts))
-
-	for i, index := range targetParts {
-		reqPart := payload.Get(index).Copy()
-		jObj, err := reqPart.JSON()
-		if err == nil {
-			jObj, err = message.CopyJSON(jObj)
-		}
+	for _, index := range targetParts {
+		reqPart, err := p.codec.CreateRequest(payload.Get(index))
 		if err != nil {
-			p.mErrJSONParse.Incr(1)
+			p.mErrParse.Incr(1)
 			p.mErr.Incr(1)
 			p.log.Errorf("Failed to decode part: %v\n", err)
-		}
-		if gParts[i], err = gabs.Consume(jObj); err != nil {
-			p.mErrJSONParse.Incr(1)
-			p.mErr.Incr(1)
-			p.log.Errorf("Failed to decode part: %v\n", err)
-		}
-		gTarget := gParts[i].S(p.path...)
-		switch t := gTarget.Data().(type) {
-		case string:
-			reqPart.Set([]byte(t))
-		default:
-			reqPart.SetJSON(gTarget.Data())
+			reqPart = payload.Get(index).Copy()
+			reqPart.Set(nil)
+			FlagErr(reqPart, err)
 		}
 		reqMsg.Append(reqPart)
 	}
@@ -304,7 +407,7 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	}
 	defer tracing.FinishSpans(propMsg)
 
-	if p.resultCodec == nil {
+	if p.codec.Discard() {
 		// With no result codec, if our results are inline with our original
 		// batch we copy the metadata only.
 		if len(targetParts) == resMsg.Len() {
@@ -337,21 +440,18 @@ func (p *ProcessField) ProcessMessage(msg types.Message) (msgs []types.Message, 
 	}
 
 	for i, index := range targetParts {
-		resVal, rErr := p.resultCodec(resMsg.Get(i))
-		if rErr != nil {
-			p.log.Errorf("Failed to marshal result: %v\n", rErr)
-			FlagErr(resMsg.Get(i), rErr)
-			continue
-		}
-
-		gParts[i].Set(resVal, p.path...)
 		tPart := payload.Get(index)
-		tPart.SetJSON(gParts[i].Data())
 		tPartMeta := tPart.Metadata()
 		resMsg.Get(i).Metadata().Iter(func(k, v string) error {
 			tPartMeta.Set(k, v)
 			return nil
 		})
+		rErr := p.codec.ExtractResult(resMsg.Get(i), tPart)
+		if rErr != nil {
+			p.log.Errorf("Failed to marshal result: %v\n", rErr)
+			FlagErr(tPart, rErr)
+			continue
+		}
 	}
 
 	p.mBatchSent.Incr(1)
