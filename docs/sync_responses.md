@@ -1,13 +1,10 @@
 Synchronous Responses
 =====================
 
-EXPERIMENTAL: The features outlined in this document are considered experimental
-and are therefore subject to change outside of major version releases.
-
 In a regular Benthos stream pipeline messages flow in one direction and
 acknowledgements flow in the other:
 
-``` text
+```text
     ----------- Message ------------->
 
 Input (AMQP) -> Processors -> Output (AMQP)
@@ -27,7 +24,7 @@ When using these protocols it's possible to configure Benthos stream pipelines
 that allow messages to pass in the opposite direction, resulting in response
 messages at the input level:
 
-``` text
+```text
            --------- Request Body -------->
 
 Input (HTTP Server) -> Processors -> Output (Sync Response)
@@ -40,7 +37,7 @@ Input (HTTP Server) -> Processors -> Output (Sync Response)
 It's possible to route the result of any Benthos processing pipeline directly
 back to an input with a [`sync_response`][sync-res] output:
 
-``` yaml
+```yaml
 input:
   http_server:
     path: /post
@@ -58,7 +55,7 @@ the response 'FOO BAR'.
 It's also possible to combine a `sync_response` output with other outputs using
 a [`broker`][output-broker]:
 
-``` yaml
+```yaml
 input:
   http_server:
     path: /post
@@ -89,7 +86,7 @@ Some outputs, such as [`http_client`][http-client-output], have the potential to
 propagate payloads received from their destination after sending a message back
 to the input:
 
-``` yaml
+```yaml
 input:
   http_server:
     path: /post
@@ -108,7 +105,7 @@ into a proxy server with the potential to mutate payloads between requests.
 The following config turns Benthos into an HTTP proxy server that also sends all
 request payloads to a Kafka topic:
 
-``` yaml
+```yaml
 input:
   http_server:
     path: /post

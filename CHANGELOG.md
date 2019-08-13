@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `codec` added to `process_field` processor.
+- Removed experimental status from sync responses components, which are now
+  considered stable.
 
 ## 2.11.2 - 2019-08-06
 

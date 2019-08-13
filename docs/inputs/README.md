@@ -371,9 +371,8 @@ response payload will be sent as per `ws_rate_limit_message`.
 
 ### Responses
 
-EXPERIMENTAL: It's possible to return a response for each message received using
-[synchronous responses](../sync_responses.md). This feature is considered
-experimental and therefore subject to change outside of major version releases.
+It's possible to return a response for each message received using
+[synchronous responses](../sync_responses.md).
 
 ### Endpoints
 

@@ -564,13 +564,10 @@ message has multiple parts the request will be sent according to
 
 ### Propagating Responses
 
-EXPERIMENTAL: It's possible to propagate the response from each HTTP request
-back to the input source by setting `propagate_response` to `true`.
-Only inputs that support [synchronous responses](../sync_responses.md) are able
-to make use of these propagated responses.
-
-This feature is considered experimental and is therefore subject to change
-outside of major version releases.
+It's possible to propagate the response from each HTTP request back to the input
+source by setting `propagate_response` to `true`. Only inputs that
+support [synchronous responses](../sync_responses.md) are able to make use of
+these propagated responses.
 
 ## `http_server`
 
@@ -1108,9 +1105,6 @@ duplicate messages aren't introduced during error conditions.
 type: sync_response
 sync_response: {}
 ```
-
-EXPERIMENTAL: This component is considered experimental and is therefore subject
-to change outside of major version releases.
 
 Returns the final message payload back to the input origin of the message, where
 it is dealt with according to that specific input type.
