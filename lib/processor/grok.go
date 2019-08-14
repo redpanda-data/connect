@@ -53,23 +53,25 @@ the resulting payload would be ` + "`{\"first\":\"foo\",\"second\":1}`" + `.`,
 
 // GrokConfig contains configuration fields for the Grok processor.
 type GrokConfig struct {
-	Parts       []int    `json:"parts" yaml:"parts"`
-	Patterns    []string `json:"patterns" yaml:"patterns"`
-	RemoveEmpty bool     `json:"remove_empty_values" yaml:"remove_empty_values"`
-	NamedOnly   bool     `json:"named_captures_only" yaml:"named_captures_only"`
-	UseDefaults bool     `json:"use_default_patterns" yaml:"use_default_patterns"`
-	To          string   `json:"output_format" yaml:"output_format"`
+	Parts              []int             `json:"parts" yaml:"parts"`
+	Patterns           []string          `json:"patterns" yaml:"patterns"`
+	RemoveEmpty        bool              `json:"remove_empty_values" yaml:"remove_empty_values"`
+	NamedOnly          bool              `json:"named_captures_only" yaml:"named_captures_only"`
+	UseDefaults        bool              `json:"use_default_patterns" yaml:"use_default_patterns"`
+	To                 string            `json:"output_format" yaml:"output_format"`
+	PatternDefinitions map[string]string `json:"pattern_definitions" yaml:"pattern_definitions"`
 }
 
 // NewGrokConfig returns a GrokConfig with default values.
 func NewGrokConfig() GrokConfig {
 	return GrokConfig{
-		Parts:       []int{},
-		Patterns:    []string{},
-		RemoveEmpty: true,
-		NamedOnly:   true,
-		UseDefaults: true,
-		To:          "json",
+		Parts:              []int{},
+		Patterns:           []string{},
+		RemoveEmpty:        true,
+		NamedOnly:          true,
+		UseDefaults:        true,
+		To:                 "json",
+		PatternDefinitions: make(map[string]string),
 	}
 }
 
@@ -101,6 +103,7 @@ func NewGrok(
 		RemoveEmptyValues:   conf.Grok.RemoveEmpty,
 		NamedCapturesOnly:   conf.Grok.NamedOnly,
 		SkipDefaultPatterns: !conf.Grok.UseDefaults,
+		Patterns:            conf.Grok.PatternDefinitions,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create grok compiler: %v", err)
