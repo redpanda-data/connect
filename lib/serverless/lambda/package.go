@@ -18,14 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package main
-
-import "github.com/Jeffail/benthos/lib/serverless/lambda"
-
-//------------------------------------------------------------------------------
-
-func main() {
-	lambda.Run()
-}
-
-//------------------------------------------------------------------------------
+// Package lambda contains the execution logic for running Benthos as an AWS
+// lambda function.
+package lambda

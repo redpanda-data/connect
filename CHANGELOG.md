@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 - Field `codec` added to `process_field` processor.
 - Removed experimental status from sync responses components, which are now
   considered stable.
+  
+### Changed
+
+- Simplified serverless lambda main function body for improving plugin
+  documentation.
 
 ## 2.11.2 - 2019-08-06
 
