@@ -154,7 +154,7 @@ func newTextAppendOperator() textOperator {
 		if len(value) == 0 {
 			return body, nil
 		}
-		return append(body[:], value...), nil
+		return append(body[:len(body):len(body)], value...), nil
 	}
 }
 
@@ -179,7 +179,7 @@ func newTextPrependOperator() textOperator {
 		if len(value) == 0 {
 			return body, nil
 		}
-		return append(value[:], body...), nil
+		return append(value[:len(value):len(value)], body...), nil
 	}
 }
 
