@@ -10,11 +10,17 @@ All notable changes to this project will be documented in this file.
 - Field `codec` added to `process_field` processor.
 - Removed experimental status from sync responses components, which are now
   considered stable.
+- Field `pattern_definitions` added to `grok` processor.
   
 ### Changed
 
 - Simplified serverless lambda main function body for improving plugin
   documentation.
+
+### Fixed
+
+- Fixed a bug where the `prepend` and `append` operators of the `text` processor
+  could result in invalid messages when consuming line-based inputs.
 
 ## 2.11.2 - 2019-08-06
 
