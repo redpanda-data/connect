@@ -601,6 +601,7 @@ grok:
   named_captures_only: true
   output_format: json
   parts: []
+  pattern_definitions: {}
   patterns: []
   remove_empty_values: true
   use_default_patterns: true
