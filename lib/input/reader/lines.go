@@ -177,6 +177,27 @@ func (r *Lines) Read() (types.Message, error) {
 			return nil, err
 		}
 
+		// WARNING: According to https://golang.org/pkg/bytes/#Buffer.Bytes the
+		// slice returned by Bytes is only correct until the next call to Write.
+		// Since we call Write for multiple part messages, and could potentially
+		// call it on a consecutive Read call before the next Acknowledge, we
+		// are passing slices through messages that are "invalid".
+		//
+		// However, in practice the calls to Write do not overwrite the memory
+		// within the returned slice even if it results in the buffer
+		// re-allocating memory. Since we also ensure that Reset is only called
+		// once messages are no longer in use we should be fine here.
+		//
+		// Regardless, we should regularly revisit this code in order to ensure
+		// that this remains the case. I can't foresee any case where discarded
+		// slices within bytes.Buffer would be wiped or modified during Write,
+		// but since the library does not guarantee this:
+		//
+		// TODO: Have another cheeky gander at
+		// https://golang.org/src/bytes/buffer.go to make sure Write never
+		// mutates a discarded slice during re-allocation. If it does then we
+		// should stop using bytes.Buffer and either eat the allocations or do
+		// some buffer rotations of our own.
 		if partSize > 0 {
 			msg.Append(message.NewPart(r.messageBuffer.Bytes()[rIndex : rIndex+partSize]))
 			if !r.multipart {

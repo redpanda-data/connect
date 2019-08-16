@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-### Added
+## 2.12.0 - 2019-08-16
+
+### Added
 
 - Field `codec` added to `process_field` processor.
 - Removed experimental status from sync responses components, which are now
