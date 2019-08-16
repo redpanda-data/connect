@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.12.1 - 2019-08-16
+
+### Changed
+
+- Disabled `kinesis_balanced` input for WASM builds.
+
 ## 2.12.0 - 2019-08-16
 
 ### Added
@@ -13,7 +19,7 @@ All notable changes to this project will be documented in this file.
 - Removed experimental status from sync responses components, which are now
   considered stable.
 - Field `pattern_definitions` added to `grok` processor.
-  
+
 ### Changed
 
 - Simplified serverless lambda main function body for improving plugin
