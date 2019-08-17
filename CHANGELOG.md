@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Capped slices from lines reader are now enforced.
+
 ## 2.12.1 - 2019-08-16
 
 ### Changed

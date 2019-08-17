@@ -199,7 +199,7 @@ func (r *Lines) Read() (types.Message, error) {
 		// should stop using bytes.Buffer and either eat the allocations or do
 		// some buffer rotations of our own.
 		if partSize > 0 {
-			msg.Append(message.NewPart(r.messageBuffer.Bytes()[rIndex : rIndex+partSize]))
+			msg.Append(message.NewPart(r.messageBuffer.Bytes()[rIndex : rIndex+partSize : rIndex+partSize]))
 			if !r.multipart {
 				return msg, nil
 			}
