@@ -193,6 +193,9 @@ func (r *rawJSONValue) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 func (r rawJSONValue) MarshalYAML() (interface{}, error) {
+	if r == nil {
+		return nil, nil
+	}
 	var val interface{}
 	if err := json.Unmarshal(r, &val); err != nil {
 		return nil, err
@@ -236,8 +239,10 @@ func newSetOperator(path []string) jsonOperator {
 		}
 
 		var data interface{}
-		if err = json.Unmarshal([]byte(value), &data); err != nil {
-			return nil, fmt.Errorf("failed to parse value: %v", err)
+		if value != nil {
+			if err = json.Unmarshal([]byte(value), &data); err != nil {
+				return nil, fmt.Errorf("failed to parse value: %v", err)
+			}
 		}
 
 		gPart.Set(data, path...)
@@ -417,8 +422,10 @@ func newAppendOperator(path []string) jsonOperator {
 		var array []interface{}
 
 		var valueParsed interface{}
-		if err = json.Unmarshal(value, &valueParsed); err != nil {
-			return nil, err
+		if value != nil {
+			if err = json.Unmarshal(value, &valueParsed); err != nil {
+				return nil, err
+			}
 		}
 		switch t := valueParsed.(type) {
 		case []interface{}:

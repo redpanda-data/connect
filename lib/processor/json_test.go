@@ -595,6 +595,20 @@ func TestJSONSet(t *testing.T) {
 			input:  `{"key":"dynamic","value":{"foo":"bar"}}`,
 			output: `{"dynamic":{"value":"{\"foo\":\"bar\"}"}}`,
 		},
+		{
+			name:   "set null 1",
+			path:   "foo.bar",
+			value:  `null`,
+			input:  `{"foo":{"bar":5}}`,
+			output: `{"foo":{"bar":null}}`,
+		},
+		{
+			name:   "set null 2",
+			path:   "foo.bar",
+			value:  `null`,
+			input:  `{"foo":{"bar":{"baz":"yelp"}}}`,
+			output: `{"foo":{"bar":null}}`,
+		},
 	}
 
 	for _, test := range tests {
@@ -724,6 +738,19 @@ value:
   baz:
     deeper: look at me
   here: 11
+`,
+		`parts:
+- 0
+operator: set
+path: foo.bar
+value: null
+`,
+		`parts:
+- 0
+operator: set
+path: foo.bar
+value:
+  foo: null
 `,
 		`parts:
 - 0

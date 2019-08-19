@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.12.2 - 2019-08-19
+
 ### Fixed
 
 - Capped slices from lines reader are now enforced.
+- The `json` processor now correctly honours a `null` value.
 
 ## 2.12.1 - 2019-08-16
 
