@@ -22,6 +22,7 @@ package writer
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -123,6 +124,30 @@ func (a *AmazonSQS) Connect() error {
 	return nil
 }
 
+func getSQSAttributes(p types.Part) map[string]*sqs.MessageAttributeValue {
+	keys := []string{}
+	p.Metadata().Iter(func(k, v string) error {
+		keys = append(keys, k)
+		return nil
+	})
+	if len(keys) == 0 {
+		return nil
+	}
+	sort.Strings(keys)
+
+	values := map[string]*sqs.MessageAttributeValue{}
+	for i, k := range keys {
+		values[k] = &sqs.MessageAttributeValue{
+			DataType:    aws.String("String"),
+			StringValue: aws.String(p.Metadata().Get(k)),
+		}
+		if i == 9 {
+			break
+		}
+	}
+	return values
+}
+
 // Write attempts to write message contents to a target SQS.
 func (a *AmazonSQS) Write(msg types.Message) error {
 	if a.session == nil {
@@ -130,10 +155,15 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 	}
 
 	entries := []*sqs.SendMessageBatchRequestEntry{}
+	attrMap := map[string]map[string]*sqs.MessageAttributeValue{}
 	msg.Iter(func(i int, p types.Part) error {
+		id := strconv.FormatInt(int64(i), 10)
+		attrs := getSQSAttributes(p)
+		attrMap[id] = attrs
 		entries = append(entries, &sqs.SendMessageBatchRequestEntry{
-			Id:          aws.String(strconv.FormatInt(int64(i), 10)),
-			MessageBody: aws.String(string(p.Get())),
+			Id:                aws.String(id),
+			MessageBody:       aws.String(string(p.Get())),
+			MessageAttributes: attrs,
 		})
 		return nil
 	})
@@ -178,8 +208,9 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 					return err
 				}
 				input.Entries = append(input.Entries, &sqs.SendMessageBatchRequestEntry{
-					Id:          v.Id,
-					MessageBody: v.Message,
+					Id:                v.Id,
+					MessageBody:       v.Message,
+					MessageAttributes: attrMap[*v.Id],
 				})
 			}
 			err = fmt.Errorf("failed to send %v messages", len(unproc))

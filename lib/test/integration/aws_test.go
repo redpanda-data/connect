@@ -22,6 +22,7 @@ package integration
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,10 +31,12 @@ import (
 	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output/writer"
+	"github.com/Jeffail/benthos/lib/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/ory/dockertest"
 )
 
@@ -57,6 +60,9 @@ func TestAWSIntegration(t *testing.T) {
 
 	endpoint := fmt.Sprintf("http://localhost:%v", resource.GetPort("4572/tcp"))
 	bucket := "mybucket"
+	sqsQueue := "benthos-test-queue"
+	sqsEndpoint := fmt.Sprintf("http://localhost:%v", resource.GetPort("4576/tcp"))
+	sqsQueueURL := fmt.Sprintf("%v/queue/%v", sqsEndpoint, sqsQueue)
 
 	s3Client := s3.New(session.Must(session.NewSession(&aws.Config{
 		S3ForcePathStyle: aws.Bool(true),
@@ -65,11 +71,22 @@ func TestAWSIntegration(t *testing.T) {
 		Region:           aws.String("eu-west-1"),
 	})))
 
+	sqsClient := sqs.New(session.Must(session.NewSession(&aws.Config{
+		Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
+		Endpoint:    aws.String(sqsEndpoint),
+		Region:      aws.String("eu-west-1"),
+	})))
+
 	if err = pool.Retry(func() error {
 		_, berr := s3Client.CreateBucket(&s3.CreateBucketInput{
 			Bucket: &bucket,
 		})
 		if berr != nil {
+			return berr
+		}
+		if _, berr = sqsClient.CreateQueue(&sqs.CreateQueueInput{
+			QueueName: aws.String(sqsQueue),
+		}); berr != nil {
 			return berr
 		}
 		return s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
@@ -87,6 +104,105 @@ func TestAWSIntegration(t *testing.T) {
 	t.Run("testS3UploadDownload", func(t *testing.T) {
 		testS3UploadDownload(t, endpoint, bucket)
 	})
+	t.Run("testSQSSinglePart", func(t *testing.T) {
+		testSQSSinglePart(t, sqsEndpoint, sqsQueueURL)
+	})
+}
+
+func createSQSInputOutput(
+	inConf reader.AmazonSQSConfig, outConf writer.AmazonSQSConfig,
+) (mInput reader.Type, mOutput writer.Type, err error) {
+	if mOutput, err = writer.NewAmazonSQS(outConf, log.Noop(), metrics.Noop()); err != nil {
+		return
+	}
+	if err = mOutput.Connect(); err != nil {
+		return
+	}
+	if mInput, err = reader.NewAmazonSQS(inConf, log.Noop(), metrics.Noop()); err != nil {
+		return
+	}
+	if err = mInput.Connect(); err != nil {
+		return
+	}
+	return
+}
+
+func testSQSSinglePart(t *testing.T, endpoint, url string) {
+	outConf := writer.NewAmazonSQSConfig()
+	outConf.URL = url
+	outConf.Endpoint = endpoint
+	outConf.Credentials.ID = "xxxxx"
+	outConf.Credentials.Secret = "xxxxx"
+	outConf.Credentials.Token = "xxxxx"
+	outConf.Region = "eu-west-1"
+
+	inConf := reader.NewAmazonSQSConfig()
+	inConf.URL = url
+	inConf.Endpoint = endpoint
+	inConf.Credentials.ID = "xxxxx"
+	inConf.Credentials.Secret = "xxxxx"
+	inConf.Credentials.Token = "xxxxx"
+	inConf.Region = "eu-west-1"
+
+	mInput, mOutput, err := createSQSInputOutput(inConf, outConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		mInput.CloseAsync()
+		if cErr := mInput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+		mOutput.CloseAsync()
+		if cErr := mOutput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	N := 10
+
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+
+	testMsgs := map[string]struct{}{}
+	for i := 0; i < N; i++ {
+		str := fmt.Sprintf("hello world: %v", i)
+		testMsgs[str] = struct{}{}
+		go func(testStr string) {
+			msg := message.New([][]byte{
+				[]byte(testStr),
+			})
+			if gerr := mOutput.Write(msg); gerr != nil {
+				t.Fatal(gerr)
+			}
+			wg.Done()
+		}(str)
+	}
+
+	lMsgs := len(testMsgs)
+	for lMsgs > 0 {
+		var actM types.Message
+		actM, err = mInput.Read()
+		if err != nil {
+			t.Error(err)
+		} else {
+			act := string(actM.Get(0).Get())
+			if _, exists := testMsgs[act]; !exists {
+				t.Errorf("Unexpected message: %v", act)
+			}
+			delete(testMsgs, act)
+			actM.Get(0).Metadata().Iter(func(k, v string) error {
+				return nil
+			})
+		}
+		if err = mInput.Acknowledge(nil); err != nil {
+			t.Error(err)
+		}
+		lMsgs = len(testMsgs)
+	}
+
+	wg.Wait()
 }
 
 func createS3InputOutput(

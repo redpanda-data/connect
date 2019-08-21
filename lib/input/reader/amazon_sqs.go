@@ -42,6 +42,7 @@ type AmazonSQSConfig struct {
 	URL                 string `json:"url" yaml:"url"`
 	Timeout             string `json:"timeout" yaml:"timeout"`
 	MaxNumberOfMessages int64  `json:"max_number_of_messages" yaml:"max_number_of_messages"`
+	DeleteMessage       bool   `json:"delete_message" yaml:"delete_message"`
 }
 
 // NewAmazonSQSConfig creates a new Config with default values.
@@ -51,6 +52,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 		URL:                 "",
 		Timeout:             "5s",
 		MaxNumberOfMessages: 1,
+		DeleteMessage:       true,
 	}
 }
 
@@ -111,6 +113,20 @@ func (a *AmazonSQS) Connect() error {
 	return nil
 }
 
+func addSQSMetadata(p types.Part, sqsMsg *sqs.Message) {
+	meta := p.Metadata()
+	meta.Set("sqs_message_id", *sqsMsg.MessageId)
+	meta.Set("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
+	if rCountStr := sqsMsg.Attributes["ApproximateReceiveCount"]; rCountStr != nil {
+		meta.Set("sqs_approximate_receive_count", *rCountStr)
+	}
+	for k, v := range sqsMsg.MessageAttributes {
+		if v.StringValue != nil {
+			meta.Set(k, *v.StringValue)
+		}
+	}
+}
+
 // Read attempts to read a new message from the target SQS.
 func (a *AmazonSQS) Read() (types.Message, error) {
 	if a.session == nil {
@@ -118,9 +134,11 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 	}
 
 	output, err := a.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
-		QueueUrl:            aws.String(a.conf.URL),
-		MaxNumberOfMessages: aws.Int64(a.conf.MaxNumberOfMessages),
-		WaitTimeSeconds:     aws.Int64(int64(a.timeout.Seconds())),
+		QueueUrl:              aws.String(a.conf.URL),
+		MaxNumberOfMessages:   aws.Int64(a.conf.MaxNumberOfMessages),
+		WaitTimeSeconds:       aws.Int64(int64(a.timeout.Seconds())),
+		AttributeNames:        []*string{aws.String("All")},
+		MessageAttributeNames: []*string{aws.String("All")},
 	})
 	if err != nil {
 		return nil, err
@@ -138,7 +156,9 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 		}
 
 		if sqsMsg.Body != nil {
-			msg.Append(message.NewPart([]byte(*sqsMsg.Body)))
+			part := message.NewPart([]byte(*sqsMsg.Body))
+			addSQSMetadata(part, sqsMsg)
+			msg.Append(part)
 		}
 	}
 
@@ -154,6 +174,15 @@ func (a *AmazonSQS) Read() (types.Message, error) {
 func (a *AmazonSQS) Acknowledge(err error) error {
 	if err == nil {
 		for len(a.pendingHandles) > 0 {
+			if !a.conf.DeleteMessage {
+				// If we aren't deleting the source here then simply remove the
+				// handles.
+				for k := range a.pendingHandles {
+					delete(a.pendingHandles, k)
+				}
+				return nil
+			}
+
 			input := sqs.DeleteMessageBatchInput{
 				QueueUrl: aws.String(a.conf.URL),
 			}

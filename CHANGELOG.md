@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `sqs` input now adds some message attributes as metadata.
+- Added field `delete_message` to `sqs` input.
+- The `sqs` output now sends metadata as message attributes.
+
 ## 2.12.2 - 2019-08-19
 
 ### Fixed

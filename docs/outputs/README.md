@@ -1004,7 +1004,10 @@ sqs:
   url: ""
 ```
 
-Sends messages to an SQS queue.
+Sends messages to an SQS queue. Metadata values are sent along with the payload
+as attributes with the data type String. If the number of metadata values in a
+message exceeds the message attribute limit (10) then the top ten keys ordered
+alphabetically will be selected.
 
 ### Credentials
 

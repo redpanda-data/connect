@@ -263,6 +263,7 @@ input:
           role_external_id: ${INPUT_SQS_CREDENTIALS_ROLE_EXTERNAL_ID}
           secret: ${INPUT_SQS_CREDENTIALS_SECRET}
           token: ${INPUT_SQS_CREDENTIALS_TOKEN}
+        delete_message: ${INPUT_SQS_DELETE_MESSAGE:true}
         endpoint: ${INPUT_SQS_ENDPOINT}
         max_number_of_messages: ${INPUT_SQS_MAX_NUMBER_OF_MESSAGES:1}
         region: ${INPUT_SQS_REGION:eu-west-1}
