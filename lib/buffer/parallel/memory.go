@@ -77,6 +77,7 @@ func (m *Memory) NextMessage() (types.Message, AckFunc, error) {
 	})
 	m.pendingBytes += messageSize
 
+	m.cond.Broadcast()
 	m.cond.L.Unlock()
 
 	return msg, func(ack bool) (int, error) {

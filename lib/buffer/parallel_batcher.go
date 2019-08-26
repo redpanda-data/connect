@@ -94,8 +94,6 @@ func (m *ParallelBatcher) outputLoop() {
 	var nextTimedBatchChan <-chan time.Time
 	if tNext := m.batcher.UntilNext(); tNext >= 0 {
 		nextTimedBatchChan = time.After(tNext)
-	} else {
-		nextTimedBatchChan = make(<-chan time.Time)
 	}
 
 	var pendingResChans []chan<- types.Response
@@ -113,6 +111,14 @@ func (m *ParallelBatcher) outputLoop() {
 				// Final flush of remaining documents.
 				atomic.StoreInt32(&m.running, 0)
 				flushBatch = true
+				// If we're waiting for a timed batch then we will respect it.
+				if nextTimedBatchChan != nil {
+					select {
+					case <-nextTimedBatchChan:
+					case <-m.closeChan:
+						return
+					}
+				}
 			} else {
 				tran.Payload.Iter(func(i int, p types.Part) error {
 					if m.batcher.Add(p) {
