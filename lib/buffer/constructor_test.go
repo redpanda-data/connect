@@ -22,7 +22,6 @@ package buffer
 
 import (
 	"encoding/json"
-	"os"
 	"reflect"
 	"testing"
 
@@ -41,7 +40,7 @@ func TestConstructorBadType(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "not_exist"
 
-	if _, err := New(conf, log.New(os.Stdout, logConfig), metrics.DudType{}); err == nil {
+	if _, err := New(conf, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }
@@ -111,6 +110,7 @@ func TestSanitise(t *testing.T) {
 	exp = `{` +
 		`"type":"memory",` +
 		`"memory":{` +
+		`"batch_policy":{"byte_size":0,"condition":{"type":"static","static":false},"count":0,"enabled":false,"period":""},` +
 		`"limit":20` +
 		`}` +
 		`}`

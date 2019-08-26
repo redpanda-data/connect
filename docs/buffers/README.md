@@ -3,8 +3,17 @@ Buffers
 
 This document was generated with `benthos --list-buffers`
 
-Buffers can solve a number of typical streaming problems and are worth
-considering if you face circumstances similar to the following:
+Benthos uses a transaction based model for guaranteeing delivery of messages
+without the need for a buffer. This ensures that messages are never acknowledged
+from a source until the message has left the target sink.
+
+However, sometimes the transaction model is undesired, in which case there are a
+range of buffer options available which decouple input sources from the rest of
+the Benthos pipeline.
+
+Buffers can therefore solve a number of typical streaming problems but come at
+the cost of weakening the delivery guarantees of your pipeline. Common problems
+that might warrant use of a buffer are:
 
 - Input sources can periodically spike beyond the capacity of your output sinks.
 - You want to use parallel [processing pipelines](../pipeline.md).
@@ -28,10 +37,13 @@ different options and their qualities:
 
 #### Delivery Guarantees
 
-| Type      | On Restart | On Crash  | On Disk Corruption |
-| --------- | ---------- | --------- | ------------------ |
-| Memory    | Lost       | Lost      | Lost               |
-| Mmap File | Persisted  | Lost      | Lost               |
+| Event     | Shutdown  | Crash  | Disk Corruption |
+| --------- | --------- | ------ | --------------- |
+| Memory    | Flushed\* | Lost   | Lost            |
+| Mmap File | Persisted | Lost   | Lost            |
+
+\* Makes a best attempt at flushing the remaining messages before closing
+  gracefully.
 
 ### Contents
 
@@ -44,12 +56,43 @@ different options and their qualities:
 ``` yaml
 type: memory
 memory:
-  limit: 5.24288e+08
+  batch_policy:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 0
+    enabled: false
+    period: ""
+  limit: 524288000
 ```
 
-The memory buffer type simply allocates a set amount of RAM for buffering
-messages. This can be useful when reading from sources that produce large bursts
-of data. Messages inside the buffer are lost if the service is stopped.
+The memory buffer stores messages in RAM. During shutdown Benthos will make a
+best attempt at flushing all remaining messages before exiting cleanly.
+
+This buffer has a configurable limit, where consumption will be stopped with
+back pressure upstream if the total size of messages in the buffer reaches this
+amount. Since this calculation is only an estimate, and the real size of
+messages in RAM is always higher, it is recommended to set the limit
+significantly below the amount of RAM available.
+
+### Batching
+
+It is possible to batch up messages sent from this buffer using a batch policy.
+Batches are considered complete and will be flushed downstream when either of
+the following conditions are met:
+
+- The `byte_size` field is non-zero and the total size of the batch in
+  bytes matches or exceeds it (disregarding metadata.)
+- The `count` field is non-zero and the total number of messages in
+  the batch matches or exceeds it.
+- A message added to the batch causes the condition to resolve `true`.
+- The `period` field is non-empty and the time since the last batch
+  exceeds its value.
+
+This is a more powerful way of batching messages than the
+[`batch`](../processors/README.md#batch) processor, as it does not
+rely on new messages entering the pipeline in order to trigger the conditions.
 
 ## `mmap_file`
 

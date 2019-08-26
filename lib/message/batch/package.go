@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2019 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,10 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package buffer
-
-import "github.com/Jeffail/benthos/lib/log"
-
-var logConfig = log.Config{
-	LogLevel: "NONE",
-}
+// Package batch provides tooling for creating and executing Benthos message
+// batch policies.
+package batch

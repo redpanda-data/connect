@@ -77,6 +77,10 @@ h3 > code {
     background: #35362e;
 }
 
+.table-hover > tbody > tr:hover > td, .table-hover > tbody > tr:hover > th {
+    background: #595a51;
+}
+
 .well {
     background-color: #272822;
     border: 1px solid #35362e;

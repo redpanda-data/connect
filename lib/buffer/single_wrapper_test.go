@@ -45,10 +45,9 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	conf := NewConfig()
 	b := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: int(incr+15) * int(total),
-	}), log.New(os.Stdout, logConfig), metrics.DudType{})
+	}), log.Noop(), metrics.Noop())
 	if err := b.Consume(tChan); err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	var i uint8
@@ -219,10 +218,9 @@ func TestBufferClosing(t *testing.T) {
 	conf := NewConfig()
 	b := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: int(incr+15) * int(total),
-	}), log.New(os.Stdout, logConfig), metrics.DudType{})
+	}), log.Noop(), metrics.Noop())
 	if err := b.Consume(tChan); err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	var i uint8
@@ -289,10 +287,9 @@ func BenchmarkSingleMem(b *testing.B) {
 	conf := NewConfig()
 	buffer := NewSingleWrapper(conf, single.NewMemory(single.MemoryConfig{
 		Limit: 50000000,
-	}), log.New(os.Stdout, logConfig), metrics.DudType{})
+	}), log.Noop(), metrics.Noop())
 	if err := buffer.Consume(tChan); err != nil {
-		b.Error(err)
-		return
+		b.Fatal(err)
 	}
 
 	contents := [][]byte{
@@ -347,13 +344,13 @@ func BenchmarkSingleMmap(b *testing.B) {
 	mmapConf.FileSize = 50000000
 	mmapConf.Path = dir
 
-	mmap, err := single.NewMmapBuffer(mmapConf, log.New(os.Stdout, logConfig), metrics.DudType{})
+	mmap, err := single.NewMmapBuffer(mmapConf, log.Noop(), metrics.Noop())
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	conf := NewConfig()
-	buffer := NewSingleWrapper(conf, mmap, log.New(os.Stdout, logConfig), metrics.DudType{})
+	buffer := NewSingleWrapper(conf, mmap, log.Noop(), metrics.Noop())
 	if err := buffer.Consume(tChan); err != nil {
 		b.Error(err)
 		return

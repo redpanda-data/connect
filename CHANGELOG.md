@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - The `sqs` input now adds some message attributes as metadata.
 - Added field `delete_message` to `sqs` input.
 - The `sqs` output now sends metadata as message attributes.
+- New `batch_policy` field added to `memory` buffer.
 
 ### Fixed
 

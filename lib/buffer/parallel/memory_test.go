@@ -286,6 +286,47 @@ func TestMemoryClose(t *testing.T) {
 	wg.Wait()
 }
 
+func TestMemoryCloseWithPending(t *testing.T) {
+	block := NewMemory(1000)
+
+	for i := 0; i < 10; i++ {
+		block.PushMessage(message.New([][]byte{
+			[]byte("hello world"),
+		}))
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		block.CloseOnceEmpty()
+		wg.Done()
+	}()
+
+	<-time.After(time.Millisecond * 100)
+	for i := 0; i < 10; i++ {
+		m, ackFunc, err := block.NextMessage()
+		if err != nil {
+			t.Error(err)
+		} else {
+			if expected, actual := "hello world", string(m.Get(0).Get()); expected != actual {
+				t.Errorf("Wrong message contents, %v != %v", expected, actual)
+			}
+			if i < 9 {
+				if _, err := ackFunc(true); err != nil {
+					t.Error(err)
+				}
+			}
+		}
+	}
+
+	if _, _, err := block.NextMessage(); err != types.ErrTypeClosed {
+		t.Errorf("Wrong error returned: %v != %v", err, types.ErrTypeClosed)
+	}
+
+	wg.Wait()
+}
+
 func TestMemoryRejectLargeMessage(t *testing.T) {
 	tMsg := message.New(make([][]byte, 1))
 	tMsg.Get(0).Set([]byte("hello world this message is too long!"))

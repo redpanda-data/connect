@@ -242,26 +242,28 @@ batch:
 ```
 
 Reads a number of discrete messages, buffering (but not acknowledging) the
-message parts until either:
+message parts until the next batch is complete.
+
+Batches are considered complete and will be flushed downstream when either of
+the following conditions are met:
 
 - The `byte_size` field is non-zero and the total size of the batch in
-  bytes matches or exceeds it.
+  bytes matches or exceeds it (disregarding metadata.)
 - The `count` field is non-zero and the total number of messages in
   the batch matches or exceeds it.
 - A message added to the batch causes the condition to resolve `true`.
 - The `period` field is non-empty and the time since the last batch
   exceeds its value.
 
-Once one of these events trigger the parts are combined into a single batch of
-messages and sent through the pipeline. After reaching a destination the
-acknowledgment is sent out for all messages inside the batch at the same time,
-preserving at-least-once delivery guarantees.
+Once a batch is complete it is sent through the pipeline. After reaching a
+destination the acknowledgment is sent out for all messages inside the batch at
+the same time, preserving at-least-once delivery guarantees.
 
-The `period` field - when non-empty - defines a period of time whereby
-a batch is sent even if the `byte_size` has not yet been reached.
-Batch parameters are only triggered when a message is added, meaning a pending
-batch can last beyond this period if no messages are added since the period was
-reached.
+This processor only checks batch conditions when a new message is added, meaning
+a pending batch can last beyond the specified period if no messages are added
+since the period was reached. If your input stream is non-continuous and you
+need to guarantee the period is respected you should instead use a
+[`memory`](../buffers/README.md#memory) buffer with a batch policy.
 
 When a batch is sent to an output the behaviour will differ depending on the
 protocol. If the output type supports multipart messages then the batch is sent
@@ -272,9 +274,11 @@ to sending them individually.
 
 ### WARNING
 
-The batch processor should *always* be positioned within the `input`
-section - ideally before any other processor - in order to avoid unexpected
-acknowledgment behaviour and message ordering.
+In order to preserve transaction-based delivery guarantees the batch processor
+should *always* be positioned within the `input` section, ideally
+before any other processor. Alternatively, if you do not need strict delivery
+guarantees it is best to use a [memory buffer](../buffers/README.md#memory) with
+a batch policy.
 
 For more information about batching in Benthos please check out
 [this document](../batching.md).

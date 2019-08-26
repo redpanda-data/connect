@@ -21,7 +21,6 @@
 package buffer
 
 import (
-	"os"
 	"testing"
 	"time"
 
@@ -36,10 +35,9 @@ func TestMemoryBuffer(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "memory"
 
-	buf, err := New(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
+	buf, err := New(conf, log.Noop(), metrics.Noop())
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	tChan, resChan := make(chan types.Transaction), make(chan types.Response)

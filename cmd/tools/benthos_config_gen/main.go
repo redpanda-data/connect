@@ -90,6 +90,7 @@ func envify(rootPath string, conf interface{}, paths map[string]string) (newConf
 		"READ_UNTIL",
 		"OUTPUT_BROKER_OUTPUTS_RETRY",
 		"CONDITIONAL",
+		"BUFFER_MEMORY_BATCH_POLICY",
 		"WHILE",
 		"SWITCH",
 		"PROCESS_FIELD",
@@ -482,23 +483,6 @@ func main() {
 		}
 
 		createYAML(t, filepath.Join(configsDir, "tracers", t+".yaml"), sanit)
-	}
-
-	// Create buffers config
-	{
-		t := "buffers"
-
-		conf := config.New()
-		conf.Input.Processors = nil
-		conf.Output.Processors = nil
-
-		sanit, err := conf.Sanitised()
-		if err != nil {
-			panic(err)
-		}
-		sanit.Buffer = conf.Buffer
-
-		createYAML(t, filepath.Join(configsDir, t+".yaml"), sanit)
 	}
 
 	// Create Environment Vars Config
