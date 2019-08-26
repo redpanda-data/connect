@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - Added field `delete_message` to `sqs` input.
 - The `sqs` output now sends metadata as message attributes.
 
+### Fixed
+
+- The `prometheus` metrics exporter adds quantiles back to timing metrics.
+
 ## 2.12.2 - 2019-08-19
 
 ### Fixed
