@@ -233,9 +233,10 @@ func (p *Prometheus) GetTimer(path string) StatTimer {
 	var exists bool
 	if tmr, exists = p.timers[stat]; !exists {
 		tmr = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-			Namespace: p.prefix,
-			Name:      stat,
-			Help:      "Benthos Timing metric",
+			Namespace:  p.prefix,
+			Name:       stat,
+			Help:       "Benthos Timing metric",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		}, nil)
 		prometheus.MustRegister(tmr)
 		p.timers[stat] = tmr
@@ -309,9 +310,10 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 	var exists bool
 	if tmr, exists = p.timers[stat]; !exists {
 		tmr = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-			Namespace: p.prefix,
-			Name:      stat,
-			Help:      "Benthos Timing metric",
+			Namespace:  p.prefix,
+			Name:       stat,
+			Help:       "Benthos Timing metric",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		}, labelNames)
 		prometheus.MustRegister(tmr)
 		p.timers[stat] = tmr
