@@ -128,6 +128,7 @@ const (
 	TypeThrottle     = "throttle"
 	TypeUnarchive    = "unarchive"
 	TypeWhile        = "while"
+	TypeXML          = "xml"
 )
 
 //------------------------------------------------------------------------------
@@ -184,6 +185,7 @@ type Config struct {
 	Throttle     ThrottleConfig     `json:"throttle" yaml:"throttle"`
 	Unarchive    UnarchiveConfig    `json:"unarchive" yaml:"unarchive"`
 	While        WhileConfig        `json:"while" yaml:"while"`
+	XML          XMLConfig          `json:"xml" yaml:"xml"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -239,6 +241,7 @@ func NewConfig() Config {
 		Throttle:     NewThrottleConfig(),
 		Unarchive:    NewUnarchiveConfig(),
 		While:        NewWhileConfig(),
+		XML:          NewXMLConfig(),
 	}
 }
 

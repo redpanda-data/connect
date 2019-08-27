@@ -480,6 +480,8 @@ pipeline:
     type: ${PROCESSOR_TYPE:noop}
     unarchive:
       format: ${PROCESSOR_UNARCHIVE_FORMAT:binary}
+    xml:
+      operator: ${PROCESSOR_XML_OPERATOR:to_json}
   threads: ${PROCESSOR_THREADS:1}
 output:
   broker:

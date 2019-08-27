@@ -5,12 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.13.0 - 2019-08-27
+
 ### Added
 
 - The `sqs` input now adds some message attributes as metadata.
 - Added field `delete_message` to `sqs` input.
 - The `sqs` output now sends metadata as message attributes.
 - New `batch_policy` field added to `memory` buffer.
+- New `xml` processor.
 
 ### Fixed
 

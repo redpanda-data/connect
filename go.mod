@@ -16,6 +16,7 @@ require (
 	github.com/benhoyt/goawk v1.6.0
 	github.com/bradfitz/gomemcache v0.0.0-20190329173943-551aad21a668
 	github.com/cenkalti/backoff v2.1.1+incompatible
+	github.com/clbanning/mxj v1.8.4
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/colinmarc/hdfs v1.1.3
 	github.com/containerd/continuity v0.0.0-20181203112020-004b46473808 // indirect
