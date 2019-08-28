@@ -87,6 +87,8 @@ const (
 	TypeS3              = "s3"
 	TypeSQS             = "sqs"
 	TypeSTDIN           = "stdin"
+	TypeTCP             = "tcp"
+	TypeTCPServer       = "tcp_server"
 	TypeWebsocket       = "websocket"
 	TypeZMQ4            = "zmq4"
 )
@@ -123,6 +125,8 @@ type Config struct {
 	S3              reader.AmazonS3Config        `json:"s3" yaml:"s3"`
 	SQS             reader.AmazonSQSConfig       `json:"sqs" yaml:"sqs"`
 	STDIN           STDINConfig                  `json:"stdin" yaml:"stdin"`
+	TCP             TCPConfig                    `json:"tcp" yaml:"tcp"`
+	TCPServer       TCPServerConfig              `json:"tcp_server" yaml:"tcp_server"`
 	Websocket       reader.WebsocketConfig       `json:"websocket" yaml:"websocket"`
 	ZMQ4            *reader.ZMQ4Config           `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors      []processor.Config           `json:"processors" yaml:"processors"`
@@ -159,6 +163,8 @@ func NewConfig() Config {
 		S3:              reader.NewAmazonS3Config(),
 		SQS:             reader.NewAmazonSQSConfig(),
 		STDIN:           NewSTDINConfig(),
+		TCP:             NewTCPConfig(),
+		TCPServer:       NewTCPServerConfig(),
 		Websocket:       reader.NewWebsocketConfig(),
 		ZMQ4:            reader.NewZMQ4Config(),
 		Processors:      []processor.Config{},

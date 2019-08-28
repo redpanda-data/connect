@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Metadata field `gcp_pubsub_publish_time_unix` added to `gcp_pubsub` input.
+- New `tcp` and `tcp_server` inputs.
 
 ## 2.13.0 - 2019-08-27
 

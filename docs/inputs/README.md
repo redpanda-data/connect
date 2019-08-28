@@ -47,7 +47,9 @@ input:
 24. [`s3`](#s3)
 25. [`sqs`](#sqs)
 26. [`stdin`](#stdin)
-27. [`websocket`](#websocket)
+27. [`tcp`](#tcp)
+28. [`tcp_server`](#tcp_server)
+29. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -251,7 +253,16 @@ Consumes messages from a GCP Cloud Pub/Sub subscription.
 The field `max_batch_count` specifies the maximum number of prefetched
 messages to be batched together.
 
-Attributes from each message are added as metadata, which can be accessed using
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+``` text
+- gcp_pubsub_publish_time_unix
+- All message attributes
+```
+
+You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
 ## `hdfs`
@@ -1069,6 +1080,49 @@ is set to true then lines are interpretted as message parts, and an empty line
 indicates the end of the message.
 
 If the delimiter field is left empty then line feed (\n) is used.
+
+## `tcp`
+
+``` yaml
+type: tcp
+tcp:
+  address: localhost:4194
+  delimiter: ""
+  max_buffer: 1e+06
+  multipart: false
+```
+
+Connects to a TCP server and consumes a continuous stream of messages.
+
+If multipart is set to false each line of data is read as a separate message. If
+multipart is set to true each line is read as a message part, and an empty line
+indicates the end of a message.
+
+If the delimiter field is left empty then line feed (\n) is used.
+
+## `tcp_server`
+
+``` yaml
+type: tcp_server
+tcp_server:
+  address: 127.0.0.1:0
+  delimiter: ""
+  max_buffer: 1e+06
+  multipart: false
+```
+
+Creates a server that receives messages over TCP. Each connection is parsed as a
+continuous stream of line delimited messages.
+
+If multipart is set to false each line of data is read as a separate message. If
+multipart is set to true each line is read as a message part, and an empty line
+indicates the end of a message.
+
+If the delimiter field is left empty then line feed (\n) is used.
+
+The field `max_buffer` specifies the maximum amount of memory to
+allocate _per connection_ for buffering lines of data. If a line of data from a
+connection exceeds this value then the connection will be closed.
 
 ## `websocket`
 

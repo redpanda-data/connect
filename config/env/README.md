@@ -264,6 +264,14 @@ INPUT_SQS_URL
 INPUT_STDIN_DELIMITER
 INPUT_STDIN_MAX_BUFFER                              = 1000000
 INPUT_STDIN_MULTIPART                               = false
+INPUT_TCP_ADDRESS                                   = localhost:4194
+INPUT_TCP_DELIMITER
+INPUT_TCP_MAX_BUFFER                                = 1000000
+INPUT_TCP_MULTIPART                                 = false
+INPUT_TCP_SERVER_ADDRESS                            = 127.0.0.1:0
+INPUT_TCP_SERVER_DELIMITER
+INPUT_TCP_SERVER_MAX_BUFFER                         = 1000000
+INPUT_TCP_SERVER_MULTIPART                          = false
 INPUT_WEBSOCKET_BASIC_AUTH_ENABLED                  = false
 INPUT_WEBSOCKET_BASIC_AUTH_PASSWORD
 INPUT_WEBSOCKET_BASIC_AUTH_USERNAME

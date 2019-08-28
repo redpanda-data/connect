@@ -273,6 +273,16 @@ input:
         delimiter: ${INPUT_STDIN_DELIMITER}
         max_buffer: ${INPUT_STDIN_MAX_BUFFER:1000000}
         multipart: ${INPUT_STDIN_MULTIPART:false}
+      tcp:
+        address: ${INPUT_TCP_ADDRESS:localhost:4194}
+        delimiter: ${INPUT_TCP_DELIMITER}
+        max_buffer: ${INPUT_TCP_MAX_BUFFER:1000000}
+        multipart: ${INPUT_TCP_MULTIPART:false}
+      tcp_server:
+        address: ${INPUT_TCP_SERVER_ADDRESS:127.0.0.1:0}
+        delimiter: ${INPUT_TCP_SERVER_DELIMITER}
+        max_buffer: ${INPUT_TCP_SERVER_MAX_BUFFER:1000000}
+        multipart: ${INPUT_TCP_SERVER_MULTIPART:false}
       type: ${INPUT_TYPE:dynamic}
       websocket:
         basic_auth:
