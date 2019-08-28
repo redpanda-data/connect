@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -346,12 +347,15 @@ func TestHTTPServerWebsockets(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
-		if err = client.WriteMessage(
+		if clientErr := client.WriteMessage(
 			websocket.BinaryMessage, []byte("hello world 1"),
-		); err != nil {
-			t.Fatal(err)
+		); clientErr != nil {
+			t.Fatal(clientErr)
 		}
+		wg.Done()
 	}()
 
 	var ts types.Transaction
@@ -368,13 +372,16 @@ func TestHTTPServerWebsockets(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for response")
 	}
+	wg.Wait()
 
+	wg.Add(1)
 	go func() {
-		if err = client.WriteMessage(
+		if closeErr := client.WriteMessage(
 			websocket.BinaryMessage, []byte("hello world 2"),
-		); err != nil {
-			t.Fatal(err)
+		); closeErr != nil {
+			t.Fatal(closeErr)
 		}
+		wg.Done()
 	}()
 
 	select {
@@ -390,6 +397,7 @@ func TestHTTPServerWebsockets(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for response")
 	}
+	wg.Wait()
 
 	h.CloseAsync()
 	if err := h.WaitForClose(time.Second * 5); err != nil {
