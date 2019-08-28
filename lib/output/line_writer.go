@@ -88,6 +88,7 @@ func (w *LineWriter) loop() {
 		mCount     = w.stats.GetCounter("count")
 		mPartsSent = w.stats.GetCounter("sent")
 		mSent      = w.stats.GetCounter("batch.sent")
+		mBytesSent = w.stats.GetCounter("batch.bytes")
 		// following metrics are left for backward compatibility
 		// and should be considered as deprecated
 		// TODO: V3 Remove obsolete metrics
@@ -142,6 +143,7 @@ func (w *LineWriter) loop() {
 			mPartsSuccess.Incr(int64(ts.Payload.Len()))
 			mSent.Incr(1)
 			mPartsSent.Incr(int64(ts.Payload.Len()))
+			mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
 		}
 
 		for _, s := range spans {

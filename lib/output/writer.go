@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output/writer"
@@ -80,6 +81,7 @@ func (w *Writer) loop() {
 		mCount      = w.stats.GetCounter("count")
 		mPartsSent  = w.stats.GetCounter("sent")
 		mSent       = w.stats.GetCounter("batch.sent")
+		mBytesSent  = w.stats.GetCounter("batch.bytes")
 		mConn       = w.stats.GetCounter("connection.up")
 		mFailedConn = w.stats.GetCounter("connection.failed")
 		mLostConn   = w.stats.GetCounter("connection.lost")
@@ -185,6 +187,7 @@ func (w *Writer) loop() {
 			mPartsSuccess.Incr(int64(ts.Payload.Len()))
 			mSent.Incr(1)
 			mPartsSent.Incr(int64(ts.Payload.Len()))
+			mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
 			throt.Reset()
 		}
 
