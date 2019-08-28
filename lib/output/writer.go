@@ -74,6 +74,13 @@ func NewWriter(
 
 //------------------------------------------------------------------------------
 
+func (w *Writer) latencyMeasuringWrite(msg types.Message) (latencyNs int64, err error) {
+	t0 := time.Now()
+	err = w.writer.Write(msg)
+	latencyNs = time.Since(t0).Nanoseconds()
+	return latencyNs, err
+}
+
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (w *Writer) loop() {
 	// Metrics paths
@@ -82,6 +89,7 @@ func (w *Writer) loop() {
 		mPartsSent  = w.stats.GetCounter("sent")
 		mSent       = w.stats.GetCounter("batch.sent")
 		mBytesSent  = w.stats.GetCounter("batch.bytes")
+		mLatency    = w.stats.GetTimer("batch.latency")
 		mConn       = w.stats.GetCounter("connection.up")
 		mFailedConn = w.stats.GetCounter("connection.failed")
 		mLostConn   = w.stats.GetCounter("connection.lost")
@@ -141,7 +149,7 @@ func (w *Writer) loop() {
 		}
 
 		spans := tracing.CreateChildSpans("output_"+w.typeStr, ts.Payload)
-		err := w.writer.Write(ts.Payload)
+		latency, err := w.latencyMeasuringWrite(ts.Payload)
 
 		// If our writer says it is not connected.
 		if err == types.ErrNotConnected {
@@ -161,7 +169,7 @@ func (w *Writer) loop() {
 					if !throt.Retry() {
 						return
 					}
-				} else if err = w.writer.Write(ts.Payload); err != types.ErrNotConnected {
+				} else if latency, err = w.latencyMeasuringWrite(ts.Payload); err != types.ErrNotConnected {
 					atomic.StoreInt32(&w.isConnected, 1)
 					mConn.Incr(1)
 					break
@@ -188,6 +196,7 @@ func (w *Writer) loop() {
 			mSent.Incr(1)
 			mPartsSent.Incr(int64(ts.Payload.Len()))
 			mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
+			mLatency.Timing(latency)
 			throt.Reset()
 		}
 

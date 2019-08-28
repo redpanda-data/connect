@@ -89,6 +89,7 @@ func (w *LineWriter) loop() {
 		mPartsSent = w.stats.GetCounter("sent")
 		mSent      = w.stats.GetCounter("batch.sent")
 		mBytesSent = w.stats.GetCounter("batch.bytes")
+		mLatency   = w.stats.GetTimer("batch.latency")
 		// following metrics are left for backward compatibility
 		// and should be considered as deprecated
 		// TODO: V3 Remove obsolete metrics
@@ -131,11 +132,13 @@ func (w *LineWriter) loop() {
 		spans := tracing.CreateChildSpans("output_"+w.typeStr, ts.Payload)
 
 		var err error
+		t0 := time.Now()
 		if ts.Payload.Len() == 1 {
 			_, err = fmt.Fprintf(w.handle, "%s%s", ts.Payload.Get(0).Get(), delim)
 		} else {
 			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(message.GetAllBytes(ts.Payload), delim), delim, delim)
 		}
+		latency := time.Since(t0).Nanoseconds()
 		if err != nil {
 			mError.Incr(1)
 		} else {
@@ -144,6 +147,7 @@ func (w *LineWriter) loop() {
 			mSent.Incr(1)
 			mPartsSent.Incr(int64(ts.Payload.Len()))
 			mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
+			mLatency.Timing(latency)
 		}
 
 		for _, s := range spans {
