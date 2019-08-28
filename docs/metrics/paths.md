@@ -55,6 +55,8 @@ prefixed with `pipeline.processor.N`, where N is the index.
 - `output.count`: The number of times the output has attempted to send messages.
 - `output.sent`: The number of messages sent.
 - `output.batch.sent`: The number of message batches sent.
+- `output.batch.bytes`: The total number of bytes sent.
+- `output.batch.latency`: Latency of message batch write in nanoseconds. Includes only sucessful attempts.
 - `output.connection.up`
 - `output.connection.failed`
 - `output.connection.lost`
