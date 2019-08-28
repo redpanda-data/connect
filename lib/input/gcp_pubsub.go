@@ -38,7 +38,16 @@ Consumes messages from a GCP Cloud Pub/Sub subscription.
 The field ` + "`max_batch_count`" + ` specifies the maximum number of prefetched
 messages to be batched together.
 
-Attributes from each message are added as metadata, which can be accessed using
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "``` text" + `
+- gcp_pubsub_publish_time_unix
+- All message attributes
+` + "```" + `
+
+You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).`,
 	}
 }

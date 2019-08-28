@@ -22,6 +22,7 @@ package reader
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -153,6 +154,7 @@ func (c *GCPPubSub) Read() (types.Message, error) {
 	c.pendingMsgs = append(c.pendingMsgs, gmsg)
 	part := message.NewPart(gmsg.Data)
 	part.SetMetadata(metadata.New(gmsg.Attributes))
+	part.Metadata().Set("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
 	msg.Append(part)
 
 batchLoop:
@@ -169,6 +171,7 @@ batchLoop:
 		c.pendingMsgs = append(c.pendingMsgs, gmsg)
 		part := message.NewPart(gmsg.Data)
 		part.SetMetadata(metadata.New(gmsg.Attributes))
+		part.Metadata().Set("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
 		msg.Append(part)
 	}
 
