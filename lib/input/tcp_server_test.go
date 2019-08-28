@@ -61,13 +61,13 @@ func TestTCPServerBasic(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if cerr, _ := conn.Write([]byte("foo\n")); err != nil {
+		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("bar\n")); err != nil {
+		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("baz\n")); err != nil {
+		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
 			t.Error(cerr)
 		}
 		wg.Done()
@@ -143,20 +143,22 @@ func TestTCPServerReconnect(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if cerr, _ := conn.Write([]byte("foo\n")); err != nil {
+		_, cerr := conn.Write([]byte("foo\n"))
+		if cerr != nil {
 			t.Error(cerr)
 		}
 		conn.Close()
-		conn, err = net.Dial("tcp", addr.String())
-		if err != nil {
-			t.Fatal(err)
+		conn, cerr = net.Dial("tcp", addr.String())
+		if cerr != nil {
+			t.Fatal(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("bar\n")); err != nil {
+		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("baz\n")); err != nil {
+		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
 			t.Error(cerr)
 		}
+
 		wg.Done()
 	}()
 
@@ -231,16 +233,16 @@ func TestTCPServerMultipart(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if cerr, _ := conn.Write([]byte("foo\n")); err != nil {
+		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("bar\n")); err != nil {
+		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("\n")); err != nil {
+		if _, cerr := conn.Write([]byte("\n")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("baz\n\n")); err != nil {
+		if _, cerr := conn.Write([]byte("baz\n\n")); cerr != nil {
 			t.Error(cerr)
 		}
 		wg.Done()
@@ -310,16 +312,16 @@ func TestTCPServerMultipartCustomDelim(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if cerr, _ := conn.Write([]byte("foo@")); err != nil {
+		if _, cerr := conn.Write([]byte("foo@")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("bar@")); err != nil {
+		if _, cerr := conn.Write([]byte("bar@")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("@")); err != nil {
+		if _, cerr := conn.Write([]byte("@")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("baz\n@@")); err != nil {
+		if _, cerr := conn.Write([]byte("baz\n@@")); cerr != nil {
 			t.Error(cerr)
 		}
 		wg.Done()
@@ -388,16 +390,16 @@ func TestTCPServerMultipartShutdown(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if cerr, _ := conn.Write([]byte("foo\n")); err != nil {
+		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("bar\n")); err != nil {
+		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("\n")); err != nil {
+		if _, cerr := conn.Write([]byte("\n")); cerr != nil {
 			t.Error(cerr)
 		}
-		if cerr, _ := conn.Write([]byte("baz\n")); err != nil {
+		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
 			t.Error(cerr)
 		}
 		conn.Close()

@@ -49,7 +49,8 @@ input:
 26. [`stdin`](#stdin)
 27. [`tcp`](#tcp)
 28. [`tcp_server`](#tcp_server)
-29. [`websocket`](#websocket)
+29. [`udp_server`](#udp_server)
+30. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -1123,6 +1124,24 @@ If the delimiter field is left empty then line feed (\n) is used.
 The field `max_buffer` specifies the maximum amount of memory to
 allocate _per connection_ for buffering lines of data. If a line of data from a
 connection exceeds this value then the connection will be closed.
+
+## `udp_server`
+
+``` yaml
+type: udp_server
+udp_server:
+  address: 127.0.0.1:0
+  delimiter: ""
+  max_buffer: 1e+06
+```
+
+Creates a server that receives messages over UDP as a continuous stream of data.
+Each line is interpretted as an individual message, if the delimiter field is
+left empty then line feed (\n) is used.
+
+The field `max_buffer` specifies the maximum amount of memory to
+allocate for buffering lines of data, this must exceed the largest expected
+message size.
 
 ## `websocket`
 

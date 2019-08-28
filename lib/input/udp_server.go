@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"io"
 	"net"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -38,39 +37,32 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors[TypeTCPServer] = TypeSpec{
-		constructor: NewTCPServer,
+	Constructors[TypeUDPServer] = TypeSpec{
+		constructor: NewUDPServer,
 		description: `
-Creates a server that receives messages over TCP. Each connection is parsed as a
-continuous stream of line delimited messages.
-
-If multipart is set to false each line of data is read as a separate message. If
-multipart is set to true each line is read as a message part, and an empty line
-indicates the end of a message.
-
-If the delimiter field is left empty then line feed (\n) is used.
+Creates a server that receives messages over UDP as a continuous stream of data.
+Each line is interpretted as an individual message, if the delimiter field is
+left empty then line feed (\n) is used.
 
 The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to
-allocate _per connection_ for buffering lines of data. If a line of data from a
-connection exceeds this value then the connection will be closed.`,
+allocate for buffering lines of data, this must exceed the largest expected
+message size.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// TCPServerConfig contains configuration for the TCPServer input type.
-type TCPServerConfig struct {
+// UDPServerConfig contains configuration for the UDPServer input type.
+type UDPServerConfig struct {
 	Address   string `json:"address" yaml:"address"`
-	Multipart bool   `json:"multipart" yaml:"multipart"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
 	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
-// NewTCPServerConfig creates a new TCPServerConfig with default values.
-func NewTCPServerConfig() TCPServerConfig {
-	return TCPServerConfig{
+// NewUDPServerConfig creates a new UDPServerConfig with default values.
+func NewUDPServerConfig() UDPServerConfig {
+	return UDPServerConfig{
 		Address:   "127.0.0.1:0",
-		Multipart: false,
 		MaxBuffer: 1000000,
 		Delim:     "",
 	}
@@ -78,17 +70,17 @@ func NewTCPServerConfig() TCPServerConfig {
 
 //------------------------------------------------------------------------------
 
-// TCPServer is an input type that binds to an address and consumes streams of
-// messages over TCP.
-type TCPServer struct {
+// UDPServer is an input type that binds to an address and consumes streams of
+// messages over UDP.
+type UDPServer struct {
 	running int32
 
-	conf  TCPServerConfig
+	conf  UDPServerConfig
 	stats metrics.Type
 	log   log.Modular
 
-	delim    []byte
-	listener net.Listener
+	delim []byte
+	conn  net.PacketConn
 
 	transactions chan types.Transaction
 
@@ -96,24 +88,24 @@ type TCPServer struct {
 	closedChan chan struct{}
 }
 
-// NewTCPServer creates a new TCPServer input type.
-func NewTCPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	ln, err := net.Listen("tcp", conf.TCPServer.Address)
+// NewUDPServer creates a new UDPServer input type.
+func NewUDPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	pc, err := net.ListenPacket("udp", conf.UDPServer.Address)
 	if err != nil {
 		return nil, err
 	}
 	delim := []byte("\n")
-	if len(conf.TCPServer.Delim) > 0 {
-		delim = []byte(conf.TCPServer.Delim)
+	if len(conf.UDPServer.Delim) > 0 {
+		delim = []byte(conf.UDPServer.Delim)
 	}
-	t := TCPServer{
+	t := UDPServer{
 		running: 1,
-		conf:    conf.TCPServer,
+		conf:    conf.UDPServer,
 		stats:   stats,
 		log:     log,
 
-		delim:    delim,
-		listener: ln,
+		delim: delim,
+		conn:  pc,
 
 		transactions: make(chan types.Transaction),
 		closeChan:    make(chan struct{}),
@@ -126,13 +118,22 @@ func NewTCPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics
 
 //------------------------------------------------------------------------------
 
-// Addr returns the underlying TCP listeners address.
-func (t *TCPServer) Addr() net.Addr {
-	return t.listener.Addr()
+// Addr returns the underlying UDP listeners address.
+func (t *UDPServer) Addr() net.Addr {
+	return t.conn.LocalAddr()
 }
 
-func (t *TCPServer) newScanner(r io.Reader) *bufio.Scanner {
-	scanner := bufio.NewScanner(r)
+type wrapPacketConn struct {
+	r net.PacketConn
+}
+
+func (w *wrapPacketConn) Read(p []byte) (n int, err error) {
+	n, _, err = w.r.ReadFrom(p)
+	return
+}
+
+func (t *UDPServer) newScanner(r net.PacketConn) *bufio.Scanner {
+	scanner := bufio.NewScanner(&wrapPacketConn{r: r})
 	if t.conf.MaxBuffer != bufio.MaxScanTokenSize {
 		scanner.Buffer([]byte{}, t.conf.MaxBuffer)
 	}
@@ -159,7 +160,7 @@ func (t *TCPServer) newScanner(r io.Reader) *bufio.Scanner {
 	return scanner
 }
 
-func (t *TCPServer) loop() {
+func (t *UDPServer) loop() {
 	var (
 		mCount     = t.stats.GetCounter("count")
 		mRcvd      = t.stats.GetCounter("batch.received")
@@ -170,15 +171,15 @@ func (t *TCPServer) loop() {
 	defer func() {
 		atomic.StoreInt32(&t.running, 0)
 
-		if t.listener != nil {
-			t.listener.Close()
+		if t.conn != nil {
+			t.conn.Close()
 		}
 
 		close(t.transactions)
 		close(t.closedChan)
 	}()
 
-	t.log.Infof("Receiving TCP messages from address: %v\n", t.listener.Addr())
+	t.log.Infof("Receiving UDP messages from address: %v\n", t.conn.LocalAddr())
 
 	sendMsg := func(msg types.Message) error {
 		tStarted := time.Now()
@@ -210,54 +211,39 @@ func (t *TCPServer) loop() {
 	}
 
 	go func() {
-		for {
-			conn, err := t.listener.Accept()
-			if err != nil {
-				if !strings.Contains(err.Error(), "use of closed network connection") {
-					t.log.Errorf("Failed to accept TCP connection: %v\n", err)
+		var msg types.Message
+		msgLoop := func() {
+			for msg != nil {
+				sendErr := sendMsg(msg)
+				if sendErr == nil || sendErr == types.ErrTypeClosed {
+					msg = nil
+					return
 				}
-				return
+				t.log.Errorf("Failed to send message: %v\n", sendErr)
+				<-time.After(time.Second)
 			}
-			go func(c net.Conn) {
-				defer c.Close()
-				scanner := t.newScanner(c)
-				var msg types.Message
-				msgLoop := func() {
-					for msg != nil {
-						sendErr := sendMsg(msg)
-						if sendErr == nil || sendErr == types.ErrTypeClosed {
-							msg = nil
-							return
-						}
-						t.log.Errorf("Failed to send message: %v\n", sendErr)
-						<-time.After(time.Second)
-					}
+		}
+		for {
+			scanner := t.newScanner(t.conn)
+			for scanner.Scan() {
+				mCount.Incr(1)
+				if len(scanner.Bytes()) == 0 {
+					continue
 				}
-				for scanner.Scan() {
-					mCount.Incr(1)
-					if len(scanner.Bytes()) == 0 {
-						if t.conf.Multipart && msg != nil {
-							msgLoop()
-						}
-						continue
-					}
-					if msg == nil {
-						msg = message.New(nil)
-					}
-					msg.Append(message.NewPart(scanner.Bytes()))
-					if !t.conf.Multipart {
-						msgLoop()
-					}
+				if msg == nil {
+					msg = message.New(nil)
 				}
-				if msg != nil {
-					msgLoop()
+				msg.Append(message.NewPart(scanner.Bytes()))
+				msgLoop()
+			}
+			if msg != nil {
+				msgLoop()
+			}
+			if cerr := scanner.Err(); cerr != nil {
+				if cerr != io.EOF {
+					t.log.Errorf("Connection error due to: %v\n", cerr)
 				}
-				if cerr := scanner.Err(); cerr != nil {
-					if cerr != io.EOF {
-						t.log.Errorf("Connection error due to: %v\n", cerr)
-					}
-				}
-			}(conn)
+			}
 		}
 	}()
 	<-t.closeChan
@@ -265,25 +251,25 @@ func (t *TCPServer) loop() {
 
 // TransactionChan returns a transactions channel for consuming messages from
 // this input.
-func (t *TCPServer) TransactionChan() <-chan types.Transaction {
+func (t *UDPServer) TransactionChan() <-chan types.Transaction {
 	return t.transactions
 }
 
 // Connected returns a boolean indicating whether this input is currently
 // connected to its target.
-func (t *TCPServer) Connected() bool {
+func (t *UDPServer) Connected() bool {
 	return true
 }
 
-// CloseAsync shuts down the TCPServer input and stops processing requests.
-func (t *TCPServer) CloseAsync() {
+// CloseAsync shuts down the UDPServer input and stops processing requests.
+func (t *UDPServer) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&t.running, 1, 0) {
 		close(t.closeChan)
 	}
 }
 
-// WaitForClose blocks until the TCPServer input has closed down.
-func (t *TCPServer) WaitForClose(timeout time.Duration) error {
+// WaitForClose blocks until the UDPServer input has closed down.
+func (t *UDPServer) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-t.closedChan:
 	case <-time.After(timeout):
