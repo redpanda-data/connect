@@ -54,6 +54,19 @@ func GetAllBytes(m types.Message) [][]byte {
 	return parts
 }
 
+// GetAllBytesLen returns total length of message content in bytes
+func GetAllBytesLen(m types.Message) int {
+	if m.Len() == 0 {
+		return 0
+	}
+	length := 0
+	m.Iter(func(i int, p types.Part) error {
+		length += len(p.Get())
+		return nil
+	})
+	return length
+}
+
 //------------------------------------------------------------------------------
 
 // MetaPartCopy creates a new empty message part by copying any meta fields
