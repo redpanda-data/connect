@@ -77,17 +77,20 @@ func NewWriter(
 func (w *Writer) loop() {
 	// Metrics paths
 	var (
+		mCount      = w.stats.GetCounter("count")
+		mPartsSent  = w.stats.GetCounter("sent")
+		mSent       = w.stats.GetCounter("batch.sent")
+		mConn       = w.stats.GetCounter("connection.up")
+		mFailedConn = w.stats.GetCounter("connection.failed")
+		mLostConn   = w.stats.GetCounter("connection.lost")
+		// following metrics are left for backward compatibility
+		// and should be considered as deprecated
+		// TODO: V3 Remove obsolete metrics
 		mRunning      = w.stats.GetGauge("running")
-		mCount        = w.stats.GetCounter("count")
 		mPartsCount   = w.stats.GetCounter("parts.count")
 		mSuccess      = w.stats.GetCounter("send.success")
 		mPartsSuccess = w.stats.GetCounter("parts.send.success")
 		mError        = w.stats.GetCounter("send.error")
-		mSent         = w.stats.GetCounter("batch.sent")
-		mPartsSent    = w.stats.GetCounter("sent")
-		mConn         = w.stats.GetCounter("connection.up")
-		mFailedConn   = w.stats.GetCounter("connection.failed")
-		mLostConn     = w.stats.GetCounter("connection.lost")
 	)
 
 	defer func() {
