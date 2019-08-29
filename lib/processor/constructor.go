@@ -116,6 +116,7 @@ const (
 	TypeProcessDAG   = "process_dag"
 	TypeProcessField = "process_field"
 	TypeProcessMap   = "process_map"
+	TypeRateLimit    = "rate_limit"
 	TypeSample       = "sample"
 	TypeSelectParts  = "select_parts"
 	TypeSleep        = "sleep"
@@ -173,6 +174,7 @@ type Config struct {
 	ProcessDAG   ProcessDAGConfig   `json:"process_dag" yaml:"process_dag"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
+	RateLimit    RateLimitConfig    `json:"rate_limit" yaml:"rate_limit"`
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Sleep        SleepConfig        `json:"sleep" yaml:"sleep"`
@@ -229,6 +231,7 @@ func NewConfig() Config {
 		ProcessDAG:   NewProcessDAGConfig(),
 		ProcessField: NewProcessFieldConfig(),
 		ProcessMap:   NewProcessMapConfig(),
+		RateLimit:    NewRateLimitConfig(),
 		Sample:       NewSampleConfig(),
 		SelectParts:  NewSelectPartsConfig(),
 		Sleep:        NewSleepConfig(),

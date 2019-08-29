@@ -466,6 +466,8 @@ pipeline:
       value: ${PROCESSOR_NUMBER_VALUE:0}
     parallel:
       cap: ${PROCESSOR_PARALLEL_CAP:0}
+    rate_limit:
+      resource: ${PROCESSOR_RATE_LIMIT_RESOURCE}
     sample:
       retain: ${PROCESSOR_SAMPLE_RETAIN:10}
       seed: ${PROCESSOR_SAMPLE_SEED:0}

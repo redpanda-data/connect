@@ -94,19 +94,20 @@ In this case the [`for_each`](#for_each) processor can be used.
 35. [`process_dag`](#process_dag)
 36. [`process_field`](#process_field)
 37. [`process_map`](#process_map)
-38. [`sample`](#sample)
-39. [`select_parts`](#select_parts)
-40. [`sleep`](#sleep)
-41. [`split`](#split)
-42. [`sql`](#sql)
-43. [`subprocess`](#subprocess)
-44. [`switch`](#switch)
-45. [`text`](#text)
-46. [`throttle`](#throttle)
-47. [`try`](#try)
-48. [`unarchive`](#unarchive)
-49. [`while`](#while)
-50. [`xml`](#xml)
+38. [`rate_limit`](#rate_limit)
+39. [`sample`](#sample)
+40. [`select_parts`](#select_parts)
+41. [`sleep`](#sleep)
+42. [`split`](#split)
+43. [`sql`](#sql)
+44. [`subprocess`](#subprocess)
+45. [`switch`](#switch)
+46. [`text`](#text)
+47. [`throttle`](#throttle)
+48. [`try`](#try)
+49. [`unarchive`](#unarchive)
+50. [`while`](#while)
+51. [`xml`](#xml)
 
 ## `archive`
 
@@ -1540,6 +1541,19 @@ This processor supports batch messages. When message parts are post-mapped after
 processing they will be correctly aligned with the original batch. However, the
 ordering of premapped message parts as they are sent through processors are not
 guaranteed to match the ordering of the original batch.
+
+## `rate_limit`
+
+``` yaml
+type: rate_limit
+rate_limit:
+  resource: ""
+```
+
+Throttles the throughput of a pipeline according to a specified
+[`rate_limit`](../rate_limits/README.md) resource. Rate limits are
+shared across components and therefore apply globally to all processing
+pipelines.
 
 ## `sample`
 

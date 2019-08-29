@@ -414,6 +414,7 @@ PROCESSOR_METRIC_VALUE
 PROCESSOR_NUMBER_OPERATOR                            = add
 PROCESSOR_NUMBER_VALUE                               = 0
 PROCESSOR_PARALLEL_CAP                               = 0
+PROCESSOR_RATE_LIMIT_RESOURCE
 PROCESSOR_SAMPLE_RETAIN                              = 10
 PROCESSOR_SAMPLE_SEED                                = 0
 PROCESSOR_SELECT_PARTS_PARTS                         = 0

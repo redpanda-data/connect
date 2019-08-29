@@ -45,7 +45,8 @@ func init() {
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 type fakeMgr struct {
-	caches map[string]types.Cache
+	caches     map[string]types.Cache
+	ratelimits map[string]types.RateLimit
 }
 
 func (f *fakeMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
@@ -60,6 +61,9 @@ func (f *fakeMgr) GetCondition(name string) (types.Condition, error) {
 	return nil, types.ErrConditionNotFound
 }
 func (f *fakeMgr) GetRateLimit(name string) (types.RateLimit, error) {
+	if r, exists := f.ratelimits[name]; exists {
+		return r, nil
+	}
 	return nil, types.ErrRateLimitNotFound
 }
 func (f *fakeMgr) GetPlugin(name string) (interface{}, error) {

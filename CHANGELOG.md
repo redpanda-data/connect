@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New `tcp` and `tcp_server` inputs.
 - New `udp_server` input.
 - Metric paths `output.batch.bytes` and `output.batch.latency` added.
+- New `rate_limit` processor.
 
 ## 2.13.0 - 2019-08-27
 
