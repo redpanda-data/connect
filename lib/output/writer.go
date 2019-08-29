@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/lib/message"
 	"github.com/Jeffail/benthos/lib/message/tracing"
 	"github.com/Jeffail/benthos/lib/metrics"
 	"github.com/Jeffail/benthos/lib/output/writer"
@@ -73,21 +74,33 @@ func NewWriter(
 
 //------------------------------------------------------------------------------
 
+func (w *Writer) latencyMeasuringWrite(msg types.Message) (latencyNs int64, err error) {
+	t0 := time.Now()
+	err = w.writer.Write(msg)
+	latencyNs = time.Since(t0).Nanoseconds()
+	return latencyNs, err
+}
+
 // loop is an internal loop that brokers incoming messages to output pipe.
 func (w *Writer) loop() {
 	// Metrics paths
 	var (
+		mCount      = w.stats.GetCounter("count")
+		mPartsSent  = w.stats.GetCounter("sent")
+		mSent       = w.stats.GetCounter("batch.sent")
+		mBytesSent  = w.stats.GetCounter("batch.bytes")
+		mLatency    = w.stats.GetTimer("batch.latency")
+		mConn       = w.stats.GetCounter("connection.up")
+		mFailedConn = w.stats.GetCounter("connection.failed")
+		mLostConn   = w.stats.GetCounter("connection.lost")
+		// following metrics are left for backward compatibility
+		// and should be considered as deprecated
+		// TODO: V3 Remove obsolete metrics
 		mRunning      = w.stats.GetGauge("running")
-		mCount        = w.stats.GetCounter("count")
 		mPartsCount   = w.stats.GetCounter("parts.count")
 		mSuccess      = w.stats.GetCounter("send.success")
 		mPartsSuccess = w.stats.GetCounter("parts.send.success")
 		mError        = w.stats.GetCounter("send.error")
-		mSent         = w.stats.GetCounter("batch.sent")
-		mPartsSent    = w.stats.GetCounter("sent")
-		mConn         = w.stats.GetCounter("connection.up")
-		mFailedConn   = w.stats.GetCounter("connection.failed")
-		mLostConn     = w.stats.GetCounter("connection.lost")
 	)
 
 	defer func() {
@@ -136,7 +149,7 @@ func (w *Writer) loop() {
 		}
 
 		spans := tracing.CreateChildSpans("output_"+w.typeStr, ts.Payload)
-		err := w.writer.Write(ts.Payload)
+		latency, err := w.latencyMeasuringWrite(ts.Payload)
 
 		// If our writer says it is not connected.
 		if err == types.ErrNotConnected {
@@ -156,7 +169,7 @@ func (w *Writer) loop() {
 					if !throt.Retry() {
 						return
 					}
-				} else if err = w.writer.Write(ts.Payload); err != types.ErrNotConnected {
+				} else if latency, err = w.latencyMeasuringWrite(ts.Payload); err != types.ErrNotConnected {
 					atomic.StoreInt32(&w.isConnected, 1)
 					mConn.Incr(1)
 					break
@@ -182,6 +195,8 @@ func (w *Writer) loop() {
 			mPartsSuccess.Incr(int64(ts.Payload.Len()))
 			mSent.Incr(1)
 			mPartsSent.Incr(int64(ts.Payload.Len()))
+			mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
+			mLatency.Timing(latency)
 			throt.Reset()
 		}
 
