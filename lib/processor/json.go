@@ -230,7 +230,13 @@ type jsonOperator func(body interface{}, value json.RawMessage) (interface{}, er
 func newSetOperator(path []string) jsonOperator {
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		if len(path) == 0 {
-			return value, nil
+			var data interface{}
+			if value != nil {
+				if err := json.Unmarshal([]byte(value), &data); err != nil {
+					return nil, fmt.Errorf("failed to parse value: %v", err)
+				}
+			}
+			return data, nil
 		}
 
 		gPart, err := gabs.Consume(body)

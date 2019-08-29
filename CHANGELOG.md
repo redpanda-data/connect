@@ -13,6 +13,11 @@ All notable changes to this project will be documented in this file.
 - Metric paths `output.batch.bytes` and `output.batch.latency` added.
 - New `rate_limit` processor.
 
+### Fixed
+
+- The `json` processor now correctly stores parsed `value` JSON when using `set`
+  on the root path.
+
 ## 2.13.0 - 2019-08-27
 
 ### Added
