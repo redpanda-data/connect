@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.14.0 - 2019-08-29
+
 ### Added
 
 - Metadata field `gcp_pubsub_publish_time_unix` added to `gcp_pubsub` input.
