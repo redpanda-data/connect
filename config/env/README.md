@@ -618,6 +618,8 @@ OUTPUT_SQS_MAX_RETRIES                                = 0
 OUTPUT_SQS_REGION                                     = eu-west-1
 OUTPUT_SQS_URL
 OUTPUT_STDOUT_DELIMITER
+OUTPUT_TCP_ADDRESS                                    = localhost:4194
+OUTPUT_UDP_ADDRESS                                    = localhost:4194
 OUTPUT_WEBSOCKET_BASIC_AUTH_ENABLED                   = false
 OUTPUT_WEBSOCKET_BASIC_AUTH_PASSWORD
 OUTPUT_WEBSOCKET_BASIC_AUTH_USERNAME

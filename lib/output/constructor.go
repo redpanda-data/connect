@@ -93,6 +93,8 @@ const (
 	TypeSTDOUT        = "stdout"
 	TypeSwitch        = "switch"
 	TypeSyncResponse  = "sync_response"
+	TypeTCP           = "tcp"
+	TypeUDP           = "udp"
 	TypeWebsocket     = "websocket"
 	TypeZMQ4          = "zmq4"
 )
@@ -136,6 +138,8 @@ type Config struct {
 	STDOUT        STDOUTConfig               `json:"stdout" yaml:"stdout"`
 	Switch        SwitchConfig               `json:"switch" yaml:"switch"`
 	SyncResponse  struct{}                   `json:"sync_response" yaml:"sync_response"`
+	TCP           writer.TCPConfig           `json:"tcp" yaml:"tcp"`
+	UDP           writer.UDPConfig           `json:"udp" yaml:"udp"`
 	Websocket     writer.WebsocketConfig     `json:"websocket" yaml:"websocket"`
 	ZMQ4          *writer.ZMQ4Config         `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors    []processor.Config         `json:"processors" yaml:"processors"`
@@ -179,6 +183,8 @@ func NewConfig() Config {
 		STDOUT:        NewSTDOUTConfig(),
 		Switch:        NewSwitchConfig(),
 		SyncResponse:  struct{}{},
+		TCP:           writer.NewTCPConfig(),
+		UDP:           writer.NewUDPConfig(),
 		Websocket:     writer.NewWebsocketConfig(),
 		ZMQ4:          writer.NewZMQ4Config(),
 		Processors:    []processor.Config{},

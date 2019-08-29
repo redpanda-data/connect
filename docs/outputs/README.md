@@ -90,7 +90,9 @@ a [`broker`](#broker) output with the 'try' pattern.
 31. [`stdout`](#stdout)
 32. [`switch`](#switch)
 33. [`sync_response`](#sync_response)
-34. [`websocket`](#websocket)
+34. [`tcp`](#tcp)
+35. [`udp`](#udp)
+36. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -1143,6 +1145,34 @@ Using the above example and posting the message 'hello world' to the endpoint
 `foo_topic` and also respond with 'HELLO WORLD'.
 
 For more information please read [Synchronous Responses](../sync_responses.md).
+
+## `tcp`
+
+``` yaml
+type: tcp
+tcp:
+  address: localhost:4194
+```
+
+Sends messages as a continuous stream of line delimited data over TCP by
+connecting to a server.
+
+If batched messages are sent the final message of the batch will be followed by
+two line breaks in order to indicate the end of the batch.
+
+## `udp`
+
+``` yaml
+type: udp
+udp:
+  address: localhost:4194
+```
+
+Sends messages as a continuous stream of line delimited data over UDP by
+connecting to a server.
+
+If batched messages are sent the final message of the batch will be followed by
+two line breaks in order to indicate the end of the batch.
 
 ## `websocket`
 

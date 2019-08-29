@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Metadata field `gcp_pubsub_publish_time_unix` added to `gcp_pubsub` input.
 - New `tcp` and `tcp_server` inputs.
 - New `udp_server` input.
+- New `tcp` and `udp` outputs.
 - Metric paths `output.batch.bytes` and `output.batch.latency` added.
 - New `rate_limit` processor.
 

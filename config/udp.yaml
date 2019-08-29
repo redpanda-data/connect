@@ -5,9 +5,8 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: tcp
-  tcp:
-    address: localhost:4194
+  type: stdin
+  stdin:
     delimiter: ""
     max_buffer: 1e+06
     multipart: false
@@ -18,8 +17,8 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: tcp
-  tcp:
+  type: udp
+  udp:
     address: localhost:4194
 resources:
   caches: {}

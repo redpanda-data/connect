@@ -63,7 +63,7 @@ deployment.
 - [RabbitMQ (AMQP 0.91)][rabbitmq]
 - [Redis (streams, list, pubsub, hashes)][redis]
 - Stdin/Stdout
-- TCP
+- TCP & UDP
 - Websocket
 - [ZMQ4][zmq]
 

@@ -235,7 +235,7 @@ func Descriptions() string {
 }
 
 // New creates a buffer type based on a buffer configuration.
-// TODO V3: Propagate mamager.
+// TODO: V3 Propagate mamager.
 func New(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, log, stats)
