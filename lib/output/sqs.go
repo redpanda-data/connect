@@ -38,6 +38,11 @@ as attributes with the data type String. If the number of metadata values in a
 message exceeds the message attribute limit (10) then the top ten keys ordered
 alphabetically will be selected.
 
+The fields ` + "`message_group_id` and `message_deduplication_id`" + ` can be
+set dynamically using
+[function interpolations](../config_interpolation.md#functions), which are
+resolved individually for each message of a batch.
+
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS

@@ -57,12 +57,21 @@ func TestAWSIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not start resource: %s", err)
 	}
+	defer func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %v", err)
+		}
+	}()
 
 	endpoint := fmt.Sprintf("http://localhost:%v", resource.GetPort("4572/tcp"))
-	bucket := "mybucket"
+	bucket := "benthos-test-bucket"
 	sqsQueue := "benthos-test-queue"
 	sqsEndpoint := fmt.Sprintf("http://localhost:%v", resource.GetPort("4576/tcp"))
 	sqsQueueURL := fmt.Sprintf("%v/queue/%v", sqsEndpoint, sqsQueue)
+
+	sqsFIFOQueue := "benthos-test-fifo-queue.fifo"
+	sqsFIFOEndpoint := fmt.Sprintf("http://localhost:%v", resource.GetPort("4576/tcp"))
+	sqsFIFOQueueURL := fmt.Sprintf("%v/queue/%v", sqsFIFOEndpoint, sqsFIFOQueue)
 
 	s3Client := s3.New(session.Must(session.NewSession(&aws.Config{
 		S3ForcePathStyle: aws.Bool(true),
@@ -77,15 +86,29 @@ func TestAWSIntegration(t *testing.T) {
 		Region:      aws.String("eu-west-1"),
 	})))
 
+	bucketCreated := false
+
 	if err = pool.Retry(func() error {
-		_, berr := s3Client.CreateBucket(&s3.CreateBucketInput{
-			Bucket: &bucket,
-		})
-		if berr != nil {
-			return berr
+		var berr error
+		if !bucketCreated {
+			if _, berr = s3Client.CreateBucket(&s3.CreateBucketInput{
+				Bucket: &bucket,
+			}); berr != nil {
+				return berr
+			}
+			bucketCreated = true
 		}
 		if _, berr = sqsClient.CreateQueue(&sqs.CreateQueueInput{
 			QueueName: aws.String(sqsQueue),
+		}); berr != nil {
+			return berr
+		}
+		if _, berr = sqsClient.CreateQueue(&sqs.CreateQueueInput{
+			QueueName: aws.String(sqsFIFOQueue),
+			Attributes: map[string]*string{
+				"FifoQueue":                 aws.String("true"),
+				"ContentBasedDeduplication": aws.String("true"),
+			},
 		}); berr != nil {
 			return berr
 		}
@@ -95,17 +118,15 @@ func TestAWSIntegration(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
-	defer func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	}()
 
 	t.Run("testS3UploadDownload", func(t *testing.T) {
 		testS3UploadDownload(t, endpoint, bucket)
 	})
 	t.Run("testSQSSinglePart", func(t *testing.T) {
 		testSQSSinglePart(t, sqsEndpoint, sqsQueueURL)
+	})
+	t.Run("testSQSFIFOSinglePart", func(t *testing.T) {
+		testSQSFIFOSinglePart(t, sqsFIFOEndpoint, sqsFIFOQueueURL)
 	})
 }
 
@@ -203,6 +224,79 @@ func testSQSSinglePart(t *testing.T, endpoint, url string) {
 	}
 
 	wg.Wait()
+}
+
+func testSQSFIFOSinglePart(t *testing.T, endpoint, url string) {
+	outConf := writer.NewAmazonSQSConfig()
+	outConf.URL = url
+	outConf.Endpoint = endpoint
+	outConf.Credentials.ID = "xxxxx"
+	outConf.Credentials.Secret = "xxxxx"
+	outConf.Credentials.Token = "xxxxx"
+	outConf.Region = "eu-west-1"
+	outConf.MessageGroupID = "foogroup"
+	outConf.MessageDeduplicationID = "${!json_field:id}"
+
+	inConf := reader.NewAmazonSQSConfig()
+	inConf.URL = url
+	inConf.Endpoint = endpoint
+	inConf.Credentials.ID = "xxxxx"
+	inConf.Credentials.Secret = "xxxxx"
+	inConf.Credentials.Token = "xxxxx"
+	inConf.Region = "eu-west-1"
+
+	mInput, mOutput, err := createSQSInputOutput(inConf, outConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		mInput.CloseAsync()
+		if cErr := mInput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+		mOutput.CloseAsync()
+		if cErr := mOutput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	N := 10
+
+	testMsgs := []string{}
+	for i := 0; i < N; i++ {
+		str := fmt.Sprintf(`{"text":"hello world","id":%v}`, i)
+		testMsgs = append(testMsgs, str)
+		msg := message.New([][]byte{
+			[]byte(str),
+		})
+		if gerr := mOutput.Write(msg); gerr != nil {
+			t.Fatal(gerr)
+		}
+
+		// Send a duplicate
+		str = fmt.Sprintf(`{"text":"DUPLICATE","id":%v}`, i)
+		msg = message.New([][]byte{
+			[]byte(str),
+		})
+		if gerr := mOutput.Write(msg); gerr != nil {
+			t.Fatal(gerr)
+		}
+	}
+
+	for _, exp := range testMsgs {
+		var actM types.Message
+		actM, err = mInput.Read()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if act := string(actM.Get(0).Get()); exp != act {
+			t.Errorf("Wrong message contents: %v != %v", act, exp)
+		}
+		if err = mInput.Acknowledge(nil); err != nil {
+			t.Error(err)
+		}
+	}
 }
 
 func createS3InputOutput(
