@@ -1,4 +1,4 @@
-module github.com/Jeffail/benthos
+module github.com/Jeffail/benthos/v3
 
 require (
 	cloud.google.com/go v0.43.0

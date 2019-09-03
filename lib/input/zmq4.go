@@ -23,10 +23,10 @@
 package input
 
 import (
-	"github.com/Jeffail/benthos/lib/input/reader"
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/input/reader"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -39,7 +39,7 @@ ZMQ4 is supported but currently depends on C bindings. Since this is an
 annoyance when building or using Benthos it is not compiled by default.
 
 Build it into your project by getting libzmq installed on your machine, then
-build with the tag: 'go install -tags "ZMQ4" github.com/Jeffail/benthos/cmd/...'
+build with the tag: 'go install -tags "ZMQ4" github.com/Jeffail/benthos/v3/cmd/...'
 
 ZMQ4 input supports PULL and SUB sockets only. If there is demand for other
 socket types then they can be added easily.`,

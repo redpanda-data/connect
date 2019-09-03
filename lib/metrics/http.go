@@ -27,7 +27,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/gabs"
 )
 

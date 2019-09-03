@@ -23,8 +23,8 @@ package reader
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/throttle"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------

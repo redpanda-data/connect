@@ -29,9 +29,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/input"
-	"github.com/Jeffail/benthos/lib/output"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Base64Encoder is a types.Processor implementation that base64 encodes

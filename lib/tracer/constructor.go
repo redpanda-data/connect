@@ -28,7 +28,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Jeffail/benthos/lib/util/config"
+	"github.com/Jeffail/benthos/v3/lib/util/config"
 	yaml "gopkg.in/yaml.v3"
 )
 

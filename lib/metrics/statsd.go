@@ -25,7 +25,7 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/quipo/statsd"
 )
 

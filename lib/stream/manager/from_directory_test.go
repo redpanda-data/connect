@@ -29,7 +29,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/Jeffail/benthos/lib/stream"
+	"github.com/Jeffail/benthos/v3/lib/stream"
 	yaml "gopkg.in/yaml.v3"
 )
 

@@ -24,7 +24,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------

@@ -26,8 +26,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Jeffail/benthos/lib/config"
-	"github.com/Jeffail/benthos/lib/stream"
+	"github.com/Jeffail/benthos/v3/lib/config"
+	"github.com/Jeffail/benthos/v3/lib/stream"
 )
 
 //------------------------------------------------------------------------------

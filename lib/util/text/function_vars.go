@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs"
 	"github.com/gofrs/uuid"
 )

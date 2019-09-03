@@ -21,8 +21,8 @@
 package buffer
 
 import (
-	"github.com/Jeffail/benthos/lib/buffer/parallel"
-	"github.com/Jeffail/benthos/lib/message/batch"
+	"github.com/Jeffail/benthos/v3/lib/buffer/parallel"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 )
 
 //------------------------------------------------------------------------------

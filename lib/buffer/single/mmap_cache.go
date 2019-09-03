@@ -29,9 +29,9 @@ import (
 	"path"
 	"sync"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/util/disk"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/util/disk"
 	mmap "github.com/edsrzf/mmap-go"
 )
 

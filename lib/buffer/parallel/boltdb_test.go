@@ -28,8 +28,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func initBoltDB(t *testing.T) (*BoltDB, func()) {

@@ -20,7 +20,7 @@
 
 package main
 
-import "github.com/Jeffail/benthos/lib/service"
+import "github.com/Jeffail/benthos/v3/lib/service"
 
 //------------------------------------------------------------------------------
 

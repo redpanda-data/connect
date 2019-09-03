@@ -20,7 +20,7 @@
 
 package metrics
 
-import "github.com/Jeffail/benthos/lib/log"
+import "github.com/Jeffail/benthos/v3/lib/log"
 
 //------------------------------------------------------------------------------
 
