@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.15.0 - 2019-09-03
+
 ### Added
 
 - New `message_group_id` and `message_deduplication_id` fields added to `sqs`
