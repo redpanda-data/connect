@@ -59,6 +59,14 @@ type Parallel interface {
 	Close()
 }
 
+type parallelBatchedWrite interface {
+	Parallel
+
+	// PushMessages adds new messages to the stack. Returns the backlog in
+	// bytes.
+	PushMessages([]types.Message) (int, error)
+}
+
 //------------------------------------------------------------------------------
 
 // ParallelWrapper wraps a buffer with a Producer/Consumer interface.
@@ -147,6 +155,67 @@ func (m *ParallelWrapper) inputLoop() {
 	}
 }
 
+func (m *ParallelWrapper) batchedInputLoop() {
+	batchWriteBuffer, ok := m.buffer.(parallelBatchedWrite)
+	if !ok {
+		m.inputLoop()
+		return
+	}
+
+	defer func() {
+		m.buffer.CloseOnceEmpty()
+		m.closedWG.Done()
+	}()
+
+	var (
+		mWriteCount   = m.stats.GetCounter("write.count")
+		mWriteErr     = m.stats.GetCounter("write.error")
+		mWriteBacklog = m.stats.GetGauge("backlog")
+	)
+
+	for atomic.LoadInt32(&m.consuming) == 1 {
+		var transactions []types.Transaction
+		var messages []types.Message
+		select {
+		case tr, open := <-m.messagesIn:
+			if !open {
+				return
+			}
+			messages = append(messages, tracing.WithSiblingSpans("buffer_"+m.conf.Type, tr.Payload))
+			transactions = append(transactions, tr)
+		case <-m.stopConsumingChan:
+			return
+		}
+		// Magic number, assuming a cap of 50 for now.
+		for i := 0; i < 50; i++ {
+			select {
+			case tr, open := <-m.messagesIn:
+				if !open {
+					return
+				}
+				messages = append(messages, tracing.WithSiblingSpans("buffer_"+m.conf.Type, tr.Payload))
+				transactions = append(transactions, tr)
+			default:
+				break
+			}
+		}
+		backlog, err := batchWriteBuffer.PushMessages(messages)
+		if err == nil {
+			mWriteCount.Incr(int64(len(transactions)))
+			mWriteBacklog.Set(int64(backlog))
+		} else {
+			mWriteErr.Incr(1)
+		}
+		for _, tr := range transactions {
+			select {
+			case tr.ResponseChan <- response.NewError(err):
+			case <-m.stopConsumingChan:
+				return
+			}
+		}
+	}
+}
+
 // outputLoop is an internal loop brokers buffer messages to output pipe.
 func (m *ParallelWrapper) outputLoop() {
 	defer func() {
@@ -224,7 +293,7 @@ func (m *ParallelWrapper) Consume(msgs <-chan types.Transaction) error {
 	m.messagesIn = msgs
 
 	m.closedWG.Add(2)
-	go m.inputLoop()
+	go m.batchedInputLoop()
 	go m.outputLoop()
 	go func() {
 		m.closedWG.Wait()

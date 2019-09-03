@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `message_group_id` and `message_deduplication_id` fields added to `sqs`
   output for supporting FIFO queues.
+- New `bolt` buffer implementation.
 
 ## 2.14.0 - 2019-08-29
 

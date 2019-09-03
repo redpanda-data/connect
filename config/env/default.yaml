@@ -304,6 +304,45 @@ input:
         url: ${INPUT_WEBSOCKET_URL:ws://localhost:4195/get/ws}
   type: broker
 buffer:
+  bolt:
+    batch_policy:
+      byte_size: ${BUFFER_BOLT_BATCH_POLICY_BYTE_SIZE:0}
+      condition:
+        bounds_check:
+          max_part_size: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_BOUNDS_CHECK_MAX_PART_SIZE:1073741824}
+          max_parts: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_BOUNDS_CHECK_MAX_PARTS:100}
+          min_part_size: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_BOUNDS_CHECK_MIN_PART_SIZE:1}
+          min_parts: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_BOUNDS_CHECK_MIN_PARTS:1}
+        check_interpolation:
+          value: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_CHECK_INTERPOLATION_VALUE}
+        count:
+          arg: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_COUNT_ARG:100}
+        jmespath:
+          part: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_JMESPATH_PART:0}
+          query: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_JMESPATH_QUERY}
+        metadata:
+          arg: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_METADATA_ARG}
+          key: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_METADATA_KEY}
+          operator: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_METADATA_OPERATOR:equals_cs}
+          part: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_METADATA_PART:0}
+        number:
+          arg: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_NUMBER_ARG:0}
+          operator: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_NUMBER_OPERATOR:equals}
+          part: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_NUMBER_PART:0}
+        processor_failed:
+          part: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_PROCESSOR_FAILED_PART:0}
+        resource: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_RESOURCE}
+        static: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_STATIC:false}
+        text:
+          arg: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_TEXT_ARG}
+          operator: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_TEXT_OPERATOR:equals_cs}
+          part: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_TEXT_PART:0}
+        type: ${BUFFER_BOLT_BATCH_POLICY_CONDITION_TYPE:static}
+      count: ${BUFFER_BOLT_BATCH_POLICY_COUNT:0}
+      enabled: ${BUFFER_BOLT_BATCH_POLICY_ENABLED:false}
+      period: ${BUFFER_BOLT_BATCH_POLICY_PERIOD}
+    file: ${BUFFER_BOLT_FILE}
+    prefetch_count: ${BUFFER_BOLT_PREFETCH_COUNT:50}
   memory:
     limit: ${BUFFER_MEMORY_LIMIT:524288000}
   mmap_file:
@@ -727,6 +766,8 @@ output:
           token: ${OUTPUT_SQS_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_SQS_ENDPOINT}
         max_retries: ${OUTPUT_SQS_MAX_RETRIES:0}
+        message_deduplication_id: ${OUTPUT_SQS_MESSAGE_DEDUPLICATION_ID}
+        message_group_id: ${OUTPUT_SQS_MESSAGE_GROUP_ID}
         region: ${OUTPUT_SQS_REGION:eu-west-1}
         url: ${OUTPUT_SQS_URL}
       stdout:

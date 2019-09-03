@@ -42,6 +42,8 @@ output:
       token: ""
     endpoint: ""
     max_retries: 0
+    message_deduplication_id: ""
+    message_group_id: ""
     region: eu-west-1
     url: ""
 resources:

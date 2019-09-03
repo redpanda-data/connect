@@ -14,6 +14,7 @@ require (
 	github.com/aws/aws-lambda-go v1.11.1
 	github.com/aws/aws-sdk-go v1.21.0
 	github.com/benhoyt/goawk v1.6.0
+	github.com/boltdb/bolt v1.3.1
 	github.com/bradfitz/gomemcache v0.0.0-20190329173943-551aad21a668
 	github.com/cenkalti/backoff v2.1.1+incompatible
 	github.com/clbanning/mxj v1.8.4
@@ -98,3 +99,5 @@ require (
 	gotest.tools v2.2.0+incompatible // indirect
 	nanomsg.org/go-mangos v1.4.0
 )
+
+go 1.13
