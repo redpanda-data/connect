@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Removed deprecated `mmap_file` buffer.
+
 ## 2.15.0 - 2019-09-03
 
 ### Added

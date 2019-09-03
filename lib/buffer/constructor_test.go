@@ -53,7 +53,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 			"memory": {
 				"value": "foo"
 			},
-			"mmap_file": {
+			"none": {
 				"query": "foo"
 			}
 		}
@@ -95,7 +95,7 @@ func TestSanitise(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = "none"
-	conf.Mmap.FileSize = 10
+	conf.Memory.Limit = 10
 
 	if actObj, err = SanitiseConfig(conf); err != nil {
 		t.Fatal(err)

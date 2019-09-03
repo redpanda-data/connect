@@ -51,7 +51,6 @@ var Constructors = map[string]TypeSpec{}
 // String constants representing each buffer type.
 const (
 	TypeMemory = "memory"
-	TypeMMAP   = "mmap_file"
 	TypeNone   = "none"
 )
 
@@ -59,10 +58,9 @@ const (
 
 // Config is the all encompassing configuration struct for all buffer types.
 type Config struct {
-	Type   string           `json:"type" yaml:"type"`
-	Memory MemoryConfig     `json:"memory" yaml:"memory"`
-	Mmap   MmapBufferConfig `json:"mmap_file,omitempty" yaml:"mmap_file,omitempty"`
-	None   struct{}         `json:"none" yaml:"none"`
+	Type   string       `json:"type" yaml:"type"`
+	Memory MemoryConfig `json:"memory" yaml:"memory"`
+	None   struct{}     `json:"none" yaml:"none"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -70,7 +68,6 @@ func NewConfig() Config {
 	return Config{
 		Type:   "none",
 		Memory: NewMemoryConfig(),
-		Mmap:   NewMmapBufferConfig(),
 		None:   struct{}{},
 	}
 }
@@ -174,14 +171,12 @@ different options and their qualities:
 | Type      | Throughput | Consumers | Capacity |
 | --------- | ---------- | --------- | -------- |
 | Memory    | Highest    | Parallel  | RAM      |
-| Mmap File | High       | Single    | Disk     |
 
 #### Delivery Guarantees
 
 | Event     | Shutdown  | Crash     | Disk Corruption |
 | --------- | --------- | --------- | --------------- |
 | Memory    | Flushed\* | Lost      | Lost            |
-| Mmap File | Persisted | Lost      | Lost            |
 
 \* Makes a best attempt at flushing the remaining messages before closing
   gracefully.`
