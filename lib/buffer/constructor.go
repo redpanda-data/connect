@@ -50,7 +50,6 @@ var Constructors = map[string]TypeSpec{}
 
 // String constants representing each buffer type.
 const (
-	TypeBolt   = "bolt"
 	TypeMemory = "memory"
 	TypeMMAP   = "mmap_file"
 	TypeNone   = "none"
@@ -61,7 +60,6 @@ const (
 // Config is the all encompassing configuration struct for all buffer types.
 type Config struct {
 	Type   string           `json:"type" yaml:"type"`
-	Bolt   BoltConfig       `json:"bolt" yaml:"bolt"`
 	Memory MemoryConfig     `json:"memory" yaml:"memory"`
 	Mmap   MmapBufferConfig `json:"mmap_file,omitempty" yaml:"mmap_file,omitempty"`
 	None   struct{}         `json:"none" yaml:"none"`
@@ -71,7 +69,6 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Type:   "none",
-		Bolt:   NewBoltConfig(),
 		Memory: NewMemoryConfig(),
 		Mmap:   NewMmapBufferConfig(),
 		None:   struct{}{},
@@ -176,7 +173,6 @@ different options and their qualities:
 
 | Type      | Throughput | Consumers | Capacity |
 | --------- | ---------- | --------- | -------- |
-| BoltDB    | Medium     | Parallel  | Disk     |
 | Memory    | Highest    | Parallel  | RAM      |
 | Mmap File | High       | Single    | Disk     |
 
@@ -184,7 +180,6 @@ different options and their qualities:
 
 | Event     | Shutdown  | Crash     | Disk Corruption |
 | --------- | --------- | --------- | --------------- |
-| BoltDB    | Persisted | Preserved | Lost            |
 | Memory    | Flushed\* | Lost      | Lost            |
 | Mmap File | Persisted | Lost      | Lost            |
 

@@ -59,6 +59,8 @@ func NewBoltDBConfig() BoltDBConfig {
 // BoltDB is a parallel buffer implementation that allows multiple parallel
 // consumers to read and purge messages from a BoltDB database asynchronously.
 type BoltDB struct {
+	running bool
+
 	db            *bolt.DB
 	prefetchCount int
 
@@ -79,14 +81,14 @@ func NewBoltDB(conf BoltDBConfig) (*BoltDB, error) {
 	}
 
 	if err = db.Update(func(tx *bolt.Tx) error {
-		b, terr := tx.CreateBucketIfNotExists(BoltDBMessagesBucket)
-		b.FillPercent = 1.0
+		_, terr := tx.CreateBucketIfNotExists(BoltDBMessagesBucket)
 		return terr
 	}); err != nil {
 		return nil, err
 	}
 
 	return &BoltDB{
+		running:       true,
 		db:            db,
 		prefetchCount: conf.PrefetchCount,
 		cond:          sync.NewCond(&sync.Mutex{}),
@@ -149,6 +151,10 @@ func (m *BoltDB) NextMessage() (types.Message, AckFunc, error) {
 
 	for key == nil {
 		m.backlogLock.Lock()
+		if !m.running {
+			m.backlogLock.Unlock()
+			return nil, nil, types.ErrTypeClosed
+		}
 		if len(m.backlog) > 0 {
 			item := m.backlog[0]
 			m.backlog = m.backlog[1:]
@@ -169,6 +175,10 @@ func (m *BoltDB) NextMessage() (types.Message, AckFunc, error) {
 			// Try IO with lock and wait for write broadcast afterwards if we're
 			// still empty.
 			m.cond.L.Lock()
+			if !m.running {
+				m.cond.L.Unlock()
+				return nil, nil, types.ErrTypeClosed
+			}
 			items, err = m.prefetch()
 			if err != nil {
 				return nil, nil, err
@@ -198,12 +208,15 @@ func (m *BoltDB) NextMessage() (types.Message, AckFunc, error) {
 			backlog = bucket.Stats().LeafAlloc
 			return nil
 		})
+		if err == bolt.ErrDatabaseNotOpen {
+			err = types.ErrTypeClosed
+		}
 		return
 	}
 	backlogFn := func() {
 		m.backlogLock.Lock()
 		m.backlog = append([]*boltDBItem{
-			&boltDBItem{
+			{
 				key: key,
 				msg: msg,
 			},
@@ -232,6 +245,7 @@ func (m *BoltDB) PushMessages(msgs []types.Message) (int, error) {
 
 	if err := m.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(BoltDBMessagesBucket)
+		b.FillPercent = 1.0
 		for _, msg := range msgs {
 			msgBytes, terr := io.MessageToJSON(msg)
 			if terr != nil {
@@ -270,7 +284,12 @@ func (m *BoltDB) PushMessages(msgs []types.Message) (int, error) {
 // and therefore the reader can close once it is caught up. This call blocks
 // until the close is completed.
 func (m *BoltDB) CloseOnceEmpty() {
-	m.Close()
+	m.cond.L.Lock()
+	m.backlogLock.Lock()
+	m.running = false
+	m.cond.Broadcast()
+	m.backlogLock.Unlock()
+	m.cond.L.Unlock()
 }
 
 // Close closes the Buffer so that blocked readers or writers become

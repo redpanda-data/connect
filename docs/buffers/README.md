@@ -32,7 +32,6 @@ different options and their qualities:
 
 | Type      | Throughput | Consumers | Capacity |
 | --------- | ---------- | --------- | -------- |
-| BoltDB    | Medium     | Parallel  | Disk     |
 | Memory    | Highest    | Parallel  | RAM      |
 | Mmap File | High       | Single    | Disk     |
 
@@ -40,7 +39,6 @@ different options and their qualities:
 
 | Event     | Shutdown  | Crash     | Disk Corruption |
 | --------- | --------- | --------- | --------------- |
-| BoltDB    | Persisted | Preserved | Lost            |
 | Memory    | Flushed\* | Lost      | Lost            |
 | Mmap File | Persisted | Lost      | Lost            |
 
@@ -49,51 +47,9 @@ different options and their qualities:
 
 ### Contents
 
-1. [`bolt`](#bolt)
-2. [`memory`](#memory)
-3. [`mmap_file`](#mmap_file)
-4. [`none`](#none)
-
-## `bolt`
-
-``` yaml
-type: bolt
-bolt:
-  batch_policy:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 0
-    enabled: false
-    period: ""
-  file: ""
-  prefetch_count: 50
-```
-
-EXPERIMENTAL: This buffer is considered experimental and subject to change
-outside of major version releases.
-
-Buffers messages within a disk backed [BoltDB](https://github.com/boltdb/bolt)
-store.
-
-### Batching
-
-It is possible to batch up messages sent from this buffer using a batch policy.
-Batches are considered complete and will be flushed downstream when either of
-the following conditions are met:
-
-- The `byte_size` field is non-zero and the total size of the batch in
-  bytes matches or exceeds it (disregarding metadata.)
-- The `count` field is non-zero and the total number of messages in
-  the batch matches or exceeds it.
-- A message added to the batch causes the condition to resolve `true`.
-- The `period` field is non-empty and the time since the last batch
-  exceeds its value.
-
-This is a more powerful way of batching messages than the
-[`batch`](../processors/README.md#batch) processor, as it does not
-rely on new messages entering the pipeline in order to trigger the conditions.
+1. [`memory`](#memory)
+2. [`mmap_file`](#mmap_file)
+3. [`none`](#none)
 
 ## `memory`
 

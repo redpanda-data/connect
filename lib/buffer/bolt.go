@@ -21,17 +21,13 @@
 package buffer
 
 import (
-	"fmt"
-
 	"github.com/Jeffail/benthos/lib/buffer/parallel"
-	"github.com/Jeffail/benthos/lib/log"
 	"github.com/Jeffail/benthos/lib/message/batch"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
+/*
 func init() {
 	Constructors[TypeBolt] = TypeSpec{
 		constructor: NewBolt,
@@ -65,6 +61,7 @@ rely on new messages entering the pipeline in order to trigger the conditions.`,
 		},
 	}
 }
+*/
 
 //------------------------------------------------------------------------------
 
@@ -87,6 +84,7 @@ func NewBoltConfig() BoltConfig {
 
 //------------------------------------------------------------------------------
 
+/*
 // NewBolt creates a buffer backed with BoltDB.
 func NewBolt(config Config, log log.Modular, stats metrics.Type) (Type, error) {
 	buf, err := parallel.NewBoltDB(config.Bolt.BoltDBConfig)
@@ -103,5 +101,6 @@ func NewBolt(config Config, log log.Modular, stats metrics.Type) (Type, error) {
 	}
 	return NewParallelBatcher(pol, wrap, log, stats), nil
 }
+*/
 
 //------------------------------------------------------------------------------

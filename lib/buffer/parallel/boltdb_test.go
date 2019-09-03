@@ -234,3 +234,111 @@ func TestBoltDBAck(t *testing.T) {
 		t.Errorf("Wrong error returned: %v != %v", err, types.ErrTypeClosed)
 	}
 }
+
+func BenchmarkBoltDBWrites1(b *testing.B) {
+	d, err := ioutil.TempDir("", "benthos_test")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	path := filepath.Join(d, "test.db")
+	conf := NewBoltDBConfig()
+	conf.File = path
+	block, err := NewBoltDB(conf)
+	if err != nil {
+		os.RemoveAll(d)
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(d)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		uniquePayload := fmt.Sprintf("test%v", i)
+		if _, err := block.PushMessages([]types.Message{
+			message.New(
+				[][]byte{
+					[]byte("hello"),
+					[]byte("world"),
+					[]byte("12345"),
+					[]byte(uniquePayload),
+				},
+			),
+		}); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkBoltDBWrites10(b *testing.B) {
+	d, err := ioutil.TempDir("", "benthos_test")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	path := filepath.Join(d, "test.db")
+	conf := NewBoltDBConfig()
+	conf.File = path
+	block, err := NewBoltDB(conf)
+	if err != nil {
+		os.RemoveAll(d)
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(d)
+
+	b.ResetTimer()
+	payloads := []types.Message{}
+	for i := 0; i < b.N; i++ {
+		uniquePayload := fmt.Sprintf("test%v", i)
+		payloads = append(payloads, message.New(
+			[][]byte{
+				[]byte("hello"),
+				[]byte("world"),
+				[]byte("12345"),
+				[]byte(uniquePayload),
+			},
+		))
+		if len(payloads) == 10 || i == (b.N-1) {
+			if _, err := block.PushMessages(payloads); err != nil {
+				b.Fatal(err)
+			}
+			payloads = nil
+		}
+	}
+}
+
+func BenchmarkBoltDBWrites100(b *testing.B) {
+	d, err := ioutil.TempDir("", "benthos_test")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	path := filepath.Join(d, "test.db")
+	conf := NewBoltDBConfig()
+	conf.File = path
+	block, err := NewBoltDB(conf)
+	if err != nil {
+		os.RemoveAll(d)
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(d)
+
+	b.ResetTimer()
+	payloads := []types.Message{}
+	for i := 0; i < b.N; i++ {
+		uniquePayload := fmt.Sprintf("test%v", i)
+		payloads = append(payloads, message.New(
+			[][]byte{
+				[]byte("hello"),
+				[]byte("world"),
+				[]byte("12345"),
+				[]byte(uniquePayload),
+			},
+		))
+		if len(payloads) == 100 || i == (b.N-1) {
+			if _, err := block.PushMessages(payloads); err != nil {
+				b.Fatal(err)
+			}
+			payloads = nil
+		}
+	}
+}
