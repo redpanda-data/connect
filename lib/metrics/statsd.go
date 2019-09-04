@@ -54,6 +54,7 @@ func (w *wrappedLogger) Println(v ...interface{}) {
 
 // StatsdConfig is config for the Statsd metrics type.
 type StatsdConfig struct {
+	Prefix      string `json:"prefix" yaml:"prefix"`
 	Address     string `json:"address" yaml:"address"`
 	FlushPeriod string `json:"flush_period" yaml:"flush_period"`
 	Network     string `json:"network" yaml:"network"`
@@ -62,6 +63,7 @@ type StatsdConfig struct {
 // NewStatsdConfig creates an StatsdConfig struct with default values.
 func NewStatsdConfig() StatsdConfig {
 	return StatsdConfig{
+		Prefix:      "benthos",
 		Address:     "localhost:4040",
 		FlushPeriod: "100ms",
 		Network:     "udp",
@@ -125,7 +127,7 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 		opt(s)
 	}
 
-	prefix := config.Prefix
+	prefix := config.Statsd.Prefix
 	if len(prefix) > 0 && prefix[len(prefix)-1] != '.' {
 		prefix = prefix + "."
 	}

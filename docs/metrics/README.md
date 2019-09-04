@@ -29,7 +29,6 @@ blacklist:
   child: {}
   paths: []
   patterns: []
-prefix: benthos
 ```
 
 Blacklist metric paths within Benthos so that they are not aggregated by a child
@@ -67,8 +66,8 @@ are blocked by your blacklists enable logging at the TRACE level.
 
 ``` yaml
 type: http_server
-http_server: {}
-prefix: benthos
+http_server:
+  prefix: benthos
 ```
 
 It is possible to expose metrics without an aggregator service by having Benthos
@@ -95,8 +94,8 @@ this:
 
 ``` yaml
 type: prometheus
-prefix: benthos
 prometheus:
+  prefix: benthos
   push_interval: ""
   push_job_name: benthos_push
   push_url: ""
@@ -120,7 +119,6 @@ not include the "/metrics/jobs/..." path in the push URL.
 
 ``` yaml
 type: rename
-prefix: benthos
 rename:
   by_regexp: []
   child: {}
@@ -183,11 +181,11 @@ are renamed enable logging at the TRACE level.
 
 ``` yaml
 type: statsd
-prefix: benthos
 statsd:
   address: localhost:4040
   flush_period: 100ms
   network: udp
+  prefix: benthos
 ```
 
 Push metrics over a TCP or UDP connection using the
@@ -197,7 +195,6 @@ Push metrics over a TCP or UDP connection using the
 
 ``` yaml
 type: whitelist
-prefix: benthos
 whitelist:
   child: {}
   paths: []

@@ -30,9 +30,10 @@ import (
 
 func TestSanitise(t *testing.T) {
 	exp := config.Sanitised{
-		"type":        "http_server",
-		"http_server": map[string]interface{}{},
-		"prefix":      "benthos",
+		"type": "http_server",
+		"http_server": map[string]interface{}{
+			"prefix": "benthos",
+		},
 	}
 
 	conf := NewConfig()
@@ -50,10 +51,10 @@ func TestSanitise(t *testing.T) {
 		"type": "statsd",
 		"statsd": map[string]interface{}{
 			"address":      "foo",
+			"prefix":       "benthos",
 			"flush_period": "100ms",
 			"network":      "udp",
 		},
-		"prefix": "benthos",
 	}
 
 	conf = NewConfig()

@@ -753,8 +753,10 @@ logger:
   level: ${LOGGER_LEVEL:INFO}
   prefix: ${LOGGER_PREFIX:benthos}
 metrics:
-  prefix: ${METRICS_PREFIX:benthos}
+  http_server:
+    prefix: ${METRICS_HTTP_SERVER_PREFIX:benthos}
   prometheus:
+    prefix: ${METRICS_PROMETHEUS_PREFIX:benthos}
     push_interval: ${METRICS_PROMETHEUS_PUSH_INTERVAL}
     push_job_name: ${METRICS_PROMETHEUS_PUSH_JOB_NAME:benthos_push}
     push_url: ${METRICS_PROMETHEUS_PUSH_URL}
@@ -762,4 +764,5 @@ metrics:
     address: ${METRICS_STATSD_ADDRESS:localhost:4040}
     flush_period: ${METRICS_STATSD_FLUSH_PERIOD:100ms}
     network: ${METRICS_STATSD_NETWORK:udp}
+    prefix: ${METRICS_STATSD_PREFIX:benthos}
   type: ${METRICS_TYPE:http_server}

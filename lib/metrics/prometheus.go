@@ -150,7 +150,7 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 		running:    1,
 		closedChan: make(chan struct{}),
 		config:     config.Prometheus,
-		prefix:     toPromName(config.Prefix),
+		prefix:     config.Prometheus.Prefix,
 		counters:   map[string]*prometheus.CounterVec{},
 		gauges:     map[string]*prometheus.GaugeVec{},
 		timers:     map[string]*prometheus.SummaryVec{},

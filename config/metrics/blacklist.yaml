@@ -37,7 +37,6 @@ metrics:
     child: {}
     paths: []
     patterns: []
-  prefix: benthos
 tracer:
   type: none
   none: {}

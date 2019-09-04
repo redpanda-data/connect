@@ -228,14 +228,16 @@ var conf = config.New()
 var testSuffix = "_benthos_test"
 
 // OptSetServiceName creates an opt func that allows the default service name
-// config fields such as metrics and logging prefixes to be overidden.
+// config fields such as metrics and logging prefixes to be overridden.
 func OptSetServiceName(name string) func() {
 	return func() {
 		testSuffix = fmt.Sprintf("_%v_test", name)
 		conf.HTTP.RootPath = "/" + name
 		conf.Logger.Prefix = name
 		conf.Logger.StaticFields["@service"] = name
-		conf.Metrics.Prefix = name
+		conf.Metrics.HTTP.Prefix = name
+		conf.Metrics.Prometheus.Prefix = name
+		conf.Metrics.Statsd.Prefix = name
 	}
 }
 

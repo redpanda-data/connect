@@ -46,6 +46,7 @@ not include the "/metrics/jobs/..." path in the push URL.`,
 
 // PrometheusConfig is config for the Prometheus metrics type.
 type PrometheusConfig struct {
+	Prefix       string `json:"prefix" yaml:"prefix"`
 	PushURL      string `json:"push_url" yaml:"push_url"`
 	PushInterval string `json:"push_interval" yaml:"push_interval"`
 	PushJobName  string `json:"push_job_name" yaml:"push_job_name"`
@@ -54,6 +55,7 @@ type PrometheusConfig struct {
 // NewPrometheusConfig creates an PrometheusConfig struct with default values.
 func NewPrometheusConfig() PrometheusConfig {
 	return PrometheusConfig{
+		Prefix:       "benthos",
 		PushURL:      "",
 		PushInterval: "",
 		PushJobName:  "benthos_push",

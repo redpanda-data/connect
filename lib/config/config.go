@@ -51,15 +51,12 @@ type Type struct {
 
 // New returns a new configuration with default values.
 func New() Type {
-	metricsConf := metrics.NewConfig()
-	metricsConf.Prefix = "benthos"
-
 	return Type{
 		HTTP:               api.NewConfig(),
 		Config:             stream.NewConfig(),
 		Manager:            manager.NewConfig(),
 		Logger:             log.NewConfig(),
-		Metrics:            metricsConf,
+		Metrics:            metrics.NewConfig(),
 		Tracer:             tracer.NewConfig(),
 		SystemCloseTimeout: "20s",
 	}
