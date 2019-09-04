@@ -177,29 +177,22 @@ func TestTCPServerReconnect(t *testing.T) {
 		return tran.Payload, nil
 	}
 
-	exp := [][]byte{[]byte("foo")}
-	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
+	expMsgs := map[string]struct{}{
+		"foo": struct{}{},
+		"bar": struct{}{},
+		"baz": struct{}{},
 	}
 
-	exp = [][]byte{[]byte("bar")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
-
-	exp = [][]byte{[]byte("baz")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
+	for i := 0; i < 3; i++ {
+		msg, err := readNextMsg()
+		if err != nil {
+			t.Fatal(err)
+		}
+		act := string(msg.Get(0).Get())
+		if _, exists := expMsgs[act]; !exists {
+			t.Errorf("Unexpected message: %v", act)
+		}
+		delete(expMsgs, act)
 	}
 
 	wg.Wait()
