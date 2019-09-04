@@ -28,7 +28,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/gabs/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -127,14 +127,7 @@ func (p *MergeJSON) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			return
 		}
 
-		var gPart *gabs.Container
-		if gPart, err = gabs.Consume(jsonPart); err != nil {
-			p.mErrJSONP.Incr(1)
-			p.mErr.Incr(1)
-			p.log.Debugf("Failed to parse part into json: %v\n", err)
-			return
-		}
-
+		gPart := gabs.Wrap(jsonPart)
 		newPart.Merge(gPart)
 	}
 

@@ -243,6 +243,20 @@ func TestAWK(t *testing.T) {
 			output:  `null`,
 		},
 		{
+			name:    "json get array 1",
+			codec:   "none",
+			program: `{ print json_get("obj.1.foo") }`,
+			input:   `{"obj":[{"foo":11},{"foo":12}]}`,
+			output:  `12`,
+		},
+		{
+			name:    "json set array 1",
+			codec:   "none",
+			program: `{ json_set("obj.1.foo", "nope") }`,
+			input:   `{"obj":[{"foo":11},{"foo":12}]}`,
+			output:  `{"obj":[{"foo":11},{"foo":"nope"}]}`,
+		},
+		{
 			name:    "json get 3",
 			codec:   "none",
 			program: `{ print json_get("obj.bar") }`,

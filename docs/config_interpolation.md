@@ -106,10 +106,10 @@ Resolves to the size of a message batch.
 ### `json_field`
 
 Resolves to the value of a JSON field within the message payload located by a
-dot-path specified as an argument. The message referred to will depend on the
-context of where the function is called. With a message containing
-`{"foo":{"bar":"hello world"}}` the function `${!json_field:foo.bar}` would
-resolve to `hello world`.
+[dot path](field_paths.md) specified as an argument. The message referred to
+will depend on the context of where the function is called. With a message
+containing `{"foo":{"bar":"hello world"}}` the function `${!json_field:foo.bar}`
+would resolve to `hello world`.
 
 When applied to a batch of message parts this function targets the first message
 part by default. It is possible to specify a target part by following the path

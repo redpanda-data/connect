@@ -206,6 +206,13 @@ func TestJSONAppend(t *testing.T) {
 			output: `{"foo":{"bar":[5,{"baz":1}]}}`,
 		},
 		{
+			name:   "append in array 1",
+			path:   "foo.1.bar",
+			value:  `{"baz":1}`,
+			input:  `{"foo":[{"ignored":true},{"bar":5}]}`,
+			output: `{"foo":[{"ignored":true},{"bar":[5,{"baz":1}]}]}`,
+		},
+		{
 			name:   "append nil 1",
 			path:   "foo.bar",
 			value:  `{"baz":1}`,

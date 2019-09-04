@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/gabs/v2"
 )
 
 func CheckTagsOfType(v reflect.Type, checkedTypes map[string]struct{}, t *testing.T) {
@@ -93,11 +93,11 @@ func TestExampleGen(t *testing.T) {
 		t.Errorf("Unexpected conf value: %v != %v", act, exp)
 	}
 
-	if exp, act := `["jmespath","filter_parts"]`, gObj.Path("pipeline.processors.type").String(); exp != act {
+	if exp, act := `["jmespath","filter_parts"]`, gObj.Path("pipeline.processors.*.type").String(); exp != act {
 		t.Errorf("Unexpected conf value: %v != %v", act, exp)
 	}
 
-	if exp, act := `["text","jmespath"]`, gObj.Path("pipeline.processors.filter_parts.type").String(); exp != act {
+	if exp, act := `["text","jmespath"]`, gObj.Path("pipeline.processors.*.filter_parts.type").String(); exp != act {
 		t.Errorf("Unexpected conf value: %v != %v", act, exp)
 	}
 

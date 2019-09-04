@@ -4,7 +4,7 @@ input:
     bucket: "TODO"
     delete_objects: false
     sqs_url: "TODO"
-    sqs_body_path: Records.s3.object.key
+    sqs_body_path: Records.*.s3.object.key
     sqs_envelope_path: ""
     sqs_max_messages: 10
     credentials:

@@ -34,7 +34,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/gabs/v2"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -81,7 +81,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		},
 		DeleteObjects:   false,
 		SQSURL:          "",
-		SQSBodyPath:     "Records.s3.object.key",
+		SQSBodyPath:     "Records.*.s3.object.key",
 		SQSBucketPath:   "",
 		SQSEnvelopePath: "",
 		SQSMaxMessages:  10,
@@ -299,7 +299,7 @@ messageLoop:
 					a.log.Errorln("Couldn't locate S3 items from SQS message")
 					continue messageLoop
 				}
-				gObj, _ = gabs.Consume(docs)
+				gObj = gabs.Wrap(docs)
 			default:
 				addDudFn(sqsMsg)
 				a.log.Errorf("Unexpected envelope value: %v", t)

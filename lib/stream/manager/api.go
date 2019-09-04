@@ -37,7 +37,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/gabs/v2"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v3"
 )

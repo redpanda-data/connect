@@ -32,7 +32,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/gabs/v2"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -45,7 +45,9 @@ func init() {
 Parses messages as a JSON document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
-If the path is empty or "." the root of the data will be targeted.
+The field ` + "`path`" + ` is a [dot separated path](../field_paths.md) which,
+for most operators, determines the field within the payload to be targetted. If
+the path is empty or "." the root of the data will be targeted.
 
 This processor will interpolate functions within the 'value' field, you can find
 a list of functions [here](../config_interpolation.md#functions).
@@ -239,14 +241,11 @@ func newSetOperator(path []string) jsonOperator {
 			return data, nil
 		}
 
-		gPart, err := gabs.Consume(body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse message body: %v", err)
-		}
+		gPart := gabs.Wrap(body)
 
 		var data interface{}
 		if value != nil {
-			if err = json.Unmarshal([]byte(value), &data); err != nil {
+			if err := json.Unmarshal([]byte(value), &data); err != nil {
 				return nil, fmt.Errorf("failed to parse value: %v", err)
 			}
 		}
@@ -264,17 +263,13 @@ func newMoveOperator(srcPath, destPath []string) (jsonOperator, error) {
 		return nil, errors.New("an empty destination path is not valid for the move operator")
 	}
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
-		gPart, err := gabs.Consume(body)
-		if err != nil {
-			return nil, err
-		}
-
+		gPart := gabs.Wrap(body)
 		gSrc := gPart.S(srcPath...).Data()
 		if gSrc == nil {
 			return nil, fmt.Errorf("item not found at path '%v'", strings.Join(srcPath, "."))
 		}
 
-		if _, err = gPart.Set(gSrc, destPath...); err != nil {
+		if _, err := gPart.Set(gSrc, destPath...); err != nil {
 			return nil, fmt.Errorf("failed to set destination path '%v': %v", strings.Join(destPath, "."), err)
 		}
 		gPart.Delete(srcPath...)
@@ -290,17 +285,13 @@ func newCopyOperator(srcPath, destPath []string) (jsonOperator, error) {
 		return nil, errors.New("an empty destination path is not valid for the copy operator")
 	}
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
-		gPart, err := gabs.Consume(body)
-		if err != nil {
-			return nil, err
-		}
-
+		gPart := gabs.Wrap(body)
 		gSrc := gPart.S(srcPath...).Data()
 		if gSrc == nil {
 			return nil, fmt.Errorf("item not found at path '%v'", strings.Join(srcPath, "."))
 		}
 
-		if _, err = gPart.Set(gSrc, destPath...); err != nil {
+		if _, err := gPart.Set(gSrc, destPath...); err != nil {
 			return nil, fmt.Errorf("failed to set destination path '%v': %v", strings.Join(destPath, "."), err)
 		}
 		return gPart.Data(), nil
@@ -309,11 +300,7 @@ func newCopyOperator(srcPath, destPath []string) (jsonOperator, error) {
 
 func newSelectOperator(path []string) jsonOperator {
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
-		gPart, err := gabs.Consume(body)
-		if err != nil {
-			return nil, err
-		}
-
+		gPart := gabs.Wrap(body)
 		target := gPart
 		if len(path) > 0 {
 			target = gPart.Search(path...)
@@ -336,12 +323,8 @@ func newDeleteOperator(path []string) jsonOperator {
 			return nil, nil
 		}
 
-		gPart, err := gabs.Consume(body)
-		if err != nil {
-			return nil, err
-		}
-
-		if err = gPart.Delete(path...); err != nil {
+		gPart := gabs.Wrap(body)
+		if err := gPart.Delete(path...); err != nil {
 			return nil, err
 		}
 		return gPart.Data(), nil
@@ -350,10 +333,7 @@ func newDeleteOperator(path []string) jsonOperator {
 
 func newCleanOperator(path []string) jsonOperator {
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
-		gRoot, err := gabs.Consume(body)
-		if err != nil {
-			return nil, err
-		}
+		gRoot := gabs.Wrap(body)
 
 		var cleanValueFn func(g interface{}) interface{}
 		var cleanArrayFn func(g []interface{}) []interface{}
@@ -420,16 +400,12 @@ func newCleanOperator(path []string) jsonOperator {
 
 func newAppendOperator(path []string) jsonOperator {
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
-		gPart, err := gabs.Consume(body)
-		if err != nil {
-			return nil, err
-		}
-
+		gPart := gabs.Wrap(body)
 		var array []interface{}
 
 		var valueParsed interface{}
 		if value != nil {
-			if err = json.Unmarshal(value, &valueParsed); err != nil {
+			if err := json.Unmarshal(value, &valueParsed); err != nil {
 				return nil, err
 			}
 		}

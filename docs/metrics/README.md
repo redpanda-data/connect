@@ -11,10 +11,12 @@ A metrics config section looks like this:
 
 ``` yaml
 metrics:
-  type: foo
-  prefix: benthos
-  foo:
-    bar: baz
+  type: statsd
+  statsd:
+    prefix: foo
+    address: localhost:8125
+    flush_period: 100ms
+    network: udp
 ```
 
 Benthos exposes lots of metrics and their paths will depend on your pipeline
@@ -40,9 +42,6 @@ a path prefix or regular expression matches a metric path it will be excluded.
 Metrics must be matched using dot notation even if the chosen output uses a
 different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
 even when sending metrics to Prometheus.
-
-The `prefix` field in a metrics config is ignored by this type. Please
-configure a prefix at the child level.
 
 ### Paths
 
@@ -130,9 +129,6 @@ Metrics must be matched using dot notation even if the chosen output uses a
 different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
 even when sending metrics to Prometheus.
 
-The `prefix` field in a metrics config is ignored by this type. Please
-configure a prefix at the child level.
-
 ### `by_regexp`
 
 An array of objects of the form:
@@ -210,9 +206,6 @@ a path prefix or regular expression matches a metric path it will be included.
 Metrics must be matched using dot notation even if the chosen output uses a
 different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
 even when sending metrics to Prometheus.
-
-The `prefix` field in a metrics config is ignored by this type. Please
-configure a prefix at the child level.
 
 ### Paths
 

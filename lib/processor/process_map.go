@@ -42,9 +42,10 @@ func init() {
 			return NewProcessMap(conf.ProcessMap, mgr, log, stats)
 		},
 		description: `
-A processor that extracts and maps fields from the original payload into new
-objects, applies a list of processors to the newly constructed objects, and
-finally maps the result back into the original payload.
+A processor that extracts and maps fields identified via
+[dot path](../field_paths.md) from the original payload into new objects,
+applies a list of processors to the newly constructed objects, and finally maps
+the result back into the original payload.
 
 This processor is useful for performing processors on subsections of a payload.
 For example, you could extract sections of a JSON object in order to construct

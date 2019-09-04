@@ -932,7 +932,9 @@ json:
 Parses messages as a JSON document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
-If the path is empty or "." the root of the data will be targeted.
+The field `path` is a [dot separated path](../field_paths.md) which,
+for most operators, determines the field within the payload to be targetted. If
+the path is empty or "." the root of the data will be targeted.
 
 This processor will interpolate functions within the 'value' field, you can find
 a list of functions [here](../config_interpolation.md#functions).
@@ -1410,9 +1412,10 @@ process_field:
   result_type: string
 ```
 
-A processor that extracts the value of a field within payloads according to a
-specified codec, applies a list of processors to the extracted value and finally
-sets the field within the original payloads to the processed result.
+A processor that extracts the value of a field [dot path](../field_paths.md)
+within payloads according to a specified codec, applies a list of processors to
+the extracted value and finally sets the field within the original payloads to
+the processed result.
 
 ### Codecs
 
@@ -1477,9 +1480,10 @@ process_map:
   processors: []
 ```
 
-A processor that extracts and maps fields from the original payload into new
-objects, applies a list of processors to the newly constructed objects, and
-finally maps the result back into the original payload.
+A processor that extracts and maps fields identified via
+[dot path](../field_paths.md) from the original payload into new objects,
+applies a list of processors to the newly constructed objects, and finally maps
+the result back into the original payload.
 
 This processor is useful for performing processors on subsections of a payload.
 For example, you could extract sections of a JSON object in order to construct

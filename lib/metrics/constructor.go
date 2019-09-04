@@ -189,10 +189,12 @@ A metrics config section looks like this:
 
 ` + "``` yaml" + `
 metrics:
-  type: foo
-  prefix: benthos
-  foo:
-    bar: baz
+  type: statsd
+  statsd:
+    prefix: foo
+    address: localhost:8125
+    flush_period: 100ms
+    network: udp
 ` + "```" + `
 
 Benthos exposes lots of metrics and their paths will depend on your pipeline

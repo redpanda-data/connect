@@ -42,9 +42,6 @@ Metrics must be matched using dot notation even if the chosen output uses a
 different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
 even when sending metrics to Prometheus.
 
-The ` + "`prefix`" + ` field in a metrics config is ignored by this type. Please
-configure a prefix at the child level.
-
 ### ` + "`by_regexp`" + `
 
 An array of objects of the form:

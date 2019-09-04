@@ -952,7 +952,7 @@ s3:
   prefix: ""
   region: eu-west-1
   retries: 3
-  sqs_body_path: Records.s3.object.key
+  sqs_body_path: Records.*.s3.object.key
   sqs_bucket_path: ""
   sqs_envelope_path: ""
   sqs_max_messages: 10
@@ -970,10 +970,11 @@ If the download manager is enabled this can help speed up file downloads but
 results in file metadata not being copied.
 
 If your bucket is configured to send events directly to an SQS queue then you
-need to set the `sqs_body_path` field to where the object key is found
-in the payload. However, it is also common practice to send bucket events to an
-SNS topic which sends enveloped events to SQS, in which case you must also set
-the `sqs_envelope_path` field to where the payload can be found.
+need to set the `sqs_body_path` field to a
+[dot path](../field_paths.md) where the object key is found in the payload.
+However, it is also common practice to send bucket events to an SNS topic which
+sends enveloped events to SQS, in which case you must also set the
+`sqs_envelope_path` field to where the payload can be found.
 
 When using SQS events it's also possible to extract target bucket names from the
 events by specifying a path in the field `sqs_bucket_path`. For each
