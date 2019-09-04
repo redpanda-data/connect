@@ -38,7 +38,7 @@ import (
 
 // TypeSpec is a constructor and usage description for each buffer type.
 type TypeSpec struct {
-	constructor        func(conf Config, log log.Modular, stats metrics.Type) (Type, error)
+	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 	description        string
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 }
@@ -231,9 +231,9 @@ func Descriptions() string {
 
 // New creates a buffer type based on a buffer configuration.
 // TODO: V3 Propagate mamager.
-func New(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func New(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	if c, ok := Constructors[conf.Type]; ok {
-		return c.constructor(conf, log, stats)
+		return c.constructor(conf, mgr, log, stats)
 	}
 	return nil, types.ErrInvalidBufferType
 }

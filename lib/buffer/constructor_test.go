@@ -40,7 +40,7 @@ func TestConstructorBadType(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "not_exist"
 
-	if _, err := New(conf, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }

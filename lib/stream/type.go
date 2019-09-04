@@ -157,7 +157,8 @@ func (t *Type) start() (err error) {
 	}
 	if t.conf.Buffer.Type != buffer.TypeNone {
 		if t.bufferLayer, err = buffer.New(
-			t.conf.Buffer, t.logger.NewModule(".buffer"), metrics.Namespaced(t.stats, "buffer"),
+			t.conf.Buffer, t.manager,
+			t.logger.NewModule(".buffer"), metrics.Namespaced(t.stats, "buffer"),
 		); err != nil {
 			return
 		}

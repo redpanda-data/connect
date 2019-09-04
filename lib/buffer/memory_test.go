@@ -35,7 +35,7 @@ func TestMemoryBuffer(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "memory"
 
-	buf, err := New(conf, log.Noop(), metrics.Noop())
+	buf, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

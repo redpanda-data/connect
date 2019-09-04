@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
   (e.g. `github.com/Jeffail/benthos/v3`).
 - Removed deprecated `mmap_file` buffer.
 - Removed deprecated (and undocumented) metrics paths.
+- Go API: buffer constructors now take a `types.Manager` argument in parity with
+  other components.
 
 ## 2.15.0 - 2019-09-03
 

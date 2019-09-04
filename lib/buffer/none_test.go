@@ -35,7 +35,7 @@ import (
 //------------------------------------------------------------------------------
 
 func TestNoneBufferClose(t *testing.T) {
-	empty, err := NewEmpty(NewConfig(), nil, nil)
+	empty, err := NewEmpty(NewConfig(), nil, nil, nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -62,7 +62,7 @@ func TestNoneBufferBasic(t *testing.T) {
 	nThreads, nMessages := 5, 100
 
 	conf := NewConfig()
-	empty, err := NewEmpty(conf, nil, nil)
+	empty, err := NewEmpty(conf, nil, nil, nil)
 	if err != nil {
 		t.Error(err)
 		return

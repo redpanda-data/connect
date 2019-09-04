@@ -97,12 +97,12 @@ func NewMemoryConfig() MemoryConfig {
 
 // NewMemory creates a buffer held in memory.
 // TODO: V3 Propagate mamager.
-func NewMemory(config Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewMemory(config Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	wrap := NewParallelWrapper(config, parallel.NewMemory(config.Memory.Limit), log, stats)
 	if !config.Memory.BatchPolicy.Enabled {
 		return wrap, nil
 	}
-	pol, err := batch.NewPolicy(config.Memory.BatchPolicy.PolicyConfig, types.NoopMgr(), log, stats)
+	pol, err := batch.NewPolicy(config.Memory.BatchPolicy.PolicyConfig, mgr, log, stats)
 	if err != nil {
 		return nil, fmt.Errorf("batch policy config error: %v", err)
 	}

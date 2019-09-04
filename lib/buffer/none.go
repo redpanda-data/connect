@@ -61,7 +61,7 @@ type Empty struct {
 }
 
 // NewEmpty creates a new buffer interface but doesn't buffer messages.
-func NewEmpty(config Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewEmpty(config Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	e := &Empty{
 		running:     1,
 		messagesOut: make(chan types.Transaction),
