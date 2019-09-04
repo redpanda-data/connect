@@ -129,6 +129,10 @@ func NewAmazonS3(
 	log log.Modular,
 	stats metrics.Type,
 ) (*AmazonS3, error) {
+	if len(conf.SQSURL) > 0 && conf.SQSBodyPath == "Records.s3.object.key" {
+		log.Warnf("It looks like a deprecated SQS Body path is configured: 'Records.s3.object.key', you might not receive S3 items unless you update to the new syntax 'Records.*.s3.object.key'")
+	}
+
 	if len(conf.Bucket) == 0 {
 		return nil, errors.New("a bucket must be specified (even with an SQS bucket path configured)")
 	}
@@ -235,7 +239,14 @@ func digStrsFromSlices(slice []interface{}) []string {
 }
 
 func (a *AmazonS3) readSQSEvents() error {
-	var dudMessageHandles []*sqs.DeleteMessageBatchRequestEntry
+	var dudMessageHandles []*sqs.ChangeMessageVisibilityBatchRequestEntry
+	addDudFn := func(m *sqs.Message) {
+		dudMessageHandles = append(dudMessageHandles, &sqs.ChangeMessageVisibilityBatchRequestEntry{
+			Id:                m.MessageId,
+			ReceiptHandle:     m.ReceiptHandle,
+			VisibilityTimeout: aws.Int64(0),
+		})
+	}
 
 	output, err := a.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(a.conf.SQSURL),
@@ -254,13 +265,14 @@ messageLoop:
 		}
 
 		if sqsMsg.Body == nil {
-			dudMessageHandles = append(dudMessageHandles, msgHandle)
+			addDudFn(sqsMsg)
+			a.log.Errorln("Received empty SQS message")
 			continue messageLoop
 		}
 
 		gObj, err := gabs.ParseJSON([]byte(*sqsMsg.Body))
 		if err != nil {
-			dudMessageHandles = append(dudMessageHandles, msgHandle)
+			addDudFn(sqsMsg)
 			a.log.Errorf("Failed to parse SQS message body: %v\n", err)
 			continue messageLoop
 		}
@@ -269,7 +281,7 @@ messageLoop:
 			switch t := gObj.S(a.sqsEnvPath...).Data().(type) {
 			case string:
 				if gObj, err = gabs.ParseJSON([]byte(t)); err != nil {
-					dudMessageHandles = append(dudMessageHandles, msgHandle)
+					addDudFn(sqsMsg)
 					a.log.Errorf("Failed to parse SQS message envelope: %v\n", err)
 					continue messageLoop
 				}
@@ -283,13 +295,13 @@ messageLoop:
 					}
 				}
 				if len(docs) == 0 {
-					dudMessageHandles = append(dudMessageHandles, msgHandle)
-					a.log.Errorf("Failed to parse SQS message envelope: %v\n", err)
+					addDudFn(sqsMsg)
+					a.log.Errorln("Couldn't locate S3 items from SQS message")
 					continue messageLoop
 				}
 				gObj, _ = gabs.Consume(docs)
 			default:
-				dudMessageHandles = append(dudMessageHandles, msgHandle)
+				addDudFn(sqsMsg)
 				a.log.Errorf("Unexpected envelope value: %v", t)
 				continue messageLoop
 			}
@@ -325,9 +337,7 @@ messageLoop:
 					newTargets = append(newTargets, p)
 				}
 			}
-			if len(newTargets) == 0 {
-				dudMessageHandles = append(dudMessageHandles, msgHandle)
-			} else {
+			if len(newTargets) > 0 {
 				for i, target := range newTargets {
 					bucket := ""
 					if len(buckets) > i {
@@ -340,13 +350,19 @@ messageLoop:
 					})
 				}
 				a.targetKeys[len(a.targetKeys)-1].sqsHandle = msgHandle
+			} else {
+				addDudFn(sqsMsg)
+				a.log.Errorln("No items found in SQS message at specified path")
 			}
+		default:
+			addDudFn(sqsMsg)
+			a.log.Errorln("No items found in SQS message at specified path")
 		}
 	}
 
 	// Discard any SQS messages not associated with a target file.
 	for len(dudMessageHandles) > 0 {
-		input := sqs.DeleteMessageBatchInput{
+		input := sqs.ChangeMessageVisibilityBatchInput{
 			QueueUrl: aws.String(a.conf.SQSURL),
 			Entries:  dudMessageHandles,
 		}
@@ -357,7 +373,7 @@ messageLoop:
 		} else {
 			dudMessageHandles = nil
 		}
-		a.sqs.DeleteMessageBatch(&input)
+		a.sqs.ChangeMessageVisibilityBatch(&input)
 	}
 
 	if len(a.targetKeys) == 0 {
@@ -377,6 +393,17 @@ func (a *AmazonS3) popTargetKey() {
 		a.targetKeys = nil
 	}
 	a.readKeys = append(a.readKeys, target)
+}
+
+func (a *AmazonS3) popFailedKey() {
+	if len(a.targetKeys) == 0 {
+		return
+	}
+	if len(a.targetKeys) > 1 {
+		a.targetKeys = a.targetKeys[1:]
+	} else {
+		a.targetKeys = nil
+	}
 }
 
 // Read attempts to read a new message from the target S3 bucket.
@@ -437,7 +464,7 @@ func (a *AmazonS3) read() (types.Message, error) {
 			target.attempts--
 			if target.attempts == 0 {
 				// Remove the target file from our list.
-				a.popTargetKey()
+				a.popFailedKey()
 				a.log.Errorf("Failed to download file '%s' from bucket '%s' after '%v' attempts: %v\n", target.s3Key, bucket, a.conf.Retries, err)
 			} else {
 				a.targetKeys[0] = target
@@ -450,13 +477,14 @@ func (a *AmazonS3) read() (types.Message, error) {
 			continue
 		}
 
-		a.popTargetKey()
-
 		bytes, err := ioutil.ReadAll(obj.Body)
 		obj.Body.Close()
 		if err != nil {
+			a.popFailedKey()
 			return nil, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, bucket, err)
 		}
+
+		a.popTargetKey()
 
 		part := message.NewPart(bytes)
 		meta := part.Metadata()
@@ -516,7 +544,7 @@ func (a *AmazonS3) readFromMgr() (types.Message, error) {
 			target.attempts--
 			if target.attempts == 0 {
 				// Remove the target file from our list.
-				a.popTargetKey()
+				a.popFailedKey()
 				a.log.Errorf("Failed to download file '%s' from bucket '%s' after '%v' attempts: %v\n", target.s3Key, bucket, a.conf.Retries, err)
 			} else {
 				a.targetKeys[0] = target

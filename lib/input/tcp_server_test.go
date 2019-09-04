@@ -178,9 +178,9 @@ func TestTCPServerReconnect(t *testing.T) {
 	}
 
 	expMsgs := map[string]struct{}{
-		"foo": struct{}{},
-		"bar": struct{}{},
-		"baz": struct{}{},
+		"foo": {},
+		"bar": {},
+		"baz": {},
 	}
 
 	for i := 0; i < 3; i++ {
