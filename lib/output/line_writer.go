@@ -90,25 +90,14 @@ func (w *LineWriter) loop() {
 		mSent      = w.stats.GetCounter("batch.sent")
 		mBytesSent = w.stats.GetCounter("batch.bytes")
 		mLatency   = w.stats.GetTimer("batch.latency")
-		// following metrics are left for backward compatibility
-		// and should be considered as deprecated
-		// TODO: V3 Remove obsolete metrics
-		mError        = w.stats.GetCounter("error")
-		mRunning      = w.stats.GetGauge("running")
-		mPartsCount   = w.stats.GetCounter("parts.count")
-		mSuccess      = w.stats.GetCounter("send.success")
-		mPartsSuccess = w.stats.GetCounter("parts.send.success")
 	)
 
 	defer func() {
 		if w.closeOnExit {
 			w.handle.Close()
 		}
-		mRunning.Decr(1)
-
 		close(w.closedChan)
 	}()
-	mRunning.Incr(1)
 
 	delim := []byte("\n")
 	if len(w.customDelim) > 0 {
@@ -124,7 +113,6 @@ func (w *LineWriter) loop() {
 				return
 			}
 			mCount.Incr(1)
-			mPartsCount.Incr(int64(ts.Payload.Len()))
 		case <-w.closeChan:
 			return
 		}
@@ -139,11 +127,7 @@ func (w *LineWriter) loop() {
 			_, err = fmt.Fprintf(w.handle, "%s%s%s", bytes.Join(message.GetAllBytes(ts.Payload), delim), delim, delim)
 		}
 		latency := time.Since(t0).Nanoseconds()
-		if err != nil {
-			mError.Incr(1)
-		} else {
-			mSuccess.Incr(1)
-			mPartsSuccess.Incr(int64(ts.Payload.Len()))
+		if err == nil {
 			mSent.Incr(1)
 			mPartsSent.Incr(int64(ts.Payload.Len()))
 			mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))

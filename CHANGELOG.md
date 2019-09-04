@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Go modules are now fully supported, imports must now include the major version
   (e.g. `github.com/Jeffail/benthos/v3`).
 - Removed deprecated `mmap_file` buffer.
+- Removed deprecated (and undocumented) metrics paths.
 
 ## 2.15.0 - 2019-09-03
 
