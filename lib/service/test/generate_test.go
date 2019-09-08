@@ -90,7 +90,7 @@ tests:
 	}
 
 	if exp, act := defaultDef, string(actBytes); exp == act {
-		t.Error("Existing definition was overriden")
+		t.Error("Existing definition was overridden")
 	}
 }
 

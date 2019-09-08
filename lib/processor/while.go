@@ -40,7 +40,7 @@ func init() {
 		constructor: NewWhile,
 		description: `
 While is a processor that has a condition and a list of child processors. The
-child processors are executed continously on a message batch for as long as the
+child processors are executed continuously on a message batch for as long as the
 child condition resolves to true.
 
 The field ` + "`at_least_once`" + `, if true, ensures that the child processors

@@ -30,7 +30,7 @@ until the issue is resolved.
 When a Benthos output fails to send a message the error is propagated back up to
 the input, where depending on the protocol it will either be pushed back to the
 source as a Noack (AMQP) or will be reattempted indefinitely with the commit
-witheld until success (Kafka).
+withheld until success (Kafka).
 
 It's possible to instead have Benthos indefinitely retry an output until success
 with a [`retry`](#retry) output. Some other outputs, such as the

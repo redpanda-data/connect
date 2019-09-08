@@ -91,9 +91,7 @@ func TestRenamePatterns(t *testing.T) {
 
 		var child *HTTP
 		if rename, ok := m.(*Rename); ok {
-			child, ok = rename.s.(*HTTP)
-		} else {
-			t.Fatal("Failed to cast rename")
+			child = rename.s.(*HTTP)
 		}
 		if child == nil {
 			t.Fatal("Failed to cast child")

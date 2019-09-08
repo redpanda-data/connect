@@ -46,7 +46,7 @@ Parses messages as a JSON document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
 The field ` + "`path`" + ` is a [dot separated path](../field_paths.md) which,
-for most operators, determines the field within the payload to be targetted. If
+for most operators, determines the field within the payload to be targeted. If
 the path is empty or "." the root of the data will be targeted.
 
 This processor will interpolate functions within the 'value' field, you can find

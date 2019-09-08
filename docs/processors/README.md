@@ -933,7 +933,7 @@ Parses messages as a JSON document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
 The field `path` is a [dot separated path](../field_paths.md) which,
-for most operators, determines the field within the payload to be targetted. If
+for most operators, determines the field within the payload to be targeted. If
 the path is empty or "." the root of the data will be targeted.
 
 This processor will interpolate functions within the 'value' field, you can find
@@ -1948,7 +1948,7 @@ while:
 ```
 
 While is a processor that has a condition and a list of child processors. The
-child processors are executed continously on a message batch for as long as the
+child processors are executed continuously on a message batch for as long as the
 child condition resolves to true.
 
 The field `at_least_once`, if true, ensures that the child processors
