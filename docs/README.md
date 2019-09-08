@@ -48,4 +48,5 @@ Welcome to the Benthos documentation site, if you haven't used Benthos before ch
 
 Previous versions of this documentation can be found for each prior major release at:
 
+- [Version 2](https://docs.benthos.dev/archive/v2/)
 - [Version 1](https://docs.benthos.dev/archive/v1/)
