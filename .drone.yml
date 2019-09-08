@@ -32,8 +32,9 @@ steps:
   commands:
     - make docker-cgo-tags
   when:
-    branch:
-      exclude: [ beta ]
+    ref:
+      exclude:
+      - refs/tags/*-rc*
 
 - name: docker-cgo-dr
   image: plugins/docker
@@ -43,8 +44,9 @@ steps:
     dry_run: true
   when:
     event: [ push, pull_request ]
-    branch:
-      exclude: [ beta ]
+    ref:
+      exclude:
+      - refs/tags/*-rc*
 
 - name: docker-cgo
   image: plugins/docker
@@ -56,14 +58,18 @@ steps:
       from_secret: docker_password
   when:
     event: tag
+    ref:
+      exclude:
+      - refs/tags/*-rc*
 
 - name: docker-tags
   image: golang
   commands:
     - make docker-tags
   when:
-    branch:
-      exclude: [ beta ]
+    ref:
+      exclude:
+      - refs/tags/*-rc*
 
 - name: docker-dr
   image: plugins/docker
@@ -73,8 +79,9 @@ steps:
     dry_run: true
   when:
     event: [ push, pull_request ]
-    branch:
-      exclude: [ beta ]
+    ref:
+      exclude:
+      - refs/tags/*-rc*
 
 - name: docker
   image: plugins/docker
@@ -86,6 +93,18 @@ steps:
       from_secret: docker_password
   when:
     event: tag
+    ref:
+      exclude:
+      - refs/tags/*-rc*
+
+- name: docker-rc-tags
+  image: golang
+  commands:
+    - make docker-rc-tags
+  when:
+    event: tag
+    ref:
+    - refs/tags/*-rc*
 
 - name: docker-beta
   image: plugins/docker
@@ -95,6 +114,7 @@ steps:
     username: jeffail
     password:
       from_secret: docker_password
-    tags: [ beta ]
   when:
-    branch: [ beta ]
+    event: tag
+    ref:
+    - refs/tags/*-rc*
