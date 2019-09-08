@@ -230,7 +230,6 @@ func Descriptions() string {
 }
 
 // New creates a buffer type based on a buffer configuration.
-// TODO: V3 Propagate mamager.
 func New(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats)

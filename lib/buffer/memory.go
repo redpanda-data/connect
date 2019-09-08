@@ -96,7 +96,6 @@ func NewMemoryConfig() MemoryConfig {
 //------------------------------------------------------------------------------
 
 // NewMemory creates a buffer held in memory.
-// TODO: V3 Propagate mamager.
 func NewMemory(config Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	wrap := NewParallelWrapper(config, parallel.NewMemory(config.Memory.Limit), log, stats)
 	if !config.Memory.BatchPolicy.Enabled {

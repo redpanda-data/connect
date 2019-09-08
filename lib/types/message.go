@@ -69,12 +69,12 @@ type Part interface {
 
 	// GetContext returns the underlying context attached to this message part,
 	// or context.Background if one has not already been attached.
-	// TODO: V3 Add this.
+	// TODO: V4 Add this.
 	// GetContext() context.Context
 
 	// WithContext returns the underlying message part with a new context
 	// attached.
-	// TODO: V3 Add this.
+	// TODO: V4 Add this.
 	// WithContext(ctx context.Context) Part
 
 	// JSON attempts to parse the part as a JSON document and either returns the
