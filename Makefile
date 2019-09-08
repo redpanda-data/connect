@@ -16,8 +16,8 @@ VER_PATCH := $(shell echo $(VER_CUT) | cut -f3 -d.)
 VER_RC    := $(shell echo $(VER_PATCH) | cut -f2 -d-)
 DATE      := $(shell date +"%Y-%m-%dT%H:%M:%SZ")
 
-VER_FLAGS = -X github.com/Jeffail/benthos/lib/service.Version=$(VERSION) \
-	-X github.com/Jeffail/benthos/lib/service.DateBuilt=$(DATE)
+VER_FLAGS = -X github.com/Jeffail/benthos/v3/lib/service.Version=$(VERSION) \
+	-X github.com/Jeffail/benthos/v3/lib/service.DateBuilt=$(DATE)
 
 LD_FLAGS =
 GO_FLAGS =
