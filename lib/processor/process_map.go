@@ -26,12 +26,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/condition"
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message/mapper"
-	"github.com/Jeffail/benthos/lib/message/tracing"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/condition"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/mapper"
+	"github.com/Jeffail/benthos/v3/lib/message/tracing"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -42,9 +42,10 @@ func init() {
 			return NewProcessMap(conf.ProcessMap, mgr, log, stats)
 		},
 		description: `
-A processor that extracts and maps fields from the original payload into new
-objects, applies a list of processors to the newly constructed objects, and
-finally maps the result back into the original payload.
+A processor that extracts and maps fields identified via
+[dot path](../field_paths.md) from the original payload into new objects,
+applies a list of processors to the newly constructed objects, and finally maps
+the result back into the original payload.
 
 This processor is useful for performing processors on subsections of a payload.
 For example, you could extract sections of a JSON object in order to construct

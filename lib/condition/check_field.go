@@ -25,10 +25,10 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/gabs/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -37,8 +37,9 @@ func init() {
 	Constructors[TypeCheckField] = TypeSpec{
 		constructor: NewCheckField,
 		description: `
-Extracts the value of a field within messages (currently only JSON format is
-supported) and then tests the extracted value against a child condition.`,
+Extracts the value of a field identified via [dot path](../field_paths.md)
+within messages (currently only JSON format is supported) and then tests the
+extracted value against a child condition.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var condConf interface{} = struct{}{}
 			if conf.CheckField.Condition != nil {
@@ -174,15 +175,7 @@ func (c *CheckField) Check(msg types.Message) bool {
 			return
 		}
 
-		var gpart *gabs.Container
-		if gpart, err = gabs.Consume(jpart); err != nil {
-			c.log.Debugf("Failed to parse message as JSON: %v\n", err)
-			c.mErrJSON.Incr(1)
-			c.mErr.Incr(1)
-			return
-		}
-
-		gpart = gpart.S(c.path...)
+		gpart := gabs.Wrap(jpart).S(c.path...)
 		switch t := gpart.Data().(type) {
 		case string:
 			payload.Get(index).Set([]byte(t))

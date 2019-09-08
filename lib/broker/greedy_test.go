@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/response"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------

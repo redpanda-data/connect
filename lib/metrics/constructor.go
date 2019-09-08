@@ -28,8 +28,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/util/config"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/util/config"
 )
 
 //------------------------------------------------------------------------------
@@ -68,13 +68,10 @@ const (
 
 // Config is the all encompassing configuration struct for all metric output
 // types.
-//
-// TODO: V3 move field prefix into specific implementations.
 type Config struct {
 	Type       string           `json:"type" yaml:"type"`
-	Prefix     string           `json:"prefix" yaml:"prefix"`
 	Blacklist  BlacklistConfig  `json:"blacklist" yaml:"blacklist"`
-	HTTP       struct{}         `json:"http_server" yaml:"http_server"`
+	HTTP       HTTPConfig       `json:"http_server" yaml:"http_server"`
 	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Rename     RenameConfig     `json:"rename" yaml:"rename"`
 	Statsd     StatsdConfig     `json:"statsd" yaml:"statsd"`
@@ -85,9 +82,8 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Type:       "http_server",
-		Prefix:     "benthos",
 		Blacklist:  NewBlacklistConfig(),
-		HTTP:       struct{}{},
+		HTTP:       NewHTTPConfig(),
 		Prometheus: NewPrometheusConfig(),
 		Rename:     NewRenameConfig(),
 		Statsd:     NewStatsdConfig(),
@@ -119,8 +115,6 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	} else {
 		outputMap[t] = hashMap[t]
 	}
-	outputMap["prefix"] = hashMap["prefix"]
-
 	return outputMap, nil
 }
 
@@ -195,10 +189,12 @@ A metrics config section looks like this:
 
 ` + "``` yaml" + `
 metrics:
-  type: foo
-  prefix: benthos
-  foo:
-    bar: baz
+  type: statsd
+  statsd:
+    prefix: foo
+    address: localhost:8125
+    flush_period: 100ms
+    network: udp
 ` + "```" + `
 
 Benthos exposes lots of metrics and their paths will depend on your pipeline

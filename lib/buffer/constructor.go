@@ -27,10 +27,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/config"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/config"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -38,7 +38,7 @@ import (
 
 // TypeSpec is a constructor and usage description for each buffer type.
 type TypeSpec struct {
-	constructor        func(conf Config, log log.Modular, stats metrics.Type) (Type, error)
+	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 	description        string
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 }
@@ -51,7 +51,6 @@ var Constructors = map[string]TypeSpec{}
 // String constants representing each buffer type.
 const (
 	TypeMemory = "memory"
-	TypeMMAP   = "mmap_file"
 	TypeNone   = "none"
 )
 
@@ -59,10 +58,9 @@ const (
 
 // Config is the all encompassing configuration struct for all buffer types.
 type Config struct {
-	Type   string           `json:"type" yaml:"type"`
-	Memory MemoryConfig     `json:"memory" yaml:"memory"`
-	Mmap   MmapBufferConfig `json:"mmap_file,omitempty" yaml:"mmap_file,omitempty"`
-	None   struct{}         `json:"none" yaml:"none"`
+	Type   string       `json:"type" yaml:"type"`
+	Memory MemoryConfig `json:"memory" yaml:"memory"`
+	None   struct{}     `json:"none" yaml:"none"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -70,7 +68,6 @@ func NewConfig() Config {
 	return Config{
 		Type:   "none",
 		Memory: NewMemoryConfig(),
-		Mmap:   NewMmapBufferConfig(),
 		None:   struct{}{},
 	}
 }
@@ -174,14 +171,12 @@ different options and their qualities:
 | Type      | Throughput | Consumers | Capacity |
 | --------- | ---------- | --------- | -------- |
 | Memory    | Highest    | Parallel  | RAM      |
-| Mmap File | High       | Single    | Disk     |
 
 #### Delivery Guarantees
 
 | Event     | Shutdown  | Crash     | Disk Corruption |
 | --------- | --------- | --------- | --------------- |
 | Memory    | Flushed\* | Lost      | Lost            |
-| Mmap File | Persisted | Lost      | Lost            |
 
 \* Makes a best attempt at flushing the remaining messages before closing
   gracefully.`
@@ -236,9 +231,9 @@ func Descriptions() string {
 
 // New creates a buffer type based on a buffer configuration.
 // TODO: V3 Propagate mamager.
-func New(conf Config, log log.Modular, stats metrics.Type) (Type, error) {
+func New(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	if c, ok := Constructors[conf.Type]; ok {
-		return c.constructor(conf, log, stats)
+		return c.constructor(conf, mgr, log, stats)
 	}
 	return nil, types.ErrInvalidBufferType
 }

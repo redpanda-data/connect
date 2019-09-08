@@ -35,15 +35,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/message/metadata"
-	"github.com/Jeffail/benthos/lib/message/roundtrip"
-	"github.com/Jeffail/benthos/lib/message/tracing"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
-	httputil "github.com/Jeffail/benthos/lib/util/http"
-	"github.com/Jeffail/benthos/lib/util/throttle"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/metadata"
+	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
+	"github.com/Jeffail/benthos/v3/lib/message/tracing"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	httputil "github.com/Jeffail/benthos/v3/lib/util/http"
+	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/gorilla/websocket"
 	"github.com/opentracing/opentracing-go"
 )
@@ -173,7 +173,6 @@ type HTTPServer struct {
 	mCount         metrics.StatCounter
 	mRateLimited   metrics.StatCounter
 	mWSRateLimited metrics.StatCounter
-	mPartsCount    metrics.StatCounter
 	mRcvd          metrics.StatCounter
 	mPartsRcvd     metrics.StatCounter
 	mSyncCount     metrics.StatCounter
@@ -231,7 +230,6 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mCount:         stats.GetCounter("count"),
 		mRateLimited:   stats.GetCounter("rate_limited"),
 		mWSRateLimited: stats.GetCounter("ws.rate_limited"),
-		mPartsCount:    stats.GetCounter("parts.count"),
 		mRcvd:          stats.GetCounter("batch.received"),
 		mPartsRcvd:     stats.GetCounter("received"),
 		mWSCount:       stats.GetCounter("ws.count"),
@@ -378,8 +376,6 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	roundtrip.AddResultStore(msg, store)
 
 	h.mCount.Incr(1)
-	h.mPartsCount.Incr(int64(msg.Len()))
-
 	h.mPartsRcvd.Incr(int64(msg.Len()))
 	h.mRcvd.Incr(1)
 

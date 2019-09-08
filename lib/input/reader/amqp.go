@@ -28,11 +28,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
-	btls "github.com/Jeffail/benthos/lib/util/tls"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/streadway/amqp"
 )
 

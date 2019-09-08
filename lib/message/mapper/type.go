@@ -25,11 +25,11 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/gabs/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -244,10 +244,7 @@ func getGabs(msg types.Message, index int) (*gabs.Container, error) {
 	if err != nil {
 		return nil, err
 	}
-	var container *gabs.Container
-	if container, err = gabs.Consume(payloadObj); err != nil {
-		return nil, err
-	}
+	container := gabs.Wrap(payloadObj)
 	return container, nil
 }
 
@@ -311,7 +308,7 @@ partLoop:
 			if len(k) > 0 {
 				destObj.SetP(srcData, k)
 			} else {
-				destObj, _ = gabs.Consume(srcData)
+				destObj = gabs.Wrap(srcData)
 			}
 		}
 		for _, k := range t.reqOptTargets {
@@ -327,7 +324,7 @@ partLoop:
 			if len(k) > 0 {
 				destObj.SetP(srcData, k)
 			} else {
-				destObj, _ = gabs.Consume(srcData)
+				destObj = gabs.Wrap(srcData)
 			}
 		}
 

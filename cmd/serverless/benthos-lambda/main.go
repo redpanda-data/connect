@@ -20,7 +20,7 @@
 
 package main
 
-import "github.com/Jeffail/benthos/lib/serverless/lambda"
+import "github.com/Jeffail/benthos/v3/lib/serverless/lambda"
 
 //------------------------------------------------------------------------------
 

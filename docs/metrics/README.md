@@ -11,10 +11,12 @@ A metrics config section looks like this:
 
 ``` yaml
 metrics:
-  type: foo
-  prefix: benthos
-  foo:
-    bar: baz
+  type: statsd
+  statsd:
+    prefix: foo
+    address: localhost:8125
+    flush_period: 100ms
+    network: udp
 ```
 
 Benthos exposes lots of metrics and their paths will depend on your pipeline
@@ -29,7 +31,6 @@ blacklist:
   child: {}
   paths: []
   patterns: []
-prefix: benthos
 ```
 
 Blacklist metric paths within Benthos so that they are not aggregated by a child
@@ -41,9 +42,6 @@ a path prefix or regular expression matches a metric path it will be excluded.
 Metrics must be matched using dot notation even if the chosen output uses a
 different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
 even when sending metrics to Prometheus.
-
-The `prefix` field in a metrics config is ignored by this type. Please
-configure a prefix at the child level.
 
 ### Paths
 
@@ -67,8 +65,8 @@ are blocked by your blacklists enable logging at the TRACE level.
 
 ``` yaml
 type: http_server
-http_server: {}
-prefix: benthos
+http_server:
+  prefix: benthos
 ```
 
 It is possible to expose metrics without an aggregator service by having Benthos
@@ -95,8 +93,8 @@ this:
 
 ``` yaml
 type: prometheus
-prefix: benthos
 prometheus:
+  prefix: benthos
   push_interval: ""
   push_job_name: benthos_push
   push_url: ""
@@ -120,7 +118,6 @@ not include the "/metrics/jobs/..." path in the push URL.
 
 ``` yaml
 type: rename
-prefix: benthos
 rename:
   by_regexp: []
   child: {}
@@ -131,9 +128,6 @@ Rename metric paths as they are registered.
 Metrics must be matched using dot notation even if the chosen output uses a
 different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
 even when sending metrics to Prometheus.
-
-The `prefix` field in a metrics config is ignored by this type. Please
-configure a prefix at the child level.
 
 ### `by_regexp`
 
@@ -183,11 +177,11 @@ are renamed enable logging at the TRACE level.
 
 ``` yaml
 type: statsd
-prefix: benthos
 statsd:
   address: localhost:4040
   flush_period: 100ms
   network: udp
+  prefix: benthos
 ```
 
 Push metrics over a TCP or UDP connection using the
@@ -197,7 +191,6 @@ Push metrics over a TCP or UDP connection using the
 
 ``` yaml
 type: whitelist
-prefix: benthos
 whitelist:
   child: {}
   paths: []
@@ -213,9 +206,6 @@ a path prefix or regular expression matches a metric path it will be included.
 Metrics must be matched using dot notation even if the chosen output uses a
 different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
 even when sending metrics to Prometheus.
-
-The `prefix` field in a metrics config is ignored by this type. Please
-configure a prefix at the child level.
 
 ### Paths
 

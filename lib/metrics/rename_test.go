@@ -69,7 +69,7 @@ func TestRenamePatterns(t *testing.T) {
 	for _, test := range testCases {
 		childConf := NewConfig()
 		childConf.Type = TypeHTTPServer
-		childConf.Prefix = ""
+		childConf.HTTP.Prefix = ""
 
 		conf := NewConfig()
 		conf.Type = TypeRename

@@ -21,18 +21,18 @@
 package config
 
 import (
-	"github.com/Jeffail/benthos/lib/api"
-	"github.com/Jeffail/benthos/lib/buffer"
-	"github.com/Jeffail/benthos/lib/condition"
-	"github.com/Jeffail/benthos/lib/input"
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/manager"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/output"
-	"github.com/Jeffail/benthos/lib/pipeline"
-	"github.com/Jeffail/benthos/lib/processor"
-	"github.com/Jeffail/benthos/lib/stream"
-	"github.com/Jeffail/benthos/lib/tracer"
+	"github.com/Jeffail/benthos/v3/lib/api"
+	"github.com/Jeffail/benthos/v3/lib/buffer"
+	"github.com/Jeffail/benthos/v3/lib/condition"
+	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/pipeline"
+	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/Jeffail/benthos/v3/lib/stream"
+	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"gopkg.in/yaml.v3"
 )
 
@@ -51,15 +51,12 @@ type Type struct {
 
 // New returns a new configuration with default values.
 func New() Type {
-	metricsConf := metrics.NewConfig()
-	metricsConf.Prefix = "benthos"
-
 	return Type{
 		HTTP:               api.NewConfig(),
 		Config:             stream.NewConfig(),
 		Manager:            manager.NewConfig(),
 		Logger:             log.NewConfig(),
-		Metrics:            metricsConf,
+		Metrics:            metrics.NewConfig(),
 		Tracer:             tracer.NewConfig(),
 		SystemCloseTimeout: "20s",
 	}

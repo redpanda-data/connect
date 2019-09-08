@@ -26,9 +26,9 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
 	radix "github.com/armon/go-radix"
 	"github.com/spf13/cast"
 )

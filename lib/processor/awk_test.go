@@ -24,9 +24,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
 func TestAWKValidation(t *testing.T) {
@@ -241,6 +241,20 @@ func TestAWK(t *testing.T) {
 			program: `{ print json_get("obj.bar") }`,
 			input:   `{"obj":{"foo":12}}`,
 			output:  `null`,
+		},
+		{
+			name:    "json get array 1",
+			codec:   "none",
+			program: `{ print json_get("obj.1.foo") }`,
+			input:   `{"obj":[{"foo":11},{"foo":12}]}`,
+			output:  `12`,
+		},
+		{
+			name:    "json set array 1",
+			codec:   "none",
+			program: `{ json_set("obj.1.foo", "nope") }`,
+			input:   `{"obj":[{"foo":11},{"foo":12}]}`,
+			output:  `{"obj":[{"foo":11},{"foo":"nope"}]}`,
 		},
 		{
 			name:    "json get 3",

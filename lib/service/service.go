@@ -33,24 +33,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/api"
-	"github.com/Jeffail/benthos/lib/buffer"
-	"github.com/Jeffail/benthos/lib/cache"
-	"github.com/Jeffail/benthos/lib/condition"
-	"github.com/Jeffail/benthos/lib/config"
-	"github.com/Jeffail/benthos/lib/input"
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/manager"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/output"
-	"github.com/Jeffail/benthos/lib/processor"
-	"github.com/Jeffail/benthos/lib/ratelimit"
-	"github.com/Jeffail/benthos/lib/service/test"
-	"github.com/Jeffail/benthos/lib/stream"
-	strmmgr "github.com/Jeffail/benthos/lib/stream/manager"
-	"github.com/Jeffail/benthos/lib/tracer"
-	"github.com/Jeffail/benthos/lib/types"
-	uconfig "github.com/Jeffail/benthos/lib/util/config"
+	"github.com/Jeffail/benthos/v3/lib/api"
+	"github.com/Jeffail/benthos/v3/lib/buffer"
+	"github.com/Jeffail/benthos/v3/lib/cache"
+	"github.com/Jeffail/benthos/v3/lib/condition"
+	"github.com/Jeffail/benthos/v3/lib/config"
+	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/Jeffail/benthos/v3/lib/ratelimit"
+	"github.com/Jeffail/benthos/v3/lib/service/test"
+	"github.com/Jeffail/benthos/v3/lib/stream"
+	strmmgr "github.com/Jeffail/benthos/v3/lib/stream/manager"
+	"github.com/Jeffail/benthos/v3/lib/tracer"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	uconfig "github.com/Jeffail/benthos/v3/lib/util/config"
 )
 
 //------------------------------------------------------------------------------
@@ -228,14 +228,16 @@ var conf = config.New()
 var testSuffix = "_benthos_test"
 
 // OptSetServiceName creates an opt func that allows the default service name
-// config fields such as metrics and logging prefixes to be overidden.
+// config fields such as metrics and logging prefixes to be overridden.
 func OptSetServiceName(name string) func() {
 	return func() {
 		testSuffix = fmt.Sprintf("_%v_test", name)
 		conf.HTTP.RootPath = "/" + name
 		conf.Logger.Prefix = name
 		conf.Logger.StaticFields["@service"] = name
-		conf.Metrics.Prefix = name
+		conf.Metrics.HTTP.Prefix = name
+		conf.Metrics.Prometheus.Prefix = name
+		conf.Metrics.Statsd.Prefix = name
 	}
 }
 
@@ -250,8 +252,8 @@ func OptOverrideConfigDefaults(fn func(c *config.Type)) func() {
 // OptSetVersionStamp creates an opt func for setting the version and date built
 // stamps that Benthos returns via --version and the /version endpoint. The
 // traditional way of setting these values is via the build flags:
-// -X github.com/Jeffail/benthos/lib/service.Version=$(VERSION) and
-// -X github.com/Jeffail/benthos/lib/service.DateBuilt=$(DATE)
+// -X github.com/Jeffail/benthos/v3/lib/service.Version=$(VERSION) and
+// -X github.com/Jeffail/benthos/v3/lib/service.DateBuilt=$(DATE)
 func OptSetVersionStamp(version, dateBuilt string) func() {
 	return func() {
 		Version = version

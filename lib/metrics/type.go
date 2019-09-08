@@ -23,7 +23,7 @@ package metrics
 import (
 	"net/http"
 
-	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/log"
 )
 
 //------------------------------------------------------------------------------

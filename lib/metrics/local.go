@@ -24,7 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/log"
 )
 
 //------------------------------------------------------------------------------

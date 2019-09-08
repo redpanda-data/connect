@@ -23,11 +23,11 @@ package buffer
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/lib/buffer/parallel"
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message/batch"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/buffer/parallel"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -97,12 +97,12 @@ func NewMemoryConfig() MemoryConfig {
 
 // NewMemory creates a buffer held in memory.
 // TODO: V3 Propagate mamager.
-func NewMemory(config Config, log log.Modular, stats metrics.Type) (Type, error) {
+func NewMemory(config Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	wrap := NewParallelWrapper(config, parallel.NewMemory(config.Memory.Limit), log, stats)
 	if !config.Memory.BatchPolicy.Enabled {
 		return wrap, nil
 	}
-	pol, err := batch.NewPolicy(config.Memory.BatchPolicy.PolicyConfig, types.NoopMgr(), log, stats)
+	pol, err := batch.NewPolicy(config.Memory.BatchPolicy.PolicyConfig, mgr, log, stats)
 	if err != nil {
 		return nil, fmt.Errorf("batch policy config error: %v", err)
 	}

@@ -27,8 +27,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/gabs/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -68,6 +68,20 @@ var (
 
 //------------------------------------------------------------------------------
 
+// HTTPConfig contains configuration parameters for the HTTP metrics aggregator.
+type HTTPConfig struct {
+	Prefix string `json:"prefix" yaml:"prefix"`
+}
+
+// NewHTTPConfig returns a new HTTPConfig with default values.
+func NewHTTPConfig() HTTPConfig {
+	return HTTPConfig{
+		Prefix: "benthos",
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // HTTP is an object with capability to hold internal stats as a JSON endpoint.
 type HTTP struct {
 	local      *Local
@@ -80,7 +94,7 @@ func NewHTTP(config Config, opts ...func(Type)) (Type, error) {
 	t := &HTTP{
 		local:      NewLocal(),
 		timestamp:  time.Now(),
-		pathPrefix: config.Prefix,
+		pathPrefix: config.HTTP.Prefix,
 	}
 	for _, opt := range opts {
 		opt(t)

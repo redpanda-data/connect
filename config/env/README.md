@@ -243,7 +243,7 @@ INPUT_S3_MAX_BATCH_COUNT                            = 1
 INPUT_S3_PREFIX
 INPUT_S3_REGION                                     = eu-west-1
 INPUT_S3_RETRIES                                    = 3
-INPUT_S3_SQS_BODY_PATH                              = Records.s3.object.key
+INPUT_S3_SQS_BODY_PATH                              = Records.*.s3.object.key
 INPUT_S3_SQS_BUCKET_PATH
 INPUT_S3_SQS_ENVELOPE_PATH
 INPUT_S3_SQS_MAX_MESSAGES                           = 10
@@ -291,13 +291,8 @@ INPUT_WEBSOCKET_URL                                 = ws://localhost:4195/get/ws
 ## BUFFER
 
 ```
-BUFFER_TYPE                          = none
-BUFFER_MEMORY_LIMIT                  = 524288000
-BUFFER_MMAP_FILE_CLEAN_UP            = true
-BUFFER_MMAP_FILE_DIRECTORY
-BUFFER_MMAP_FILE_FILE_SIZE           = 262144000
-BUFFER_MMAP_FILE_RESERVED_DISK_SPACE = 104857600
-BUFFER_MMAP_FILE_RETRY_PERIOD        = 1s
+BUFFER_TYPE         = none
+BUFFER_MEMORY_LIMIT = 524288000
 ```
 
 ## PROCESSOR
@@ -647,11 +642,13 @@ LOGGER_PREFIX        = benthos
 
 ```
 METRICS_TYPE                     = http_server
-METRICS_PREFIX                   = benthos
+METRICS_HTTP_SERVER_PREFIX       = benthos
+METRICS_PROMETHEUS_PREFIX        = benthos
 METRICS_PROMETHEUS_PUSH_INTERVAL
 METRICS_PROMETHEUS_PUSH_JOB_NAME = benthos_push
 METRICS_PROMETHEUS_PUSH_URL
 METRICS_STATSD_ADDRESS           = localhost:4040
 METRICS_STATSD_FLUSH_PERIOD      = 100ms
 METRICS_STATSD_NETWORK           = udp
+METRICS_STATSD_PREFIX            = benthos
 ```

@@ -24,12 +24,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/input/reader"
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message/tracing"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/throttle"
+	"github.com/Jeffail/benthos/v3/lib/input/reader"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/tracing"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -84,21 +84,14 @@ func NewReader(
 func (r *Reader) loop() {
 	// Metrics paths
 	var (
-		mRunning     = r.stats.GetGauge("running")
-		mCount       = r.stats.GetCounter("count")
-		mPartsCount  = r.stats.GetCounter("parts.count")
-		mRcvd        = r.stats.GetCounter("batch.received")
-		mPartsRcvd   = r.stats.GetCounter("received")
-		mReadSuccess = r.stats.GetCounter("read.success")
-		mReadError   = r.stats.GetCounter("read.error")
-		mSendSuccess = r.stats.GetCounter("send.success")
-		mSendError   = r.stats.GetCounter("send.error")
-		mAckSuccess  = r.stats.GetCounter("ack.success")
-		mAckError    = r.stats.GetCounter("ack.error")
-		mConn        = r.stats.GetCounter("connection.up")
-		mFailedConn  = r.stats.GetCounter("connection.failed")
-		mLostConn    = r.stats.GetCounter("connection.lost")
-		mLatency     = r.stats.GetTimer("latency")
+		mRunning    = r.stats.GetGauge("running")
+		mCount      = r.stats.GetCounter("count")
+		mRcvd       = r.stats.GetCounter("batch.received")
+		mPartsRcvd  = r.stats.GetCounter("received")
+		mConn       = r.stats.GetCounter("connection.up")
+		mFailedConn = r.stats.GetCounter("connection.failed")
+		mLostConn   = r.stats.GetCounter("connection.lost")
+		mLatency    = r.stats.GetTimer("latency")
 	)
 
 	defer func() {
@@ -168,7 +161,6 @@ func (r *Reader) loop() {
 
 		if err != nil || msg == nil {
 			if err != types.ErrTimeout && err != types.ErrNotConnected {
-				mReadError.Incr(1)
 				r.log.Errorf("Failed to read message: %v\n", err)
 			}
 			if !r.connThrot.Retry() {
@@ -178,8 +170,6 @@ func (r *Reader) loop() {
 		} else {
 			r.connThrot.Reset()
 			mCount.Incr(1)
-			mPartsCount.Incr(int64(msg.Len()))
-			mReadSuccess.Incr(1)
 			mPartsRcvd.Incr(int64(msg.Len()))
 			mRcvd.Incr(1)
 		}
@@ -210,19 +200,12 @@ func (r *Reader) loop() {
 		if !open {
 			return
 		}
-		if res.Error() != nil {
-			mSendError.Incr(1)
-		} else {
-			mSendSuccess.Incr(1)
-		}
 		if res.Error() != nil || !res.SkipAck() {
 			if err = r.reader.Acknowledge(res.Error()); err != nil {
-				mAckError.Incr(1)
-			} else {
-				tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
-				mLatency.Timing(tTaken)
-				mAckSuccess.Incr(1)
+				r.log.Errorf("Failed to acknowledge message: %v\n", err)
 			}
+			tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
+			mLatency.Timing(tTaken)
 		}
 		tracing.FinishSpans(msg)
 	}

@@ -33,11 +33,11 @@ logger:
     '@service': benthos
 metrics:
   type: statsd
-  prefix: benthos
   statsd:
     address: localhost:4040
     flush_period: 100ms
     network: udp
+    prefix: benthos
 tracer:
   type: none
   none: {}

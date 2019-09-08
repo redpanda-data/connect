@@ -24,7 +24,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Jeffail/benthos/lib/message/metadata"
+	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 )
 
 func TestPartBasic(t *testing.T) {

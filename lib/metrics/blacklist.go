@@ -28,7 +28,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/log"
 )
 
 //------------------------------------------------------------------------------
@@ -46,9 +46,6 @@ a path prefix or regular expression matches a metric path it will be excluded.
 Metrics must be matched using dot notation even if the chosen output uses a
 different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
 even when sending metrics to Prometheus.
-
-The ` + "`prefix`" + ` field in a metrics config is ignored by this type. Please
-configure a prefix at the child level.
 
 ### Paths
 

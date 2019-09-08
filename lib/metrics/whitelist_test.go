@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/log"
 )
 
 func TestWhitelistPaths(t *testing.T) {

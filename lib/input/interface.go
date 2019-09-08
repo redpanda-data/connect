@@ -21,7 +21,7 @@
 package input
 
 import (
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Type is the standard interface of an input type.

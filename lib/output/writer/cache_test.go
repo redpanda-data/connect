@@ -24,11 +24,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Jeffail/benthos/lib/cache"
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/manager"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/cache"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
 func TestCacheBasic(t *testing.T) {

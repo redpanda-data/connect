@@ -26,12 +26,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/message/tracing"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/tracing"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/gabs/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -40,9 +40,10 @@ func init() {
 	Constructors[TypeProcessField] = TypeSpec{
 		constructor: NewProcessField,
 		description: `
-A processor that extracts the value of a field within payloads according to a
-specified codec, applies a list of processors to the extracted value and finally
-sets the field within the original payloads to the processed result.
+A processor that extracts the value of a field [dot path](../field_paths.md)
+within payloads according to a specified codec, applies a list of processors to
+the extracted value and finally sets the field within the original payloads to
+the processed result.
 
 ### Codecs
 
@@ -236,10 +237,7 @@ func (p *processFieldJSONCodec) CreateRequest(source types.Part) (types.Part, er
 	if err != nil {
 		return nil, err
 	}
-	var gObj *gabs.Container
-	if gObj, err = gabs.Consume(jObj); err != nil {
-		return nil, err
-	}
+	gObj := gabs.Wrap(jObj)
 	gTarget := gObj.S(p.path...)
 	switch t := gTarget.Data().(type) {
 	case string:
@@ -262,10 +260,7 @@ func (p *processFieldJSONCodec) ExtractResult(from, to types.Part) error {
 	if err != nil {
 		return err
 	}
-	var gObj *gabs.Container
-	if gObj, err = gabs.Consume(jObj); err != nil {
-		return err
-	}
+	gObj := gabs.Wrap(jObj)
 	gObj.Set(resVal, p.path...)
 	return to.SetJSON(gObj.Data())
 }

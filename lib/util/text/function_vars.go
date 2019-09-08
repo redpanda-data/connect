@@ -30,8 +30,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 )
 
@@ -59,7 +59,7 @@ func jsonFieldFunction(msg Message, arg string) []byte {
 	if err != nil {
 		return []byte("null")
 	}
-	gPart, _ := gabs.Consume(jPart)
+	gPart := gabs.Wrap(jPart)
 	if len(args) > 0 {
 		gPart = gPart.Path(args[0])
 	}

@@ -29,7 +29,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Jeffail/benthos/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"gopkg.in/yaml.v3"
 )
 

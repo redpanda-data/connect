@@ -28,10 +28,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/input"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/output"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // SplitToBatch is a types.Processor implementation that reads a single message

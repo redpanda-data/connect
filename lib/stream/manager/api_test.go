@@ -31,11 +31,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/stream"
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/stream"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/gabs/v2"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v3"
 )

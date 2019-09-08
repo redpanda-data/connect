@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.0.0 - TBD
+
+This is a major version release, for more information and guidance on how to
+migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.benthos.dev/migration/v3/).
+
+### Changed
+
+- Go modules are now fully supported, imports must now include the major version
+  (e.g. `github.com/Jeffail/benthos/v3`).
+- Removed deprecated `mmap_file` buffer.
+- Removed deprecated (and undocumented) metrics paths.
+- Go API: buffer constructors now take a `types.Manager` argument in parity with
+  other components.
+- JSON dot paths within the following components have been updated to allow
+  array-based operations:
+  + `awk` processor
+  + `json` processor
+  + `process_field` processor
+  + `process_map` processor
+  + `check_field` condition
+  + `json_field` function interpolation
+  + `s3` input
+  + `dynamodb`
+
 ## 2.15.0 - 2019-09-03
 
 ### Added

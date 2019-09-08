@@ -1,8 +1,6 @@
 Field Paths
 ===========
 
-STOP RIGHT THERE! This document is a work in progress and does NOT reflect the behaviour of Benthos v2, this functionality is expected to be implemented in v3.
-
 Many components within Benthos allow you to target certain fields using a JSON dot path. The syntax of a path within Benthos is similar to [JSON Pointers][json-pointers], except with dot separators instead of slashes (and no leading dot.) When a path is used to set a value any path segment that does not yet exist in the structure is created as an object.
 
 For example, if we had the following JSON structure:

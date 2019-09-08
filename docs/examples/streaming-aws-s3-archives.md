@@ -24,7 +24,7 @@ input:
     bucket: TODO
     delete_objects: false
     sqs_url: TODO
-    sqs_body_path: Records.s3.object.key
+    sqs_body_path: Records.*.s3.object.key
     sqs_envelope_path: ""
     sqs_max_messages: 10
     credentials:
@@ -38,7 +38,7 @@ This input section contains lots of fields to be completed which are self
 explanatory, such as `bucket`, `sqs_url` and the `credentials` section.
 
 The `sqs_body_path` field is the JSON path within an SQS message that contains
-the name of new S3 files, which should be left as `Records.s3.object.key` unless
+the name of new S3 files, which should be left as `Records.*.s3.object.key` unless
 you have built a custom solution.
 
 If SNS is being used to broadcast S3 events instead of connecting SQS directly

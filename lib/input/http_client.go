@@ -29,13 +29,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/input/reader"
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/message/tracing"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/http/client"
+	"github.com/Jeffail/benthos/v3/lib/input/reader"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/tracing"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
 
 //------------------------------------------------------------------------------
@@ -269,9 +269,6 @@ func (h *HTTPClient) loop() {
 		mReqParseErr = h.stats.GetCounter("request.parse.error")
 		mReqSucc     = h.stats.GetCounter("request.success")
 		mCount       = h.stats.GetCounter("count")
-		mPartsCount  = h.stats.GetCounter("parts.count")
-		mSendErr     = h.stats.GetCounter("send.error")
-		mSendSucc    = h.stats.GetCounter("send.success")
 	)
 
 	defer func() {
@@ -313,7 +310,6 @@ func (h *HTTPClient) loop() {
 
 			if msgOut != nil {
 				mCount.Incr(1)
-				mPartsCount.Incr(int64(msgOut.Len()))
 				mRcvd.Incr(1)
 				mPartsRcvd.Incr(int64(msgOut.Len()))
 			}
@@ -331,12 +327,9 @@ func (h *HTTPClient) loop() {
 				if !open {
 					return
 				}
-				if res.Error() != nil {
-					mSendErr.Incr(1)
-				} else {
+				if res.Error() == nil {
 					tracing.FinishSpans(msgOut)
 					msgOut = nil
-					mSendSucc.Incr(1)
 				}
 			case <-h.closeChan:
 				return

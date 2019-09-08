@@ -249,7 +249,7 @@ input:
         prefix: ${INPUT_S3_PREFIX}
         region: ${INPUT_S3_REGION:eu-west-1}
         retries: ${INPUT_S3_RETRIES:3}
-        sqs_body_path: ${INPUT_S3_SQS_BODY_PATH:Records.s3.object.key}
+        sqs_body_path: ${INPUT_S3_SQS_BODY_PATH:Records.*.s3.object.key}
         sqs_bucket_path: ${INPUT_S3_SQS_BUCKET_PATH}
         sqs_envelope_path: ${INPUT_S3_SQS_ENVELOPE_PATH}
         sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:10}
@@ -306,12 +306,6 @@ input:
 buffer:
   memory:
     limit: ${BUFFER_MEMORY_LIMIT:524288000}
-  mmap_file:
-    clean_up: ${BUFFER_MMAP_FILE_CLEAN_UP:true}
-    directory: ${BUFFER_MMAP_FILE_DIRECTORY}
-    file_size: ${BUFFER_MMAP_FILE_FILE_SIZE:262144000}
-    reserved_disk_space: ${BUFFER_MMAP_FILE_RESERVED_DISK_SPACE:104857600}
-    retry_period: ${BUFFER_MMAP_FILE_RETRY_PERIOD:1s}
   type: ${BUFFER_TYPE:none}
 pipeline:
   processors:
@@ -759,8 +753,10 @@ logger:
   level: ${LOGGER_LEVEL:INFO}
   prefix: ${LOGGER_PREFIX:benthos}
 metrics:
-  prefix: ${METRICS_PREFIX:benthos}
+  http_server:
+    prefix: ${METRICS_HTTP_SERVER_PREFIX:benthos}
   prometheus:
+    prefix: ${METRICS_PROMETHEUS_PREFIX:benthos}
     push_interval: ${METRICS_PROMETHEUS_PUSH_INTERVAL}
     push_job_name: ${METRICS_PROMETHEUS_PUSH_JOB_NAME:benthos_push}
     push_url: ${METRICS_PROMETHEUS_PUSH_URL}
@@ -768,4 +764,5 @@ metrics:
     address: ${METRICS_STATSD_ADDRESS:localhost:4040}
     flush_period: ${METRICS_STATSD_FLUSH_PERIOD:100ms}
     network: ${METRICS_STATSD_NETWORK:udp}
+    prefix: ${METRICS_STATSD_PREFIX:benthos}
   type: ${METRICS_TYPE:http_server}

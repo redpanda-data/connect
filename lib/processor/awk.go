@@ -30,11 +30,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/gabs"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/gabs/v2"
 	"github.com/benhoyt/goawk/interp"
 	"github.com/benhoyt/goawk/parser"
 	"github.com/opentracing/opentracing-go"
@@ -383,14 +383,11 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			part.Metadata().Set(k, v)
 		}
 		customFuncs["json_get"] = func(path string) (string, error) {
-			var gPart *gabs.Container
 			jsonPart, err := part.JSON()
-			if err == nil {
-				gPart, err = gabs.Consume(jsonPart)
-			}
 			if err != nil {
 				return "", fmt.Errorf("failed to parse message into json: %v", err)
 			}
+			gPart := gabs.Wrap(jsonPart)
 			gTarget := gPart.Path(path)
 			if gTarget.Data() == nil {
 				return "null", nil
@@ -401,7 +398,6 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			return gTarget.String(), nil
 		}
 		getJSON := func() (*gabs.Container, error) {
-			var gPart *gabs.Container
 			var err error
 			jsonPart := mutableJSONParts[i]
 			if jsonPart == nil {
@@ -413,11 +409,11 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 				}
 			}
 			if err == nil {
-				gPart, err = gabs.Consume(jsonPart)
 			}
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse message into json: %v", err)
 			}
+			gPart := gabs.Wrap(jsonPart)
 			return gPart, nil
 		}
 		setJSON := func(path string, v interface{}) (int, error) {

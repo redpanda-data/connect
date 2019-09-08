@@ -21,10 +21,10 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/output/writer"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output/writer"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -50,9 +50,10 @@ string_columns:
 ` + "```" + `
 
 The field ` + "`json_map_columns`" + ` is a map of column names to json paths,
-where the path is extracted from each document and converted into a map value.
-Both an empty path and the path ` + "`.`" + ` are interpreted as the root of the
-document. This allows you to populate map columns of an item like follows:
+where the [dot path](../field_paths.md) is extracted from each document and
+converted into a map value. Both an empty path and the path ` + "`.`" + ` are
+interpreted as the root of the document. This allows you to populate map columns
+of an item like follows:
 
 ` + "``` yaml" + `
 json_map_columns:

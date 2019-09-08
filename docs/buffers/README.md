@@ -33,14 +33,12 @@ different options and their qualities:
 | Type      | Throughput | Consumers | Capacity |
 | --------- | ---------- | --------- | -------- |
 | Memory    | Highest    | Parallel  | RAM      |
-| Mmap File | High       | Single    | Disk     |
 
 #### Delivery Guarantees
 
 | Event     | Shutdown  | Crash     | Disk Corruption |
 | --------- | --------- | --------- | --------------- |
 | Memory    | Flushed\* | Lost      | Lost            |
-| Mmap File | Persisted | Lost      | Lost            |
 
 \* Makes a best attempt at flushing the remaining messages before closing
   gracefully.
@@ -48,8 +46,7 @@ different options and their qualities:
 ### Contents
 
 1. [`memory`](#memory)
-2. [`mmap_file`](#mmap_file)
-3. [`none`](#none)
+2. [`none`](#none)
 
 ## `memory`
 
@@ -93,35 +90,6 @@ the following conditions are met:
 This is a more powerful way of batching messages than the
 [`batch`](../processors/README.md#batch) processor, as it does not
 rely on new messages entering the pipeline in order to trigger the conditions.
-
-## `mmap_file`
-
-``` yaml
-type: mmap_file
-mmap_file:
-  clean_up: true
-  directory: ""
-  file_size: 2.62144e+08
-  reserved_disk_space: 1.048576e+08
-  retry_period: 1s
-```
-
-DEPRECATED: This buffer type is due to be removed in V3.
-
-The mmap file buffer type uses memory mapped files to perform low-latency,
-file-persisted buffering of messages.
-
-To configure the mmap file buffer you need to designate a writeable directory
-for storing the mapped files. Benthos will create multiple files in this
-directory as it fills them.
-
-When files are fully read from they will be deleted. You can disable this
-feature if you wish to preserve the data indefinitely, but the directory will
-fill up as fast as data passes through.
-
-WARNING: This buffer currently wipes all metadata from message payloads. If you
-are using metadata in your pipeline you should avoid using this buffer, or
-preferably all buffers altogether.
 
 ## `none`
 

@@ -26,13 +26,13 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/buffer"
-	"github.com/Jeffail/benthos/lib/input"
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/output"
-	"github.com/Jeffail/benthos/lib/pipeline"
-	"github.com/Jeffail/benthos/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/buffer"
+	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/pipeline"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -157,7 +157,8 @@ func (t *Type) start() (err error) {
 	}
 	if t.conf.Buffer.Type != buffer.TypeNone {
 		if t.bufferLayer, err = buffer.New(
-			t.conf.Buffer, t.logger.NewModule(".buffer"), metrics.Namespaced(t.stats, "buffer"),
+			t.conf.Buffer, t.manager,
+			t.logger.NewModule(".buffer"), metrics.Namespaced(t.stats, "buffer"),
 		); err != nil {
 			return
 		}

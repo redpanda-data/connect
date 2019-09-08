@@ -30,7 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/client_golang/prometheus/push"
@@ -150,7 +150,7 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 		running:    1,
 		closedChan: make(chan struct{}),
 		config:     config.Prometheus,
-		prefix:     toPromName(config.Prefix),
+		prefix:     config.Prometheus.Prefix,
 		counters:   map[string]*prometheus.CounterVec{},
 		gauges:     map[string]*prometheus.GaugeVec{},
 		timers:     map[string]*prometheus.SummaryVec{},

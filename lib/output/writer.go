@@ -24,14 +24,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/lib/log"
-	"github.com/Jeffail/benthos/lib/message"
-	"github.com/Jeffail/benthos/lib/message/tracing"
-	"github.com/Jeffail/benthos/lib/metrics"
-	"github.com/Jeffail/benthos/lib/output/writer"
-	"github.com/Jeffail/benthos/lib/response"
-	"github.com/Jeffail/benthos/lib/types"
-	"github.com/Jeffail/benthos/lib/util/throttle"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/tracing"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output/writer"
+	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -93,25 +93,15 @@ func (w *Writer) loop() {
 		mConn       = w.stats.GetCounter("connection.up")
 		mFailedConn = w.stats.GetCounter("connection.failed")
 		mLostConn   = w.stats.GetCounter("connection.lost")
-		// following metrics are left for backward compatibility
-		// and should be considered as deprecated
-		// TODO: V3 Remove obsolete metrics
-		mRunning      = w.stats.GetGauge("running")
-		mPartsCount   = w.stats.GetCounter("parts.count")
-		mSuccess      = w.stats.GetCounter("send.success")
-		mPartsSuccess = w.stats.GetCounter("parts.send.success")
-		mError        = w.stats.GetCounter("send.error")
 	)
 
 	defer func() {
 		err := w.writer.WaitForClose(time.Second)
 		for ; err != nil; err = w.writer.WaitForClose(time.Second) {
 		}
-		mRunning.Decr(1)
 		atomic.StoreInt32(&w.isConnected, 0)
 		close(w.closedChan)
 	}()
-	mRunning.Incr(1)
 
 	throt := throttle.New(throttle.OptCloseChan(w.closeChan))
 
@@ -143,7 +133,6 @@ func (w *Writer) loop() {
 				return
 			}
 			mCount.Incr(1)
-			mPartsCount.Incr(int64(ts.Payload.Len()))
 		case <-w.closeChan:
 			return
 		}
@@ -186,13 +175,10 @@ func (w *Writer) loop() {
 
 		if err != nil {
 			w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
-			mError.Incr(1)
 			if !throt.Retry() {
 				return
 			}
 		} else {
-			mSuccess.Incr(1)
-			mPartsSuccess.Incr(int64(ts.Payload.Len()))
 			mSent.Incr(1)
 			mPartsSent.Incr(int64(ts.Payload.Len()))
 			mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
