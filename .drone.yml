@@ -106,7 +106,7 @@ steps:
     ref:
     - refs/tags/*-rc*
 
-- name: docker-beta
+- name: docker-rc
   image: plugins/docker
   settings:
     repo: jeffail/benthos
