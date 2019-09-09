@@ -61,6 +61,38 @@ func TestProcessDAGCircular(t *testing.T) {
 	}
 }
 
+func TestProcessDAGBadNames(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_dag"
+	conf.ProcessDAG["foo,bar"] = createProcMapConf("tmp.baz", "tmp.foo")
+
+	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err == nil {
+		t.Error("expected error from bad name")
+	}
+
+	conf = NewConfig()
+	conf.Type = "process_dag"
+	conf.ProcessDAG["foo$"] = createProcMapConf("tmp.baz", "tmp.foo")
+
+	if _, err = New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+		t.Error("expected error from bad name")
+	}
+}
+
+func TestProcessDAGGoodNames(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = "process_dag"
+	conf.ProcessDAG["foo_bar"] = createProcMapConf("tmp.baz", "tmp.foo")
+	conf.ProcessDAG["FOO-BAR"] = createProcMapConf("tmp.baz", "tmp.foo")
+	conf.ProcessDAG["FOO-9"] = createProcMapConf("tmp.baz", "tmp.foo")
+	conf.ProcessDAG["FOO-10"] = createProcMapConf("tmp.baz", "tmp.foo")
+
+	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestProcessDAGSimple(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "process_dag"

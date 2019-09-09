@@ -1349,6 +1349,9 @@ calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to
 their postmap targets for provided fields and their premap targets for required
 fields.
 
+The names of workflow stages may only contain alphanumeric, underscore and dash
+characters (they must match the regular expression `[a-zA-Z0-9_-]+`).
+
 The DAG is then used to execute the children in the necessary order with the
 maximum parallelism possible. You can read more about workflows in Benthos
 [in this document](../workflows.md).

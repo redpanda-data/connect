@@ -23,6 +23,7 @@ package processor
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,9 @@ A processor that manages a map of ` + "`process_map`" + ` processors and
 calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to
 their postmap targets for provided fields and their premap targets for required
 fields.
+
+The names of workflow stages may only contain alphanumeric, underscore and dash
+characters (they must match the regular expression ` + "`[a-zA-Z0-9_-]+`" + `).
 
 The DAG is then used to execute the children in the necessary order with the
 maximum parallelism possible. You can read more about workflows in Benthos
@@ -197,6 +201,8 @@ type ProcessDAG struct {
 	mBatchSent metrics.StatCounter
 }
 
+var processDAGStageName = regexp.MustCompile("[a-zA-Z0-9-_]+")
+
 // NewProcessDAG returns a ProcessField processor.
 func NewProcessDAG(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
@@ -205,6 +211,10 @@ func NewProcessDAG(
 	explicitDeps := map[string][]string{}
 
 	for k, v := range conf.ProcessDAG {
+		if len(processDAGStageName.FindString(k)) != len(k) {
+			return nil, fmt.Errorf("workflow stage name '%v' contains invalid characters", k)
+		}
+
 		nsLog := log.NewModule(fmt.Sprintf(".%v", k))
 		nsStats := metrics.Namespaced(stats, k)
 

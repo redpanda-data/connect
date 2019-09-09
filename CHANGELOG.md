@@ -16,6 +16,7 @@ migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.be
   (e.g. `github.com/Jeffail/benthos/v3`).
 - Removed deprecated `mmap_file` buffer.
 - Removed deprecated (and undocumented) metrics paths.
+- Names of `process_dag` stages must now match the regexp `[a-zA-Z0-9_-]+`.
 - Go API: buffer constructors now take a `types.Manager` argument in parity with
   other components.
 - JSON dot paths within the following components have been updated to allow
@@ -27,7 +28,7 @@ migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.be
   + `check_field` condition
   + `json_field` function interpolation
   + `s3` input
-  + `dynamodb`
+  + `dynamodb` output
 
 ## 2.15.0 - 2019-09-03
 
