@@ -1,17 +1,14 @@
 module github.com/Jeffail/benthos/v3
 
 require (
-	cloud.google.com/go v0.45.1
 	cloud.google.com/go/pubsub v1.0.1
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
 	github.com/DataDog/zstd v1.4.1 // indirect
-	github.com/Jeffail/gabs v1.4.0
 	github.com/Jeffail/gabs/v2 v2.1.0
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
 	github.com/OneOfOne/xxhash v1.2.5
 	github.com/Shopify/sarama v1.23.1
-	github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da // indirect
 	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-lambda-go v1.13.1
 	github.com/aws/aws-sdk-go v1.23.18
@@ -29,6 +26,7 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.2.0
 	github.com/edsrzf/mmap-go v1.0.0
 	github.com/fortytw2/leaktest v1.3.0 // indirect
+	github.com/frankban/quicktest v1.4.2 // indirect
 	github.com/go-redis/redis v6.15.5+incompatible
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gofrs/uuid v3.2.0+incompatible
@@ -38,10 +36,7 @@ require (
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/websocket v1.4.1
 	github.com/gotestyourself/gotestyourself v2.2.0+incompatible // indirect
-	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
-	github.com/hashicorp/go-msgpack v0.5.3 // indirect
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
-	github.com/hashicorp/raft v1.0.0 // indirect
 	github.com/jcmturner/gofork v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
@@ -50,11 +45,8 @@ require (
 	github.com/linkedin/goavro/v2 v2.9.6
 	github.com/mailru/easyjson v0.7.0 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.2
-	github.com/nats-io/gnatsd v1.4.1 // indirect
-	github.com/nats-io/nats-server v1.4.1 // indirect
-	github.com/nats-io/nats-streaming-server v0.12.0 // indirect
+	github.com/nats-io/nats-streaming-server v0.16.1-0.20190905144423-ed7405a40a25 // indirect
 	github.com/nats-io/nats.go v1.8.1
-	github.com/nats-io/nkeys v0.1.0 // indirect
 	github.com/nats-io/stan.go v0.5.0
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/olivere/elastic v6.2.23+incompatible
@@ -65,7 +57,6 @@ require (
 	github.com/opencontainers/runc v0.1.1 // indirect
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/ory/dockertest v3.3.4+incompatible
-	github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c // indirect
 	github.com/patrobinson/gokini v0.0.7
 	github.com/pebbe/zmq4 v1.0.0
 	github.com/pierrec/lz4 v2.3.0+incompatible // indirect
@@ -85,7 +76,6 @@ require (
 	github.com/uber-go/atomic v1.3.2 // indirect
 	github.com/uber/jaeger-client-go v2.17.0+incompatible
 	github.com/uber/jaeger-lib v2.1.1+incompatible // indirect
-	go.etcd.io/bbolt v1.3.2 // indirect
 	go.opencensus.io v0.22.1 // indirect
 	go.uber.org/atomic v1.3.2 // indirect
 	golang.org/x/crypto v0.0.0-20190909091759-094676da4a83 // indirect
@@ -101,7 +91,6 @@ require (
 	google.golang.org/grpc v1.23.0 // indirect
 	gopkg.in/jcmturner/goidentity.v3 v3.0.0 // indirect
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0 // indirect
-	gopkg.in/urfave/cli.v1 v1.20.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20190905181640-827449938966
 	gotest.tools v2.2.0+incompatible // indirect
 	honnef.co/go/tools v0.0.1-2019.2.3 // indirect
