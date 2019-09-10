@@ -30,7 +30,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/nats-io/go-nats-streaming"
+	"github.com/nats-io/stan.go"
 )
 
 //------------------------------------------------------------------------------

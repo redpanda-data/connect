@@ -31,7 +31,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gofrs/uuid"
-	stan "github.com/nats-io/go-nats-streaming"
+	"github.com/nats-io/stan.go"
 )
 
 //------------------------------------------------------------------------------
