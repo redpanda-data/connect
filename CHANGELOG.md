@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.15.1 - 2019-09-10
+
+### Fixed
+
+- The `s3` and `sqs` inputs should now correctly log handles and codes from
+  failed SQS message deletes and visibility timeout changes.
+
 ## 2.15.0 - 2019-09-03
 
 ### Added
