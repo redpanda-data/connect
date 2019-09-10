@@ -609,7 +609,7 @@ func (a *AmazonS3) Acknowledge(err error) error {
 				a.log.Errorf("Failed to delete consumed SQS messages: %v\n", serr)
 			} else {
 				for _, fail := range res.Failed {
-					a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", fail.Id, fail.Code)
+					a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", *fail.Id, *fail.Code)
 				}
 			}
 		}
