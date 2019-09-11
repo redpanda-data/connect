@@ -117,6 +117,7 @@ const (
 	TypeProcessField = "process_field"
 	TypeProcessMap   = "process_map"
 	TypeRateLimit    = "rate_limit"
+	TypeRedis        = "redis"
 	TypeSample       = "sample"
 	TypeSelectParts  = "select_parts"
 	TypeSleep        = "sleep"
@@ -175,6 +176,7 @@ type Config struct {
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
 	RateLimit    RateLimitConfig    `json:"rate_limit" yaml:"rate_limit"`
+	Redis        RedisConfig        `json:"redis" yaml:"redis"`
 	Sample       SampleConfig       `json:"sample" yaml:"sample"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Sleep        SleepConfig        `json:"sleep" yaml:"sleep"`
@@ -232,6 +234,7 @@ func NewConfig() Config {
 		ProcessField: NewProcessFieldConfig(),
 		ProcessMap:   NewProcessMapConfig(),
 		RateLimit:    NewRateLimitConfig(),
+		Redis:        NewRedisConfig(),
 		Sample:       NewSampleConfig(),
 		SelectParts:  NewSelectPartsConfig(),
 		Sleep:        NewSleepConfig(),
