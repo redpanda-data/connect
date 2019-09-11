@@ -11,7 +11,7 @@ input:
     queue: benthos_queue
     subject: benthos_messages
     urls:
-    - nats://localhost:4222
+    - nats://127.0.0.1:4222
 buffer:
   type: none
   none: {}
@@ -23,7 +23,7 @@ output:
   nats:
     subject: benthos_messages
     urls:
-    - nats://localhost:4222
+    - nats://127.0.0.1:4222
 resources:
   caches: {}
   conditions: {}

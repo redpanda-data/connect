@@ -190,7 +190,7 @@ input:
         queue: ${INPUT_NATS_QUEUE:benthos_queue}
         subject: ${INPUT_NATS_SUBJECT:benthos_messages}
         urls:
-        - ${INPUT_NATS_URLS:nats://localhost:4222}
+        - ${INPUT_NATS_URLS:nats://127.0.0.1:4222}
       nats_stream:
         client_id: ${INPUT_NATS_STREAM_CLIENT_ID:benthos_client}
         cluster_id: ${INPUT_NATS_STREAM_CLUSTER_ID:test-cluster}
@@ -652,7 +652,7 @@ output:
       nats:
         subject: ${OUTPUT_NATS_SUBJECT:benthos_messages}
         urls:
-        - ${OUTPUT_NATS_URLS:nats://localhost:4222}
+        - ${OUTPUT_NATS_URLS:nats://127.0.0.1:4222}
       nats_stream:
         client_id: ${OUTPUT_NATS_STREAM_CLIENT_ID:benthos_client}
         cluster_id: ${OUTPUT_NATS_STREAM_CLUSTER_ID:test-cluster}

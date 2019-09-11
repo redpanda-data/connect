@@ -756,7 +756,7 @@ type: nats
 nats:
   subject: benthos_messages
   urls:
-  - nats://localhost:4222
+  - nats://127.0.0.1:4222
 ```
 
 Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.

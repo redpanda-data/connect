@@ -47,7 +47,7 @@ allowing you to transfer data across accounts. You can find out more
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+` + "```text" + `
 - sqs_message_id
 - sqs_receipt_handle
 - sqs_approximate_receive_count

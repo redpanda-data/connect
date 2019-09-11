@@ -755,7 +755,7 @@ nats:
   queue: benthos_queue
   subject: benthos_messages
   urls:
-  - nats://localhost:4222
+  - nats://127.0.0.1:4222
 ```
 
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
@@ -1056,7 +1056,7 @@ allowing you to transfer data across accounts. You can find out more
 
 This input adds the following metadata fields to each message:
 
-```
+```text
 - sqs_message_id
 - sqs_receipt_handle
 - sqs_approximate_receive_count
