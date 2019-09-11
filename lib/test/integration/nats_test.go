@@ -32,7 +32,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	nats "github.com/nats-io/go-nats"
+	"github.com/nats-io/nats.go"
 	"github.com/ory/dockertest"
 )
 

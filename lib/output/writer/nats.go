@@ -30,7 +30,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
-	nats "github.com/nats-io/go-nats"
+	"github.com/nats-io/nats.go"
 )
 
 //------------------------------------------------------------------------------
