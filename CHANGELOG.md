@@ -16,6 +16,7 @@ migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.be
   (e.g. `github.com/Jeffail/benthos/v3`).
 - Removed deprecated `mmap_file` buffer.
 - Removed deprecated (and undocumented) metrics paths.
+- Moved field `prefix` from root of `metrics` into relevant child components.
 - Names of `process_dag` stages must now match the regexp `[a-zA-Z0-9_-]+`.
 - Go API: buffer constructors now take a `types.Manager` argument in parity with
   other components.
