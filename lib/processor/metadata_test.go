@@ -31,41 +31,53 @@ import (
 
 func TestMetadataSet(t *testing.T) {
 	type mTest struct {
-		name   string
-		key    string
-		value  string
-		input  string
-		output string
+		name     string
+		inputKey string
+		key      string
+		value    string
+		input    string
+		output   string
 	}
 
 	tests := []mTest{
 		{
-			name:   "set 1",
-			key:    "foo.bar",
-			value:  `foo bar`,
-			input:  `{"foo":{"bar":5}}`,
-			output: `foo bar`,
+			name:     "set 1",
+			inputKey: "foo.bar",
+			key:      "foo.bar",
+			value:    `foo bar`,
+			input:    `{"foo":{"bar":5}}`,
+			output:   `foo bar`,
 		},
 		{
-			name:   "set 2",
-			key:    "foo.bar",
-			value:  `${!json_field:foo.bar}`,
-			input:  `{"foo":{"bar":"hello world"}}`,
-			output: `hello world`,
+			name:     "set 2",
+			inputKey: "foo.bar",
+			key:      "foo.bar",
+			value:    `${!json_field:foo.bar}`,
+			input:    `{"foo":{"bar":"hello world"}}`,
+			output:   `hello world`,
 		},
 		{
-			name:   "set 3",
-			key:    "foo.bar",
-			value:  `hello ${!json_field:foo.bar} world`,
-			input:  `{"foo":{"bar":100}}`,
-			output: `hello 100 world`,
+			name:     "set 3",
+			inputKey: "foo.bar",
+			key:      "foo.bar",
+			value:    `hello ${!json_field:foo.bar} world`,
+			input:    `{"foo":{"bar":100}}`,
+			output:   `hello 100 world`,
+		},
+		{
+			name:     "set 4",
+			inputKey: "key-${!json_field:key}",
+			key:      "key-custom-key",
+			value:    `hello world`,
+			input:    `{"key":"custom-key"}`,
+			output:   `hello world`,
 		},
 	}
 
 	for _, test := range tests {
 		conf := NewConfig()
 		conf.Metadata.Operator = "set"
-		conf.Metadata.Key = test.key
+		conf.Metadata.Key = test.inputKey
 		conf.Metadata.Value = test.value
 
 		mSet, err := NewMetadata(conf, nil, log.Noop(), metrics.Noop())

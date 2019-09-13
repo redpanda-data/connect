@@ -1139,10 +1139,10 @@ referred to using configuration
 [interpolation functions](../config_interpolation.md#metadata),
 which allow you to set fields in certain outputs using these dynamic values.
 
-This processor will interpolate functions within the `value` field,
-you can find a list of functions [here](../config_interpolation.md#functions).
-This allows you to set the contents of a metadata field using values taken from
-the message payload.
+This processor will interpolate functions within both the
+`key` and `value` fields, you can find a list of functions
+[here](../config_interpolation.md#functions). This allows you to set the
+contents of a metadata field using values taken from the message payload.
 
 Value interpolations are resolved once per batch. In order to resolve them per
 message of a batch place it within a [`for_each`](#for_each)

@@ -14,6 +14,7 @@ migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.be
 
 - The `json` processor now allows you to `move` from either a root source or to
   a root destination.
+- Added interpolation to the `metadata` processor `key` field.
 
 ### Changed
 
@@ -35,6 +36,11 @@ migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.be
   + `json_field` function interpolation
   + `s3` input
   + `dynamodb` output
+
+### Fixed
+
+- The `sqs` output no longer attempts to send invalid attributes with payloads
+  from metadata.
 
 ## 2.15.1 - 2019-09-10
 

@@ -44,10 +44,10 @@ referred to using configuration
 [interpolation functions](../config_interpolation.md#metadata),
 which allow you to set fields in certain outputs using these dynamic values.
 
-This processor will interpolate functions within the ` + "`value`" + ` field,
-you can find a list of functions [here](../config_interpolation.md#functions).
-This allows you to set the contents of a metadata field using values taken from
-the message payload.
+This processor will interpolate functions within both the
+` + "`key` and `value`" + ` fields, you can find a list of functions
+[here](../config_interpolation.md#functions). This allows you to set the
+contents of a metadata field using values taken from the message payload.
 
 Value interpolations are resolved once per batch. In order to resolve them per
 message of a batch place it within a ` + "[`for_each`](#for_each)" + `
@@ -100,17 +100,17 @@ func NewMetadataConfig() MetadataConfig {
 
 //------------------------------------------------------------------------------
 
-type metadataOperator func(m types.Metadata, value []byte) error
+type metadataOperator func(m types.Metadata, key, value string) error
 
-func newMetadataSetOperator(key string) metadataOperator {
-	return func(m types.Metadata, value []byte) error {
-		m.Set(key, string(value))
+func newMetadataSetOperator() metadataOperator {
+	return func(m types.Metadata, key, value string) error {
+		m.Set(key, value)
 		return nil
 	}
 }
 
-func newMetadataDeleteAllOperator(key string) metadataOperator {
-	return func(m types.Metadata, value []byte) error {
+func newMetadataDeleteAllOperator() metadataOperator {
+	return func(m types.Metadata, key, value string) error {
 		m.Iter(func(k, _ string) error {
 			m.Delete(k)
 			return nil
@@ -119,11 +119,10 @@ func newMetadataDeleteAllOperator(key string) metadataOperator {
 	}
 }
 
-func newMetadataDeletePrefixOperator(key string) metadataOperator {
-	return func(m types.Metadata, value []byte) error {
-		prefix := string(value)
+func newMetadataDeletePrefixOperator() metadataOperator {
+	return func(m types.Metadata, key, value string) error {
 		m.Iter(func(k, _ string) error {
-			if strings.HasPrefix(k, prefix) {
+			if strings.HasPrefix(k, value) {
 				m.Delete(k)
 			}
 			return nil
@@ -132,14 +131,14 @@ func newMetadataDeletePrefixOperator(key string) metadataOperator {
 	}
 }
 
-func getMetadataOperator(opStr string, key string) (metadataOperator, error) {
+func getMetadataOperator(opStr string) (metadataOperator, error) {
 	switch opStr {
 	case "set":
-		return newMetadataSetOperator(key), nil
+		return newMetadataSetOperator(), nil
 	case "delete_all":
-		return newMetadataDeleteAllOperator(key), nil
+		return newMetadataDeleteAllOperator(), nil
 	case "delete_prefix":
-		return newMetadataDeletePrefixOperator(key), nil
+		return newMetadataDeletePrefixOperator(), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
@@ -149,9 +148,10 @@ func getMetadataOperator(opStr string, key string) (metadataOperator, error) {
 // Metadata is a processor that performs an operation on the Metadata of a
 // message.
 type Metadata struct {
-	interpolate bool
-	valueBytes  []byte
-	operator    metadataOperator
+	value *text.InterpolatedString
+	key   *text.InterpolatedString
+
+	operator metadataOperator
 
 	parts []int
 
@@ -176,7 +176,8 @@ func NewMetadata(
 
 		parts: conf.Metadata.Parts,
 
-		valueBytes: []byte(conf.Metadata.Value),
+		value: text.NewInterpolatedString(conf.Metadata.Value),
+		key:   text.NewInterpolatedString(conf.Metadata.Key),
 
 		mCount:     stats.GetCounter("count"),
 		mErr:       stats.GetCounter("error"),
@@ -184,10 +185,8 @@ func NewMetadata(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
-	m.interpolate = text.ContainsFunctionVariables(m.valueBytes)
-
 	var err error
-	if m.operator, err = getMetadataOperator(conf.Metadata.Operator, conf.Metadata.Key); err != nil {
+	if m.operator, err = getMetadataOperator(conf.Metadata.Operator); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -201,13 +200,11 @@ func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	valueBytes := p.valueBytes
-	if p.interpolate {
-		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
-	}
+	key := p.key.Get(msg)
+	value := p.value.Get(msg)
 
 	proc := func(index int, span opentracing.Span, part types.Part) error {
-		if err := p.operator(part.Metadata(), valueBytes); err != nil {
+		if err := p.operator(part.Metadata(), key, value); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)
 			return err

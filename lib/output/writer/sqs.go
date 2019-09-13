@@ -22,8 +22,10 @@ package writer
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -146,11 +148,23 @@ type sqsAttributes struct {
 	dedupeID *string
 }
 
+var sqsAttributeKeyInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(^aws\.)|(^amazon\.)|(\.$)|([^a-z_\-\.]+)`)
+var sqsAttributeValueInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(\.$)|([^a-z_\-\.]+)`)
+
+func isValidSQSAttribute(k, v string) bool {
+	return len(sqsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0 &&
+		len(sqsAttributeValueInvalidCharRegexp.FindStringIndex(strings.ToLower(v))) == 0
+}
+
 func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
 	p.Metadata().Iter(func(k, v string) error {
-		keys = append(keys, k)
+		if isValidSQSAttribute(k, v) {
+			keys = append(keys, k)
+		} else {
+			a.log.Debugf("Rejecting metadata key '%v' due to invalid characters\n", k)
+		}
 		return nil
 	})
 	var values map[string]*sqs.MessageAttributeValue
@@ -243,7 +257,7 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 			input.Entries = []*sqs.SendMessageBatchRequestEntry{}
 			for _, v := range unproc {
 				if *v.SenderFault {
-					err = fmt.Errorf("record failed with code: %v", *v.Code)
+					err = fmt.Errorf("record failed with code: %v, message: %v", *v.Code, *v.Message)
 					a.log.Errorf("SQS record error: %v\n", err)
 					return err
 				}
