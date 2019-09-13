@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 This is a major version release, for more information and guidance on how to
 migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.benthos.dev/migration/v3/).
 
+### Added
+
+- The `json` processor now allows you to `move` from either a root source or to
+  a root destination.
+
 ### Changed
 
 - Go modules are now fully supported, imports must now include the major version

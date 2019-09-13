@@ -58,20 +58,10 @@ func TestJSONValidation(t *testing.T) {
 	conf.JSON.Operator = "move"
 	conf.JSON.Parts = []int{0}
 	conf.JSON.Path = ""
-	conf.JSON.Value = []byte(`"foo.bar"`)
-
-	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
-		t.Error("Expected error from empty move path")
-	}
-
-	conf = NewConfig()
-	conf.JSON.Operator = "move"
-	conf.JSON.Parts = []int{0}
-	conf.JSON.Path = "foo.bar"
 	conf.JSON.Value = []byte(`""`)
 
 	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
-		t.Error("Expected error from empty move destination")
+		t.Error("Expected error from empty move paths")
 	}
 
 	conf = NewConfig()
@@ -310,6 +300,20 @@ func TestJSONMove(t *testing.T) {
 			value:  `"bar.baz"`,
 			input:  `{"foo":{"bar":5},"bar":{"qux":6}}`,
 			output: `{"bar":{"baz":5,"qux":6},"foo":{}}`,
+		},
+		{
+			name:   "move from root 1",
+			path:   ".",
+			value:  `"bar.baz"`,
+			input:  `{"foo":{"bar":5}}`,
+			output: `{"bar":{"baz":{"foo":{"bar":5}}}}`,
+		},
+		{
+			name:   "move to root 1",
+			path:   "foo",
+			value:  `""`,
+			input:  `{"foo":{"bar":5}}`,
+			output: `{"bar":5}`,
 		},
 	}
 

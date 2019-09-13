@@ -256,19 +256,25 @@ func newSetOperator(path []string) jsonOperator {
 }
 
 func newMoveOperator(srcPath, destPath []string) (jsonOperator, error) {
-	if len(srcPath) == 0 {
-		return nil, errors.New("an empty source path is not valid for the move operator")
-	}
-	if len(destPath) == 0 {
-		return nil, errors.New("an empty destination path is not valid for the move operator")
+	if len(srcPath) == 0 && len(destPath) == 0 {
+		return nil, errors.New("an empty source and destination path is not valid for the move operator")
 	}
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
-		gPart := gabs.Wrap(body)
-		gSrc := gPart.S(srcPath...).Data()
+		var gPart *gabs.Container
+		var gSrc interface{}
+		if len(srcPath) > 0 {
+			gPart = gabs.Wrap(body)
+			gSrc = gPart.S(srcPath...).Data()
+		} else {
+			gPart = gabs.New()
+			gSrc = body
+		}
 		if gSrc == nil {
 			return nil, fmt.Errorf("item not found at path '%v'", strings.Join(srcPath, "."))
 		}
-
+		if len(destPath) == 0 {
+			return gSrc, nil
+		}
 		if _, err := gPart.Set(gSrc, destPath...); err != nil {
 			return nil, fmt.Errorf("failed to set destination path '%v': %v", strings.Join(destPath, "."), err)
 		}
