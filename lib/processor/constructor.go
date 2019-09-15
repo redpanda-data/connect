@@ -115,7 +115,11 @@ const (
 	TypeSQL          = "sql"
 	TypeSubprocess   = "subprocess"
 	TypeSwitch       = "switch"
+<<<<<<< HEAD
 	TypeSyncResponse = "sync_response"
+=======
+	TypeSyslog       = "syslog"
+>>>>>>> +syslog processor
 	TypeText         = "text"
 	TypeTry          = "try"
 	TypeThrottle     = "throttle"
@@ -178,7 +182,11 @@ type Config struct {
 	SQL          SQLConfig          `json:"sql" yaml:"sql"`
 	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
 	Switch       SwitchConfig       `json:"switch" yaml:"switch"`
+<<<<<<< HEAD
 	SyncResponse SyncResponseConfig `json:"sync_response" yaml:"sync_response"`
+=======
+	Syslog       SyslogConfig       `json:"syslog" yaml:"syslog"`
+>>>>>>> +syslog processor
 	Text         TextConfig         `json:"text" yaml:"text"`
 	Try          TryConfig          `json:"try" yaml:"try"`
 	Throttle     ThrottleConfig     `json:"throttle" yaml:"throttle"`
@@ -240,7 +248,11 @@ func NewConfig() Config {
 		SQL:          NewSQLConfig(),
 		Subprocess:   NewSubprocessConfig(),
 		Switch:       NewSwitchConfig(),
+<<<<<<< HEAD
 		SyncResponse: NewSyncResponseConfig(),
+=======
+		Syslog:       NewSyslogConfig(),
+>>>>>>> +syslog processor
 		Text:         NewTextConfig(),
 		Try:          NewTryConfig(),
 		Throttle:     NewThrottleConfig(),

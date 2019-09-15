@@ -497,6 +497,7 @@ PROCESSOR_SQL_QUERY
 PROCESSOR_SQL_RESULT_CODEC                           = none
 PROCESSOR_SUBPROCESS_MAX_BUFFER                      = 65536
 PROCESSOR_SUBPROCESS_NAME                            = cat
+PROCESSOR_SYSLOG_RFC                                 = rfc5424
 PROCESSOR_TEXT_ARG
 PROCESSOR_TEXT_OPERATOR                              = trim_space
 PROCESSOR_TEXT_VALUE
