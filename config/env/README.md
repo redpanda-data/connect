@@ -517,10 +517,14 @@ OUTPUT_HTTP_SERVER_WS_PATH                            = /get/ws
 OUTPUT_INPROC
 OUTPUT_KAFKA_ACK_REPLICAS                             = false
 OUTPUT_KAFKA_ADDRESSES                                = localhost:9092
+OUTPUT_KAFKA_BACKOFF_INITIAL_INTERVAL                 = 0s
+OUTPUT_KAFKA_BACKOFF_MAX_ELAPSED_TIME                 = 5s
+OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL                     = 1s
 OUTPUT_KAFKA_CLIENT_ID                                = benthos_kafka_output
 OUTPUT_KAFKA_COMPRESSION                              = none
 OUTPUT_KAFKA_KEY
 OUTPUT_KAFKA_MAX_MSG_BYTES                            = 1000000
+OUTPUT_KAFKA_MAX_RETRIES                              = 0
 OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS                   = false
 OUTPUT_KAFKA_SASL_ENABLED                             = false
 OUTPUT_KAFKA_SASL_PASSWORD

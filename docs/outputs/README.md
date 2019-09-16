@@ -622,10 +622,15 @@ kafka:
   ack_replicas: false
   addresses:
   - localhost:9092
+  backoff:
+    initial_interval: 0s
+    max_elapsed_time: 5s
+    max_interval: 1s
   client_id: benthos_kafka_output
   compression: none
   key: ""
   max_msg_bytes: 1e+06
+  max_retries: 0
   round_robin_partitions: false
   sasl:
     enabled: false

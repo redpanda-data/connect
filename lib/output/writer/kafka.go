@@ -31,9 +31,11 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
+	"github.com/cenkalti/backoff"
 )
 
 //------------------------------------------------------------------------------
@@ -52,6 +54,7 @@ type KafkaConfig struct {
 	TargetVersion        string      `json:"target_version" yaml:"target_version"`
 	TLS                  btls.Config `json:"tls" yaml:"tls"`
 	SASL                 SASLConfig  `json:"sasl" yaml:"sasl"`
+	retries.Config       `json:",inline" yaml:",inline"`
 }
 
 // SASLConfig contains configuration for SASL based authentication.
@@ -63,6 +66,10 @@ type SASLConfig struct {
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
 func NewKafkaConfig() KafkaConfig {
+	rConf := retries.NewConfig()
+	rConf.Backoff.InitialInterval = "0s"
+	rConf.Backoff.MaxInterval = "1s"
+	rConf.Backoff.MaxElapsedTime = "5s"
 	return KafkaConfig{
 		Addresses:            []string{"localhost:9092"},
 		ClientID:             "benthos_kafka_output",
@@ -75,6 +82,7 @@ func NewKafkaConfig() KafkaConfig {
 		AckReplicas:          false,
 		TargetVersion:        sarama.V1_0_0_0.String(),
 		TLS:                  btls.NewConfig(),
+		Config:               rConf,
 	}
 }
 
@@ -84,6 +92,8 @@ func NewKafkaConfig() KafkaConfig {
 type Kafka struct {
 	log   log.Modular
 	stats metrics.Type
+
+	backoff backoff.BackOff
 
 	tlsConf *tls.Config
 	timeout time.Duration
@@ -146,6 +156,9 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 		}
 	}
 
+	if k.backoff, err = conf.Config.Get(); err != nil {
+		return nil, err
+	}
 	return &k, nil
 }
 
@@ -260,13 +273,32 @@ func (k *Kafka) Write(msg types.Message) error {
 	})
 
 	err := producer.SendMessages(msgs)
-	if err != nil {
-		if pErr, ok := err.(sarama.ProducerErrors); ok && len(pErr) > 0 {
-			err = fmt.Errorf("failed to send %v parts from message: %v", len(pErr), pErr[0].Err)
+	for err != nil {
+		pErrs, ok := err.(sarama.ProducerErrors)
+		if !ok {
+			k.log.Errorf("Failed to send messages: %v\n", err)
+		} else {
+			if len(pErrs) == 0 {
+				break
+			}
+			msgs = nil
+			for _, pErr := range pErrs {
+				msgs = append(msgs, pErr.Msg)
+			}
+			k.log.Errorf("Failed to send '%v' messages: %v\n", len(pErrs), pErrs[0].Err)
 		}
+
+		tNext := k.backoff.NextBackOff()
+		if tNext == backoff.Stop {
+			k.backoff.Reset()
+			return err
+		}
+		<-time.After(tNext)
+		err = producer.SendMessages(msgs)
 	}
 
-	return err
+	k.backoff.Reset()
+	return nil
 }
 
 // CloseAsync shuts down the Kafka writer and stops processing messages.

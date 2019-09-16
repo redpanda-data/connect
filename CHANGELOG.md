@@ -15,6 +15,7 @@ migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.be
 - The `json` processor now allows you to `move` from either a root source or to
   a root destination.
 - Added interpolation to the `metadata` processor `key` field.
+- Granular retry fields added to `kafka` output.
 
 ### Changed
 
