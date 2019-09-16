@@ -95,19 +95,20 @@ In this case the [`for_each`](#for_each) processor can be used.
 36. [`process_field`](#process_field)
 37. [`process_map`](#process_map)
 38. [`rate_limit`](#rate_limit)
-39. [`sample`](#sample)
-40. [`select_parts`](#select_parts)
-41. [`sleep`](#sleep)
-42. [`split`](#split)
-43. [`sql`](#sql)
-44. [`subprocess`](#subprocess)
-45. [`switch`](#switch)
-46. [`text`](#text)
-47. [`throttle`](#throttle)
-48. [`try`](#try)
-49. [`unarchive`](#unarchive)
-50. [`while`](#while)
-51. [`xml`](#xml)
+39. [`redis`](#redis)
+40. [`sample`](#sample)
+41. [`select_parts`](#select_parts)
+42. [`sleep`](#sleep)
+43. [`split`](#split)
+44. [`sql`](#sql)
+45. [`subprocess`](#subprocess)
+46. [`switch`](#switch)
+47. [`text`](#text)
+48. [`throttle`](#throttle)
+49. [`try`](#try)
+50. [`unarchive`](#unarchive)
+51. [`while`](#while)
+52. [`xml`](#xml)
 
 ## `archive`
 
@@ -1561,6 +1562,48 @@ Throttles the throughput of a pipeline according to a specified
 [`rate_limit`](../rate_limits/README.md) resource. Rate limits are
 shared across components and therefore apply globally to all processing
 pipelines.
+
+## `redis`
+
+``` yaml
+type: redis
+redis:
+  key: ""
+  operator: scard
+  parts: []
+  prefix: ""
+  retries: 3
+  retry_period: 500ms
+  url: tcp://localhost:6379
+  value: ""
+```
+
+Redis is a processor that runs a query against redis and replaces the batch with the result.
+
+The fields`key`and`value`have a support of
+[interpolation functions](../config_interpolation.md#functions).
+
+In order to execute a Redis query for each message of the batch use this
+processor within a [`for_each`](#for_each) processor:
+
+``` yaml
+for_each:
+- redis:
+	operator: scard
+	key: ${!content}
+```
+
+### Operators
+
+#### `scard`
+
+Returns the cardinality of a set.
+
+#### `sadd`
+
+Adds a member in a set. Returns`1`if a member was not in a set and `0`if a member was.
+At the moment, multi insertion is not supported. 
+		
 
 ## `sample`
 

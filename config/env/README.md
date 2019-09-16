@@ -410,6 +410,13 @@ PROCESSOR_NUMBER_OPERATOR                            = add
 PROCESSOR_NUMBER_VALUE                               = 0
 PROCESSOR_PARALLEL_CAP                               = 0
 PROCESSOR_RATE_LIMIT_RESOURCE
+PROCESSOR_REDIS_KEY
+PROCESSOR_REDIS_OPERATOR                             = scard
+PROCESSOR_REDIS_PREFIX
+PROCESSOR_REDIS_RETRIES                              = 3
+PROCESSOR_REDIS_RETRY_PERIOD                         = 500ms
+PROCESSOR_REDIS_URL                                  = tcp://localhost:6379
+PROCESSOR_REDIS_VALUE
 PROCESSOR_SAMPLE_RETAIN                              = 10
 PROCESSOR_SAMPLE_SEED                                = 0
 PROCESSOR_SELECT_PARTS_PARTS                         = 0

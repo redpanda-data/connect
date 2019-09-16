@@ -41,7 +41,31 @@ func init() {
 	Constructors[TypeRedis] = TypeSpec{
 		constructor: NewRedis,
 		description: `
-TODO: docs
+Redis is a processor that runs a query against redis and replaces the batch with the result.
+
+The fields` + "`key`" + `and` + "`value`" + `have a support of
+[interpolation functions](../config_interpolation.md#functions).
+
+In order to execute a Redis query for each message of the batch use this
+processor within a ` + "[`for_each`](#for_each)" + ` processor:
+
+` + "``` yaml" + `
+for_each:
+- redis:
+	operator: scard
+	key: ${!content}
+` + "```" + `
+
+### Operators
+
+#### ` + "`scard`" + `
+
+Returns the cardinality of a set.
+
+#### ` + "`sadd`" + `
+
+Adds a member in a set. Returns` + "`1`" + `if a member was not in a set and ` + "`0`" + `if a member was.
+At the moment, multi insertion is not supported. 
 		`,
 	}
 }
@@ -67,7 +91,7 @@ func NewRedisConfig() RedisConfig {
 		Parts:       []int{},
 		Operator:    "scard",
 		Key:         "",
-		Value:       "${!content}",
+		Value:       "",
 		Prefix:      "",
 		Retries:     3,
 		RetryPeriod: "500ms",
@@ -134,8 +158,8 @@ func NewRedis(
 		log:    log,
 		stats:  stats,
 
-		key:        text.NewInterpolatedString(conf.Redis.Key),
-		valueBytes: text.NewInterpolatedBytes([]byte(conf.Redis.Value)),
+		key: text.NewInterpolatedString(conf.Redis.Key),
+		//valueBytes: text.NewInterpolatedBytes([]byte(conf.Redis.Value)),
 
 		retryPeriod: retryPeriod,
 		client:      client,
@@ -147,6 +171,12 @@ func NewRedis(
 		mRedisRetry: stats.GetCounter("redis.retry"),
 
 		mLatency: stats.GetTimer("latency"),
+	}
+
+	if conf.Redis.Value == "" {
+		r.valueBytes = text.NewInterpolatedBytes([]byte("${!content}"))
+	} else {
+		r.valueBytes = text.NewInterpolatedBytes([]byte(conf.Redis.Value))
 	}
 
 	if r.operator, err = getRedisOperator(conf.Redis.Operator, r, "", make([]byte, 0, 0)); err != nil {
