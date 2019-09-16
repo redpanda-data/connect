@@ -41,6 +41,8 @@ migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.be
 
 - The `sqs` output no longer attempts to send invalid attributes with payloads
   from metadata.
+- During graceful shutdown Benthos now scales the attempt to propagate acks for
+  sent messages with the overall system shutdown period.
 
 ## 2.15.1 - 2019-09-10
 

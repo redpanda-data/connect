@@ -21,6 +21,7 @@
 package output
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -49,8 +50,11 @@ type Writer struct {
 
 	transactions <-chan types.Transaction
 
-	closeChan  chan struct{}
-	closedChan chan struct{}
+	closeOnce      sync.Once
+	closeChan      chan struct{}
+	fullyCloseOnce sync.Once
+	fullyCloseChan chan struct{}
+	closedChan     chan struct{}
 }
 
 // NewWriter creates a new Writer output type.
@@ -61,14 +65,15 @@ func NewWriter(
 	stats metrics.Type,
 ) (Type, error) {
 	return &Writer{
-		running:      1,
-		typeStr:      typeStr,
-		writer:       w,
-		log:          log,
-		stats:        stats,
-		transactions: nil,
-		closeChan:    make(chan struct{}),
-		closedChan:   make(chan struct{}),
+		running:        1,
+		typeStr:        typeStr,
+		writer:         w,
+		log:            log,
+		stats:          stats,
+		transactions:   nil,
+		closeChan:      make(chan struct{}),
+		fullyCloseChan: make(chan struct{}),
+		closedChan:     make(chan struct{}),
 	}, nil
 }
 
@@ -195,12 +200,9 @@ func (w *Writer) loop() {
 		case <-w.closeChan:
 			// The pipeline is terminating but we still want to attempt to
 			// propagate an acknowledgement from in-transit messages.
-			//
-			// TODO: Replace this timer with a value linked to our service
-			// shutdown timer.
 			select {
 			case ts.ResponseChan <- response.NewError(err):
-			case <-time.After(time.Second):
+			case <-w.fullyCloseChan:
 			}
 			return
 		}
@@ -233,6 +235,10 @@ func (w *Writer) CloseAsync() {
 
 // WaitForClose blocks until the File output has closed down.
 func (w *Writer) WaitForClose(timeout time.Duration) error {
+	go w.fullyCloseOnce.Do(func() {
+		<-time.After(timeout - time.Second)
+		close(w.fullyCloseChan)
+	})
 	select {
 	case <-w.closedChan:
 	case <-time.After(timeout):

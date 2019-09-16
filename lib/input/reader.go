@@ -21,6 +21,7 @@
 package input
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -50,7 +51,10 @@ type Reader struct {
 	transactions chan types.Transaction
 	responses    chan types.Response
 
-	closeChan  chan struct{}
+	closeChan      chan struct{}
+	fullyCloseChan chan struct{}
+	fullyCloseOnce sync.Once
+
 	closedChan chan struct{}
 }
 
@@ -62,15 +66,16 @@ func NewReader(
 	stats metrics.Type,
 ) (Type, error) {
 	rdr := &Reader{
-		running:      1,
-		typeStr:      typeStr,
-		reader:       r,
-		log:          log,
-		stats:        stats,
-		transactions: make(chan types.Transaction),
-		responses:    make(chan types.Response),
-		closeChan:    make(chan struct{}),
-		closedChan:   make(chan struct{}),
+		running:        1,
+		typeStr:        typeStr,
+		reader:         r,
+		log:            log,
+		stats:          stats,
+		transactions:   make(chan types.Transaction),
+		responses:      make(chan types.Response),
+		closeChan:      make(chan struct{}),
+		fullyCloseChan: make(chan struct{}),
+		closedChan:     make(chan struct{}),
 	}
 
 	rdr.connThrot = throttle.New(throttle.OptCloseChan(rdr.closeChan))
@@ -188,12 +193,9 @@ func (r *Reader) loop() {
 		case <-r.closeChan:
 			// The pipeline is terminating but we still want to attempt to
 			// propagate an acknowledgement from in-transit messages.
-			//
-			// TODO: Replace this timer with a value linked to our service
-			// shutdown timer.
 			select {
 			case res, open = <-r.responses:
-			case <-time.After(time.Second):
+			case <-r.fullyCloseChan:
 				return
 			}
 		}
@@ -226,13 +228,17 @@ func (r *Reader) Connected() bool {
 // CloseAsync shuts down the Reader input and stops processing requests.
 func (r *Reader) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&r.running, 1, 0) {
-		r.reader.CloseAsync()
 		close(r.closeChan)
+		r.reader.CloseAsync()
 	}
 }
 
 // WaitForClose blocks until the Reader input has closed down.
 func (r *Reader) WaitForClose(timeout time.Duration) error {
+	go r.fullyCloseOnce.Do(func() {
+		<-time.After(timeout - time.Second)
+		close(r.fullyCloseChan)
+	})
 	select {
 	case <-r.closedChan:
 	case <-time.After(timeout):
