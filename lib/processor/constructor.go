@@ -87,6 +87,7 @@ const (
 	TypeFilter       = "filter"
 	TypeFilterParts  = "filter_parts"
 	TypeForEach      = "for_each"
+	TypeGeoIP        = "geoip"
 	TypeGrok         = "grok"
 	TypeGroupBy      = "group_by"
 	TypeGroupByValue = "group_by_value"
@@ -150,6 +151,7 @@ type Config struct {
 	Filter       FilterConfig       `json:"filter" yaml:"filter"`
 	FilterParts  FilterPartsConfig  `json:"filter_parts" yaml:"filter_parts"`
 	ForEach      ForEachConfig      `json:"for_each" yaml:"for_each"`
+	GeoIP        GeoIPConfig        `json:"geoip" yaml:"geoip"`
 	Grok         GrokConfig         `json:"grok" yaml:"grok"`
 	GroupBy      GroupByConfig      `json:"group_by" yaml:"group_by"`
 	GroupByValue GroupByValueConfig `json:"group_by_value" yaml:"group_by_value"`
@@ -212,6 +214,7 @@ func NewConfig() Config {
 		Filter:       NewFilterConfig(),
 		FilterParts:  NewFilterPartsConfig(),
 		ForEach:      NewForEachConfig(),
+		GeoIP:        NewGeoIPConfig(),
 		Grok:         NewGrokConfig(),
 		GroupBy:      NewGroupByConfig(),
 		GroupByValue: NewGroupByValueConfig(),

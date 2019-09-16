@@ -59,6 +59,7 @@ require (
 	github.com/opencontainers/runc v0.1.1 // indirect
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/ory/dockertest v3.3.4+incompatible
+	github.com/oschwald/geoip2-golang v1.4.0
 	github.com/patrobinson/gokini v0.0.7
 	github.com/pebbe/zmq4 v1.0.0
 	github.com/pierrec/lz4 v2.4.0+incompatible // indirect
