@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 3.0.0 - TBD
+## 3.0.0 - 2019-09-17
 
 This is a major version release, for more information and guidance on how to
 migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.benthos.dev/migration/v3/).
