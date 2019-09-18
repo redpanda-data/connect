@@ -11,7 +11,7 @@ func TestCounter(t *testing.T) {
 
 	counter.With(value).Incr(1)
 
-	counters := local.GetCounters()
+	counters := local.GetCountersWithLabels()
 	c, ok := counters[path]
 	if !ok {
 		t.Fatal("did not find counter for path")
@@ -31,7 +31,7 @@ func TestCounterWithLabelsAndValues(t *testing.T) {
 
 	counter.With(value).Incr(1)
 
-	counters := local.GetCounters()
+	counters := local.GetCountersWithLabels()
 	c, ok := counters[path]
 	if !ok {
 		t.Fatal("did not find counter for path")
@@ -55,7 +55,7 @@ func TestTimer(t *testing.T) {
 
 	counter.With(value).Timing(1)
 
-	counters := local.GetTimings()
+	counters := local.GetTimingsWithLabels()
 	c, ok := counters[path]
 	if !ok {
 		t.Fatal("did not find counter for path")
@@ -75,7 +75,7 @@ func TestTimerWithLabelsAndValues(t *testing.T) {
 
 	counter.With(value).Timing(1)
 
-	counters := local.GetTimings()
+	counters := local.GetTimingsWithLabels()
 	c, ok := counters[path]
 	if !ok {
 		t.Fatal("did not find counter for path")
@@ -99,7 +99,7 @@ func TestGauge(t *testing.T) {
 
 	counter.With(value).Incr(1)
 
-	counters := local.GetCounters()
+	counters := local.GetCountersWithLabels()
 	c, ok := counters[path]
 	if !ok {
 		t.Fatal("did not find counter for path")
@@ -119,7 +119,7 @@ func TestGaugeWithLabelsAndValues(t *testing.T) {
 
 	counter.With(value).Incr(1)
 
-	counters := local.GetCounters()
+	counters := local.GetCountersWithLabels()
 	c, ok := counters[path]
 	if !ok {
 		t.Fatal("did not find counter for path")

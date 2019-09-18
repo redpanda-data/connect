@@ -119,7 +119,7 @@ func (h *HTTP) HandlerFunc() http.HandlerFunc {
 		}
 		for k, v := range timings {
 			obj.SetP(v, k)
-			obj.SetP(time.Duration(*v.Value).String(), k+"_readable")
+			obj.SetP(time.Duration(v).String(), k+"_readable")
 		}
 		obj.SetP(fmt.Sprintf("%v", uptime), "uptime")
 		obj.SetP(goroutines, "goroutines")

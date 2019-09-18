@@ -104,7 +104,19 @@ func NewLocal() *Local {
 //------------------------------------------------------------------------------
 
 // GetCounters returns a map of metric paths to counters.
-func (l *Local) GetCounters() map[string]LocalStat {
+func (l *Local) GetCounters() map[string]int64 {
+	l.Lock()
+	localFlatCounters := make(map[string]int64, len(l.flatCounters))
+	for k := range l.flatCounters {
+		localFlatCounters[k] = atomic.LoadInt64(l.flatCounters[k].Value)
+	}
+	l.Unlock()
+	return localFlatCounters
+}
+
+// GetCounters returns a map of metric paths to counters including labels and
+// values.
+func (l *Local) GetCountersWithLabels() map[string]LocalStat {
 	l.Lock()
 	localFlatCounters := make(map[string]LocalStat, len(l.flatCounters))
 	for k := range l.flatCounters {
@@ -121,7 +133,19 @@ func (l *Local) GetCounters() map[string]LocalStat {
 }
 
 // GetTimings returns a map of metric paths to timers.
-func (l *Local) GetTimings() map[string]LocalStat {
+func (l *Local) GetTimings() map[string]int64 {
+	l.Lock()
+	localFlatTimings := make(map[string]int64, len(l.flatTimings))
+	for k := range l.flatTimings {
+		localFlatTimings[k] = atomic.LoadInt64(l.flatTimings[k].Value)
+	}
+	l.Unlock()
+	return localFlatTimings
+}
+
+// GetTimingsWithLabels returns a map of metric paths to timers, including
+// labels and values.
+func (l *Local) GetTimingsWithLabels() map[string]LocalStat {
 	l.Lock()
 	localFlatTimings := make(map[string]LocalStat, len(l.flatTimings))
 	for k := range l.flatTimings {
