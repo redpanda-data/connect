@@ -55,14 +55,14 @@ func fakeTimerVec(f func([]string) StatTimer) StatTimerVec {
 //------------------------------------------------------------------------------
 
 type fGaugeVec struct {
-	f func() StatGauge
+	f func([]string) StatGauge
 }
 
 func (f *fGaugeVec) With(labels ...string) StatGauge {
-	return f.f()
+	return f.f(labels)
 }
 
-func fakeGaugeVec(f func() StatGauge) StatGaugeVec {
+func fakeGaugeVec(f func([]string) StatGauge) StatGaugeVec {
 	return &fGaugeVec{
 		f: f,
 	}

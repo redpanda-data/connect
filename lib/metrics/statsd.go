@@ -201,7 +201,7 @@ func (h *Statsd) GetGauge(path string) StatGauge {
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *Statsd) GetGaugeVec(path string, n []string) StatGaugeVec {
-	return fakeGaugeVec(func() StatGauge {
+	return fakeGaugeVec(func([]string) StatGauge {
 		return &StatsdStat{
 			path: path,
 			s:    h.s,

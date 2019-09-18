@@ -60,13 +60,17 @@ func (l *LocalStat) Set(value int64) error {
 	return nil
 }
 
-func (l *LocalStat) SetLabelsAndValues(ls, vs []string) *LocalStat {
+func (l *LocalStat) setLabelsAndValues(ls, vs []string) *LocalStat {
 	for i, k := range ls {
 		l.labelsAndValues[k] = vs[i]
 	}
 	return l
 }
 
+// HasLabelWithValue takes a label/value pair and returns true if that
+// combination has been recorded, or false otherwise.
+//
+// This is mostly useful in tests for custom processors.
 func (l *LocalStat) HasLabelWithValue(k, v string) bool {
 	label := l.labelsAndValues[k]
 	return v == label
@@ -166,8 +170,7 @@ func (l *Local) GetGauge(path string) StatGauge {
 	l.Lock()
 	st, exists := l.flatCounters[path]
 	if !exists {
-		var ctr int64
-		st = &LocalStat{Value: &ctr}
+		st = newLocalStat(0)
 		l.flatCounters[path] = st
 	}
 	l.Unlock()
@@ -179,23 +182,23 @@ func (l *Local) GetGauge(path string) StatGauge {
 // labels and values.
 func (l *Local) GetCounterVec(path string, k []string) StatCounterVec {
 	return fakeCounterVec(func(v []string) StatCounter {
-		return l.GetCounter(path).(*LocalStat).SetLabelsAndValues(k, v)
+		return l.GetCounter(path).(*LocalStat).setLabelsAndValues(k, v)
 	})
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
-// discarded and values.
+// and values.
 func (l *Local) GetTimerVec(path string, k []string) StatTimerVec {
 	return fakeTimerVec(func(v []string) StatTimer {
-		return l.GetTimer(path).(*LocalStat).SetLabelsAndValues(k, v)
+		return l.GetTimer(path).(*LocalStat).setLabelsAndValues(k, v)
 	})
 }
 
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
-func (l *Local) GetGaugeVec(path string, n []string) StatGaugeVec {
-	return fakeGaugeVec(func() StatGauge {
-		return l.GetGauge(path)
+func (l *Local) GetGaugeVec(path string, k []string) StatGaugeVec {
+	return fakeGaugeVec(func(v []string) StatGauge {
+		return l.GetGauge(path).(*LocalStat).setLabelsAndValues(k, v)
 	})
 }
 

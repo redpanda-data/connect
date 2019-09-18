@@ -258,7 +258,7 @@ func (h *Whitelist) GetGaugeVec(path string, n []string) StatGaugeVec {
 	if h.allowPath(path) {
 		return h.s.GetGaugeVec(path, n)
 	}
-	return fakeGaugeVec(func() StatGauge {
+	return fakeGaugeVec(func([]string) StatGauge {
 		return DudStat{}
 	})
 }

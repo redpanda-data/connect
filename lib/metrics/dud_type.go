@@ -76,7 +76,7 @@ func (d DudType) GetGauge(path string) StatGauge { return DudStat{} }
 
 // GetGaugeVec returns a DudStat.
 func (d DudType) GetGaugeVec(path string, n []string) StatGaugeVec {
-	return fakeGaugeVec(func() StatGauge {
+	return fakeGaugeVec(func([]string) StatGauge {
 		return DudStat{}
 	})
 }

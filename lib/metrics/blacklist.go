@@ -217,7 +217,7 @@ func (h *Blacklist) GetCounter(path string) StatCounter {
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
-// and values.
+// discarded.
 func (h *Blacklist) GetCounterVec(path string, n []string) StatCounterVec {
 	if h.rejectPath(path) {
 		return fakeCounterVec(func([]string) StatCounter {
@@ -236,7 +236,7 @@ func (h *Blacklist) GetTimer(path string) StatTimer {
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
-// and values.
+// discarded.
 func (h *Blacklist) GetTimerVec(path string, n []string) StatTimerVec {
 	if h.rejectPath(path) {
 		return fakeTimerVec(func([]string) StatTimer {
@@ -258,7 +258,7 @@ func (h *Blacklist) GetGauge(path string) StatGauge {
 // discarded.
 func (h *Blacklist) GetGaugeVec(path string, n []string) StatGaugeVec {
 	if h.rejectPath(path) {
-		return fakeGaugeVec(func() StatGauge {
+		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
 		})
 	}

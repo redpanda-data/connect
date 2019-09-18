@@ -378,11 +378,11 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 
 			obj := gabs.New()
 			for k, v := range counters {
-				obj.SetP(v, k)
+				obj.SetP(*v.Value, k)
 			}
 			for k, v := range timings {
-				obj.SetP(v, k)
-				obj.SetP(time.Duration(v).String(), k+"_readable")
+				obj.SetP(*v.Value, k)
+				obj.SetP(time.Duration(*v.Value).String(), k+"_readable")
 			}
 			obj.SetP(fmt.Sprintf("%v", uptime), "uptime")
 			w.Write(obj.Bytes())
