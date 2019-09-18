@@ -114,8 +114,8 @@ func (l *Local) GetCounters() map[string]int64 {
 	return localFlatCounters
 }
 
-// GetCounters returns a map of metric paths to counters including labels and
-// values.
+// GetCountersWithLabels returns a map of metric paths to counters including
+// labels and values.
 func (l *Local) GetCountersWithLabels() map[string]LocalStat {
 	l.Lock()
 	localFlatCounters := make(map[string]LocalStat, len(l.flatCounters))
