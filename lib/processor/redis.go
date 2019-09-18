@@ -41,32 +41,38 @@ func init() {
 	Constructors[TypeRedis] = TypeSpec{
 		constructor: NewRedis,
 		description: `
-Redis is a processor that runs a query against redis and replaces the batch with the result.
+Performs actions against Redis that aren't possible using a
+` + "[`cache`](#cache)" + ` processor. Actions are performed for each message of
+a batch, where the contents are replaced with the result.
 
-The fields` + "`key`" + `and` + "`value`" + `have a support of
-[interpolation functions](../config_interpolation.md#functions).
+The field ` + "`key`" + ` supports
+[interpolation functions](../config_interpolation.md#functions) resolved
+individually for each message of the batch.
 
-In order to execute a Redis query for each message of the batch use this
-processor within a ` + "[`for_each`](#for_each)" + ` processor:
+For example, given payloads with a metadata field ` + "`set_key`" + `, you could
+add a JSON field to your payload with the cardinality of their target sets with:
 
-` + "``` yaml" + `
-for_each:
-- redis:
-	operator: scard
-	key: ${!content}
-` + "```" + `
+` + "```yaml" + `
+- process_field:
+    path: meta.cardinality
+    result_type: int
+    processors:
+      - redis:
+          url: TODO
+          operator: scard
+          key: ${!metadata:set_key}
+ ` + "```" + `
+
 
 ### Operators
 
 #### ` + "`scard`" + `
 
-Returns the cardinality of a set.
+Returns the cardinality of a set, or 0 if the key does not exist.
 
 #### ` + "`sadd`" + `
 
-Adds a member in a set. Returns` + "`1`" + `if a member was not in a set and ` + "`0`" + `if a member was.
-At the moment, multi insertion is not supported. 
-		`,
+Adds a new member to a set. Returns ` + "`1`" + ` if the member was added.`,
 	}
 }
 
@@ -78,8 +84,6 @@ type RedisConfig struct {
 	Parts       []int  `json:"parts" yaml:"parts"`
 	Operator    string `json:"operator" yaml:"operator"`
 	Key         string `json:"key" yaml:"key"`
-	Value       string `json:"value" yaml:"value"`
-	Prefix      string `json:"prefix" yaml:"prefix"`
 	Retries     int    `json:"retries" yaml:"retries"`
 	RetryPeriod string `json:"retry_period" yaml:"retry_period"`
 }
@@ -91,8 +95,6 @@ func NewRedisConfig() RedisConfig {
 		Parts:       []int{},
 		Operator:    "scard",
 		Key:         "",
-		Value:       "",
-		Prefix:      "",
 		Retries:     3,
 		RetryPeriod: "500ms",
 	}
@@ -107,11 +109,9 @@ type Redis struct {
 	log   log.Modular
 	stats metrics.Type
 
-	key        *text.InterpolatedString
-	valueBytes *text.InterpolatedBytes
+	key *text.InterpolatedString
 
 	operator    redisOperator
-	prefix      string
 	client      *redis.Client
 	retryPeriod time.Duration
 
@@ -120,15 +120,12 @@ type Redis struct {
 	mSent       metrics.StatCounter
 	mBatchSent  metrics.StatCounter
 	mRedisRetry metrics.StatCounter
-
-	mLatency metrics.StatTimer
 }
 
 // NewRedis returns a Redis processor.
 func NewRedis(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-
 	var retryPeriod time.Duration
 	if tout := conf.Redis.RetryPeriod; len(tout) > 0 {
 		var err error
@@ -152,14 +149,12 @@ func NewRedis(
 	})
 
 	r := &Redis{
-		parts:  conf.Redis.Parts,
-		conf:   conf,
-		prefix: conf.Redis.Prefix,
-		log:    log,
-		stats:  stats,
+		parts: conf.Redis.Parts,
+		conf:  conf,
+		log:   log,
+		stats: stats,
 
 		key: text.NewInterpolatedString(conf.Redis.Key),
-		//valueBytes: text.NewInterpolatedBytes([]byte(conf.Redis.Value)),
 
 		retryPeriod: retryPeriod,
 		client:      client,
@@ -169,17 +164,9 @@ func NewRedis(
 		mSent:       stats.GetCounter("sent"),
 		mBatchSent:  stats.GetCounter("batch.sent"),
 		mRedisRetry: stats.GetCounter("redis.retry"),
-
-		mLatency: stats.GetTimer("latency"),
 	}
 
-	if conf.Redis.Value == "" {
-		r.valueBytes = text.NewInterpolatedBytes([]byte("${!content}"))
-	} else {
-		r.valueBytes = text.NewInterpolatedBytes([]byte(conf.Redis.Value))
-	}
-
-	if r.operator, err = getRedisOperator(conf.Redis.Operator, r, "", make([]byte, 0, 0)); err != nil {
+	if r.operator, err = getRedisOperator(conf.Redis.Operator); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -187,12 +174,10 @@ func NewRedis(
 
 //------------------------------------------------------------------------------
 
-type redisOperator func(r *Redis, key string, value []byte) (string, error)
+type redisOperator func(r *Redis, key string, value []byte) ([]byte, error)
 
-func newSCardOperator(r *Redis, key string, value []byte) redisOperator {
-	return func(r *Redis, key string, value []byte) (string, error) {
-		tStarted := time.Now()
-
+func newRedisSCardOperator() redisOperator {
+	return func(r *Redis, key string, value []byte) ([]byte, error) {
 		res, err := r.client.SCard(key).Result()
 
 		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
@@ -202,22 +187,15 @@ func newSCardOperator(r *Redis, key string, value []byte) redisOperator {
 			res, err = r.client.SCard(key).Result()
 		}
 
-		latency := int64(time.Since(tStarted))
-		r.mLatency.Timing(latency)
-
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-
-		return strconv.FormatInt(int64(res), 10), err
+		return strconv.AppendInt(nil, res, 10), nil
 	}
 }
 
-// TODO: There natively might be an array of keys.
-func newSAddOperator(r *Redis, key string, value []byte) redisOperator {
-	return func(r *Redis, key string, value []byte) (string, error) {
-		tStarted := time.Now()
-
+func newRedisSAddOperator() redisOperator {
+	return func(r *Redis, key string, value []byte) ([]byte, error) {
 		res, err := r.client.SAdd(key, value).Result()
 
 		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
@@ -227,24 +205,19 @@ func newSAddOperator(r *Redis, key string, value []byte) redisOperator {
 			res, err = r.client.SAdd(key, value).Result()
 		}
 
-		latency := int64(time.Since(tStarted))
-		r.mLatency.Timing(latency)
-
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-
-		return strconv.FormatInt(int64(res), 10), err
+		return strconv.AppendInt(nil, res, 10), nil
 	}
 }
 
-func getRedisOperator(opStr string, r *Redis, key string, value []byte) (redisOperator, error) {
-
+func getRedisOperator(opStr string) (redisOperator, error) {
 	switch opStr {
 	case "sadd":
-		return newSAddOperator(r, key, value), nil
+		return newRedisSAddOperator(), nil
 	case "scard":
-		return newSCardOperator(r, key, value), nil
+		return newRedisSCardOperator(), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
@@ -256,34 +229,31 @@ func (r *Redis) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	newMsg := msg.Copy()
 
 	proc := func(index int, span opentracing.Span, part types.Part) error {
-		key := r.prefix + r.key.Get(message.Lock(newMsg, index))
-		value := r.valueBytes.Get(message.Lock(newMsg, index))
-		res, err := r.operator(r, key, value)
+		key := r.key.Get(message.Lock(newMsg, index))
+		res, err := r.operator(r, key, part.Get())
 		if err != nil {
 			r.mErr.Incr(1)
 			r.log.Debugf("Operator failed for key '%s': %v\n", key, err)
 			return err
 		}
-		part.Set([]byte(res))
+		part.Set(res)
 		return nil
 	}
 
 	IteratePartsWithSpan(TypeRedis, r.parts, newMsg, proc)
 
-	msgs := [1]types.Message{newMsg}
-
 	r.mBatchSent.Incr(1)
 	r.mSent.Incr(int64(newMsg.Len()))
-	return msgs[:], nil
+	return []types.Message{newMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.
 func (r *Redis) CloseAsync() {
-
 }
 
 // WaitForClose blocks until the processor has closed down.
 func (r *Redis) WaitForClose(timeout time.Duration) error {
+	r.client.Close()
 	return nil
 }
 

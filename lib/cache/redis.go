@@ -342,6 +342,7 @@ func (r *Redis) CloseAsync() {
 
 // WaitForClose blocks until the cache has closed down.
 func (r *Redis) WaitForClose(timeout time.Duration) error {
+	r.client.Close()
 	return nil
 }
 

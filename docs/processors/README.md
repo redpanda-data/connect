@@ -1571,39 +1571,43 @@ redis:
   key: ""
   operator: scard
   parts: []
-  prefix: ""
   retries: 3
   retry_period: 500ms
   url: tcp://localhost:6379
-  value: ""
 ```
 
-Redis is a processor that runs a query against redis and replaces the batch with the result.
+Performs actions against Redis that aren't possible using a
+[`cache`](#cache) processor. Actions are performed for each message of
+a batch, where the contents are replaced with the result.
 
-The fields`key`and`value`have a support of
-[interpolation functions](../config_interpolation.md#functions).
+The field `key` supports
+[interpolation functions](../config_interpolation.md#functions) resolved
+individually for each message of the batch.
 
-In order to execute a Redis query for each message of the batch use this
-processor within a [`for_each`](#for_each) processor:
+For example, given payloads with a metadata field `set_key`, you could
+add a JSON field to your payload with the cardinality of their target sets with:
 
-``` yaml
-for_each:
-- redis:
-	operator: scard
-	key: ${!content}
-```
+```yaml
+- process_field:
+    path: meta.cardinality
+    result_type: int
+    processors:
+      - redis:
+          url: TODO
+          operator: scard
+          key: ${!metadata:set_key}
+ ```
+
 
 ### Operators
 
 #### `scard`
 
-Returns the cardinality of a set.
+Returns the cardinality of a set, or 0 if the key does not exist.
 
 #### `sadd`
 
-Adds a member in a set. Returns`1`if a member was not in a set and `0`if a member was.
-At the moment, multi insertion is not supported. 
-		
+Adds a new member to a set. Returns `1` if the member was added.
 
 ## `sample`
 

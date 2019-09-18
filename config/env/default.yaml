@@ -465,11 +465,9 @@ pipeline:
     redis:
       key: ${PROCESSOR_REDIS_KEY}
       operator: ${PROCESSOR_REDIS_OPERATOR:scard}
-      prefix: ${PROCESSOR_REDIS_PREFIX}
       retries: ${PROCESSOR_REDIS_RETRIES:3}
       retry_period: ${PROCESSOR_REDIS_RETRY_PERIOD:500ms}
       url: ${PROCESSOR_REDIS_URL:tcp://localhost:6379}
-      value: ${PROCESSOR_REDIS_VALUE}
     sample:
       retain: ${PROCESSOR_SAMPLE_RETAIN:10}
       seed: ${PROCESSOR_SAMPLE_SEED:0}
