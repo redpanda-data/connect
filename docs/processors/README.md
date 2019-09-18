@@ -95,19 +95,20 @@ In this case the [`for_each`](#for_each) processor can be used.
 36. [`process_field`](#process_field)
 37. [`process_map`](#process_map)
 38. [`rate_limit`](#rate_limit)
-39. [`sample`](#sample)
-40. [`select_parts`](#select_parts)
-41. [`sleep`](#sleep)
-42. [`split`](#split)
-43. [`sql`](#sql)
-44. [`subprocess`](#subprocess)
-45. [`switch`](#switch)
-46. [`text`](#text)
-47. [`throttle`](#throttle)
-48. [`try`](#try)
-49. [`unarchive`](#unarchive)
-50. [`while`](#while)
-51. [`xml`](#xml)
+39. [`redis`](#redis)
+40. [`sample`](#sample)
+41. [`select_parts`](#select_parts)
+42. [`sleep`](#sleep)
+43. [`split`](#split)
+44. [`sql`](#sql)
+45. [`subprocess`](#subprocess)
+46. [`switch`](#switch)
+47. [`text`](#text)
+48. [`throttle`](#throttle)
+49. [`try`](#try)
+50. [`unarchive`](#unarchive)
+51. [`while`](#while)
+52. [`xml`](#xml)
 
 ## `archive`
 
@@ -1561,6 +1562,52 @@ Throttles the throughput of a pipeline according to a specified
 [`rate_limit`](../rate_limits/README.md) resource. Rate limits are
 shared across components and therefore apply globally to all processing
 pipelines.
+
+## `redis`
+
+``` yaml
+type: redis
+redis:
+  key: ""
+  operator: scard
+  parts: []
+  retries: 3
+  retry_period: 500ms
+  url: tcp://localhost:6379
+```
+
+Performs actions against Redis that aren't possible using a
+[`cache`](#cache) processor. Actions are performed for each message of
+a batch, where the contents are replaced with the result.
+
+The field `key` supports
+[interpolation functions](../config_interpolation.md#functions) resolved
+individually for each message of the batch.
+
+For example, given payloads with a metadata field `set_key`, you could
+add a JSON field to your payload with the cardinality of their target sets with:
+
+```yaml
+- process_field:
+    path: meta.cardinality
+    result_type: int
+    processors:
+      - redis:
+          url: TODO
+          operator: scard
+          key: ${!metadata:set_key}
+ ```
+
+
+### Operators
+
+#### `scard`
+
+Returns the cardinality of a set, or 0 if the key does not exist.
+
+#### `sadd`
+
+Adds a new member to a set. Returns `1` if the member was added.
 
 ## `sample`
 
