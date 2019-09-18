@@ -220,7 +220,7 @@ func (h *Whitelist) GetCounterVec(path string, n []string) StatCounterVec {
 	if h.allowPath(path) {
 		return h.s.GetCounterVec(path, n)
 	}
-	return fakeCounterVec(func() StatCounter {
+	return fakeCounterVec(func([]string) StatCounter {
 		return DudStat{}
 	})
 }
@@ -239,7 +239,7 @@ func (h *Whitelist) GetTimerVec(path string, n []string) StatTimerVec {
 	if h.allowPath(path) {
 		return h.s.GetTimerVec(path, n)
 	}
-	return fakeTimerVec(func() StatTimer {
+	return fakeTimerVec(func([]string) StatTimer {
 		return DudStat{}
 	})
 }

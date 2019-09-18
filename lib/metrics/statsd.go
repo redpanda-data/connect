@@ -163,7 +163,7 @@ func (h *Statsd) GetCounter(path string) StatCounter {
 // GetCounterVec returns a stat counter object for a path with the labels
 // discarded.
 func (h *Statsd) GetCounterVec(path string, n []string) StatCounterVec {
-	return fakeCounterVec(func() StatCounter {
+	return fakeCounterVec(func([]string) StatCounter {
 		return &StatsdStat{
 			path: path,
 			s:    h.s,
@@ -182,7 +182,7 @@ func (h *Statsd) GetTimer(path string) StatTimer {
 // GetTimerVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *Statsd) GetTimerVec(path string, n []string) StatTimerVec {
-	return fakeTimerVec(func() StatTimer {
+	return fakeTimerVec(func([]string) StatTimer {
 		return &StatsdStat{
 			path: path,
 			s:    h.s,

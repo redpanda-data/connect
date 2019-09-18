@@ -32,39 +32,59 @@ import (
 // LocalStat is a representation of a single metric stat. Interactions with this
 // stat are thread safe.
 type LocalStat struct {
-	value *int64
+	Value           *int64
+	labelsAndValues map[string]string
 }
 
 // Incr increments a metric by an amount.
 func (l *LocalStat) Incr(count int64) error {
-	atomic.AddInt64(l.value, count)
+	atomic.AddInt64(l.Value, count)
 	return nil
 }
 
 // Decr decrements a metric by an amount.
 func (l *LocalStat) Decr(count int64) error {
-	atomic.AddInt64(l.value, -count)
+	atomic.AddInt64(l.Value, -count)
 	return nil
 }
 
 // Timing sets a timing metric.
 func (l *LocalStat) Timing(delta int64) error {
-	atomic.StoreInt64(l.value, delta)
+	atomic.StoreInt64(l.Value, delta)
 	return nil
 }
 
 // Set sets a gauge metric.
 func (l *LocalStat) Set(value int64) error {
-	atomic.StoreInt64(l.value, value)
+	atomic.StoreInt64(l.Value, value)
 	return nil
+}
+
+func (l *LocalStat) SetLabelsAndValues(ls, vs []string) *LocalStat {
+	for i, k := range ls {
+		l.labelsAndValues[k] = vs[i]
+	}
+	return l
+}
+
+func (l *LocalStat) HasLabelWithValue(k, v string) bool {
+	label := l.labelsAndValues[k]
+	return v == label
+}
+
+func newLocalStat(c int64) *LocalStat {
+	return &LocalStat{
+		Value:           &c,
+		labelsAndValues: make(map[string]string),
+	}
 }
 
 //------------------------------------------------------------------------------
 
 // Local is a metrics aggregator that stores metrics locally.
 type Local struct {
-	flatCounters map[string]*int64
-	flatTimings  map[string]*int64
+	flatCounters map[string]*LocalStat
+	flatTimings  map[string]*LocalStat
 
 	sync.Mutex
 }
@@ -72,30 +92,42 @@ type Local struct {
 // NewLocal creates and returns a new Local aggregator.
 func NewLocal() *Local {
 	return &Local{
-		flatCounters: map[string]*int64{},
-		flatTimings:  map[string]*int64{},
+		flatCounters: make(map[string]*LocalStat),
+		flatTimings:  make(map[string]*LocalStat),
 	}
 }
 
 //------------------------------------------------------------------------------
 
 // GetCounters returns a map of metric paths to counters.
-func (l *Local) GetCounters() map[string]int64 {
+func (l *Local) GetCounters() map[string]LocalStat {
 	l.Lock()
-	localFlatCounters := make(map[string]int64, len(l.flatCounters))
+	localFlatCounters := make(map[string]LocalStat, len(l.flatCounters))
 	for k := range l.flatCounters {
-		localFlatCounters[k] = atomic.LoadInt64(l.flatCounters[k])
+		o := l.flatCounters[k]
+		cv := atomic.LoadInt64(o.Value)
+		ls := *newLocalStat(cv)
+		for k, v := range o.labelsAndValues {
+			ls.labelsAndValues[k] = v
+		}
+		localFlatCounters[k] = ls
 	}
 	l.Unlock()
 	return localFlatCounters
 }
 
 // GetTimings returns a map of metric paths to timers.
-func (l *Local) GetTimings() map[string]int64 {
+func (l *Local) GetTimings() map[string]LocalStat {
 	l.Lock()
-	localFlatTimings := make(map[string]int64, len(l.flatTimings))
+	localFlatTimings := make(map[string]LocalStat, len(l.flatTimings))
 	for k := range l.flatTimings {
-		localFlatTimings[k] = atomic.LoadInt64(l.flatTimings[k])
+		o := l.flatTimings[k]
+		cv := atomic.LoadInt64(o.Value)
+		ls := *newLocalStat(cv)
+		for k, v := range o.labelsAndValues {
+			ls.labelsAndValues[k] = v
+		}
+		localFlatTimings[k] = ls
 	}
 	l.Unlock()
 	return localFlatTimings
@@ -106,64 +138,56 @@ func (l *Local) GetTimings() map[string]int64 {
 // GetCounter returns a stat counter object for a path.
 func (l *Local) GetCounter(path string) StatCounter {
 	l.Lock()
-	ptr, exists := l.flatCounters[path]
+	st, exists := l.flatCounters[path]
 	if !exists {
-		var ctr int64
-		ptr = &ctr
-		l.flatCounters[path] = ptr
+		st = newLocalStat(0)
+		l.flatCounters[path] = st
 	}
 	l.Unlock()
 
-	return &LocalStat{
-		value: ptr,
-	}
+	return st
 }
 
 // GetTimer returns a stat timer object for a path.
 func (l *Local) GetTimer(path string) StatTimer {
 	l.Lock()
-	ptr, exists := l.flatTimings[path]
+	st, exists := l.flatTimings[path]
 	if !exists {
-		var ctr int64
-		ptr = &ctr
-		l.flatTimings[path] = ptr
+		st = newLocalStat(0)
+		l.flatTimings[path] = st
 	}
 	l.Unlock()
 
-	return &LocalStat{
-		value: ptr,
-	}
+	return st
 }
 
 // GetGauge returns a stat gauge object for a path.
 func (l *Local) GetGauge(path string) StatGauge {
 	l.Lock()
-	ptr, exists := l.flatCounters[path]
+	st, exists := l.flatCounters[path]
 	if !exists {
 		var ctr int64
-		ptr = &ctr
-		l.flatCounters[path] = ptr
+		st = &LocalStat{Value: &ctr}
+		l.flatCounters[path] = st
 	}
 	l.Unlock()
 
-	return &LocalStat{
-		value: ptr,
-	}
+	return st
 }
 
-// GetCounterVec returns a stat counter object for a path with the labels
-// discarded.
-func (l *Local) GetCounterVec(path string, n []string) StatCounterVec {
-	return fakeCounterVec(func() StatCounter {
-		return l.GetCounter(path)
+// GetCounterVec returns a stat counter object for a path and records the
+// labels and values.
+func (l *Local) GetCounterVec(path string, k []string) StatCounterVec {
+	return fakeCounterVec(func(v []string) StatCounter {
+		return l.GetCounter(path).(*LocalStat).SetLabelsAndValues(k, v)
 	})
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
-// discarded.
-func (l *Local) GetTimerVec(path string, n []string) StatTimerVec {
-	return fakeTimerVec(func() StatTimer {
-		return l.GetTimer(path)
+// discarded and values.
+func (l *Local) GetTimerVec(path string, k []string) StatTimerVec {
+	return fakeTimerVec(func(v []string) StatTimer {
+		return l.GetTimer(path).(*LocalStat).SetLabelsAndValues(k, v)
 	})
 }
 
@@ -176,7 +200,7 @@ func (l *Local) GetGaugeVec(path string, n []string) StatGaugeVec {
 }
 
 // SetLogger does nothing.
-func (l *Local) SetLogger(log log.Modular) {}
+func (l *Local) SetLogger(logger log.Modular) {}
 
 // Close stops the Local object from aggregating metrics and cleans up
 // resources.

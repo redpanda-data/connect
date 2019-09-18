@@ -119,7 +119,7 @@ func (h *HTTP) HandlerFunc() http.HandlerFunc {
 		}
 		for k, v := range timings {
 			obj.SetP(v, k)
-			obj.SetP(time.Duration(v).String(), k+"_readable")
+			obj.SetP(time.Duration(*v.Value).String(), k+"_readable")
 		}
 		obj.SetP(fmt.Sprintf("%v", uptime), "uptime")
 		obj.SetP(goroutines, "goroutines")
@@ -141,9 +141,9 @@ func (h *HTTP) GetCounter(path string) StatCounter {
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
-// discarded.
+// and values.
 func (h *HTTP) GetCounterVec(path string, n []string) StatCounterVec {
-	return fakeCounterVec(func() StatCounter {
+	return fakeCounterVec(func([]string) StatCounter {
 		return h.local.GetCounter(path)
 	})
 }
@@ -154,9 +154,9 @@ func (h *HTTP) GetTimer(path string) StatTimer {
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
-// discarded.
+// and values.
 func (h *HTTP) GetTimerVec(path string, n []string) StatTimerVec {
-	return fakeTimerVec(func() StatTimer {
+	return fakeTimerVec(func([]string) StatTimer {
 		return h.local.GetTimer(path)
 	})
 }
