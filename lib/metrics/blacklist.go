@@ -220,7 +220,7 @@ func (h *Blacklist) GetCounter(path string) StatCounter {
 // discarded.
 func (h *Blacklist) GetCounterVec(path string, n []string) StatCounterVec {
 	if h.rejectPath(path) {
-		return fakeCounterVec(func() StatCounter {
+		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
 		})
 	}
@@ -239,7 +239,7 @@ func (h *Blacklist) GetTimer(path string) StatTimer {
 // discarded.
 func (h *Blacklist) GetTimerVec(path string, n []string) StatTimerVec {
 	if h.rejectPath(path) {
-		return fakeTimerVec(func() StatTimer {
+		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
 		})
 	}
@@ -258,7 +258,7 @@ func (h *Blacklist) GetGauge(path string) StatGauge {
 // discarded.
 func (h *Blacklist) GetGaugeVec(path string, n []string) StatGaugeVec {
 	if h.rejectPath(path) {
-		return fakeGaugeVec(func() StatGauge {
+		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
 		})
 	}

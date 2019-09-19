@@ -84,7 +84,7 @@ func (h *wrappedFlat) GetCounter(path string) StatCounter {
 // GetCounterVec returns a stat counter object for a path with the labels
 // discarded.
 func (h *wrappedFlat) GetCounterVec(path string, n []string) StatCounterVec {
-	return fakeCounterVec(func() StatCounter {
+	return fakeCounterVec(func([]string) StatCounter {
 		return &flatStat{
 			path: path,
 			f:    h.f,
@@ -103,7 +103,7 @@ func (h *wrappedFlat) GetTimer(path string) StatTimer {
 // GetTimerVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *wrappedFlat) GetTimerVec(path string, n []string) StatTimerVec {
-	return fakeTimerVec(func() StatTimer {
+	return fakeTimerVec(func([]string) StatTimer {
 		return &flatStat{
 			path: path,
 			f:    h.f,
@@ -122,7 +122,7 @@ func (h *wrappedFlat) GetGauge(path string) StatGauge {
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *wrappedFlat) GetGaugeVec(path string, n []string) StatGaugeVec {
-	return fakeGaugeVec(func() StatGauge {
+	return fakeGaugeVec(func([]string) StatGauge {
 		return &flatStat{
 			path: path,
 			f:    h.f,

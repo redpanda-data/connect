@@ -258,7 +258,7 @@ func (r *Rename) GetCounter(path string) StatCounter {
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
-// discarded.
+// and values.
 func (r *Rename) GetCounterVec(path string, n []string) StatCounterVec {
 	rpath, _ := r.renamePath(path)
 	return r.s.GetCounterVec(rpath, n)
@@ -280,7 +280,7 @@ func (r *Rename) GetTimer(path string) StatTimer {
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
-// discarded.
+// and values.
 func (r *Rename) GetTimerVec(path string, n []string) StatTimerVec {
 	rpath, _ := r.renamePath(path)
 	return r.s.GetTimerVec(rpath, n)

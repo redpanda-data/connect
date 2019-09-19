@@ -143,7 +143,7 @@ func (h *HTTP) GetCounter(path string) StatCounter {
 // GetCounterVec returns a stat counter object for a path with the labels
 // discarded.
 func (h *HTTP) GetCounterVec(path string, n []string) StatCounterVec {
-	return fakeCounterVec(func() StatCounter {
+	return fakeCounterVec(func([]string) StatCounter {
 		return h.local.GetCounter(path)
 	})
 }
@@ -156,7 +156,7 @@ func (h *HTTP) GetTimer(path string) StatTimer {
 // GetTimerVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *HTTP) GetTimerVec(path string, n []string) StatTimerVec {
-	return fakeTimerVec(func() StatTimer {
+	return fakeTimerVec(func([]string) StatTimer {
 		return h.local.GetTimer(path)
 	})
 }
@@ -169,7 +169,7 @@ func (h *HTTP) GetGauge(path string) StatGauge {
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *HTTP) GetGaugeVec(path string, n []string) StatGaugeVec {
-	return fakeGaugeVec(func() StatGauge {
+	return fakeGaugeVec(func([]string) StatGauge {
 		return h.local.GetGauge(path)
 	})
 }

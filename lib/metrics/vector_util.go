@@ -23,14 +23,14 @@ package metrics
 //------------------------------------------------------------------------------
 
 type fCounterVec struct {
-	f func() StatCounter
+	f func([]string) StatCounter
 }
 
 func (f *fCounterVec) With(labels ...string) StatCounter {
-	return f.f()
+	return f.f(labels)
 }
 
-func fakeCounterVec(f func() StatCounter) StatCounterVec {
+func fakeCounterVec(f func([]string) StatCounter) StatCounterVec {
 	return &fCounterVec{
 		f: f,
 	}
@@ -39,14 +39,14 @@ func fakeCounterVec(f func() StatCounter) StatCounterVec {
 //------------------------------------------------------------------------------
 
 type fTimerVec struct {
-	f func() StatTimer
+	f func([]string) StatTimer
 }
 
 func (f *fTimerVec) With(labels ...string) StatTimer {
-	return f.f()
+	return f.f(labels)
 }
 
-func fakeTimerVec(f func() StatTimer) StatTimerVec {
+func fakeTimerVec(f func([]string) StatTimer) StatTimerVec {
 	return &fTimerVec{
 		f: f,
 	}
@@ -55,14 +55,14 @@ func fakeTimerVec(f func() StatTimer) StatTimerVec {
 //------------------------------------------------------------------------------
 
 type fGaugeVec struct {
-	f func() StatGauge
+	f func([]string) StatGauge
 }
 
 func (f *fGaugeVec) With(labels ...string) StatGauge {
-	return f.f()
+	return f.f(labels)
 }
 
-func fakeGaugeVec(f func() StatGauge) StatGaugeVec {
+func fakeGaugeVec(f func([]string) StatGauge) StatGaugeVec {
 	return &fGaugeVec{
 		f: f,
 	}
