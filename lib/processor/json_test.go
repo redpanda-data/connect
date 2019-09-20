@@ -302,6 +302,13 @@ func TestJSONMove(t *testing.T) {
 			output: `{"bar":{"baz":5,"qux":6},"foo":{}}`,
 		},
 		{
+			name:   "move to same path 1",
+			path:   "foo.bar",
+			value:  `"foo.bar"`,
+			input:  `{"foo":{"bar":5},"bar":{"qux":6}}`,
+			output:  `{"bar":{"qux":6},"foo":{"bar":5}}`,
+		},
+		{
 			name:   "move from root 1",
 			path:   ".",
 			value:  `"bar.baz"`,

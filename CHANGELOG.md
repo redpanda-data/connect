@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 - New `kinesis_firehose` output.
 - Go API: The `metrics.Local` aggregator now supports labels.
 
+### Fixed
+
+- The `json` processor no longer removes content moved from a path to the same
+  path.
+
 ## 3.0.0 - 2019-09-17
 
 This is a major version release, for more information and guidance on how to

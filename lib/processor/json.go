@@ -265,6 +265,7 @@ func newMoveOperator(srcPath, destPath []string) (jsonOperator, error) {
 		if len(srcPath) > 0 {
 			gPart = gabs.Wrap(body)
 			gSrc = gPart.S(srcPath...).Data()
+			gPart.Delete(srcPath...)
 		} else {
 			gPart = gabs.New()
 			gSrc = body
@@ -278,7 +279,6 @@ func newMoveOperator(srcPath, destPath []string) (jsonOperator, error) {
 		if _, err := gPart.Set(gSrc, destPath...); err != nil {
 			return nil, fmt.Errorf("failed to set destination path '%v': %v", strings.Join(destPath, "."), err)
 		}
-		gPart.Delete(srcPath...)
 		return gPart.Data(), nil
 	}, nil
 }
