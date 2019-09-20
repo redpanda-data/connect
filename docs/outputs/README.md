@@ -74,25 +74,26 @@ a [`broker`](#broker) output with the 'try' pattern.
 15. [`inproc`](#inproc)
 16. [`kafka`](#kafka)
 17. [`kinesis`](#kinesis)
-18. [`mqtt`](#mqtt)
-19. [`nanomsg`](#nanomsg)
-20. [`nats`](#nats)
-21. [`nats_stream`](#nats_stream)
-22. [`nsq`](#nsq)
-23. [`redis_hash`](#redis_hash)
-24. [`redis_list`](#redis_list)
-25. [`redis_pubsub`](#redis_pubsub)
-26. [`redis_streams`](#redis_streams)
-27. [`retry`](#retry)
-28. [`s3`](#s3)
-29. [`sns`](#sns)
-30. [`sqs`](#sqs)
-31. [`stdout`](#stdout)
-32. [`switch`](#switch)
-33. [`sync_response`](#sync_response)
-34. [`tcp`](#tcp)
-35. [`udp`](#udp)
-36. [`websocket`](#websocket)
+18. [`kinesis_firehose`](#kinesis_firehose)
+19. [`mqtt`](#mqtt)
+20. [`nanomsg`](#nanomsg)
+21. [`nats`](#nats)
+22. [`nats_stream`](#nats_stream)
+23. [`nsq`](#nsq)
+24. [`redis_hash`](#redis_hash)
+25. [`redis_list`](#redis_list)
+26. [`redis_pubsub`](#redis_pubsub)
+27. [`redis_streams`](#redis_streams)
+28. [`retry`](#retry)
+29. [`s3`](#s3)
+30. [`sns`](#sns)
+31. [`sqs`](#sqs)
+32. [`stdout`](#stdout)
+33. [`switch`](#switch)
+34. [`sync_response`](#sync_response)
+35. [`tcp`](#tcp)
+36. [`udp`](#udp)
+37. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -715,6 +716,37 @@ Both the `partition_key`(required) and `hash_key` (optional)
 fields can be dynamically set using function interpolations described
 [here](../config_interpolation.md#functions). When sending batched messages the
 interpolations are performed per message part.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](../aws.md).
+
+## `kinesis_firehose`
+
+``` yaml
+type: kinesis_firehose
+kinesis_firehose:
+  backoff:
+    initial_interval: 1s
+    max_elapsed_time: 30s
+    max_interval: 5s
+  credentials:
+    id: ""
+    profile: ""
+    role: ""
+    role_external_id: ""
+    secret: ""
+    token: ""
+  endpoint: ""
+  max_retries: 0
+  region: eu-west-1
+  stream: ""
+```
+
+Sends messages to a Kinesis Firehose delivery stream.
 
 ### Credentials
 

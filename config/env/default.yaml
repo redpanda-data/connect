@@ -648,6 +648,22 @@ output:
         partition_key: ${OUTPUT_KINESIS_PARTITION_KEY}
         region: ${OUTPUT_KINESIS_REGION:eu-west-1}
         stream: ${OUTPUT_KINESIS_STREAM}
+      kinesis_firehose:
+        backoff:
+          initial_interval: ${OUTPUT_KINESIS_FIREHOSE_BACKOFF_INITIAL_INTERVAL:1s}
+          max_elapsed_time: ${OUTPUT_KINESIS_FIREHOSE_BACKOFF_MAX_ELAPSED_TIME:30s}
+          max_interval: ${OUTPUT_KINESIS_FIREHOSE_BACKOFF_MAX_INTERVAL:5s}
+        credentials:
+          id: ${OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_ID}
+          profile: ${OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_PROFILE}
+          role: ${OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_ROLE}
+          role_external_id: ${OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_ROLE_EXTERNAL_ID}
+          secret: ${OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_SECRET}
+          token: ${OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_TOKEN}
+        endpoint: ${OUTPUT_KINESIS_FIREHOSE_ENDPOINT}
+        max_retries: ${OUTPUT_KINESIS_FIREHOSE_MAX_RETRIES:0}
+        region: ${OUTPUT_KINESIS_FIREHOSE_REGION:eu-west-1}
+        stream: ${OUTPUT_KINESIS_FIREHOSE_STREAM}
       mqtt:
         client_id: ${OUTPUT_MQTT_CLIENT_ID:benthos_output}
         qos: ${OUTPUT_MQTT_QOS:1}
