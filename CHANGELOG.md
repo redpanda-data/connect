@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `redis` processor.
+- New `kinesis_firehose` output.
+- Go API: The `metrics.Local` aggregator now supports labels.
 
 ## 3.0.0 - 2019-09-17
 
