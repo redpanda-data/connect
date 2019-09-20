@@ -619,9 +619,17 @@ pattern returns at least one value a resulting structured object is created
 according to the chosen output format and will replace the payload. Currently
 only json is a valid output format.
 
-This processor respects type hints in the grok patterns, therefore with the
-pattern `%{WORD:first},%{INT:second:int}` and a payload of `foo,1`
+Type hints within patterns are respected, therefore with the pattern
+`%{WORD:first},%{INT:second:int}` and a payload of `foo,1`
 the resulting payload would be `{"first":"foo","second":1}`.
+
+### Performance
+
+This processor currently uses the [Go RE2](https://golang.org/s/re2syntax)
+regular expression engine, which is guaranteed to run in time linear to the size
+of the input. However, this property often makes it less performant than pcre
+based implementations of grok. For more information see
+[https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).
 
 ## `group_by`
 
