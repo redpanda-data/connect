@@ -4,3 +4,4 @@ tmp
 site
 .tags
 go.sum
+.DS_Store
