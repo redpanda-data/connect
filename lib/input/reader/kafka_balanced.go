@@ -239,9 +239,14 @@ func (k *KafkaBalanced) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sar
 			if !open {
 				return nil
 			}
-			k.msgChan <- consumerMessage{
+			select {
+			case k.msgChan <- consumerMessage{
 				ConsumerMessage: msg,
 				highWaterMark:   claim.HighWaterMarkOffset(),
+			}:
+			case <-sess.Context().Done():
+				k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
+				return nil
 			}
 		case <-sess.Context().Done():
 			k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())

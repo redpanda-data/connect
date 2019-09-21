@@ -21,6 +21,8 @@
 package reader
 
 import (
+	"context"
+
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -44,6 +46,30 @@ type Type interface {
 
 	// Read attempts to read a new message from the source.
 	Read() (types.Message, error)
+
+	types.Closable
+}
+
+// AsyncAckFn is a function used to acknowledge receipt of a message batch. The
+// provided response indicates whether the message batch was successfully
+// delivered. Returns an error if the acknowledge was not propagated.
+type AsyncAckFn func(context.Context, types.Response) error
+
+// Async is a type that reads Benthos messages from an external source and
+// allows acknowledgements for a message batch to be propagated asynchronously.
+// If the source supports acknowledgements then it is the responsibility of Type
+// implementations to ensure acknowledgements are not sent for consumed messages
+// until a subsequent Acknowledge call contains a nil error.
+type Async interface {
+	// Connect attempts to establish a connection to the source, if unsuccessful
+	// returns an error. If the attempt is successful (or not necessary) returns
+	// nil.
+	Connect(ctx context.Context) error
+
+	// Read attempts to read a new message from the source. If successful a
+	// message is returned along with a function used to acknowledge receipt of
+	// the returned message.
+	Read(ctx context.Context) (types.Message, AsyncAckFn, error)
 
 	types.Closable
 }
