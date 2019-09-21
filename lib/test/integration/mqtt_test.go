@@ -52,6 +52,12 @@ func TestMQTTIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not start resource: %s", err)
 	}
+	defer func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %v", err)
+		}
+	}()
+	resource.Expire(900)
 
 	url := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("1883/tcp"))
 
@@ -71,12 +77,6 @@ func TestMQTTIntegration(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
-
-	defer func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	}()
 
 	t.Run("TestMQTTSinglePart", func(te *testing.T) {
 		testMQTTSinglePart(url, te)

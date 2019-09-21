@@ -62,6 +62,7 @@ func TestAWSIntegration(t *testing.T) {
 			t.Logf("Failed to clean up docker resource: %v", err)
 		}
 	}()
+	resource.Expire(900)
 
 	endpoint := fmt.Sprintf("http://localhost:%v", resource.GetPort("4572/tcp"))
 	bucket := "benthos-test-bucket"
