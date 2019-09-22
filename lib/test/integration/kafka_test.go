@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ashley Jeffs
+// Copyright (c) 2019 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -31,12 +32,14 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/nats-io/stan.go"
 	"github.com/ory/dockertest"
+	"github.com/ory/dockertest/docker"
 )
 
-func TestNATSStreamIntegration(t *testing.T) {
+func TestKafkaIntegration(t *testing.T) {
+	t.Skip("Need to work out how to overcome Kafkas advertised port")
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -47,55 +50,97 @@ func TestNATSStreamIntegration(t *testing.T) {
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Minute
 
-	resource, err := pool.Run("nats-streaming", "latest", nil)
+	zkResource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository: "wurstmeister/zookeeper",
+		Tag:        "latest",
+	})
 	if err != nil {
-		t.Fatalf("Could not start resource: %s", err)
+		t.Fatalf("Could not start zookeeper resource: %s", err)
 	}
 	defer func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
+		if err = pool.Purge(zkResource); err != nil {
+			t.Logf("Failed to clean up zookeeper docker resource: %v", err)
 		}
 	}()
-	resource.Expire(900)
+	zkResource.Expire(900)
 
-	url := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp"))
-	if err = pool.Retry(func() error {
-		natsConn, err := stan.Connect("test-cluster", "benthos_test_client", stan.NatsURL(url))
-		if err != nil {
-			return err
+	zkAddr := fmt.Sprintf("%v:2181", zkResource.Container.NetworkSettings.IPAddress)
+	kafkaResource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository:   "wurstmeister/kafka",
+		Tag:          "latest",
+		ExposedPorts: []string{"9092"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"9092": []docker.PortBinding{
+				{HostPort: "9092"},
+			},
+		},
+		Env: []string{
+			"KAFKA_ADVERTISED_HOST_NAME=localhost",
+			fmt.Sprintf("KAFKA_ZOOKEEPER_CONNECT=%v", zkAddr),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Could not start kafka resource: %s", err)
+	}
+	defer func() {
+		if err = pool.Purge(kafkaResource); err != nil {
+			t.Logf("Failed to clean up kafka docker resource: %v", err)
 		}
-		natsConn.Close()
-		return nil
+	}()
+	kafkaResource.Expire(900)
+
+	address := fmt.Sprintf("localhost:%v", "9092") //kafkaResource.GetPort("9092/tcp"))
+	if err = pool.Retry(func() error {
+		log := log.Noop()
+		outConf := writer.NewKafkaConfig()
+		outConf.TargetVersion = "2.1.0"
+		outConf.Addresses = []string{address}
+		outConf.Topic = "pls_ignore_just_testing_connection"
+		tmpOutput, serr := writer.NewKafka(outConf, log, metrics.Noop())
+		if serr != nil {
+			return serr
+		}
+		defer tmpOutput.CloseAsync()
+		if serr = tmpOutput.Connect(); serr != nil {
+			return serr
+		}
+		return tmpOutput.Write(message.New([][]byte{
+			[]byte("foo message"),
+		}))
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
 
-	t.Run("TestNATSStreamSinglePart", func(te *testing.T) {
-		testNATSStreamSinglePart(url, te)
+	t.Run("TestKafkaSinglePart", func(te *testing.T) {
+		testKafkaSinglePart(address, te)
 	})
-	t.Run("TestNATSStreamResumeDurable", func(te *testing.T) {
-		testNATSStreamResumeDurable(url, te)
+	t.Run("TestKafkaResumeDurable", func(te *testing.T) {
+		testKafkaResumeDurable(address, te)
 	})
-	t.Run("TestNATSStreamMultiplePart", func(te *testing.T) {
-		testNATSStreamMultiplePart(url, te)
+	t.Run("TestKafkaMultiplePart", func(te *testing.T) {
+		testKafkaMultiplePart(address, te)
 	})
-	t.Run("TestNATSStreamDisconnect", func(te *testing.T) {
-		testNATSStreamDisconnect(url, te)
+	t.Run("TestKafkaDisconnect", func(te *testing.T) {
+		testKafkaDisconnect(address, te)
 	})
 }
 
-func createNATSStreamInputOutput(
-	inConf reader.NATSStreamConfig, outConf writer.NATSStreamConfig,
-) (mInput reader.Type, mOutput writer.Type, err error) {
-	if mInput, err = reader.NewNATSStream(inConf, log.Noop(), metrics.Noop()); err != nil {
+func createKafkaInputOutput(
+	inConf reader.KafkaCGConfig, outConf writer.KafkaConfig,
+) (mInput reader.Async, mOutput writer.Type, err error) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
+	log := log.Noop()
+	if mInput, err = reader.NewKafkaCG(inConf, nil, log, metrics.Noop()); err != nil {
 		return
 	}
-	if err = mInput.Connect(); err != nil {
+	if err = mInput.Connect(ctx); err != nil {
 		return
 	}
-	if mOutput, err = writer.NewNATSStream(outConf, log.Noop(), metrics.Noop()); err != nil {
+	if mOutput, err = writer.NewKafka(outConf, log, metrics.Noop()); err != nil {
 		return
 	}
 	if err = mOutput.Connect(); err != nil {
@@ -104,19 +149,20 @@ func createNATSStreamInputOutput(
 	return
 }
 
-func testNATSStreamSinglePart(url string, t *testing.T) {
-	subject := "benthos_test_single"
+func testKafkaSinglePart(address string, t *testing.T) {
+	topic := "benthos_test_single"
 
-	inConf := reader.NewNATSStreamConfig()
+	inConf := reader.NewKafkaCGConfig()
 	inConf.ClientID = "benthos_test_single_client"
-	inConf.URLs = []string{url}
-	inConf.Subject = subject
+	inConf.Addresses = []string{address}
+	inConf.Topics = []string{topic}
 
-	outConf := writer.NewNATSStreamConfig()
-	outConf.URLs = []string{url}
-	outConf.Subject = subject
+	outConf := writer.NewKafkaConfig()
+	outConf.TargetVersion = "2.1.0"
+	outConf.Addresses = []string{address}
+	outConf.Topic = topic
 
-	mInput, mOutput, err := createNATSStreamInputOutput(inConf, outConf)
+	mInput, mOutput, err := createKafkaInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,37 +183,45 @@ func testNATSStreamSinglePart(url string, t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(N)
 
+	ctx, done := context.WithTimeout(context.Background(), time.Second*60)
+	defer done()
+
 	testMsgs := map[string]struct{}{}
 	for i := 0; i < N; i++ {
 		str := fmt.Sprintf("hello world: %v", i)
 		testMsgs[str] = struct{}{}
-		go func(testStr string) {
-			msg := message.New([][]byte{
-				[]byte(testStr),
-			})
-			msg.Get(0).Metadata().Set("foo", "bar")
-			msg.Get(0).Metadata().Set("root_foo", "bar2")
-			if gerr := mOutput.Write(msg); gerr != nil {
-				t.Fatal(gerr)
-			}
-			wg.Done()
-		}(str)
+		msg := message.New([][]byte{
+			[]byte(str),
+		})
+		msg.Get(0).Metadata().Set("foo", "bar")
+		msg.Get(0).Metadata().Set("root_foo", "bar2")
+		if gerr := mOutput.Write(msg); gerr != nil {
+			t.Fatal(gerr)
+		}
+		wg.Done()
 	}
 
 	lMsgs := len(testMsgs)
 	for lMsgs > 0 {
 		var actM types.Message
-		actM, err = mInput.Read()
+		var ackFn reader.AsyncAckFn
+		actM, ackFn, err = mInput.Read(ctx)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		} else {
 			act := string(actM.Get(0).Get())
 			if _, exists := testMsgs[act]; !exists {
 				t.Errorf("Unexpected message: %v", act)
 			}
 			delete(testMsgs, act)
+			if act = actM.Get(0).Metadata().Get("foo"); act != "bar" {
+				t.Errorf("Wrong metadata returned: %v != bar", act)
+			}
+			if act = actM.Get(0).Metadata().Get("root_foo"); act != "bar2" {
+				t.Errorf("Wrong metadata returned: %v != bar2", act)
+			}
 		}
-		if err = mInput.Acknowledge(nil); err != nil {
+		if err = ackFn(ctx, response.NewAck()); err != nil {
 			t.Error(err)
 		}
 		lMsgs = len(testMsgs)
@@ -176,20 +230,20 @@ func testNATSStreamSinglePart(url string, t *testing.T) {
 	wg.Wait()
 }
 
-func testNATSStreamResumeDurable(url string, t *testing.T) {
-	subject := "benthos_test_resume_durable"
+func testKafkaResumeDurable(address string, t *testing.T) {
+	topic := "benthos_test_resume_durable"
 
-	inConf := reader.NewNATSStreamConfig()
-	inConf.ClientID = "benthos_test_durable_client"
-	inConf.URLs = []string{url}
-	inConf.Subject = subject
-	inConf.UnsubOnClose = false
+	inConf := reader.NewKafkaCGConfig()
+	inConf.ClientID = "benthos_test_resume_durable"
+	inConf.Addresses = []string{address}
+	inConf.Topics = []string{topic}
 
-	outConf := writer.NewNATSStreamConfig()
-	outConf.URLs = []string{url}
-	outConf.Subject = subject
+	outConf := writer.NewKafkaConfig()
+	outConf.TargetVersion = "2.1.0"
+	outConf.Addresses = []string{address}
+	outConf.Topic = topic
 
-	mInput, mOutput, err := createNATSStreamInputOutput(inConf, outConf)
+	mInput, mOutput, err := createKafkaInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,6 +258,9 @@ func testNATSStreamResumeDurable(url string, t *testing.T) {
 			t.Error(cErr)
 		}
 	}()
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*60)
+	defer done()
 
 	testMsgs := map[string]struct{}{}
 	N := 50
@@ -223,7 +280,8 @@ func testNATSStreamResumeDurable(url string, t *testing.T) {
 
 	for len(testMsgs) > 0 {
 		var actM types.Message
-		actM, err = mInput.Read()
+		var ackFn reader.AsyncAckFn
+		actM, ackFn, err = mInput.Read(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -233,7 +291,7 @@ func testNATSStreamResumeDurable(url string, t *testing.T) {
 			}
 			delete(testMsgs, act)
 		}
-		if err = mInput.Acknowledge(nil); err != nil {
+		if err = ackFn(ctx, response.NewAck()); err != nil {
 			t.Error(err)
 		}
 	}
@@ -256,16 +314,17 @@ func testNATSStreamResumeDurable(url string, t *testing.T) {
 		}
 	}
 
-	if mInput, err = reader.NewNATSStream(inConf, log.Noop(), metrics.Noop()); err != nil {
+	if mInput, err = reader.NewKafkaCG(inConf, nil, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
-	if err = mInput.Connect(); err != nil {
+	if err = mInput.Connect(ctx); err != nil {
 		t.Fatal(err)
 	}
 
 	for len(testMsgs) > 1 {
 		var actM types.Message
-		actM, err = mInput.Read()
+		var ackFn reader.AsyncAckFn
+		actM, ackFn, err = mInput.Read(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -275,25 +334,26 @@ func testNATSStreamResumeDurable(url string, t *testing.T) {
 			}
 			delete(testMsgs, act)
 		}
-		if err = mInput.Acknowledge(nil); err != nil {
+		if err = ackFn(ctx, response.NewAck()); err != nil {
 			t.Error(err)
 		}
 	}
 }
 
-func testNATSStreamMultiplePart(url string, t *testing.T) {
-	subject := "benthos_test_multi"
+func testKafkaMultiplePart(address string, t *testing.T) {
+	topic := "benthos_test_multi"
 
-	inConf := reader.NewNATSStreamConfig()
-	inConf.ClientID = "benthos_test_multi_client"
-	inConf.URLs = []string{url}
-	inConf.Subject = subject
+	inConf := reader.NewKafkaCGConfig()
+	inConf.ClientID = "benthos_test_resume_durable"
+	inConf.Addresses = []string{address}
+	inConf.Topics = []string{topic}
 
-	outConf := writer.NewNATSStreamConfig()
-	outConf.URLs = []string{url}
-	outConf.Subject = subject
+	outConf := writer.NewKafkaConfig()
+	outConf.TargetVersion = "2.1.0"
+	outConf.Addresses = []string{address}
+	outConf.Topic = topic
 
-	mInput, mOutput, err := createNATSStreamInputOutput(inConf, outConf)
+	mInput, mOutput, err := createKafkaInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,6 +373,9 @@ func testNATSStreamMultiplePart(url string, t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(N)
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*60)
+	defer done()
 
 	testMsgs := map[string]struct{}{}
 	for i := 0; i < N; i++ {
@@ -340,7 +403,8 @@ func testNATSStreamMultiplePart(url string, t *testing.T) {
 	lMsgs := len(testMsgs)
 	for lMsgs > 0 {
 		var actM types.Message
-		actM, err = mInput.Read()
+		var ackFn reader.AsyncAckFn
+		actM, ackFn, err = mInput.Read(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -350,7 +414,7 @@ func testNATSStreamMultiplePart(url string, t *testing.T) {
 			}
 			delete(testMsgs, act)
 		}
-		if err = mInput.Acknowledge(nil); err != nil {
+		if err = ackFn(ctx, response.NewAck()); err != nil {
 			t.Error(err)
 		}
 		lMsgs = len(testMsgs)
@@ -359,22 +423,26 @@ func testNATSStreamMultiplePart(url string, t *testing.T) {
 	wg.Wait()
 }
 
-func testNATSStreamDisconnect(url string, t *testing.T) {
-	subject := "benthos_test_disconnect"
+func testKafkaDisconnect(address string, t *testing.T) {
+	topic := "benthos_test_disconnect"
 
-	inConf := reader.NewNATSStreamConfig()
-	inConf.ClientID = "benthos_test_disconn_client"
-	inConf.URLs = []string{url}
-	inConf.Subject = subject
+	inConf := reader.NewKafkaCGConfig()
+	inConf.ClientID = "benthos_test_single_client"
+	inConf.Addresses = []string{address}
+	inConf.Topics = []string{topic}
 
-	outConf := writer.NewNATSStreamConfig()
-	outConf.URLs = []string{url}
-	outConf.Subject = subject
+	outConf := writer.NewKafkaConfig()
+	outConf.TargetVersion = "2.1.0"
+	outConf.Addresses = []string{address}
+	outConf.Topic = topic
 
-	mInput, mOutput, err := createNATSStreamInputOutput(inConf, outConf)
+	mInput, mOutput, err := createKafkaInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*60)
+	defer done()
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -390,7 +458,7 @@ func testNATSStreamDisconnect(url string, t *testing.T) {
 		wg.Done()
 	}()
 
-	if _, err = mInput.Read(); err != types.ErrTypeClosed && err != types.ErrNotConnected {
+	if _, _, err = mInput.Read(ctx); err != types.ErrTypeClosed && err != types.ErrNotConnected {
 		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
 	}
 

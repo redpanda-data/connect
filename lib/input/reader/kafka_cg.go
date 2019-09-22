@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ashley Jeffs
+// Copyright (c) 2019 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,6 @@ package reader
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -41,75 +41,70 @@ import (
 
 //------------------------------------------------------------------------------
 
-// KafkaBalancedGroupConfig contains config fields for Kafka consumer groups.
-type KafkaBalancedGroupConfig struct {
+// KafkaCGGroupConfig contains config fields for Kafka consumer groups.
+type KafkaCGGroupConfig struct {
 	SessionTimeout    string `json:"session_timeout" yaml:"session_timeout"`
 	HeartbeatInterval string `json:"heartbeat_interval" yaml:"heartbeat_interval"`
 	RebalanceTimeout  string `json:"rebalance_timeout" yaml:"rebalance_timeout"`
 }
 
-// NewKafkaBalancedGroupConfig returns a KafkaBalancedGroupConfig with default
+// NewKafkaCGGroupConfig returns a KafkaCGGroupConfig with default
 // values.
-func NewKafkaBalancedGroupConfig() KafkaBalancedGroupConfig {
-	return KafkaBalancedGroupConfig{
+func NewKafkaCGGroupConfig() KafkaCGGroupConfig {
+	return KafkaCGGroupConfig{
 		SessionTimeout:    "10s",
 		HeartbeatInterval: "3s",
 		RebalanceTimeout:  "60s",
 	}
 }
 
-// KafkaBalancedConfig contains configuration for the KafkaBalanced input type.
-type KafkaBalancedConfig struct {
-	Addresses           []string                 `json:"addresses" yaml:"addresses"`
-	ClientID            string                   `json:"client_id" yaml:"client_id"`
-	ConsumerGroup       string                   `json:"consumer_group" yaml:"consumer_group"`
-	Group               KafkaBalancedGroupConfig `json:"group" yaml:"group"`
-	CommitPeriod        string                   `json:"commit_period" yaml:"commit_period"`
-	MaxProcessingPeriod string                   `json:"max_processing_period" yaml:"max_processing_period"`
-	FetchBufferCap      int                      `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
-	Topics              []string                 `json:"topics" yaml:"topics"`
-	StartFromOldest     bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
-	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
-	MaxBatchCount       int                      `json:"max_batch_count" yaml:"max_batch_count"`
-	TLS                 btls.Config              `json:"tls" yaml:"tls"`
-	SASL                SASLConfig               `json:"sasl" yaml:"sasl"`
+// KafkaCGConfig contains configuration for the KafkaCG input type.
+type KafkaCGConfig struct {
+	Addresses           []string           `json:"addresses" yaml:"addresses"`
+	ClientID            string             `json:"client_id" yaml:"client_id"`
+	ConsumerGroup       string             `json:"consumer_group" yaml:"consumer_group"`
+	Group               KafkaCGGroupConfig `json:"group" yaml:"group"`
+	CommitPeriod        string             `json:"commit_period" yaml:"commit_period"`
+	MaxProcessingPeriod string             `json:"max_processing_period" yaml:"max_processing_period"`
+	FetchBufferCap      int                `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
+	Topics              []string           `json:"topics" yaml:"topics"`
+	Batching            batch.PolicyConfig `json:"batching" yaml:"batching"`
+	StartFromOldest     bool               `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TargetVersion       string             `json:"target_version" yaml:"target_version"`
+	TLS                 btls.Config        `json:"tls" yaml:"tls"`
+	SASL                SASLConfig         `json:"sasl" yaml:"sasl"`
 }
 
-// SASLConfig contains configuration for SASL based authentication.
-type SASLConfig struct {
-	Enabled  bool   `json:"enabled" yaml:"enabled"`
-	User     string `json:"user" yaml:"user"`
-	Password string `json:"password" yaml:"password"`
-}
-
-// NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
-func NewKafkaBalancedConfig() KafkaBalancedConfig {
-	return KafkaBalancedConfig{
+// NewKafkaCGConfig creates a new KafkaCGConfig with default values.
+func NewKafkaCGConfig() KafkaCGConfig {
+	batchConf := batch.NewPolicyConfig()
+	batchConf.Count = 1
+	return KafkaCGConfig{
 		Addresses:           []string{"localhost:9092"},
 		ClientID:            "benthos_kafka_input",
 		ConsumerGroup:       "benthos_consumer_group",
-		Group:               NewKafkaBalancedGroupConfig(),
+		Group:               NewKafkaCGGroupConfig(),
 		CommitPeriod:        "1s",
 		MaxProcessingPeriod: "100ms",
 		FetchBufferCap:      256,
 		Topics:              []string{"benthos_stream"},
+		Batching:            batchConf,
 		StartFromOldest:     true,
-		TargetVersion:       sarama.V1_0_0_0.String(),
-		MaxBatchCount:       1,
+		TargetVersion:       sarama.V2_1_0_0.String(),
 		TLS:                 btls.NewConfig(),
 	}
 }
 
 //------------------------------------------------------------------------------
 
-type consumerMessage struct {
-	*sarama.ConsumerMessage
-	highWaterMark int64
+type asyncMessage struct {
+	msg   types.Message
+	ackFn AsyncAckFn
 }
 
-// KafkaBalanced is an input type that reads from a Kafka cluster by balancing
+// KafkaCG is an input type that reads from a Kafka cluster by balancing
 // partitions across other consumers of the same consumer group.
-type KafkaBalanced struct {
+type KafkaCG struct {
 	version   sarama.KafkaVersion
 	tlsConf   *tls.Config
 	addresses []string
@@ -124,31 +119,27 @@ type KafkaBalanced struct {
 	cMut          sync.Mutex
 	groupCancelFn context.CancelFunc
 	session       sarama.ConsumerGroupSession
-	msgChan       chan consumerMessage
-
-	offsets map[string]map[int32]int64
+	msgChan       chan asyncMessage
 
 	mRebalanced metrics.StatCounter
 
-	conf  KafkaBalancedConfig
+	conf  KafkaCGConfig
 	stats metrics.Type
 	log   log.Modular
+	mgr   types.Manager
 }
 
-// NewKafkaBalanced creates a new KafkaBalanced input type.
-func NewKafkaBalanced(
-	conf KafkaBalancedConfig, log log.Modular, stats metrics.Type,
-) (*KafkaBalanced, error) {
-	k := KafkaBalanced{
+// NewKafkaCG creates a new KafkaCG input type.
+func NewKafkaCG(
+	conf KafkaCGConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (*KafkaCG, error) {
+	k := KafkaCG{
 		conf:          conf,
 		stats:         stats,
 		groupCancelFn: func() {},
 		log:           log,
-		offsets:       map[string]map[int32]int64{},
+		mgr:           mgr,
 		mRebalanced:   stats.GetCounter("rebalanced"),
-	}
-	if conf.MaxBatchCount < 1 {
-		return nil, errors.New("max_batch_count must be greater than or equal to 1")
 	}
 	if conf.TLS.Enabled {
 		var err error
@@ -211,7 +202,7 @@ func NewKafkaBalanced(
 //------------------------------------------------------------------------------
 
 // Setup is run at the beginning of a new session, before ConsumeClaim.
-func (k *KafkaBalanced) Setup(sesh sarama.ConsumerGroupSession) error {
+func (k *KafkaCG) Setup(sesh sarama.ConsumerGroupSession) error {
 	k.cMut.Lock()
 	k.session = sesh
 	k.cMut.Unlock()
@@ -221,7 +212,7 @@ func (k *KafkaBalanced) Setup(sesh sarama.ConsumerGroupSession) error {
 
 // Cleanup is run at the end of a session, once all ConsumeClaim goroutines have
 // exited but before the offsets are committed for the very last time.
-func (k *KafkaBalanced) Cleanup(sesh sarama.ConsumerGroupSession) error {
+func (k *KafkaCG) Cleanup(sesh sarama.ConsumerGroupSession) error {
 	k.cMut.Lock()
 	k.session = nil
 	k.cMut.Unlock()
@@ -231,25 +222,91 @@ func (k *KafkaBalanced) Cleanup(sesh sarama.ConsumerGroupSession) error {
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
 // Once the Messages() channel is closed, the Handler must finish its processing
 // loop and exit.
-func (k *KafkaBalanced) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	k.log.Debugf("Consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
-	for {
+func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	k.log.Infof("Consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
+
+	ackChan := make(chan types.Response)
+
+	latestOffset := claim.InitialOffset()
+	batchPolicy, err := batch.NewPolicy(k.conf.Batching, k.mgr, k.log, k.stats)
+	if err != nil {
+		return fmt.Errorf("failed to initialise batch policy: %v", err)
+	}
+	var nextTimedBatchChan <-chan time.Time
+	flushBatch := func() bool {
+		nextTimedBatchChan = nil
 		select {
-		case msg, open := <-claim.Messages():
+		case k.msgChan <- asyncMessage{
+			msg: batchPolicy.Flush(),
+			ackFn: func(ctx context.Context, res types.Response) error {
+				select {
+				case ackChan <- res:
+					return nil
+				case <-ctx.Done():
+				}
+				return types.ErrTimeout
+			},
+		}:
+			select {
+			case res := <-ackChan:
+				if res.Error() != nil {
+					k.log.Errorf("Received error from message batch: %v, shutting down consumer.\n", res.Error())
+					return false
+				}
+				k.session.MarkOffset(claim.Topic(), claim.Partition(), latestOffset+1, "")
+			case <-sess.Context().Done():
+				return false
+			}
+		case <-sess.Context().Done():
+			return false
+		}
+		return true
+	}
+
+	for {
+		if nextTimedBatchChan == nil {
+			if tNext := batchPolicy.UntilNext(); tNext >= 0 {
+				nextTimedBatchChan = time.After(tNext)
+			}
+		}
+		select {
+		case <-nextTimedBatchChan:
+			if !flushBatch() {
+				k.log.Infof("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
+				return nil
+			}
+		case data, open := <-claim.Messages():
 			if !open {
 				return nil
 			}
-			select {
-			case k.msgChan <- consumerMessage{
-				ConsumerMessage: msg,
-				highWaterMark:   claim.HighWaterMarkOffset(),
-			}:
-			case <-sess.Context().Done():
-				k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
-				return nil
+			latestOffset = data.Offset
+			part := message.NewPart(data.Value)
+
+			meta := part.Metadata()
+			for _, hdr := range data.Headers {
+				meta.Set(string(hdr.Key), string(hdr.Value))
+			}
+
+			lag := claim.HighWaterMarkOffset() - data.Offset - 1
+			if lag < 0 {
+				lag = 0
+			}
+
+			meta.Set("kafka_key", string(data.Key))
+			meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
+			meta.Set("kafka_topic", data.Topic)
+			meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
+			meta.Set("kafka_lag", strconv.FormatInt(lag, 10))
+			meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
+
+			if batchPolicy.Add(part) {
+				if !flushBatch() {
+					k.log.Infof("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
+					return nil
+				}
 			}
 		case <-sess.Context().Done():
-			k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
+			k.log.Infof("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
 			return nil
 		}
 	}
@@ -257,17 +314,7 @@ func (k *KafkaBalanced) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sar
 
 //------------------------------------------------------------------------------
 
-func (k *KafkaBalanced) setOffset(topic string, partition int32, offset int64) {
-	var topicMap map[int32]int64
-	var exists bool
-	if topicMap, exists = k.offsets[topic]; !exists {
-		topicMap = map[int32]int64{}
-		k.offsets[topic] = topicMap
-	}
-	topicMap[partition] = offset
-}
-
-func (k *KafkaBalanced) closeGroup() {
+func (k *KafkaCG) closeGroup() {
 	k.cMut.Lock()
 	cancelFn := k.groupCancelFn
 	k.cMut.Unlock()
@@ -279,8 +326,8 @@ func (k *KafkaBalanced) closeGroup() {
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a KafkaBalanced connection.
-func (k *KafkaBalanced) Connect() error {
+// Connect establishes a KafkaCG connection.
+func (k *KafkaCG) Connect(ctx context.Context) error {
 	k.cMut.Lock()
 	defer k.cMut.Unlock()
 	if k.msgChan != nil {
@@ -334,7 +381,7 @@ func (k *KafkaBalanced) Connect() error {
 				return
 			}
 			if gerr != nil {
-				k.log.Errorf("KafkaBalanced message recv error: %v\n", gerr)
+				k.log.Errorf("KafkaCG message recv error: %v\n", gerr)
 				if cerr, ok := gerr.(*sarama.ConsumerError); ok {
 					if cerr.Err == sarama.ErrUnknownMemberId {
 						// Sarama doesn't seem to recover from this error.
@@ -365,7 +412,7 @@ func (k *KafkaBalanced) Connect() error {
 			doneFn()
 			if gerr != nil {
 				if gerr != io.EOF {
-					k.log.Errorf("KafkaBalanced group session error: %v\n", gerr)
+					k.log.Errorf("KafkaCG group session error: %v\n", gerr)
 				}
 				break groupLoop
 			}
@@ -382,98 +429,40 @@ func (k *KafkaBalanced) Connect() error {
 		k.cMut.Unlock()
 	}()
 
-	k.msgChan = make(chan consumerMessage, k.conf.MaxBatchCount)
-	k.offsets = map[string]map[int32]int64{}
+	k.msgChan = make(chan asyncMessage, 0)
 
-	k.log.Infof("Receiving KafkaBalanced messages from addresses: %s\n", k.addresses)
+	k.log.Infof("Receiving kafka messages from brokers %s as group '%v'\n", k.addresses, k.conf.ConsumerGroup)
 	return nil
 }
 
-// Read attempts to read a message from a KafkaBalanced topic.
-func (k *KafkaBalanced) Read() (types.Message, error) {
+// Read attempts to read a message from a KafkaCG topic.
+func (k *KafkaCG) Read(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, types.ErrNotConnected
+		return nil, nil, types.ErrNotConnected
 	}
 
-	msg := message.New(nil)
-	addPart := func(data consumerMessage) {
-		part := message.NewPart(data.Value)
-
-		meta := part.Metadata()
-		for _, hdr := range data.Headers {
-			meta.Set(string(hdr.Key), string(hdr.Value))
+	select {
+	case m, open := <-k.msgChan:
+		if !open {
+			return nil, nil, types.ErrNotConnected
 		}
-
-		lag := data.highWaterMark - data.Offset - 1
-		if lag < 0 {
-			lag = 0
-		}
-
-		meta.Set("kafka_key", string(data.Key))
-		meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
-		meta.Set("kafka_topic", data.Topic)
-		meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
-		meta.Set("kafka_lag", strconv.FormatInt(lag, 10))
-		meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
-
-		msg.Append(part)
-
-		k.setOffset(data.Topic, data.Partition, data.Offset)
+		return m.msg, m.ackFn, nil
+	case <-ctx.Done():
 	}
-
-	data, open := <-msgChan
-	if !open {
-		return nil, types.ErrNotConnected
-	}
-	addPart(data)
-
-batchLoop:
-	for i := 1; i < k.conf.MaxBatchCount; i++ {
-		select {
-		case data, open = <-msgChan:
-			if !open {
-				return nil, types.ErrNotConnected
-			}
-			addPart(data)
-		default:
-			// Drained the buffer
-			break batchLoop
-		}
-	}
-
-	if msg.Len() == 0 {
-		return nil, types.ErrTimeout
-	}
-	return msg, nil
+	return nil, nil, types.ErrTimeout
 }
 
-// Acknowledge instructs whether the current offset should be committed.
-func (k *KafkaBalanced) Acknowledge(err error) error {
-	if err == nil {
-		k.cMut.Lock()
-		if k.session != nil {
-			for topic, v := range k.offsets {
-				for part, offset := range v {
-					k.session.MarkOffset(topic, part, offset+1, "")
-				}
-			}
-		}
-		k.cMut.Unlock()
-	}
-	return nil
-}
-
-// CloseAsync shuts down the KafkaBalanced input and stops processing requests.
-func (k *KafkaBalanced) CloseAsync() {
+// CloseAsync shuts down the KafkaCG input and stops processing requests.
+func (k *KafkaCG) CloseAsync() {
 	go k.closeGroup()
 }
 
-// WaitForClose blocks until the KafkaBalanced input has closed down.
-func (k *KafkaBalanced) WaitForClose(timeout time.Duration) error {
+// WaitForClose blocks until the KafkaCG input has closed down.
+func (k *KafkaCG) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 

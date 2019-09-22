@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `redis` processor.
 - New `kinesis_firehose` output.
+- New experimental `kafka_cg` input.
 - Go API: The `metrics.Local` aggregator now supports labels.
 
 ### Fixed
