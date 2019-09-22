@@ -294,6 +294,15 @@ func (k *Kafka) Write(msg types.Message) error {
 			return err
 		}
 		<-time.After(tNext)
+
+		// Recheck connection is alive
+		k.connMut.RLock()
+		producer = k.producer
+		k.connMut.RUnlock()
+
+		if producer == nil {
+			return types.ErrNotConnected
+		}
 		err = producer.SendMessages(msgs)
 	}
 
@@ -303,12 +312,14 @@ func (k *Kafka) Write(msg types.Message) error {
 
 // CloseAsync shuts down the Kafka writer and stops processing messages.
 func (k *Kafka) CloseAsync() {
-	k.connMut.Lock()
-	if nil != k.producer {
-		k.producer.Close()
-		k.producer = nil
-	}
-	k.connMut.Unlock()
+	go func() {
+		k.connMut.Lock()
+		if nil != k.producer {
+			k.producer.Close()
+			k.producer = nil
+		}
+		k.connMut.Unlock()
+	}()
 }
 
 // WaitForClose blocks until the Kafka writer has closed down.
