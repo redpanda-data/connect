@@ -32,6 +32,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/ory/dockertest"
 	"github.com/ory/dockertest/docker"
@@ -49,8 +50,7 @@ func TestKafkaIntegration(t *testing.T) {
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
-	// Kafka is an absolute unit and takes forever to kick off.
-	pool.MaxWait = time.Second * 60 * 1
+	pool.MaxWait = time.Minute
 
 	zkResource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "wurstmeister/zookeeper",
@@ -91,12 +91,14 @@ func TestKafkaIntegration(t *testing.T) {
 	}()
 	kafkaResource.Expire(900)
 
-	address := "localhost:9092"
+	address := fmt.Sprintf("localhost:%v", "9092") //kafkaResource.GetPort("9092/tcp"))
 	if err = pool.Retry(func() error {
+		log := log.Noop()
 		outConf := writer.NewKafkaConfig()
+		outConf.TargetVersion = "2.1.0"
 		outConf.Addresses = []string{address}
 		outConf.Topic = "pls_ignore_just_testing_connection"
-		tmpOutput, serr := writer.NewKafka(outConf, log.Noop(), metrics.Noop())
+		tmpOutput, serr := writer.NewKafka(outConf, log, metrics.Noop())
 		if serr != nil {
 			return serr
 		}
@@ -114,17 +116,15 @@ func TestKafkaIntegration(t *testing.T) {
 	t.Run("TestKafkaSinglePart", func(te *testing.T) {
 		testKafkaSinglePart(address, te)
 	})
-	/*
-		t.Run("TestKafkaResumeDurable", func(te *testing.T) {
-			testKafkaResumeDurable(address, te)
-		})
-		t.Run("TestKafkaMultiplePart", func(te *testing.T) {
-			testKafkaMultiplePart(address, te)
-		})
-		t.Run("TestKafkaDisconnect", func(te *testing.T) {
-			testKafkaDisconnect(address, te)
-		})
-	*/
+	t.Run("TestKafkaResumeDurable", func(te *testing.T) {
+		testKafkaResumeDurable(address, te)
+	})
+	t.Run("TestKafkaMultiplePart", func(te *testing.T) {
+		testKafkaMultiplePart(address, te)
+	})
+	t.Run("TestKafkaDisconnect", func(te *testing.T) {
+		testKafkaDisconnect(address, te)
+	})
 }
 
 func createKafkaInputOutput(
@@ -158,6 +158,7 @@ func testKafkaSinglePart(address string, t *testing.T) {
 	inConf.Topics = []string{topic}
 
 	outConf := writer.NewKafkaConfig()
+	outConf.TargetVersion = "2.1.0"
 	outConf.Addresses = []string{address}
 	outConf.Topic = topic
 
@@ -213,8 +214,14 @@ func testKafkaSinglePart(address string, t *testing.T) {
 				t.Errorf("Unexpected message: %v", act)
 			}
 			delete(testMsgs, act)
+			if act = actM.Get(0).Metadata().Get("foo"); act != "bar" {
+				t.Errorf("Wrong metadata returned: %v != bar", act)
+			}
+			if act = actM.Get(0).Metadata().Get("root_foo"); act != "bar2" {
+				t.Errorf("Wrong metadata returned: %v != bar2", act)
+			}
 		}
-		if err = ackFn(ctx, nil); err != nil {
+		if err = ackFn(ctx, response.NewAck()); err != nil {
 			t.Error(err)
 		}
 		lMsgs = len(testMsgs)
@@ -223,19 +230,18 @@ func testKafkaSinglePart(address string, t *testing.T) {
 	wg.Wait()
 }
 
-/*
-func testKafkaResumeDurable(url string, t *testing.T) {
-	subject := "benthos_test_resume_durable"
+func testKafkaResumeDurable(address string, t *testing.T) {
+	topic := "benthos_test_resume_durable"
 
-	inConf := reader.NewKafkaConfig()
-	inConf.ClientID = "benthos_test_durable_client"
-	inConf.URLs = []string{url}
-	inConf.Subject = subject
-	inConf.UnsubOnClose = false
+	inConf := reader.NewKafkaCGConfig()
+	inConf.ClientID = "benthos_test_resume_durable"
+	inConf.Addresses = []string{address}
+	inConf.Topics = []string{topic}
 
 	outConf := writer.NewKafkaConfig()
-	outConf.URLs = []string{url}
-	outConf.Subject = subject
+	outConf.TargetVersion = "2.1.0"
+	outConf.Addresses = []string{address}
+	outConf.Topic = topic
 
 	mInput, mOutput, err := createKafkaInputOutput(inConf, outConf)
 	if err != nil {
@@ -252,6 +258,9 @@ func testKafkaResumeDurable(url string, t *testing.T) {
 			t.Error(cErr)
 		}
 	}()
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*60)
+	defer done()
 
 	testMsgs := map[string]struct{}{}
 	N := 50
@@ -271,7 +280,8 @@ func testKafkaResumeDurable(url string, t *testing.T) {
 
 	for len(testMsgs) > 0 {
 		var actM types.Message
-		actM, err = mInput.Read()
+		var ackFn reader.AsyncAckFn
+		actM, ackFn, err = mInput.Read(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -281,7 +291,7 @@ func testKafkaResumeDurable(url string, t *testing.T) {
 			}
 			delete(testMsgs, act)
 		}
-		if err = mInput.Acknowledge(nil); err != nil {
+		if err = ackFn(ctx, response.NewAck()); err != nil {
 			t.Error(err)
 		}
 	}
@@ -304,16 +314,17 @@ func testKafkaResumeDurable(url string, t *testing.T) {
 		}
 	}
 
-	if mInput, err = reader.NewKafka(inConf, log.Noop(), metrics.Noop()); err != nil {
+	if mInput, err = reader.NewKafkaCG(inConf, nil, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
-	if err = mInput.Connect(); err != nil {
+	if err = mInput.Connect(ctx); err != nil {
 		t.Fatal(err)
 	}
 
 	for len(testMsgs) > 1 {
 		var actM types.Message
-		actM, err = mInput.Read()
+		var ackFn reader.AsyncAckFn
+		actM, ackFn, err = mInput.Read(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -323,23 +334,24 @@ func testKafkaResumeDurable(url string, t *testing.T) {
 			}
 			delete(testMsgs, act)
 		}
-		if err = mInput.Acknowledge(nil); err != nil {
+		if err = ackFn(ctx, response.NewAck()); err != nil {
 			t.Error(err)
 		}
 	}
 }
 
-func testKafkaMultiplePart(url string, t *testing.T) {
-	subject := "benthos_test_multi"
+func testKafkaMultiplePart(address string, t *testing.T) {
+	topic := "benthos_test_multi"
 
-	inConf := reader.NewKafkaConfig()
-	inConf.ClientID = "benthos_test_multi_client"
-	inConf.URLs = []string{url}
-	inConf.Subject = subject
+	inConf := reader.NewKafkaCGConfig()
+	inConf.ClientID = "benthos_test_resume_durable"
+	inConf.Addresses = []string{address}
+	inConf.Topics = []string{topic}
 
 	outConf := writer.NewKafkaConfig()
-	outConf.URLs = []string{url}
-	outConf.Subject = subject
+	outConf.TargetVersion = "2.1.0"
+	outConf.Addresses = []string{address}
+	outConf.Topic = topic
 
 	mInput, mOutput, err := createKafkaInputOutput(inConf, outConf)
 	if err != nil {
@@ -361,6 +373,9 @@ func testKafkaMultiplePart(url string, t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(N)
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*60)
+	defer done()
 
 	testMsgs := map[string]struct{}{}
 	for i := 0; i < N; i++ {
@@ -388,7 +403,8 @@ func testKafkaMultiplePart(url string, t *testing.T) {
 	lMsgs := len(testMsgs)
 	for lMsgs > 0 {
 		var actM types.Message
-		actM, err = mInput.Read()
+		var ackFn reader.AsyncAckFn
+		actM, ackFn, err = mInput.Read(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -398,7 +414,7 @@ func testKafkaMultiplePart(url string, t *testing.T) {
 			}
 			delete(testMsgs, act)
 		}
-		if err = mInput.Acknowledge(nil); err != nil {
+		if err = ackFn(ctx, response.NewAck()); err != nil {
 			t.Error(err)
 		}
 		lMsgs = len(testMsgs)
@@ -407,22 +423,26 @@ func testKafkaMultiplePart(url string, t *testing.T) {
 	wg.Wait()
 }
 
-func testKafkaDisconnect(url string, t *testing.T) {
-	subject := "benthos_test_disconnect"
+func testKafkaDisconnect(address string, t *testing.T) {
+	topic := "benthos_test_disconnect"
 
-	inConf := reader.NewKafkaConfig()
-	inConf.ClientID = "benthos_test_disconn_client"
-	inConf.URLs = []string{url}
-	inConf.Subject = subject
+	inConf := reader.NewKafkaCGConfig()
+	inConf.ClientID = "benthos_test_single_client"
+	inConf.Addresses = []string{address}
+	inConf.Topics = []string{topic}
 
 	outConf := writer.NewKafkaConfig()
-	outConf.URLs = []string{url}
-	outConf.Subject = subject
+	outConf.TargetVersion = "2.1.0"
+	outConf.Addresses = []string{address}
+	outConf.Topic = topic
 
 	mInput, mOutput, err := createKafkaInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*60)
+	defer done()
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -438,10 +458,9 @@ func testKafkaDisconnect(url string, t *testing.T) {
 		wg.Done()
 	}()
 
-	if _, err = mInput.Read(); err != types.ErrTypeClosed && err != types.ErrNotConnected {
+	if _, _, err = mInput.Read(ctx); err != types.ErrTypeClosed && err != types.ErrNotConnected {
 		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
 	}
 
 	wg.Wait()
 }
-*/

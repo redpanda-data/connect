@@ -248,7 +248,11 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 			},
 		}:
 			select {
-			case <-ackChan:
+			case res := <-ackChan:
+				if res.Error() != nil {
+					k.log.Errorf("Received error from message batch: %v, shutting down consumer.\n", res.Error())
+					return false
+				}
 				k.session.MarkOffset(claim.Topic(), claim.Partition(), latestOffset+1, "")
 			case <-sess.Context().Done():
 				return false
