@@ -23,6 +23,8 @@ package integration
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -38,8 +40,22 @@ import (
 	"github.com/ory/dockertest/docker"
 )
 
+func getFreePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	listener, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer listener.Close()
+	return listener.Addr().(*net.TCPAddr).Port, nil
+}
+
 func TestKafkaIntegration(t *testing.T) {
-	t.Skip("Need to work out how to overcome Kafkas advertised port")
+	// t.Skip("Need to work out how to overcome Kafkas advertised port")
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -51,6 +67,14 @@ func TestKafkaIntegration(t *testing.T) {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
 	pool.MaxWait = time.Minute
+
+	networks, _ := pool.Client.ListNetworks()
+	hostIp := ""
+	for _, network := range networks {
+		if network.Name == "bridge" {
+			hostIp = network.IPAM.Config[0].Gateway
+		}
+	}
 
 	zkResource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "wurstmeister/zookeeper",
@@ -65,33 +89,43 @@ func TestKafkaIntegration(t *testing.T) {
 		}
 	}()
 	zkResource.Expire(900)
-
 	zkAddr := fmt.Sprintf("%v:2181", zkResource.Container.NetworkSettings.IPAddress)
+
+	kafkaPort, err := getFreePort()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kafkaPortStr := strconv.Itoa(kafkaPort)
+	env := []string{
+		"KAFKA_ADVERTISED_HOST_NAME=" + hostIp,
+		"KAFKA_BROKER_ID=1",
+		"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=OUTSIDE:PLAINTEXT,INSIDE:PLAINTEXT",
+		"KAFKA_LISTENERS=OUTSIDE://:" + kafkaPortStr + ",INSIDE://:9092",
+		"KAFKA_ADVERTISED_LISTENERS=OUTSIDE://" + hostIp + ":" + kafkaPortStr + ",INSIDE://:9092",
+		"KAFKA_INTER_BROKER_LISTENER_NAME=INSIDE",
+		"KAFKA_ZOOKEEPER_CONNECT=" + zkAddr,
+	}
+
 	kafkaResource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "wurstmeister/kafka",
 		Tag:          "latest",
-		ExposedPorts: []string{"9092"},
+		ExposedPorts: []string{kafkaPortStr + "/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092": []docker.PortBinding{
-				{HostPort: "9092"},
-			},
+			docker.Port(kafkaPortStr + "/tcp"): {{HostIP: "", HostPort: kafkaPortStr}},
 		},
-		Env: []string{
-			"KAFKA_ADVERTISED_HOST_NAME=localhost",
-			fmt.Sprintf("KAFKA_ZOOKEEPER_CONNECT=%v", zkAddr),
-		},
+		Env: env,
 	})
 	if err != nil {
 		t.Fatalf("Could not start kafka resource: %s", err)
 	}
 	defer func() {
 		if err = pool.Purge(kafkaResource); err != nil {
-			t.Logf("Failed to clean up kafka docker resource: %v", err)
+			t.Logf("Failed to clean up kafka docker re2769a1612fb8source: %v", err)
 		}
 	}()
 	kafkaResource.Expire(900)
 
-	address := fmt.Sprintf("localhost:%v", "9092") //kafkaResource.GetPort("9092/tcp"))
+	address := fmt.Sprintf("%v:%v", hostIp, kafkaPortStr)
 	if err = pool.Retry(func() error {
 		log := log.Noop()
 		outConf := writer.NewKafkaConfig()
