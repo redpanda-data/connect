@@ -247,33 +247,19 @@ batch:
 Reads a number of discrete messages, buffering (but not acknowledging) the
 message parts until the next batch is complete.
 
-Batches are considered complete and will be flushed downstream when either of
-the following conditions are met:
-
-- The `byte_size` field is non-zero and the total size of the batch in
-  bytes matches or exceeds it (disregarding metadata.)
-- The `count` field is non-zero and the total number of messages in
-  the batch matches or exceeds it.
-- A message added to the batch causes the condition to resolve `true`.
-- The `period` field is non-empty and the time since the last batch
-  exceeds its value.
-
 Once a batch is complete it is sent through the pipeline. After reaching a
 destination the acknowledgment is sent out for all messages inside the batch at
 the same time, preserving at-least-once delivery guarantees.
 
-This processor only checks batch conditions when a new message is added, meaning
-a pending batch can last beyond the specified period if no messages are added
-since the period was reached. If your input stream is non-continuous and you
-need to guarantee the period is respected you should instead use a
-[`memory`](../buffers/README.md#memory) buffer with a batch policy.
+The batching logic of this processor follows the same rules as any other
+[batch policy](../batching.md#batch-policy). However, this processor only checks
+batch conditions when a new message is added, meaning a pending batch can last
+beyond the specified period if no messages are added since the period was
+reached.
 
-When a batch is sent to an output the behaviour will differ depending on the
-protocol. If the output type supports multipart messages then the batch is sent
-as a single message with multiple parts. If the output only supports single part
-messages then the parts will be sent as a batch of single part messages. If the
-output supports neither multipart or batches of messages then Benthos falls back
-to sending them individually.
+If your input does not support batch policies, its feed is non-continuous and
+you need to guarantee the batch period is respected you should instead use a
+[`memory`](../buffers/README.md#memory) buffer with a batch policy.
 
 ### WARNING
 

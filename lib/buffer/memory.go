@@ -47,7 +47,8 @@ significantly below the amount of RAM available.
 
 ### Batching
 
-It is possible to batch up messages sent from this buffer using a batch policy.` + batch.PolicyDoc + `
+It is possible to batch up messages sent from this buffer using a
+[batch policy](../batching.md#batch-policy).
 
 This is a more powerful way of batching messages than the
 ` + "[`batch`](../processors/README.md#batch)" + ` processor, as it does not

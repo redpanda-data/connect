@@ -32,20 +32,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-// PolicyDoc is a markdown document explaining the fields of a Benthos batch
-// policy.
-var PolicyDoc = `
-Batches are considered complete and will be flushed downstream when either of
-the following conditions are met:
-
-- The ` + "`byte_size`" + ` field is non-zero and the total size of the batch in
-  bytes matches or exceeds it (disregarding metadata.)
-- The ` + "`count`" + ` field is non-zero and the total number of messages in
-  the batch matches or exceeds it.
-- A message added to the batch causes the condition to resolve ` + "`true`" + `.
-- The ` + "`period`" + ` field is non-empty and the time since the last batch
-  exceeds its value.`
-
 // SanitisePolicyConfig returns a policy config structure ready to be marshalled
 // with irrelevant fields omitted.
 func SanitisePolicyConfig(policy PolicyConfig) (interface{}, error) {

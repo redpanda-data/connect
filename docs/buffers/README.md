@@ -75,17 +75,8 @@ significantly below the amount of RAM available.
 
 ### Batching
 
-It is possible to batch up messages sent from this buffer using a batch policy.
-Batches are considered complete and will be flushed downstream when either of
-the following conditions are met:
-
-- The `byte_size` field is non-zero and the total size of the batch in
-  bytes matches or exceeds it (disregarding metadata.)
-- The `count` field is non-zero and the total number of messages in
-  the batch matches or exceeds it.
-- A message added to the batch causes the condition to resolve `true`.
-- The `period` field is non-empty and the time since the last batch
-  exceeds its value.
+It is possible to batch up messages sent from this buffer using a
+[batch policy](../batching.md#batch-policy).
 
 This is a more powerful way of batching messages than the
 [`batch`](../processors/README.md#batch) processor, as it does not

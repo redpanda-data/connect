@@ -47,9 +47,9 @@ Partitions consumed by this client can be processed in parallel, meaning a
 single instance of this input can utilise any number of threads within a
 ` + "`pipeline`" + ` section of a config.
 
-WARNING: It is NOT safe to use a ` + "`batch`" + ` processor with this input, and it
-will shut down if that is the case. Instead, configure an appropriate
-[batch policy](../batching.md#batch_policy).
+WARNING: It is NOT safe to use a ` + "`batch`" + ` processor with this input,
+and it will shut down if that is the case. Instead, configure an appropriate
+[batch policy](../batching.md#batch-policy).
 
 The field ` + "`max_processing_period`" + ` should be set above the maximum
 estimated time taken to process a message.

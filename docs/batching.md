@@ -19,24 +19,50 @@ messages and message batches are interchangeable within Benthos.
 
 ## Creating Batches
 
-Most input types have some way of creating batches of messages from their input.
-For example, the [`kafka`][kafka] and [`kafka_balanced`][kafka_balanced] inputs
-have the field `max_batch_count`, which specifies the maximum count of
-prefetched messages each batch should contain (defaults at 1). These input
-specific methods are usually the most efficient and should therefore be
-preferred.
+Most input types have some way of creating batches of messages from their feeds.
+These input specific methods are usually the most efficient and should therefore
+be preferred.
+
+### Batch Policy
+
+When an input component has a config field `batching` that means it supports
+a batch policy. This is a mechanism that allows you to configure exactly how
+your batching should work.
+
+Batches are considered complete and will be flushed downstream when either of
+the following conditions are met:
+
+- The `byte_size` field is non-zero and the total size of the batch in
+  bytes matches or exceeds it (disregarding metadata.)
+- The `count` field is non-zero and the total number of messages in
+  the batch matches or exceeds it.
+- A message added to the batch causes the [`condition`][conditions] to resolve
+  to `true`.
+- The `period` field is non-empty and the time since the last batch exceeds its
+  value.
+
+### Other Fields
+
+Sometimes an input doesn't support batch policies but has other less powerful
+ways of aggregating batches. For example, the [`kafka`][kafka] input has the
+field `max_batch_count`, which specifies the maximum count of prefetched
+messages each batch should contain (defaults at 1).
+
+### Batch Processors
 
 Alternatively, there are also [processors][processors] within Benthos that can
 expand and contract batches, these are the [`batch`][batch] and [`split`][split]
 processors.
 
-The `batch` processor continuously reads messages until a target size has been
-reached, then the batch continues through the pipeline.
+The `batch` processor follows the same rules as any other
+[batch policy](#batch-policy). However, the rules are only checked when a new
+message is added, meaning a pending batch can last beyond the specified period
+if no messages are added since the period was reached.
 
-As messages are read and stored in a batch the input they originated from is
-told to grab the next message but defer from acknowledging the current one, this
-allows the entire batch of messages to be acknowledged at the same time and only
-when they have reached their final destination.
+As messages are read and stored within a batch processor the input they
+originated from is told to grab the next message but defer from acknowledging
+the current one, this allows the entire batch of messages to be acknowledged at
+the same time and only when they have reached their final destination.
 
 It is good practice to always expand or contract batches within the `input`
 section. Like this, for example:
@@ -96,6 +122,7 @@ batch of one message. Whatever messages result from the child processors will
 continue as their own batch.
 
 [processors]: ./processors/README.md
+[conditions]: ./conditions/README.md
 [batch]: ./processors/README.md#batch
 [split]: ./processors/README.md#split
 [archive]: ./processors/README.md#archive
