@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.1.0 - 2019-09-23
+
 ### Added
 
 - New `redis` processor.
