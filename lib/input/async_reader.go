@@ -180,7 +180,7 @@ func (r *AsyncReader) loop() {
 		}
 
 		if err != nil || msg == nil {
-			if err != types.ErrTimeout && err != types.ErrNotConnected {
+			if err != nil && err != types.ErrTimeout && err != types.ErrNotConnected {
 				r.log.Errorf("Failed to read message: %v\n", err)
 			}
 			if !r.connThrot.Retry() {

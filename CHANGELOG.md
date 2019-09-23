@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Prevented `kafka_cg` input lock up after batch policy period trigger with no
+  backlog.
+
 ## 3.1.0 - 2019-09-23
 
 ### Added

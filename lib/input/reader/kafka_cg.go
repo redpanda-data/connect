@@ -223,7 +223,9 @@ func (k *KafkaCG) Cleanup(sesh sarama.ConsumerGroupSession) error {
 // Once the Messages() channel is closed, the Handler must finish its processing
 // loop and exit.
 func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	k.log.Infof("Consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
+	topic, partition := claim.Topic(), claim.Partition()
+	k.log.Debugf("Consuming messages from topic '%v' partition '%v'\n", topic, partition)
+	defer k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", topic, partition)
 
 	ackChan := make(chan types.Response)
 
@@ -235,9 +237,13 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 	var nextTimedBatchChan <-chan time.Time
 	flushBatch := func() bool {
 		nextTimedBatchChan = nil
+		msg := batchPolicy.Flush()
+		if msg == nil {
+			return true
+		}
 		select {
 		case k.msgChan <- asyncMessage{
-			msg: batchPolicy.Flush(),
+			msg: msg,
 			ackFn: func(ctx context.Context, res types.Response) error {
 				select {
 				case ackChan <- res:
@@ -272,7 +278,6 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 		select {
 		case <-nextTimedBatchChan:
 			if !flushBatch() {
-				k.log.Infof("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
 				return nil
 			}
 		case data, open := <-claim.Messages():
@@ -301,12 +306,10 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 
 			if batchPolicy.Add(part) {
 				if !flushBatch() {
-					k.log.Infof("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
 					return nil
 				}
 			}
 		case <-sess.Context().Done():
-			k.log.Infof("Stopped consuming messages from topic '%v' partition '%v'\n", claim.Topic(), claim.Partition())
 			return nil
 		}
 	}
