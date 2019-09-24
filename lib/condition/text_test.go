@@ -480,6 +480,127 @@ func TestTextCheck(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "is ip pos 1",
+			fields: fields{
+				operator: "is",
+				arg:      "ip",
+			},
+			arg: [][]byte{
+				[]byte("8.8.8.8"),
+			},
+			want: true,
+		},
+		{
+			name: "is ip pos 2",
+			fields: fields{
+				operator: "is",
+				arg:      "ip",
+			},
+			arg: [][]byte{
+				[]byte("ffff:0000:0000:0000:0000:ffff:0100:0000"),
+			},
+			want: true,
+		},
+		{
+			name: "is ip neg 1",
+			fields: fields{
+				operator: "is",
+				arg:      "ip",
+			},
+			arg: [][]byte{
+				[]byte("42.42.42.420"),
+			},
+			want: false,
+		},
+		{
+			name: "is ip neg 2",
+			fields: fields{
+				operator: "is",
+				arg:      "ip",
+			},
+			arg: [][]byte{
+				[]byte("foo"),
+			},
+			want: false,
+		},
+		{
+			name: "is ip neg 3",
+			fields: fields{
+				operator: "is",
+				arg:      "ip",
+			},
+			arg: [][]byte{
+				[]byte("1.2.3"),
+			},
+			want: false,
+		},
+		{
+			name: "is ipv4 pos 1",
+			fields: fields{
+				operator: "is",
+				arg:      "ipv4",
+			},
+			arg: [][]byte{
+				[]byte("1.2.3.4"),
+			},
+			want: true,
+		},
+		{
+			name: "is ipv4 neg 1",
+			fields: fields{
+				operator: "is",
+				arg:      "ipv4",
+			},
+			arg: [][]byte{
+				[]byte("1.2.3"),
+			},
+			want: false,
+		},
+		{
+			name: "is ipv4 neg 2",
+			fields: fields{
+				operator: "is",
+				arg:      "ipv4",
+			},
+			arg: [][]byte{
+				[]byte("0000:0000:0000:0000:0000:ffff:0100:0000"),
+			},
+			want: false,
+		},
+		{
+			name: "is ipv6 pos 1",
+			fields: fields{
+				operator: "is",
+				arg:      "ipv6",
+			},
+			arg: [][]byte{
+				[]byte("ffff:0000:0000:0000:0000:ffff:0100:0000"),
+			},
+			want: true,
+		},
+		{
+			name: "is ipv6 neg 1",
+			fields: fields{
+				operator: "is",
+				arg:      "ipv6",
+			},
+			arg: [][]byte{
+				[]byte("42.42.42.42"),
+			},
+			want: false,
+		},
+		{
+			name: "is ipv6 neg 2",
+			fields: fields{
+				operator: "is",
+				arg:      "ipv6",
+			},
+			arg: [][]byte{
+				[]byte("foo"),
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
