@@ -105,10 +105,25 @@ func NewLocal() *Local {
 
 // GetCounters returns a map of metric paths to counters.
 func (l *Local) GetCounters() map[string]int64 {
+	return l.getCounters(false)
+}
+
+// FlushCounters returns a map of the current state of the metrics paths to
+// counters and then resets the counters to 0
+func (l *Local) FlushCounters() map[string]int64 {
+	return l.getCounters(true)
+}
+
+// getCounters internal method that returns a copy of the counter maps before
+// optionally reseting the counter as determined by the reset value passed in
+func (l *Local) getCounters(reset bool) map[string]int64 {
 	l.Lock()
 	localFlatCounters := make(map[string]int64, len(l.flatCounters))
 	for k := range l.flatCounters {
 		localFlatCounters[k] = atomic.LoadInt64(l.flatCounters[k].Value)
+		if reset {
+			atomic.StoreInt64(l.flatCounters[k].Value, 0)
+		}
 	}
 	l.Unlock()
 	return localFlatCounters
@@ -134,10 +149,25 @@ func (l *Local) GetCountersWithLabels() map[string]LocalStat {
 
 // GetTimings returns a map of metric paths to timers.
 func (l *Local) GetTimings() map[string]int64 {
+	return l.getTimings(false)
+}
+
+// FlushTimings returns a map of the current state of the metrics paths to
+// counters and then resets the counters to 0
+func (l *Local) FlushTimings() map[string]int64 {
+	return l.getTimings(true)
+}
+
+// FlushTimings returns a map of the current state of the metrics paths to
+// counters and then resets the counters to 0
+func (l *Local) getTimings(reset bool) map[string]int64 {
 	l.Lock()
 	localFlatTimings := make(map[string]int64, len(l.flatTimings))
 	for k := range l.flatTimings {
 		localFlatTimings[k] = atomic.LoadInt64(l.flatTimings[k].Value)
+		if reset {
+			atomic.StoreInt64(l.flatTimings[k].Value, 0)
+		}
 	}
 	l.Unlock()
 	return localFlatTimings

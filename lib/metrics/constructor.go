@@ -61,6 +61,7 @@ const (
 	TypePrometheus = "prometheus"
 	TypeRename     = "rename"
 	TypeStatsd     = "statsd"
+	TypeStdout     = "stdout"
 	TypeWhiteList  = "whitelist"
 )
 
@@ -75,6 +76,7 @@ type Config struct {
 	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Rename     RenameConfig     `json:"rename" yaml:"rename"`
 	Statsd     StatsdConfig     `json:"statsd" yaml:"statsd"`
+	Stdout     StdoutConfig     `json:"stdout" yaml:"stdout"`
 	Whitelist  WhitelistConfig  `json:"whitelist" yaml:"whitelist"`
 }
 
@@ -87,6 +89,7 @@ func NewConfig() Config {
 		Prometheus: NewPrometheusConfig(),
 		Rename:     NewRenameConfig(),
 		Statsd:     NewStatsdConfig(),
+		Stdout:     NewStdoutConfig(),
 		Whitelist:  NewWhitelistConfig(),
 	}
 }
