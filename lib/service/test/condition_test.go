@@ -22,6 +22,7 @@ package test
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -149,6 +150,56 @@ func TestContentCondition(t *testing.T) {
 			name:     "negative 1",
 			input:    "foo",
 			expected: errors.New("content mismatch, expected 'foo bar', got 'foo'"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(tt *testing.T) {
+			actErr := cond.Check(message.NewPart([]byte(test.input)))
+			if test.expected == nil && actErr == nil {
+				return
+			}
+			if test.expected == nil && actErr != nil {
+				tt.Errorf("Wrong result, expected %v, received %v", test.expected, actErr)
+				return
+			}
+			if test.expected != nil && actErr == nil {
+				tt.Errorf("Wrong result, expected %v, received %v", test.expected, actErr)
+				return
+			}
+			if exp, act := test.expected.Error(), actErr.Error(); exp != act {
+				tt.Errorf("Wrong result, expected %v, received %v", act, exp)
+			}
+		})
+	}
+}
+
+func TestContentMatchesCondition(t *testing.T) {
+
+	match_pattern := "^foo [a-z]+ bar$"
+	cond := ContentMatchesCondition(match_pattern)
+
+	type testCase struct {
+		name     string
+		input    string
+		expected error
+	}
+
+	tests := []testCase{
+		{
+			name:     "positive 1",
+			input:    "foo and bar",
+			expected: nil,
+		},
+		{
+			name:     "negative 1",
+			input:    "foo",
+			expected: fmt.Errorf("content mismatch, expected '%s', got 'foo'", match_pattern),
+		},
+		{
+			name:     "negative 2",
+			input:    "foo & bar",
+			expected: fmt.Errorf("content mismatch, expected '%s', got 'foo & bar'", match_pattern),
 		},
 	}
 
