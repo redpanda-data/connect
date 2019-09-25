@@ -80,6 +80,14 @@ content_equals: example content
 
 Checks the full raw contents of a message against a value.
 
+### `content_matches`
+
+```yaml
+content_matches: "^foo [a-z]+ bar$"
+```
+
+Checks whether the full raw contents of a message matches a regular expression (re2).
+
 ### `metadata_equals`
 
 ```yaml

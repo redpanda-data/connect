@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `is` operator added to `text` condition.
+- New config unit test condition `content_matches`.
 
 ## 3.1.1 - 2019-09-23
 
