@@ -1004,6 +1004,12 @@ json:
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
 contains keys that aren't strings those fields will be ignored.
 
+#### `split`
+
+Splits a string field by a value and replaces the original string with an array
+containing the results of the split. This operator requires both the path value
+and the contents of the `value` field to be strings.
+
 ## `lambda`
 
 ``` yaml

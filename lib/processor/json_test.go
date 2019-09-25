@@ -274,6 +274,81 @@ func TestJSONAppend(t *testing.T) {
 	}
 }
 
+func TestJSONSplit(t *testing.T) {
+	type jTest struct {
+		name   string
+		path   string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "split 1",
+			path:   "foo.bar",
+			value:  `","`,
+			input:  `{"foo":{"bar":"1,2,3"}}`,
+			output: `{"foo":{"bar":["1","2","3"]}}`,
+		},
+		{
+			name:   "split 2",
+			path:   "foo.bar",
+			value:  `"-"`,
+			input:  `{"foo":{"bar":"1-2-3"}}`,
+			output: `{"foo":{"bar":["1","2","3"]}}`,
+		},
+		{
+			name:   "split 3",
+			path:   "foo.bar",
+			value:  `"-"`,
+			input:  `{"foo":{"bar":20}}`,
+			output: `{"foo":{"bar":20}}`,
+		},
+		{
+			name:   "split 4",
+			path:   "foo.bar",
+			value:  `","`,
+			input:  `{"foo":{"bar":"1"}}`,
+			output: `{"foo":{"bar":["1"]}}`,
+		},
+		{
+			name:   "split 5",
+			path:   "foo.bar",
+			value:  `","`,
+			input:  `{"foo":{"bar":","}}`,
+			output: `{"foo":{"bar":["",""]}}`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.JSON.Operator = "split"
+		conf.JSON.Parts = []int{0}
+		conf.JSON.Path = test.path
+		conf.JSON.Value = []byte(test.value)
+
+		jSet, err := NewJSON(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := jSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestJSONMove(t *testing.T) {
 	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}
