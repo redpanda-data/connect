@@ -42,6 +42,8 @@ type MQTTConfig struct {
 	Topics       []string `json:"topics" yaml:"topics"`
 	ClientID     string   `json:"client_id" yaml:"client_id"`
 	CleanSession bool     `json:"clean_session" yaml:"clean_session"`
+	User         string   `json:"user" yaml:"user"`
+	Password     string   `json:"password" yaml:"password"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
@@ -52,6 +54,8 @@ func NewMQTTConfig() MQTTConfig {
 		Topics:       []string{"benthos_topic"},
 		ClientID:     "benthos_input",
 		CleanSession: true,
+		User:         "",
+		Password:     "",
 	}
 }
 
@@ -120,6 +124,14 @@ func (m *MQTT) Connect() error {
 				}
 			}
 		})
+
+	if m.conf.User != "" {
+		conf.SetUsername(m.conf.User)
+	}
+
+	if m.conf.Password != "" {
+		conf.SetPassword(m.conf.Password)
+	}
 
 	for _, u := range m.urls {
 		conf = conf.AddBroker(u)

@@ -39,6 +39,8 @@ type MQTTConfig struct {
 	QoS      uint8    `json:"qos" yaml:"qos"`
 	Topic    string   `json:"topic" yaml:"topic"`
 	ClientID string   `json:"client_id" yaml:"client_id"`
+	User     string   `json:"user" yaml:"user"`
+	Password string   `json:"password" yaml:"password"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
@@ -48,6 +50,8 @@ func NewMQTTConfig() MQTTConfig {
 		QoS:      1,
 		Topic:    "benthos_topic",
 		ClientID: "benthos_output",
+		User:     "",
+		Password: "",
 	}
 }
 
@@ -107,6 +111,14 @@ func (m *MQTT) Connect() error {
 
 	for _, u := range m.urls {
 		conf = conf.AddBroker(u)
+	}
+
+	if m.conf.User != "" {
+		conf.SetUsername(m.conf.User)
+	}
+
+	if m.conf.Password != "" {
+		conf.SetPassword(m.conf.Password)
 	}
 
 	client := mqtt.NewClient(conf)
