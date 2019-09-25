@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `is` operator added to `text` condition.
+
 ## 3.1.1 - 2019-09-23
 
 ### Fixed

@@ -588,7 +588,7 @@ Checks whether the content contains the argument under unicode case-folding
 ### `is`
 
 Checks whether the content meets the characteristic of a type specified in 
-the argument field. Supported types are `ip`,`ipv4`,`ipv6`
+the argument field. Supported types are `ip`, `ipv4`, `ipv6`.
 
 ### `prefix_cs`
 
