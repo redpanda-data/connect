@@ -132,6 +132,7 @@ multiple cache types to share a memcached cluster under different namespaces.
 type: memory
 memory:
   compaction_interval: 60s
+  init_values: {}
   ttl: 300
 ```
 
@@ -143,6 +144,20 @@ during the next compaction.
 A compaction only occurs during a write where the time since the last compaction
 is above the compaction interval. It is therefore possible to obtain values of
 keys that have expired between compactions.
+
+The field `init_values` can be used to prepopulate the memory cache
+with any number of key/value pairs which are exempt from TTLs:
+
+```yaml
+type: memory
+memory:
+  ttl: 60
+  init_values:
+    foo: bar
+```
+
+These values can be overridden during execution, at which point the configured
+TTL is respected as usual.
 
 ## `redis`
 
