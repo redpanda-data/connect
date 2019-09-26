@@ -176,8 +176,8 @@ func TestContentCondition(t *testing.T) {
 
 func TestContentMatchesCondition(t *testing.T) {
 
-	match_pattern := "^foo [a-z]+ bar$"
-	cond := ContentMatchesCondition(match_pattern)
+	matchPattern := "^foo [a-z]+ bar$"
+	cond := ContentMatchesCondition(matchPattern)
 
 	type testCase struct {
 		name     string
@@ -194,12 +194,12 @@ func TestContentMatchesCondition(t *testing.T) {
 		{
 			name:     "negative 1",
 			input:    "foo",
-			expected: fmt.Errorf("content mismatch, expected '%s', got 'foo'", match_pattern),
+			expected: fmt.Errorf("content mismatch, expected '%s', got 'foo'", matchPattern),
 		},
 		{
 			name:     "negative 2",
 			input:    "foo & bar",
-			expected: fmt.Errorf("content mismatch, expected '%s', got 'foo & bar'", match_pattern),
+			expected: fmt.Errorf("content mismatch, expected '%s', got 'foo & bar'", matchPattern),
 		},
 	}
 

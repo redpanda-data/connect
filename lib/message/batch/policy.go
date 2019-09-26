@@ -70,6 +70,23 @@ func NewPolicyConfig() PolicyConfig {
 	}
 }
 
+// IsNoop returns true if this batch policy configuration does nothing.
+func (p PolicyConfig) IsNoop() bool {
+	if p.ByteSize > 0 {
+		return false
+	}
+	if p.Count > 1 {
+		return false
+	}
+	if p.Condition.Type != condition.TypeStatic {
+		return false
+	}
+	if len(p.Period) > 0 {
+		return false
+	}
+	return true
+}
+
 //------------------------------------------------------------------------------
 
 // Policy implements a batching policy by buffering messages until, based on a
