@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Field `init_values` added to the `memory` cache.
 - New `split` operator added to `json` processor.
 - Fields `user` and `password` added to `mqtt` input and output.
+- New experimental `amqp_0_9` input.
 
 ## 3.1.1 - 2019-09-23
 

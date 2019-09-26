@@ -21,6 +21,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -31,6 +32,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/ory/dockertest"
 	"github.com/streadway/amqp"
@@ -81,9 +83,18 @@ func TestAMQPIntegration(t *testing.T) {
 	t.Run("TestAMQPDisconnect", func(te *testing.T) {
 		testAMQPDisconnect(url, te)
 	})
+	t.Run("TestAMQP09SinglePart", func(te *testing.T) {
+		testAMQP09SinglePart(url, te)
+	})
+	t.Run("TestAMQP09MultiPart", func(te *testing.T) {
+		testAMQP09SinglePart(url, te)
+	})
+	t.Run("TestAMQP09Disconnect", func(te *testing.T) {
+		testAMQP09Disconnect(url, te)
+	})
 }
 
-func createInputOutput(
+func createAMQPInputOutput(
 	inConf reader.AMQPConfig, outConf writer.AMQPConfig,
 ) (mInput reader.Type, mOutput writer.Type, err error) {
 	if mOutput, err = writer.NewAMQP(outConf, log.Noop(), metrics.Noop()); err != nil {
@@ -96,6 +107,24 @@ func createInputOutput(
 		return
 	}
 	if err = mInput.Connect(); err != nil {
+		return
+	}
+	return
+}
+
+func createAMQP09InputOutput(
+	inConf reader.AMQP09Config, outConf writer.AMQPConfig,
+) (mInput reader.Async, mOutput writer.Type, err error) {
+	if mOutput, err = writer.NewAMQP(outConf, log.Noop(), metrics.Noop()); err != nil {
+		return
+	}
+	if err = mOutput.Connect(); err != nil {
+		return
+	}
+	if mInput, err = reader.NewAMQP09(inConf, log.Noop(), metrics.Noop()); err != nil {
+		return
+	}
+	if err = mInput.Connect(context.Background()); err != nil {
 		return
 	}
 	return
@@ -114,7 +143,7 @@ func testAMQPSinglePart(url string, t *testing.T) {
 		RoutingKey: outConf.BindingKey,
 	})
 
-	mInput, mOutput, err := createInputOutput(inConf, outConf)
+	mInput, mOutput, err := createAMQPInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +222,7 @@ func testAMQPMultiplePart(url string, t *testing.T) {
 		RoutingKey: outConf.BindingKey,
 	})
 
-	mInput, mOutput, err := createInputOutput(inConf, outConf)
+	mInput, mOutput, err := createAMQPInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +313,7 @@ func testAMQPDisconnect(url string, t *testing.T) {
 		RoutingKey: outConf.BindingKey,
 	})
 
-	mInput, mOutput, err := createInputOutput(inConf, outConf)
+	mInput, mOutput, err := createAMQPInputOutput(inConf, outConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,6 +333,223 @@ func testAMQPDisconnect(url string, t *testing.T) {
 	}()
 
 	if _, err = mInput.Read(); err != types.ErrTypeClosed && err != types.ErrNotConnected {
+		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
+	}
+
+	wg.Wait()
+}
+
+func testAMQP09SinglePart(url string, t *testing.T) {
+	outConf := writer.NewAMQPConfig()
+	outConf.URL = url
+	outConf.ExchangeDeclare.Enabled = true
+
+	inConf := reader.NewAMQP09Config()
+	inConf.URL = url
+	inConf.QueueDeclare.Enabled = true
+	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQP09BindingConfig{
+		Exchange:   outConf.Exchange,
+		RoutingKey: outConf.BindingKey,
+	})
+
+	mInput, mOutput, err := createAMQP09InputOutput(inConf, outConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		mInput.CloseAsync()
+		if cErr := mInput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+		mOutput.CloseAsync()
+		if cErr := mOutput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	N := 10
+
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+
+	testMsgs := map[string]struct{}{}
+	for i := 0; i < N; i++ {
+		str := fmt.Sprintf("hello world: %v", i)
+		testMsgs[str] = struct{}{}
+		go func(testStr string) {
+			msg := message.New([][]byte{
+				[]byte(testStr),
+			})
+			msg.Get(0).Metadata().Set("foo", "bar")
+			msg.Get(0).Metadata().Set("root_foo", "bar2")
+			if gerr := mOutput.Write(msg); gerr != nil {
+				t.Fatal(gerr)
+			}
+			wg.Done()
+		}(str)
+	}
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+	defer done()
+
+	lMsgs := len(testMsgs)
+	for lMsgs > 0 {
+		var actM types.Message
+		var ackFn reader.AsyncAckFn
+		actM, ackFn, err = mInput.Read(ctx)
+		if err != nil {
+			t.Error(err)
+		} else {
+			act := string(actM.Get(0).Get())
+			if _, exists := testMsgs[act]; !exists {
+				t.Errorf("Unexpected message: %v", act)
+			}
+			delete(testMsgs, act)
+			if act = actM.Get(0).Metadata().Get("foo"); act != "bar" {
+				t.Errorf("Wrong metadata returned: %v != bar", act)
+			}
+			if act = actM.Get(0).Metadata().Get("root_foo"); act != "bar2" {
+				t.Errorf("Wrong metadata returned: %v != bar2", act)
+			}
+		}
+		if err = ackFn(ctx, response.NewAck()); err != nil {
+			t.Error(err)
+		}
+		lMsgs = len(testMsgs)
+	}
+
+	wg.Wait()
+}
+
+func testAMQP09MultiplePart(url string, t *testing.T) {
+	outConf := writer.NewAMQPConfig()
+	outConf.URL = url
+	outConf.ExchangeDeclare.Enabled = true
+
+	inConf := reader.NewAMQP09Config()
+	inConf.URL = url
+	inConf.QueueDeclare.Enabled = true
+	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQP09BindingConfig{
+		Exchange:   outConf.Exchange,
+		RoutingKey: outConf.BindingKey,
+	})
+
+	mInput, mOutput, err := createAMQP09InputOutput(inConf, outConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		mInput.CloseAsync()
+		if cErr := mInput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+		mOutput.CloseAsync()
+		if cErr := mOutput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	N := 10
+
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+	defer done()
+
+	testMsgs := map[string]struct{}{}
+	for i := 0; i < N; i++ {
+		str1 := fmt.Sprintf("hello world: %v part 1", i)
+		str2 := fmt.Sprintf("hello world: %v part 2", i)
+		str3 := fmt.Sprintf("hello world: %v part 3", i)
+		testMsgs[str1] = struct{}{}
+		testMsgs[str2] = struct{}{}
+		testMsgs[str3] = struct{}{}
+		go func(testStr1, testStr2, testStr3 string) {
+			msg := message.New([][]byte{
+				[]byte(testStr1),
+				[]byte(testStr2),
+				[]byte(testStr3),
+			})
+			msg.Get(0).Metadata().Set("foo", "bar")
+			msg.Get(1).Metadata().Set("root_foo", "bar2")
+			if gerr := mOutput.Write(msg); gerr != nil {
+				t.Fatal(gerr)
+			}
+			wg.Done()
+		}(str1, str2, str3)
+	}
+
+	lMsgs := len(testMsgs)
+	for lMsgs > 0 {
+		var actM types.Message
+		var ackFn reader.AsyncAckFn
+		actM, ackFn, err = mInput.Read(ctx)
+		if err != nil {
+			t.Error(err)
+		} else {
+			act := string(actM.Get(0).Get())
+			if _, exists := testMsgs[act]; !exists {
+				t.Errorf("Unexpected message: %v", act)
+			}
+			delete(testMsgs, act)
+			if act = actM.Get(0).Metadata().Get("foo"); act != "bar" {
+				t.Errorf("Wrong metadata returned: %v != bar", act)
+			}
+			if act = actM.Get(1).Metadata().Get("foo"); act != "" {
+				t.Errorf("Wrong metadata returned: %v != ''", act)
+			}
+			if act = actM.Get(1).Metadata().Get("root_foo"); act != "bar2" {
+				t.Errorf("Wrong metadata returned: %v != bar2", act)
+			}
+			if act = actM.Get(0).Metadata().Get("root_foo"); act != "" {
+				t.Errorf("Wrong metadata returned: %v != ''", act)
+			}
+		}
+		if err = ackFn(ctx, response.NewAck()); err != nil {
+			t.Error(err)
+		}
+		lMsgs = len(testMsgs)
+	}
+
+	wg.Wait()
+}
+
+func testAMQP09Disconnect(url string, t *testing.T) {
+	outConf := writer.NewAMQPConfig()
+	outConf.URL = url
+	outConf.ExchangeDeclare.Enabled = true
+
+	inConf := reader.NewAMQP09Config()
+	inConf.URL = url
+	inConf.QueueDeclare.Enabled = true
+	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQP09BindingConfig{
+		Exchange:   outConf.Exchange,
+		RoutingKey: outConf.BindingKey,
+	})
+
+	mInput, mOutput, err := createAMQP09InputOutput(inConf, outConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		mInput.CloseAsync()
+		if cErr := mInput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+		mOutput.CloseAsync()
+		if cErr := mOutput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+		wg.Done()
+	}()
+
+	if _, _, err = mInput.Read(context.Background()); err != types.ErrTypeClosed && err != types.ErrNotConnected {
 		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
 	}
 

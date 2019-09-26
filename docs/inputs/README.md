@@ -22,36 +22,37 @@ input:
 ### Contents
 
 1. [`amqp`](#amqp)
-2. [`broker`](#broker)
-3. [`dynamic`](#dynamic)
-4. [`file`](#file)
-5. [`files`](#files)
-6. [`gcp_pubsub`](#gcp_pubsub)
-7. [`hdfs`](#hdfs)
-8. [`http_client`](#http_client)
-9. [`http_server`](#http_server)
-10. [`inproc`](#inproc)
-11. [`kafka`](#kafka)
-12. [`kafka_balanced`](#kafka_balanced)
-13. [`kafka_cg`](#kafka_cg)
-14. [`kinesis`](#kinesis)
-15. [`kinesis_balanced`](#kinesis_balanced)
-16. [`mqtt`](#mqtt)
-17. [`nanomsg`](#nanomsg)
-18. [`nats`](#nats)
-19. [`nats_stream`](#nats_stream)
-20. [`nsq`](#nsq)
-21. [`read_until`](#read_until)
-22. [`redis_list`](#redis_list)
-23. [`redis_pubsub`](#redis_pubsub)
-24. [`redis_streams`](#redis_streams)
-25. [`s3`](#s3)
-26. [`sqs`](#sqs)
-27. [`stdin`](#stdin)
-28. [`tcp`](#tcp)
-29. [`tcp_server`](#tcp_server)
-30. [`udp_server`](#udp_server)
-31. [`websocket`](#websocket)
+2. [`amqp_0_9`](#amqp_0_9)
+3. [`broker`](#broker)
+4. [`dynamic`](#dynamic)
+5. [`file`](#file)
+6. [`files`](#files)
+7. [`gcp_pubsub`](#gcp_pubsub)
+8. [`hdfs`](#hdfs)
+9. [`http_client`](#http_client)
+10. [`http_server`](#http_server)
+11. [`inproc`](#inproc)
+12. [`kafka`](#kafka)
+13. [`kafka_balanced`](#kafka_balanced)
+14. [`kafka_cg`](#kafka_cg)
+15. [`kinesis`](#kinesis)
+16. [`kinesis_balanced`](#kinesis_balanced)
+17. [`mqtt`](#mqtt)
+18. [`nanomsg`](#nanomsg)
+19. [`nats`](#nats)
+20. [`nats_stream`](#nats_stream)
+21. [`nsq`](#nsq)
+22. [`read_until`](#read_until)
+23. [`redis_list`](#redis_list)
+24. [`redis_pubsub`](#redis_pubsub)
+25. [`redis_streams`](#redis_streams)
+26. [`s3`](#s3)
+27. [`sqs`](#sqs)
+28. [`stdin`](#stdin)
+29. [`tcp`](#tcp)
+30. [`tcp_server`](#tcp_server)
+31. [`udp_server`](#udp_server)
+32. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -98,6 +99,133 @@ Similarly, it is possible to declare queue bindings by adding objects to the
 
 TLS is automatic when connecting to an `amqps` URL, but custom
 settings can be enabled in the `tls` section.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+``` text
+- amqp_content_type
+- amqp_content_encoding
+- amqp_delivery_mode
+- amqp_priority
+- amqp_correlation_id
+- amqp_reply_to
+- amqp_expiration
+- amqp_message_id
+- amqp_timestamp
+- amqp_type
+- amqp_user_id
+- amqp_app_id
+- amqp_consumer_tag
+- amqp_delivery_tag
+- amqp_redelivered
+- amqp_exchange
+- amqp_routing_key
+- All existing message headers, including nested headers prefixed with the key
+  of their respective parent.
+```
+
+You can access these metadata fields using
+[function interpolation](../config_interpolation.md#metadata).
+
+## `amqp_0_9`
+
+``` yaml
+type: amqp_0_9
+amqp_0_9:
+  batching:
+    byte_size: 0
+    condition:
+      all: {}
+      and: []
+      any: {}
+      bounds_check:
+        max_part_size: 1.073741824e+09
+        max_parts: 100
+        min_part_size: 1
+        min_parts: 1
+      check_field:
+        condition: {}
+        parts: []
+        path: ""
+      check_interpolation:
+        condition: {}
+        value: ""
+      count:
+        arg: 100
+      jmespath:
+        part: 0
+        query: ""
+      metadata:
+        arg: ""
+        key: ""
+        operator: equals_cs
+        part: 0
+      not: {}
+      number:
+        arg: 0
+        operator: equals
+        part: 0
+      or: []
+      processor_failed:
+        part: 0
+      resource: ""
+      static: false
+      text:
+        arg: ""
+        operator: equals_cs
+        part: 0
+      type: static
+      xor: []
+    count: 1
+    period: ""
+  bindings_declare: []
+  consumer_tag: benthos-consumer
+  prefetch_count: 10
+  prefetch_size: 0
+  queue: benthos-queue
+  queue_declare:
+    durable: true
+    enabled: false
+  tls:
+    client_certs: []
+    enabled: false
+    root_cas_file: ""
+    skip_cert_verify: false
+  url: amqp://guest:guest@localhost:5672/
+```
+
+EXPERIMENTAL: This input is considered experimental and is therefore subject to
+change outside of major version releases.
+
+Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
+message brokers, including RabbitMQ.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
+It's possible for this input type to declare the target queue by setting
+`queue_declare.enabled` to `true`, if the queue already exists then
+the declaration passively verifies that they match the target fields.
+
+Similarly, it is possible to declare queue bindings by adding objects to the
+`bindings_declare` array. Binding declare objects take the form of:
+
+``` yaml
+{
+  "exchange": "benthos-exchange",
+  "key": "benthos-key"
+}
+```
+
+TLS is automatic when connecting to an `amqps` URL, but custom
+settings can be enabled in the `tls` section.
+
+WARNING: It is NOT safe to use a `batch` processor with this input,
+and it will shut down if that is the case. Instead, configure an appropriate
+[batch policy](../batching.md#batch-policy).
 
 ### Metadata
 

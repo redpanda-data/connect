@@ -69,10 +69,10 @@ func TestKafkaIntegration(t *testing.T) {
 	pool.MaxWait = time.Minute
 
 	networks, _ := pool.Client.ListNetworks()
-	hostIp := ""
+	hostIP := ""
 	for _, network := range networks {
 		if network.Name == "bridge" {
-			hostIp = network.IPAM.Config[0].Gateway
+			hostIP = network.IPAM.Config[0].Gateway
 		}
 	}
 
@@ -97,11 +97,11 @@ func TestKafkaIntegration(t *testing.T) {
 	}
 	kafkaPortStr := strconv.Itoa(kafkaPort)
 	env := []string{
-		"KAFKA_ADVERTISED_HOST_NAME=" + hostIp,
+		"KAFKA_ADVERTISED_HOST_NAME=" + hostIP,
 		"KAFKA_BROKER_ID=1",
 		"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=OUTSIDE:PLAINTEXT,INSIDE:PLAINTEXT",
 		"KAFKA_LISTENERS=OUTSIDE://:" + kafkaPortStr + ",INSIDE://:9092",
-		"KAFKA_ADVERTISED_LISTENERS=OUTSIDE://" + hostIp + ":" + kafkaPortStr + ",INSIDE://:9092",
+		"KAFKA_ADVERTISED_LISTENERS=OUTSIDE://" + hostIP + ":" + kafkaPortStr + ",INSIDE://:9092",
 		"KAFKA_INTER_BROKER_LISTENER_NAME=INSIDE",
 		"KAFKA_ZOOKEEPER_CONNECT=" + zkAddr,
 	}
@@ -125,7 +125,7 @@ func TestKafkaIntegration(t *testing.T) {
 	}()
 	kafkaResource.Expire(900)
 
-	address := fmt.Sprintf("%v:%v", hostIp, kafkaPortStr)
+	address := fmt.Sprintf("%v:%v", hostIP, kafkaPortStr)
 	if err = pool.Retry(func() error {
 		log := log.Noop()
 		outConf := writer.NewKafkaConfig()
