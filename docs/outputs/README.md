@@ -761,10 +761,12 @@ allowing you to transfer data across accounts. You can find out more
 type: mqtt
 mqtt:
   client_id: benthos_output
+  password: ""
   qos: 1
   topic: benthos_topic
   urls:
   - tcp://localhost:1883
+  user: ""
 ```
 
 Pushes messages to an MQTT broker.

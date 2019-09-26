@@ -232,11 +232,13 @@ input:
       mqtt:
         clean_session: ${INPUT_MQTT_CLEAN_SESSION:true}
         client_id: ${INPUT_MQTT_CLIENT_ID:benthos_input}
+        password: ${INPUT_MQTT_PASSWORD}
         qos: ${INPUT_MQTT_QOS:1}
         topics:
         - ${INPUT_MQTT_TOPICS:benthos_topic}
         urls:
         - ${INPUT_MQTT_URLS:tcp://localhost:1883}
+        user: ${INPUT_MQTT_USER}
       nanomsg:
         bind: ${INPUT_NANOMSG_BIND:true}
         poll_timeout: ${INPUT_NANOMSG_POLL_TIMEOUT:5s}
@@ -725,10 +727,12 @@ output:
         stream: ${OUTPUT_KINESIS_FIREHOSE_STREAM}
       mqtt:
         client_id: ${OUTPUT_MQTT_CLIENT_ID:benthos_output}
+        password: ${OUTPUT_MQTT_PASSWORD}
         qos: ${OUTPUT_MQTT_QOS:1}
         topic: ${OUTPUT_MQTT_TOPIC:benthos_topic}
         urls:
         - ${OUTPUT_MQTT_URLS:tcp://localhost:1883}
+        user: ${OUTPUT_MQTT_USER}
       nanomsg:
         bind: ${OUTPUT_NANOMSG_BIND:false}
         poll_timeout: ${OUTPUT_NANOMSG_POLL_TIMEOUT:5s}

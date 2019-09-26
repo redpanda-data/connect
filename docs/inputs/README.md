@@ -799,11 +799,13 @@ type: mqtt
 mqtt:
   clean_session: true
   client_id: benthos_input
+  password: ""
   qos: 1
   topics:
   - benthos_topic
   urls:
   - tcp://localhost:1883
+  user: ""
 ```
 
 Subscribe to topics on MQTT brokers.

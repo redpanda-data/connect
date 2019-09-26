@@ -229,9 +229,11 @@ INPUT_KINESIS_STREAM
 INPUT_KINESIS_TIMEOUT                                        = 5s
 INPUT_MQTT_CLEAN_SESSION                                     = true
 INPUT_MQTT_CLIENT_ID                                         = benthos_input
+INPUT_MQTT_PASSWORD
 INPUT_MQTT_QOS                                               = 1
 INPUT_MQTT_TOPICS                                            = benthos_topic
 INPUT_MQTT_URLS                                              = tcp://localhost:1883
+INPUT_MQTT_USER
 INPUT_NANOMSG_BIND                                           = true
 INPUT_NANOMSG_POLL_TIMEOUT                                   = 5s
 INPUT_NANOMSG_REPLY_TIMEOUT                                  = 5s
@@ -612,9 +614,11 @@ OUTPUT_KINESIS_PARTITION_KEY
 OUTPUT_KINESIS_REGION                                 = eu-west-1
 OUTPUT_KINESIS_STREAM
 OUTPUT_MQTT_CLIENT_ID                                 = benthos_output
+OUTPUT_MQTT_PASSWORD
 OUTPUT_MQTT_QOS                                       = 1
 OUTPUT_MQTT_TOPIC                                     = benthos_topic
 OUTPUT_MQTT_URLS                                      = tcp://localhost:1883
+OUTPUT_MQTT_USER
 OUTPUT_NANOMSG_BIND                                   = false
 OUTPUT_NANOMSG_POLL_TIMEOUT                           = 5s
 OUTPUT_NANOMSG_SOCKET_TYPE                            = PUSH

@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New config unit test condition `content_matches`.
 - Field `init_values` added to the `memory` cache.
 - New `split` operator added to `json` processor.
+- Fields `user` and `password` added to `mqtt` input and output.
 
 ## 3.1.1 - 2019-09-23
 
