@@ -43,7 +43,21 @@ during the next compaction.
 
 A compaction only occurs during a write where the time since the last compaction
 is above the compaction interval. It is therefore possible to obtain values of
-keys that have expired between compactions.`,
+keys that have expired between compactions.
+
+The field ` + "`init_values`" + ` can be used to prepopulate the memory cache
+with any number of key/value pairs which are exempt from TTLs:
+
+` + "```yaml" + `
+type: memory
+memory:
+  ttl: 60
+  init_values:
+    foo: bar
+` + "```" + `
+
+These values can be overridden during execution, at which point the configured
+TTL is respected as usual.`,
 	}
 }
 
@@ -51,8 +65,9 @@ keys that have expired between compactions.`,
 
 // MemoryConfig contains config fields for the Memory cache type.
 type MemoryConfig struct {
-	TTL                int    `json:"ttl" yaml:"ttl"`
-	CompactionInterval string `json:"compaction_interval" yaml:"compaction_interval"`
+	TTL                int               `json:"ttl" yaml:"ttl"`
+	CompactionInterval string            `json:"compaction_interval" yaml:"compaction_interval"`
+	InitValues         map[string]string `json:"init_values" yaml:"init_values"`
 }
 
 // NewMemoryConfig creates a MemoryConfig populated with default values.
@@ -60,6 +75,7 @@ func NewMemoryConfig() MemoryConfig {
 	return MemoryConfig{
 		TTL:                300, // 5 Mins
 		CompactionInterval: "60s",
+		InitValues:         map[string]string{},
 	}
 }
 
@@ -93,8 +109,15 @@ func NewMemory(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 			return nil, fmt.Errorf("failed to parse compaction interval string: %v", err)
 		}
 	}
+	items := map[string]item{}
+	for k, v := range conf.Memory.InitValues {
+		items[k] = item{
+			value: []byte(v),
+			ts:    time.Time{},
+		}
+	}
 	return &Memory{
-		items:          map[string]item{},
+		items:          items,
 		ttl:            time.Second * time.Duration(conf.Memory.TTL),
 		compInterval:   interval,
 		lastCompaction: time.Now(),
@@ -112,6 +135,9 @@ func (m *Memory) compaction() {
 	}
 	m.mCompactions.Incr(1)
 	for k, v := range m.items {
+		if v.ts.IsZero() {
+			continue
+		}
 		if time.Since(v.ts) >= m.ttl {
 			delete(m.items, k)
 		}

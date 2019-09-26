@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `is` operator added to `text` condition.
+- New config unit test condition `content_matches`.
+- Field `init_values` added to the `memory` cache.
+- New `split` operator added to `json` processor.
+
 ## 3.1.1 - 2019-09-23
 
 ### Fixed

@@ -120,7 +120,13 @@ json:
 ` + "```" + `
 
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
-contains keys that aren't strings those fields will be ignored.`,
+contains keys that aren't strings those fields will be ignored.
+
+#### ` + "`split`" + `
+
+Splits a string field by a value and replaces the original string with an array
+containing the results of the split. This operator requires both the path value
+and the contents of the ` + "`value`" + ` field to be strings.`,
 	}
 }
 
@@ -439,6 +445,35 @@ func newAppendOperator(path []string) jsonOperator {
 	}
 }
 
+func newSplitOperator(path []string) jsonOperator {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+		gPart := gabs.Wrap(body)
+
+		var valueParsed string
+		if value != nil {
+			if err := json.Unmarshal(value, &valueParsed); err != nil {
+				return nil, err
+			}
+		}
+		if len(valueParsed) == 0 {
+			return nil, errors.New("value field must be a non-empty string")
+		}
+
+		targetStr, ok := gPart.S(path...).Data().(string)
+		if !ok {
+			return nil, errors.New("path value must be a string")
+		}
+
+		var values []interface{}
+		for _, v := range strings.Split(targetStr, valueParsed) {
+			values = append(values, v)
+		}
+
+		gPart.Set(values, path...)
+		return gPart.Data(), nil
+	}
+}
+
 func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperator, error) {
 	var destPath []string
 	if opStr == "move" || opStr == "copy" {
@@ -455,6 +490,8 @@ func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperat
 		return newSetOperator(path), nil
 	case "select":
 		return newSelectOperator(path), nil
+	case "split":
+		return newSplitOperator(path), nil
 	case "copy":
 		return newCopyOperator(path, destPath)
 	case "move":

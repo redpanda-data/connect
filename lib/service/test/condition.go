@@ -22,6 +22,7 @@ package test
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -54,6 +55,12 @@ func (c *ConditionsMap) UnmarshalYAML(value *yaml.Node) error {
 		switch k {
 		case "content_equals":
 			val := ContentEqualsCondition("")
+			if err := v.Decode(&val); err != nil {
+				return fmt.Errorf("line %v: %v", v.Line, err)
+			}
+			cond = val
+		case "content_matches":
+			val := ContentMatchesCondition("")
 			if err := v.Decode(&val); err != nil {
 				return fmt.Errorf("line %v: %v", v.Line, err)
 			}
@@ -98,6 +105,21 @@ type ContentEqualsCondition string
 func (c ContentEqualsCondition) Check(p types.Part) error {
 	if exp, act := string(c), string(p.Get()); exp != act {
 		return fmt.Errorf("content mismatch, expected '%v', got '%v'", exp, act)
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// ContentMatchesCondition is a string condition that tests parses the string as
+// a regular expression and tests that regular expression against the contents of a message.
+type ContentMatchesCondition string
+
+// Check this condition against a message part.
+func (c ContentMatchesCondition) Check(p types.Part) error {
+	re := regexp.MustCompile(string(c))
+	if !re.MatchString(string(p.Get())) {
+		return fmt.Errorf("content mismatch, expected '%v', got '%v'", string(c), string(p.Get()))
 	}
 	return nil
 }

@@ -11,14 +11,14 @@ For example, imagine we are consuming from a source `foo`. Our goal is to consum
 
 Sometimes our source of data can have many multiple connected clients and will distribute a stream of messages amongst them. In these circumstances it is possible to fully utilise a set of parallel processing threads by configuring the number of consumers to be greater than or equal to the number of threads. Ideally the number of consumers would be slightly higher than the number of threads in order to compensate for occasional IO stalls.
 
-We can configure this arrangement with a [`broker` input][broker-input]:
+Sometimes the input itself will automatically utilise as many processing threads as it can access. In other cases we can combine multiple instances of an input connection with a [`broker` input][broker-input]:
 
 ```yaml
 input:
   broker:
     copies: 8
     inputs:
-      - type: foo
+      - type: baz
 buffer:
   type: none
 pipeline:
@@ -51,10 +51,7 @@ Sometimes a source of data can only have a single consuming client. In these cir
 
 ```yaml
 input:
-  kafka_balanced:
-    addresses: [ TODO ]
-    topics: [ foo, bar ]
-    consumer_group: foogroup
+  foo:
     max_batch_count: 100
   processors:
     - split:
@@ -74,10 +71,10 @@ With this config the pipeline within our Benthos instance would look something l
 
 ```text
                   Batch       Split
-kafka_balanced -> ######## -> ## ---> processors ---> bar
-                              ## \--> processors -/
-                              ## \--> processors -/
-                              ## \--> processors -/
+foo -> ######## -> ## ---> processors ---> bar
+                   ## \--> processors -/
+                   ## \--> processors -/
+                   ## \--> processors -/
 ```
 
 However, this pattern caps the processing time of a whole batch with the slowest processing time of the split batches, as they are locked within a transaction. If there is wide variance in the expected processing time of message batches then it's possible to mitigate this effect by combining this pattern with the previous, allowing you to utilise all threads even when the number of brokered inputs is less than the thread count.

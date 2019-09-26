@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net"
 	"regexp"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -77,6 +78,11 @@ Checks whether the content contains the argument (case sensitive.)
 
 Checks whether the content contains the argument under unicode case-folding
 (case insensitive.)
+
+### ` + "`is`" + `
+
+Checks whether the content meets the characteristic of a type specified in 
+the argument field. Supported types are ` + "`ip`, " + "`ipv4`, " + "`ipv6`." + `
 
 ### ` + "`prefix_cs`" + `
 
@@ -234,6 +240,49 @@ func textEnumOperator(arg interface{}) (textOperator, error) {
 	}, nil
 }
 
+func textIsOperatorArgIP() textOperator {
+	return func(c []byte) bool {
+		if err := net.ParseIP(string(c)); err != nil {
+			return true
+		}
+		return false
+	}
+}
+
+func textIsOperatorArgIPV4() textOperator {
+	return func(c []byte) bool {
+		if err := net.ParseIP(string(c)); err != nil && bytes.Contains(c, []byte(".")) {
+			return true
+		}
+		return false
+	}
+}
+
+func textIsOperatorArgIPV6() textOperator {
+	return func(c []byte) bool {
+		if err := net.ParseIP(string(c)); err != nil && bytes.Contains(c, []byte(":")) {
+			return true
+		}
+		return false
+	}
+}
+
+func textIsOperator(arg interface{}) (textOperator, error) {
+	str, ok := arg.(string)
+	if !ok {
+		return nil, fmt.Errorf("expected string as operator argument, received: %T", arg)
+	}
+	switch str {
+	case "ip":
+		return textIsOperatorArgIP(), nil
+	case "ipv4":
+		return textIsOperatorArgIPV4(), nil
+	case "ipv6":
+		return textIsOperatorArgIPV6(), nil
+	}
+	return nil, fmt.Errorf("invalid argument for 'is' operator: %s", str)
+}
+
 func strToTextOperator(str string, arg interface{}) (textOperator, error) {
 	bytesArgErr := func(ctor func([]byte) (textOperator, error)) (textOperator, error) {
 		str, ok := arg.(string)
@@ -256,6 +305,8 @@ func strToTextOperator(str string, arg interface{}) (textOperator, error) {
 		return bytesArg(textContainsOperator)
 	case "contains":
 		return bytesArg(textContainsFoldOperator)
+	case "is":
+		return textIsOperator(arg)
 	case "prefix_cs":
 		return bytesArg(textPrefixOperator)
 	case "prefix":
