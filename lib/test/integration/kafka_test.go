@@ -171,7 +171,7 @@ func createKafkaInputOutput(
 	if mInput, err = reader.NewKafkaCG(inConf, nil, log, metrics.Noop()); err != nil {
 		return
 	}
-	if err = mInput.Connect(ctx); err != nil {
+	if err = mInput.ConnectWithContext(ctx); err != nil {
 		return
 	}
 	if mOutput, err = writer.NewKafka(outConf, log, metrics.Noop()); err != nil {
@@ -239,7 +239,7 @@ func testKafkaSinglePart(address string, t *testing.T) {
 	for lMsgs > 0 {
 		var actM types.Message
 		var ackFn reader.AsyncAckFn
-		actM, ackFn, err = mInput.Read(ctx)
+		actM, ackFn, err = mInput.ReadWithContext(ctx)
 		if err != nil {
 			t.Fatal(err)
 		} else {
@@ -315,7 +315,7 @@ func testKafkaResumeDurable(address string, t *testing.T) {
 	for len(testMsgs) > 0 {
 		var actM types.Message
 		var ackFn reader.AsyncAckFn
-		actM, ackFn, err = mInput.Read(ctx)
+		actM, ackFn, err = mInput.ReadWithContext(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -351,14 +351,14 @@ func testKafkaResumeDurable(address string, t *testing.T) {
 	if mInput, err = reader.NewKafkaCG(inConf, nil, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
-	if err = mInput.Connect(ctx); err != nil {
+	if err = mInput.ConnectWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 
 	for len(testMsgs) > 1 {
 		var actM types.Message
 		var ackFn reader.AsyncAckFn
-		actM, ackFn, err = mInput.Read(ctx)
+		actM, ackFn, err = mInput.ReadWithContext(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -438,7 +438,7 @@ func testKafkaMultiplePart(address string, t *testing.T) {
 	for lMsgs > 0 {
 		var actM types.Message
 		var ackFn reader.AsyncAckFn
-		actM, ackFn, err = mInput.Read(ctx)
+		actM, ackFn, err = mInput.ReadWithContext(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -492,7 +492,7 @@ func testKafkaDisconnect(address string, t *testing.T) {
 		wg.Done()
 	}()
 
-	if _, _, err = mInput.Read(ctx); err != types.ErrTypeClosed && err != types.ErrNotConnected {
+	if _, _, err = mInput.ReadWithContext(ctx); err != types.ErrTypeClosed && err != types.ErrNotConnected {
 		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
 	}
 

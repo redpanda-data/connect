@@ -95,11 +95,11 @@ func TestAsyncBatcherHappy(t *testing.T) {
 		rdr.waitForCloseChan <- nil
 	}()
 
-	if err = batcher.Connect(ctx); err != nil {
+	if err = batcher.ConnectWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 
-	msg, ackFn, err := batcher.Read(ctx)
+	msg, ackFn, err := batcher.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestAsyncBatcherHappy(t *testing.T) {
 		t.Error(err)
 	}
 
-	if msg, ackFn, err = batcher.Read(ctx); err != nil {
+	if msg, ackFn, err = batcher.ReadWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if msg.Len() != 5 {
@@ -185,15 +185,15 @@ func TestAsyncBatcherSadThenHappy(t *testing.T) {
 		rdr.waitForCloseChan <- nil
 	}()
 
-	if err = batcher.Connect(ctx); err != nil {
+	if err = batcher.ConnectWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, _, err = batcher.Read(ctx); err != firstReadErr {
+	if _, _, err = batcher.ReadWithContext(ctx); err != firstReadErr {
 		t.Fatalf("Expected '%v', received: %v", firstReadErr, err)
 	}
 
-	msg, ackFn, err := batcher.Read(ctx)
+	msg, ackFn, err := batcher.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,11 +210,11 @@ func TestAsyncBatcherSadThenHappy(t *testing.T) {
 		t.Error(err)
 	}
 
-	if _, _, err = batcher.Read(ctx); err != secondReadErr {
+	if _, _, err = batcher.ReadWithContext(ctx); err != secondReadErr {
 		t.Fatalf("Expected '%v', received: %v", secondReadErr, err)
 	}
 
-	if msg, ackFn, err = batcher.Read(ctx); err != nil {
+	if msg, ackFn, err = batcher.ReadWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if msg.Len() != 5 {
@@ -279,11 +279,11 @@ func TestAsyncBatcherTimedBatches(t *testing.T) {
 		rdr.waitForCloseChan <- nil
 	}()
 
-	if err = batcher.Connect(ctx); err != nil {
+	if err = batcher.ConnectWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 
-	msg, ackFn, err := batcher.Read(ctx)
+	msg, ackFn, err := batcher.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +300,7 @@ func TestAsyncBatcherTimedBatches(t *testing.T) {
 		t.Error(err)
 	}
 
-	if msg, ackFn, err = batcher.Read(ctx); err != nil {
+	if msg, ackFn, err = batcher.ReadWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if msg.Len() != 8 {

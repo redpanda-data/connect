@@ -124,7 +124,7 @@ func createAMQP09InputOutput(
 	if mInput, err = reader.NewAMQP09(inConf, log.Noop(), metrics.Noop()); err != nil {
 		return
 	}
-	if err = mInput.Connect(context.Background()); err != nil {
+	if err = mInput.ConnectWithContext(context.Background()); err != nil {
 		return
 	}
 	return
@@ -397,7 +397,7 @@ func testAMQP09SinglePart(url string, t *testing.T) {
 	for lMsgs > 0 {
 		var actM types.Message
 		var ackFn reader.AsyncAckFn
-		actM, ackFn, err = mInput.Read(ctx)
+		actM, ackFn, err = mInput.ReadWithContext(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -486,7 +486,7 @@ func testAMQP09MultiplePart(url string, t *testing.T) {
 	for lMsgs > 0 {
 		var actM types.Message
 		var ackFn reader.AsyncAckFn
-		actM, ackFn, err = mInput.Read(ctx)
+		actM, ackFn, err = mInput.ReadWithContext(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -549,7 +549,7 @@ func testAMQP09Disconnect(url string, t *testing.T) {
 		wg.Done()
 	}()
 
-	if _, _, err = mInput.Read(context.Background()); err != types.ErrTypeClosed && err != types.ErrNotConnected {
+	if _, _, err = mInput.ReadWithContext(context.Background()); err != types.ErrTypeClosed && err != types.ErrNotConnected {
 		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
 	}
 

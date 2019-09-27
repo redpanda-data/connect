@@ -56,14 +56,14 @@ func newMockAsyncReader() *mockAsyncReader {
 	}
 }
 
-func (r *mockAsyncReader) Connect(ctx context.Context) error {
+func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 	cerr, open := <-r.connChan
 	if !open {
 		return types.ErrNotConnected
 	}
 	return cerr
 }
-func (r *mockAsyncReader) Read(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	select {
 	case <-ctx.Done():
 		return nil, nil, types.ErrTimeout
@@ -116,7 +116,7 @@ func TestAsyncPreserverClose(t *testing.T) {
 	wg.Add(1)
 
 	go func() {
-		if err := pres.Connect(ctx); err != nil {
+		if err := pres.ConnectWithContext(ctx); err != nil {
 			t.Error(err)
 		}
 		pres.CloseAsync()
@@ -176,12 +176,12 @@ func TestAsyncPreserverHappy(t *testing.T) {
 		}
 	}()
 
-	if err := pres.Connect(ctx); err != nil {
+	if err := pres.ConnectWithContext(ctx); err != nil {
 		t.Error(err)
 	}
 
 	for _, exp := range expParts {
-		msg, _, err := pres.Read(ctx)
+		msg, _, err := pres.ReadWithContext(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -225,13 +225,13 @@ func TestAsyncPreserverErrorProp(t *testing.T) {
 		}
 	}()
 
-	if actErr := pres.Connect(ctx); expErr != actErr {
+	if actErr := pres.ConnectWithContext(ctx); expErr != actErr {
 		t.Errorf("Wrong error returned: %v != %v", actErr, expErr)
 	}
-	if _, _, actErr := pres.Read(ctx); expErr != actErr {
+	if _, _, actErr := pres.ReadWithContext(ctx); expErr != actErr {
 		t.Errorf("Wrong error returned: %v != %v", actErr, expErr)
 	}
-	if _, aFn, actErr := pres.Read(ctx); actErr != nil {
+	if _, aFn, actErr := pres.ReadWithContext(ctx); actErr != nil {
 		t.Fatal(actErr)
 	} else {
 		if actErr = aFn(ctx, response.NewAck()); expErr != actErr {
@@ -275,7 +275,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	exp3 := "msg 3"
 
 	go sendMsg(exp)
-	msg, aFn, err := pres.Read(ctx)
+	msg, aFn, err := pres.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 
 	// Fail previous message, expecting it to be resent.
 	aFn(ctx, response.NewError(errors.New("failed")))
-	msg, aFn, err = pres.Read(ctx)
+	msg, aFn, err = pres.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 
 	// Read the primed message.
 	var aFn2 AsyncAckFn
-	msg, aFn2, err = pres.Read(ctx)
+	msg, aFn2, err = pres.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,14 +311,14 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	aFn2(ctx, response.NewError(errors.New("failed again")))
 
 	// Read both messages.
-	msg, aFn, err = pres.Read(ctx)
+	msg, aFn, err = pres.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if act := string(msg.Get(0).Get()); exp != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp)
 	}
-	msg, aFn2, err = pres.Read(ctx)
+	msg, aFn2, err = pres.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	aFn(ctx, response.NewAck())
 	aFn2(ctx, response.NewAck())
 
-	msg, aFn, err = pres.Read(ctx)
+	msg, aFn, err = pres.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +380,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 	ackFns := []AsyncAckFn{}
 	for _, exp := range messages {
 		go sendMsg(exp)
-		msg, aFn, err := pres.Read(ctx)
+		msg, aFn, err := pres.ReadWithContext(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -397,7 +397,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 	ackFns = []AsyncAckFn{}
 
 	for _, exp := range messages {
-		msg, aFn, err := pres.Read(ctx)
+		msg, aFn, err := pres.ReadWithContext(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}

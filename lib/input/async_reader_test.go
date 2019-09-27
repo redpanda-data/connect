@@ -57,14 +57,14 @@ func newMockAsyncReader() *mockAsyncReader {
 	}
 }
 
-func (r *mockAsyncReader) Connect(ctx context.Context) error {
+func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 	cerr, open := <-r.connChan
 	if !open {
 		return types.ErrNotConnected
 	}
 	return cerr
 }
-func (r *mockAsyncReader) Read(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
 	select {
 	case <-ctx.Done():
 		return nil, nil, types.ErrTimeout
@@ -102,8 +102,10 @@ func (r *mockAsyncReader) WaitForClose(time.Duration) error {
 
 type asyncReaderCantConnect struct{}
 
-func (r asyncReaderCantConnect) Connect(ctx context.Context) error { return types.ErrNotConnected }
-func (r asyncReaderCantConnect) Read(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (r asyncReaderCantConnect) ConnectWithContext(ctx context.Context) error {
+	return types.ErrNotConnected
+}
+func (r asyncReaderCantConnect) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
 	return nil, nil, types.ErrNotConnected
 }
 func (r asyncReaderCantConnect) CloseAsync() {}
@@ -134,11 +136,11 @@ type asyncReaderCantRead struct {
 	connected int
 }
 
-func (r *asyncReaderCantRead) Connect(ctx context.Context) error {
+func (r *asyncReaderCantRead) ConnectWithContext(ctx context.Context) error {
 	r.connected++
 	return nil
 }
-func (r *asyncReaderCantRead) Read(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (r *asyncReaderCantRead) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
 	return nil, nil, types.ErrNotConnected
 }
 func (r *asyncReaderCantRead) CloseAsync() {}

@@ -127,7 +127,7 @@ func (r *AsyncReader) loop() {
 	}()
 
 	for {
-		if err := r.reader.Connect(r.ctx); err != nil {
+		if err := r.reader.ConnectWithContext(r.ctx); err != nil {
 			if err == types.ErrTypeClosed {
 				return
 			}
@@ -145,7 +145,7 @@ func (r *AsyncReader) loop() {
 	atomic.StoreInt32(&r.connected, 1)
 
 	for atomic.LoadInt32(&r.running) == 1 {
-		msg, ackFn, err := r.reader.Read(r.ctx)
+		msg, ackFn, err := r.reader.ReadWithContext(r.ctx)
 
 		// If our reader says it is not connected.
 		if err == types.ErrNotConnected {
@@ -154,7 +154,7 @@ func (r *AsyncReader) loop() {
 
 			// Continue to try to reconnect while still active.
 			for atomic.LoadInt32(&r.running) == 1 {
-				if err = r.reader.Connect(r.ctx); err != nil {
+				if err = r.reader.ConnectWithContext(r.ctx); err != nil {
 					// Close immediately if our reader is closed.
 					if err == types.ErrTypeClosed {
 						return
@@ -162,7 +162,7 @@ func (r *AsyncReader) loop() {
 
 					r.log.Errorf("Failed to reconnect to %v: %v\n", r.typeStr, err)
 					mFailedConn.Incr(1)
-				} else if msg, ackFn, err = r.reader.Read(r.ctx); err != types.ErrNotConnected {
+				} else if msg, ackFn, err = r.reader.ReadWithContext(r.ctx); err != types.ErrNotConnected {
 					mConn.Incr(1)
 					atomic.StoreInt32(&r.connected, 1)
 					r.connThrot.Reset()

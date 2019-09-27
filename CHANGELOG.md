@@ -16,6 +16,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Go API: Experimental `reader.Async` component methods renamed.
+
+### Changed
+
 - Linting is now disabled for the environment var config shipped with docker
   images, this should prevent the log spam on start up.
 

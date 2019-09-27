@@ -122,8 +122,8 @@ func NewAMQP09(conf AMQP09Config, log log.Modular, stats metrics.Type) (Async, e
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to an AMQP09 server.
-func (a *AMQP09) Connect(ctx context.Context) (err error) {
+// ConnectWithContext establishes a connection to an AMQP09 server.
+func (a *AMQP09) ConnectWithContext(ctx context.Context) (err error) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
@@ -228,8 +228,8 @@ func (a *AMQP09) disconnect() error {
 
 //------------------------------------------------------------------------------
 
-// Read a new AMQP09 message.
-func (a *AMQP09) Read(ctx context.Context) (types.Message, AsyncAckFn, error) {
+// ReadWithContext a new AMQP09 message.
+func (a *AMQP09) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	var c <-chan amqp.Delivery
 
 	a.m.RLock()

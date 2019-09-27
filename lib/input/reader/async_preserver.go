@@ -56,11 +56,11 @@ func NewAsyncPreserver(r Async) *AsyncPreserver {
 
 //------------------------------------------------------------------------------
 
-// Connect attempts to establish a connection to the source, if unsuccessful
-// returns an error. If the attempt is successful (or not necessary) returns
-// nil.
-func (p *AsyncPreserver) Connect(ctx context.Context) error {
-	return p.r.Connect(ctx)
+// ConnectWithContext attempts to establish a connection to the source, if
+// unsuccessful returns an error. If the attempt is successful (or not
+// necessary) returns nil.
+func (p *AsyncPreserver) ConnectWithContext(ctx context.Context) error {
+	return p.r.ConnectWithContext(ctx)
 }
 
 func (p *AsyncPreserver) wrapAckFn(msg types.Message, ackFn AsyncAckFn) AsyncAckFn {
@@ -78,8 +78,8 @@ func (p *AsyncPreserver) wrapAckFn(msg types.Message, ackFn AsyncAckFn) AsyncAck
 	}
 }
 
-// Read attempts to read a new message from the source.
-func (p *AsyncPreserver) Read(ctx context.Context) (types.Message, AsyncAckFn, error) {
+// ReadWithContext attempts to read a new message from the source.
+func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	// If we have messages queued to be resent we prioritise them over reading
 	// new messages.
 	p.msgsMut.Lock()
@@ -94,7 +94,7 @@ func (p *AsyncPreserver) Read(ctx context.Context) (types.Message, AsyncAckFn, e
 		return resend.msg, p.wrapAckFn(resend.msg, resend.ackFn), nil
 	}
 	p.msgsMut.Unlock()
-	msg, aFn, err := p.r.Read(ctx)
+	msg, aFn, err := p.r.ReadWithContext(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

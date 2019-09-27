@@ -61,15 +61,16 @@ type AsyncAckFn func(context.Context, types.Response) error
 // implementations to ensure acknowledgements are not sent for consumed messages
 // until a subsequent Acknowledge call contains a nil error.
 type Async interface {
-	// Connect attempts to establish a connection to the source, if unsuccessful
-	// returns an error. If the attempt is successful (or not necessary) returns
-	// nil.
-	Connect(ctx context.Context) error
+	// ConnectWithContext attempts to establish a connection to the source, if
+	// unsuccessful returns an error. If the attempt is successful (or not
+	// necessary) returns nil.
+	ConnectWithContext(ctx context.Context) error
 
-	// Read attempts to read a new message from the source. If successful a
-	// message is returned along with a function used to acknowledge receipt of
-	// the returned message.
-	Read(ctx context.Context) (types.Message, AsyncAckFn, error)
+	// ReadWithContext attempts to read a new message from the source. If
+	// successful a message is returned along with a function used to
+	// acknowledge receipt of the returned message. It's safe to process the
+	// returned message and read the next message asynchronously.
+	ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error)
 
 	types.Closable
 }

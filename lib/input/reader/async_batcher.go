@@ -65,11 +65,11 @@ func NewAsyncBatcher(
 
 //------------------------------------------------------------------------------
 
-// Connect attempts to establish a connection to the source, if unsuccessful
-// returns an error. If the attempt is successful (or not necessary) returns
-// nil.
-func (p *AsyncBatcher) Connect(ctx context.Context) error {
-	return p.r.Connect(ctx)
+// ConnectWithContext attempts to establish a connection to the source, if
+// unsuccessful returns an error. If the attempt is successful (or not
+// necessary) returns nil.
+func (p *AsyncBatcher) ConnectWithContext(ctx context.Context) error {
+	return p.r.ConnectWithContext(ctx)
 }
 
 func (p *AsyncBatcher) wrapAckFns() AsyncAckFn {
@@ -77,8 +77,14 @@ func (p *AsyncBatcher) wrapAckFns() AsyncAckFn {
 	p.pendingAcks = nil
 	return func(ctx context.Context, res types.Response) error {
 		errs := []error{}
+		errChan := make(chan error)
 		for _, fn := range ackFns {
-			if err := fn(ctx, res); err != nil {
+			go func(f AsyncAckFn) {
+				errChan <- f(ctx, res)
+			}(fn)
+		}
+		for range ackFns {
+			if err := <-errChan; err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -92,8 +98,8 @@ func (p *AsyncBatcher) wrapAckFns() AsyncAckFn {
 	}
 }
 
-// Read attempts to read a new message from the source.
-func (p *AsyncBatcher) Read(ctx context.Context) (types.Message, AsyncAckFn, error) {
+// ReadWithContext attempts to read a new message from the source.
+func (p *AsyncBatcher) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	var forcedBatchDeadline time.Time
 	if tout := p.batcher.UntilNext(); tout >= 0 {
 		forcedBatchDeadline = time.Now().Add(tout)
@@ -104,7 +110,7 @@ func (p *AsyncBatcher) Read(ctx context.Context) (types.Message, AsyncAckFn, err
 
 	flushBatch := false
 	for !flushBatch {
-		msg, ackFn, err := p.r.Read(ctx)
+		msg, ackFn, err := p.r.ReadWithContext(ctx)
 		if err != nil {
 			if !forcedBatchDeadline.IsZero() && !time.Now().Before(forcedBatchDeadline) {
 				if batch := p.batcher.Flush(); batch != nil && batch.Len() > 0 {

@@ -329,8 +329,8 @@ func (k *KafkaCG) closeGroup() {
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a KafkaCG connection.
-func (k *KafkaCG) Connect(ctx context.Context) error {
+// ConnectWithContext establishes a KafkaCG connection.
+func (k *KafkaCG) ConnectWithContext(ctx context.Context) error {
 	k.cMut.Lock()
 	defer k.cMut.Unlock()
 	if k.msgChan != nil {
@@ -438,8 +438,8 @@ func (k *KafkaCG) Connect(ctx context.Context) error {
 	return nil
 }
 
-// Read attempts to read a message from a KafkaCG topic.
-func (k *KafkaCG) Read(ctx context.Context) (types.Message, AsyncAckFn, error) {
+// ReadWithContext attempts to read a message from a KafkaCG topic.
+func (k *KafkaCG) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()
