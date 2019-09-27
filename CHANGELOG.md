@@ -14,6 +14,11 @@ All notable changes to this project will be documented in this file.
 - Fields `user` and `password` added to `mqtt` input and output.
 - New experimental `amqp_0_9` input.
 
+### Changed
+
+- Linting is now disabled for the environment var config shipped with docker
+  images, this should prevent the log spam on start up.
+
 ## 3.1.1 - 2019-09-23
 
 ### Fixed

@@ -21,6 +21,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strings"
@@ -180,6 +181,10 @@ func lintWalk(path string, rawNode *yaml.Node, raw, processed interface{}) []str
 // Lint attempts to report errors within a user config. Returns a slice of lint
 // results.
 func Lint(rawBytes []byte, config Type) ([]string, error) {
+	if bytes.HasPrefix(rawBytes, []byte("# BENTHOS LINT DISABLE")) {
+		return nil, nil
+	}
+
 	var raw, processed interface{}
 	var rawNode yaml.Node
 	if err := yaml.Unmarshal(rawBytes, &raw); err != nil {
