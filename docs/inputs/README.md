@@ -137,47 +137,8 @@ amqp_0_9:
   batching:
     byte_size: 0
     condition:
-      all: {}
-      and: []
-      any: {}
-      bounds_check:
-        max_part_size: 1.073741824e+09
-        max_parts: 100
-        min_part_size: 1
-        min_parts: 1
-      check_field:
-        condition: {}
-        parts: []
-        path: ""
-      check_interpolation:
-        condition: {}
-        value: ""
-      count:
-        arg: 100
-      jmespath:
-        part: 0
-        query: ""
-      metadata:
-        arg: ""
-        key: ""
-        operator: equals_cs
-        part: 0
-      not: {}
-      number:
-        arg: 0
-        operator: equals
-        part: 0
-      or: []
-      processor_failed:
-        part: 0
-      resource: ""
-      static: false
-      text:
-        arg: ""
-        operator: equals_cs
-        part: 0
       type: static
-      xor: []
+      static: false
     count: 1
     period: ""
   bindings_declare: []

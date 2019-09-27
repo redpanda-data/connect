@@ -23,8 +23,10 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -92,6 +94,25 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			batchSanit, err := batch.SanitisePolicyConfig(conf.AMQP09.Batching)
+			if err != nil {
+				return nil, err
+			}
+
+			cBytes, err := yaml.Marshal(conf.AMQP09)
+			if err != nil {
+				return nil, err
+			}
+
+			hashMap := map[string]interface{}{}
+			if err = yaml.Unmarshal(cBytes, &hashMap); err != nil {
+				return nil, err
+			}
+
+			hashMap["batching"] = batchSanit
+			return hashMap, nil
+		},
 	}
 }
 
