@@ -72,6 +72,9 @@ func TestNATSStreamIntegration(t *testing.T) {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
 
+	t.Run("TestNATSStreamStreamsALO", func(te *testing.T) {
+		testNATSStreamStreamsALO(url, te)
+	})
 	t.Run("TestNATSStreamSinglePart", func(te *testing.T) {
 		testNATSStreamSinglePart(url, te)
 	})
@@ -102,6 +105,41 @@ func createNATSStreamInputOutput(
 		return
 	}
 	return
+}
+
+func testNATSStreamStreamsALO(url string, t *testing.T) {
+	subject := "benthos_test_streams_alo"
+
+	inConf := reader.NewNATSStreamConfig()
+	inConf.ClientID = "benthos_test_streams_alo"
+	inConf.URLs = []string{url}
+	inConf.Subject = subject
+
+	outConf := writer.NewNATSStreamConfig()
+	outConf.URLs = []string{url}
+	outConf.Subject = subject
+
+	outputCtr := func() (mOutput writer.Type, err error) {
+		if mOutput, err = writer.NewNATSStream(outConf, log.Noop(), metrics.Noop()); err != nil {
+			return
+		}
+		err = mOutput.Connect()
+		return
+	}
+	inputCtr := func() (mInput reader.Type, err error) {
+		if mInput, err = reader.NewNATSStream(inConf, log.Noop(), metrics.Noop()); err != nil {
+			return
+		}
+		err = mInput.Connect()
+		return
+	}
+
+	checkALOSynchronous(outputCtr, inputCtr, t)
+
+	inConf.Subject = "benthos_test_streams_alo_with_dc"
+	outConf.Subject = "benthos_test_streams_alo_with_dc"
+
+	checkALOSynchronousAndDie(outputCtr, inputCtr, t)
 }
 
 func testNATSStreamSinglePart(url string, t *testing.T) {

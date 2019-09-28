@@ -74,6 +74,9 @@ func TestAMQPIntegration(t *testing.T) {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
 
+	t.Run("TestAMQPStreamsALO", func(te *testing.T) {
+		testAMQPStreamsALO(url, te)
+	})
 	t.Run("TestAMQPSinglePart", func(te *testing.T) {
 		testAMQPSinglePart(url, te)
 	})
@@ -128,6 +131,52 @@ func createAMQP09InputOutput(
 		return
 	}
 	return
+}
+
+func testAMQPStreamsALO(url string, t *testing.T) {
+	subject := "benthos_test_streams_alo"
+
+	outConf := writer.NewAMQPConfig()
+	outConf.Exchange = subject
+	outConf.URL = url
+	outConf.ExchangeDeclare.Enabled = true
+
+	inConf := reader.NewAMQPConfig()
+	inConf.URL = url
+	inConf.QueueDeclare.Enabled = true
+	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
+		Exchange:   outConf.Exchange,
+		RoutingKey: outConf.BindingKey,
+	})
+
+	outputCtr := func() (mOutput writer.Type, err error) {
+		if mOutput, err = writer.NewAMQP(outConf, log.Noop(), metrics.Noop()); err != nil {
+			return
+		}
+		err = mOutput.Connect()
+		return
+	}
+	inputCtr := func() (mInput reader.Type, err error) {
+		if mInput, err = reader.NewAMQP(inConf, log.Noop(), metrics.Noop()); err != nil {
+			return
+		}
+		err = mInput.Connect()
+		return
+	}
+
+	checkALOSynchronous(outputCtr, inputCtr, t)
+
+	subject = "benthos_test_streams_alo_with_dc"
+
+	outConf.Exchange = subject
+	inConf.BindingsDeclare = []reader.AMQPBindingConfig{
+		{
+			Exchange:   outConf.Exchange,
+			RoutingKey: outConf.BindingKey,
+		},
+	}
+
+	checkALOSynchronousAndDie(outputCtr, inputCtr, t)
 }
 
 func testAMQPSinglePart(url string, t *testing.T) {

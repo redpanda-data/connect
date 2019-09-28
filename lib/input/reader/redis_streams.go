@@ -87,6 +87,10 @@ type RedisStreams struct {
 
 	stats metrics.Type
 	log   log.Modular
+
+	closeChan  chan struct{}
+	closedChan chan struct{}
+	closeOnce  sync.Once
 }
 
 // NewRedisStreams creates a new RedisStreams input type.
@@ -100,6 +104,8 @@ func NewRedisStreams(
 		backlogs:   make(map[string]string, len(conf.Streams)),
 		ackSend:    make(map[string][]string, len(conf.Streams)),
 		ackPending: make(map[string][]string, len(conf.Streams)),
+		closeChan:  make(chan struct{}),
+		closedChan: make(chan struct{}),
 	}
 
 	for _, str := range conf.Streams {
@@ -126,10 +132,36 @@ func NewRedisStreams(
 		}
 	}
 
+	go r.loop()
 	return r, nil
 }
 
 //------------------------------------------------------------------------------
+
+func (r *RedisStreams) loop() {
+	defer func() {
+		var client *redis.Client
+		r.cMut.Lock()
+		client = r.client
+		r.client = nil
+		r.cMut.Unlock()
+		if client != nil {
+			client.Close()
+		}
+		close(r.closedChan)
+	}()
+	commitTimer := time.NewTicker(r.commitPeriod)
+
+	closed := false
+	for !closed {
+		select {
+		case <-commitTimer.C:
+		case <-r.closeChan:
+			closed = true
+		}
+		r.sendAcks()
+	}
+}
 
 func (r *RedisStreams) addPendingAcks(stream string, ids ...string) {
 	r.aMut.Lock()
@@ -138,6 +170,17 @@ func (r *RedisStreams) addPendingAcks(stream string, ids ...string) {
 		r.ackPending[stream] = acks
 	} else {
 		r.ackPending[stream] = ids
+	}
+	r.aMut.Unlock()
+}
+
+func (r *RedisStreams) addAsyncAcks(stream string, ids ...string) {
+	r.aMut.Lock()
+	if acks, exists := r.ackSend[stream]; exists {
+		acks = append(acks, ids...)
+		r.ackSend[stream] = acks
+	} else {
+		r.ackSend[stream] = ids
 	}
 	r.aMut.Unlock()
 }
@@ -314,12 +357,6 @@ func (r *RedisStreams) Acknowledge(err error) error {
 	if err == nil {
 		r.scheduleAcks()
 	}
-
-	if time.Since(r.ackLastSent) < r.commitPeriod {
-		return nil
-	}
-
-	r.sendAcks()
 	return nil
 }
 
@@ -340,11 +377,18 @@ func (r *RedisStreams) disconnect() error {
 
 // CloseAsync shuts down the RedisStreams input and stops processing requests.
 func (r *RedisStreams) CloseAsync() {
-	r.disconnect()
+	r.closeOnce.Do(func() {
+		close(r.closeChan)
+	})
 }
 
 // WaitForClose blocks until the RedisStreams input has closed down.
 func (r *RedisStreams) WaitForClose(timeout time.Duration) error {
+	select {
+	case <-r.closedChan:
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	}
 	return nil
 }
 

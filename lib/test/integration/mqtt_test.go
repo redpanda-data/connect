@@ -42,6 +42,8 @@ func TestMQTTIntegration(t *testing.T) {
 	}
 	t.Skip("Skipping MQTT tests because the library crashes on shutdown")
 
+	t.Parallel()
+
 	pool, err := dockertest.NewPool("")
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)

@@ -40,6 +40,8 @@ func TestRedisStreamsIntegration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
+	t.Parallel()
+
 	pool, err := dockertest.NewPool("")
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
@@ -78,6 +80,9 @@ func TestRedisStreamsIntegration(t *testing.T) {
 	t.Run("TestRedisStreamsSinglePart", func(te *testing.T) {
 		testRedisStreamsSinglePart(url, te)
 	})
+	t.Run("TestRedisStreamsALO", func(te *testing.T) {
+		testRedisStreamsALO(url, te)
+	})
 	t.Run("TestRedisStreamsMultiplePart", func(te *testing.T) {
 		testRedisStreamsMultiplePart(url, te)
 	})
@@ -105,6 +110,50 @@ func createRedisStreamsInputOutput(
 		return
 	}
 	return
+}
+
+func testRedisStreamsALO(url string, t *testing.T) {
+	inConf := reader.NewRedisStreamsConfig()
+	inConf.URL = url
+	inConf.Streams = []string{"benthos_test_streams_alo"}
+	inConf.StartFromOldest = false
+
+	outConf := writer.NewRedisStreamsConfig()
+	outConf.URL = url
+	outConf.Stream = "benthos_test_streams_alo"
+
+	outputCtr := func() (writer.Type, error) {
+		mOutput, err := writer.NewRedisStreams(outConf, log.Noop(), metrics.Noop())
+		if err != nil {
+			return nil, err
+		}
+		if err = mOutput.Connect(); err != nil {
+			return nil, err
+		}
+		if err = mOutput.Write(message.New([][]byte{[]byte(`IGNORE ME`)})); err != nil {
+			return nil, err
+		}
+		return mOutput, nil
+	}
+	inputCtr := func() (reader.Type, error) {
+		var err error
+		var mInput reader.Type
+		if mInput, err = reader.NewRedisStreams(inConf, log.Noop(), metrics.Noop()); err != nil {
+			return nil, err
+		}
+		mInput = reader.NewPreserver(mInput)
+		if err = mInput.Connect(); err != nil {
+			return nil, err
+		}
+		return mInput, nil
+	}
+
+	checkALOSynchronous(outputCtr, inputCtr, t)
+
+	inConf.Streams = []string{"benthos_test_streams_alo_with_dc"}
+	outConf.Stream = "benthos_test_streams_alo_with_dc"
+
+	checkALOSynchronousAndDie(outputCtr, inputCtr, t)
 }
 
 func testRedisStreamsSinglePart(url string, t *testing.T) {
