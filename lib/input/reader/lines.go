@@ -23,6 +23,7 @@ package reader
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"time"
 
@@ -120,6 +121,11 @@ func (r *Lines) closeHandle() {
 
 // Connect attempts to establish a new scanner for an io.Reader.
 func (r *Lines) Connect() error {
+	return r.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext attempts to establish a new scanner for an io.Reader.
+func (r *Lines) ConnectWithContext(ctx context.Context) error {
 	if r.scanner != nil {
 		return nil
 	}
@@ -159,6 +165,43 @@ func (r *Lines) Connect() error {
 	})
 
 	return nil
+}
+
+// ReadWithContext attempts to read a new line from the io.Reader.
+func (r *Lines) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	if r.scanner == nil {
+		return nil, nil, types.ErrNotConnected
+	}
+
+	msg := message.New(nil)
+
+	for r.scanner.Scan() {
+		partBytes := make([]byte, len(r.scanner.Bytes()))
+		partSize := copy(partBytes, r.scanner.Bytes())
+
+		if partSize > 0 {
+			msg.Append(message.NewPart(partBytes))
+			if !r.multipart {
+				return msg, noopAsyncAckFn, nil
+			}
+		} else if r.multipart && msg.Len() > 0 {
+			// Empty line means we're finished reading parts for this
+			// message.
+			return msg, noopAsyncAckFn, nil
+		}
+	}
+
+	if err := r.scanner.Err(); err != nil {
+		r.closeHandle()
+		return nil, nil, err
+	}
+
+	r.closeHandle()
+
+	if msg.Len() > 0 {
+		return msg, noopAsyncAckFn, nil
+	}
+	return nil, nil, types.ErrNotConnected
 }
 
 // Read attempts to read a new line from the io.Reader.
