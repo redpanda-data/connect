@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"context"
 	"io/ioutil"
 	llog "log"
 	"strings"
@@ -78,7 +79,7 @@ type NSQ struct {
 }
 
 // NewNSQ creates a new NSQ input type.
-func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (*NSQ, error) {
 	n := NSQ{
 		conf:             conf,
 		stats:            stats,
@@ -122,6 +123,11 @@ func (n *NSQ) HandleMessage(message *nsq.Message) error {
 
 // Connect establishes a connection to an NSQ server.
 func (n *NSQ) Connect() (err error) {
+	return n.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext establishes a connection to an NSQ server.
+func (n *NSQ) ConnectWithContext(ctx context.Context) (err error) {
 	n.cMut.Lock()
 	defer n.cMut.Unlock()
 
@@ -169,12 +175,12 @@ func (n *NSQ) disconnect() error {
 
 //------------------------------------------------------------------------------
 
-// Read attempts to read a new message from NSQ.
-func (n *NSQ) Read() (types.Message, error) {
+func (n *NSQ) read(ctx context.Context) (*nsq.Message, error) {
 	var msg *nsq.Message
 	select {
 	case msg = <-n.internalMessages:
-		n.unAckMsgs = append(n.unAckMsgs, msg)
+		return msg, nil
+	case <-ctx.Done():
 	case <-n.interruptChan:
 		for _, m := range n.unAckMsgs {
 			m.Requeue(-1)
@@ -184,6 +190,32 @@ func (n *NSQ) Read() (types.Message, error) {
 		n.disconnect()
 		return nil, types.ErrTypeClosed
 	}
+	return nil, types.ErrTimeout
+}
+
+// ReadWithContext attempts to read a new message from NSQ.
+func (n *NSQ) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	msg, err := n.read(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	n.unAckMsgs = append(n.unAckMsgs, msg)
+	return message.New([][]byte{msg.Body}), func(rctx context.Context, res types.Response) error {
+		if res.Error() != nil {
+			msg.Requeue(-1)
+		}
+		msg.Finish()
+		return nil
+	}, nil
+}
+
+// Read attempts to read a new message from NSQ.
+func (n *NSQ) Read() (types.Message, error) {
+	msg, err := n.read(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	n.unAckMsgs = append(n.unAckMsgs, msg)
 	return message.New([][]byte{msg.Body}), nil
 }
 
