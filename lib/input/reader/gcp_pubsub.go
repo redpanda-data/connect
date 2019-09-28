@@ -97,6 +97,12 @@ func NewGCPPubSub(
 
 // Connect attempts to establish a connection to the target subscription.
 func (c *GCPPubSub) Connect() error {
+	return c.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext attempts to establish a connection to the target
+// subscription.
+func (c *GCPPubSub) ConnectWithContext(ignored context.Context) error {
 	c.subMut.Lock()
 	defer c.subMut.Unlock()
 	if c.subscription != nil {
@@ -134,6 +140,43 @@ func (c *GCPPubSub) Connect() error {
 
 	c.log.Infof("Receiving GCP Cloud Pub/Sub messages from project '%v' and subscription '%v'\n", c.conf.ProjectID, c.conf.SubscriptionID)
 	return nil
+}
+
+// ReadWithContext attempts to read a new message from the target subscription.
+func (c *GCPPubSub) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	c.subMut.Lock()
+	msgsChan := c.msgsChan
+	c.subMut.Unlock()
+	if msgsChan == nil {
+		return nil, nil, types.ErrNotConnected
+	}
+
+	msg := message.New(nil)
+
+	var gmsg *pubsub.Message
+	var open bool
+	select {
+	case gmsg, open = <-msgsChan:
+	case <-ctx.Done():
+		return nil, nil, types.ErrTimeout
+	}
+	if !open {
+		return nil, nil, types.ErrNotConnected
+	}
+
+	part := message.NewPart(gmsg.Data)
+	part.SetMetadata(metadata.New(gmsg.Attributes))
+	part.Metadata().Set("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
+	msg.Append(part)
+
+	return msg, func(ctx context.Context, res types.Response) error {
+		if res.Error() != nil {
+			gmsg.Nack()
+		} else {
+			gmsg.Ack()
+		}
+		return nil
+	}, nil
 }
 
 // Read attempts to read a new message from the target subscription.
