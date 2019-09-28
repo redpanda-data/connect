@@ -98,7 +98,7 @@ func (f *Files) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 	if err != nil {
 		return nil, nil, err
 	}
-	return msg, func(ctx context.Context, res types.Response) error { return nil }, nil
+	return msg, noopAsyncAckFn, nil
 }
 
 // Read a new Files message.

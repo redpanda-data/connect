@@ -55,6 +55,10 @@ type Type interface {
 // delivered. Returns an error if the acknowledge was not propagated.
 type AsyncAckFn func(context.Context, types.Response) error
 
+var noopAsyncAckFn AsyncAckFn = func(context.Context, types.Response) error {
+	return nil
+}
+
 // Async is a type that reads Benthos messages from an external source and
 // allows acknowledgements for a message batch to be propagated asynchronously.
 // If the source supports acknowledgements then it is the responsibility of Type
