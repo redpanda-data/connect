@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -126,6 +127,11 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 
 // Connect establishes a nanomsg socket.
 func (s *ScaleProto) Connect() error {
+	return s.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext establishes a nanomsg socket.
+func (s *ScaleProto) ConnectWithContext(ctx context.Context) error {
 	s.cMut.Lock()
 	defer s.cMut.Unlock()
 
@@ -201,21 +207,27 @@ func (s *ScaleProto) Connect() error {
 
 // Read attempts to read a new message from the nanomsg socket.
 func (s *ScaleProto) Read() (types.Message, error) {
+	msg, _, err := s.ReadWithContext(context.Background())
+	return msg, err
+}
+
+// ReadWithContext attempts to read a new message from the nanomsg socket.
+func (s *ScaleProto) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	s.cMut.Lock()
 	socket := s.socket
 	s.cMut.Unlock()
 
 	if socket == nil {
-		return nil, types.ErrNotConnected
+		return nil, nil, types.ErrNotConnected
 	}
 	data, err := socket.Recv()
 	if err != nil {
 		if err == mangos.ErrRecvTimeout {
-			return nil, types.ErrTimeout
+			return nil, nil, types.ErrTimeout
 		}
-		return nil, err
+		return nil, nil, err
 	}
-	return message.New([][]byte{data}), nil
+	return message.New([][]byte{data}), noopAsyncAckFn, nil
 }
 
 // Acknowledge instructs whether the pending messages were propagated

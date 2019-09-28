@@ -23,6 +23,7 @@
 package reader
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -118,6 +119,11 @@ func getZMQType(t string) (zmq4.Type, error) {
 
 // Connect establishes a ZMQ4 socket.
 func (z *ZMQ4) Connect() error {
+	return z.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext establishes a ZMQ4 socket.
+func (z *ZMQ4) ConnectWithContext(ignored context.Context) error {
 	if z.socket != nil {
 		return nil
 	}
@@ -176,8 +182,14 @@ func (z *ZMQ4) Connect() error {
 
 // Read attempts to read a new message from the ZMQ socket.
 func (z *ZMQ4) Read() (types.Message, error) {
+	msg, _, err := z.ReadWithContext(context.Background())
+	return msg, err
+}
+
+// ReadWithContext attempts to read a new message from the ZMQ socket.
+func (z *ZMQ4) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	if z.socket == nil {
-		return nil, types.ErrNotConnected
+		return nil, nil, types.ErrNotConnected
 	}
 
 	data, err := z.socket.RecvMessageBytes(zmq4.DONTWAIT)
@@ -186,14 +198,14 @@ func (z *ZMQ4) Read() (types.Message, error) {
 		if polled, err = z.poller.Poll(z.pollTimeout); len(polled) == 1 {
 			data, err = z.socket.RecvMessageBytes(0)
 		} else if err == nil {
-			return nil, types.ErrTimeout
+			return nil, nil, types.ErrTimeout
 		}
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return message.New(data), nil
+	return message.New(data), noopAsyncAckFn, nil
 }
 
 // Acknowledge instructs whether the pending messages were propagated
