@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -53,7 +54,7 @@ type Files struct {
 }
 
 // NewFiles creates a new Files input type.
-func NewFiles(conf FilesConfig) (Type, error) {
+func NewFiles(conf FilesConfig) (*Files, error) {
 	f := Files{}
 
 	if info, err := os.Stat(conf.Path); err != nil {
@@ -84,7 +85,21 @@ func (f *Files) Connect() (err error) {
 	return nil
 }
 
+// ConnectWithContext establishes a connection.
+func (f *Files) ConnectWithContext(ctx context.Context) (err error) {
+	return nil
+}
+
 //------------------------------------------------------------------------------
+
+// ReadWithContext a new Files message.
+func (f *Files) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	msg, err := f.Read()
+	if err != nil {
+		return nil, nil, err
+	}
+	return msg, func(ctx context.Context, res types.Response) error { return nil }, nil
+}
 
 // Read a new Files message.
 func (f *Files) Read() (types.Message, error) {

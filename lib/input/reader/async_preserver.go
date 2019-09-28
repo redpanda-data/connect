@@ -40,6 +40,10 @@ type asyncPreserverResend struct {
 // during message propagation the contents of the buffer will be resent instead
 // of reading new messages until it is depleted. AsyncPreserver implements
 // reader.Async.
+//
+// Wrapping an input with this type is useful when your source of messages
+// doesn't have a concept of a NoAck (like Kafka), and instead of "rejecting"
+// messages we always intend to simply retry them until success.
 type AsyncPreserver struct {
 	resendMessages []asyncPreserverResend
 	msgsMut        sync.Mutex

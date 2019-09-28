@@ -21,11 +21,13 @@
 package reader
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -131,7 +133,7 @@ func TestFilesFile(t *testing.T) {
 	conf := NewFilesConfig()
 	conf.Path = tmpFile.Name()
 
-	var f Type
+	var f *Files
 	if f, err = NewFiles(conf); err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +143,8 @@ func TestFilesFile(t *testing.T) {
 	}
 
 	var msg types.Message
-	if msg, err = f.Read(); err != nil {
+	var ackFn AsyncAckFn
+	if msg, ackFn, err = f.ReadWithContext(context.Background()); err != nil {
 		t.Error(err)
 	} else {
 		resStr := string(msg.Get(0).Get())
@@ -149,6 +152,9 @@ func TestFilesFile(t *testing.T) {
 			t.Errorf("Received duplicate message: %v", resStr)
 		}
 		act[resStr] = struct{}{}
+		if err = ackFn(context.Background(), response.NewAck()); err != nil {
+			t.Error(err)
+		}
 	}
 	if _, err = f.Read(); err != types.ErrTypeClosed {
 		t.Error(err)
