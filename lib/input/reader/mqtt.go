@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"sync"
@@ -104,6 +105,11 @@ func NewMQTT(
 
 // Connect establishes a connection to an MQTT server.
 func (m *MQTT) Connect() error {
+	return m.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext establishes a connection to an MQTT server.
+func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 	m.cMut.Lock()
 	defer m.cMut.Unlock()
 
@@ -156,8 +162,8 @@ func (m *MQTT) msgHandler(c mqtt.Client, msg mqtt.Message) {
 	}
 }
 
-// Read attempts to read a new message from an MQTT broker.
-func (m *MQTT) Read() (types.Message, error) {
+// ReadWithContext attempts to read a new message from an MQTT broker.
+func (m *MQTT) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	select {
 	case msg := <-m.msgChan:
 		message := message.New([][]byte{[]byte(msg.Payload())})
@@ -169,10 +175,18 @@ func (m *MQTT) Read() (types.Message, error) {
 		meta.Set("mqtt_topic", string(msg.Topic()))
 		meta.Set("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
 
-		return message, nil
+		return message, noopAsyncAckFn, nil
+	case <-ctx.Done():
 	case <-m.interruptChan:
+		return nil, nil, types.ErrTypeClosed
 	}
-	return nil, types.ErrTypeClosed
+	return nil, nil, types.ErrTimeout
+}
+
+// Read attempts to read a new message from an MQTT broker.
+func (m *MQTT) Read() (types.Message, error) {
+	msg, _, err := m.ReadWithContext(context.Background())
+	return msg, err
 }
 
 // Acknowledge instructs whether messages have been successfully propagated.
