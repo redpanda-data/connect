@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"sync"
@@ -124,6 +125,12 @@ func (n *NATSStream) disconnect() {
 
 // Connect attempts to establish a connection to a NATS streaming server.
 func (n *NATSStream) Connect() error {
+	return n.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext attempts to establish a connection to a NATS streaming
+// server.
+func (n *NATSStream) ConnectWithContext(ctx context.Context) error {
 	n.cMut.Lock()
 	defer n.cMut.Unlock()
 
@@ -203,8 +210,7 @@ func (n *NATSStream) Connect() error {
 	return nil
 }
 
-// Read attempts to read a new message from the NATS streaming server.
-func (n *NATSStream) Read() (types.Message, error) {
+func (n *NATSStream) read(ctx context.Context) (*stan.Msg, error) {
 	var msg *stan.Msg
 	var open bool
 	select {
@@ -212,12 +218,44 @@ func (n *NATSStream) Read() (types.Message, error) {
 		if !open {
 			return nil, types.ErrNotConnected
 		}
-		n.unAckMsgs = append(n.unAckMsgs, msg)
+	case <-ctx.Done():
+		return nil, types.ErrTimeout
 	case <-n.interruptChan:
 		n.unAckMsgs = nil
 		n.disconnect()
 		return nil, types.ErrTypeClosed
 	}
+	return msg, nil
+}
+
+// ReadWithContext attempts to read a new message from the NATS streaming
+// server.
+func (n *NATSStream) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	msg, err := n.read(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bmsg := message.New([][]byte{msg.Data})
+	bmsg.Get(0).Metadata().Set("nats_stream_subject", msg.Subject)
+	bmsg.Get(0).Metadata().Set("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
+
+	return bmsg, func(rctx context.Context, res types.Response) error {
+		if res.Error() == nil {
+			return msg.Ack()
+		}
+		return nil
+	}, nil
+}
+
+// Read attempts to read a new message from the NATS streaming server.
+func (n *NATSStream) Read() (types.Message, error) {
+	msg, err := n.read(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	n.unAckMsgs = append(n.unAckMsgs, msg)
+
 	bmsg := message.New([][]byte{msg.Data})
 	bmsg.Get(0).Metadata().Set("nats_stream_subject", msg.Subject)
 	bmsg.Get(0).Metadata().Set("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
