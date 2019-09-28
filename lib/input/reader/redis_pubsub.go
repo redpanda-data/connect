@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"context"
 	"net/url"
 	"sync"
 	"time"
@@ -87,8 +88,13 @@ func NewRedisPubSub(
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to an RedisPubSub server.
+// Connect establishes a connection to a RedisPubSub server.
 func (r *RedisPubSub) Connect() error {
+	return r.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext establishes a connection to an RedisPubSub server.
+func (r *RedisPubSub) ConnectWithContext(ctx context.Context) error {
 	r.cMut.Lock()
 	defer r.cMut.Unlock()
 
@@ -123,6 +129,12 @@ func (r *RedisPubSub) Connect() error {
 
 // Read attempts to pop a message from a redis pubsub channel.
 func (r *RedisPubSub) Read() (types.Message, error) {
+	msg, _, err := r.ReadWithContext(context.Background())
+	return msg, err
+}
+
+// ReadWithContext attempts to pop a message from a redis pubsub channel.
+func (r *RedisPubSub) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	var pubsub *redis.PubSub
 
 	r.cMut.Lock()
@@ -130,16 +142,20 @@ func (r *RedisPubSub) Read() (types.Message, error) {
 	r.cMut.Unlock()
 
 	if pubsub == nil {
-		return nil, types.ErrNotConnected
+		return nil, nil, types.ErrNotConnected
 	}
 
-	rMsg, open := <-pubsub.Channel()
-	if !open {
-		r.disconnect()
-		return nil, types.ErrTypeClosed
+	select {
+	case rMsg, open := <-pubsub.Channel():
+		if !open {
+			r.disconnect()
+			return nil, nil, types.ErrTypeClosed
+		}
+		return message.New([][]byte{[]byte(rMsg.Payload)}), noopAsyncAckFn, nil
+	case <-ctx.Done():
 	}
 
-	return message.New([][]byte{[]byte(rMsg.Payload)}), nil
+	return nil, nil, types.ErrTimeout
 }
 
 // Acknowledge is a noop since Redis pub/sub channels do not support
