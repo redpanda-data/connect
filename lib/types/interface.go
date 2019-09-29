@@ -216,6 +216,8 @@ type Response interface {
 	// processing a message, it should not be acknowledged. If SkipAck is false
 	// and Error is nil then all unacknowledged messages should be acknowledged
 	// also.
+	//
+	// TODO: V4 Remove this.
 	SkipAck() bool
 }
 
