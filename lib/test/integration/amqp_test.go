@@ -86,6 +86,9 @@ func TestAMQPIntegration(t *testing.T) {
 	t.Run("TestAMQPDisconnect", func(te *testing.T) {
 		testAMQPDisconnect(url, te)
 	})
+	t.Run("TestAMQP09StreamsALOAsync", func(te *testing.T) {
+		testAMQP09StreamsALOAsync(url, te)
+	})
 	t.Run("TestAMQP09SinglePart", func(te *testing.T) {
 		testAMQP09SinglePart(url, te)
 	})
@@ -143,6 +146,7 @@ func testAMQPStreamsALO(url string, t *testing.T) {
 
 	inConf := reader.NewAMQPConfig()
 	inConf.URL = url
+	inConf.Queue = subject
 	inConf.QueueDeclare.Enabled = true
 	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
 		Exchange:   outConf.Exchange,
@@ -169,6 +173,7 @@ func testAMQPStreamsALO(url string, t *testing.T) {
 	subject = "benthos_test_streams_alo_with_dc"
 
 	outConf.Exchange = subject
+	inConf.Queue = subject
 	inConf.BindingsDeclare = []reader.AMQPBindingConfig{
 		{
 			Exchange:   outConf.Exchange,
@@ -180,12 +185,16 @@ func testAMQPStreamsALO(url string, t *testing.T) {
 }
 
 func testAMQPSinglePart(url string, t *testing.T) {
+	subject := "benthos_test_single_part"
+
 	outConf := writer.NewAMQPConfig()
 	outConf.URL = url
+	outConf.Exchange = subject
 	outConf.ExchangeDeclare.Enabled = true
 
 	inConf := reader.NewAMQPConfig()
 	inConf.URL = url
+	inConf.Queue = subject
 	inConf.QueueDeclare.Enabled = true
 	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
 		Exchange:   outConf.Exchange,
@@ -259,12 +268,16 @@ func testAMQPSinglePart(url string, t *testing.T) {
 }
 
 func testAMQPMultiplePart(url string, t *testing.T) {
+	subject := "benthos_test_multi_part"
+
 	outConf := writer.NewAMQPConfig()
 	outConf.URL = url
+	outConf.Exchange = subject
 	outConf.ExchangeDeclare.Enabled = true
 
 	inConf := reader.NewAMQPConfig()
 	inConf.URL = url
+	inConf.Queue = subject
 	inConf.QueueDeclare.Enabled = true
 	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
 		Exchange:   outConf.Exchange,
@@ -350,12 +363,16 @@ func testAMQPMultiplePart(url string, t *testing.T) {
 }
 
 func testAMQPDisconnect(url string, t *testing.T) {
+	subject := "benthos_test_dc"
+
 	outConf := writer.NewAMQPConfig()
 	outConf.URL = url
+	outConf.Exchange = subject
 	outConf.ExchangeDeclare.Enabled = true
 
 	inConf := reader.NewAMQPConfig()
 	inConf.URL = url
+	inConf.Queue = subject
 	inConf.QueueDeclare.Enabled = true
 	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQPBindingConfig{
 		Exchange:   outConf.Exchange,
@@ -388,13 +405,82 @@ func testAMQPDisconnect(url string, t *testing.T) {
 	wg.Wait()
 }
 
-func testAMQP09SinglePart(url string, t *testing.T) {
+func testAMQP09StreamsALOAsync(url string, t *testing.T) {
+	subject := "benthos_test_streams_alo_async"
+
 	outConf := writer.NewAMQPConfig()
+	outConf.Exchange = subject
 	outConf.URL = url
 	outConf.ExchangeDeclare.Enabled = true
 
 	inConf := reader.NewAMQP09Config()
 	inConf.URL = url
+	inConf.Queue = subject
+	inConf.QueueDeclare.Enabled = true
+	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQP09BindingConfig{
+		Exchange:   outConf.Exchange,
+		RoutingKey: outConf.BindingKey,
+	})
+
+	outputCtr := func() (mOutput writer.Type, err error) {
+		if mOutput, err = writer.NewAMQP(outConf, log.Noop(), metrics.Noop()); err != nil {
+			return
+		}
+		err = mOutput.Connect()
+		return
+	}
+	inputCtr := func() (mInput reader.Async, err error) {
+		ctx, done := context.WithTimeout(context.Background(), time.Second*60)
+		defer done()
+
+		if mInput, err = reader.NewAMQP09(inConf, log.Noop(), metrics.Noop()); err != nil {
+			return
+		}
+		err = mInput.ConnectWithContext(ctx)
+		return
+	}
+
+	checkALOSynchronousAsync(outputCtr, inputCtr, t)
+
+	subject = "benthos_test_streams_alo_with_dc_async"
+
+	outConf.Exchange = subject
+	inConf.Queue = subject
+	inConf.BindingsDeclare = []reader.AMQP09BindingConfig{
+		{
+			Exchange:   outConf.Exchange,
+			RoutingKey: outConf.BindingKey,
+		},
+	}
+
+	checkALOSynchronousAndDieAsync(outputCtr, inputCtr, t)
+
+	subject = "benthos_test_streams_alo_parallel_async"
+
+	outConf.Exchange = subject
+	inConf.Queue = subject
+	inConf.PrefetchCount = 100
+	inConf.BindingsDeclare = []reader.AMQP09BindingConfig{
+		{
+			Exchange:   outConf.Exchange,
+			RoutingKey: outConf.BindingKey,
+		},
+	}
+
+	checkALOParallelAsync(outputCtr, inputCtr, 50, t)
+}
+
+func testAMQP09SinglePart(url string, t *testing.T) {
+	subject := "benthos_test_09_single_part"
+
+	outConf := writer.NewAMQPConfig()
+	outConf.URL = url
+	outConf.Exchange = subject
+	outConf.ExchangeDeclare.Enabled = true
+
+	inConf := reader.NewAMQP09Config()
+	inConf.URL = url
+	inConf.Queue = subject
 	inConf.QueueDeclare.Enabled = true
 	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQP09BindingConfig{
 		Exchange:   outConf.Exchange,
@@ -472,12 +558,16 @@ func testAMQP09SinglePart(url string, t *testing.T) {
 }
 
 func testAMQP09MultiplePart(url string, t *testing.T) {
+	subject := "benthos_test_09_multi_part"
+
 	outConf := writer.NewAMQPConfig()
 	outConf.URL = url
+	outConf.Exchange = subject
 	outConf.ExchangeDeclare.Enabled = true
 
 	inConf := reader.NewAMQP09Config()
 	inConf.URL = url
+	inConf.Queue = subject
 	inConf.QueueDeclare.Enabled = true
 	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQP09BindingConfig{
 		Exchange:   outConf.Exchange,
@@ -567,12 +657,16 @@ func testAMQP09MultiplePart(url string, t *testing.T) {
 }
 
 func testAMQP09Disconnect(url string, t *testing.T) {
+	subject := "benthos_test_09_disconnect"
+
 	outConf := writer.NewAMQPConfig()
 	outConf.URL = url
+	outConf.Exchange = subject
 	outConf.ExchangeDeclare.Enabled = true
 
 	inConf := reader.NewAMQP09Config()
 	inConf.URL = url
+	inConf.Queue = subject
 	inConf.QueueDeclare.Enabled = true
 	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQP09BindingConfig{
 		Exchange:   outConf.Exchange,

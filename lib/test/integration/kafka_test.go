@@ -150,20 +150,18 @@ func TestKafkaIntegration(t *testing.T) {
 	t.Run("TestKafkaStreamsALO", func(te *testing.T) {
 		testKafkaStreamsALO(address, te)
 	})
-	/*
-		t.Run("TestKafkaSinglePart", func(te *testing.T) {
-			testKafkaSinglePart(address, te)
-		})
-		t.Run("TestKafkaResumeDurable", func(te *testing.T) {
-			testKafkaResumeDurable(address, te)
-		})
-		t.Run("TestKafkaMultiplePart", func(te *testing.T) {
-			testKafkaMultiplePart(address, te)
-		})
-		t.Run("TestKafkaDisconnect", func(te *testing.T) {
-			testKafkaDisconnect(address, te)
-		})
-	*/
+	t.Run("TestKafkaSinglePart", func(te *testing.T) {
+		testKafkaSinglePart(address, te)
+	})
+	t.Run("TestKafkaResumeDurable", func(te *testing.T) {
+		testKafkaResumeDurable(address, te)
+	})
+	t.Run("TestKafkaMultiplePart", func(te *testing.T) {
+		testKafkaMultiplePart(address, te)
+	})
+	t.Run("TestKafkaDisconnect", func(te *testing.T) {
+		testKafkaDisconnect(address, te)
+	})
 }
 
 func createKafkaInputOutput(

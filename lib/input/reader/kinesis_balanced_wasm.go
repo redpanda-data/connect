@@ -23,6 +23,7 @@
 package reader
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -59,6 +60,18 @@ func NewKinesisBalanced(
 // Connect attempts to establish a connection to the target Kinesis stream.
 func (k *KinesisBalanced) Connect() error {
 	return errNoWASM
+}
+
+// ConnectWithContext attempts to establish a connection to the target Kinesis
+// stream.
+func (k *KinesisBalanced) ConnectWithContext(ctx context.Context) error {
+	return errNoWASM
+}
+
+// ReadWithContext attempts to read a new message from the target Kinesis
+// stream.
+func (k *KinesisBalanced) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	return nil, nil, errNoWASM
 }
 
 // Read attempts to read a new message from the target Kinesis stream.

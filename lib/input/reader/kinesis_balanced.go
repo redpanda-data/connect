@@ -23,6 +23,7 @@
 package reader
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -127,6 +128,12 @@ func NewKinesisBalanced(
 
 // Connect attempts to establish a connection to the target Kinesis stream.
 func (k *KinesisBalanced) Connect() error {
+	return k.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext attempts to establish a connection to the target Kinesis
+// stream.
+func (k *KinesisBalanced) ConnectWithContext(ctx context.Context) error {
 	err := k.kc.StartConsumer()
 
 	k.log.Infof("Receiving Amazon Kinesis messages from stream: %v\n", k.conf.Stream)
@@ -138,6 +145,30 @@ func (k *KinesisBalanced) setMetadata(record *gokini.Records, p types.Part) {
 	met.Set("kinesis_shard", k.shardID)
 	met.Set("kinesis_partition_key", record.PartitionKey)
 	met.Set("kinesis_sequence_number", record.SequenceNumber)
+}
+
+// ReadWithContext attempts to read a new message from the target Kinesis
+// stream.
+func (k *KinesisBalanced) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	var record *gokini.Records
+	select {
+	case record = <-k.records:
+	case <-ctx.Done():
+		return nil, nil, types.ErrTimeout
+	}
+	if record == nil {
+		return nil, nil, fmt.Errorf("shard '%s' has closed", k.shardID)
+	}
+
+	part := message.NewPart(record.Data)
+	k.setMetadata(record, part)
+
+	msg := message.New(nil)
+	msg.Append(part)
+
+	return msg, func(rctx context.Context, res types.Response) error {
+		return k.kc.Checkpoint(k.shardID, record.SequenceNumber)
+	}, nil
 }
 
 // Read attempts to read a new message from the target Kinesis stream.

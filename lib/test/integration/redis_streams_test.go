@@ -21,6 +21,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -82,6 +83,9 @@ func TestRedisStreamsIntegration(t *testing.T) {
 	})
 	t.Run("TestRedisStreamsALO", func(te *testing.T) {
 		testRedisStreamsALO(url, te)
+	})
+	t.Run("TestRedisStreamsAsyncALO", func(te *testing.T) {
+		testRedisStreamsAsyncALO(url, te)
 	})
 	t.Run("TestRedisStreamsMultiplePart", func(te *testing.T) {
 		testRedisStreamsMultiplePart(url, te)
@@ -154,6 +158,53 @@ func testRedisStreamsALO(url string, t *testing.T) {
 	outConf.Stream = "benthos_test_streams_alo_with_dc"
 
 	checkALOSynchronousAndDie(outputCtr, inputCtr, t)
+}
+
+func testRedisStreamsAsyncALO(url string, t *testing.T) {
+	inConf := reader.NewRedisStreamsConfig()
+	inConf.URL = url
+	inConf.Streams = []string{"benthos_test_streams_alo_async"}
+	inConf.StartFromOldest = false
+
+	outConf := writer.NewRedisStreamsConfig()
+	outConf.URL = url
+	outConf.Stream = "benthos_test_streams_alo_async"
+
+	outputCtr := func() (writer.Type, error) {
+		mOutput, err := writer.NewRedisStreams(outConf, log.Noop(), metrics.Noop())
+		if err != nil {
+			return nil, err
+		}
+		if err = mOutput.Connect(); err != nil {
+			return nil, err
+		}
+		if err = mOutput.Write(message.New([][]byte{[]byte(`IGNORE ME`)})); err != nil {
+			return nil, err
+		}
+		return mOutput, nil
+	}
+	inputCtr := func() (reader.Async, error) {
+		ctx, done := context.WithTimeout(context.Background(), time.Second)
+		defer done()
+
+		var err error
+		var mInput reader.Async
+		if mInput, err = reader.NewRedisStreams(inConf, log.Noop(), metrics.Noop()); err != nil {
+			return nil, err
+		}
+		mInput = reader.NewAsyncPreserver(mInput)
+		if err = mInput.ConnectWithContext(ctx); err != nil {
+			return nil, err
+		}
+		return mInput, nil
+	}
+
+	checkALOSynchronousAsync(outputCtr, inputCtr, t)
+
+	inConf.Streams = []string{"benthos_test_streams_alo_with_dc_async"}
+	outConf.Stream = "benthos_test_streams_alo_with_dc_async"
+
+	checkALOSynchronousAndDieAsync(outputCtr, inputCtr, t)
 }
 
 func testRedisStreamsSinglePart(url string, t *testing.T) {
