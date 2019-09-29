@@ -322,12 +322,12 @@ func checkALOParallelAsync(
 		if actM, ackFn, err = input.ReadWithContext(ctx); err != nil {
 			if err == types.ErrNotConnected {
 				if err = input.ConnectWithContext(ctx); err != nil {
-					t.Fatal(err)
+					t.Fatalf("Failed at '%v' read: %v", i, err)
 				}
 				actM, ackFn, err = input.ReadWithContext(ctx)
 			}
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("Failed at '%v' read: %v", i, err)
 			}
 		}
 		ackFns = append(ackFns, ackFn)
