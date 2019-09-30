@@ -21,6 +21,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -125,6 +126,9 @@ func TestAWSIntegration(t *testing.T) {
 	t.Run("testS3UploadDownload", func(t *testing.T) {
 		testS3UploadDownload(t, endpoint, bucket)
 	})
+	t.Run("testSQSStreamsAsync", func(t *testing.T) {
+		testSQSStreamsAsync(t, sqsEndpoint, sqsQueueURL)
+	})
 	t.Run("testSQSSinglePart", func(t *testing.T) {
 		testSQSSinglePart(t, sqsEndpoint, sqsQueueURL)
 	})
@@ -149,6 +153,94 @@ func createSQSInputOutput(
 		return
 	}
 	return
+}
+
+func testS3Streams(t *testing.T, endpoint, sqsEndpoint, sqsURL, bucket string) {
+	inconf := reader.NewAmazonS3Config()
+	inconf.Endpoint = endpoint
+	inconf.Credentials.ID = "xxxxx"
+	inconf.Credentials.Secret = "xxxxx"
+	inconf.Credentials.Token = "xxxxx"
+	inconf.Region = "eu-west-1"
+	inconf.Bucket = bucket
+	inconf.ForcePathStyleURLs = true
+	inconf.Timeout = "1s"
+
+	outconf := writer.NewAmazonS3Config()
+	outconf.Endpoint = endpoint
+	outconf.Credentials.ID = "xxxxx"
+	outconf.Credentials.Secret = "xxxxx"
+	outconf.Credentials.Token = "xxxxx"
+	outconf.Region = "eu-west-1"
+	outconf.Bucket = bucket
+	outconf.ForcePathStyleURLs = true
+	outconf.Path = "${!count:s3uploaddownload}.txt"
+
+	outputCtr := func() (mOutput writer.Type, err error) {
+		if mOutput, err = writer.NewAmazonS3(outconf, log.Noop(), metrics.Noop()); err != nil {
+			return
+		}
+		if err = mOutput.Connect(); err != nil {
+			return
+		}
+		return
+	}
+	inputCtr := func() (mInput reader.Type, err error) {
+		if mInput, err = reader.NewAmazonS3(inconf, log.Noop(), metrics.Noop()); err != nil {
+			return
+		}
+		if err = mInput.Connect(); err != nil {
+			return
+		}
+		return
+	}
+
+	checkALOSynchronous(outputCtr, inputCtr, t)
+	checkALOSynchronousAndDie(outputCtr, inputCtr, t)
+}
+
+func testSQSStreamsAsync(t *testing.T, endpoint, url string) {
+	outConf := writer.NewAmazonSQSConfig()
+	outConf.URL = url
+	outConf.Endpoint = endpoint
+	outConf.Credentials.ID = "xxxxx"
+	outConf.Credentials.Secret = "xxxxx"
+	outConf.Credentials.Token = "xxxxx"
+	outConf.Region = "eu-west-1"
+
+	inConf := reader.NewAmazonSQSConfig()
+	inConf.URL = url
+	inConf.Endpoint = endpoint
+	inConf.Credentials.ID = "xxxxx"
+	inConf.Credentials.Secret = "xxxxx"
+	inConf.Credentials.Token = "xxxxx"
+	inConf.Region = "eu-west-1"
+
+	outputCtr := func() (mOutput writer.Type, err error) {
+		if mOutput, err = writer.NewAmazonSQS(outConf, log.Noop(), metrics.Noop()); err != nil {
+			return
+		}
+		if err = mOutput.Connect(); err != nil {
+			return
+		}
+		return
+	}
+	inputCtr := func() (mInput reader.Async, err error) {
+		ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+		defer done()
+
+		if mInput, err = reader.NewAmazonSQS(inConf, log.Noop(), metrics.Noop()); err != nil {
+			return
+		}
+		if err = mInput.ConnectWithContext(ctx); err != nil {
+			return
+		}
+		return
+	}
+
+	checkALOSynchronousAsync(outputCtr, inputCtr, t)
+	checkALOSynchronousAndDieAsync(outputCtr, inputCtr, t)
+	checkALOParallelAsync(outputCtr, inputCtr, 100, t)
 }
 
 func testSQSSinglePart(t *testing.T, endpoint, url string) {

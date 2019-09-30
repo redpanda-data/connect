@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -97,6 +98,12 @@ func NewAmazonSQS(
 
 // Connect attempts to establish a connection to the target SQS queue.
 func (a *AmazonSQS) Connect() error {
+	return a.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext attempts to establish a connection to the target SQS
+// queue.
+func (a *AmazonSQS) ConnectWithContext(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -125,6 +132,106 @@ func addSQSMetadata(p types.Part, sqsMsg *sqs.Message) {
 			meta.Set(k, *v.StringValue)
 		}
 	}
+}
+
+// ReadWithContext attempts to read a new message from the target SQS.
+func (a *AmazonSQS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	if a.session == nil {
+		return nil, nil, types.ErrNotConnected
+	}
+
+	msg := message.New(nil)
+	pendingHandles := map[string]string{}
+
+	output, err := a.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
+		QueueUrl:              aws.String(a.conf.URL),
+		MaxNumberOfMessages:   aws.Int64(a.conf.MaxNumberOfMessages),
+		WaitTimeSeconds:       aws.Int64(int64(a.timeout.Seconds())),
+		AttributeNames:        []*string{aws.String("All")},
+		MessageAttributeNames: []*string{aws.String("All")},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, sqsMsg := range output.Messages {
+		if sqsMsg.ReceiptHandle != nil {
+			pendingHandles[*sqsMsg.MessageId] = *sqsMsg.ReceiptHandle
+		}
+
+		if sqsMsg.Body != nil {
+			part := message.NewPart([]byte(*sqsMsg.Body))
+			addSQSMetadata(part, sqsMsg)
+			msg.Append(part)
+		}
+	}
+	if msg.Len() == 0 {
+		return nil, nil, types.ErrTimeout
+	}
+
+	return msg, func(rctx context.Context, res types.Response) error {
+		// TODO: Replace this with a background process for batching these
+		// requests up more.
+		if res.Error() == nil {
+			if !a.conf.DeleteMessage {
+				return nil
+			}
+			for len(pendingHandles) > 0 {
+				input := sqs.DeleteMessageBatchInput{
+					QueueUrl: aws.String(a.conf.URL),
+				}
+
+			delHandleLoop:
+				for k, v := range pendingHandles {
+					input.Entries = append(input.Entries, &sqs.DeleteMessageBatchRequestEntry{
+						Id:            aws.String(k),
+						ReceiptHandle: aws.String(v),
+					})
+					delete(pendingHandles, k)
+					if len(input.Entries) == 10 {
+						break delHandleLoop
+					}
+				}
+
+				response, serr := a.sqs.DeleteMessageBatchWithContext(rctx, &input)
+				if serr != nil {
+					a.log.Errorf("Failed to delete consumed SQS messages: %v\n", serr)
+					return serr
+				}
+				for _, fail := range response.Failed {
+					a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", *fail.Id, *fail.Code)
+				}
+			}
+		} else {
+			for len(pendingHandles) > 0 {
+				input := sqs.ChangeMessageVisibilityBatchInput{
+					QueueUrl: aws.String(a.conf.URL),
+				}
+
+			visHandleLoop:
+				for k, v := range pendingHandles {
+					input.Entries = append(input.Entries, &sqs.ChangeMessageVisibilityBatchRequestEntry{
+						Id:                aws.String(k),
+						ReceiptHandle:     aws.String(v),
+						VisibilityTimeout: aws.Int64(0),
+					})
+					delete(pendingHandles, k)
+					if len(input.Entries) == 10 {
+						break visHandleLoop
+					}
+				}
+
+				response, serr := a.sqs.ChangeMessageVisibilityBatchWithContext(rctx, &input)
+				if serr != nil {
+					a.log.Errorf("Failed to change consumed SQS message visibility: %v\n", serr)
+					return serr
+				}
+				for _, fail := range response.Failed {
+					a.log.Errorf("Failed to change consumed SQS message '%v' visibility, response code: %v\n", *fail.Id, *fail.Code)
+				}
+			}
+		}
+		return nil
+	}, nil
 }
 
 // Read attempts to read a new message from the target SQS.

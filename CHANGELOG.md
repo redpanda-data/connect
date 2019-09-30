@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `sqs_endpoint` added to the `s3` input.
+
 ## 3.2.0 - 2019-09-27
 
 ### Added
