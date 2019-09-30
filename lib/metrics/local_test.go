@@ -20,6 +20,17 @@ func TestCounter(t *testing.T) {
 	if *c.Value != 1 {
 		t.Fatalf("value for counter: got %d, wanted 1", *c.Value)
 	}
+
+	// test second call results in the same value
+	counters = local.GetCountersWithLabels()
+	c, ok = counters[path]
+	if !ok {
+		t.Fatal("did not find counter for path")
+	}
+
+	if *c.Value != 1 {
+		t.Fatalf("value for counter: got %d, wanted 1", *c.Value)
+	}
 }
 
 func TestFlushCounter(t *testing.T) {
@@ -41,6 +52,7 @@ func TestFlushCounter(t *testing.T) {
 		t.Fatalf("value for counter: got %d, wanted 1", c)
 	}
 
+	// test second call results in a reset counter
 	counters = local.FlushCounters()
 	c, ok = counters[path]
 	if !ok {
@@ -95,6 +107,17 @@ func TestTimer(t *testing.T) {
 	if *c.Value != 1 {
 		t.Fatalf("value for counter: got %d, wanted 1", *c.Value)
 	}
+
+	// test second call results in the same value
+	counters = local.GetTimingsWithLabels()
+	c, ok = counters[path]
+	if !ok {
+		t.Fatal("did not find counter for path")
+	}
+
+	if *c.Value != 1 {
+		t.Fatalf("value for counter: got %d, wanted 1", *c.Value)
+	}
 }
 
 func TestFlushTimer(t *testing.T) {
@@ -116,6 +139,7 @@ func TestFlushTimer(t *testing.T) {
 		t.Fatalf("value for counter: got %d, wanted 1", c)
 	}
 
+	// test second call results in a reset counter
 	counters = local.FlushTimings()
 	c, ok = counters[path]
 	if !ok {
