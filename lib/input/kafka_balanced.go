@@ -38,9 +38,12 @@ Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
 
-The field ` + "`max_batch_count`" + ` specifies the maximum number of prefetched
-messages to be batched together. When more than one message is batched they can
-be split into individual messages with the ` + "`split`" + ` processor.
+Partitions consumed by this input can be processed in parallel allowing it to
+utilise >1 pipeline processing threads and parallel outputs.
+
+The ` + "`batching`" + ` fields allow you to configure a
+[batching policy](../batching.md#batch-policy) which will be applied per
+partition.
 
 The field ` + "`max_processing_period`" + ` should be set above the maximum
 estimated time taken to process a message.
@@ -67,6 +70,9 @@ message offset.
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return sanitiseWithBatch(conf.KafkaBalanced, conf.KafkaBalanced.Batching)
+		},
 	}
 }
 
@@ -74,11 +80,16 @@ You can access these metadata fields using
 
 // NewKafkaBalanced creates a new KafkaBalanced input type.
 func NewKafkaBalanced(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	k, err := reader.NewKafkaBalanced(conf.KafkaBalanced, log, stats)
+	if conf.KafkaBalanced.MaxBatchCount > 1 {
+		log.Warnf("Field '%v.max_batch_count' is deprecated, use '%v.batching.count' instead.\n", conf.Type, conf.Type)
+		conf.KafkaBalanced.Batching.Count = conf.KafkaBalanced.MaxBatchCount
+	}
+	k, err := reader.NewKafkaCG(conf.KafkaBalanced, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return NewReader("kafka_balanced", reader.NewPreserver(k), log, stats)
+	preserved := reader.NewAsyncBundleUnacks(reader.NewAsyncPreserver(k))
+	return NewAsyncReader("kafka_balanced", true, preserved, log, stats)
 }
 
 //------------------------------------------------------------------------------

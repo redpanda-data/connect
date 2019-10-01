@@ -9,6 +9,13 @@ input:
   kafka_balanced:
     addresses:
     - localhost:9092
+    batching:
+      byte_size: 0
+      condition:
+        type: static
+        static: false
+      count: 1
+      period: ""
     client_id: benthos_kafka_input
     commit_period: 1s
     consumer_group: benthos_consumer_group
@@ -24,7 +31,7 @@ input:
       password: ""
       user: ""
     start_from_oldest: true
-    target_version: 1.0.0
+    target_version: 2.1.0
     tls:
       client_certs: []
       enabled: false

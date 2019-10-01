@@ -105,7 +105,7 @@ type AMQP09 struct {
 }
 
 // NewAMQP09 creates a new AMQP09 input type.
-func NewAMQP09(conf AMQP09Config, log log.Modular, stats metrics.Type) (Async, error) {
+func NewAMQP09(conf AMQP09Config, log log.Modular, stats metrics.Type) (*AMQP09, error) {
 	a := AMQP09{
 		conf:  conf,
 		stats: stats,

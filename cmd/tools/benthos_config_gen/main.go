@@ -101,6 +101,7 @@ func envify(rootPath string, conf interface{}, paths map[string]string) (newConf
 		"CHECK_FIELD",
 		"FILTER",
 		"DEDUPE",
+		"BATCHING_CONDITION",
 		"INPUT_BROKER_INPUTS_BROKER",
 		"OUTPUT_BROKER_OUTPUTS_BROKER",
 		"OUTPUT_BROKER_OUTPUTS_DYNAMODB",

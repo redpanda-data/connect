@@ -74,7 +74,6 @@ const (
 	TypeInproc          = "inproc"
 	TypeKafka           = "kafka"
 	TypeKafkaBalanced   = "kafka_balanced"
-	TypeKafkaCG         = "kafka_cg"
 	TypeKinesis         = "kinesis"
 	TypeKinesisBalanced = "kinesis_balanced"
 	TypeMQTT            = "mqtt"
@@ -113,8 +112,7 @@ type Config struct {
 	HTTPServer      HTTPServerConfig             `json:"http_server" yaml:"http_server"`
 	Inproc          InprocConfig                 `json:"inproc" yaml:"inproc"`
 	Kafka           reader.KafkaConfig           `json:"kafka" yaml:"kafka"`
-	KafkaBalanced   reader.KafkaBalancedConfig   `json:"kafka_balanced" yaml:"kafka_balanced"`
-	KafkaCG         reader.KafkaCGConfig         `json:"kafka_cg" yaml:"kafka_cg"`
+	KafkaBalanced   reader.KafkaCGConfig         `json:"kafka_balanced" yaml:"kafka_balanced"`
 	Kinesis         reader.KinesisConfig         `json:"kinesis" yaml:"kinesis"`
 	KinesisBalanced reader.KinesisBalancedConfig `json:"kinesis_balanced" yaml:"kinesis_balanced"`
 	MQTT            reader.MQTTConfig            `json:"mqtt" yaml:"mqtt"`
@@ -154,8 +152,7 @@ func NewConfig() Config {
 		HTTPServer:      NewHTTPServerConfig(),
 		Inproc:          NewInprocConfig(),
 		Kafka:           reader.NewKafkaConfig(),
-		KafkaBalanced:   reader.NewKafkaBalancedConfig(),
-		KafkaCG:         reader.NewKafkaCGConfig(),
+		KafkaBalanced:   reader.NewKafkaCGConfig(),
 		Kinesis:         reader.NewKinesisConfig(),
 		KinesisBalanced: reader.NewKinesisBalancedConfig(),
 		MQTT:            reader.NewMQTTConfig(),

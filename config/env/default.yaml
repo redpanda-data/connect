@@ -26,37 +26,6 @@ input:
       amqp_0_9:
         batching:
           byte_size: ${INPUT_AMQP_0_9_BATCHING_BYTE_SIZE:0}
-          condition:
-            bounds_check:
-              max_part_size: ${INPUT_AMQP_0_9_BATCHING_CONDITION_BOUNDS_CHECK_MAX_PART_SIZE:1073741824}
-              max_parts: ${INPUT_AMQP_0_9_BATCHING_CONDITION_BOUNDS_CHECK_MAX_PARTS:100}
-              min_part_size: ${INPUT_AMQP_0_9_BATCHING_CONDITION_BOUNDS_CHECK_MIN_PART_SIZE:1}
-              min_parts: ${INPUT_AMQP_0_9_BATCHING_CONDITION_BOUNDS_CHECK_MIN_PARTS:1}
-            check_interpolation:
-              value: ${INPUT_AMQP_0_9_BATCHING_CONDITION_CHECK_INTERPOLATION_VALUE}
-            count:
-              arg: ${INPUT_AMQP_0_9_BATCHING_CONDITION_COUNT_ARG:100}
-            jmespath:
-              part: ${INPUT_AMQP_0_9_BATCHING_CONDITION_JMESPATH_PART:0}
-              query: ${INPUT_AMQP_0_9_BATCHING_CONDITION_JMESPATH_QUERY}
-            metadata:
-              arg: ${INPUT_AMQP_0_9_BATCHING_CONDITION_METADATA_ARG}
-              key: ${INPUT_AMQP_0_9_BATCHING_CONDITION_METADATA_KEY}
-              operator: ${INPUT_AMQP_0_9_BATCHING_CONDITION_METADATA_OPERATOR:equals_cs}
-              part: ${INPUT_AMQP_0_9_BATCHING_CONDITION_METADATA_PART:0}
-            number:
-              arg: ${INPUT_AMQP_0_9_BATCHING_CONDITION_NUMBER_ARG:0}
-              operator: ${INPUT_AMQP_0_9_BATCHING_CONDITION_NUMBER_OPERATOR:equals}
-              part: ${INPUT_AMQP_0_9_BATCHING_CONDITION_NUMBER_PART:0}
-            processor_failed:
-              part: ${INPUT_AMQP_0_9_BATCHING_CONDITION_PROCESSOR_FAILED_PART:0}
-            resource: ${INPUT_AMQP_0_9_BATCHING_CONDITION_RESOURCE}
-            static: ${INPUT_AMQP_0_9_BATCHING_CONDITION_STATIC:false}
-            text:
-              arg: ${INPUT_AMQP_0_9_BATCHING_CONDITION_TEXT_ARG}
-              operator: ${INPUT_AMQP_0_9_BATCHING_CONDITION_TEXT_OPERATOR:equals_cs}
-              part: ${INPUT_AMQP_0_9_BATCHING_CONDITION_TEXT_PART:0}
-            type: ${INPUT_AMQP_0_9_BATCHING_CONDITION_TYPE:static}
           count: ${INPUT_AMQP_0_9_BATCHING_COUNT:1}
           period: ${INPUT_AMQP_0_9_BATCHING_PERIOD}
         consumer_tag: ${INPUT_AMQP_0_9_CONSUMER_TAG:benthos-consumer}
@@ -162,6 +131,10 @@ input:
       kafka_balanced:
         addresses:
         - ${INPUT_KAFKA_BALANCED_ADDRESSES:localhost:9092}
+        batching:
+          byte_size: ${INPUT_KAFKA_BALANCED_BATCHING_BYTE_SIZE:0}
+          count: ${INPUT_KAFKA_BALANCED_BATCHING_COUNT:1}
+          period: ${INPUT_KAFKA_BALANCED_BATCHING_PERIOD}
         client_id: ${INPUT_KAFKA_BALANCED_CLIENT_ID:benthos_kafka_input}
         commit_period: ${INPUT_KAFKA_BALANCED_COMMIT_PERIOD:1s}
         consumer_group: ${INPUT_KAFKA_BALANCED_CONSUMER_GROUP:benthos_consumer_group}
@@ -177,72 +150,13 @@ input:
           password: ${INPUT_KAFKA_BALANCED_SASL_PASSWORD}
           user: ${INPUT_KAFKA_BALANCED_SASL_USER}
         start_from_oldest: ${INPUT_KAFKA_BALANCED_START_FROM_OLDEST:true}
-        target_version: ${INPUT_KAFKA_BALANCED_TARGET_VERSION:1.0.0}
+        target_version: ${INPUT_KAFKA_BALANCED_TARGET_VERSION:2.1.0}
         tls:
           enabled: ${INPUT_KAFKA_BALANCED_TLS_ENABLED:false}
           root_cas_file: ${INPUT_KAFKA_BALANCED_TLS_ROOT_CAS_FILE}
           skip_cert_verify: ${INPUT_KAFKA_BALANCED_TLS_SKIP_CERT_VERIFY:false}
         topics:
         - ${INPUT_KAFKA_BALANCED_TOPICS:benthos_stream}
-      kafka_cg:
-        addresses:
-        - ${INPUT_KAFKA_CG_ADDRESSES:localhost:9092}
-        batching:
-          byte_size: ${INPUT_KAFKA_CG_BATCHING_BYTE_SIZE:0}
-          condition:
-            bounds_check:
-              max_part_size: ${INPUT_KAFKA_CG_BATCHING_CONDITION_BOUNDS_CHECK_MAX_PART_SIZE:1073741824}
-              max_parts: ${INPUT_KAFKA_CG_BATCHING_CONDITION_BOUNDS_CHECK_MAX_PARTS:100}
-              min_part_size: ${INPUT_KAFKA_CG_BATCHING_CONDITION_BOUNDS_CHECK_MIN_PART_SIZE:1}
-              min_parts: ${INPUT_KAFKA_CG_BATCHING_CONDITION_BOUNDS_CHECK_MIN_PARTS:1}
-            check_interpolation:
-              value: ${INPUT_KAFKA_CG_BATCHING_CONDITION_CHECK_INTERPOLATION_VALUE}
-            count:
-              arg: ${INPUT_KAFKA_CG_BATCHING_CONDITION_COUNT_ARG:100}
-            jmespath:
-              part: ${INPUT_KAFKA_CG_BATCHING_CONDITION_JMESPATH_PART:0}
-              query: ${INPUT_KAFKA_CG_BATCHING_CONDITION_JMESPATH_QUERY}
-            metadata:
-              arg: ${INPUT_KAFKA_CG_BATCHING_CONDITION_METADATA_ARG}
-              key: ${INPUT_KAFKA_CG_BATCHING_CONDITION_METADATA_KEY}
-              operator: ${INPUT_KAFKA_CG_BATCHING_CONDITION_METADATA_OPERATOR:equals_cs}
-              part: ${INPUT_KAFKA_CG_BATCHING_CONDITION_METADATA_PART:0}
-            number:
-              arg: ${INPUT_KAFKA_CG_BATCHING_CONDITION_NUMBER_ARG:0}
-              operator: ${INPUT_KAFKA_CG_BATCHING_CONDITION_NUMBER_OPERATOR:equals}
-              part: ${INPUT_KAFKA_CG_BATCHING_CONDITION_NUMBER_PART:0}
-            processor_failed:
-              part: ${INPUT_KAFKA_CG_BATCHING_CONDITION_PROCESSOR_FAILED_PART:0}
-            resource: ${INPUT_KAFKA_CG_BATCHING_CONDITION_RESOURCE}
-            static: ${INPUT_KAFKA_CG_BATCHING_CONDITION_STATIC:false}
-            text:
-              arg: ${INPUT_KAFKA_CG_BATCHING_CONDITION_TEXT_ARG}
-              operator: ${INPUT_KAFKA_CG_BATCHING_CONDITION_TEXT_OPERATOR:equals_cs}
-              part: ${INPUT_KAFKA_CG_BATCHING_CONDITION_TEXT_PART:0}
-            type: ${INPUT_KAFKA_CG_BATCHING_CONDITION_TYPE:static}
-          count: ${INPUT_KAFKA_CG_BATCHING_COUNT:1}
-          period: ${INPUT_KAFKA_CG_BATCHING_PERIOD}
-        client_id: ${INPUT_KAFKA_CG_CLIENT_ID:benthos_kafka_input}
-        commit_period: ${INPUT_KAFKA_CG_COMMIT_PERIOD:1s}
-        consumer_group: ${INPUT_KAFKA_CG_CONSUMER_GROUP:benthos_consumer_group}
-        fetch_buffer_cap: ${INPUT_KAFKA_CG_FETCH_BUFFER_CAP:256}
-        group:
-          heartbeat_interval: ${INPUT_KAFKA_CG_GROUP_HEARTBEAT_INTERVAL:3s}
-          rebalance_timeout: ${INPUT_KAFKA_CG_GROUP_REBALANCE_TIMEOUT:60s}
-          session_timeout: ${INPUT_KAFKA_CG_GROUP_SESSION_TIMEOUT:10s}
-        max_processing_period: ${INPUT_KAFKA_CG_MAX_PROCESSING_PERIOD:100ms}
-        sasl:
-          enabled: ${INPUT_KAFKA_CG_SASL_ENABLED:false}
-          password: ${INPUT_KAFKA_CG_SASL_PASSWORD}
-          user: ${INPUT_KAFKA_CG_SASL_USER}
-        start_from_oldest: ${INPUT_KAFKA_CG_START_FROM_OLDEST:true}
-        target_version: ${INPUT_KAFKA_CG_TARGET_VERSION:2.1.0}
-        tls:
-          enabled: ${INPUT_KAFKA_CG_TLS_ENABLED:false}
-          root_cas_file: ${INPUT_KAFKA_CG_TLS_ROOT_CAS_FILE}
-          skip_cert_verify: ${INPUT_KAFKA_CG_TLS_SKIP_CERT_VERIFY:false}
-        topics:
-        - ${INPUT_KAFKA_CG_TOPICS:benthos_stream}
       kinesis:
         client_id: ${INPUT_KINESIS_CLIENT_ID:benthos_consumer}
         commit_period: ${INPUT_KINESIS_COMMIT_PERIOD:1s}

@@ -23,10 +23,8 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -62,10 +60,6 @@ Similarly, it is possible to declare queue bindings by adding objects to the
 TLS is automatic when connecting to an ` + "`amqps`" + ` URL, but custom
 settings can be enabled in the ` + "`tls`" + ` section.
 
-WARNING: It is NOT safe to use a ` + "`batch`" + ` processor with this input,
-and it will shut down if that is the case. Instead, configure an appropriate
-[batch policy](../batching.md#batch-policy).
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -95,23 +89,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			batchSanit, err := batch.SanitisePolicyConfig(conf.AMQP09.Batching)
-			if err != nil {
-				return nil, err
-			}
-
-			cBytes, err := yaml.Marshal(conf.AMQP09)
-			if err != nil {
-				return nil, err
-			}
-
-			hashMap := map[string]interface{}{}
-			if err = yaml.Unmarshal(cBytes, &hashMap); err != nil {
-				return nil, err
-			}
-
-			hashMap["batching"] = batchSanit
-			return hashMap, nil
+			return sanitiseWithBatch(conf.AMQP09, conf.AMQP09.Batching)
 		},
 	}
 }
@@ -120,15 +98,16 @@ You can access these metadata fields using
 
 // NewAMQP09 creates a new AMQP09 input type.
 func NewAMQP09(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	a, err := reader.NewAMQP09(conf.AMQP09, log, stats)
-	if err != nil {
+	var a reader.Async
+	var err error
+	if a, err = reader.NewAMQP09(conf.AMQP09, log, stats); err != nil {
 		return nil, err
 	}
-	a, err = reader.NewAsyncBatcher(conf.AMQP09.Batching, a, mgr, log, stats)
-	if err != nil {
+	a = reader.NewAsyncBundleUnacks(a)
+	if a, err = reader.NewAsyncBatcher(conf.AMQP09.Batching, a, mgr, log, stats); err != nil {
 		return nil, err
 	}
-	return NewAsyncReader("amqp_0_9", false, a, log, stats)
+	return NewAsyncReader("amqp_0_9", true, a, log, stats)
 }
 
 //------------------------------------------------------------------------------

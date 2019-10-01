@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 - Field `sqs_endpoint` added to the `s3` input.
 - Operator `delete` added to `metadata` processor.
 
+### Changed
+
+- Experimental `kafka_cg` input has been removed.
+- The `kafka_balanced` inputs underlying implementation has been replaced with
+  the `kafka_cg` one.
+
 ## 3.2.0 - 2019-09-27
 
 ### Added

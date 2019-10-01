@@ -69,6 +69,7 @@ type KafkaCGConfig struct {
 	FetchBufferCap      int                `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
 	Topics              []string           `json:"topics" yaml:"topics"`
 	Batching            batch.PolicyConfig `json:"batching" yaml:"batching"`
+	MaxBatchCount       int                `json:"max_batch_count" yaml:"max_batch_count"`
 	StartFromOldest     bool               `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion       string             `json:"target_version" yaml:"target_version"`
 	TLS                 btls.Config        `json:"tls" yaml:"tls"`
@@ -89,6 +90,7 @@ func NewKafkaCGConfig() KafkaCGConfig {
 		FetchBufferCap:      256,
 		Topics:              []string{"benthos_stream"},
 		Batching:            batchConf,
+		MaxBatchCount:       1,
 		StartFromOldest:     true,
 		TargetVersion:       sarama.V2_1_0_0.String(),
 		TLS:                 btls.NewConfig(),

@@ -34,25 +34,24 @@ input:
 11. [`inproc`](#inproc)
 12. [`kafka`](#kafka)
 13. [`kafka_balanced`](#kafka_balanced)
-14. [`kafka_cg`](#kafka_cg)
-15. [`kinesis`](#kinesis)
-16. [`kinesis_balanced`](#kinesis_balanced)
-17. [`mqtt`](#mqtt)
-18. [`nanomsg`](#nanomsg)
-19. [`nats`](#nats)
-20. [`nats_stream`](#nats_stream)
-21. [`nsq`](#nsq)
-22. [`read_until`](#read_until)
-23. [`redis_list`](#redis_list)
-24. [`redis_pubsub`](#redis_pubsub)
-25. [`redis_streams`](#redis_streams)
-26. [`s3`](#s3)
-27. [`sqs`](#sqs)
-28. [`stdin`](#stdin)
-29. [`tcp`](#tcp)
-30. [`tcp_server`](#tcp_server)
-31. [`udp_server`](#udp_server)
-32. [`websocket`](#websocket)
+14. [`kinesis`](#kinesis)
+15. [`kinesis_balanced`](#kinesis_balanced)
+16. [`mqtt`](#mqtt)
+17. [`nanomsg`](#nanomsg)
+18. [`nats`](#nats)
+19. [`nats_stream`](#nats_stream)
+20. [`nsq`](#nsq)
+21. [`read_until`](#read_until)
+22. [`redis_list`](#redis_list)
+23. [`redis_pubsub`](#redis_pubsub)
+24. [`redis_streams`](#redis_streams)
+25. [`s3`](#s3)
+26. [`sqs`](#sqs)
+27. [`stdin`](#stdin)
+28. [`tcp`](#tcp)
+29. [`tcp_server`](#tcp_server)
+30. [`udp_server`](#udp_server)
+31. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -183,10 +182,6 @@ Similarly, it is possible to declare queue bindings by adding objects to the
 
 TLS is automatic when connecting to an `amqps` URL, but custom
 settings can be enabled in the `tls` section.
-
-WARNING: It is NOT safe to use a `batch` processor with this input,
-and it will shut down if that is the case. Instead, configure an appropriate
-[batch policy](../batching.md#batch-policy).
 
 ### Metadata
 
@@ -624,88 +619,6 @@ type: kafka_balanced
 kafka_balanced:
   addresses:
   - localhost:9092
-  client_id: benthos_kafka_input
-  commit_period: 1s
-  consumer_group: benthos_consumer_group
-  fetch_buffer_cap: 256
-  group:
-    heartbeat_interval: 3s
-    rebalance_timeout: 60s
-    session_timeout: 10s
-  max_batch_count: 1
-  max_processing_period: 100ms
-  sasl:
-    enabled: false
-    password: ""
-    user: ""
-  start_from_oldest: true
-  target_version: 1.0.0
-  tls:
-    client_certs: []
-    enabled: false
-    root_cas_file: ""
-    skip_cert_verify: false
-  topics:
-  - benthos_stream
-```
-
-Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
-consumer group (set via config), and partitions are automatically balanced
-across any members of the consumer group.
-
-The field `max_batch_count` specifies the maximum number of prefetched
-messages to be batched together. When more than one message is batched they can
-be split into individual messages with the `split` processor.
-
-The field `max_processing_period` should be set above the maximum
-estimated time taken to process a message.
-
-### TLS
-
-Custom TLS settings can be used to override system defaults. This includes
-providing a collection of root certificate authorities, providing a list of
-client certificates to use for client verification and skipping certificate
-verification.
-
-Client certificates can either be added by file or by raw contents:
-
-``` yaml
-enabled: true
-client_certs:
-  - cert_file: ./example.pem
-    key_file: ./example.key
-  - cert: foo
-    key: bar
-```
-
-### Metadata
-
-This input adds the following metadata fields to each message:
-
-``` text
-- kafka_key
-- kafka_topic
-- kafka_partition
-- kafka_offset
-- kafka_lag
-- kafka_timestamp_unix
-- All existing message headers (version 0.11+)
-```
-
-The field `kafka_lag` is the calculated difference between the high
-water mark offset of the partition at the time of ingestion and the current
-message offset.
-
-You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).
-
-## `kafka_cg`
-
-``` yaml
-type: kafka_cg
-kafka_cg:
-  addresses:
-  - localhost:9092
   batching:
     byte_size: 0
     condition:
@@ -721,6 +634,7 @@ kafka_cg:
     heartbeat_interval: 3s
     rebalance_timeout: 60s
     session_timeout: 10s
+  max_batch_count: 1
   max_processing_period: 100ms
   sasl:
     enabled: false
@@ -737,20 +651,16 @@ kafka_cg:
   - benthos_stream
 ```
 
-EXPERIMENTAL: This input is considered experimental and is therefore subject to
-change outside of major version releases.
-
-Connects to a Kafka (0.9+) server. Offsets are managed within kafka as per the
+Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
 
-Partitions consumed by this client can be processed in parallel, meaning a
-single instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
+Partitions consumed by this input can be processed in parallel allowing it to
+utilise >1 pipeline processing threads and parallel outputs.
 
-WARNING: It is NOT safe to use a `batch` processor with this input,
-and it will shut down if that is the case. Instead, configure an appropriate
-[batch policy](../batching.md#batch-policy).
+The `batching` fields allow you to configure a
+[batching policy](../batching.md#batch-policy) which will be applied per
+partition.
 
 The field `max_processing_period` should be set above the maximum
 estimated time taken to process a message.
