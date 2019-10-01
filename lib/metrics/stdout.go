@@ -39,6 +39,9 @@ func init() {
 	Constructors[TypeStdout] = TypeSpec{
 		constructor: NewStdout,
 		description: `
+EXPERIMENTAL: This component is considered experimental and is therefore subject
+to change outside of major version releases.
+
 It is possible to expose metrics without an aggregator service while running in
 serverless mode by having Benthos output metrics as JSON objects to stdout.  This
 is useful if you do not have Prometheus or Statsd endpoints and you cannot query
