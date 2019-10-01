@@ -65,29 +65,26 @@ func (p *AsyncBundleUnacks) ConnectWithContext(ctx context.Context) error {
 }
 
 func (p *AsyncBundleUnacks) wrapAckFn(ackFn AsyncAckFn) AsyncAckFn {
+	p.acksMut.Lock()
+	accumulatedAcks := p.pendingAcks
+	p.pendingAcks = nil
+	p.acksMut.Unlock()
 	return func(ctx context.Context, res types.Response) error {
 		if res.Error() == nil && res.SkipAck() {
 			p.acksMut.Lock()
+			p.pendingAcks = append(p.pendingAcks, accumulatedAcks...)
 			p.pendingAcks = append(p.pendingAcks, ackFn)
 			p.acksMut.Unlock()
 			return nil
 		}
 
-		p.acksMut.RLock()
-		nPendingAcks := len(p.pendingAcks)
-		p.acksMut.RUnlock()
-
+		nPendingAcks := len(accumulatedAcks)
 		if nPendingAcks == 0 {
 			return ackFn(ctx, res)
 		}
 
-		p.acksMut.Lock()
-		pendingAcks := p.pendingAcks
-		p.pendingAcks = nil
-		p.acksMut.Unlock()
-
 		errs := []error{}
-		for _, aFn := range pendingAcks {
+		for _, aFn := range accumulatedAcks {
 			if err := aFn(ctx, res); err != nil {
 				errs = append(errs, err)
 			}

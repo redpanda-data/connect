@@ -361,6 +361,7 @@ input:
         retries: ${INPUT_S3_RETRIES:3}
         sqs_body_path: ${INPUT_S3_SQS_BODY_PATH:Records.*.s3.object.key}
         sqs_bucket_path: ${INPUT_S3_SQS_BUCKET_PATH}
+        sqs_endpoint: ${INPUT_S3_SQS_ENDPOINT}
         sqs_envelope_path: ${INPUT_S3_SQS_ENVELOPE_PATH}
         sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:10}
         sqs_url: ${INPUT_S3_SQS_URL}

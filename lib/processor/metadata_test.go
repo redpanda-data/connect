@@ -210,3 +210,48 @@ func TestMetadataDeletePrefix(t *testing.T) {
 		t.Errorf("Lost metadata: %v", expMap)
 	}
 }
+
+func TestMetadataDelete(t *testing.T) {
+	conf := NewConfig()
+	conf.Metadata.Operator = "delete"
+	conf.Metadata.Value = "delete_me"
+
+	mDel, err := NewMetadata(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inMsg := message.New([][]byte{[]byte("")})
+	inMsg.Get(0).Metadata().Set("foo", "bar")
+	inMsg.Get(0).Metadata().Set("delete_me_not", "bar2")
+	inMsg.Get(0).Metadata().Set("delete_me", "bar3")
+	inMsg.Get(0).Metadata().Set("delbar", "bar4")
+
+	msgs, _ := mDel.ProcessMessage(inMsg)
+	if len(msgs) != 1 {
+		t.Fatalf("Wrong count of messages: %v", len(msgs))
+	}
+
+	expMap := map[string]string{
+		"foo":           "bar",
+		"delete_me_not": "bar2",
+		"delbar":        "bar4",
+	}
+
+	if err = msgs[0].Get(0).Metadata().Iter(func(k, v string) error {
+		if _, exists := expMap[k]; !exists {
+			return fmt.Errorf("unexpected key: %v", k)
+		}
+		if exp, act := expMap[k], v; exp != act {
+			return fmt.Errorf("wrong value: %v != %v", act, exp)
+		}
+		delete(expMap, k)
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
+
+	if len(expMap) > 0 {
+		t.Errorf("Lost metadata: %v", expMap)
+	}
+}

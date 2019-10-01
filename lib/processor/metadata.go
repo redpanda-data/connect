@@ -67,6 +67,11 @@ for_each:
 
 Sets the value of a metadata key.
 
+#### ` + "`delete`" + `
+
+Removes all metadata values from the message where the key matches the value
+provided. If the value field is left empty the key value will instead be used.
+
 #### ` + "`delete_all`" + `
 
 Removes all metadata values from the message.
@@ -74,7 +79,8 @@ Removes all metadata values from the message.
 #### ` + "`delete_prefix`" + `
 
 Removes all metadata values from the message where the key is prefixed with the
-value provided.`,
+value provided. If the value field is left empty the key value will instead be
+used as the prefix.`,
 	}
 }
 
@@ -119,10 +125,25 @@ func newMetadataDeleteAllOperator() metadataOperator {
 	}
 }
 
+func newMetadataDeleteOperator() metadataOperator {
+	return func(m types.Metadata, key, value string) error {
+		target := value
+		if len(target) == 0 && len(key) > 0 {
+			target = key
+		}
+		m.Delete(target)
+		return nil
+	}
+}
+
 func newMetadataDeletePrefixOperator() metadataOperator {
 	return func(m types.Metadata, key, value string) error {
+		prefix := value
+		if len(prefix) == 0 && len(key) > 0 {
+			prefix = key
+		}
 		m.Iter(func(k, _ string) error {
-			if strings.HasPrefix(k, value) {
+			if strings.HasPrefix(k, prefix) {
 				m.Delete(k)
 			}
 			return nil
@@ -135,6 +156,8 @@ func getMetadataOperator(opStr string) (metadataOperator, error) {
 	switch opStr {
 	case "set":
 		return newMetadataSetOperator(), nil
+	case "delete":
+		return newMetadataDeleteOperator(), nil
 	case "delete_all":
 		return newMetadataDeleteAllOperator(), nil
 	case "delete_prefix":

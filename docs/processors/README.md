@@ -1163,6 +1163,11 @@ for_each:
 
 Sets the value of a metadata key.
 
+#### `delete`
+
+Removes all metadata values from the message where the key matches the value
+provided. If the value field is left empty the key value will instead be used.
+
 #### `delete_all`
 
 Removes all metadata values from the message.
@@ -1170,7 +1175,8 @@ Removes all metadata values from the message.
 #### `delete_prefix`
 
 Removes all metadata values from the message where the key is prefixed with the
-value provided.
+value provided. If the value field is left empty the key value will instead be
+used as the prefix.
 
 ## `metric`
 

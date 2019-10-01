@@ -1141,6 +1141,7 @@ s3:
   retries: 3
   sqs_body_path: Records.*.s3.object.key
   sqs_bucket_path: ""
+  sqs_endpoint: ""
   sqs_envelope_path: ""
   sqs_max_messages: 10
   sqs_url: ""
