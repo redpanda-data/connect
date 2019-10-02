@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Field `sqs_endpoint` added to the `s3` input.
 - Operator `delete` added to `metadata` processor.
+- New experimental metrics aggregator `stdout`.
 
 ### Changed
 
