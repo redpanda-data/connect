@@ -46,8 +46,6 @@ func TestAWSIntegration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	t.Parallel()
-
 	pool, err := dockertest.NewPool("")
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)

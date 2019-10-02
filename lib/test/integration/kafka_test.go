@@ -165,7 +165,7 @@ func TestKafkaIntegration(t *testing.T) {
 }
 
 func createKafkaInputOutput(
-	inConf reader.KafkaCGConfig, outConf writer.KafkaConfig,
+	inConf reader.KafkaBalancedConfig, outConf writer.KafkaConfig,
 ) (mInput reader.Async, mOutput writer.Type, err error) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second)
 	defer done()
@@ -189,7 +189,7 @@ func createKafkaInputOutput(
 func testKafkaStreamsALO(address string, t *testing.T) {
 	topic := "benthos_test_streams_alo"
 
-	inConf := reader.NewKafkaCGConfig()
+	inConf := reader.NewKafkaBalancedConfig()
 	inConf.ClientID = "benthos_test_streams_alo"
 	inConf.ConsumerGroup = "benthos_test_streams_alo"
 	inConf.Addresses = []string{address}
@@ -235,7 +235,7 @@ func testKafkaStreamsALO(address string, t *testing.T) {
 func testKafkaSinglePart(address string, t *testing.T) {
 	topic := "benthos_test_single"
 
-	inConf := reader.NewKafkaCGConfig()
+	inConf := reader.NewKafkaBalancedConfig()
 	inConf.ClientID = "benthos_test_single_client"
 	inConf.Addresses = []string{address}
 	inConf.Topics = []string{topic}
@@ -316,7 +316,7 @@ func testKafkaSinglePart(address string, t *testing.T) {
 func testKafkaResumeDurable(address string, t *testing.T) {
 	topic := "benthos_test_resume_durable"
 
-	inConf := reader.NewKafkaCGConfig()
+	inConf := reader.NewKafkaBalancedConfig()
 	inConf.ClientID = "benthos_test_resume_durable"
 	inConf.Addresses = []string{address}
 	inConf.Topics = []string{topic}
@@ -426,7 +426,7 @@ func testKafkaResumeDurable(address string, t *testing.T) {
 func testKafkaMultiplePart(address string, t *testing.T) {
 	topic := "benthos_test_multi"
 
-	inConf := reader.NewKafkaCGConfig()
+	inConf := reader.NewKafkaBalancedConfig()
 	inConf.ClientID = "benthos_test_resume_durable"
 	inConf.Addresses = []string{address}
 	inConf.Topics = []string{topic}
@@ -489,7 +489,7 @@ func testKafkaMultiplePart(address string, t *testing.T) {
 		var ackFn reader.AsyncAckFn
 		actM, ackFn, err = mInput.ReadWithContext(ctx)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		} else {
 			act := string(actM.Get(0).Get())
 			if _, exists := testMsgs[act]; !exists {
@@ -509,7 +509,7 @@ func testKafkaMultiplePart(address string, t *testing.T) {
 func testKafkaDisconnect(address string, t *testing.T) {
 	topic := "benthos_test_disconnect"
 
-	inConf := reader.NewKafkaCGConfig()
+	inConf := reader.NewKafkaBalancedConfig()
 	inConf.ClientID = "benthos_test_single_client"
 	inConf.Addresses = []string{address}
 	inConf.Topics = []string{topic}

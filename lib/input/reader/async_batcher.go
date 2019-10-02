@@ -120,6 +120,11 @@ func (p *AsyncBatcher) ReadWithContext(ctx context.Context) (types.Message, Asyn
 			if err == types.ErrTimeout {
 				continue
 			}
+			if err == types.ErrTypeClosed {
+				if batch := p.batcher.Flush(); batch != nil && batch.Len() > 0 {
+					return batch, p.wrapAckFns(), nil
+				}
+			}
 			return nil, nil, err
 		}
 

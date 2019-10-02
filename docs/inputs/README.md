@@ -166,6 +166,9 @@ Messages consumed by this input can be processed in parallel, meaning a single
 instance of this input can utilise any number of threads within a
 `pipeline` section of a config.
 
+Use the `batching` fields to configure an optional
+[batching policy](../batching.md#batch-policy).
+
 It's possible for this input type to declare the target queue by setting
 `queue_declare.enabled` to `true`, if the queue already exists then
 the declaration passively verifies that they match the target fields.
@@ -310,6 +313,10 @@ Reads files from a path, where each discrete file will be consumed as a single
 message payload. The path can either point to a single file (resulting in only a
 single message) or a directory, in which case the directory will be walked and
 each file found will become a message.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
 
 ### Metadata
 
@@ -641,7 +648,7 @@ kafka_balanced:
     password: ""
     user: ""
   start_from_oldest: true
-  target_version: 2.1.0
+  target_version: 1.0.0
   tls:
     client_certs: []
     enabled: false

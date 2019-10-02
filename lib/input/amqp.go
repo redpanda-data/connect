@@ -91,6 +91,7 @@ You can access these metadata fields using
 //------------------------------------------------------------------------------
 
 // NewAMQP creates a new AMQP input type.
+// TODO: V4 Remove this.
 func NewAMQP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	a, err := reader.NewAMQP(conf.AMQP, log, stats)
 	if err != nil {

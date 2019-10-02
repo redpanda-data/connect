@@ -52,6 +52,24 @@ type TypeSpec struct {
 	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 	description        string
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
+
+	// DEPRECATED: This is a hack for until the batch processor is removed.
+	// TODO: V4 Remove this.
+	brokerConstructorHasBatchProcessor func(
+		hasBatchProc bool,
+		conf Config,
+		mgr types.Manager,
+		log log.Modular,
+		stats metrics.Type,
+		pipelineConstructors ...types.PipelineConstructorFunc,
+	) (Type, error)
+	constructorHasBatchProcessor func(
+		hasBatchProc bool,
+		conf Config,
+		mgr types.Manager,
+		log log.Modular,
+		stats metrics.Type,
+	) (Type, error)
 }
 
 // Constructors is a map of all input types with their specs.
@@ -112,7 +130,7 @@ type Config struct {
 	HTTPServer      HTTPServerConfig             `json:"http_server" yaml:"http_server"`
 	Inproc          InprocConfig                 `json:"inproc" yaml:"inproc"`
 	Kafka           reader.KafkaConfig           `json:"kafka" yaml:"kafka"`
-	KafkaBalanced   reader.KafkaCGConfig         `json:"kafka_balanced" yaml:"kafka_balanced"`
+	KafkaBalanced   reader.KafkaBalancedConfig   `json:"kafka_balanced" yaml:"kafka_balanced"`
 	Kinesis         reader.KinesisConfig         `json:"kinesis" yaml:"kinesis"`
 	KinesisBalanced reader.KinesisBalancedConfig `json:"kinesis_balanced" yaml:"kinesis_balanced"`
 	MQTT            reader.MQTTConfig            `json:"mqtt" yaml:"mqtt"`
@@ -152,7 +170,7 @@ func NewConfig() Config {
 		HTTPServer:      NewHTTPServerConfig(),
 		Inproc:          NewInprocConfig(),
 		Kafka:           reader.NewKafkaConfig(),
-		KafkaBalanced:   reader.NewKafkaCGConfig(),
+		KafkaBalanced:   reader.NewKafkaBalancedConfig(),
 		Kinesis:         reader.NewKinesisConfig(),
 		KinesisBalanced: reader.NewKinesisBalancedConfig(),
 		MQTT:            reader.NewMQTTConfig(),
@@ -361,7 +379,27 @@ func New(
 	stats metrics.Type,
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
+	return newHasBatchProcessor(false, conf, mgr, log, stats, pipelines...)
+}
+
+// DEPRECATED: This is a hack for until the batch processor is removed.
+// TODO: V4 Remove this.
+func newHasBatchProcessor(
+	hasBatchProc bool,
+	conf Config,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+	pipelines ...types.PipelineConstructorFunc,
+) (Type, error) {
 	if len(conf.Processors) > 0 {
+		// TODO: V4 Remove this.
+		for _, procConf := range conf.Processors {
+			if procConf.Type == processor.TypeBatch {
+				hasBatchProc = true
+			}
+		}
+
 		pipelines = append([]types.PipelineConstructorFunc{func(i *int) (types.Pipeline, error) {
 			if i == nil {
 				procs := 0
@@ -381,10 +419,21 @@ func New(
 		}}, pipelines...)
 	}
 	if c, ok := Constructors[conf.Type]; ok {
+		// TODO: V4 Remove this.
+		if c.brokerConstructorHasBatchProcessor != nil {
+			return c.brokerConstructorHasBatchProcessor(hasBatchProc, conf, mgr, log, stats, pipelines...)
+		}
 		if c.brokerConstructor != nil {
 			return c.brokerConstructor(conf, mgr, log, stats, pipelines...)
 		}
-		input, err := c.constructor(conf, mgr, log, stats)
+		var input Type
+		var err error
+		// TODO: V4 Remove this.
+		if c.constructorHasBatchProcessor != nil {
+			input, err = c.constructorHasBatchProcessor(hasBatchProc, conf, mgr, log, stats)
+		} else {
+			input, err = c.constructor(conf, mgr, log, stats)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to create input '%v': %v", conf.Type, err)
 		}

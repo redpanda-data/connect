@@ -44,6 +44,7 @@ func (o Error) Error() error {
 }
 
 // SkipAck indicates whether a successful message should be acknowledged.
+// TODO: V4 Remove this once batch processor is removed.
 func (o Error) SkipAck() bool {
 	return false
 }
@@ -104,6 +105,8 @@ func NewNoack() Noack {
 // It is considered correct for certain inputs to acknowledge based on an Unack
 // response if they are locked in a request/response loop. For example, the HTTP
 // input might return a 200 code from this response.
+//
+// TODO: V4 Remove this once batch processor is removed.
 type Unack struct{}
 
 // Error returns the underlying error.

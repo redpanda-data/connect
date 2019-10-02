@@ -82,10 +82,10 @@ type AsyncReader struct {
 
 	transactions chan types.Transaction
 
-	ctx            context.Context
-	closeFn        func()
-	fullyCloseChan chan struct{}
-	fullyCloseOnce sync.Once
+	ctx           context.Context
+	closeFn       func()
+	fullyCloseCtx context.Context
+	fullyCloseFn  func()
 
 	closedChan chan struct{}
 }
@@ -99,18 +99,20 @@ func NewAsyncReader(
 	stats metrics.Type,
 ) (Type, error) {
 	ctx, cancelFn := context.WithCancel(context.Background())
+	fullyCloseCtx, fullyCancelFn := context.WithCancel(context.Background())
 	rdr := &AsyncReader{
-		running:        1,
-		allowSkipAcks:  allowSkipAcks,
-		typeStr:        typeStr,
-		reader:         r,
-		log:            log,
-		stats:          stats,
-		transactions:   make(chan types.Transaction),
-		ctx:            ctx,
-		closeFn:        cancelFn,
-		fullyCloseChan: make(chan struct{}),
-		closedChan:     make(chan struct{}),
+		running:       1,
+		allowSkipAcks: allowSkipAcks,
+		typeStr:       typeStr,
+		reader:        r,
+		log:           log,
+		stats:         stats,
+		transactions:  make(chan types.Transaction),
+		ctx:           ctx,
+		closeFn:       cancelFn,
+		fullyCloseCtx: fullyCloseCtx,
+		fullyCloseFn:  fullyCancelFn,
+		closedChan:    make(chan struct{}),
 	}
 
 	rdr.connThrot = throttle.New(throttle.OptCloseChan(ctx.Done()))
@@ -135,6 +137,7 @@ func (r *AsyncReader) loop() {
 	)
 
 	defer func() {
+		r.reader.CloseAsync()
 		err := r.reader.WaitForClose(time.Second)
 		for ; err != nil; err = r.reader.WaitForClose(time.Second) {
 		}
@@ -246,7 +249,7 @@ func (r *AsyncReader) loop() {
 				// propagate an acknowledgement from in-transit messages.
 				select {
 				case res, open = <-rChan:
-				case <-r.fullyCloseChan:
+				case <-r.fullyCloseCtx.Done():
 					return
 				}
 			}
@@ -258,7 +261,7 @@ func (r *AsyncReader) loop() {
 				res = response.NewNoack()
 				r.CloseAsync()
 			}
-			if err = aFn(r.ctx, res); err != nil {
+			if err = aFn(r.fullyCloseCtx, res); err != nil {
 				r.log.Errorf("Failed to acknowledge message: %v\n", err)
 			}
 			mLatency.Timing(time.Since(m.CreatedAt()).Nanoseconds())
@@ -283,16 +286,15 @@ func (r *AsyncReader) Connected() bool {
 func (r *AsyncReader) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&r.running, 1, 0) {
 		r.closeFn()
-		r.reader.CloseAsync()
 	}
 }
 
 // WaitForClose blocks until the AsyncReader input has closed down.
 func (r *AsyncReader) WaitForClose(timeout time.Duration) error {
-	go r.fullyCloseOnce.Do(func() {
+	go func() {
 		<-time.After(timeout - time.Second)
-		close(r.fullyCloseChan)
-	})
+		r.fullyCloseFn()
+	}()
 	select {
 	case <-r.closedChan:
 	case <-time.After(timeout):

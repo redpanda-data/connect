@@ -32,7 +32,8 @@ import (
 
 func init() {
 	Constructors[TypeKafkaBalanced] = TypeSpec{
-		constructor: NewKafkaBalanced,
+		constructor:                  NewKafkaBalanced,
+		constructorHasBatchProcessor: newKafkaBalancedHasBatchProcessor,
 		description: `
 Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
@@ -80,6 +81,7 @@ You can access these metadata fields using
 
 // NewKafkaBalanced creates a new KafkaBalanced input type.
 func NewKafkaBalanced(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	// TODO: V4 Remove this.
 	if conf.KafkaBalanced.MaxBatchCount > 1 {
 		log.Warnf("Field '%v.max_batch_count' is deprecated, use '%v.batching.count' instead.\n", conf.Type, conf.Type)
 		conf.KafkaBalanced.Batching.Count = conf.KafkaBalanced.MaxBatchCount
@@ -88,8 +90,29 @@ func NewKafkaBalanced(conf Config, mgr types.Manager, log log.Modular, stats met
 	if err != nil {
 		return nil, err
 	}
-	preserved := reader.NewAsyncBundleUnacks(reader.NewAsyncPreserver(k))
+	preserved := reader.NewAsyncPreserver(k)
 	return NewAsyncReader("kafka_balanced", true, preserved, log, stats)
+}
+
+// DEPRECATED: This is a hack for until the batch processor is removed.
+// TODO: V4 Remove this.
+func newKafkaBalancedHasBatchProcessor(
+	hasBatchProc bool,
+	conf Config,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+) (Type, error) {
+	if !hasBatchProc {
+		return NewKafkaBalanced(conf, mgr, log, stats)
+	}
+
+	log.Warnln("Detected presence of a 'batch' processor, kafka_balanced input falling back to single threaded mode. To fix this use the 'batching' fields instead.")
+	k, err := reader.NewKafkaBalanced(conf.KafkaBalanced, log, stats)
+	if err != nil {
+		return nil, err
+	}
+	return NewReader("kafka_balanced", reader.NewPreserver(k), log, stats)
 }
 
 //------------------------------------------------------------------------------

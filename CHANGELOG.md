@@ -16,6 +16,10 @@ All notable changes to this project will be documented in this file.
 - Experimental `kafka_cg` input has been removed.
 - The `kafka_balanced` inputs underlying implementation has been replaced with
   the `kafka_cg` one.
+- The following inputs have been updated to automatically utilise >1 processing
+  threads:
+  - `kafka_balanced`
+  - `files`
 
 ## 3.2.0 - 2019-09-27
 

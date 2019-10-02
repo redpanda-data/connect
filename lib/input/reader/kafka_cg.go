@@ -35,67 +35,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
 )
-
-//------------------------------------------------------------------------------
-
-// KafkaCGGroupConfig contains config fields for Kafka consumer groups.
-type KafkaCGGroupConfig struct {
-	SessionTimeout    string `json:"session_timeout" yaml:"session_timeout"`
-	HeartbeatInterval string `json:"heartbeat_interval" yaml:"heartbeat_interval"`
-	RebalanceTimeout  string `json:"rebalance_timeout" yaml:"rebalance_timeout"`
-}
-
-// NewKafkaCGGroupConfig returns a KafkaCGGroupConfig with default
-// values.
-func NewKafkaCGGroupConfig() KafkaCGGroupConfig {
-	return KafkaCGGroupConfig{
-		SessionTimeout:    "10s",
-		HeartbeatInterval: "3s",
-		RebalanceTimeout:  "60s",
-	}
-}
-
-// KafkaCGConfig contains configuration for the KafkaCG input type.
-type KafkaCGConfig struct {
-	Addresses           []string           `json:"addresses" yaml:"addresses"`
-	ClientID            string             `json:"client_id" yaml:"client_id"`
-	ConsumerGroup       string             `json:"consumer_group" yaml:"consumer_group"`
-	Group               KafkaCGGroupConfig `json:"group" yaml:"group"`
-	CommitPeriod        string             `json:"commit_period" yaml:"commit_period"`
-	MaxProcessingPeriod string             `json:"max_processing_period" yaml:"max_processing_period"`
-	FetchBufferCap      int                `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
-	Topics              []string           `json:"topics" yaml:"topics"`
-	Batching            batch.PolicyConfig `json:"batching" yaml:"batching"`
-	MaxBatchCount       int                `json:"max_batch_count" yaml:"max_batch_count"`
-	StartFromOldest     bool               `json:"start_from_oldest" yaml:"start_from_oldest"`
-	TargetVersion       string             `json:"target_version" yaml:"target_version"`
-	TLS                 btls.Config        `json:"tls" yaml:"tls"`
-	SASL                SASLConfig         `json:"sasl" yaml:"sasl"`
-}
-
-// NewKafkaCGConfig creates a new KafkaCGConfig with default values.
-func NewKafkaCGConfig() KafkaCGConfig {
-	batchConf := batch.NewPolicyConfig()
-	batchConf.Count = 1
-	return KafkaCGConfig{
-		Addresses:           []string{"localhost:9092"},
-		ClientID:            "benthos_kafka_input",
-		ConsumerGroup:       "benthos_consumer_group",
-		Group:               NewKafkaCGGroupConfig(),
-		CommitPeriod:        "1s",
-		MaxProcessingPeriod: "100ms",
-		FetchBufferCap:      256,
-		Topics:              []string{"benthos_stream"},
-		Batching:            batchConf,
-		MaxBatchCount:       1,
-		StartFromOldest:     true,
-		TargetVersion:       sarama.V2_1_0_0.String(),
-		TLS:                 btls.NewConfig(),
-	}
-}
 
 //------------------------------------------------------------------------------
 
@@ -125,7 +66,7 @@ type KafkaCG struct {
 
 	mRebalanced metrics.StatCounter
 
-	conf  KafkaCGConfig
+	conf  KafkaBalancedConfig
 	stats metrics.Type
 	log   log.Modular
 	mgr   types.Manager
@@ -133,7 +74,7 @@ type KafkaCG struct {
 
 // NewKafkaCG creates a new KafkaCG input type.
 func NewKafkaCG(
-	conf KafkaCGConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf KafkaBalancedConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (*KafkaCG, error) {
 	k := KafkaCG{
 		conf:          conf,
@@ -229,7 +170,7 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 	k.log.Debugf("Consuming messages from topic '%v' partition '%v'\n", topic, partition)
 	defer k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", topic, partition)
 
-	ackChan := make(chan types.Response)
+	ackedChan := make(chan error)
 
 	latestOffset := claim.InitialOffset()
 	batchPolicy, err := batch.NewPolicy(k.conf.Batching, k.mgr, k.log, k.stats)
@@ -237,7 +178,7 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 		return fmt.Errorf("failed to initialise batch policy: %v", err)
 	}
 	var nextTimedBatchChan <-chan time.Time
-	flushBatch := func() bool {
+	flushBatch := func(topic string, partition int32, offset int64) bool {
 		nextTimedBatchChan = nil
 		msg := batchPolicy.Flush()
 		if msg == nil {
@@ -247,21 +188,30 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 		case k.msgChan <- asyncMessage{
 			msg: msg,
 			ackFn: func(ctx context.Context, res types.Response) error {
-				select {
-				case ackChan <- res:
-					return nil
-				case <-ctx.Done():
+				resErr := res.Error()
+				if resErr == nil {
+					k.cMut.Lock()
+					if k.session != nil {
+						k.log.Debugf("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
+						k.session.MarkOffset(topic, partition, offset, "")
+					} else {
+						k.log.Debugf("Unable to mark offset for topic '%v' partition '%v'.\n", topic, partition)
+					}
+					k.cMut.Unlock()
 				}
-				return types.ErrTimeout
+				select {
+				case ackedChan <- resErr:
+				case <-sess.Context().Done():
+				}
+				return nil
 			},
 		}:
 			select {
-			case res := <-ackChan:
-				if res.Error() != nil {
-					k.log.Errorf("Received error from message batch: %v, shutting down consumer.\n", res.Error())
+			case resErr := <-ackedChan:
+				if resErr != nil {
+					k.log.Errorf("Received error from message batch: %v, shutting down consumer.\n", resErr)
 					return false
 				}
-				k.session.MarkOffset(claim.Topic(), claim.Partition(), latestOffset+1, "")
 			case <-sess.Context().Done():
 				return false
 			}
@@ -279,7 +229,7 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 		}
 		select {
 		case <-nextTimedBatchChan:
-			if !flushBatch() {
+			if !flushBatch(claim.Topic(), claim.Partition(), latestOffset+1) {
 				return nil
 			}
 		case data, open := <-claim.Messages():
@@ -307,7 +257,7 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 			meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
 
 			if batchPolicy.Add(part) {
-				if !flushBatch() {
+				if !flushBatch(claim.Topic(), claim.Partition(), latestOffset+1) {
 					return nil
 				}
 			}
@@ -325,6 +275,7 @@ func (k *KafkaCG) closeGroup() {
 	k.cMut.Unlock()
 
 	if cancelFn != nil {
+		k.log.Debugln("Closing group consumers.")
 		cancelFn()
 	}
 }

@@ -45,7 +45,8 @@ var (
 
 func init() {
 	Constructors[TypeBroker] = TypeSpec{
-		brokerConstructor: NewBroker,
+		brokerConstructor:                  NewBroker,
+		brokerConstructorHasBatchProcessor: newBrokerHasBatchProcessor,
 		description: `
 The broker type allows you to combine multiple inputs, where each input will be
 read in parallel. A broker type is configured with its own list of input
@@ -227,13 +228,26 @@ func NewBroker(
 	stats metrics.Type,
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
+	return newBrokerHasBatchProcessor(false, conf, mgr, log, stats, pipelines...)
+}
+
+// DEPRECATED: This is a hack for until the batch processor is removed.
+// TODO: V4 Remove this.
+func newBrokerHasBatchProcessor(
+	hasBatchProc bool,
+	conf Config,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+	pipelines ...types.PipelineConstructorFunc,
+) (Type, error) {
 	lInputs := len(conf.Broker.Inputs) * conf.Broker.Copies
 
 	if lInputs <= 0 {
 		return nil, ErrBrokerNoInputs
 	}
 	if lInputs == 1 {
-		return New(conf.Broker.Inputs[0], mgr, log, stats, pipelines...)
+		return newHasBatchProcessor(hasBatchProc, conf.Broker.Inputs[0], mgr, log, stats, pipelines...)
 	}
 
 	inputs := make([]types.Producer, lInputs)
@@ -242,7 +256,8 @@ func NewBroker(
 	for j := 0; j < conf.Broker.Copies; j++ {
 		for i, iConf := range conf.Broker.Inputs {
 			ns := fmt.Sprintf("broker.inputs.%v", i)
-			inputs[len(conf.Broker.Inputs)*j+i], err = New(
+			inputs[len(conf.Broker.Inputs)*j+i], err = newHasBatchProcessor(
+				hasBatchProc,
 				iConf, mgr,
 				log.NewModule("."+ns),
 				metrics.Combine(stats, metrics.Namespaced(stats, ns)),

@@ -33,6 +33,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -68,11 +69,13 @@ type KafkaBalancedConfig struct {
 	MaxProcessingPeriod string                   `json:"max_processing_period" yaml:"max_processing_period"`
 	FetchBufferCap      int                      `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
 	Topics              []string                 `json:"topics" yaml:"topics"`
+	Batching            batch.PolicyConfig       `json:"batching" yaml:"batching"`
 	StartFromOldest     bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
-	MaxBatchCount       int                      `json:"max_batch_count" yaml:"max_batch_count"`
-	TLS                 btls.Config              `json:"tls" yaml:"tls"`
-	SASL                SASLConfig               `json:"sasl" yaml:"sasl"`
+	// TODO: V4 Remove this.
+	MaxBatchCount int         `json:"max_batch_count" yaml:"max_batch_count"`
+	TLS           btls.Config `json:"tls" yaml:"tls"`
+	SASL          SASLConfig  `json:"sasl" yaml:"sasl"`
 }
 
 // SASLConfig contains configuration for SASL based authentication.
@@ -84,6 +87,8 @@ type SASLConfig struct {
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
 func NewKafkaBalancedConfig() KafkaBalancedConfig {
+	batchConf := batch.NewPolicyConfig()
+	batchConf.Count = 1
 	return KafkaBalancedConfig{
 		Addresses:           []string{"localhost:9092"},
 		ClientID:            "benthos_kafka_input",
@@ -95,6 +100,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Topics:              []string{"benthos_stream"},
 		StartFromOldest:     true,
 		TargetVersion:       sarama.V1_0_0_0.String(),
+		Batching:            batchConf,
 		MaxBatchCount:       1,
 		TLS:                 btls.NewConfig(),
 	}
