@@ -684,14 +684,17 @@ LOGGER_PREFIX        = benthos
 ## METRICS
 
 ```
-METRICS_TYPE                     = http_server
-METRICS_HTTP_SERVER_PREFIX       = benthos
-METRICS_PROMETHEUS_PREFIX        = benthos
+METRICS_TYPE                          = http_server
+METRICS_HTTP_SERVER_PREFIX            = benthos
+METRICS_PROMETHEUS_PREFIX             = benthos
 METRICS_PROMETHEUS_PUSH_INTERVAL
-METRICS_PROMETHEUS_PUSH_JOB_NAME = benthos_push
+METRICS_PROMETHEUS_PUSH_JOB_NAME      = benthos_push
 METRICS_PROMETHEUS_PUSH_URL
-METRICS_STATSD_ADDRESS           = localhost:4040
-METRICS_STATSD_FLUSH_PERIOD      = 100ms
-METRICS_STATSD_NETWORK           = udp
-METRICS_STATSD_PREFIX            = benthos
+METRICS_STATSD_ADDRESS                = localhost:4040
+METRICS_STATSD_FLUSH_PERIOD           = 100ms
+METRICS_STATSD_NETWORK                = udp
+METRICS_STATSD_PREFIX                 = benthos
+METRICS_STDOUT_FLUSH_METRICS          = false
+METRICS_STDOUT_PUSH_INTERVAL
+METRICS_STDOUT_STATIC_FIELDS_@SERVICE = benthos
 ```

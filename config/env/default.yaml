@@ -819,4 +819,9 @@ metrics:
     flush_period: ${METRICS_STATSD_FLUSH_PERIOD:100ms}
     network: ${METRICS_STATSD_NETWORK:udp}
     prefix: ${METRICS_STATSD_PREFIX:benthos}
+  stdout:
+    flush_metrics: ${METRICS_STDOUT_FLUSH_METRICS:false}
+    push_interval: ${METRICS_STDOUT_PUSH_INTERVAL}
+    static_fields:
+      '@service': ${METRICS_STDOUT_STATIC_FIELDS_@SERVICE:benthos}
   type: ${METRICS_TYPE:http_server}
