@@ -22,6 +22,7 @@ package reader
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,6 +49,7 @@ type NATSStreamConfig struct {
 	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	Subject         string   `json:"subject" yaml:"subject"`
 	MaxInflight     int      `json:"max_inflight" yaml:"max_inflight"`
+	AckWait         string   `json:"ack_wait" yaml:"ack_wait"`
 }
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
@@ -62,6 +64,7 @@ func NewNATSStreamConfig() NATSStreamConfig {
 		StartFromOldest: true,
 		Subject:         "benthos_messages",
 		MaxInflight:     1024,
+		AckWait:         "30s",
 	}
 }
 
@@ -69,8 +72,10 @@ func NewNATSStreamConfig() NATSStreamConfig {
 
 // NATSStream is an input type that receives NATSStream messages.
 type NATSStream struct {
-	urls  string
-	conf  NATSStreamConfig
+	urls    string
+	conf    NATSStreamConfig
+	ackWait time.Duration
+
 	stats metrics.Type
 	log   log.Modular
 
@@ -93,8 +98,18 @@ func NewNATSStream(conf NATSStreamConfig, log log.Modular, stats metrics.Type) (
 		}
 		conf.ClientID = u4.String()
 	}
+
+	var ackWait time.Duration
+	if tout := conf.AckWait; len(tout) > 0 {
+		var err error
+		if ackWait, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse ack_wait string: %v", err)
+		}
+	}
+
 	n := NATSStream{
 		conf:          conf,
+		ackWait:       ackWait,
 		stats:         stats,
 		log:           log,
 		msgChan:       make(chan *stan.Msg),
@@ -181,6 +196,9 @@ func (n *NATSStream) ConnectWithContext(ctx context.Context) error {
 	}
 	if n.conf.MaxInflight != 0 {
 		options = append(options, stan.MaxInflight(n.conf.MaxInflight))
+	}
+	if n.ackWait > 0 {
+		options = append(options, stan.AckWait(n.ackWait))
 	}
 
 	var natsSub stan.Subscription
