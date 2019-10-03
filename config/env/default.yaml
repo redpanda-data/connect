@@ -216,6 +216,7 @@ input:
         urls:
         - ${INPUT_NATS_URLS:nats://127.0.0.1:4222}
       nats_stream:
+        ack_wait: ${INPUT_NATS_STREAM_ACK_WAIT:30s}
         client_id: ${INPUT_NATS_STREAM_CLIENT_ID:benthos_client}
         cluster_id: ${INPUT_NATS_STREAM_CLUSTER_ID:test-cluster}
         durable_name: ${INPUT_NATS_STREAM_DURABLE_NAME:benthos_offset}

@@ -884,6 +884,7 @@ You can access these metadata fields using
 ``` yaml
 type: nats_stream
 nats_stream:
+  ack_wait: 30s
   client_id: benthos_client
   cluster_id: test-cluster
   durable_name: benthos_offset
