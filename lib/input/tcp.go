@@ -42,6 +42,10 @@ If multipart is set to false each line of data is read as a separate message. If
 multipart is set to true each line is read as a message part, and an empty line
 indicates the end of a message.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+` + "`pipeline`" + ` section of a config.
+
 If the delimiter field is left empty then line feed (\n) is used.`,
 	}
 }
@@ -98,9 +102,10 @@ func NewTCP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type)
 	if err != nil {
 		return nil, err
 	}
-	return NewReader(
+	return NewAsyncReader(
 		TypeTCP,
-		reader.NewPreserver(rdr),
+		true,
+		reader.NewAsyncPreserver(rdr),
 		log, stats,
 	)
 }

@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -36,11 +37,12 @@ import (
 // Lines is a reader implementation that continuously reads line delimited
 // messages from an io.Reader type.
 type Lines struct {
-	handleCtor func() (io.Reader, error)
-	onClose    func()
+	handleCtor func(ctx context.Context) (io.Reader, error)
+	onClose    func(ctx context.Context)
 
-	handle  io.Reader
-	scanner *bufio.Scanner
+	scannerMut sync.Mutex
+	handle     io.Reader
+	scanner    *bufio.Scanner
 
 	messageBuffer      *bytes.Buffer
 	messageBufferIndex int
@@ -50,7 +52,8 @@ type Lines struct {
 	delimiter []byte
 }
 
-// NewLines creates a new reader input type.
+// NewLines creates a new reader input type able to create a feed of line
+// delimited messages from an io.Reader.
 //
 // Callers must provide a constructor function for the target io.Reader, which
 // is called on start up and again each time a reader is exhausted. If the
@@ -63,6 +66,33 @@ type Lines struct {
 func NewLines(
 	handleCtor func() (io.Reader, error),
 	onClose func(),
+	options ...func(r *Lines),
+) (*Lines, error) {
+	r := Lines{
+		handleCtor: func(ctx context.Context) (io.Reader, error) {
+			return handleCtor()
+		},
+		onClose: func(ctx context.Context) {
+			onClose()
+		},
+		messageBuffer: &bytes.Buffer{},
+		maxBuffer:     bufio.MaxScanTokenSize,
+		multipart:     false,
+		delimiter:     []byte("\n"),
+	}
+
+	for _, opt := range options {
+		opt(&r)
+	}
+
+	return &r, nil
+}
+
+// NewLinesWithContext expands NewLines by requiring context.Context arguments
+// in the provided closures.
+func NewLinesWithContext(
+	handleCtor func(ctx context.Context) (io.Reader, error),
+	onClose func(ctx context.Context),
 	options ...func(r *Lines),
 ) (*Lines, error) {
 	r := Lines{
@@ -126,13 +156,15 @@ func (r *Lines) Connect() error {
 
 // ConnectWithContext attempts to establish a new scanner for an io.Reader.
 func (r *Lines) ConnectWithContext(ctx context.Context) error {
+	r.scannerMut.Lock()
+	defer r.scannerMut.Unlock()
 	if r.scanner != nil {
 		return nil
 	}
 	r.closeHandle() // Just incase we have an open handle without a scanner.
 
 	var err error
-	r.handle, err = r.handleCtor()
+	r.handle, err = r.handleCtor(ctx)
 	if err != nil {
 		if err == io.EOF {
 			return types.ErrTypeClosed
@@ -169,15 +201,30 @@ func (r *Lines) ConnectWithContext(ctx context.Context) error {
 
 // ReadWithContext attempts to read a new line from the io.Reader.
 func (r *Lines) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
-	if r.scanner == nil {
+	r.scannerMut.Lock()
+	scanner := r.scanner
+	r.scannerMut.Unlock()
+	if scanner == nil {
 		return nil, nil, types.ErrNotConnected
 	}
 
+	finishedChan := make(chan struct{})
+	defer close(finishedChan)
+
+	go func() {
+		select {
+		case <-finishedChan:
+		case <-ctx.Done():
+			r.scannerMut.Lock()
+			r.closeHandle()
+			r.scannerMut.Unlock()
+		}
+	}()
 	msg := message.New(nil)
 
-	for r.scanner.Scan() {
-		partBytes := make([]byte, len(r.scanner.Bytes()))
-		partSize := copy(partBytes, r.scanner.Bytes())
+	for scanner.Scan() {
+		partBytes := make([]byte, len(scanner.Bytes()))
+		partSize := copy(partBytes, scanner.Bytes())
 
 		if partSize > 0 {
 			msg.Append(message.NewPart(partBytes))
@@ -191,13 +238,15 @@ func (r *Lines) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 		}
 	}
 
-	if err := r.scanner.Err(); err != nil {
-		r.closeHandle()
+	err := scanner.Err()
+
+	r.scannerMut.Lock()
+	r.closeHandle()
+	r.scannerMut.Unlock()
+
+	if err != nil {
 		return nil, nil, err
 	}
-
-	r.closeHandle()
-
 	if msg.Len() > 0 {
 		return msg, noopAsyncAckFn, nil
 	}
@@ -278,12 +327,14 @@ func (r *Lines) Acknowledge(err error) error {
 
 // CloseAsync shuts down the reader input and stops processing requests.
 func (r *Lines) CloseAsync() {
-	r.onClose()
+	r.onClose(context.Background())
 }
 
 // WaitForClose blocks until the reader input has closed down.
 func (r *Lines) WaitForClose(timeout time.Duration) error {
+	r.scannerMut.Lock()
 	r.closeHandle()
+	r.scannerMut.Unlock()
 	return nil
 }
 

@@ -35,6 +35,10 @@ func init() {
 		description: `
 Connects to a websocket server and continuously receives messages.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+` + "`pipeline`" + ` section of a config.
+
 It is possible to configure an ` + "`open_message`" + `, which when set to a
 non-empty string will be sent to the websocket server each time a connection is
 first established.`,
@@ -49,7 +53,7 @@ func NewWebsocket(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewReader("websocket", reader.NewPreserver(ws), log, stats)
+	return NewAsyncReader("websocket", true, reader.NewAsyncPreserver(ws), log, stats)
 }
 
 //------------------------------------------------------------------------------

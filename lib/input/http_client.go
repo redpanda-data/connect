@@ -22,6 +22,7 @@ package input
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -176,8 +177,8 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mStrnOnClose     = h.stats.GetCounter("stream.on_close")
 	)
 
-	rdr, err := reader.NewLines(
-		func() (io.Reader, error) {
+	rdr, err := reader.NewLinesWithContext(
+		func(ctx context.Context) (io.Reader, error) {
 			mStrmConstructor.Incr(1)
 
 			resMux.Lock()
@@ -198,7 +199,12 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 				mStrmReqErr.Incr(1)
 
 				resMux.Unlock()
-				<-time.After(time.Second)
+				select {
+				case <-time.After(time.Second):
+				case <-ctx.Done():
+					resMux.Lock()
+					return nil, types.ErrTimeout
+				}
 				resMux.Lock()
 
 				res, err = h.doRequest()
@@ -211,7 +217,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 			conn = true
 			return res.Body, nil
 		},
-		func() {
+		func(ctx context.Context) {
 			mStrnOnClose.Incr(1)
 
 			resMux.Lock()
@@ -234,9 +240,10 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 		return nil, err
 	}
 
-	return NewReader(
-		"http_client",
-		reader.NewPreserver(rdr),
+	return NewAsyncReader(
+		TypeHTTPClient,
+		true,
+		reader.NewAsyncPreserver(rdr),
 		log, stats,
 	)
 }

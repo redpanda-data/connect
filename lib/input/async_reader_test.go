@@ -27,6 +27,7 @@ import (
 	"os"
 	"reflect"
 	"runtime/pprof"
+	"sync"
 	"testing"
 	"time"
 
@@ -43,6 +44,7 @@ import (
 type mockAsyncReader struct {
 	msgsToSnd []types.Message
 	ackRcvd   []error
+	ackMut    sync.Mutex
 
 	connChan chan error
 	readChan chan error
@@ -76,8 +78,10 @@ func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (types.Message, r
 			return nil, nil, err
 		}
 	}
+	r.ackMut.Lock()
 	r.ackRcvd = append(r.ackRcvd, errors.New("ack not received"))
 	i := len(r.ackRcvd) - 1
+	r.ackMut.Unlock()
 
 	var nextMsg types.Message = message.New(nil)
 	if len(r.msgsToSnd) > 0 {
@@ -89,7 +93,9 @@ func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (types.Message, r
 		if res.SkipAck() {
 			return nil
 		}
+		r.ackMut.Lock()
 		r.ackRcvd[i] = res.Error()
+		r.ackMut.Unlock()
 		return <-r.ackChan
 	}, nil
 }

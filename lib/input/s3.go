@@ -105,9 +105,12 @@ func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 	if err != nil {
 		return nil, err
 	}
-	return NewReader(
-		"s3",
-		reader.NewPreserver(r),
+	return NewAsyncReader(
+		TypeS3,
+		true,
+		reader.NewAsyncBundleUnacks(
+			reader.NewAsyncPreserver(r),
+		),
 		log, stats,
 	)
 }

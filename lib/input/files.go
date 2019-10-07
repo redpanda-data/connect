@@ -64,8 +64,8 @@ func NewFiles(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 	if f, err = reader.NewFiles(conf.Files); err != nil {
 		return nil, err
 	}
-	f = reader.NewAsyncBundleUnacks(reader.NewAsyncPreserver(f))
-	return NewAsyncReader("files", true, f, log, stats)
+	f = reader.NewAsyncPreserver(f)
+	return NewAsyncReader(TypeFiles, true, f, log, stats)
 }
 
 //------------------------------------------------------------------------------

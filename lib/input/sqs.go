@@ -36,6 +36,10 @@ func init() {
 Receive messages from an Amazon SQS URL, only the body is extracted into
 messages.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+` + "`pipeline`" + ` section of a config.
+
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS
@@ -67,7 +71,7 @@ func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewReader("sqs", s, log, stats)
+	return NewAsyncReader(TypeSQS, true, reader.NewAsyncBundleUnacks(s), log, stats)
 }
 
 //------------------------------------------------------------------------------

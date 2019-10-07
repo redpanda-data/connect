@@ -162,42 +162,61 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 		"bar",
 	}
 
-	for _, exp := range expMsgs {
-		var tran types.Transaction
-		var open bool
+	var tran types.Transaction
+	var open bool
 
+	resChans := []chan<- types.Response{}
+	for i, exp := range expMsgs {
 		// First try
 		select {
 		case tran, open = <-in.TransactionChan():
 			if !open {
-				t.Fatal("transaction chan closed")
+				t.Fatalf("transaction chan closed at %v", i)
 			}
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
 
 		if act := string(tran.Payload.Get(0).Get()); exp != act {
-			t.Errorf("Wrong message contents: %v != %v", act, exp)
+			t.Errorf("Wrong message contents '%v': %v != %v", i, act, exp)
 		}
+		resChans = append(resChans, tran.ResponseChan)
+	}
 
+	select {
+	case <-in.TransactionChan():
+		t.Error("Unexpected transaction")
+		return
+	case <-time.After(time.Millisecond * 500):
+	}
+
+	for _, rChan := range resChans {
 		select {
-		case tran.ResponseChan <- response.NewError(errors.New("failed")):
+		case rChan <- response.NewError(errors.New("failed")):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
+	}
 
+	expMsgs = []string{
+		"baz",
+		"foo",
+		"bar",
+	}
+
+	for i, exp := range expMsgs {
 		// Second try
 		select {
 		case tran, open = <-in.TransactionChan():
 			if !open {
-				t.Fatal("transaction chan closed")
+				t.Fatalf("transaction chan closed at %v", i)
 			}
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
 
 		if act := string(tran.Payload.Get(0).Get()); exp != act {
-			t.Errorf("Wrong message contents: %v != %v", act, exp)
+			t.Errorf("Wrong message contents '%v': %v != %v", i, act, exp)
 		}
 
 		select {

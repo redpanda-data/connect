@@ -41,6 +41,10 @@ messages are assumed single part and are line delimited. If the multipart option
 is set to true then lines are interpretted as message parts, and an empty line
 indicates the end of the message.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+` + "`pipeline`" + ` section of a config.
+
 If the delimiter field is left empty then line feed (\n) is used.`,
 	}
 }
@@ -92,9 +96,9 @@ func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 	if err != nil {
 		return nil, err
 	}
-	return NewReader(
-		"stdin",
-		reader.NewCutOff(reader.NewPreserver(rdr)),
+	return NewAsyncReader(
+		TypeSTDIN, true,
+		reader.NewAsyncCutOff(reader.NewAsyncPreserver(rdr)),
 		log, stats,
 	)
 }

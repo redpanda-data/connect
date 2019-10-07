@@ -369,8 +369,12 @@ hdfs:
   user: benthos_hdfs
 ```
 
-Reads files from a HDFS directory, where each discrete file will be consumed as a single
-message payload.
+Reads files from a HDFS directory, where each discrete file will be consumed as
+a single message payload.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
 
 ### Metadata
 
@@ -816,6 +820,10 @@ mqtt:
 
 Subscribe to topics on MQTT brokers.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -848,6 +856,10 @@ nanomsg:
 The scalability protocols are common communication patterns. This input should
 be compatible with any implementation, but specifically targets Nanomsg.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
 Currently only PULL and SUB sockets are supported.
 
 ## `nats`
@@ -864,6 +876,10 @@ nats:
 
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
 behaviour then look at NATS Stream.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
 
 The urls can contain username/password semantics. e.g.
 nats://derek:pass@localhost:4222
@@ -982,6 +998,10 @@ redis_list:
 
 Pops messages from the beginning of a Redis list using the BLPop command.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
 ## `redis_pubsub`
 
 ``` yaml
@@ -995,6 +1015,10 @@ redis_pubsub:
 
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple
 channels using this input.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
 
 In order to subscribe to channels using the `PSUBSCRIBE` command set
 the field `use_patterns` to `true`, then you can include glob-style
@@ -1151,6 +1175,10 @@ sqs:
 Receive messages from an Amazon SQS URL, only the body is extracted into
 messages.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS
@@ -1187,6 +1215,10 @@ messages are assumed single part and are line delimited. If the multipart option
 is set to true then lines are interpretted as message parts, and an empty line
 indicates the end of the message.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
 If the delimiter field is left empty then line feed (\n) is used.
 
 ## `tcp`
@@ -1205,6 +1237,10 @@ Connects to a TCP server and consumes a continuous stream of messages.
 If multipart is set to false each line of data is read as a separate message. If
 multipart is set to true each line is read as a message part, and an empty line
 indicates the end of a message.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
 
 If the delimiter field is left empty then line feed (\n) is used.
 
@@ -1271,6 +1307,10 @@ websocket:
 ```
 
 Connects to a websocket server and continuously receives messages.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
 
 It is possible to configure an `open_message`, which when set to a
 non-empty string will be sent to the websocket server each time a connection is

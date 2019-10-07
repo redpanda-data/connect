@@ -72,7 +72,7 @@ type NATS struct {
 }
 
 // NewNATS creates a new NATS input type.
-func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error) {
 	n := NATS{
 		conf:          conf,
 		stats:         stats,

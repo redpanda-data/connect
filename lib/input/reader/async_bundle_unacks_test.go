@@ -160,6 +160,9 @@ func TestAsyncBundleUnacksHappy(t *testing.T) {
 		[]byte("foo"),
 		[]byte("bar"),
 	}
+	for _, p := range expMsgs {
+		readerImpl.msgsToSnd = append(readerImpl.msgsToSnd, message.New([][]byte{p}))
+	}
 
 	go func() {
 		select {
@@ -167,8 +170,7 @@ func TestAsyncBundleUnacksHappy(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
-		for _, p := range expMsgs {
-			readerImpl.msgsToSnd = []types.Message{message.New([][]byte{p})}
+		for range expMsgs {
 			select {
 			case readerImpl.readChan <- nil:
 			case <-time.After(time.Second):
@@ -228,6 +230,9 @@ func TestAsyncBundleUnacksSad(t *testing.T) {
 		[]byte("foo"),
 		[]byte("bar"),
 	}
+	for _, p := range expMsgs {
+		readerImpl.msgsToSnd = append(readerImpl.msgsToSnd, message.New([][]byte{p}))
+	}
 
 	go func() {
 		select {
@@ -235,8 +240,7 @@ func TestAsyncBundleUnacksSad(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
-		for _, p := range expMsgs {
-			readerImpl.msgsToSnd = []types.Message{message.New([][]byte{p})}
+		for range expMsgs {
 			select {
 			case readerImpl.readChan <- nil:
 			case <-time.After(time.Second):
@@ -298,6 +302,9 @@ func TestAsyncBundleUnacksSadTwo(t *testing.T) {
 		[]byte("foo"),
 		[]byte("bar"),
 	}
+	for _, p := range expMsgs {
+		readerImpl.msgsToSnd = append(readerImpl.msgsToSnd, message.New([][]byte{p}))
+	}
 
 	errFirstAck := errors.New("error returned by first ack")
 	errSecondAck := errors.New("error returned by second ack")
@@ -308,8 +315,7 @@ func TestAsyncBundleUnacksSadTwo(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
-		for _, p := range expMsgs {
-			readerImpl.msgsToSnd = []types.Message{message.New([][]byte{p})}
+		for range expMsgs {
 			select {
 			case readerImpl.readChan <- nil:
 			case <-time.After(time.Second):
@@ -374,6 +380,9 @@ func TestAsyncBundleUnacksSadThree(t *testing.T) {
 		[]byte("foo"),
 		[]byte("bar"),
 	}
+	for _, p := range expMsgs {
+		readerImpl.msgsToSnd = append(readerImpl.msgsToSnd, message.New([][]byte{p}))
+	}
 
 	errFirstAck := errors.New("error returned by first ack")
 
@@ -383,8 +392,7 @@ func TestAsyncBundleUnacksSadThree(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
-		for _, p := range expMsgs {
-			readerImpl.msgsToSnd = []types.Message{message.New([][]byte{p})}
+		for range expMsgs {
 			select {
 			case readerImpl.readChan <- nil:
 			case <-time.After(time.Second):

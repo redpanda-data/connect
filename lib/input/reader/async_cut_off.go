@@ -82,6 +82,8 @@ func (c *AsyncCutOff) ReadWithContext(ctx context.Context) (types.Message, Async
 		return m.msg, m.ackFn, nil
 	case e := <-c.errChan:
 		return nil, nil, e
+	case <-ctx.Done():
+		return nil, nil, types.ErrTimeout
 	case <-c.closeChan:
 	}
 	return nil, nil, types.ErrTypeClosed

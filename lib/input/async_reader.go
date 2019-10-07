@@ -261,11 +261,11 @@ func (r *AsyncReader) loop() {
 				res = response.NewNoack()
 				r.CloseAsync()
 			}
+			mLatency.Timing(time.Since(m.CreatedAt()).Nanoseconds())
+			tracing.FinishSpans(m)
 			if err = aFn(r.fullyCloseCtx, res); err != nil {
 				r.log.Errorf("Failed to acknowledge message: %v\n", err)
 			}
-			mLatency.Timing(time.Since(m.CreatedAt()).Nanoseconds())
-			tracing.FinishSpans(m)
 		}(msg, ackFn, resChan)
 	}
 }

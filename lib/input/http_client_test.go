@@ -176,7 +176,7 @@ func TestHTTPClientGETStreamNotExist(t *testing.T) {
 	<-time.After(time.Millisecond * 500)
 
 	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	if err := h.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 }

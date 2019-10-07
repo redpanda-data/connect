@@ -79,7 +79,7 @@ type ScaleProto struct {
 }
 
 // NewScaleProto creates a new ScaleProto input type.
-func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (Type, error) {
+func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (*ScaleProto, error) {
 	s := ScaleProto{
 		conf:  conf,
 		stats: stats,

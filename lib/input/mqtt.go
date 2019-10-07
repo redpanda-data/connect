@@ -35,6 +35,10 @@ func init() {
 		description: `
 Subscribe to topics on MQTT brokers.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+` + "`pipeline`" + ` section of a config.
+
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -60,7 +64,12 @@ func NewMQTT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	return NewReader("mqtt", reader.NewPreserver(m), log, stats)
+	return NewAsyncReader(
+		TypeMQTT,
+		true,
+		reader.NewAsyncPreserver(m),
+		log, stats,
+	)
 }
 
 //------------------------------------------------------------------------------
