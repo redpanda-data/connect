@@ -92,7 +92,7 @@ condition:
 #### Hydration
 
 It's possible to enrich payloads with content previously stored in a cache by
-using the [` + "`process_dag`" + `](#process_dag) processor:
+using the [` + "`process_map`" + `](#process_map) processor:
 
 ` + "``` yaml" + `
 - process_map:

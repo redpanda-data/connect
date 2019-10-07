@@ -118,6 +118,18 @@ func (p *AsyncBatcher) ReadWithContext(ctx context.Context) (types.Message, Asyn
 				}
 			}
 			if err == types.ErrTimeout {
+				// If the call "timed out" it could either mean that the context
+				// was cancelled, in which case we want to return right now, or
+				// that the underlying mechanism timed out, in which case we
+				// simply want to try again.
+				select {
+				case <-ctx.Done():
+					if batch := p.batcher.Flush(); batch != nil && batch.Len() > 0 {
+						return batch, p.wrapAckFns(), nil
+					}
+					return nil, nil, types.ErrTimeout
+				default:
+				}
 				continue
 			}
 			if err == types.ErrTypeClosed {

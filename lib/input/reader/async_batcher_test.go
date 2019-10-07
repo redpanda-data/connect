@@ -231,6 +231,41 @@ func TestAsyncBatcherSadThenHappy(t *testing.T) {
 	}
 }
 
+func TestAsyncBatcherTimeout(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Millisecond)
+	defer done()
+
+	rdr := newMockAsyncReader()
+
+	conf := batch.NewPolicyConfig()
+	conf.Count = 5
+	batcher, err := NewAsyncBatcher(conf, rdr, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		batcher.CloseAsync()
+		if err = batcher.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	go func() {
+		rdr.connChan <- nil
+		rdr.readChan <- types.ErrTimeout
+		rdr.closeAsyncChan <- struct{}{}
+		rdr.waitForCloseChan <- nil
+	}()
+
+	if err = batcher.ConnectWithContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err = batcher.ReadWithContext(ctx); err != types.ErrTimeout {
+		t.Fatalf("Expected '%v', received: %v", types.ErrTimeout, err)
+	}
+}
+
 func TestAsyncBatcherTimedBatches(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*10)
 	defer done()
