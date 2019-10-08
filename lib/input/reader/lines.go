@@ -40,12 +40,11 @@ type Lines struct {
 	handleCtor func(ctx context.Context) (io.Reader, error)
 	onClose    func(ctx context.Context)
 
-	scannerMut sync.Mutex
+	mut        sync.Mutex
 	handle     io.Reader
-	scanner    *bufio.Scanner
-
-	messageBuffer      *bytes.Buffer
-	messageBufferIndex int
+	shutdownFn func()
+	errChan    chan error
+	msgChan    chan types.Message
 
 	maxBuffer int
 	multipart bool
@@ -75,16 +74,16 @@ func NewLines(
 		onClose: func(ctx context.Context) {
 			onClose()
 		},
-		messageBuffer: &bytes.Buffer{},
-		maxBuffer:     bufio.MaxScanTokenSize,
-		multipart:     false,
-		delimiter:     []byte("\n"),
+		maxBuffer: bufio.MaxScanTokenSize,
+		multipart: false,
+		delimiter: []byte("\n"),
 	}
 
 	for _, opt := range options {
 		opt(&r)
 	}
 
+	r.shutdownFn = func() {}
 	return &r, nil
 }
 
@@ -96,18 +95,18 @@ func NewLinesWithContext(
 	options ...func(r *Lines),
 ) (*Lines, error) {
 	r := Lines{
-		handleCtor:    handleCtor,
-		onClose:       onClose,
-		messageBuffer: &bytes.Buffer{},
-		maxBuffer:     bufio.MaxScanTokenSize,
-		multipart:     false,
-		delimiter:     []byte("\n"),
+		handleCtor: handleCtor,
+		onClose:    onClose,
+		maxBuffer:  bufio.MaxScanTokenSize,
+		multipart:  false,
+		delimiter:  []byte("\n"),
 	}
 
 	for _, opt := range options {
 		opt(&r)
 	}
 
+	r.shutdownFn = func() {}
 	return &r, nil
 }
 
@@ -146,8 +145,10 @@ func (r *Lines) closeHandle() {
 		}
 		r.handle = nil
 	}
-	r.scanner = nil
+	r.shutdownFn()
 }
+
+//------------------------------------------------------------------------------
 
 // Connect attempts to establish a new scanner for an io.Reader.
 func (r *Lines) Connect() error {
@@ -156,15 +157,11 @@ func (r *Lines) Connect() error {
 
 // ConnectWithContext attempts to establish a new scanner for an io.Reader.
 func (r *Lines) ConnectWithContext(ctx context.Context) error {
-	r.scannerMut.Lock()
-	defer r.scannerMut.Unlock()
-	if r.scanner != nil {
-		return nil
-	}
-	r.closeHandle() // Just incase we have an open handle without a scanner.
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	r.closeHandle()
 
-	var err error
-	r.handle, err = r.handleCtor(ctx)
+	handle, err := r.handleCtor(ctx)
 	if err != nil {
 		if err == io.EOF {
 			return types.ErrTypeClosed
@@ -172,12 +169,12 @@ func (r *Lines) ConnectWithContext(ctx context.Context) error {
 		return err
 	}
 
-	r.scanner = bufio.NewScanner(r.handle)
+	scanner := bufio.NewScanner(handle)
 	if r.maxBuffer != bufio.MaxScanTokenSize {
-		r.scanner.Buffer([]byte{}, r.maxBuffer)
+		scanner.Buffer([]byte{}, r.maxBuffer)
 	}
 
-	r.scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if atEOF && len(data) == 0 {
 			return 0, nil, nil
 		}
@@ -196,145 +193,128 @@ func (r *Lines) ConnectWithContext(ctx context.Context) error {
 		return 0, nil, nil
 	})
 
+	scannerCtx, shutdownFn := context.WithCancel(context.Background())
+	msgChan := make(chan types.Message)
+	errChan := make(chan error)
+
+	go func() {
+		defer func() {
+			shutdownFn()
+			close(errChan)
+			close(msgChan)
+		}()
+
+		msg := message.New(nil)
+		for scanner.Scan() {
+			partBytes := make([]byte, len(scanner.Bytes()))
+			partSize := copy(partBytes, scanner.Bytes())
+
+			if partSize > 0 {
+				msg.Append(message.NewPart(partBytes))
+				if !r.multipart {
+					select {
+					case msgChan <- msg:
+					case <-scannerCtx.Done():
+						return
+					}
+					msg = message.New(nil)
+				}
+			} else if r.multipart && msg.Len() > 0 {
+				// Empty line means we're finished reading parts for this
+				// message.
+				select {
+				case msgChan <- msg:
+				case <-scannerCtx.Done():
+					return
+				}
+				msg = message.New(nil)
+			}
+		}
+		if msg.Len() > 0 {
+			select {
+			case msgChan <- msg:
+			case <-scannerCtx.Done():
+				return
+			}
+		}
+		if serr := scanner.Err(); serr != nil {
+			select {
+			case errChan <- serr:
+			case <-scannerCtx.Done():
+				return
+			}
+		}
+	}()
+
+	r.handle = handle
+	r.msgChan = msgChan
+	r.errChan = errChan
+	r.shutdownFn = shutdownFn
 	return nil
 }
 
 // ReadWithContext attempts to read a new line from the io.Reader.
 func (r *Lines) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
-	r.scannerMut.Lock()
-	scanner := r.scanner
-	r.scannerMut.Unlock()
-	if scanner == nil {
-		return nil, nil, types.ErrNotConnected
-	}
+	r.mut.Lock()
+	msgChan := r.msgChan
+	errChan := r.errChan
+	r.mut.Unlock()
 
-	finishedChan := make(chan struct{})
-	defer close(finishedChan)
-
-	go func() {
-		select {
-		case <-finishedChan:
-		case <-ctx.Done():
-			r.scannerMut.Lock()
-			r.closeHandle()
-			r.scannerMut.Unlock()
+	select {
+	case msg, open := <-msgChan:
+		if !open {
+			return nil, nil, types.ErrNotConnected
 		}
-	}()
-	msg := message.New(nil)
-
-	for scanner.Scan() {
-		partBytes := make([]byte, len(scanner.Bytes()))
-		partSize := copy(partBytes, scanner.Bytes())
-
-		if partSize > 0 {
-			msg.Append(message.NewPart(partBytes))
-			if !r.multipart {
-				return msg, noopAsyncAckFn, nil
-			}
-		} else if r.multipart && msg.Len() > 0 {
-			// Empty line means we're finished reading parts for this
-			// message.
-			return msg, noopAsyncAckFn, nil
-		}
-	}
-
-	err := scanner.Err()
-
-	r.scannerMut.Lock()
-	r.closeHandle()
-	r.scannerMut.Unlock()
-
-	if err != nil {
-		return nil, nil, err
-	}
-	if msg.Len() > 0 {
 		return msg, noopAsyncAckFn, nil
+	case err, open := <-errChan:
+		if !open {
+			return nil, nil, types.ErrNotConnected
+		}
+		return nil, nil, err
+	case <-ctx.Done():
 	}
-	return nil, nil, types.ErrNotConnected
+	return nil, nil, types.ErrTimeout
 }
 
 // Read attempts to read a new line from the io.Reader.
 func (r *Lines) Read() (types.Message, error) {
-	if r.scanner == nil {
-		return nil, types.ErrNotConnected
-	}
+	r.mut.Lock()
+	msgChan := r.msgChan
+	errChan := r.errChan
+	r.mut.Unlock()
 
-	msg := message.New(nil)
-
-	for r.scanner.Scan() {
-		partSize, err := r.messageBuffer.Write(r.scanner.Bytes())
-		rIndex := r.messageBufferIndex
-		r.messageBufferIndex += partSize
-		if err != nil {
-			return nil, err
+	select {
+	case msg, open := <-msgChan:
+		if !open {
+			return nil, types.ErrNotConnected
 		}
-
-		// WARNING: According to https://golang.org/pkg/bytes/#Buffer.Bytes the
-		// slice returned by Bytes is only correct until the next call to Write.
-		// Since we call Write for multiple part messages, and could potentially
-		// call it on a consecutive Read call before the next Acknowledge, we
-		// are passing slices through messages that are "invalid".
-		//
-		// However, in practice the calls to Write do not overwrite the memory
-		// within the returned slice even if it results in the buffer
-		// re-allocating memory. Since we also ensure that Reset is only called
-		// once messages are no longer in use we should be fine here.
-		//
-		// Regardless, we should regularly revisit this code in order to ensure
-		// that this remains the case. I can't foresee any case where discarded
-		// slices within bytes.Buffer would be wiped or modified during Write,
-		// but since the library does not guarantee this:
-		//
-		// TODO: Have another cheeky gander at
-		// https://golang.org/src/bytes/buffer.go to make sure Write never
-		// mutates a discarded slice during re-allocation. If it does then we
-		// should stop using bytes.Buffer and either eat the allocations or do
-		// some buffer rotations of our own.
-		if partSize > 0 {
-			msg.Append(message.NewPart(r.messageBuffer.Bytes()[rIndex : rIndex+partSize : rIndex+partSize]))
-			if !r.multipart {
-				return msg, nil
-			}
-		} else if r.multipart && msg.Len() > 0 {
-			// Empty line means we're finished reading parts for this
-			// message.
-			return msg, nil
+		return msg, nil
+	case err, open := <-errChan:
+		if !open {
+			return nil, types.ErrNotConnected
 		}
-	}
-
-	if err := r.scanner.Err(); err != nil {
-		r.closeHandle()
 		return nil, err
 	}
-
-	r.closeHandle()
-
-	if msg.Len() > 0 {
-		return msg, nil
-	}
-	return nil, types.ErrNotConnected
 }
 
 // Acknowledge confirms whether or not our unacknowledged messages have been
 // successfully propagated or not.
 func (r *Lines) Acknowledge(err error) error {
-	if err == nil && r.messageBuffer != nil {
-		r.messageBuffer.Reset()
-		r.messageBufferIndex = 0
-	}
 	return nil
 }
 
 // CloseAsync shuts down the reader input and stops processing requests.
 func (r *Lines) CloseAsync() {
-	r.onClose(context.Background())
+	go func() {
+		r.mut.Lock()
+		r.onClose(context.Background())
+		r.closeHandle()
+		r.mut.Unlock()
+	}()
 }
 
 // WaitForClose blocks until the reader input has closed down.
 func (r *Lines) WaitForClose(timeout time.Duration) error {
-	r.scannerMut.Lock()
-	r.closeHandle()
-	r.scannerMut.Unlock()
 	return nil
 }
 

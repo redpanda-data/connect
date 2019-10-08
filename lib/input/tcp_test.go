@@ -452,10 +452,10 @@ func TestTCPMultipartShutdown(t *testing.T) {
 			select {
 			case tran.ResponseChan <- response.NewAck():
 			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
+				return nil, errors.New("timed out on ack")
 			}
 		case <-time.After(time.Second):
-			return nil, errors.New("timed out")
+			return nil, errors.New("timed out on read")
 		}
 		return msg, nil
 	}
