@@ -43,6 +43,8 @@ func TestAWSS3ToSQSIntegration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
+	t.Parallel()
+
 	pool, err := dockertest.NewPool("")
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
@@ -51,6 +53,7 @@ func TestAWSS3ToSQSIntegration(t *testing.T) {
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "localstack/localstack",
 		ExposedPorts: []string{"4572/tcp"},
+		Env:          []string{"SERVICES=s3,sqs"},
 	})
 	if err != nil {
 		t.Fatalf("Could not start resource: %s", err)
