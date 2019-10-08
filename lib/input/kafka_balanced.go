@@ -91,7 +91,7 @@ func NewKafkaBalanced(conf Config, mgr types.Manager, log log.Modular, stats met
 		return nil, err
 	}
 	preserved := reader.NewAsyncPreserver(k)
-	return NewAsyncReader("kafka_balanced", true, preserved, log, stats)
+	return NewAsyncReader("kafka_balanced", false, preserved, log, stats)
 }
 
 // DEPRECATED: This is a hack for until the batch processor is removed.

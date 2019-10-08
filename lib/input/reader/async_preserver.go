@@ -45,8 +45,9 @@ type asyncPreserverResend struct {
 // doesn't have a concept of a NoAck (like Kafka), and instead of "rejecting"
 // messages we always intend to simply retry them until success.
 type AsyncPreserver struct {
-	resendMessages []asyncPreserverResend
-	msgsMut        sync.Mutex
+	resendMessages  []asyncPreserverResend
+	resendInterrupt func()
+	msgsMut         sync.Mutex
 
 	r Async
 }
@@ -54,7 +55,8 @@ type AsyncPreserver struct {
 // NewAsyncPreserver returns a new AsyncPreserver wrapper around a reader.Async.
 func NewAsyncPreserver(r Async) *AsyncPreserver {
 	return &AsyncPreserver{
-		r: r,
+		r:               r,
+		resendInterrupt: func() {},
 	}
 }
 
@@ -75,6 +77,7 @@ func (p *AsyncPreserver) wrapAckFn(msg types.Message, ackFn AsyncAckFn) AsyncAck
 				msg:   msg,
 				ackFn: ackFn,
 			})
+			p.resendInterrupt()
 			p.msgsMut.Unlock()
 			return nil
 		}
@@ -84,6 +87,10 @@ func (p *AsyncPreserver) wrapAckFn(msg types.Message, ackFn AsyncAckFn) AsyncAck
 
 // ReadWithContext attempts to read a new message from the source.
 func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	var cancel func()
+	ctx, cancel = context.WithCancel(ctx)
+	defer cancel()
+
 	// If we have messages queued to be resent we prioritise them over reading
 	// new messages.
 	p.msgsMut.Lock()
@@ -97,7 +104,9 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (types.Message, As
 		p.msgsMut.Unlock()
 		return resend.msg, p.wrapAckFn(resend.msg, resend.ackFn), nil
 	}
+	p.resendInterrupt = cancel
 	p.msgsMut.Unlock()
+
 	msg, aFn, err := p.r.ReadWithContext(ctx)
 	if err != nil {
 		return nil, nil, err
