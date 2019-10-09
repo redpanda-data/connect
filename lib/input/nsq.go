@@ -33,7 +33,17 @@ func init() {
 	Constructors[TypeNSQ] = TypeSpec{
 		constructor: NewNSQ,
 		description: `
-Subscribe to an NSQ instance topic and channel.`,
+Subscribe to an NSQ instance topic and channel.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+` + "`pipeline`" + ` section of a config.
+
+Use the ` + "`batching`" + ` fields to configure an optional
+[batching policy](../batching.md#batch-policy).`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return sanitiseWithBatch(conf.NSQ, conf.NSQ.Batching)
+		},
 	}
 }
 
@@ -41,11 +51,16 @@ Subscribe to an NSQ instance topic and channel.`,
 
 // NewNSQ creates a new NSQ input type.
 func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	n, err := reader.NewNSQ(conf.NSQ, log, stats)
-	if err != nil {
+	var n reader.Async
+	var err error
+	if n, err = reader.NewNSQ(conf.NSQ, log, stats); err != nil {
 		return nil, err
 	}
-	return NewReader("nsq", n, log, stats)
+	if n, err = reader.NewAsyncBatcher(conf.NSQ.Batching, n, mgr, log, stats); err != nil {
+		return nil, err
+	}
+	n = reader.NewAsyncBundleUnacks(n)
+	return NewAsyncReader(TypeNSQ, true, n, log, stats)
 }
 
 //------------------------------------------------------------------------------

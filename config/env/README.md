@@ -235,6 +235,9 @@ INPUT_NATS_STREAM_UNSUBSCRIBE_ON_CLOSE              = false
 INPUT_NATS_STREAM_URLS                              = nats://localhost:4222
 INPUT_NATS_SUBJECT                                  = benthos_messages
 INPUT_NATS_URLS                                     = nats://127.0.0.1:4222
+INPUT_NSQ_BATCHING_BYTE_SIZE                        = 0
+INPUT_NSQ_BATCHING_COUNT                            = 1
+INPUT_NSQ_BATCHING_PERIOD
 INPUT_NSQ_CHANNEL                                   = benthos_stream
 INPUT_NSQ_LOOKUPD_HTTP_ADDRESSES                    = localhost:4161
 INPUT_NSQ_MAX_IN_FLIGHT                             = 100

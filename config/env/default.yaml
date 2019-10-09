@@ -240,6 +240,10 @@ input:
         urls:
         - ${INPUT_NATS_STREAM_URLS:nats://localhost:4222}
       nsq:
+        batching:
+          byte_size: ${INPUT_NSQ_BATCHING_BYTE_SIZE:0}
+          count: ${INPUT_NSQ_BATCHING_COUNT:1}
+          period: ${INPUT_NSQ_BATCHING_PERIOD}
         channel: ${INPUT_NSQ_CHANNEL:benthos_stream}
         lookupd_http_addresses:
         - ${INPUT_NSQ_LOOKUPD_HTTP_ADDRESSES:localhost:4161}

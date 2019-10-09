@@ -982,6 +982,13 @@ You can access these metadata fields using
 ``` yaml
 type: nsq
 nsq:
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   channel: benthos_stream
   lookupd_http_addresses:
   - localhost:4161
@@ -993,6 +1000,13 @@ nsq:
 ```
 
 Subscribe to an NSQ instance topic and channel.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
+Use the `batching` fields to configure an optional
+[batching policy](../batching.md#batch-policy).
 
 ## `read_until`
 

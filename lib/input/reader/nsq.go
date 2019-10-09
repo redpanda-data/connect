@@ -30,6 +30,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	nsq "github.com/nsqio/go-nsq"
@@ -39,16 +40,19 @@ import (
 
 // NSQConfig contains configuration fields for the NSQ input type.
 type NSQConfig struct {
-	Addresses       []string `json:"nsqd_tcp_addresses" yaml:"nsqd_tcp_addresses"`
-	LookupAddresses []string `json:"lookupd_http_addresses" yaml:"lookupd_http_addresses"`
-	Topic           string   `json:"topic" yaml:"topic"`
-	Channel         string   `json:"channel" yaml:"channel"`
-	UserAgent       string   `json:"user_agent" yaml:"user_agent"`
-	MaxInFlight     int      `json:"max_in_flight" yaml:"max_in_flight"`
+	Addresses       []string           `json:"nsqd_tcp_addresses" yaml:"nsqd_tcp_addresses"`
+	LookupAddresses []string           `json:"lookupd_http_addresses" yaml:"lookupd_http_addresses"`
+	Topic           string             `json:"topic" yaml:"topic"`
+	Channel         string             `json:"channel" yaml:"channel"`
+	UserAgent       string             `json:"user_agent" yaml:"user_agent"`
+	MaxInFlight     int                `json:"max_in_flight" yaml:"max_in_flight"`
+	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewNSQConfig creates a new NSQConfig with default values.
 func NewNSQConfig() NSQConfig {
+	batching := batch.NewPolicyConfig()
+	batching.Count = 1
 	return NSQConfig{
 		Addresses:       []string{"localhost:4150"},
 		LookupAddresses: []string{"localhost:4161"},
@@ -56,6 +60,7 @@ func NewNSQConfig() NSQConfig {
 		Channel:         "benthos_stream",
 		UserAgent:       "benthos_consumer",
 		MaxInFlight:     100,
+		Batching:        batching,
 	}
 }
 
