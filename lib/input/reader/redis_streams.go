@@ -30,6 +30,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis"
@@ -40,19 +41,22 @@ import (
 // RedisStreamsConfig contains configuration fields for the RedisStreams input
 // type.
 type RedisStreamsConfig struct {
-	URL             string   `json:"url" yaml:"url"`
-	BodyKey         string   `json:"body_key" yaml:"body_key"`
-	Streams         []string `json:"streams" yaml:"streams"`
-	ConsumerGroup   string   `json:"consumer_group" yaml:"consumer_group"`
-	ClientID        string   `json:"client_id" yaml:"client_id"`
-	Limit           int64    `json:"limit" yaml:"limit"`
-	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
-	CommitPeriod    string   `json:"commit_period" yaml:"commit_period"`
-	Timeout         string   `json:"timeout" yaml:"timeout"`
+	URL             string             `json:"url" yaml:"url"`
+	BodyKey         string             `json:"body_key" yaml:"body_key"`
+	Streams         []string           `json:"streams" yaml:"streams"`
+	ConsumerGroup   string             `json:"consumer_group" yaml:"consumer_group"`
+	ClientID        string             `json:"client_id" yaml:"client_id"`
+	Limit           int64              `json:"limit" yaml:"limit"`
+	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
+	StartFromOldest bool               `json:"start_from_oldest" yaml:"start_from_oldest"`
+	CommitPeriod    string             `json:"commit_period" yaml:"commit_period"`
+	Timeout         string             `json:"timeout" yaml:"timeout"`
 }
 
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.
 func NewRedisStreamsConfig() RedisStreamsConfig {
+	batchConf := batch.NewPolicyConfig()
+	batchConf.Count = 1
 	return RedisStreamsConfig{
 		URL:             "tcp://localhost:6379",
 		BodyKey:         "body",
@@ -60,6 +64,7 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		ConsumerGroup:   "benthos_group",
 		ClientID:        "benthos_consumer",
 		Limit:           10,
+		Batching:        batchConf,
 		StartFromOldest: true,
 		CommitPeriod:    "1s",
 		Timeout:         "5s",

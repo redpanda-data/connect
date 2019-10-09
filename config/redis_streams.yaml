@@ -7,6 +7,13 @@ http:
 input:
   type: redis_streams
   redis_streams:
+    batching:
+      byte_size: 0
+      condition:
+        type: static
+        static: false
+      count: 1
+      period: ""
     body_key: body
     client_id: benthos_consumer
     commit_period: 1s

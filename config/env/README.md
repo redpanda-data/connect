@@ -247,6 +247,9 @@ INPUT_REDIS_LIST_URL                                = tcp://localhost:6379
 INPUT_REDIS_PUBSUB_CHANNELS                         = benthos_chan
 INPUT_REDIS_PUBSUB_URL                              = tcp://localhost:6379
 INPUT_REDIS_PUBSUB_USE_PATTERNS                     = false
+INPUT_REDIS_STREAMS_BATCHING_BYTE_SIZE              = 0
+INPUT_REDIS_STREAMS_BATCHING_COUNT                  = 1
+INPUT_REDIS_STREAMS_BATCHING_PERIOD
 INPUT_REDIS_STREAMS_BODY_KEY                        = body
 INPUT_REDIS_STREAMS_CLIENT_ID                       = benthos_consumer
 INPUT_REDIS_STREAMS_COMMIT_PERIOD                   = 1s

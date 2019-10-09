@@ -85,11 +85,10 @@ func NewKinesisBalanced(conf Config, mgr types.Manager, log log.Modular, stats m
 	if k, err = reader.NewKinesisBalanced(conf.KinesisBalanced, log, stats); err != nil {
 		return nil, err
 	}
-	k = reader.NewAsyncBundleUnacks(k)
-	k = reader.NewAsyncPreserver(k)
 	if k, err = reader.NewAsyncBatcher(conf.KinesisBalanced.Batching, k, mgr, log, stats); err != nil {
 		return nil, err
 	}
+	k = reader.NewAsyncBundleUnacks(reader.NewAsyncPreserver(k))
 	return NewAsyncReader(TypeKinesisBalanced, true, k, log, stats)
 }
 
