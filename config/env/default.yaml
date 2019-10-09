@@ -51,6 +51,10 @@ input:
       files:
         path: ${INPUT_FILES_PATH}
       gcp_pubsub:
+        batching:
+          byte_size: ${INPUT_GCP_PUBSUB_BATCHING_BYTE_SIZE:0}
+          count: ${INPUT_GCP_PUBSUB_BATCHING_COUNT:1}
+          period: ${INPUT_GCP_PUBSUB_BATCHING_PERIOD}
         max_batch_count: ${INPUT_GCP_PUBSUB_MAX_BATCH_COUNT:1}
         max_outstanding_bytes: ${INPUT_GCP_PUBSUB_MAX_OUTSTANDING_BYTES:1000000000}
         max_outstanding_messages: ${INPUT_GCP_PUBSUB_MAX_OUTSTANDING_MESSAGES:1000}

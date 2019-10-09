@@ -334,8 +334,15 @@ You can access these metadata fields using
 ``` yaml
 type: gcp_pubsub
 gcp_pubsub:
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   max_batch_count: 1
-  max_outstanding_bytes: 1e+09
+  max_outstanding_bytes: 1000000000
   max_outstanding_messages: 1000
   project: ""
   subscription: ""
@@ -343,8 +350,12 @@ gcp_pubsub:
 
 Consumes messages from a GCP Cloud Pub/Sub subscription.
 
-The field `max_batch_count` specifies the maximum number of prefetched
-messages to be batched together.
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
+Use the `batching` fields to configure an optional
+[batching policy](../batching.md#batch-policy).
 
 ### Metadata
 

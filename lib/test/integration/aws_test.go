@@ -470,18 +470,29 @@ func testS3UploadDownload(t *testing.T, endpoint, bucket string) {
 		t.Fatal(err)
 	}
 
+	expMsgs := map[string]struct{}{}
 	for i := 0; i < N; i++ {
+		expMsgs[fmt.Sprintf("foo%v", i)] = struct{}{}
+	}
+
+	i := 0
+	for len(expMsgs) > 0 && i < N {
 		msg, err := mInput.Read()
 		if err != nil {
 			t.Fatal(err)
 		}
-		exp := fmt.Sprintf("foo%v", i)
 		mBytes := message.GetAllBytes(msg)
 		if len(mBytes) == 0 {
 			t.Fatal("Empty message received")
 		}
-		if act := string(mBytes[0]); exp != act {
-			t.Errorf("Wrong result: %v != %v", act, exp)
+		act := string(mBytes[0])
+		if _, exists := expMsgs[act]; !exists {
+			t.Errorf("Unexpected result: %v", act)
 		}
+		delete(expMsgs, act)
+		i++
+	}
+	if len(expMsgs) > 0 {
+		t.Errorf("Unseen messages: %v", expMsgs)
 	}
 }

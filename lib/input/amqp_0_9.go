@@ -110,7 +110,7 @@ func NewAMQP09(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 	if a, err = reader.NewAsyncBatcher(conf.AMQP09.Batching, a, mgr, log, stats); err != nil {
 		return nil, err
 	}
-	return NewAsyncReader("amqp_0_9", true, a, log, stats)
+	return NewAsyncReader(TypeAMQP09, true, a, log, stats)
 }
 
 //------------------------------------------------------------------------------

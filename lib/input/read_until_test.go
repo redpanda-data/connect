@@ -157,16 +157,17 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expMsgs := []string{
-		"foo",
-		"bar",
+	expMsgs := map[string]struct{}{
+		"foo": {},
+		"bar": {},
 	}
 
 	var tran types.Transaction
 	var open bool
 
 	resChans := []chan<- types.Response{}
-	for i, exp := range expMsgs {
+	i := 0
+	for len(expMsgs) > 0 && i < 10 {
 		// First try
 		select {
 		case tran, open = <-in.TransactionChan():
@@ -177,8 +178,12 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		if act := string(tran.Payload.Get(0).Get()); exp != act {
-			t.Errorf("Wrong message contents '%v': %v != %v", i, act, exp)
+		i++
+		act := string(tran.Payload.Get(0).Get())
+		if _, exists := expMsgs[act]; !exists {
+			t.Errorf("Unexpected message contents '%v': %v", i, act)
+		} else {
+			delete(expMsgs, act)
 		}
 		resChans = append(resChans, tran.ResponseChan)
 	}
@@ -198,25 +203,29 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 		}
 	}
 
-	expMsgs = []string{
-		"baz",
-		"foo",
-		"bar",
+	expMsgs = map[string]struct{}{
+		"foo": {},
+		"bar": {},
+		"baz": {},
 	}
 
-	for i, exp := range expMsgs {
+remainingLoop:
+	for len(expMsgs) > 0 {
 		// Second try
 		select {
 		case tran, open = <-in.TransactionChan():
 			if !open {
-				t.Fatalf("transaction chan closed at %v", i)
+				break remainingLoop
 			}
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
 
-		if act := string(tran.Payload.Get(0).Get()); exp != act {
-			t.Errorf("Wrong message contents '%v': %v != %v", i, act, exp)
+		act := string(tran.Payload.Get(0).Get())
+		if _, exists := expMsgs[act]; !exists {
+			t.Errorf("Unexpected message contents '%v': %v", i, act)
+		} else {
+			delete(expMsgs, act)
 		}
 
 		select {
@@ -224,6 +233,9 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
+	}
+	if len(expMsgs) == 3 {
+		t.Error("Expected at least one extra message")
 	}
 
 	// Should close automatically now

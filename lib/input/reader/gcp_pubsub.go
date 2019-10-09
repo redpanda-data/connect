@@ -29,6 +29,7 @@ import (
 	"cloud.google.com/go/pubsub"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -42,17 +43,22 @@ type GCPPubSubConfig struct {
 	SubscriptionID         string `json:"subscription" yaml:"subscription"`
 	MaxOutstandingMessages int    `json:"max_outstanding_messages" yaml:"max_outstanding_messages"`
 	MaxOutstandingBytes    int    `json:"max_outstanding_bytes" yaml:"max_outstanding_bytes"`
-	MaxBatchCount          int    `json:"max_batch_count" yaml:"max_batch_count"`
+	// TODO: V4 Remove this.
+	MaxBatchCount int                `json:"max_batch_count" yaml:"max_batch_count"`
+	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
 func NewGCPPubSubConfig() GCPPubSubConfig {
+	batchConf := batch.NewPolicyConfig()
+	batchConf.Count = 1
 	return GCPPubSubConfig{
 		ProjectID:              "",
 		SubscriptionID:         "",
 		MaxOutstandingMessages: pubsub.DefaultReceiveSettings.MaxOutstandingMessages,
 		MaxOutstandingBytes:    pubsub.DefaultReceiveSettings.MaxOutstandingBytes,
 		MaxBatchCount:          1,
+		Batching:               batchConf,
 	}
 }
 
