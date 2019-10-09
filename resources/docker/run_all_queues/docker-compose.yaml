@@ -70,6 +70,17 @@ services:
     ports:
       - "9200:9200"
       - "9300:9300"
+  localstack:
+    image: localstack/localstack
+    environment:
+      SERVICES: s3,sqs
+    ports:
+      - "4572:4572"
+      - "4576:4576"
+  hadoop:
+    image: cybermaggedon/hadoop
+    hostname: localhost
+    ports: ["9000:9000", "50075:50075", "50070:50070", "50010:50010"]
   benthos-in:
     image: jeffail/benthos
     volumes:
