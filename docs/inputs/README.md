@@ -926,6 +926,13 @@ You can access these metadata fields using
 type: nats_stream
 nats_stream:
   ack_wait: 30s
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   client_id: benthos_client
   cluster_id: test-cluster
   durable_name: benthos_offset
@@ -950,6 +957,13 @@ When a consumer closes its connection it unsubscribes, when all consumers of a
 durable queue do this the offsets are deleted. In order to avoid this you can
 stop the consumers from unsubscribing by setting the field
 `unsubscribe_on_close` to `false`.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
+Use the `batching` fields to configure an optional
+[batching policy](../batching.md#batch-policy).
 
 ### Metadata
 

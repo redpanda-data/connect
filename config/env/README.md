@@ -221,6 +221,9 @@ INPUT_NANOMSG_URLS                                  = tcp://*:5555
 INPUT_NATS_PREFETCH_COUNT                           = 32
 INPUT_NATS_QUEUE                                    = benthos_queue
 INPUT_NATS_STREAM_ACK_WAIT                          = 30s
+INPUT_NATS_STREAM_BATCHING_BYTE_SIZE                = 0
+INPUT_NATS_STREAM_BATCHING_COUNT                    = 1
+INPUT_NATS_STREAM_BATCHING_PERIOD
 INPUT_NATS_STREAM_CLIENT_ID                         = benthos_client
 INPUT_NATS_STREAM_CLUSTER_ID                        = test-cluster
 INPUT_NATS_STREAM_DURABLE_NAME                      = benthos_offset

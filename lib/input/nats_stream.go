@@ -46,6 +46,13 @@ durable queue do this the offsets are deleted. In order to avoid this you can
 stop the consumers from unsubscribing by setting the field
 ` + "`unsubscribe_on_close` to `false`" + `.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+` + "`pipeline`" + ` section of a config.
+
+Use the ` + "`batching`" + ` fields to configure an optional
+[batching policy](../batching.md#batch-policy).
+
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -57,6 +64,9 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return sanitiseWithBatch(conf.NATSStream, conf.NATSStream.Batching)
+		},
 	}
 }
 
@@ -64,11 +74,16 @@ You can access these metadata fields using
 
 // NewNATSStream creates a new NATSStream input type.
 func NewNATSStream(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	n, err := reader.NewNATSStream(conf.NATSStream, log, stats)
-	if err != nil {
+	var c reader.Async
+	var err error
+	if c, err = reader.NewNATSStream(conf.NATSStream, log, stats); err != nil {
 		return nil, err
 	}
-	return NewReader("nats_stream", n, log, stats)
+	c = reader.NewAsyncBundleUnacks(c)
+	if c, err = reader.NewAsyncBatcher(conf.NATSStream.Batching, c, mgr, log, stats); err != nil {
+		return nil, err
+	}
+	return NewAsyncReader(TypeNATSStream, true, c, log, stats)
 }
 
 //------------------------------------------------------------------------------
