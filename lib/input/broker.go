@@ -29,6 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/broker"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"gopkg.in/yaml.v3"
@@ -95,9 +96,14 @@ nodes processors.`,
 				}
 				inSlice = append(inSlice, sanInput)
 			}
+			var batchSanit interface{}
+			if batchSanit, err = batch.SanitisePolicyConfig(conf.Broker.Batching); err != nil {
+				return nil, err
+			}
 			return map[string]interface{}{
-				"copies": conf.Broker.Copies,
-				"inputs": inSlice,
+				"copies":   conf.Broker.Copies,
+				"inputs":   inSlice,
+				"batching": batchSanit,
 			}, nil
 		},
 	}
@@ -107,15 +113,19 @@ nodes processors.`,
 
 // BrokerConfig contains configuration fields for the Broker input type.
 type BrokerConfig struct {
-	Copies int             `json:"copies" yaml:"copies"`
-	Inputs brokerInputList `json:"inputs" yaml:"inputs"`
+	Copies   int                `json:"copies" yaml:"copies"`
+	Inputs   brokerInputList    `json:"inputs" yaml:"inputs"`
+	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewBrokerConfig creates a new BrokerConfig with default values.
 func NewBrokerConfig() BrokerConfig {
+	batching := batch.NewPolicyConfig()
+	batching.Count = 1
 	return BrokerConfig{
-		Copies: 1,
-		Inputs: brokerInputList{},
+		Copies:   1,
+		Inputs:   brokerInputList{},
+		Batching: batching,
 	}
 }
 
@@ -269,7 +279,21 @@ func newBrokerHasBatchProcessor(
 		}
 	}
 
-	return broker.NewFanIn(inputs, stats)
+	var b Type
+	if b, err = broker.NewFanIn(inputs, stats); err != nil {
+		return nil, err
+	}
+
+	if conf.Broker.Batching.IsNoop() {
+		return b, nil
+	}
+
+	policy, err := batch.NewPolicy(conf.Broker.Batching, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct batch policy: %v", err)
+	}
+
+	return NewBatcher(policy, b, log, stats), nil
 }
 
 //------------------------------------------------------------------------------

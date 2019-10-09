@@ -53,7 +53,7 @@ func NewAsyncBatcher(
 	if batchConfig.IsNoop() {
 		return r, nil
 	}
-	policy, err := batch.NewPolicy(batchConfig, mgr, log, stats)
+	policy, err := batch.NewPolicy(batchConfig, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 	}

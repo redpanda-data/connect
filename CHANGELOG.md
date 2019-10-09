@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Operator `delete` added to `metadata` processor.
 - New experimental metrics aggregator `stdout`.
 - Field `ack_wait` added to `nats_stream` input.
+- New `batching` field added to `broker` input for batching merged streams.
 
 ### Changed
 

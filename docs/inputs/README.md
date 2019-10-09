@@ -220,6 +220,13 @@ You can access these metadata fields using
 ``` yaml
 type: broker
 broker:
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   copies: 1
   inputs: []
 ```
