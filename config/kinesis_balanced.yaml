@@ -7,6 +7,13 @@ http:
 input:
   type: kinesis_balanced
   kinesis_balanced:
+    batching:
+      byte_size: 0
+      condition:
+        type: static
+        static: false
+      count: 1
+      period: ""
     credentials:
       id: ""
       profile: ""

@@ -180,6 +180,10 @@ input:
         stream: ${INPUT_KINESIS_STREAM}
         timeout: ${INPUT_KINESIS_TIMEOUT:5s}
       kinesis_balanced:
+        batching:
+          byte_size: ${INPUT_KINESIS_BALANCED_BATCHING_BYTE_SIZE:0}
+          count: ${INPUT_KINESIS_BALANCED_BATCHING_COUNT:1}
+          period: ${INPUT_KINESIS_BALANCED_BATCHING_PERIOD}
         credentials:
           id: ${INPUT_KINESIS_BALANCED_CREDENTIALS_ID}
           profile: ${INPUT_KINESIS_BALANCED_CREDENTIALS_PROFILE}

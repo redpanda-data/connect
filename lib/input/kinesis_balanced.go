@@ -39,6 +39,13 @@ version releases.
 Receives messages from a Kinesis stream and automatically balances shards across
 consumers.
 
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+` + "`pipeline`" + ` section of a config.
+
+Use the ` + "`batching`" + ` fields to configure an optional
+[batching policy](../batching.md#batch-policy).
+
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS
@@ -58,6 +65,9 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return sanitiseWithBatch(conf.KinesisBalanced, conf.KinesisBalanced.Batching)
+		},
 	}
 }
 
@@ -65,15 +75,22 @@ You can access these metadata fields using
 
 // NewKinesisBalanced creates a new AWS KinesisBalanced input type.
 func NewKinesisBalanced(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	k, err := reader.NewKinesisBalanced(conf.KinesisBalanced, log, stats)
-	if err != nil {
+	// TODO: V4 Remove this.
+	if conf.KinesisBalanced.MaxBatchCount > 1 {
+		log.Warnf("Field '%v.max_batch_count' is deprecated, use '%v.batching.count' instead.\n", conf.Type, conf.Type)
+		conf.KinesisBalanced.Batching.Count = conf.KinesisBalanced.MaxBatchCount
+	}
+	var k reader.Async
+	var err error
+	if k, err = reader.NewKinesisBalanced(conf.KinesisBalanced, log, stats); err != nil {
 		return nil, err
 	}
-	return NewReader(
-		TypeKinesisBalanced,
-		reader.NewPreserver(k),
-		log, stats,
-	)
+	k = reader.NewAsyncBundleUnacks(k)
+	k = reader.NewAsyncPreserver(k)
+	if k, err = reader.NewAsyncBatcher(conf.KinesisBalanced.Batching, k, mgr, log, stats); err != nil {
+		return nil, err
+	}
+	return NewAsyncReader(TypeKinesisBalanced, true, k, log, stats)
 }
 
 //------------------------------------------------------------------------------

@@ -29,6 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
@@ -46,12 +47,16 @@ type KinesisBalancedConfig struct {
 	DynamoDBBillingMode   string `json:"dynamodb_billing_mode" yaml:"dynamodb_billing_mode"`
 	DynamoDBReadCapacity  int64  `json:"dynamodb_read_provision" yaml:"dynamodb_read_provision"`
 	DynamoDBWriteCapacity int64  `json:"dynamodb_write_provision" yaml:"dynamodb_write_provision"`
-	MaxBatchCount         int    `json:"max_batch_count" yaml:"max_batch_count"`
-	StartFromOldest       bool   `json:"start_from_oldest" yaml:"start_from_oldest"`
+	// TODO: V4 Remove this.
+	MaxBatchCount   int                `json:"max_batch_count" yaml:"max_batch_count"`
+	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
+	StartFromOldest bool               `json:"start_from_oldest" yaml:"start_from_oldest"`
 }
 
 // NewKinesisBalancedConfig creates a new Config with default values.
 func NewKinesisBalancedConfig() KinesisBalancedConfig {
+	batchConf := batch.NewPolicyConfig()
+	batchConf.Count = 1
 	s := sess.NewConfig()
 	return KinesisBalancedConfig{
 		Config:                s,
@@ -61,6 +66,7 @@ func NewKinesisBalancedConfig() KinesisBalancedConfig {
 		DynamoDBReadCapacity:  0,
 		DynamoDBWriteCapacity: 0,
 		MaxBatchCount:         1,
+		Batching:              batchConf,
 		StartFromOldest:       true,
 	}
 }

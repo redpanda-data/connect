@@ -769,6 +769,13 @@ allowing you to transfer data across accounts. You can find out more
 ``` yaml
 type: kinesis_balanced
 kinesis_balanced:
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   credentials:
     id: ""
     profile: ""
@@ -792,6 +799,13 @@ version releases.
 
 Receives messages from a Kinesis stream and automatically balances shards across
 consumers.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
+Use the `batching` fields to configure an optional
+[batching policy](../batching.md#batch-policy).
 
 ### Credentials
 
