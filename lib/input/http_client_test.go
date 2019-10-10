@@ -31,11 +31,7 @@ func TestHTTPClientGET(t *testing.T) {
 	var reqCount uint32
 	index := 0
 
-	var reqMut sync.Mutex
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqMut.Lock()
-		defer reqMut.Unlock()
-
 		if exp, act := "GET", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -58,9 +54,7 @@ func TestHTTPClientGET(t *testing.T) {
 	var tr types.Transaction
 	var open bool
 
-	reqMut.Lock()
 	for _, expPart := range inputs {
-		reqMut.Unlock()
 		select {
 		case tr, open = <-h.TransactionChan():
 			if !open {
@@ -76,7 +70,6 @@ func TestHTTPClientGET(t *testing.T) {
 			t.Errorf("Action timed out")
 		}
 
-		reqMut.Lock()
 		select {
 		case tr.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
@@ -85,7 +78,6 @@ func TestHTTPClientGET(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	reqMut.Unlock()
 	select {
 	case <-h.TransactionChan():
 	case <-time.After(time.Second):
@@ -96,7 +88,7 @@ func TestHTTPClientGET(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := uint32(len(inputs)), atomic.LoadUint32(&reqCount); exp != act {
+	if exp, act := uint32(len(inputs)), atomic.LoadUint32(&reqCount); exp != act && exp+1 != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", act, exp)
 	}
 }
@@ -227,13 +219,8 @@ func TestHTTPClientPOST(t *testing.T) {
 		"foo5",
 	}
 
-	var reqMut sync.Mutex
-
 	index := 0
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqMut.Lock()
-		defer reqMut.Unlock()
-
 		if exp, act := "POST", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -266,12 +253,10 @@ func TestHTTPClientPOST(t *testing.T) {
 		return
 	}
 
-	reqMut.Lock()
 	for _, expPart := range inputs {
 		var ts types.Transaction
 		var open bool
 
-		reqMut.Unlock()
 		select {
 		case ts, open = <-h.TransactionChan():
 			if !open {
@@ -287,7 +272,6 @@ func TestHTTPClientPOST(t *testing.T) {
 			t.Errorf("Action timed out")
 		}
 
-		reqMut.Lock()
 		select {
 		case ts.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
@@ -296,7 +280,6 @@ func TestHTTPClientPOST(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	reqMut.Unlock()
 
 	select {
 	case <-h.TransactionChan():
@@ -308,19 +291,14 @@ func TestHTTPClientPOST(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := uint32(len(inputs)), atomic.LoadUint32(&reqCount); exp != act {
+	if exp, act := uint32(len(inputs)), atomic.LoadUint32(&reqCount); exp != act && exp+1 != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", act, exp)
 	}
 }
 
 func TestHTTPClientGETMultipart(t *testing.T) {
-	var reqMut sync.Mutex
-
 	var reqCount uint32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqMut.Lock()
-		defer reqMut.Unlock()
-
 		if exp, act := "GET", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
@@ -385,14 +363,12 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 		t.Errorf("Action timed out")
 	}
 
-	reqMut.Lock()
 	select {
 	case tr.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 	}
 	h.CloseAsync()
-	reqMut.Unlock()
 
 	select {
 	case <-h.TransactionChan():
@@ -404,7 +380,7 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := uint32(1), atomic.LoadUint32(&reqCount); exp != act {
+	if exp, act := uint32(1), atomic.LoadUint32(&reqCount); exp != act && exp+1 != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", act, exp)
 	}
 }

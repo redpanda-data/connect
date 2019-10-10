@@ -21,19 +21,15 @@
 package input
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
@@ -105,35 +101,16 @@ func NewHTTPClientConfig() HTTPClientConfig {
 // HTTPClient is an input type that continuously makes HTTP requests and reads
 // the response bodies as message payloads.
 type HTTPClient struct {
-	running int32
-
-	stats metrics.Type
-	log   log.Modular
-
 	conf Config
 
-	buffer *bytes.Buffer
-	client *client.Type
-
+	client  *client.Type
 	payload types.Message
-
-	transactions chan types.Transaction
-
-	closeChan  chan struct{}
-	closedChan chan struct{}
 }
 
 // NewHTTPClient creates a new HTTPClient input type.
 func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	h := HTTPClient{
-		running:      1,
-		stats:        stats,
-		log:          log,
-		conf:         conf,
-		buffer:       &bytes.Buffer{},
-		transactions: make(chan types.Transaction),
-		closeChan:    make(chan struct{}),
-		closedChan:   make(chan struct{}),
+		conf: conf,
 	}
 
 	if h.conf.HTTPClient.Stream.Enabled {
@@ -147,17 +124,19 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	var err error
 	if h.client, err = client.New(
 		h.conf.HTTPClient.Config,
-		client.OptSetCloseChan(h.closeChan),
-		client.OptSetLogger(h.log),
+		client.OptSetLogger(log.NewModule(".client")),
 		client.OptSetManager(mgr),
-		client.OptSetStats(metrics.Namespaced(h.stats, "client")),
+		client.OptSetStats(metrics.Namespaced(stats, "client")),
 	); err != nil {
 		return nil, err
 	}
 
 	if !h.conf.HTTPClient.Stream.Enabled {
-		go h.loop()
-		return &h, nil
+		hc, err := reader.NewHTTPClient(h.payload, h.client)
+		if err != nil {
+			return nil, err
+		}
+		return NewAsyncReader(TypeHTTPClient, true, reader.NewAsyncPreserver(hc), log, stats)
 	}
 
 	delim := conf.HTTPClient.Stream.Delim
@@ -172,9 +151,9 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	conn := false
 
 	var (
-		mStrmConstructor = h.stats.GetCounter("stream.constructor")
-		mStrmReqErr      = h.stats.GetCounter("stream.request.error")
-		mStrnOnClose     = h.stats.GetCounter("stream.on_close")
+		mStrmConstructor = stats.GetCounter("stream.constructor")
+		mStrmReqErr      = stats.GetCounter("stream.request.error")
+		mStrnOnClose     = stats.GetCounter("stream.on_close")
 	)
 
 	rdr, err := reader.NewLinesWithContext(
@@ -195,7 +174,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 			var err error
 			res, err = h.doRequest()
 			for err != nil && !closed {
-				h.log.Errorf("HTTP stream request failed: %v\n", err)
+				log.Errorf("HTTP stream request failed: %v\n", err)
 				mStrmReqErr.Incr(1)
 
 				resMux.Unlock()
@@ -260,118 +239,6 @@ func (h *HTTPClient) parseResponse(res *http.Response) (types.Message, error) {
 		return nil, err
 	}
 	return msg, nil
-}
-
-//------------------------------------------------------------------------------
-
-// loop is an internal loop brokers incoming messages to output pipe through
-// POST requests.
-func (h *HTTPClient) loop() {
-	var (
-		mRunning     = h.stats.GetGauge("running")
-		mRcvd        = h.stats.GetCounter("batch.received")
-		mPartsRcvd   = h.stats.GetCounter("received")
-		mReqTimedOut = h.stats.GetCounter("request.timed_out")
-		mReqErr      = h.stats.GetCounter("request.error")
-		mReqParseErr = h.stats.GetCounter("request.parse.error")
-		mReqSucc     = h.stats.GetCounter("request.success")
-		mCount       = h.stats.GetCounter("count")
-	)
-
-	defer func() {
-		atomic.StoreInt32(&h.running, 0)
-		mRunning.Decr(1)
-
-		close(h.transactions)
-		close(h.closedChan)
-	}()
-
-	mRunning.Incr(1)
-	h.log.Infof("Polling for HTTP messages from: %s\n", h.conf.HTTPClient.URL)
-
-	resOut := make(chan types.Response)
-
-	var msgOut types.Message
-	for atomic.LoadInt32(&h.running) == 1 {
-		if msgOut == nil {
-			var res *http.Response
-			var err error
-
-			if res, err = h.doRequest(); err != nil {
-				if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
-					// Hate this ^
-					mReqTimedOut.Incr(1)
-				} else {
-					h.log.Errorf("Request failed: %v\n", err)
-					mReqErr.Incr(1)
-				}
-			} else {
-				if msgOut, err = h.parseResponse(res); err != nil {
-					mReqParseErr.Incr(1)
-					h.log.Errorf("Failed to decode response: %v\n", err)
-				} else {
-					mReqSucc.Incr(1)
-				}
-				res.Body.Close()
-			}
-
-			if msgOut != nil {
-				mCount.Incr(1)
-				mRcvd.Incr(1)
-				mPartsRcvd.Incr(int64(msgOut.Len()))
-			}
-		}
-
-		if msgOut != nil {
-			tracing.InitSpans("input_http_client", msgOut)
-			select {
-			case h.transactions <- types.NewTransaction(msgOut, resOut):
-			case <-h.closeChan:
-				return
-			}
-			select {
-			case res, open := <-resOut:
-				if !open {
-					return
-				}
-				if res.Error() == nil {
-					tracing.FinishSpans(msgOut)
-					msgOut = nil
-				}
-			case <-h.closeChan:
-				return
-			}
-		}
-	}
-}
-
-// TransactionChan returns a transactions channel for consuming messages from
-// this input type.
-func (h *HTTPClient) TransactionChan() <-chan types.Transaction {
-	return h.transactions
-}
-
-// Connected returns a boolean indicating whether this input is currently
-// connected to its target.
-func (h *HTTPClient) Connected() bool {
-	return true
-}
-
-// CloseAsync shuts down the HTTPClient input.
-func (h *HTTPClient) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {
-		close(h.closeChan)
-	}
-}
-
-// WaitForClose blocks until the HTTPClient input has closed down.
-func (h *HTTPClient) WaitForClose(timeout time.Duration) error {
-	select {
-	case <-h.closedChan:
-	case <-time.After(timeout):
-		return types.ErrTimeout
-	}
-	return nil
 }
 
 //------------------------------------------------------------------------------
