@@ -76,15 +76,16 @@ duplicate condition configs by using the [resource condition][resource].
 6. [`check_interpolation`](#check_interpolation)
 7. [`count`](#count)
 8. [`jmespath`](#jmespath)
-9. [`metadata`](#metadata)
-10. [`not`](#not)
-11. [`number`](#number)
-12. [`or`](#or)
-13. [`processor_failed`](#processor_failed)
-14. [`resource`](#resource)
-15. [`static`](#static)
-16. [`text`](#text)
-17. [`xor`](#xor)
+9. [`jsonschema`](#jsonschema)
+10. [`metadata`](#metadata)
+11. [`not`](#not)
+12. [`number`](#number)
+13. [`or`](#or)
+14. [`processor_failed`](#processor_failed)
+15. [`resource`](#resource)
+16. [`static`](#static)
+17. [`text`](#text)
+18. [`xor`](#xor)
 
 ## `all`
 
@@ -245,6 +246,61 @@ Then the condition would pass.
 JMESPath is traditionally used for mutating JSON, in order to do this please
 instead use the [`jmespath`](../processors/README.md#jmespath)
 processor.
+
+## `jsonschema`
+
+``` yaml
+type: jsonschema
+jsonschema:
+  part: 0
+  schema: ""
+  schema_path: ""
+```
+
+Validates a message against the provided JSONSchema definition to retrieve a
+boolean response indicating whether the message matches the schema or not.
+If the response is true the condition passes, otherwise it does not. Please refer to the
+[JSONSchema website](https://json-schema.org/) for information and tutorials regarding
+the syntax of the schema.
+
+For example, with the following JSONSchema document:
+``` json
+{
+	"$id": "https://example.com/person.schema.json",
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Person",
+	"type": "object",
+	"properties": {
+	  "firstName": {
+		"type": "string",
+		"description": "The person's first name."
+	  },
+	  "lastName": {
+		"type": "string",
+		"description": "The person's last name."
+	  },
+	  "age": {
+		"description": "Age in years which must be equal to or greater than zero.",
+		"type": "integer",
+		"minimum": 0
+	  }
+	}
+}
+```
+
+and the following Benthos configuration:
+``` yaml
+jsonschema:
+  part: 0
+  schema_path: "file://path_to_schema.json"
+```
+
+If the message being processed looked like:
+``` json
+{"firstName":"John","lastName":"Doe","age":21}
+```
+
+Then the condition would pass.
 
 ## `metadata`
 
