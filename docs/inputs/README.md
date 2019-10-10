@@ -564,6 +564,13 @@ type: kafka
 kafka:
   addresses:
   - localhost:9092
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   client_id: benthos_kafka_input
   commit_period: 1s
   consumer_group: benthos_consumer_group
@@ -590,9 +597,10 @@ consumer group (set via config). Only one partition per input is supported, if
 you wish to balance partitions across a consumer group look at the
 `kafka_balanced` input type instead.
 
-The field `max_batch_count` specifies the maximum number of prefetched
-messages to be batched together. When more than one message is batched they can
-be split into individual messages with the `split` processor.
+Use the `batching` fields to configure an optional
+[batching policy](../batching.md#batch-policy). It is not currently possible to
+use [broker based batching](../batching.md#combined-batching) with this input
+type.
 
 The field `max_processing_period` should be set above the maximum
 estimated time taken to process a message.
@@ -689,7 +697,8 @@ utilise >1 pipeline processing threads and parallel outputs.
 
 The `batching` fields allow you to configure a
 [batching policy](../batching.md#batch-policy) which will be applied per
-partition.
+partition. It is not currently possible to use
+[broker based batching](../batching.md#combined-batching) with this input type.
 
 The field `max_processing_period` should be set above the maximum
 estimated time taken to process a message.
@@ -738,6 +747,13 @@ You can access these metadata fields using
 ``` yaml
 type: kinesis
 kinesis:
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   client_id: benthos_consumer
   commit_period: 1s
   credentials:
@@ -763,6 +779,11 @@ It's possible to use DynamoDB for persisting shard iterators by setting the
 table name. Offsets will then be tracked per `client_id` per
 `shard_id`. When using this mode you should create a table with
 `namespace` as the primary key and `shard_id` as a sort key.
+
+Use the `batching` fields to configure an optional
+[batching policy](../batching.md#batch-policy). It is not currently possible to
+use [broker based batching](../batching.md#combined-batching) with this input
+type.
 
 ### Credentials
 

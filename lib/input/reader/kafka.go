@@ -21,6 +21,7 @@
 package reader
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"strconv"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -40,23 +42,27 @@ import (
 
 // KafkaConfig contains configuration fields for the Kafka input type.
 type KafkaConfig struct {
-	Addresses           []string    `json:"addresses" yaml:"addresses"`
-	ClientID            string      `json:"client_id" yaml:"client_id"`
-	ConsumerGroup       string      `json:"consumer_group" yaml:"consumer_group"`
-	CommitPeriod        string      `json:"commit_period" yaml:"commit_period"`
-	MaxProcessingPeriod string      `json:"max_processing_period" yaml:"max_processing_period"`
-	FetchBufferCap      int         `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
-	Topic               string      `json:"topic" yaml:"topic"`
-	Partition           int32       `json:"partition" yaml:"partition"`
-	StartFromOldest     bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
-	TargetVersion       string      `json:"target_version" yaml:"target_version"`
-	MaxBatchCount       int         `json:"max_batch_count" yaml:"max_batch_count"`
-	TLS                 btls.Config `json:"tls" yaml:"tls"`
-	SASL                SASLConfig  `json:"sasl" yaml:"sasl"`
+	Addresses           []string `json:"addresses" yaml:"addresses"`
+	ClientID            string   `json:"client_id" yaml:"client_id"`
+	ConsumerGroup       string   `json:"consumer_group" yaml:"consumer_group"`
+	CommitPeriod        string   `json:"commit_period" yaml:"commit_period"`
+	MaxProcessingPeriod string   `json:"max_processing_period" yaml:"max_processing_period"`
+	FetchBufferCap      int      `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
+	Topic               string   `json:"topic" yaml:"topic"`
+	Partition           int32    `json:"partition" yaml:"partition"`
+	StartFromOldest     bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TargetVersion       string   `json:"target_version" yaml:"target_version"`
+	// TODO: V4 Remove this.
+	MaxBatchCount int                `json:"max_batch_count" yaml:"max_batch_count"`
+	TLS           btls.Config        `json:"tls" yaml:"tls"`
+	SASL          SASLConfig         `json:"sasl" yaml:"sasl"`
+	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
 func NewKafkaConfig() KafkaConfig {
+	batchConf := batch.NewPolicyConfig()
+	batchConf.Count = 1
 	return KafkaConfig{
 		Addresses:           []string{"localhost:9092"},
 		ClientID:            "benthos_kafka_input",
@@ -70,6 +76,7 @@ func NewKafkaConfig() KafkaConfig {
 		TargetVersion:       sarama.V1_0_0_0.String(),
 		MaxBatchCount:       1,
 		TLS:                 btls.NewConfig(),
+		Batching:            batchConf,
 	}
 }
 
@@ -187,6 +194,11 @@ func (k *Kafka) closeClients() {
 
 // Connect establishes a Kafka connection.
 func (k *Kafka) Connect() error {
+	return k.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext establishes a Kafka connection.
+func (k *Kafka) ConnectWithContext(ctx context.Context) error {
 	var err error
 	defer func() {
 		if err != nil {
@@ -293,6 +305,11 @@ func (k *Kafka) Connect() error {
 
 // Read attempts to read a message from a Kafka topic.
 func (k *Kafka) Read() (types.Message, error) {
+	return k.ReadNextWithContext(context.Background())
+}
+
+// ReadNextWithContext attempts to read a message from a Kafka topic.
+func (k *Kafka) ReadNextWithContext(ctx context.Context) (types.Message, error) {
 	var partConsumer sarama.PartitionConsumer
 
 	k.sMut.Lock()
@@ -306,6 +323,7 @@ func (k *Kafka) Read() (types.Message, error) {
 	hwm := partConsumer.HighWaterMarkOffset()
 
 	msg := message.New(nil)
+
 	addPart := func(data *sarama.ConsumerMessage) {
 		k.offset = data.Offset + 1
 		part := message.NewPart(data.Value)
@@ -330,24 +348,14 @@ func (k *Kafka) Read() (types.Message, error) {
 		msg.Append(part)
 	}
 
-	data, open := <-partConsumer.Messages()
-	if !open {
-		return nil, types.ErrTypeClosed
-	}
-	addPart(data)
-
-batchLoop:
-	for i := 1; i < k.conf.MaxBatchCount; i++ {
-		select {
-		case data, open = <-partConsumer.Messages():
-			if !open {
-				return nil, types.ErrTypeClosed
-			}
-			addPart(data)
-		default:
-			// Drained the buffer
-			break batchLoop
+	select {
+	case data, open := <-partConsumer.Messages():
+		if !open {
+			return nil, types.ErrTypeClosed
 		}
+		addPart(data)
+	case <-ctx.Done():
+		return nil, types.ErrTimeout
 	}
 
 	if msg.Len() == 0 {
@@ -358,6 +366,12 @@ batchLoop:
 
 // Acknowledge instructs whether the current offset should be committed.
 func (k *Kafka) Acknowledge(err error) error {
+	return k.AcknowledgeWithContext(context.Background(), err)
+}
+
+// AcknowledgeWithContext instructs whether the current offset should be
+// committed.
+func (k *Kafka) AcknowledgeWithContext(ctx context.Context, err error) error {
 	if err == nil {
 		k.offsetCommit = k.offset
 	}

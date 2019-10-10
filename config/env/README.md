@@ -156,6 +156,9 @@ INPUT_KAFKA_BALANCED_TLS_ENABLED                    = false
 INPUT_KAFKA_BALANCED_TLS_ROOT_CAS_FILE
 INPUT_KAFKA_BALANCED_TLS_SKIP_CERT_VERIFY           = false
 INPUT_KAFKA_BALANCED_TOPICS                         = benthos_stream
+INPUT_KAFKA_BATCHING_BYTE_SIZE                      = 0
+INPUT_KAFKA_BATCHING_COUNT                          = 1
+INPUT_KAFKA_BATCHING_PERIOD
 INPUT_KAFKA_CLIENT_ID                               = benthos_kafka_input
 INPUT_KAFKA_COMMIT_PERIOD                           = 1s
 INPUT_KAFKA_CONSUMER_GROUP                          = benthos_consumer_group
@@ -190,6 +193,9 @@ INPUT_KINESIS_BALANCED_MAX_BATCH_COUNT              = 1
 INPUT_KINESIS_BALANCED_REGION                       = eu-west-1
 INPUT_KINESIS_BALANCED_START_FROM_OLDEST            = true
 INPUT_KINESIS_BALANCED_STREAM
+INPUT_KINESIS_BATCHING_BYTE_SIZE                    = 0
+INPUT_KINESIS_BATCHING_COUNT                        = 1
+INPUT_KINESIS_BATCHING_PERIOD
 INPUT_KINESIS_CLIENT_ID                             = benthos_consumer
 INPUT_KINESIS_COMMIT_PERIOD                         = 1s
 INPUT_KINESIS_CREDENTIALS_ID

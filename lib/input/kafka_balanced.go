@@ -44,7 +44,8 @@ utilise >1 pipeline processing threads and parallel outputs.
 
 The ` + "`batching`" + ` fields allow you to configure a
 [batching policy](../batching.md#batch-policy) which will be applied per
-partition.
+partition. It is not currently possible to use
+[broker based batching](../batching.md#combined-batching) with this input type.
 
 The field ` + "`max_processing_period`" + ` should be set above the maximum
 estimated time taken to process a message.

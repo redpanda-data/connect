@@ -21,16 +21,19 @@
 package reader
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -42,18 +45,21 @@ import (
 // KinesisConfig is configuration values for the input type.
 type KinesisConfig struct {
 	sess.Config     `json:",inline" yaml:",inline"`
-	Limit           int64  `json:"limit" yaml:"limit"`
-	Stream          string `json:"stream" yaml:"stream"`
-	Shard           string `json:"shard" yaml:"shard"`
-	DynamoDBTable   string `json:"dynamodb_table" yaml:"dynamodb_table"`
-	ClientID        string `json:"client_id" yaml:"client_id"`
-	CommitPeriod    string `json:"commit_period" yaml:"commit_period"`
-	StartFromOldest bool   `json:"start_from_oldest" yaml:"start_from_oldest"`
-	Timeout         string `json:"timeout" yaml:"timeout"`
+	Limit           int64              `json:"limit" yaml:"limit"`
+	Stream          string             `json:"stream" yaml:"stream"`
+	Shard           string             `json:"shard" yaml:"shard"`
+	DynamoDBTable   string             `json:"dynamodb_table" yaml:"dynamodb_table"`
+	ClientID        string             `json:"client_id" yaml:"client_id"`
+	CommitPeriod    string             `json:"commit_period" yaml:"commit_period"`
+	StartFromOldest bool               `json:"start_from_oldest" yaml:"start_from_oldest"`
+	Timeout         string             `json:"timeout" yaml:"timeout"`
+	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewKinesisConfig creates a new Config with default values.
 func NewKinesisConfig() KinesisConfig {
+	batchConf := batch.NewPolicyConfig()
+	batchConf.Count = 1
 	return KinesisConfig{
 		Config:          sess.NewConfig(),
 		Limit:           100,
@@ -64,6 +70,7 @@ func NewKinesisConfig() KinesisConfig {
 		CommitPeriod:    "1s",
 		StartFromOldest: true,
 		Timeout:         "5s",
+		Batching:        batchConf,
 	}
 }
 
@@ -217,6 +224,12 @@ func (k *Kinesis) getIter() error {
 
 // Connect attempts to establish a connection to the target SQS queue.
 func (k *Kinesis) Connect() error {
+	return k.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext attempts to establish a connection to the target Kinesis
+// shard.
+func (k *Kinesis) ConnectWithContext(ctx context.Context) error {
 	if k.session != nil {
 		return nil
 	}
@@ -243,6 +256,12 @@ func (k *Kinesis) Connect() error {
 
 // Read attempts to read a new message from the target SQS.
 func (k *Kinesis) Read() (types.Message, error) {
+	return k.ReadNextWithContext(context.Background())
+}
+
+// ReadNextWithContext attempts to read a new message from the target Kinesis
+// shard.
+func (k *Kinesis) ReadNextWithContext(ctx context.Context) (types.Message, error) {
 	if k.session == nil {
 		return nil, types.ErrNotConnected
 	}
@@ -257,12 +276,14 @@ func (k *Kinesis) Read() (types.Message, error) {
 		ShardIterator: &k.sharditer,
 	}
 	res, err := k.kinesis.GetRecordsWithContext(
-		aws.BackgroundContext(),
+		ctx,
 		&getRecords,
 		request.WithResponseReadTimeout(k.timeout),
 	)
 	if err != nil {
 		if err.Error() == request.ErrCodeResponseTimeout {
+			return nil, types.ErrTimeout
+		} else if aerr, ok := err.(awserr.Error); ok && aerr.Code() == request.CanceledErrorCode {
 			return nil, types.ErrTimeout
 		} else if err.Error() == kinesis.ErrCodeExpiredIteratorException {
 			k.log.Warnln("Shard iterator expired, attempting to refresh")
@@ -333,6 +354,12 @@ func (k *Kinesis) commit() error {
 // Acknowledge confirms whether or not our unacknowledged messages have been
 // successfully propagated or not.
 func (k *Kinesis) Acknowledge(err error) error {
+	return k.AcknowledgeWithContext(context.Background(), err)
+}
+
+// AcknowledgeWithContext confirms whether or not our unacknowledged messages
+// have been successfully propagated or not.
+func (k *Kinesis) AcknowledgeWithContext(ctx context.Context, err error) error {
 	if err == nil {
 		k.sequenceCommit = k.sequence
 	}

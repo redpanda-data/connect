@@ -114,6 +114,10 @@ input:
       kafka:
         addresses:
         - ${INPUT_KAFKA_ADDRESSES:localhost:9092}
+        batching:
+          byte_size: ${INPUT_KAFKA_BATCHING_BYTE_SIZE:0}
+          count: ${INPUT_KAFKA_BATCHING_COUNT:1}
+          period: ${INPUT_KAFKA_BATCHING_PERIOD}
         client_id: ${INPUT_KAFKA_CLIENT_ID:benthos_kafka_input}
         commit_period: ${INPUT_KAFKA_COMMIT_PERIOD:1s}
         consumer_group: ${INPUT_KAFKA_CONSUMER_GROUP:benthos_consumer_group}
@@ -162,6 +166,10 @@ input:
         topics:
         - ${INPUT_KAFKA_BALANCED_TOPICS:benthos_stream}
       kinesis:
+        batching:
+          byte_size: ${INPUT_KINESIS_BATCHING_BYTE_SIZE:0}
+          count: ${INPUT_KINESIS_BATCHING_COUNT:1}
+          period: ${INPUT_KINESIS_BATCHING_PERIOD}
         client_id: ${INPUT_KINESIS_CLIENT_ID:benthos_consumer}
         commit_period: ${INPUT_KINESIS_COMMIT_PERIOD:1s}
         credentials:

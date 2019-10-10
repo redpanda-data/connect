@@ -50,6 +50,31 @@ type Type interface {
 	types.Closable
 }
 
+// Sync is a type that reads Benthos messages from an external source. Messages
+// can be read continuously, but acknowledgements must be made synchronously
+// and apply for all read messages.
+type Sync interface {
+	// ConnectWithContext attempts to establish a connection to the source, if
+	// unsuccessful returns an error. If the attempt is successful (or not
+	// necessary) returns nil.
+	ConnectWithContext(ctx context.Context) error
+
+	// ReadNextWithContext attempts to read a new message from the source. If
+	// successful a message is returned. Messages returned remain unacknowledged
+	// until the next AcknowledgeWithContext call.
+	ReadNextWithContext(ctx context.Context) (types.Message, error)
+
+	// Acknowledge, if applicable to the source, should send acknowledgments for
+	// (or commit) all unacknowledged (or uncommitted) messages that have thus
+	// far been consumed. If the error is non-nil this means the message was
+	// unsuccessfully propagated down the pipeline, in which case it is up to
+	// the implementation to decide whether to simply retry uncommitted messages
+	// that are buffered locally, or to send the error upstream.
+	AcknowledgeWithContext(ctx context.Context, err error) error
+
+	types.Closable
+}
+
 // AsyncAckFn is a function used to acknowledge receipt of a message batch. The
 // provided response indicates whether the message batch was successfully
 // delivered. Returns an error if the acknowledge was not propagated.

@@ -31,6 +31,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
@@ -151,6 +153,9 @@ func (a *AmazonSQS) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 		MessageAttributeNames: []*string{aws.String("All")},
 	})
 	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == request.CanceledErrorCode {
+			return nil, nil, types.ErrTimeout
+		}
 		return nil, nil, err
 	}
 	for _, sqsMsg := range output.Messages {

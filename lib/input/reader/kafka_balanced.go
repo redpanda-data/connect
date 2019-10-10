@@ -86,6 +86,7 @@ type SASLConfig struct {
 }
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
+// TODO: V4 Remove this unused implementation.
 func NewKafkaBalancedConfig() KafkaBalancedConfig {
 	batchConf := batch.NewPolicyConfig()
 	batchConf.Count = 1
