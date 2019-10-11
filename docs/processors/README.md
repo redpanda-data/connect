@@ -244,33 +244,11 @@ batch:
   period: ""
 ```
 
-Reads a number of discrete messages, buffering (but not acknowledging) the
-message parts until the next batch is complete.
+DEPRECATED: This processor is no longer supported and has been replaced with
+improved batching mechanisms. For more information about batching in Benthos
+please check out [this document](../batching.md).
 
-Once a batch is complete it is sent through the pipeline. After reaching a
-destination the acknowledgment is sent out for all messages inside the batch at
-the same time, preserving at-least-once delivery guarantees.
-
-The batching logic of this processor follows the same rules as any other
-[batch policy](../batching.md#batch-policy). However, this processor only checks
-batch conditions when a new message is added, meaning a pending batch can last
-beyond the specified period if no messages are added since the period was
-reached.
-
-If your input does not support batch policies, its feed is non-continuous and
-you need to guarantee the batch period is respected you should instead use a
-[`memory`](../buffers/README.md#memory) buffer with a batch policy.
-
-### WARNING
-
-In order to preserve transaction-based delivery guarantees the batch processor
-should *always* be positioned within the `input` section, ideally
-before any other processor. Alternatively, if you do not need strict delivery
-guarantees it is best to use a [memory buffer](../buffers/README.md#memory) with
-a batch policy.
-
-For more information about batching in Benthos please check out
-[this document](../batching.md).
+This processor is scheduled to be removed in Benthos V4
 
 ## `bounds_check`
 
