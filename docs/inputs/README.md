@@ -602,6 +602,12 @@ Use the `batching` fields to configure an optional
 use [broker based batching](../batching.md#combined-batching) with this input
 type.
 
+This input currently provides a single continuous feed of data, and therefore
+by default will only utilise a single processing thread and parallel output.
+Take a look at the
+[pipelines documentation](../pipeline.md#single-consumer-without-buffer) for
+guides on how to work around this.
+
 The field `max_processing_period` should be set above the maximum
 estimated time taken to process a message.
 
@@ -693,7 +699,8 @@ consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
 
 Partitions consumed by this input can be processed in parallel allowing it to
-utilise >1 pipeline processing threads and parallel outputs.
+utilise <= N pipeline processing threads and parallel outputs where N is the
+number of partitions allocated to this consumer.
 
 The `batching` fields allow you to configure a
 [batching policy](../batching.md#batch-policy) which will be applied per
@@ -784,6 +791,12 @@ Use the `batching` fields to configure an optional
 [batching policy](../batching.md#batch-policy). It is not currently possible to
 use [broker based batching](../batching.md#combined-batching) with this input
 type.
+
+This input currently provides a single continuous feed of data, and therefore
+by default will only utilise a single processing thread and parallel output.
+Take a look at the
+[pipelines documentation](../pipeline.md#single-consumer-without-buffer) for
+guides on how to work around this.
 
 ### Credentials
 

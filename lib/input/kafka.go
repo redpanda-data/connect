@@ -44,6 +44,12 @@ Use the ` + "`batching`" + ` fields to configure an optional
 use [broker based batching](../batching.md#combined-batching) with this input
 type.
 
+This input currently provides a single continuous feed of data, and therefore
+by default will only utilise a single processing thread and parallel output.
+Take a look at the
+[pipelines documentation](../pipeline.md#single-consumer-without-buffer) for
+guides on how to work around this.
+
 The field ` + "`max_processing_period`" + ` should be set above the maximum
 estimated time taken to process a message.
 
@@ -93,7 +99,7 @@ func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 	if err != nil {
 		return nil, err
 	}
-	var kb reader.Type
+	var kb reader.Type = k
 	if !conf.Kafka.Batching.IsNoop() {
 		if kb, err = reader.NewSyncBatcher(conf.Kafka.Batching, k, mgr, log, stats); err != nil {
 			return nil, err

@@ -40,7 +40,8 @@ consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
 
 Partitions consumed by this input can be processed in parallel allowing it to
-utilise >1 pipeline processing threads and parallel outputs.
+utilise <= N pipeline processing threads and parallel outputs where N is the
+number of partitions allocated to this consumer.
 
 The ` + "`batching`" + ` fields allow you to configure a
 [batching policy](../batching.md#batch-policy) which will be applied per

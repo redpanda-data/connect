@@ -45,6 +45,12 @@ Use the ` + "`batching`" + ` fields to configure an optional
 use [broker based batching](../batching.md#combined-batching) with this input
 type.
 
+This input currently provides a single continuous feed of data, and therefore
+by default will only utilise a single processing thread and parallel output.
+Take a look at the
+[pipelines documentation](../pipeline.md#single-consumer-without-buffer) for
+guides on how to work around this.
+
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS
@@ -65,7 +71,7 @@ func NewKinesis(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 	if err != nil {
 		return nil, err
 	}
-	var kb reader.Type
+	var kb reader.Type = k
 	if !conf.Kinesis.Batching.IsNoop() {
 		if kb, err = reader.NewSyncBatcher(conf.Kinesis.Batching, k, mgr, log, stats); err != nil {
 			return nil, err
