@@ -56,6 +56,7 @@ type OptionalAWSConfig struct {
 type ElasticsearchConfig struct {
 	URLs           []string             `json:"urls" yaml:"urls"`
 	Sniff          bool                 `json:"sniff" yaml:"sniff"`
+	Healthcheck    bool                 `json:"healthcheck" yaml:"healthcheck"`
 	ID             string               `json:"id" yaml:"id"`
 	Index          string               `json:"index" yaml:"index"`
 	Pipeline       string               `json:"pipeline" yaml:"pipeline"`
@@ -74,14 +75,15 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 	rConf.Backoff.MaxElapsedTime = "30s"
 
 	return ElasticsearchConfig{
-		URLs:     []string{"http://localhost:9200"},
-		Sniff:    true,
-		ID:       "${!count:elastic_ids}-${!timestamp_unix}",
-		Index:    "benthos_index",
-		Pipeline: "",
-		Type:     "doc",
-		Timeout:  "5s",
-		Auth:     auth.NewBasicAuthConfig(),
+		URLs:        []string{"http://localhost:9200"},
+		Sniff:       true,
+		Healthcheck: true,
+		ID:          "${!count:elastic_ids}-${!timestamp_unix}",
+		Index:       "benthos_index",
+		Pipeline:    "",
+		Type:        "doc",
+		Timeout:     "5s",
+		Auth:        auth.NewBasicAuthConfig(),
 		AWS: OptionalAWSConfig{
 			Enabled: false,
 			Config:  sess.NewConfig(),
@@ -97,9 +99,10 @@ type Elasticsearch struct {
 	log   log.Modular
 	stats metrics.Type
 
-	urls  []string
-	sniff bool
-	conf  ElasticsearchConfig
+	urls        []string
+	sniff       bool
+	healthcheck bool
+	conf        ElasticsearchConfig
 
 	backoff backoff.BackOff
 	timeout time.Duration
@@ -121,6 +124,7 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 		stats:             stats,
 		conf:              conf,
 		sniff:             conf.Sniff,
+		healthcheck:       conf.Healthcheck,
 		idStr:             text.NewInterpolatedString(conf.ID),
 		indexStr:          text.NewInterpolatedString(conf.Index),
 		pipelineStr:       text.NewInterpolatedString(conf.Pipeline),
@@ -165,6 +169,7 @@ func (e *Elasticsearch) Connect() error {
 			Timeout: e.timeout,
 		}),
 		elastic.SetSniff(e.sniff),
+		elastic.SetHealthcheck(e.healthcheck),
 	}
 
 	if e.conf.Auth.Enabled {
