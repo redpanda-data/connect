@@ -148,7 +148,7 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 
 	type fields struct {
 		schema string
-		part       int
+		part   int
 	}
 	tests := []struct {
 		name   string
@@ -160,7 +160,7 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 			name: "schema match",
 			fields: fields{
 				schema: schemaDef,
-				part:       0,
+				part:   0,
 			},
 			arg: [][]byte{
 				[]byte(`{"firstName":"John","lastName":"Doe","age":21}`),
@@ -171,7 +171,7 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 			name: "schema no match",
 			fields: fields{
 				schema: schemaDef,
-				part:       0,
+				part:   0,
 			},
 			arg: [][]byte{
 				[]byte(`{"firstName":"John","lastName":"Doe","age":-20}`),

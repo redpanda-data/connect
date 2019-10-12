@@ -88,9 +88,9 @@ Then the condition would pass.`,
 // JSONSchemaConfig is a configuration struct containing fields for the jsonschema
 // condition.
 type JSONSchemaConfig struct {
-	Part        int    `json:"part" yaml:"part"`
-	SchemaPath  string `json:"schema_path" yaml:"schema_path"`
-	Schema      string `json:"schema" yaml:"schema"`
+	Part       int    `json:"part" yaml:"part"`
+	SchemaPath string `json:"schema_path" yaml:"schema_path"`
+	Schema     string `json:"schema" yaml:"schema"`
 }
 
 // NewJSONSchemaConfig returns a JSONSchemaConfig with default values.
@@ -115,7 +115,6 @@ type JSONSchema struct {
 	mTrue     metrics.StatCounter
 	mFalse    metrics.StatCounter
 	mErrJSONP metrics.StatCounter
-	mErrJMES  metrics.StatCounter
 	mErr      metrics.StatCounter
 }
 
