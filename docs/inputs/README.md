@@ -208,6 +208,13 @@ If the number of copies is greater than zero the list will be copied that number
 of times. For example, if your inputs were of type foo and bar, with 'copies'
 set to '2', you would end up with two 'foo' inputs and two 'bar' inputs.
 
+### Batching
+
+It's possible to configure a [batch policy](../batching.md#batch-policy) with a
+broker using the `batching` fields. When doing this the feeds from all
+child inputs are combined. Some inputs do not support broker based batching and
+specify this in their documentation.
+
 ### Processors
 
 It is possible to configure [processors](../processors/README.md) at the broker
