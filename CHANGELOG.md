@@ -12,16 +12,15 @@ All notable changes to this project will be documented in this file.
 - New experimental metrics aggregator `stdout`.
 - Field `ack_wait` added to `nats_stream` input.
 - New `batching` field added to `broker` input for batching merged streams.
+- Field `healthcheck` added to `elasticsearch` output.
 
 ### Changed
 
 - Experimental `kafka_cg` input has been removed.
 - The `kafka_balanced` inputs underlying implementation has been replaced with
   the `kafka_cg` one.
-- The following inputs have been updated to automatically utilise >1 processing
-  threads:
-  - `kafka_balanced`
-  - `files`
+- All inputs have been updated to automatically utilise >1 processing threads,
+  with the exception of `kafka` and `kinesis`.
 
 ## 3.2.0 - 2019-09-27
 

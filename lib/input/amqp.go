@@ -33,58 +33,8 @@ func init() {
 	Constructors[TypeAMQP] = TypeSpec{
 		constructor: NewAMQP,
 		description: `
-Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
-message brokers, including RabbitMQ.
-
-The field ` + "`max_batch_count`" + ` specifies the maximum number of prefetched
-messages to be batched together. When more than one message is batched they can
-be split into individual messages with the ` + "`split`" + ` processor.
-
-It's possible for this input type to declare the target queue by setting
-` + "`queue_declare.enabled` to `true`" + `, if the queue already exists then
-the declaration passively verifies that they match the target fields.
-
-Similarly, it is possible to declare queue bindings by adding objects to the
-` + "`bindings_declare`" + ` array. Binding declare objects take the form of:
-
-` + "``` yaml" + `
-{
-  "exchange": "benthos-exchange",
-  "key": "benthos-key"
-}
-` + "```" + `
-
-TLS is automatic when connecting to an ` + "`amqps`" + ` URL, but custom
-settings can be enabled in the ` + "`tls`" + ` section.
-
-### Metadata
-
-This input adds the following metadata fields to each message:
-
-` + "``` text" + `
-- amqp_content_type
-- amqp_content_encoding
-- amqp_delivery_mode
-- amqp_priority
-- amqp_correlation_id
-- amqp_reply_to
-- amqp_expiration
-- amqp_message_id
-- amqp_timestamp
-- amqp_type
-- amqp_user_id
-- amqp_app_id
-- amqp_consumer_tag
-- amqp_delivery_tag
-- amqp_redelivered
-- amqp_exchange
-- amqp_routing_key
-- All existing message headers, including nested headers prefixed with the key
-  of their respective parent.
-` + "```" + `
-
-You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+DEPRECATED: This input is deprecated and scheduled for removal in Benthos V4.
+Please use [` + "`amqp_0_9`" + `](#amqp_0_9) instead.`,
 	}
 }
 
@@ -93,6 +43,7 @@ You can access these metadata fields using
 // NewAMQP creates a new AMQP input type.
 // TODO: V4 Remove this.
 func NewAMQP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	log.Warnln("The amqp input is deprecated, please use amqp_0_9 instead.")
 	a, err := reader.NewAMQP(conf.AMQP, log, stats)
 	if err != nil {
 		return nil, err

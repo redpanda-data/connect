@@ -33,9 +33,6 @@ func init() {
 	Constructors[TypeAMQP09] = TypeSpec{
 		constructor: NewAMQP09,
 		description: `
-EXPERIMENTAL: This input is considered experimental and is therefore subject to
-change outside of major version releases.
-
 Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
 message brokers, including RabbitMQ.
 
