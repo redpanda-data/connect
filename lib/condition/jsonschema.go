@@ -38,11 +38,12 @@ func init() {
 		description: `
 Validates a message against the provided JSONSchema definition to retrieve a
 boolean response indicating whether the message matches the schema or not.
-If the response is true the condition passes, otherwise it does not. Please refer to the
-[JSONSchema website](https://json-schema.org/) for information and tutorials regarding
-the syntax of the schema.
+If the response is true the condition passes, otherwise it does not. Please
+refer to the [JSON Schema website](https://json-schema.org/) for information and
+tutorials regarding the syntax of the schema.
 
 For example, with the following JSONSchema document:
+
 ` + "``` json" + `
 {
 	"$id": "https://example.com/person.schema.json",
@@ -67,14 +68,16 @@ For example, with the following JSONSchema document:
 }
 ` + "```" + `
 
-and the following Benthos configuration:
+And the following Benthos configuration:
+
 ` + "``` yaml" + `
-jsonschema:
+json_schema:
   part: 0
   schema_path: "file://path_to_schema.json"
 ` + "```" + `
 
 If the message being processed looked like:
+
 ` + "``` json" + `
 {"firstName":"John","lastName":"Doe","age":21}
 ` + "```" + `
@@ -85,8 +88,8 @@ Then the condition would pass.`,
 
 //------------------------------------------------------------------------------
 
-// JSONSchemaConfig is a configuration struct containing fields for the jsonschema
-// condition.
+// JSONSchemaConfig is a configuration struct containing fields for the
+// jsonschema condition.
 type JSONSchemaConfig struct {
 	Part       int    `json:"part" yaml:"part"`
 	SchemaPath string `json:"schema_path" yaml:"schema_path"`

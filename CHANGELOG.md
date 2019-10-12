@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Field `ack_wait` added to `nats_stream` input.
 - New `batching` field added to `broker` input for batching merged streams.
 - Field `healthcheck` added to `elasticsearch` output.
+- New `json_schema` condition.
 
 ### Changed
 

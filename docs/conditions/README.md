@@ -76,7 +76,7 @@ duplicate condition configs by using the [resource condition][resource].
 6. [`check_interpolation`](#check_interpolation)
 7. [`count`](#count)
 8. [`jmespath`](#jmespath)
-9. [`jsonschema`](#jsonschema)
+9. [`json_schema`](#json_schema)
 10. [`metadata`](#metadata)
 11. [`not`](#not)
 12. [`number`](#number)
@@ -247,11 +247,11 @@ JMESPath is traditionally used for mutating JSON, in order to do this please
 instead use the [`jmespath`](../processors/README.md#jmespath)
 processor.
 
-## `jsonschema`
+## `json_schema`
 
 ``` yaml
-type: jsonschema
-jsonschema:
+type: json_schema
+json_schema:
   part: 0
   schema: ""
   schema_path: ""
@@ -259,11 +259,12 @@ jsonschema:
 
 Validates a message against the provided JSONSchema definition to retrieve a
 boolean response indicating whether the message matches the schema or not.
-If the response is true the condition passes, otherwise it does not. Please refer to the
-[JSONSchema website](https://json-schema.org/) for information and tutorials regarding
-the syntax of the schema.
+If the response is true the condition passes, otherwise it does not. Please
+refer to the [JSON Schema website](https://json-schema.org/) for information and
+tutorials regarding the syntax of the schema.
 
 For example, with the following JSONSchema document:
+
 ``` json
 {
 	"$id": "https://example.com/person.schema.json",
@@ -288,14 +289,16 @@ For example, with the following JSONSchema document:
 }
 ```
 
-and the following Benthos configuration:
+And the following Benthos configuration:
+
 ``` yaml
-jsonschema:
+json_schema:
   part: 0
   schema_path: "file://path_to_schema.json"
 ```
 
 If the message being processed looked like:
+
 ``` json
 {"firstName":"John","lastName":"Doe","age":21}
 ```

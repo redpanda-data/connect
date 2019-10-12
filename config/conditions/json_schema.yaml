@@ -17,8 +17,8 @@ pipeline:
   processors:
   - type: filter_parts
     filter_parts:
-      type: jsonschema
-      jsonschema:
+      type: json_schema
+      json_schema:
         part: 0
         schema: ""
         schema_path: ""
