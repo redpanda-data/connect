@@ -513,6 +513,7 @@ OUTPUT_ELASTICSEARCH_BACKOFF_MAX_INTERVAL             = 5s
 OUTPUT_ELASTICSEARCH_BASIC_AUTH_ENABLED               = false
 OUTPUT_ELASTICSEARCH_BASIC_AUTH_PASSWORD
 OUTPUT_ELASTICSEARCH_BASIC_AUTH_USERNAME
+OUTPUT_ELASTICSEARCH_HEALTHCHECK                      = true
 OUTPUT_ELASTICSEARCH_ID                               = ${!count:elastic_ids}-${!timestamp_unix}
 OUTPUT_ELASTICSEARCH_INDEX                            = benthos_index
 OUTPUT_ELASTICSEARCH_MAX_RETRIES                      = 0

@@ -598,6 +598,7 @@ output:
           enabled: ${OUTPUT_ELASTICSEARCH_BASIC_AUTH_ENABLED:false}
           password: ${OUTPUT_ELASTICSEARCH_BASIC_AUTH_PASSWORD}
           username: ${OUTPUT_ELASTICSEARCH_BASIC_AUTH_USERNAME}
+        healthcheck: ${OUTPUT_ELASTICSEARCH_HEALTHCHECK:true}
         id: ${OUTPUT_ELASTICSEARCH_ID:${!count:elastic_ids}-${!timestamp_unix}}
         index: ${OUTPUT_ELASTICSEARCH_INDEX:benthos_index}
         max_retries: ${OUTPUT_ELASTICSEARCH_MAX_RETRIES:0}
