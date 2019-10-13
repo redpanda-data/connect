@@ -23,7 +23,9 @@ input:
     topics:
     - source-queue
     consumer_group: enrichment-consumer
-    max_batch_count: 20
+    batching:
+      count: 20
+      period: 1s
 
 pipeline:
   processors:
@@ -92,7 +94,9 @@ input:
     topics:
     - retry-queue
     consumer_group: retry-consumer
-    max_batch_count: 20
+    batching:
+      count: 20
+      period: 1s
 
 pipeline:
   processors:

@@ -81,7 +81,9 @@ input:
     topics:
     - articles
     consumer_group: benthos_articles_group
-    max_batch_count: 20 # Tune this to set the size of our document batches.
+    batching:
+      count: 20 # Tune this to set the size of our document batches.
+      period: 1s
 
 pipeline:
   processors:
@@ -255,7 +257,9 @@ input:
     topics:
     - articles
     consumer_group: benthos_articles_group
-    max_batch_count: 20 # Tune this to set the size of our document batches.
+    batching:
+      count: 20 # Tune this to set the size of our document batches.
+      period: 1s
 
 pipeline:
   processors:

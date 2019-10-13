@@ -13,7 +13,7 @@ binary or a docker image.
 Stream pipelines are defined in a single config file, allowing you to declare
 connectors and a list of processing stages:
 
-``` yaml
+```yaml
 input:
   kafka_balanced:
     addresses: [ TODO ]
@@ -21,6 +21,7 @@ input:
     consumer_group: foogroup
 
 pipeline:
+  threads: 4
   processors:
   - jmespath:
       query: '{ message: @, meta: { link_count: length(links) } }'
@@ -82,13 +83,13 @@ For guidance on building your own custom plugins check out
 
 ## Run
 
-``` shell
+```shell
 benthos -c ./config.yaml
 ```
 
 Or, with docker:
 
-``` shell
+```shell
 # Send HTTP /POST data to Kafka:
 docker run --rm \
 	-e "INPUT_TYPE=http_server" \
@@ -143,7 +144,7 @@ Grab a binary for your OS from [here.][releases]
 
 Or pull the docker image:
 
-``` shell
+```shell
 docker pull jeffail/benthos
 ```
 
@@ -155,7 +156,7 @@ brew install benthos
 
 Build with Go (1.11 or later):
 
-``` shell
+```shell
 git clone git@github.com:Jeffail/benthos
 cd benthos
 make
@@ -172,13 +173,13 @@ It's pretty easy to write your own custom plugins for Benthos, take a look at
 There's a multi-stage `Dockerfile` for creating a Benthos docker image which
 results in a minimal image from scratch. You can build it with:
 
-``` shell
+```shell
 make docker
 ```
 
 Then use the image:
 
-``` shell
+```shell
 docker run --rm \
 	-v /path/to/your/benthos.yaml:/config.yaml \
 	-v /tmp/data:/data \
@@ -194,13 +195,13 @@ setting up Benthos containers using `docker-compose`.
 Benthos supports ZMQ4 for both data input and output. To add this you need to
 install libzmq4 and use the compile time flag when building Benthos:
 
-``` shell
+```shell
 make TAGS=ZMQ4
 ```
 
 Or to build a docker image using CGO, which includes ZMQ:
 
-``` shell
+```shell
 make docker-cgo
 ```
 
