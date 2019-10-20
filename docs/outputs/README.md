@@ -870,7 +870,7 @@ redis_hash:
 
 If the field `walk_metadata` is set to `true` then Benthos
 will walk all metadata fields of messages and add them to the list of hash
-fields to set. 
+fields to set.
 
 If the field `walk_json_object` is set to `true` then
 Benthos will walk each message as a JSON object, extracting keys and the string
@@ -982,6 +982,7 @@ s3:
   path: ${!count:files}-${!timestamp_unix_nano}.txt
   region: eu-west-1
   timeout: 5s
+  kms_key_id: ""
 ```
 
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
