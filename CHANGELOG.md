@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `sqs_endpoint` added to the `s3` input.
+- Field `kms_key_id` added to the `s3` output.
 - Operator `delete` added to `metadata` processor.
 - New experimental metrics aggregator `stdout`.
 - Field `ack_wait` added to `nats_stream` input.
