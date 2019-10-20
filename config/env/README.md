@@ -658,6 +658,7 @@ OUTPUT_S3_FORCE_PATH_STYLE_URLS                       = false
 OUTPUT_S3_PATH                                        = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_S3_REGION                                      = eu-west-1
 OUTPUT_S3_TIMEOUT                                     = 5s
+OUTPUT_S3_KMS_KEY_ID
 OUTPUT_SNS_CREDENTIALS_ID
 OUTPUT_SNS_CREDENTIALS_PROFILE
 OUTPUT_SNS_CREDENTIALS_ROLE

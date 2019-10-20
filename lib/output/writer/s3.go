@@ -48,6 +48,7 @@ type AmazonS3Config struct {
 	ContentType        string `json:"content_type" yaml:"content_type"`
 	ContentEncoding    string `json:"content_encoding" yaml:"content_encoding"`
 	Timeout            string `json:"timeout" yaml:"timeout"`
+	KMSKeyID           string `json:"kms_key_id" yaml:"kms_key_id"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
@@ -60,6 +61,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		ContentType:        "application/octet-stream",
 		ContentEncoding:    "",
 		Timeout:            "5s",
+		KMSKeyID:           "",
 	}
 }
 
@@ -151,14 +153,21 @@ func (a *AmazonS3) Write(msg types.Message) error {
 			contentEncoding = aws.String(ce)
 		}
 
-		if _, err := a.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
+		uploadInput := &s3manager.UploadInput{
 			Bucket:          &a.conf.Bucket,
 			Key:             aws.String(a.path.Get(lMsg)),
 			Body:            bytes.NewReader(p.Get()),
 			ContentType:     aws.String(a.contentType.Get(lMsg)),
 			ContentEncoding: contentEncoding,
 			Metadata:        metadata,
-		}); err != nil {
+		}
+
+		if a.conf.KMSKeyID != "" {
+			uploadInput.ServerSideEncryption = aws.String("aws:kms")
+			uploadInput.SSEKMSKeyId = &a.conf.KMSKeyID
+		}
+
+		if _, err := a.uploader.UploadWithContext(ctx, uploadInput); err != nil {
 			return err
 		}
 		return nil
