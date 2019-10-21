@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -316,8 +317,12 @@ func (a *AmazonS3) parseItemPaths(sqsMsg *string) ([]objTarget, error) {
 				if len(buckets) > i {
 					bucket = buckets[i]
 				}
+				decodedTarget, err := url.QueryUnescape(target)
+				if err != nil {
+					return nil, fmt.Errorf("failed to decode S3 path: %v", err)
+				}
 				items = append(items, objTarget{
-					key:    target,
+					key:    decodedTarget,
 					bucket: bucket,
 				})
 			}

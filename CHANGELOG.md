@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.3.1 - 2019-10-21
+
+### Fixed
+
+- The `s3` input now correctly unescapes bucket keys when streaming from SQS.
+
 ## 3.3.0 - 2019-10-20
 
 ### Added

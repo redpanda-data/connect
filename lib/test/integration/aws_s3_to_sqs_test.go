@@ -164,7 +164,7 @@ func testS3ToSQSStreams(t *testing.T, endpoint, sqsEndpoint, sqsURL, bucket stri
 	outconf.Region = "eu-west-1"
 	outconf.Bucket = bucket
 	outconf.ForcePathStyleURLs = true
-	outconf.Path = "${!count:s3uploaddownload}.txt"
+	outconf.Path = "foo ^%&$ ${!count:s3uploaddownload}.txt"
 
 	outputCtr := func() (mOutput writer.Type, err error) {
 		if mOutput, err = writer.NewAmazonS3(outconf, log.Noop(), metrics.Noop()); err != nil {
