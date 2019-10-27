@@ -7,9 +7,9 @@ The Benthos service offers a command `benthos --test ./...` for running unit tes
 
 ## Contents
 
-1. [Writing a Test](#writing_a_test)
-2. [Output Conditions](#output_conditions)
-3. [Running Tests](#running_tests)
+1. [Writing a Test](#writing-a-test)
+2. [Output Conditions](#output-conditions)
+3. [Running Tests](#running-tests)
 
 ## Writing a Test
 

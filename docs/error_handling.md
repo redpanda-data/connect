@@ -1,8 +1,6 @@
 Error Handling
 ==============
 
-## Processor Errors
-
 Sometimes things can go wrong. Benthos supports a range of
 [processors][processors] such as `http` and `lambda` that have the potential to
 fail if their retry attempts are exhausted. When this happens the data is not
@@ -15,12 +13,12 @@ This behaviour allows you to define in your config whether you would like the
 failed messages to be dropped, recovered with more processing, or routed to a
 dead-letter queue, or any combination thereof.
 
-### Abandon on Failure
+## Abandon on Failure
 
 It's possible to define a list of processors which should be skipped for
 messages that failed a previous stage using the [`try`][try] processor:
 
-``` yaml
+```yaml
   - type: try
     try:
     - type: foo
@@ -28,12 +26,12 @@ messages that failed a previous stage using the [`try`][try] processor:
     - type: baz # Skipped if foo or bar failed
 ```
 
-### Recover Failed Messages
+## Recover Failed Messages
 
 Failed messages can be fed into their own processor steps with a
 [`catch`][catch] processor:
 
-``` yaml
+```yaml
   - catch:
     - type: foo # Recover here
 ```
@@ -43,7 +41,7 @@ and are treated like regular messages. If this behaviour is not desired then it
 is possible to simulate a catch block with a [`conditional`][conditional]
 processor placed within a [`for_each`][for_each] processor:
 
-``` yaml
+```yaml
   - for_each:
     - conditional:
         condition:
@@ -52,7 +50,7 @@ processor placed within a [`for_each`][for_each] processor:
         - type: foo # Recover here
 ```
 
-### Logging Errors
+## Logging Errors
 
 When an error occurs there will occasionally be useful information stored within
 the error flag that can be exposed with the interpolation function
@@ -61,7 +59,7 @@ information with processors.
 
 For example, when catching failed processors you can [`log`][log] the messages:
 
-``` yaml
+```yaml
   - catch:
     - log:
         message: "Processing failed due to: ${!error}"
@@ -69,7 +67,7 @@ For example, when catching failed processors you can [`log`][log] the messages:
 
 Or perhaps augment the message payload with the error message:
 
-``` yaml
+```yaml
   - catch:
     - json:
         operator: set
@@ -77,12 +75,12 @@ Or perhaps augment the message payload with the error message:
         value: ${!error}
 ```
 
-### Attempt Until Success
+## Attempt Until Success
 
 It's possible to reattempt a processor for a particular message until it is
 successful with a [`while`][while] processor:
 
-``` yaml
+```yaml
   - for_each:
     - while:
         at_least_once: true
@@ -99,12 +97,12 @@ acknowledged. It is therefore usually a good idea in practice to build your
 condition with an exit strategy after N failed attempts so that the pipeline can
 unblock itself without intervention.
 
-### Drop Failed Messages
+## Drop Failed Messages
 
 In order to filter out any failed messages from your pipeline you can simply use
 a [`filter_parts`][filter_parts] processor:
 
-``` yaml
+```yaml
   - filter_parts:
       not:
         type: processor_failed
@@ -112,13 +110,13 @@ a [`filter_parts`][filter_parts] processor:
 
 This will remove any failed messages from a batch.
 
-### Route to a Dead-Letter Queue
+## Route to a Dead-Letter Queue
 
 It is possible to send failed messages to different destinations using either a
 [`group_by`][group_by] processor with a [`switch`][switch] output, or a
 [`broker`][broker] output with [`filter_parts`][filter_parts] processors.
 
-``` yaml
+```yaml
 pipeline:
   processors:
   - group_by:
@@ -140,7 +138,7 @@ are batched.
 
 Alternatively, using a `broker` output looks like this:
 
-``` yaml
+```yaml
 output:
   broker:
     pattern: fan_out
