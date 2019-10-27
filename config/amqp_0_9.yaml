@@ -35,9 +35,23 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: stdout
-  stdout:
-    delimiter: ""
+  type: amqp_0_9
+  amqp_0_9:
+    exchange: benthos-exchange
+    exchange_declare:
+      durable: true
+      enabled: false
+      type: direct
+    immediate: false
+    key: benthos-key
+    mandatory: false
+    persistent: false
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
+    url: amqp://guest:guest@localhost:5672/
 resources:
   caches: {}
   conditions: {}

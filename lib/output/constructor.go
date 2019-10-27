@@ -61,6 +61,7 @@ var Constructors = map[string]TypeSpec{}
 // String constants representing each output type.
 const (
 	TypeAMQP            = "amqp"
+	TypeAMQP09          = "amqp_0_9"
 	TypeBroker          = "broker"
 	TypeCache           = "cache"
 	TypeDrop            = "drop"
@@ -106,6 +107,7 @@ const (
 type Config struct {
 	Type            string                       `json:"type" yaml:"type"`
 	AMQP            writer.AMQPConfig            `json:"amqp" yaml:"amqp"`
+	AMQP09          writer.AMQPConfig            `json:"amqp_0_9" yaml:"amqp_0_9"`
 	Broker          BrokerConfig                 `json:"broker" yaml:"broker"`
 	Cache           writer.CacheConfig           `json:"cache" yaml:"cache"`
 	Drop            writer.DropConfig            `json:"drop" yaml:"drop"`
@@ -152,6 +154,7 @@ func NewConfig() Config {
 	return Config{
 		Type:            "stdout",
 		AMQP:            writer.NewAMQPConfig(),
+		AMQP09:          writer.NewAMQPConfig(),
 		Broker:          NewBrokerConfig(),
 		Cache:           writer.NewCacheConfig(),
 		Drop:            writer.NewDropConfig(),

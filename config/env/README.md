@@ -485,6 +485,18 @@ PROCESSOR_XML_OPERATOR                               = to_json
 OUTPUTS                                               = 1
 OUTPUTS_PATTERN                                       = greedy
 OUTPUT_TYPE                                           = dynamic
+OUTPUT_AMQP_0_9_EXCHANGE                              = benthos-exchange
+OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_DURABLE              = true
+OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_ENABLED              = false
+OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_TYPE                 = direct
+OUTPUT_AMQP_0_9_IMMEDIATE                             = false
+OUTPUT_AMQP_0_9_KEY                                   = benthos-key
+OUTPUT_AMQP_0_9_MANDATORY                             = false
+OUTPUT_AMQP_0_9_PERSISTENT                            = false
+OUTPUT_AMQP_0_9_TLS_ENABLED                           = false
+OUTPUT_AMQP_0_9_TLS_ROOT_CAS_FILE
+OUTPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY                  = false
+OUTPUT_AMQP_0_9_URL                                   = amqp://guest:guest@localhost:5672/
 OUTPUT_AMQP_EXCHANGE                                  = benthos-exchange
 OUTPUT_AMQP_EXCHANGE_DECLARE_DURABLE                  = true
 OUTPUT_AMQP_EXCHANGE_DECLARE_ENABLED                  = false
@@ -655,10 +667,10 @@ OUTPUT_S3_CREDENTIALS_SECRET
 OUTPUT_S3_CREDENTIALS_TOKEN
 OUTPUT_S3_ENDPOINT
 OUTPUT_S3_FORCE_PATH_STYLE_URLS                       = false
+OUTPUT_S3_KMS_KEY_ID
 OUTPUT_S3_PATH                                        = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_S3_REGION                                      = eu-west-1
 OUTPUT_S3_TIMEOUT                                     = 5s
-OUTPUT_S3_KMS_KEY_ID
 OUTPUT_SNS_CREDENTIALS_ID
 OUTPUT_SNS_CREDENTIALS_PROFILE
 OUTPUT_SNS_CREDENTIALS_ROLE

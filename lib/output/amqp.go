@@ -33,28 +33,17 @@ func init() {
 	Constructors[TypeAMQP] = TypeSpec{
 		constructor: NewAMQP,
 		description: `
-Sends messages to an AMQP (0.91) exchange. AMQP is a messaging protocol used by
-various message brokers, including RabbitMQ. The metadata from each message are
-delivered as headers.
-
-It's possible for this output type to create the target exchange by setting
-` + "`exchange_declare.enabled` to `true`" + `, if the exchange already exists
-then the declaration passively verifies that the settings match.
-
-Exchange type options are: direct|fanout|topic|x-custom
-
-TLS is automatic when connecting to an ` + "`amqps`" + ` URL, but custom
-settings can be enabled in the ` + "`tls`" + ` section.
-
-The field 'key' can be dynamically set using function interpolations described
-[here](../config_interpolation.md#functions).`,
+DEPRECATED: This output is deprecated and scheduled for removal in Benthos V4.
+Please use [` + "`amqp_0_9`" + `](#amqp_0_9) instead.`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
 // NewAMQP creates a new AMQP output type.
+// TODO: V4 Remove this.
 func NewAMQP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	log.Warnln("The amqp input is deprecated, please use amqp_0_9 instead.")
 	a, err := writer.NewAMQP(conf.AMQP, log, stats)
 	if err != nil {
 		return nil, err

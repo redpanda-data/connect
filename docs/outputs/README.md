@@ -58,48 +58,74 @@ a [`broker`](#broker) output with the 'try' pattern.
 ### Contents
 
 1. [`amqp`](#amqp)
-2. [`broker`](#broker)
-3. [`cache`](#cache)
-4. [`drop`](#drop)
-5. [`drop_on_error`](#drop_on_error)
-6. [`dynamic`](#dynamic)
-7. [`dynamodb`](#dynamodb)
-8. [`elasticsearch`](#elasticsearch)
-9. [`file`](#file)
-10. [`files`](#files)
-11. [`gcp_pubsub`](#gcp_pubsub)
-12. [`hdfs`](#hdfs)
-13. [`http_client`](#http_client)
-14. [`http_server`](#http_server)
-15. [`inproc`](#inproc)
-16. [`kafka`](#kafka)
-17. [`kinesis`](#kinesis)
-18. [`kinesis_firehose`](#kinesis_firehose)
-19. [`mqtt`](#mqtt)
-20. [`nanomsg`](#nanomsg)
-21. [`nats`](#nats)
-22. [`nats_stream`](#nats_stream)
-23. [`nsq`](#nsq)
-24. [`redis_hash`](#redis_hash)
-25. [`redis_list`](#redis_list)
-26. [`redis_pubsub`](#redis_pubsub)
-27. [`redis_streams`](#redis_streams)
-28. [`retry`](#retry)
-29. [`s3`](#s3)
-30. [`sns`](#sns)
-31. [`sqs`](#sqs)
-32. [`stdout`](#stdout)
-33. [`switch`](#switch)
-34. [`sync_response`](#sync_response)
-35. [`tcp`](#tcp)
-36. [`udp`](#udp)
-37. [`websocket`](#websocket)
+2. [`amqp_0_9`](#amqp_0_9)
+3. [`broker`](#broker)
+4. [`cache`](#cache)
+5. [`drop`](#drop)
+6. [`drop_on_error`](#drop_on_error)
+7. [`dynamic`](#dynamic)
+8. [`dynamodb`](#dynamodb)
+9. [`elasticsearch`](#elasticsearch)
+10. [`file`](#file)
+11. [`files`](#files)
+12. [`gcp_pubsub`](#gcp_pubsub)
+13. [`hdfs`](#hdfs)
+14. [`http_client`](#http_client)
+15. [`http_server`](#http_server)
+16. [`inproc`](#inproc)
+17. [`kafka`](#kafka)
+18. [`kinesis`](#kinesis)
+19. [`kinesis_firehose`](#kinesis_firehose)
+20. [`mqtt`](#mqtt)
+21. [`nanomsg`](#nanomsg)
+22. [`nats`](#nats)
+23. [`nats_stream`](#nats_stream)
+24. [`nsq`](#nsq)
+25. [`redis_hash`](#redis_hash)
+26. [`redis_list`](#redis_list)
+27. [`redis_pubsub`](#redis_pubsub)
+28. [`redis_streams`](#redis_streams)
+29. [`retry`](#retry)
+30. [`s3`](#s3)
+31. [`sns`](#sns)
+32. [`sqs`](#sqs)
+33. [`stdout`](#stdout)
+34. [`switch`](#switch)
+35. [`sync_response`](#sync_response)
+36. [`tcp`](#tcp)
+37. [`udp`](#udp)
+38. [`websocket`](#websocket)
 
 ## `amqp`
 
 ``` yaml
 type: amqp
 amqp:
+  exchange: benthos-exchange
+  exchange_declare:
+    durable: true
+    enabled: false
+    type: direct
+  immediate: false
+  key: benthos-key
+  mandatory: false
+  persistent: false
+  tls:
+    client_certs: []
+    enabled: false
+    root_cas_file: ""
+    skip_cert_verify: false
+  url: amqp://guest:guest@localhost:5672/
+```
+
+DEPRECATED: This output is deprecated and scheduled for removal in Benthos V4.
+Please use [`amqp_0_9`](#amqp_0_9) instead.
+
+## `amqp_0_9`
+
+``` yaml
+type: amqp_0_9
+amqp_0_9:
   exchange: benthos-exchange
   exchange_declare:
     durable: true
@@ -979,10 +1005,10 @@ s3:
     token: ""
   endpoint: ""
   force_path_style_urls: false
+  kms_key_id: ""
   path: ${!count:files}-${!timestamp_unix_nano}.txt
   region: eu-west-1
   timeout: 5s
-  kms_key_id: ""
 ```
 
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded

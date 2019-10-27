@@ -52,10 +52,10 @@ output:
       token: ""
     endpoint: ""
     force_path_style_urls: false
+    kms_key_id: ""
     path: ${!count:files}-${!timestamp_unix_nano}.txt
     region: eu-west-1
     timeout: 5s
-    kms_key_id: ""
 resources:
   caches: {}
   conditions: {}
