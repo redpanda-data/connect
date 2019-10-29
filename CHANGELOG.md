@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - New `amqp_0_9` output which replaces the now deprecated `amqp` output.
 
+### Fixed
+
+- The `memory` buffer now allows parallel processing of batched payloads.
+
 ## 3.3.1 - 2019-10-21
 
 ### Fixed

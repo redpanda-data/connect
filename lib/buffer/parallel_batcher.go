@@ -150,22 +150,25 @@ func (m *ParallelBatcher) outputLoop() {
 		case <-m.closeChan:
 			return
 		}
-		select {
-		case <-m.closeChan:
-			return
-		case res, open := <-resChan:
-			if !open {
+
+		go func(rChan chan types.Response, upstreamResChans []chan<- types.Response) {
+			select {
+			case <-m.closeChan:
 				return
-			}
-			for _, c := range pendingResChans {
-				select {
-				case <-m.closeChan:
+			case res, open := <-rChan:
+				if !open {
 					return
-				case c <- res:
+				}
+				for _, c := range upstreamResChans {
+					select {
+					case <-m.closeChan:
+						return
+					case c <- res:
+					}
 				}
 			}
-			pendingResChans = nil
-		}
+		}(resChan, pendingResChans)
+		pendingResChans = nil
 	}
 }
 
