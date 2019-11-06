@@ -55,6 +55,33 @@ input:
 
 Some inputs do not support broker based batching and will specify this in their documentation.
 
+### Batching After Processing
+
+When using inputs that support broker based batching you can choose to batch at the end of your processing with an [output `broker`][output_broker]:
+
+```yaml
+input:
+  type: foo
+
+pipeline:
+  processors:
+    - filter:
+        text:
+          operator: contains
+          value: bar
+
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      - foo:
+          bar: baz
+    batching:
+      count: 50
+      period: 500ms
+```
+
+
 ## Shrinking Batches
 
 A message batch can be broken down into smaller batches using the [`split`][split] processor:
@@ -104,3 +131,4 @@ input:
 [unarchive]: ./processors/README.md#unarchive
 [for_each]: ./processors/README.md#for_each
 [input_broker]: ./inputs/README.md#broker
+[output_broker]: ./outputs/README.md#broker

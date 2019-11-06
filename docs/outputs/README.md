@@ -164,6 +164,13 @@ The field 'key' can be dynamically set using function interpolations described
 ``` yaml
 type: broker
 broker:
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   copies: 1
   outputs: []
   pattern: fan_out
@@ -236,6 +243,13 @@ This pattern is useful for triggering events in the case where certain output
 targets have broken. For example, if you had an output type `http_client`
 but wished to reroute messages whenever the endpoint becomes unreachable you
 could use a try broker.
+
+### Batching
+
+It's possible to configure a [batch policy](../batching.md#batch-policy) with a
+broker using the `batching` fields, allowing you to create batches
+after your processing stages. Some inputs do not support broker based batching
+and specify this in their documentation.
 
 ### Utilising More Outputs
 

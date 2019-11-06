@@ -198,10 +198,12 @@ func (m *Batcher) CloseAsync() {
 
 // WaitForClose blocks until the Batcher output has closed down.
 func (m *Batcher) WaitForClose(timeout time.Duration) error {
-	go m.fullyCloseOnce.Do(func() {
-		<-time.After(timeout - time.Second)
-		close(m.fullyCloseChan)
-	})
+	if atomic.LoadInt32(&m.running) == 0 {
+		go m.fullyCloseOnce.Do(func() {
+			<-time.After(timeout - time.Second)
+			close(m.fullyCloseChan)
+		})
+	}
 	select {
 	case <-m.closedChan:
 	case <-time.After(timeout):

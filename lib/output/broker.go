@@ -26,6 +26,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/broker"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -112,6 +113,13 @@ targets have broken. For example, if you had an output type ` + "`http_client`" 
 but wished to reroute messages whenever the endpoint becomes unreachable you
 could use a try broker.
 
+### Batching
+
+It's possible to configure a [batch policy](../batching.md#batch-policy) with a
+broker using the ` + "`batching`" + ` fields, allowing you to create batches
+after your processing stages. Some inputs do not support broker based batching
+and specify this in their documentation.
+
 ### Utilising More Outputs
 
 When using brokered outputs with patterns such as round robin or greedy it is
@@ -136,10 +144,15 @@ nodes processors.`,
 				}
 				outSlice = append(outSlice, sanOutput)
 			}
+			batchSanit, err := batch.SanitisePolicyConfig(conf.Broker.Batching)
+			if err != nil {
+				return nil, err
+			}
 			return map[string]interface{}{
-				"copies":  conf.Broker.Copies,
-				"pattern": conf.Broker.Pattern,
-				"outputs": outSlice,
+				"copies":   conf.Broker.Copies,
+				"pattern":  conf.Broker.Pattern,
+				"outputs":  outSlice,
+				"batching": batchSanit,
 			}, nil
 		},
 	}
@@ -149,17 +162,21 @@ nodes processors.`,
 
 // BrokerConfig contains configuration fields for the Broker output type.
 type BrokerConfig struct {
-	Copies  int              `json:"copies" yaml:"copies"`
-	Pattern string           `json:"pattern" yaml:"pattern"`
-	Outputs brokerOutputList `json:"outputs" yaml:"outputs"`
+	Copies   int                `json:"copies" yaml:"copies"`
+	Pattern  string             `json:"pattern" yaml:"pattern"`
+	Outputs  brokerOutputList   `json:"outputs" yaml:"outputs"`
+	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewBrokerConfig creates a new BrokerConfig with default values.
 func NewBrokerConfig() BrokerConfig {
+	batching := batch.NewPolicyConfig()
+	batching.Count = 1
 	return BrokerConfig{
-		Copies:  1,
-		Pattern: "fan_out",
-		Outputs: brokerOutputList{},
+		Copies:   1,
+		Pattern:  "fan_out",
+		Outputs:  brokerOutputList{},
+		Batching: batching,
 	}
 }
 
@@ -182,7 +199,18 @@ func NewBroker(
 		return nil, ErrBrokerNoOutputs
 	}
 	if lOutputs == 1 {
-		return New(outputConfs[0], mgr, log, stats, pipelines...)
+		b, err := New(outputConfs[0], mgr, log, stats, pipelines...)
+		if err != nil {
+			return nil, err
+		}
+		if !conf.Broker.Batching.IsNoop() {
+			policy, err := batch.NewPolicy(conf.Broker.Batching, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+			if err != nil {
+				return nil, fmt.Errorf("failed to construct batch policy: %v", err)
+			}
+			b = NewBatcher(policy, b, log, stats)
+		}
+		return b, nil
 	}
 
 	outputs := make([]types.Output, lOutputs)
@@ -228,6 +256,14 @@ func NewBroker(
 	}
 	if err == nil && !isThreaded {
 		b, err = WrapWithPipelines(b, pipelines...)
+	}
+
+	if !conf.Broker.Batching.IsNoop() {
+		policy, err := batch.NewPolicy(conf.Broker.Batching, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
+		}
+		b = NewBatcher(policy, b, log, stats)
 	}
 	return b, err
 }

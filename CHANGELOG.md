@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `amqp_0_9` output which replaces the now deprecated `amqp` output.
+- The `broker` output now supports batching.
 
 ### Fixed
 
