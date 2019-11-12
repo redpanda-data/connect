@@ -5,14 +5,18 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-### Added
+## 3.4.0 - 2019-11-12
+
+### Added
 
 - New `amqp_0_9` output which replaces the now deprecated `amqp` output.
 - The `broker` output now supports batching.
 
-### Fixed
+### Fixed
 
 - The `memory` buffer now allows parallel processing of batched payloads.
+- Version and date information should now be correctly displayed in archive
+  distributions.
 
 ## 3.3.1 - 2019-10-21
 

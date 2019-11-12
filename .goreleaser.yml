@@ -6,8 +6,8 @@ builds:
     goarch: [ amd64, arm ]
     goarm: [ 5, 6, 7 ]
     ldflags: >
-      -X github.com/Jeffail/benthos/lib/service.Version={{.Version}}
-      -X github.com/Jeffail/benthos/lib/service.DateBuilt={{.Date}}
+      -X github.com/Jeffail/benthos/v3/lib/service.Version={{.Version}}
+      -X github.com/Jeffail/benthos/v3/lib/service.DateBuilt={{.Date}}
   - id: benthos-lambda
     main: cmd/serverless/benthos-lambda/main.go
     binary: benthos-lambda
