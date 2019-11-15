@@ -85,6 +85,12 @@ Prepends text to the beginning of the payload.
 Returns a doubled-quoted string, using escape sequences (\t, \n, \xFF, \u0100)
 for control characters and other non-printable characters.
 
+#### ` + "`regexp_expand`" + `
+
+Expands the template variables with the matched occurrences of the regular
+expression in a message. Inside the value $ signs are interpreted as submatch
+expansions, e.g. $1 represents the text of the first submatch.
+
 #### ` + "`replace`" + `
 
 Replaces all occurrences of the argument in a message with a value.
@@ -219,6 +225,20 @@ func newTextSetOperator() textOperator {
 	}
 }
 
+func newTextRegexpExpandOperator(arg string) (textOperator, error) {
+	rp, err := regexp.Compile(arg)
+	if err != nil {
+		return nil, err
+	}
+	return func(body []byte, value []byte) ([]byte, error) {
+		var result []byte
+		for _, submatches := range rp.FindAllSubmatchIndex(body, -1) {
+			result = rp.Expand(result, value, body, submatches)
+		}
+		return result, nil
+	}, nil
+}
+
 func newTextReplaceOperator(arg string) textOperator {
 	replaceArg := []byte(arg)
 	return func(body []byte, value []byte) ([]byte, error) {
@@ -277,6 +297,8 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 		return newTextPrependOperator(), nil
 	case "quote":
 		return newTextQuoteOperator(), nil
+	case "regexp_expand":
+		return newTextRegexpExpandOperator(arg)
 	case "replace":
 		return newTextReplaceOperator(arg), nil
 	case "replace_regexp":

@@ -634,6 +634,70 @@ func TestTextTrim(t *testing.T) {
 	}
 }
 
+func TestTextRegexpExpand(t *testing.T) {
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	type jTest struct {
+		name   string
+		arg    string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "regexp expand 1",
+			arg:    "(foo) bar",
+			value:  "$1",
+			input:  `foo bar`,
+			output: `foo`,
+		},
+		{
+			name:   "regexp expand 2",
+			arg:    "(?P<key>\\w+) \\w+",
+			value:  "$key baz",
+			input:  `foo bar`,
+			output: `foo baz`,
+		},
+		{
+			name:   "regexp expand 3",
+			arg:    "(?m)(?P<key>\\w+):\\s+(?P<value>\\w+)$",
+			value:  "$key=$value\n",
+			input:  "# comment line\nfoo1: bar1\nbar2: baz2\n\n# another comment line\nbaz3: qux3",
+			output: "foo1=bar1\nbar2=baz2\nbaz3=qux3\n",
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Text.Operator = "regexp_expand"
+		conf.Text.Arg = test.arg
+		conf.Text.Value = test.value
+		conf.Text.Parts = []int{0}
+
+		tp, err := NewText(conf, nil, tLog, tStats)
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := tp.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestTextReplace(t *testing.T) {
 	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}

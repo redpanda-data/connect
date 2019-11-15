@@ -1853,6 +1853,12 @@ Prepends text to the beginning of the payload.
 Returns a doubled-quoted string, using escape sequences (\t, \n, \xFF, \u0100)
 for control characters and other non-printable characters.
 
+#### `regexp_expand`
+
+Expands the template variables with the matched occurrences of the regular
+expression in a message. Inside the value $ signs are interpreted as submatch
+expansions, e.g. $1 represents the text of the first submatch.
+
 #### `replace`
 
 Replaces all occurrences of the argument in a message with a value.
