@@ -1855,9 +1855,36 @@ for control characters and other non-printable characters.
 
 #### `regexp_expand`
 
-Expands the template variables with the matched occurrences of the regular
-expression in a message. Inside the value $ signs are interpreted as submatch
-expansions, e.g. $1 represents the text of the first submatch.
+Expands each matched occurrence of the argument regular expression according to
+a template specified with the `value` field, and replaces the message
+with the aggregated results.
+
+Inside the template $ signs are interpreted as submatch expansions, e.g. $1
+represents the text of the first submatch.
+
+For example, given the following config:
+
+```yaml
+  - text:
+      operator: regexp_expand
+      arg: "(?m)(?P<key>\\w+):\\s+(?P<value>\\w+)$"
+      value: "$key=$value\n"
+```
+
+And a message containing:
+
+```text
+option1: value1
+# comment line
+option2: value2
+```
+
+The resulting payload would be:
+
+```text
+option1=value1
+option2=value2
+```
 
 #### `replace`
 
