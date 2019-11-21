@@ -3,6 +3,7 @@ module github.com/Jeffail/benthos/v3
 require (
 	cloud.google.com/go/pubsub v1.0.1
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
+	github.com/DataDog/datadog-go v3.2.0+incompatible
 	github.com/DataDog/zstd v1.4.1 // indirect
 	github.com/Jeffail/gabs/v2 v2.1.0
 	github.com/Microsoft/go-winio v0.4.14 // indirect
@@ -64,7 +65,7 @@ require (
 	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4 // indirect
 	github.com/prometheus/procfs v0.0.4 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
-	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
+	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20190826022208-cac0b30c2563 // indirect
 	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/smartystreets/assertions v0.0.0-20190215210624-980c5ac6f3ac // indirect

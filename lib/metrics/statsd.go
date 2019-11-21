@@ -21,12 +21,13 @@
 package metrics
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"time"
 
+	"github.com/DataDog/datadog-go/statsd"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/quipo/statsd"
 )
 
 //------------------------------------------------------------------------------
@@ -76,32 +77,35 @@ func NewStatsdConfig() StatsdConfig {
 // this stat are thread safe.
 type StatsdStat struct {
 	path string
-	s    statsd.Statsd
+	s    *statsd.Client
+	tags []string
 }
 
 // Incr increments a metric by an amount.
 func (s *StatsdStat) Incr(count int64) error {
-	s.s.Incr(s.path, count)
+	s.s.Incr(s.path, s.tags, float64(count))
 	return nil
 }
 
 // Decr decrements a metric by an amount.
 func (s *StatsdStat) Decr(count int64) error {
-	s.s.Decr(s.path, count)
+	s.s.Decr(s.path, s.tags, float64(count))
 	return nil
 }
 
 // Timing sets a timing metric.
 func (s *StatsdStat) Timing(delta int64) error {
-	s.s.Timing(s.path, delta)
+	s.s.Timing(s.path, time.Duration(delta), s.tags, noSampling)
 	return nil
 }
 
 // Set sets a gauge metric.
 func (s *StatsdStat) Set(value int64) error {
-	s.s.Gauge(s.path, value)
+	s.s.Gauge(s.path, float64(value), s.tags, noSampling)
 	return nil
 }
+
+const noSampling = 1
 
 //------------------------------------------------------------------------------
 
@@ -109,7 +113,7 @@ func (s *StatsdStat) Set(value int64) error {
 // endpoint.
 type Statsd struct {
 	config Config
-	s      statsd.Statsd
+	s      *statsd.Client
 	log    log.Modular
 }
 
@@ -132,19 +136,27 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 		prefix = prefix + "."
 	}
 
-	statsdclient := statsd.NewStatsdBuffer(
-		flushPeriod,
-		statsd.NewStatsdClient(config.Statsd.Address, prefix),
-	)
-	statsdclient.Logger = &wrappedLogger{m: s.log}
+	address := config.Statsd.Address
 	if config.Statsd.Network == "udp" {
-		if err := statsdclient.CreateSocket(); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := statsdclient.CreateTCPSocket(); err != nil {
-			return nil, err
-		}
+		// UDP is assumed, ignoring the network field
+	}
+	if config.Statsd.Network == "tcp" {
+		// TCP is not supported by the datadog client
+		return nil, errors.New("tcp is not a supported metric network protocol")
+	}
+	// The only network prefix supported by the datadog
+	// client is "unix"
+	if config.Statsd.Network == "unix" {
+		// prefix address with network
+		address = fmt.Sprintf("%s://%s", config.Statsd.Network, address)
+	}
+
+	statsdclient, err := statsd.New(address,
+		statsd.WithNamespace(prefix),
+		statsd.WithBufferFlushInterval(flushPeriod),
+	)
+	if err != nil {
+		return nil, err
 	}
 	s.s = statsdclient
 	return s, nil
@@ -160,15 +172,18 @@ func (h *Statsd) GetCounter(path string) StatCounter {
 	}
 }
 
-// GetCounterVec returns a stat counter object for a path with the labels
-// discarded.
+// GetCounterVec returns a stat counter object for a path with labels
 func (h *Statsd) GetCounterVec(path string, n []string) StatCounterVec {
-	return fakeCounterVec(func([]string) StatCounter {
-		return &StatsdStat{
-			path: path,
-			s:    h.s,
-		}
-	})
+	return &fCounterVec{
+		f: func(l []string) StatCounter {
+			return &StatsdStat{
+				path: path,
+				s:    h.s,
+				tags: tags(n, l),
+			}
+		},
+	}
+
 }
 
 // GetTimer returns a stat timer object for a path.
@@ -179,15 +194,17 @@ func (h *Statsd) GetTimer(path string) StatTimer {
 	}
 }
 
-// GetTimerVec returns a stat timer object for a path with the labels
-// discarded.
+// GetTimerVec returns a stat timer object for a path with labels
 func (h *Statsd) GetTimerVec(path string, n []string) StatTimerVec {
-	return fakeTimerVec(func([]string) StatTimer {
-		return &StatsdStat{
-			path: path,
-			s:    h.s,
-		}
-	})
+	return &fTimerVec{
+		f: func(l []string) StatTimer {
+			return &StatsdStat{
+				path: path,
+				s:    h.s,
+				tags: tags(n, l),
+			}
+		},
+	}
 }
 
 // GetGauge returns a stat gauge object for a path.
@@ -198,15 +215,17 @@ func (h *Statsd) GetGauge(path string) StatGauge {
 	}
 }
 
-// GetGaugeVec returns a stat timer object for a path with the labels
-// discarded.
+// GetGaugeVec returns a stat timer object for a path with labels
 func (h *Statsd) GetGaugeVec(path string, n []string) StatGaugeVec {
-	return fakeGaugeVec(func([]string) StatGauge {
-		return &StatsdStat{
-			path: path,
-			s:    h.s,
-		}
-	})
+	return &fGaugeVec{
+		f: func(l []string) StatGauge {
+			return &StatsdStat{
+				path: path,
+				s:    h.s,
+				tags: tags(n, l),
+			}
+		},
+	}
 }
 
 // SetLogger sets the logger used to print connection errors.
@@ -219,6 +238,25 @@ func (h *Statsd) SetLogger(log log.Modular) {
 func (h *Statsd) Close() error {
 	h.s.Close()
 	return nil
+}
+
+// tags merges tag labels with their interpolated values
+// assumes that the input lists are the same length and
+// that labels[i] maps to values[i] for all i.
+//
+// Behavior for labels and values containing
+// the `:` character is undefined.
+func tags(labels []string, values []string) []string {
+	tags := make([]string, len(labels))
+	for i := range labels {
+		// We said we assumed the len(labels) == len(values),
+		// but we may as well check to be safe
+		if i >= len(values) {
+			break
+		}
+		tags[i] = fmt.Sprintf("%s:%s", labels[i], values[i])
+	}
+	return tags
 }
 
 //------------------------------------------------------------------------------
