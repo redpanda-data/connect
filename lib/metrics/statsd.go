@@ -241,19 +241,15 @@ func (h *Statsd) Close() error {
 }
 
 // tags merges tag labels with their interpolated values
-// assumes that the input lists are the same length and
-// that labels[i] maps to values[i] for all i.
 //
-// Behavior for labels and values containing
-// the `:` character is undefined.
+// no attempt is made to merge labels and values if slices
+// are not the same length
 func tags(labels []string, values []string) []string {
+	if len(labels) != len(values) {
+		return nil
+	}
 	tags := make([]string, len(labels))
 	for i := range labels {
-		// We said we assumed the len(labels) == len(values),
-		// but we may as well check to be safe
-		if i >= len(values) {
-			break
-		}
 		tags[i] = fmt.Sprintf("%s:%s", labels[i], values[i])
 	}
 	return tags
