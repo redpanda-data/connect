@@ -33,6 +33,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
+	"github.com/Jeffail/benthos/v3/lib/util/text"
 )
 
 //------------------------------------------------------------------------------
@@ -117,8 +118,10 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 		// Timeout should be left at zero if we are streaming.
 		h.conf.HTTPClient.Timeout = ""
 	}
-	if len(h.conf.HTTPClient.Payload) > 0 {
-		h.payload = message.New([][]byte{[]byte(h.conf.HTTPClient.Payload)})
+
+	if h.conf.HTTPClient.Payload != "" {
+		interpolated := text.NewInterpolatedString(h.conf.HTTPClient.Payload).Get(nil)
+		h.payload = message.New([][]byte{[]byte(interpolated)})
 	}
 
 	var err error
