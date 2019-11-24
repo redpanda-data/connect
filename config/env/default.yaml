@@ -485,6 +485,9 @@ pipeline:
       operator: ${PROCESSOR_JSON_OPERATOR:clean}
       path: ${PROCESSOR_JSON_PATH}
       value: ${PROCESSOR_JSON_VALUE}
+    json_schema:
+      schema: ${PROCESSOR_JSON_SCHEMA_SCHEMA}
+      schema_path: ${PROCESSOR_JSON_SCHEMA_SCHEMA_PATH}
     lambda:
       credentials:
         id: ${PROCESSOR_LAMBDA_CREDENTIALS_ID}

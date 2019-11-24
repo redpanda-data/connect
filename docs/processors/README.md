@@ -82,33 +82,34 @@ In this case the [`for_each`](#for_each) processor can be used.
 23. [`insert_part`](#insert_part)
 24. [`jmespath`](#jmespath)
 25. [`json`](#json)
-26. [`lambda`](#lambda)
-27. [`log`](#log)
-28. [`merge_json`](#merge_json)
-29. [`metadata`](#metadata)
-30. [`metric`](#metric)
-31. [`noop`](#noop)
-32. [`number`](#number)
-33. [`parallel`](#parallel)
-34. [`process_batch`](#process_batch)
-35. [`process_dag`](#process_dag)
-36. [`process_field`](#process_field)
-37. [`process_map`](#process_map)
-38. [`rate_limit`](#rate_limit)
-39. [`redis`](#redis)
-40. [`sample`](#sample)
-41. [`select_parts`](#select_parts)
-42. [`sleep`](#sleep)
-43. [`split`](#split)
-44. [`sql`](#sql)
-45. [`subprocess`](#subprocess)
-46. [`switch`](#switch)
-47. [`text`](#text)
-48. [`throttle`](#throttle)
-49. [`try`](#try)
-50. [`unarchive`](#unarchive)
-51. [`while`](#while)
-52. [`xml`](#xml)
+26. [`json_schema`](#json_schema)
+27. [`lambda`](#lambda)
+28. [`log`](#log)
+29. [`merge_json`](#merge_json)
+30. [`metadata`](#metadata)
+31. [`metric`](#metric)
+32. [`noop`](#noop)
+33. [`number`](#number)
+34. [`parallel`](#parallel)
+35. [`process_batch`](#process_batch)
+36. [`process_dag`](#process_dag)
+37. [`process_field`](#process_field)
+38. [`process_map`](#process_map)
+39. [`rate_limit`](#rate_limit)
+40. [`redis`](#redis)
+41. [`sample`](#sample)
+42. [`select_parts`](#select_parts)
+43. [`sleep`](#sleep)
+44. [`split`](#split)
+45. [`sql`](#sql)
+46. [`subprocess`](#subprocess)
+47. [`switch`](#switch)
+48. [`text`](#text)
+49. [`throttle`](#throttle)
+50. [`try`](#try)
+51. [`unarchive`](#unarchive)
+52. [`while`](#while)
+53. [`xml`](#xml)
 
 ## `archive`
 
@@ -987,6 +988,68 @@ contains keys that aren't strings those fields will be ignored.
 Splits a string field by a value and replaces the original string with an array
 containing the results of the split. This operator requires both the path value
 and the contents of the `value` field to be strings.
+
+## `json_schema`
+
+``` yaml
+type: json_schema
+json_schema:
+  parts: []
+  schema: ""
+  schema_path: ""
+```
+
+JSONSchema is a processor that validates a message against the provided JSONSchema
+definition.
+Any validation error is populated into the error field ${!error} for it to be
+potentially re-used or logged afterwards.
+The initial batch is then sent onwards unchanged.
+Please refer to the [JSON Schema website](https://json-schema.org/) for information 
+and tutorials regarding the syntax of the schema.
+
+For example, with the following JSONSchema document:
+
+``` json
+{
+	"$id": "https://example.com/person.schema.json",
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Person",
+	"type": "object",
+	"properties": {
+	  "firstName": {
+		"type": "string",
+		"description": "The person's first name."
+	  },
+	  "lastName": {
+		"type": "string",
+		"description": "The person's last name."
+	  },
+	  "age": {
+		"description": "Age in years which must be equal to or greater than zero.",
+		"type": "integer",
+		"minimum": 0
+	  }
+	}
+}
+```
+
+And the following Benthos configuration:
+
+``` yaml
+json_schema:
+  part: 0
+  schema_path: "file://path_to_schema.json"
+```
+
+If the message being processed looked like:
+
+``` json
+{"firstName":"John","lastName":"Doe","age":-21}
+```
+
+Then the message would be unchanged.
+
+But !{error} would contain a validation error.
 
 ## `lambda`
 
