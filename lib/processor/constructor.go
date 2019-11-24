@@ -131,6 +131,7 @@ const (
 	TypeThrottle     = "throttle"
 	TypeUnarchive    = "unarchive"
 	TypeWhile        = "while"
+	TypeWorkflow     = "workflow"
 	TypeXML          = "xml"
 )
 
@@ -191,6 +192,7 @@ type Config struct {
 	Throttle     ThrottleConfig     `json:"throttle" yaml:"throttle"`
 	Unarchive    UnarchiveConfig    `json:"unarchive" yaml:"unarchive"`
 	While        WhileConfig        `json:"while" yaml:"while"`
+	Workflow     WorkflowConfig     `json:"workflow" yaml:"workflow"`
 	XML          XMLConfig          `json:"xml" yaml:"xml"`
 }
 
@@ -250,6 +252,7 @@ func NewConfig() Config {
 		Throttle:     NewThrottleConfig(),
 		Unarchive:    NewUnarchiveConfig(),
 		While:        NewWhileConfig(),
+		Workflow:     NewWorkflowConfig(),
 		XML:          NewXMLConfig(),
 	}
 }
