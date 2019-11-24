@@ -193,14 +193,15 @@ func (s *JSONSchema) ProcessMessage(msg types.Message) ([]types.Message, types.R
 			return err
 		}
 
-		if result.Valid() {
-			s.log.Debugf("The document is valid\n")
-		} else {
+		if !result.Valid() {
 			s.log.Debugf("The document is not valid\n")
+			s.mErr.Incr(1)
 			for _, desc := range result.Errors() {
 				return errors.New(desc.Field() + " " + strings.ToLower(desc.Description()))
 			}
 		}
+		s.mSent.Incr(1)
+		s.log.Debugf("The document is valid\n")
 
 		return nil
 	}

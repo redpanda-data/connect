@@ -77,6 +77,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 		fields fields
 		arg    [][]byte
 		output string
+		err    string
 	}{
 		{
 			name: "schema match",
@@ -97,6 +98,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 				[]byte(`{"firstName":"John","lastName":"Doe","age":-20}`),
 			},
 			output: `{"firstName":"John","lastName":"Doe","age":-20}`,
+			err:    `age must be greater than or equal to 0/1`,
 		},
 	}
 	for _, tt := range tests {
@@ -111,16 +113,21 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 				return
 			}
 			msgs, _ := c.ProcessMessage(message.New(tt.arg))
-			fmt.Print(c)
 
 			if len(msgs) != 1 {
 				t.Fatalf("Test '%v' did not succeed", tt.name)
 			}
-			fmt.Print(string(message.GetAllBytes(msgs[0])[0]))
 
 			if exp, act := tt.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 				t.Errorf("Wrong result '%v': %v != %v", tt.name, act, exp)
 			}
+			msgs[0].Iter(func(i int, part types.Part) error {
+				act := part.Metadata().Get(FailFlagKey)
+				if len(act) > 0 && act != tt.err {
+					t.Errorf("Wrong error message '%v': %v != %v", tt.name, act, tt.err)
+				}
+				return nil
+			})
 		})
 	}
 }
