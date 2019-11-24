@@ -164,7 +164,7 @@ type Config struct {
 	InsertPart   InsertPartConfig   `json:"insert_part" yaml:"insert_part"`
 	JMESPath     JMESPathConfig     `json:"jmespath" yaml:"jmespath"`
 	JSON         JSONConfig         `json:"json" yaml:"json"`
-	JSONSchema   JSONSchemaConfig   `json:"jsonschema" yaml:"jsonschema"`
+	JSONSchema   JSONSchemaConfig   `json:"json_schema" yaml:"json_schema"`
 	Lambda       LambdaConfig       `json:"lambda" yaml:"lambda"`
 	Log          LogConfig          `json:"log" yaml:"log"`
 	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`

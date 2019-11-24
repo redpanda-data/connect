@@ -21,6 +21,7 @@
 package processor
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -185,11 +186,20 @@ func (s *JSONSchema) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		}
 
 		partLoader := jsonschema.NewGoLoader(jsonPart)
-		_, err = s.schema.Validate(partLoader)
+		result, err := s.schema.Validate(partLoader)
 		if err != nil {
 			s.log.Debugf("Failed to validate json: %v\n", err)
 			s.mErr.Incr(1)
 			return err
+		}
+
+		if result.Valid() {
+			s.log.Debugf("The document is valid\n")
+		} else {
+			s.log.Debugf("The document is not valid\n")
+			for _, desc := range result.Errors() {
+				return errors.New(desc.Field() + " " + strings.ToLower(desc.Description()))
+			}
 		}
 
 		return nil
