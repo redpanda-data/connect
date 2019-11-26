@@ -49,7 +49,8 @@ cache is the same for both inputs.
 3. [`memcached`](#memcached)
 4. [`memory`](#memory)
 5. [`redis`](#redis)
-6. [`s3`](#s3)
+6. [`redis_hybrid`](#redis_hybrid)
+7. [`s3`](#s3)
 
 ## `dynamodb`
 
@@ -173,6 +174,24 @@ redis:
 
 Use a Redis instance as a cache. The expiration can be set to zero or an empty
 string in order to set no expiration.
+
+## `redis_hybrid`
+
+``` yaml
+type: redis_hybrid
+redis_hybrid:
+  expiration: 24h
+  invalidation_channel: benthos_redis_hybrid
+  local_cache_size: 1.073741824e+09
+  prefix: ""
+  retries: 3
+  retry_period: 500ms
+  url: tcp://localhost:6379
+```
+
+Use a in-memory cache that acts as a read-through cache onto Redis. Any changes
+will cause distributed invalidation via a Redis pubsub channel, which can be
+configured.
 
 ## `s3`
 

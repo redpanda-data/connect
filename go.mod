@@ -20,6 +20,7 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/colinmarc/hdfs v1.1.3
 	github.com/containerd/continuity v0.0.0-20181203112020-004b46473808 // indirect
+	github.com/dgraph-io/ristretto v0.0.0-20191114170855-99d1bbbf28e6
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.3.3 // indirect
 	github.com/eapache/go-resiliency v1.2.0 // indirect
