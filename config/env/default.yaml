@@ -557,6 +557,8 @@ pipeline:
     type: ${PROCESSOR_TYPE:noop}
     unarchive:
       format: ${PROCESSOR_UNARCHIVE_FORMAT:binary}
+    workflow:
+      meta_path: ${PROCESSOR_WORKFLOW_META_PATH:meta.workflow}
     xml:
       operator: ${PROCESSOR_XML_OPERATOR:to_json}
   threads: ${PROCESSOR_THREADS:1}
