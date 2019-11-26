@@ -40,12 +40,12 @@ func init() {
 	Constructors[TypeWorkflow] = TypeSpec{
 		constructor: NewWorkflow,
 		description: `
-Performs the same workflow stages as the process_dag processor, but uses a
-record of workflow statuses stored in the path specified by the field
-` + "`meta_path`" + ` in order to report which workflow stages succeeded, were
-skipped, or failed for a document. The record takes this form:
+Performs the same workflow stages as the ` + "[`process_dag`](#process_dag)" + `
+processor, but uses a record of workflow statuses stored in the path specified
+by the field ` + "`meta_path`" + ` in order to report which workflow stages
+succeeded, were skipped, or failed for a document. The record takes this form:
 
-` + "``` json" + `
+` + "```json" + `
 {
 	"succeeded": [ "foo" ],
 	"skipped": [ "bar" ],
@@ -56,11 +56,16 @@ skipped, or failed for a document. The record takes this form:
 If a document is consumed that already contains these records then they will be
 used in order to only perform stages that haven't already succeeded or have been
 skipped. For example, if a document received contained the above snippet then
-the foo and bar stages would not be attempted.
+the foo and bar stages would not be attempted. Before writing the new records to
+the resulting payloads the old one will be moved into
+` + "`<meta_path>.previous`" + `.
 
-If the ` + "`meta_path`" + ` already exists for a document and is an array then
-it will be used as a whitelist of stages to apply, all other stages will be
-skipped.`,
+If a field ` + "`<meta_path>.apply`" + ` exists in the record for a document and
+is an array then it will be used as a whitelist of stages to apply, all other
+stages will be skipped.
+
+You can read more about workflows in Benthos
+[in this document](../workflows.md).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			sanitChildren := map[string]interface{}{}
 			for k, v := range conf.Workflow.Stages {
@@ -131,8 +136,11 @@ func NewWorkflow(
 		stats:       stats,
 		mErrStages:  map[string]metrics.StatCounter{},
 		mSuccStages: map[string]metrics.StatCounter{},
-		metaPath:    gabs.DotPathToSlice(conf.Workflow.MetaPath),
+		metaPath:    nil,
 		allStages:   map[string]struct{}{},
+	}
+	if len(conf.Workflow.MetaPath) > 0 {
+		w.metaPath = gabs.DotPathToSlice(conf.Workflow.MetaPath)
 	}
 
 	explicitDeps := map[string][]string{}
@@ -156,8 +164,8 @@ func NewWorkflow(
 		w.allStages[k] = struct{}{}
 	}
 
-	dag, err := resolveDAG(explicitDeps, w.children)
-	if err != nil {
+	var err error
+	if w.dag, err = resolveDAG(explicitDeps, w.children); err != nil {
 		return nil, err
 	}
 
@@ -170,7 +178,7 @@ func NewWorkflow(
 	w.mErrMeta = stats.GetCounter("error.meta_set")
 	w.mErrOverlay = stats.GetCounter("error.overlay")
 
-	w.log.Infof("Resolved workflow DAG: %v\n", dag)
+	w.log.Infof("Resolved workflow DAG: %v\n", w.dag)
 	return w, nil
 }
 
@@ -267,6 +275,10 @@ func (r *resultTracker) ToSlices() (succeeded, skipped, failed []string) {
 // Returns a map of enrichment IDs that should be skipped for this payload.
 func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
 	skipList := map[string]struct{}{}
+	if len(w.metaPath) == 0 {
+		return skipList
+	}
+
 	gObj := gabs.Wrap(root)
 
 	// If a whitelist is provided for this flow then skip stages that aren't
@@ -395,40 +407,45 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	}
 
 	// Finally, set the meta records of each document.
-	payload.Iter(func(i int, p types.Part) error {
-		pJSON, err := p.JSON()
-		if err != nil {
-			w.mErr.Incr(1)
-			w.mErrMeta.Incr(1)
-			w.log.Errorf("Failed to parse message for meta update: %v\n", err)
+	if len(w.metaPath) > 0 {
+		payload.Iter(func(i int, p types.Part) error {
+			pJSON, err := p.JSON()
+			if err != nil {
+				w.mErr.Incr(1)
+				w.mErrMeta.Incr(1)
+				w.log.Errorf("Failed to parse message for meta update: %v\n", err)
+				return nil
+			}
+
+			gObj := gabs.Wrap(pJSON)
+			if oldRecord := gObj.S(w.metaPath...).Data(); oldRecord != nil {
+				gObj.Delete(w.metaPath...)
+				gObj.Set(oldRecord, append(w.metaPath, "previous")...)
+			}
+
+			succStrs, skipStrs, failStrs := records[i].ToSlices()
+			succeeded := make([]interface{}, len(succStrs))
+			skipped := make([]interface{}, len(skipStrs))
+			failed := make([]interface{}, len(failStrs))
+
+			for j, v := range succStrs {
+				succeeded[j] = v
+			}
+			for j, v := range skipStrs {
+				skipped[j] = v
+			}
+			for j, v := range failStrs {
+				failed[j] = v
+			}
+
+			gObj.Set(succeeded, append(w.metaPath, "succeeded")...)
+			gObj.Set(skipped, append(w.metaPath, "skipped")...)
+			gObj.Set(failed, append(w.metaPath, "failed")...)
+
+			p.SetJSON(gObj.Data())
 			return nil
-		}
-
-		gObj := gabs.Wrap(pJSON)
-		gObj.Delete(w.metaPath...)
-
-		succStrs, skipStrs, failStrs := records[i].ToSlices()
-		succeeded := make([]interface{}, len(succStrs))
-		skipped := make([]interface{}, len(skipStrs))
-		failed := make([]interface{}, len(failStrs))
-
-		for j, v := range succStrs {
-			succeeded[j] = v
-		}
-		for j, v := range skipStrs {
-			skipped[j] = v
-		}
-		for j, v := range failStrs {
-			failed[j] = v
-		}
-
-		gObj.Set(succeeded, append(w.metaPath, "succeeded")...)
-		gObj.Set(skipped, append(w.metaPath, "skipped")...)
-		gObj.Set(failed, append(w.metaPath, "failed")...)
-
-		p.SetJSON(gObj.Data())
-		return nil
-	})
+		})
+	}
 
 	tracing.FinishSpans(propMsg)
 
