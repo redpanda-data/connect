@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.5.0 - 2019-11-26
+
 ### Added
 
 - New `regexp_expand` operator added to the `text` processor.
