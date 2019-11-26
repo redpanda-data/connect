@@ -41,17 +41,16 @@ func init() {
 	Constructors[TypeJSONSchema] = TypeSpec{
 		constructor: NewJSONSchema,
 		description: `
-JSONSchema is a processor that validates a message against the provided JSONSchema
-definition.
-Any validation error is populated into the error field ${!error} for it to be
-potentially re-used or logged afterwards.
-The initial batch is then sent onwards unchanged.
-Please refer to the [JSON Schema website](https://json-schema.org/) for information 
-and tutorials regarding the syntax of the schema.
+Checks messages against a provided JSONSchema definition but does not change the
+payload under any circumstances. If a message does not match the schema it can
+be caught using error handling methods outlined [here](../error_handling.md).
+
+Please refer to the [JSON Schema website](https://json-schema.org/) for
+information and tutorials regarding the syntax of the schema.
 
 For example, with the following JSONSchema document:
 
-` + "``` json" + `
+` + "```json" + `
 {
 	"$id": "https://example.com/person.schema.json",
 	"$schema": "http://json-schema.org/draft-07/schema#",
@@ -77,21 +76,28 @@ For example, with the following JSONSchema document:
 
 And the following Benthos configuration:
 
-` + "``` yaml" + `
-json_schema:
-  part: 0
-  schema_path: "file://path_to_schema.json"
+` + "```yaml" + `
+pipeline:
+  processors:
+  - json_schema:
+      schema_path: "file://path_to_schema.json"
+  - catch:
+    - log:
+        level: ERROR
+        message: "Schema validation failed due to: ${!error}"
 ` + "```" + `
 
-If the message being processed looked like:
+If a payload being processed looked like:
 
-` + "``` json" + `
+` + "```json" + `
 {"firstName":"John","lastName":"Doe","age":-21}
 ` + "```" + `
 
-Then the message would be unchanged.
-
-But !{error} would contain a validation error.`,
+Then the payload would be unchanged but a log message would appear explaining
+the fault. This gives you flexibility in how you may handle schema errors, but
+for a simpler use case you might instead wish to use the
+` + "[`json_schema`](../conditions/README.md#json_schema)" + ` condition with a
+` + "[`filter`](#filter)" + `.`,
 	}
 }
 

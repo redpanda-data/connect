@@ -83,11 +83,11 @@ require (
 	go.uber.org/atomic v1.3.2 // indirect
 	golang.org/x/crypto v0.0.0-20190909091759-094676da4a83 // indirect
 	golang.org/x/exp v0.0.0-20190829153037-c13cbed26979 // indirect
-	golang.org/x/lint v0.0.0-20190930215403-16217165b5de // indirect
+	golang.org/x/lint v0.0.0-20190909230951-414d861bb4ac // indirect
 	golang.org/x/net v0.0.0-20190909003024-a7b16738d86b // indirect
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/sys v0.0.0-20190910064555-bbd175535a8b // indirect
-	golang.org/x/tools v0.0.0-20191124021906-f5828fc9a103 // indirect
+	golang.org/x/tools v0.0.0-20190925230517-ea99b82c7b93 // indirect
 	google.golang.org/api v0.10.0 // indirect
 	google.golang.org/appengine v1.6.2 // indirect
 	google.golang.org/genproto v0.0.0-20190905072037-92dd089d5514 // indirect
