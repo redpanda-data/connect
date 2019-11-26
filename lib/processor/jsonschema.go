@@ -202,11 +202,15 @@ func (s *JSONSchema) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		if !result.Valid() {
 			s.log.Debugf("The document is not valid\n")
 			s.mErr.Incr(1)
-			for _, desc := range result.Errors() {
-				return errors.New(desc.Field() + " " + strings.ToLower(desc.Description()))
+			var errStr string
+			for i, desc := range result.Errors() {
+				if i > 0 {
+					errStr = errStr + "\n"
+				}
+				errStr = errStr + desc.Field() + " " + strings.ToLower(desc.Description())
 			}
+			return errors.New(errStr)
 		}
-		s.mSent.Incr(1)
 		s.log.Debugf("The document is valid\n")
 
 		return nil
