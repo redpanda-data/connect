@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `workflow` processor.
+
 ## 3.5.0 - 2019-11-26
 
 ### Added
