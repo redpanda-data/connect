@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `regexp_expand` operator added to the `text` processor.
+- New `json_schema` processor.
 
 ## 3.4.0 - 2019-11-12
 
