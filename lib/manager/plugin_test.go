@@ -121,6 +121,7 @@ plugins:
     plugin:
       bar: change this
       foo: default
+processors: {}
 rate_limits: {}
 ` + "```" + `
 
@@ -138,6 +139,7 @@ plugins:
       foo: default
       bar: change this
       baz: 10
+processors: {}
 rate_limits: {}
 ` + "```" + `
 `

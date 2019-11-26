@@ -21,6 +21,7 @@
 package manager
 
 import (
+	"errors"
 	"net/http"
 	"path"
 
@@ -56,6 +57,17 @@ func (n *NamespacedManager) GetCache(name string) (types.Cache, error) {
 // GetCondition attempts to find a service wide condition by its name.
 func (n *NamespacedManager) GetCondition(name string) (types.Condition, error) {
 	return n.mgr.GetCondition(name)
+}
+
+// GetProcessor attempts to find a service wide processor by its name.
+func (n *NamespacedManager) GetProcessor(name string) (types.Processor, error) {
+	// TODO: V4 Simplify this.
+	if procProv, ok := n.mgr.(interface {
+		GetProcessor(name string) (types.Processor, error)
+	}); ok {
+		return procProv.GetProcessor(name)
+	}
+	return nil, errors.New("wrapped manager does not support processor resources")
 }
 
 // GetRateLimit attempts to find a service wide rate limit by its name.

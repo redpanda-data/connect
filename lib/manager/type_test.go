@@ -28,6 +28,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -122,6 +123,27 @@ func TestManagerCondition(t *testing.T) {
 	}
 	if _, err := mgr.GetCondition("baz"); err != types.ErrConditionNotFound {
 		t.Errorf("Wrong error returned: %v != %v", err, types.ErrConditionNotFound)
+	}
+}
+
+func TestManagerProcessor(t *testing.T) {
+	conf := NewConfig()
+	conf.Processors["foo"] = processor.NewConfig()
+	conf.Processors["bar"] = processor.NewConfig()
+
+	mgr, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := mgr.GetProcessor("foo"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mgr.GetProcessor("bar"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mgr.GetProcessor("baz"); err != types.ErrProcessorNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, types.ErrProcessorNotFound)
 	}
 }
 

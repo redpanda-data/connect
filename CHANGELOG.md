@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `workflow` processor.
+- New `resource` processor.
+- Processors can now be registered within the `resources` section of a config.
 
 ## 3.5.0 - 2019-11-26
 

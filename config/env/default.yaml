@@ -529,6 +529,7 @@ pipeline:
       retries: ${PROCESSOR_REDIS_RETRIES:3}
       retry_period: ${PROCESSOR_REDIS_RETRY_PERIOD:500ms}
       url: ${PROCESSOR_REDIS_URL:tcp://localhost:6379}
+    resource: ${PROCESSOR_RESOURCE}
     sample:
       retain: ${PROCESSOR_SAMPLE_RETAIN:10}
       seed: ${PROCESSOR_SAMPLE_SEED:0}

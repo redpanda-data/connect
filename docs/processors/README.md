@@ -97,20 +97,21 @@ In this case the [`for_each`](#for_each) processor can be used.
 38. [`process_map`](#process_map)
 39. [`rate_limit`](#rate_limit)
 40. [`redis`](#redis)
-41. [`sample`](#sample)
-42. [`select_parts`](#select_parts)
-43. [`sleep`](#sleep)
-44. [`split`](#split)
-45. [`sql`](#sql)
-46. [`subprocess`](#subprocess)
-47. [`switch`](#switch)
-48. [`text`](#text)
-49. [`throttle`](#throttle)
-50. [`try`](#try)
-51. [`unarchive`](#unarchive)
-52. [`while`](#while)
-53. [`workflow`](#workflow)
-54. [`xml`](#xml)
+41. [`resource`](#resource)
+42. [`sample`](#sample)
+43. [`select_parts`](#select_parts)
+44. [`sleep`](#sleep)
+45. [`split`](#split)
+46. [`sql`](#sql)
+47. [`subprocess`](#subprocess)
+48. [`switch`](#switch)
+49. [`text`](#text)
+50. [`throttle`](#throttle)
+51. [`try`](#try)
+52. [`unarchive`](#unarchive)
+53. [`while`](#while)
+54. [`workflow`](#workflow)
+55. [`xml`](#xml)
 
 ## `archive`
 
@@ -1662,6 +1663,45 @@ Returns the cardinality of a set, or 0 if the key does not exist.
 #### `sadd`
 
 Adds a new member to a set. Returns `1` if the member was added.
+
+## `resource`
+
+``` yaml
+type: resource
+resource: ""
+```
+
+Resource is a processor type that runs a processor resource by its name. This
+processor allows you to run the same configured processor resource in multiple
+places.
+
+Resource processors also have the advantage of name based metrics and logging.
+For example, the config:
+
+``` yaml
+pipeline:
+  processors:
+    - jmespath:
+        query: foo
+```
+
+Is equivalent to:
+
+``` yaml
+pipeline:
+  processors:
+    - resource: foo_proc
+
+resources:
+  processors:
+    foo_proc:
+      jmespath:
+        query: foo
+```
+
+But now the metrics path of the JMESPath processor will be
+`resources.processors.foo_proc`, this way of flattening observability
+labels becomes more useful as configs get larger and more nested.
 
 ## `sample`
 

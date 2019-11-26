@@ -63,6 +63,7 @@ var (
 var (
 	ErrCacheNotFound     = errors.New("cache not found")
 	ErrConditionNotFound = errors.New("condition not found")
+	ErrProcessorNotFound = errors.New("processor not found")
 	ErrRateLimitNotFound = errors.New("rate limit not found")
 	ErrPluginNotFound    = errors.New("plugin not found")
 	ErrKeyAlreadyExists  = errors.New("key already exists")

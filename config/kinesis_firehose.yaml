@@ -37,6 +37,7 @@ output:
 resources:
   caches: {}
   conditions: {}
+  processors: {}
   rate_limits: {}
 logger:
   prefix: benthos

@@ -105,6 +105,10 @@ type Manager interface {
 	// GetCondition attempts to find a service wide condition by its name.
 	GetCondition(name string) (Condition, error)
 
+	// GetProcessor attempts to find a service wide processor by its name.
+	// TODO: V4 Add this
+	// GetProcessor(name string) (Processor, error)
+
 	// GetRateLimit attempts to find a service wide rate limit by its name.
 	GetRateLimit(name string) (RateLimit, error)
 

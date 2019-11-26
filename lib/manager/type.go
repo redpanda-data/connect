@@ -30,6 +30,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
@@ -48,6 +49,7 @@ type APIReg interface {
 type Config struct {
 	Caches     map[string]cache.Config     `json:"caches" yaml:"caches"`
 	Conditions map[string]condition.Config `json:"conditions" yaml:"conditions"`
+	Processors map[string]processor.Config `json:"processors" yaml:"processors"`
 	RateLimits map[string]ratelimit.Config `json:"rate_limits" yaml:"rate_limits"`
 	Plugins    map[string]PluginConfig     `json:"plugins,omitempty" yaml:"plugins,omitempty"`
 }
@@ -57,6 +59,7 @@ func NewConfig() Config {
 	return Config{
 		Caches:     map[string]cache.Config{},
 		Conditions: map[string]condition.Config{},
+		Processors: map[string]processor.Config{},
 		RateLimits: map[string]ratelimit.Config{},
 		Plugins:    map[string]PluginConfig{},
 	}
@@ -70,6 +73,9 @@ func AddExamples(c *Config) {
 	}
 	if len(c.Conditions) == 0 {
 		c.Conditions["example"] = condition.NewConfig()
+	}
+	if len(c.Processors) == 0 {
+		c.Processors["example"] = processor.NewConfig()
 	}
 	if len(c.RateLimits) == 0 {
 		c.RateLimits["example"] = ratelimit.NewConfig()
@@ -92,6 +98,13 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	conditions := map[string]interface{}{}
 	for k, v := range conf.Conditions {
 		if conditions[k], err = condition.SanitiseConfig(v); err != nil {
+			return nil, err
+		}
+	}
+
+	processors := map[string]interface{}{}
+	for k, v := range conf.Processors {
+		if processors[k], err = processor.SanitiseConfig(v); err != nil {
 			return nil, err
 		}
 	}
@@ -120,6 +133,7 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	m := map[string]interface{}{
 		"caches":      caches,
 		"conditions":  conditions,
+		"processors":  processors,
 		"rate_limits": rateLimits,
 	}
 	if len(plugins) > 0 {
@@ -138,6 +152,7 @@ type Type struct {
 	apiReg     APIReg
 	caches     map[string]types.Cache
 	conditions map[string]types.Condition
+	processors map[string]types.Processor
 	rateLimits map[string]types.RateLimit
 	plugins    map[string]interface{}
 
@@ -157,6 +172,7 @@ func New(
 		apiReg:     apiReg,
 		caches:     map[string]types.Cache{},
 		conditions: map[string]types.Condition{},
+		processors: map[string]types.Processor{},
 		rateLimits: map[string]types.RateLimit{},
 		plugins:    map[string]interface{}{},
 		pipes:      map[string]<-chan types.Transaction{},
@@ -193,6 +209,28 @@ func New(
 		}
 
 		t.conditions[k] = newCond
+	}
+
+	// Sometimes processor resources might refer to other processor resources.
+	// When they are constructed they will check with the manager to ensure the
+	// resource they point to is valid, but not use the processor. Since we
+	// cannot guarantee an order of initialisation we create placeholder
+	// processors during construction.
+	for k := range conf.Processors {
+		t.processors[k] = nil
+	}
+
+	// TODO: Prevent recursive processors.
+	for k, newConf := range conf.Processors {
+		newProc, err := processor.New(newConf, t, log.NewModule(".resource.processor."+k), metrics.Namespaced(stats, "resource.processor."+k))
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to create processor resource '%v' of type '%v': %v",
+				k, newConf.Type, err,
+			)
+		}
+
+		t.processors[k] = newProc
 	}
 
 	for k, conf := range conf.RateLimits {
@@ -278,6 +316,14 @@ func (t *Type) GetCondition(name string) (types.Condition, error) {
 	return nil, types.ErrConditionNotFound
 }
 
+// GetProcessor attempts to find a service wide processor by its name.
+func (t *Type) GetProcessor(name string) (types.Processor, error) {
+	if p, exists := t.processors[name]; exists {
+		return p, nil
+	}
+	return nil, types.ErrProcessorNotFound
+}
+
 // GetRateLimit attempts to find a service wide rate limit by its name.
 func (t *Type) GetRateLimit(name string) (types.RateLimit, error) {
 	if rl, exists := t.rateLimits[name]; exists {
@@ -307,6 +353,9 @@ func (t *Type) CloseAsync() {
 			closer.CloseAsync()
 		}
 	}
+	for _, p := range t.processors {
+		p.CloseAsync()
+	}
 	for _, c := range t.plugins {
 		if closer, ok := c.(types.Closable); ok {
 			closer.CloseAsync()
@@ -331,6 +380,11 @@ func (t *Type) WaitForClose(timeout time.Duration) error {
 			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
 				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 			}
+		}
+	}
+	for k, p := range t.processors {
+		if err := p.WaitForClose(time.Until(timesOut)); err != nil {
+			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}
 	}
 	for k, c := range t.rateLimits {
