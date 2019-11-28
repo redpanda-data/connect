@@ -13,6 +13,11 @@ All notable changes to this project will be documented in this file.
 - New `resource` processor.
 - Processors can now be registered within the `resources` section of a config.
 
+### Fixed
+
+- The `kafka` output no longer attempts to send headers on old versions of the
+  protocol.
+
 ## 3.5.0 - 2019-11-26
 
 ### Added

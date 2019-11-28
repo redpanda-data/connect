@@ -181,22 +181,21 @@ func strToCompressionCodec(str string) (sarama.CompressionCodec, error) {
 //------------------------------------------------------------------------------
 
 func buildHeaders(version sarama.KafkaVersion, part types.Part) []sarama.RecordHeader {
-  if version.IsAtLeast(sarama.V0_11_0_0) {
-  	out := []sarama.RecordHeader{}
-  	meta := part.Metadata()
-  	meta.Iter(func(k, v string) error {
-  		out = append(out, sarama.RecordHeader{
-  			Key:   []byte(k),
-  			Value: []byte(v),
-  		})
-  		return nil
-  	})
+	if version.IsAtLeast(sarama.V0_11_0_0) {
+		out := []sarama.RecordHeader{}
+		meta := part.Metadata()
+		meta.Iter(func(k, v string) error {
+			out = append(out, sarama.RecordHeader{
+				Key:   []byte(k),
+				Value: []byte(v),
+			})
+			return nil
+		})
+		return out
+	}
 
-  	return out
-  } else {
-    // no headers before version 0.11
-    return nil
-  }
+	// no headers before version 0.11
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -254,7 +253,7 @@ func (k *Kafka) Connect() error {
 func (k *Kafka) Write(msg types.Message) error {
 	k.connMut.RLock()
 	producer := k.producer
-	version  := k.version
+	version := k.version
 	k.connMut.RUnlock()
 
 	if producer == nil {
