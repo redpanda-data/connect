@@ -180,18 +180,23 @@ func strToCompressionCodec(str string) (sarama.CompressionCodec, error) {
 
 //------------------------------------------------------------------------------
 
-func buildHeaders(part types.Part) []sarama.RecordHeader {
-	out := []sarama.RecordHeader{}
-	meta := part.Metadata()
-	meta.Iter(func(k, v string) error {
-		out = append(out, sarama.RecordHeader{
-			Key:   []byte(k),
-			Value: []byte(v),
-		})
-		return nil
-	})
+func buildHeaders(version sarama.KafkaVersion, part types.Part) []sarama.RecordHeader {
+  if version.IsAtLeast(sarama.V0_11_0_0) {
+  	out := []sarama.RecordHeader{}
+  	meta := part.Metadata()
+  	meta.Iter(func(k, v string) error {
+  		out = append(out, sarama.RecordHeader{
+  			Key:   []byte(k),
+  			Value: []byte(v),
+  		})
+  		return nil
+  	})
 
-	return out
+  	return out
+  } else {
+    // no headers before version 0.11
+    return nil
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -249,6 +254,7 @@ func (k *Kafka) Connect() error {
 func (k *Kafka) Write(msg types.Message) error {
 	k.connMut.RLock()
 	producer := k.producer
+	version  := k.version
 	k.connMut.RUnlock()
 
 	if producer == nil {
@@ -263,7 +269,7 @@ func (k *Kafka) Write(msg types.Message) error {
 		nextMsg := &sarama.ProducerMessage{
 			Topic:   k.topic.Get(lMsg),
 			Value:   sarama.ByteEncoder(p.Get()),
-			Headers: buildHeaders(p),
+			Headers: buildHeaders(version, p),
 		}
 		if len(key) > 0 {
 			nextMsg.Key = sarama.ByteEncoder(key)
