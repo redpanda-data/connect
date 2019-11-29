@@ -26,8 +26,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/text"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
@@ -62,8 +64,9 @@ type MQTT struct {
 	log   log.Modular
 	stats metrics.Type
 
-	urls []string
-	conf MQTTConfig
+	urls  []string
+	conf  MQTTConfig
+	topic *text.InterpolatedString
 
 	client  mqtt.Client
 	connMut sync.RWMutex
@@ -79,6 +82,8 @@ func NewMQTT(
 		log:   log,
 		stats: stats,
 		conf:  conf,
+
+		topic: text.NewInterpolatedString(conf.Topic),
 	}
 
 	for _, u := range conf.URLs {
@@ -146,7 +151,8 @@ func (m *MQTT) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		mtok := client.Publish(m.conf.Topic, byte(m.conf.QoS), false, p.Get())
+		lMsg := message.Lock(msg, i)
+		mtok := client.Publish(m.topic.Get(lMsg), byte(m.conf.QoS), false, p.Get())
 		mtok.Wait()
 		return mtok.Error()
 	})
