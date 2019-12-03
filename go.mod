@@ -45,6 +45,8 @@ require (
 	github.com/linkedin/goavro/v2 v2.9.6
 	github.com/mailru/easyjson v0.7.0 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.2
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/nats-io/nats-streaming-server v0.16.1-0.20190905144423-ed7405a40a25 // indirect
 	github.com/nats-io/nats.go v1.8.1
 	github.com/nats-io/stan.go v0.5.0
@@ -69,6 +71,7 @@ require (
 	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/smartystreets/assertions v0.0.0-20190215210624-980c5ac6f3ac // indirect
 	github.com/smartystreets/goconvey v0.0.0-20190222223459-a17d461953aa // indirect
+	github.com/smira/go-statsd v1.3.1
 	github.com/spf13/cast v1.3.0
 	github.com/streadway/amqp v0.0.0-20190827072141-edfb9018d271
 	github.com/trivago/grok v1.0.0

@@ -187,6 +187,21 @@ statsd:
 Push metrics over a TCP or UDP connection using the
 [StatsD protocol](https://github.com/statsd/statsd).
 
+## `datadog` (statsd with tags)
+
+``` yaml
+type: datadog
+statsd:
+  address: localhost:4040
+  flush_period: 100ms
+  tag_format: influxdb
+  prefix: benthos
+```
+
+Push metrics over UDP connection using the Datadog
+[StatsD protocol](https://github.com/statsd/statsd) with supporting 
+tags in `influxdb` and `datadog` formats.
+
 ## `stdout`
 
 ``` yaml
