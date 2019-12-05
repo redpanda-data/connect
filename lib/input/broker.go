@@ -263,32 +263,35 @@ func newBrokerHasBatchProcessor(
 	if lInputs <= 0 {
 		return nil, ErrBrokerNoInputs
 	}
-	if lInputs == 1 {
-		return newHasBatchProcessor(hasBatchProc, conf.Broker.Inputs[0], mgr, log, stats, pipelines...)
-	}
-
-	inputs := make([]types.Producer, lInputs)
 
 	var err error
-	for j := 0; j < conf.Broker.Copies; j++ {
-		for i, iConf := range conf.Broker.Inputs {
-			ns := fmt.Sprintf("broker.inputs.%v", i)
-			inputs[len(conf.Broker.Inputs)*j+i], err = newHasBatchProcessor(
-				hasBatchProc,
-				iConf, mgr,
-				log.NewModule("."+ns),
-				metrics.Combine(stats, metrics.Namespaced(stats, ns)),
-				pipelines...,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create input '%v' type '%v': %v", i, iConf.Type, err)
+	var b Type
+	if lInputs == 1 {
+		if b, err = newHasBatchProcessor(hasBatchProc, conf.Broker.Inputs[0], mgr, log, stats, pipelines...); err != nil {
+			return nil, err
+		}
+	} else {
+		inputs := make([]types.Producer, lInputs)
+
+		for j := 0; j < conf.Broker.Copies; j++ {
+			for i, iConf := range conf.Broker.Inputs {
+				ns := fmt.Sprintf("broker.inputs.%v", i)
+				inputs[len(conf.Broker.Inputs)*j+i], err = newHasBatchProcessor(
+					hasBatchProc,
+					iConf, mgr,
+					log.NewModule("."+ns),
+					metrics.Combine(stats, metrics.Namespaced(stats, ns)),
+					pipelines...,
+				)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create input '%v' type '%v': %v", i, iConf.Type, err)
+				}
 			}
 		}
-	}
 
-	var b Type
-	if b, err = broker.NewFanIn(inputs, stats); err != nil {
-		return nil, err
+		if b, err = broker.NewFanIn(inputs, stats); err != nil {
+			return nil, err
+		}
 	}
 
 	if conf.Broker.Batching.IsNoop() {
