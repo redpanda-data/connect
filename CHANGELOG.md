@@ -5,9 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- The `http` processor now gracefully handles empty responses.
+
 ## 3.6.1 - 2019-12-05
 
-### Fixed
+### Fixed
 
 - Batching using an input `broker` now works with only one child input
   configured.

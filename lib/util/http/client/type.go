@@ -370,68 +370,70 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 // ParseResponse attempts to parse an HTTP response into a 2D slice of bytes.
 func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err error) {
 	resMsg = message.New(nil)
-	if res.Body == nil {
-		return
-	}
-	contentType := res.Header.Get("Content-Type")
 
-	var mediaType string
-	var params map[string]string
-	if len(contentType) > 0 {
-		if mediaType, params, err = mime.ParseMediaType(res.Header.Get("Content-Type")); err != nil {
-			h.mErrRes.Incr(1)
-			h.mErr.Incr(1)
-			h.log.Errorf("Failed to parse media type: %v\n", err)
-			return
-		}
-	}
+	if res.Body != nil {
+		contentType := res.Header.Get("Content-Type")
 
-	var buffer bytes.Buffer
-	if strings.HasPrefix(mediaType, "multipart/") {
-		resMsg = message.New(nil)
-
-		mr := multipart.NewReader(res.Body, params["boundary"])
-		var bufferIndex int64
-		for {
-			var p *multipart.Part
-			if p, err = mr.NextPart(); err != nil {
-				if err == io.EOF {
-					err = nil
-					break
-				}
+		var mediaType string
+		var params map[string]string
+		if len(contentType) > 0 {
+			if mediaType, params, err = mime.ParseMediaType(res.Header.Get("Content-Type")); err != nil {
+				h.mErrRes.Incr(1)
+				h.mErr.Incr(1)
+				h.log.Errorf("Failed to parse media type: %v\n", err)
 				return
 			}
+		}
 
+		var buffer bytes.Buffer
+		if strings.HasPrefix(mediaType, "multipart/") {
+			resMsg = message.New(nil)
+
+			mr := multipart.NewReader(res.Body, params["boundary"])
+			var bufferIndex int64
+			for {
+				var p *multipart.Part
+				if p, err = mr.NextPart(); err != nil {
+					if err == io.EOF {
+						err = nil
+						break
+					}
+					return
+				}
+
+				var bytesRead int64
+				if bytesRead, err = buffer.ReadFrom(p); err != nil {
+					h.mErrRes.Incr(1)
+					h.mErr.Incr(1)
+					h.log.Errorf("Failed to read response: %v\n", err)
+					return
+				}
+
+				index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
+				bufferIndex += bytesRead
+
+				if h.conf.CopyResponseHeaders {
+					meta := resMsg.Get(index).Metadata()
+					for k, values := range p.Header {
+						if len(values) > 0 {
+							meta.Set(strings.ToLower(k), values[0])
+						}
+					}
+				}
+			}
+		} else {
 			var bytesRead int64
-			if bytesRead, err = buffer.ReadFrom(p); err != nil {
+			if bytesRead, err = buffer.ReadFrom(res.Body); err != nil {
 				h.mErrRes.Incr(1)
 				h.mErr.Incr(1)
 				h.log.Errorf("Failed to read response: %v\n", err)
 				return
 			}
-
-			index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
-			bufferIndex += bytesRead
-
-			if h.conf.CopyResponseHeaders {
-				meta := resMsg.Get(index).Metadata()
-				for k, values := range p.Header {
-					if len(values) > 0 {
-						meta.Set(strings.ToLower(k), values[0])
-					}
-				}
+			if bytesRead > 0 {
+				resMsg = message.New([][]byte{buffer.Bytes()[:bytesRead]})
+			} else {
+				resMsg.Append(message.NewPart(nil))
 			}
-		}
-	} else {
-		var bytesRead int64
-		if bytesRead, err = buffer.ReadFrom(res.Body); err != nil {
-			h.mErrRes.Incr(1)
-			h.mErr.Incr(1)
-			h.log.Errorf("Failed to read response: %v\n", err)
-			return
-		}
-		if bytesRead > 0 {
-			resMsg = message.New([][]byte{buffer.Bytes()[:bytesRead]})
 			if h.conf.CopyResponseHeaders {
 				meta := resMsg.Get(0).Metadata()
 				for k, values := range res.Header {
@@ -441,13 +443,15 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 				}
 			}
 		}
+		res.Body.Close()
+	} else {
+		resMsg.Append(message.NewPart(nil))
 	}
 
 	resMsg.Iter(func(i int, p types.Part) error {
 		p.Metadata().Set("http_status_code", strconv.Itoa(res.StatusCode))
 		return nil
 	})
-	res.Body.Close()
 	return
 }
 

@@ -75,6 +75,10 @@ func (h *HTTPClient) ReadWithContext(ctx context.Context) (types.Message, AsyncA
 		return nil, nil, err
 	}
 
+	if msg.Len() == 0 || msg.Len() == 1 && msg.Get(0).IsEmpty() {
+		return nil, nil, types.ErrTimeout
+	}
+
 	return msg, noopAsyncAckFn, nil
 }
 

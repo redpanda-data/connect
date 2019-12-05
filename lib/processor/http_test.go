@@ -149,6 +149,95 @@ func TestHTTPClientBasic(t *testing.T) {
 	}
 }
 
+func TestHTTPClientEmptyResponse(t *testing.T) {
+	i := 0
+	expPayloads := []string{"foo", "bar", "baz"}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqBytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exp, act := expPayloads[i], string(reqBytes); exp != act {
+			t.Errorf("Wrong payload value: %v != %v", act, exp)
+		}
+		i++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
+
+	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := h.ProcessMessage(message.New([][]byte{[]byte("foo")}))
+	if res != nil {
+		t.Error(res.Error())
+	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
+		t.Errorf("Wrong result count: %v != %v", actC, expC)
+	} else if exp, act := "", string(message.GetAllBytes(msgs[0])[0]); act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	} else if exp, act := "200", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
+	}
+
+	msgs, res = h.ProcessMessage(message.New([][]byte{[]byte("bar")}))
+	if res != nil {
+		t.Error(res.Error())
+	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
+		t.Errorf("Wrong result count: %v != %v", actC, expC)
+	} else if exp, act := "", string(message.GetAllBytes(msgs[0])[0]); act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	} else if exp, act := "200", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
+	}
+
+	// Check metadata persists.
+	msg := message.New([][]byte{[]byte("baz")})
+	msg.Get(0).Metadata().Set("foo", "bar")
+	msgs, res = h.ProcessMessage(msg)
+	if res != nil {
+		t.Error(res.Error())
+	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
+		t.Errorf("Wrong result count: %v != %v", actC, expC)
+	} else if exp, act := "", string(message.GetAllBytes(msgs[0])[0]); act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	} else if exp, act := "200", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
+	}
+}
+
+func TestHTTPClientEmpty404Response(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
+
+	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := h.ProcessMessage(message.New([][]byte{[]byte("foo")}))
+	if res != nil {
+		t.Error(res.Error())
+	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
+		t.Errorf("Wrong result count: %v != %v", actC, expC)
+	} else if exp, act := "foo", string(message.GetAllBytes(msgs[0])[0]); act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	} else if exp, act := "404", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
+	} else if !HasFailed(msgs[0].Get(0)) {
+		t.Error("Expected error flag")
+	}
+}
+
 func TestHTTPClientBasicWithMetadata(t *testing.T) {
 	i := 0
 	expPayloads := []string{"foo", "bar", "baz"}
