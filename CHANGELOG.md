@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - New `try` output, which is a drop-in replacement for a `broker` with the `try`
   pattern.
 - Field `successful_on` added to the `http` processor.
+- The `statsd` metrics type now supports Datadog or InfluxDB tagging.
 
 ### Changed
 

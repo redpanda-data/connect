@@ -39,6 +39,7 @@ metrics:
     flush_period: 100ms
     network: udp
     prefix: benthos
+    tag_format: legacy
 tracer:
   type: none
   none: {}

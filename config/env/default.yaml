@@ -875,6 +875,7 @@ metrics:
     flush_period: ${METRICS_STATSD_FLUSH_PERIOD:100ms}
     network: ${METRICS_STATSD_NETWORK:udp}
     prefix: ${METRICS_STATSD_PREFIX:benthos}
+    tag_format: ${METRICS_STATSD_TAG_FORMAT:legacy}
   stdout:
     flush_metrics: ${METRICS_STDOUT_FLUSH_METRICS:false}
     push_interval: ${METRICS_STDOUT_PUSH_INTERVAL}
