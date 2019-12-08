@@ -71,7 +71,7 @@ output:
 The broker pattern determines the way in which messages are allocated to outputs
 and can be chosen from the following:
 
-#### ` + "`fan_out`" + `
+` + "`fan_out`" + `
 
 With the fan out pattern all outputs will be sent every message that passes
 through Benthos in parallel.
@@ -80,20 +80,20 @@ If an output applies back pressure it will block all subsequent messages, and if
 an output fails to send a message it will be retried continuously until
 completion or service shut down.
 
-#### ` + "`fan_out_sequential`" + `
+` + "`fan_out_sequential`" + `
 
 Similar to the fan out pattern except outputs are written to sequentially,
 meaning an output is only written to once the preceding output has confirmed
 receipt of the same message.
 
-#### ` + "`round_robin`" + `
+` + "`round_robin`" + `
 
 With the round robin pattern each message will be assigned a single output
 following their order. If an output applies back pressure it will block all
 subsequent messages. If an output fails to send a message then the message will
 be re-attempted with the next input, and so on.
 
-#### ` + "`greedy`" + `
+` + "`greedy`" + `
 
 The greedy pattern results in higher output throughput at the cost of
 potentially disproportionate message allocations to those outputs. Each message
@@ -102,7 +102,7 @@ messages as soon as they are able to process them. This results in certain
 faster outputs potentially processing more messages at the cost of slower
 outputs.
 
-#### ` + "`try`" + `
+` + "`try`" + `
 
 The try pattern attempts to send each message to only one output, starting from
 the first output on the list. If an output attempt fails then the broker

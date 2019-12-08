@@ -53,7 +53,7 @@ conditions please [read the docs here](../conditions/README.md).
 ### Dead Letter Queues
 
 It's possible to create fallback outputs for when an output target fails using
-a [`broker`](#broker) output with the 'try' pattern.
+a [`try`](#try) output.
 
 ### Contents
 
@@ -93,8 +93,9 @@ a [`broker`](#broker) output with the 'try' pattern.
 34. [`switch`](#switch)
 35. [`sync_response`](#sync_response)
 36. [`tcp`](#tcp)
-37. [`udp`](#udp)
-38. [`websocket`](#websocket)
+37. [`try`](#try)
+38. [`udp`](#udp)
+39. [`websocket`](#websocket)
 
 ## `amqp`
 
@@ -202,7 +203,7 @@ output:
 The broker pattern determines the way in which messages are allocated to outputs
 and can be chosen from the following:
 
-#### `fan_out`
+`fan_out`
 
 With the fan out pattern all outputs will be sent every message that passes
 through Benthos in parallel.
@@ -211,20 +212,20 @@ If an output applies back pressure it will block all subsequent messages, and if
 an output fails to send a message it will be retried continuously until
 completion or service shut down.
 
-#### `fan_out_sequential`
+`fan_out_sequential`
 
 Similar to the fan out pattern except outputs are written to sequentially,
 meaning an output is only written to once the preceding output has confirmed
 receipt of the same message.
 
-#### `round_robin`
+`round_robin`
 
 With the round robin pattern each message will be assigned a single output
 following their order. If an output applies back pressure it will block all
 subsequent messages. If an output fails to send a message then the message will
 be re-attempted with the next input, and so on.
 
-#### `greedy`
+`greedy`
 
 The greedy pattern results in higher output throughput at the cost of
 potentially disproportionate message allocations to those outputs. Each message
@@ -233,7 +234,7 @@ messages as soon as they are able to process them. This results in certain
 faster outputs potentially processing more messages at the cost of slower
 outputs.
 
-#### `try`
+`try`
 
 The try pattern attempts to send each message to only one output, starting from
 the first output on the list. If an output attempt fails then the broker
@@ -1255,6 +1256,41 @@ connecting to a server.
 
 If batched messages are sent the final message of the batch will be followed by
 two line breaks in order to indicate the end of the batch.
+
+## `try`
+
+``` yaml
+type: try
+try: []
+```
+
+Attempts to send each message to only one output, starting from the first output
+on the list. If an output attempt fails then the next output in the list is
+attempted, and so on.
+
+This pattern is useful for triggering events in the case where certain output
+targets have broken. For example, if you had an output type `http_client`
+but wished to reroute messages whenever the endpoint becomes unreachable you
+could use this pattern:
+
+``` yaml
+output:
+  try:
+  - http_client:
+      url: http://foo:4195/post/might/become/unreachable
+      retries: 3
+      retry_period: 1s
+  - http_client:
+      url: http://bar:4196/somewhere/else
+      retries: 3
+      retry_period: 1s
+    processors:
+    - text:
+        operator: prepend
+        value: 'failed to send this message to foo: '
+  - file:
+      path: /usr/local/benthos/everything_failed.jsonl
+```
 
 ## `udp`
 

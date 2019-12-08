@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `try` output, which is a drop-in replacement for a `broker` with the `try`
+  pattern.
+
 ### Changed
 
 - The `http` processor now gracefully handles empty responses.

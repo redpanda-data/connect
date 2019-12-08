@@ -37,7 +37,8 @@ import (
 type Try struct {
 	running int32
 
-	stats metrics.Type
+	stats         metrics.Type
+	outputsPrefix string
 
 	transactions <-chan types.Transaction
 
@@ -51,12 +52,13 @@ type Try struct {
 // NewTry creates a new Try type by providing consumers.
 func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
 	t := &Try{
-		running:      1,
-		stats:        stats,
-		transactions: nil,
-		outputs:      outputs,
-		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		running:       1,
+		stats:         stats,
+		outputsPrefix: "broker.outputs",
+		transactions:  nil,
+		outputs:       outputs,
+		closedChan:    make(chan struct{}),
+		closeChan:     make(chan struct{}),
 	}
 	t.outputTsChans = make([]chan types.Transaction, len(t.outputs))
 	for i := range t.outputTsChans {
@@ -69,6 +71,12 @@ func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
 }
 
 //------------------------------------------------------------------------------
+
+// WithOutputMetricsPrefix changes the prefix used for counter metrics showing
+// errors of an output.
+func (t *Try) WithOutputMetricsPrefix(prefix string) {
+	t.outputsPrefix = prefix
+}
 
 // Consume assigns a new messages channel for the broker to read.
 func (t *Try) Consume(ts <-chan types.Transaction) error {
@@ -104,11 +112,11 @@ func (t *Try) loop() {
 	}()
 
 	var (
-		mMsgsRcvd = t.stats.GetCounter("messages.received")
+		mMsgsRcvd = t.stats.GetCounter("count")
 		mErrs     = []metrics.StatCounter{}
 	)
 	for i := range t.outputs {
-		mErrs = append(mErrs, t.stats.GetCounter(fmt.Sprintf("broker.outputs.%v.failed", i)))
+		mErrs = append(mErrs, t.stats.GetCounter(fmt.Sprintf("%v.%v.failed", t.outputsPrefix, i)))
 	}
 
 	var open bool

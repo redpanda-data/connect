@@ -96,6 +96,7 @@ const (
 	TypeSwitch          = "switch"
 	TypeSyncResponse    = "sync_response"
 	TypeTCP             = "tcp"
+	TypeTry             = "try"
 	TypeUDP             = "udp"
 	TypeWebsocket       = "websocket"
 	TypeZMQ4            = "zmq4"
@@ -143,6 +144,7 @@ type Config struct {
 	Switch          SwitchConfig                 `json:"switch" yaml:"switch"`
 	SyncResponse    struct{}                     `json:"sync_response" yaml:"sync_response"`
 	TCP             writer.TCPConfig             `json:"tcp" yaml:"tcp"`
+	Try             TryConfig                    `json:"try" yaml:"try"`
 	UDP             writer.UDPConfig             `json:"udp" yaml:"udp"`
 	Websocket       writer.WebsocketConfig       `json:"websocket" yaml:"websocket"`
 	ZMQ4            *writer.ZMQ4Config           `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
@@ -190,6 +192,7 @@ func NewConfig() Config {
 		Switch:          NewSwitchConfig(),
 		SyncResponse:    struct{}{},
 		TCP:             writer.NewTCPConfig(),
+		Try:             NewTryConfig(),
 		UDP:             writer.NewUDPConfig(),
 		Websocket:       writer.NewWebsocketConfig(),
 		ZMQ4:            writer.NewZMQ4Config(),
@@ -360,7 +363,7 @@ conditions please [read the docs here](../conditions/README.md).
 ### Dead Letter Queues
 
 It's possible to create fallback outputs for when an output target fails using
-a ` + "[`broker`](#broker)" + ` output with the 'try' pattern.`
+a ` + "[`try`](#try)" + ` output.`
 
 // Descriptions returns a formatted string of collated descriptions of each
 // type.
