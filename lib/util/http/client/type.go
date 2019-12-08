@@ -61,6 +61,7 @@ type Config struct {
 	NumRetries          int               `json:"retries" yaml:"retries"`
 	BackoffOn           []int             `json:"backoff_on" yaml:"backoff_on"`
 	DropOn              []int             `json:"drop_on" yaml:"drop_on"`
+	SuccessfulOn        []int             `json:"successful_on" yaml:"successful_on"`
 	TLS                 tls.Config        `json:"tls" yaml:"tls"`
 	auth.Config         `json:",inline" yaml:",inline"`
 }
@@ -81,6 +82,7 @@ func NewConfig() Config {
 		NumRetries:          3,
 		BackoffOn:           []int{429},
 		DropOn:              []int{},
+		SuccessfulOn:        []int{},
 		TLS:                 tls.NewConfig(),
 		Config:              auth.NewConfig(),
 	}
@@ -94,6 +96,7 @@ type Type struct {
 
 	backoffOn map[int]struct{}
 	dropOn    map[int]struct{}
+	successOn map[int]struct{}
 
 	url     *text.InterpolatedString
 	headers map[string]*text.InterpolatedString
@@ -134,6 +137,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		mgr:       types.NoopMgr(),
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
+		successOn: map[int]struct{}{},
 		headers:   map[string]*text.InterpolatedString{},
 		host:      nil,
 	}
@@ -160,6 +164,9 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	}
 	for _, c := range conf.DropOn {
 		h.dropOn[c] = struct{}{}
+	}
+	for _, c := range conf.SuccessfulOn {
+		h.successOn[c] = struct{}{}
 	}
 
 	for k, v := range conf.Headers {
@@ -472,6 +479,9 @@ func (h *Type) checkStatus(code int) (succeeded bool, retStrat retryStrategy) {
 	}
 	if _, exists := h.backoffOn[code]; exists {
 		return false, retryBackoff
+	}
+	if _, exists := h.successOn[code]; exists {
+		return true, noRetry
 	}
 	if code < 200 || code > 299 {
 		return false, retryLinear

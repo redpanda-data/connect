@@ -66,7 +66,19 @@ response back into the original payload instead of replacing it entirely, you
 can use the ` + "[`process_map`](#process_map)" + ` or
  ` + "[`process_field`](#process_field)" + ` processors.
 
-### Metadata
+### Response Codes
+
+Benthos considers any response code between 200 and 299 inclusive to indicate a
+successful response, you can add more success status codes with the field
+` + "`successful_on`" + `.
+
+When a request returns a response code within the ` + "`backoff_on`" + ` field
+it will be retried after increasing intervals.
+
+When a request returns a response code within the ` + "`drop_on`" + ` field it
+will not be reattempted and is immediately considered a failed request.
+
+### Adding Metadata
 
 If the request returns a response code this processor sets a metadata field
 ` + "`http_status_code`" + ` on all resulting messages.

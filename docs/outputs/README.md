@@ -581,6 +581,7 @@ http_client:
   rate_limit: ""
   retries: 3
   retry_period: 1s
+  successful_on: []
   timeout: 5s
   tls:
     client_certs: []

@@ -164,6 +164,40 @@ func TestHTTPClientDropOn(t *testing.T) {
 	}
 }
 
+func TestHTTPClientSuccessfulOn(t *testing.T) {
+	var reqs int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"foo":"bar"}`))
+		atomic.AddInt32(&reqs, 1)
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.SuccessfulOn = []int{400}
+
+	h, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testMsg := message.New([][]byte{[]byte(`{"bar":"baz"}`)})
+
+	resMsg, err := h.Send(testMsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if exp, act := `{"foo":"bar"}`, string(resMsg.Get(0).Get()); exp != act {
+		t.Errorf("Wrong result returned: %v != %v", act, exp)
+	}
+
+	if exp, act := int32(1), atomic.LoadInt32(&reqs); exp != act {
+		t.Errorf("Wrong total of requests: %v != %v", act, exp)
+	}
+}
+
 func TestHTTPClientSendInterpolate(t *testing.T) {
 	nTestLoops := 1000
 

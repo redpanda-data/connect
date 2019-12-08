@@ -393,6 +393,7 @@ http_client:
     max_buffer: 1e+06
     multipart: false
     reconnect: true
+  successful_on: []
   timeout: 5s
   tls:
     client_certs: []
