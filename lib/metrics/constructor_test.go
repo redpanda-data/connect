@@ -54,6 +54,7 @@ func TestSanitise(t *testing.T) {
 			"prefix":       "benthos",
 			"flush_period": "100ms",
 			"network":      "udp",
+			"tag_format":   "legacy",
 		},
 	}
 
