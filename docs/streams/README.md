@@ -19,6 +19,31 @@ streams in this mode can be done in two ways:
 These two methods can be used in combination, i.e. it's possible to update and
 delete streams that were created with static files.
 
+## Resources
+
+The `resource` section of a Benthos config defines named resources (`caches`,
+`rate_limits`, etc) that can be referenced throughout a stream configuration.
+When running in streams mode these resources are also shared across streams.
+
+An individual stream config should not define any resources. Instead, they
+should be defined in a service-wide config:
+
+```yaml
+resources:
+  caches:
+    foo:
+      memory:
+        ttl: 3600
+```
+
+```sh
+benthos --streams -c ./config.yaml
+```
+
+This means it is not currently possible to modify resources dynamically. If this
+is blocking you from using streams mode then consider
+[raising a ticket](https://github.com/Jeffail/benthos/issues).
+
 ## Metrics
 
 Metrics from all streams are aggregated and exposed via the method specified in
