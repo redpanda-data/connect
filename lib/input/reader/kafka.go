@@ -421,12 +421,16 @@ func (k *Kafka) commit() error {
 		}
 
 		// Attempt to reconnect
-		if newCoord, err := k.client.Coordinator(k.conf.ConsumerGroup); err != nil {
-			k.log.Errorf("Failed to create new coordinator: %v\n", err)
+		if err := k.client.RefreshCoordinator(k.conf.ConsumerGroup); err != nil {
+			k.log.Errorf("Failed to refresh coordinator: %v\n", err)
 		} else {
-			k.coordinator.Close()
-			k.coordinator = newCoord
-		}
+  		if newCoord, err := k.client.Coordinator(k.conf.ConsumerGroup); err != nil {
+  			k.log.Errorf("Failed to acquire new coordinator: %v\n", err)
+  		} else {
+  			k.coordinator.Close()
+  			k.coordinator = newCoord
+  		}
+    }
 	} else {
 		k.offsetCommitted = k.offsetCommit
 		k.offsetLastCommitted = time.Now()
