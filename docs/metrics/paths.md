@@ -44,11 +44,22 @@ prefixed with `pipeline.processor.N`, where N is the index.
 - `pipeline.processor.0.batch.sent`
 - `pipeline.processor.0.error`
 
+Processors that are children of other processors have paths that describe the
+full hierarchy, e.g. `pipeline.processor.0.if.0.1.count`. This can become a
+burden when the hierarchies are large and the paths are long. As an alternative
+it's possible to place processors within the [resources section](#resources)
+which results in flattened named paths.
+
 ## Conditions
 
-- `condition.count`
-- `condition.true`
-- `condition.false`
+Conditions provide `count`, `true` and `false` counters. They are either
+configured as direct children of other components and their path respects that,
+e.g.:
+
+`pipeline.processors.0.condition.count`
+
+Or they are a configured as a [resource](#resources), where their path is
+flattened using their name.
 
 ## Output
 
@@ -60,3 +71,13 @@ prefixed with `pipeline.processor.N`, where N is the index.
 - `output.connection.up`
 - `output.connection.failed`
 - `output.connection.lost`
+
+## Resources
+
+Components within the resources section have a metrics path containing their
+name:
+
+- `resource.cache.foo.latency`
+- `resource.condition.bar.count`
+- `resource.processor.baz.count`
+- `resource.rate_limit.quz.count`
