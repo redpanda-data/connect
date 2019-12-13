@@ -211,10 +211,8 @@ func (k *Kafka) ConnectWithContext(ctx context.Context) error {
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
 	}
-	if k.conf.SASL.Enabled {
-		config.Net.SASL.Enable = true
-		config.Net.SASL.User = k.conf.SASL.User
-		config.Net.SASL.Password = k.conf.SASL.Password
+	if err := k.conf.SASL.ConfigureSaramaSASL(config); err != nil {
+		return err
 	}
 
 	k.client, err = sarama.NewClient(k.addresses, config)

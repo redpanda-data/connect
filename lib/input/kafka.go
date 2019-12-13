@@ -26,6 +26,28 @@ Use the ` + "`batching`" + ` fields to configure an optional
 [batching policy](/docs/configuration/batching#batch-policy). Any other batching
 mechanism will stall with this input due its sequential transaction model.
 
+This input currently provides a single continuous feed of data, and therefore
+by default will only utilise a single processing thread and parallel output.
+Take a look at the
+[pipelines documentation](../pipeline.md#single-consumer-without-buffer) for
+guides on how to work around this.
+
+The field ` + "`max_processing_period`" + ` should be set above the maximum
+estimated time taken to process a message.
+
+The target version by default will be the oldest supported, as it is expected
+that the server will be backwards compatible. In order to support newer client
+features you should increase this version up to the known version of the target
+server.
+
+The ` + "`access_token`" + ` field under the ` + "`sasl`" + ` configuration can
+be used to specify an OAuth bearer token for SASL authentication. For more
+complex use cases, a custom build of Benthos can register a named access token
+provider via ` + "`reader.KafkaRegisterAccessTokenProvider`" + `and use it via
+the` + "`token_provider`" + ` field.
+
+` + tls.Documentation + `
+
 ### Metadata
 
 This input adds the following metadata fields to each message:

@@ -3,6 +3,7 @@ package writer
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -47,9 +48,27 @@ type KafkaConfig struct {
 
 // SASLConfig contains configuration for SASL based authentication.
 type SASLConfig struct {
-	Enabled  bool   `json:"enabled" yaml:"enabled"`
-	User     string `json:"user" yaml:"user"`
-	Password string `json:"password" yaml:"password"`
+	Enabled       bool   `json:"enabled" yaml:"enabled"`
+	User          string `json:"user" yaml:"user"`
+	Password      string `json:"password" yaml:"password"`
+	AccessToken   string `json:"access_token" yaml:"access_token"`
+	TokenProvider string `json:"token_provider" yaml:"token_provider"`
+}
+
+var kafkaAccessTokenProviders = map[string]sarama.AccessTokenProvider{}
+
+// KafkaRegisterAccessTokenProvider registers an access token provider callback
+// under the given name, to be specified in the Kafka SASL configuration.
+func KafkaRegisterAccessTokenProvider(name string, provider sarama.AccessTokenProvider) {
+	kafkaAccessTokenProviders[name] = provider
+}
+
+type staticAccessTokenProvider struct {
+	token string
+}
+
+func (s *staticAccessTokenProvider) Token() (*sarama.AccessToken, error) {
+	return &sarama.AccessToken{Token: s.token}, nil
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -254,10 +273,8 @@ func (k *Kafka) Connect() error {
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
 	}
-	if k.conf.SASL.Enabled {
-		config.Net.SASL.Enable = true
-		config.Net.SASL.User = k.conf.SASL.User
-		config.Net.SASL.Password = k.conf.SASL.Password
+	if err := k.conf.SASL.ConfigureSaramaSASL(config); err != nil {
+		return err
 	}
 
 	if k.conf.AckReplicas {
@@ -362,6 +379,34 @@ func (k *Kafka) CloseAsync() {
 
 // WaitForClose blocks until the Kafka writer has closed down.
 func (k *Kafka) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
+// ConfigureSaramaSASL sets up the Sarama SASL configuration based on the
+// given SASL options.
+func (s SASLConfig) ConfigureSaramaSASL(config *sarama.Config) error {
+	if !s.Enabled {
+		return nil
+	}
+
+	config.Net.SASL.Enable = true
+
+	switch {
+	case s.TokenProvider != "":
+		tokenProvider, ok := kafkaAccessTokenProviders[s.TokenProvider]
+		if !ok {
+			return errors.New("no access token provider available")
+		}
+		config.Net.SASL.Mechanism = "OAUTHBEARER"
+		config.Net.SASL.TokenProvider = tokenProvider
+	case s.AccessToken != "":
+		config.Net.SASL.Mechanism = "OAUTHBEARER"
+		config.Net.SASL.TokenProvider = &staticAccessTokenProvider{s.AccessToken}
+	default:
+		config.Net.SASL.User = s.User
+		config.Net.SASL.Password = s.Password
+	}
+
 	return nil
 }
 
