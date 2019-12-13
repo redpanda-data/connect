@@ -129,8 +129,10 @@ input:
         max_processing_period: ${INPUT_KAFKA_MAX_PROCESSING_PERIOD:100ms}
         partition: ${INPUT_KAFKA_PARTITION:0}
         sasl:
+          access_token: ${INPUT_KAFKA_SASL_ACCESS_TOKEN}
           enabled: ${INPUT_KAFKA_SASL_ENABLED:false}
           password: ${INPUT_KAFKA_SASL_PASSWORD}
+          token_provider: ${INPUT_KAFKA_SASL_TOKEN_PROVIDER}
           user: ${INPUT_KAFKA_SASL_USER}
         start_from_oldest: ${INPUT_KAFKA_START_FROM_OLDEST:true}
         target_version: ${INPUT_KAFKA_TARGET_VERSION:1.0.0}
@@ -157,8 +159,10 @@ input:
         max_batch_count: ${INPUT_KAFKA_BALANCED_MAX_BATCH_COUNT:1}
         max_processing_period: ${INPUT_KAFKA_BALANCED_MAX_PROCESSING_PERIOD:100ms}
         sasl:
+          access_token: ${INPUT_KAFKA_BALANCED_SASL_ACCESS_TOKEN}
           enabled: ${INPUT_KAFKA_BALANCED_SASL_ENABLED:false}
           password: ${INPUT_KAFKA_BALANCED_SASL_PASSWORD}
+          token_provider: ${INPUT_KAFKA_BALANCED_SASL_TOKEN_PROVIDER}
           user: ${INPUT_KAFKA_BALANCED_SASL_USER}
         start_from_oldest: ${INPUT_KAFKA_BALANCED_START_FROM_OLDEST:true}
         target_version: ${INPUT_KAFKA_BALANCED_TARGET_VERSION:1.0.0}
@@ -736,8 +740,10 @@ output:
         partitioner: ${OUTPUT_KAFKA_PARTITIONER:fnv1a_hash}
         round_robin_partitions: ${OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS:false}
         sasl:
+          access_token: ${OUTPUT_KAFKA_SASL_ACCESS_TOKEN}
           enabled: ${OUTPUT_KAFKA_SASL_ENABLED:false}
           password: ${OUTPUT_KAFKA_SASL_PASSWORD}
+          token_provider: ${OUTPUT_KAFKA_SASL_TOKEN_PROVIDER}
           user: ${OUTPUT_KAFKA_SASL_USER}
         target_version: ${OUTPUT_KAFKA_TARGET_VERSION:1.0.0}
         timeout: ${OUTPUT_KAFKA_TIMEOUT:5s}
