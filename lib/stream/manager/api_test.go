@@ -146,10 +146,10 @@ func TestTypeAPIBadMethods(t *testing.T) {
 
 func TestTypeAPIBasicOperations(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
-		OptSetStats(metrics.DudType{}),
-		OptSetManager(types.DudMgr{}),
-		OptSetAPITimeout(time.Millisecond*100),
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.Noop()),
+		OptSetManager(types.NoopMgr()),
+		OptSetAPITimeout(time.Second),
 	)
 
 	r := router(mgr)
@@ -211,6 +211,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
+		t.Logf("Error message: %v", response.Body.String())
 	}
 
 	request = genRequest("GET", "/streams/foo", conf)
@@ -342,10 +343,10 @@ func TestTypeAPIPatch(t *testing.T) {
 
 func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
-		OptSetStats(metrics.DudType{}),
-		OptSetManager(types.DudMgr{}),
-		OptSetAPITimeout(time.Millisecond*100),
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.Noop()),
+		OptSetManager(types.NoopMgr()),
+		OptSetAPITimeout(time.Second),
 	)
 
 	r := router(mgr)
