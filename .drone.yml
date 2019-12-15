@@ -23,7 +23,7 @@ steps:
     GITHUB_TOKEN:
       from_secret: github_token
   commands:
-    - curl -sL https://git.io/goreleaser | bash
+    - bash <(curl -sL https://git.io/goreleaser) --release-notes <(./resources/scripts/release_notes.sh)
   when:
     event: tag
 
