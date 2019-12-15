@@ -1,7 +1,7 @@
 Synchronous Responses
 =====================
 
-In a regular Benthos stream pipeline messages flow in one direction and
+In a regular Benthos pipeline messages will flow in one direction and
 acknowledgements flow in the other:
 
 ```text
@@ -12,7 +12,6 @@ Input (AMQP) -> Processors -> Output (AMQP)
     <------- Acknowledgement ---------
 ```
 
-For most Benthos input and output targets this is the only workflow available.
 However, Benthos has support for a number of protocols where this limitation is
 not the case.
 
@@ -29,7 +28,7 @@ messages at the input level:
 
 Input (HTTP Server) -> Processors -> Output (Sync Response)
 
-           <------- Response Body ---------
+           <--- Response Body (and ack) ---
 ```
 
 ## Routing Processed Messages Back
@@ -80,6 +79,41 @@ NOTE: It's safe to use these mechanisms even when combining multiple inputs with
 a broker, a response payload will always be routed back to the original source
 of the message.
 
+## Returning Partially Processed Messages
+
+It's possible to set the state of a message to be the synchronous response
+before processing is finished by using the
+[`sync_response` processor][sync-res-proc]. This allows you to further mutate
+the payload without changing the response returned to the input:
+
+```yaml
+input:
+  http_server:
+    path: /post
+
+pipeline:
+  processors:
+    - text:
+        operator: append
+        value: " baz"
+    - type: sync_response
+    - text:
+        operator: to_upper
+
+output:
+  kafka:
+    addresses: [ TODO:9092 ]
+    topic: foo_topic
+```
+
+Using the above example, sending a request 'foo bar' to the path `/post` passes
+the message 'FOO BAR BAZ' to the Kafka topic `foo_topic`, and also returns the
+response 'foo bar baz'.
+
+However, it is important to keep in mind that due to Benthos' strict delivery
+guarantees the response message will not actually be returned until the message
+has reached its output destination and an acknowledgement can be made.
+
 ## Routing Output Responses Back
 
 Some outputs, such as [`http_client`][http-client-output], have the potential to
@@ -123,5 +157,6 @@ output:
 ```
 
 [sync-res]: ./outputs/README.md#sync_response
+[sync-res-proc]: ./processors/README.md#sync_response
 [http-client-output]: ./outputs/README.md#http_client
 [output-broker]: ./outputs/README.md#broker

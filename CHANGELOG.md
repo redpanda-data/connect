@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Field `successful_on` added to the `http` processor.
 - The `statsd` metrics type now supports Datadog or InfluxDB tagging.
 - Field `sync_response.headers` added to `http_server` input.
+- New `sync_response` processor.
 
 ### Changed
 
