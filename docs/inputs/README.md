@@ -430,6 +430,9 @@ http_server:
   key_file: ""
   path: /post
   rate_limit: ""
+  sync_response:
+    headers:
+      Content-Type: application/octet-stream
   timeout: 5s
   ws_path: /post/ws
   ws_rate_limit_message: ""
@@ -453,7 +456,10 @@ response payload will be sent as per `ws_rate_limit_message`.
 ### Responses
 
 It's possible to return a response for each message received using
-[synchronous responses](../sync_responses.md).
+[synchronous responses](../sync_responses.md). When doing so you can customise
+headers with the `sync_response` field `headers`, which can also use
+[function interpolation](../config_interpolation.md#metadata) in the value based
+on the response message contents.
 
 ### Endpoints
 

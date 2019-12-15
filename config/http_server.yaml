@@ -12,6 +12,9 @@ input:
     key_file: ""
     path: /post
     rate_limit: ""
+    sync_response:
+      headers:
+        Content-Type: application/octet-stream
     timeout: 5s
     ws_path: /post/ws
     ws_rate_limit_message: ""
