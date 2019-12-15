@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.7.0 - TBD
+
 ### Added
 
 - New `try` output, which is a drop-in replacement for a `broker` with the `try`
