@@ -31,6 +31,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/murmur2"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -46,6 +47,7 @@ type KafkaConfig struct {
 	ClientID             string      `json:"client_id" yaml:"client_id"`
 	Key                  string      `json:"key" yaml:"key"`
 	RoundRobinPartitions bool        `json:"round_robin_partitions" yaml:"round_robin_partitions"`
+	Partitioner          string      `json:"partitioner" yaml:"partitioner"`
 	Topic                string      `json:"topic" yaml:"topic"`
 	Compression          string      `json:"compression" yaml:"compression"`
 	MaxMsgBytes          int         `json:"max_msg_bytes" yaml:"max_msg_bytes"`
@@ -109,6 +111,7 @@ type Kafka struct {
 
 	producer    sarama.SyncProducer
 	compression sarama.CompressionCodec
+	partitioner sarama.PartitionerConstructor
 
 	connMut sync.RWMutex
 }
@@ -120,6 +123,15 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 		return nil, err
 	}
 
+	partitioner, err := strToPartitioner(conf.Partitioner)
+	if err != nil {
+		return nil, err
+	}
+	// for backward compatitility
+	if conf.RoundRobinPartitions {
+		partitioner = sarama.NewRoundRobinPartitioner
+	}
+
 	k := Kafka{
 		log:   log,
 		stats: stats,
@@ -128,6 +140,7 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 		key:         text.NewInterpolatedBytes([]byte(conf.Key)),
 		topic:       text.NewInterpolatedString(conf.Topic),
 		compression: compression,
+		partitioner: partitioner,
 	}
 
 	if tout := conf.Timeout; len(tout) > 0 {
@@ -180,6 +193,33 @@ func strToCompressionCodec(str string) (sarama.CompressionCodec, error) {
 
 //------------------------------------------------------------------------------
 
+func strToPartitioner(str string) (sarama.PartitionerConstructor, error) {
+	var partitioner sarama.PartitionerConstructor
+
+	switch str {
+	case "":
+		// special fallback for backward compatibility ("round_robin_partitions" flag)
+		return nil, nil
+	case "hash":
+		partitioner = sarama.NewHashPartitioner
+	case "murmur2":
+		partitioner = sarama.NewCustomPartitioner(
+			sarama.WithAbsFirst(),
+			sarama.WithCustomHashFunction(murmur2.New32),
+		)
+	case "random":
+		partitioner = sarama.NewRandomPartitioner
+	case "roundrobin":
+		partitioner = sarama.NewRoundRobinPartitioner
+	}
+	if partitioner == nil {
+		return nil, fmt.Errorf("partitioner not recognised: %v", str)
+	}
+	return partitioner, nil
+}
+
+//------------------------------------------------------------------------------
+
 func buildHeaders(version sarama.KafkaVersion, part types.Part) []sarama.RecordHeader {
 	if version.IsAtLeast(sarama.V0_11_0_0) {
 		out := []sarama.RecordHeader{}
@@ -215,6 +255,7 @@ func (k *Kafka) Connect() error {
 	config.Version = k.version
 
 	config.Producer.Compression = k.compression
+	config.Producer.Partitioner = k.partitioner
 	config.Producer.MaxMessageBytes = k.conf.MaxMsgBytes
 	config.Producer.Timeout = k.timeout
 	config.Producer.Return.Errors = true
@@ -227,10 +268,6 @@ func (k *Kafka) Connect() error {
 		config.Net.SASL.Enable = true
 		config.Net.SASL.User = k.conf.SASL.User
 		config.Net.SASL.Password = k.conf.SASL.Password
-	}
-
-	if k.conf.RoundRobinPartitions {
-		config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	}
 
 	if k.conf.AckReplicas {
