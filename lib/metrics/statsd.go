@@ -1,4 +1,4 @@
-// Copyright (c) 2014 Ashley Jeffs
+// Copyright (c) 2019 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +22,10 @@ package metrics
 
 import (
 	"fmt"
-	"io/ioutil"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/quipo/statsd"
+	statsd "github.com/smira/go-statsd"
 )
 
 //------------------------------------------------------------------------------
@@ -35,19 +34,30 @@ func init() {
 	Constructors[TypeStatsd] = TypeSpec{
 		constructor: NewStatsd,
 		description: `
-Push metrics over a TCP or UDP connection using the
-[StatsD protocol](https://github.com/statsd/statsd).`,
+Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
+Supported tagging formats are 'legacy', 'none', 'datadog' and 'influxdb'.
+
+The underlying client library has recently been updated in order to support
+tagging. The tag format 'legacy' is default and causes Benthos to continue using
+the old library in order to preserve backwards compatibility.
+
+The legacy library aggregated timing metrics, so dashboards and alerts may need
+to be updated when migrating to the new library.
+
+The 'network' field is deprecated and scheduled for removal. If you currently
+rely on sending Statsd metrics over TCP and want it to be supported long term
+please [raise an issue](https://github.com/Jeffail/benthos/issues).`,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-type wrappedLogger struct {
-	m log.Modular
+type wrappedDatadogLogger struct {
+	log log.Modular
 }
 
-func (w *wrappedLogger) Println(v ...interface{}) {
-	w.m.Warnf(fmt.Sprintln(v...))
+func (s wrappedDatadogLogger) Printf(msg string, args ...interface{}) {
+	s.log.Warnf(fmt.Sprintf(msg, args...))
 }
 
 //------------------------------------------------------------------------------
@@ -58,6 +68,7 @@ type StatsdConfig struct {
 	Address     string `json:"address" yaml:"address"`
 	FlushPeriod string `json:"flush_period" yaml:"flush_period"`
 	Network     string `json:"network" yaml:"network"`
+	TagFormat   string `json:"tag_format" yaml:"tag_format"`
 }
 
 // NewStatsdConfig creates an StatsdConfig struct with default values.
@@ -67,8 +78,17 @@ func NewStatsdConfig() StatsdConfig {
 		Address:     "localhost:4040",
 		FlushPeriod: "100ms",
 		Network:     "udp",
+		TagFormat:   TagFormatLegacy,
 	}
 }
+
+// Tag formats supported by the statsd metric type.
+const (
+	TagFormatNone     = "none"
+	TagFormatDatadog  = "datadog"
+	TagFormatInfluxDB = "influxdb"
+	TagFormatLegacy   = "legacy"
+)
 
 //------------------------------------------------------------------------------
 
@@ -76,30 +96,31 @@ func NewStatsdConfig() StatsdConfig {
 // this stat are thread safe.
 type StatsdStat struct {
 	path string
-	s    statsd.Statsd
+	s    *statsd.Client
+	tags []statsd.Tag
 }
 
 // Incr increments a metric by an amount.
 func (s *StatsdStat) Incr(count int64) error {
-	s.s.Incr(s.path, count)
+	s.s.Incr(s.path, count, s.tags...)
 	return nil
 }
 
 // Decr decrements a metric by an amount.
 func (s *StatsdStat) Decr(count int64) error {
-	s.s.Decr(s.path, count)
+	s.s.Decr(s.path, count, s.tags...)
 	return nil
 }
 
 // Timing sets a timing metric.
 func (s *StatsdStat) Timing(delta int64) error {
-	s.s.Timing(s.path, delta)
+	s.s.Timing(s.path, delta, s.tags...)
 	return nil
 }
 
 // Set sets a gauge metric.
 func (s *StatsdStat) Set(value int64) error {
-	s.s.Gauge(s.path, value)
+	s.s.Gauge(s.path, value, s.tags...)
 	return nil
 }
 
@@ -109,19 +130,24 @@ func (s *StatsdStat) Set(value int64) error {
 // endpoint.
 type Statsd struct {
 	config Config
-	s      statsd.Statsd
+	s      *statsd.Client
 	log    log.Modular
 }
 
 // NewStatsd creates and returns a new Statsd object.
 func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
+	if config.Statsd.Network != "udp" || config.Statsd.TagFormat == TagFormatLegacy {
+		return NewStatsdLegacy(config, opts...)
+	}
+
 	flushPeriod, err := time.ParseDuration(config.Statsd.FlushPeriod)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse flush period: %s", err)
 	}
+
 	s := &Statsd{
 		config: config,
-		log:    log.New(ioutil.Discard, log.Config{LogLevel: "OFF"}),
+		log:    log.Noop(),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -132,21 +158,25 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 		prefix = prefix + "."
 	}
 
-	statsdclient := statsd.NewStatsdBuffer(
-		flushPeriod,
-		statsd.NewStatsdClient(config.Statsd.Address, prefix),
-	)
-	statsdclient.Logger = &wrappedLogger{m: s.log}
-	if config.Statsd.Network == "udp" {
-		if err := statsdclient.CreateSocket(); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := statsdclient.CreateTCPSocket(); err != nil {
-			return nil, err
-		}
+	statsdOpts := []statsd.Option{
+		statsd.FlushInterval(flushPeriod),
+		statsd.MetricPrefix(prefix),
+		statsd.Logger(wrappedDatadogLogger{log: s.log}),
 	}
-	s.s = statsdclient
+
+	switch config.Statsd.TagFormat {
+	case TagFormatInfluxDB:
+		statsdOpts = append(statsdOpts, statsd.TagStyle(statsd.TagFormatInfluxDB))
+	case TagFormatDatadog:
+		statsdOpts = append(statsdOpts, statsd.TagStyle(statsd.TagFormatDatadog))
+	case TagFormatNone:
+	default:
+		return nil, fmt.Errorf("tag format '%s' was not recognised", config.Statsd.TagFormat)
+	}
+
+	client := statsd.NewClient(config.Statsd.Address, statsdOpts...)
+
+	s.s = client
 	return s, nil
 }
 
@@ -161,14 +191,16 @@ func (h *Statsd) GetCounter(path string) StatCounter {
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
-// discarded.
 func (h *Statsd) GetCounterVec(path string, n []string) StatCounterVec {
-	return fakeCounterVec(func([]string) StatCounter {
-		return &StatsdStat{
-			path: path,
-			s:    h.s,
-		}
-	})
+	return &fCounterVec{
+		f: func(l []string) StatCounter {
+			return &StatsdStat{
+				path: path,
+				s:    h.s,
+				tags: tags(n, l),
+			}
+		},
+	}
 }
 
 // GetTimer returns a stat timer object for a path.
@@ -180,14 +212,16 @@ func (h *Statsd) GetTimer(path string) StatTimer {
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
-// discarded.
 func (h *Statsd) GetTimerVec(path string, n []string) StatTimerVec {
-	return fakeTimerVec(func([]string) StatTimer {
-		return &StatsdStat{
-			path: path,
-			s:    h.s,
-		}
-	})
+	return &fTimerVec{
+		f: func(l []string) StatTimer {
+			return &StatsdStat{
+				path: path,
+				s:    h.s,
+				tags: tags(n, l),
+			}
+		},
+	}
 }
 
 // GetGauge returns a stat gauge object for a path.
@@ -199,14 +233,16 @@ func (h *Statsd) GetGauge(path string) StatGauge {
 }
 
 // GetGaugeVec returns a stat timer object for a path with the labels
-// discarded.
 func (h *Statsd) GetGaugeVec(path string, n []string) StatGaugeVec {
-	return fakeGaugeVec(func([]string) StatGauge {
-		return &StatsdStat{
-			path: path,
-			s:    h.s,
-		}
-	})
+	return &fGaugeVec{
+		f: func(l []string) StatGauge {
+			return &StatsdStat{
+				path: path,
+				s:    h.s,
+				tags: tags(n, l),
+			}
+		},
+	}
 }
 
 // SetLogger sets the logger used to print connection errors.
@@ -219,6 +255,21 @@ func (h *Statsd) SetLogger(log log.Modular) {
 func (h *Statsd) Close() error {
 	h.s.Close()
 	return nil
+}
+
+// tags merges tag labels with their interpolated values
+//
+// no attempt is made to merge labels and values if slices
+// are not the same length
+func tags(labels []string, values []string) []statsd.Tag {
+	if len(labels) != len(values) {
+		return nil
+	}
+	tags := make([]statsd.Tag, len(labels))
+	for i := range labels {
+		tags[i] = statsd.StringTag(labels[i], values[i])
+	}
+	return tags
 }
 
 //------------------------------------------------------------------------------

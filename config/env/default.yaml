@@ -106,6 +106,9 @@ input:
         key_file: ${INPUT_HTTP_SERVER_KEY_FILE}
         path: ${INPUT_HTTP_SERVER_PATH:/post}
         rate_limit: ${INPUT_HTTP_SERVER_RATE_LIMIT}
+        sync_response:
+          headers:
+            Content-Type: ${INPUT_HTTP_SERVER_SYNC_RESPONSE_HEADERS_CONTENT_TYPE:application/octet-stream}
         timeout: ${INPUT_HTTP_SERVER_TIMEOUT:5s}
         ws_path: ${INPUT_HTTP_SERVER_WS_PATH:/post/ws}
         ws_rate_limit_message: ${INPUT_HTTP_SERVER_WS_RATE_LIMIT_MESSAGE}
@@ -875,6 +878,7 @@ metrics:
     flush_period: ${METRICS_STATSD_FLUSH_PERIOD:100ms}
     network: ${METRICS_STATSD_NETWORK:udp}
     prefix: ${METRICS_STATSD_PREFIX:benthos}
+    tag_format: ${METRICS_STATSD_TAG_FORMAT:legacy}
   stdout:
     flush_metrics: ${METRICS_STDOUT_FLUSH_METRICS:false}
     push_interval: ${METRICS_STDOUT_PUSH_INTERVAL}

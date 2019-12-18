@@ -43,6 +43,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	httputil "github.com/Jeffail/benthos/v3/lib/util/http"
+	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/gorilla/websocket"
 	"github.com/opentracing/opentracing-go"
@@ -71,7 +72,10 @@ response payload will be sent as per ` + "`ws_rate_limit_message`" + `.
 ### Responses
 
 It's possible to return a response for each message received using
-[synchronous responses](../sync_responses.md).
+[synchronous responses](../sync_responses.md). When doing so you can customise
+headers with the ` + "`sync_response` field `headers`" + `, which can also use
+[function interpolation](../config_interpolation.md#metadata) in the value based
+on the response message contents.
 
 ### Endpoints
 
@@ -117,17 +121,33 @@ You can access these metadata fields using
 
 //------------------------------------------------------------------------------
 
+// HTTPServerResponseConfig provides config fields for customising the response
+// given from successful requests.
+type HTTPServerResponseConfig struct {
+	Headers map[string]string `json:"headers" yaml:"headers"`
+}
+
+// NewHTTPServerResponseConfig creates a new HTTPServerConfig with default values.
+func NewHTTPServerResponseConfig() HTTPServerResponseConfig {
+	return HTTPServerResponseConfig{
+		Headers: map[string]string{
+			"Content-Type": "application/octet-stream",
+		},
+	}
+}
+
 // HTTPServerConfig contains configuration for the HTTPServer input type.
 type HTTPServerConfig struct {
-	Address            string `json:"address" yaml:"address"`
-	Path               string `json:"path" yaml:"path"`
-	WSPath             string `json:"ws_path" yaml:"ws_path"`
-	WSWelcomeMessage   string `json:"ws_welcome_message" yaml:"ws_welcome_message"`
-	WSRateLimitMessage string `json:"ws_rate_limit_message" yaml:"ws_rate_limit_message"`
-	Timeout            string `json:"timeout" yaml:"timeout"`
-	RateLimit          string `json:"rate_limit" yaml:"rate_limit"`
-	CertFile           string `json:"cert_file" yaml:"cert_file"`
-	KeyFile            string `json:"key_file" yaml:"key_file"`
+	Address            string                   `json:"address" yaml:"address"`
+	Path               string                   `json:"path" yaml:"path"`
+	WSPath             string                   `json:"ws_path" yaml:"ws_path"`
+	WSWelcomeMessage   string                   `json:"ws_welcome_message" yaml:"ws_welcome_message"`
+	WSRateLimitMessage string                   `json:"ws_rate_limit_message" yaml:"ws_rate_limit_message"`
+	Timeout            string                   `json:"timeout" yaml:"timeout"`
+	RateLimit          string                   `json:"rate_limit" yaml:"rate_limit"`
+	CertFile           string                   `json:"cert_file" yaml:"cert_file"`
+	KeyFile            string                   `json:"key_file" yaml:"key_file"`
+	Response           HTTPServerResponseConfig `json:"sync_response" yaml:"sync_response"`
 }
 
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
@@ -142,6 +162,7 @@ func NewHTTPServerConfig() HTTPServerConfig {
 		RateLimit:          "",
 		CertFile:           "",
 		KeyFile:            "",
+		Response:           NewHTTPServerResponseConfig(),
 	}
 }
 
@@ -164,6 +185,8 @@ type HTTPServer struct {
 	mux     *http.ServeMux
 	server  *http.Server
 	timeout time.Duration
+
+	responseHeaders map[string]*text.InterpolatedString
 
 	transactions chan types.Transaction
 
@@ -215,17 +238,18 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	h := HTTPServer{
-		running:      1,
-		conf:         conf,
-		stats:        stats,
-		log:          log,
-		mux:          mux,
-		ratelimit:    ratelimit,
-		server:       server,
-		timeout:      timeout,
-		transactions: make(chan types.Transaction),
-		closeChan:    make(chan struct{}),
-		closedChan:   make(chan struct{}),
+		running:         1,
+		conf:            conf,
+		stats:           stats,
+		log:             log,
+		mux:             mux,
+		ratelimit:       ratelimit,
+		server:          server,
+		timeout:         timeout,
+		responseHeaders: map[string]*text.InterpolatedString{},
+		transactions:    make(chan types.Transaction),
+		closeChan:       make(chan struct{}),
+		closedChan:      make(chan struct{}),
 
 		mCount:         stats.GetCounter("count"),
 		mRateLimited:   stats.GetCounter("rate_limited"),
@@ -240,6 +264,10 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mWSSucc:        stats.GetCounter("ws.send.success"),
 		mAsyncErr:      stats.GetCounter("send.async_error"),
 		mAsyncSucc:     stats.GetCounter("send.async_success"),
+	}
+
+	for k, v := range h.conf.HTTPServer.Response.Headers {
+		h.responseHeaders[k] = text.NewInterpolatedString(v)
 	}
 
 	postHdlr := httputil.GzipHandler(h.postHandler)
@@ -419,27 +447,41 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var parts []types.Part
-	for _, responseMsg := range store.Get() {
-		responseMsg.Iter(func(i int, part types.Part) error {
-			parts = append(parts, part)
+	responseMsg := message.New(nil)
+	for _, resMsg := range store.Get() {
+		resMsg.Iter(func(i int, part types.Part) error {
+			responseMsg.Append(part)
 			return nil
 		})
 	}
-	if plen := len(parts); plen == 1 {
-		payload := parts[0].Get()
-		w.Header().Set("Content-Type", http.DetectContentType(payload))
+	if responseMsg.Len() != 0 {
+		for k, v := range h.responseHeaders {
+			w.Header().Set(k, v.Get(responseMsg))
+		}
+	}
+	if plen := responseMsg.Len(); plen == 1 {
+		payload := responseMsg.Get(0).Get()
+		if len(w.Header().Get("Content-Type")) == 0 {
+			w.Header().Set("Content-Type", http.DetectContentType(payload))
+		}
 		w.Write(payload)
 	} else if plen > 1 {
+		customContentType, customContentTypeExists := h.responseHeaders["Content-Type"]
 		writer := multipart.NewWriter(w)
+
 		var merr error
 		for i := 0; i < plen && merr == nil; i++ {
-			payload := parts[i].Get()
+			payload := responseMsg.Get(i).Get()
+
+			mimeHeader := textproto.MIMEHeader{}
+			if customContentTypeExists {
+				mimeHeader.Set("Content-Type", customContentType.Get(message.Lock(responseMsg, i)))
+			} else {
+				mimeHeader.Set("Content-Type", http.DetectContentType(payload))
+			}
 
 			var part io.Writer
-			if part, merr = writer.CreatePart(textproto.MIMEHeader{
-				"Content-Type": []string{http.DetectContentType(payload)},
-			}); merr == nil {
+			if part, merr = writer.CreatePart(mimeHeader); merr == nil {
 				_, merr = io.Copy(part, bytes.NewReader(payload))
 			}
 		}

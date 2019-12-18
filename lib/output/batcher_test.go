@@ -161,9 +161,9 @@ func TestBatcherBasic(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	case <-doneChan:
+		close(resChan)
+		close(tInChan)
 	}
-	close(resChan)
-	close(tInChan)
 }
 
 func TestBatcherTimed(t *testing.T) {

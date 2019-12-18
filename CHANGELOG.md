@@ -5,11 +5,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.7.0 - TBD
+
 ### Added
 
 - New `try` output, which is a drop-in replacement for a `broker` with the `try`
   pattern.
 - Field `successful_on` added to the `http` processor.
+- The `statsd` metrics type now supports Datadog or InfluxDB tagging.
+- Field `sync_response.headers` added to `http_server` input.
+- New `sync_response` processor.
 
 ### Changed
 

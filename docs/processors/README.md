@@ -105,13 +105,14 @@ In this case the [`for_each`](#for_each) processor can be used.
 46. [`sql`](#sql)
 47. [`subprocess`](#subprocess)
 48. [`switch`](#switch)
-49. [`text`](#text)
-50. [`throttle`](#throttle)
-51. [`try`](#try)
-52. [`unarchive`](#unarchive)
-53. [`while`](#while)
-54. [`workflow`](#workflow)
-55. [`xml`](#xml)
+49. [`sync_response`](#sync_response)
+50. [`text`](#text)
+51. [`throttle`](#throttle)
+52. [`try`](#try)
+53. [`unarchive`](#unarchive)
+54. [`while`](#while)
+55. [`workflow`](#workflow)
+56. [`xml`](#xml)
 
 ## `archive`
 
@@ -1921,6 +1922,23 @@ In order to switch each message of a batch individually use this processor with
 the [`for_each`](#for_each) processor.
 
 You can find a [full list of conditions here](../conditions).
+
+## `sync_response`
+
+``` yaml
+type: sync_response
+sync_response: {}
+```
+
+Adds the payload in its current state as a synchronous response to the input
+source, where it is dealt with according to that specific input type.
+
+For most inputs this mechanism is ignored entirely, in which case the sync
+response is dropped without penalty. It is therefore safe to use this processor
+even when combining input types that might not have support for sync responses.
+An example of an input able to utilise this is the `http_server`.
+
+For more information please read [Synchronous Responses](../sync_responses.md).
 
 ## `text`
 
