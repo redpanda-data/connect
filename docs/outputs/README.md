@@ -675,6 +675,7 @@ kafka:
     max_interval: 1s
   client_id: benthos_kafka_output
   compression: none
+  partitioner: hash
   key: ""
   max_msg_bytes: 1e+06
   max_retries: 0
