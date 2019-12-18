@@ -711,9 +711,13 @@ When sending batched messages these interpolations are performed per message
 part.
 
 By default the paritioner will select partitions based on a hash of the key
-value. If the key is empty then a partition is chosen at random. You can
-alternatively force the partitioner to round-robin partitions with the field
-`round_robin_partitions`.
+value. If the key is empty then a partition is chosen at random. You can select
+the partitioner using `partitioner` field. Possible options are: `hash` (uses
+FNV-1a hash, sarama driver default), `murmur2` (same as java drive default),
+`random` (ignores key altogether) and `roundrobin`.
+You can alternatively force the partitioner to round-robin partitions with
+the field `round_robin_partitions` - seting it to true overrides `partioner`
+field.
 
 ### TLS
 
