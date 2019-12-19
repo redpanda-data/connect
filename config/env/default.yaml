@@ -698,6 +698,7 @@ output:
           max_interval: ${OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL:1s}
         client_id: ${OUTPUT_KAFKA_CLIENT_ID:benthos_kafka_output}
         compression: ${OUTPUT_KAFKA_COMPRESSION:none}
+        partitioner: ${OUTPUT_KAFKA_PARTITIONER:hash}
         key: ${OUTPUT_KAFKA_KEY}
         max_msg_bytes: ${OUTPUT_KAFKA_MAX_MSG_BYTES:1000000}
         max_retries: ${OUTPUT_KAFKA_MAX_RETRIES:0}
