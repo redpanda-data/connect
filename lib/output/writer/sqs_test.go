@@ -51,7 +51,7 @@ func TestSQSHeaderCheck(t *testing.T) {
 		},
 		{
 			k: "foo", v: ".bar",
-			expected: false,
+			expected: true,
 		},
 		{
 			k: "f..oo", v: "bar",
@@ -59,7 +59,7 @@ func TestSQSHeaderCheck(t *testing.T) {
 		},
 		{
 			k: "foo", v: "ba..r",
-			expected: false,
+			expected: true,
 		},
 		{
 			k: "aws.foo", v: "bar",
@@ -75,7 +75,7 @@ func TestSQSHeaderCheck(t *testing.T) {
 		},
 		{
 			k: "foo", v: "bar.",
-			expected: false,
+			expected: true,
 		},
 		{
 			k: "fo$o", v: "bar",
@@ -83,7 +83,7 @@ func TestSQSHeaderCheck(t *testing.T) {
 		},
 		{
 			k: "foo", v: "ba$r",
-			expected: false,
+			expected: true,
 		},
 		{
 			k: "foo_with_10_numbers", v: "bar",
