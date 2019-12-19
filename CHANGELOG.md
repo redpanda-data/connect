@@ -15,10 +15,18 @@ All notable changes to this project will be documented in this file.
 - The `statsd` metrics type now supports Datadog or InfluxDB tagging.
 - Field `sync_response.headers` added to `http_server` input.
 - New `sync_response` processor.
+- Field `partitioner` added to the `kafka` output.
 
 ### Changed
 
 - The `http` processor now gracefully handles empty responses.
+
+### Fixed
+
+- The `kafka` input should now correctly recover from coordinator failures
+  during an offset commit.
+- Attributes permitted by the `sqs` output should now have parity with real
+  limitations.
 
 ## 3.6.1 - 2019-12-05
 
