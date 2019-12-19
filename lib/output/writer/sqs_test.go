@@ -98,11 +98,11 @@ func TestSQSHeaderCheck(t *testing.T) {
 			expected: false,
 		},
 		{
-			k: "iso date", v: "1997-07-16T19:20:30.45+01:00",
+			k: "iso_date", v: "1997-07-16T19:20:30.45+01:00",
 			expected: true,
 		},
 		{
-			k: "has a char in the valid range", v: "#x9 | #xA | #xD | #x20 to #xD7FF | #xE000 to #xFFFD | #x10000 to #x10FFFF - Ѱ",
+			k: "has_a_char_in_the_valid_range", v: "#x9 | #xA | #xD | #x20 to #xD7FF | #xE000 to #xFFFD | #x10000 to #x10FFFF - Ѱ",
 			expected: true,
 		},
 	}
