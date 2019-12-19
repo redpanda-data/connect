@@ -85,6 +85,18 @@ func TestSQSHeaderCheck(t *testing.T) {
 			k: "foo", v: "ba$r",
 			expected: false,
 		},
+		{
+			k: "foo_with_10_numbers", v: "bar",
+			expected: true,
+		},
+		{
+			k: "foo", v: "bar_with_10_numbers and a space",
+			expected: true,
+		},
+		{
+			k: "foo with space", v: "bar",
+			expected: false,
+		},
 	}
 
 	for i, test := range tests {

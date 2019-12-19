@@ -282,6 +282,17 @@ func testSQSSinglePart(t *testing.T, endpoint, url string) {
 	wg := sync.WaitGroup{}
 	wg.Add(N)
 
+	goodMeta := map[string]string{
+		"foo":  "bar",
+		"foo9": "bar9",
+		"foo_": "bar_ and space",
+	}
+	badMeta := map[string]string{
+		"aws.foo":    "nah",
+		"foonaughty": "bar.",
+		"foo$":       "nope",
+	}
+
 	testMsgs := map[string]struct{}{}
 	for i := 0; i < N; i++ {
 		str := fmt.Sprintf("hello world: %v", i)
@@ -290,6 +301,12 @@ func testSQSSinglePart(t *testing.T, endpoint, url string) {
 			msg := message.New([][]byte{
 				[]byte(testStr),
 			})
+			for k, v := range goodMeta {
+				msg.Get(0).Metadata().Set(k, v)
+			}
+			for k, v := range badMeta {
+				msg.Get(0).Metadata().Set(k, v)
+			}
 			if gerr := mOutput.Write(msg); gerr != nil {
 				t.Fatal(gerr)
 			}
@@ -309,9 +326,16 @@ func testSQSSinglePart(t *testing.T, endpoint, url string) {
 				t.Errorf("Unexpected message: %v", act)
 			}
 			delete(testMsgs, act)
-			actM.Get(0).Metadata().Iter(func(k, v string) error {
-				return nil
-			})
+			for k, v := range goodMeta {
+				if exp, act := v, actM.Get(0).Metadata().Get(k); exp != act {
+					t.Errorf("Wrong metadata received for '%v': %v != %v", k, act, exp)
+				}
+			}
+			for k := range badMeta {
+				if act = actM.Get(0).Metadata().Get(k); len(act) > 0 {
+					t.Errorf("Bad metadata propagated: %v", k)
+				}
+			}
 		}
 		if err = mInput.Acknowledge(nil); err != nil {
 			t.Error(err)
