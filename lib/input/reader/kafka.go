@@ -107,6 +107,9 @@ type Kafka struct {
 	conf      KafkaConfig
 	stats     metrics.Type
 	log       log.Modular
+
+	closeOnce  sync.Once
+	closedChan chan struct{}
 }
 
 // NewKafka creates a new Kafka input type.
@@ -114,11 +117,12 @@ func NewKafka(
 	conf KafkaConfig, log log.Modular, stats metrics.Type,
 ) (*Kafka, error) {
 	k := Kafka{
-		offset:  0,
-		conf:    conf,
-		stats:   stats,
-		mRcvErr: stats.GetCounter("recv.error"),
-		log:     log,
+		offset:     0,
+		conf:       conf,
+		stats:      stats,
+		mRcvErr:    stats.GetCounter("recv.error"),
+		log:        log,
+		closedChan: make(chan struct{}),
 	}
 
 	if conf.TLS.Enabled {
@@ -188,6 +192,9 @@ func (k *Kafka) closeClients() {
 		k.client.Close()
 		k.client = nil
 	}
+	k.closeOnce.Do(func() {
+		close(k.closedChan)
+	})
 }
 
 //------------------------------------------------------------------------------
@@ -254,7 +261,12 @@ func (k *Kafka) ConnectWithContext(ctx context.Context) error {
 		offsetBlock := offsetRes.Blocks[k.conf.Topic][k.conf.Partition]
 		if offsetBlock.Err == sarama.ErrNoError {
 			k.offset = offsetBlock.Offset
+		} else {
+			k.log.Errorf("Failed to acquire offset: %v\n", offsetBlock.Err)
 		}
+		k.log.Debugf("Acquired stored offset: %v\n", k.offset)
+	} else {
+		k.log.Errorf("Failed to acquire offset from coordinator: %v\n", err)
 	}
 
 	var partConsumer sarama.PartitionConsumer
@@ -447,6 +459,11 @@ func (k *Kafka) CloseAsync() {
 
 // WaitForClose blocks until the Kafka input has closed down.
 func (k *Kafka) WaitForClose(timeout time.Duration) error {
+	select {
+	case <-k.closedChan:
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	}
 	return nil
 }
 

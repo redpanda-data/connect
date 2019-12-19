@@ -70,6 +70,9 @@ type KafkaCG struct {
 	stats metrics.Type
 	log   log.Modular
 	mgr   types.Manager
+
+	closeOnce  sync.Once
+	closedChan chan struct{}
 }
 
 // NewKafkaCG creates a new KafkaCG input type.
@@ -83,6 +86,7 @@ func NewKafkaCG(
 		log:           log,
 		mgr:           mgr,
 		mRebalanced:   stats.GetCounter("rebalanced"),
+		closedChan:    make(chan struct{}),
 	}
 	if conf.TLS.Enabled {
 		var err error
@@ -278,6 +282,10 @@ func (k *KafkaCG) closeGroup() {
 		k.log.Debugln("Closing group consumers.")
 		cancelFn()
 	}
+
+	k.closeOnce.Do(func() {
+		close(k.closedChan)
+	})
 }
 
 //------------------------------------------------------------------------------
@@ -419,6 +427,11 @@ func (k *KafkaCG) CloseAsync() {
 
 // WaitForClose blocks until the KafkaCG input has closed down.
 func (k *KafkaCG) WaitForClose(timeout time.Duration) error {
+	select {
+	case <-k.closedChan:
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	}
 	return nil
 }
 
