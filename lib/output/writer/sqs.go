@@ -148,8 +148,8 @@ type sqsAttributes struct {
 	dedupeID *string
 }
 
-var sqsAttributeKeyInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(^aws\.)|(^amazon\.)|(\.$)|([^a-z_\-\.]+)`)
-var sqsAttributeValueInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(\.$)|([^a-z_\-\.]+)`)
+var sqsAttributeKeyInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(^aws\.)|(^amazon\.)|(\.$)|([^a-z0-9_\-\.]+)`)
+var sqsAttributeValueInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(\.$)|([^a-z0-9\s_\-\.]+)`)
 
 func isValidSQSAttribute(k, v string) bool {
 	return len(sqsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0 &&
