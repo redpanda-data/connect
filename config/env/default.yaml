@@ -698,10 +698,10 @@ output:
           max_interval: ${OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL:1s}
         client_id: ${OUTPUT_KAFKA_CLIENT_ID:benthos_kafka_output}
         compression: ${OUTPUT_KAFKA_COMPRESSION:none}
-        partitioner: ${OUTPUT_KAFKA_PARTITIONER:hash}
         key: ${OUTPUT_KAFKA_KEY}
         max_msg_bytes: ${OUTPUT_KAFKA_MAX_MSG_BYTES:1000000}
         max_retries: ${OUTPUT_KAFKA_MAX_RETRIES:0}
+        partitioner: ${OUTPUT_KAFKA_PARTITIONER:fnv1a_hash}
         round_robin_partitions: ${OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS:false}
         sasl:
           enabled: ${OUTPUT_KAFKA_SASL_ENABLED:false}

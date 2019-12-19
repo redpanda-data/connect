@@ -56,6 +56,7 @@ output:
     key: ""
     max_msg_bytes: 1e+06
     max_retries: 0
+    partitioner: fnv1a_hash
     round_robin_partitions: false
     sasl:
       enabled: false

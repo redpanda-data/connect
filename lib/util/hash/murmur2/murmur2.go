@@ -27,12 +27,14 @@ type murmur2 struct {
 	cached *uint32
 }
 
+// New32 creates a murmur 2 based hash.Hash32 implementation.
 func New32() hash.Hash32 {
 	return &murmur2{
 		data: make([]byte, 0),
 	}
 }
 
+// Write a slice of data to the hasher.
 func (mur *murmur2) Write(p []byte) (n int, err error) {
 	mur.data = append(mur.data, p...)
 	mur.cached = nil

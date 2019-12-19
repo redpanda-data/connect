@@ -675,10 +675,10 @@ kafka:
     max_interval: 1s
   client_id: benthos_kafka_output
   compression: none
-  partitioner: hash
   key: ""
   max_msg_bytes: 1e+06
   max_retries: 0
+  partitioner: fnv1a_hash
   round_robin_partitions: false
   sasl:
     enabled: false
@@ -694,30 +694,25 @@ kafka:
   topic: benthos_stream
 ```
 
-The kafka output type writes messages to a kafka broker, these messages are
-acknowledged, which is propagated back to the input. The config field
+The kafka output type writes a batch of messages to Kafka brokers and waits for
+acknowledgement before propagating it back to the input. The config field
 `ack_replicas` determines whether we wait for acknowledgement from all
 replicas or just a single broker.
 
 It is possible to specify a compression codec to use out of the following
-options: none, snappy, lz4 and gzip.
-
-If the field `key` is not empty then each message will be given its
-contents as a key.
+options: `none`, `snappy`, `lz4` and `gzip`.
 
 Both the `key` and `topic` fields can be dynamically set using
 function interpolations described [here](../config_interpolation.md#functions).
 When sending batched messages these interpolations are performed per message
 part.
 
-By default the paritioner will select partitions based on a hash of the key
-value. If the key is empty then a partition is chosen at random. You can select
-the partitioner using `partitioner` field. Possible options are: `hash` (uses
-FNV-1a hash, sarama driver default), `murmur2` (same as java drive default),
-`random` (ignores key altogether) and `roundrobin`.
-You can alternatively force the partitioner to round-robin partitions with
-the field `round_robin_partitions` - seting it to true overrides `partioner`
-field.
+The `partitioner` field determines how messages are delegated to a
+partition. Options are `fnv1a_hash`, `murmur2_hash`, `random` and
+`round_robin`. When a hash partitioner is selected but a message key
+is empty then a random partition is chosen.
+
+The field `round_robin_partitions` is deprecated.
 
 ### TLS
 

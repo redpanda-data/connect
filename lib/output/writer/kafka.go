@@ -31,7 +31,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/murmur2"
+	"github.com/Jeffail/benthos/v3/lib/util/hash/murmur2"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -77,6 +77,7 @@ func NewKafkaConfig() KafkaConfig {
 		ClientID:             "benthos_kafka_output",
 		Key:                  "",
 		RoundRobinPartitions: false,
+		Partitioner:          "fnv1a_hash",
 		Topic:                "benthos_stream",
 		Compression:          "none",
 		MaxMsgBytes:          1000000,
@@ -123,13 +124,14 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 		return nil, err
 	}
 
+	// for backward compatitility
+	if conf.RoundRobinPartitions {
+		conf.Partitioner = "round_robin"
+		log.Warnln("The field 'round_robin_partitions' is deprecated, please use the 'partitioner' field (set to 'round_robin') instead.")
+	}
 	partitioner, err := strToPartitioner(conf.Partitioner)
 	if err != nil {
 		return nil, err
-	}
-	// for backward compatitility
-	if conf.RoundRobinPartitions {
-		partitioner = sarama.NewRoundRobinPartitioner
 	}
 
 	k := Kafka{
@@ -194,28 +196,21 @@ func strToCompressionCodec(str string) (sarama.CompressionCodec, error) {
 //------------------------------------------------------------------------------
 
 func strToPartitioner(str string) (sarama.PartitionerConstructor, error) {
-	var partitioner sarama.PartitionerConstructor
-
 	switch str {
-	case "":
-		// special fallback for backward compatibility ("round_robin_partitions" flag)
-		return nil, nil
-	case "hash":
-		partitioner = sarama.NewHashPartitioner
-	case "murmur2":
-		partitioner = sarama.NewCustomPartitioner(
+	case "fnv1a_hash":
+		return sarama.NewHashPartitioner, nil
+	case "murmur2_hash":
+		return sarama.NewCustomPartitioner(
 			sarama.WithAbsFirst(),
 			sarama.WithCustomHashFunction(murmur2.New32),
-		)
+		), nil
 	case "random":
-		partitioner = sarama.NewRandomPartitioner
-	case "roundrobin":
-		partitioner = sarama.NewRoundRobinPartitioner
+		return sarama.NewRandomPartitioner, nil
+	case "round_robin":
+		return sarama.NewRoundRobinPartitioner, nil
+	default:
 	}
-	if partitioner == nil {
-		return nil, fmt.Errorf("partitioner not recognised: %v", str)
-	}
-	return partitioner, nil
+	return nil, fmt.Errorf("partitioner not recognised: %v", str)
 }
 
 //------------------------------------------------------------------------------
