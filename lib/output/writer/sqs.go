@@ -149,11 +149,9 @@ type sqsAttributes struct {
 }
 
 var sqsAttributeKeyInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(^aws\.)|(^amazon\.)|(\.$)|([^a-z0-9_\-\.]+)`)
-var sqsAttributeValueInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(\.$)|([^a-z0-9\s_\-\.]+)`)
 
 func isValidSQSAttribute(k, v string) bool {
-	return len(sqsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0 &&
-		len(sqsAttributeValueInvalidCharRegexp.FindStringIndex(strings.ToLower(v))) == 0
+	return len(sqsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
 func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
