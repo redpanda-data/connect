@@ -288,9 +288,8 @@ func testSQSSinglePart(t *testing.T, endpoint, url string) {
 		"foo_": "bar_ and space",
 	}
 	badMeta := map[string]string{
-		"aws.foo":    "nah",
-		"foonaughty": "bar.",
-		"foo$":       "nope",
+		"aws.foo": "nah",
+		"foo$":    "nope",
 	}
 
 	testMsgs := map[string]struct{}{}
