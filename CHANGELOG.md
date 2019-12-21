@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New field `max_in_flight` added to `http_client` output.
+
 ## 3.7.0 - 2019-12-21
 
 ### Added

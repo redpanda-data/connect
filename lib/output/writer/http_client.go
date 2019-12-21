@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -36,6 +37,7 @@ import (
 // type.
 type HTTPClientConfig struct {
 	client.Config     `json:",inline" yaml:",inline"`
+	MaxInFlight       int  `json:"max_in_flight" yaml:"max_in_flight"`
 	PropagateResponse bool `json:"propagate_response" yaml:"propagate_response"`
 }
 
@@ -43,6 +45,7 @@ type HTTPClientConfig struct {
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
 		Config:            client.NewConfig(),
+		MaxInFlight:       1, // TODO: Increase this default?
 		PropagateResponse: false,
 	}
 }
@@ -89,15 +92,26 @@ func NewHTTPClient(
 
 //------------------------------------------------------------------------------
 
-// Connect does nothing.
-func (h *HTTPClient) Connect() error {
+// ConnectWithContext does nothing.
+func (h *HTTPClient) ConnectWithContext(ctx context.Context) error {
 	h.log.Infof("Sending messages via HTTP requests to: %s\n", h.conf.URL)
 	return nil
+}
+
+// Connect does nothing.
+func (h *HTTPClient) Connect() error {
+	return h.ConnectWithContext(context.Background())
 }
 
 // Write attempts to send a message to an HTTP server, this attempt may include
 // retries, and if all retries fail an error is returned.
 func (h *HTTPClient) Write(msg types.Message) error {
+	return h.WriteWithContext(context.Background(), msg)
+}
+
+// WriteWithContext attempts to send a message to an HTTP server, this attempt
+// may include retries, and if all retries fail an error is returned.
+func (h *HTTPClient) WriteWithContext(ctx context.Context, msg types.Message) error {
 	resultMsg, err := h.client.Send(msg)
 	if err == nil && h.conf.PropagateResponse {
 		msgCopy := msg.Copy()

@@ -68,7 +68,10 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter("http_client", h, log, stats)
+	if conf.HTTPClient.MaxInFlight == 1 {
+		return NewWriter(TypeHTTPClient, h, log, stats)
+	}
+	return NewAsyncWriter(TypeHTTPClient, conf.HTTPClient.MaxInFlight, h, log, stats)
 }
 
 //------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ashley Jeffs
+// Copyright (c) 2019 Ashley Jeffs
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,6 @@ package output
 import (
 	"context"
 	"errors"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -36,68 +35,40 @@ import (
 
 //------------------------------------------------------------------------------
 
-type mockWriter struct {
-	resToSnd error
-	msgRcvd  types.Message
-
+type mockAsyncWriter struct {
 	connChan  chan error
 	writeChan chan error
 }
 
-func newMockWriter() *mockWriter {
-	return &mockWriter{
+func newAsyncMockWriter() *mockAsyncWriter {
+	return &mockAsyncWriter{
 		connChan:  make(chan error),
 		writeChan: make(chan error),
 	}
 }
 
-func (w *mockWriter) ConnectWithContext(ctx context.Context) error {
-	return w.Connect()
-}
-func (w *mockWriter) Connect() error {
+func (w *mockAsyncWriter) ConnectWithContext(ctx context.Context) error {
 	return <-w.connChan
 }
-func (w *mockWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
-	return w.Write(msg)
-}
-func (w *mockWriter) Write(msg types.Message) error {
-	w.msgRcvd = msg
+func (w *mockAsyncWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
 	return <-w.writeChan
 }
-func (w *mockWriter) CloseAsync() {}
-func (w *mockWriter) WaitForClose(time.Duration) error {
+func (w *mockAsyncWriter) CloseAsync() {}
+func (w *mockAsyncWriter) WaitForClose(time.Duration) error {
 	return nil
 }
 
 //------------------------------------------------------------------------------
 
-type writerCantConnect struct{}
-
-func (w writerCantConnect) ConnectWithContext(ctx context.Context) error {
-	return w.Connect()
-}
-func (w writerCantConnect) Connect() error { return types.ErrNotConnected }
-func (w writerCantConnect) WriteWithContext(ctx context.Context, msg types.Message) error {
-	return w.Write(msg)
-}
-func (w writerCantConnect) Write(msg types.Message) error {
-	return types.ErrNotConnected
-}
-func (w writerCantConnect) CloseAsync() {}
-func (w writerCantConnect) WaitForClose(time.Duration) error {
-	return nil
-}
-
-func TestWriterCantConnect(t *testing.T) {
+func TestAsyncWriterCantConnect(t *testing.T) {
 	t.Parallel()
 
-	w, err := NewWriter(
-		"foo", writerCantConnect{},
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+	w, err := NewAsyncWriter(
+		"foo", 1, writerCantConnect{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	if err = w.Consume(make(chan types.Transaction)); err != nil {
@@ -116,36 +87,14 @@ func TestWriterCantConnect(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
-type writerCantSend struct {
-	connected int
-}
-
-func (w *writerCantSend) ConnectWithContext(ctx context.Context) error {
-	return w.Connect()
-}
-func (w *writerCantSend) Connect() error {
-	w.connected++
-	return nil
-}
-func (w *writerCantSend) WriteWithContext(ctx context.Context, msg types.Message) error {
-	return w.Write(msg)
-}
-func (w *writerCantSend) Write(msg types.Message) error {
-	return types.ErrNotConnected
-}
-func (w *writerCantSend) CloseAsync() {}
-func (w *writerCantSend) WaitForClose(time.Duration) error {
-	return nil
-}
-
-func TestWriterCantSendClosed(t *testing.T) {
+func TestAsyncWriterCantSendClosed(t *testing.T) {
 	t.Parallel()
 
 	writerImpl := &writerCantSend{}
 
-	w, err := NewWriter(
-		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+	w, err := NewAsyncWriter(
+		"foo", 1, writerImpl,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -164,14 +113,14 @@ func TestWriterCantSendClosed(t *testing.T) {
 	}
 }
 
-func TestWriterCantSendClosedChan(t *testing.T) {
+func TestAsyncWriterCantSendClosedChan(t *testing.T) {
 	t.Parallel()
 
 	writerImpl := &writerCantSend{}
 
-	w, err := NewWriter(
-		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+	w, err := NewAsyncWriter(
+		"foo", 1, writerImpl,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -192,14 +141,14 @@ func TestWriterCantSendClosedChan(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
-func TestWriterStartClosed(t *testing.T) {
+func TestAsyncWriterStartClosed(t *testing.T) {
 	t.Parallel()
 
 	writerImpl := newMockWriter()
 
-	w, err := NewWriter(
-		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+	w, err := NewAsyncWriter(
+		"foo", 1, writerImpl,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -223,14 +172,14 @@ func TestWriterStartClosed(t *testing.T) {
 	}
 }
 
-func TestWriterClosesOnReconn(t *testing.T) {
+func TestAsyncWriterClosesOnReconn(t *testing.T) {
 	t.Parallel()
 
 	writerImpl := newMockWriter()
 
-	w, err := NewWriter(
-		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+	w, err := NewAsyncWriter(
+		"foo", 1, writerImpl,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -274,14 +223,14 @@ func TestWriterClosesOnReconn(t *testing.T) {
 	}
 }
 
-func TestWriterClosesOnResend(t *testing.T) {
+func TestAsyncWriterClosesOnResend(t *testing.T) {
 	t.Parallel()
 
 	writerImpl := newMockWriter()
 
-	w, err := NewWriter(
-		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+	w, err := NewAsyncWriter(
+		"foo", 1, writerImpl,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -332,14 +281,14 @@ func TestWriterClosesOnResend(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
-func TestWriterCanReconnect(t *testing.T) {
+func TestAsyncWriterCanReconnect(t *testing.T) {
 	t.Parallel()
 
 	writerImpl := newMockWriter()
 
-	w, err := NewWriter(
-		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+	w, err := NewAsyncWriter(
+		"foo", 1, writerImpl,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -400,14 +349,114 @@ func TestWriterCanReconnect(t *testing.T) {
 	}
 }
 
-func TestWriterCantReconnect(t *testing.T) {
+func TestAsyncWriterCanReconnectAsync(t *testing.T) {
+	t.Parallel()
+
+	writerImpl := newAsyncMockWriter()
+
+	w, err := NewAsyncWriter(
+		"foo", 2, writerImpl,
+		log.Noop(), metrics.Noop(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+	resChan2 := make(chan types.Response)
+
+	if err = w.Consume(msgChan); err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case writerImpl.connChan <- nil:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	go func() {
+		select {
+		case writerImpl.writeChan <- types.ErrNotConnected:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case writerImpl.writeChan <- types.ErrNotConnected:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case writerImpl.connChan <- nil:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		go func() {
+			select {
+			case writerImpl.connChan <- nil:
+			case <-time.After(time.Second):
+			}
+		}()
+		select {
+		case writerImpl.writeChan <- nil:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+		select {
+		case writerImpl.writeChan <- nil:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out")
+		}
+	}()
+
+	select {
+	case msgChan <- types.NewTransaction(message.New(nil), resChan):
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+	select {
+	case msgChan <- types.NewTransaction(message.New(nil), resChan2):
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+	select {
+	case res, open := <-resChan:
+		if !open {
+			t.Error("Res chan closed")
+		}
+		if err := res.Error(); err != nil {
+			t.Error(err)
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+	select {
+	case res, open := <-resChan2:
+		if !open {
+			t.Error("Res chan closed")
+		}
+		if err := res.Error(); err != nil {
+			t.Error(err)
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	w.CloseAsync()
+	if err = w.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestAsyncWriterCantReconnect(t *testing.T) {
 	t.Parallel()
 
 	writerImpl := newMockWriter()
 
-	w, err := NewWriter(
-		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+	w, err := NewAsyncWriter(
+		"foo", 1, writerImpl,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -461,7 +510,7 @@ func TestWriterCantReconnect(t *testing.T) {
 	}
 }
 
-func TestWriterHappyPath(t *testing.T) {
+func TestAsyncWriterHappyPath(t *testing.T) {
 	t.Parallel()
 
 	writerImpl := newMockWriter()
@@ -471,9 +520,9 @@ func TestWriterHappyPath(t *testing.T) {
 
 	writerImpl.resToSnd = expErr
 
-	w, err := NewWriter(
-		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+	w, err := NewAsyncWriter(
+		"foo", 1, writerImpl,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -529,7 +578,7 @@ func TestWriterHappyPath(t *testing.T) {
 	}
 }
 
-func TestWriterSadPath(t *testing.T) {
+func TestAsyncWriterSadPath(t *testing.T) {
 	t.Parallel()
 
 	writerImpl := newMockWriter()
@@ -539,9 +588,9 @@ func TestWriterSadPath(t *testing.T) {
 
 	writerImpl.resToSnd = expErr
 
-	w, err := NewWriter(
-		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+	w, err := NewAsyncWriter(
+		"foo", 1, writerImpl,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
