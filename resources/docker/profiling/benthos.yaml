@@ -3,20 +3,16 @@ http:
   debug_endpoints: true
 
 input:
-  type: broker
   broker:
     copies: 1
     inputs:
     - type: http_server
-    - type: read_until
-      read_until:
+    - read_until:
         input:
-          type: file
           file:
             path: /sample_data.txt
         restart_input: true
         condition:
-          type: static
           static: false
 
 buffer:
@@ -28,7 +24,6 @@ pipeline:
   - type: compress
 
 output:
-  type: broker
   broker:
     pattern: greedy
     copies: 1
@@ -40,10 +35,9 @@ logger:
   level: INFO
 
 metrics:
-  type: prometheus
-  prefix: benthos
+  prometheus:
+    prefix: benthos
 
 tracer:
-  type: jaeger
   jaeger:
     agent_address: 'jaeger:6831'

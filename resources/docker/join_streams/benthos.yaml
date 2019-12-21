@@ -3,11 +3,9 @@ http:
   debug_endpoints: true
 
 input:
-  type: broker
   broker:
     inputs:
-    - type: kafka
-      kafka:
+    - kafka:
         addresses:
         - kafka:9092
         topic: data_source
@@ -18,8 +16,7 @@ input:
       kafka:
         topic: retry_queue
       processors:
-      - type: awk
-        awk:
+      - awk:
           codec: json
           program: |
             {
@@ -35,28 +32,23 @@ input:
               metadata_set("retry_attempts", retryAttempts)
               metadata_set("delay_for_s", delay_for)
             }
-      - type: sleep
-        sleep:
+      - sleep:
           duration: "${!metadata:delay_for_s}s"
 
 pipeline:
   processors:
-  - type: metadata
-    metadata:
+  - metadata:
       operator: set
       key: output_topic
       value: output_sink
 
-  - type: process_dag
-    process_dag:
+  - process_dag:
       articles:
         conditions:
-        - type: jmespath
-          jmespath:
+        - jmespath:
             query: "type == 'article'"
         processors:
-        - type: cache
-          cache:
+        - cache:
             cache: article_cache
             operator: set
             key: "${!json_field:article.id}"
@@ -64,12 +56,10 @@ pipeline:
 
       likes:
         conditions:
-        - type: jmespath
-          jmespath:
+        - jmespath:
             query: "type == 'like'"
         processors:
-        - type: cache
-          cache:
+        - cache:
             cache: article_cache
             operator: get
             key: "${!json_field:like.article_id}"
@@ -78,40 +68,31 @@ pipeline:
 
   # This will catch any of the previous cache operations failing and allows us
   # to redirect these failed documents to a retry queue topic.
-  - type: catch
-    catch:
-    - type: metadata
-      metadata:
+  - catch:
+    - metadata:
         operator: set
         key: output_topic
         value: retry_queue
-    - type: metadata
-      metadata:
+    - metadata:
         operator: set
         key: last_attempt_at
         value: "${!timestamp_unix}"
-    - type: conditional
-      conditional:
+    - conditional:
         condition:
-          type: not
           not:
-            type: metadata
             metadata:
               operator: greater_than
               key: retry_attempts
               arg: 3
         else_processors:
-        - type: log
-          log:
+        - log:
             level: ERROR
             message: "Dropping message '${!content}' due to running out of retry attempts"
-        - type: filter
-          filter:
+        - filter:
             type: static
             static: false
 
 output:
-  type: kafka
   kafka:
     addresses:
     - kafka:9092
@@ -124,7 +105,6 @@ resources:
       type: memory
 
 tracer:
-  type: jaeger
   jaeger:
     agent_address: 'jaeger:6831'
 
@@ -133,5 +113,5 @@ logger:
   level: INFO
 
 metrics:
-  type: prometheus
-  prefix: benthos
+  prometheus:
+    prefix: benthos

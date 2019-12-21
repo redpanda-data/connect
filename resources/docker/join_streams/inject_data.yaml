@@ -2,34 +2,27 @@ http:
   address: 0.0.0.0:4197
 
 input:
-  type: read_until
   read_until:
     input:
-      type: files
       files:
         path: ./sample_data.txt
     restart_input: true
     condition:
-      type: static
       static: false
   processors:
-  - type: throttle
-    throttle:
+  - throttle:
       period: 3s
 
 pipeline:
   processors:
-  - type: text
-    text:
+  - text:
       operator: replace
       arg: ITERATION
       value: ${!count:iterations}
-  - type: unarchive
-    unarchive:
+  - unarchive:
       format: lines
 
 output:
-  type: kafka
   kafka:
     addresses:
     - localhost:9092

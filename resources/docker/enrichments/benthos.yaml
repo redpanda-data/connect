@@ -92,10 +92,9 @@ logger:
   level: INFO
 
 metrics:
-  type: prometheus
-  prefix: benthos
+  prometheus:
+    prefix: benthos
 
 tracer:
-  type: jaeger
   jaeger:
     agent_address: 'jaeger:6831'

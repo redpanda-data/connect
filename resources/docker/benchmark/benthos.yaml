@@ -39,5 +39,5 @@ logger:
   level: INFO
 
 metrics:
-  type: prometheus
-  prefix: benthos
+  prometheus:
+    prefix: benthos
