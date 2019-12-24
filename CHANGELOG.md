@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New field `max_in_flight` added to `http_client` and `amqp_0_9` outputs.
 - More TRACE level logs added throughout the pipeline.
+- SASL/SCRAM authentication mechanism added to all Kafka components. 
 
 ## 3.7.0 - 2019-12-21
 

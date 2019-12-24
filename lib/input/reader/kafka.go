@@ -24,6 +24,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+
 	"strconv"
 	"strings"
 	"sync"
@@ -34,7 +35,10 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+
+	kf "github.com/Jeffail/benthos/v3/lib/util/input/kafka"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
+
 	"github.com/Shopify/sarama"
 )
 
@@ -228,13 +232,29 @@ func (k *Kafka) ConnectWithContext(ctx context.Context) error {
 	config.Consumer.MaxProcessingTime = k.maxProcPeriod
 	config.ChannelBufferSize = k.conf.FetchBufferCap
 	config.Net.TLS.Enable = k.conf.TLS.Enabled
+
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
 	}
+
 	if k.conf.SASL.Enabled {
+		config.Net.TLS.Enable = true
 		config.Net.SASL.Enable = true
+		config.Net.SASL.Handshake = true
+
 		config.Net.SASL.User = k.conf.SASL.User
 		config.Net.SASL.Password = k.conf.SASL.Password
+
+		if k.conf.SASL.Mechanism != "" {
+			generatorFunc, err := kf.SASLSCRAMClientGeneratorFunc(k.conf.SASL.Mechanism)
+
+			if err != nil {
+				return err
+			}
+
+			config.Net.SASL.Mechanism = sarama.SASLMechanism(k.conf.SASL.Mechanism)
+			config.Net.SASL.SCRAMClientGeneratorFunc = generatorFunc
+		}
 	}
 
 	k.client, err = sarama.NewClient(k.addresses, config)

@@ -543,6 +543,7 @@ kafka:
     enabled: false
     password: ""
     user: ""
+    mechanism: ""
   start_from_oldest: true
   target_version: 1.0.0
   tls:
@@ -644,6 +645,7 @@ kafka_balanced:
     enabled: false
     password: ""
     user: ""
+    mechanism: ""
   start_from_oldest: true
   target_version: 1.0.0
   tls:

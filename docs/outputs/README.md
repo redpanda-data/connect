@@ -687,6 +687,7 @@ kafka:
     enabled: false
     password: ""
     user: ""
+    mechanism: ""
   target_version: 1.0.0
   timeout: 5s
   tls:

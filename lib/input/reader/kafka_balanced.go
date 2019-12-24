@@ -36,7 +36,10 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+
+	kf "github.com/Jeffail/benthos/v3/lib/util/input/kafka"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
+
 	"github.com/Shopify/sarama"
 )
 
@@ -80,9 +83,10 @@ type KafkaBalancedConfig struct {
 
 // SASLConfig contains configuration for SASL based authentication.
 type SASLConfig struct {
-	Enabled  bool   `json:"enabled" yaml:"enabled"`
-	User     string `json:"user" yaml:"user"`
-	Password string `json:"password" yaml:"password"`
+	Enabled   bool   `json:"enabled" yaml:"enabled"`
+	User      string `json:"user" yaml:"user"`
+	Password  string `json:"password" yaml:"password"`
+	Mechanism string `json:"mechanism" yaml:"mechanism"`
 }
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
@@ -322,9 +326,23 @@ func (k *KafkaBalanced) Connect() error {
 	}
 
 	if k.conf.SASL.Enabled {
+		config.Net.TLS.Enable = true
 		config.Net.SASL.Enable = true
+		config.Net.SASL.Handshake = true
+
 		config.Net.SASL.User = k.conf.SASL.User
 		config.Net.SASL.Password = k.conf.SASL.Password
+
+		if k.conf.SASL.Mechanism != "" {
+			generatorFunc, err := kf.SASLSCRAMClientGeneratorFunc(k.conf.SASL.Mechanism)
+
+			if err != nil {
+				return err
+			}
+
+			config.Net.SASL.Mechanism = sarama.SASLMechanism(k.conf.SASL.Mechanism)
+			config.Net.SASL.SCRAMClientGeneratorFunc = generatorFunc
+		}
 	}
 
 	// Start a new consumer group

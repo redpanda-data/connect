@@ -27,6 +27,7 @@ input:
       enabled: false
       password: ""
       user: ""
+      mechanism: ""
     start_from_oldest: true
     target_version: 1.0.0
     tls:
@@ -62,6 +63,7 @@ output:
       enabled: false
       password: ""
       user: ""
+      mechanism: ""
     target_version: 1.0.0
     timeout: 5s
     tls:

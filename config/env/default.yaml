@@ -132,6 +132,7 @@ input:
           enabled: ${INPUT_KAFKA_SASL_ENABLED:false}
           password: ${INPUT_KAFKA_SASL_PASSWORD}
           user: ${INPUT_KAFKA_SASL_USER}
+          mechanism: ${INPUT_KAFKA_SASL_MECHANISM}
         start_from_oldest: ${INPUT_KAFKA_START_FROM_OLDEST:true}
         target_version: ${INPUT_KAFKA_TARGET_VERSION:1.0.0}
         tls:
@@ -160,6 +161,7 @@ input:
           enabled: ${INPUT_KAFKA_BALANCED_SASL_ENABLED:false}
           password: ${INPUT_KAFKA_BALANCED_SASL_PASSWORD}
           user: ${INPUT_KAFKA_BALANCED_SASL_USER}
+          mechanism: ${INPUT_KAFKA_BALANCED_SASL_MECHANISM}
         start_from_oldest: ${INPUT_KAFKA_BALANCED_START_FROM_OLDEST:true}
         target_version: ${INPUT_KAFKA_BALANCED_TARGET_VERSION:1.0.0}
         tls:
@@ -710,6 +712,7 @@ output:
           enabled: ${OUTPUT_KAFKA_SASL_ENABLED:false}
           password: ${OUTPUT_KAFKA_SASL_PASSWORD}
           user: ${OUTPUT_KAFKA_SASL_USER}
+          mechanism: ${OUTPUT_KAFKA_SASL_MECHANISM}
         target_version: ${OUTPUT_KAFKA_TARGET_VERSION:1.0.0}
         timeout: ${OUTPUT_KAFKA_TIMEOUT:5s}
         tls:

@@ -24,6 +24,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+
 	"io"
 	"strconv"
 	"strings"
@@ -35,6 +36,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+
+	kf "github.com/Jeffail/benthos/v3/lib/util/input/kafka"
+
 	"github.com/Shopify/sarama"
 )
 
@@ -326,13 +330,28 @@ func (k *KafkaCG) ConnectWithContext(ctx context.Context) error {
 	}
 
 	if k.conf.SASL.Enabled {
+		config.Net.TLS.Enable = true
 		config.Net.SASL.Enable = true
+		config.Net.SASL.Handshake = true
+
 		config.Net.SASL.User = k.conf.SASL.User
 		config.Net.SASL.Password = k.conf.SASL.Password
+
+		if k.conf.SASL.Mechanism != "" {
+			generatorFunc, err := kf.SASLSCRAMClientGeneratorFunc(k.conf.SASL.Mechanism)
+
+			if err != nil {
+				return err
+			}
+
+			config.Net.SASL.Mechanism = sarama.SASLMechanism(k.conf.SASL.Mechanism)
+			config.Net.SASL.SCRAMClientGeneratorFunc = generatorFunc
+		}
 	}
 
 	// Start a new consumer group
 	group, err := sarama.NewConsumerGroup(k.addresses, k.conf.ConsumerGroup, config)
+
 	if err != nil {
 		return err
 	}
