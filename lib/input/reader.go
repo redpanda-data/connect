@@ -177,6 +177,7 @@ func (r *Reader) loop() {
 			mCount.Incr(1)
 			mPartsRcvd.Incr(int64(msg.Len()))
 			mRcvd.Incr(1)
+			r.log.Tracef("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 		}
 
 		tracing.InitSpans("input_"+r.typeStr, msg)

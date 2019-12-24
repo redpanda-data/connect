@@ -406,6 +406,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	h.mCount.Incr(1)
 	h.mPartsRcvd.Incr(int64(msg.Len()))
 	h.mRcvd.Incr(1)
+	h.log.Tracef("Consumed %v messages from POST to '%v'.\n", msg.Len(), h.conf.HTTPServer.Path)
 
 	resChan := make(chan types.Response)
 	select {

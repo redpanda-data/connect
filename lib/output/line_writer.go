@@ -117,6 +117,7 @@ func (w *LineWriter) loop() {
 			return
 		}
 
+		w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 		spans := tracing.CreateChildSpans("output_"+w.typeStr, ts.Payload)
 
 		var err error
@@ -131,6 +132,7 @@ func (w *LineWriter) loop() {
 			mSent.Incr(1)
 			mPartsSent.Incr(int64(ts.Payload.Len()))
 			mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
+			w.log.Tracef("Successfully wrote %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			mLatency.Timing(latency)
 		}
 

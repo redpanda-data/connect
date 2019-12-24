@@ -142,6 +142,7 @@ func (w *Writer) loop() {
 			return
 		}
 
+		w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 		spans := tracing.CreateChildSpans("output_"+w.typeStr, ts.Payload)
 		latency, err := w.latencyMeasuringWrite(ts.Payload)
 
@@ -188,6 +189,7 @@ func (w *Writer) loop() {
 			mPartsSent.Incr(int64(ts.Payload.Len()))
 			mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
 			mLatency.Timing(latency)
+			w.log.Tracef("Successfully wrote %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			throt.Reset()
 		}
 

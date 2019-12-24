@@ -222,6 +222,7 @@ func (r *AsyncReader) loop() {
 			mCount.Incr(1)
 			mPartsRcvd.Incr(int64(msg.Len()))
 			mRcvd.Incr(1)
+			r.log.Tracef("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 		}
 
 		resChan := make(chan types.Response)

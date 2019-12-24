@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New field `max_in_flight` added to `http_client` output.
+- More TRACE level logs added throughout the pipeline.
 
 ## 3.7.0 - 2019-12-21
 
