@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"strings"
@@ -49,6 +50,7 @@ type AMQPExchangeDeclareConfig struct {
 // AMQPConfig contains configuration fields for the AMQP output type.
 type AMQPConfig struct {
 	URL             string                    `json:"url" yaml:"url"`
+	MaxInFlight     int                       `json:"max_in_flight" yaml:"max_in_flight"`
 	Exchange        string                    `json:"exchange" yaml:"exchange"`
 	ExchangeDeclare AMQPExchangeDeclareConfig `json:"exchange_declare" yaml:"exchange_declare"`
 	BindingKey      string                    `json:"key" yaml:"key"`
@@ -61,8 +63,9 @@ type AMQPConfig struct {
 // NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
-		URL:      "amqp://guest:guest@localhost:5672/",
-		Exchange: "benthos-exchange",
+		URL:         "amqp://guest:guest@localhost:5672/",
+		MaxInFlight: 1,
+		Exchange:    "benthos-exchange",
 		ExchangeDeclare: AMQPExchangeDeclareConfig{
 			Enabled: false,
 			Type:    "direct",
@@ -120,6 +123,11 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error
 }
 
 //------------------------------------------------------------------------------
+
+// ConnectWithContext establishes a connection to an AMQP server.
+func (a *AMQP) ConnectWithContext(ctx context.Context) error {
+	return a.Connect()
+}
 
 // Connect establishes a connection to an AMQP server.
 func (a *AMQP) Connect() error {
@@ -196,6 +204,12 @@ func (a *AMQP) disconnect() error {
 }
 
 //------------------------------------------------------------------------------
+
+// WriteWithContext will attempt to write a message over AMQP, wait for
+// acknowledgement, and returns an error if applicable.
+func (a *AMQP) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return a.Write(msg)
+}
 
 // Write will attempt to write a message over AMQP, wait for acknowledgement,
 // and returns an error if applicable.

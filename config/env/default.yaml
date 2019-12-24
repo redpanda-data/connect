@@ -579,6 +579,7 @@ output:
         immediate: ${OUTPUT_AMQP_IMMEDIATE:false}
         key: ${OUTPUT_AMQP_KEY:benthos-key}
         mandatory: ${OUTPUT_AMQP_MANDATORY:false}
+        max_in_flight: ${OUTPUT_AMQP_MAX_IN_FLIGHT:1}
         persistent: ${OUTPUT_AMQP_PERSISTENT:false}
         tls:
           enabled: ${OUTPUT_AMQP_TLS_ENABLED:false}
@@ -594,6 +595,7 @@ output:
         immediate: ${OUTPUT_AMQP_0_9_IMMEDIATE:false}
         key: ${OUTPUT_AMQP_0_9_KEY:benthos-key}
         mandatory: ${OUTPUT_AMQP_0_9_MANDATORY:false}
+        max_in_flight: ${OUTPUT_AMQP_0_9_MAX_IN_FLIGHT:1}
         persistent: ${OUTPUT_AMQP_0_9_PERSISTENT:false}
         tls:
           enabled: ${OUTPUT_AMQP_0_9_TLS_ENABLED:false}
@@ -660,6 +662,7 @@ output:
         copy_response_headers: ${OUTPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS:false}
         headers:
           Content-Type: ${OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
+        max_in_flight: ${OUTPUT_HTTP_CLIENT_MAX_IN_FLIGHT:1}
         max_retry_backoff: ${OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
         oauth:
           access_token: ${OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN}

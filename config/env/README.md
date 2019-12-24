@@ -497,6 +497,7 @@ OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_TYPE                 = direct
 OUTPUT_AMQP_0_9_IMMEDIATE                             = false
 OUTPUT_AMQP_0_9_KEY                                   = benthos-key
 OUTPUT_AMQP_0_9_MANDATORY                             = false
+OUTPUT_AMQP_0_9_MAX_IN_FLIGHT                         = 1
 OUTPUT_AMQP_0_9_PERSISTENT                            = false
 OUTPUT_AMQP_0_9_TLS_ENABLED                           = false
 OUTPUT_AMQP_0_9_TLS_ROOT_CAS_FILE
@@ -509,6 +510,7 @@ OUTPUT_AMQP_EXCHANGE_DECLARE_TYPE                     = direct
 OUTPUT_AMQP_IMMEDIATE                                 = false
 OUTPUT_AMQP_KEY                                       = benthos-key
 OUTPUT_AMQP_MANDATORY                                 = false
+OUTPUT_AMQP_MAX_IN_FLIGHT                             = 1
 OUTPUT_AMQP_PERSISTENT                                = false
 OUTPUT_AMQP_TLS_ENABLED                               = false
 OUTPUT_AMQP_TLS_ROOT_CAS_FILE
@@ -557,6 +559,7 @@ OUTPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME
 OUTPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS              = false
 OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE               = application/octet-stream
+OUTPUT_HTTP_CLIENT_MAX_IN_FLIGHT                      = 1
 OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF                  = 300s
 OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN
 OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN_SECRET

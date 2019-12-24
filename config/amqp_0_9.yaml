@@ -45,6 +45,7 @@ output:
     immediate: false
     key: benthos-key
     mandatory: false
+    max_in_flight: 1
     persistent: false
     tls:
       client_certs: []

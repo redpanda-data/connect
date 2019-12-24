@@ -110,6 +110,7 @@ amqp:
   immediate: false
   key: benthos-key
   mandatory: false
+  max_in_flight: 1
   persistent: false
   tls:
     client_certs: []
@@ -135,6 +136,7 @@ amqp_0_9:
   immediate: false
   key: benthos-key
   mandatory: false
+  max_in_flight: 1
   persistent: false
   tls:
     client_certs: []
@@ -569,6 +571,7 @@ http_client:
   drop_on: []
   headers:
     Content-Type: application/octet-stream
+  max_in_flight: 1
   max_retry_backoff: 300s
   oauth:
     access_token: ""

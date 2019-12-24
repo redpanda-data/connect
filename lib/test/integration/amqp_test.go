@@ -468,6 +468,20 @@ func testAMQP09StreamsALOAsync(url string, t *testing.T) {
 	}
 
 	checkALOParallelAsync(outputCtr, inputCtr, 50, t)
+
+	subject = "benthos_test_streams_alo_parallel_async_parallel_writes"
+
+	outConf.Exchange = subject
+	inConf.Queue = subject
+	inConf.PrefetchCount = 100
+	inConf.BindingsDeclare = []reader.AMQP09BindingConfig{
+		{
+			Exchange:   outConf.Exchange,
+			RoutingKey: outConf.BindingKey,
+		},
+	}
+
+	checkALOAsyncParallelWrites(outputCtr, inputCtr, 50, t)
 }
 
 func testAMQP09SinglePart(url string, t *testing.T) {
