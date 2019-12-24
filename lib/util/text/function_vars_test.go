@@ -25,6 +25,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -458,6 +459,35 @@ func TestCountersFunction(t *testing.T) {
 			t.Errorf("Wrong results for input (%v): %v != %v", input, act, exp)
 		}
 	}
+}
+
+func TestCountersSharedFunction(t *testing.T) {
+	tests := []string{
+		"foo1: ${!count:foo}",
+		"bar1: ${!count:bar}",
+		"foo2: ${!count:foo} ${!count:foo}",
+		"bar2: ${!count:bar} ${!count:bar}",
+		"foo3: ${!count:foo} ${!count:foo}",
+		"bar3: ${!count:bar} ${!count:bar}",
+	}
+
+	startChan := make(chan struct{})
+	wg := sync.WaitGroup{}
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-startChan
+			for _, input := range tests {
+				act := string(ReplaceFunctionVariables(nil, []byte(input)))
+				if act == input {
+					t.Errorf("Unchanged input: %v", act)
+				}
+			}
+		}()
+	}
+	close(startChan)
+	wg.Wait()
 }
 
 func TestUUIDV4Function(t *testing.T) {
