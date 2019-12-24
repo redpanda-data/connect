@@ -32,6 +32,7 @@ output:
       token: ""
     endpoint: ""
     json_map_columns: {}
+    max_in_flight: 1
     max_retries: 3
     region: eu-west-1
     string_columns: {}

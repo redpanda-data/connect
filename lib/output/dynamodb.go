@@ -89,8 +89,13 @@ func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		"dynamodb", dyn, log, stats,
+	if conf.DynamoDB.MaxInFlight == 1 {
+		return NewWriter(
+			TypeDynamoDB, dyn, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeDynamoDB, conf.DynamoDB.MaxInFlight, dyn, log, stats,
 	)
 }
 

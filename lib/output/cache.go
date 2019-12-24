@@ -81,8 +81,13 @@ func NewCache(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		"cache", c, log, stats,
+	if conf.Cache.MaxInFlight == 1 {
+		return NewWriter(
+			TypeCache, c, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeCache, conf.Cache.MaxInFlight, c, log, stats,
 	)
 }
 

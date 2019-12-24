@@ -7,7 +7,11 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- New field `max_in_flight` added to `http_client` and `amqp_0_9` outputs.
+- New field `max_in_flight` added to the following outputs:
+  + `amqp_0_9`
+  + `cache`
+  + `dynamodb`
+  + `http_client`
 - More TRACE level logs added throughout the pipeline.
 
 ## 3.7.0 - 2019-12-21

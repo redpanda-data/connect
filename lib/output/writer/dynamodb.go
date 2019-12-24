@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,6 +52,7 @@ type DynamoDBConfig struct {
 	JSONMapColumns map[string]string `json:"json_map_columns" yaml:"json_map_columns"`
 	TTL            string            `json:"ttl" yaml:"ttl"`
 	TTLKey         string            `json:"ttl_key" yaml:"ttl_key"`
+	MaxInFlight    int               `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 }
 
@@ -70,6 +72,7 @@ func NewDynamoDBConfig() DynamoDBConfig {
 		JSONMapColumns: map[string]string{},
 		TTL:            "",
 		TTLKey:         "",
+		MaxInFlight:    1,
 		Config:         rConf,
 	}
 }
@@ -134,6 +137,12 @@ func NewDynamoDB(
 
 // Connect attempts to establish a connection to the target SQS queue.
 func (d *DynamoDB) Connect() error {
+	return d.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext attempts to establish a connection to the target DynamoDB
+// table.
+func (d *DynamoDB) ConnectWithContext(ctx context.Context) error {
 	if d.client != nil {
 		return nil
 	}
@@ -214,8 +223,14 @@ func jsonToMap(path string, root interface{}) (*dynamodb.AttributeValue, error) 
 	return walkJSON(gObj.Data()), nil
 }
 
-// Write attempts to write message contents to a target SQS.
+// Write attempts to write message contents to a target DynamoDB table.
 func (d *DynamoDB) Write(msg types.Message) error {
+	return d.WriteWithContext(context.Background(), msg)
+}
+
+// WriteWithContext attempts to write message contents to a target DynamoDB
+// table.
+func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) error {
 	if d.client == nil {
 		return types.ErrNotConnected
 	}

@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -35,15 +36,17 @@ import (
 
 // CacheConfig contains configuration fields for the Cache output type.
 type CacheConfig struct {
-	Target string `json:"target" yaml:"target"`
-	Key    string `json:"key" yaml:"key"`
+	Target      string `json:"target" yaml:"target"`
+	Key         string `json:"key" yaml:"key"`
+	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewCacheConfig creates a new Config with default values.
 func NewCacheConfig() CacheConfig {
 	return CacheConfig{
-		Target: "",
-		Key:    "${!count:items}-${!timestamp_unix_nano}",
+		Target:      "",
+		Key:         "${!count:items}-${!timestamp_unix_nano}",
+		MaxInFlight: 1,
 	}
 }
 
@@ -81,13 +84,23 @@ func NewCache(
 	}, nil
 }
 
+// ConnectWithContext does nothing.
+func (c *Cache) ConnectWithContext(ctx context.Context) error {
+	return c.Connect()
+}
+
 // Connect does nothing.
 func (c *Cache) Connect() error {
 	c.log.Infof("Writing message parts as items in cache: %v\n", c.conf.Target)
 	return nil
 }
 
-// Write attempts to write message contents to a target Cache directory as files.
+// WriteWithContext attempts to write message contents to a target Cache.
+func (c *Cache) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return c.Write(msg)
+}
+
+// Write attempts to write message contents to a target Cache.
 func (c *Cache) Write(msg types.Message) error {
 	if msg.Len() == 1 {
 		return c.cache.Set(c.key.Get(msg), msg.Get(0).Get())

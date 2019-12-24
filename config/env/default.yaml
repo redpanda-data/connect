@@ -604,6 +604,7 @@ output:
         url: ${OUTPUT_AMQP_0_9_URL:amqp://guest:guest@localhost:5672/}
       cache:
         key: ${OUTPUT_CACHE_KEY:${!count:items}-${!timestamp_unix_nano}}
+        max_in_flight: ${OUTPUT_CACHE_MAX_IN_FLIGHT:1}
         target: ${OUTPUT_CACHE_TARGET}
       dynamic:
         prefix: ${OUTPUT_DYNAMIC_PREFIX}

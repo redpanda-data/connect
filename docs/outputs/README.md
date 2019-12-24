@@ -275,6 +275,7 @@ nodes processors.
 type: cache
 cache:
   key: ${!count:items}-${!timestamp_unix_nano}
+  max_in_flight: 1
   target: ""
 ```
 
@@ -384,6 +385,7 @@ dynamodb:
     token: ""
   endpoint: ""
   json_map_columns: {}
+  max_in_flight: 1
   max_retries: 3
   region: eu-west-1
   string_columns: {}
