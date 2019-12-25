@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -47,6 +48,7 @@ const (
 type KinesisFirehoseConfig struct {
 	sessionConfig  `json:",inline" yaml:",inline"`
 	Stream         string `json:"stream" yaml:"stream"`
+	MaxInFlight    int    `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 }
 
@@ -60,8 +62,9 @@ func NewKinesisFirehoseConfig() KinesisFirehoseConfig {
 		sessionConfig: sessionConfig{
 			Config: sess.NewConfig(),
 		},
-		Stream: "",
-		Config: rConf,
+		Stream:      "",
+		MaxInFlight: 1,
+		Config:      rConf,
 	}
 }
 
@@ -141,8 +144,14 @@ func (a *KinesisFirehose) toRecords(msg types.Message) ([]*firehose.Record, erro
 
 //------------------------------------------------------------------------------
 
-// Connect creates a new Kinesis Firehose client and ensures that the target Kinesis
-// Firehose delivery stream.
+// ConnectWithContext creates a new Kinesis Firehose client and ensures that the
+// target Kinesis Firehose delivery stream.
+func (a *KinesisFirehose) ConnectWithContext(ctx context.Context) error {
+	return a.Connect()
+}
+
+// Connect creates a new Kinesis Firehose client and ensures that the target
+// Kinesis Firehose delivery stream.
 func (a *KinesisFirehose) Connect() error {
 	if a.session != nil {
 		return nil
@@ -170,6 +179,13 @@ func (a *KinesisFirehose) Connect() error {
 // stream in batches of 500. If throttling is detected, failed messages are retried
 // according to the configurable backoff settings.
 func (a *KinesisFirehose) Write(msg types.Message) error {
+	return a.WriteWithContext(context.Background(), msg)
+}
+
+// WriteWithContext attempts to write message contents to a target Kinesis
+// Firehose delivery stream in batches of 500. If throttling is detected, failed
+// messages are retried according to the configurable backoff settings.
+func (a *KinesisFirehose) WriteWithContext(ctx context.Context, msg types.Message) error {
 	if a.session == nil {
 		return types.ErrNotConnected
 	}

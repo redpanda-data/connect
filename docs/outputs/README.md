@@ -759,6 +759,7 @@ kinesis:
     token: ""
   endpoint: ""
   hash_key: ""
+  max_in_flight: 1
   max_retries: 0
   partition_key: ""
   region: eu-west-1
@@ -796,6 +797,7 @@ kinesis_firehose:
     secret: ""
     token: ""
   endpoint: ""
+  max_in_flight: 1
   max_retries: 0
   region: eu-west-1
   stream: ""

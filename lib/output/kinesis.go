@@ -57,8 +57,13 @@ func NewKinesis(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		"kinesis", kin, log, stats,
+	if conf.Kinesis.MaxInFlight == 1 {
+		return NewWriter(
+			TypeKinesis, kin, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeKinesis, conf.Kinesis.MaxInFlight, kin, log, stats,
 	)
 }
 

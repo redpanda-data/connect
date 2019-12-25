@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
   + `hdfs`
   + `http_client`
   + `kafka`
+  + `kinesis`
+  + `kinesis_firehose`
 - More TRACE level logs added throughout the pipeline.
 
 ## 3.7.0 - 2019-12-21

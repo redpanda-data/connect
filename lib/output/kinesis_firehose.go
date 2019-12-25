@@ -52,8 +52,13 @@ func NewKinesisFirehose(conf Config, mgr types.Manager, log log.Modular, stats m
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		"kinesis_firehose", kin, log, stats,
+	if conf.KinesisFirehose.MaxInFlight == 1 {
+		return NewWriter(
+			TypeKinesisFirehose, kin, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeKinesisFirehose, conf.KinesisFirehose.MaxInFlight, kin, log, stats,
 	)
 }
 

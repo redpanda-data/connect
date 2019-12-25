@@ -31,6 +31,7 @@ output:
       secret: ""
       token: ""
     endpoint: ""
+    max_in_flight: 1
     max_retries: 0
     region: eu-west-1
     stream: ""

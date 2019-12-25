@@ -53,6 +53,7 @@ output:
       token: ""
     endpoint: ""
     hash_key: ""
+    max_in_flight: 1
     max_retries: 0
     partition_key: ""
     region: eu-west-1

@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -61,6 +62,7 @@ type KinesisConfig struct {
 	Stream         string `json:"stream" yaml:"stream"`
 	HashKey        string `json:"hash_key" yaml:"hash_key"`
 	PartitionKey   string `json:"partition_key" yaml:"partition_key"`
+	MaxInFlight    int    `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 }
 
@@ -77,6 +79,7 @@ func NewKinesisConfig() KinesisConfig {
 		Stream:       "",
 		HashKey:      "",
 		PartitionKey: "",
+		MaxInFlight:  1,
 		Config:       rConf,
 	}
 }
@@ -173,6 +176,12 @@ func (a *Kinesis) toRecords(msg types.Message) ([]*kinesis.PutRecordsRequestEntr
 // Connect creates a new Kinesis client and ensures that the target Kinesis
 // stream exists.
 func (a *Kinesis) Connect() error {
+	return a.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext creates a new Kinesis client and ensures that the target
+// Kinesis stream exists.
+func (a *Kinesis) ConnectWithContext(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -195,10 +204,17 @@ func (a *Kinesis) Connect() error {
 	return nil
 }
 
-// Write attempts to write message contents to a target Kinesis stream in batches of 500.
-// If throttling is detected, failed messages are retried according to the configurable
-// backoff settings.
+// Write attempts to write message contents to a target Kinesis stream in
+// batches of 500. If throttling is detected, failed messages are retried
+// according to the configurable backoff settings.
 func (a *Kinesis) Write(msg types.Message) error {
+	return a.WriteWithContext(context.Background(), msg)
+}
+
+// WriteWithContext attempts to write message contents to a target Kinesis
+// stream in batches of 500. If throttling is detected, failed messages are
+// retried according to the configurable backoff settings.
+func (a *Kinesis) WriteWithContext(ctx context.Context, msg types.Message) error {
 	if a.session == nil {
 		return types.ErrNotConnected
 	}

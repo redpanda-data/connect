@@ -736,6 +736,7 @@ output:
           token: ${OUTPUT_KINESIS_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_KINESIS_ENDPOINT}
         hash_key: ${OUTPUT_KINESIS_HASH_KEY}
+        max_in_flight: ${OUTPUT_KINESIS_MAX_IN_FLIGHT:1}
         max_retries: ${OUTPUT_KINESIS_MAX_RETRIES:0}
         partition_key: ${OUTPUT_KINESIS_PARTITION_KEY}
         region: ${OUTPUT_KINESIS_REGION:eu-west-1}
@@ -753,6 +754,7 @@ output:
           secret: ${OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_SECRET}
           token: ${OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_KINESIS_FIREHOSE_ENDPOINT}
+        max_in_flight: ${OUTPUT_KINESIS_FIREHOSE_MAX_IN_FLIGHT:1}
         max_retries: ${OUTPUT_KINESIS_FIREHOSE_MAX_RETRIES:0}
         region: ${OUTPUT_KINESIS_FIREHOSE_REGION:eu-west-1}
         stream: ${OUTPUT_KINESIS_FIREHOSE_STREAM}
