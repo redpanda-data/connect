@@ -45,8 +45,13 @@ interpolations are performed per message part.`,
 
 // NewHDFS creates a new HDFS output type.
 func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	return NewWriter(
-		"hdfs", writer.NewHDFS(conf.HDFS, log, stats), log, stats,
+	if conf.HDFS.MaxInFlight == 1 {
+		return NewWriter(
+			TypeHDFS, writer.NewHDFS(conf.HDFS, log, stats), log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeHDFS, conf.HDFS.MaxInFlight, writer.NewHDFS(conf.HDFS, log, stats), log, stats,
 	)
 }
 

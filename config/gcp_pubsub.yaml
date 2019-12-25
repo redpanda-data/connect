@@ -28,6 +28,7 @@ pipeline:
 output:
   type: gcp_pubsub
   gcp_pubsub:
+    max_in_flight: 1
     project: ""
     topic: ""
 resources:

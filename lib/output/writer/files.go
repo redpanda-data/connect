@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -74,10 +75,20 @@ func NewFiles(
 	}
 }
 
+// ConnectWithContext is a noop.
+func (f *Files) ConnectWithContext(ctx context.Context) error {
+	return f.Connect()
+}
+
 // Connect is a noop.
 func (f *Files) Connect() error {
 	f.log.Infoln("Writing message parts as files.")
 	return nil
+}
+
+// WriteWithContext attempts to write message contents to a directory as files.
+func (f *Files) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return f.Write(msg)
 }
 
 // Write attempts to write message contents to a directory as files.

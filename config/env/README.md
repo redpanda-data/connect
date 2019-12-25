@@ -549,10 +549,12 @@ OUTPUT_ELASTICSEARCH_URLS                             = http://localhost:9200
 OUTPUT_FILES_PATH                                     = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_FILE_DELIMITER
 OUTPUT_FILE_PATH
+OUTPUT_GCP_PUBSUB_MAX_IN_FLIGHT                       = 1
 OUTPUT_GCP_PUBSUB_PROJECT
 OUTPUT_GCP_PUBSUB_TOPIC
 OUTPUT_HDFS_DIRECTORY
 OUTPUT_HDFS_HOSTS                                     = localhost:9000
+OUTPUT_HDFS_MAX_IN_FLIGHT                             = 1
 OUTPUT_HDFS_PATH                                      = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_HDFS_USER                                      = benthos_hdfs
 OUTPUT_HTTP_CLIENT_BACKOFF_ON                         = 429

@@ -23,6 +23,7 @@ package integration
 import (
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -106,6 +107,10 @@ func TestHDFSIntegration(t *testing.T) {
 	t.Run("TestHDFSReaderWriterBasic", func(th *testing.T) {
 		testHDFSReaderBasic(hosts, user, th)
 	})
+
+	t.Run("TestHDFSReaderParallelWriters", func(th *testing.T) {
+		testHDFSReaderParallelWriters(hosts, user, th)
+	})
 }
 
 func testHDFSReaderBasic(hosts []string, user string, t *testing.T) {
@@ -140,7 +145,6 @@ func testHDFSReaderBasic(hosts []string, user string, t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		if err := w.Write(message.New(testMsgs[i])); err != nil {
-			time.Sleep(time.Second * 3000)
 			t.Fatal(err)
 		}
 	}
@@ -178,6 +182,83 @@ func testHDFSReaderBasic(hosts []string, user string, t *testing.T) {
 		}
 		if exp, act := filePath, msg.Get(0).Metadata().Get("hdfs_path"); exp != act {
 			t.Errorf("Wrong metadata returned: %v != %v", act, exp)
+		}
+	}
+}
+
+func testHDFSReaderParallelWriters(hosts []string, user string, t *testing.T) {
+	wconf := writer.NewHDFSConfig()
+	wconf.User = user
+	wconf.Hosts = hosts
+	wconf.Directory = "/subdir"
+	wconf.Path = "${!count:files2}-benthos_test.txt"
+
+	w := writer.NewHDFS(wconf, log.Noop(), metrics.Noop())
+
+	if err := w.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		w.CloseAsync()
+		if err := w.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	N := 9
+
+	testMsgs := map[string]struct{}{}
+	for i := 0; i < N; i++ {
+		testMsgs[fmt.Sprintf(`{"user":"%v","message":"hello world"}`, i)] = struct{}{}
+	}
+
+	startChan := make(chan struct{})
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+	for k := range testMsgs {
+		go func(v string) {
+			<-startChan
+			if err := w.Write(message.New([][]byte{[]byte(v)})); err != nil {
+				t.Error(err)
+			}
+			wg.Done()
+		}(k)
+	}
+	close(startChan)
+	wg.Wait()
+
+	rconf := reader.NewHDFSConfig()
+	rconf.User = user
+	rconf.Hosts = hosts
+	rconf.Directory = "/subdir"
+
+	r := reader.NewHDFS(rconf, log.Noop(), metrics.Noop())
+
+	if err := r.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		r.CloseAsync()
+		if err := r.WaitForClose(time.Second); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	for len(testMsgs) > 0 {
+		msg, err := r.Read()
+		if err != nil {
+			t.Fatalf("Failed to read message: %v", err)
+		}
+		if msg.Len() != 1 {
+			t.Errorf("Unexpected batch size: %v", msg.Len())
+		}
+		act := string(msg.Get(0).Get())
+		if _, ok := testMsgs[act]; ok {
+			delete(testMsgs, act)
+		} else {
+			t.Fatalf("Unexpected message payload: %v", act)
 		}
 	}
 }

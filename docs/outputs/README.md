@@ -534,6 +534,7 @@ these interpolations are performed per message part.
 ``` yaml
 type: gcp_pubsub
 gcp_pubsub:
+  max_in_flight: 1
   project: ""
   topic: ""
 ```
@@ -549,6 +550,7 @@ hdfs:
   directory: ""
   hosts:
   - localhost:9000
+  max_in_flight: 1
   path: ${!count:files}-${!timestamp_unix_nano}.txt
   user: benthos_hdfs
 ```

@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
   + `cache`
   + `dynamodb`
   + `elasticsearch`
+  + `gcp_pubsub`
+  + `hdfs`
   + `http_client`
 - More TRACE level logs added throughout the pipeline.
 

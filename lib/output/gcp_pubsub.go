@@ -46,8 +46,13 @@ func NewGCPPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		"gcp_pubsub", a, log, stats,
+	if conf.GCPPubSub.MaxInFlight == 1 {
+		return NewWriter(
+			TypeGCPPubSub, a, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeGCPPubSub, conf.GCPPubSub.MaxInFlight, a, log, stats,
 	)
 }
 

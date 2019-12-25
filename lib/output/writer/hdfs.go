@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"path/filepath"
 	"time"
 
@@ -36,19 +37,21 @@ import (
 
 // HDFSConfig contains configuration fields for the HDFS output type.
 type HDFSConfig struct {
-	Hosts     []string `json:"hosts" yaml:"hosts"`
-	User      string   `json:"user" yaml:"user"`
-	Directory string   `json:"directory" yaml:"directory"`
-	Path      string   `json:"path" yaml:"path"`
+	Hosts       []string `json:"hosts" yaml:"hosts"`
+	User        string   `json:"user" yaml:"user"`
+	Directory   string   `json:"directory" yaml:"directory"`
+	Path        string   `json:"path" yaml:"path"`
+	MaxInFlight int      `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewHDFSConfig creates a new Config with default values.
 func NewHDFSConfig() HDFSConfig {
 	return HDFSConfig{
-		Hosts:     []string{"localhost:9000"},
-		User:      "benthos_hdfs",
-		Directory: "",
-		Path:      "${!count:files}-${!timestamp_unix_nano}.txt",
+		Hosts:       []string{"localhost:9000"},
+		User:        "benthos_hdfs",
+		Directory:   "",
+		Path:        "${!count:files}-${!timestamp_unix_nano}.txt",
+		MaxInFlight: 1,
 	}
 }
 
@@ -85,6 +88,12 @@ func NewHDFS(
 	}
 }
 
+// ConnectWithContext attempts to establish a connection to the target HDFS
+// host.
+func (h *HDFS) ConnectWithContext(ctx context.Context) error {
+	return h.Connect()
+}
+
 // Connect attempts to establish a connection to the target HDFS host.
 func (h *HDFS) Connect() error {
 	if h.client != nil {
@@ -103,6 +112,12 @@ func (h *HDFS) Connect() error {
 
 	h.log.Infof("Writing message parts as files to HDFS directory: %v\n", h.conf.Directory)
 	return nil
+}
+
+// WriteWithContext attempts to write message contents to a target HDFS
+// directory as files.
+func (h *HDFS) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return h.Write(msg)
 }
 
 // Write attempts to write message contents to a target HDFS directory as files.

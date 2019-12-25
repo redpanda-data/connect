@@ -36,15 +36,17 @@ import (
 
 // GCPPubSubConfig contains configuration fields for the output GCPPubSub type.
 type GCPPubSubConfig struct {
-	ProjectID string `json:"project" yaml:"project"`
-	TopicID   string `json:"topic" yaml:"topic"`
+	ProjectID   string `json:"project" yaml:"project"`
+	TopicID     string `json:"topic" yaml:"topic"`
+	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
 func NewGCPPubSubConfig() GCPPubSubConfig {
 	return GCPPubSubConfig{
-		ProjectID: "",
-		TopicID:   "",
+		ProjectID:   "",
+		TopicID:     "",
+		MaxInFlight: 1,
 	}
 }
 
@@ -83,8 +85,9 @@ func NewGCPPubSub(
 	}, nil
 }
 
-// Connect attempts to establish a connection to the target GCP Pub/Sub topic.
-func (c *GCPPubSub) Connect() error {
+// ConnectWithContext attempts to establish a connection to the target GCP
+// Pub/Sub topic.
+func (c *GCPPubSub) ConnectWithContext(ctx context.Context) error {
 	c.topicMut.Lock()
 	defer c.topicMut.Unlock()
 	if c.topic != nil {
@@ -92,10 +95,7 @@ func (c *GCPPubSub) Connect() error {
 	}
 
 	topic := c.client.Topic(c.conf.TopicID)
-
-	existsCtx, existsCancel := context.WithTimeout(context.Background(), time.Second*5)
-	exists, err := topic.Exists(existsCtx)
-	existsCancel()
+	exists, err := topic.Exists(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,8 +108,15 @@ func (c *GCPPubSub) Connect() error {
 	return nil
 }
 
-// Write attempts to write message contents to a target topic.
-func (c *GCPPubSub) Write(msg types.Message) error {
+// Connect attempts to establish a connection to the target GCP Pub/Sub topic.
+func (c *GCPPubSub) Connect() error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	return c.ConnectWithContext(ctx)
+}
+
+// WriteWithContext attempts to write message contents to a target topic.
+func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) error {
 	c.topicMut.Lock()
 	topic := c.topic
 	c.topicMut.Unlock()
@@ -118,7 +125,6 @@ func (c *GCPPubSub) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	ctx := context.Background()
 	results := make([]*pubsub.PublishResult, msg.Len())
 
 	msg.Iter(func(i int, part types.Part) error {
@@ -149,14 +155,21 @@ func (c *GCPPubSub) Write(msg types.Message) error {
 	return nil
 }
 
+// Write attempts to write message contents to a target topic.
+func (c *GCPPubSub) Write(msg types.Message) error {
+	return c.WriteWithContext(context.Background(), msg)
+}
+
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
 func (c *GCPPubSub) CloseAsync() {
-	c.topicMut.Lock()
-	defer c.topicMut.Unlock()
-	if c.topic != nil {
-		c.topic.Stop()
-		c.topic = nil
-	}
+	go func() {
+		c.topicMut.Lock()
+		defer c.topicMut.Unlock()
+		if c.topic != nil {
+			c.topic.Stop()
+			c.topic = nil
+		}
+	}()
 }
 
 // WaitForClose will block until either the reader is closed or a specified
