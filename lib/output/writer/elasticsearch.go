@@ -64,6 +64,7 @@ type ElasticsearchConfig struct {
 	Timeout        string               `json:"timeout" yaml:"timeout"`
 	Auth           auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
 	AWS            OptionalAWSConfig    `json:"aws" yaml:"aws"`
+	MaxInFlight    int                  `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 }
 
@@ -88,7 +89,8 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 			Enabled: false,
 			Config:  sess.NewConfig(),
 		},
-		Config: rConf,
+		MaxInFlight: 1,
+		Config:      rConf,
 	}
 }
 
@@ -157,6 +159,12 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 
 //------------------------------------------------------------------------------
 
+// ConnectWithContext attempts to establish a connection to a Elasticsearch
+// broker.
+func (e *Elasticsearch) ConnectWithContext(ctx context.Context) error {
+	return e.Connect()
+}
+
 // Connect attempts to establish a connection to a Elasticsearch broker.
 func (e *Elasticsearch) Connect() error {
 	if e.client != nil {
@@ -208,6 +216,12 @@ type pendingBulkIndex struct {
 	Pipeline string
 	Type     string
 	Doc      interface{}
+}
+
+// WriteWithContext will attempt to write a message to Elasticsearch, wait for
+// acknowledgement, and returns an error if applicable.
+func (e *Elasticsearch) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return e.Write(msg)
 }
 
 // Write will attempt to write a message to Elasticsearch, wait for

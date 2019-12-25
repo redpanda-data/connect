@@ -376,37 +376,43 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 		t.Fatal("Timed out")
 	}
 
+	doneChan := make(chan struct{})
 	go func() {
+		defer close(doneChan)
 		select {
 		case writerImpl.writeChan <- types.ErrNotConnected:
-		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+		case <-time.After(time.Second * 5):
+			t.Error("Timed out")
+			return
 		}
 		select {
 		case writerImpl.writeChan <- types.ErrNotConnected:
-		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+		case <-time.After(time.Second * 5):
+			t.Error("Timed out")
+			return
 		}
 		select {
 		case writerImpl.connChan <- nil:
-		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+		case <-time.After(time.Second * 5):
+			t.Error("Timed out")
+			return
 		}
 		go func() {
 			select {
 			case writerImpl.connChan <- nil:
-			case <-time.After(time.Second):
+			case <-time.After(time.Second * 5):
 			}
 		}()
 		select {
 		case writerImpl.writeChan <- nil:
-		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+		case <-time.After(time.Second * 5):
+			t.Error("Timed out")
+			return
 		}
 		select {
 		case writerImpl.writeChan <- nil:
-		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+		case <-time.After(time.Second * 5):
+			t.Error("Timed out")
 		}
 	}()
 
@@ -428,7 +434,7 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 		if err := res.Error(); err != nil {
 			t.Error(err)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Error("Timed out")
 	}
 	select {
@@ -439,9 +445,10 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 		if err := res.Error(); err != nil {
 			t.Error(err)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		t.Error("Timed out")
 	}
+	<-doneChan
 
 	w.CloseAsync()
 	if err = w.WaitForClose(time.Second); err != nil {

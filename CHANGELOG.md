@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
   + `amqp_0_9`
   + `cache`
   + `dynamodb`
+  + `elasticsearch`
   + `http_client`
 - More TRACE level logs added throughout the pipeline.
 

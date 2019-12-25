@@ -467,6 +467,7 @@ elasticsearch:
   healthcheck: true
   id: ${!count:elastic_ids}-${!timestamp_unix}
   index: benthos_index
+  max_in_flight: 1
   max_retries: 0
   pipeline: ""
   sniff: true

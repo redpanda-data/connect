@@ -60,8 +60,13 @@ func NewElasticsearch(conf Config, mgr types.Manager, log log.Modular, stats met
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		"elasticsearch", elasticWriter, log, stats,
+	if conf.Elasticsearch.MaxInFlight == 1 {
+		return NewWriter(
+			TypeElasticsearch, elasticWriter, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeElasticsearch, conf.Elasticsearch.MaxInFlight, elasticWriter, log, stats,
 	)
 }
 

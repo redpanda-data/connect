@@ -539,6 +539,7 @@ OUTPUT_ELASTICSEARCH_BASIC_AUTH_USERNAME
 OUTPUT_ELASTICSEARCH_HEALTHCHECK                      = true
 OUTPUT_ELASTICSEARCH_ID                               = ${!count:elastic_ids}-${!timestamp_unix}
 OUTPUT_ELASTICSEARCH_INDEX                            = benthos_index
+OUTPUT_ELASTICSEARCH_MAX_IN_FLIGHT                    = 1
 OUTPUT_ELASTICSEARCH_MAX_RETRIES                      = 0
 OUTPUT_ELASTICSEARCH_PIPELINE
 OUTPUT_ELASTICSEARCH_SNIFF                            = true

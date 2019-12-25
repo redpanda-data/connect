@@ -163,9 +163,12 @@ func (w *AsyncWriter) loop() {
 		connectMut.Lock()
 		defer connectMut.Unlock()
 
-		// If another goroutine got here first, we gracefully accept defeat.
+		// If another goroutine got here first and we're able to send over the
+		// connection, then we gracefully accept defeat.
 		if atomic.LoadInt32(&w.isConnected) == 1 {
-			return
+			if latency, err = w.latencyMeasuringWrite(msg); err != types.ErrNotConnected {
+				return
+			}
 		}
 		mLostConn.Incr(1)
 

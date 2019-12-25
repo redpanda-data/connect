@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,12 +46,14 @@ func TestElasticIntegration(t *testing.T) {
 	}
 	pool.MaxWait = time.Second * 30
 
-	resource, err := pool.Run("elasticsearch", "latest", nil)
+	resource, err := pool.Run("elasticsearch", "7.5.1", []string{
+		"discovery.type=single-node",
+	})
 	if err != nil {
 		t.Fatalf("Could not start resource: %s", err)
 	}
 
-	urls := []string{fmt.Sprintf("http://localhost:%v", resource.GetPort("9200/tcp"))}
+	urls := []string{fmt.Sprintf("http://127.0.0.1:%v", resource.GetPort("9200/tcp"))}
 
 	var client *elastic.Client
 
@@ -60,6 +63,7 @@ func TestElasticIntegration(t *testing.T) {
 			elastic.SetHttpClient(&http.Client{
 				Timeout: time.Second,
 			}),
+			elastic.SetSniff(false),
 		}
 
 		var cerr error
@@ -72,16 +76,14 @@ func TestElasticIntegration(t *testing.T) {
 		"number_of_replicas": 0
 	},
 	"mappings":{
-		"doc":{
-			"properties": {
-				"user":{
-					"type":"keyword"
-				},
-				"message":{
-					"type":"text",
-					"store": true,
-					"fielddata": true
-				}
+		"properties": {
+			"user":{
+				"type":"keyword"
+			},
+			"message":{
+				"type":"text",
+				"store": true,
+				"fielddata": true
 			}
 		}
 	}
@@ -105,6 +107,10 @@ func TestElasticIntegration(t *testing.T) {
 
 	t.Run("TestElasticNoIndex", func(te *testing.T) {
 		testElasticNoIndex(urls, client, te)
+	})
+
+	t.Run("TestElasticParallelWrites", func(te *testing.T) {
+		testElasticParallelWrites(urls, client, te)
 	})
 
 	t.Run("TestElasticErrorHandling", func(te *testing.T) {
@@ -131,6 +137,7 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 	conf.URLs = urls
 	conf.MaxRetries = 1
 	conf.Backoff.MaxElapsedTime = "1s"
+	conf.Sniff = false
 
 	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -163,7 +170,7 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 		id := fmt.Sprintf("foo-%v", i+1)
 		get, err := client.Get().
 			Index("does_not_exist").
-			Type("doc").
+			Type("_doc").
 			Id(id).
 			Do(context.Background())
 		if err != nil {
@@ -175,12 +182,85 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 	}
 }
 
+func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing.T) {
+	conf := NewElasticsearchConfig()
+	conf.Index = "new_index_parallel_writes"
+	conf.ID = "${!json_field:key}"
+	conf.URLs = urls
+	conf.MaxRetries = 1
+	conf.Backoff.MaxElapsedTime = "1s"
+	conf.Sniff = false
+
+	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = m.Connect(); err != nil {
+		t.Error(err)
+	}
+
+	defer func() {
+		m.CloseAsync()
+		if cErr := m.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	N := 10
+
+	startChan := make(chan struct{})
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+
+	docs := map[string]string{}
+
+	for i := 0; i < N; i++ {
+		str := fmt.Sprintf(`{"key":"doc-%v","message":"foobar"}`, i)
+		docs[fmt.Sprintf("doc-%v", i)] = str
+		go func(content string) {
+			<-startChan
+			if lerr := m.Write(message.New([][]byte{[]byte(content)})); lerr != nil {
+				t.Error(lerr)
+			}
+			wg.Done()
+		}(str)
+	}
+
+	close(startChan)
+	wg.Wait()
+
+	for id, exp := range docs {
+		get, err := client.Get().
+			Index("new_index_parallel_writes").
+			Type("_doc").
+			Id(id).
+			Do(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to get doc '%v': %v", id, err)
+		}
+		if !get.Found {
+			t.Errorf("document %v not found", id)
+		} else {
+			rawBytes, err := get.Source.MarshalJSON()
+			if err != nil {
+				t.Error(err)
+			} else {
+				if act := string(rawBytes); act != exp {
+					t.Errorf("Wrong result: %v != %v", act, exp)
+				}
+			}
+		}
+	}
+}
+
 func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.T) {
 	conf := NewElasticsearchConfig()
 	conf.Index = "test_conn_index?"
 	conf.ID = "foo-static"
 	conf.URLs = urls
 	conf.Backoff.MaxInterval = "1s"
+	conf.Sniff = false
 
 	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -212,6 +292,8 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 	conf.Index = "test_conn_index"
 	conf.ID = "foo-${!count:foo}"
 	conf.URLs = urls
+	conf.Type = "_doc"
+	conf.Sniff = false
 
 	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -246,7 +328,7 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 		id := fmt.Sprintf("foo-%v", i+1)
 		get, err := client.Get().
 			Index("test_conn_index").
-			Type("doc").
+			Type("_doc").
 			Id(id).
 			Do(context.Background())
 		if err != nil {
@@ -273,6 +355,8 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 	conf.Index = "${!metadata:index}"
 	conf.ID = "bar-${!count:bar}"
 	conf.URLs = urls
+	conf.Type = "_doc"
+	conf.Sniff = false
 
 	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -309,7 +393,7 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 		id := fmt.Sprintf("bar-%v", i+1)
 		get, err := client.Get().
 			Index("test_conn_index").
-			Type("doc").
+			Type("_doc").
 			Id(id).
 			Do(context.Background())
 		if err != nil {
@@ -336,6 +420,8 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 	conf.Index = "${!metadata:index}"
 	conf.ID = "bar-${!count:bar}"
 	conf.URLs = urls
+	conf.Sniff = false
+	conf.Type = "_doc"
 
 	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -372,7 +458,7 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 		id := fmt.Sprintf("bar-%v", i+1)
 		get, err := client.Get().
 			Index("test_conn_index").
-			Type("doc").
+			Type("_doc").
 			Id(id).
 			Do(context.Background())
 		if err != nil {
