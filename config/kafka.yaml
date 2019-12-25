@@ -54,6 +54,7 @@ output:
     client_id: benthos_kafka_output
     compression: none
     key: ""
+    max_in_flight: 1
     max_msg_bytes: 1e+06
     max_retries: 0
     partitioner: fnv1a_hash

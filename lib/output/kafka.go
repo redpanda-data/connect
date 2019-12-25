@@ -66,8 +66,13 @@ func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		"kafka", k, log, stats,
+	if conf.Kafka.MaxInFlight == 1 {
+		return NewWriter(
+			TypeKafka, k, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeKafka, conf.Kafka.MaxInFlight, k, log, stats,
 	)
 }
 

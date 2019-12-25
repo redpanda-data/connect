@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
   + `gcp_pubsub`
   + `hdfs`
   + `http_client`
+  + `kafka`
 - More TRACE level logs added throughout the pipeline.
 
 ## 3.7.0 - 2019-12-21

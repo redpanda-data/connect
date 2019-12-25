@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"strings"
@@ -56,6 +57,7 @@ type KafkaConfig struct {
 	TargetVersion        string      `json:"target_version" yaml:"target_version"`
 	TLS                  btls.Config `json:"tls" yaml:"tls"`
 	SASL                 SASLConfig  `json:"sasl" yaml:"sasl"`
+	MaxInFlight          int         `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config       `json:",inline" yaml:",inline"`
 }
 
@@ -85,6 +87,7 @@ func NewKafkaConfig() KafkaConfig {
 		AckReplicas:          false,
 		TargetVersion:        sarama.V1_0_0_0.String(),
 		TLS:                  btls.NewConfig(),
+		MaxInFlight:          1,
 		Config:               rConf,
 	}
 }
@@ -235,6 +238,11 @@ func buildHeaders(version sarama.KafkaVersion, part types.Part) []sarama.RecordH
 
 //------------------------------------------------------------------------------
 
+// ConnectWithContext attempts to establish a connection to a Kafka broker.
+func (k *Kafka) ConnectWithContext(ctx context.Context) error {
+	return k.Connect()
+}
+
 // Connect attempts to establish a connection to a Kafka broker.
 func (k *Kafka) Connect() error {
 	k.connMut.Lock()
@@ -278,6 +286,12 @@ func (k *Kafka) Connect() error {
 		k.log.Infof("Sending Kafka messages to addresses: %s\n", k.addresses)
 	}
 	return err
+}
+
+// WriteWithContext will attempt to write a message to Kafka, wait for
+// acknowledgement, and returns an error if applicable.
+func (k *Kafka) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return k.Write(msg)
 }
 
 // Write will attempt to write a message to Kafka, wait for acknowledgement, and

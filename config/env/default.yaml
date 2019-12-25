@@ -706,6 +706,7 @@ output:
         client_id: ${OUTPUT_KAFKA_CLIENT_ID:benthos_kafka_output}
         compression: ${OUTPUT_KAFKA_COMPRESSION:none}
         key: ${OUTPUT_KAFKA_KEY}
+        max_in_flight: ${OUTPUT_KAFKA_MAX_IN_FLIGHT:1}
         max_msg_bytes: ${OUTPUT_KAFKA_MAX_MSG_BYTES:1000000}
         max_retries: ${OUTPUT_KAFKA_MAX_RETRIES:0}
         partitioner: ${OUTPUT_KAFKA_PARTITIONER:fnv1a_hash}
