@@ -818,6 +818,7 @@ allowing you to transfer data across accounts. You can find out more
 type: mqtt
 mqtt:
   client_id: benthos_output
+  max_in_flight: 1
   password: ""
   qos: 1
   topic: benthos_topic

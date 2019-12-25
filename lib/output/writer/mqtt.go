@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
@@ -37,23 +38,25 @@ import (
 
 // MQTTConfig contains configuration fields for the MQTT output type.
 type MQTTConfig struct {
-	URLs     []string `json:"urls" yaml:"urls"`
-	QoS      uint8    `json:"qos" yaml:"qos"`
-	Topic    string   `json:"topic" yaml:"topic"`
-	ClientID string   `json:"client_id" yaml:"client_id"`
-	User     string   `json:"user" yaml:"user"`
-	Password string   `json:"password" yaml:"password"`
+	URLs        []string `json:"urls" yaml:"urls"`
+	QoS         uint8    `json:"qos" yaml:"qos"`
+	Topic       string   `json:"topic" yaml:"topic"`
+	ClientID    string   `json:"client_id" yaml:"client_id"`
+	User        string   `json:"user" yaml:"user"`
+	Password    string   `json:"password" yaml:"password"`
+	MaxInFlight int      `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
 func NewMQTTConfig() MQTTConfig {
 	return MQTTConfig{
-		URLs:     []string{"tcp://localhost:1883"},
-		QoS:      1,
-		Topic:    "benthos_topic",
-		ClientID: "benthos_output",
-		User:     "",
-		Password: "",
+		URLs:        []string{"tcp://localhost:1883"},
+		QoS:         1,
+		Topic:       "benthos_topic",
+		ClientID:    "benthos_output",
+		User:        "",
+		Password:    "",
+		MaxInFlight: 1,
 	}
 }
 
@@ -99,6 +102,11 @@ func NewMQTT(
 
 //------------------------------------------------------------------------------
 
+// ConnectWithContext establishes a connection to an MQTT server.
+func (m *MQTT) ConnectWithContext(ctx context.Context) error {
+	return m.Connect()
+}
+
 // Connect establishes a connection to an MQTT server.
 func (m *MQTT) Connect() error {
 	m.connMut.Lock()
@@ -140,6 +148,11 @@ func (m *MQTT) Connect() error {
 
 //------------------------------------------------------------------------------
 
+// WriteWithContext attempts to write a message by pushing it to an MQTT broker.
+func (m *MQTT) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return m.Write(msg)
+}
+
 // Write attempts to write a message by pushing it to an MQTT broker.
 func (m *MQTT) Write(msg types.Message) error {
 	m.connMut.RLock()
@@ -160,12 +173,14 @@ func (m *MQTT) Write(msg types.Message) error {
 
 // CloseAsync shuts down the MQTT output and stops processing messages.
 func (m *MQTT) CloseAsync() {
-	m.connMut.Lock()
-	if m.client != nil {
-		m.client.Disconnect(0)
-		m.client = nil
-	}
-	m.connMut.Unlock()
+	go func() {
+		m.connMut.Lock()
+		if m.client != nil {
+			m.client.Disconnect(0)
+			m.client = nil
+		}
+		m.connMut.Unlock()
+	}()
 }
 
 // WaitForClose blocks until the MQTT output has closed down.

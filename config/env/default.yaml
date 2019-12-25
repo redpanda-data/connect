@@ -760,6 +760,7 @@ output:
         stream: ${OUTPUT_KINESIS_FIREHOSE_STREAM}
       mqtt:
         client_id: ${OUTPUT_MQTT_CLIENT_ID:benthos_output}
+        max_in_flight: ${OUTPUT_MQTT_MAX_IN_FLIGHT:1}
         password: ${OUTPUT_MQTT_PASSWORD}
         qos: ${OUTPUT_MQTT_QOS:1}
         topic: ${OUTPUT_MQTT_TOPIC:benthos_topic}

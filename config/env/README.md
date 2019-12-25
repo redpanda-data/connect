@@ -642,6 +642,7 @@ OUTPUT_KINESIS_PARTITION_KEY
 OUTPUT_KINESIS_REGION                                 = eu-west-1
 OUTPUT_KINESIS_STREAM
 OUTPUT_MQTT_CLIENT_ID                                 = benthos_output
+OUTPUT_MQTT_MAX_IN_FLIGHT                             = 1
 OUTPUT_MQTT_PASSWORD
 OUTPUT_MQTT_QOS                                       = 1
 OUTPUT_MQTT_TOPIC                                     = benthos_topic

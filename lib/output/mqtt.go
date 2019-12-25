@@ -49,7 +49,10 @@ func NewMQTT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter("mqtt", w, log, stats)
+	if conf.MQTT.MaxInFlight == 1 {
+		return NewWriter(TypeMQTT, w, log, stats)
+	}
+	return NewAsyncWriter(TypeMQTT, conf.MQTT.MaxInFlight, w, log, stats)
 }
 
 //------------------------------------------------------------------------------
