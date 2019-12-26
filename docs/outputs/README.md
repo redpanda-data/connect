@@ -839,6 +839,7 @@ messages these interpolations are performed per message part.
 type: nanomsg
 nanomsg:
   bind: false
+  max_in_flight: 1
   poll_timeout: 5s
   socket_type: PUSH
   urls:
@@ -855,6 +856,7 @@ Currently only PUSH and PUB sockets are supported.
 ``` yaml
 type: nats
 nats:
+  max_in_flight: 1
   subject: benthos_messages
   urls:
   - nats://127.0.0.1:4222
@@ -873,6 +875,7 @@ type: nats_stream
 nats_stream:
   client_id: benthos_client
   cluster_id: test-cluster
+  max_in_flight: 1
   subject: benthos_messages
   urls:
   - nats://localhost:4222

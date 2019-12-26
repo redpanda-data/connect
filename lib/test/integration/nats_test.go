@@ -82,6 +82,9 @@ func TestNATSIntegration(t *testing.T) {
 	t.Run("TestNATSDisconnect", func(te *testing.T) {
 		testNATSDisconnect(url, te)
 	})
+	t.Run("TestNATSParallelWriters", func(te *testing.T) {
+		testNATSParallelWriters(url, te)
+	})
 }
 
 func createNATSInputOutput(
@@ -282,6 +285,82 @@ func testNATSDisconnect(url string, t *testing.T) {
 
 	if _, err = mInput.Read(); err != types.ErrTypeClosed && err != types.ErrNotConnected {
 		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
+	}
+
+	wg.Wait()
+}
+
+func testNATSParallelWriters(url string, t *testing.T) {
+	subject := "benthos_test_parallel_writes"
+
+	inConf := reader.NewNATSConfig()
+	inConf.URLs = []string{url}
+	inConf.Subject = subject
+
+	outConf := writer.NewNATSConfig()
+	outConf.URLs = []string{url}
+	outConf.Subject = subject
+
+	mInput, mOutput, err := createNATSInputOutput(inConf, outConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		mInput.CloseAsync()
+		if cErr := mInput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+		mOutput.CloseAsync()
+		if cErr := mOutput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	N := 10
+
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+
+	startChan := make(chan struct{})
+
+	testMsgs := map[string]struct{}{}
+	for i := 0; i < N; i++ {
+		str := fmt.Sprintf("hello world: %v", i)
+		testMsgs[str] = struct{}{}
+		go func(testStr string) {
+			<-startChan
+			msg := message.New([][]byte{
+				[]byte(testStr),
+			})
+			msg.Get(0).Metadata().Set("foo", "bar")
+			msg.Get(0).Metadata().Set("root_foo", "bar2")
+			if gerr := mOutput.Write(msg); gerr != nil {
+				t.Fatal(gerr)
+			}
+			wg.Done()
+		}(str)
+	}
+
+	close(startChan)
+
+	lMsgs := len(testMsgs)
+	for lMsgs > 0 {
+		var actM types.Message
+		actM, err = mInput.Read()
+		if err != nil {
+			t.Error(err)
+		} else {
+			act := string(actM.Get(0).Get())
+			if _, exists := testMsgs[act]; !exists {
+				t.Errorf("Unexpected message: %v", act)
+			}
+			delete(testMsgs, act)
+		}
+		if err = mInput.Acknowledge(nil); err != nil {
+			t.Error(err)
+		}
+		lMsgs = len(testMsgs)
 	}
 
 	wg.Wait()

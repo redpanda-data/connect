@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
@@ -37,15 +38,17 @@ import (
 
 // NATSConfig contains configuration fields for the NATS output type.
 type NATSConfig struct {
-	URLs    []string `json:"urls" yaml:"urls"`
-	Subject string   `json:"subject" yaml:"subject"`
+	URLs        []string `json:"urls" yaml:"urls"`
+	Subject     string   `json:"subject" yaml:"subject"`
+	MaxInFlight int      `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewNATSConfig creates a new NATSConfig with default values.
 func NewNATSConfig() NATSConfig {
 	return NATSConfig{
-		URLs:    []string{nats.DefaultURL},
-		Subject: "benthos_messages",
+		URLs:        []string{nats.DefaultURL},
+		Subject:     "benthos_messages",
+		MaxInFlight: 1,
 	}
 }
 
@@ -64,7 +67,7 @@ type NATS struct {
 }
 
 // NewNATS creates a new NATS output type.
-func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error) {
 	n := NATS{
 		log:        log,
 		conf:       conf,
@@ -76,6 +79,11 @@ func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (Type, error)
 }
 
 //------------------------------------------------------------------------------
+
+// ConnectWithContext attempts to establish a connection to NATS servers.
+func (n *NATS) ConnectWithContext(ctx context.Context) error {
+	return n.Connect()
+}
 
 // Connect attempts to establish a connection to NATS servers.
 func (n *NATS) Connect() error {
@@ -92,6 +100,11 @@ func (n *NATS) Connect() error {
 		n.log.Infof("Sending NATS messages to subject: %v\n", n.conf.Subject)
 	}
 	return err
+}
+
+// WriteWithContext attempts to write a message.
+func (n *NATS) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return n.Write(msg)
 }
 
 // Write attempts to write a message.
@@ -121,12 +134,14 @@ func (n *NATS) Write(msg types.Message) error {
 
 // CloseAsync shuts down the MQTT output and stops processing messages.
 func (n *NATS) CloseAsync() {
-	n.connMut.Lock()
-	if n.natsConn != nil {
-		n.natsConn.Close()
-		n.natsConn = nil
-	}
-	n.connMut.Unlock()
+	go func() {
+		n.connMut.Lock()
+		if n.natsConn != nil {
+			n.natsConn.Close()
+			n.natsConn = nil
+		}
+		n.connMut.Unlock()
+	}()
 }
 
 // WaitForClose blocks until the NATS output has closed down.

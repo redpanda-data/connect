@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -45,6 +46,7 @@ type NanomsgConfig struct {
 	Bind        bool     `json:"bind" yaml:"bind"`
 	SocketType  string   `json:"socket_type" yaml:"socket_type"`
 	PollTimeout string   `json:"poll_timeout" yaml:"poll_timeout"`
+	MaxInFlight int      `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewNanomsgConfig creates a new NanomsgConfig with default values.
@@ -54,6 +56,7 @@ func NewNanomsgConfig() NanomsgConfig {
 		Bind:        false,
 		SocketType:  "PUSH",
 		PollTimeout: "5s",
+		MaxInFlight: 1,
 	}
 }
 
@@ -116,6 +119,11 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 	return nil, types.ErrInvalidScaleProtoType
 }
 
+// ConnectWithContext establishes a connection to a nanomsg socket.
+func (s *Nanomsg) ConnectWithContext(ctx context.Context) error {
+	return s.Connect()
+}
+
 // Connect establishes a connection to a nanomsg socket.
 func (s *Nanomsg) Connect() error {
 	s.sockMut.Lock()
@@ -174,6 +182,12 @@ func (s *Nanomsg) Connect() error {
 
 //------------------------------------------------------------------------------
 
+// WriteWithContext attempts to write a message by pushing it to a nanomsg
+// socket.
+func (s *Nanomsg) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return s.Write(msg)
+}
+
 // Write attempts to write a message by pushing it to a nanomsg socket.
 func (s *Nanomsg) Write(msg types.Message) error {
 	s.sockMut.RLock()
@@ -191,12 +205,14 @@ func (s *Nanomsg) Write(msg types.Message) error {
 
 // CloseAsync shuts down the Nanomsg output and stops processing messages.
 func (s *Nanomsg) CloseAsync() {
-	s.sockMut.Lock()
-	if s.socket != nil {
-		s.socket.Close()
-		s.socket = nil
-	}
-	s.sockMut.Unlock()
+	go func() {
+		s.sockMut.Lock()
+		if s.socket != nil {
+			s.socket.Close()
+			s.socket = nil
+		}
+		s.sockMut.Unlock()
+	}()
 }
 
 // WaitForClose blocks until the Nanomsg output has closed down.

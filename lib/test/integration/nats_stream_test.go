@@ -187,6 +187,11 @@ func testNATSStreamStreamsALOAsync(url string, t *testing.T) {
 	outConf.Subject = "benthos_test_streams_parallel_async"
 
 	checkALOParallelAsync(outputCtr, inputCtr, 100, t)
+
+	inConf.Subject = "benthos_test_streams_parallel_writers_async"
+	outConf.Subject = "benthos_test_streams_parallel_writers_async"
+
+	checkALOAsyncParallelWrites(outputCtr, inputCtr, 50, t)
 }
 
 func testNATSStreamSinglePart(url string, t *testing.T) {

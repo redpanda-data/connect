@@ -649,11 +649,14 @@ OUTPUT_MQTT_TOPIC                                     = benthos_topic
 OUTPUT_MQTT_URLS                                      = tcp://localhost:1883
 OUTPUT_MQTT_USER
 OUTPUT_NANOMSG_BIND                                   = false
+OUTPUT_NANOMSG_MAX_IN_FLIGHT                          = 1
 OUTPUT_NANOMSG_POLL_TIMEOUT                           = 5s
 OUTPUT_NANOMSG_SOCKET_TYPE                            = PUSH
 OUTPUT_NANOMSG_URLS                                   = tcp://localhost:5556
+OUTPUT_NATS_MAX_IN_FLIGHT                             = 1
 OUTPUT_NATS_STREAM_CLIENT_ID                          = benthos_client
 OUTPUT_NATS_STREAM_CLUSTER_ID                         = test-cluster
+OUTPUT_NATS_STREAM_MAX_IN_FLIGHT                      = 1
 OUTPUT_NATS_STREAM_SUBJECT                            = benthos_messages
 OUTPUT_NATS_STREAM_URLS                               = nats://localhost:4222
 OUTPUT_NATS_SUBJECT                                   = benthos_messages

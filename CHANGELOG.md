@@ -19,6 +19,9 @@ All notable changes to this project will be documented in this file.
   + `kinesis`
   + `kinesis_firehose`
   + `mqtt`
+  + `nanomsg`
+  + `nats`
+  + `nats_stream`
 - More TRACE level logs added throughout the pipeline.
 
 ## 3.7.0 - 2019-12-21

@@ -21,6 +21,7 @@ pipeline:
 output:
   type: nats
   nats:
+    max_in_flight: 1
     subject: benthos_messages
     urls:
     - nats://127.0.0.1:4222

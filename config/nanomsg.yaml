@@ -24,6 +24,7 @@ output:
   type: nanomsg
   nanomsg:
     bind: false
+    max_in_flight: 1
     poll_timeout: 5s
     socket_type: PUSH
     urls:

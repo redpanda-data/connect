@@ -45,7 +45,10 @@ func NewNATSStream(conf Config, mgr types.Manager, log log.Modular, stats metric
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter("nats_stream", w, log, stats)
+	if conf.NATSStream.MaxInFlight == 1 {
+		return NewWriter(TypeNATSStream, w, log, stats)
+	}
+	return NewAsyncWriter(TypeNATSStream, conf.NATSStream.MaxInFlight, w, log, stats)
 }
 
 //------------------------------------------------------------------------------
