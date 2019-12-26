@@ -787,16 +787,19 @@ output:
         urls:
         - ${OUTPUT_NATS_STREAM_URLS:nats://localhost:4222}
       nsq:
+        max_in_flight: ${OUTPUT_NSQ_MAX_IN_FLIGHT:1}
         nsqd_tcp_address: ${OUTPUT_NSQ_NSQD_TCP_ADDRESS:localhost:4150}
         topic: ${OUTPUT_NSQ_TOPIC:benthos_messages}
         user_agent: ${OUTPUT_NSQ_USER_AGENT:benthos_producer}
       redis_hash:
         key: ${OUTPUT_REDIS_HASH_KEY}
+        max_in_flight: ${OUTPUT_REDIS_HASH_MAX_IN_FLIGHT:1}
         url: ${OUTPUT_REDIS_HASH_URL:tcp://localhost:6379}
         walk_json_object: ${OUTPUT_REDIS_HASH_WALK_JSON_OBJECT:false}
         walk_metadata: ${OUTPUT_REDIS_HASH_WALK_METADATA:false}
       redis_list:
         key: ${OUTPUT_REDIS_LIST_KEY:benthos_list}
+        max_in_flight: ${OUTPUT_REDIS_LIST_MAX_IN_FLIGHT:1}
         url: ${OUTPUT_REDIS_LIST_URL:tcp://localhost:6379}
       redis_pubsub:
         channel: ${OUTPUT_REDIS_PUBSUB_CHANNEL:benthos_chan}

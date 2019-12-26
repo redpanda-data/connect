@@ -46,7 +46,10 @@ func NewRedisList(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter("redis_list", w, log, stats)
+	if conf.RedisList.MaxInFlight == 1 {
+		return NewWriter(TypeRedisList, w, log, stats)
+	}
+	return NewAsyncWriter(TypeRedisList, conf.RedisList.MaxInFlight, w, log, stats)
 }
 
 //------------------------------------------------------------------------------

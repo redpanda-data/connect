@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"net/url"
 	"sync"
 	"time"
@@ -35,15 +36,17 @@ import (
 
 // RedisListConfig contains configuration fields for the RedisList output type.
 type RedisListConfig struct {
-	URL string `json:"url" yaml:"url"`
-	Key string `json:"key" yaml:"key"`
+	URL         string `json:"url" yaml:"url"`
+	Key         string `json:"key" yaml:"key"`
+	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewRedisListConfig creates a new RedisListConfig with default values.
 func NewRedisListConfig() RedisListConfig {
 	return RedisListConfig{
-		URL: "tcp://localhost:6379",
-		Key: "benthos_list",
+		URL:         "tcp://localhost:6379",
+		Key:         "benthos_list",
+		MaxInFlight: 1,
 	}
 }
 
@@ -85,6 +88,11 @@ func NewRedisList(
 
 //------------------------------------------------------------------------------
 
+// ConnectWithContext establishes a connection to an RedisList server.
+func (r *RedisList) ConnectWithContext(ctx context.Context) error {
+	return r.Connect()
+}
+
 // Connect establishes a connection to an RedisList server.
 func (r *RedisList) Connect() error {
 	r.connMut.Lock()
@@ -111,6 +119,12 @@ func (r *RedisList) Connect() error {
 }
 
 //------------------------------------------------------------------------------
+
+// WriteWithContext attempts to write a message by pushing it to the end of a
+// Redis list.
+func (r *RedisList) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return r.Write(msg)
+}
 
 // Write attempts to write a message by pushing it to the end of a Redis list.
 func (r *RedisList) Write(msg types.Message) error {
@@ -146,7 +160,7 @@ func (r *RedisList) disconnect() error {
 
 // CloseAsync shuts down the RedisList output and stops processing messages.
 func (r *RedisList) CloseAsync() {
-	r.disconnect()
+	go r.disconnect()
 }
 
 // WaitForClose blocks until the RedisList output has closed down.

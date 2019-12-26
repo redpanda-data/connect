@@ -888,6 +888,7 @@ Publish to a NATS Stream subject.
 ``` yaml
 type: nsq
 nsq:
+  max_in_flight: 1
   nsqd_tcp_address: localhost:4150
   topic: benthos_messages
   user_agent: benthos_producer
@@ -905,6 +906,7 @@ type: redis_hash
 redis_hash:
   fields: {}
   key: ""
+  max_in_flight: 1
   url: tcp://localhost:6379
   walk_json_object: false
   walk_metadata: false
@@ -951,6 +953,7 @@ Where latter stages will overwrite matching field names of a former stage.
 type: redis_list
 redis_list:
   key: benthos_list
+  max_in_flight: 1
   url: tcp://localhost:6379
 ```
 

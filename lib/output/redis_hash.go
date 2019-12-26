@@ -78,8 +78,13 @@ func NewRedisHash(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		TypeRedisHash, rhash, log, stats,
+	if conf.RedisHash.MaxInFlight == 1 {
+		return NewWriter(
+			TypeRedisHash, rhash, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeRedisHash, conf.RedisHash.MaxInFlight, rhash, log, stats,
 	)
 }
 

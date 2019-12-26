@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
   + `nanomsg`
   + `nats`
   + `nats_stream`
+  + `nsq`
+  + `redis_hash`
+  + `redis_list`
 - More TRACE level logs added throughout the pipeline.
 
 ## 3.7.0 - 2019-12-21

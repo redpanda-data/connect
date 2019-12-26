@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"io/ioutil"
 	llog "log"
 	"sync"
@@ -38,17 +39,19 @@ import (
 
 // NSQConfig contains configuration fields for the NSQ output type.
 type NSQConfig struct {
-	Address   string `json:"nsqd_tcp_address" yaml:"nsqd_tcp_address"`
-	Topic     string `json:"topic" yaml:"topic"`
-	UserAgent string `json:"user_agent" yaml:"user_agent"`
+	Address     string `json:"nsqd_tcp_address" yaml:"nsqd_tcp_address"`
+	Topic       string `json:"topic" yaml:"topic"`
+	UserAgent   string `json:"user_agent" yaml:"user_agent"`
+	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewNSQConfig creates a new NSQConfig with default values.
 func NewNSQConfig() NSQConfig {
 	return NSQConfig{
-		Address:   "localhost:4150",
-		Topic:     "benthos_messages",
-		UserAgent: "benthos_producer",
+		Address:     "localhost:4150",
+		Topic:       "benthos_messages",
+		UserAgent:   "benthos_producer",
+		MaxInFlight: 1,
 	}
 }
 
@@ -78,6 +81,11 @@ func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (*NSQ, error) {
 
 //------------------------------------------------------------------------------
 
+// ConnectWithContext attempts to establish a connection to NSQ servers.
+func (n *NSQ) ConnectWithContext(ctx context.Context) error {
+	return n.Connect()
+}
+
 // Connect attempts to establish a connection to NSQ servers.
 func (n *NSQ) Connect() error {
 	n.connMut.Lock()
@@ -101,6 +109,11 @@ func (n *NSQ) Connect() error {
 	return nil
 }
 
+// WriteWithContext attempts to write a message.
+func (n *NSQ) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return n.Write(msg)
+}
+
 // Write attempts to write a message.
 func (n *NSQ) Write(msg types.Message) error {
 	n.connMut.RLock()
@@ -118,12 +131,14 @@ func (n *NSQ) Write(msg types.Message) error {
 
 // CloseAsync shuts down the NSQ output and stops processing messages.
 func (n *NSQ) CloseAsync() {
-	n.connMut.Lock()
-	if n.producer != nil {
-		n.producer.Stop()
-		n.producer = nil
-	}
-	n.connMut.Unlock()
+	go func() {
+		n.connMut.Lock()
+		if n.producer != nil {
+			n.producer.Stop()
+			n.producer = nil
+		}
+		n.connMut.Unlock()
+	}()
 }
 
 // WaitForClose blocks until the NSQ output has closed down.

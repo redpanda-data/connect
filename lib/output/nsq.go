@@ -49,7 +49,10 @@ func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type)
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter("nsq", w, log, stats)
+	if conf.NSQ.MaxInFlight == 1 {
+		return NewWriter(TypeNSQ, w, log, stats)
+	}
+	return NewAsyncWriter(TypeNSQ, conf.NSQ.MaxInFlight, w, log, stats)
 }
 
 //------------------------------------------------------------------------------

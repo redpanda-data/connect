@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis"
 	"github.com/ory/dockertest"
 )
@@ -87,6 +89,9 @@ func TestRedisHashIntegration(t *testing.T) {
 	})
 	t.Run("TestRedisHashMultiplePart", func(te *testing.T) {
 		testRedisHashMultiplePart(url, te)
+	})
+	t.Run("TestRedisHashParallelWrites", func(te *testing.T) {
+		testRedisHashParallelWrites(url, te)
 	})
 }
 
@@ -283,4 +288,77 @@ func testRedisHashMultiplePart(surl string, t *testing.T) {
 			t.Errorf("Wrong result: %v != %v", res, exp)
 		}
 	}
+}
+
+func testRedisHashParallelWrites(surl string, t *testing.T) {
+	outConf := writer.NewRedisHashConfig()
+	outConf.URL = surl
+	outConf.Key = "${!metadata:key}"
+	outConf.Fields["example_key"] = "${!metadata:example_key}"
+
+	mOutput, err := writer.NewRedisHash(outConf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = mOutput.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		mOutput.CloseAsync()
+		if cErr := mOutput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	purl, err := url.Parse(surl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := redis.NewClient(&redis.Options{
+		Addr:    purl.Host,
+		Network: purl.Scheme,
+	})
+
+	if _, err = client.Ping().Result(); err != nil {
+		t.Fatal(err)
+	}
+
+	N := 10
+	startChan := make(chan struct{})
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+
+	testIds := map[string]struct{}{}
+	for i := 0; i < N; i++ {
+		id := fmt.Sprintf("id%v", i)
+		testIds[id] = struct{}{}
+		msg := message.New([][]byte{
+			[]byte("not this content"),
+		})
+		msg.Get(0).Metadata().Set("key", id)
+		msg.Get(0).Metadata().Set("example_key", "test-"+id)
+		go func(m types.Message) {
+			<-startChan
+			if gerr := mOutput.Write(m); gerr != nil {
+				t.Fatal(gerr)
+			}
+			wg.Done()
+		}(msg)
+	}
+
+	close(startChan)
+
+	for k := range testIds {
+		res, err := client.HGet(k, "example_key").Result()
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+		if exp := "test-" + k; exp != res {
+			t.Errorf("Wrong result: %v != %v", res, exp)
+		}
+	}
+
+	wg.Wait()
 }

@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -44,6 +45,7 @@ type RedisHashConfig struct {
 	WalkMetadata   bool              `json:"walk_metadata" yaml:"walk_metadata"`
 	WalkJSONObject bool              `json:"walk_json_object" yaml:"walk_json_object"`
 	Fields         map[string]string `json:"fields" yaml:"fields"`
+	MaxInFlight    int               `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewRedisHashConfig creates a new RedisHashConfig with default values.
@@ -54,6 +56,7 @@ func NewRedisHashConfig() RedisHashConfig {
 		WalkMetadata:   false,
 		WalkJSONObject: false,
 		Fields:         map[string]string{},
+		MaxInFlight:    1,
 	}
 }
 
@@ -108,6 +111,11 @@ func NewRedisHash(
 
 //------------------------------------------------------------------------------
 
+// ConnectWithContext establishes a connection to an RedisHash server.
+func (r *RedisHash) ConnectWithContext(ctx context.Context) error {
+	return r.Connect()
+}
+
 // Connect establishes a connection to an RedisHash server.
 func (r *RedisHash) Connect() error {
 	r.connMut.Lock()
@@ -148,6 +156,12 @@ func walkForHashFields(msg types.Message, fields map[string]interface{}) error {
 		fields[k] = v
 	}
 	return nil
+}
+
+// WriteWithContext attempts to write a message to Redis by setting it using the
+// HMSET command.
+func (r *RedisHash) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return r.Write(msg)
 }
 
 // Write attempts to write a message to Redis by setting it using the HMSET

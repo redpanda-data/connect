@@ -661,14 +661,17 @@ OUTPUT_NATS_STREAM_SUBJECT                            = benthos_messages
 OUTPUT_NATS_STREAM_URLS                               = nats://localhost:4222
 OUTPUT_NATS_SUBJECT                                   = benthos_messages
 OUTPUT_NATS_URLS                                      = nats://127.0.0.1:4222
+OUTPUT_NSQ_MAX_IN_FLIGHT                              = 1
 OUTPUT_NSQ_NSQD_TCP_ADDRESS                           = localhost:4150
 OUTPUT_NSQ_TOPIC                                      = benthos_messages
 OUTPUT_NSQ_USER_AGENT                                 = benthos_producer
 OUTPUT_REDIS_HASH_KEY
+OUTPUT_REDIS_HASH_MAX_IN_FLIGHT                       = 1
 OUTPUT_REDIS_HASH_URL                                 = tcp://localhost:6379
 OUTPUT_REDIS_HASH_WALK_JSON_OBJECT                    = false
 OUTPUT_REDIS_HASH_WALK_METADATA                       = false
 OUTPUT_REDIS_LIST_KEY                                 = benthos_list
+OUTPUT_REDIS_LIST_MAX_IN_FLIGHT                       = 1
 OUTPUT_REDIS_LIST_URL                                 = tcp://localhost:6379
 OUTPUT_REDIS_PUBSUB_CHANNEL                           = benthos_chan
 OUTPUT_REDIS_PUBSUB_URL                               = tcp://localhost:6379
