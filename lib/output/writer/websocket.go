@@ -155,12 +155,14 @@ func (w *Websocket) Write(msg types.Message) error {
 
 // CloseAsync shuts down the Websocket output and stops processing messages.
 func (w *Websocket) CloseAsync() {
-	w.lock.Lock()
-	if w.client != nil {
-		w.client.Close()
-		w.client = nil
-	}
-	w.lock.Unlock()
+	go func() {
+		w.lock.Lock()
+		if w.client != nil {
+			w.client.Close()
+			w.client = nil
+		}
+		w.lock.Unlock()
+	}()
 }
 
 // WaitForClose blocks until the Websocket output has closed down.
