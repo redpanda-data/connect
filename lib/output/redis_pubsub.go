@@ -49,7 +49,10 @@ func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metri
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter("redis_pubsub", w, log, stats)
+	if conf.RedisPubSub.MaxInFlight == 1 {
+		return NewWriter(TypeRedisPubSub, w, log, stats)
+	}
+	return NewAsyncWriter(TypeRedisPubSub, conf.RedisPubSub.MaxInFlight, w, log, stats)
 }
 
 //------------------------------------------------------------------------------

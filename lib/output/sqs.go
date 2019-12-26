@@ -60,8 +60,13 @@ func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		"sqs", s, log, stats,
+	if conf.SQS.MaxInFlight == 1 {
+		return NewWriter(
+			TypeSQS, s, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeSQS, conf.SQS.MaxInFlight, s, log, stats,
 	)
 }
 

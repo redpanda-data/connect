@@ -21,6 +21,7 @@ output:
   type: redis_pubsub
   redis_pubsub:
     channel: benthos_chan
+    max_in_flight: 1
     url: tcp://localhost:6379
 resources:
   caches: {}

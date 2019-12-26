@@ -52,8 +52,13 @@ func NewAmazonSNS(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		"SNS", s, log, stats,
+	if conf.SNS.MaxInFlight == 1 {
+		return NewWriter(
+			TypeSNS, s, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeSNS, conf.SNS.MaxInFlight, s, log, stats,
 	)
 }
 

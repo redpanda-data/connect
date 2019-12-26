@@ -41,6 +41,7 @@ output:
       secret: ""
       token: ""
     endpoint: ""
+    max_in_flight: 1
     max_retries: 0
     message_deduplication_id: ""
     message_group_id: ""

@@ -94,7 +94,7 @@ type Kinesis struct {
 	session *session.Session
 	kinesis kinesisiface.KinesisAPI
 
-	backoff      backoff.BackOff
+	backoffCtor  func() backoff.BackOff
 	endpoint     *string
 	hashKey      *text.InterpolatedString
 	partitionKey *text.InterpolatedString
@@ -131,7 +131,7 @@ func NewKinesis(
 	}
 
 	var err error
-	if k.backoff, err = conf.Config.Get(); err != nil {
+	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {
 		return nil, err
 	}
 	return &k, nil
@@ -219,6 +219,8 @@ func (a *Kinesis) WriteWithContext(ctx context.Context, msg types.Message) error
 		return types.ErrNotConnected
 	}
 
+	backOff := a.backoffCtor()
+
 	records, err := a.toRecords(msg)
 	if err != nil {
 		return err
@@ -237,9 +239,9 @@ func (a *Kinesis) WriteWithContext(ctx context.Context, msg types.Message) error
 	}
 
 	var failed []*kinesis.PutRecordsRequestEntry
-	a.backoff.Reset()
+	backOff.Reset()
 	for len(input.Records) > 0 {
-		wait := a.backoff.NextBackOff()
+		wait := backOff.NextBackOff()
 
 		// batch write to kinesis
 		output, err := a.kinesis.PutRecords(input)

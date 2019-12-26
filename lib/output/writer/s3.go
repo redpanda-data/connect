@@ -49,6 +49,7 @@ type AmazonS3Config struct {
 	ContentEncoding    string `json:"content_encoding" yaml:"content_encoding"`
 	Timeout            string `json:"timeout" yaml:"timeout"`
 	KMSKeyID           string `json:"kms_key_id" yaml:"kms_key_id"`
+	MaxInFlight        int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
@@ -62,6 +63,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		ContentEncoding:    "",
 		Timeout:            "5s",
 		KMSKeyID:           "",
+		MaxInFlight:        1,
 	}
 }
 
@@ -108,6 +110,12 @@ func NewAmazonS3(
 	}, nil
 }
 
+// ConnectWithContext attempts to establish a connection to the target S3
+// bucket.
+func (a *AmazonS3) ConnectWithContext(ctx context.Context) error {
+	return a.Connect()
+}
+
 // Connect attempts to establish a connection to the target S3 bucket.
 func (a *AmazonS3) Connect() error {
 	if a.session != nil {
@@ -130,12 +138,18 @@ func (a *AmazonS3) Connect() error {
 
 // Write attempts to write message contents to a target S3 bucket as files.
 func (a *AmazonS3) Write(msg types.Message) error {
+	return a.WriteWithContext(context.Background(), msg)
+}
+
+// WriteWithContext attempts to write message contents to a target S3 bucket as
+// files.
+func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) error {
 	if a.session == nil {
 		return types.ErrNotConnected
 	}
 
 	ctx, cancel := context.WithTimeout(
-		aws.BackgroundContext(), a.timeout,
+		wctx, a.timeout,
 	)
 	defer cancel()
 

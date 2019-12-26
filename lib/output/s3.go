@@ -60,8 +60,13 @@ func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
-		"s3", sthree, log, stats,
+	if conf.S3.MaxInFlight == 1 {
+		return NewWriter(
+			TypeS3, sthree, log, stats,
+		)
+	}
+	return NewAsyncWriter(
+		TypeS3, conf.S3.MaxInFlight, sthree, log, stats,
 	)
 }
 

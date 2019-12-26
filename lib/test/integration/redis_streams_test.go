@@ -210,6 +210,12 @@ func testRedisStreamsAsyncALO(url string, t *testing.T) {
 	outConf.Stream = "benthos_test_streams_parallel_async"
 
 	checkALOParallelAsync(outputCtr, inputCtr, 100, t)
+
+	inConf.Streams = []string{"benthos_test_streams_parallel_writers"}
+	inConf.Limit = 1
+	outConf.Stream = "benthos_test_streams_parallel_writers"
+
+	checkALOAsyncParallelWrites(outputCtr, inputCtr, 50, t)
 }
 
 func testRedisStreamsSinglePart(url string, t *testing.T) {

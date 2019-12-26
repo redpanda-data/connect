@@ -78,9 +78,9 @@ type KinesisFirehose struct {
 	session  *session.Session
 	firehose firehoseiface.FirehoseAPI
 
-	backoff    backoff.BackOff
-	endpoint   *string
-	streamName *string
+	backoffCtor func() backoff.BackOff
+	endpoint    *string
+	streamName  *string
 
 	log   log.Modular
 	stats metrics.Type
@@ -107,7 +107,7 @@ func NewKinesisFirehose(
 	}
 
 	var err error
-	if k.backoff, err = conf.Config.Get(); err != nil {
+	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {
 		return nil, err
 	}
 	return &k, nil
@@ -190,6 +190,8 @@ func (a *KinesisFirehose) WriteWithContext(ctx context.Context, msg types.Messag
 		return types.ErrNotConnected
 	}
 
+	backOff := a.backoffCtor()
+
 	records, err := a.toRecords(msg)
 	if err != nil {
 		return err
@@ -208,9 +210,8 @@ func (a *KinesisFirehose) WriteWithContext(ctx context.Context, msg types.Messag
 	}
 
 	var failed []*firehose.Record
-	a.backoff.Reset()
 	for len(input.Records) > 0 {
-		wait := a.backoff.NextBackOff()
+		wait := backOff.NextBackOff()
 
 		// batch write to kinesis firehose
 		output, err := a.firehose.PutRecordBatch(input)

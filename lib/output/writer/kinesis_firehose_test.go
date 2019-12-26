@@ -38,7 +38,9 @@ func (m *mockKinesisFirehose) PutRecordBatch(input *firehose.PutRecordBatchInput
 
 func TestKinesisFirehoseWriteSinglePartMessage(t *testing.T) {
 	k := KinesisFirehose{
-		backoff: backoff.NewExponentialBackOff(),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -71,7 +73,9 @@ func TestKinesisFirehoseWriteMultiPartMessage(t *testing.T) {
 		{[]byte(`{"foo":"baz","id":456}`), "456"},
 	}
 	k := KinesisFirehose{
-		backoff: backoff.NewExponentialBackOff(),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -101,7 +105,9 @@ func TestKinesisFirehoseWriteChunk(t *testing.T) {
 	batchLengths := []int{}
 	n := 1200
 	k := KinesisFirehose{
-		backoff: backoff.NewExponentialBackOff(),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -143,7 +149,9 @@ func TestKinesisFirehoseWriteChunkWithThrottling(t *testing.T) {
 	batchLengths := []int{}
 	n := 1200
 	k := KinesisFirehose{
-		backoff: backoff.NewExponentialBackOff(),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -202,7 +210,9 @@ func TestKinesisFirehoseWriteError(t *testing.T) {
 	t.Parallel()
 	var calls int
 	k := KinesisFirehose{
-		backoff: backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2)
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -230,7 +240,9 @@ func TestKinesisFirehoseWriteMessageThrottling(t *testing.T) {
 	t.Parallel()
 	var calls [][]*firehose.Record
 	k := KinesisFirehose{
-		backoff: backoff.NewExponentialBackOff(),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -282,7 +294,9 @@ func TestKinesisFirehoseWriteBackoffMaxRetriesExceeded(t *testing.T) {
 	t.Parallel()
 	var calls int
 	k := KinesisFirehose{
-		backoff: backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2)
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),

@@ -966,6 +966,7 @@ already exist) using the RPUSH command.
 type: redis_pubsub
 redis_pubsub:
   channel: benthos_chan
+  max_in_flight: 1
   url: tcp://localhost:6379
 ```
 
@@ -981,6 +982,7 @@ can find a list of functions [here](../config_interpolation.md#functions).
 type: redis_streams
 redis_streams:
   body_key: body
+  max_in_flight: 1
   max_length: 0
   stream: benthos_stream
   url: tcp://localhost:6379
@@ -1044,6 +1046,7 @@ s3:
   endpoint: ""
   force_path_style_urls: false
   kms_key_id: ""
+  max_in_flight: 1
   path: ${!count:files}-${!timestamp_unix_nano}.txt
   region: eu-west-1
   timeout: 5s
@@ -1079,6 +1082,7 @@ sns:
     secret: ""
     token: ""
   endpoint: ""
+  max_in_flight: 1
   region: eu-west-1
   timeout: 5s
   topic_arn: ""
@@ -1110,6 +1114,7 @@ sqs:
     secret: ""
     token: ""
   endpoint: ""
+  max_in_flight: 1
   max_retries: 0
   message_deduplication_id: ""
   message_group_id: ""

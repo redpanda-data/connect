@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -56,6 +57,7 @@ type AmazonSQSConfig struct {
 	URL                    string `json:"url" yaml:"url"`
 	MessageGroupID         string `json:"message_group_id" yaml:"message_group_id"`
 	MessageDeduplicationID string `json:"message_deduplication_id" yaml:"message_deduplication_id"`
+	MaxInFlight            int    `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config         `json:",inline" yaml:",inline"`
 }
 
@@ -72,6 +74,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 		URL:                    "",
 		MessageGroupID:         "",
 		MessageDeduplicationID: "",
+		MaxInFlight:            1,
 		Config:                 rConf,
 	}
 }
@@ -83,9 +86,10 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 type AmazonSQS struct {
 	conf AmazonSQSConfig
 
-	backoff backoff.BackOff
 	session *session.Session
 	sqs     *sqs.SQS
+
+	backoffCtor func() backoff.BackOff
 
 	groupID  *text.InterpolatedString
 	dedupeID *text.InterpolatedString
@@ -118,10 +122,16 @@ func NewAmazonSQS(
 	}
 
 	var err error
-	if s.backoff, err = conf.Config.Get(); err != nil {
+	if s.backoffCtor, err = conf.Config.GetCtor(); err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// ConnectWithContext attempts to establish a connection to the target SQS
+// queue.
+func (a *AmazonSQS) ConnectWithContext(ctx context.Context) error {
+	return a.Connect()
 }
 
 // Connect attempts to establish a connection to the target SQS queue.
@@ -199,9 +209,16 @@ func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
 
 // Write attempts to write message contents to a target SQS.
 func (a *AmazonSQS) Write(msg types.Message) error {
+	return a.WriteWithContext(context.Background(), msg)
+}
+
+// WriteWithContext attempts to write message contents to a target SQS.
+func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg types.Message) error {
 	if a.session == nil {
 		return types.ErrNotConnected
 	}
+
+	backOff := a.backoffCtor()
 
 	entries := []*sqs.SendMessageBatchRequestEntry{}
 	attrMap := map[string]sqsAttributes{}
@@ -234,7 +251,7 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 
 	var err error
 	for len(input.Entries) > 0 {
-		wait := a.backoff.NextBackOff()
+		wait := backOff.NextBackOff()
 
 		var batchResult *sqs.SendMessageBatchOutput
 		if batchResult, err = a.sqs.SendMessageBatch(input); err != nil {
@@ -245,6 +262,8 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 			}
 			select {
 			case <-time.After(wait):
+			case <-ctx.Done():
+				return types.ErrTimeout
 			case <-a.closeChan:
 				return err
 			}
@@ -279,6 +298,8 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 			}
 			select {
 			case <-time.After(wait):
+			case <-ctx.Done():
+				return types.ErrTimeout
 			case <-a.closeChan:
 				return err
 			}
@@ -295,9 +316,6 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 		}
 	}
 
-	if err == nil {
-		a.backoff.Reset()
-	}
 	return err
 }
 

@@ -54,7 +54,10 @@ func NewRedisStreams(conf Config, mgr types.Manager, log log.Modular, stats metr
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter("redis_streams", w, log, stats)
+	if conf.RedisStreams.MaxInFlight == 1 {
+		return NewWriter(TypeRedisStreams, w, log, stats)
+	}
+	return NewAsyncWriter(TypeRedisStreams, conf.RedisStreams.MaxInFlight, w, log, stats)
 }
 
 //------------------------------------------------------------------------------

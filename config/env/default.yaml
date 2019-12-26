@@ -803,9 +803,11 @@ output:
         url: ${OUTPUT_REDIS_LIST_URL:tcp://localhost:6379}
       redis_pubsub:
         channel: ${OUTPUT_REDIS_PUBSUB_CHANNEL:benthos_chan}
+        max_in_flight: ${OUTPUT_REDIS_PUBSUB_MAX_IN_FLIGHT:1}
         url: ${OUTPUT_REDIS_PUBSUB_URL:tcp://localhost:6379}
       redis_streams:
         body_key: ${OUTPUT_REDIS_STREAMS_BODY_KEY:body}
+        max_in_flight: ${OUTPUT_REDIS_STREAMS_MAX_IN_FLIGHT:1}
         max_length: ${OUTPUT_REDIS_STREAMS_MAX_LENGTH:0}
         stream: ${OUTPUT_REDIS_STREAMS_STREAM:benthos_stream}
         url: ${OUTPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
@@ -823,6 +825,7 @@ output:
         endpoint: ${OUTPUT_S3_ENDPOINT}
         force_path_style_urls: ${OUTPUT_S3_FORCE_PATH_STYLE_URLS:false}
         kms_key_id: ${OUTPUT_S3_KMS_KEY_ID}
+        max_in_flight: ${OUTPUT_S3_MAX_IN_FLIGHT:1}
         path: ${OUTPUT_S3_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
         region: ${OUTPUT_S3_REGION:eu-west-1}
         timeout: ${OUTPUT_S3_TIMEOUT:5s}
@@ -835,6 +838,7 @@ output:
           secret: ${OUTPUT_SNS_CREDENTIALS_SECRET}
           token: ${OUTPUT_SNS_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_SNS_ENDPOINT}
+        max_in_flight: ${OUTPUT_SNS_MAX_IN_FLIGHT:1}
         region: ${OUTPUT_SNS_REGION:eu-west-1}
         timeout: ${OUTPUT_SNS_TIMEOUT:5s}
         topic_arn: ${OUTPUT_SNS_TOPIC_ARN}
@@ -851,6 +855,7 @@ output:
           secret: ${OUTPUT_SQS_CREDENTIALS_SECRET}
           token: ${OUTPUT_SQS_CREDENTIALS_TOKEN}
         endpoint: ${OUTPUT_SQS_ENDPOINT}
+        max_in_flight: ${OUTPUT_SQS_MAX_IN_FLIGHT:1}
         max_retries: ${OUTPUT_SQS_MAX_RETRIES:0}
         message_deduplication_id: ${OUTPUT_SQS_MESSAGE_DEDUPLICATION_ID}
         message_group_id: ${OUTPUT_SQS_MESSAGE_GROUP_ID}

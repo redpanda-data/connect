@@ -27,6 +27,7 @@ output:
       secret: ""
       token: ""
     endpoint: ""
+    max_in_flight: 1
     region: eu-west-1
     timeout: 5s
     topic_arn: ""

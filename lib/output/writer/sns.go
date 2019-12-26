@@ -41,6 +41,7 @@ type SNSConfig struct {
 	TopicArn      string `json:"topic_arn" yaml:"topic_arn"`
 	sessionConfig `json:",inline" yaml:",inline"`
 	Timeout       string `json:"timeout" yaml:"timeout"`
+	MaxInFlight   int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewSNSConfig creates a new Config with default values.
@@ -49,8 +50,9 @@ func NewSNSConfig() SNSConfig {
 		sessionConfig: sessionConfig{
 			Config: sess.NewConfig(),
 		},
-		TopicArn: "",
-		Timeout:  "5s",
+		TopicArn:    "",
+		Timeout:     "5s",
+		MaxInFlight: 1,
 	}
 }
 
@@ -86,6 +88,11 @@ func NewSNS(conf SNSConfig, log log.Modular, stats metrics.Type) (*SNS, error) {
 	return s, nil
 }
 
+// ConnectWithContext attempts to establish a connection to the target SNS queue.
+func (a *SNS) ConnectWithContext(ctx context.Context) error {
+	return a.Connect()
+}
+
 // Connect attempts to establish a connection to the target SNS queue.
 func (a *SNS) Connect() error {
 	if a.session != nil {
@@ -106,13 +113,16 @@ func (a *SNS) Connect() error {
 
 // Write attempts to write message contents to a target SNS.
 func (a *SNS) Write(msg types.Message) error {
+	return a.WriteWithContext(context.Background(), msg)
+}
+
+// WriteWithContext attempts to write message contents to a target SNS.
+func (a *SNS) WriteWithContext(wctx context.Context, msg types.Message) error {
 	if a.session == nil {
 		return types.ErrNotConnected
 	}
 
-	ctx, cancel := context.WithTimeout(
-		aws.BackgroundContext(), a.tout,
-	)
+	ctx, cancel := context.WithTimeout(wctx, a.tout)
 	defer cancel()
 
 	return msg.Iter(func(i int, p types.Part) error {

@@ -34,6 +34,7 @@ output:
   type: redis_streams
   redis_streams:
     body_key: body
+    max_in_flight: 1
     max_length: 0
     stream: benthos_stream
     url: tcp://localhost:6379

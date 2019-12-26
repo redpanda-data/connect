@@ -43,7 +43,9 @@ func (m *mockKinesis) PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRe
 
 func TestKinesisWriteSinglePartMessage(t *testing.T) {
 	k := Kinesis{
-		backoff: backoff.NewExponentialBackOff(),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -81,7 +83,9 @@ func TestKinesisWriteMultiPartMessage(t *testing.T) {
 		{[]byte(`{"foo":"baz","id":456}`), "456"},
 	}
 	k := Kinesis{
-		backoff: backoff.NewExponentialBackOff(),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -118,7 +122,9 @@ func TestKinesisWriteChunk(t *testing.T) {
 	batchLengths := []int{}
 	n := 1200
 	k := Kinesis{
-		backoff: backoff.NewExponentialBackOff(),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -162,7 +168,9 @@ func TestKinesisWriteChunkWithThrottling(t *testing.T) {
 	batchLengths := []int{}
 	n := 1200
 	k := Kinesis{
-		backoff: backoff.NewExponentialBackOff(),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -222,7 +230,9 @@ func TestKinesisWriteError(t *testing.T) {
 	t.Parallel()
 	var calls int
 	k := Kinesis{
-		backoff: backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2)
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -252,7 +262,9 @@ func TestKinesisWriteMessageThrottling(t *testing.T) {
 	t.Parallel()
 	var calls [][]*kinesis.PutRecordsRequestEntry
 	k := Kinesis{
-		backoff: backoff.NewExponentialBackOff(),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),
@@ -306,7 +318,9 @@ func TestKinesisWriteBackoffMaxRetriesExceeded(t *testing.T) {
 	t.Parallel()
 	var calls int
 	k := Kinesis{
-		backoff: backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2),
+		backoffCtor: func() backoff.BackOff {
+			return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2)
+		},
 		session: session.Must(session.NewSession(&aws.Config{
 			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
 		})),

@@ -25,6 +25,11 @@ All notable changes to this project will be documented in this file.
   + `nsq`
   + `redis_hash`
   + `redis_list`
+  + `redis_pubsub`
+  + `redis_streams`
+  + `s3`
+  + `sns`
+  + `sqs`
 - More TRACE level logs added throughout the pipeline.
 
 ## 3.7.0 - 2019-12-21

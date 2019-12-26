@@ -674,8 +674,10 @@ OUTPUT_REDIS_LIST_KEY                                 = benthos_list
 OUTPUT_REDIS_LIST_MAX_IN_FLIGHT                       = 1
 OUTPUT_REDIS_LIST_URL                                 = tcp://localhost:6379
 OUTPUT_REDIS_PUBSUB_CHANNEL                           = benthos_chan
+OUTPUT_REDIS_PUBSUB_MAX_IN_FLIGHT                     = 1
 OUTPUT_REDIS_PUBSUB_URL                               = tcp://localhost:6379
 OUTPUT_REDIS_STREAMS_BODY_KEY                         = body
+OUTPUT_REDIS_STREAMS_MAX_IN_FLIGHT                    = 1
 OUTPUT_REDIS_STREAMS_MAX_LENGTH                       = 0
 OUTPUT_REDIS_STREAMS_STREAM                           = benthos_stream
 OUTPUT_REDIS_STREAMS_URL                              = tcp://localhost:6379
@@ -691,6 +693,7 @@ OUTPUT_S3_CREDENTIALS_TOKEN
 OUTPUT_S3_ENDPOINT
 OUTPUT_S3_FORCE_PATH_STYLE_URLS                       = false
 OUTPUT_S3_KMS_KEY_ID
+OUTPUT_S3_MAX_IN_FLIGHT                               = 1
 OUTPUT_S3_PATH                                        = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_S3_REGION                                      = eu-west-1
 OUTPUT_S3_TIMEOUT                                     = 5s
@@ -701,6 +704,7 @@ OUTPUT_SNS_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_SNS_CREDENTIALS_SECRET
 OUTPUT_SNS_CREDENTIALS_TOKEN
 OUTPUT_SNS_ENDPOINT
+OUTPUT_SNS_MAX_IN_FLIGHT                              = 1
 OUTPUT_SNS_REGION                                     = eu-west-1
 OUTPUT_SNS_TIMEOUT                                    = 5s
 OUTPUT_SNS_TOPIC_ARN
@@ -714,6 +718,7 @@ OUTPUT_SQS_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_SQS_CREDENTIALS_SECRET
 OUTPUT_SQS_CREDENTIALS_TOKEN
 OUTPUT_SQS_ENDPOINT
+OUTPUT_SQS_MAX_IN_FLIGHT                              = 1
 OUTPUT_SQS_MAX_RETRIES                                = 0
 OUTPUT_SQS_MESSAGE_DEDUPLICATION_ID
 OUTPUT_SQS_MESSAGE_GROUP_ID

@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"net/url"
 	"sync"
 	"time"
@@ -39,6 +40,7 @@ type RedisStreamsConfig struct {
 	Stream       string `json:"stream" yaml:"stream"`
 	BodyKey      string `json:"body_key" yaml:"body_key"`
 	MaxLenApprox int64  `json:"max_length" yaml:"max_length"`
+	MaxInFlight  int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.
@@ -48,6 +50,7 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		Stream:       "benthos_stream",
 		BodyKey:      "body",
 		MaxLenApprox: 0,
+		MaxInFlight:  1,
 	}
 }
 
@@ -89,6 +92,11 @@ func NewRedisStreams(
 
 //------------------------------------------------------------------------------
 
+// ConnectWithContext establishes a connection to an RedisStreams server.
+func (r *RedisStreams) ConnectWithContext(ctx context.Context) error {
+	return r.Connect()
+}
+
 // Connect establishes a connection to an RedisStreams server.
 func (r *RedisStreams) Connect() error {
 	r.connMut.Lock()
@@ -116,7 +124,12 @@ func (r *RedisStreams) Connect() error {
 
 //------------------------------------------------------------------------------
 
-// Write attempts to write a message by pushing it to the end of a Redis list.
+// WriteWithContext attempts to write a message by pushing it to a Redis stream.
+func (r *RedisStreams) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return r.Write(msg)
+}
+
+// Write attempts to write a message by pushing it to a Redis stream.
 func (r *RedisStreams) Write(msg types.Message) error {
 	r.connMut.RLock()
 	client := r.client

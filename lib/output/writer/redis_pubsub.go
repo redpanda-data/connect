@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"context"
 	"net/url"
 	"sync"
 	"time"
@@ -38,15 +39,17 @@ import (
 // RedisPubSubConfig contains configuration fields for the RedisPubSub output
 // type.
 type RedisPubSubConfig struct {
-	URL     string `json:"url" yaml:"url"`
-	Channel string `json:"channel" yaml:"channel"`
+	URL         string `json:"url" yaml:"url"`
+	Channel     string `json:"channel" yaml:"channel"`
+	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewRedisPubSubConfig creates a new RedisPubSubConfig with default values.
 func NewRedisPubSubConfig() RedisPubSubConfig {
 	return RedisPubSubConfig{
-		URL:     "tcp://localhost:6379",
-		Channel: "benthos_chan",
+		URL:         "tcp://localhost:6379",
+		Channel:     "benthos_chan",
+		MaxInFlight: 1,
 	}
 }
 
@@ -89,6 +92,11 @@ func NewRedisPubSub(
 
 //------------------------------------------------------------------------------
 
+// ConnectWithContext establishes a connection to an RedisPubSub server.
+func (r *RedisPubSub) ConnectWithContext(ctx context.Context) error {
+	return r.Connect()
+}
+
 // Connect establishes a connection to an RedisPubSub server.
 func (r *RedisPubSub) Connect() error {
 	r.connMut.Lock()
@@ -116,7 +124,13 @@ func (r *RedisPubSub) Connect() error {
 
 //------------------------------------------------------------------------------
 
-// Write attempts to write a message by pushing it to the end of a Redis list.
+// WriteWithContext attempts to write a message by pushing it to a Redis pub/sub
+// topic.
+func (r *RedisPubSub) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return r.Write(msg)
+}
+
+// Write attempts to write a message by pushing it to a Redis pub/sub topic.
 func (r *RedisPubSub) Write(msg types.Message) error {
 	r.connMut.RLock()
 	client := r.client
