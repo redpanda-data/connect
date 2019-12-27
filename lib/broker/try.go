@@ -23,6 +23,7 @@ package broker
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -108,7 +109,11 @@ func (t *Try) Connected() bool {
 
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (t *Try) loop() {
+	wg := sync.WaitGroup{}
+
 	defer func() {
+		wg.Wait()
+
 		for _, c := range t.outputTsChans {
 			close(c)
 		}
@@ -124,12 +129,10 @@ func (t *Try) loop() {
 	}
 
 	var open bool
-	resChan := make(chan types.Response)
 	for atomic.LoadInt32(&t.running) == 1 {
-		var ts types.Transaction
-		var res types.Response
+		var tran types.Transaction
 		select {
-		case ts, open = <-t.transactions:
+		case tran, open = <-t.transactions:
 			if !open {
 				return
 			}
@@ -138,32 +141,46 @@ func (t *Try) loop() {
 		}
 		mMsgsRcvd.Incr(1)
 
-	triesLoop:
-		for i, ot := range t.outputTsChans {
-			select {
-			case ot <- types.NewTransaction(ts.Payload, resChan):
-			case <-t.closeChan:
-				return
-			}
-			select {
-			case res, open = <-resChan:
-				if !open {
-					return
-				}
-				if res.Error() != nil {
-					mErrs[i].Incr(1)
-				} else {
-					break triesLoop
-				}
-			case <-t.closeChan:
-				return
-			}
-		}
+		rChan := make(chan types.Response)
 		select {
-		case ts.ResponseChan <- res:
+		case t.outputTsChans[0] <- types.NewTransaction(tran.Payload, rChan):
 		case <-t.closeChan:
 			return
 		}
+
+		go func(ts types.Transaction, resChan chan types.Response) {
+			var res types.Response
+
+		triesLoop:
+			for i := 1; i <= len(t.outputTsChans); i++ {
+				select {
+				case res, open = <-resChan:
+					if !open {
+						return
+					}
+					if res.Error() != nil {
+						mErrs[i-1].Incr(1)
+					} else {
+						break triesLoop
+					}
+				case <-t.closeChan:
+					return
+				}
+
+				if i < len(t.outputTsChans) {
+					select {
+					case t.outputTsChans[i] <- types.NewTransaction(ts.Payload, resChan):
+					case <-t.closeChan:
+						return
+					}
+				}
+			}
+			select {
+			case ts.ResponseChan <- res:
+			case <-t.closeChan:
+				return
+			}
+		}(tran, rChan)
 	}
 }
 

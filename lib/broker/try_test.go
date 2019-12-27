@@ -23,6 +23,8 @@ package broker
 import (
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -251,12 +253,10 @@ func TestTryAllFail(t *testing.T) {
 
 	oTM, err := NewTry(outputs, metrics.DudType{})
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	for i := 0; i < 10; i++ {
@@ -264,8 +264,7 @@ func TestTryAllFail(t *testing.T) {
 		select {
 		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for broker send")
-			return
+			t.Fatalf("Timed out waiting for broker send")
 		}
 
 		testErr := errors.New("test error")
@@ -278,21 +277,17 @@ func TestTryAllFail(t *testing.T) {
 						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 					}
 				case <-mockOutputs[(j+1)%3].TChan:
-					t.Errorf("Received message in wrong order: %v != %v", j%3, (j+1)%3)
-					return
+					t.Fatalf("Received message in wrong order: %v != %v", j%3, (j+1)%3)
 				case <-mockOutputs[(j+2)%3].TChan:
-					t.Errorf("Received message in wrong order: %v != %v", j%3, (j+2)%3)
-					return
+					t.Fatalf("Received message in wrong order: %v != %v", j%3, (j+2)%3)
 				case <-time.After(time.Second):
-					t.Errorf("Timed out waiting for broker propagate")
-					return
+					t.Fatalf("Timed out waiting for broker propagate")
 				}
 
 				select {
 				case ts.ResponseChan <- response.NewError(testErr):
 				case <-time.After(time.Second):
-					t.Errorf("Timed out responding to broker")
-					return
+					t.Fatalf("Timed out responding to broker")
 				}
 			}
 		}()
@@ -303,8 +298,99 @@ func TestTryAllFail(t *testing.T) {
 				t.Errorf("Wrong error returned: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
-			t.Errorf("Timed out responding to broker")
-			return
+			t.Fatal("Timed out responding to broker")
+		}
+	}
+
+	oTM.CloseAsync()
+	if err := oTM.WaitForClose(time.Second * 10); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestTryAllFailParallel(t *testing.T) {
+	outputs := []types.Output{}
+	mockOutputs := []*MockOutputType{
+		{},
+		{},
+		{},
+	}
+
+	for _, o := range mockOutputs {
+		outputs = append(outputs, o)
+	}
+
+	readChan := make(chan types.Transaction)
+
+	oTM, err := NewTry(outputs, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = oTM.Consume(readChan); err != nil {
+		t.Fatal(err)
+	}
+
+	resChans := make([]chan types.Response, 10)
+	for i := range resChans {
+		resChans[i] = make(chan types.Response)
+	}
+
+	tallies := [3]int32{}
+
+	wg := sync.WaitGroup{}
+	testErr := errors.New("test error")
+	startChan := make(chan struct{})
+	for _, resChan := range resChans {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 3; j++ {
+				var ts types.Transaction
+				var index int
+				select {
+				case ts = <-mockOutputs[j%3].TChan:
+					index = j % 3
+				case ts = <-mockOutputs[(j+1)%3].TChan:
+					index = (j + 1) % 3
+				case ts = <-mockOutputs[(j+2)%3].TChan:
+					index = (j + 2) % 3
+				case <-time.After(time.Second):
+					t.Fatalf("Timed out waiting for broker propagate")
+				}
+				atomic.AddInt32(&tallies[index], 1)
+
+				<-startChan
+
+				select {
+				case ts.ResponseChan <- response.NewError(testErr):
+				case <-time.After(time.Second):
+					t.Fatalf("Timed out responding to broker")
+				}
+			}
+		}()
+		select {
+		case readChan <- types.NewTransaction(message.New([][]byte{[]byte("foo")}), resChan):
+		case <-time.After(time.Second):
+			t.Fatalf("Timed out waiting for broker send")
+		}
+	}
+	close(startChan)
+
+	for _, resChan := range resChans {
+		select {
+		case res := <-resChan:
+			if exp, act := testErr, res.Error(); exp != act {
+				t.Errorf("Wrong error returned: %v != %v", act, exp)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("Timed out responding to broker")
+		}
+	}
+
+	wg.Wait()
+	for _, tally := range tallies {
+		if int(tally) != len(resChans) {
+			t.Errorf("Wrong count of propagated messages: %v", tally)
 		}
 	}
 

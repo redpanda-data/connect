@@ -202,7 +202,10 @@ func (r *Retry) loop() {
 		mEndOfRetries = r.stats.GetCounter("retry.end_of_retries")
 	)
 
+	wg := sync.WaitGroup{}
+
 	defer func() {
+		wg.Wait()
 		close(r.transactionsOut)
 		r.wrapped.CloseAsync()
 		err := r.wrapped.WaitForClose(time.Second)
@@ -213,7 +216,6 @@ func (r *Retry) loop() {
 	}()
 	mRunning.Incr(1)
 
-	wg := sync.WaitGroup{}
 	errInterruptChan := make(chan struct{})
 	var errLooped int64
 
@@ -322,8 +324,6 @@ func (r *Retry) loop() {
 			}
 		}(tran, rChan)
 	}
-
-	wg.Wait()
 }
 
 // Consume assigns a messages channel for the output to read.
