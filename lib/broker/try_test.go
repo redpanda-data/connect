@@ -45,10 +45,9 @@ func TestTryInterfaces(t *testing.T) {
 }
 
 func TestTryDoubleClose(t *testing.T) {
-	oTM, err := NewTry([]types.Output{}, metrics.DudType{})
+	oTM, err := NewTry([]types.Output{&MockOutputType{}}, metrics.DudType{})
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	// This shouldn't cause a panic

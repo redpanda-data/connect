@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -55,7 +56,7 @@ we want to avoid reapplying to the same message more than once in the pipeline.
 
 Rather than retrying the same output you may wish to retry the send using a
 different output target (a dead letter queue). In which case you should instead
-use the ` + "[`broker`](#broker)" + ` output type with the pattern 'try'.`,
+use the ` + "[`try`](#try)" + ` output type.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			confBytes, err := json.Marshal(conf.Retry)
 			if err != nil {
@@ -139,8 +140,8 @@ type Retry struct {
 	running int32
 	conf    RetryConfig
 
-	wrapped Type
-	backoff backoff.BackOff
+	wrapped     Type
+	backoffCtor func() backoff.BackOff
 
 	stats metrics.Type
 	log   log.Modular
@@ -168,8 +169,8 @@ func NewRetry(
 		return nil, fmt.Errorf("failed to create output '%v': %v", conf.Retry.Output.Type, err)
 	}
 
-	var boff backoff.BackOff
-	if boff, err = conf.Retry.Get(); err != nil {
+	var boffCtor func() backoff.BackOff
+	if boffCtor, err = conf.Retry.GetCtor(); err != nil {
 		return nil, err
 	}
 
@@ -180,7 +181,7 @@ func NewRetry(
 		log:             log,
 		stats:           stats,
 		wrapped:         wrapped,
-		backoff:         boff,
+		backoffCtor:     boffCtor,
 		transactionsOut: make(chan types.Transaction),
 
 		closeChan:  make(chan struct{}),
@@ -212,13 +213,27 @@ func (r *Retry) loop() {
 	}()
 	mRunning.Incr(1)
 
-	resChan := make(chan types.Response)
+	wg := sync.WaitGroup{}
+	errInterruptChan := make(chan struct{})
+	var errLooped int64
 
 	for atomic.LoadInt32(&r.running) == 1 {
-		var ts types.Transaction
+		// Do not consume another message while pending messages are being
+		// reattempted.
+		for atomic.LoadInt64(&errLooped) > 0 {
+			select {
+			case <-errInterruptChan:
+			case <-time.After(time.Millisecond * 100):
+				// Just incase an interrupt doesn't arrive.
+			case <-r.closeChan:
+				return
+			}
+		}
+
+		var tran types.Transaction
 		var open bool
 		select {
-		case ts, open = <-r.transactionsIn:
+		case tran, open = <-r.transactionsIn:
 			if !open {
 				return
 			}
@@ -227,55 +242,88 @@ func (r *Retry) loop() {
 			return
 		}
 
-		var resOut types.Response
-
-	retryLoop:
-		for atomic.LoadInt32(&r.running) == 1 {
-			select {
-			case r.transactionsOut <- types.NewTransaction(ts.Payload, resChan):
-			case <-r.closeChan:
-				return
-			}
-
-			var res types.Response
-			select {
-			case res = <-resChan:
-			case <-r.closeChan:
-				return
-			}
-
-			if res.Error() != nil {
-				mError.Incr(1)
-				r.log.Errorf("Failed to send message: %v\n", res.Error())
-
-				nextBackoff := r.backoff.NextBackOff()
-				if nextBackoff == backoff.Stop {
-					mEndOfRetries.Incr(1)
-					r.backoff.Reset()
-					resOut = response.NewNoack()
-					break retryLoop
-				}
-				select {
-				case <-time.After(nextBackoff):
-				case <-r.closeChan:
-					// TODO: log failed message?
-					return
-				}
-			} else {
-				mSuccess.Incr(1)
-				mPartsSuccess.Incr(int64(ts.Payload.Len()))
-				r.backoff.Reset()
-				resOut = response.NewAck()
-				break retryLoop
-			}
-		}
-
+		rChan := make(chan types.Response)
 		select {
-		case ts.ResponseChan <- resOut:
+		case r.transactionsOut <- types.NewTransaction(tran.Payload, rChan):
 		case <-r.closeChan:
 			return
 		}
+
+		wg.Add(1)
+		go func(ts types.Transaction, resChan chan types.Response) {
+			var backOff backoff.BackOff
+			var resOut types.Response
+			var inErrLoop bool
+
+			defer func() {
+				wg.Done()
+				if inErrLoop {
+					atomic.AddInt64(&errLooped, -1)
+
+					// We're exiting our error loop, so (attempt to) interrupt the
+					// consumer.
+					select {
+					case errInterruptChan <- struct{}{}:
+					default:
+					}
+				}
+			}()
+
+		retryLoop:
+			for atomic.LoadInt32(&r.running) == 1 {
+				var res types.Response
+				select {
+				case res = <-resChan:
+				case <-r.closeChan:
+					return
+				}
+
+				if res.Error() != nil {
+					if !inErrLoop {
+						inErrLoop = true
+						atomic.AddInt64(&errLooped, 1)
+					}
+
+					mError.Incr(1)
+					r.log.Errorf("Failed to send message: %v\n", res.Error())
+					if backOff == nil {
+						backOff = r.backoffCtor()
+					}
+
+					nextBackoff := backOff.NextBackOff()
+					if nextBackoff == backoff.Stop {
+						mEndOfRetries.Incr(1)
+						resOut = response.NewNoack()
+						break retryLoop
+					}
+					select {
+					case <-time.After(nextBackoff):
+					case <-r.closeChan:
+						return
+					}
+
+					select {
+					case r.transactionsOut <- types.NewTransaction(ts.Payload, resChan):
+					case <-r.closeChan:
+						return
+					}
+				} else {
+					mSuccess.Incr(1)
+					mPartsSuccess.Incr(int64(ts.Payload.Len()))
+					resOut = response.NewAck()
+					break retryLoop
+				}
+			}
+
+			select {
+			case ts.ResponseChan <- resOut:
+			case <-r.closeChan:
+				return
+			}
+		}(tran, rChan)
 	}
+
+	wg.Wait()
 }
 
 // Consume assigns a messages channel for the output to read.

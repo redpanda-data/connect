@@ -21,6 +21,7 @@
 package broker
 
 import (
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -59,6 +60,9 @@ func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
 		outputs:       outputs,
 		closedChan:    make(chan struct{}),
 		closeChan:     make(chan struct{}),
+	}
+	if len(outputs) == 0 {
+		return nil, errors.New("missing outputs")
 	}
 	t.outputTsChans = make([]chan types.Transaction, len(t.outputs))
 	for i := range t.outputTsChans {
