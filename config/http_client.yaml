@@ -59,6 +59,13 @@ output:
       enabled: false
       password: ""
       username: ""
+    batching:
+      byte_size: 0
+      condition:
+        type: static
+        static: false
+      count: 1
+      period: ""
     copy_response_headers: false
     drop_on: []
     headers:

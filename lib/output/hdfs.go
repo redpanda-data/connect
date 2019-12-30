@@ -32,12 +32,13 @@ import (
 func init() {
 	Constructors[TypeHDFS] = TypeSpec{
 		constructor: NewHDFS,
-		description: `
+		Description: `
 Sends message parts as files to a HDFS directory. Each file is written
 with the path specified with the 'path' field, in order to have a different path
 for each object you should use function interpolations described
 [here](../config_interpolation.md#functions). When sending batched messages the
 interpolations are performed per message part.`,
+		Async: true,
 	}
 }
 

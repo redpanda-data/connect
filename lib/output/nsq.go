@@ -21,10 +21,9 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/v3/lib/output/writer"
-
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -33,11 +32,12 @@ import (
 func init() {
 	Constructors[TypeNSQ] = TypeSpec{
 		constructor: NewNSQ,
-		description: `
+		Description: `
 Publish to an NSQ topic. The ` + "`topic`" + ` field can be dynamically set
 using function interpolations described
 [here](../config_interpolation.md#functions). When sending batched messages
 these interpolations are performed per message part.`,
+		Async: true,
 	}
 }
 

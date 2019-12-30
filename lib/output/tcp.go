@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeTCP] = TypeSpec{
 		constructor: NewTCP,
-		description: `
+		Description: `
 Sends messages as a continuous stream of line delimited data over TCP by
 connecting to a server.
 

@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeS3] = TypeSpec{
 		constructor: NewAmazonS3,
-		description: `
+		Description: `
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
 with the path specified with the ` + "`path`" + ` field.
 
@@ -49,6 +49,7 @@ By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).`,
+		Async: true,
 	}
 }
 

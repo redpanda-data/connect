@@ -29,6 +29,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
@@ -66,6 +67,7 @@ type ElasticsearchConfig struct {
 	AWS            OptionalAWSConfig    `json:"aws" yaml:"aws"`
 	MaxInFlight    int                  `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
+	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewElasticsearchConfig creates a new ElasticsearchConfig with default values.
@@ -74,6 +76,9 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 	rConf.Backoff.InitialInterval = "1s"
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
+
+	batching := batch.NewPolicyConfig()
+	batching.Count = 1
 
 	return ElasticsearchConfig{
 		URLs:        []string{"http://localhost:9200"},
@@ -91,6 +96,7 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 		},
 		MaxInFlight: 1,
 		Config:      rConf,
+		Batching:    batching,
 	}
 }
 

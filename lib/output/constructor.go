@@ -21,11 +21,8 @@
 package output
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -49,8 +46,16 @@ type TypeSpec struct {
 		pipelineConstructors ...types.PipelineConstructorFunc,
 	) (Type, error)
 	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
-	description        string
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
+
+	Description string
+
+	// Async indicates whether this output benefits from sending multiple
+	// messages asynchronously over the protocol.
+	Async bool
+
+	// Batches indicates whether this output benefits from batching of messages.
+	Batches bool
 }
 
 // Constructors is a map of all output types with their specs.
@@ -310,109 +315,6 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 }
 
 //------------------------------------------------------------------------------
-
-var header = "This document was generated with `benthos --list-outputs`" + `
-
-An output is a sink where we wish to send our consumed data after applying an
-optional array of [processors](../processors). Only one output is configured at
-the root of a Benthos config. However, the output can be a [broker](#broker)
-which combines multiple outputs under a chosen brokering pattern.
-
-An output config section looks like this:
-
-` + "``` yaml" + `
-output:
-  type: foo
-  foo:
-    bar: baz
-  processors:
-  - type: qux
-` + "```" + `
-
-### Back Pressure
-
-Benthos outputs apply back pressure to components upstream. This means if your
-output target starts blocking traffic Benthos will gracefully stop consuming
-until the issue is resolved.
-
-### Retries
-
-When a Benthos output fails to send a message the error is propagated back up to
-the input, where depending on the protocol it will either be pushed back to the
-source as a Noack (AMQP) or will be reattempted indefinitely with the commit
-withheld until success (Kafka).
-
-It's possible to instead have Benthos indefinitely retry an output until success
-with a [` + "`retry`" + `](#retry) output. Some other outputs, such as the
-[` + "`broker`" + `](#broker), might also retry indefinitely depending on their
-configuration.
-
-### Multiplexing Outputs
-
-It is possible to perform content based multiplexing of messages to specific
-outputs either by using the ` + "[`switch`](#switch)" + ` output, or a
-` + "[`broker`](#broker)" + ` with the ` + "`fan_out`" + ` pattern and a
-[filter processor](../processors/README.md#filter_parts) on each output, which
-is a processor that drops messages if the condition does not pass.
-Conditions are content aware logical operators that can be combined using
-boolean logic.
-
-For more information regarding conditions, including a full list of available
-conditions please [read the docs here](../conditions/README.md).
-
-### Dead Letter Queues
-
-It's possible to create fallback outputs for when an output target fails using
-a ` + "[`try`](#try)" + ` output.`
-
-// Descriptions returns a formatted string of collated descriptions of each
-// type.
-func Descriptions() string {
-	// Order our output types alphabetically
-	names := []string{}
-	for name := range Constructors {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	buf := bytes.Buffer{}
-	buf.WriteString("Outputs\n")
-	buf.WriteString(strings.Repeat("=", 7))
-	buf.WriteString("\n\n")
-	buf.WriteString(header)
-	buf.WriteString("\n\n")
-
-	buf.WriteString("### Contents\n\n")
-	for i, name := range names {
-		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, name))
-	}
-	buf.WriteString("\n")
-
-	// Append each description
-	for i, name := range names {
-		var confBytes []byte
-
-		conf := NewConfig()
-		conf.Type = name
-		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = config.MarshalYAML(confSanit)
-		}
-
-		buf.WriteString("## ")
-		buf.WriteString("`" + name + "`")
-		buf.WriteString("\n")
-		if confBytes != nil {
-			buf.WriteString("\n``` yaml\n")
-			buf.Write(confBytes)
-			buf.WriteString("```\n")
-		}
-		buf.WriteString(Constructors[name].description)
-		if i != (len(names) - 1) {
-			buf.WriteString("\n\n")
-		}
-	}
-	return buf.String()
-}
 
 // New creates an output type based on an output configuration.
 func New(

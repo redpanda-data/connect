@@ -32,11 +32,12 @@ import (
 func init() {
 	Constructors["nanomsg"] = TypeSpec{
 		constructor: NewNanomsg,
-		description: `
+		Description: `
 The scalability protocols are common communication patterns. This output should
 be compatible with any implementation, but specifically targets Nanomsg.
 
 Currently only PUSH and PUB sockets are supported.`,
+		Async: true,
 	}
 }
 

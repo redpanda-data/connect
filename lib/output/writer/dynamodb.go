@@ -30,6 +30,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
@@ -54,6 +55,7 @@ type DynamoDBConfig struct {
 	TTLKey         string            `json:"ttl_key" yaml:"ttl_key"`
 	MaxInFlight    int               `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
+	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewDynamoDBConfig creates a DynamoDBConfig populated with default values.
@@ -63,6 +65,8 @@ func NewDynamoDBConfig() DynamoDBConfig {
 	rConf.Backoff.InitialInterval = "1s"
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
+	batching := batch.NewPolicyConfig()
+	batching.Count = 1
 	return DynamoDBConfig{
 		sessionConfig: sessionConfig{
 			Config: session.NewConfig(),
@@ -74,6 +78,7 @@ func NewDynamoDBConfig() DynamoDBConfig {
 		TTLKey:         "",
 		MaxInFlight:    1,
 		Config:         rConf,
+		Batching:       batching,
 	}
 }
 

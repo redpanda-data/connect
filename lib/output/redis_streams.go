@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeRedisStreams] = TypeSpec{
 		constructor: NewRedisStreams,
-		description: `
+		Description: `
 Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't
 already exist) using the XADD command. It's possible to specify a maximum length
 of the target stream by setting it to a value greater than 0, in which case this
@@ -43,6 +43,7 @@ Redis stream entries are key/value pairs, as such it is necessary to specify the
 key to be set to the body of the message. All metadata fields of the message
 will also be set as key/value pairs, if there is a key collision between
 a metadata item and the body then the body takes precedence.`,
+		Async: true,
 	}
 }
 

@@ -21,7 +21,10 @@
 package output
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -32,7 +35,7 @@ import (
 func init() {
 	Constructors[TypeHTTPClient] = TypeSpec{
 		constructor: NewHTTPClient,
-		description: `
+		Description: `
 Sends messages to an HTTP server. The request will be retried for each message
 whenever the response code is outside the range of 200 -> 299 inclusive. It is
 possible to list codes outside of this range in the ` + "`drop_on`" + ` field in
@@ -59,6 +62,11 @@ It's possible to propagate the response from each HTTP request back to the input
 source by setting ` + "`propagate_response` to `true`" + `. Only inputs that
 support [synchronous responses](../sync_responses.md) are able to make use of
 these propagated responses.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return sanitiseWithBatch(conf.HTTPClient, conf.HTTPClient.Batching)
+		},
+		Async:   true,
+		Batches: true,
 	}
 }
 
@@ -68,10 +76,20 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	if err != nil {
 		return nil, err
 	}
+	var w Type
 	if conf.HTTPClient.MaxInFlight == 1 {
-		return NewWriter(TypeHTTPClient, h, log, stats)
+		w, err = NewWriter(TypeHTTPClient, h, log, stats)
+	} else {
+		w, err = NewAsyncWriter(TypeHTTPClient, conf.HTTPClient.MaxInFlight, h, log, stats)
 	}
-	return NewAsyncWriter(TypeHTTPClient, conf.HTTPClient.MaxInFlight, h, log, stats)
+	if bconf := conf.HTTPClient.Batching; err == nil && !bconf.IsNoop() {
+		policy, err := batch.NewPolicy(bconf, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
+		}
+		w = NewBatcher(policy, w, log, stats)
+	}
+	return w, err
 }
 
 //------------------------------------------------------------------------------

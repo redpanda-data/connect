@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeDrop] = TypeSpec{
 		constructor: NewDrop,
-		description: `
+		Description: `
 Drops all messages.`,
 	}
 }

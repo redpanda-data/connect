@@ -34,7 +34,7 @@ import (
 func init() {
 	Constructors[TypeInproc] = TypeSpec{
 		constructor: NewInproc,
-		description: `
+		Description: `
 Sends data directly to Benthos inputs by connecting to a unique ID. This allows
 you to hook up isolated streams whilst running Benthos in
 ` + "[`--streams` mode](../streams/README.md) mode" + `, it is NOT recommended

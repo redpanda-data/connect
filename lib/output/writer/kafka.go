@@ -30,6 +30,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/hash/murmur2"
@@ -59,6 +60,7 @@ type KafkaConfig struct {
 	SASL                 SASLConfig  `json:"sasl" yaml:"sasl"`
 	MaxInFlight          int         `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config       `json:",inline" yaml:",inline"`
+	Batching             batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // SASLConfig contains configuration for SASL based authentication.
@@ -74,6 +76,8 @@ func NewKafkaConfig() KafkaConfig {
 	rConf.Backoff.InitialInterval = "0s"
 	rConf.Backoff.MaxInterval = "1s"
 	rConf.Backoff.MaxElapsedTime = "5s"
+	batching := batch.NewPolicyConfig()
+	batching.Count = 1
 	return KafkaConfig{
 		Addresses:            []string{"localhost:9092"},
 		ClientID:             "benthos_kafka_output",
@@ -89,6 +93,7 @@ func NewKafkaConfig() KafkaConfig {
 		TLS:                  btls.NewConfig(),
 		MaxInFlight:          1,
 		Config:               rConf,
+		Batching:             batching,
 	}
 }
 

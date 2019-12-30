@@ -629,6 +629,10 @@ output:
           enabled: ${OUTPUT_ELASTICSEARCH_BASIC_AUTH_ENABLED:false}
           password: ${OUTPUT_ELASTICSEARCH_BASIC_AUTH_PASSWORD}
           username: ${OUTPUT_ELASTICSEARCH_BASIC_AUTH_USERNAME}
+        batching:
+          byte_size: ${OUTPUT_ELASTICSEARCH_BATCHING_BYTE_SIZE:0}
+          count: ${OUTPUT_ELASTICSEARCH_BATCHING_COUNT:1}
+          period: ${OUTPUT_ELASTICSEARCH_BATCHING_PERIOD}
         healthcheck: ${OUTPUT_ELASTICSEARCH_HEALTHCHECK:true}
         id: ${OUTPUT_ELASTICSEARCH_ID:${!count:elastic_ids}-${!timestamp_unix}}
         index: ${OUTPUT_ELASTICSEARCH_INDEX:benthos_index}
@@ -663,6 +667,10 @@ output:
           enabled: ${OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED:false}
           password: ${OUTPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD}
           username: ${OUTPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME}
+        batching:
+          byte_size: ${OUTPUT_HTTP_CLIENT_BATCHING_BYTE_SIZE:0}
+          count: ${OUTPUT_HTTP_CLIENT_BATCHING_COUNT:1}
+          period: ${OUTPUT_HTTP_CLIENT_BATCHING_PERIOD}
         copy_response_headers: ${OUTPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS:false}
         headers:
           Content-Type: ${OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
@@ -703,6 +711,10 @@ output:
           initial_interval: ${OUTPUT_KAFKA_BACKOFF_INITIAL_INTERVAL:0s}
           max_elapsed_time: ${OUTPUT_KAFKA_BACKOFF_MAX_ELAPSED_TIME:5s}
           max_interval: ${OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL:1s}
+        batching:
+          byte_size: ${OUTPUT_KAFKA_BATCHING_BYTE_SIZE:0}
+          count: ${OUTPUT_KAFKA_BATCHING_COUNT:1}
+          period: ${OUTPUT_KAFKA_BATCHING_PERIOD}
         client_id: ${OUTPUT_KAFKA_CLIENT_ID:benthos_kafka_output}
         compression: ${OUTPUT_KAFKA_COMPRESSION:none}
         key: ${OUTPUT_KAFKA_KEY}
@@ -727,6 +739,10 @@ output:
           initial_interval: ${OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL:1s}
           max_elapsed_time: ${OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME:30s}
           max_interval: ${OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL:5s}
+        batching:
+          byte_size: ${OUTPUT_KINESIS_BATCHING_BYTE_SIZE:0}
+          count: ${OUTPUT_KINESIS_BATCHING_COUNT:1}
+          period: ${OUTPUT_KINESIS_BATCHING_PERIOD}
         credentials:
           id: ${OUTPUT_KINESIS_CREDENTIALS_ID}
           profile: ${OUTPUT_KINESIS_CREDENTIALS_PROFILE}
@@ -746,6 +762,10 @@ output:
           initial_interval: ${OUTPUT_KINESIS_FIREHOSE_BACKOFF_INITIAL_INTERVAL:1s}
           max_elapsed_time: ${OUTPUT_KINESIS_FIREHOSE_BACKOFF_MAX_ELAPSED_TIME:30s}
           max_interval: ${OUTPUT_KINESIS_FIREHOSE_BACKOFF_MAX_INTERVAL:5s}
+        batching:
+          byte_size: ${OUTPUT_KINESIS_FIREHOSE_BATCHING_BYTE_SIZE:0}
+          count: ${OUTPUT_KINESIS_FIREHOSE_BATCHING_COUNT:1}
+          period: ${OUTPUT_KINESIS_FIREHOSE_BATCHING_PERIOD}
         credentials:
           id: ${OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_ID}
           profile: ${OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_PROFILE}
@@ -847,6 +867,10 @@ output:
           initial_interval: ${OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL:1s}
           max_elapsed_time: ${OUTPUT_SQS_BACKOFF_MAX_ELAPSED_TIME:30s}
           max_interval: ${OUTPUT_SQS_BACKOFF_MAX_INTERVAL:5s}
+        batching:
+          byte_size: ${OUTPUT_SQS_BATCHING_BYTE_SIZE:0}
+          count: ${OUTPUT_SQS_BATCHING_COUNT:1}
+          period: ${OUTPUT_SQS_BATCHING_PERIOD}
         credentials:
           id: ${OUTPUT_SQS_CREDENTIALS_ID}
           profile: ${OUTPUT_SQS_CREDENTIALS_PROFILE}

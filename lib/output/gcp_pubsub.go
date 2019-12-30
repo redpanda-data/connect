@@ -32,9 +32,10 @@ import (
 func init() {
 	Constructors[TypeGCPPubSub] = TypeSpec{
 		constructor: NewGCPPubSub,
-		description: `
+		Description: `
 Sends messages to a GCP Cloud Pub/Sub topic. Metadata from messages are sent as
 attributes.`,
+		Async: true,
 	}
 }
 

@@ -30,6 +30,14 @@ All notable changes to this project will be documented in this file.
   + `s3`
   + `sns`
   + `sqs`
+- Batching fields added to the following outputs:
+  + `dynamodb`
+  + `elasticsearch`
+  + `http_client`
+  + `kafka`
+  + `kinesis`
+  + `kinesis_firehose`
+  + `sqs`
 - More TRACE level logs added throughout the pipeline.
 
 ## 3.7.0 - 2019-12-21

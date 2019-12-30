@@ -32,12 +32,13 @@ import (
 func init() {
 	Constructors[TypeMQTT] = TypeSpec{
 		constructor: NewMQTT,
-		description: `
+		Description: `
 Pushes messages to an MQTT broker.
 
 The ` + "`topic`" + ` field can be dynamically set using function interpolations
 described [here](../config_interpolation.md#functions). When sending batched
 messages these interpolations are performed per message part.`,
+		Async: true,
 	}
 }
 

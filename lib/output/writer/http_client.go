@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -37,16 +38,20 @@ import (
 // type.
 type HTTPClientConfig struct {
 	client.Config     `json:",inline" yaml:",inline"`
-	MaxInFlight       int  `json:"max_in_flight" yaml:"max_in_flight"`
-	PropagateResponse bool `json:"propagate_response" yaml:"propagate_response"`
+	MaxInFlight       int                `json:"max_in_flight" yaml:"max_in_flight"`
+	PropagateResponse bool               `json:"propagate_response" yaml:"propagate_response"`
+	Batching          batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
+	batching := batch.NewPolicyConfig()
+	batching.Count = 1
 	return HTTPClientConfig{
 		Config:            client.NewConfig(),
 		MaxInFlight:       1, // TODO: Increase this default?
 		PropagateResponse: false,
+		Batching:          batching,
 	}
 }
 

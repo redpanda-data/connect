@@ -33,7 +33,7 @@ import (
 func init() {
 	Constructors[TypeFile] = TypeSpec{
 		constructor: NewFile,
-		description: `
+		Description: `
 The file output type simply appends all messages to an output file. Single part
 messages are printed with a delimiter (defaults to '\n' if left empty).
 Multipart messages are written with each part delimited, with the final part

@@ -33,6 +33,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -44,17 +45,21 @@ import (
 func init() {
 	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: NewHTTPServer,
-		description: `
+		Description: `
 Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
 2.0 is supported when using TLS, which is enabled when key and cert files are
 specified.
 
-You can leave the 'address' config field blank in order to use the default
-service, but this will ignore TLS options.
+You can leave the ` + "`address`" + ` config field blank in order to use the
+default service wide server address, but this will ignore TLS options.
 
-You can receive a single, discrete message on the configured 'path' endpoint, or
-receive a constant stream of line delimited messages on the configured
-'stream_path' endpoint.`,
+Three endpoints will be registered at the paths specified by the fields
+` + "`path`, `stream_path` and `ws_path`" + `. Which allow you to consume a
+single message batch, a continuous stream of line delimited messages, or a
+websocket of messages for each request respectively.
+
+When messages are batched the ` + "`path`" + ` endpoint encodes the batch
+according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).`,
 	}
 }
 
@@ -74,6 +79,8 @@ type HTTPServerConfig struct {
 
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
+	batching := batch.NewPolicyConfig()
+	batching.Count = 1
 	return HTTPServerConfig{
 		Address:    "",
 		Path:       "/get",
@@ -212,6 +219,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 			)
 		}
 	}
+
 	return &h, nil
 }
 

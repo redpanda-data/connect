@@ -32,8 +32,9 @@ import (
 func init() {
 	Constructors[TypeNATSStream] = TypeSpec{
 		constructor: NewNATSStream,
-		description: `
+		Description: `
 Publish to a NATS Stream subject.`,
+		Async: true,
 	}
 }
 

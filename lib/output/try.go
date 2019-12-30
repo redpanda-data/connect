@@ -34,7 +34,7 @@ import (
 func init() {
 	Constructors[TypeTry] = TypeSpec{
 		brokerConstructor: NewTry,
-		description: `
+		Description: `
 Attempts to send each message to only one output, starting from the first output
 on the list. If an output attempt fails then the next output in the list is
 attempted, and so on.

@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeAMQP09] = TypeSpec{
 		constructor: NewAMQP09,
-		description: `
+		Description: `
 Sends messages to an AMQP (0.91) exchange. AMQP is a messaging protocol used by
 various message brokers, including RabbitMQ. The metadata from each message are
 delivered as headers.
@@ -48,6 +48,7 @@ settings can be enabled in the ` + "`tls`" + ` section.
 
 The field 'key' can be dynamically set using function interpolations described
 [here](../config_interpolation.md#functions).`,
+		Async: true,
 	}
 }
 

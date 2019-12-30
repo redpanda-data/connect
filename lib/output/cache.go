@@ -45,7 +45,7 @@ func init() {
 
 	Constructors[TypeCache] = TypeSpec{
 		constructor: NewCache,
-		description: `
+		Description: `
 Stores message parts as items in a cache. Caches are configured within the
 [resources section](../caches/README.md) and can target any of the following
 types:
@@ -70,6 +70,7 @@ resources:
 In order to create a unique ` + "`key`" + ` value per item you should use
 function interpolations described [here](../config_interpolation.md#functions).
 When sending batched messages the interpolations are performed per message part.`,
+		Async: true,
 	}
 }
 

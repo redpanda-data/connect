@@ -38,7 +38,7 @@ import (
 func init() {
 	Constructors[TypeDropOnError] = TypeSpec{
 		constructor: NewDropOnError,
-		description: `
+		Description: `
 Attempts to write messages to a child output and if the write fails for any
 reason the message is dropped instead of being reattempted. This output can be
 combined with a child ` + "`retry`" + ` output in order to set an explicit

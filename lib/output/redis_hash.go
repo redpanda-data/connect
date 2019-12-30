@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeRedisHash] = TypeSpec{
 		constructor: NewRedisHash,
-		description: `
+		Description: `
 Sets Redis hash objects using the HMSET command.
 
 The field ` + "`key`" + ` supports
@@ -67,6 +67,7 @@ The order of hash field extraction is as follows:
 3. Explicit fields
 
 Where latter stages will overwrite matching field names of a former stage.`,
+		Async: true,
 	}
 }
 

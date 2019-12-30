@@ -34,7 +34,7 @@ func init() {
 		constructor: func(_ Config, _ types.Manager, logger log.Modular, stats metrics.Type) (Type, error) {
 			return NewWriter(TypeSyncResponse, roundtrip.Writer{}, logger, stats)
 		},
-		description: `
+		Description: `
 Returns the final message payload back to the input origin of the message, where
 it is dealt with according to that specific input type.
 

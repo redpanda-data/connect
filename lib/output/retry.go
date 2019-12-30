@@ -41,7 +41,7 @@ import (
 func init() {
 	Constructors[TypeRetry] = TypeSpec{
 		constructor: NewRetry,
-		description: `
+		Description: `
 Attempts to write messages to a child output and if the write fails for any
 reason the message is retried either until success or, if the retries or max
 elapsed time fields are non-zero, either is reached.

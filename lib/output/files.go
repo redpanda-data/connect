@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeFiles] = TypeSpec{
 		constructor: NewFiles,
-		description: `
+		Description: `
 Writes each individual part of each message to a new file.
 
 Message parts only contain raw data, and therefore in order to create a unique
@@ -48,7 +48,7 @@ these interpolations are performed per message part.`,
 // NewFiles creates a new Files output type.
 func NewFiles(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	return NewWriter(
-		"files", writer.NewFiles(conf.Files, log, stats), log, stats,
+		TypeFiles, writer.NewFiles(conf.Files, log, stats), log, stats,
 	)
 }
 

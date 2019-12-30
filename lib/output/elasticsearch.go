@@ -21,7 +21,10 @@
 package output
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -32,7 +35,7 @@ import (
 func init() {
 	Constructors[TypeElasticsearch] = TypeSpec{
 		constructor: NewElasticsearch,
-		description: `
+		Description: `
 Publishes messages into an Elasticsearch index. If the index does not exist then
 it is created with a dynamic mapping.
 
@@ -49,6 +52,11 @@ allowing you to transfer data across accounts. You can find out more
 
 If the configured target is a managed AWS Elasticsearch cluster, you may need
 to set ` + "`sniff` and `healthcheck`" + ` to false for connections to succeed.`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return sanitiseWithBatch(conf.Elasticsearch, conf.Elasticsearch.Batching)
+		},
+		Async:   true,
+		Batches: true,
 	}
 }
 
@@ -60,14 +68,24 @@ func NewElasticsearch(conf Config, mgr types.Manager, log log.Modular, stats met
 	if err != nil {
 		return nil, err
 	}
+	var w Type
 	if conf.Elasticsearch.MaxInFlight == 1 {
-		return NewWriter(
+		w, err = NewWriter(
 			TypeElasticsearch, elasticWriter, log, stats,
 		)
+	} else {
+		w, err = NewAsyncWriter(
+			TypeElasticsearch, conf.Elasticsearch.MaxInFlight, elasticWriter, log, stats,
+		)
 	}
-	return NewAsyncWriter(
-		TypeElasticsearch, conf.Elasticsearch.MaxInFlight, elasticWriter, log, stats,
-	)
+	if bconf := conf.Elasticsearch.Batching; err == nil && !bconf.IsNoop() {
+		policy, err := batch.NewPolicy(bconf, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
+		}
+		w = NewBatcher(policy, w, log, stats)
+	}
+	return w, err
 }
 
 //------------------------------------------------------------------------------

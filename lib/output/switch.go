@@ -51,7 +51,7 @@ var (
 func init() {
 	Constructors[TypeSwitch] = TypeSpec{
 		constructor: NewSwitch,
-		description: `
+		Description: `
 The switch output type allows you to configure multiple conditional output
 targets by listing child outputs paired with conditions. Conditional logic is
 currently applied per whole message batch. In order to multiplex per message of

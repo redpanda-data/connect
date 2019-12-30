@@ -21,7 +21,10 @@
 package output
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -33,7 +36,7 @@ import (
 func init() {
 	Constructors[TypeKafka] = TypeSpec{
 		constructor: NewKafka,
-		description: `
+		Description: `
 The kafka output type writes a batch of messages to Kafka brokers and waits for
 acknowledgement before propagating it back to the input. The config field
 ` + "`ack_replicas`" + ` determines whether we wait for acknowledgement from all
@@ -55,6 +58,11 @@ is empty then a random partition is chosen.
 The field ` + "`round_robin_partitions`" + ` is deprecated.
 
 ` + tls.Documentation + ``,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return sanitiseWithBatch(conf.Kafka, conf.Kafka.Batching)
+		},
+		Async:   true,
+		Batches: true,
 	}
 }
 
@@ -66,14 +74,24 @@ func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 	if err != nil {
 		return nil, err
 	}
+	var w Type
 	if conf.Kafka.MaxInFlight == 1 {
-		return NewWriter(
+		w, err = NewWriter(
 			TypeKafka, k, log, stats,
 		)
+	} else {
+		w, err = NewAsyncWriter(
+			TypeKafka, conf.Kafka.MaxInFlight, k, log, stats,
+		)
 	}
-	return NewAsyncWriter(
-		TypeKafka, conf.Kafka.MaxInFlight, k, log, stats,
-	)
+	if bconf := conf.Kafka.Batching; err == nil && !bconf.IsNoop() {
+		policy, err := batch.NewPolicy(bconf, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
+		}
+		w = NewBatcher(policy, w, log, stats)
+	}
+	return w, err
 }
 
 //------------------------------------------------------------------------------

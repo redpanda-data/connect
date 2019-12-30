@@ -38,6 +38,13 @@ output:
       enabled: false
       password: ""
       username: ""
+    batching:
+      byte_size: 0
+      condition:
+        type: static
+        static: false
+      count: 1
+      period: ""
     healthcheck: true
     id: ${!count:elastic_ids}-${!timestamp_unix}
     index: benthos_index

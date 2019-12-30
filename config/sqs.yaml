@@ -33,6 +33,13 @@ output:
       initial_interval: 1s
       max_elapsed_time: 30s
       max_interval: 5s
+    batching:
+      byte_size: 0
+      condition:
+        type: static
+        static: false
+      count: 1
+      period: ""
     credentials:
       id: ""
       profile: ""

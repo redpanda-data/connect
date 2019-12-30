@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeUDP] = TypeSpec{
 		constructor: NewUDP,
-		description: `
+		Description: `
 Sends messages as a continuous stream of line delimited data over UDP by
 connecting to a server.
 
