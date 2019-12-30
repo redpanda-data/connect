@@ -59,6 +59,7 @@ var (
 	TypeAnd                = "and"
 	TypeAny                = "any"
 	TypeBoundsCheck        = "bounds_check"
+	TypeCache              = "cache"
 	TypeCheckField         = "check_field"
 	TypeCheckInterpolation = "check_interpolation"
 	TypeCount              = "count"
@@ -84,6 +85,7 @@ type Config struct {
 	And                AndConfig                `json:"and" yaml:"and"`
 	Any                AnyConfig                `json:"any" yaml:"any"`
 	BoundsCheck        BoundsCheckConfig        `json:"bounds_check" yaml:"bounds_check"`
+	Cache              CacheConfig              `json:"cache" yaml:"cache"`
 	CheckField         CheckFieldConfig         `json:"check_field" yaml:"check_field"`
 	CheckInterpolation CheckInterpolationConfig `json:"check_interpolation" yaml:"check_interpolation"`
 	Count              CountConfig              `json:"count" yaml:"count"`
@@ -107,6 +109,7 @@ func NewConfig() Config {
 		Type:               "text",
 		And:                NewAndConfig(),
 		BoundsCheck:        NewBoundsCheckConfig(),
+		Cache:              NewCacheConfig(),
 		CheckField:         NewCheckFieldConfig(),
 		CheckInterpolation: NewCheckInterpolationConfig(),
 		Count:              NewCountConfig(),

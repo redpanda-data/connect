@@ -32,13 +32,17 @@ import (
 )
 
 type fakeMgr struct {
-	conds map[string]Type
+  caches map[string]types.Cache
+	conds  map[string]Type
 }
 
 func (f *fakeMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 }
 func (f *fakeMgr) GetCache(name string) (types.Cache, error) {
-	return nil, types.ErrCacheNotFound
+  if c, exists := f.caches[name]; exists {
+    return c, nil
+  }
+  return nil, types.ErrCacheNotFound
 }
 func (f *fakeMgr) GetCondition(name string) (types.Condition, error) {
 	if c, exists := f.conds[name]; exists {
