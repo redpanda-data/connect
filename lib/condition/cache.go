@@ -21,14 +21,14 @@
 package condition
 
 import (
-  "bytes"
-  "fmt"
+	"bytes"
+	"fmt"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-  "github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/util/text"
 )
 
 //------------------------------------------------------------------------------
@@ -71,21 +71,21 @@ cache contents for the key.
 // CacheConfig is a configuration struct containing fields for the
 // cache condition.
 type CacheConfig struct {
-  Cache    string `json:"cache" yaml:"cache"`
+	Cache    string `json:"cache" yaml:"cache"`
 	Part     int    `json:"part" yaml:"part"`
-  Operator string `json:"operator" yaml:"operator"`
-  Key      string `json:"key" yaml:"key"`
-  Value    string `json:"value" yaml:"value"`
+	Operator string `json:"operator" yaml:"operator"`
+	Key      string `json:"key" yaml:"key"`
+	Value    string `json:"value" yaml:"value"`
 }
 
 // NewCacheConfig returns a CacheConfig with default values.
 func NewCacheConfig() CacheConfig {
 	return CacheConfig{
-    Cache:    "",
+		Cache:    "",
 		Part:     0,
-    Operator: "hit",
-    Key:      "",
-    Value:    "",
+		Operator: "hit",
+		Key:      "",
+		Value:    "",
 	}
 }
 
@@ -95,11 +95,11 @@ func NewCacheConfig() CacheConfig {
 // a cache resource.
 type Cache struct {
 	part  int
-  key   *text.InterpolatedString
-  value *text.InterpolatedBytes
+	key   *text.InterpolatedString
+	value *text.InterpolatedBytes
 
-  cache    types.Cache
-  operator cacheOperator
+	cache    types.Cache
+	operator cacheOperator
 
 	mCount metrics.StatCounter
 	mTrue  metrics.StatCounter
@@ -110,23 +110,23 @@ type Cache struct {
 func NewCache(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-  c, err := mgr.GetCache(conf.Cache.Cache)
-  if err != nil {
-    return nil, err
-  }
+	c, err := mgr.GetCache(conf.Cache.Cache)
+	if err != nil {
+		return nil, err
+	}
 
-  op, err := cacheOperatorFromString(conf.Cache.Operator, c)
-  if err != nil {
-    return nil, err
-  }
+	op, err := cacheOperatorFromString(conf.Cache.Operator, c)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Cache{
 		part:  conf.Cache.Part,
 		key:   text.NewInterpolatedString(conf.Cache.Key),
-    value: text.NewInterpolatedBytes([]byte(conf.Cache.Value)),
+		value: text.NewInterpolatedBytes([]byte(conf.Cache.Value)),
 
-    cache:    c,
-    operator: op,
+		cache:    c,
+		operator: op,
 
 		mCount: stats.GetCounter("count"),
 		mTrue:  stats.GetCounter("true"),
@@ -136,43 +136,43 @@ func NewCache(
 
 //------------------------------------------------------------------------------
 
-type cacheOperator func(key string, value []byte) (bool)
+type cacheOperator func(key string, value []byte) bool
 
 func newCacheHitOperator(cache types.Cache) cacheOperator {
-  return func(key string, value []byte) (bool) {
-    _, err := cache.Get(key)
-    return err == nil
-  }
+	return func(key string, value []byte) bool {
+		_, err := cache.Get(key)
+		return err == nil
+	}
 }
 
 func newCacheMissOperator(cache types.Cache) cacheOperator {
-  return func(key string, value []byte) (bool) {
-    _, err := cache.Get(key)
-    return err == types.ErrKeyNotFound
-  }
+	return func(key string, value []byte) bool {
+		_, err := cache.Get(key)
+		return err == types.ErrKeyNotFound
+	}
 }
 
 func newCacheEqualsOperator(cache types.Cache) cacheOperator {
-  return func(key string, value []byte) (bool) {
-    cacheValue, err := cache.Get(key)
-    if err != nil {
-      return false
-    }
-    return bytes.Compare(cacheValue, value) == 0
-  }
+	return func(key string, value []byte) bool {
+		cacheValue, err := cache.Get(key)
+		if err != nil {
+			return false
+		}
+		return bytes.Compare(cacheValue, value) == 0
+	}
 }
 
 func cacheOperatorFromString(operator string, cache types.Cache) (cacheOperator, error) {
-  switch operator {
-  case "hit":
-    return newCacheHitOperator(cache), nil
-  case "miss":
-    return newCacheMissOperator(cache), nil
-  case "equal":
-  case "equals":
-    return newCacheEqualsOperator(cache), nil
-  }
-  return nil, fmt.Errorf("operator not recognised: %v", operator)
+	switch operator {
+	case "hit":
+		return newCacheHitOperator(cache), nil
+	case "miss":
+		return newCacheMissOperator(cache), nil
+	case "equal":
+	case "equals":
+		return newCacheEqualsOperator(cache), nil
+	}
+	return nil, fmt.Errorf("operator not recognised: %v", operator)
 }
 
 //------------------------------------------------------------------------------
@@ -181,15 +181,15 @@ func cacheOperatorFromString(operator string, cache types.Cache) (cacheOperator,
 func (c *Cache) Check(msg types.Message) bool {
 	c.mCount.Incr(1)
 
-  key := c.key.Get(message.Lock(msg, c.part))
-  value := c.value.Get(message.Lock(msg, c.part))
+	key := c.key.Get(message.Lock(msg, c.part))
+	value := c.value.Get(message.Lock(msg, c.part))
 
-  if c.operator(key, value) {
-	  c.mTrue.Incr(1)
-    return true
-  }
-  c.mFalse.Incr(1)
-  return false
+	if c.operator(key, value) {
+		c.mTrue.Incr(1)
+		return true
+	}
+	c.mFalse.Incr(1)
+	return false
 }
 
 //------------------------------------------------------------------------------

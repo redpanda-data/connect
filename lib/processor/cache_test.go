@@ -327,12 +327,12 @@ func TestCacheDelete(t *testing.T) {
 		t.Errorf("Wrong fail flag: %v != %v", act, exp)
 	}
 
-  _, err = memCache.Get("1")
-  if err != types.ErrKeyNotFound {
-    t.Errorf("Wrong result: %v != %v", err, types.ErrKeyNotFound)
-  }
+	_, err = memCache.Get("1")
+	if err != types.ErrKeyNotFound {
+		t.Errorf("Wrong result: %v != %v", err, types.ErrKeyNotFound)
+	}
 
-  actBytes, err := memCache.Get("2")
+	actBytes, err := memCache.Get("2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,8 +340,8 @@ func TestCacheDelete(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-  _, err = memCache.Get("3")
-  if err != types.ErrKeyNotFound {
-    t.Errorf("Wrong result: %v != %v", err, types.ErrKeyNotFound)
-  }
+	_, err = memCache.Get("3")
+	if err != types.ErrKeyNotFound {
+		t.Errorf("Wrong result: %v != %v", err, types.ErrKeyNotFound)
+	}
 }
