@@ -66,6 +66,11 @@ Retrieve the contents of a cached key and replace the original message payload
 with the result. If the key does not exist the action fails with an error, which
 can be detected with [processor error handling](../error_handling.md).
 
+#### ` + "`delete`" + `
+
+Delete a key and its contents from the cache.  If the key does not exist the
+action is a no-op and will not fail with an error.
+
 ### Examples
 
 The ` + "`cache`" + ` processor can be used in combination with other processors
@@ -213,6 +218,13 @@ func newCacheGetOperator(cache types.Cache) cacheOperator {
 	}
 }
 
+func newCacheDeleteOperator(cache types.Cache) cacheOperator {
+	return func(key string, _ []byte) ([]byte, bool, error) {
+		err := cache.Delete(key)
+		return nil, false, err
+	}
+}
+
 func cacheOperatorFromString(operator string, cache types.Cache) (cacheOperator, error) {
 	switch operator {
 	case "set":
@@ -221,6 +233,8 @@ func cacheOperatorFromString(operator string, cache types.Cache) (cacheOperator,
 		return newCacheAddOperator(cache), nil
 	case "get":
 		return newCacheGetOperator(cache), nil
+	case "delete":
+		return newCacheDeleteOperator(cache), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", operator)
 }
