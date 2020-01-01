@@ -40,7 +40,7 @@ import (
 func init() {
 	Constructors[TypeGroupBy] = TypeSpec{
 		constructor: NewGroupBy,
-		description: `
+		Description: `
 Splits a batch of messages into N batches, where each resulting batch contains a
 group of messages determined by conditions that are applied per message of the
 original batch. Once the groups are established a list of processors are applied

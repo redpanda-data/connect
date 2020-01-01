@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeMQTT] = TypeSpec{
 		constructor: NewMQTT,
-		description: `
+		Description: `
 Subscribe to topics on MQTT brokers.
 
 Messages consumed by this input can be processed in parallel, meaning a single

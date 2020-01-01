@@ -36,7 +36,7 @@ import (
 func init() {
 	Constructors[TypeHashSample] = TypeSpec{
 		constructor: NewHashSample,
-		description: `
+		Description: `
 Retains a percentage of message batches deterministically by hashing selected
 messages and checking the hash against a valid range, dropping all others.
 

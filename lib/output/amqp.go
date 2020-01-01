@@ -35,6 +35,7 @@ func init() {
 		Description: `
 DEPRECATED: This output is deprecated and scheduled for removal in Benthos V4.
 Please use [` + "`amqp_0_9`" + `](#amqp_0_9) instead.`,
+		Deprecated: true,
 	}
 }
 

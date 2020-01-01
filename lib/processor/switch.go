@@ -38,7 +38,7 @@ import (
 func init() {
 	Constructors[TypeSwitch] = TypeSpec{
 		constructor: NewSwitch,
-		description: `
+		Description: `
 Switch is a processor that lists child case objects each containing a condition
 and processors. Each batch of messages is tested against the condition of each
 child case until a condition passes, whereby the processors of that case will be

@@ -33,7 +33,7 @@ import (
 func init() {
 	Constructors[TypeNoop] = TypeSpec{
 		constructor: NewNoop,
-		description: `
+		Description: `
 Noop is a no-op processor that does nothing, the message passes through
 unchanged.`,
 	}

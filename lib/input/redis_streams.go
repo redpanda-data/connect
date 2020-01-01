@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeRedisStreams] = TypeSpec{
 		constructor: NewRedisStreams,
-		description: `
+		Description: `
 Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
 ` + "`client_id`" + ` should be unique for each consumer of a group.
 

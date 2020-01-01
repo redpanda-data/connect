@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeKinesisBalanced] = TypeSpec{
 		constructor: NewKinesisBalanced,
-		description: `
+		Description: `
 BETA: This input is a beta component and is subject to change outside of major
 version releases.
 

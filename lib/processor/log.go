@@ -35,7 +35,7 @@ import (
 func init() {
 	Constructors[TypeLog] = TypeSpec{
 		constructor: NewLog,
-		description: `
+		Description: `
 Log is a processor that prints a log event each time it processes a batch. The
 batch is then sent onwards unchanged. The log message can be set using function
 interpolations described [here](../config_interpolation.md#functions) which

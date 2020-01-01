@@ -41,7 +41,7 @@ import (
 func init() {
 	Constructors[TypeText] = TypeSpec{
 		constructor: NewText,
-		description: `
+		Description: `
 Performs text based mutations on payloads.
 
 This processor will interpolate functions within the ` + "`value`" + ` field,

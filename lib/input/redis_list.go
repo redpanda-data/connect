@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeRedisList] = TypeSpec{
 		constructor: NewRedisList,
-		description: `
+		Description: `
 Pops messages from the beginning of a Redis list using the BLPop command.
 
 Messages consumed by this input can be processed in parallel, meaning a single

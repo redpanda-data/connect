@@ -40,7 +40,7 @@ import (
 func init() {
 	Constructors[TypeDecode] = TypeSpec{
 		constructor: NewDecode,
-		description: `
+		Description: `
 Decodes messages according to the selected scheme. Supported available schemes
 are: hex, base64.`,
 	}

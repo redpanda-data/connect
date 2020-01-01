@@ -41,7 +41,7 @@ import (
 func init() {
 	Constructors[TypeHash] = TypeSpec{
 		constructor: NewHash,
-		description: `
+		Description: `
 Hashes messages according to the selected algorithm. Supported algorithms are:
 sha256, sha512, sha1, xxhash64.
 

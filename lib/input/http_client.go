@@ -40,7 +40,7 @@ import (
 func init() {
 	Constructors[TypeHTTPClient] = TypeSpec{
 		constructor: NewHTTPClient,
-		description: `
+		Description: `
 The HTTP client input type connects to a server and continuously performs
 requests for a single message.
 

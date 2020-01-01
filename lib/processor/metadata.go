@@ -37,7 +37,7 @@ import (
 func init() {
 	Constructors[TypeMetadata] = TypeSpec{
 		constructor: NewMetadata,
-		description: `
+		Description: `
 Performs operations on the metadata of a message. Metadata are key/value pairs
 that are associated with message parts of a batch. Metadata values can be
 referred to using configuration

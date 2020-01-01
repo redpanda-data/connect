@@ -54,7 +54,7 @@ import (
 func init() {
 	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: NewHTTPServer,
-		description: `
+		Description: `
 Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
 which is enabled when key and cert files are specified.
 

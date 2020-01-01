@@ -38,7 +38,7 @@ import (
 func init() {
 	Constructors[TypeLambda] = TypeSpec{
 		constructor: NewLambda,
-		description: `
+		Description: `
 Invokes an AWS lambda for each message part of a batch. The contents of the
 message part is the payload of the request, and the result of the invocation
 will become the new contents of the message.

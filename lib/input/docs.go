@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package output
+package input
 
 import (
 	"bytes"
@@ -58,64 +58,27 @@ func sanitiseWithBatch(
 
 //------------------------------------------------------------------------------
 
-var header = "This document was generated with `benthos --list-outputs`" + `
+var header = "This document was generated with `benthos --list-inputs`" + `
 
-An output is a sink where we wish to send our consumed data after applying an
-optional array of [processors](../processors). Only one output is configured at
-the root of a Benthos config. However, the output can be a [broker](#broker)
-which combines multiple outputs under a chosen brokering pattern.
+An input is a source of data piped through an array of optional
+[processors](../processors). Only one input is configured at the root of a
+Benthos config. However, the root input can be a [broker](#broker) which
+combines multiple inputs.
 
-An output config section looks like this:
+An input config section looks like this:
 
 ` + "``` yaml" + `
-output:
+input:
   type: foo
   foo:
     bar: baz
   processors:
   - type: qux
-` + "```" + `
+` + "```" + ``
 
-### Back Pressure
-
-Benthos outputs apply back pressure to components upstream. This means if your
-output target starts blocking traffic Benthos will gracefully stop consuming
-until the issue is resolved.
-
-### Retries
-
-When a Benthos output fails to send a message the error is propagated back up to
-the input, where depending on the protocol it will either be pushed back to the
-source as a Noack (e.g. AMQP) or will be reattempted indefinitely with the
-commit withheld until success (e.g. Kafka).
-
-It's possible to instead have Benthos indefinitely retry an output until success
-with a [` + "`retry`" + `](#retry) output. Some other outputs, such as the
-[` + "`broker`" + `](#broker), might also retry indefinitely depending on their
-configuration.
-
-### Multiplexing Outputs
-
-It is possible to perform content based multiplexing of messages to specific
-outputs either by using the ` + "[`switch`](#switch)" + ` output, or a
-` + "[`broker`](#broker)" + ` with the ` + "`fan_out`" + ` pattern and a
-[filter processor](../processors/README.md#filter_parts) on each output, which
-is a processor that drops messages if the condition does not pass.
-Conditions are content aware logical operators that can be combined using
-boolean logic.
-
-For more information regarding conditions, including a full list of available
-conditions please [read the docs here](../conditions/README.md).
-
-### Dead Letter Queues
-
-It's possible to create fallback outputs for when an output target fails using
-a ` + "[`try`](#try)" + ` output.`
-
-// Descriptions returns a formatted string of collated descriptions of each
-// type.
+// Descriptions returns a formatted string of descriptions for each type.
 func Descriptions() string {
-	// Order our output types alphabetically
+	// Order our input types alphabetically
 	names := []string{}
 	for name := range Constructors {
 		names = append(names, name)
@@ -123,8 +86,8 @@ func Descriptions() string {
 	sort.Strings(names)
 
 	buf := bytes.Buffer{}
-	buf.WriteString("Outputs\n")
-	buf.WriteString(strings.Repeat("=", 7))
+	buf.WriteString("Inputs\n")
+	buf.WriteString(strings.Repeat("=", 6))
 	buf.WriteString("\n\n")
 	buf.WriteString(header)
 	buf.WriteString("\n\n")
@@ -146,6 +109,7 @@ func Descriptions() string {
 
 		conf := NewConfig()
 		conf.Type = name
+		conf.Processors = nil
 		if confSanit, err := SanitiseConfig(conf); err == nil {
 			confBytes, _ = config.MarshalYAML(confSanit)
 		}
@@ -159,30 +123,6 @@ func Descriptions() string {
 			buf.WriteString("```\n")
 		}
 		buf.WriteString(def.Description)
-
-		hasPerformanced := false
-		performance := func() {
-			if !hasPerformanced {
-				buf.WriteString("\n\n### Performance\n")
-				hasPerformanced = true
-			} else {
-				buf.WriteString("\n")
-			}
-		}
-		if def.Async {
-			performance()
-			buf.WriteString(`
-This output benefits from sending multiple messages in flight in parallel for
-improved performance. You can tune the max number of in flight messages with the
-field ` + "`max_in_flight`" + `.`)
-		}
-		if def.Batches {
-			performance()
-			buf.WriteString(`
-This output benefits from sending messages as a batch for improved performance.
-Batches can be formed at both the input and output level. You can find out more
-[in this doc](../batching.md).`)
-		}
 		if i != (len(names) - 1) {
 			buf.WriteString("\n\n")
 		}

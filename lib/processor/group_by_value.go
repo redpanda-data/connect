@@ -38,7 +38,7 @@ import (
 func init() {
 	Constructors[TypeGroupByValue] = TypeSpec{
 		constructor: NewGroupByValue,
-		description: `
+		Description: `
 Splits a batch of messages into N batches, where each resulting batch contains a
 group of messages determined by a
 [function interpolated string](../config_interpolation.md#functions) evaluated

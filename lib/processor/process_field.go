@@ -39,7 +39,7 @@ import (
 func init() {
 	Constructors[TypeProcessField] = TypeSpec{
 		constructor: NewProcessField,
-		description: `
+		Description: `
 A processor that extracts the value of a field [dot path](../field_paths.md)
 within payloads according to a specified codec, applies a list of processors to
 the extracted value and finally sets the field within the original payloads to

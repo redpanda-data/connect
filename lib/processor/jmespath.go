@@ -36,7 +36,7 @@ import (
 func init() {
 	Constructors[TypeJMESPath] = TypeSpec{
 		constructor: NewJMESPath,
-		description: `
+		Description: `
 Parses a message as a JSON document and attempts to apply a JMESPath expression
 to it, replacing the contents of the part with the result. Please refer to the
 [JMESPath website](http://jmespath.org/) for information and tutorials regarding

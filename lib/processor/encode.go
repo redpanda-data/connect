@@ -39,7 +39,7 @@ import (
 func init() {
 	Constructors[TypeEncode] = TypeSpec{
 		constructor: NewEncode,
-		description: `
+		Description: `
 Encodes messages according to the selected scheme. Supported schemes are:
 hex, base64.`,
 	}

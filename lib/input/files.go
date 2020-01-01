@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeFiles] = TypeSpec{
 		constructor: NewFiles,
-		description: `
+		Description: `
 Reads files from a path, where each discrete file will be consumed as a single
 message payload. The path can either point to a single file (resulting in only a
 single message) or a directory, in which case the directory will be walked and

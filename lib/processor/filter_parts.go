@@ -39,7 +39,7 @@ import (
 func init() {
 	Constructors[TypeFilterParts] = TypeSpec{
 		constructor: NewFilterParts,
-		description: `
+		Description: `
 Tests each individual message of a batch against a condition, if the condition
 fails then the message is dropped. If the resulting batch is empty it will be
 dropped. You can find a [full list of conditions here](../conditions), in this

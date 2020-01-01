@@ -38,7 +38,7 @@ import (
 func init() {
 	Constructors[TypeParallel] = TypeSpec{
 		constructor: NewParallel,
-		description: `
+		Description: `
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message (similar to the
 ` + "[`for_each`](#for_each)" + ` processor), but where each message is

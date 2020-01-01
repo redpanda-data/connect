@@ -35,7 +35,7 @@ import (
 func init() {
 	Constructors[TypeTCP] = TypeSpec{
 		constructor: NewTCP,
-		description: `
+		Description: `
 Connects to a TCP server and consumes a continuous stream of messages.
 
 If multipart is set to false each line of data is read as a separate message. If

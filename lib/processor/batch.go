@@ -36,7 +36,7 @@ import (
 func init() {
 	Constructors[TypeBatch] = TypeSpec{
 		constructor: NewBatch,
-		description: `
+		Description: `
 DEPRECATED: This processor is no longer supported and has been replaced with
 improved batching mechanisms. For more information about batching in Benthos
 please check out [this document](../batching.md).
@@ -45,6 +45,7 @@ This processor is scheduled to be removed in Benthos V4`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return batch.SanitisePolicyConfig(batch.PolicyConfig(conf.Batch))
 		},
+		Deprecated: true,
 	}
 }
 

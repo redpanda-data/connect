@@ -41,7 +41,7 @@ import (
 func init() {
 	Constructors[TypeProcessDAG] = TypeSpec{
 		constructor: NewProcessDAG,
-		description: `
+		Description: `
 A processor that manages a map of ` + "`process_map`" + ` processors and
 calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to
 their postmap targets for provided fields and their premap targets for required

@@ -39,7 +39,7 @@ import (
 func init() {
 	Constructors[TypeMetric] = TypeSpec{
 		constructor: NewMetric,
-		description: `
+		Description: `
 Expose custom metrics by extracting values from message batches. This processor
 executes once per batch, in order to execute once per message place it within a
 ` + "[`for_each`](#for_each)" + ` processor:

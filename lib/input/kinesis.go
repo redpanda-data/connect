@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeKinesis] = TypeSpec{
 		constructor: NewKinesis,
-		description: `
+		Description: `
 Receive messages from a Kinesis stream.
 
 It's possible to use DynamoDB for persisting shard iterators by setting the

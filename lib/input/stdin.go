@@ -35,7 +35,7 @@ import (
 func init() {
 	Constructors[TypeSTDIN] = TypeSpec{
 		constructor: NewSTDIN,
-		description: `
+		Description: `
 The stdin input simply reads any data piped to stdin as messages. By default the
 messages are assumed single part and are line delimited. If the multipart option
 is set to true then lines are interpretted as message parts, and an empty line

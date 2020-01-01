@@ -42,7 +42,7 @@ import (
 func init() {
 	Constructors[TypeUnarchive] = TypeSpec{
 		constructor: NewUnarchive,
-		description: `
+		Description: `
 Unarchives messages according to the selected archive format into multiple
 messages within a batch. Supported archive formats are:
 ` + "`tar`, `zip`, `binary`, `lines`, `json_documents` and `json_array`." + `

@@ -44,8 +44,12 @@ type TypeSpec struct {
 		log log.Modular,
 		stats metrics.Type,
 	) (Type, error)
-	description        string
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
+
+	Description string
+
+	// Deprecated indicates whether this component is deprecated.
+	Deprecated bool
 }
 
 // Constructors is a map of all processor types with their specs.
@@ -438,6 +442,11 @@ func Descriptions() string {
 
 	// Append each description
 	for i, name := range names {
+		def := Constructors[name]
+		if def.Deprecated {
+			continue
+		}
+
 		var confBytes []byte
 
 		conf := NewConfig()
@@ -454,7 +463,7 @@ func Descriptions() string {
 			buf.Write(confBytes)
 			buf.WriteString("```\n")
 		}
-		buf.WriteString(Constructors[name].description)
+		buf.WriteString(def.Description)
 		buf.WriteString("\n")
 		if i != (len(names) - 1) {
 			buf.WriteString("\n")

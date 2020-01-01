@@ -36,7 +36,7 @@ import (
 func init() {
 	Constructors[TypeMergeJSON] = TypeSpec{
 		constructor: NewMergeJSON,
-		description: `
+		Description: `
 Parses selected messages of a batch as JSON documents, attempts to merge them
 into one single JSON document and then writes it to a new message at the end of
 the batch. Merged parts are removed unless ` + "`retain_parts`" + ` is set to

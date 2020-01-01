@@ -48,7 +48,7 @@ func init() {
 	Constructors[TypeBroker] = TypeSpec{
 		brokerConstructor:                  NewBroker,
 		brokerConstructorHasBatchProcessor: newBrokerHasBatchProcessor,
-		description: `
+		Description: `
 The broker type allows you to combine multiple inputs, where each input will be
 read in parallel. A broker type is configured with its own list of input
 configurations and a field to specify how many copies of the list of inputs

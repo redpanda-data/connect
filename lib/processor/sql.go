@@ -44,7 +44,7 @@ import (
 func init() {
 	Constructors[TypeSQL] = TypeSpec{
 		constructor: NewSQL,
-		description: `
+		Description: `
 SQL is a processor that runs a query against a target database for each message
 batch and, for queries that return rows, replaces the batch with the result.
 

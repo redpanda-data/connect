@@ -37,7 +37,7 @@ import (
 func init() {
 	Constructors[TypeGrok] = TypeSpec{
 		constructor: NewGrok,
-		description: `
+		Description: `
 Parses message payloads by attempting to apply a list of Grok patterns, if a
 pattern returns at least one value a resulting structured object is created
 according to the chosen output format and will replace the payload. Currently

@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeS3] = TypeSpec{
 		constructor: NewAmazonS3,
-		description: `
+		Description: `
 Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
 SQS queue has been configured then only object keys read from the queue will be
 downloaded. Otherwise, the entire list of objects found when this input is

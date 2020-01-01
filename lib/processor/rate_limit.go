@@ -35,7 +35,7 @@ import (
 func init() {
 	Constructors[TypeRateLimit] = TypeSpec{
 		constructor: NewRateLimit,
-		description: `
+		Description: `
 Throttles the throughput of a pipeline according to a specified
 ` + "[`rate_limit`](../rate_limits/README.md)" + ` resource. Rate limits are
 shared across components and therefore apply globally to all processing

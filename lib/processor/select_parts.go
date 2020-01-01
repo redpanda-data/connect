@@ -35,7 +35,7 @@ import (
 func init() {
 	Constructors[TypeSelectParts] = TypeSpec{
 		constructor: NewSelectParts,
-		description: `
+		Description: `
 Cherry pick a set of messages from a batch by their index. Indexes larger than
 the number of messages are simply ignored.
 

@@ -43,7 +43,7 @@ import (
 func init() {
 	Constructors[TypeArchive] = TypeSpec{
 		constructor: NewArchive,
-		description: `
+		Description: `
 Archives all the messages of a batch into a single message according to the
 selected archive format. Supported archive formats are:
 ` + "`tar`, `zip`, `binary`, `lines` and `json_array`." + `

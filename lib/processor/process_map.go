@@ -41,7 +41,7 @@ func init() {
 		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			return NewProcessMap(conf.ProcessMap, mgr, log, stats)
 		},
-		description: `
+		Description: `
 A processor that extracts and maps fields identified via
 [dot path](../field_paths.md) from the original payload into new objects,
 applies a list of processors to the newly constructed objects, and finally maps

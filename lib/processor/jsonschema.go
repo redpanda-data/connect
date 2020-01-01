@@ -40,7 +40,7 @@ import (
 func init() {
 	Constructors[TypeJSONSchema] = TypeSpec{
 		constructor: NewJSONSchema,
-		description: `
+		Description: `
 Checks messages against a provided JSONSchema definition but does not change the
 payload under any circumstances. If a message does not match the schema it can
 be caught using error handling methods outlined [here](../error_handling.md).

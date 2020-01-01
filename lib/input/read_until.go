@@ -38,7 +38,7 @@ import (
 func init() {
 	Constructors[TypeReadUntil] = TypeSpec{
 		constructor: NewReadUntil,
-		description: `
+		Description: `
 Reads from an input and tests a condition on each message. Messages are read
 continuously while the condition returns false, when the condition returns true
 the message that triggered the condition is sent out and the input is closed.

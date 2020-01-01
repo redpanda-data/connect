@@ -37,7 +37,7 @@ import (
 func init() {
 	Constructors[TypeCache] = TypeSpec{
 		constructor: NewCache,
-		description: `
+		Description: `
 Performs operations against a [cache resource](../caches) for each message of a
 batch, allowing you to store or retrieve data within message payloads.
 

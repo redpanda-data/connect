@@ -34,7 +34,7 @@ import (
 func init() {
 	Constructors[TypeHDFS] = TypeSpec{
 		constructor: NewHDFS,
-		description: `
+		Description: `
 Reads files from a HDFS directory, where each discrete file will be consumed as
 a single message payload.
 

@@ -42,7 +42,7 @@ import (
 func init() {
 	Constructors[TypeDecompress] = TypeSpec{
 		constructor: NewDecompress,
-		description: `
+		Description: `
 Decompresses messages according to the selected algorithm. Supported
 decompression types are: gzip, zlib, bzip2, flate.`,
 	}

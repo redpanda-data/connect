@@ -36,7 +36,7 @@ import (
 func init() {
 	Constructors[TypeAvro] = TypeSpec{
 		constructor: NewAvro,
-		description: `
+		Description: `
 EXPERIMENTAL: This processor is considered experimental and is therefore subject
 to change outside of major version releases.
 

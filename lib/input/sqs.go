@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeSQS] = TypeSpec{
 		constructor: NewAmazonSQS,
-		description: `
+		Description: `
 Receive messages from an Amazon SQS URL, only the body is extracted into
 messages.
 

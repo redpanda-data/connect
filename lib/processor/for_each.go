@@ -35,7 +35,7 @@ import (
 func init() {
 	Constructors[TypeForEach] = TypeSpec{
 		constructor: NewForEach,
-		description: `
+		Description: `
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message. This is useful for forcing batch
 wide processors such as ` + "[`dedupe`](#dedupe)" + ` or interpolations such as
@@ -57,7 +57,7 @@ this processor is not needed in those cases.`,
 	}
 	Constructors[TypeProcessBatch] = TypeSpec{
 		constructor: NewProcessBatch,
-		description: `
+		Description: `
 Alias for the ` + "[`for_each`](#for_each)" + ` processor, which should be used
 instead.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {

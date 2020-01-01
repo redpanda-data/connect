@@ -40,7 +40,7 @@ import (
 func init() {
 	Constructors[TypeDynamic] = TypeSpec{
 		brokerConstructor: NewDynamic,
-		description: `
+		Description: `
 The dynamic type is a special broker type where the inputs are identified by
 unique labels and can be created, changed and removed during runtime via a REST
 HTTP interface.

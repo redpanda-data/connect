@@ -38,7 +38,7 @@ import (
 func init() {
 	Constructors[TypeNumber] = TypeSpec{
 		constructor: NewNumber,
-		description: `
+		Description: `
 Parses message contents into a 64-bit floating point number and performs an
 operator on it. In order to execute this processor on a sub field of a document
 use it with the ` + "[`process_field`](#process_field)" + ` processor.

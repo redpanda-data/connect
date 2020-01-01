@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeGCPPubSub] = TypeSpec{
 		constructor: NewGCPPubSub,
-		description: `
+		Description: `
 Consumes messages from a GCP Cloud Pub/Sub subscription.
 
 Messages consumed by this input can be processed in parallel, meaning a single

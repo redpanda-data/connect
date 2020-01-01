@@ -33,7 +33,7 @@ import (
 func init() {
 	Constructors[TypeKafka] = TypeSpec{
 		constructor: NewKafka,
-		description: `
+		Description: `
 Connects to a kafka (0.8+) server. Offsets are managed within kafka as per the
 consumer group (set via config). Only one partition per input is supported, if
 you wish to balance partitions across a consumer group look at the

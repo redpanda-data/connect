@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeNSQ] = TypeSpec{
 		constructor: NewNSQ,
-		description: `
+		Description: `
 Subscribe to an NSQ instance topic and channel.
 
 Messages consumed by this input can be processed in parallel, meaning a single

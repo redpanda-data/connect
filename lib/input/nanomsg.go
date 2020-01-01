@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeNanomsg] = TypeSpec{
 		constructor: NewNanomsg,
-		description: `
+		Description: `
 The scalability protocols are common communication patterns. This input should
 be compatible with any implementation, but specifically targets Nanomsg.
 

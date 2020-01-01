@@ -56,6 +56,9 @@ type TypeSpec struct {
 
 	// Batches indicates whether this output benefits from batching of messages.
 	Batches bool
+
+	// Deprecated indicates whether this component is deprecated.
+	Deprecated bool
 }
 
 // Constructors is a map of all output types with their specs.

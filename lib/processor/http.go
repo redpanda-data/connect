@@ -38,7 +38,7 @@ import (
 func init() {
 	Constructors[TypeHTTP] = TypeSpec{
 		constructor: NewHTTP,
-		description: `
+		Description: `
 Performs an HTTP request using a message batch as the request body, and replaces
 the original message parts with the body of the response.
 

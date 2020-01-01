@@ -36,7 +36,7 @@ import (
 func init() {
 	Constructors[TypeThrottle] = TypeSpec{
 		constructor: NewThrottle,
-		description: `
+		Description: `
 Throttles the throughput of a pipeline to a maximum of one message batch per
 period. This throttle is per processing pipeline, and therefore four threads
 each with a throttle would result in four times the rate specified.

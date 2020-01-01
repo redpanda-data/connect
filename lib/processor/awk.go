@@ -49,7 +49,7 @@ func init() {
 
 	Constructors[TypeAWK] = TypeSpec{
 		constructor: NewAWK,
-		description: `
+		Description: `
 Executes an AWK program on messages by feeding contents as the input based on a
 codec and replaces the contents with the result. If the result is empty (nothing
 is printed by the program) then the original message contents remain unchanged.

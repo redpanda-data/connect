@@ -36,7 +36,7 @@ import (
 func init() {
 	Constructors[TypeResource] = TypeSpec{
 		constructor: NewResource,
-		description: `
+		Description: `
 Resource is a processor type that runs a processor resource by its name. This
 processor allows you to run the same configured processor resource in multiple
 places.

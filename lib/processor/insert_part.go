@@ -35,7 +35,7 @@ import (
 func init() {
 	Constructors[TypeInsertPart] = TypeSpec{
 		constructor: NewInsertPart,
-		description: `
+		Description: `
 Insert a new message into a batch at an index. If the specified index is greater
 than the length of the existing batch it will be appended to the end.
 

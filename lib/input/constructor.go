@@ -21,11 +21,8 @@
 package input
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -50,7 +47,6 @@ type TypeSpec struct {
 		pipelineConstructors ...types.PipelineConstructorFunc,
 	) (Type, error)
 	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
-	description        string
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
 	// DEPRECATED: This is a hack for until the batch processor is removed.
@@ -70,6 +66,11 @@ type TypeSpec struct {
 		log log.Modular,
 		stats metrics.Type,
 	) (Type, error)
+
+	Description string
+
+	// Deprecated indicates whether this component is deprecated.
+	Deprecated bool
 }
 
 // Constructors is a map of all input types with their specs.
@@ -303,73 +304,6 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 }
 
 //------------------------------------------------------------------------------
-
-var header = "This document was generated with `benthos --list-inputs`" + `
-
-An input is a source of data piped through an array of optional
-[processors](../processors). Only one input is configured at the root of a
-Benthos config. However, the root input can be a [broker](#broker) which
-combines multiple inputs.
-
-An input config section looks like this:
-
-` + "``` yaml" + `
-input:
-  type: foo
-  foo:
-    bar: baz
-  processors:
-  - type: qux
-` + "```" + ``
-
-// Descriptions returns a formatted string of descriptions for each type.
-func Descriptions() string {
-	// Order our input types alphabetically
-	names := []string{}
-	for name := range Constructors {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	buf := bytes.Buffer{}
-	buf.WriteString("Inputs\n")
-	buf.WriteString(strings.Repeat("=", 6))
-	buf.WriteString("\n\n")
-	buf.WriteString(header)
-	buf.WriteString("\n\n")
-
-	buf.WriteString("### Contents\n\n")
-	for i, name := range names {
-		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, name))
-	}
-	buf.WriteString("\n")
-
-	// Append each description
-	for i, name := range names {
-		var confBytes []byte
-
-		conf := NewConfig()
-		conf.Type = name
-		conf.Processors = nil
-		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = config.MarshalYAML(confSanit)
-		}
-
-		buf.WriteString("## ")
-		buf.WriteString("`" + name + "`")
-		buf.WriteString("\n")
-		if confBytes != nil {
-			buf.WriteString("\n``` yaml\n")
-			buf.Write(confBytes)
-			buf.WriteString("```\n")
-		}
-		buf.WriteString(Constructors[name].description)
-		if i != (len(names) - 1) {
-			buf.WriteString("\n\n")
-		}
-	}
-	return buf.String()
-}
 
 // New creates an input type based on an input configuration.
 func New(

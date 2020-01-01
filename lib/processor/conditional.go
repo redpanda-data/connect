@@ -36,7 +36,7 @@ import (
 func init() {
 	Constructors[TypeConditional] = TypeSpec{
 		constructor: NewConditional,
-		description: `
+		Description: `
 Conditional is a processor that has a list of child ` + "`processors`," + `
 ` + "`else_processors`" + `, and a condition. For each message batch, if the
 condition passes, the child ` + "`processors`" + ` will be applied, otherwise

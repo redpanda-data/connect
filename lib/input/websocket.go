@@ -32,7 +32,7 @@ import (
 func init() {
 	Constructors[TypeWebsocket] = TypeSpec{
 		constructor: NewWebsocket,
-		description: `
+		Description: `
 Connects to a websocket server and continuously receives messages.
 
 Messages consumed by this input can be processed in parallel, meaning a single

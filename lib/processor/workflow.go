@@ -39,7 +39,7 @@ import (
 func init() {
 	Constructors[TypeWorkflow] = TypeSpec{
 		constructor: NewWorkflow,
-		description: `
+		Description: `
 Performs the same workflow stages as the ` + "[`process_dag`](#process_dag)" + `
 processor, but uses a record of workflow statuses stored in the path specified
 by the field ` + "`meta_path`" + ` in order to report which workflow stages

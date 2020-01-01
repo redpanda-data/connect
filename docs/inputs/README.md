@@ -53,31 +53,6 @@ input:
 30. [`udp_server`](#udp_server)
 31. [`websocket`](#websocket)
 
-## `amqp`
-
-``` yaml
-type: amqp
-amqp:
-  bindings_declare: []
-  consumer_tag: benthos-consumer
-  max_batch_count: 1
-  prefetch_count: 10
-  prefetch_size: 0
-  queue: benthos-queue
-  queue_declare:
-    durable: true
-    enabled: false
-  tls:
-    client_certs: []
-    enabled: false
-    root_cas_file: ""
-    skip_cert_verify: false
-  url: amqp://guest:guest@localhost:5672/
-```
-
-DEPRECATED: This input is deprecated and scheduled for removal in Benthos V4.
-Please use [`amqp_0_9`](#amqp_0_9) instead.
-
 ## `amqp_0_9`
 
 ``` yaml

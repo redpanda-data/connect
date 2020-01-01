@@ -41,7 +41,7 @@ import (
 func init() {
 	Constructors[TypeJSON] = TypeSpec{
 		constructor: NewJSON,
-		description: `
+		Description: `
 Parses messages as a JSON document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
