@@ -15,13 +15,6 @@ func init() {
 		Description: `
 Consumes messages from a GCP Cloud Pub/Sub subscription.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
-Use the ` + "`batching`" + ` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -36,6 +29,7 @@ You can access these metadata fields using
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.GCPPubSub, conf.GCPPubSub.Batching)
 		},
+		DeprecatedFields: []string{"batching", "max_batch_count"},
 	}
 }
 

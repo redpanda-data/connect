@@ -42,8 +42,10 @@ type AMQP09Config struct {
 	ConsumerTag     string                   `json:"consumer_tag" yaml:"consumer_tag"`
 	PrefetchCount   int                      `json:"prefetch_count" yaml:"prefetch_count"`
 	PrefetchSize    int                      `json:"prefetch_size" yaml:"prefetch_size"`
-	Batching        batch.PolicyConfig       `json:"batching" yaml:"batching"`
 	TLS             btls.Config              `json:"tls" yaml:"tls"`
+
+	// TODO: V4 remove this (maybe in V5 to allow a grace period)
+	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewAMQP09Config creates a new AMQP09Config with default values.

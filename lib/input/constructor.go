@@ -51,6 +51,10 @@ type TypeSpec struct {
 
 	// Deprecated indicates whether this component is deprecated.
 	Deprecated bool
+
+	// DeprecatedFields is an optional list of config field paths (from the root
+	// of a sanitised component config) that are deprecated.
+	DeprecatedFields []string
 }
 
 // Constructors is a map of all input types with their specs.
@@ -179,6 +183,10 @@ func NewConfig() Config {
 // SanitiseConfig returns a sanitised version of the Config, meaning sections
 // that aren't relevant to behaviour are removed.
 func SanitiseConfig(conf Config) (interface{}, error) {
+	return sanitiseConfig(conf, false)
+}
+
+func sanitiseConfig(conf Config, skipDeprecated bool) (interface{}, error) {
 	cBytes, err := json.Marshal(conf)
 	if err != nil {
 		return nil, err
@@ -192,8 +200,10 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	outputMap := config.Sanitised{}
 
 	t := conf.Type
+	def := Constructors[t]
+
 	outputMap["type"] = t
-	if sfunc := Constructors[t].sanitiseConfigFunc; sfunc != nil {
+	if sfunc := def.sanitiseConfigFunc; sfunc != nil {
 		if outputMap[t], err = sfunc(conf); err != nil {
 			return nil, err
 		}
@@ -210,6 +220,13 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 			}
 			if plugSanit != nil {
 				outputMap["plugin"] = plugSanit
+			}
+		}
+	}
+	if skipDeprecated {
+		if m, ok := outputMap[t].(map[string]interface{}); ok {
+			for _, path := range def.DeprecatedFields {
+				delete(m, path)
 			}
 		}
 	}

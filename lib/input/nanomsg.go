@@ -16,10 +16,6 @@ func init() {
 The scalability protocols are common communication patterns. This input should
 be compatible with any implementation, but specifically targets Nanomsg.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
 Currently only PULL and SUB sockets are supported.`,
 	}
 }

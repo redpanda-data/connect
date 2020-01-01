@@ -18,10 +18,6 @@ message payload. The path can either point to a single file (resulting in only a
 single message) or a directory, in which case the directory will be walked and
 each file found will become a message.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
 ### Metadata
 
 This input adds the following metadata fields to each message:

@@ -20,19 +20,13 @@ The field ` + "`limit`" + ` specifies the maximum number of records to be
 received per request. When more than one record is returned they are batched and
 can be split into individual messages with the ` + "`split`" + ` processor.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
-Use the ` + "`batching`" + ` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
-
 Redis stream entries are key/value pairs, as such it is necessary to specify the
 key that contains the body of the message. All other keys/value pairs are saved
 as metadata fields.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.RedisStreams, conf.RedisStreams.Batching)
 		},
+		DeprecatedFields: []string{"batching"},
 	}
 }
 

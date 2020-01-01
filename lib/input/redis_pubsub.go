@@ -16,10 +16,6 @@ func init() {
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple
 channels using this input.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
 In order to subscribe to channels using the ` + "`PSUBSCRIBE`" + ` command set
 the field ` + "`use_patterns` to `true`" + `, then you can include glob-style
 patterns in your channel names. For example:

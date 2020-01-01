@@ -15,10 +15,6 @@ func init() {
 		Description: `
 Subscribe to topics on MQTT brokers.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
 ### Metadata
 
 This input adds the following metadata fields to each message:

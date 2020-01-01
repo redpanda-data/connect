@@ -21,16 +21,18 @@ import (
 // RedisStreamsConfig contains configuration fields for the RedisStreams input
 // type.
 type RedisStreamsConfig struct {
-	URL             string             `json:"url" yaml:"url"`
-	BodyKey         string             `json:"body_key" yaml:"body_key"`
-	Streams         []string           `json:"streams" yaml:"streams"`
-	ConsumerGroup   string             `json:"consumer_group" yaml:"consumer_group"`
-	ClientID        string             `json:"client_id" yaml:"client_id"`
-	Limit           int64              `json:"limit" yaml:"limit"`
-	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
-	StartFromOldest bool               `json:"start_from_oldest" yaml:"start_from_oldest"`
-	CommitPeriod    string             `json:"commit_period" yaml:"commit_period"`
-	Timeout         string             `json:"timeout" yaml:"timeout"`
+	URL             string   `json:"url" yaml:"url"`
+	BodyKey         string   `json:"body_key" yaml:"body_key"`
+	Streams         []string `json:"streams" yaml:"streams"`
+	ConsumerGroup   string   `json:"consumer_group" yaml:"consumer_group"`
+	ClientID        string   `json:"client_id" yaml:"client_id"`
+	Limit           int64    `json:"limit" yaml:"limit"`
+	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	CommitPeriod    string   `json:"commit_period" yaml:"commit_period"`
+	Timeout         string   `json:"timeout" yaml:"timeout"`
+
+	// TODO: V4 remove this.
+	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.

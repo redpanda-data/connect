@@ -13,17 +13,11 @@ func init() {
 	Constructors[TypeNSQ] = TypeSpec{
 		constructor: NewNSQ,
 		Description: `
-Subscribe to an NSQ instance topic and channel.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
-Use the ` + "`batching`" + ` fields to configure an optional
-[batching policy](../batching.md#batch-policy).`,
+Subscribe to an NSQ instance topic and channel.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.NSQ, conf.NSQ.Batching)
 		},
+		DeprecatedFields: []string{"batching"},
 	}
 }
 

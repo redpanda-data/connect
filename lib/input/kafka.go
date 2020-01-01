@@ -20,9 +20,8 @@ you wish to balance partitions across a consumer group look at the
 ` + "`kafka_balanced`" + ` input type instead.
 
 Use the ` + "`batching`" + ` fields to configure an optional
-[batching policy](../batching.md#batch-policy). It is not currently possible to
-use [broker based batching](../batching.md#combined-batching) with this input
-type.
+[batching policy](../batching.md#batch-policy). Any other batching mechanism
+will stall with this input due its sequential transaction model.
 
 This input currently provides a single continuous feed of data, and therefore
 by default will only utilise a single processing thread and parallel output.

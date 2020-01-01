@@ -16,13 +16,6 @@ func init() {
 Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
 message brokers, including RabbitMQ.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
-Use the ` + "`batching`" + ` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
-
 It's possible for this input type to declare the target queue by setting
 ` + "`queue_declare.enabled` to `true`" + `, if the queue already exists then
 the declaration passively verifies that they match the target fields.
@@ -71,6 +64,7 @@ You can access these metadata fields using
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.AMQP09, conf.AMQP09.Batching)
 		},
+		DeprecatedFields: []string{"batching"},
 	}
 }
 

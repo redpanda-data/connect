@@ -16,10 +16,6 @@ func init() {
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
 behaviour then look at NATS Stream.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
 The urls can contain username/password semantics. e.g.
 nats://derek:pass@localhost:4222
 

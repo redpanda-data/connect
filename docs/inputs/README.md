@@ -58,13 +58,6 @@ input:
 ``` yaml
 type: amqp_0_9
 amqp_0_9:
-  batching:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 1
-    period: ""
   bindings_declare: []
   consumer_tag: benthos-consumer
   prefetch_count: 10
@@ -83,13 +76,6 @@ amqp_0_9:
 
 Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
 message brokers, including RabbitMQ.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
 
 It's possible for this input type to declare the target queue by setting
 `queue_declare.enabled` to `true`, if the queue already exists then
@@ -250,10 +236,6 @@ message payload. The path can either point to a single file (resulting in only a
 single message) or a directory, in which case the directory will be walked and
 each file found will become a message.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -270,14 +252,6 @@ You can access these metadata fields using
 ``` yaml
 type: gcp_pubsub
 gcp_pubsub:
-  batching:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 1
-    period: ""
-  max_batch_count: 1
   max_outstanding_bytes: 1000000000
   max_outstanding_messages: 1000
   project: ""
@@ -285,13 +259,6 @@ gcp_pubsub:
 ```
 
 Consumes messages from a GCP Cloud Pub/Sub subscription.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
 
 ### Metadata
 
@@ -318,10 +285,6 @@ hdfs:
 
 Reads files from a HDFS directory, where each discrete file will be consumed as
 a single message payload.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
 
 ### Metadata
 
@@ -534,9 +497,8 @@ you wish to balance partitions across a consumer group look at the
 `kafka_balanced` input type instead.
 
 Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy). It is not currently possible to
-use [broker based batching](../batching.md#combined-batching) with this input
-type.
+[batching policy](../batching.md#batch-policy). Any other batching mechanism
+will stall with this input due its sequential transaction model.
 
 This input currently provides a single continuous feed of data, and therefore
 by default will only utilise a single processing thread and parallel output.
@@ -640,8 +602,8 @@ number of partitions allocated to this consumer.
 
 The `batching` fields allow you to configure a
 [batching policy](../batching.md#batch-policy) which will be applied per
-partition. It is not currently possible to use
-[broker based batching](../batching.md#combined-batching) with this input type.
+partition. Any other batching mechanism will stall with this input due its
+sequential transaction model.
 
 The field `max_processing_period` should be set above the maximum
 estimated time taken to process a message.
@@ -724,9 +686,9 @@ table name. Offsets will then be tracked per `client_id` per
 `namespace` as the primary key and `shard_id` as a sort key.
 
 Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy). It is not currently possible to
-use [broker based batching](../batching.md#combined-batching) with this input
-type.
+[batching policy](../batching.md#batch-policy). Any other batching mechanism
+will stall with this input due its sequential transaction model.
+
 
 This input currently provides a single continuous feed of data, and therefore
 by default will only utilise a single processing thread and parallel output.
@@ -822,10 +784,6 @@ mqtt:
 
 Subscribe to topics on MQTT brokers.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -858,10 +816,6 @@ nanomsg:
 The scalability protocols are common communication patterns. This input should
 be compatible with any implementation, but specifically targets Nanomsg.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
 Currently only PULL and SUB sockets are supported.
 
 ## `nats`
@@ -878,10 +832,6 @@ nats:
 
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
 behaviour then look at NATS Stream.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
 
 The urls can contain username/password semantics. e.g.
 nats://derek:pass@localhost:4222
@@ -903,13 +853,6 @@ You can access these metadata fields using
 type: nats_stream
 nats_stream:
   ack_wait: 30s
-  batching:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 1
-    period: ""
   client_id: benthos_client
   cluster_id: test-cluster
   durable_name: benthos_offset
@@ -935,13 +878,6 @@ durable queue do this the offsets are deleted. In order to avoid this you can
 stop the consumers from unsubscribing by setting the field
 `unsubscribe_on_close` to `false`.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -959,13 +895,6 @@ You can access these metadata fields using
 ``` yaml
 type: nsq
 nsq:
-  batching:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 1
-    period: ""
   channel: benthos_stream
   lookupd_http_addresses:
   - localhost:4161
@@ -977,13 +906,6 @@ nsq:
 ```
 
 Subscribe to an NSQ instance topic and channel.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
 
 ## `read_until`
 
@@ -1028,10 +950,6 @@ redis_list:
 
 Pops messages from the beginning of a Redis list using the BLPop command.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
 ## `redis_pubsub`
 
 ``` yaml
@@ -1045,10 +963,6 @@ redis_pubsub:
 
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple
 channels using this input.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
 
 In order to subscribe to channels using the `PSUBSCRIBE` command set
 the field `use_patterns` to `true`, then you can include glob-style
@@ -1066,13 +980,6 @@ verbatim.
 ``` yaml
 type: redis_streams
 redis_streams:
-  batching:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 1
-    period: ""
   body_key: body
   client_id: benthos_consumer
   commit_period: 1s
@@ -1091,13 +998,6 @@ Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
 The field `limit` specifies the maximum number of records to be
 received per request. When more than one record is returned they are batched and
 can be split into individual messages with the `split` processor.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
 
 Redis stream entries are key/value pairs, as such it is necessary to specify the
 key that contains the body of the message. All other keys/value pairs are saved

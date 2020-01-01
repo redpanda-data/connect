@@ -13,11 +13,7 @@ func init() {
 	Constructors[TypeRedisList] = TypeSpec{
 		constructor: NewRedisList,
 		Description: `
-Pops messages from the beginning of a Redis list using the BLPop command.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.`,
+Pops messages from the beginning of a Redis list using the BLPop command.`,
 	}
 }
 

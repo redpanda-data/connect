@@ -25,8 +25,8 @@ number of partitions allocated to this consumer.
 
 The ` + "`batching`" + ` fields allow you to configure a
 [batching policy](../batching.md#batch-policy) which will be applied per
-partition. It is not currently possible to use
-[broker based batching](../batching.md#combined-batching) with this input type.
+partition. Any other batching mechanism will stall with this input due its
+sequential transaction model.
 
 The field ` + "`max_processing_period`" + ` should be set above the maximum
 estimated time taken to process a message.

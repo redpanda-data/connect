@@ -26,13 +26,6 @@ durable queue do this the offsets are deleted. In order to avoid this you can
 stop the consumers from unsubscribing by setting the field
 ` + "`unsubscribe_on_close` to `false`" + `.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
-Use the ` + "`batching`" + ` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -47,6 +40,7 @@ You can access these metadata fields using
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.NATSStream, conf.NATSStream.Batching)
 		},
+		DeprecatedFields: []string{"batching"},
 	}
 }
 

@@ -21,17 +21,19 @@ import (
 
 // NATSStreamConfig contains configuration fields for the NATSStream input type.
 type NATSStreamConfig struct {
-	URLs            []string           `json:"urls" yaml:"urls"`
-	ClusterID       string             `json:"cluster_id" yaml:"cluster_id"`
-	ClientID        string             `json:"client_id" yaml:"client_id"`
-	QueueID         string             `json:"queue" yaml:"queue"`
-	DurableName     string             `json:"durable_name" yaml:"durable_name"`
-	UnsubOnClose    bool               `json:"unsubscribe_on_close" yaml:"unsubscribe_on_close"`
-	StartFromOldest bool               `json:"start_from_oldest" yaml:"start_from_oldest"`
-	Subject         string             `json:"subject" yaml:"subject"`
-	MaxInflight     int                `json:"max_inflight" yaml:"max_inflight"`
-	AckWait         string             `json:"ack_wait" yaml:"ack_wait"`
-	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
+	URLs            []string `json:"urls" yaml:"urls"`
+	ClusterID       string   `json:"cluster_id" yaml:"cluster_id"`
+	ClientID        string   `json:"client_id" yaml:"client_id"`
+	QueueID         string   `json:"queue" yaml:"queue"`
+	DurableName     string   `json:"durable_name" yaml:"durable_name"`
+	UnsubOnClose    bool     `json:"unsubscribe_on_close" yaml:"unsubscribe_on_close"`
+	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	Subject         string   `json:"subject" yaml:"subject"`
+	MaxInflight     int      `json:"max_inflight" yaml:"max_inflight"`
+	AckWait         string   `json:"ack_wait" yaml:"ack_wait"`
+
+	// TODO: V4 remove this.
+	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
