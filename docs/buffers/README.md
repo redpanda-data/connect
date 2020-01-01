@@ -82,6 +82,7 @@ This is a more powerful way of batching messages than the
 [`batch`](../processors/README.md#batch) processor, as it does not
 rely on new messages entering the pipeline in order to trigger the conditions.
 
+---
 ## `none`
 
 ``` yaml
@@ -97,4 +98,5 @@ the output protocol to the input protocol.
 If the output layer is hit with back pressure it will propagate all the way to
 the input layer, and further up the data stream. If you need to relieve your
 pipeline of this back pressure consider using a more robust buffering solution
-such as Kafka before resorting to alternatives.
+such as Kafka before resorting to alternatives.---
+

@@ -34,7 +34,7 @@ a list of functions [here](../config_interpolation.md#functions).
 
 ### Operators
 
-#### ` + "`append`" + `
+` + "`append`" + `
 
 Appends a value to an array at a target dot path. If the path does not exist all
 objects in the path are created (unless there is a collision).
@@ -47,7 +47,7 @@ array. E.g. if the target is an array ` + "`[0,1]`" + ` and the value is also an
 array ` + "`[2,3]`" + `, the result will be ` + "`[0,1,2,3]`" + ` as opposed to
 ` + "`[0,1,[2,3]]`" + `.
 
-#### ` + "`clean`" + `
+` + "`clean`" + `
 
 Walks the JSON structure and deletes any fields where the value is:
 
@@ -56,31 +56,31 @@ Walks the JSON structure and deletes any fields where the value is:
 - An empty string
 - null
 
-#### ` + "`copy`" + `
+` + "`copy`" + `
 
 Copies the value of a target dot path (if it exists) to a location. The
 destination path is specified in the ` + "`value`" + ` field. If the destination
 path does not exist all objects in the path are created (unless there is a
 collision).
 
-#### ` + "`delete`" + `
+` + "`delete`" + `
 
 Removes a key identified by the dot path. If the path does not exist this is a
 no-op.
 
-#### ` + "`move`" + `
+` + "`move`" + `
 
 Moves the value of a target dot path (if it exists) to a new location. The
 destination path is specified in the ` + "`value`" + ` field. If the destination
 path does not exist all objects in the path are created (unless there is a
 collision).
 
-#### ` + "`select`" + `
+` + "`select`" + `
 
 Reads the value found at a dot path and replaced the original contents entirely
 by the new value.
 
-#### ` + "`set`" + `
+` + "`set`" + `
 
 Sets the value of a field at a dot path. If the path does not exist all objects
 in the path are created (unless there is a collision).
@@ -102,7 +102,7 @@ json:
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
 contains keys that aren't strings those fields will be ignored.
 
-#### ` + "`split`" + `
+` + "`split`" + `
 
 Splits a string field by a value and replaces the original string with an array
 containing the results of the split. This operator requires both the path value

@@ -110,6 +110,7 @@ all:
     arg: foo
 ```
 
+---
 ## `and`
 
 ``` yaml
@@ -119,6 +120,7 @@ and: []
 
 And is a condition that returns the logical AND of its children conditions.
 
+---
 ## `any`
 
 ``` yaml
@@ -140,6 +142,7 @@ any:
     arg: foo
 ```
 
+---
 ## `bounds_check`
 
 ``` yaml
@@ -153,6 +156,7 @@ bounds_check:
 
 Checks a message against a set of bounds.
 
+---
 ## `check_field`
 
 ``` yaml
@@ -167,6 +171,7 @@ Extracts the value of a field identified via [dot path](../field_paths.md)
 within messages (currently only JSON format is supported) and then tests the
 extracted value against a child condition.
 
+---
 ## `check_interpolation`
 
 ``` yaml
@@ -191,6 +196,7 @@ check_interpolation:
       arg: 1
 ```
 
+---
 ## `count`
 
 ``` yaml
@@ -210,6 +216,7 @@ Parallel processors containing a count condition will therefore count
 independently. It is, however, possible to share the counter across processor
 pipelines by defining the count condition as a resource.
 
+---
 ## `jmespath`
 
 ``` yaml
@@ -247,6 +254,7 @@ JMESPath is traditionally used for mutating JSON, in order to do this please
 instead use the [`jmespath`](../processors/README.md#jmespath)
 processor.
 
+---
 ## `json_schema`
 
 ``` yaml
@@ -305,6 +313,7 @@ If the message being processed looked like:
 
 Then the condition would pass.
 
+---
 ## `metadata`
 
 ``` yaml
@@ -444,6 +453,7 @@ metadata:
 ```
 
 
+---
 ## `not`
 
 ``` yaml
@@ -481,6 +491,7 @@ Or, the same example as JSON:
 }
 ```
 
+---
 ## `number`
 
 ``` yaml
@@ -524,6 +535,7 @@ value cannot be parsed as a number.
 Checks whether the value is less than the argument. Returns false if the value
 cannot be parsed as a number.
 
+---
 ## `or`
 
 ``` yaml
@@ -533,6 +545,7 @@ or: []
 
 Or is a condition that returns the logical OR of its children conditions.
 
+---
 ## `processor_failed`
 
 ``` yaml
@@ -545,6 +558,7 @@ Returns true if a processing stage of a message has failed. This condition is
 useful for dropping failed messages or creating dead letter queues, you can read
 more about these patterns [here](../error_handling.md).
 
+---
 ## `resource`
 
 ``` yaml
@@ -586,6 +600,7 @@ resources:
         arg: filter me please
 ```
 
+---
 ## `static`
 
 ``` yaml
@@ -595,6 +610,7 @@ static: true
 
 Static is a condition that always resolves to the same static boolean value.
 
+---
 ## `text`
 
 ``` yaml
@@ -689,6 +705,7 @@ text:
   - bar
 ```
 
+---
 ## `xor`
 
 ``` yaml
@@ -699,6 +716,7 @@ xor: []
 Xor is a condition that returns the logical XOR of its children conditions,
 meaning it only resolves to true if _exactly_ one of its children conditions
 resolves to true.
+---
 
 [processors]: ../processors/README.md
 [filter]: ../processors/README.md#filter

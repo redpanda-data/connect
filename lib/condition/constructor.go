@@ -313,6 +313,7 @@ func Descriptions() string {
 		if i != (len(names) - 1) {
 			buf.WriteString("\n")
 		}
+		buf.WriteString("---\n")
 	}
 
 	buf.WriteString(footer)

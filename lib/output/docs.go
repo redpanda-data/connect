@@ -111,6 +111,9 @@ func Descriptions() string {
 
 	buf.WriteString("### Contents\n\n")
 	for i, name := range names {
+		if Constructors[name].Deprecated {
+			continue
+		}
 		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, name))
 	}
 	buf.WriteString("\n")
@@ -166,6 +169,7 @@ Batches can be formed at both the input and output level. You can find out more
 		if i != (len(names) - 1) {
 			buf.WriteString("\n\n")
 		}
+		buf.WriteString("---\n")
 	}
 	return buf.String()
 }

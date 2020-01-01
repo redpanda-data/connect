@@ -21,7 +21,6 @@ input:
 
 ### Contents
 
-1. [`amqp`](#amqp)
 2. [`amqp_0_9`](#amqp_0_9)
 3. [`broker`](#broker)
 4. [`dynamic`](#dynamic)
@@ -123,6 +122,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `broker`
 
 ``` yaml
@@ -184,6 +184,7 @@ individual child inputs. If you have processors at both the broker level _and_
 on child inputs then the broker processors will be applied _after_ the child
 nodes processors.
 
+---
 ## `dynamic`
 
 ``` yaml
@@ -206,6 +207,7 @@ methods on the `/inputs/{input_id}` endpoint. When using POST the body
 of the request should be a JSON configuration for the input, if the input
 already exists it will be changed.
 
+---
 ## `file`
 
 ``` yaml
@@ -223,6 +225,7 @@ a message part, and an empty line indicates the end of a message.
 
 If the delimiter field is left empty then line feed (\n) is used.
 
+---
 ## `files`
 
 ``` yaml
@@ -247,6 +250,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `gcp_pubsub`
 
 ``` yaml
@@ -272,6 +276,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `hdfs`
 
 ``` yaml
@@ -298,6 +303,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `http_client`
 
 ``` yaml
@@ -358,6 +364,7 @@ line delimited list of message parts. Each part is read as an individual message
 unless multipart is set to true, in which case an empty line indicates the end
 of a message.
 
+---
 ## `http_server`
 
 ``` yaml
@@ -439,6 +446,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `inproc`
 
 ``` yaml
@@ -456,6 +464,7 @@ It is possible to connect multiple inputs to the same inproc ID, but only one
 output can connect to an inproc ID, and will replace existing outputs if a
 collision occurs.
 
+---
 ## `kafka`
 
 ``` yaml
@@ -553,6 +562,7 @@ message offset.
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `kafka_balanced`
 
 ``` yaml
@@ -647,6 +657,7 @@ message offset.
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `kinesis`
 
 ``` yaml
@@ -703,6 +714,7 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
 
+---
 ## `kinesis_balanced`
 
 ``` yaml
@@ -766,6 +778,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `mqtt`
 
 ``` yaml
@@ -799,6 +812,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `nanomsg`
 
 ``` yaml
@@ -818,6 +832,7 @@ be compatible with any implementation, but specifically targets Nanomsg.
 
 Currently only PULL and SUB sockets are supported.
 
+---
 ## `nats`
 
 ``` yaml
@@ -847,6 +862,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `nats_stream`
 
 ``` yaml
@@ -890,6 +906,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `nsq`
 
 ``` yaml
@@ -907,6 +924,7 @@ nsq:
 
 Subscribe to an NSQ instance topic and channel.
 
+---
 ## `read_until`
 
 ``` yaml
@@ -938,6 +956,7 @@ down until the condition is met then set `restart_input` to `true`.
 A metadata key `benthos_read_until` containing the value `final` is
 added to the first part of the message that triggers to input to stop.
 
+---
 ## `redis_list`
 
 ``` yaml
@@ -950,6 +969,7 @@ redis_list:
 
 Pops messages from the beginning of a Redis list using the BLPop command.
 
+---
 ## `redis_pubsub`
 
 ``` yaml
@@ -975,6 +995,7 @@ patterns in your channel names. For example:
 Use `\` to escape special characters if you want to match them
 verbatim.
 
+---
 ## `redis_streams`
 
 ``` yaml
@@ -1003,6 +1024,7 @@ Redis stream entries are key/value pairs, as such it is necessary to specify the
 key that contains the body of the message. All other keys/value pairs are saved
 as metadata fields.
 
+---
 ## `s3`
 
 ``` yaml
@@ -1096,6 +1118,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `sqs`
 
 ``` yaml
@@ -1144,6 +1167,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `stdin`
 
 ``` yaml
@@ -1165,6 +1189,7 @@ instance of this input can utilise any number of threads within a
 
 If the delimiter field is left empty then line feed (\n) is used.
 
+---
 ## `tcp`
 
 ``` yaml
@@ -1188,6 +1213,7 @@ instance of this input can utilise any number of threads within a
 
 If the delimiter field is left empty then line feed (\n) is used.
 
+---
 ## `tcp_server`
 
 ``` yaml
@@ -1212,6 +1238,7 @@ The field `max_buffer` specifies the maximum amount of memory to
 allocate _per connection_ for buffering lines of data. If a line of data from a
 connection exceeds this value then the connection will be closed.
 
+---
 ## `udp_server`
 
 ``` yaml
@@ -1230,6 +1257,7 @@ The field `max_buffer` specifies the maximum amount of memory to
 allocate for buffering lines of data, this must exceed the largest expected
 message size.
 
+---
 ## `websocket`
 
 ``` yaml
@@ -1258,4 +1286,5 @@ instance of this input can utilise any number of threads within a
 
 It is possible to configure an `open_message`, which when set to a
 non-empty string will be sent to the websocket server each time a connection is
-first established.
+first established.---
+

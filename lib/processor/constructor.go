@@ -376,8 +376,8 @@ for detecting and recovering from these failures which can be read about
 ### Batching and Multiple Part Messages
 
 All Benthos processors support multiple part messages, which are synonymous with
-batches. Some processors such as [batch](#batch) and [split](#split) are able to
-create, expand and break down batches.
+batches. Some processors such as [split](#split) are able to create, expand and
+break down batches.
 
 Many processors are able to perform their behaviours on specific parts of a
 message batch, or on all parts, and have a field ` + "`parts`" + ` for
@@ -416,6 +416,9 @@ func Descriptions() string {
 
 	buf.WriteString("### Contents\n\n")
 	for i, name := range names {
+		if Constructors[name].Deprecated {
+			continue
+		}
 		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, name))
 	}
 	buf.WriteString("\n")
@@ -448,6 +451,7 @@ func Descriptions() string {
 		if i != (len(names) - 1) {
 			buf.WriteString("\n")
 		}
+		buf.WriteString("---\n")
 	}
 	buf.WriteString(footer)
 	return buf.String()

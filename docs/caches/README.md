@@ -96,6 +96,7 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
 
+---
 ## `file`
 
 ``` yaml
@@ -110,6 +111,7 @@ the path relative to the configured directory.
 This type currently offers no form of item expiry or garbage collection, and is
 intended to be used for development and debugging purposes only.
 
+---
 ## `memcached`
 
 ``` yaml
@@ -126,6 +128,7 @@ memcached:
 Connects to a cluster of memcached services, a prefix can be specified to allow
 multiple cache types to share a memcached cluster under different namespaces.
 
+---
 ## `memory`
 
 ``` yaml
@@ -159,6 +162,7 @@ memory:
 These values can be overridden during execution, at which point the configured
 TTL is respected as usual.
 
+---
 ## `redis`
 
 ``` yaml
@@ -174,6 +178,7 @@ redis:
 Use a Redis instance as a cache. The expiration can be set to zero or an empty
 string in order to set no expiration.
 
+---
 ## `s3`
 
 ``` yaml
@@ -207,4 +212,5 @@ By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
+---
 

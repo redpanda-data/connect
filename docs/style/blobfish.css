@@ -7,6 +7,15 @@ h1, h2, h3, h4, h5, h6 {
     color: #fff;
 }
 
+h2 {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+hr {
+    border: 1px solid #ff6188;
+}
+
 a, a code {
     color: #60daff;
 }

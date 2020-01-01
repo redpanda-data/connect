@@ -57,7 +57,6 @@ a [`try`](#try) output.
 
 ### Contents
 
-1. [`amqp`](#amqp)
 2. [`amqp_0_9`](#amqp_0_9)
 3. [`broker`](#broker)
 4. [`cache`](#cache)
@@ -142,6 +141,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `broker`
 
 ``` yaml
@@ -249,6 +249,7 @@ individual child outputs. If you have processors at both the broker level _and_
 on child outputs then the broker processors will be applied _before_ the child
 nodes processors.
 
+---
 ## `cache`
 
 ``` yaml
@@ -296,6 +297,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `drop`
 
 ``` yaml
@@ -305,6 +307,7 @@ drop: {}
 
 Drops all messages.
 
+---
 ## `drop_on_error`
 
 ``` yaml
@@ -330,6 +333,7 @@ output:
         type: foo
 ```
 
+---
 ## `dynamic`
 
 ``` yaml
@@ -353,6 +357,7 @@ methods on the `/outputs/{output_id}` endpoint. When using POST the
 body of the request should be a JSON configuration for the output, if the output
 already exists it will be changed.
 
+---
 ## `dynamodb`
 
 ``` yaml
@@ -443,6 +448,7 @@ This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](../batching.md).
 
+---
 ## `elasticsearch`
 
 ``` yaml
@@ -514,6 +520,7 @@ This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](../batching.md).
 
+---
 ## `file`
 
 ``` yaml
@@ -533,6 +540,7 @@ foo\n
 bar\n
 baz\n\n
 
+---
 ## `files`
 
 ``` yaml
@@ -549,6 +557,7 @@ using function interpolations on the `path` field as described
 [here](../config_interpolation.md#functions). When sending batched messages
 these interpolations are performed per message part.
 
+---
 ## `gcp_pubsub`
 
 ``` yaml
@@ -568,6 +577,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `hdfs`
 
 ``` yaml
@@ -593,6 +603,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `http_client`
 
 ``` yaml
@@ -676,6 +687,7 @@ This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](../batching.md).
 
+---
 ## `http_server`
 
 ``` yaml
@@ -705,6 +717,7 @@ websocket of messages for each request respectively.
 When messages are batched the `path` endpoint encodes the batch
 according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
 
+---
 ## `inproc`
 
 ``` yaml
@@ -722,6 +735,7 @@ It is possible to connect multiple inputs to the same inproc ID, but only one
 output can connect to an inproc ID, and will replace existing outputs if a
 collision occurs.
 
+---
 ## `kafka`
 
 ``` yaml
@@ -811,6 +825,7 @@ This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](../batching.md).
 
+---
 ## `kinesis`
 
 ``` yaml
@@ -867,6 +882,7 @@ This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](../batching.md).
 
+---
 ## `kinesis_firehose`
 
 ``` yaml
@@ -916,6 +932,7 @@ This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](../batching.md).
 
+---
 ## `mqtt`
 
 ``` yaml
@@ -943,6 +960,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `nanomsg`
 
 ``` yaml
@@ -967,6 +985,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `nats`
 
 ``` yaml
@@ -990,6 +1009,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `nats_stream`
 
 ``` yaml
@@ -1011,6 +1031,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `nsq`
 
 ``` yaml
@@ -1033,6 +1054,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `redis_hash`
 
 ``` yaml
@@ -1087,6 +1109,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `redis_list`
 
 ``` yaml
@@ -1106,6 +1129,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `redis_pubsub`
 
 ``` yaml
@@ -1128,6 +1152,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `redis_streams`
 
 ``` yaml
@@ -1157,6 +1182,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `retry`
 
 ``` yaml
@@ -1186,6 +1212,7 @@ Rather than retrying the same output you may wish to retry the send using a
 different output target (a dead letter queue). In which case you should instead
 use the [`try`](#try) output type.
 
+---
 ## `s3`
 
 ``` yaml
@@ -1233,6 +1260,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `sns`
 
 ``` yaml
@@ -1267,6 +1295,7 @@ This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
+---
 ## `sqs`
 
 ``` yaml
@@ -1326,6 +1355,7 @@ This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](../batching.md).
 
+---
 ## `stdout`
 
 ``` yaml
@@ -1344,6 +1374,7 @@ foo\n
 bar\n
 baz\n\n
 
+---
 ## `switch`
 
 ``` yaml
@@ -1412,6 +1443,7 @@ output returns an error the switch output also returns an error by setting
 wrap the switch with a `try` broker, but care must be taken to ensure
 duplicate messages aren't introduced during error conditions.
 
+---
 ## `sync_response`
 
 ``` yaml
@@ -1454,6 +1486,7 @@ Using the above example and posting the message 'hello world' to the endpoint
 
 For more information please read [Synchronous Responses](../sync_responses.md).
 
+---
 ## `tcp`
 
 ``` yaml
@@ -1468,6 +1501,7 @@ connecting to a server.
 If batched messages are sent the final message of the batch will be followed by
 two line breaks in order to indicate the end of the batch.
 
+---
 ## `try`
 
 ``` yaml
@@ -1503,6 +1537,7 @@ output:
       path: /usr/local/benthos/everything_failed.jsonl
 ```
 
+---
 ## `udp`
 
 ``` yaml
@@ -1517,6 +1552,7 @@ connecting to a server.
 If batched messages are sent the final message of the batch will be followed by
 two line breaks in order to indicate the end of the batch.
 
+---
 ## `websocket`
 
 ``` yaml
@@ -1536,4 +1572,5 @@ websocket:
   url: ws://localhost:4195/post/ws
 ```
 
-Sends messages to an HTTP server via a websocket connection.
+Sends messages to an HTTP server via a websocket connection.---
+
