@@ -129,7 +129,7 @@ func Descriptions() string {
 
 		conf := NewConfig()
 		conf.Type = name
-		if confSanit, err := SanitiseConfig(conf); err == nil {
+		if confSanit, err := sanitiseConfig(conf, true); err == nil {
 			confBytes, _ = config.MarshalYAML(confSanit)
 		}
 

@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+#
+# Installs Benthos the quick way, for adventurers that want to spend more time
+# grooming their cats.
+#
+# Requires curl, grep, cut, tar, uname, chmod, mv, rm.
+
+[[ $- = *i* ]] && echo "Don't source this script!" && return 10
+
+header() {
+    cat 1>&2 <<EOF
+Benthos Installer
+
+Website: https://benthos.dev
+Docs: https://docs.benthos.dev
+Repo: https://github.com/Jeffail/benthos
+
+EOF
+}
+
+check_cmd() {
+	command -v "$1" > /dev/null 2>&1
+}
+
+check_tools() {
+	Tools=("curl" "grep" "cut" "tar" "uname" "chmod" "mv" "rm")
+
+	for tool in ${Tools[*]}; do
+		if ! check_cmd $tool; then
+			echo "Aborted, missing $tool, sorry!"
+			exit 6
+		fi
+	done
+}
+
+install_benthos()
+{
+	trap 'echo -e "Aborted, error $? in command: $BASH_COMMAND"; trap ERR; exit 1' ERR
+	install_path="/usr/local/bin"
+	benthos_os="unsupported"
+	benthos_arch="unknown"
+	benthos_arm=""
+
+	header
+	check_tools
+
+	if [[ -n "$PREFIX" ]]; then
+		install_path="$PREFIX/bin"
+	fi
+
+	# Fall back to /usr/bin if necessary
+	if [[ ! -d $install_path ]]; then
+		install_path="/usr/bin"
+	fi
+
+	# Not every platform has or needs sudo (https://termux.com/linux.html)
+	((EUID)) && sudo_cmd="sudo"
+
+	#########################
+	# Which OS and version? #
+	#########################
+
+	benthos_bin="benthos"
+	benthos_dl_ext=".tar.gz"
+
+	# NOTE: `uname -m` is more accurate and universal than `arch`
+	# See https://en.wikipedia.org/wiki/Uname
+	unamem="$(uname -m)"
+	if [[ $unamem == *aarch64* ]]; then
+		benthos_arch="arm64"
+	elif [[ $unamem == *64* ]]; then
+		benthos_arch="amd64"
+	elif [[ $unamem == *armv5* ]]; then
+		benthos_arch="arm"
+		benthos_arm="5"
+	elif [[ $unamem == *armv6l* ]]; then
+		benthos_arch="arm"
+		benthos_arm="6"
+	elif [[ $unamem == *armv7l* ]]; then
+		benthos_arch="arm"
+		benthos_arm="7"
+	else
+		echo "Aborted, unsupported or unknown architecture: $unamem"
+		return 2
+	fi
+
+	unameu="$(tr '[:lower:]' '[:upper:]' <<<$(uname))"
+	if [[ $unameu == *DARWIN* ]]; then
+		benthos_os="darwin"
+		version=${vers##*ProductVersion:}
+	elif [[ $unameu == *LINUX* ]]; then
+		benthos_os="linux"
+	elif [[ $unameu == *FREEBSD* ]]; then
+		benthos_os="freebsd"
+	elif [[ $unameu == *OPENBSD* ]]; then
+		benthos_os="openbsd"
+	elif [[ $unameu == *WIN* || $unameu == MSYS* ]]; then
+		# Should catch cygwin
+		sudo_cmd=""
+		benthos_os="windows"
+		benthos_bin=$benthos_bin.exe
+	else
+		echo "Aborted, unsupported or unknown os: $uname"
+		return 6
+	fi
+
+	########################
+	# Download and extract #
+	########################
+
+	echo "Downloading Benthos for ${benthos_os}/${benthos_arch}${benthos_arm}..."
+	benthos_file="benthos_${benthos_os}_${benthos_arch}${benthos_arm}${benthos_dl_ext}"
+
+	benthos_latest_tag=$(curl -s https://api.github.com/repos/Jeffail/benthos/releases/latest | grep 'tag_name' | cut -d\" -f4)
+	benthos_latest_version=$(echo ${benthos_latest_tag} | cut -c2-)
+	benthos_url="https://github.com/Jeffail/benthos/releases/download/${benthos_latest_tag}/benthos_${benthos_latest_version}_${benthos_os}_${benthos_arch}${benthos_arm}.tar.gz"
+
+	dl="/tmp/$benthos_file"
+	rm -rf -- "$dl"
+
+	curl -fsSL "$benthos_url" -o "$dl"
+
+	echo "Extracting..."
+	case "$benthos_file" in
+		*.tar.gz) tar -xzf "$dl" -C "$PREFIX/tmp/" "$benthos_bin" ;;
+	esac
+	chmod +x "$PREFIX/tmp/$benthos_bin"
+
+	echo "Putting benthos in $install_path (may require password)"
+	$sudo_cmd mv "$PREFIX/tmp/$benthos_bin" "$install_path/$benthos_bin"
+	$sudo_cmd rm -- "$dl"
+
+	# check installation
+	$benthos_bin -version
+
+	echo "Successfully installed"
+	trap ERR
+	return 0
+}
+
+install_benthos

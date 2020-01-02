@@ -483,7 +483,6 @@ kafka:
   commit_period: 1s
   consumer_group: benthos_consumer_group
   fetch_buffer_cap: 256
-  max_batch_count: 1
   max_processing_period: 100ms
   partition: 0
   sasl:
@@ -585,7 +584,6 @@ kafka_balanced:
     heartbeat_interval: 3s
     rebalance_timeout: 60s
     session_timeout: 10s
-  max_batch_count: 1
   max_processing_period: 100ms
   sasl:
     enabled: false

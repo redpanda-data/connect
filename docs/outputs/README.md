@@ -762,7 +762,6 @@ kafka:
   max_msg_bytes: 1000000
   max_retries: 0
   partitioner: fnv1a_hash
-  round_robin_partitions: false
   sasl:
     enabled: false
     password: ""
@@ -794,8 +793,6 @@ The `partitioner` field determines how messages are delegated to a
 partition. Options are `fnv1a_hash`, `murmur2_hash`, `random` and
 `round_robin`. When a hash partitioner is selected but a message key
 is empty then a random partition is chosen.
-
-The field `round_robin_partitions` is deprecated.
 
 ### TLS
 

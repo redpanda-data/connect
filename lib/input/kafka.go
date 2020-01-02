@@ -62,6 +62,7 @@ You can access these metadata fields using
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.Kafka, conf.Kafka.Batching)
 		},
+		DeprecatedFields: []string{"max_batch_count"},
 	}
 }
 

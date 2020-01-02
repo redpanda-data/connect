@@ -39,6 +39,7 @@ All notable changes to this project will be documented in this file.
   + `kinesis_firehose`
   + `sqs`
 - More TRACE level logs added throughout the pipeline.
+- Operator `delete` added to `cache` processor.
 
 ## 3.7.0 - 2019-12-21
 

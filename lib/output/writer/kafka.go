@@ -25,22 +25,24 @@ import (
 
 // KafkaConfig contains configuration fields for the Kafka output type.
 type KafkaConfig struct {
-	Addresses            []string    `json:"addresses" yaml:"addresses"`
-	ClientID             string      `json:"client_id" yaml:"client_id"`
-	Key                  string      `json:"key" yaml:"key"`
-	RoundRobinPartitions bool        `json:"round_robin_partitions" yaml:"round_robin_partitions"`
-	Partitioner          string      `json:"partitioner" yaml:"partitioner"`
-	Topic                string      `json:"topic" yaml:"topic"`
-	Compression          string      `json:"compression" yaml:"compression"`
-	MaxMsgBytes          int         `json:"max_msg_bytes" yaml:"max_msg_bytes"`
-	Timeout              string      `json:"timeout" yaml:"timeout"`
-	AckReplicas          bool        `json:"ack_replicas" yaml:"ack_replicas"`
-	TargetVersion        string      `json:"target_version" yaml:"target_version"`
-	TLS                  btls.Config `json:"tls" yaml:"tls"`
-	SASL                 SASLConfig  `json:"sasl" yaml:"sasl"`
-	MaxInFlight          int         `json:"max_in_flight" yaml:"max_in_flight"`
-	retries.Config       `json:",inline" yaml:",inline"`
-	Batching             batch.PolicyConfig `json:"batching" yaml:"batching"`
+	Addresses      []string    `json:"addresses" yaml:"addresses"`
+	ClientID       string      `json:"client_id" yaml:"client_id"`
+	Key            string      `json:"key" yaml:"key"`
+	Partitioner    string      `json:"partitioner" yaml:"partitioner"`
+	Topic          string      `json:"topic" yaml:"topic"`
+	Compression    string      `json:"compression" yaml:"compression"`
+	MaxMsgBytes    int         `json:"max_msg_bytes" yaml:"max_msg_bytes"`
+	Timeout        string      `json:"timeout" yaml:"timeout"`
+	AckReplicas    bool        `json:"ack_replicas" yaml:"ack_replicas"`
+	TargetVersion  string      `json:"target_version" yaml:"target_version"`
+	TLS            btls.Config `json:"tls" yaml:"tls"`
+	SASL           SASLConfig  `json:"sasl" yaml:"sasl"`
+	MaxInFlight    int         `json:"max_in_flight" yaml:"max_in_flight"`
+	retries.Config `json:",inline" yaml:",inline"`
+	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
+
+	// TODO: V4 remove this.
+	RoundRobinPartitions bool `json:"round_robin_partitions" yaml:"round_robin_partitions"`
 }
 
 // SASLConfig contains configuration for SASL based authentication.

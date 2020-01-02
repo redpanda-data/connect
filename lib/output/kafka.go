@@ -35,14 +35,13 @@ partition. Options are ` + "`fnv1a_hash`, `murmur2_hash`, `random`" + ` and
 ` + "`round_robin`" + `. When a hash partitioner is selected but a message key
 is empty then a random partition is chosen.
 
-The field ` + "`round_robin_partitions`" + ` is deprecated.
-
 ` + tls.Documentation + ``,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.Kafka, conf.Kafka.Batching)
 		},
-		Async:   true,
-		Batches: true,
+		DeprecatedFields: []string{"round_robin_partitions"},
+		Async:            true,
+		Batches:          true,
 	}
 }
 
