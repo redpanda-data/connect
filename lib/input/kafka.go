@@ -1,23 +1,3 @@
-// Copyright (c) 2014 Ashley Jeffs
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
 package input
 
 import (
@@ -33,16 +13,15 @@ import (
 func init() {
 	Constructors[TypeKafka] = TypeSpec{
 		constructor: NewKafka,
-		description: `
+		Description: `
 Connects to a kafka (0.8+) server. Offsets are managed within kafka as per the
 consumer group (set via config). Only one partition per input is supported, if
 you wish to balance partitions across a consumer group look at the
 ` + "`kafka_balanced`" + ` input type instead.
 
 Use the ` + "`batching`" + ` fields to configure an optional
-[batching policy](../batching.md#batch-policy). It is not currently possible to
-use [broker based batching](../batching.md#combined-batching) with this input
-type.
+[batching policy](../batching.md#batch-policy). Any other batching mechanism
+will stall with this input due its sequential transaction model.
 
 This input currently provides a single continuous feed of data, and therefore
 by default will only utilise a single processing thread and parallel output.

@@ -51,11 +51,18 @@ output:
       initial_interval: 0s
       max_elapsed_time: 5s
       max_interval: 1s
+    batching:
+      byte_size: 0
+      condition:
+        type: static
+        static: false
+      count: 1
+      period: ""
     client_id: benthos_kafka_output
     compression: none
     key: ""
     max_in_flight: 1
-    max_msg_bytes: 1e+06
+    max_msg_bytes: 1000000
     max_retries: 0
     partitioner: fnv1a_hash
     round_robin_partitions: false

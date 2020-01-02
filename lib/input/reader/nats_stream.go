@@ -1,23 +1,3 @@
-// Copyright (c) 2018 Ashley Jeffs
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
 package reader
 
 import (
@@ -41,17 +21,19 @@ import (
 
 // NATSStreamConfig contains configuration fields for the NATSStream input type.
 type NATSStreamConfig struct {
-	URLs            []string           `json:"urls" yaml:"urls"`
-	ClusterID       string             `json:"cluster_id" yaml:"cluster_id"`
-	ClientID        string             `json:"client_id" yaml:"client_id"`
-	QueueID         string             `json:"queue" yaml:"queue"`
-	DurableName     string             `json:"durable_name" yaml:"durable_name"`
-	UnsubOnClose    bool               `json:"unsubscribe_on_close" yaml:"unsubscribe_on_close"`
-	StartFromOldest bool               `json:"start_from_oldest" yaml:"start_from_oldest"`
-	Subject         string             `json:"subject" yaml:"subject"`
-	MaxInflight     int                `json:"max_inflight" yaml:"max_inflight"`
-	AckWait         string             `json:"ack_wait" yaml:"ack_wait"`
-	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
+	URLs            []string `json:"urls" yaml:"urls"`
+	ClusterID       string   `json:"cluster_id" yaml:"cluster_id"`
+	ClientID        string   `json:"client_id" yaml:"client_id"`
+	QueueID         string   `json:"queue" yaml:"queue"`
+	DurableName     string   `json:"durable_name" yaml:"durable_name"`
+	UnsubOnClose    bool     `json:"unsubscribe_on_close" yaml:"unsubscribe_on_close"`
+	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	Subject         string   `json:"subject" yaml:"subject"`
+	MaxInflight     int      `json:"max_inflight" yaml:"max_inflight"`
+	AckWait         string   `json:"ack_wait" yaml:"ack_wait"`
+
+	// TODO: V4 remove this.
+	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.

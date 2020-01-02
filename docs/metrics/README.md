@@ -61,6 +61,7 @@ to allow none of the latency based metrics with the pattern
 In order to see logs breaking down which metrics are registered and whether they
 are blocked by your blacklists enable logging at the TRACE level.
 
+---
 ## `http_server`
 
 ``` yaml
@@ -89,6 +90,7 @@ this:
 }
 ```
 
+---
 ## `prometheus`
 
 ``` yaml
@@ -114,6 +116,7 @@ once Benthos shuts down. It is also possible to specify a
 The Push Gateway is useful for when Benthos instances are short lived. Do not
 include the "/metrics/jobs/..." path in the push URL.
 
+---
 ## `rename`
 
 ``` yaml
@@ -173,6 +176,7 @@ set via renaming.
 In order to see logs breaking down which metrics are registered and whether they
 are renamed enable logging at the TRACE level.
 
+---
 ## `statsd`
 
 ``` yaml
@@ -199,6 +203,7 @@ The 'network' field is deprecated and scheduled for removal. If you currently
 rely on sending Statsd metrics over TCP and want it to be supported long term
 please [raise an issue](https://github.com/Jeffail/benthos/issues).
 
+---
 ## `stdout`
 
 ``` yaml
@@ -231,6 +236,7 @@ flush_metrics dictates whether counter and timing metrics are reset to 0 after
 they are pushed out.
 
 
+---
 ## `whitelist`
 
 ``` yaml
@@ -266,4 +272,5 @@ to allow all latency based metrics with the pattern `.*\.latency`.
 ### Debugging
 
 In order to see logs breaking down which metrics are registered and whether they
-pass your whitelists enable logging at the TRACE level.
+pass your whitelists enable logging at the TRACE level.---
+

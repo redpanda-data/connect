@@ -21,7 +21,6 @@ input:
 
 ### Contents
 
-1. [`amqp`](#amqp)
 2. [`amqp_0_9`](#amqp_0_9)
 3. [`broker`](#broker)
 4. [`dynamic`](#dynamic)
@@ -53,43 +52,11 @@ input:
 30. [`udp_server`](#udp_server)
 31. [`websocket`](#websocket)
 
-## `amqp`
-
-``` yaml
-type: amqp
-amqp:
-  bindings_declare: []
-  consumer_tag: benthos-consumer
-  max_batch_count: 1
-  prefetch_count: 10
-  prefetch_size: 0
-  queue: benthos-queue
-  queue_declare:
-    durable: true
-    enabled: false
-  tls:
-    client_certs: []
-    enabled: false
-    root_cas_file: ""
-    skip_cert_verify: false
-  url: amqp://guest:guest@localhost:5672/
-```
-
-DEPRECATED: This input is deprecated and scheduled for removal in Benthos V4.
-Please use [`amqp_0_9`](#amqp_0_9) instead.
-
 ## `amqp_0_9`
 
 ``` yaml
 type: amqp_0_9
 amqp_0_9:
-  batching:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 1
-    period: ""
   bindings_declare: []
   consumer_tag: benthos-consumer
   prefetch_count: 10
@@ -108,13 +75,6 @@ amqp_0_9:
 
 Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
 message brokers, including RabbitMQ.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
 
 It's possible for this input type to declare the target queue by setting
 `queue_declare.enabled` to `true`, if the queue already exists then
@@ -162,6 +122,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `broker`
 
 ``` yaml
@@ -223,6 +184,7 @@ individual child inputs. If you have processors at both the broker level _and_
 on child inputs then the broker processors will be applied _after_ the child
 nodes processors.
 
+---
 ## `dynamic`
 
 ``` yaml
@@ -245,6 +207,7 @@ methods on the `/inputs/{input_id}` endpoint. When using POST the body
 of the request should be a JSON configuration for the input, if the input
 already exists it will be changed.
 
+---
 ## `file`
 
 ``` yaml
@@ -262,6 +225,7 @@ a message part, and an empty line indicates the end of a message.
 
 If the delimiter field is left empty then line feed (\n) is used.
 
+---
 ## `files`
 
 ``` yaml
@@ -275,10 +239,6 @@ message payload. The path can either point to a single file (resulting in only a
 single message) or a directory, in which case the directory will be walked and
 each file found will become a message.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -290,19 +250,12 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `gcp_pubsub`
 
 ``` yaml
 type: gcp_pubsub
 gcp_pubsub:
-  batching:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 1
-    period: ""
-  max_batch_count: 1
   max_outstanding_bytes: 1000000000
   max_outstanding_messages: 1000
   project: ""
@@ -310,13 +263,6 @@ gcp_pubsub:
 ```
 
 Consumes messages from a GCP Cloud Pub/Sub subscription.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
 
 ### Metadata
 
@@ -330,6 +276,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `hdfs`
 
 ``` yaml
@@ -344,10 +291,6 @@ hdfs:
 Reads files from a HDFS directory, where each discrete file will be consumed as
 a single message payload.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -360,6 +303,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `http_client`
 
 ``` yaml
@@ -420,6 +364,7 @@ line delimited list of message parts. Each part is read as an individual message
 unless multipart is set to true, in which case an empty line indicates the end
 of a message.
 
+---
 ## `http_server`
 
 ``` yaml
@@ -501,6 +446,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `inproc`
 
 ``` yaml
@@ -518,6 +464,7 @@ It is possible to connect multiple inputs to the same inproc ID, but only one
 output can connect to an inproc ID, and will replace existing outputs if a
 collision occurs.
 
+---
 ## `kafka`
 
 ``` yaml
@@ -559,9 +506,8 @@ you wish to balance partitions across a consumer group look at the
 `kafka_balanced` input type instead.
 
 Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy). It is not currently possible to
-use [broker based batching](../batching.md#combined-batching) with this input
-type.
+[batching policy](../batching.md#batch-policy). Any other batching mechanism
+will stall with this input due its sequential transaction model.
 
 This input currently provides a single continuous feed of data, and therefore
 by default will only utilise a single processing thread and parallel output.
@@ -616,6 +562,7 @@ message offset.
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `kafka_balanced`
 
 ``` yaml
@@ -665,8 +612,8 @@ number of partitions allocated to this consumer.
 
 The `batching` fields allow you to configure a
 [batching policy](../batching.md#batch-policy) which will be applied per
-partition. It is not currently possible to use
-[broker based batching](../batching.md#combined-batching) with this input type.
+partition. Any other batching mechanism will stall with this input due its
+sequential transaction model.
 
 The field `max_processing_period` should be set above the maximum
 estimated time taken to process a message.
@@ -710,6 +657,7 @@ message offset.
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `kinesis`
 
 ``` yaml
@@ -749,9 +697,9 @@ table name. Offsets will then be tracked per `client_id` per
 `namespace` as the primary key and `shard_id` as a sort key.
 
 Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy). It is not currently possible to
-use [broker based batching](../batching.md#combined-batching) with this input
-type.
+[batching policy](../batching.md#batch-policy). Any other batching mechanism
+will stall with this input due its sequential transaction model.
+
 
 This input currently provides a single continuous feed of data, and therefore
 by default will only utilise a single processing thread and parallel output.
@@ -766,6 +714,7 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
 
+---
 ## `kinesis_balanced`
 
 ``` yaml
@@ -829,6 +778,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `mqtt`
 
 ``` yaml
@@ -847,10 +797,6 @@ mqtt:
 
 Subscribe to topics on MQTT brokers.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -866,6 +812,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `nanomsg`
 
 ``` yaml
@@ -883,12 +830,9 @@ nanomsg:
 The scalability protocols are common communication patterns. This input should
 be compatible with any implementation, but specifically targets Nanomsg.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
 Currently only PULL and SUB sockets are supported.
 
+---
 ## `nats`
 
 ``` yaml
@@ -904,10 +848,6 @@ nats:
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
 behaviour then look at NATS Stream.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
 The urls can contain username/password semantics. e.g.
 nats://derek:pass@localhost:4222
 
@@ -922,19 +862,13 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `nats_stream`
 
 ``` yaml
 type: nats_stream
 nats_stream:
   ack_wait: 30s
-  batching:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 1
-    period: ""
   client_id: benthos_client
   cluster_id: test-cluster
   durable_name: benthos_offset
@@ -960,13 +894,6 @@ durable queue do this the offsets are deleted. In order to avoid this you can
 stop the consumers from unsubscribing by setting the field
 `unsubscribe_on_close` to `false`.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -979,18 +906,12 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `nsq`
 
 ``` yaml
 type: nsq
 nsq:
-  batching:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 1
-    period: ""
   channel: benthos_stream
   lookupd_http_addresses:
   - localhost:4161
@@ -1003,13 +924,7 @@ nsq:
 
 Subscribe to an NSQ instance topic and channel.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
-
+---
 ## `read_until`
 
 ``` yaml
@@ -1041,6 +956,7 @@ down until the condition is met then set `restart_input` to `true`.
 A metadata key `benthos_read_until` containing the value `final` is
 added to the first part of the message that triggers to input to stop.
 
+---
 ## `redis_list`
 
 ``` yaml
@@ -1053,10 +969,7 @@ redis_list:
 
 Pops messages from the beginning of a Redis list using the BLPop command.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
+---
 ## `redis_pubsub`
 
 ``` yaml
@@ -1071,10 +984,6 @@ redis_pubsub:
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple
 channels using this input.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
 In order to subscribe to channels using the `PSUBSCRIBE` command set
 the field `use_patterns` to `true`, then you can include glob-style
 patterns in your channel names. For example:
@@ -1086,18 +995,12 @@ patterns in your channel names. For example:
 Use `\` to escape special characters if you want to match them
 verbatim.
 
+---
 ## `redis_streams`
 
 ``` yaml
 type: redis_streams
 redis_streams:
-  batching:
-    byte_size: 0
-    condition:
-      type: static
-      static: false
-    count: 1
-    period: ""
   body_key: body
   client_id: benthos_consumer
   commit_period: 1s
@@ -1117,17 +1020,11 @@ The field `limit` specifies the maximum number of records to be
 received per request. When more than one record is returned they are batched and
 can be split into individual messages with the `split` processor.
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-Use the `batching` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
-
 Redis stream entries are key/value pairs, as such it is necessary to specify the
 key that contains the body of the message. All other keys/value pairs are saved
 as metadata fields.
 
+---
 ## `s3`
 
 ``` yaml
@@ -1221,6 +1118,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `sqs`
 
 ``` yaml
@@ -1269,6 +1167,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
+---
 ## `stdin`
 
 ``` yaml
@@ -1290,6 +1189,7 @@ instance of this input can utilise any number of threads within a
 
 If the delimiter field is left empty then line feed (\n) is used.
 
+---
 ## `tcp`
 
 ``` yaml
@@ -1313,6 +1213,7 @@ instance of this input can utilise any number of threads within a
 
 If the delimiter field is left empty then line feed (\n) is used.
 
+---
 ## `tcp_server`
 
 ``` yaml
@@ -1337,6 +1238,7 @@ The field `max_buffer` specifies the maximum amount of memory to
 allocate _per connection_ for buffering lines of data. If a line of data from a
 connection exceeds this value then the connection will be closed.
 
+---
 ## `udp_server`
 
 ``` yaml
@@ -1355,6 +1257,7 @@ The field `max_buffer` specifies the maximum amount of memory to
 allocate for buffering lines of data, this must exceed the largest expected
 message size.
 
+---
 ## `websocket`
 
 ``` yaml
@@ -1383,4 +1286,5 @@ instance of this input can utilise any number of threads within a
 
 It is possible to configure an `open_message`, which when set to a
 non-empty string will be sent to the websocket server each time a connection is
-first established.
+first established.---
+

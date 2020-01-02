@@ -1,23 +1,3 @@
-// Copyright (c) 2018 Ashley Jeffs
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
 package writer
 
 import (
@@ -29,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
@@ -64,6 +45,7 @@ type KinesisConfig struct {
 	PartitionKey   string `json:"partition_key" yaml:"partition_key"`
 	MaxInFlight    int    `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
+	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewKinesisConfig creates a new Config with default values.
@@ -72,6 +54,8 @@ func NewKinesisConfig() KinesisConfig {
 	rConf.Backoff.InitialInterval = "1s"
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
+	batching := batch.NewPolicyConfig()
+	batching.Count = 1
 	return KinesisConfig{
 		sessionConfig: sessionConfig{
 			Config: sess.NewConfig(),
@@ -81,6 +65,7 @@ func NewKinesisConfig() KinesisConfig {
 		PartitionKey: "",
 		MaxInFlight:  1,
 		Config:       rConf,
+		Batching:     batching,
 	}
 }
 

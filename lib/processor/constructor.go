@@ -1,23 +1,3 @@
-// Copyright (c) 2017 Ashley Jeffs
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
 package processor
 
 import (
@@ -44,8 +24,12 @@ type TypeSpec struct {
 		log log.Modular,
 		stats metrics.Type,
 	) (Type, error)
-	description        string
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
+
+	Description string
+
+	// Deprecated indicates whether this component is deprecated.
+	Deprecated bool
 }
 
 // Constructors is a map of all processor types with their specs.
@@ -392,8 +376,8 @@ for detecting and recovering from these failures which can be read about
 ### Batching and Multiple Part Messages
 
 All Benthos processors support multiple part messages, which are synonymous with
-batches. Some processors such as [batch](#batch) and [split](#split) are able to
-create, expand and break down batches.
+batches. Some processors such as [split](#split) are able to create, expand and
+break down batches.
 
 Many processors are able to perform their behaviours on specific parts of a
 message batch, or on all parts, and have a field ` + "`parts`" + ` for
@@ -432,12 +416,20 @@ func Descriptions() string {
 
 	buf.WriteString("### Contents\n\n")
 	for i, name := range names {
+		if Constructors[name].Deprecated {
+			continue
+		}
 		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, name))
 	}
 	buf.WriteString("\n")
 
 	// Append each description
 	for i, name := range names {
+		def := Constructors[name]
+		if def.Deprecated {
+			continue
+		}
+
 		var confBytes []byte
 
 		conf := NewConfig()
@@ -454,11 +446,12 @@ func Descriptions() string {
 			buf.Write(confBytes)
 			buf.WriteString("```\n")
 		}
-		buf.WriteString(Constructors[name].description)
+		buf.WriteString(def.Description)
 		buf.WriteString("\n")
 		if i != (len(names) - 1) {
 			buf.WriteString("\n")
 		}
+		buf.WriteString("---\n")
 	}
 	buf.WriteString(footer)
 	return buf.String()

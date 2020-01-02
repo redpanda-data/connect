@@ -1,23 +1,3 @@
-// Copyright (c) 2018 Ashley Jeffs
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
 package processor
 
 import (
@@ -41,7 +21,7 @@ import (
 func init() {
 	Constructors[TypeJSON] = TypeSpec{
 		constructor: NewJSON,
-		description: `
+		Description: `
 Parses messages as a JSON document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
@@ -54,7 +34,7 @@ a list of functions [here](../config_interpolation.md#functions).
 
 ### Operators
 
-#### ` + "`append`" + `
+` + "`append`" + `
 
 Appends a value to an array at a target dot path. If the path does not exist all
 objects in the path are created (unless there is a collision).
@@ -67,7 +47,7 @@ array. E.g. if the target is an array ` + "`[0,1]`" + ` and the value is also an
 array ` + "`[2,3]`" + `, the result will be ` + "`[0,1,2,3]`" + ` as opposed to
 ` + "`[0,1,[2,3]]`" + `.
 
-#### ` + "`clean`" + `
+` + "`clean`" + `
 
 Walks the JSON structure and deletes any fields where the value is:
 
@@ -76,31 +56,31 @@ Walks the JSON structure and deletes any fields where the value is:
 - An empty string
 - null
 
-#### ` + "`copy`" + `
+` + "`copy`" + `
 
 Copies the value of a target dot path (if it exists) to a location. The
 destination path is specified in the ` + "`value`" + ` field. If the destination
 path does not exist all objects in the path are created (unless there is a
 collision).
 
-#### ` + "`delete`" + `
+` + "`delete`" + `
 
 Removes a key identified by the dot path. If the path does not exist this is a
 no-op.
 
-#### ` + "`move`" + `
+` + "`move`" + `
 
 Moves the value of a target dot path (if it exists) to a new location. The
 destination path is specified in the ` + "`value`" + ` field. If the destination
 path does not exist all objects in the path are created (unless there is a
 collision).
 
-#### ` + "`select`" + `
+` + "`select`" + `
 
 Reads the value found at a dot path and replaced the original contents entirely
 by the new value.
 
-#### ` + "`set`" + `
+` + "`set`" + `
 
 Sets the value of a field at a dot path. If the path does not exist all objects
 in the path are created (unless there is a collision).
@@ -122,7 +102,7 @@ json:
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
 contains keys that aren't strings those fields will be ignored.
 
-#### ` + "`split`" + `
+` + "`split`" + `
 
 Splits a string field by a value and replaces the original string with an array
 containing the results of the split. This operator requires both the path value

@@ -29,8 +29,8 @@ until the issue is resolved.
 
 When a Benthos output fails to send a message the error is propagated back up to
 the input, where depending on the protocol it will either be pushed back to the
-source as a Noack (AMQP) or will be reattempted indefinitely with the commit
-withheld until success (Kafka).
+source as a Noack (e.g. AMQP) or will be reattempted indefinitely with the
+commit withheld until success (e.g. Kafka).
 
 It's possible to instead have Benthos indefinitely retry an output until success
 with a [`retry`](#retry) output. Some other outputs, such as the
@@ -57,7 +57,6 @@ a [`try`](#try) output.
 
 ### Contents
 
-1. [`amqp`](#amqp)
 2. [`amqp_0_9`](#amqp_0_9)
 3. [`broker`](#broker)
 4. [`cache`](#cache)
@@ -96,32 +95,6 @@ a [`try`](#try) output.
 37. [`try`](#try)
 38. [`udp`](#udp)
 39. [`websocket`](#websocket)
-
-## `amqp`
-
-``` yaml
-type: amqp
-amqp:
-  exchange: benthos-exchange
-  exchange_declare:
-    durable: true
-    enabled: false
-    type: direct
-  immediate: false
-  key: benthos-key
-  mandatory: false
-  max_in_flight: 1
-  persistent: false
-  tls:
-    client_certs: []
-    enabled: false
-    root_cas_file: ""
-    skip_cert_verify: false
-  url: amqp://guest:guest@localhost:5672/
-```
-
-DEPRECATED: This output is deprecated and scheduled for removal in Benthos V4.
-Please use [`amqp_0_9`](#amqp_0_9) instead.
 
 ## `amqp_0_9`
 
@@ -162,6 +135,13 @@ settings can be enabled in the `tls` section.
 The field 'key' can be dynamically set using function interpolations described
 [here](../config_interpolation.md#functions).
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `broker`
 
 ``` yaml
@@ -269,6 +249,7 @@ individual child outputs. If you have processors at both the broker level _and_
 on child outputs then the broker processors will be applied _before_ the child
 nodes processors.
 
+---
 ## `cache`
 
 ``` yaml
@@ -310,6 +291,13 @@ In order to create a unique `key` value per item you should use
 function interpolations described [here](../config_interpolation.md#functions).
 When sending batched messages the interpolations are performed per message part.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `drop`
 
 ``` yaml
@@ -319,6 +307,7 @@ drop: {}
 
 Drops all messages.
 
+---
 ## `drop_on_error`
 
 ``` yaml
@@ -344,6 +333,7 @@ output:
         type: foo
 ```
 
+---
 ## `dynamic`
 
 ``` yaml
@@ -367,6 +357,7 @@ methods on the `/outputs/{output_id}` endpoint. When using POST the
 body of the request should be a JSON configuration for the output, if the output
 already exists it will be changed.
 
+---
 ## `dynamodb`
 
 ``` yaml
@@ -376,6 +367,13 @@ dynamodb:
     initial_interval: 1s
     max_elapsed_time: 30s
     max_interval: 5s
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   credentials:
     id: ""
     profile: ""
@@ -440,6 +438,17 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](../batching.md).
+
+---
 ## `elasticsearch`
 
 ``` yaml
@@ -464,6 +473,13 @@ elasticsearch:
     enabled: false
     password: ""
     username: ""
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   healthcheck: true
   id: ${!count:elastic_ids}-${!timestamp_unix}
   index: benthos_index
@@ -494,6 +510,17 @@ allowing you to transfer data across accounts. You can find out more
 If the configured target is a managed AWS Elasticsearch cluster, you may need
 to set `sniff` and `healthcheck` to false for connections to succeed.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](../batching.md).
+
+---
 ## `file`
 
 ``` yaml
@@ -513,6 +540,7 @@ foo\n
 bar\n
 baz\n\n
 
+---
 ## `files`
 
 ``` yaml
@@ -529,6 +557,7 @@ using function interpolations on the `path` field as described
 [here](../config_interpolation.md#functions). When sending batched messages
 these interpolations are performed per message part.
 
+---
 ## `gcp_pubsub`
 
 ``` yaml
@@ -542,6 +571,13 @@ gcp_pubsub:
 Sends messages to a GCP Cloud Pub/Sub topic. Metadata from messages are sent as
 attributes.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `hdfs`
 
 ``` yaml
@@ -561,6 +597,13 @@ for each object you should use function interpolations described
 [here](../config_interpolation.md#functions). When sending batched messages the
 interpolations are performed per message part.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `http_client`
 
 ``` yaml
@@ -572,6 +615,13 @@ http_client:
     enabled: false
     password: ""
     username: ""
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   copy_response_headers: false
   drop_on: []
   headers:
@@ -627,6 +677,17 @@ source by setting `propagate_response` to `true`. Only inputs that
 support [synchronous responses](../sync_responses.md) are able to make use of
 these propagated responses.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](../batching.md).
+
+---
 ## `http_server`
 
 ``` yaml
@@ -645,13 +706,18 @@ Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
 2.0 is supported when using TLS, which is enabled when key and cert files are
 specified.
 
-You can leave the 'address' config field blank in order to use the default
-service, but this will ignore TLS options.
+You can leave the `address` config field blank in order to use the
+default service wide server address, but this will ignore TLS options.
 
-You can receive a single, discrete message on the configured 'path' endpoint, or
-receive a constant stream of line delimited messages on the configured
-'stream_path' endpoint.
+Three endpoints will be registered at the paths specified by the fields
+`path`, `stream_path` and `ws_path`. Which allow you to consume a
+single message batch, a continuous stream of line delimited messages, or a
+websocket of messages for each request respectively.
 
+When messages are batched the `path` endpoint encodes the batch
+according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
+
+---
 ## `inproc`
 
 ``` yaml
@@ -669,6 +735,7 @@ It is possible to connect multiple inputs to the same inproc ID, but only one
 output can connect to an inproc ID, and will replace existing outputs if a
 collision occurs.
 
+---
 ## `kafka`
 
 ``` yaml
@@ -681,11 +748,18 @@ kafka:
     initial_interval: 0s
     max_elapsed_time: 5s
     max_interval: 1s
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   client_id: benthos_kafka_output
   compression: none
   key: ""
   max_in_flight: 1
-  max_msg_bytes: 1e+06
+  max_msg_bytes: 1000000
   max_retries: 0
   partitioner: fnv1a_hash
   round_robin_partitions: false
@@ -741,6 +815,17 @@ client_certs:
     key: bar
 ```
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](../batching.md).
+
+---
 ## `kinesis`
 
 ``` yaml
@@ -750,6 +835,13 @@ kinesis:
     initial_interval: 1s
     max_elapsed_time: 30s
     max_interval: 5s
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   credentials:
     id: ""
     profile: ""
@@ -780,6 +872,17 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](../batching.md).
+
+---
 ## `kinesis_firehose`
 
 ``` yaml
@@ -789,6 +892,13 @@ kinesis_firehose:
     initial_interval: 1s
     max_elapsed_time: 30s
     max_interval: 5s
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   credentials:
     id: ""
     profile: ""
@@ -812,6 +922,17 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](../batching.md).
+
+---
 ## `mqtt`
 
 ``` yaml
@@ -833,6 +954,13 @@ The `topic` field can be dynamically set using function interpolations
 described [here](../config_interpolation.md#functions). When sending batched
 messages these interpolations are performed per message part.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `nanomsg`
 
 ``` yaml
@@ -851,6 +979,13 @@ be compatible with any implementation, but specifically targets Nanomsg.
 
 Currently only PUSH and PUB sockets are supported.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `nats`
 
 ``` yaml
@@ -868,6 +1003,13 @@ For at-least-once behaviour with NATS look at NATS Stream.
 This output will interpolate functions within the subject field, you
 can find a list of functions [here](../config_interpolation.md#functions).
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `nats_stream`
 
 ``` yaml
@@ -883,6 +1025,13 @@ nats_stream:
 
 Publish to a NATS Stream subject.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `nsq`
 
 ``` yaml
@@ -899,6 +1048,13 @@ using function interpolations described
 [here](../config_interpolation.md#functions). When sending batched messages
 these interpolations are performed per message part.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `redis_hash`
 
 ``` yaml
@@ -947,6 +1103,13 @@ The order of hash field extraction is as follows:
 
 Where latter stages will overwrite matching field names of a former stage.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `redis_list`
 
 ``` yaml
@@ -960,6 +1123,13 @@ redis_list:
 Pushes messages onto the end of a Redis list (which is created if it doesn't
 already exist) using the RPUSH command.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `redis_pubsub`
 
 ``` yaml
@@ -976,6 +1146,13 @@ guarantee that messages have been received.
 This output will interpolate functions within the channel field, you
 can find a list of functions [here](../config_interpolation.md#functions).
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `redis_streams`
 
 ``` yaml
@@ -999,6 +1176,13 @@ key to be set to the body of the message. All metadata fields of the message
 will also be set as key/value pairs, if there is a key collision between
 a metadata item and the body then the body takes precedence.
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `retry`
 
 ``` yaml
@@ -1026,8 +1210,9 @@ we want to avoid reapplying to the same message more than once in the pipeline.
 
 Rather than retrying the same output you may wish to retry the send using a
 different output target (a dead letter queue). In which case you should instead
-use the [`broker`](#broker) output type with the pattern 'try'.
+use the [`try`](#try) output type.
 
+---
 ## `s3`
 
 ``` yaml
@@ -1069,6 +1254,13 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `sns`
 
 ``` yaml
@@ -1097,6 +1289,13 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+---
 ## `sqs`
 
 ``` yaml
@@ -1106,6 +1305,13 @@ sqs:
     initial_interval: 1s
     max_elapsed_time: 30s
     max_interval: 5s
+  batching:
+    byte_size: 0
+    condition:
+      type: static
+      static: false
+    count: 1
+    period: ""
   credentials:
     id: ""
     profile: ""
@@ -1139,6 +1345,17 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
 
+### Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](../batching.md).
+
+---
 ## `stdout`
 
 ``` yaml
@@ -1157,6 +1374,7 @@ foo\n
 bar\n
 baz\n\n
 
+---
 ## `switch`
 
 ``` yaml
@@ -1225,6 +1443,7 @@ output returns an error the switch output also returns an error by setting
 wrap the switch with a `try` broker, but care must be taken to ensure
 duplicate messages aren't introduced during error conditions.
 
+---
 ## `sync_response`
 
 ``` yaml
@@ -1267,6 +1486,7 @@ Using the above example and posting the message 'hello world' to the endpoint
 
 For more information please read [Synchronous Responses](../sync_responses.md).
 
+---
 ## `tcp`
 
 ``` yaml
@@ -1281,6 +1501,7 @@ connecting to a server.
 If batched messages are sent the final message of the batch will be followed by
 two line breaks in order to indicate the end of the batch.
 
+---
 ## `try`
 
 ``` yaml
@@ -1316,6 +1537,7 @@ output:
       path: /usr/local/benthos/everything_failed.jsonl
 ```
 
+---
 ## `udp`
 
 ``` yaml
@@ -1330,6 +1552,7 @@ connecting to a server.
 If batched messages are sent the final message of the batch will be followed by
 two line breaks in order to indicate the end of the batch.
 
+---
 ## `websocket`
 
 ``` yaml
@@ -1349,4 +1572,5 @@ websocket:
   url: ws://localhost:4195/post/ws
 ```
 
-Sends messages to an HTTP server via a websocket connection.
+Sends messages to an HTTP server via a websocket connection.---
+

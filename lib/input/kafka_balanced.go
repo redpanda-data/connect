@@ -1,23 +1,3 @@
-// Copyright (c) 2017 Ashley Jeffs
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
 package input
 
 import (
@@ -34,7 +14,7 @@ func init() {
 	Constructors[TypeKafkaBalanced] = TypeSpec{
 		constructor:                  NewKafkaBalanced,
 		constructorHasBatchProcessor: newKafkaBalancedHasBatchProcessor,
-		description: `
+		Description: `
 Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
 consumer group (set via config), and partitions are automatically balanced
 across any members of the consumer group.
@@ -45,8 +25,8 @@ number of partitions allocated to this consumer.
 
 The ` + "`batching`" + ` fields allow you to configure a
 [batching policy](../batching.md#batch-policy) which will be applied per
-partition. It is not currently possible to use
-[broker based batching](../batching.md#combined-batching) with this input type.
+partition. Any other batching mechanism will stall with this input due its
+sequential transaction model.
 
 The field ` + "`max_processing_period`" + ` should be set above the maximum
 estimated time taken to process a message.

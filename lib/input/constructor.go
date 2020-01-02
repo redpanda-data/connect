@@ -1,31 +1,8 @@
-// Copyright (c) 2014 Ashley Jeffs
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
 package input
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -50,7 +27,6 @@ type TypeSpec struct {
 		pipelineConstructors ...types.PipelineConstructorFunc,
 	) (Type, error)
 	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
-	description        string
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
 	// DEPRECATED: This is a hack for until the batch processor is removed.
@@ -70,6 +46,15 @@ type TypeSpec struct {
 		log log.Modular,
 		stats metrics.Type,
 	) (Type, error)
+
+	Description string
+
+	// Deprecated indicates whether this component is deprecated.
+	Deprecated bool
+
+	// DeprecatedFields is an optional list of config field paths (from the root
+	// of a sanitised component config) that are deprecated.
+	DeprecatedFields []string
 }
 
 // Constructors is a map of all input types with their specs.
@@ -198,6 +183,10 @@ func NewConfig() Config {
 // SanitiseConfig returns a sanitised version of the Config, meaning sections
 // that aren't relevant to behaviour are removed.
 func SanitiseConfig(conf Config) (interface{}, error) {
+	return sanitiseConfig(conf, false)
+}
+
+func sanitiseConfig(conf Config, skipDeprecated bool) (interface{}, error) {
 	cBytes, err := json.Marshal(conf)
 	if err != nil {
 		return nil, err
@@ -211,8 +200,10 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	outputMap := config.Sanitised{}
 
 	t := conf.Type
+	def := Constructors[t]
+
 	outputMap["type"] = t
-	if sfunc := Constructors[t].sanitiseConfigFunc; sfunc != nil {
+	if sfunc := def.sanitiseConfigFunc; sfunc != nil {
 		if outputMap[t], err = sfunc(conf); err != nil {
 			return nil, err
 		}
@@ -229,6 +220,13 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 			}
 			if plugSanit != nil {
 				outputMap["plugin"] = plugSanit
+			}
+		}
+	}
+	if skipDeprecated {
+		if m, ok := outputMap[t].(map[string]interface{}); ok {
+			for _, path := range def.DeprecatedFields {
+				delete(m, path)
 			}
 		}
 	}
@@ -303,73 +301,6 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 }
 
 //------------------------------------------------------------------------------
-
-var header = "This document was generated with `benthos --list-inputs`" + `
-
-An input is a source of data piped through an array of optional
-[processors](../processors). Only one input is configured at the root of a
-Benthos config. However, the root input can be a [broker](#broker) which
-combines multiple inputs.
-
-An input config section looks like this:
-
-` + "``` yaml" + `
-input:
-  type: foo
-  foo:
-    bar: baz
-  processors:
-  - type: qux
-` + "```" + ``
-
-// Descriptions returns a formatted string of descriptions for each type.
-func Descriptions() string {
-	// Order our input types alphabetically
-	names := []string{}
-	for name := range Constructors {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	buf := bytes.Buffer{}
-	buf.WriteString("Inputs\n")
-	buf.WriteString(strings.Repeat("=", 6))
-	buf.WriteString("\n\n")
-	buf.WriteString(header)
-	buf.WriteString("\n\n")
-
-	buf.WriteString("### Contents\n\n")
-	for i, name := range names {
-		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, name))
-	}
-	buf.WriteString("\n")
-
-	// Append each description
-	for i, name := range names {
-		var confBytes []byte
-
-		conf := NewConfig()
-		conf.Type = name
-		conf.Processors = nil
-		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = config.MarshalYAML(confSanit)
-		}
-
-		buf.WriteString("## ")
-		buf.WriteString("`" + name + "`")
-		buf.WriteString("\n")
-		if confBytes != nil {
-			buf.WriteString("\n``` yaml\n")
-			buf.Write(confBytes)
-			buf.WriteString("```\n")
-		}
-		buf.WriteString(Constructors[name].description)
-		if i != (len(names) - 1) {
-			buf.WriteString("\n\n")
-		}
-	}
-	return buf.String()
-}
 
 // New creates an input type based on an input configuration.
 func New(

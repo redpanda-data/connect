@@ -38,8 +38,8 @@ for detecting and recovering from these failures which can be read about
 ### Batching and Multiple Part Messages
 
 All Benthos processors support multiple part messages, which are synonymous with
-batches. Some processors such as [batch](#batch) and [split](#split) are able to
-create, expand and break down batches.
+batches. Some processors such as [split](#split) are able to create, expand and
+break down batches.
 
 Many processors are able to perform their behaviours on specific parts of a
 message batch, or on all parts, and have a field `parts` for
@@ -60,7 +60,6 @@ In this case the [`for_each`](#for_each) processor can be used.
 1. [`archive`](#archive)
 2. [`avro`](#avro)
 3. [`awk`](#awk)
-4. [`batch`](#batch)
 5. [`bounds_check`](#bounds_check)
 6. [`cache`](#cache)
 7. [`catch`](#catch)
@@ -140,6 +139,7 @@ the result to an array, which becomes the contents of the resulting message.
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.
 
+---
 ## `avro`
 
 ``` yaml
@@ -170,6 +170,7 @@ specifies how the source documents are encoded.
 Attempts to convert JSON documents into Avro documents according to the
 specified encoding.
 
+---
 ## `awk`
 
 ``` yaml
@@ -235,25 +236,7 @@ foo_created_at = "2018-12-18T11:57:32"
 
 Custom functions can also still be used with this codec.
 
-## `batch`
-
-``` yaml
-type: batch
-batch:
-  byte_size: 0
-  condition:
-    type: static
-    static: false
-  count: 0
-  period: ""
-```
-
-DEPRECATED: This processor is no longer supported and has been replaced with
-improved batching mechanisms. For more information about batching in Benthos
-please check out [this document](../batching.md).
-
-This processor is scheduled to be removed in Benthos V4
-
+---
 ## `bounds_check`
 
 ``` yaml
@@ -268,6 +251,7 @@ bounds_check:
 Checks whether each message batch fits within certain boundaries, and drops
 batches that do not.
 
+---
 ## `cache`
 
 ``` yaml
@@ -347,6 +331,7 @@ using the [`process_map`](#process_map) processor:
       message.document: .
 ```
 
+---
 ## `catch`
 
 ``` yaml
@@ -378,6 +363,7 @@ actions (such as logging/metrics) are required before dropping them.
 
 More information about error handing can be found [here](../error_handling.md).
 
+---
 ## `compress`
 
 ``` yaml
@@ -393,6 +379,7 @@ algorithms are: gzip, zlib, flate.
 
 The 'level' field might not apply to all algorithms.
 
+---
 ## `conditional`
 
 ``` yaml
@@ -419,6 +406,7 @@ processor with the [`for_each`](#for_each) processor.
 
 You can find a [full list of conditions here](../conditions).
 
+---
 ## `decode`
 
 ``` yaml
@@ -431,6 +419,7 @@ decode:
 Decodes messages according to the selected scheme. Supported available schemes
 are: hex, base64.
 
+---
 ## `decompress`
 
 ``` yaml
@@ -443,6 +432,7 @@ decompress:
 Decompresses messages according to the selected algorithm. Supported
 decompression types are: gzip, zlib, bzip2, flate.
 
+---
 ## `dedupe`
 
 ``` yaml
@@ -501,6 +491,7 @@ problem by using a memory based cache. This is a compromise that can achieve
 effective deduplication but parallel deployments of the pipeline as well as
 service restarts increase the chances of duplicates passing undetected.
 
+---
 ## `encode`
 
 ``` yaml
@@ -513,6 +504,7 @@ encode:
 Encodes messages according to the selected scheme. Supported schemes are:
 hex, base64.
 
+---
 ## `filter`
 
 ``` yaml
@@ -531,6 +523,7 @@ batch is dropped. You can find a [full list of conditions here](../conditions).
 In order to filter individual messages of a batch use the
 [`filter_parts`](#filter_parts) processor.
 
+---
 ## `filter_parts`
 
 ``` yaml
@@ -552,6 +545,7 @@ batch.
 This processor is useful if you are combining messages into batches using the
 [`batch`](#batch) processor and wish to remove specific parts.
 
+---
 ## `for_each`
 
 ``` yaml
@@ -568,6 +562,7 @@ individual message parts of a batch instead.
 Please note that most processors already process per message of a batch, and
 this processor is not needed in those cases.
 
+---
 ## `grok`
 
 ``` yaml
@@ -599,6 +594,7 @@ of the input. However, this property often makes it less performant than pcre
 based implementations of grok. For more information see
 [https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).
 
+---
 ## `group_by`
 
 ``` yaml
@@ -666,6 +662,7 @@ output:
 Since any message that isn't a foo is a bar, and bars do not require their own
 processing steps, we only need a single grouping configuration.
 
+---
 ## `group_by_value`
 
 ``` yaml
@@ -700,6 +697,7 @@ output:
     path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz
 ```
 
+---
 ## `hash`
 
 ``` yaml
@@ -725,6 +723,7 @@ process_field:
       algorithm: sha256
 ```
 
+---
 ## `hash_sample`
 
 ``` yaml
@@ -746,6 +745,7 @@ to `50.0` and `retain_max` to `100.1` will drop the _other_ half.
 In order to sample individual messages of a batch use this processor with the
 [`for_each`](#for_each) processor.
 
+---
 ## `http`
 
 ``` yaml
@@ -840,6 +840,7 @@ attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](../error_handling.md).
 
+---
 ## `insert_part`
 
 ``` yaml
@@ -864,6 +865,7 @@ the batch.
 This processor will interpolate functions within the 'content' field, you can
 find a list of functions [here](../config_interpolation.md#functions).
 
+---
 ## `jmespath`
 
 ``` yaml
@@ -908,6 +910,7 @@ It is possible to create boolean queries with JMESPath, in order to filter
 messages with boolean queries please instead use the
 [`jmespath`](../conditions/README.md#jmespath) condition.
 
+---
 ## `json`
 
 ``` yaml
@@ -931,7 +934,7 @@ a list of functions [here](../config_interpolation.md#functions).
 
 ### Operators
 
-#### `append`
+`append`
 
 Appends a value to an array at a target dot path. If the path does not exist all
 objects in the path are created (unless there is a collision).
@@ -944,7 +947,7 @@ array. E.g. if the target is an array `[0,1]` and the value is also an
 array `[2,3]`, the result will be `[0,1,2,3]` as opposed to
 `[0,1,[2,3]]`.
 
-#### `clean`
+`clean`
 
 Walks the JSON structure and deletes any fields where the value is:
 
@@ -953,31 +956,31 @@ Walks the JSON structure and deletes any fields where the value is:
 - An empty string
 - null
 
-#### `copy`
+`copy`
 
 Copies the value of a target dot path (if it exists) to a location. The
 destination path is specified in the `value` field. If the destination
 path does not exist all objects in the path are created (unless there is a
 collision).
 
-#### `delete`
+`delete`
 
 Removes a key identified by the dot path. If the path does not exist this is a
 no-op.
 
-#### `move`
+`move`
 
 Moves the value of a target dot path (if it exists) to a new location. The
 destination path is specified in the `value` field. If the destination
 path does not exist all objects in the path are created (unless there is a
 collision).
 
-#### `select`
+`select`
 
 Reads the value found at a dot path and replaced the original contents entirely
 by the new value.
 
-#### `set`
+`set`
 
 Sets the value of a field at a dot path. If the path does not exist all objects
 in the path are created (unless there is a collision).
@@ -999,12 +1002,13 @@ json:
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
 contains keys that aren't strings those fields will be ignored.
 
-#### `split`
+`split`
 
 Splits a string field by a value and replaces the original string with an array
 containing the results of the split. This operator requires both the path value
 and the contents of the `value` field to be strings.
 
+---
 ## `json_schema`
 
 ``` yaml
@@ -1073,6 +1077,7 @@ for a simpler use case you might instead wish to use the
 [`json_schema`](../conditions/README.md#json_schema) condition with a
 [`filter`](#filter).
 
+---
 ## `lambda`
 
 ``` yaml
@@ -1122,6 +1127,7 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](../aws.md).
 
+---
 ## `log`
 
 ``` yaml
@@ -1171,6 +1177,7 @@ log:
     kafka_topic: "${!metadata:kafka_topic}"
 ```
 
+---
 ## `merge_json`
 
 ``` yaml
@@ -1186,6 +1193,7 @@ the batch. Merged parts are removed unless `retain_parts` is set to
 true. The new merged message will contain the metadata of the first part to be
 merged.
 
+---
 ## `metadata`
 
 ``` yaml
@@ -1241,6 +1249,7 @@ Removes all metadata values from the message where the key is prefixed with the
 value provided. If the value field is left empty the key value will instead be
 used as the prefix.
 
+---
 ## `metric`
 
 ``` yaml
@@ -1325,6 +1334,7 @@ case the `labels` field can be used in order to create them. Label
 values can also be set using function interpolations in order to dynamically
 populate them with context about the message.
 
+---
 ## `noop`
 
 ``` yaml
@@ -1334,6 +1344,7 @@ type: noop
 Noop is a no-op processor that does nothing, the message passes through
 unchanged.
 
+---
 ## `number`
 
 ``` yaml
@@ -1380,6 +1391,7 @@ Adds a value.
 
 Subtracts a value.
 
+---
 ## `parallel`
 
 ``` yaml
@@ -1397,6 +1409,7 @@ processed in parallel.
 The field `cap`, if greater than zero, caps the maximum number of
 parallel processing threads.
 
+---
 ## `process_batch`
 
 ``` yaml
@@ -1407,6 +1420,7 @@ process_batch: []
 Alias for the [`for_each`](#for_each) processor, which should be used
 instead.
 
+---
 ## `process_dag`
 
 ``` yaml
@@ -1473,6 +1487,7 @@ process_dag:
 With this config the DAG would determine that the children foo and bar can be
 executed in parallel, and once they are both finished we may proceed onto baz.
 
+---
 ## `process_field`
 
 ``` yaml
@@ -1539,6 +1554,7 @@ If the number of messages resulting from the processing steps does not match the
 original count then this processor fails and the messages continue unchanged.
 Therefore, you should avoid using batch and filter type processors in this list.
 
+---
 ## `process_map`
 
 ``` yaml
@@ -1619,6 +1635,7 @@ processing they will be correctly aligned with the original batch. However, the
 ordering of premapped message parts as they are sent through processors are not
 guaranteed to match the ordering of the original batch.
 
+---
 ## `rate_limit`
 
 ``` yaml
@@ -1632,6 +1649,7 @@ Throttles the throughput of a pipeline according to a specified
 shared across components and therefore apply globally to all processing
 pipelines.
 
+---
 ## `redis`
 
 ``` yaml
@@ -1678,6 +1696,7 @@ Returns the cardinality of a set, or 0 if the key does not exist.
 
 Adds a new member to a set. Returns `1` if the member was added.
 
+---
 ## `resource`
 
 ``` yaml
@@ -1717,6 +1736,7 @@ But now the metrics path of the JMESPath processor will be
 `resources.processors.foo_proc`, this way of flattening observability
 labels becomes more useful as configs get larger and more nested.
 
+---
 ## `sample`
 
 ``` yaml
@@ -1730,6 +1750,7 @@ Retains a randomly sampled percentage of message batches (0 to 100) and drops
 all others. The random seed is static in order to sample deterministically, but
 can be set in config to allow parallel samples that are unique.
 
+---
 ## `select_parts`
 
 ``` yaml
@@ -1754,6 +1775,7 @@ end counting backwards starting from -1. E.g. if index = -1 then the selected
 part will be the last part of the message, if index = -2 then the part before
 the last element with be selected, and so on.
 
+---
 ## `sleep`
 
 ``` yaml
@@ -1776,6 +1798,7 @@ for_each:
     duration: ${!metadata:sleep_for}
 ```
 
+---
 ## `split`
 
 ``` yaml
@@ -1795,6 +1818,7 @@ also sent as a single batch. For example, if your target size was 10, and the
 processor received a batch of 95 message parts, the result would be 9 batches of
 10 messages followed by a batch of 5 messages.
 
+---
 ## `sql`
 
 ``` yaml
@@ -1855,6 +1879,7 @@ The following is a list of supported drivers and their respective DSN formats:
 Please note that the `postgres` driver enforces SSL by default, you
 can override this with the parameter `sslmode=disable` if required.
 
+---
 ## `subprocess`
 
 ``` yaml
@@ -1893,6 +1918,7 @@ If a message contains line breaks each line of the message is piped to the
 subprocess and flushed, and a response is expected from the subprocess before
 another line is fed in.
 
+---
 ## `switch`
 
 ``` yaml
@@ -1923,6 +1949,7 @@ the [`for_each`](#for_each) processor.
 
 You can find a [full list of conditions here](../conditions).
 
+---
 ## `sync_response`
 
 ``` yaml
@@ -1940,6 +1967,7 @@ An example of an input able to utilise this is the `http_server`.
 
 For more information please read [Synchronous Responses](../sync_responses.md).
 
+---
 ## `text`
 
 ``` yaml
@@ -2065,6 +2093,7 @@ Removes all leading and trailing whitespace from the payload.
 
 Unquotes a single, double, or back-quoted string literal
 
+---
 ## `throttle`
 
 ``` yaml
@@ -2080,6 +2109,7 @@ each with a throttle would result in four times the rate specified.
 The period should be specified as a time duration string. For example, '1s'
 would be 1 second, '10ms' would be 10 milliseconds, etc.
 
+---
 ## `try`
 
 ``` yaml
@@ -2111,6 +2141,7 @@ only to failed messages.
 
 More information about error handing can be found [here](../error_handling.md).
 
+---
 ## `unarchive`
 
 ``` yaml
@@ -2139,6 +2170,7 @@ For the unarchive formats that contain file information (tar, zip), a metadata
 field is added to each message called `archive_filename` with the
 extracted filename.
 
+---
 ## `while`
 
 ``` yaml
@@ -2172,6 +2204,7 @@ the first batch only.
 
 You can find a [full list of conditions here](../conditions).
 
+---
 ## `workflow`
 
 ``` yaml
@@ -2208,6 +2241,7 @@ stages will be skipped.
 You can read more about workflows in Benthos
 [in this document](../workflows.md).
 
+---
 ## `xml`
 
 ``` yaml
@@ -2267,6 +2301,7 @@ The resulting JSON structure would look like this:
   }
 }
 ```
+---
 
 [0]: ../examples/README.md
 [1]: ../pipeline.md

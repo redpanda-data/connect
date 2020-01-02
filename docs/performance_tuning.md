@@ -39,7 +39,7 @@ input:
         field1: etc
 ```
 
-Which would create the exact same consumer as before with four copies in total. Try increasing the number of copies to see how that affects the throughput. If your multiple consumers would require different configurations then set copies to `1` and write each consumer as a separate object in the `inputs` array.
+Which would create the exact same consumer as before with four connections in total. Try increasing the number of copies to see how that affects the throughput. If your multiple consumers would require different configurations then set copies to `1` and write each consumer as a separate object in the `inputs` array.
 
 Read the [broker documentation][broker-input] for more tips on simplifying broker configs.
 
@@ -53,13 +53,17 @@ Firstly, you should check the config parameters of your output sink. There are o
 
 If the config parameters for an output sink aren't enough then you can try the following:
 
+#### Increase in flight messages
+
+Most outputs have a field `max_in_flight` that allows you to specify how many messages can be in flight at the same time. Increasing this value can improve throughput significantly.
+
 #### Send messages in batches
 
-Most outputs will send data quicker when messages can be batched into single requests. Read the [batching documentation][batching] for more guidance on how to tune message batches within Benthos.
+Most outputs will send data quicker when messages are batched, this is often done automatically in the background. However, for a few outputs your batches need to be configured. Read the [batching documentation][batching] for more guidance on how to tune message batches within Benthos.
 
 #### Increase the number of parallel output sinks
 
-If your output sink supports multiple parallel writers then it can greatly increase your throughput to have multiple outputs configured.
+If your output sink supports multiple parallel writers then it can greatly increase your throughput to have multiple connections configured.
 
 Increasing the number of parallel output sinks is similar to doing the same for input sources and is done using a [broker][broker-output]. The output broker
 type supports a few different routing patterns depending on your intention. In this case we want to maximize throughput so our best choice is a `greedy`
@@ -100,17 +104,11 @@ Therefore, it's still important to have an output that can keep up with the flow
 
 For example, if your input usually produces 10 msgs/s, but occasionally spikes to 100 msgs/s, and your output can handle up to 50 msgs/s, it might be possible to configure a buffer large enough to store spikes in their entirety. As long as the average flow of messages from the input remains below 50 msgs/s then your service should be able to continue indefinitely without ever blocking the input source.
 
-Benthos offers [a range of buffer strategies][buffers] and it is worth studying them all in order to find the correct combination of resilience, throughput and capacity that you need.
-
 ## Maximising CPU Utilisation
 
 Some [processors][processors] within Benthos are relatively heavy on your CPU, and can potentially become the bottleneck of a service. In these circumstances it is worth configuring Benthos so that your processors are running on each available core of your machine without contention.
 
-An array of processors in any section of a Benthos config becomes a single logical pipeline of steps running on a single logical thread.
-
-When the target of the processors (an input or output) is a broker type the pipeline will be duplicated once for each discrete input/output. This is one way to create parallel processing threads but they will be tightly coupled to the input or output they are bound to. Using processing pipelines in this way results in uneven and varying loads which is unideal for distributing processing work across logical CPUs.
-
-The other way to create parallel processor threads is to configure them inside the [pipeline][pipeline] configuration block, where we can explicitly set any number of parallel processor threads independent of how many inputs or outputs we want to use.
+An array of processors in any section of a Benthos config becomes a single logical pipeline of steps running on a single logical thread. The easiest way to create parallel processor threads is to configure them inside the [pipeline][pipeline] configuration block, where we can explicitly set any number of parallel processor threads independent of how many inputs or outputs we want to use.
 
 Please refer [to the documentation regarding pipelines][pipeline] for some examples.
 
