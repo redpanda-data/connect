@@ -252,3 +252,76 @@ func TestCacheGet(t *testing.T) {
 		t.Errorf("Wrong fail flag: %v != %v", act, exp)
 	}
 }
+
+func TestCacheDelete(t *testing.T) {
+	memCache, err := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+
+	memCache.Set("1", []byte("foo 1"))
+	memCache.Set("2", []byte("foo 2"))
+	memCache.Set("3", []byte("foo 3"))
+
+	conf := NewConfig()
+	conf.Cache.Key = "${!json_field:key}"
+	conf.Cache.Cache = "foocache"
+	conf.Cache.Operator = "delete"
+	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	input := message.New([][]byte{
+		[]byte(`{"key":"1"}`),
+		[]byte(`{"key":"3"}`),
+		[]byte(`{"key":"4"}`),
+	})
+
+	output, res := proc.ProcessMessage(input)
+	if res != nil {
+		t.Fatal(res.Error())
+	}
+
+	if len(output) != 1 {
+		t.Fatalf("Wrong count of result messages: %v", len(output))
+	}
+
+	if exp, act := message.GetAllBytes(input), message.GetAllBytes(output[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result messages: %s != %s", act, exp)
+	}
+
+	if exp, act := false, HasFailed(output[0].Get(0)); exp != act {
+		t.Errorf("Wrong fail flag: %v != %v", act, exp)
+	}
+	if exp, act := false, HasFailed(output[0].Get(1)); exp != act {
+		t.Errorf("Wrong fail flag: %v != %v", act, exp)
+	}
+	if exp, act := false, HasFailed(output[0].Get(2)); exp != act {
+		t.Errorf("Wrong fail flag: %v != %v", act, exp)
+	}
+
+	_, err = memCache.Get("1")
+	if err != types.ErrKeyNotFound {
+		t.Errorf("Wrong result: %v != %v", err, types.ErrKeyNotFound)
+	}
+
+	actBytes, err := memCache.Get("2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := "foo 2", string(actBytes); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	_, err = memCache.Get("3")
+	if err != types.ErrKeyNotFound {
+		t.Errorf("Wrong result: %v != %v", err, types.ErrKeyNotFound)
+	}
+}
