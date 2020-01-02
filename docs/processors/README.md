@@ -292,6 +292,11 @@ Retrieve the contents of a cached key and replace the original message payload
 with the result. If the key does not exist the action fails with an error, which
 can be detected with [processor error handling](../error_handling.md).
 
+#### `delete`
+
+Delete a key and its contents from the cache.  If the key does not exist the
+action is a no-op and will not fail with an error.
+
 ### Examples
 
 The `cache` processor can be used in combination with other processors
