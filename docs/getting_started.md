@@ -3,12 +3,10 @@ Getting Started
 
 ## Install
 
-### Homebrew
+The easiest way to install Benthos is using this handy script:
 
-On macOS, Benthos can be installed via Homebrew:
-
-```shell
-brew install benthos
+```sh
+curl -Lsf https://sh.benthos.dev | bash
 ```
 
 ### Pull With Docker
@@ -29,6 +27,14 @@ Otherwise you can pull an archive containing Benthos from the
 ```sh
 curl -L https://github.com/Jeffail/benthos/releases/download/${VERSION}/benthos_${VERSION}_linux_amd64.tar.gz | tar xz
 ./benthos -c ./yourconfig.yaml
+```
+
+### Homebrew
+
+On macOS, Benthos can be installed via Homebrew:
+
+```shell
+brew install benthos
 ```
 
 ### Build With Go
