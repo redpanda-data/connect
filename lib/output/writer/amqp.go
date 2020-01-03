@@ -157,7 +157,7 @@ func (a *AMQP) Connect() error {
 
 	a.conn = conn
 	a.amqpChan = amqpChan
-	a.confirmChan = amqpChan.NotifyPublish(make(chan amqp.Confirmation, 1))
+	a.confirmChan = amqpChan.NotifyPublish(make(chan amqp.Confirmation, a.conf.MaxInFlight))
 	if a.conf.Mandatory || a.conf.Immediate {
 		a.returnChan = amqpChan.NotifyReturn(make(chan amqp.Return, 1))
 	}

@@ -848,6 +848,7 @@ output:
         max_in_flight: ${OUTPUT_S3_MAX_IN_FLIGHT:1}
         path: ${OUTPUT_S3_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
         region: ${OUTPUT_S3_REGION:eu-west-1}
+        storage_class: ${OUTPUT_S3_STORAGE_CLASS:STANDARD}
         timeout: ${OUTPUT_S3_TIMEOUT:5s}
       sns:
         credentials:

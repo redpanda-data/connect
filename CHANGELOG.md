@@ -40,6 +40,7 @@ All notable changes to this project will be documented in this file.
   + `sqs`
 - More TRACE level logs added throughout the pipeline.
 - Operator `delete` added to `cache` processor.
+- Field `storage_class` added to S3 output.
 
 ## 3.7.0 - 2019-12-21
 

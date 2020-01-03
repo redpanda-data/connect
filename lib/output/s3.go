@@ -20,8 +20,8 @@ In order to have a different path for each object you should use function
 interpolations described [here](../config_interpolation.md#functions), which are
 calculated per message of a batch.
 
-The fields ` + "`content_type` and `content_encoding`" + ` can also be set
-dynamically using function interpolation.
+The fields ` + "`content_type`, `content_encoding` and `storage_class`" + ` can
+also be set dynamically using function interpolation.
 
 ### Credentials
 

@@ -1231,6 +1231,7 @@ s3:
   max_in_flight: 1
   path: ${!count:files}-${!timestamp_unix_nano}.txt
   region: eu-west-1
+  storage_class: STANDARD
   timeout: 5s
 ```
 
@@ -1241,8 +1242,8 @@ In order to have a different path for each object you should use function
 interpolations described [here](../config_interpolation.md#functions), which are
 calculated per message of a batch.
 
-The fields `content_type` and `content_encoding` can also be set
-dynamically using function interpolation.
+The fields `content_type`, `content_encoding` and `storage_class` can
+also be set dynamically using function interpolation.
 
 ### Credentials
 

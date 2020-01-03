@@ -711,6 +711,7 @@ OUTPUT_S3_KMS_KEY_ID
 OUTPUT_S3_MAX_IN_FLIGHT                               = 1
 OUTPUT_S3_PATH                                        = ${!count:files}-${!timestamp_unix_nano}.txt
 OUTPUT_S3_REGION                                      = eu-west-1
+OUTPUT_S3_STORAGE_CLASS                               = STANDARD
 OUTPUT_S3_TIMEOUT                                     = 5s
 OUTPUT_SNS_CREDENTIALS_ID
 OUTPUT_SNS_CREDENTIALS_PROFILE

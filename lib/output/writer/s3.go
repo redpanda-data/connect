@@ -27,6 +27,7 @@ type AmazonS3Config struct {
 	Path               string `json:"path" yaml:"path"`
 	ContentType        string `json:"content_type" yaml:"content_type"`
 	ContentEncoding    string `json:"content_encoding" yaml:"content_encoding"`
+	StorageClass       string `json:"storage_class" yaml:"storage_class"`
 	Timeout            string `json:"timeout" yaml:"timeout"`
 	KMSKeyID           string `json:"kms_key_id" yaml:"kms_key_id"`
 	MaxInFlight        int    `json:"max_in_flight" yaml:"max_in_flight"`
@@ -41,6 +42,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		Path:               "${!count:files}-${!timestamp_unix_nano}.txt",
 		ContentType:        "application/octet-stream",
 		ContentEncoding:    "",
+		StorageClass:       "STANDARD",
 		Timeout:            "5s",
 		KMSKeyID:           "",
 		MaxInFlight:        1,
@@ -57,6 +59,7 @@ type AmazonS3 struct {
 	path            *text.InterpolatedString
 	contentType     *text.InterpolatedString
 	contentEncoding *text.InterpolatedString
+	storageClass    *text.InterpolatedString
 
 	session  *session.Session
 	uploader *s3manager.Uploader
@@ -86,6 +89,7 @@ func NewAmazonS3(
 		path:            text.NewInterpolatedString(conf.Path),
 		contentType:     text.NewInterpolatedString(conf.ContentType),
 		contentEncoding: text.NewInterpolatedString(conf.ContentEncoding),
+		storageClass:    text.NewInterpolatedString(conf.StorageClass),
 		timeout:         timeout,
 	}, nil
 }
@@ -153,6 +157,7 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 			Body:            bytes.NewReader(p.Get()),
 			ContentType:     aws.String(a.contentType.Get(lMsg)),
 			ContentEncoding: contentEncoding,
+			StorageClass:    aws.String(a.storageClass.Get(lMsg)),
 			Metadata:        metadata,
 		}
 

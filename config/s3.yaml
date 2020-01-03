@@ -56,6 +56,7 @@ output:
     max_in_flight: 1
     path: ${!count:files}-${!timestamp_unix_nano}.txt
     region: eu-west-1
+    storage_class: STANDARD
     timeout: 5s
 resources:
   caches: {}
