@@ -23,9 +23,7 @@ For example, if we wanted to check that all messages of a batch contain the word
 'foo' we could use this config:
 
 ` + "``` yaml" + `
-type: all
 all:
-  type: text
   text:
     operator: contains
     arg: foo

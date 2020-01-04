@@ -12,11 +12,17 @@ An input config section looks like this:
 
 ``` yaml
 input:
-  type: foo
-  foo:
-    bar: baz
+  redis_streams:
+    url: tcp://localhost:6379
+    streams:
+      - benthos_stream
+    body_key: body
+    consumer_group: benthos_group
+
+  # Optional list of processing steps
   processors:
-  - type: qux
+   - jmespath:
+       query: '{ message: @, meta: { link_count: length(links) } }'
 ```
 
 ### Contents
@@ -156,6 +162,12 @@ input:
         url: amqp://guest:guest@localhost:5672/
         consumer_tag: benthos-consumer
         queue: benthos-queue
+
+      # Optional list of input specific processing steps
+      processors:
+        - jmespath:
+            query: '{ message: @, meta: { link_count: length(links) } }'
+
     - kafka:
         addresses:
         - localhost:9092

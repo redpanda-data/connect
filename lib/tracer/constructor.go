@@ -150,9 +150,11 @@ A tracer config section looks like this:
 
 ` + "``` yaml" + `
 tracer:
-  type: foo
-  foo:
-    bar: baz
+  jaeger:
+    agent_address: localhost:6831
+    sampler_param: 1
+    sampler_type: const
+    service_name: benthos
 ` + "```" + `
 
 WARNING: Although the configuration spec of this component is stable the format

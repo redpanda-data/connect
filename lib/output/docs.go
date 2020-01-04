@@ -49,11 +49,14 @@ An output config section looks like this:
 
 ` + "``` yaml" + `
 output:
-  type: foo
-  foo:
-    bar: baz
+  s3:
+    bucket: TODO
+    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+
+  # Optional list of processing steps
   processors:
-  - type: qux
+   - jmespath:
+       query: '{ message: @, meta: { link_count: length(links) } }'
 ` + "```" + `
 
 ### Back Pressure

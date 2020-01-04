@@ -72,13 +72,13 @@ install_benthos()
 		benthos_arch="amd64"
 	elif [[ $unamem == *armv5* ]]; then
 		benthos_arch="arm"
-		benthos_arm="5"
+		benthos_arm="v5"
 	elif [[ $unamem == *armv6l* ]]; then
 		benthos_arch="arm"
-		benthos_arm="6"
+		benthos_arm="v6"
 	elif [[ $unamem == *armv7l* ]]; then
 		benthos_arch="arm"
-		benthos_arm="7"
+		benthos_arm="v7"
 	else
 		echo "Aborted, unsupported or unknown architecture: $unamem"
 		return 2

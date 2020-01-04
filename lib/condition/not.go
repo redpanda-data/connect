@@ -19,9 +19,7 @@ body of a not object is the child condition, i.e. in order to express 'part 0
 NOT equal to "foo"' you could have the following YAML config:
 
 ` + "``` yaml" + `
-type: not
 not:
-  type: text
   text:
     operator: equal
     part: 0

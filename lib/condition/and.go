@@ -14,7 +14,18 @@ func init() {
 	Constructors[TypeAnd] = TypeSpec{
 		constructor: NewAnd,
 		description: `
-And is a condition that returns the logical AND of its children conditions.`,
+And is a condition that returns the logical AND of its children conditions:
+
+` + "``` yaml" + `
+# True if message contains both 'foo' and 'bar'
+and:
+  - text:
+      operator: contains
+      arg: foo
+  - text:
+      operator: contains
+      arg: bar
+` + "```" + ``,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
 			condConfs := make([]interface{}, len(conf.And))

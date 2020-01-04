@@ -17,9 +17,8 @@ messages and can be placed in the pipeline section:
 pipeline:
   threads: 1
   processors:
-  - type: foo
-    foo:
-      bar: baz
+   - jmespath:
+       query: '{ message: @, meta: { link_count: length(links) } }'
 ```
 
 The `threads` field in the pipeline section determines how many
@@ -51,9 +50,10 @@ counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the last
 element will be selected, and so on.
 
-Some processors such as `filter` and `dedupe` act across an entire
-batch, when instead we'd like to perform them on individual messages of a batch.
-In this case the [`for_each`](#for_each) processor can be used.
+Some processors such as [`filter`](#filter) and [`dedupe`](#dedupe)
+act across an entire batch, when instead we'd like to perform them on individual
+messages of a batch. In this case the [`for_each`](#for_each)
+processor can be used.
 
 ### Contents
 
@@ -2308,5 +2308,5 @@ The resulting JSON structure would look like this:
 ```
 ---
 
-[0]: ../examples/README.md
+[0]: ../cookbooks/README.md
 [1]: ../pipeline.md

@@ -202,7 +202,7 @@ Conditions are boolean queries that can be executed based on the contents of a
 message. Some [processors][processors] such as ` + "[`filter`][filter]" + ` use
 conditions for expressing their logic.
 
-Conditions themselves can modify ` + "(`not`) and combine (`and`, `or`)" + `
+Conditions themselves can modify ` + "([`not`][not]) and combine ([`and`][and], [`or`][or])" + `
 other conditions, and can therefore be used to create complex boolean
 expressions.
 
@@ -210,33 +210,21 @@ The format of a condition is similar to other Benthos types:
 
 ` + "``` yaml" + `
 condition:
-  type: text
   text:
     operator: equals
-    part: 0
     arg: hello world
 ` + "```" + `
 
-And using boolean condition types we can combine multiple conditions together:
+And is usually found as the child of a processor:
 
 ` + "``` yaml" + `
-condition:
-  and:
-  - text:
-      operator: contains
-      arg: hello world
-  - or:
-    - text:
-        operator: contains
-        arg: foo
-    - not:
+pipeline:
+  processors:
+    - filter_parts:
         text:
-          operator: contains
-          arg: bar
+          operator: equals
+          arg: hello world
 ` + "```" + `
-
-The above example could be summarised as 'text contains "hello world" and also
-either contains "foo" or does _not_ contain "bar"'.
 
 ### Batching and Multipart Messages
 
@@ -265,6 +253,9 @@ var footer = `
 [processors]: ../processors/README.md
 [filter]: ../processors/README.md#filter
 [filter_parts]: ../processors/README.md#filter_parts
+[and]: #and
+[or]: #or
+[not]: #not
 [resource]: #resource`
 
 // Descriptions returns a formatted string of collated descriptions of each

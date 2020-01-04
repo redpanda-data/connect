@@ -11,12 +11,10 @@ A metrics config section looks like this:
 
 ``` yaml
 metrics:
-  type: statsd
   statsd:
     prefix: foo
     address: localhost:8125
     flush_period: 100ms
-    network: udp
 ```
 
 Benthos exposes lots of metrics and their paths will depend on your pipeline
@@ -158,12 +156,17 @@ with 'zip.bar' and 'zip.baz' respectively, and store the respective values '0'
 and '1' under the label key 'index' we could use this config:
 
 ```yaml
-rename:
-  by_regexp:
-  - pattern: "foo\\.([a-z]*)\\.([a-z]*)\\.zap"
-    value: "zip.$1"
-    to_label:
-      index: $2
+metrics:
+  rename:
+    by_regexp:
+      - pattern: "foo\\.([a-z]*)\\.([a-z]*)\\.zap"
+        value: "zip.$1"
+        to_label:
+          index: $2
+    child:
+      statsd:
+        prefix: foo
+        address: localhost:8125
 ```
 
 These labels will only be injected into metrics registered without pre-existing

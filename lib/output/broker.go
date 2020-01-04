@@ -40,11 +40,12 @@ output:
         bar_field_2: value3
     - baz:
         baz_field_1: value4
+      # Processors only applied to messages sent to baz.
       processors:
-      # Processor only applied to messages sent to baz.
       - type: baz_processor
+
+  # Processors applied to messages sent to all brokered outputs.
   processors:
-  # Processor applied to messages sent to any brokered output.
   - type: some_processor
 ` + "```" + `
 

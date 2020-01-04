@@ -14,9 +14,19 @@ func init() {
 	Constructors[TypeXor] = TypeSpec{
 		constructor: NewXor,
 		description: `
-Xor is a condition that returns the logical XOR of its children conditions,
-meaning it only resolves to true if _exactly_ one of its children conditions
-resolves to true.`,
+Returns the logical XOR of its children conditions, meaning it only resolves to
+true if _exactly_ one of its children conditions resolves to true.
+
+` + "``` yaml" + `
+# True if message contains 'foo' or 'bar', but not both
+xor:
+  - text:
+      operator: contains
+      arg: foo
+  - text:
+      operator: contains
+      arg: bar
+` + "```" + ``,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
 			condConfs := make([]interface{}, len(conf.Xor))

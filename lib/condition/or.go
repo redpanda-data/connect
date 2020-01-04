@@ -14,7 +14,18 @@ func init() {
 	Constructors[TypeOr] = TypeSpec{
 		constructor: NewOr,
 		description: `
-Or is a condition that returns the logical OR of its children conditions.`,
+Or is a condition that returns the logical OR of its children conditions.
+
+` + "``` yaml" + `
+# True if message contains 'foo' or 'bar'
+or:
+  - text:
+      operator: contains
+      arg: foo
+  - text:
+      operator: contains
+      arg: bar
+` + "```" + ``,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
 			condConfs := make([]interface{}, len(conf.Or))

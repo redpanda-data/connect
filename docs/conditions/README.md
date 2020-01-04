@@ -7,7 +7,7 @@ Conditions are boolean queries that can be executed based on the contents of a
 message. Some [processors][processors] such as [`filter`][filter] use
 conditions for expressing their logic.
 
-Conditions themselves can modify (`not`) and combine (`and`, `or`)
+Conditions themselves can modify ([`not`][not]) and combine ([`and`][and], [`or`][or])
 other conditions, and can therefore be used to create complex boolean
 expressions.
 
@@ -15,33 +15,21 @@ The format of a condition is similar to other Benthos types:
 
 ``` yaml
 condition:
-  type: text
   text:
     operator: equals
-    part: 0
     arg: hello world
 ```
 
-And using boolean condition types we can combine multiple conditions together:
+And is usually found as the child of a processor:
 
 ``` yaml
-condition:
-  and:
-  - text:
-      operator: contains
-      arg: hello world
-  - or:
-    - text:
-        operator: contains
-        arg: foo
-    - not:
+pipeline:
+  processors:
+    - filter_parts:
         text:
-          operator: contains
-          arg: bar
+          operator: equals
+          arg: hello world
 ```
-
-The above example could be summarised as 'text contains "hello world" and also
-either contains "foo" or does _not_ contain "bar"'.
 
 ### Batching and Multipart Messages
 
@@ -102,9 +90,7 @@ For example, if we wanted to check that all messages of a batch contain the word
 'foo' we could use this config:
 
 ``` yaml
-type: all
 all:
-  type: text
   text:
     operator: contains
     arg: foo
@@ -118,7 +104,18 @@ type: and
 and: []
 ```
 
-And is a condition that returns the logical AND of its children conditions.
+And is a condition that returns the logical AND of its children conditions:
+
+``` yaml
+# True if message contains both 'foo' and 'bar'
+and:
+  - text:
+      operator: contains
+      arg: foo
+  - text:
+      operator: contains
+      arg: bar
+```
 
 ---
 ## `any`
@@ -466,9 +463,7 @@ body of a not object is the child condition, i.e. in order to express 'part 0
 NOT equal to "foo"' you could have the following YAML config:
 
 ``` yaml
-type: not
 not:
-  type: text
   text:
     operator: equal
     part: 0
@@ -544,6 +539,17 @@ or: []
 ```
 
 Or is a condition that returns the logical OR of its children conditions.
+
+``` yaml
+# True if message contains 'foo' or 'bar'
+or:
+  - text:
+      operator: contains
+      arg: foo
+  - text:
+      operator: contains
+      arg: bar
+```
 
 ---
 ## `processor_failed`
@@ -713,12 +719,25 @@ type: xor
 xor: []
 ```
 
-Xor is a condition that returns the logical XOR of its children conditions,
-meaning it only resolves to true if _exactly_ one of its children conditions
-resolves to true.
+Returns the logical XOR of its children conditions, meaning it only resolves to
+true if _exactly_ one of its children conditions resolves to true.
+
+``` yaml
+# True if message contains 'foo' or 'bar', but not both
+xor:
+  - text:
+      operator: contains
+      arg: foo
+  - text:
+      operator: contains
+      arg: bar
+```
 ---
 
 [processors]: ../processors/README.md
 [filter]: ../processors/README.md#filter
 [filter_parts]: ../processors/README.md#filter_parts
+[and]: #and
+[or]: #or
+[not]: #not
 [resource]: #resource

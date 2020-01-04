@@ -46,6 +46,12 @@ input:
         url: amqp://guest:guest@localhost:5672/
         consumer_tag: benthos-consumer
         queue: benthos-queue
+
+      # Optional list of input specific processing steps
+      processors:
+        - jmespath:
+            query: '{ message: @, meta: { link_count: length(links) } }'
+
     - kafka:
         addresses:
         - localhost:9092

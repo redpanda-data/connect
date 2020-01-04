@@ -12,11 +12,14 @@ An output config section looks like this:
 
 ``` yaml
 output:
-  type: foo
-  foo:
-    bar: baz
+  s3:
+    bucket: TODO
+    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+
+  # Optional list of processing steps
   processors:
-  - type: qux
+   - jmespath:
+       query: '{ message: @, meta: { link_count: length(links) } }'
 ```
 
 ### Back Pressure
@@ -174,11 +177,12 @@ output:
         bar_field_2: value3
     - baz:
         baz_field_1: value4
+      # Processors only applied to messages sent to baz.
       processors:
-      # Processor only applied to messages sent to baz.
       - type: baz_processor
+
+  # Processors applied to messages sent to all brokered outputs.
   processors:
-  # Processor applied to messages sent to any brokered output.
   - type: some_processor
 ```
 

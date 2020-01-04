@@ -5,10 +5,10 @@
 [![Build Status][drone-badge]][drone-url]
 
 Benthos is a high performance and resilient stream processor, able to connect
-various [sources][inputs] and [sinks][outputs] and perform arbitrary
-[actions, transformations and filters][processors] on payloads. It is easy to
-deploy and monitor, and ready to drop into your pipeline either as a static
-binary or a docker image.
+various [sources][inputs] and [sinks][outputs] in a range of brokering patterns
+and perform arbitrary [actions, transformations and filters][processors] on
+payloads. It is easy to deploy and monitor, and ready to drop into your pipeline
+either as a static binary or a docker image.
 
 Stream pipelines are defined in a single config file, allowing you to declare
 connectors and a list of processing stages:
@@ -34,45 +34,20 @@ output:
 
 ### Delivery Guarantees
 
-Benthos implements transaction based resiliency with back pressure. When
-connecting to at-least-once sources and sinks it guarantees at-least-once
-delivery without needing to persist messages during transit.
-
-When running a Benthos stream with a [buffer][buffers] there are various options
-for choosing a level of resiliency that meets your needs.
-
-### Serverless
-
-There are also [specialised distributions][serverless] of Benthos for serverless
-deployment.
+Yep, we got 'em. Benthos implements transaction based resiliency with back
+pressure. When connecting to at-least-once sources and sinks it guarantees
+at-least-once delivery without needing to persist messages during transit.
 
 ## Supported Sources & Sinks
 
-- [AWS (DynamoDB, Kinesis, S3, SQS, SNS)][aws]
-- [Elasticsearch][elasticsearch] (output only)
-- File
-- [GCP (pub/sub)][gcp]
-- [HDFS][hdfs]
-- HTTP(S)
-- [Kafka][kafka]
-- [Memcached][memcached] (output only)
-- [MQTT][mqtt]
-- [Nanomsg][nanomsg]
-- [NATS][nats]
-- [NATS Streaming][natsstreaming]
-- [NSQ][nsq]
-- [RabbitMQ (AMQP 0.91)][rabbitmq]
-- [Redis (streams, list, pubsub, hashes)][redis]
-- Stdin/Stdout
-- TCP & UDP
-- Websocket
-- [ZMQ4][zmq]
+[AWS (DynamoDB, Kinesis, S3, SQS, SNS)][aws], [Elasticsearch][elasticsearch] (output only), File, [GCP (pub/sub)][gcp], [HDFS][hdfs], HTTP(S), [Kafka][kafka], [Memcached][memcached] (output only), [MQTT][mqtt], [Nanomsg][nanomsg], [NATS][nats], [NATS Streaming][natsstreaming], [NSQ][nsq], [RabbitMQ (AMQP 0.91)][rabbitmq], [Redis (streams, list, pubsub, hashes)][redis], Stdin/Stdout, TCP & UDP, Websocket and [ZMQ4][zmq].
+
+If you want more [then say](https://github.com/Jeffail/benthos/issues/new).
 
 ## Documentation
 
-Documentation for Benthos components, concepts and recommendations can be found
-on the [documentation site][general-docs], or within the repo at the
-[docs directory][docs-dir].
+If you want to dive fully into Benthos then don't waste your time here, check
+out the [documentation site][general-docs].
 
 For guidance on how to configure more advanced stream processing concepts such
 as stream joins, enrichment workflows, etc, check out the
@@ -80,6 +55,29 @@ as stream joins, enrichment workflows, etc, check out the
 
 For guidance on building your own custom plugins check out
 [this example repo.][plugin-repo]
+
+## Install
+
+Grab a binary for your OS from [here.][releases] Or use this script:
+
+```shell
+curl -Lsf https://sh.benthos.dev | bash
+```
+
+Or pull the docker image:
+
+```shell
+docker pull jeffail/benthos
+```
+
+On macOS, Benthos can be installed via Homebrew:
+
+```shell
+brew install benthos
+```
+
+There are also specialised distributions of Benthos for
+[serverless deployment[serverless].
 
 ## Run
 
@@ -129,30 +127,13 @@ the processors within a pipeline.
 Benthos provides lots of tools for making configuration discovery, debugging and
 organisation easy. You can [read about them here][config-doc].
 
-You can also find runnable example configs demonstrating each input, output,
-buffer and processor option [here](config).
-
 ### Environment Variables
 
 It is possible to select fields inside a configuration file to be set via
 [environment variables][config-interp]. The docker image, for example, is built
 with [a config file][env-config] where _all_ common fields can be set this way.
 
-## Install
-
-Grab a binary for your OS from [here.][releases]
-
-Or pull the docker image:
-
-```shell
-docker pull jeffail/benthos
-```
-
-On macOS, Benthos can be installed via Homebrew:
-
-```shell
-brew install benthos
-```
+## Build
 
 Build with Go (1.11 or later):
 
@@ -166,7 +147,6 @@ make
 
 It's pretty easy to write your own custom plugins for Benthos, take a look at
 [this repo][plugin-repo] for examples and build instructions.
-
 
 ### Docker Builds
 
@@ -212,7 +192,6 @@ and chat in the [#benthos Gophers slack channel][benthos-slack-chan]
 ([get an invite][gophers-slack-invite]), and watch your back.
 
 [inputs]: https://docs.benthos.dev/inputs/
-[buffers]: https://docs.benthos.dev/buffers/
 [processors]: https://docs.benthos.dev/processors/
 [outputs]: https://docs.benthos.dev/outputs/
 

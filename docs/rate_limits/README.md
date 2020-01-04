@@ -24,7 +24,6 @@ pipeline:
 resources:
   rate_limits:
     foobar:
-      type: local
       local:
         count: 500
         interval: 1s

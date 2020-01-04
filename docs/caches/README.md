@@ -5,42 +5,30 @@ This document was generated with `benthos --list-caches`
 
 A cache is a key/value store which can be used by certain processors for
 applications such as deduplication. Caches are listed with unique labels which
-are referred to by processors that may share them. For example, if we were to
-deduplicate hypothetical 'foo' and 'bar' inputs, but not 'baz', we could arrange
-our config as follows:
+are referred to by processors that may share them.
 
-``` yaml
-input:
-  type: broker
-  broker:
-    inputs:
-    - type: foo
-      processors:
-      - type: dedupe
-        dedupe:
-          cache: foobar
-          hash: xxhash
-    - type: bar
-      processors:
-      - type: dedupe
-        dedupe:
-          cache: foobar
-          hash: xxhash
-    - type: baz
+Caches are configured as resources:
+
+```yaml
 resources:
   caches:
     foobar:
-      type: memcached
       memcached:
         addresses:
-        - localhost:11211
+          - localhost:11211
         ttl: 60
 ```
 
-In that example we have a single memcached based cache 'foobar', which is used
-by the dedupe processors of both the 'foo' and 'bar' inputs. A message received
-from both 'foo' and 'bar' would therefore be detected and removed since the
-cache is the same for both inputs.
+And any components that use caches have a field used to refer to a cache
+resource:
+
+```yaml
+pipeline:
+  processors:
+    - dedupe:
+        cache: foobar
+        hash: xxhash
+```
 
 ### Contents
 
