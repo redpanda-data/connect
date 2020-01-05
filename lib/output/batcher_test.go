@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -55,30 +56,64 @@ func TestBatcherBasic(t *testing.T) {
 	secondErr := errors.New("second error")
 	finalErr := errors.New("final error")
 
-	doneChan := make(chan struct{})
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
-		defer close(doneChan)
+		defer wg.Done()
 		for _, batch := range firstBatchExpected {
-			tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan)
+			select {
+			case tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan):
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
 		}
 		for range firstBatchExpected {
-			if exp, act := firstErr, (<-resChan).Error(); exp != act {
+			var act error
+			select {
+			case actRes := <-resChan:
+				act = actRes.Error()
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
+			if exp := firstErr; exp != act {
 				t.Errorf("Unexpected response: %v != %v", act, exp)
 			}
 		}
 		for _, batch := range secondBatchExpected {
-			tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan)
+			select {
+			case tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan):
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
 		}
 		for range secondBatchExpected {
-			if exp, act := secondErr, (<-resChan).Error(); exp != act {
+			var act error
+			select {
+			case actRes := <-resChan:
+				act = actRes.Error()
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
+			if exp := secondErr; exp != act {
 				t.Errorf("Unexpected response: %v != %v", act, exp)
 			}
 		}
 		for _, batch := range finalBatchExpected {
-			tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan)
+			select {
+			case tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan):
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
 		}
 		for range finalBatchExpected {
-			if exp, act := finalErr, (<-resChan).Error(); exp != act {
+			var act error
+			select {
+			case actRes := <-resChan:
+				act = actRes.Error()
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
+			if exp := finalErr; exp != act {
 				t.Errorf("Unexpected response: %v != %v", act, exp)
 			}
 		}
@@ -94,8 +129,14 @@ func TestBatcherBasic(t *testing.T) {
 	if exp, act := firstBatchExpected, message.GetAllBytes(outTr.Payload); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result from batch: %s != %s", act, exp)
 	}
+	wg.Add(1)
 	go func(rChan chan<- types.Response, err error) {
-		rChan <- response.NewError(err)
+		defer wg.Done()
+		select {
+		case rChan <- response.NewError(err):
+		case <-time.After(time.Second):
+			t.Error("timed out")
+		}
 	}(outTr.ResponseChan, firstErr)
 
 	// Receive second batch on output
@@ -107,8 +148,14 @@ func TestBatcherBasic(t *testing.T) {
 	if exp, act := secondBatchExpected, message.GetAllBytes(outTr.Payload); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result from batch: %s != %s", act, exp)
 	}
+	wg.Add(1)
 	go func(rChan chan<- types.Response, err error) {
-		rChan <- response.NewError(err)
+		defer wg.Done()
+		select {
+		case rChan <- response.NewError(err):
+		case <-time.After(time.Second):
+			t.Error("timed out")
+		}
 	}(outTr.ResponseChan, secondErr)
 
 	// Check for empty buffer
@@ -129,21 +176,20 @@ func TestBatcherBasic(t *testing.T) {
 	if exp, act := finalBatchExpected, message.GetAllBytes(outTr.Payload); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result from batch: %s != %s", act, exp)
 	}
+	wg.Add(1)
 	go func(rChan chan<- types.Response, err error) {
-		rChan <- response.NewError(err)
+		defer wg.Done()
+		select {
+		case rChan <- response.NewError(err):
+		case <-time.After(time.Second):
+			t.Error("timed out")
+		}
 	}(outTr.ResponseChan, finalErr)
 
-	if err = b.WaitForClose(time.Second); err != nil {
+	if err = b.WaitForClose(time.Second * 10); err != nil {
 		t.Error(err)
 	}
-
-	select {
-	case <-time.After(time.Second):
-		t.Error("Timed out")
-	case <-doneChan:
-		close(resChan)
-		close(tInChan)
-	}
+	wg.Wait()
 }
 
 func TestBatcherTimed(t *testing.T) {
