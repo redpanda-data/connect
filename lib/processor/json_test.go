@@ -330,9 +330,6 @@ func TestJSONSplit(t *testing.T) {
 }
 
 func TestJSONMove(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
-
 	type jTest struct {
 		name   string
 		path   string
@@ -386,7 +383,57 @@ func TestJSONMove(t *testing.T) {
 		conf.JSON.Path = test.path
 		conf.JSON.Value = []byte(test.value)
 
-		jSet, err := NewJSON(conf, nil, tLog, tStats)
+		jSet, err := NewJSON(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := jSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
+func TestJSONExplode(t *testing.T) {
+	type jTest struct {
+		name   string
+		path   string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "explode 1",
+			path:   "foo",
+			input:  `{"foo":[1,2,3],"id":"bar"}`,
+			output: `[{"foo":1,"id":"bar"},{"foo":2,"id":"bar"},{"foo":3,"id":"bar"}]`,
+		},
+		{
+			name:   "explode 2",
+			path:   "foo.bar",
+			input:  `{"foo":{"also":"this","bar":[{"key":"value1"},{"key":"value2"},{"key":"value3"}]},"id":"baz"}`,
+			output: `[{"foo":{"also":"this","bar":{"key":"value1"}},"id":"baz"},{"foo":{"also":"this","bar":{"key":"value2"}},"id":"baz"},{"foo":{"also":"this","bar":{"key":"value3"}},"id":"baz"}]`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.JSON.Operator = "explode"
+		conf.JSON.Parts = []int{0}
+		conf.JSON.Path = test.path
+
+		jSet, err := NewJSON(conf, nil, log.Noop(), metrics.Noop())
 		if err != nil {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}

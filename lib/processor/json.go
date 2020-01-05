@@ -68,6 +68,42 @@ collision).
 Removes a key identified by the dot path. If the path does not exist this is a
 no-op.
 
+` + "`explode`" + `
+
+Explodes an array within a JSON document to create an array containing objects
+matching the original document where the target array field of each element is
+the element of the exploded array.
+
+It is then possible to expand the array to create individual messages per
+element with the ` + "[`unarchive` processor](#unarchive)" + `.
+
+For example, given the following input document:
+
+` + "```json" + `
+{"id":1,"value":["foo","bar","baz"]}
+` + "```" + `
+
+We can explode the elements of ` + "`value`" + ` with:
+
+` + "```yaml" + `
+json:
+  operator: explode
+  path: value
+` + "```" + `
+
+To create:
+
+` + "```json" + `
+[{"id":1,"value":"foo"},{"id":1,"value":"bar"},{"id":1,"value":"baz"}]
+` + "```" + `
+
+Which can be further exploded into individual messages with:
+
+` + "```yaml" + `
+unarchive:
+  format: json_array
+` + "```" + `
+
 ` + "`move`" + `
 
 Moves the value of a target dot path (if it exists) to a new location. The
@@ -89,7 +125,7 @@ The value can be any type, including objects and arrays. When using YAML
 configuration files a YAML object will be converted into a JSON object, i.e.
 with the config:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 json:
   operator: set
   parts: [0]
@@ -290,6 +326,33 @@ func newCopyOperator(srcPath, destPath []string) (jsonOperator, error) {
 	}, nil
 }
 
+func newExplodeOperator(path []string) (jsonOperator, error) {
+	if len(path) == 0 {
+		return nil, errors.New("explode operator requires a target path")
+	}
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+		target := gabs.Wrap(body).Search(path...)
+
+		array, ok := target.Data().([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("target value was not an array, found: %T", target.Data())
+		}
+
+		result := make([]interface{}, len(array))
+		for i, ele := range array {
+			exploded, err := message.CopyJSON(body)
+			if err != nil {
+				return nil, fmt.Errorf("failed to clone root object to explode: %v", err)
+			}
+
+			gExploded := gabs.Wrap(exploded)
+			gExploded.Set(ele, path...)
+			result[i] = gExploded.Data()
+		}
+		return result, nil
+	}, nil
+}
+
 func newSelectOperator(path []string) jsonOperator {
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		gPart := gabs.Wrap(body)
@@ -462,7 +525,7 @@ func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperat
 			return nil, fmt.Errorf("failed to parse destination path from value: %v", err)
 		}
 		if len(destDotPath) > 0 {
-			destPath = strings.Split(destDotPath, ".")
+			destPath = gabs.DotPathToSlice(destDotPath)
 		}
 	}
 	switch opStr {
@@ -482,6 +545,8 @@ func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperat
 		return newAppendOperator(path), nil
 	case "clean":
 		return newCleanOperator(path), nil
+	case "explode":
+		return newExplodeOperator(path)
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
@@ -529,7 +594,7 @@ func NewJSON(
 
 	j.interpolate = text.ContainsFunctionVariables(j.valueBytes)
 
-	splitPath := strings.Split(conf.JSON.Path, ".")
+	splitPath := gabs.DotPathToSlice(conf.JSON.Path)
 	if len(conf.JSON.Path) == 0 || conf.JSON.Path == "." {
 		splitPath = []string{}
 	}
