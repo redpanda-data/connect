@@ -111,8 +111,7 @@ pipeline:
           metadata_set("delay_for_s", delay_for)
         }
 
-  - type: sleep
-    sleep:
+  - sleep:
       duration: "${!metadata:delay_for_s}s"
 
   # TODO: Reprocess

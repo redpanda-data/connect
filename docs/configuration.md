@@ -103,22 +103,6 @@ input:
 This is very useful for sharing configuration files across different deployment
 environments.
 
-It's also possible to use `type` fields for environment variable based feature
-toggles. For example, the following config:
-
-``` yaml
-type: ${FEATURE:noop}
-jmespath:
-  query: '{ enveloped: @ }'
-text:
-  operator: set
-  text: "Wrapped: ${!content}"
-```
-
-Allows us to use the env var `FEATURE` to choose between two different processor
-steps (or neither.)
-
-
 ## Reusing Configuration Snippets
 
 It's possible to break a large configuration file into smaller parts with
@@ -145,8 +129,7 @@ For example, suppose we have a configuration snippet saved under
 ``` yaml
 pipeline:
   processors:
-  - type: cache
-    cache:
+  - cache:
       operator: get
       key: ${!json_field:id}
       cache: objects
@@ -159,8 +142,7 @@ string value which is the path to our snippet:
 ``` yaml
 pipeline:
   processors:
-  - type: decompress
-    decompress:
+  - decompress:
       algorithm: gzip
 
   - "$ref": "./foo.yaml#/pipeline/processors/0"
@@ -172,12 +154,10 @@ configuration:
 ``` yaml
 pipeline:
   processors:
-  - type: decompress
-    decompress:
+  - decompress:
       algorithm: gzip
 
-  - type: cache
-    cache:
+  - cache:
       operator: get
       key: ${!json_field:id}
       cache: objects
@@ -196,8 +176,7 @@ configurations are resolved _before_ references are resolved.
 ``` yaml
 pipeline:
   processors:
-  - type: decompress
-    decompress:
+  - decompress:
       algorithm: gzip
 
   - "$ref": "./${TARGET_SNIPPET}#/pipeline/processors/0"

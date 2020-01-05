@@ -264,7 +264,7 @@ cache:
   target: ""
 ```
 
-Stores message parts as items in a cache. Caches are configured within the
+Stores messages in a cache. Caches are configured within the
 [resources section](../caches/README.md) and can target any of the following
 types:
 
@@ -282,12 +282,13 @@ output:
   cache:
     target: foo
     key: ${!json_field:document.id}
+
 resources:
   caches:
     foo:
       memcached:
         addresses:
-        - localhost:11211
+          - localhost:11211
         ttl: 60
 ```
 
