@@ -46,8 +46,8 @@ If you want more [then say](https://github.com/Jeffail/benthos/issues/new).
 
 ## Documentation
 
-If you want to dive fully into Benthos then don't waste your time here, check
-out the [documentation site][general-docs].
+If you want to dive fully into Benthos then don't waste your time in this dump,
+check out the [documentation site][general-docs].
 
 For guidance on how to configure more advanced stream processing concepts such
 as stream joins, enrichment workflows, etc, check out the

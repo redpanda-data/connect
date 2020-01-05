@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.8.0 - TBD
+
 ### Added
 
 - New field `max_in_flight` added to the following outputs:
