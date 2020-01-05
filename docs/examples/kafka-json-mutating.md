@@ -78,19 +78,16 @@ increase the throughput of the output in case it becomes the bottleneck.
 
 ``` yaml
 input:
-  broker:
-    count: 8 # Try cranking this value up if your CPUs aren't maxed out
-    inputs:
-    - kafka_balanced:
-        addresses:
-        - localhost:9092 # TODO
-        client_id: benthos_mutator_1
-        consumer_group: benthos_mutator_group
-        topics:
-        - data_stream
-        batching:
-          count: 8 # Batch size: Tune this to increase output throughput
-          period: 1s
+  kafka_balanced:
+    addresses:
+      - localhost:9092 # TODO
+    client_id: benthos_mutator_1
+    consumer_group: benthos_mutator_group
+    topics:
+      - data_stream
+    batching:
+      count: 8 # Batch size: Tune this to increase output throughput
+      period: 1s
 ```
 
 The `kafka_balanced` input is used here, which automatically distributes the

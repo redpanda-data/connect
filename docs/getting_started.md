@@ -9,12 +9,9 @@ The easiest way to install Benthos is with this handy script:
 curl -Lsf https://sh.benthos.dev | bash
 ```
 
-### Download an Archive
+Or you can grab an archive containing Benthos from the [releases page][releases].
 
-Otherwise you can grab an archive containing Benthos from the
-[releases page][releases].
-
-### Pull With Docker
+### Docker
 
 If you have docker installed you can pull the latest official Benthos image
 with:
@@ -42,7 +39,7 @@ section [here][serverless].
 A Benthos stream pipeline is configured with a single
 [config file][configuration], you can generate a fresh one with:
 
-```sh
+```shell
 benthos --print-yaml > config.yaml
 ```
 
@@ -148,7 +145,8 @@ You should see (amongst some logs):
 {"doc":{"id":"2","names":["chad","robert","kroeger"]},"first_name":"CHAD","last_name":"uXXg5wCKPjpyj/qbivPbD9H9CZ5DH/F0Q1Twytnt2hQ="}
 ```
 
-Now that you are a Benthos expert check out all the other
+How exciting! I don't know about you, but I'll need to lie down for a while. Now
+that you are a Benthos expert check out all the other
 [cool stuff you can do][docs].
 
 [proc_proc_field]: ./processors/README.md#process_field

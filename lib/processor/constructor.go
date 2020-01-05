@@ -449,9 +449,8 @@ func Descriptions() string {
 		buf.WriteString(def.Description)
 		buf.WriteString("\n")
 		if i != (len(names) - 1) {
-			buf.WriteString("\n")
+			buf.WriteString("\n---\n")
 		}
-		buf.WriteString("---\n")
 	}
 	buf.WriteString(footer)
 	return buf.String()

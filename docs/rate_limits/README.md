@@ -52,5 +52,4 @@ local:
 
 The local rate limit is a simple X every Y type rate limit that can be shared
 across any number of components within the pipeline.
----
 

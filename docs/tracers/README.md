@@ -57,5 +57,5 @@ type: none
 none: {}
 ```
 
-Do not send opentracing events anywhere.---
+Do not send opentracing events anywhere.
 

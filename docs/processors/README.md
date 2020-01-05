@@ -973,6 +973,42 @@ collision).
 Removes a key identified by the dot path. If the path does not exist this is a
 no-op.
 
+`explode`
+
+Explodes an array within a JSON document to create an array containing objects
+matching the original document where the target array field of each element is
+the element of the exploded array.
+
+It is then possible to expand the array to create individual messages per
+element with the [`unarchive` processor](#unarchive).
+
+For example, given the following input document:
+
+```json
+{"id":1,"value":["foo","bar","baz"]}
+```
+
+We can explode the elements of `value` with:
+
+```yaml
+json:
+  operator: explode
+  path: value
+```
+
+To create:
+
+```json
+[{"id":1,"value":"foo"},{"id":1,"value":"bar"},{"id":1,"value":"baz"}]
+```
+
+Which can be further exploded into individual messages with:
+
+```yaml
+unarchive:
+  format: json_array
+```
+
 `move`
 
 Moves the value of a target dot path (if it exists) to a new location. The
@@ -994,7 +1030,7 @@ The value can be any type, including objects and arrays. When using YAML
 configuration files a YAML object will be converted into a JSON object, i.e.
 with the config:
 
-``` yaml
+```yaml
 json:
   operator: set
   parts: [0]
@@ -2306,7 +2342,6 @@ The resulting JSON structure would look like this:
   }
 }
 ```
----
 
 [0]: ../cookbooks/README.md
 [1]: ../pipeline.md

@@ -1296,5 +1296,5 @@ instance of this input can utilise any number of threads within a
 
 It is possible to configure an `open_message`, which when set to a
 non-empty string will be sent to the websocket server each time a connection is
-first established.---
+first established.
 

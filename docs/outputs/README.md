@@ -1575,5 +1575,5 @@ websocket:
   url: ws://localhost:4195/post/ws
 ```
 
-Sends messages to an HTTP server via a websocket connection.---
+Sends messages to an HTTP server via a websocket connection.
 

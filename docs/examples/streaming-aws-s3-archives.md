@@ -46,22 +46,6 @@ you will need to fill in the `sqs_envelope_path`, which is the JSON path inside
 an SNS message that contains the enveloped S3 event. The value of
 `sqs_envelope_path` should be `Message` when using the standard AWS set up.
 
-This example uses a single consumer, but if the throughput isn't high enough to
-keep up with the bucket it is possible to use a `broker` type to have multiple
-parallel consumers:
-
-``` yaml
-input:
-  broker:
-    copies: 8 # Increase this to gain more parallel consumers
-    inputs:
-    - s3:
-      ... etc
-```
-
-You can have any number of consumers of a bucket and messages (archives) will
-automatically be distributed amongst them via the SQS queue.
-
 ## Pipeline
 
 ``` yaml

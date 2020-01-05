@@ -732,7 +732,6 @@ xor:
       operator: contains
       arg: bar
 ```
----
 
 [processors]: ../processors/README.md
 [filter]: ../processors/README.md#filter

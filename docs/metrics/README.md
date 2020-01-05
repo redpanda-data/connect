@@ -275,5 +275,5 @@ to allow all latency based metrics with the pattern `.*\.latency`.
 ### Debugging
 
 In order to see logs breaking down which metrics are registered and whether they
-pass your whitelists enable logging at the TRACE level.---
+pass your whitelists enable logging at the TRACE level.
 

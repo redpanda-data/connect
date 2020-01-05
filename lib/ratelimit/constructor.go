@@ -217,9 +217,8 @@ func Descriptions() string {
 		buf.WriteString(Constructors[name].description)
 		buf.WriteString("\n")
 		if i != (len(names) - 1) {
-			buf.WriteString("\n")
+			buf.WriteString("\n---\n")
 		}
-		buf.WriteString("---\n")
 	}
 	return buf.String()
 }

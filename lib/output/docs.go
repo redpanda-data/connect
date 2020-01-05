@@ -169,10 +169,10 @@ This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](../batching.md).`)
 		}
+		buf.WriteString("\n")
 		if i != (len(names) - 1) {
-			buf.WriteString("\n\n")
+			buf.WriteString("\n---\n")
 		}
-		buf.WriteString("---\n")
 	}
 	return buf.String()
 }
