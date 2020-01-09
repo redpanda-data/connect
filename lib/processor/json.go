@@ -77,6 +77,10 @@ the element of the exploded array.
 It is then possible to expand the array to create individual messages per
 element with the ` + "[`unarchive` processor](#unarchive)" + `.
 
+Alternatively, explodes a map within a JSON document to create a map containing
+objects matching the original document where the key of each element is the key
+of the map, and the target field of each element is the corresponding map value.
+
 For example, given the following input document:
 
 ` + "```json" + `
@@ -102,6 +106,18 @@ Which can be further exploded into individual messages with:
 ` + "```yaml" + `
 unarchive:
   format: json_array
+` + "```" + `
+
+Alternatively, given the following input document:
+
+` + "```json" + `
+{"id":1,"value":{"foo":"goo","bar":["car","dar"],"baz":{"caz":"daz"}}}
+` + "```" + `
+
+The same operator configuration would create:
+
+` + "```json" + `
+{"foo":{"id":1,"value":"goo"},"bar":{"id":1,"value":["car","dar"]},"baz":{"id":1,"value":{"caz","daz"}}}
 ` + "```" + `
 
 ` + "`move`" + `
@@ -334,22 +350,39 @@ func newExplodeOperator(path []string) (jsonOperator, error) {
 		target := gabs.Wrap(body).Search(path...)
 
 		array, ok := target.Data().([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("target value was not an array, found: %T", target.Data())
-		}
+		if ok {
+			result := make([]interface{}, len(array))
+			for i, ele := range array {
+				exploded, err := message.CopyJSON(body)
+				if err != nil {
+					return nil, fmt.Errorf("failed to clone root object to explode: %v", err)
+				}
 
-		result := make([]interface{}, len(array))
-		for i, ele := range array {
-			exploded, err := message.CopyJSON(body)
-			if err != nil {
-				return nil, fmt.Errorf("failed to clone root object to explode: %v", err)
+				gExploded := gabs.Wrap(exploded)
+				gExploded.Set(ele, path...)
+				result[i] = gExploded.Data()
 			}
-
-			gExploded := gabs.Wrap(exploded)
-			gExploded.Set(ele, path...)
-			result[i] = gExploded.Data()
+			return result, nil
 		}
-		return result, nil
+
+		mapobj, ok := target.Data().(map[string]interface{})
+		if ok {
+			result := make(map[string]interface{})
+			for key, ele := range mapobj {
+				exploded, err := message.CopyJSON(body)
+				if err != nil {
+					return nil, fmt.Errorf("failed to clone root object to explode: %v", err)
+				}
+
+				gExploded := gabs.Wrap(exploded)
+				gExploded.Set(ele, path...)
+				result[key] = gExploded.Data()
+			}
+			return result, nil
+		}
+
+		return nil, fmt.Errorf("target value was not an array or a map, found: %T", target.Data())
+
 	}, nil
 }
 

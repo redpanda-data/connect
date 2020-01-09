@@ -425,6 +425,18 @@ func TestJSONExplode(t *testing.T) {
 			input:  `{"foo":{"also":"this","bar":[{"key":"value1"},{"key":"value2"},{"key":"value3"}]},"id":"baz"}`,
 			output: `[{"foo":{"also":"this","bar":{"key":"value1"}},"id":"baz"},{"foo":{"also":"this","bar":{"key":"value2"}},"id":"baz"},{"foo":{"also":"this","bar":{"key":"value3"}},"id":"baz"}]`,
 		},
+		{
+			name:   "explode 3",
+			path:   "foo",
+			input:  `{"foo":{"a":1,"b":2,"c":3},"id":"bar"}`,
+			output: `{"a":{"foo":1,"id":"bar"},"b":{"foo":2,"id":"bar"},"c":{"foo":3,"id":"bar"}}`,
+		},
+		{
+			name:   "explode 4",
+			path:   "foo.bar",
+			input:  `{"foo":{"also":"this","bar":{"key1":["a","b"],"key2":{"c":3,"d":4}}},"id":"baz"}`,
+			output: `{"key1":{"foo":{"also":"this","bar":["a","b"]},"id":"baz"},"key2":{"foo":{"also":"this","bar":{"c":3,"d":4}},"id":"baz"}}`,
+		},
 	}
 
 	for _, test := range tests {
