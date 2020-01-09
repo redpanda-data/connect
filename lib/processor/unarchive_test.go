@@ -256,6 +256,66 @@ func TestUnarchiveJSONArray(t *testing.T) {
 	}
 }
 
+func TestUnarchiveJSONMap(t *testing.T) {
+	conf := NewConfig()
+	conf.Unarchive.Format = "json_map"
+
+	exp := [][]byte{
+		[]byte(`{"foo":"bar"}`),
+		[]byte(`5`),
+		[]byte(`"testing 123"`),
+		[]byte(`["nested","array"]`),
+		[]byte(`true`),
+	}
+	expKeys := []string{
+		"a", "b", "c", "d", "e",
+	}
+
+	proc, err := NewUnarchive(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New([][]byte{
+		[]byte(`{"a":{"foo":"bar"},"b":5,"c":"testing 123","d":["nested","array"],"e":true}`),
+	}))
+	if len(msgs) != 1 {
+		t.Error("Unarchive failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	} else if msgs[0].Len() != len(exp) {
+		t.Errorf("Incorrect number of messages: %d != %d", msgs[0].Len(), len(exp))
+	}
+
+	// we need to be careful of the random order the map will be generated in
+	// so we can't just test for byte equivalence of the whole array
+	found := make([]bool, msgs[0].Len())
+	for i := 0; i < msgs[0].Len(); i++ {
+		key := msgs[0].Get(i).Metadata().Get("archive_key")
+		seq := -1
+		for j := 0; j < len(expKeys); j++ {
+			if expKeys[j] == key {
+				seq = j
+			}
+		}
+		if seq < 0 {
+			t.Errorf("Unexpected output: incorrect key %s found in position %d", key, i)
+		}
+		if found[seq] {
+			t.Errorf("Unexpected output: duplicate key %s found in position %d", key, i)
+		}
+		found[seq] = true
+		if act := msgs[0].Get(i).Get(); !reflect.DeepEqual(exp[seq], act) {
+			t.Errorf("Unexpected output: %s != %s", act, exp[seq])
+		}
+	}
+	for i := 0; i < msgs[0].Len(); i++ {
+		if !found[i] {
+			t.Errorf("Missing output: message for key %s not found", expKeys[i])
+		}
+	}
+}
+
 func TestUnarchiveBinary(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "binary"

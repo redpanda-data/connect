@@ -25,7 +25,7 @@ func init() {
 		Description: `
 Unarchives messages according to the selected archive format into multiple
 messages within a batch. Supported archive formats are:
-` + "`tar`, `zip`, `binary`, `lines`, `json_documents` and `json_array`." + `
+` + "`tar`, `zip`, `binary`, `lines`, `json_documents`, `json_array` and `json_map`." + `
 
 When a message is unarchived the new messages replaces the original message in
 the batch. Messages that are selected but fail to unarchive (invalid format)
@@ -38,9 +38,15 @@ message.
 The ` + "`json_array`" + ` format attempts to parse the message as a JSON array
 and for each element of the array expands its contents into a new message.
 
+The ` + "`json_map`" + ` format attempts to parse the message as a JSON map
+and for each element of the map expands its contents into a new message.
+
 For the unarchive formats that contain file information (tar, zip), a metadata
 field is added to each message called ` + "`archive_filename`" + ` with the
-extracted filename.`,
+extracted filename.
+
+For the ` + "`json_map`" + ` format, a metadata field is added to each message
+called ` + "`archive_key`" + ` with the relevant key from the top-level map.`,
 	}
 }
 
@@ -193,6 +199,31 @@ func jsonArrayUnarchive(part types.Part) ([]types.Part, error) {
 	return parts, nil
 }
 
+func jsonMapUnarchive(part types.Part) ([]types.Part, error) {
+	jDoc, err := part.JSON()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse message into JSON map: %v", err)
+	}
+
+	jMap, ok := jDoc.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("failed to parse message into JSON map: invalid type '%T'", jDoc)
+	}
+
+	parts := make([]types.Part, len(jMap))
+	i := 0
+	for key, ele := range jMap {
+		newPart := part.Copy()
+		if err = newPart.SetJSON(ele); err != nil {
+			return nil, fmt.Errorf("failed to marshal element into new message: %v", err)
+		}
+		newPart.Metadata().Set("archive_key", key)
+		parts[i] = newPart
+		i += 1
+	}
+	return parts, nil
+}
+
 func strToUnarchiver(str string) (unarchiveFunc, error) {
 	switch str {
 	case "tar":
@@ -207,6 +238,8 @@ func strToUnarchiver(str string) (unarchiveFunc, error) {
 		return jsonDocumentsUnarchive, nil
 	case "json_array":
 		return jsonArrayUnarchive, nil
+	case "json_map":
+		return jsonMapUnarchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }
