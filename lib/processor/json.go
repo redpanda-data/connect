@@ -70,24 +70,21 @@ no-op.
 
 ` + "`explode`" + `
 
-Explodes an array within a JSON document to create an array containing objects
-matching the original document where the target array field of each element is
-the element of the exploded array.
+Explodes an array or object within a JSON document.
 
-It is then possible to expand the array to create individual messages per
-element with the ` + "[`unarchive` processor](#unarchive)" + `.
+Exploding arrays results in a root level array containing elements matching the
+original document, where the target field of each element is an element of the
+exploded array.
 
-Alternatively, explodes a map within a JSON document to create a map containing
-objects matching the original document where the key of each element is the key
-of the map, and the target field of each element is the corresponding map value.
+Exploding objects results in a root level object where the keys match the target
+object, and the values match the original document but with the target field
+replaced by the exploded value.
 
-For example, given the following input document:
+It is then possible to expand the result to create individual messages per
+element with the ` + "[`unarchive` processor](#unarchive) `json_array` or" + `
+` + "`json_object` format." + `.
 
-` + "```json" + `
-{"id":1,"value":["foo","bar","baz"]}
-` + "```" + `
-
-We can explode the elements of ` + "`value`" + ` with:
+For example, given the following config:
 
 ` + "```yaml" + `
 json:
@@ -95,29 +92,18 @@ json:
   path: value
 ` + "```" + `
 
-To create:
+And two input documents:
+
+` + "```json" + `
+{"id":1,"value":["foo","bar","baz"]}
+{"id":1,"value":{"foo":2,"bar":[3,4],"baz":{"bev":5}}}
+` + "```" + `
+
+The respective results would be:
 
 ` + "```json" + `
 [{"id":1,"value":"foo"},{"id":1,"value":"bar"},{"id":1,"value":"baz"}]
-` + "```" + `
-
-Which can be further exploded into individual messages with:
-
-` + "```yaml" + `
-unarchive:
-  format: json_array
-` + "```" + `
-
-Alternatively, given the following input document:
-
-` + "```json" + `
-{"id":1,"value":{"foo":"goo","bar":["car","dar"],"baz":{"caz":"daz"}}}
-` + "```" + `
-
-The same operator configuration would create:
-
-` + "```json" + `
-{"foo":{"id":1,"value":"goo"},"bar":{"id":1,"value":["car","dar"]},"baz":{"id":1,"value":{"caz","daz"}}}
+{"foo":{"id":1,"value":2},"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}}}
 ` + "```" + `
 
 ` + "`move`" + `
@@ -349,10 +335,10 @@ func newExplodeOperator(path []string) (jsonOperator, error) {
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		target := gabs.Wrap(body).Search(path...)
 
-		array, ok := target.Data().([]interface{})
-		if ok {
-			result := make([]interface{}, len(array))
-			for i, ele := range array {
+		switch t := target.Data().(type) {
+		case []interface{}:
+			result := make([]interface{}, len(t))
+			for i, ele := range t {
 				exploded, err := message.CopyJSON(body)
 				if err != nil {
 					return nil, fmt.Errorf("failed to clone root object to explode: %v", err)
@@ -363,12 +349,9 @@ func newExplodeOperator(path []string) (jsonOperator, error) {
 				result[i] = gExploded.Data()
 			}
 			return result, nil
-		}
-
-		mapobj, ok := target.Data().(map[string]interface{})
-		if ok {
+		case map[string]interface{}:
 			result := make(map[string]interface{})
-			for key, ele := range mapobj {
+			for key, ele := range t {
 				exploded, err := message.CopyJSON(body)
 				if err != nil {
 					return nil, fmt.Errorf("failed to clone root object to explode: %v", err)
@@ -382,7 +365,6 @@ func newExplodeOperator(path []string) (jsonOperator, error) {
 		}
 
 		return nil, fmt.Errorf("target value was not an array or a map, found: %T", target.Data())
-
 	}, nil
 }
 

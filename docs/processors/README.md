@@ -975,20 +975,21 @@ no-op.
 
 `explode`
 
-Explodes an array within a JSON document to create an array containing objects
-matching the original document where the target array field of each element is
-the element of the exploded array.
+Explodes an array or object within a JSON document.
 
-It is then possible to expand the array to create individual messages per
-element with the [`unarchive` processor](#unarchive).
+Exploding arrays results in a root level array containing elements matching the
+original document, where the target field of each element is an element of the
+exploded array.
 
-For example, given the following input document:
+Exploding objects results in a root level object where the keys match the target
+object, and the values match the original document but with the target field
+replaced by the exploded value.
 
-```json
-{"id":1,"value":["foo","bar","baz"]}
-```
+It is then possible to expand the result to create individual messages per
+element with the [`unarchive` processor](#unarchive) `json_array` or
+`json_object` format..
 
-We can explode the elements of `value` with:
+For example, given the following config:
 
 ```yaml
 json:
@@ -996,17 +997,18 @@ json:
   path: value
 ```
 
-To create:
+And two input documents:
+
+```json
+{"id":1,"value":["foo","bar","baz"]}
+{"id":1,"value":{"foo":2,"bar":[3,4],"baz":{"bev":5}}}
+```
+
+The respective results would be:
 
 ```json
 [{"id":1,"value":"foo"},{"id":1,"value":"bar"},{"id":1,"value":"baz"}]
-```
-
-Which can be further exploded into individual messages with:
-
-```yaml
-unarchive:
-  format: json_array
+{"foo":{"id":1,"value":2},"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}}}
 ```
 
 `move`
@@ -2194,7 +2196,7 @@ unarchive:
 
 Unarchives messages according to the selected archive format into multiple
 messages within a batch. Supported archive formats are:
-`tar`, `zip`, `binary`, `lines`, `json_documents` and `json_array`.
+`tar`, `zip`, `binary`, `lines`, `json_documents`, `json_array` and `json_map`.
 
 When a message is unarchived the new messages replaces the original message in
 the batch. Messages that are selected but fail to unarchive (invalid format)
@@ -2207,9 +2209,15 @@ message.
 The `json_array` format attempts to parse the message as a JSON array
 and for each element of the array expands its contents into a new message.
 
+The `json_map` format attempts to parse the message as a JSON map
+and for each element of the map expands its contents into a new message.
+
 For the unarchive formats that contain file information (tar, zip), a metadata
 field is added to each message called `archive_filename` with the
 extracted filename.
+
+For the `json_map` format, a metadata field is added to each message
+called `archive_key` with the relevant key from the top-level map.
 
 ---
 ## `while`

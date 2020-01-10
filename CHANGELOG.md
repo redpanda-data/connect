@@ -43,7 +43,8 @@ All notable changes to this project will be documented in this file.
 - More TRACE level logs added throughout the pipeline.
 - Operator `delete` added to `cache` processor.
 - Operator `explode` added to `json` processor.
-- Field `storage_class` added to S3 output.
+- Field `storage_class` added to `s3` output.
+- Format `json_map` added to `unarchive` processor.
 
 ## 3.7.0 - 2019-12-21
 

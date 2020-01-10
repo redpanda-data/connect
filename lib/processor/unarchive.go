@@ -219,7 +219,7 @@ func jsonMapUnarchive(part types.Part) ([]types.Part, error) {
 		}
 		newPart.Metadata().Set("archive_key", key)
 		parts[i] = newPart
-		i += 1
+		i++
 	}
 	return parts, nil
 }
