@@ -204,7 +204,7 @@ func ContainsFunctionVariables(inBytes []byte) bool {
 }
 
 func escapeBytes(in []byte) []byte {
-	quoted := strconv.QuoteToASCII(string(in))
+	quoted := strconv.Quote(string(in))
 	if len(quoted) < 3 {
 		return in
 	}

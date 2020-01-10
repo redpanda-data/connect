@@ -1,0 +1,58 @@
+http:
+  address: 0.0.0.0:4195
+
+input:
+  http_client:
+    url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+    rate_limit: github_reqs
+
+pipeline:
+  processors:
+    - jmespath:
+        query: |
+          map(&{
+            dist: name,
+            download_count: download_count
+          }, assets)
+    - unarchive:
+        format: json_array
+    - process_field:
+        path: dist
+        processors:
+          - text:
+              operator: replace_regexp
+              arg: '^benthos(-lambda)?_[^_]+_([^\.]+).*'
+              value: $2
+    - filter_parts:
+        jmespath:
+          query: "dist != 'checksums'"
+    - for_each:
+      - resource: github.metric
+
+output:
+  type: drop
+
+resources:
+  rate_limits:
+    github_reqs:
+      local:
+        count: 1
+        interval: 300s
+
+  processors:
+    github.metric:
+      metric:
+        labels:
+          dist: "${!json_field:dist}"
+        path: "downloads"
+        type: gauge
+        value: "${!json_field:download_count}"
+
+metrics:
+  rename:
+    by_regexp:
+    - pattern: '^resource\.processor\.github\.metric\.(.*)$'
+      value: "$1"
+    child:
+      prometheus:
+        prefix: benthos

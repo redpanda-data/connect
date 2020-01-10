@@ -643,9 +643,6 @@ func TestJSONClean(t *testing.T) {
 }
 
 func TestJSONSet(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
-
 	type jTest struct {
 		name   string
 		path   string
@@ -741,6 +738,27 @@ func TestJSONSet(t *testing.T) {
 			input:  `{"foo":{"bar":{"baz":"yelp"}}}`,
 			output: `{"foo":{"bar":null}}`,
 		},
+		{
+			name:   "set unicode 1",
+			path:   "foo.bar",
+			value:  `"contains 🦄 emoji"`,
+			input:  `{"foo":{"bar":{"baz":"yelp"}}}`,
+			output: `{"foo":{"bar":"contains 🦄 emoji"}}`,
+		},
+		{
+			name:   "set unicode 2",
+			path:   "foo.bar",
+			value:  `{"value":{"unicode":"contains 🦄 emoji"}}`,
+			input:  `{"foo":{"bar":{"baz":"yelp"}}}`,
+			output: `{"foo":{"bar":{"value":{"unicode":"contains 🦄 emoji"}}}}`,
+		},
+		{
+			name:   "set unicode 3",
+			path:   "foo.bar",
+			value:  `{"value":"${!json_field:foo.bar.baz}"}`,
+			input:  `{"foo":{"bar":{"baz":"foo 🦄 bar"}}}`,
+			output: `{"foo":{"bar":{"value":"foo 🦄 bar"}}}`,
+		},
 	}
 
 	for _, test := range tests {
@@ -750,7 +768,9 @@ func TestJSONSet(t *testing.T) {
 		conf.JSON.Path = test.path
 		conf.JSON.Value = []byte(test.value)
 
-		jSet, err := NewJSON(conf, nil, tLog, tStats)
+		logConf := log.NewConfig()
+		logConf.LogLevel = "DEBUG"
+		jSet, err := NewJSON(conf, nil, log.New(os.Stdout, logConf), metrics.Noop())
 		if err != nil {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}

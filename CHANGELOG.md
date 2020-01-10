@@ -46,6 +46,11 @@ All notable changes to this project will be documented in this file.
 - Field `storage_class` added to `s3` output.
 - Format `json_map` added to `unarchive` processor.
 
+### Fixed
+
+- Function interpolated strings within the `json` processor `value` field are
+  now correctly unicode escaped.
+
 ## 3.7.0 - 2019-12-21
 
 ### Added
