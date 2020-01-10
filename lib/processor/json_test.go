@@ -768,9 +768,7 @@ func TestJSONSet(t *testing.T) {
 		conf.JSON.Path = test.path
 		conf.JSON.Value = []byte(test.value)
 
-		logConf := log.NewConfig()
-		logConf.LogLevel = "DEBUG"
-		jSet, err := NewJSON(conf, nil, log.New(os.Stdout, logConf), metrics.Noop())
+		jSet, err := NewJSON(conf, nil, log.Noop(), metrics.Noop())
 		if err != nil {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
