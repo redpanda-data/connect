@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -26,7 +27,9 @@ as metadata fields.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.RedisStreams, conf.RedisStreams.Batching)
 		},
-		DeprecatedFields: []string{"batching"},
+		FieldSpecs: docs.FieldSpecs{
+			"batching": docs.FieldDeprecated(),
+		},
 	}
 }
 

@@ -10,7 +10,7 @@ combines multiple inputs.
 
 An input config section looks like this:
 
-``` yaml
+```yaml
 input:
   redis_streams:
     url: tcp://localhost:6379

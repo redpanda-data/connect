@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -39,9 +40,11 @@ is empty then a random partition is chosen.
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.Kafka, conf.Kafka.Batching)
 		},
-		DeprecatedFields: []string{"round_robin_partitions"},
-		Async:            true,
-		Batches:          true,
+		Async:   true,
+		Batches: true,
+		FieldSpecs: docs.FieldSpecs{
+			"round_robin_partitions": docs.FieldDeprecated(),
+		},
 	}
 }
 

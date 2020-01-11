@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -64,7 +65,9 @@ You can access these metadata fields using
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.AMQP09, conf.AMQP09.Batching)
 		},
-		DeprecatedFields: []string{"batching"},
+		FieldSpecs: docs.FieldSpecs{
+			"batching": docs.FieldDeprecated(),
+		},
 	}
 }
 

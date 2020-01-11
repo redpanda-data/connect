@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -48,13 +49,8 @@ type TypeSpec struct {
 	) (Type, error)
 
 	Description string
-
-	// Deprecated indicates whether this component is deprecated.
-	Deprecated bool
-
-	// DeprecatedFields is an optional list of config field paths (from the root
-	// of a sanitised component config) that are deprecated.
-	DeprecatedFields []string
+	FieldSpecs  docs.FieldSpecs
+	Deprecated  bool
 }
 
 // Constructors is a map of all input types with their specs.
@@ -225,8 +221,10 @@ func sanitiseConfig(conf Config, skipDeprecated bool) (interface{}, error) {
 	}
 	if skipDeprecated {
 		if m, ok := outputMap[t].(map[string]interface{}); ok {
-			for _, path := range def.DeprecatedFields {
-				delete(m, path)
+			for path, spec := range def.FieldSpecs {
+				if spec.Deprecated {
+					delete(m, path)
+				}
 			}
 		}
 	}
