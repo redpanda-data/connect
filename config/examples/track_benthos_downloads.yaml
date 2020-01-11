@@ -1,0 +1,77 @@
+http:
+  address: 0.0.0.0:4195
+
+input:
+  broker:
+    inputs:
+      - http_client:
+          url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+          rate_limit: github_reqs
+        processors:
+          - jmespath:
+              query: |
+                map(&{
+                  dist: name,
+                  download_count: download_count
+                }, assets)
+          - unarchive:
+              format: json_array
+          - process_field:
+              path: dist
+              processors:
+                - text:
+                    operator: replace_regexp
+                    arg: '^benthos-?((lambda_)|_)[^_]+_([^\.]+).*'
+                    value: $2$3
+          - filter_parts:
+              jmespath:
+                query: "dist != 'checksums'"
+
+      - http_client:
+          url: https://hub.docker.com/v2/repositories/jeffail/benthos/
+          rate_limit: docker_reqs
+        processors:
+          - jmespath:
+              query: |
+                {
+                  dist: 'docker',
+                  download_count: pull_count
+                }
+
+pipeline:
+  processors:
+    - for_each:
+      - resource: metric.proc
+
+output:
+  type: drop
+
+resources:
+  rate_limits:
+    github_reqs:
+      local:
+        count: 1
+        interval: 300s
+
+    docker_reqs:
+      local:
+        count: 1
+        interval: 300s
+
+  processors:
+    metric.proc:
+      metric:
+        labels:
+          dist: "${!json_field:dist}"
+        path: "downloads"
+        type: gauge
+        value: "${!json_field:download_count}"
+
+metrics:
+  rename:
+    by_regexp:
+    - pattern: '^resource\.processor\.metric\.proc\.(.*)$'
+      value: "$1"
+    child:
+      prometheus:
+        prefix: benthos
