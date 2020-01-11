@@ -77,7 +77,7 @@ brew install benthos
 ```
 
 There are also specialised distributions of Benthos for
-[serverless deployment[serverless].
+[serverless deployment][serverless].
 
 ## Run
 
