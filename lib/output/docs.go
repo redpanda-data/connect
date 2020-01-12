@@ -113,11 +113,13 @@ func Descriptions() string {
 	buf.WriteString("\n\n")
 
 	buf.WriteString("### Contents\n\n")
-	for i, name := range names {
+	i := 0
+	for _, name := range names {
 		if Constructors[name].Deprecated {
 			continue
 		}
-		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, name))
+		i++
+		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i, name, name))
 	}
 	buf.WriteString("\n")
 
