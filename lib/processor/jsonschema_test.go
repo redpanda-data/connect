@@ -78,7 +78,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 				[]byte(`{"firstName":"John","lastName":"Doe","age":-20}`),
 			},
 			output: `{"firstName":"John","lastName":"Doe","age":-20}`,
-			err:    `age must be greater than or equal to 0/1`,
+			err:    `age must be greater than or equal to 0`,
 		},
 	}
 	for _, tt := range tests {
@@ -170,7 +170,7 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 				[]byte(`{"firstName":"John","lastName":"Doe","age":-20}`),
 			},
 			output: `{"firstName":"John","lastName":"Doe","age":-20}`,
-			err:    `age must be greater than or equal to 0/1`,
+			err:    `age must be greater than or equal to 0`,
 		},
 	}
 	for _, tt := range tests {

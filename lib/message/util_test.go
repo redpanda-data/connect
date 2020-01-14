@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
-	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -90,28 +89,21 @@ func TestCloneGeneric(t *testing.T) {
 }
 
 func TestCloneGenericYAML(t *testing.T) {
-	var original interface{}
-	var cloned interface{}
-
-	err := yaml.Unmarshal([]byte(`{
-		"root":{
-			"first":{
+	var original interface{} = map[interface{}]interface{}{
+		"root": map[interface{}]interface{}{
+			"first": map[interface{}]interface{}{
 				"value1": 1,
 				"value2": 1.2,
 				"value3": false,
-				"value4": "hello world"
+				"value4": "hello world",
 			},
-			"second": [
-				1,
-				1.2,
-				false,
-				"hello world"
-			]
-		}
-	}`), &original)
-	if err != nil {
-		t.Fatal(err)
+			"second": []interface{}{
+				1, 1.2, false, "hello world",
+			},
+		},
 	}
+	var cloned interface{}
+	var err error
 
 	if cloned, err = cloneGeneric(original); err != nil {
 		t.Fatal(err)

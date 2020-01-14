@@ -888,7 +888,7 @@ nats_stream:
   subject: benthos_messages
   unsubscribe_on_close: false
   urls:
-  - nats://localhost:4222
+  - nats://127.0.0.1:4222
 ```
 
 Subscribe to a NATS Stream subject, which is at-least-once. Joining a queue is

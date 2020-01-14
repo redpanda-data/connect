@@ -1022,7 +1022,7 @@ nats_stream:
   max_in_flight: 1
   subject: benthos_messages
   urls:
-  - nats://localhost:4222
+  - nats://127.0.0.1:4222
 ```
 
 Publish to a NATS Stream subject.

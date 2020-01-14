@@ -249,7 +249,7 @@ input:
         subject: ${INPUT_NATS_STREAM_SUBJECT:benthos_messages}
         unsubscribe_on_close: ${INPUT_NATS_STREAM_UNSUBSCRIBE_ON_CLOSE:false}
         urls:
-        - ${INPUT_NATS_STREAM_URLS:nats://localhost:4222}
+        - ${INPUT_NATS_STREAM_URLS:nats://127.0.0.1:4222}
       nsq:
         batching:
           byte_size: ${INPUT_NSQ_BATCHING_BYTE_SIZE:0}
@@ -805,7 +805,7 @@ output:
         max_in_flight: ${OUTPUT_NATS_STREAM_MAX_IN_FLIGHT:1}
         subject: ${OUTPUT_NATS_STREAM_SUBJECT:benthos_messages}
         urls:
-        - ${OUTPUT_NATS_STREAM_URLS:nats://localhost:4222}
+        - ${OUTPUT_NATS_STREAM_URLS:nats://127.0.0.1:4222}
       nsq:
         max_in_flight: ${OUTPUT_NSQ_MAX_IN_FLIGHT:1}
         nsqd_tcp_address: ${OUTPUT_NSQ_NSQD_TCP_ADDRESS:localhost:4150}

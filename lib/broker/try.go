@@ -130,12 +130,13 @@ func (t *Try) loop() {
 
 		go func(ts types.Transaction, resChan chan types.Response) {
 			var res types.Response
+			var lOpen bool
 
 		triesLoop:
 			for i := 1; i <= len(t.outputTsChans); i++ {
 				select {
-				case res, open = <-resChan:
-					if !open {
+				case res, lOpen = <-resChan:
+					if !lOpen {
 						return
 					}
 					if res.Error() != nil {

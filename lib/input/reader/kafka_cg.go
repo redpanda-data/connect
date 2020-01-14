@@ -284,7 +284,8 @@ func (k *KafkaCG) ConnectWithContext(ctx context.Context) error {
 	config.Version = k.version
 	config.Consumer.Return.Errors = true
 	config.Consumer.MaxProcessingTime = k.maxProcPeriod
-	config.Consumer.Offsets.CommitInterval = k.commitPeriod
+	config.Consumer.Offsets.AutoCommit.Enable = true
+	config.Consumer.Offsets.AutoCommit.Interval = k.commitPeriod
 	config.Consumer.Group.Session.Timeout = k.sessionTimeout
 	config.Consumer.Group.Heartbeat.Interval = k.heartbeatInterval
 	config.Consumer.Group.Rebalance.Timeout = k.rebalanceTimeout
