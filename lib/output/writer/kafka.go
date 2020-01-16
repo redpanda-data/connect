@@ -55,9 +55,9 @@ type SASLConfig struct {
 // NewKafkaConfig creates a new KafkaConfig with default values.
 func NewKafkaConfig() KafkaConfig {
 	rConf := retries.NewConfig()
-	rConf.Backoff.InitialInterval = "0s"
-	rConf.Backoff.MaxInterval = "1s"
-	rConf.Backoff.MaxElapsedTime = "5s"
+	rConf.Backoff.InitialInterval = "3s"
+	rConf.Backoff.MaxInterval = "10s"
+	rConf.Backoff.MaxElapsedTime = "30s"
 	batching := batch.NewPolicyConfig()
 	batching.Count = 1
 	return KafkaConfig{

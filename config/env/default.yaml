@@ -708,9 +708,9 @@ output:
         addresses:
         - ${OUTPUT_KAFKA_ADDRESSES:localhost:9092}
         backoff:
-          initial_interval: ${OUTPUT_KAFKA_BACKOFF_INITIAL_INTERVAL:0s}
-          max_elapsed_time: ${OUTPUT_KAFKA_BACKOFF_MAX_ELAPSED_TIME:5s}
-          max_interval: ${OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL:1s}
+          initial_interval: ${OUTPUT_KAFKA_BACKOFF_INITIAL_INTERVAL:3s}
+          max_elapsed_time: ${OUTPUT_KAFKA_BACKOFF_MAX_ELAPSED_TIME:30s}
+          max_interval: ${OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL:10s}
         batching:
           byte_size: ${OUTPUT_KAFKA_BATCHING_BYTE_SIZE:0}
           count: ${OUTPUT_KAFKA_BATCHING_COUNT:1}

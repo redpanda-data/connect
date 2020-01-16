@@ -50,6 +50,8 @@ All notable changes to this project will be documented in this file.
 
 - Function interpolated strings within the `json` processor `value` field are
   now correctly unicode escaped.
+- Retry intervals for `kafka` output have been tuned to prevent circuit breaker
+  throttling.
 
 ## 3.7.0 - 2019-12-21
 

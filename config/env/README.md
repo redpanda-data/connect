@@ -597,9 +597,9 @@ OUTPUT_HTTP_SERVER_WS_PATH                            = /get/ws
 OUTPUT_INPROC
 OUTPUT_KAFKA_ACK_REPLICAS                             = false
 OUTPUT_KAFKA_ADDRESSES                                = localhost:9092
-OUTPUT_KAFKA_BACKOFF_INITIAL_INTERVAL                 = 0s
-OUTPUT_KAFKA_BACKOFF_MAX_ELAPSED_TIME                 = 5s
-OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL                     = 1s
+OUTPUT_KAFKA_BACKOFF_INITIAL_INTERVAL                 = 3s
+OUTPUT_KAFKA_BACKOFF_MAX_ELAPSED_TIME                 = 30s
+OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL                     = 10s
 OUTPUT_KAFKA_BATCHING_BYTE_SIZE                       = 0
 OUTPUT_KAFKA_BATCHING_COUNT                           = 1
 OUTPUT_KAFKA_BATCHING_PERIOD

@@ -750,9 +750,9 @@ kafka:
   addresses:
   - localhost:9092
   backoff:
-    initial_interval: 0s
-    max_elapsed_time: 5s
-    max_interval: 1s
+    initial_interval: 3s
+    max_elapsed_time: 30s
+    max_interval: 10s
   batching:
     byte_size: 0
     condition:
