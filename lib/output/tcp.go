@@ -18,11 +18,13 @@ connecting to a server.
 
 If batched messages are sent the final message of the batch will be followed by
 two line breaks in order to indicate the end of the batch.`,
+		Deprecated: true,
 	}
 }
 
 // NewTCP creates a new TCP output type.
 func NewTCP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	log.Warnln("The tcp output is deprecated, please use socket instead.")
 	t, err := writer.NewTCP(conf.TCP, mgr, log, stats)
 	if err != nil {
 		return nil, err

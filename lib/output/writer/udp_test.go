@@ -12,15 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-type wrapPacketConn struct {
-	r net.PacketConn
-}
-
-func (w *wrapPacketConn) Read(p []byte) (n int, err error) {
-	n, _, err = w.r.ReadFrom(p)
-	return
-}
-
 func TestUDPBasic(t *testing.T) {
 	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {

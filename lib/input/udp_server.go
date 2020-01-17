@@ -27,6 +27,7 @@ left empty then line feed (\n) is used.
 The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to
 allocate for buffering lines of data, this must exceed the largest expected
 message size.`,
+		Deprecated: true,
 	}
 }
 
@@ -103,17 +104,8 @@ func (t *UDPServer) Addr() net.Addr {
 	return t.conn.LocalAddr()
 }
 
-type wrapPacketConn struct {
-	r net.PacketConn
-}
-
-func (w *wrapPacketConn) Read(p []byte) (n int, err error) {
-	n, _, err = w.r.ReadFrom(p)
-	return
-}
-
 func (t *UDPServer) newScanner(r net.PacketConn) *bufio.Scanner {
-	scanner := bufio.NewScanner(&wrapPacketConn{r: r})
+	scanner := bufio.NewScanner(&wrapPacketConn{PacketConn: r})
 	if t.conf.MaxBuffer != bufio.MaxScanTokenSize {
 		scanner.Buffer([]byte{}, t.conf.MaxBuffer)
 	}

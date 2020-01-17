@@ -3,6 +3,7 @@ package input
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -18,11 +19,11 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors[TypeTCPServer] = TypeSpec{
-		constructor: NewTCPServer,
+	Constructors[TypeSocketServer] = TypeSpec{
+		constructor: NewSocketServer,
 		Description: `
-Creates a server that receives messages over TCP. Each connection is parsed as a
-continuous stream of line delimited messages.
+Creates a server that receives messages over a (tcp/udp/unix) socket. Each
+connection is parsed as a continuous stream of line delimited messages.
 
 If multipart is set to false each line of data is read as a separate message. If
 multipart is set to true each line is read as a message part, and an empty line
@@ -33,24 +34,25 @@ If the delimiter field is left empty then line feed (\n) is used.
 The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to
 allocate _per connection_ for buffering lines of data. If a line of data from a
 connection exceeds this value then the connection will be closed.`,
-		Deprecated: true,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// TCPServerConfig contains configuration for the TCPServer input type.
-type TCPServerConfig struct {
+// SocketServerConfig contains configuration for the SocketServer input type.
+type SocketServerConfig struct {
+	Network   string `json:"network" yaml:"network"`
 	Address   string `json:"address" yaml:"address"`
 	Multipart bool   `json:"multipart" yaml:"multipart"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
 	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
-// NewTCPServerConfig creates a new TCPServerConfig with default values.
-func NewTCPServerConfig() TCPServerConfig {
-	return TCPServerConfig{
-		Address:   "127.0.0.1:0",
+// NewSocketServerConfig creates a new SocketServerConfig with default values.
+func NewSocketServerConfig() SocketServerConfig {
+	return SocketServerConfig{
+		Network:   "unix",
+		Address:   "/tmp/benthos.sock",
 		Multipart: false,
 		MaxBuffer: 1000000,
 		Delim:     "",
@@ -59,17 +61,27 @@ func NewTCPServerConfig() TCPServerConfig {
 
 //------------------------------------------------------------------------------
 
-// TCPServer is an input type that binds to an address and consumes streams of
-// messages over TCP.
-type TCPServer struct {
+type wrapPacketConn struct {
+	net.PacketConn
+}
+
+func (w *wrapPacketConn) Read(p []byte) (n int, err error) {
+	n, _, err = w.ReadFrom(p)
+	return
+}
+
+// SocketServer is an input type that binds to an address and consumes streams of
+// messages over Socket.
+type SocketServer struct {
 	running int32
 
-	conf  TCPServerConfig
+	conf  SocketServerConfig
 	stats metrics.Type
 	log   log.Modular
 
 	delim    []byte
 	listener net.Listener
+	conn     net.PacketConn
 
 	transactions chan types.Transaction
 
@@ -77,43 +89,62 @@ type TCPServer struct {
 	closedChan chan struct{}
 }
 
-// NewTCPServer creates a new TCPServer input type.
-func NewTCPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	log.Warnln("The tcp_server input is deprecated, please use socket_server instead.")
-	ln, err := net.Listen("tcp", conf.TCPServer.Address)
+// NewSocketServer creates a new SocketServer input type.
+func NewSocketServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	var ln net.Listener
+	var cn net.PacketConn
+	var err error
+
+	switch conf.SocketServer.Network {
+	case "tcp", "unix":
+		ln, err = net.Listen(conf.SocketServer.Network, conf.SocketServer.Address)
+	case "udp":
+		cn, err = net.ListenPacket(conf.SocketServer.Network, conf.SocketServer.Address)
+	default:
+		return nil, fmt.Errorf("socket network '%v' is not supported by this input", conf.SocketServer.Network)
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	delim := []byte("\n")
-	if len(conf.TCPServer.Delim) > 0 {
-		delim = []byte(conf.TCPServer.Delim)
+	if len(conf.SocketServer.Delim) > 0 {
+		delim = []byte(conf.SocketServer.Delim)
 	}
-	t := TCPServer{
+	t := SocketServer{
 		running: 1,
-		conf:    conf.TCPServer,
+		conf:    conf.SocketServer,
 		stats:   stats,
 		log:     log,
 
 		delim:    delim,
 		listener: ln,
+		conn:     cn,
 
 		transactions: make(chan types.Transaction),
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
 
-	go t.loop()
+	if ln == nil {
+		go t.udpLoop()
+	} else {
+		go t.loop()
+	}
 	return &t, nil
 }
 
 //------------------------------------------------------------------------------
 
-// Addr returns the underlying TCP listeners address.
-func (t *TCPServer) Addr() net.Addr {
-	return t.listener.Addr()
+// Addr returns the underlying Socket listeners address.
+func (t *SocketServer) Addr() net.Addr {
+	if t.listener != nil {
+		return t.listener.Addr()
+	}
+	return t.conn.LocalAddr()
 }
 
-func (t *TCPServer) newScanner(r io.Reader) *bufio.Scanner {
+func (t *SocketServer) newScanner(r io.Reader) *bufio.Scanner {
 	scanner := bufio.NewScanner(r)
 	if t.conf.MaxBuffer != bufio.MaxScanTokenSize {
 		scanner.Buffer([]byte{}, t.conf.MaxBuffer)
@@ -141,7 +172,7 @@ func (t *TCPServer) newScanner(r io.Reader) *bufio.Scanner {
 	return scanner
 }
 
-func (t *TCPServer) loop() {
+func (t *SocketServer) loop() {
 	var (
 		mCount     = t.stats.GetCounter("count")
 		mRcvd      = t.stats.GetCounter("batch.received")
@@ -160,7 +191,7 @@ func (t *TCPServer) loop() {
 		close(t.closedChan)
 	}()
 
-	t.log.Infof("Receiving TCP messages from address: %v\n", t.listener.Addr())
+	t.log.Infof("Receiving %v socket messages from address: %v\n", t.conf.Network, t.listener.Addr())
 
 	sendMsg := func(msg types.Message) error {
 		tStarted := time.Now()
@@ -196,7 +227,7 @@ func (t *TCPServer) loop() {
 			conn, err := t.listener.Accept()
 			if err != nil {
 				if !strings.Contains(err.Error(), "use of closed network connection") {
-					t.log.Errorf("Failed to accept TCP connection: %v\n", err)
+					t.log.Errorf("Failed to accept Socket connection: %v\n", err)
 				}
 				return
 			}
@@ -245,27 +276,116 @@ func (t *TCPServer) loop() {
 	<-t.closeChan
 }
 
+func (t *SocketServer) udpLoop() {
+	var (
+		mCount     = t.stats.GetCounter("count")
+		mRcvd      = t.stats.GetCounter("batch.received")
+		mPartsRcvd = t.stats.GetCounter("received")
+		mLatency   = t.stats.GetTimer("latency")
+	)
+
+	defer func() {
+		atomic.StoreInt32(&t.running, 0)
+
+		if t.conn != nil {
+			t.conn.Close()
+		}
+
+		close(t.transactions)
+		close(t.closedChan)
+	}()
+
+	t.log.Infof("Receiving udp socket messages from address: %v\n", t.conn.LocalAddr())
+
+	sendMsg := func(msg types.Message) error {
+		tStarted := time.Now()
+		mPartsRcvd.Incr(int64(msg.Len()))
+		mRcvd.Incr(1)
+
+		resChan := make(chan types.Response)
+		select {
+		case t.transactions <- types.NewTransaction(msg, resChan):
+		case <-t.closeChan:
+			return types.ErrTypeClosed
+		}
+
+		select {
+		case res, open := <-resChan:
+			if !open {
+				return types.ErrTypeClosed
+			}
+			if res != nil {
+				if res.Error() != nil {
+					return res.Error()
+				}
+			}
+		case <-t.closeChan:
+			return types.ErrTypeClosed
+		}
+		mLatency.Timing(time.Since(tStarted).Nanoseconds())
+		return nil
+	}
+
+	go func() {
+		var msg types.Message
+		msgLoop := func() {
+			for msg != nil {
+				sendErr := sendMsg(msg)
+				if sendErr == nil || sendErr == types.ErrTypeClosed {
+					msg = nil
+					return
+				}
+				t.log.Errorf("Failed to send message: %v\n", sendErr)
+				<-time.After(time.Second)
+			}
+		}
+		for {
+			scanner := t.newScanner(&wrapPacketConn{PacketConn: t.conn})
+			for scanner.Scan() {
+				mCount.Incr(1)
+				if len(scanner.Bytes()) == 0 {
+					continue
+				}
+				if msg == nil {
+					msg = message.New(nil)
+				}
+				msg.Append(message.NewPart(scanner.Bytes()))
+				msgLoop()
+			}
+			if msg != nil {
+				msgLoop()
+			}
+			if cerr := scanner.Err(); cerr != nil {
+				if cerr != io.EOF {
+					t.log.Errorf("Connection error due to: %v\n", cerr)
+				}
+			}
+		}
+	}()
+	<-t.closeChan
+}
+
 // TransactionChan returns a transactions channel for consuming messages from
 // this input.
-func (t *TCPServer) TransactionChan() <-chan types.Transaction {
+func (t *SocketServer) TransactionChan() <-chan types.Transaction {
 	return t.transactions
 }
 
 // Connected returns a boolean indicating whether this input is currently
 // connected to its target.
-func (t *TCPServer) Connected() bool {
+func (t *SocketServer) Connected() bool {
 	return true
 }
 
-// CloseAsync shuts down the TCPServer input and stops processing requests.
-func (t *TCPServer) CloseAsync() {
+// CloseAsync shuts down the SocketServer input and stops processing requests.
+func (t *SocketServer) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&t.running, 1, 0) {
 		close(t.closeChan)
 	}
 }
 
-// WaitForClose blocks until the TCPServer input has closed down.
-func (t *TCPServer) WaitForClose(timeout time.Duration) error {
+// WaitForClose blocks until the SocketServer input has closed down.
+func (t *SocketServer) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-t.closedChan:
 	case <-time.After(timeout):

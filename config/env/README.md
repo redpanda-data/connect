@@ -291,6 +291,16 @@ INPUT_S3_SQS_ENVELOPE_PATH
 INPUT_S3_SQS_MAX_MESSAGES                            = 10
 INPUT_S3_SQS_URL
 INPUT_S3_TIMEOUT                                     = 5s
+INPUT_SOCKET_ADDRESS                                 = /tmp/benthos.sock
+INPUT_SOCKET_DELIMITER
+INPUT_SOCKET_MAX_BUFFER                              = 1000000
+INPUT_SOCKET_MULTIPART                               = false
+INPUT_SOCKET_NETWORK                                 = unix
+INPUT_SOCKET_SERVER_ADDRESS                          = /tmp/benthos.sock
+INPUT_SOCKET_SERVER_DELIMITER
+INPUT_SOCKET_SERVER_MAX_BUFFER                       = 1000000
+INPUT_SOCKET_SERVER_MULTIPART                        = false
+INPUT_SOCKET_SERVER_NETWORK                          = unix
 INPUT_SQS_CREDENTIALS_ID
 INPUT_SQS_CREDENTIALS_PROFILE
 INPUT_SQS_CREDENTIALS_ROLE
@@ -724,6 +734,8 @@ OUTPUT_SNS_MAX_IN_FLIGHT                              = 1
 OUTPUT_SNS_REGION                                     = eu-west-1
 OUTPUT_SNS_TIMEOUT                                    = 5s
 OUTPUT_SNS_TOPIC_ARN
+OUTPUT_SOCKET_ADDRESS                                 = /tmp/benthos.sock
+OUTPUT_SOCKET_NETWORK                                 = unix
 OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL                   = 1s
 OUTPUT_SQS_BACKOFF_MAX_ELAPSED_TIME                   = 30s
 OUTPUT_SQS_BACKOFF_MAX_INTERVAL                       = 5s

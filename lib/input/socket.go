@@ -1,6 +1,7 @@
 package input
 
 import (
+	"fmt"
 	"io"
 	"net"
 
@@ -13,10 +14,10 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors[TypeTCP] = TypeSpec{
-		constructor: NewTCP,
+	Constructors[TypeSocket] = TypeSpec{
+		constructor: NewSocket,
 		Description: `
-Connects to a TCP server and consumes a continuous stream of messages.
+Connects to a (tcp/unix) socket and consumes a continuous stream of messages.
 
 If multipart is set to false each line of data is read as a separate message. If
 multipart is set to true each line is read as a message part, and an empty line
@@ -27,24 +28,25 @@ instance of this input can utilise any number of threads within a
 ` + "`pipeline`" + ` section of a config.
 
 If the delimiter field is left empty then line feed (\n) is used.`,
-		Deprecated: true,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// TCPConfig contains configuration values for the TCP input type.
-type TCPConfig struct {
+// SocketConfig contains configuration values for the Socket input type.
+type SocketConfig struct {
+	Network   string `json:"network" yaml:"network"`
 	Address   string `json:"address" yaml:"address"`
 	Multipart bool   `json:"multipart" yaml:"multipart"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
 	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
-// NewTCPConfig creates a new TCPConfig with default values.
-func NewTCPConfig() TCPConfig {
-	return TCPConfig{
-		Address:   "localhost:4194",
+// NewSocketConfig creates a new SocketConfig with default values.
+func NewSocketConfig() SocketConfig {
+	return SocketConfig{
+		Network:   "unix",
+		Address:   "/tmp/benthos.sock",
 		Multipart: false,
 		MaxBuffer: 1000000,
 		Delim:     "",
@@ -53,12 +55,16 @@ func NewTCPConfig() TCPConfig {
 
 //------------------------------------------------------------------------------
 
-// NewTCP creates a new TCP input type.
-func NewTCP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	log.Warnln("The tcp input is deprecated, please use socket instead.")
-	delim := conf.TCP.Delim
+// NewSocket creates a new Socket input type.
+func NewSocket(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	delim := conf.Socket.Delim
 	if len(delim) == 0 {
 		delim = "\n"
+	}
+	switch conf.Socket.Network {
+	case "tcp", "unix":
+	default:
+		return nil, fmt.Errorf("socket network '%v' is not supported by this input", conf.Socket.Network)
 	}
 	var conn net.Conn
 	rdr, err := reader.NewLines(
@@ -68,7 +74,7 @@ func NewTCP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type)
 				conn = nil
 			}
 			var err error
-			conn, err = net.Dial("tcp", conf.TCP.Address)
+			conn, err = net.Dial(conf.Socket.Network, conf.Socket.Address)
 			return conn, err
 		},
 		func() {
@@ -78,14 +84,14 @@ func NewTCP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type)
 			}
 		},
 		reader.OptLinesSetDelimiter(delim),
-		reader.OptLinesSetMaxBuffer(conf.TCP.MaxBuffer),
-		reader.OptLinesSetMultipart(conf.TCP.Multipart),
+		reader.OptLinesSetMaxBuffer(conf.Socket.MaxBuffer),
+		reader.OptLinesSetMultipart(conf.Socket.Multipart),
 	)
 	if err != nil {
 		return nil, err
 	}
 	return NewAsyncReader(
-		TypeTCP,
+		TypeSocket,
 		true,
 		reader.NewAsyncPreserver(rdr),
 		log, stats,

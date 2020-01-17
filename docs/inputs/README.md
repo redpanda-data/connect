@@ -51,12 +51,11 @@ input:
 22. [`redis_pubsub`](#redis_pubsub)
 23. [`redis_streams`](#redis_streams)
 24. [`s3`](#s3)
-25. [`sqs`](#sqs)
-26. [`stdin`](#stdin)
-27. [`tcp`](#tcp)
-28. [`tcp_server`](#tcp_server)
-29. [`udp_server`](#udp_server)
-30. [`websocket`](#websocket)
+25. [`socket`](#socket)
+26. [`socket_server`](#socket_server)
+27. [`sqs`](#sqs)
+28. [`stdin`](#stdin)
+29. [`websocket`](#websocket)
 
 ## `amqp_0_9`
 
@@ -1129,6 +1128,57 @@ You can access these metadata fields using
 [function interpolation](../config_interpolation.md#metadata).
 
 ---
+## `socket`
+
+``` yaml
+type: socket
+socket:
+  address: /tmp/benthos.sock
+  delimiter: ""
+  max_buffer: 1e+06
+  multipart: false
+  network: unix
+```
+
+Connects to a (tcp/unix) socket and consumes a continuous stream of messages.
+
+If multipart is set to false each line of data is read as a separate message. If
+multipart is set to true each line is read as a message part, and an empty line
+indicates the end of a message.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
+If the delimiter field is left empty then line feed (\n) is used.
+
+---
+## `socket_server`
+
+``` yaml
+type: socket_server
+socket_server:
+  address: /tmp/benthos.sock
+  delimiter: ""
+  max_buffer: 1e+06
+  multipart: false
+  network: unix
+```
+
+Creates a server that receives messages over a (tcp/udp/unix) socket. Each
+connection is parsed as a continuous stream of line delimited messages.
+
+If multipart is set to false each line of data is read as a separate message. If
+multipart is set to true each line is read as a message part, and an empty line
+indicates the end of a message.
+
+If the delimiter field is left empty then line feed (\n) is used.
+
+The field `max_buffer` specifies the maximum amount of memory to
+allocate _per connection_ for buffering lines of data. If a line of data from a
+connection exceeds this value then the connection will be closed.
+
+---
 ## `sqs`
 
 ``` yaml
@@ -1198,74 +1248,6 @@ instance of this input can utilise any number of threads within a
 `pipeline` section of a config.
 
 If the delimiter field is left empty then line feed (\n) is used.
-
----
-## `tcp`
-
-``` yaml
-type: tcp
-tcp:
-  address: localhost:4194
-  delimiter: ""
-  max_buffer: 1e+06
-  multipart: false
-```
-
-Connects to a TCP server and consumes a continuous stream of messages.
-
-If multipart is set to false each line of data is read as a separate message. If
-multipart is set to true each line is read as a message part, and an empty line
-indicates the end of a message.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
-
-If the delimiter field is left empty then line feed (\n) is used.
-
----
-## `tcp_server`
-
-``` yaml
-type: tcp_server
-tcp_server:
-  address: 127.0.0.1:0
-  delimiter: ""
-  max_buffer: 1e+06
-  multipart: false
-```
-
-Creates a server that receives messages over TCP. Each connection is parsed as a
-continuous stream of line delimited messages.
-
-If multipart is set to false each line of data is read as a separate message. If
-multipart is set to true each line is read as a message part, and an empty line
-indicates the end of a message.
-
-If the delimiter field is left empty then line feed (\n) is used.
-
-The field `max_buffer` specifies the maximum amount of memory to
-allocate _per connection_ for buffering lines of data. If a line of data from a
-connection exceeds this value then the connection will be closed.
-
----
-## `udp_server`
-
-``` yaml
-type: udp_server
-udp_server:
-  address: 127.0.0.1:0
-  delimiter: ""
-  max_buffer: 1e+06
-```
-
-Creates a server that receives messages over UDP as a continuous stream of data.
-Each line is interpretted as an individual message, if the delimiter field is
-left empty then line feed (\n) is used.
-
-The field `max_buffer` specifies the maximum amount of memory to
-allocate for buffering lines of data, this must exceed the largest expected
-message size.
 
 ---
 ## `websocket`
