@@ -5,13 +5,13 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: tcp
-  tcp:
-    network: unix
+  type: socket
+  socket:
     address: /tmp/benthos.sock
     delimiter: ""
     max_buffer: 1e+06
     multipart: false
+    network: unix
 buffer:
   type: none
   none: {}
@@ -19,9 +19,10 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: tcp
-  tcp:
-    address: localhost:4194
+  type: socket
+  socket:
+    address: /tmp/benthos.sock
+    network: unix
 resources:
   caches: {}
   conditions: {}

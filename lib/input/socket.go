@@ -1,6 +1,7 @@
 package input
 
 import (
+	"fmt"
 	"io"
 	"net"
 
@@ -16,7 +17,7 @@ func init() {
 	Constructors[TypeSocket] = TypeSpec{
 		constructor: NewSocket,
 		Description: `
-Connects to a Socket and consumes a continuous stream of messages.
+Connects to a (tcp/unix) socket and consumes a continuous stream of messages.
 
 If multipart is set to false each line of data is read as a separate message. If
 multipart is set to true each line is read as a message part, and an empty line
@@ -59,6 +60,11 @@ func NewSocket(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 	delim := conf.Socket.Delim
 	if len(delim) == 0 {
 		delim = "\n"
+	}
+	switch conf.Socket.Network {
+	case "tcp", "unix":
+	default:
+		return nil, fmt.Errorf("socket network '%v' is not supported by this input", conf.Socket.Network)
 	}
 	var conn net.Conn
 	rdr, err := reader.NewLines(

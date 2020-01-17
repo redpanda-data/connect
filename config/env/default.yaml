@@ -312,6 +312,18 @@ input:
         sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:10}
         sqs_url: ${INPUT_S3_SQS_URL}
         timeout: ${INPUT_S3_TIMEOUT:5s}
+      socket:
+        address: ${INPUT_SOCKET_ADDRESS:/tmp/benthos.sock}
+        delimiter: ${INPUT_SOCKET_DELIMITER}
+        max_buffer: ${INPUT_SOCKET_MAX_BUFFER:1000000}
+        multipart: ${INPUT_SOCKET_MULTIPART:false}
+        network: ${INPUT_SOCKET_NETWORK:unix}
+      socket_server:
+        address: ${INPUT_SOCKET_SERVER_ADDRESS:/tmp/benthos.sock}
+        delimiter: ${INPUT_SOCKET_SERVER_DELIMITER}
+        max_buffer: ${INPUT_SOCKET_SERVER_MAX_BUFFER:1000000}
+        multipart: ${INPUT_SOCKET_SERVER_MULTIPART:false}
+        network: ${INPUT_SOCKET_SERVER_NETWORK:unix}
       sqs:
         credentials:
           id: ${INPUT_SQS_CREDENTIALS_ID}
@@ -863,6 +875,9 @@ output:
         region: ${OUTPUT_SNS_REGION:eu-west-1}
         timeout: ${OUTPUT_SNS_TIMEOUT:5s}
         topic_arn: ${OUTPUT_SNS_TOPIC_ARN}
+      socket:
+        address: ${OUTPUT_SOCKET_ADDRESS:/tmp/benthos.sock}
+        network: ${OUTPUT_SOCKET_NETWORK:unix}
       sqs:
         backoff:
           initial_interval: ${OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL:1s}

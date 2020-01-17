@@ -27,6 +27,7 @@ instance of this input can utilise any number of threads within a
 ` + "`pipeline`" + ` section of a config.
 
 If the delimiter field is left empty then line feed (\n) is used.`,
+		Deprecated: true,
 	}
 }
 
@@ -54,6 +55,7 @@ func NewTCPConfig() TCPConfig {
 
 // NewTCP creates a new TCP input type.
 func NewTCP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	log.Warnln("The tcp input is deprecated, please use socket instead.")
 	delim := conf.TCP.Delim
 	if len(delim) == 0 {
 		delim = "\n"

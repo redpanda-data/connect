@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -48,6 +49,11 @@ func NewSocket(
 	log log.Modular,
 	stats metrics.Type,
 ) (*Socket, error) {
+	switch conf.Network {
+	case "tcp", "udp", "unix":
+	default:
+		return nil, fmt.Errorf("socket network '%v' is not supported by this output", conf.Network)
+	}
 	t := Socket{
 		network: conf.Network,
 		address: conf.Address,

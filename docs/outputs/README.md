@@ -90,14 +90,13 @@ a [`try`](#try) output.
 28. [`retry`](#retry)
 29. [`s3`](#s3)
 30. [`sns`](#sns)
-31. [`sqs`](#sqs)
-32. [`stdout`](#stdout)
-33. [`switch`](#switch)
-34. [`sync_response`](#sync_response)
-35. [`tcp`](#tcp)
+31. [`socket`](#socket)
+32. [`sqs`](#sqs)
+33. [`stdout`](#stdout)
+34. [`switch`](#switch)
+35. [`sync_response`](#sync_response)
 36. [`try`](#try)
-37. [`udp`](#udp)
-38. [`websocket`](#websocket)
+37. [`websocket`](#websocket)
 
 ## `amqp_0_9`
 
@@ -1299,6 +1298,22 @@ improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
 
 ---
+## `socket`
+
+``` yaml
+type: socket
+socket:
+  address: /tmp/benthos.sock
+  network: unix
+```
+
+Sends messages as a continuous stream of line delimited data over a
+(tcp/udp/unix) socket by connecting to a server.
+
+If batched messages are sent the final message of the batch will be followed by
+two line breaks in order to indicate the end of the batch.
+
+---
 ## `sqs`
 
 ``` yaml
@@ -1490,21 +1505,6 @@ Using the above example and posting the message 'hello world' to the endpoint
 For more information please read [Synchronous Responses](../sync_responses.md).
 
 ---
-## `tcp`
-
-``` yaml
-type: tcp
-tcp:
-  address: localhost:4194
-```
-
-Sends messages as a continuous stream of line delimited data over TCP by
-connecting to a server.
-
-If batched messages are sent the final message of the batch will be followed by
-two line breaks in order to indicate the end of the batch.
-
----
 ## `try`
 
 ``` yaml
@@ -1539,21 +1539,6 @@ output:
   - file:
       path: /usr/local/benthos/everything_failed.jsonl
 ```
-
----
-## `udp`
-
-``` yaml
-type: udp
-udp:
-  address: localhost:4194
-```
-
-Sends messages as a continuous stream of line delimited data over UDP by
-connecting to a server.
-
-If batched messages are sent the final message of the batch will be followed by
-two line breaks in order to indicate the end of the batch.
 
 ---
 ## `websocket`

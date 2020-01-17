@@ -33,6 +33,7 @@ If the delimiter field is left empty then line feed (\n) is used.
 The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to
 allocate _per connection_ for buffering lines of data. If a line of data from a
 connection exceeds this value then the connection will be closed.`,
+		Deprecated: true,
 	}
 }
 
@@ -78,6 +79,7 @@ type TCPServer struct {
 
 // NewTCPServer creates a new TCPServer input type.
 func NewTCPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	log.Warnln("The tcp_server input is deprecated, please use socket_server instead.")
 	ln, err := net.Listen("tcp", conf.TCPServer.Address)
 	if err != nil {
 		return nil, err

@@ -3,6 +3,7 @@ package input
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -21,8 +22,8 @@ func init() {
 	Constructors[TypeSocketServer] = TypeSpec{
 		constructor: NewSocketServer,
 		Description: `
-Creates a server that receives messages over Socket. Each connection is parsed as a
-continuous stream of line delimited messages.
+Creates a server that receives messages over a (tcp/udp/unix) socket. Each
+connection is parsed as a continuous stream of line delimited messages.
 
 If multipart is set to false each line of data is read as a separate message. If
 multipart is set to true each line is read as a message part, and an empty line
@@ -60,6 +61,15 @@ func NewSocketServerConfig() SocketServerConfig {
 
 //------------------------------------------------------------------------------
 
+type wrapPacketConn struct {
+	net.PacketConn
+}
+
+func (w *wrapPacketConn) Read(p []byte) (n int, err error) {
+	n, _, err = w.ReadFrom(p)
+	return
+}
+
 // SocketServer is an input type that binds to an address and consumes streams of
 // messages over Socket.
 type SocketServer struct {
@@ -71,6 +81,7 @@ type SocketServer struct {
 
 	delim    []byte
 	listener net.Listener
+	conn     net.PacketConn
 
 	transactions chan types.Transaction
 
@@ -80,10 +91,22 @@ type SocketServer struct {
 
 // NewSocketServer creates a new SocketServer input type.
 func NewSocketServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	ln, err := net.Listen(conf.SocketServer.Network, conf.SocketServer.Address)
+	var ln net.Listener
+	var cn net.PacketConn
+	var err error
+
+	switch conf.SocketServer.Network {
+	case "tcp", "unix":
+		ln, err = net.Listen(conf.SocketServer.Network, conf.SocketServer.Address)
+	case "udp":
+		cn, err = net.ListenPacket(conf.SocketServer.Network, conf.SocketServer.Address)
+	default:
+		return nil, fmt.Errorf("socket network '%v' is not supported by this input", conf.SocketServer.Network)
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	delim := []byte("\n")
 	if len(conf.SocketServer.Delim) > 0 {
 		delim = []byte(conf.SocketServer.Delim)
@@ -96,13 +119,18 @@ func NewSocketServer(conf Config, mgr types.Manager, log log.Modular, stats metr
 
 		delim:    delim,
 		listener: ln,
+		conn:     cn,
 
 		transactions: make(chan types.Transaction),
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
 
-	go t.loop()
+	if ln == nil {
+		go t.udpLoop()
+	} else {
+		go t.loop()
+	}
 	return &t, nil
 }
 
@@ -110,7 +138,10 @@ func NewSocketServer(conf Config, mgr types.Manager, log log.Modular, stats metr
 
 // Addr returns the underlying Socket listeners address.
 func (t *SocketServer) Addr() net.Addr {
-	return t.listener.Addr()
+	if t.listener != nil {
+		return t.listener.Addr()
+	}
+	return t.conn.LocalAddr()
 }
 
 func (t *SocketServer) newScanner(r io.Reader) *bufio.Scanner {
@@ -160,7 +191,7 @@ func (t *SocketServer) loop() {
 		close(t.closedChan)
 	}()
 
-	t.log.Infof("Receiving Socket messages from address: %v\n", t.listener.Addr())
+	t.log.Infof("Receiving %v socket messages from address: %v\n", t.conf.Network, t.listener.Addr())
 
 	sendMsg := func(msg types.Message) error {
 		tStarted := time.Now()
@@ -240,6 +271,95 @@ func (t *SocketServer) loop() {
 					}
 				}
 			}(conn)
+		}
+	}()
+	<-t.closeChan
+}
+
+func (t *SocketServer) udpLoop() {
+	var (
+		mCount     = t.stats.GetCounter("count")
+		mRcvd      = t.stats.GetCounter("batch.received")
+		mPartsRcvd = t.stats.GetCounter("received")
+		mLatency   = t.stats.GetTimer("latency")
+	)
+
+	defer func() {
+		atomic.StoreInt32(&t.running, 0)
+
+		if t.conn != nil {
+			t.conn.Close()
+		}
+
+		close(t.transactions)
+		close(t.closedChan)
+	}()
+
+	t.log.Infof("Receiving udp socket messages from address: %v\n", t.conn.LocalAddr())
+
+	sendMsg := func(msg types.Message) error {
+		tStarted := time.Now()
+		mPartsRcvd.Incr(int64(msg.Len()))
+		mRcvd.Incr(1)
+
+		resChan := make(chan types.Response)
+		select {
+		case t.transactions <- types.NewTransaction(msg, resChan):
+		case <-t.closeChan:
+			return types.ErrTypeClosed
+		}
+
+		select {
+		case res, open := <-resChan:
+			if !open {
+				return types.ErrTypeClosed
+			}
+			if res != nil {
+				if res.Error() != nil {
+					return res.Error()
+				}
+			}
+		case <-t.closeChan:
+			return types.ErrTypeClosed
+		}
+		mLatency.Timing(time.Since(tStarted).Nanoseconds())
+		return nil
+	}
+
+	go func() {
+		var msg types.Message
+		msgLoop := func() {
+			for msg != nil {
+				sendErr := sendMsg(msg)
+				if sendErr == nil || sendErr == types.ErrTypeClosed {
+					msg = nil
+					return
+				}
+				t.log.Errorf("Failed to send message: %v\n", sendErr)
+				<-time.After(time.Second)
+			}
+		}
+		for {
+			scanner := t.newScanner(&wrapPacketConn{PacketConn: t.conn})
+			for scanner.Scan() {
+				mCount.Incr(1)
+				if len(scanner.Bytes()) == 0 {
+					continue
+				}
+				if msg == nil {
+					msg = message.New(nil)
+				}
+				msg.Append(message.NewPart(scanner.Bytes()))
+				msgLoop()
+			}
+			if msg != nil {
+				msgLoop()
+			}
+			if cerr := scanner.Err(); cerr != nil {
+				if cerr != io.EOF {
+					t.log.Errorf("Connection error due to: %v\n", cerr)
+				}
+			}
 		}
 	}()
 	<-t.closeChan

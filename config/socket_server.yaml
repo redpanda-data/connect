@@ -5,13 +5,13 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: tcp_server
-  tcp_server:
-    network: unix
+  type: socket_server
+  socket_server:
     address: /tmp/benthos.sock
     delimiter: ""
     max_buffer: 1e+06
     multipart: false
+    network: unix
 buffer:
   type: none
   none: {}
