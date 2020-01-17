@@ -5,7 +5,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 3.8.0 - TBD
+### Added
+
+- New `socket`, `socket_server` inputs.
+- New `socket` output.
+
+### Changed
+
+- The `tcp`, `tcp_server` and `udp_server` inputs have been deprecated and moved
+  into the `socket` and `socket_server` inputs respectively.
+- The `udp` and `tcp` outputs have been deprecated and moved into the `socket`
+  output.
+
+## 3.8.0 - 2020-01-17
 
 ### Added
 
