@@ -90,6 +90,8 @@ const (
 	TypeTCP             = "tcp"
 	TypeTCPServer       = "tcp_server"
 	TypeUDPServer       = "udp_server"
+	TypeSocket          = "socket"
+	TypeSocketServer    = "socket_server"
 	TypeWebsocket       = "websocket"
 	TypeZMQ4            = "zmq4"
 )
@@ -130,6 +132,8 @@ type Config struct {
 	TCP             TCPConfig                    `json:"tcp" yaml:"tcp"`
 	TCPServer       TCPServerConfig              `json:"tcp_server" yaml:"tcp_server"`
 	UDPServer       UDPServerConfig              `json:"udp_server" yaml:"udp_server"`
+	Socket          SocketConfig                 `json:"socket" yaml:"socket"`
+	SocketServer    SocketServerConfig           `json:"socket_server" yaml:"socket_server"`
 	Websocket       reader.WebsocketConfig       `json:"websocket" yaml:"websocket"`
 	ZMQ4            *reader.ZMQ4Config           `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors      []processor.Config           `json:"processors" yaml:"processors"`
@@ -170,6 +174,8 @@ func NewConfig() Config {
 		TCP:             NewTCPConfig(),
 		TCPServer:       NewTCPServerConfig(),
 		UDPServer:       NewUDPServerConfig(),
+		Socket:          NewSocketConfig(),
+		SocketServer:    NewSocketServerConfig(),
 		Websocket:       reader.NewWebsocketConfig(),
 		ZMQ4:            reader.NewZMQ4Config(),
 		Processors:      []processor.Config{},

@@ -89,6 +89,7 @@ const (
 	TypeTCP             = "tcp"
 	TypeTry             = "try"
 	TypeUDP             = "udp"
+	TypeSocket          = "socket"
 	TypeWebsocket       = "websocket"
 	TypeZMQ4            = "zmq4"
 )
@@ -137,6 +138,7 @@ type Config struct {
 	TCP             writer.TCPConfig             `json:"tcp" yaml:"tcp"`
 	Try             TryConfig                    `json:"try" yaml:"try"`
 	UDP             writer.UDPConfig             `json:"udp" yaml:"udp"`
+	Socket          writer.SocketConfig          `json:"socket" yaml:"socket"`
 	Websocket       writer.WebsocketConfig       `json:"websocket" yaml:"websocket"`
 	ZMQ4            *writer.ZMQ4Config           `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors      []processor.Config           `json:"processors" yaml:"processors"`
@@ -185,6 +187,7 @@ func NewConfig() Config {
 		TCP:             writer.NewTCPConfig(),
 		Try:             NewTryConfig(),
 		UDP:             writer.NewUDPConfig(),
+		Socket:          writer.NewSocketConfig(),
 		Websocket:       writer.NewWebsocketConfig(),
 		ZMQ4:            writer.NewZMQ4Config(),
 		Processors:      []processor.Config{},
