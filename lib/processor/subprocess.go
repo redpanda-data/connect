@@ -361,6 +361,7 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 					olog.String("event", "error"),
 					olog.String("type", err.Error()),
 				)
+				FlagErr(result.Get(i), err)
 				results = append(results, p)
 			} else {
 				results = append(results, res)
