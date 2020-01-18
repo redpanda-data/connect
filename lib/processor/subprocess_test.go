@@ -135,3 +135,30 @@ func TestSubprocessLineBreaks(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestSubprocessWithErrors(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = TypeSubprocess
+	conf.Subprocess.Name = "sh"
+	conf.Subprocess.Args = []string{"-c", "cat 1>&2"}
+
+	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Skipf("Not sure if this is due to missing executable: %v", err)
+	}
+
+	msgIn := message.New([][]byte{
+		[]byte(`hello bar world`),
+	})
+
+	msgs, _ := proc.ProcessMessage(msgIn)
+
+	if !HasFailed(msgs[0].Get(0)) {
+		t.Errorf("Expected subprocessor to fail")
+	}
+
+	proc.CloseAsync()
+	if err := proc.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
