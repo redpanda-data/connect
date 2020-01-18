@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file.
 - The `udp` and `tcp` outputs have been deprecated and moved into the `socket`
   output.
 
+### Fixed
+
+- The `subprocess` processor now correctly flags errors that occur.
+
 ## 3.8.0 - 2020-01-17
 
 ### Added
