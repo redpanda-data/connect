@@ -14,7 +14,7 @@ import (
 func init() {
 	Constructors[TypeNone] = TypeSpec{
 		constructor: NewEmpty,
-		description: `
+		Description: `
 Selecting no buffer (default) means the output layer is directly coupled with
 the input layer. This is the safest and lowest latency option since
 acknowledgements from at-least-once protocols can be propagated all the way from

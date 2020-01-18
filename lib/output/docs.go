@@ -38,11 +38,25 @@ func sanitiseWithBatch(
 
 //------------------------------------------------------------------------------
 
+// DocsBatches returns a documentation paragraph regarding outputs that support
+// batching.
+var DocsBatches = `
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](/docs/configuration/batching).`
+
+// DocsAsync returns a documentation paragraph regarding outputs that support
+// asynchronous sends.
+var DocsAsync = `
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field ` + "`max_in_flight`" + `.`
+
 var header = "This document was generated with `benthos --list-outputs`" + `
 
 An output is a sink where we wish to send our consumed data after applying an
-optional array of [processors](../processors). Only one output is configured at
-the root of a Benthos config. However, the output can be a [broker](#broker)
+optional array of [processors](/docs/components/processors/about). Only one output is configured at
+the root of a Benthos config. However, the output can be a [broker](broker)
 which combines multiple outputs under a chosen brokering pattern.
 
 An output config section looks like this:
@@ -73,27 +87,27 @@ source as a Noack (e.g. AMQP) or will be reattempted indefinitely with the
 commit withheld until success (e.g. Kafka).
 
 It's possible to instead have Benthos indefinitely retry an output until success
-with a [` + "`retry`" + `](#retry) output. Some other outputs, such as the
-[` + "`broker`" + `](#broker), might also retry indefinitely depending on their
+with a [` + "`retry`" + `](retry) output. Some other outputs, such as the
+[` + "`broker`" + `](broker), might also retry indefinitely depending on their
 configuration.
 
 ### Multiplexing Outputs
 
 It is possible to perform content based multiplexing of messages to specific
-outputs either by using the ` + "[`switch`](#switch)" + ` output, or a
-` + "[`broker`](#broker)" + ` with the ` + "`fan_out`" + ` pattern and a
-[filter processor](../processors/README.md#filter_parts) on each output, which
+outputs either by using the ` + "[`switch`](switch)" + ` output, or a
+` + "[`broker`](broker)" + ` with the ` + "`fan_out`" + ` pattern and a
+[filter processor](/docs/components/processors/filter_parts) on each output, which
 is a processor that drops messages if the condition does not pass.
 Conditions are content aware logical operators that can be combined using
 boolean logic.
 
 For more information regarding conditions, including a full list of available
-conditions please [read the docs here](../conditions/README.md).
+conditions please [read the docs here](/docs/components/conditions/about).
 
 ### Dead Letter Queues
 
 It's possible to create fallback outputs for when an output target fails using
-a ` + "[`try`](#try)" + ` output.`
+a ` + "[`try`](try)" + ` output.`
 
 // Descriptions returns a formatted string of collated descriptions of each
 // type.
@@ -169,7 +183,7 @@ field ` + "`max_in_flight`" + `.`)
 			buf.WriteString(`
 This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
-[in this doc](../batching.md).`)
+[in this doc](/docs/configuration/batching).`)
 		}
 		buf.WriteString("\n")
 		if i != (len(names) - 1) {

@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,12 +16,19 @@ import (
 func init() {
 	Constructors[TypeFile] = TypeSpec{
 		constructor: NewFile,
-		Description: `
-The file type reads input from a file. If multipart is set to false each line
-is read as a separate message. If multipart is set to true each line is read as
-a message part, and an empty line indicates the end of a message.
-
-If the delimiter field is left empty then line feed (\n) is used.`,
+		Summary: `
+Reads a file, where each line is processed as an individual message.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("path", "A path pointing to a file on disk."),
+			docs.FieldCommon("multipart", `
+If set `+"`true`"+` each line is read as a message part, and an empty line
+indicates the end of a message batch, and only then is the batch flushed
+downstream.`),
+			docs.FieldCommon("max_buffer", "Must be larger than the largest line of the target file."),
+			docs.FieldCommon("delimiter", `
+A string that indicates the end of a message within the target file. If left
+empty then line feed (\n) is used.`),
+		},
 	}
 }
 

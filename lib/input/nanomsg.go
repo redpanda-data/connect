@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,11 +13,18 @@ import (
 func init() {
 	Constructors[TypeNanomsg] = TypeSpec{
 		constructor: NewNanomsg,
+		Summary: `
+Consumes messages via Nanomsg sockets (scalability protocols).`,
 		Description: `
-The scalability protocols are common communication patterns. This input should
-be compatible with any implementation, but specifically targets Nanomsg.
-
 Currently only PULL and SUB sockets are supported.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("urls", "A list of URLs to connect to (or as). If an item of the list contains commas it will be expanded into multiple URLs."),
+			docs.FieldCommon("bind", "Whether the URLs provided should be connected to, or bound as."),
+			docs.FieldCommon("socket_type", "The socket type to use.").HasOptions("PULL", "SUB"),
+			docs.FieldCommon("sub_filters", "A list of sub filters to use when consuming from a SUB socket."),
+			docs.FieldAdvanced("poll_timeout", "The period to wait until a poll is abandoned and reattempted."),
+			docs.FieldDeprecated("reply_timeout"),
+		},
 	}
 }
 

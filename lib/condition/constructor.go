@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -24,8 +25,11 @@ type TypeSpec struct {
 		log log.Modular,
 		stats metrics.Type,
 	) (Type, error)
-	description        string
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
+
+	Summary     string
+	Description string
+	FieldSpecs  docs.FieldSpecs
 }
 
 // Constructors is a map of all condition types with their specs.
@@ -250,9 +254,9 @@ times as branches of a larger condition. It is possible to avoid writing
 duplicate condition configs by using the [resource condition][resource].`
 
 var footer = `
-[processors]: ../processors/README.md
-[filter]: ../processors/README.md#filter
-[filter_parts]: ../processors/README.md#filter_parts
+[processors]: /docs/components/processors/about
+[filter]: /docs/components/processors/filter
+[filter_parts]: /docs/components/processors/filter_parts
 [and]: #and
 [or]: #or
 [not]: #not
@@ -299,7 +303,7 @@ func Descriptions() string {
 			buf.Write(confBytes)
 			buf.WriteString("```\n")
 		}
-		buf.WriteString(Constructors[name].description)
+		buf.WriteString(Constructors[name].Description)
 		buf.WriteString("\n")
 		if i != (len(names) - 1) {
 			buf.WriteString("\n")

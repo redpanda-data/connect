@@ -30,7 +30,7 @@ behaviour after this will depend on the pipeline but usually this simply means
 the send is attempted again until successful whilst applying back pressure.
 
 The URL and header values of this type can be dynamically set using function
-interpolations described [here](../config_interpolation.md#functions).
+interpolations described [here](/docs/configuration/interpolation#functions).
 
 The body of the HTTP request is the raw contents of the message payload. If the
 message has multiple parts the request will be sent according to
@@ -40,7 +40,7 @@ message has multiple parts the request will be sent according to
 
 It's possible to propagate the response from each HTTP request back to the input
 source by setting ` + "`propagate_response` to `true`" + `. Only inputs that
-support [synchronous responses](../sync_responses.md) are able to make use of
+support [synchronous responses](/docs/guides/sync_responses) are able to make use of
 these propagated responses.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.HTTPClient, conf.HTTPClient.Batching)

@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeNot] = TypeSpec{
 		constructor: NewNot,
-		description: `
+		Description: `
 Not is a condition that returns the opposite (NOT) of its child condition. The
 body of a not object is the child condition, i.e. in order to express 'part 0
 NOT equal to "foo"' you could have the following YAML config:

@@ -3,8 +3,11 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,26 +15,19 @@ import (
 func init() {
 	Constructors[TypeKinesisBalanced] = TypeSpec{
 		constructor: NewKinesisBalanced,
-		Description: `
+		Summary: `
 BETA: This input is a beta component and is subject to change outside of major
 version releases.
 
 Receives messages from a Kinesis stream and automatically balances shards across
-consumers.
-
+consumers.`,
+		Description: `
 Messages consumed by this input can be processed in parallel, meaning a single
 instance of this input can utilise any number of threads within a
 ` + "`pipeline`" + ` section of a config.
 
 Use the ` + "`batching`" + ` fields to configure an optional
-[batching policy](../batching.md#batch-policy).
-
-### Credentials
-
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](../aws.md).
+[batching policy](/docs/configuration/batching#batch-policy).
 
 ### Metadata
 
@@ -44,10 +40,22 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.KinesisBalanced, conf.KinesisBalanced.Batching)
 		},
+		FieldSpecs: append(
+			append(docs.FieldSpecs{
+				docs.FieldCommon("stream", "The Kinesis stream to consume from."),
+				docs.FieldCommon("dynamodb_table", "A DynamoDB table to use for offset storage."),
+				docs.FieldAdvanced("dynamodb_billing_mode", "A billing mode to set for the offset DynamoDB table."),
+				docs.FieldAdvanced("dynamodb_read_provision", "The read capacity of the offset DynamoDB table."),
+				docs.FieldAdvanced("dynamodb_write_provision", "The write capacity of the offset DynamoDB table."),
+				docs.FieldCommon("start_from_oldest", "Whether to consume from the oldest message when an offset does not yet exist for the stream."),
+			}, session.FieldSpecs()...),
+			batch.FieldSpec(),
+			docs.FieldDeprecated("max_batch_count"),
+		),
 	}
 }
 

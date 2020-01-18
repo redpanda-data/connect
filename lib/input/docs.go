@@ -41,8 +41,8 @@ func sanitiseWithBatch(
 var header = "This document was generated with `benthos --list-inputs`" + `
 
 An input is a source of data piped through an array of optional
-[processors](../processors). Only one input is configured at the root of a
-Benthos config. However, the root input can be a [broker](#broker) which
+[processors](/docs/components/processors/about). Only one input is configured at the root of a
+Benthos config. However, the root input can be a [broker](broker) which
 combines multiple inputs.
 
 An input config section looks like this:

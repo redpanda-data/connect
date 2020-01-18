@@ -27,7 +27,7 @@ TLS is automatic when connecting to an ` + "`amqps`" + ` URL, but custom
 settings can be enabled in the ` + "`tls`" + ` section.
 
 The field 'key' can be dynamically set using function interpolations described
-[here](../config_interpolation.md#functions).`,
+[here](/docs/configuration/interpolation#functions).`,
 		Async: true,
 	}
 }

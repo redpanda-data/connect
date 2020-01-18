@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -26,10 +27,12 @@ type TypeSpec struct {
 	) (Type, error)
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
+	Summary     string
 	Description string
 
 	// Deprecated indicates whether this component is deprecated.
 	Deprecated bool
+	FieldSpecs docs.FieldSpecs
 }
 
 // Constructors is a map of all processor types with their specs.
@@ -370,12 +373,12 @@ You can [find some examples here][0].
 
 Some processors have conditions whereby they might fail. Benthos has mechanisms
 for detecting and recovering from these failures which can be read about
-[here](../error_handling.md).
+[here](/docs/configuration/error_handling).
 
 ### Batching and Multiple Part Messages
 
 All Benthos processors support multiple part messages, which are synonymous with
-batches. Some processors such as [split](#split) are able to create, expand and
+batches. Some processors such as [split](split) are able to create, expand and
 break down batches.
 
 Many processors are able to perform their behaviours on specific parts of a
@@ -388,14 +391,14 @@ counting backwards starting from -1. E.g. if part = -1 then the selected part
 will be the last part of the message, if part = -2 then the part before the last
 element will be selected, and so on.
 
-Some processors such as ` + "[`filter`](#filter) and [`dedupe`](#dedupe)" + `
+Some processors such as ` + "[`filter`](filter) and [`dedupe`](dedupe)" + `
 act across an entire batch, when instead we'd like to perform them on individual
-messages of a batch. In this case the ` + "[`for_each`](#for_each)" + `
+messages of a batch. In this case the ` + "[`for_each`](for_each)" + `
 processor can be used.`
 
 var footer = `
-[0]: ../cookbooks/README.md
-[1]: ../pipeline.md`
+[0]: /cookbooks
+[1]: /docs/configuration/processing_pipelines`
 
 // Descriptions returns a formatted string of collated descriptions of each
 // type.

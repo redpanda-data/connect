@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeAnd] = TypeSpec{
 		constructor: NewAnd,
-		description: `
+		Description: `
 And is a condition that returns the logical AND of its children conditions:
 
 ` + "``` yaml" + `

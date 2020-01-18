@@ -32,7 +32,7 @@ characters (they must match the regular expression ` + "`[a-zA-Z0-9_-]+`" + `).
 
 The DAG is then used to execute the children in the necessary order with the
 maximum parallelism possible. You can read more about workflows in Benthos
-[in this document](../workflows.md).
+[in this document](/docs/configuration/workflows).
 
 The field ` + "`dependencies`" + ` is an optional array of fields that a child
 depends on. This is useful for when fields are required but don't appear within

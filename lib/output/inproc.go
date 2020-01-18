@@ -17,7 +17,7 @@ func init() {
 		Description: `
 Sends data directly to Benthos inputs by connecting to a unique ID. This allows
 you to hook up isolated streams whilst running Benthos in
-` + "[`--streams` mode](../streams/README.md) mode" + `, it is NOT recommended
+` + "[`--streams` mode](/docs/guides/streams_mode/about)" + `, it is NOT recommended
 that you connect the inputs of a stream with an output of the same stream, as
 feedback loops can lead to deadlocks in your message flow.
 

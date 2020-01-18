@@ -1,0 +1,127 @@
+---
+title: nats_stream
+type: input
+---
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+input:
+  nats_stream:
+    urls:
+    - nats://127.0.0.1:4222
+    cluster_id: test-cluster
+    client_id: benthos_client
+    queue: benthos_queue
+    subject: benthos_messages
+    durable_name: benthos_offset
+    unsubscribe_on_close: false
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+input:
+  nats_stream:
+    urls:
+    - nats://127.0.0.1:4222
+    cluster_id: test-cluster
+    client_id: benthos_client
+    queue: benthos_queue
+    subject: benthos_messages
+    durable_name: benthos_offset
+    unsubscribe_on_close: false
+    start_from_oldest: true
+    max_inflight: 1024
+    ack_wait: 30s
+```
+
+</TabItem>
+</Tabs>
+
+Subscribe to a NATS Stream subject, which is at-least-once. Joining a queue is
+optional and allows multiple clients of a subject to consume using queue
+semantics.
+
+Tracking and persisting offsets through a durable name is also optional and
+works with or without a queue. If a durable name is not provided then subjects
+are consumed from the most recently published message.
+
+When a consumer closes its connection it unsubscribes, when all consumers of a
+durable queue do this the offsets are deleted. In order to avoid this you can
+stop the consumers from unsubscribing by setting the field
+`unsubscribe_on_close` to `false`.
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+``` text
+- nats_stream_subject
+- nats_stream_sequence
+```
+
+You can access these metadata fields using
+[function interpolation](/docs/configuration/interpolation#metadata).
+
+## Fields
+
+### `urls`
+
+`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+```yaml
+# Examples
+
+urls:
+- nats://127.0.0.1:4222
+```
+
+### `cluster_id`
+
+`string` The ID of the cluster to consume from.
+
+### `client_id`
+
+`string` A client ID to connect as.
+
+### `queue`
+
+`string` The queue to consume from.
+
+### `subject`
+
+`string` A subject to consume from.
+
+### `durable_name`
+
+`string` Preserve the state of your consumer under a durable name.
+
+### `unsubscribe_on_close`
+
+`bool` Whether the subscription should be destroyed when this client disconnects.
+
+### `start_from_oldest`
+
+`bool` If a position is not found for a queue, determines whether to consume from the oldest available message, otherwise messages are consumed from the latest.
+
+### `max_inflight`
+
+`number` The maximum number of unprocessed messages to fetch at a given time.
+
+### `ack_wait`
+
+`string` An optional duration to specify at which a message that is yet to be acked will be automatically retried.
+
+

@@ -29,11 +29,11 @@ SQL is a processor that runs a query against a target database for each message
 batch and, for queries that return rows, replaces the batch with the result.
 
 If a query contains arguments they can be set as an array of strings supporting
-[interpolation functions](../config_interpolation.md#functions) in the
+[interpolation functions](/docs/configuration/interpolation#functions) in the
 ` + "`args`" + ` field.
 
 In order to execute an SQL query for each message of the batch use this
-processor within a ` + "[`for_each`](#for_each)" + ` processor:
+processor within a ` + "[`for_each`](for_each)" + ` processor:
 
 ` + "``` yaml" + `
 for_each:

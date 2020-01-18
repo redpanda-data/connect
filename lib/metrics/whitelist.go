@@ -16,7 +16,7 @@ import (
 func init() {
 	Constructors[TypeWhiteList] = TypeSpec{
 		constructor: NewWhitelist,
-		description: `
+		Description: `
 Whitelist metric paths within Benthos so that only matching metric paths are
 aggregated by a child metric target.
 

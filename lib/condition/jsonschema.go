@@ -15,7 +15,7 @@ import (
 func init() {
 	Constructors[TypeJSONSchema] = TypeSpec{
 		constructor: NewJSONSchema,
-		description: `
+		Description: `
 Validates a message against the provided JSONSchema definition to retrieve a
 boolean response indicating whether the message matches the schema or not.
 If the response is true the condition passes, otherwise it does not. Please

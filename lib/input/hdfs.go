@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -14,10 +15,10 @@ import (
 func init() {
 	Constructors[TypeHDFS] = TypeSpec{
 		constructor: NewHDFS,
-		Description: `
+		Summary: `
 Reads files from a HDFS directory, where each discrete file will be consumed as
-a single message payload.
-
+a single message payload.`,
+		Description: `
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -28,7 +29,12 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("hosts", "A list of target host addresses to connect to."),
+			docs.FieldCommon("user", "A user ID to connect as."),
+			docs.FieldCommon("directory", "The directory to consume from."),
+		},
 	}
 }
 

@@ -22,11 +22,11 @@ func init() {
 		constructor: NewRedis,
 		Description: `
 Performs actions against Redis that aren't possible using a
-` + "[`cache`](#cache)" + ` processor. Actions are performed for each message of
+` + "[`cache`](cache)" + ` processor. Actions are performed for each message of
 a batch, where the contents are replaced with the result.
 
 The field ` + "`key`" + ` supports
-[interpolation functions](../config_interpolation.md#functions) resolved
+[interpolation functions](/docs/configuration/interpolation#functions) resolved
 individually for each message of the batch.
 
 For example, given payloads with a metadata field ` + "`set_key`" + `, you could

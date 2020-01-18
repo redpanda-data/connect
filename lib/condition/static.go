@@ -11,7 +11,7 @@ import (
 func init() {
 	Constructors[TypeStatic] = TypeSpec{
 		constructor: NewStatic,
-		description: `
+		Description: `
 Static is a condition that always resolves to the same static boolean value.`,
 	}
 }

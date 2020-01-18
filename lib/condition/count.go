@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeCount] = TypeSpec{
 		constructor: NewCount,
-		description: `
+		Description: `
 Counts messages starting from one, returning true until the counter reaches its
 target, at which point it will return false and reset the counter. This
 condition is useful when paired with the ` + "`read_until`" + ` input, as it can

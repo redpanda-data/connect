@@ -11,10 +11,10 @@ import (
 func init() {
 	Constructors[TypeProcessorFailed] = TypeSpec{
 		constructor: NewProcessorFailed,
-		description: `
+		Description: `
 Returns true if a processing stage of a message has failed. This condition is
 useful for dropping failed messages or creating dead letter queues, you can read
-more about these patterns [here](../error_handling.md).`,
+more about these patterns [here](/docs/configuration/error_handling).`,
 	}
 }
 

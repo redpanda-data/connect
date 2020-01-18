@@ -16,7 +16,7 @@ func init() {
 	Constructors[TypeCatch] = TypeSpec{
 		constructor: NewCatch,
 		Description: `
-Behaves similarly to the ` + "[`for_each`](#for_each)" + ` processor, where a
+Behaves similarly to the ` + "[`for_each`](for_each)" + ` processor, where a
 list of child processors are applied to individual messages of a batch. However,
 processors are only applied to messages that failed a processing step prior to
 the catch.
@@ -38,7 +38,7 @@ When messages leave the catch block their fail flags are cleared. This processor
 is useful for when it's possible to recover failed messages, or when special
 actions (such as logging/metrics) are required before dropping them.
 
-More information about error handing can be found [here](../error_handling.md).`,
+More information about error handing can be found [here](/docs/configuration/error_handling).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
 			procConfs := make([]interface{}, len(conf.Catch))

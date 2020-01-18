@@ -19,7 +19,13 @@ Subscribe to an NSQ instance topic and channel.`,
 			return sanitiseWithBatch(conf.NSQ, conf.NSQ.Batching)
 		},
 		FieldSpecs: docs.FieldSpecs{
-			"batching": docs.FieldDeprecated(),
+			docs.FieldDeprecated("batching"),
+			docs.FieldCommon("nsqd_tcp_addresses", "A list of nsqd addresses to connect to."),
+			docs.FieldCommon("lookupd_http_addresses", "A list of nsqlookupd addresses to connect to."),
+			docs.FieldCommon("topic", "The topic to consume from."),
+			docs.FieldCommon("channel", "The channel to consume from."),
+			docs.FieldCommon("user_agent", "A user agent to assume when connecting."),
+			docs.FieldCommon("max_in_flight", "The maximum number of pending messages to consume at any given time."),
 		},
 	}
 }

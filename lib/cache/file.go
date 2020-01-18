@@ -16,7 +16,7 @@ import (
 func init() {
 	Constructors[TypeFile] = TypeSpec{
 		constructor: NewFile,
-		description: `
+		Description: `
 The file cache stores each item in a directory as a file, where an item ID is
 the path relative to the configured directory.
 

@@ -1,0 +1,34 @@
+---
+title: catch
+type: processor
+---
+
+```yaml
+catch: []
+```
+
+Behaves similarly to the [`for_each`](for_each) processor, where a
+list of child processors are applied to individual messages of a batch. However,
+processors are only applied to messages that failed a processing step prior to
+the catch.
+
+For example, with the following config:
+
+``` yaml
+- type: foo
+- catch:
+  - type: bar
+  - type: baz
+```
+
+If the processor `foo` fails for a particular message, that message
+will be fed into the processors `bar` and `baz`. Messages that do not
+fail for the processor `foo` will skip these processors.
+
+When messages leave the catch block their fail flags are cleared. This processor
+is useful for when it's possible to recover failed messages, or when special
+actions (such as logging/metrics) are required before dropping them.
+
+More information about error handing can be found [here](/docs/configuration/error_handling).
+
+

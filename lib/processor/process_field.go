@@ -20,7 +20,7 @@ func init() {
 	Constructors[TypeProcessField] = TypeSpec{
 		constructor: NewProcessField,
 		Description: `
-A processor that extracts the value of a field [dot path](../field_paths.md)
+A processor that extracts the value of a field [dot path](/docs/configuration/field_paths)
 within payloads according to a specified codec, applies a list of processors to
 the extracted value and finally sets the field within the original payloads to
 the processed result.
@@ -59,7 +59,7 @@ is discarded and the original metadata value is left unchanged.
 
 For example, with an input JSON document ` + "`{\"foo\":\"hello world\"}`" + `
 it's possible to uppercase the value of the field 'foo' by using the JSON codec
-and a ` + "[`text`](#text)" + ` child processor:
+and a ` + "[`text`](text)" + ` child processor:
 
 ` + "```yaml" + `
 process_field:

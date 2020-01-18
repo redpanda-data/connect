@@ -28,7 +28,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).`,
 	}
 }
 

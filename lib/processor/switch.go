@@ -38,9 +38,9 @@ A case takes this form:
 ` + "```" + `
 
 In order to switch each message of a batch individually use this processor with
-the ` + "[`for_each`](#for_each)" + ` processor.
+the ` + "[`for_each`](for_each)" + ` processor.
 
-You can find a [full list of conditions here](../conditions).`,
+You can find a [full list of conditions here](/docs/components/conditions/about).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			switchSlice := []interface{}{}
 			for _, switchCase := range conf.Switch {

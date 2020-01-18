@@ -3,8 +3,11 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,34 +15,33 @@ import (
 func init() {
 	Constructors[TypeKinesis] = TypeSpec{
 		constructor: NewKinesis,
+		Summary: `
+Receive messages from a Kinesis stream.`,
 		Description: `
-Receive messages from a Kinesis stream.
-
 It's possible to use DynamoDB for persisting shard iterators by setting the
 table name. Offsets will then be tracked per ` + "`client_id`" + ` per
 ` + "`shard_id`" + `. When using this mode you should create a table with
 ` + "`namespace`" + ` as the primary key and ` + "`shard_id`" + ` as a sort key.
 
 Use the ` + "`batching`" + ` fields to configure an optional
-[batching policy](../batching.md#batch-policy). Any other batching mechanism
-will stall with this input due its sequential transaction model.
-
-
-This input currently provides a single continuous feed of data, and therefore
-by default will only utilise a single processing thread and parallel output.
-Take a look at the
-[pipelines documentation](../pipeline.md#single-consumer-without-buffer) for
-guides on how to work around this.
-
-### Credentials
-
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](../aws.md).`,
+[batching policy](/docs/configuration/batching#batch-policy). Any other batching
+mechanism will stall with this input due its sequential transaction model.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.Kinesis, conf.Kinesis.Batching)
 		},
+		FieldSpecs: append(
+			append(docs.FieldSpecs{
+				docs.FieldCommon("stream", "The Kinesis stream to consume from."),
+				docs.FieldCommon("shard", "The shard to consume from."),
+				docs.FieldCommon("client_id", "The client identifier to assume."),
+				docs.FieldCommon("commit_period", "The rate at which offset commits should be sent."),
+				docs.FieldCommon("dynamodb_table", "A DynamoDB table to use for offset storage."),
+				docs.FieldCommon("start_from_oldest", "Whether to consume from the oldest message when an offset does not yet exist for the stream."),
+			}, session.FieldSpecs()...),
+			docs.FieldAdvanced("timeout", "The period of time to wait before abandoning a request and trying again."),
+			docs.FieldAdvanced("limit", "The maximum number of messages to consume from each request."),
+			batch.FieldSpec(),
+		),
 	}
 }
 

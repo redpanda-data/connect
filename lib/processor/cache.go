@@ -18,14 +18,14 @@ func init() {
 	Constructors[TypeCache] = TypeSpec{
 		constructor: NewCache,
 		Description: `
-Performs operations against a [cache resource](../caches) for each message of a
+Performs operations against a [cache resource](/docs/components/caches/about) for each message of a
 batch, allowing you to store or retrieve data within message payloads.
 
 This processor will interpolate functions within the ` + "`key` and `value`" + `
 fields individually for each message of the batch. This allows you to specify
 dynamic keys and values based on the contents of the message payloads and
 metadata. You can find a list of functions
-[here](../config_interpolation.md#functions).
+[here](/docs/configuration/interpolation#functions).
 
 ### Operators
 
@@ -38,13 +38,13 @@ overridden.
 
 Set a key in the cache to a value. If the key already exists the action fails
 with a 'key already exists' error, which can be detected with
-[processor error handling](../error_handling.md).
+[processor error handling](/docs/configuration/error_handling).
 
 #### ` + "`get`" + `
 
 Retrieve the contents of a cached key and replace the original message payload
 with the result. If the key does not exist the action fails with an error, which
-can be detected with [processor error handling](../error_handling.md).
+can be detected with [processor error handling](/docs/configuration/error_handling).
 
 #### ` + "`delete`" + `
 
@@ -61,7 +61,7 @@ in order to solve a variety of data stream problems.
 Deduplication can be done using the add operator with a key extracted from the
 message payload, since it fails when a key already exists we can remove the
 duplicates using a
-[` + "`processor_failed`" + `](../conditions/README.md#processor_failed)
+[` + "`processor_failed`" + `](/docs/components/conditions/processor_failed)
 condition:
 
 ` + "``` yaml" + `
@@ -77,7 +77,7 @@ condition:
 #### Hydration
 
 It's possible to enrich payloads with content previously stored in a cache by
-using the [` + "`process_map`" + `](#process_map) processor:
+using the [` + "`process_map`" + `](process_map) processor:
 
 ` + "``` yaml" + `
 - process_map:

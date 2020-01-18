@@ -27,7 +27,7 @@ func init() {
 		constructor: NewCache,
 		Description: `
 Stores messages in a cache. Caches are configured within the
-[resources section](../caches/README.md) and can target any of the following
+[resources section](/docs/components/caches/about) and can target any of the following
 types:
 
 ` + cachesList + `
@@ -49,7 +49,7 @@ resources:
 ` + "```" + `
 
 In order to create a unique ` + "`key`" + ` value per item you should use
-function interpolations described [here](../config_interpolation.md#functions).
+function interpolations described [here](/docs/configuration/interpolation#functions).
 When sending batched messages the interpolations are performed per message part.`,
 		Async: true,
 	}

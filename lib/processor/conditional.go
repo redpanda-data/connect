@@ -24,9 +24,9 @@ the ` + "`else_processors`" + ` are applied. This processor is useful for
 applying processors based on the content of message batches.
 
 In order to conditionally process each message of a batch individually use this
-processor with the ` + "[`for_each`](#for_each)" + ` processor.
+processor with the ` + "[`for_each`](for_each)" + ` processor.
 
-You can find a [full list of conditions here](../conditions).`,
+You can find a [full list of conditions here](/docs/components/conditions/about).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			condSanit, err := condition.SanitiseConfig(conf.Conditional.Condition)
 			if err != nil {

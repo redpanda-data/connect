@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,11 +21,10 @@ import (
 func init() {
 	Constructors[TypeDynamic] = TypeSpec{
 		brokerConstructor: NewDynamic,
+		Summary: `
+A special broker type where the inputs are identified by unique labels and can
+be created, changed and removed during runtime via a REST HTTP interface.`,
 		Description: `
-The dynamic type is a special broker type where the inputs are identified by
-unique labels and can be created, changed and removed during runtime via a REST
-HTTP interface.
-
 To GET a JSON map of input identifiers with their current uptimes use the
 ` + "`/inputs`" + ` endpoint.
 
@@ -47,6 +47,11 @@ already exists it will be changed.`,
 				"prefix":  conf.Dynamic.Prefix,
 				"timeout": conf.Dynamic.Timeout,
 			}, nil
+		},
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("inputs", "A map of inputs to statically create."),
+			docs.FieldCommon("prefix", "A path prefix for HTTP endpoints that are registered."),
+			docs.FieldCommon("timeout", "The server side timeout of HTTP requests."),
 		},
 	}
 }

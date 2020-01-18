@@ -1,0 +1,74 @@
+/**
+ * CSS files with the .module.css suffix will be treated as CSS modules
+ * and scoped locally.
+ */
+
+.heroBanner {
+  padding: 4rem 0;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+@media screen and (max-width: 966px) {
+  .heroBanner {
+    padding: 2rem;
+  }
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.features {
+  display: flex;
+  align-items: center;
+  padding: 2rem 0;
+  width: 100%;
+}
+
+.featureImage {
+  height: 150px;
+  width: 250px;
+}
+
+.heroImg {
+  height: 200px;
+  margin: 10px 0;
+}
+
+.configSnippet {
+  font-size: 10pt !important;
+}
+
+.configSnippets {
+  margin: 10px 0;
+}
+
+.pitch {
+  margin: 40px 0;
+}
+
+.loveSection {
+  margin: 20px 0;
+  padding: 20px 0;
+  background-image: url(/img/love-bg-dark.svg);
+}
+
+.loveSectionPlea {
+  text-align: center;
+}
+
+.loveImg {
+  height: 200px;
+}
+
+html[data-theme="dark"] .loveSection {
+  background-image: url(/img/love-bg-dark.svg);
+}
+
+.sponsorImg {
+  max-height: 30px;
+}

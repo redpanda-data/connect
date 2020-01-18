@@ -24,7 +24,7 @@ import (
 func init() {
 	Constructors[TypeDynamoDB] = TypeSpec{
 		constructor: NewDynamoDB,
-		description: `
+		Description: `
 The dynamodb cache stores key/value pairs as a single document in a DynamoDB
 table. The key is stored as a string value and used as the table hash key. The
 value is stored as a binary value using the ` + "`data_key`" + ` field name.
@@ -41,7 +41,7 @@ configuration field.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](../aws.md).`,
+[in this document](/docs/guides/aws).`,
 	}
 }
 

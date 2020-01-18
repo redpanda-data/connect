@@ -23,7 +23,7 @@ func init() {
 		},
 		Description: `
 A processor that extracts and maps fields identified via
-[dot path](../field_paths.md) from the original payload into new objects,
+[dot path](/docs/configuration/field_paths) from the original payload into new objects,
 applies a list of processors to the newly constructed objects, and finally maps
 the result back into the original payload.
 

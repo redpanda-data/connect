@@ -96,7 +96,7 @@ could use a try broker.
 
 ### Batching
 
-It's possible to configure a [batch policy](../batching.md#batch-policy) with a
+It's possible to configure a [batch policy](/docs/configuration/batching#batch-policy) with a
 broker using the ` + "`batching`" + ` fields, allowing you to create batches
 after your processing stages. Some inputs do not support broker based batching
 and specify this in their documentation.
@@ -106,11 +106,11 @@ and specify this in their documentation.
 When using brokered outputs with patterns such as round robin or greedy it is
 possible to have multiple messages in-flight at the same time. In order to fully
 utilise this you either need to have a greater number of input sources than
-output sources [or use a buffer](../buffers/README.md).
+output sources [or use a buffer](/docs/components/buffers/about).
 
 ### Processors
 
-It is possible to configure [processors](../processors/README.md) at the broker
+It is possible to configure [processors](/docs/components/processors/about) at the broker
 level, where they will be applied to _all_ child outputs, as well as on the
 individual child outputs. If you have processors at both the broker level _and_
 on child outputs then the broker processors will be applied _before_ the child

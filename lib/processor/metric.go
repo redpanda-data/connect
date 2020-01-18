@@ -22,7 +22,7 @@ func init() {
 		Description: `
 Expose custom metrics by extracting values from message batches. This processor
 executes once per batch, in order to execute once per message place it within a
-` + "[`for_each`](#for_each)" + ` processor:
+` + "[`for_each`](for_each)" + ` processor:
 
 ` + "``` yaml" + `
 for_each:
@@ -37,7 +37,7 @@ set and will automatically be converted into the correct format of the
 configured metric aggregator.
 
 The ` + "`value`" + ` field can be set using function interpolations described
-[here](../config_interpolation.md#functions) and is used according to the
+[here](/docs/configuration/interpolation#functions) and is used according to the
 specific type.
 
 ### Types

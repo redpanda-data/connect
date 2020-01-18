@@ -15,7 +15,7 @@ func init() {
 		Description: `
 Publish to an NSQ topic. The ` + "`topic`" + ` field can be dynamically set
 using function interpolations described
-[here](../config_interpolation.md#functions). When sending batched messages
+[here](/docs/configuration/interpolation#functions). When sending batched messages
 these interpolations are performed per message part.`,
 		Async: true,
 	}

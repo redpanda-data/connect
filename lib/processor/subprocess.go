@@ -32,7 +32,7 @@ newline.
 The subprocess must then either return a line over stdout or stderr. If a
 response is returned over stdout then its contents will replace the message. If
 a response is instead returned from stderr it will be logged and the message
-will continue unchanged and will be [marked as failed](../error_handling.md).
+will continue unchanged and will be [marked as failed](/docs/configuration/error_handling).
 
 The field ` + "`max_buffer`" + ` defines the maximum response size able to be
 read from the subprocess. This value should be set significantly above the real

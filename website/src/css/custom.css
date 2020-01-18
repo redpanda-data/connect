@@ -1,0 +1,72 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+:root {
+  --ifm-color-primary: #3578e5;
+  --ifm-color-primary-dark: #1d68e1;
+  --ifm-color-primary-darker: #1b62d4;
+  --ifm-color-primary-darkest: #1751af;
+  --ifm-color-primary-light: #4e89e8;
+  --ifm-color-primary-lighter: #5a91ea;
+  --ifm-color-primary-lightest: #80aaef;
+
+  --ifm-color-danger: #ff6188;
+  --ifm-color-danger-dark: #ff3e6d;
+  --ifm-color-danger-darker: #ff2c60;
+  --ifm-color-danger-darkest: #f6003d;
+  --ifm-color-danger-light: #ff84a3;
+  --ifm-color-danger-lighter: #ff96b0;
+  --ifm-color-danger-lightest: #ffcbd8;
+
+  --ifm-color-success: #a9dc76;
+  --ifm-color-success-dark: #98d55b;
+  --ifm-color-success-darker: #90d24e;
+  --ifm-color-success-darkest: #76bc30;
+  --ifm-color-success-light: #bae391;
+  --ifm-color-success-lighter: #c2e69e;
+  --ifm-color-success-lightest: #dcf1c7;
+
+  --ifm-color-info: #78dce8;
+  --ifm-color-info-dark: #5ad4e3;
+  --ifm-color-info-darker: #4bd0e0;
+  --ifm-color-info-darkest: #24c0d3;
+  --ifm-color-info-light: #96e4ed;
+  --ifm-color-info-lighter: #a5e8f0;
+  --ifm-color-info-lightest: #d2f3f7;
+
+  --ifm-color-warning: #ffd866;
+  --ifm-color-warning-dark: #ffcf42;
+  --ifm-color-warning-darker: #ffca30;
+  --ifm-color-warning-darkest: #faba00;
+  --ifm-color-warning-light: #ffe18a;
+  --ifm-color-warning-lighter: #ffe69c;
+  --ifm-color-warning-lightest: #fff3d1;
+
+  --ifm-code-font-size: 95%;
+}
+
+.footer.footer--dark {
+  --ifm-footer-background-color: #272822;
+}
+
+html[data-theme="dark"] {
+  --ifm-color-primary: #3bd1ff;
+  --ifm-color-primary-dark: #1ccaff;
+  --ifm-color-primary-darker: #0cc6ff;
+  --ifm-color-primary-darkest: #00a8dc;
+  --ifm-color-primary-light: #5ad8ff;
+  --ifm-color-primary-lighter: #6adcff;
+  --ifm-color-primary-lightest: #99e7ff;
+
+  --ifm-background-color: #1f201c;
+  --ifm-background-surface-color: #272822;
+  --ifm-navbar-background-color: #272822;
+
+  --ifm-code-background: #2e2f28;
+  --ifm-code-color: #ffffff;
+
+  background-color: #1f201c;
+}

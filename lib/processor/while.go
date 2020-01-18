@@ -34,7 +34,7 @@ zero the loop is exited regardless of the condition result. If following a loop
 execution there are more than 1 message batches the condition is checked against
 the first batch only.
 
-You can find a [full list of conditions here](../conditions).`,
+You can find a [full list of conditions here](/docs/components/conditions/about).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			condSanit, err := condition.SanitiseConfig(conf.While.Condition)
 			if err != nil {

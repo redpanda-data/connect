@@ -31,20 +31,20 @@ If you are sending batches and wish to avoid this behaviour then you can set the
 ` + "`parallel`" + ` flag to ` + "`true`" + ` and the messages of a batch will
 be sent as individual requests in parallel. You can also cap the max number of
 parallel requests with ` + "`max_parallel`" + `. Alternatively, you can use the
-` + "[`archive`](#archive)" + ` processor to create a single message
+` + "[`archive`](archive)" + ` processor to create a single message
 from the batch.
 
 The ` + "`rate_limit`" + ` field can be used to specify a rate limit
-[resource](../rate_limits/README.md) to cap the rate of requests across all
+[resource](/docs/components/rate_limits/about) to cap the rate of requests across all
 parallel components service wide.
 
 The URL and header values of this type can be dynamically set using function
-interpolations described [here](../config_interpolation.md#functions).
+interpolations described [here](/docs/configuration/interpolation#functions).
 
 In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
-can use the ` + "[`process_map`](#process_map)" + ` or
- ` + "[`process_field`](#process_field)" + ` processors.
+can use the ` + "[`process_map`](process_map)" + ` or
+ ` + "[`process_field`](process_field)" + ` processors.
 
 ### Response Codes
 
@@ -71,7 +71,7 @@ in the response will also be set in the resulting message as metadata.
 When all retry attempts for a message are exhausted the processor cancels the
 attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
-can read about these patterns [here](../error_handling.md).`,
+can read about these patterns [here](/docs/configuration/error_handling).`,
 	}
 }
 

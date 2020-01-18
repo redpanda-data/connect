@@ -21,7 +21,7 @@ func init() {
 		Description: `
 Splits a batch of messages into N batches, where each resulting batch contains a
 group of messages determined by a
-[function interpolated string](../config_interpolation.md#functions) evaluated
+[function interpolated string](/docs/configuration/interpolation#functions) evaluated
 per message. This allows you to group messages using arbitrary fields within
 their content or metadata, process them individually, and send them to unique
 locations as per their group.

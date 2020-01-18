@@ -45,7 +45,7 @@ For example, imagine we have a batch of messages that we wish to split into two
 groups - the foos and the bars - which should be sent to different output
 destinations based on those groupings. We also need to send the foos as a tar
 gzip archive. For this purpose we can use the ` + "`group_by`" + ` processor
-with a ` + "[`switch`](../outputs/README.md#switch)" + ` output:
+with a ` + "[`switch`](/docs/components/outputs/switch)" + ` output:
 
 ` + "``` yaml" + `
 pipeline:

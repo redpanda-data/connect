@@ -23,7 +23,7 @@ func init() {
 		Description: `
 Checks messages against a provided JSONSchema definition but does not change the
 payload under any circumstances. If a message does not match the schema it can
-be caught using error handling methods outlined [here](../error_handling.md).
+be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
 Please refer to the [JSON Schema website](https://json-schema.org/) for
 information and tutorials regarding the syntax of the schema.
@@ -76,8 +76,8 @@ If a payload being processed looked like:
 Then the payload would be unchanged but a log message would appear explaining
 the fault. This gives you flexibility in how you may handle schema errors, but
 for a simpler use case you might instead wish to use the
-` + "[`json_schema`](../conditions/README.md#json_schema)" + ` condition with a
-` + "[`filter`](#filter)" + `.`,
+` + "[`json_schema`](/docs/components/conditions/json_schema)" + ` condition with a
+` + "[`filter`](filter)" + `.`,
 	}
 }
 

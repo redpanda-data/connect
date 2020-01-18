@@ -1,0 +1,199 @@
+---
+title: kinesis
+type: input
+---
+
+Receive messages from a Kinesis stream.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+input:
+  kinesis:
+    stream: ""
+    shard: "0"
+    client_id: benthos_consumer
+    commit_period: 1s
+    dynamodb_table: ""
+    start_from_oldest: true
+    region: eu-west-1
+    batching:
+      count: 1
+      byte_size: 0
+      period: ""
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+input:
+  kinesis:
+    stream: ""
+    shard: "0"
+    client_id: benthos_consumer
+    commit_period: 1s
+    dynamodb_table: ""
+    start_from_oldest: true
+    region: eu-west-1
+    endpoint: ""
+    credentials:
+      profile: ""
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
+      role_external_id: ""
+    timeout: 5s
+    limit: 100
+    batching:
+      count: 1
+      byte_size: 0
+      period: ""
+      condition:
+        static: false
+        type: static
+```
+
+</TabItem>
+</Tabs>
+
+It's possible to use DynamoDB for persisting shard iterators by setting the
+table name. Offsets will then be tracked per `client_id` per
+`shard_id`. When using this mode you should create a table with
+`namespace` as the primary key and `shard_id` as a sort key.
+
+Use the `batching` fields to configure an optional
+[batching policy](/docs/configuration/batching#batch-policy). Any other batching
+mechanism will stall with this input due its sequential transaction model.
+
+## Fields
+
+### `stream`
+
+`string` The Kinesis stream to consume from.
+
+### `shard`
+
+`string` The shard to consume from.
+
+### `client_id`
+
+`string` The client identifier to assume.
+
+### `commit_period`
+
+`string` The rate at which offset commits should be sent.
+
+### `dynamodb_table`
+
+`string` A DynamoDB table to use for offset storage.
+
+### `start_from_oldest`
+
+`bool` Whether to consume from the oldest message when an offset does not yet exist for the stream.
+
+### `region`
+
+`string` The AWS region to target.
+
+### `endpoint`
+
+`string` Allows you to specify a custom endpoint for the AWS API.
+
+### `credentials`
+
+`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+### `credentials.profile`
+
+`string` A profile from `~/.aws/credentials` to use.
+
+### `credentials.id`
+
+`string` The ID of credentials to use.
+
+### `credentials.secret`
+
+`string` The secret for the credentials being used.
+
+### `credentials.token`
+
+`string` The token for the credentials being used, required when using short term credentials.
+
+### `credentials.role`
+
+`string` A role ARN to assume.
+
+### `credentials.role_external_id`
+
+`string` An external ID to provide when assuming a role.
+
+### `timeout`
+
+`string` The period of time to wait before abandoning a request and trying again.
+
+### `limit`
+
+`number` The maximum number of messages to consume from each request.
+
+### `batching`
+
+`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+
+```yaml
+# Examples
+
+batching:
+  byte_size: 5000
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  condition:
+    text:
+      arg: END BATCH
+      operator: contains
+  period: 1m
+```
+
+### `batching.count`
+
+`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+### `batching.byte_size`
+
+`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+### `batching.period`
+
+`string` A period in which an incomplete batch should be flushed regardless of its size.
+
+```yaml
+# Examples
+
+batching.period: 1s
+
+batching.period: 1m
+
+batching.period: 500ms
+```
+
+### `batching.condition`
+
+`object` A [`condition`](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+

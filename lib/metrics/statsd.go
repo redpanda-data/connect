@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeStatsd] = TypeSpec{
 		constructor: NewStatsd,
-		description: `
+		Description: `
 Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
 Supported tagging formats are 'legacy', 'none', 'datadog' and 'influxdb'.
 

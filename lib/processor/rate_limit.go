@@ -17,7 +17,7 @@ func init() {
 		constructor: NewRateLimit,
 		Description: `
 Throttles the throughput of a pipeline according to a specified
-` + "[`rate_limit`](../rate_limits/README.md)" + ` resource. Rate limits are
+` + "[`rate_limit`](/docs/components/rate_limits/about)" + ` resource. Rate limits are
 shared across components and therefore apply globally to all processing
 pipelines.`,
 	}

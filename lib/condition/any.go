@@ -14,7 +14,7 @@ import (
 func init() {
 	Constructors[TypeAny] = TypeSpec{
 		constructor: NewAny,
-		description: `
+		Description: `
 Any is a condition that tests a child condition against each message of a batch
 individually. If any message passes the child condition then this condition also
 passes.

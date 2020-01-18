@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeBolt] = TypeSpec{
 		constructor: NewBolt,
-		description: `
+		Description: `
 EXPERIMENTAL: This buffer is considered experimental and subject to change
 outside of major version releases.
 
@@ -25,7 +25,7 @@ store.
 It is possible to batch up messages sent from this buffer using a batch policy.` + batch.PolicyDoc + `
 
 This is a more powerful way of batching messages than the
-` + "[`batch`](../processors/README.md#batch)" + ` processor, as it does not
+` + "[`batch`](/docs/components/processors/batch)" + ` processor, as it does not
 rely on new messages entering the pipeline in order to trigger the conditions.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			bSanit, err := batch.SanitisePolicyConfig(batch.PolicyConfig(conf.Bolt.BatchPolicy.PolicyConfig))

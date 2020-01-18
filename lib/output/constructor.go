@@ -29,6 +29,7 @@ type TypeSpec struct {
 	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
+	Summary     string
 	Description string
 
 	// Async indicates whether this output benefits from sending multiple
@@ -241,9 +242,9 @@ func sanitiseConfig(conf Config, skipDeprecated bool) (interface{}, error) {
 	}
 	if skipDeprecated {
 		if m, ok := outputMap[t].(map[string]interface{}); ok {
-			for path, spec := range def.FieldSpecs {
+			for _, spec := range def.FieldSpecs {
 				if spec.Deprecated {
-					delete(m, path)
+					delete(m, spec.Name)
 				}
 			}
 		}

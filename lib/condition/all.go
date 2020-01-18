@@ -14,7 +14,7 @@ import (
 func init() {
 	Constructors[TypeAll] = TypeSpec{
 		constructor: NewAll,
-		description: `
+		Description: `
 All is a condition that tests a child condition against each message of a batch
 individually. If all messages pass the child condition then this condition also
 passes.

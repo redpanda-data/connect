@@ -18,11 +18,11 @@ func init() {
 		Description: `
 Log is a processor that prints a log event each time it processes a batch. The
 batch is then sent onwards unchanged. The log message can be set using function
-interpolations described [here](../config_interpolation.md#functions) which
+interpolations described [here](/docs/configuration/interpolation#functions) which
 allows you to log the contents and metadata of a messages within a batch.
 
 In order to print a log message per message of a batch place it within a
-` + "[`for_each`](#for_each)" + ` processor.
+` + "[`for_each`](for_each)" + ` processor.
 
 For example, if we wished to create a debug log event for each message in a
 pipeline in order to expose the JSON field ` + "`foo.bar`" + ` as well as the

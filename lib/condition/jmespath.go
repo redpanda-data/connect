@@ -14,7 +14,7 @@ import (
 func init() {
 	Constructors[TypeJMESPath] = TypeSpec{
 		constructor: NewJMESPath,
-		description: `
+		Description: `
 Parses a message part as a JSON blob and attempts to apply a JMESPath expression
 to it, expecting a boolean response. If the response is true the condition
 passes, otherwise it does not. Please refer to the
@@ -40,7 +40,7 @@ If the initial jmespaths of part 0 were:
 Then the condition would pass.
 
 JMESPath is traditionally used for mutating JSON, in order to do this please
-instead use the ` + "[`jmespath`](../processors/README.md#jmespath)" + `
+instead use the ` + "[`jmespath`](/docs/components/processors/jmespath)" + `
 processor.`,
 	}
 }

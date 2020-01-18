@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,11 +13,13 @@ import (
 func init() {
 	Constructors[TypeFiles] = TypeSpec{
 		constructor: NewFiles,
-		Description: `
+		Summary: `
 Reads files from a path, where each discrete file will be consumed as a single
-message payload. The path can either point to a single file (resulting in only a
-single message) or a directory, in which case the directory will be walked and
-each file found will become a message.
+message.`,
+		Description: `
+The path can either point to a single file (resulting in only a single message)
+or a directory, in which case the directory will be walked and each file found
+will become a message.
 
 ### Metadata
 
@@ -27,7 +30,10 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("path", "A path to either a directory or a file."),
+		},
 	}
 }
 

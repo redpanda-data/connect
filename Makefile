@@ -88,16 +88,8 @@ clean:
 	rm -rf $(PATHINSTDOCKER)
 
 docs: $(APPS)
-	@$(PATHINSTBIN)/benthos --list-inputs > ./docs/inputs/README.md; true
-	@$(PATHINSTBIN)/benthos --list-processors > ./docs/processors/README.md; true
-	@$(PATHINSTBIN)/benthos --list-conditions > ./docs/conditions/README.md; true
-	@$(PATHINSTBIN)/benthos --list-buffers > ./docs/buffers/README.md; true
-	@$(PATHINSTBIN)/benthos --list-outputs > ./docs/outputs/README.md; true
-	@$(PATHINSTBIN)/benthos --list-caches > ./docs/caches/README.md; true
-	@$(PATHINSTBIN)/benthos --list-rate-limits > ./docs/rate_limits/README.md; true
-	@$(PATHINSTBIN)/benthos --list-metrics > ./docs/metrics/README.md; true
-	@$(PATHINSTBIN)/benthos --list-tracers > ./docs/tracers/README.md; true
 	@go run $(GO_FLAGS) ./cmd/tools/benthos_config_gen/main.go
+	@go run $(GO_FLAGS) ./cmd/tools/benthos_docs_gen/main.go
 
 deploy-docs:
 	@git diff-index --quiet HEAD -- || ( echo "Failed: Branch must be clean"; false )

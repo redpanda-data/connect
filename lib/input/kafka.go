@@ -3,6 +3,7 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -14,31 +15,16 @@ import (
 func init() {
 	Constructors[TypeKafka] = TypeSpec{
 		constructor: NewKafka,
+		Summary: `
+Connects to a Kafka broker and consumes a topic and partition.`,
 		Description: `
-Connects to a kafka (0.8+) server. Offsets are managed within kafka as per the
-consumer group (set via config). Only one partition per input is supported, if
-you wish to balance partitions across a consumer group look at the
-` + "`kafka_balanced`" + ` input type instead.
+Offsets are managed within kafka as per the consumer group. Only one partition
+per input is supported, if you wish to balance partitions across a consumer
+group look at the ` + "`kafka_balanced`" + ` input type instead.
 
 Use the ` + "`batching`" + ` fields to configure an optional
-[batching policy](../batching.md#batch-policy). Any other batching mechanism
-will stall with this input due its sequential transaction model.
-
-This input currently provides a single continuous feed of data, and therefore
-by default will only utilise a single processing thread and parallel output.
-Take a look at the
-[pipelines documentation](../pipeline.md#single-consumer-without-buffer) for
-guides on how to work around this.
-
-The field ` + "`max_processing_period`" + ` should be set above the maximum
-estimated time taken to process a message.
-
-The target version by default will be the oldest supported, as it is expected
-that the server will be backwards compatible. In order to support newer client
-features you should increase this version up to the known version of the target
-server.
-
-` + tls.Documentation + `
+[batching policy](/docs/configuration/batching#batch-policy). Any other batching
+mechanism will stall with this input due its sequential transaction model.
 
 ### Metadata
 
@@ -59,12 +45,25 @@ water mark offset of the partition at the time of ingestion and the current
 message offset.
 
 You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.Kafka, conf.Kafka.Batching)
 		},
 		FieldSpecs: docs.FieldSpecs{
-			"max_batch_count": docs.FieldDeprecated(),
+			docs.FieldDeprecated("max_batch_count"),
+			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}),
+			tls.FieldSpec(),
+			saslFieldSpec(),
+			docs.FieldCommon("topic", "A topic to consume from."),
+			docs.FieldCommon("partition", "A partition to consume from."),
+			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection."),
+			docs.FieldCommon("client_id", "An identifier for the client connection."),
+			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic parition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
+			docs.FieldAdvanced("commit_period", "The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown."),
+			docs.FieldAdvanced("max_processing_period", "A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization."),
+			docs.FieldAdvanced("fetch_buffer_cap", "The maximum number of unprocessed messages to fetch at a given time."),
+			docs.FieldAdvanced("target_version", "The version of the Kafka protocol to use."),
+			batch.FieldSpec(),
 		},
 	}
 }

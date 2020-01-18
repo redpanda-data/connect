@@ -19,7 +19,7 @@ func init() {
 		Description: `
 DEPRECATED: This processor is no longer supported and has been replaced with
 improved batching mechanisms. For more information about batching in Benthos
-please check out [this document](../batching.md).
+please check out [this document](/docs/configuration/batching).
 
 This processor is scheduled to be removed in Benthos V4`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {

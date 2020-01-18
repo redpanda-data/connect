@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeResource] = TypeSpec{
 		constructor: NewResource,
-		description: `
+		Description: `
 Resource is a condition type that runs a condition resource by its name. This
 condition allows you to run the same configured condition resource in multiple
 processors, or as a branch of another condition.

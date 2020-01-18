@@ -48,6 +48,7 @@ type TypeSpec struct {
 		stats metrics.Type,
 	) (Type, error)
 
+	Summary     string
 	Description string
 	FieldSpecs  docs.FieldSpecs
 	Deprecated  bool
@@ -227,9 +228,9 @@ func sanitiseConfig(conf Config, skipDeprecated bool) (interface{}, error) {
 	}
 	if skipDeprecated {
 		if m, ok := outputMap[t].(map[string]interface{}); ok {
-			for path, spec := range def.FieldSpecs {
+			for _, spec := range def.FieldSpecs {
 				if spec.Deprecated {
-					delete(m, path)
+					delete(m, spec.Name)
 				}
 			}
 		}

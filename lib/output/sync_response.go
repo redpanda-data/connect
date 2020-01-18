@@ -48,7 +48,7 @@ Using the above example and posting the message 'hello world' to the endpoint
 ` + "`/post`" + ` Benthos would send it unchanged to the topic
 ` + "`foo_topic`" + ` and also respond with 'HELLO WORLD'.
 
-For more information please read [Synchronous Responses](../sync_responses.md).`,
+For more information please read [Synchronous Responses](/docs/guides/sync_responses).`,
 	}
 }
 

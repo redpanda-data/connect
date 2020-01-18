@@ -16,7 +16,7 @@ import (
 func init() {
 	Constructors[TypeBlackList] = TypeSpec{
 		constructor: NewBlacklist,
-		description: `
+		Description: `
 Blacklist metric paths within Benthos so that they are not aggregated by a child
 metric target.
 

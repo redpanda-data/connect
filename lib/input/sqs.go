@@ -25,7 +25,7 @@ instance of this input can utilise any number of threads within a
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](../aws.md).
+[in this document](/docs/guides/aws).
 
 ### Metadata
 
@@ -39,7 +39,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).`,
 	}
 }
 

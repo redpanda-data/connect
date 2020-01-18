@@ -23,7 +23,7 @@ alphabetically will be selected.
 
 The fields ` + "`message_group_id` and `message_deduplication_id`" + ` can be
 set dynamically using
-[function interpolations](../config_interpolation.md#functions), which are
+[function interpolations](/docs/configuration/interpolation#functions), which are
 resolved individually for each message of a batch.
 
 ### Credentials
@@ -31,7 +31,7 @@ resolved individually for each message of a batch.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](../aws.md).`,
+[in this document](/docs/guides/aws).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.SQS, conf.SQS.Batching)
 		},

@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeOr] = TypeSpec{
 		constructor: NewOr,
-		description: `
+		Description: `
 Or is a condition that returns the logical OR of its children conditions.
 
 ` + "``` yaml" + `

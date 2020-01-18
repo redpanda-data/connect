@@ -13,9 +13,9 @@ import (
 func init() {
 	Constructors[TypeGCPPubSub] = TypeSpec{
 		constructor: NewGCPPubSub,
+		Summary: `
+Consumes messages from a GCP Cloud Pub/Sub subscription.`,
 		Description: `
-Consumes messages from a GCP Cloud Pub/Sub subscription.
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -26,13 +26,17 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.GCPPubSub, conf.GCPPubSub.Batching)
 		},
 		FieldSpecs: docs.FieldSpecs{
-			"batching":        docs.FieldDeprecated(),
-			"max_batch_count": docs.FieldDeprecated(),
+			docs.FieldCommon("project", "The project ID of the target subscription."),
+			docs.FieldCommon("subscription", "The target subscription ID."),
+			docs.FieldCommon("max_outstanding_messages", "The maximum number of outstanding pending messages to be consumed at a given time."),
+			docs.FieldCommon("max_outstanding_bytes", "The maximum number of outstanding pending messages to be consumed measured in bytes."),
+			docs.FieldDeprecated("batching"),
+			docs.FieldDeprecated("max_batch_count"),
 		},
 	}
 }

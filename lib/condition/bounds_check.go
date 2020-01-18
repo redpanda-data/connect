@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeBoundsCheck] = TypeSpec{
 		constructor: NewBoundsCheck,
-		description: `
+		Description: `
 Checks a message against a set of bounds.`,
 	}
 }

@@ -19,7 +19,7 @@ import (
 func init() {
 	Constructors[TypeMetadata] = TypeSpec{
 		constructor: NewMetadata,
-		description: `
+		Description: `
 Metadata is a condition that checks metadata keys of a message part against an
 operator from the following list:
 

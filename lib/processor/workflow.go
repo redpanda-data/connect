@@ -20,7 +20,7 @@ func init() {
 	Constructors[TypeWorkflow] = TypeSpec{
 		constructor: NewWorkflow,
 		Description: `
-Performs the same workflow stages as the ` + "[`process_dag`](#process_dag)" + `
+Performs the same workflow stages as the ` + "[`process_dag`](process_dag)" + `
 processor, but uses a record of workflow statuses stored in the path specified
 by the field ` + "`meta_path`" + ` in order to report which workflow stages
 succeeded, were skipped, or failed for a document. The record takes this form:
@@ -45,7 +45,7 @@ is an array then it will be used as a whitelist of stages to apply, all other
 stages will be skipped.
 
 You can read more about workflows in Benthos
-[in this document](../workflows.md).`,
+[in this document](/docs/configuration/workflows).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			sanitChildren := map[string]interface{}{}
 			for k, v := range conf.Workflow.Stages {

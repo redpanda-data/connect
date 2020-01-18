@@ -23,7 +23,7 @@ import (
 func init() {
 	Constructors[TypeS3] = TypeSpec{
 		constructor: NewS3,
-		description: `
+		Description: `
 The s3 cache stores each item in an S3 bucket as a file, where an item ID is
 the path of the item within the bucket.
 
@@ -35,7 +35,7 @@ does not already exist, therefore this cache is not suitable for deduplication.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](../aws.md).`,
+[in this document](/docs/guides/aws).`,
 	}
 }
 

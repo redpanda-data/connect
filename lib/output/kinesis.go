@@ -20,7 +20,7 @@ Sends messages to a Kinesis stream.
 
 Both the ` + "`partition_key`" + `(required) and ` + "`hash_key`" + ` (optional)
 fields can be dynamically set using function interpolations described
-[here](../config_interpolation.md#functions). When sending batched messages the
+[here](/docs/configuration/interpolation#functions). When sending batched messages the
 interpolations are performed per message part.
 
 ### Credentials
@@ -28,7 +28,7 @@ interpolations are performed per message part.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](../aws.md).`,
+[in this document](/docs/guides/aws).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.Kinesis, conf.Kinesis.Batching)
 		},

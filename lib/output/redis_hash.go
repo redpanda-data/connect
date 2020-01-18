@@ -16,7 +16,7 @@ func init() {
 Sets Redis hash objects using the HMSET command.
 
 The field ` + "`key`" + ` supports
-[interpolation functions](../config_interpolation.md#functions) evaluated per
+[interpolation functions](/docs/configuration/interpolation#functions) evaluated per
 message of a batch, allowing you to create a unique key for each message.
 
 The field ` + "`fields`" + ` allows you to specify an explicit map of field

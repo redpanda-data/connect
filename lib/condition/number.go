@@ -15,12 +15,12 @@ import (
 func init() {
 	Constructors[TypeNumber] = TypeSpec{
 		constructor: NewNumber,
-		description: `
+		Description: `
 Number is a condition that checks the contents of a message parsed as a 64-bit
 floating point number against a logical operator and an argument.
 
-It's possible to use the ` + "[`check_field`](#check_field)" + ` and
-` + "[`check_interpolation`](#check_interpolation)" + ` conditions to check a
+It's possible to use the ` + "[`check_field`](check_field)" + ` and
+` + "[`check_interpolation`](check_interpolation)" + ` conditions to check a
 number condition against arbitrary metadata or fields of messages. For example,
 you can test a number condition against the size of a message batch with:
 

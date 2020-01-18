@@ -24,7 +24,7 @@ results in file metadata not being copied.
 
 If your bucket is configured to send events directly to an SQS queue then you
 need to set the ` + "`sqs_body_path`" + ` field to a
-[dot path](../field_paths.md) where the object key is found in the payload.
+[dot path](/docs/configuration/field_paths) where the object key is found in the payload.
 However, it is also common practice to send bucket events to an SNS topic which
 sends enveloped events to SQS, in which case you must also set the
 ` + "`sqs_envelope_path`" + ` field to where the payload can be found.
@@ -54,7 +54,7 @@ be processed multiple times.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](../aws.md).
+[in this document](/docs/guides/aws).
 
 ### Metadata
 
@@ -73,7 +73,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).`,
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/lib/util/config"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -24,8 +25,11 @@ var (
 // TypeSpec is a constructor and a usage description for each tracer type.
 type TypeSpec struct {
 	constructor        func(conf Config, opts ...func(Type)) (Type, error)
-	description        string
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
+
+	Summary     string
+	Description string
+	FieldSpecs  docs.FieldSpecs
 }
 
 // Constructors is a map of all tracer types with their specs.
@@ -196,7 +200,7 @@ func Descriptions() string {
 			buf.Write(confBytes)
 			buf.WriteString("```\n")
 		}
-		buf.WriteString(Constructors[name].description)
+		buf.WriteString(Constructors[name].Description)
 		buf.WriteString("\n")
 		if i != (len(names) - 1) {
 			buf.WriteString("\n---\n")

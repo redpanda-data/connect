@@ -15,7 +15,7 @@ import (
 func init() {
 	Constructors[TypeMemory] = TypeSpec{
 		constructor: NewMemory,
-		description: `
+		Description: `
 The memory buffer stores messages in RAM. During shutdown Benthos will make a
 best attempt at flushing all remaining messages before exiting cleanly.
 
@@ -28,10 +28,10 @@ significantly below the amount of RAM available.
 ### Batching
 
 It is possible to batch up messages sent from this buffer using a
-[batch policy](../batching.md#batch-policy).
+[batch policy](/docs/configuration/batching#batch-policy).
 
 This is a more powerful way of batching messages than the
-` + "[`batch`](../processors/README.md#batch)" + ` processor, as it does not
+` + "[`batch`](/docs/components/processors/batch)" + ` processor, as it does not
 rely on new messages entering the pipeline in order to trigger the conditions.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			bSanit, err := batch.SanitisePolicyConfig(batch.PolicyConfig(conf.Memory.BatchPolicy.PolicyConfig))

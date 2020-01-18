@@ -16,9 +16,9 @@ import (
 func init() {
 	Constructors[TypeCheckInterpolation] = TypeSpec{
 		constructor: NewCheckInterpolation,
-		description: `
+		Description: `
 Resolves a string containing
-[function interpolations](../config_interpolation.md#functions) and then tests
+[function interpolations](/docs/configuration/interpolation#functions) and then tests
 the result against a child condition.
 
 For example, you could use this to test against the size of a message batch:

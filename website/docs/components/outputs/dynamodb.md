@@ -1,0 +1,91 @@
+---
+title: dynamodb
+type: output
+---
+
+```yaml
+dynamodb:
+  backoff:
+    initial_interval: 1s
+    max_elapsed_time: 30s
+    max_interval: 5s
+  batching:
+    byte_size: 0
+    condition:
+      static: false
+      type: static
+    count: 1
+    period: ""
+  credentials:
+    id: ""
+    profile: ""
+    role: ""
+    role_external_id: ""
+    secret: ""
+    token: ""
+  endpoint: ""
+  json_map_columns: {}
+  max_in_flight: 1
+  max_retries: 3
+  region: eu-west-1
+  string_columns: {}
+  table: ""
+  ttl: ""
+  ttl_key: ""
+```
+
+Inserts items into a DynamoDB table.
+
+The field `string_columns` is a map of column names to string values,
+where the values are
+[function interpolated](/docs/configuration/interpolation#functions) per message of a
+batch. This allows you to populate string columns of an item by extracting
+fields within the document payload or metadata like follows:
+
+``` yaml
+string_columns:
+  id: ${!json_field:id}
+  title: ${!json_field:body.title}
+  topic: ${!metadata:kafka_topic}
+  full_content: ${!content}
+```
+
+The field `json_map_columns` is a map of column names to json paths,
+where the [dot path](/docs/configuration/field_paths) is extracted from each document and
+converted into a map value. Both an empty path and the path `.` are
+interpreted as the root of the document. This allows you to populate map columns
+of an item like follows:
+
+``` yaml
+json_map_columns:
+  user: path.to.user
+  whole_document: .
+```
+
+A column name can be empty:
+
+``` yaml
+json_map_columns:
+  "": .
+```
+
+In which case the top level document fields will be written at the root of the
+item, potentially overwriting previously defined column values. If a path is not
+found within a document the column will not be populated.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](/docs/guides/aws).
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](/docs/configuration/batching).
+
+

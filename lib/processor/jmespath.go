@@ -50,7 +50,7 @@ Then the resulting contents would be:
 
 It is possible to create boolean queries with JMESPath, in order to filter
 messages with boolean queries please instead use the
-` + "[`jmespath`](../conditions/README.md#jmespath)" + ` condition.`,
+` + "[`jmespath`](/docs/components/conditions/jmespath)" + ` condition.`,
 	}
 }
 

@@ -25,12 +25,12 @@ func init() {
 Parses messages as a JSON document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
-The field ` + "`path`" + ` is a [dot separated path](../field_paths.md) which,
+The field ` + "`path`" + ` is a [dot separated path](/docs/configuration/field_paths) which,
 for most operators, determines the field within the payload to be targeted. If
 the path is empty or "." the root of the data will be targeted.
 
 This processor will interpolate functions within the 'value' field, you can find
-a list of functions [here](../config_interpolation.md#functions).
+a list of functions [here](/docs/configuration/interpolation#functions).
 
 ### Operators
 
@@ -81,7 +81,7 @@ object, and the values match the original document but with the target field
 replaced by the exploded value.
 
 It is then possible to expand the result to create individual messages per
-element with the ` + "[`unarchive` processor](#unarchive) `json_array` or" + `
+element with the ` + "[`unarchive` processor](unarchive) `json_array` or" + `
 ` + "`json_object` format." + `.
 
 For example, given the following config:

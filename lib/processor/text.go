@@ -25,11 +25,11 @@ func init() {
 Performs text based mutations on payloads.
 
 This processor will interpolate functions within the ` + "`value`" + ` field,
-you can find a list of functions [here](../config_interpolation.md#functions).
+you can find a list of functions [here](/docs/configuration/interpolation#functions).
 
 Value interpolations are resolved once per message batch, in order to resolve it
 for each message of the batch place it within a
-` + "[`for_each`](#for_each)" + ` processor:
+` + "[`for_each`](for_each)" + ` processor:
 
 ` + "``` yaml" + `
 for_each:

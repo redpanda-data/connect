@@ -15,7 +15,7 @@ import (
 func init() {
 	Constructors[TypeRename] = TypeSpec{
 		constructor: NewRename,
-		description: `
+		Description: `
 Rename metric paths as they are registered.
 
 Metrics must be matched using dot notation even if the chosen output uses a
@@ -63,7 +63,7 @@ metrics:
 
 These labels will only be injected into metrics registered without pre-existing
 labels. Therefore it's currently not possible to combine labels registered from
-the ` + "[`metric` processor](../processors/README.md#metric)" + ` with labels
+the ` + "[`metric` processor](/docs/components/processors/metric)" + ` with labels
 set via renaming.
 
 ### Debugging

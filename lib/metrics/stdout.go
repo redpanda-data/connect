@@ -18,7 +18,7 @@ import (
 func init() {
 	Constructors[TypeStdout] = TypeSpec{
 		constructor: NewStdout,
-		description: `
+		Description: `
 EXPERIMENTAL: This component is considered experimental and is therefore subject
 to change outside of major version releases.
 

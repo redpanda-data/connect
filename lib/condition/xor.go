@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeXor] = TypeSpec{
 		constructor: NewXor,
-		description: `
+		Description: `
 Returns the logical XOR of its children conditions, meaning it only resolves to
 true if _exactly_ one of its children conditions resolves to true.
 

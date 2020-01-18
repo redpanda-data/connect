@@ -16,7 +16,7 @@ import (
 func init() {
 	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: NewHTTP,
-		description: `
+		Description: `
 It is possible to expose metrics without an aggregator service by having Benthos
 serve them as a JSON object at the endpoints ` + "`/stats` and `/metrics`" + `.
 This is useful for quickly debugging a pipeline.

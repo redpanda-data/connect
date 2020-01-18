@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
@@ -13,24 +14,10 @@ import (
 func init() {
 	Constructors[TypeAMQP09] = TypeSpec{
 		constructor: NewAMQP09,
-		Description: `
+		Summary: `
 Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
-message brokers, including RabbitMQ.
-
-It's possible for this input type to declare the target queue by setting
-` + "`queue_declare.enabled` to `true`" + `, if the queue already exists then
-the declaration passively verifies that they match the target fields.
-
-Similarly, it is possible to declare queue bindings by adding objects to the
-` + "`bindings_declare`" + ` array. Binding declare objects take the form of:
-
-` + "``` yaml" + `
-{
-  "exchange": "benthos-exchange",
-  "key": "benthos-key"
-}
-` + "```" + `
-
+message brokers, including RabbitMQ.`,
+		Description: `
 TLS is automatic when connecting to an ` + "`amqps`" + ` URL, but custom
 settings can be enabled in the ` + "`tls`" + ` section.
 
@@ -56,17 +43,43 @@ This input adds the following metadata fields to each message:
 - amqp_redelivered
 - amqp_exchange
 - amqp_routing_key
-- All existing message headers, including nested headers prefixed with the key
-  of their respective parent.
+- All existing message headers, including nested headers prefixed with the key of their respective parent.
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.AMQP09, conf.AMQP09.Batching)
 		},
 		FieldSpecs: docs.FieldSpecs{
-			"batching": docs.FieldDeprecated(),
+			docs.FieldCommon("url",
+				"A URL to connect to.",
+				"amqp://localhost:5672/",
+				"amqps://guest:guest@localhost:5672/",
+			),
+			docs.FieldCommon("queue", "An AMQP queue to consume from."),
+			docs.FieldAdvanced("queue_declare", `
+Allows you to passively declare the target queue. If the queue already exists
+then the declaration passively verifies that they match the target fields.`,
+				map[string]interface{}{
+					"enabled": true,
+					"durable": false,
+				},
+			),
+			docs.FieldAdvanced("bindings_declare",
+				"Allows you to passively declare bindings for the target queue.",
+				[]interface{}{
+					map[string]interface{}{
+						"exchange": "foo",
+						"key":      "bar",
+					},
+				},
+			),
+			docs.FieldCommon("consumer_tag", "A consumer tag."),
+			docs.FieldCommon("prefetch_count", "The maximum number of pending messages to have consumed at a time."),
+			docs.FieldAdvanced("prefetch_size", "The maximum amount of pending messages measured in bytes to have consumed at a time."),
+			tls.FieldSpec(),
+			docs.FieldDeprecated("batching"),
 		},
 	}
 }

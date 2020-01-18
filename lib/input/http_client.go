@@ -13,29 +13,47 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
 
+func httpClientSpecs() docs.FieldSpecs {
+	streamSpecs := docs.FieldSpecs{
+		docs.FieldCommon("enabled", "Enables streaming mode.").HasType("bool"),
+		docs.FieldCommon("reconnect", "Sets whether to re-establish the connection once it is lost.").HasType("bool"),
+		docs.FieldAdvanced("multipart", "When running in stream mode sets whether an empty line indicates the end of a message batch, and only then is the batch flushed downstream.").HasType("bool"),
+		docs.FieldAdvanced("max_buffer", "Must be larger than the largest line of the stream.").HasType("number"),
+		docs.FieldAdvanced("delimiter", `
+A string that indicates the end of a message within the stream. If left empty
+then line feed (\n) is used.`).HasType("string"),
+	}
+
+	specs := append(client.FieldSpecs(),
+		docs.FieldCommon("payload", "An optional payload to deliver for each request."),
+		docs.FieldCommon(
+			"stream", "Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.",
+		).WithChildren(streamSpecs...),
+	)
+	return specs
+}
+
 func init() {
 	Constructors[TypeHTTPClient] = TypeSpec{
 		constructor: NewHTTPClient,
+		Summary: `
+Connects to a server and continuously performs requests for a single message.`,
 		Description: `
-The HTTP client input type connects to a server and continuously performs
-requests for a single message.
-
-You should set a sensible retry period and max backoff so as to not flood your
-target server.
-
 The URL and header values of this type can be dynamically set using function
-interpolations described [here](../config_interpolation.md#functions).
+interpolations described [here](/docs/configuration/interpolation#functions).
 
 ### Streaming
 
 If you enable streaming then Benthos will consume the body of the response as a
-line delimited list of message parts. Each part is read as an individual message
+line delimited feed of message parts. Each part is read as an individual message
 unless multipart is set to true, in which case an empty line indicates the end
 of a message.`,
+		FieldSpecs: httpClientSpecs(),
 	}
 }
 

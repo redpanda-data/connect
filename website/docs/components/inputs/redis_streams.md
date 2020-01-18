@@ -1,0 +1,100 @@
+---
+title: redis_streams
+type: input
+---
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+input:
+  redis_streams:
+    url: tcp://localhost:6379
+    body_key: body
+    streams:
+    - benthos_stream
+    limit: 10
+    client_id: benthos_consumer
+    consumer_group: benthos_group
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+input:
+  redis_streams:
+    url: tcp://localhost:6379
+    body_key: body
+    streams:
+    - benthos_stream
+    limit: 10
+    client_id: benthos_consumer
+    consumer_group: benthos_group
+    start_from_oldest: true
+    commit_period: 1s
+    timeout: 5s
+```
+
+</TabItem>
+</Tabs>
+
+Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
+`client_id` should be unique for each consumer of a group.
+
+The field `limit` specifies the maximum number of records to be
+received per request. When more than one record is returned they are batched and
+can be split into individual messages with the `split` processor.
+
+Redis stream entries are key/value pairs, as such it is necessary to specify the
+key that contains the body of the message. All other keys/value pairs are saved
+as metadata fields.
+
+## Fields
+
+### `url`
+
+`string` The URL of a Redis server to connect to.
+
+### `body_key`
+
+`string` The field key to extract the raw message from. All other keys will be stored in the message as metadata.
+
+### `streams`
+
+`array` A list of streams to consume from.
+
+### `limit`
+
+`number` The maximum number of messages to consume from a single request. When multiple messages are consumed they are processed as a [batch](/docs/configuration/batching).
+
+### `client_id`
+
+`string` An identifier for the client connection.
+
+### `consumer_group`
+
+`string` An identifier for the consumer group of the stream.
+
+### `start_from_oldest`
+
+`bool` If an offset is not found for a stream, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+
+### `commit_period`
+
+`string` The period of time between each commit of the current offset. Offsets are always committed during shutdown.
+
+### `timeout`
+
+`string` The length of time to poll for new messages before reattempting.
+
+

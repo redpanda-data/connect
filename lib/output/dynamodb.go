@@ -20,7 +20,7 @@ Inserts items into a DynamoDB table.
 
 The field ` + "`string_columns`" + ` is a map of column names to string values,
 where the values are
-[function interpolated](../config_interpolation.md#functions) per message of a
+[function interpolated](/docs/configuration/interpolation#functions) per message of a
 batch. This allows you to populate string columns of an item by extracting
 fields within the document payload or metadata like follows:
 
@@ -33,7 +33,7 @@ string_columns:
 ` + "```" + `
 
 The field ` + "`json_map_columns`" + ` is a map of column names to json paths,
-where the [dot path](../field_paths.md) is extracted from each document and
+where the [dot path](/docs/configuration/field_paths) is extracted from each document and
 converted into a map value. Both an empty path and the path ` + "`.`" + ` are
 interpreted as the root of the document. This allows you to populate map columns
 of an item like follows:
@@ -60,7 +60,7 @@ found within a document the column will not be populated.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](../aws.md).`,
+[in this document](/docs/guides/aws).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.DynamoDB, conf.DynamoDB.Batching)
 		},

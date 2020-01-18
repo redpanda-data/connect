@@ -1,0 +1,27 @@
+---
+title: socket
+type: input
+---
+
+```yaml
+socket:
+  address: /tmp/benthos.sock
+  delimiter: ""
+  max_buffer: 1e+06
+  multipart: false
+  network: unix
+```
+
+Connects to a (tcp/unix) socket and consumes a continuous stream of messages.
+
+If multipart is set to false each line of data is read as a separate message. If
+multipart is set to true each line is read as a message part, and an empty line
+indicates the end of a message.
+
+Messages consumed by this input can be processed in parallel, meaning a single
+instance of this input can utilise any number of threads within a
+`pipeline` section of a config.
+
+If the delimiter field is left empty then line feed (\n) is used.
+
+

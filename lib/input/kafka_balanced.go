@@ -3,6 +3,7 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -11,28 +12,33 @@ import (
 
 //------------------------------------------------------------------------------
 
+func saslFieldSpec() docs.FieldSpec {
+	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
+		docs.FieldCommon("enabled", "Whether SASL authentication is enabled."),
+		docs.FieldCommon("user", "A plain text username. It is recommended that you use environment variables to populate this field.", "${USER}"),
+		docs.FieldCommon("password", "A plain text password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
+	)
+}
+
 func init() {
 	Constructors[TypeKafkaBalanced] = TypeSpec{
 		constructor:                  NewKafkaBalanced,
 		constructorHasBatchProcessor: newKafkaBalancedHasBatchProcessor,
+		Summary: `
+Connects to Kafka brokers and consumes topics by automatically sharing
+partitions across other consumers of the same consumer group.`,
 		Description: `
-Connects to a kafka (0.9+) server. Offsets are managed within kafka as per the
-consumer group (set via config), and partitions are automatically balanced
-across any members of the consumer group.
+Offsets are managed within Kafka as per the consumer group (set via config), and
+partitions are automatically balanced across any members of the consumer group.
 
 Partitions consumed by this input can be processed in parallel allowing it to
 utilise <= N pipeline processing threads and parallel outputs where N is the
 number of partitions allocated to this consumer.
 
 The ` + "`batching`" + ` fields allow you to configure a
-[batching policy](../batching.md#batch-policy) which will be applied per
-partition. Any other batching mechanism will stall with this input due its
-sequential transaction model.
-
-The field ` + "`max_processing_period`" + ` should be set above the maximum
-estimated time taken to process a message.
-
-` + tls.Documentation + `
+[batching policy](/docs/configuration/batching#batch-policy) which will be
+applied per partition. Any other batching mechanism will stall with this input
+due its sequential transaction model.
 
 ### Metadata
 
@@ -53,13 +59,29 @@ water mark offset of the partition at the time of ingestion and the current
 message offset.
 
 You can access these metadata fields using
-[function interpolation](../config_interpolation.md#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.KafkaBalanced, conf.KafkaBalanced.Batching)
 		},
 		FieldSpecs: docs.FieldSpecs{
-			"max_batch_count": docs.FieldDeprecated(),
-			"tls":             tls.FieldSpec(),
+			docs.FieldDeprecated("max_batch_count"),
+			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}),
+			tls.FieldSpec(),
+			saslFieldSpec(),
+			docs.FieldCommon("topics", "A list of topics to consume from. If an item of the list contains commas it will be expanded into multiple topics."),
+			docs.FieldCommon("client_id", "An identifier for the client connection."),
+			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection."),
+			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic parition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
+			docs.FieldAdvanced("commit_period", "The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown."),
+			docs.FieldAdvanced("max_processing_period", "A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization."),
+			docs.FieldAdvanced("group", "Tuning parameters for consumer group synchronization.").WithChildren(
+				docs.FieldAdvanced("session_timeout", "A period after which a consumer of the group is kicked after no heartbeats."),
+				docs.FieldAdvanced("heartbeat_interval", "A period in which heartbeats should be sent out."),
+				docs.FieldAdvanced("rebalance_timeout", "A period after which rebalancing is abandoned if unresolved."),
+			),
+			docs.FieldAdvanced("fetch_buffer_cap", "The maximum number of unprocessed messages to fetch at a given time."),
+			docs.FieldAdvanced("target_version", "The version of the Kafka protocol to use."),
+			batch.FieldSpec(),
 		},
 	}
 }

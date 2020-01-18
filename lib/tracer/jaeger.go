@@ -16,7 +16,7 @@ import (
 func init() {
 	Constructors[TypeJaeger] = TypeSpec{
 		constructor: NewJaeger,
-		description: `
+		Description: `
 Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.
 
 Available sampler types are: const, probabilistic, ratelimiting and remote.`,

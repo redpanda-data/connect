@@ -17,7 +17,7 @@ Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
 with the path specified with the ` + "`path`" + ` field.
 
 In order to have a different path for each object you should use function
-interpolations described [here](../config_interpolation.md#functions), which are
+interpolations described [here](/docs/configuration/interpolation#functions), which are
 calculated per message of a batch.
 
 The fields ` + "`content_type`, `content_encoding` and `storage_class`" + ` can
@@ -28,7 +28,7 @@ also be set dynamically using function interpolation.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](../aws.md).`,
+[in this document](/docs/guides/aws).`,
 		Async: true,
 	}
 }

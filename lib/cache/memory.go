@@ -15,7 +15,7 @@ import (
 func init() {
 	Constructors[TypeMemory] = TypeSpec{
 		constructor: NewMemory,
-		description: `
+		Description: `
 The memory cache simply stores key/value pairs in a map held in memory. This
 cache is therefore reset every time the service restarts. Each item in the cache
 has a TTL set from the moment it was last edited, after which it will be removed
