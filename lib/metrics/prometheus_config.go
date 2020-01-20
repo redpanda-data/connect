@@ -7,7 +7,7 @@ func init() {
 		constructor: NewPrometheus,
 		Description: `
 Host endpoints (` + "`/metrics` and `/stats`" + `) for Prometheus scraping.
-Metrics paths will differ from [the list](about#paths) in that dot separators will
+Metrics paths will differ from [the list](/docs/components/metrics/about#paths) in that dot separators will
 instead be underscores.
 
 ### Push Gateway

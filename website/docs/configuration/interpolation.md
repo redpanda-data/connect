@@ -184,6 +184,6 @@ Resolves to the hostname of the machine running Benthos. E.g.
 `foo ${!hostname} bar` might resolve to `foo glados bar`.
 
 [env_var_config]: https://github.com/Jeffail/benthos/blob/master/config/env/default.yaml
-[error_handling]: error_handling
-[field_paths]: field_paths
+[error_handling]: /docs/configuration/error_handling
+[field_paths]: /docs/configuration/field_paths
 [metadata processor]: /docs/components/processors/metadata

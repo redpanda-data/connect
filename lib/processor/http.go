@@ -31,7 +31,7 @@ If you are sending batches and wish to avoid this behaviour then you can set the
 ` + "`parallel`" + ` flag to ` + "`true`" + ` and the messages of a batch will
 be sent as individual requests in parallel. You can also cap the max number of
 parallel requests with ` + "`max_parallel`" + `. Alternatively, you can use the
-` + "[`archive`](archive)" + ` processor to create a single message
+` + "[`archive`](/docs/components/processors/archive)" + ` processor to create a single message
 from the batch.
 
 The ` + "`rate_limit`" + ` field can be used to specify a rate limit
@@ -43,8 +43,8 @@ interpolations described [here](/docs/configuration/interpolation#functions).
 
 In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
-can use the ` + "[`process_map`](process_map)" + ` or
- ` + "[`process_field`](process_field)" + ` processors.
+can use the ` + "[`process_map`](/docs/components/processors/process_map)" + ` or
+ ` + "[`process_field`](/docs/components/processors/process_field)" + ` processors.
 
 ### Response Codes
 

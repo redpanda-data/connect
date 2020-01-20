@@ -77,7 +77,7 @@ Then the payload would be unchanged but a log message would appear explaining
 the fault. This gives you flexibility in how you may handle schema errors, but
 for a simpler use case you might instead wish to use the
 ` + "[`json_schema`](/docs/components/conditions/json_schema)" + ` condition with a
-` + "[`filter`](filter)" + `.`,
+` + "[`filter`](/docs/components/processors/filter)" + `.`,
 	}
 }
 

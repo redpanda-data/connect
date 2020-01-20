@@ -21,7 +21,7 @@ var keyValueRules = []func(line int, path, key string, value interface{}) []stri
 		}
 		if key == "type" && valueStr == "batch" {
 			if !strings.HasPrefix(path, "input.") {
-				return []string{fmt.Sprintf("line %v: path '%v': Type 'batch' is unsafe outside of the 'input' section, for more information read https://docs.benthos.dev/processors/#batch", line, path)}
+				return []string{fmt.Sprintf("line %v: path '%v': Type 'batch' is unsafe outside of the 'input' section, for more information read https://benthos.dev/docs/configuration/batching", line, path)}
 			}
 		}
 		return nil

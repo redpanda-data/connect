@@ -22,7 +22,7 @@ interpolations described [here](/docs/configuration/interpolation#functions) whi
 allows you to log the contents and metadata of a messages within a batch.
 
 In order to print a log message per message of a batch place it within a
-` + "[`for_each`](for_each)" + ` processor.
+` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.
 
 For example, if we wished to create a debug log event for each message in a
 pipeline in order to expose the JSON field ` + "`foo.bar`" + ` as well as the

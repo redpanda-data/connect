@@ -83,7 +83,7 @@ You can access these metadata fields using
 func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	// TODO: V4 Remove this.
 	if conf.S3.MaxBatchCount > 1 {
-		log.Warnf("Field '%v.max_batch_count' is deprecated, use the batching methods outlined in https://docs.benthos.dev/batching instead.\n", conf.Type)
+		log.Warnf("Field '%v.max_batch_count' is deprecated, use the batching methods outlined in https://benthos.dev/docs/configuration/batching instead.\n", conf.Type)
 	}
 	r, err := reader.NewAmazonS3(conf.S3, log, stats)
 	if err != nil {

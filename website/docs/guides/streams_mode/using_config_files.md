@@ -134,5 +134,5 @@ $ curl http://localhost:4195/streams/foo | jq '.'
 There are other endpoints [in the REST API][rest-api] for creating, updating and
 deleting streams.
 
-[rest-api]: using_rest_api
+[rest-api]: /docs/guides/streams_mode/using_rest_api
 [interpolation]: /docs/configuration/interpolation

@@ -180,4 +180,4 @@ During shutdown any remaining messages waiting for a batch to complete will be f
 [input_broker]: /docs/components/inputs/broker
 [output_broker]: /docs/components/outputs/broker
 [input_kafka]: /docs/components/inputs/kafka
-[function_interpolation]: interpolation#functions
+[function_interpolation]: /docs/configuration/interpolation#functions

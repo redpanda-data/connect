@@ -26,4 +26,4 @@ choice, which can be used to visualise the processors within a pipeline.
 
 [metrics.about]: /docs/components/metrics/about
 [metrics.paths]: /docs/components/metrics/about#paths
-[tracing.about]: /docs/components/tracing/about
+[tracing.about]: /docs/components/tracers/about

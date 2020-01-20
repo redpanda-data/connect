@@ -4,7 +4,7 @@ import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import useBaseUrl from '@docusaurus/useBaseUrl';
-import styles from './styles.module.css';
+import styles from './index.module.css';
 import CodeSnippet from "@site/src/theme/CodeSnippet";
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -57,35 +57,6 @@ output:
           url: tcp://TODO:6379
           channel: baz
           max_in_flight: 20`,
-  },
-  {
-    label: 'Delay',
-    config: `input:
-  amqp_0_9:
-    url: amqp://guest:guest@TODO:5672/
-    queue: somequeue
-
-pipeline:
-  processors:
-    - awk:
-        program: |
-          {
-            created_at = timestamp_unix(json_get(meta.created_at))
-            delay_for = 3600 - (timestamp_unix() - created_at)
-            if ( delay_for < 0 ) {
-              delay_for = 0
-            }
-            metadata_set("delay_for_s", delay_for)
-          }
-
-    - sleep:
-        duration: "\${!metadata:delay_for_s}s"
-
-output:
-  nats:
-    urls: [ nats://TODO:4222 ]
-    subject: foosubject
-    max_in_flight: 20`,
   },
   {
     label: 'Enrichments',
@@ -265,7 +236,7 @@ function Home() {
         </div>
         {features && features.length && (
           <section className={styles.features}>
-            <div className="container">
+            <div className="container margin-vert--md">
               <div className="row">
                 {features.map((props, idx) => (
                   <Feature key={idx} {...props} />

@@ -33,7 +33,7 @@ If a query contains arguments they can be set as an array of strings supporting
 ` + "`args`" + ` field.
 
 In order to execute an SQL query for each message of the batch use this
-processor within a ` + "[`for_each`](for_each)" + ` processor:
+processor within a ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor:
 
 ` + "``` yaml" + `
 for_each:

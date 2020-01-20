@@ -87,8 +87,8 @@ metrics:
       prefix: benthos
 ```
 
-[static-files]: using_config_files
-[rest-api]: using_rest_api
+[static-files]: /docs/guides/streams_mode/using_config_files
+[rest-api]: /docs/guides/streams_mode/using_rest_api
 [metrics]: /docs/components/metrics/about
 [whitelist]: /docs/components/metrics/whitelist
 [blacklist]: /docs/components/metrics/blacklist

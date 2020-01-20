@@ -1,0 +1,19 @@
+.cookbookPostItem {
+  background-color: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-background-surface-color);
+  border-radius: var(--ifm-global-radius);
+  box-shadow: var(--ifm-panel-box-shadow);
+  color: var(--ifm-font-base-color);
+  display: block;
+  margin-bottom: var(--ifm-spacing-vertical);
+  padding: calc( var(--ifm-spacing-vertical) * 1.5 ) calc( var(--ifm-spacing-horizontal) * 2 );
+}
+
+.cookbookPostItem:hover {
+  text-decoration: none;
+  background-color: var(--ifm-background-surface-color-secondary);
+}
+
+.cookbookPostItem > * {
+  color: var(--ifm-font-base-color);
+}

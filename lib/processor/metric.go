@@ -22,7 +22,7 @@ func init() {
 		Description: `
 Expose custom metrics by extracting values from message batches. This processor
 executes once per batch, in order to execute once per message place it within a
-` + "[`for_each`](for_each)" + ` processor:
+` + "[`for_each`](/docs/components/processors/for_each)" + ` processor:
 
 ` + "``` yaml" + `
 for_each:

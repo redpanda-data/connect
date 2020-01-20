@@ -239,5 +239,5 @@ $ curl http://localhost:4195/streams | jq '.'
 
 Done.
 
-[http-interface]: streams_api
+[http-interface]: /docs/guides/streams_mode/streams_api
 [interpolation]: /docs/configuration/interpolation

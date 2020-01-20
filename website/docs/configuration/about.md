@@ -93,9 +93,8 @@ shutdown_timeout: 20s
 
 </Tabs>
 
-
-Config examples for every input, output and processor type can be found
-[here](https://github.com/Jeffail/benthos/tree/master/config).
+Most sections represent a component type, which you can read about in more
+detail in [this document][components].
 
 These types are hierarchical. For example, an `input` can have a list of child
 `processor` types attached to it, which in turn can have their own `condition`
@@ -409,7 +408,8 @@ benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[0].filter'
 
 [processors]: /docs/components/processors/about
 [conditions]: /docs/components/conditions/about
-[config-interp]: interpolation
-[config.testing]: unit_testing
+[config-interp]: /docs/configuration/interpolation
+[config.testing]: /docs/configuration/unit_testing
 [json-references]: https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03
 [jq]: https://stedolan.github.io/jq/
+[components]: /docs/components/about

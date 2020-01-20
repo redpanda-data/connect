@@ -96,7 +96,7 @@ function is always available even when the ` + "`json`" + ` codec is not used.
 ` + "### `json_set(path, value)`" + `
 
 Attempts to set a JSON value in the input message payload identified by a
-[dot separated path](/docs/configuation/field_paths), the value argument will be interpreted
+[dot separated path](/docs/configuration/field_paths), the value argument will be interpreted
 as a string. This function is always available even when the ` + "`json`" + ` codec is not
 used.
 
@@ -109,7 +109,7 @@ In order to set non-string values use one of the following typed varieties:
 ` + "### `json_delete(path)`" + `
 
 Attempts to delete a JSON field from the input message payload identified by a
-[dot separated path](/docs/configuation/field_paths). This function is always available even
+[dot separated path](/docs/configuration/field_paths). This function is always available even
 when the ` + "`json`" + ` codec is not used.
 
 ` + "### `create_json_object(key1, val1, key2, val2, ...)`" + `

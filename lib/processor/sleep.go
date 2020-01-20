@@ -24,7 +24,7 @@ of functions [here](/docs/configuration/interpolation#functions).
 
 This processor executes once per message batch. In order to execute once for
 each message of a batch place it within a
-` + "[`for_each`](for_each)" + ` processor:
+` + "[`for_each`](/docs/components/processors/for_each)" + ` processor:
 
 ` + "``` yaml" + `
 for_each:

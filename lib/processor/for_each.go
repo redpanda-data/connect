@@ -18,7 +18,7 @@ func init() {
 		Description: `
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message. This is useful for forcing batch
-wide processors such as ` + "[`dedupe`](dedupe)" + ` or interpolations such as
+wide processors such as ` + "[`dedupe`](/docs/components/processors/dedupe)" + ` or interpolations such as
 the ` + "`value`" + ` field of the ` + "`metadata`" + ` processor to execute on
 individual message parts of a batch instead.
 
@@ -38,7 +38,7 @@ this processor is not needed in those cases.`,
 	Constructors[TypeProcessBatch] = TypeSpec{
 		constructor: NewProcessBatch,
 		Description: `
-Alias for the ` + "[`for_each`](for_each)" + ` processor, which should be used
+Alias for the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor, which should be used
 instead.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error

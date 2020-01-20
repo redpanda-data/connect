@@ -56,7 +56,7 @@ var header = "This document was generated with `benthos --list-outputs`" + `
 
 An output is a sink where we wish to send our consumed data after applying an
 optional array of [processors](/docs/components/processors/about). Only one output is configured at
-the root of a Benthos config. However, the output can be a [broker](broker)
+the root of a Benthos config. However, the output can be a [broker](/docs/components/outputs/broker)
 which combines multiple outputs under a chosen brokering pattern.
 
 An output config section looks like this:
@@ -87,15 +87,15 @@ source as a Noack (e.g. AMQP) or will be reattempted indefinitely with the
 commit withheld until success (e.g. Kafka).
 
 It's possible to instead have Benthos indefinitely retry an output until success
-with a [` + "`retry`" + `](retry) output. Some other outputs, such as the
-[` + "`broker`" + `](broker), might also retry indefinitely depending on their
+with a [` + "`retry`" + `](/docs/components/outputs/retry) output. Some other outputs, such as the
+[` + "`broker`" + `](/docs/components/outputs/broker), might also retry indefinitely depending on their
 configuration.
 
 ### Multiplexing Outputs
 
 It is possible to perform content based multiplexing of messages to specific
-outputs either by using the ` + "[`switch`](switch)" + ` output, or a
-` + "[`broker`](broker)" + ` with the ` + "`fan_out`" + ` pattern and a
+outputs either by using the ` + "[`switch`](/docs/components/outputs/switch)" + ` output, or a
+` + "[`broker`](/docs/components/outputs/broker)" + ` with the ` + "`fan_out`" + ` pattern and a
 [filter processor](/docs/components/processors/filter_parts) on each output, which
 is a processor that drops messages if the condition does not pass.
 Conditions are content aware logical operators that can be combined using
@@ -107,7 +107,7 @@ conditions please [read the docs here](/docs/components/conditions/about).
 ### Dead Letter Queues
 
 It's possible to create fallback outputs for when an output target fails using
-a ` + "[`try`](try)" + ` output.`
+a ` + "[`try`](/docs/components/outputs/try)" + ` output.`
 
 // Descriptions returns a formatted string of collated descriptions of each
 // type.

@@ -42,7 +42,7 @@ var header = "This document was generated with `benthos --list-inputs`" + `
 
 An input is a source of data piped through an array of optional
 [processors](/docs/components/processors/about). Only one input is configured at the root of a
-Benthos config. However, the root input can be a [broker](broker) which
+Benthos config. However, the root input can be a [broker](/docs/components/inputs/broker) which
 combines multiple inputs.
 
 An input config section looks like this:

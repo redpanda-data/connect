@@ -30,7 +30,7 @@ This processor will interpolate functions within both the
 contents of a metadata field using values taken from the message payload.
 
 Value interpolations are resolved once per batch. In order to resolve them per
-message of a batch place it within a ` + "[`for_each`](for_each)" + `
+message of a batch place it within a ` + "[`for_each`](/docs/components/processors/for_each)" + `
 processor:
 
 ` + "``` yaml" + `

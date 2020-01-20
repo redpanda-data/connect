@@ -69,7 +69,7 @@ type Batch struct {
 func NewBatch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	log.Warnln("The batch processor is deprecated and is scheduled for removal in Benthos V4. For more information about batching in Benthos check out https://docs.benthos.dev/batching")
+	log.Warnln("The batch processor is deprecated and is scheduled for removal in Benthos V4. For more information about batching in Benthos check out https://benthos.dev/docs/configuration/batching")
 	policy, err := batch.NewPolicy(batch.PolicyConfig(conf.Batch), mgr, log, stats)
 	if err != nil {
 		return nil, err

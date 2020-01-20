@@ -81,7 +81,7 @@ object, and the values match the original document but with the target field
 replaced by the exploded value.
 
 It is then possible to expand the result to create individual messages per
-element with the ` + "[`unarchive` processor](unarchive) `json_array` or" + `
+element with the ` + "[`unarchive` processor](/docs/components/processors/unarchive) `json_array` or" + `
 ` + "`json_object` format." + `.
 
 For example, given the following config:

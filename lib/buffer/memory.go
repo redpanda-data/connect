@@ -28,11 +28,7 @@ significantly below the amount of RAM available.
 ### Batching
 
 It is possible to batch up messages sent from this buffer using a
-[batch policy](/docs/configuration/batching#batch-policy).
-
-This is a more powerful way of batching messages than the
-` + "[`batch`](/docs/components/processors/batch)" + ` processor, as it does not
-rely on new messages entering the pipeline in order to trigger the conditions.`,
+[batch policy](/docs/configuration/batching#batch-policy).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			bSanit, err := batch.SanitisePolicyConfig(batch.PolicyConfig(conf.Memory.BatchPolicy.PolicyConfig))
 			if err != nil {

@@ -113,4 +113,4 @@ Read the metrics of an existing stream as a hierarchical JSON object.
 
 The stream was found.
 
-[streams-api-walkthrough]: using_rest_api
+[streams-api-walkthrough]: /docs/guides/streams_mode/using_rest_api

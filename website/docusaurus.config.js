@@ -1,3 +1,5 @@
+const path = require('path');
+
 module.exports = {
   title: 'Benthos',
   tagline: 'The stream processor for mundane tasks',
@@ -10,6 +12,7 @@ module.exports = {
     prism: {
       theme: require('./src/plugins/prism_themes/monokai'),
     },
+    image: 'img/logo_hero.svg',
     navbar: {
       title: 'Benthos',
       logo: {
@@ -18,8 +21,10 @@ module.exports = {
       },
       links: [
         {to: 'docs/about', label: 'Docs', position: 'left'},
-        {to: 'https://www.jeffail.uk', label: 'Blog', position: 'left'},
-        {to: 'https://www.youtube.com/playlist?list=PL9hWaP-BQh2rvNuM29bTLlL0hYk6cqyT5', label: 'Videos', position: 'left'},
+        {to: 'cookbooks', label: 'Cookbooks', position: 'left'},
+        {to: 'blog', label: 'Blog', position: 'left'},
+        {to: 'videos', label: 'Videos', position: 'left'},
+        {to: 'https://lab.benthos.dev', label: 'Lab', position: 'right'},
         {to: 'https://github.com/Jeffail/benthos/releases/latest', label: 'Download', position: 'right'},
         {
           href: 'https://github.com/Jeffail/benthos',
@@ -39,8 +44,8 @@ module.exports = {
               to: 'docs/guides/getting_started',
             },
             {
-              label: 'Components',
-              to: 'docs/components',
+              label: 'Videos',
+              to: 'videos',
             },
           ],
         },
@@ -57,7 +62,7 @@ module.exports = {
           title: 'Social',
           items: [
             {
-              label: 'Blog',
+              label: "Jeffail's Blog",
               to: 'https://www.jeffail.uk',
             },
             {
@@ -88,6 +93,9 @@ module.exports = {
         },
       },
     ],
+  ],
+  plugins: [
+    path.resolve(__dirname, './src/plugins/cookbooks'),
   ],
   scripts: [
     '/js/dark_default.js',

@@ -23,8 +23,8 @@ func init() {
 Text is a condition that checks the contents of a message as plain text against
 a logical operator and an argument.
 
-It's possible to use the ` + "[`check_field`](check_field)" + ` and
-` + "[`check_interpolation`](check_interpolation)" + ` conditions to check a
+It's possible to use the ` + "[`check_field`](/docs/components/conditions/check_field)" + ` and
+` + "[`check_interpolation`](/docs/components/conditions/check_interpolation)" + ` conditions to check a
 text condition against arbitrary metadata or fields of messages. For example,
 you can test a text condition against a JSON field ` + "`foo.bar`" + ` with:
 

@@ -33,7 +33,7 @@ acknowledgement before propagating it back to the input. The config field
 replicas or just a single broker.
 
 Both the ` + "`key` and `topic`" + ` fields can be dynamically set using
-function interpolations described [here](/docs/configuration/interpolation/functions).
+function interpolations described [here](/docs/configuration/interpolation#functions).
 When sending batched messages these interpolations are performed per message
 part.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {

@@ -2,12 +2,15 @@
 title: Error Handling
 ---
 
-Sometimes things can go wrong. Benthos supports a range of
-[processors][processors] such as `http` and `lambda` that have the potential to
-fail if their retry attempts are exhausted. When this happens the data is not
-dropped but instead continues through the pipeline mostly unchanged. The content
-remains the same but a metadata flag is added to the message that can be
-referred to later in the pipeline using the
+A good captain understands that things can always go wrong and plans accordingly.
+
+<div style={{textAlign: 'center'}}><img style={{maxWidth: '300px', marginBottom: '40px'}} src="/img/Blobpirate.svg" /></div>
+
+Benthos supports a range of [processors][processors] such as `http` and `lambda`
+that have the potential to fail if their retry attempts are exhausted. When this
+happens the data is not dropped but instead continues through the pipeline
+mostly unchanged. The content remains the same but a metadata flag is added to
+the message that can be referred to later in the pipeline using the
 [`processor_failed`][processor_failed] condition.
 
 This behaviour allows you to define in your config whether you would like the
@@ -54,7 +57,7 @@ processor placed within a [`for_each`][for_each] processor:
 
 When an error occurs there will occasionally be useful information stored within
 the error flag that can be exposed with the interpolation function
-[`error`](interpolation#error). This allows you to expose the information with
+[`error`][error_interpolation]. This allows you to expose the information with
 processors.
 
 For example, when catching failed processors you can [`log`][log] the messages:
@@ -166,3 +169,4 @@ output:
 [group_by]: /docs/components/processors/group_by
 [switch]: /docs/components/outputs/switch
 [broker]: /docs/components/outputs/broker
+[error_interpolation]: /docs/configuration/interpolation#error

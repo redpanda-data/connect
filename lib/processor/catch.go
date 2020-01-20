@@ -16,7 +16,7 @@ func init() {
 	Constructors[TypeCatch] = TypeSpec{
 		constructor: NewCatch,
 		Description: `
-Behaves similarly to the ` + "[`for_each`](for_each)" + ` processor, where a
+Behaves similarly to the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor, where a
 list of child processors are applied to individual messages of a batch. However,
 processors are only applied to messages that failed a processing step prior to
 the catch.

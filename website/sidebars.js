@@ -50,6 +50,7 @@ module.exports = {
       type: 'category',
       label: 'Components',
       items: [
+        'components/about',
         {
           type: 'category',
           label: 'Inputs',

@@ -59,7 +59,7 @@ is discarded and the original metadata value is left unchanged.
 
 For example, with an input JSON document ` + "`{\"foo\":\"hello world\"}`" + `
 it's possible to uppercase the value of the field 'foo' by using the JSON codec
-and a ` + "[`text`](text)" + ` child processor:
+and a ` + "[`text`](/docs/components/processors/text)" + ` child processor:
 
 ` + "```yaml" + `
 process_field:

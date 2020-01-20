@@ -81,7 +81,7 @@ pipeline:
   - type: batch
     batch: {}`,
 			lints: []string{
-				"line 6: path 'pipeline.processors[0].type': Type 'batch' is unsafe outside of the 'input' section, for more information read https://docs.benthos.dev/processors/#batch",
+				"line 6: path 'pipeline.processors[0].type': Type 'batch' is unsafe outside of the 'input' section, for more information read https://benthos.dev/docs/configuration/batching",
 			},
 		},
 	}

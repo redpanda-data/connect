@@ -22,7 +22,7 @@ func init() {
 		constructor: NewRedis,
 		Description: `
 Performs actions against Redis that aren't possible using a
-` + "[`cache`](cache)" + ` processor. Actions are performed for each message of
+` + "[`cache`](/docs/components/processors/cache)" + ` processor. Actions are performed for each message of
 a batch, where the contents are replaced with the result.
 
 The field ` + "`key`" + ` supports

@@ -328,4 +328,4 @@ recover from them outlined [in this document][error-handling].
 [conditional]: /docs/components/processors/conditional
 [process_dag]: /docs/components/processors/process_dag
 [process_map]: /docs/components/processors/process_map
-[error-handling]: error_handling
+[error-handling]: /docs/configuration/error_handling

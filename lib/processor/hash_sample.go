@@ -25,7 +25,7 @@ results in dropping half of the input stream, and setting ` + "`retain_min`" + `
 to ` + "`50.0` and `retain_max` to `100.1`" + ` will drop the _other_ half.
 
 In order to sample individual messages of a batch use this processor with the
-` + "[`for_each`](for_each)" + ` processor.`,
+` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.`,
 	}
 }
 

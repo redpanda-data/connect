@@ -28,7 +28,7 @@ none or xxhash.
 
 This processor acts across an entire batch, in order to deduplicate individual
 messages within a batch use this processor with the
-` + "[`for_each`](for_each)" + ` processor.
+` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.
 
 Optionally, the ` + "`key`" + ` field can be populated in order to hash on a
 function interpolated string rather than the full contents of messages. This
