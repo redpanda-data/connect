@@ -110,6 +110,7 @@ module.exports = {
   ],
   plugins: [
     path.resolve(__dirname, './src/plugins/cookbooks'),
+    path.resolve(__dirname, './src/plugins/redirects'),
   ],
   scripts: [
     '/js/dark_default.js',
