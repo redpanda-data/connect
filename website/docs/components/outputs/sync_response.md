@@ -12,7 +12,8 @@ type: output
 
 
 ```yaml
-sync_response: {}
+output:
+  sync_response: {}
 ```
 
 Returns the final message payload back to the input origin of the message, where

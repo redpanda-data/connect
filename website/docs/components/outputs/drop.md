@@ -12,7 +12,8 @@ type: output
 
 
 ```yaml
-drop: {}
+output:
+  drop: {}
 ```
 
 Drops all messages.

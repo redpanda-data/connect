@@ -12,23 +12,24 @@ type: output
 
 
 ```yaml
-amqp_0_9:
-  exchange: benthos-exchange
-  exchange_declare:
-    durable: true
-    enabled: false
-    type: direct
-  immediate: false
-  key: benthos-key
-  mandatory: false
-  max_in_flight: 1
-  persistent: false
-  tls:
-    client_certs: []
-    enabled: false
-    root_cas_file: ""
-    skip_cert_verify: false
-  url: amqp://guest:guest@localhost:5672/
+output:
+  amqp_0_9:
+    exchange: benthos-exchange
+    exchange_declare:
+      durable: true
+      enabled: false
+      type: direct
+    immediate: false
+    key: benthos-key
+    mandatory: false
+    max_in_flight: 1
+    persistent: false
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
+    url: amqp://guest:guest@localhost:5672/
 ```
 
 Sends messages to an AMQP (0.91) exchange. AMQP is a messaging protocol used by

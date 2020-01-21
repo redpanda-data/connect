@@ -1,29 +1,14 @@
-const path = require('path');
-const fs = require('fs');
+const {listPaths} = require('./src/plugins/components');
 
-function scan_component_docs(component) {
-  let docs = [`components/${component}/about`];
-
-  let dir = path.join(__dirname, `docs/components/${component}`);
-  fs.readdirSync(dir).forEach(function (file) {
-    if ( file != 'about.md' ) {
-      let name = file.split('.').slice(0, -1).join('.');
-      docs.push(`components/${component}/${name}`);
-    }
-  });
-
-  return docs;
-}
-
-let inputs_docs = scan_component_docs("inputs");
-let processors_docs = scan_component_docs("processors");
-let conditions_docs = scan_component_docs("conditions");
-let outputs_docs = scan_component_docs("outputs");
-let caches_docs = scan_component_docs("caches");
-let rate_limits_docs = scan_component_docs("rate_limits");
-let buffers_docs = scan_component_docs("buffers");
-let metrics_docs = scan_component_docs("metrics");
-let tracers_docs = scan_component_docs("tracers");
+let inputs_docs = listPaths("inputs");
+let processors_docs = listPaths("processors");
+let conditions_docs = listPaths("conditions");
+let outputs_docs = listPaths("outputs");
+let caches_docs = listPaths("caches");
+let rate_limits_docs = listPaths("rate_limits");
+let buffers_docs = listPaths("buffers");
+let metrics_docs = listPaths("metrics");
+let tracers_docs = listPaths("tracers");
 
 module.exports = {
   docs: [

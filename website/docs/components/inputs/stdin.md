@@ -12,10 +12,11 @@ type: input
 
 
 ```yaml
-stdin:
-  delimiter: ""
-  max_buffer: 1e+06
-  multipart: false
+input:
+  stdin:
+    delimiter: ""
+    max_buffer: 1e+06
+    multipart: false
 ```
 
 The stdin input simply reads any data piped to stdin as messages. By default the

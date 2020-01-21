@@ -12,13 +12,14 @@ type: output
 
 
 ```yaml
-nats_stream:
-  client_id: benthos_client
-  cluster_id: test-cluster
-  max_in_flight: 1
-  subject: benthos_messages
-  urls:
-  - nats://127.0.0.1:4222
+output:
+  nats_stream:
+    client_id: benthos_client
+    cluster_id: test-cluster
+    max_in_flight: 1
+    subject: benthos_messages
+    urls:
+    - nats://127.0.0.1:4222
 ```
 
 Publish to a NATS Stream subject.

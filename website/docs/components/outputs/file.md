@@ -12,9 +12,10 @@ type: output
 
 
 ```yaml
-file:
-  delimiter: ""
-  path: ""
+output:
+  file:
+    delimiter: ""
+    path: ""
 ```
 
 The file output type simply appends all messages to an output file. Single part

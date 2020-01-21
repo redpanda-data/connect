@@ -12,9 +12,10 @@ type: output
 
 
 ```yaml
-switch:
-  outputs: []
-  retry_until_success: true
+output:
+  switch:
+    outputs: []
+    retry_until_success: true
 ```
 
 The switch output type allows you to configure multiple conditional output

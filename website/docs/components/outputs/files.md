@@ -12,8 +12,9 @@ type: output
 
 
 ```yaml
-files:
-  path: ${!count:files}-${!timestamp_unix_nano}.txt
+output:
+  files:
+    path: ${!count:files}-${!timestamp_unix_nano}.txt
 ```
 
 Writes each individual part of each message to a new file.

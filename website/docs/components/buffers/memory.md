@@ -12,16 +12,17 @@ type: buffer
 
 
 ```yaml
-memory:
-  batch_policy:
-    byte_size: 0
-    condition:
-      static: false
-      type: static
-    count: 0
-    enabled: false
-    period: ""
-  limit: 524288000
+buffer:
+  memory:
+    batch_policy:
+      byte_size: 0
+      condition:
+        static: false
+        type: static
+      count: 0
+      enabled: false
+      period: ""
+    limit: 524288000
 ```
 
 The memory buffer stores messages in RAM. During shutdown Benthos will make a

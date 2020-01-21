@@ -12,12 +12,13 @@ type: input
 
 
 ```yaml
-socket:
-  address: /tmp/benthos.sock
-  delimiter: ""
-  max_buffer: 1e+06
-  multipart: false
-  network: unix
+input:
+  socket:
+    address: /tmp/benthos.sock
+    delimiter: ""
+    max_buffer: 1e+06
+    multipart: false
+    network: unix
 ```
 
 Connects to a (tcp/unix) socket and consumes a continuous stream of messages.

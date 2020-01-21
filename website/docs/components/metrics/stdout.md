@@ -12,11 +12,12 @@ type: metrics
 
 
 ```yaml
-stdout:
-  flush_metrics: false
-  push_interval: ""
-  static_fields:
-    '@service': benthos
+metrics:
+  stdout:
+    flush_metrics: false
+    push_interval: ""
+    static_fields:
+      '@service': benthos
 ```
 
 EXPERIMENTAL: This component is considered experimental and is therefore subject

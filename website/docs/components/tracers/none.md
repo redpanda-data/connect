@@ -12,7 +12,8 @@ type: tracer
 
 
 ```yaml
-none: {}
+tracer:
+  none: {}
 ```
 
 Do not send opentracing events anywhere.

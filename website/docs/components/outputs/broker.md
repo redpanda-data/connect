@@ -12,17 +12,18 @@ type: output
 
 
 ```yaml
-broker:
-  batching:
-    byte_size: 0
-    condition:
-      static: false
-      type: static
-    count: 1
-    period: ""
-  copies: 1
-  outputs: []
-  pattern: fan_out
+output:
+  broker:
+    batching:
+      byte_size: 0
+      condition:
+        static: false
+        type: static
+      count: 1
+      period: ""
+    copies: 1
+    outputs: []
+    pattern: fan_out
 ```
 
 The broker output type allows you to configure multiple output targets by

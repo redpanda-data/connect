@@ -12,12 +12,13 @@ type: input
 
 
 ```yaml
-nats:
-  prefetch_count: 32
-  queue: benthos_queue
-  subject: benthos_messages
-  urls:
-  - nats://127.0.0.1:4222
+input:
+  nats:
+    prefetch_count: 32
+    queue: benthos_queue
+    subject: benthos_messages
+    urls:
+    - nats://127.0.0.1:4222
 ```
 
 Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once

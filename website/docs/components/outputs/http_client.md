@@ -12,46 +12,47 @@ type: output
 
 
 ```yaml
-http_client:
-  backoff_on:
-  - 429
-  basic_auth:
-    enabled: false
-    password: ""
-    username: ""
-  batching:
-    byte_size: 0
-    condition:
-      static: false
-      type: static
-    count: 1
-    period: ""
-  copy_response_headers: false
-  drop_on: []
-  headers:
-    Content-Type: application/octet-stream
-  max_in_flight: 1
-  max_retry_backoff: 300s
-  oauth:
-    access_token: ""
-    access_token_secret: ""
-    consumer_key: ""
-    consumer_secret: ""
-    enabled: false
-    request_url: ""
-  propagate_response: false
-  rate_limit: ""
-  retries: 3
-  retry_period: 1s
-  successful_on: []
-  timeout: 5s
-  tls:
-    client_certs: []
-    enabled: false
-    root_cas_file: ""
-    skip_cert_verify: false
-  url: http://localhost:4195/post
-  verb: POST
+output:
+  http_client:
+    backoff_on:
+    - 429
+    basic_auth:
+      enabled: false
+      password: ""
+      username: ""
+    batching:
+      byte_size: 0
+      condition:
+        static: false
+        type: static
+      count: 1
+      period: ""
+    copy_response_headers: false
+    drop_on: []
+    headers:
+      Content-Type: application/octet-stream
+    max_in_flight: 1
+    max_retry_backoff: 300s
+    oauth:
+      access_token: ""
+      access_token_secret: ""
+      consumer_key: ""
+      consumer_secret: ""
+      enabled: false
+      request_url: ""
+    propagate_response: false
+    rate_limit: ""
+    retries: 3
+    retry_period: 1s
+    successful_on: []
+    timeout: 5s
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
+    url: http://localhost:4195/post
+    verb: POST
 ```
 
 Sends messages to an HTTP server. The request will be retried for each message

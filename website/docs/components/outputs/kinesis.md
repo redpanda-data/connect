@@ -12,32 +12,33 @@ type: output
 
 
 ```yaml
-kinesis:
-  backoff:
-    initial_interval: 1s
-    max_elapsed_time: 30s
-    max_interval: 5s
-  batching:
-    byte_size: 0
-    condition:
-      static: false
-      type: static
-    count: 1
-    period: ""
-  credentials:
-    id: ""
-    profile: ""
-    role: ""
-    role_external_id: ""
-    secret: ""
-    token: ""
-  endpoint: ""
-  hash_key: ""
-  max_in_flight: 1
-  max_retries: 0
-  partition_key: ""
-  region: eu-west-1
-  stream: ""
+output:
+  kinesis:
+    backoff:
+      initial_interval: 1s
+      max_elapsed_time: 30s
+      max_interval: 5s
+    batching:
+      byte_size: 0
+      condition:
+        static: false
+        type: static
+      count: 1
+      period: ""
+    credentials:
+      id: ""
+      profile: ""
+      role: ""
+      role_external_id: ""
+      secret: ""
+      token: ""
+    endpoint: ""
+    hash_key: ""
+    max_in_flight: 1
+    max_retries: 0
+    partition_key: ""
+    region: eu-west-1
+    stream: ""
 ```
 
 Sends messages to a Kinesis stream.

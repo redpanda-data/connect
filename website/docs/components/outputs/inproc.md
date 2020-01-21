@@ -12,7 +12,8 @@ type: output
 
 
 ```yaml
-inproc: ""
+output:
+  inproc: ""
 ```
 
 Sends data directly to Benthos inputs by connecting to a unique ID. This allows

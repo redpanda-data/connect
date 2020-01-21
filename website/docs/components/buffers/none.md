@@ -12,7 +12,8 @@ type: buffer
 
 
 ```yaml
-none: {}
+buffer:
+  none: {}
 ```
 
 Selecting no buffer (default) means the output layer is directly coupled with

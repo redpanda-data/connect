@@ -12,20 +12,21 @@ type: input
 
 
 ```yaml
-websocket:
-  basic_auth:
-    enabled: false
-    password: ""
-    username: ""
-  oauth:
-    access_token: ""
-    access_token_secret: ""
-    consumer_key: ""
-    consumer_secret: ""
-    enabled: false
-    request_url: ""
-  open_message: ""
-  url: ws://localhost:4195/get/ws
+input:
+  websocket:
+    basic_auth:
+      enabled: false
+      password: ""
+      username: ""
+    oauth:
+      access_token: ""
+      access_token_secret: ""
+      consumer_key: ""
+      consumer_secret: ""
+      enabled: false
+      request_url: ""
+    open_message: ""
+    url: ws://localhost:4195/get/ws
 ```
 
 Connects to a websocket server and continuously receives messages.

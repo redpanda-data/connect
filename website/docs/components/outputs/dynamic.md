@@ -12,10 +12,11 @@ type: output
 
 
 ```yaml
-dynamic:
-  outputs: {}
-  prefix: ""
-  timeout: 5s
+output:
+  dynamic:
+    outputs: {}
+    prefix: ""
+    timeout: 5s
 ```
 
 The dynamic type is a special broker type where the outputs are identified by

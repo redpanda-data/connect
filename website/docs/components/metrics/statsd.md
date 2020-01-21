@@ -12,12 +12,13 @@ type: metrics
 
 
 ```yaml
-statsd:
-  address: localhost:4040
-  flush_period: 100ms
-  network: udp
-  prefix: benthos
-  tag_format: legacy
+metrics:
+  statsd:
+    address: localhost:4040
+    flush_period: 100ms
+    network: udp
+    prefix: benthos
+    tag_format: legacy
 ```
 
 Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).

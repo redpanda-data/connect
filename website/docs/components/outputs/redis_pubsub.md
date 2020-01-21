@@ -12,10 +12,11 @@ type: output
 
 
 ```yaml
-redis_pubsub:
-  channel: benthos_chan
-  max_in_flight: 1
-  url: tcp://localhost:6379
+output:
+  redis_pubsub:
+    channel: benthos_chan
+    max_in_flight: 1
+    url: tcp://localhost:6379
 ```
 
 Publishes messages through the Redis PubSub model. It is not possible to

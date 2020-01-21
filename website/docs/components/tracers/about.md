@@ -23,4 +23,9 @@ tracer:
 
 WARNING: Although the configuration spec of this component is stable the format of spans, tags and logs created by Benthos is subject to change as it is tuned for improvement.
 
+import ComponentSelect from '@theme/ComponentSelect';
+
+<ComponentSelect type="tracers" singular="tracing target"></ComponentSelect>
+
+
 [jaeger]: https://www.jaegertracing.io/

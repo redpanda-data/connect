@@ -20,5 +20,9 @@ input:
        query: '{ message: @, meta: { link_count: length(links) } }'
 ```
 
+import ComponentSelect from '@theme/ComponentSelect';
+
+<ComponentSelect type="inputs"></ComponentSelect>
+
 [processors]: /docs/components/processors/about
 [input.broker]: /docs/components/inputs/broker

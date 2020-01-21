@@ -12,9 +12,10 @@ type: output
 
 
 ```yaml
-socket:
-  address: /tmp/benthos.sock
-  network: unix
+output:
+  socket:
+    address: /tmp/benthos.sock
+    network: unix
 ```
 
 Sends messages as a continuous stream of line delimited data over a

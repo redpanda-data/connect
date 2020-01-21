@@ -12,19 +12,20 @@ type: output
 
 
 ```yaml
-sns:
-  credentials:
-    id: ""
-    profile: ""
-    role: ""
-    role_external_id: ""
-    secret: ""
-    token: ""
-  endpoint: ""
-  max_in_flight: 1
-  region: eu-west-1
-  timeout: 5s
-  topic_arn: ""
+output:
+  sns:
+    credentials:
+      id: ""
+      profile: ""
+      role: ""
+      role_external_id: ""
+      secret: ""
+      token: ""
+    endpoint: ""
+    max_in_flight: 1
+    region: eu-west-1
+    timeout: 5s
+    topic_arn: ""
 ```
 
 Sends messages to an AWS SNS topic.

@@ -12,8 +12,9 @@ type: metrics
 
 
 ```yaml
-http_server:
-  prefix: benthos
+metrics:
+  http_server:
+    prefix: benthos
 ```
 
 It is possible to expose metrics without an aggregator service by having Benthos

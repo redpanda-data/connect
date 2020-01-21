@@ -12,20 +12,21 @@ type: input
 
 
 ```yaml
-sqs:
-  credentials:
-    id: ""
-    profile: ""
-    role: ""
-    role_external_id: ""
-    secret: ""
-    token: ""
-  delete_message: true
-  endpoint: ""
-  max_number_of_messages: 1
-  region: eu-west-1
-  timeout: 5s
-  url: ""
+input:
+  sqs:
+    credentials:
+      id: ""
+      profile: ""
+      role: ""
+      role_external_id: ""
+      secret: ""
+      token: ""
+    delete_message: true
+    endpoint: ""
+    max_number_of_messages: 1
+    region: eu-west-1
+    timeout: 5s
+    url: ""
 ```
 
 Receive messages from an Amazon SQS URL, only the body is extracted into

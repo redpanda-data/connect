@@ -39,6 +39,10 @@ For more information regarding conditions, including a full list of available co
 
 It's possible to create fallback outputs for when an output target fails using a [`try`][output.try] output.
 
+import ComponentSelect from '@theme/ComponentSelect';
+
+<ComponentSelect type="outputs"></ComponentSelect>
+
 [processors]: /docs/components/processors/about
 [processor.filter_parts]: /docs/components/processors/filter_parts
 [conditions]: /docs/components/conditions/about

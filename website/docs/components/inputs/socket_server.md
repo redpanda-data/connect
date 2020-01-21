@@ -12,12 +12,13 @@ type: input
 
 
 ```yaml
-socket_server:
-  address: /tmp/benthos.sock
-  delimiter: ""
-  max_buffer: 1e+06
-  multipart: false
-  network: unix
+input:
+  socket_server:
+    address: /tmp/benthos.sock
+    delimiter: ""
+    max_buffer: 1e+06
+    multipart: false
+    network: unix
 ```
 
 Creates a server that receives messages over a (tcp/udp/unix) socket. Each

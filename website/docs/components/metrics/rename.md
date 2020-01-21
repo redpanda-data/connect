@@ -12,9 +12,10 @@ type: metrics
 
 
 ```yaml
-rename:
-  by_regexp: []
-  child: {}
+metrics:
+  rename:
+    by_regexp: []
+    child: {}
 ```
 
 Rename metric paths as they are registered.

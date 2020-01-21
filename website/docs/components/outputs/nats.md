@@ -12,11 +12,12 @@ type: output
 
 
 ```yaml
-nats:
-  max_in_flight: 1
-  subject: benthos_messages
-  urls:
-  - nats://127.0.0.1:4222
+output:
+  nats:
+    max_in_flight: 1
+    subject: benthos_messages
+    urls:
+    - nats://127.0.0.1:4222
 ```
 
 Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.

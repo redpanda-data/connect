@@ -31,6 +31,10 @@ Part indexes can be negative, and if so the part will be selected from the end c
 
 Some processors such as [`filter`][processor.filter] and [`dedupe`][processor.dedupe] act across an entire batch, when instead we'd like to perform them on individual messages of a batch. In this case the [`for_each`][processor.for_each] processor can be used.
 
+import ComponentSelect from '@theme/ComponentSelect';
+
+<ComponentSelect type="processors"></ComponentSelect>
+
 [error_handling]: /docs/configuration/error_handling
 [pipelines]: /docs/configuration/processing_pipelines
 [processor.split]: /docs/components/processors/split

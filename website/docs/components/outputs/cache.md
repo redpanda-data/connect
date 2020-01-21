@@ -12,10 +12,11 @@ type: output
 
 
 ```yaml
-cache:
-  key: ${!count:items}-${!timestamp_unix_nano}
-  max_in_flight: 1
-  target: ""
+output:
+  cache:
+    key: ${!count:items}-${!timestamp_unix_nano}
+    max_in_flight: 1
+    target: ""
 ```
 
 Stores messages in a cache. Caches are configured within the

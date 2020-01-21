@@ -12,7 +12,8 @@ type: output
 
 
 ```yaml
-drop_on_error: {}
+output:
+  drop_on_error: {}
 ```
 
 Attempts to write messages to a child output and if the write fails for any

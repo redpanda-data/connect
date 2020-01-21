@@ -12,15 +12,16 @@ type: output
 
 
 ```yaml
-mqtt:
-  client_id: benthos_output
-  max_in_flight: 1
-  password: ""
-  qos: 1
-  topic: benthos_topic
-  urls:
-  - tcp://localhost:1883
-  user: ""
+output:
+  mqtt:
+    client_id: benthos_output
+    max_in_flight: 1
+    password: ""
+    qos: 1
+    topic: benthos_topic
+    urls:
+    - tcp://localhost:1883
+    user: ""
 ```
 
 Pushes messages to an MQTT broker.

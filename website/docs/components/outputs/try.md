@@ -12,7 +12,8 @@ type: output
 
 
 ```yaml
-try: []
+output:
+  try: []
 ```
 
 Attempts to send each message to only one output, starting from the first output

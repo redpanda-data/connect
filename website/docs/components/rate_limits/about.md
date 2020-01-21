@@ -22,3 +22,7 @@ resources:
 ```
 
 By using a rate limit in this way we can guarantee that our input will only poll our HTTP source at the rate of 500 requests per second.
+
+import ComponentSelect from '@theme/ComponentSelect';
+
+<ComponentSelect type="rate_limits" singular="rate limit"></ComponentSelect>

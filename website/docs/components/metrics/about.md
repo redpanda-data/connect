@@ -83,3 +83,7 @@ Components within the resources section have a metrics path containing their nam
 
 [metrics.rename]: /docs/components/metrics/rename
 [metrics.whitelist]: /docs/components/metrics/whitelist
+
+import ComponentSelect from '@theme/ComponentSelect';
+
+<ComponentSelect type="metrics" singular="metrics target"></ComponentSelect>

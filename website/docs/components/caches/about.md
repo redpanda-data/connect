@@ -26,3 +26,7 @@ pipeline:
         cache: foobar
         hash: xxhash
 ```
+
+import ComponentSelect from '@theme/ComponentSelect';
+
+<ComponentSelect type="caches"></ComponentSelect>

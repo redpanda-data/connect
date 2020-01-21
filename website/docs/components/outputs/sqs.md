@@ -12,32 +12,33 @@ type: output
 
 
 ```yaml
-sqs:
-  backoff:
-    initial_interval: 1s
-    max_elapsed_time: 30s
-    max_interval: 5s
-  batching:
-    byte_size: 0
-    condition:
-      static: false
-      type: static
-    count: 1
-    period: ""
-  credentials:
-    id: ""
-    profile: ""
-    role: ""
-    role_external_id: ""
-    secret: ""
-    token: ""
-  endpoint: ""
-  max_in_flight: 1
-  max_retries: 0
-  message_deduplication_id: ""
-  message_group_id: ""
-  region: eu-west-1
-  url: ""
+output:
+  sqs:
+    backoff:
+      initial_interval: 1s
+      max_elapsed_time: 30s
+      max_interval: 5s
+    batching:
+      byte_size: 0
+      condition:
+        static: false
+        type: static
+      count: 1
+      period: ""
+    credentials:
+      id: ""
+      profile: ""
+      role: ""
+      role_external_id: ""
+      secret: ""
+      token: ""
+    endpoint: ""
+    max_in_flight: 1
+    max_retries: 0
+    message_deduplication_id: ""
+    message_group_id: ""
+    region: eu-west-1
+    url: ""
 ```
 
 Sends messages to an SQS queue. Metadata values are sent along with the payload

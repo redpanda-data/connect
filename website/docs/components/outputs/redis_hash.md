@@ -12,13 +12,14 @@ type: output
 
 
 ```yaml
-redis_hash:
-  fields: {}
-  key: ""
-  max_in_flight: 1
-  url: tcp://localhost:6379
-  walk_json_object: false
-  walk_metadata: false
+output:
+  redis_hash:
+    fields: {}
+    key: ""
+    max_in_flight: 1
+    url: tcp://localhost:6379
+    walk_json_object: false
+    walk_metadata: false
 ```
 
 Sets Redis hash objects using the HMSET command.

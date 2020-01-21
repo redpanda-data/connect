@@ -27,3 +27,7 @@ If you believe that a problem you have would be solved by a buffer the next step
 | Memory    | Flushed\* | Lost      | Lost            |
 
 \* Makes a best attempt at flushing the remaining messages before closing gracefully.
+
+import ComponentSelect from '@theme/ComponentSelect';
+
+<ComponentSelect type="buffers"></ComponentSelect>

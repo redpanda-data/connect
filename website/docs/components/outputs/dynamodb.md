@@ -12,34 +12,35 @@ type: output
 
 
 ```yaml
-dynamodb:
-  backoff:
-    initial_interval: 1s
-    max_elapsed_time: 30s
-    max_interval: 5s
-  batching:
-    byte_size: 0
-    condition:
-      static: false
-      type: static
-    count: 1
-    period: ""
-  credentials:
-    id: ""
-    profile: ""
-    role: ""
-    role_external_id: ""
-    secret: ""
-    token: ""
-  endpoint: ""
-  json_map_columns: {}
-  max_in_flight: 1
-  max_retries: 3
-  region: eu-west-1
-  string_columns: {}
-  table: ""
-  ttl: ""
-  ttl_key: ""
+output:
+  dynamodb:
+    backoff:
+      initial_interval: 1s
+      max_elapsed_time: 30s
+      max_interval: 5s
+    batching:
+      byte_size: 0
+      condition:
+        static: false
+        type: static
+      count: 1
+      period: ""
+    credentials:
+      id: ""
+      profile: ""
+      role: ""
+      role_external_id: ""
+      secret: ""
+      token: ""
+    endpoint: ""
+    json_map_columns: {}
+    max_in_flight: 1
+    max_retries: 3
+    region: eu-west-1
+    string_columns: {}
+    table: ""
+    ttl: ""
+    ttl_key: ""
 ```
 
 Inserts items into a DynamoDB table.

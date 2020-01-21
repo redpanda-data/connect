@@ -85,3 +85,11 @@ html[data-theme="dark"] {
   --ifm-color-secondary: #f0f0f0;
   --ifm-blockquote-color: #c0c0c0;
 }
+
+a > code {
+  color: var(--ifm-link-color);
+}
+
+a.contents__link > code {
+  color: var(--ifm-code-color);
+}

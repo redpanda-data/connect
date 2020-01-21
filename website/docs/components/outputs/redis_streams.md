@@ -12,12 +12,13 @@ type: output
 
 
 ```yaml
-redis_streams:
-  body_key: body
-  max_in_flight: 1
-  max_length: 0
-  stream: benthos_stream
-  url: tcp://localhost:6379
+output:
+  redis_streams:
+    body_key: body
+    max_in_flight: 1
+    max_length: 0
+    stream: benthos_stream
+    url: tcp://localhost:6379
 ```
 
 Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't

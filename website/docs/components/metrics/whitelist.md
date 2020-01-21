@@ -12,10 +12,11 @@ type: metrics
 
 
 ```yaml
-whitelist:
-  child: {}
-  paths: []
-  patterns: []
+metrics:
+  whitelist:
+    child: {}
+    paths: []
+    patterns: []
 ```
 
 Whitelist metric paths within Benthos so that only matching metric paths are

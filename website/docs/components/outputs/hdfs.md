@@ -12,13 +12,14 @@ type: output
 
 
 ```yaml
-hdfs:
-  directory: ""
-  hosts:
-  - localhost:9000
-  max_in_flight: 1
-  path: ${!count:files}-${!timestamp_unix_nano}.txt
-  user: benthos_hdfs
+output:
+  hdfs:
+    directory: ""
+    hosts:
+    - localhost:9000
+    max_in_flight: 1
+    path: ${!count:files}-${!timestamp_unix_nano}.txt
+    user: benthos_hdfs
 ```
 
 Sends message parts as files to a HDFS directory. Each file is written

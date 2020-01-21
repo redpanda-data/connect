@@ -12,15 +12,16 @@ type: input
 
 
 ```yaml
-read_until:
-  condition:
-    text:
-      arg: ""
-      operator: equals_cs
-      part: 0
-    type: text
-  input: {}
-  restart_input: false
+input:
+  read_until:
+    condition:
+      text:
+        arg: ""
+        operator: equals_cs
+        part: 0
+      type: text
+    input: {}
+    restart_input: false
 ```
 
 Reads from an input and tests a condition on each message. Messages are read

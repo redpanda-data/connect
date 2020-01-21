@@ -12,13 +12,14 @@ type: output
 
 
 ```yaml
-retry:
-  backoff:
-    initial_interval: 500ms
-    max_elapsed_time: 0s
-    max_interval: 3s
-  max_retries: 0
-  output: {}
+output:
+  retry:
+    backoff:
+      initial_interval: 500ms
+      max_elapsed_time: 0s
+      max_interval: 3s
+    max_retries: 0
+    output: {}
 ```
 
 Attempts to write messages to a child output and if the write fails for any

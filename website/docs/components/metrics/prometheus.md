@@ -12,11 +12,12 @@ type: metrics
 
 
 ```yaml
-prometheus:
-  prefix: benthos
-  push_interval: ""
-  push_job_name: benthos_push
-  push_url: ""
+metrics:
+  prometheus:
+    prefix: benthos
+    push_interval: ""
+    push_job_name: benthos_push
+    push_url: ""
 ```
 
 Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.

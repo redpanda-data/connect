@@ -40,6 +40,10 @@ Part indexes can be negative, and if so the part will be selected from the end c
 
 Sometimes large chunks of logic are reused across processors, or nested multiple times as branches of a larger condition. It is possible to avoid writing duplicate condition configs by using the [resource condition][condition.resource].
 
+import ComponentSelect from '@theme/ComponentSelect';
+
+<ComponentSelect type="conditions"></ComponentSelect>
+
 [processors]: /docs/components/processors/about
 [processor.filter]: /docs/components/processors/filter
 [processor.filter_parts]: /docs/components/processors/filter_parts

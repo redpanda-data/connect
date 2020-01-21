@@ -1,4 +1,5 @@
 const path = require('path');
+const {listNames} = require('./src/plugins/components');
 
 module.exports = {
   title: 'Benthos',
@@ -8,6 +9,19 @@ module.exports = {
   favicon: 'img/favicon.ico',
   organizationName: 'Jeffail',
   projectName: 'benthos',
+  customFields: {
+    components: {
+      inputs: listNames("inputs"),
+      processors: listNames("processors"),
+      conditions: listNames("conditions"),
+      outputs: listNames("outputs"),
+      caches: listNames("caches"),
+      rate_limits: listNames("rate_limits"),
+      buffers: listNames("buffers"),
+      metrics: listNames("metrics"),
+      tracers: listNames("tracers"),
+    },
+  },
   themeConfig: {
     prism: {
       theme: require('./src/plugins/prism_themes/monokai'),

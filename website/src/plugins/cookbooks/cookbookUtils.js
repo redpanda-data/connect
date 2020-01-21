@@ -23,13 +23,6 @@ function truncate(fileString, truncateMarker) {
 // prefer named capture, but old Node version does not support.
 const FILENAME_PATTERN = /^(\d{4}-\d{1,2}-\d{1,2})-?(.*?).mdx?$/;
 
-function toUrl({date, link}) {
-  return `${date
-    .toISOString()
-    .substring(0, '2019-01-01'.length)
-    .replace(/-/g, '/')}/${link}`;
-}
-
 async function generateCookbookPosts(
   guideDir,
   {siteConfig, siteDir},
@@ -80,7 +73,7 @@ async function generateCookbookPosts(
           permalink: normalizeUrl([
             baseUrl,
             routeBasePath,
-            frontMatter.id || toUrl({date, link: linkName}),
+            frontMatter.id || linkName,
           ]),
           source: aliasedSource,
           description: frontMatter.description || excerpt,

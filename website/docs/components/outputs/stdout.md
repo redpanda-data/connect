@@ -12,8 +12,9 @@ type: output
 
 
 ```yaml
-stdout:
-  delimiter: ""
+output:
+  stdout:
+    delimiter: ""
 ```
 
 The stdout output type prints messages to stdout. Single part messages are

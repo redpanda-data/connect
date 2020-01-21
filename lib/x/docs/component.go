@@ -175,9 +175,15 @@ func (c *ComponentSpec) createConfigs(root string, fullConfigExample interface{}
 		panic(err)
 	}
 	if len(c.Fields) == 0 {
-		if advancedConfigBytes, err = config.MarshalYAML(map[string]interface{}{
+		tmp := map[string]interface{}{
 			c.Name: fullConfigExample,
-		}); err != nil {
+		}
+		if len(root) > 0 {
+			tmp = map[string]interface{}{
+				root: tmp,
+			}
+		}
+		if advancedConfigBytes, err = config.MarshalYAML(tmp); err != nil {
 			panic(err)
 		}
 		commonConfigBytes = advancedConfigBytes

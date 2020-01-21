@@ -12,7 +12,8 @@ type: input
 
 
 ```yaml
-inproc: ""
+input:
+  inproc: ""
 ```
 
 Directly connect to an output within a Benthos process by referencing it by a

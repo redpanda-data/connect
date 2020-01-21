@@ -12,11 +12,12 @@ type: input
 
 
 ```yaml
-redis_pubsub:
-  channels:
-  - benthos_chan
-  url: tcp://localhost:6379
-  use_patterns: false
+input:
+  redis_pubsub:
+    channels:
+    - benthos_chan
+    url: tcp://localhost:6379
+    use_patterns: false
 ```
 
 Redis supports a publish/subscribe model, it's possible to subscribe to multiple

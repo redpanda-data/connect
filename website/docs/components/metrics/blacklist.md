@@ -12,10 +12,11 @@ type: metrics
 
 
 ```yaml
-blacklist:
-  child: {}
-  paths: []
-  patterns: []
+metrics:
+  blacklist:
+    child: {}
+    paths: []
+    patterns: []
 ```
 
 Blacklist metric paths within Benthos so that they are not aggregated by a child

@@ -12,14 +12,15 @@ type: output
 
 
 ```yaml
-http_server:
-  address: ""
-  cert_file: ""
-  key_file: ""
-  path: /get
-  stream_path: /get/stream
-  timeout: 5s
-  ws_path: /get/ws
+output:
+  http_server:
+    address: ""
+    cert_file: ""
+    key_file: ""
+    path: /get
+    stream_path: /get/stream
+    timeout: 5s
+    ws_path: /get/ws
 ```
 
 Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
