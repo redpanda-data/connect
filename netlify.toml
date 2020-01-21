@@ -1,99 +1,149 @@
 [[redirects]]
   from = "/docs/"
   to = "/docs/about/"
+  status = 302
+  force = false
 
 [[redirects]]
   from = "/docs/buffers"
   to = "/docs/components/buffers/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/caches"
   to = "/docs/components/caches/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/conditions"
   to = "/docs/components/conditions/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/inputs"
   to = "/docs/components/inputs/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/logger"
   to = "/docs/components/logger/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/metrics"
   to = "/docs/components/metrics/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/outputs"
   to = "/docs/components/outputs/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/processors"
   to = "/docs/components/processors/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/rate_limits"
   to = "/docs/components/rate_limits/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/tracers"
   to = "/docs/components/tracers/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/cookbooks/"
   to = "/cookbooks/"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/getting_started"
   to = "/docs/guides/getting_started"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/serverless"
   to = "/docs/guides/serverless/about"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/configuration"
   to = "/docs/configuration/about"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/configuration_testing"
   to = "/docs/configuration/unit_testing"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/config_interpolation"
   to = "/docs/configuration/interpolation"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/pipeline"
   to = "/docs/configuration/processing_pipelines"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/batching"
   to = "/docs/configuration/batching"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/error_handling"
   to = "/docs/configuration/error_handling"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/performance_tuning"
   to = "/docs/guides/performance_tuning"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/monitoring"
   to = "/docs/guides/monitoring"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/sync_responses"
   to = "/docs/guides/sync_responses"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/workflows"
   to = "/docs/configuration/workflows"
+  status = 301
+  force = false
 
 [[redirects]]
   from = "/docs/streams"
   to = "/docs/guides/streams_mode/about"
+  status = 301
+  force = false
