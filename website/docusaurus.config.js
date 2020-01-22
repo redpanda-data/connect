@@ -92,6 +92,16 @@ module.exports = {
       ],
       copyright: `Copyright © ${new Date().getFullYear()} Ashley Jeffs.`,
     },
+    googleAnalytics: {
+      trackingID: 'UA-135959729-1',
+    },
+    /*
+    TODO
+    algolia: {
+      apiKey: 'api-key',
+      indexName: 'index-name',
+    },
+    */
   },
   presets: [
     [
