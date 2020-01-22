@@ -11,6 +11,9 @@ type: input
 -->
 
 
+Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
+`client_id` should be unique for each consumer of a group.
+
 
 import Tabs from '@theme/Tabs';
 
@@ -55,9 +58,6 @@ input:
 
 </TabItem>
 </Tabs>
-
-Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
-`client_id` should be unique for each consumer of a group.
 
 The field `limit` specifies the maximum number of records to be
 received per request. When more than one record is returned they are batched and

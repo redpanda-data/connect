@@ -13,11 +13,10 @@ import (
 func init() {
 	Constructors[TypeNATSStream] = TypeSpec{
 		constructor: NewNATSStream,
+		Summary: `
+Subscribe to a NATS Stream subject. Joining a queue is optional and allows
+multiple clients of a subject to consume using queue semantics.`,
 		Description: `
-Subscribe to a NATS Stream subject, which is at-least-once. Joining a queue is
-optional and allows multiple clients of a subject to consume using queue
-semantics.
-
 Tracking and persisting offsets through a durable name is also optional and
 works with or without a queue. If a durable name is not provided then subjects
 are consumed from the most recently published message.

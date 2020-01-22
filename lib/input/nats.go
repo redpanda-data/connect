@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,13 +13,9 @@ import (
 func init() {
 	Constructors[TypeNATS] = TypeSpec{
 		constructor: NewNATS,
+		Summary: `
+Subscribe to a NATS subject.`,
 		Description: `
-Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
-behaviour then look at NATS Stream.
-
-The urls can contain username/password semantics. e.g.
-nats://derek:pass@localhost:4222
-
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -29,6 +26,12 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"nats://127.0.0.1:4222"}),
+			docs.FieldCommon("queue", "The queue to consume from."),
+			docs.FieldCommon("subject", "A subject to consume from."),
+			docs.FieldAdvanced("prefetch_count", "The maximum number of messages to pull at a time."),
+		},
 	}
 }
 

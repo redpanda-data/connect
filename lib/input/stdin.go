@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,17 +16,18 @@ import (
 func init() {
 	Constructors[TypeSTDIN] = TypeSpec{
 		constructor: NewSTDIN,
+		Summary: `
+Consumes data piped to stdin as line delimited messages.`,
 		Description: `
-The stdin input simply reads any data piped to stdin as messages. By default the
-messages are assumed single part and are line delimited. If the multipart option
-is set to true then lines are interpretted as message parts, and an empty line
-indicates the end of the message.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
+If the multipart option is set to true then lines are interpretted as message
+parts, and an empty line indicates the end of the message.
 
 If the delimiter field is left empty then line feed (\n) is used.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldAdvanced("multipart", "Whether messages should be consumed as multiple parts. If so, each line is consumed as a message parts and the full message ends with an empty line."),
+			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
+			docs.FieldAdvanced("delimiter", "The delimiter to use to detect the end of each message. If left empty line breaks are used."),
+		},
 	}
 }
 

@@ -11,6 +11,9 @@ type: input
 -->
 
 
+Subscribe to a NATS Stream subject. Joining a queue is optional and allows
+multiple clients of a subject to consume using queue semantics.
+
 
 import Tabs from '@theme/Tabs';
 
@@ -57,10 +60,6 @@ input:
 
 </TabItem>
 </Tabs>
-
-Subscribe to a NATS Stream subject, which is at-least-once. Joining a queue is
-optional and allows multiple clients of a subject to consume using queue
-semantics.
 
 Tracking and persisting offsets through a durable name is also optional and
 works with or without a queue. If a durable name is not provided then subjects

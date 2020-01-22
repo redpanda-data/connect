@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,10 +13,10 @@ import (
 func init() {
 	Constructors[TypeRedisPubSub] = TypeSpec{
 		constructor: NewRedisPubSub,
+		Summary: `
+Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or
+PSUBSCRIBE commands.`,
 		Description: `
-Redis supports a publish/subscribe model, it's possible to subscribe to multiple
-channels using this input.
-
 In order to subscribe to channels using the ` + "`PSUBSCRIBE`" + ` command set
 the field ` + "`use_patterns` to `true`" + `, then you can include glob-style
 patterns in your channel names. For example:
@@ -26,6 +27,11 @@ patterns in your channel names. For example:
 
 Use ` + "`\\`" + ` to escape special characters if you want to match them
 verbatim.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),
+			docs.FieldCommon("channels", "A list of channels to consume from."),
+			docs.FieldCommon("use_patterns", "Whether to use the PSUBSCRIBE command."),
+		},
 	}
 }
 

@@ -5,6 +5,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,15 +14,14 @@ import (
 func init() {
 	Constructors[TypeS3] = TypeSpec{
 		constructor: NewAmazonS3,
+		Summary: `
+Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix.
+If an SQS queue has been configured then only object keys read from the queue
+will be downloaded.`,
 		Description: `
-Downloads objects in an Amazon S3 bucket, optionally filtered by a prefix. If an
-SQS queue has been configured then only object keys read from the queue will be
-downloaded. Otherwise, the entire list of objects found when this input is
-created will be downloaded. Note that the prefix configuration is only used when
-downloading objects without SQS configured.
-
-If the download manager is enabled this can help speed up file downloads but
-results in file metadata not being copied.
+If an SQS queue is not specified the entire list of objects found when this
+input starts will be consumed. Note that the prefix configuration is only used
+when downloading objects without SQS configured.
 
 If your bucket is configured to send events directly to an SQS queue then you
 need to set the ` + "`sqs_body_path`" + ` field to a
@@ -74,6 +75,26 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
+		FieldSpecs: append(
+			append(docs.FieldSpecs{
+				docs.FieldCommon("bucket", "The bucket to consume from. If `sqs_bucket_path` is set this field is still required as a fallback."),
+				docs.FieldCommon("prefix", "An optional path prefix, if set only objects with the prefix are consumed. This field is ignored when SQS is used."),
+				docs.FieldCommon("sqs_url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded from the target bucket."),
+				docs.FieldCommon("sqs_body_path", "A [dot path](/docs/configuration/field_paths) whereby object keys are found in SQS messages, this field is only required when an `sqs_url` is specified."),
+				docs.FieldCommon("sqs_bucket_path", "An optional [dot path](/docs/configuration/field_paths) whereby the bucket of an object can be found in consumed SQS messages."),
+				docs.FieldCommon("sqs_envelope_path", "An optional [dot path](/docs/configuration/field_paths) of enveloped payloads to extract from SQS messages. This is required when pushing events from S3 to SNS to SQS."),
+				docs.FieldAdvanced("sqs_max_messages", "The maximum number of SQS messages to consume from each request."),
+				docs.FieldAdvanced("sqs_endpoint", "A custom endpoint to use when connecting to SQS."),
+			}, session.FieldSpecs()...),
+			docs.FieldAdvanced("retries", "The maximum number of times to attempt an object download."),
+			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."),
+			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the bucket."),
+			docs.FieldAdvanced("download_manager", "Controls if and how to use the download manager API. This can help speed up file downloads, but results in file metadata not being copied.").WithChildren(
+				docs.FieldCommon("enabled", "Whether to use to download manager API."),
+			),
+			docs.FieldAdvanced("timeout", "The period of time to wait before abandoning a request and trying again."),
+			docs.FieldDeprecated("max_batch_count"),
+		),
 	}
 }
 

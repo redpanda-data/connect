@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -21,10 +22,10 @@ import (
 func init() {
 	Constructors[TypeSocketServer] = TypeSpec{
 		constructor: NewSocketServer,
-		Description: `
+		Summary: `
 Creates a server that receives messages over a (tcp/udp/unix) socket. Each
-connection is parsed as a continuous stream of line delimited messages.
-
+connection is parsed as a continuous stream of line delimited messages.`,
+		Description: `
 If multipart is set to false each line of data is read as a separate message. If
 multipart is set to true each line is read as a message part, and an empty line
 indicates the end of a message.
@@ -34,6 +35,15 @@ If the delimiter field is left empty then line feed (\n) is used.
 The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to
 allocate _per connection_ for buffering lines of data. If a line of data from a
 connection exceeds this value then the connection will be closed.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("network", "A network type to accept (unix|tcp|udp).").HasOptions(
+				"unix", "tcp", "udp",
+			),
+			docs.FieldCommon("address", "The address to listen from.", "/tmp/benthos.sock", "0.0.0.0:6000"),
+			docs.FieldAdvanced("multipart", "Whether messages should be consumed as multiple parts. If so, each line is consumed as a message parts and the full message ends with an empty line."),
+			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
+			docs.FieldAdvanced("delimiter", "The delimiter to use to detect the end of each message. If left empty line breaks are used."),
+		},
 	}
 }
 

@@ -5,6 +5,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,16 +14,16 @@ import (
 func init() {
 	Constructors[TypeWebsocket] = TypeSpec{
 		constructor: NewWebsocket,
+		Summary: `
+Connects to a websocket server and continuously receives messages.`,
 		Description: `
-Connects to a websocket server and continuously receives messages.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
 It is possible to configure an ` + "`open_message`" + `, which when set to a
 non-empty string will be sent to the websocket server each time a connection is
 first established.`,
+		FieldSpecs: append(docs.FieldSpecs{
+			docs.FieldCommon("url", "The URL to connect to.", "ws://localhost:4195/get/ws").HasType("string"),
+			docs.FieldAdvanced("open_message", "An optional message to send to the server upon connection."),
+		}, auth.FieldSpecs()...),
 	}
 }
 

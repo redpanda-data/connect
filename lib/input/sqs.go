@@ -5,6 +5,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,14 +14,9 @@ import (
 func init() {
 	Constructors[TypeSQS] = TypeSpec{
 		constructor: NewAmazonSQS,
+		Summary: `
+Receive messages from an Amazon SQS URL.`,
 		Description: `
-Receive messages from an Amazon SQS URL, only the body is extracted into
-messages.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS
@@ -40,6 +37,14 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
+		FieldSpecs: append(
+			append(docs.FieldSpecs{
+				docs.FieldCommon("url", "The SQS URL to consume from."),
+				docs.FieldAdvanced("delete_message", "Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism."),
+			}, session.FieldSpecs()...),
+			docs.FieldAdvanced("timeout", "The period of time to wait before abandoning a request and trying again."),
+			docs.FieldAdvanced("max_number_of_messages", "The maximum number of messages to consume from each request."),
+		),
 	}
 }
 

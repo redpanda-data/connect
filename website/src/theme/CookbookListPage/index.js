@@ -62,10 +62,11 @@ function CookbookListPage(props) {
 
   return (
     <Layout title="Cookbooks" description="Benthos Cookbooks">
-      <header className={classnames(styles.cookbookListHeader, 'padding-top--xl padding-bottom--lg')}>
+      <header className={styles.cookbookListHeader}>
         <div className="container">
           <div className="row">
             <div className="col col--5 col--offset-1">
+              <img className={styles.headerImgMobile} src="/img/Blobchef.svg" />
               <div>
                 <h1>Benthos Cookbooks</h1>
                 <p>A collection of guides to walk you through more advanced Benthos applications.</p>

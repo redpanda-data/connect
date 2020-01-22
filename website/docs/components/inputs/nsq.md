@@ -11,6 +11,8 @@ type: input
 -->
 
 
+Subscribe to an NSQ instance topic and channel.
+
 ```yaml
 input:
   nsq:
@@ -23,8 +25,6 @@ input:
     user_agent: benthos_consumer
     max_in_flight: 100
 ```
-
-Subscribe to an NSQ instance topic and channel.
 
 ## Fields
 

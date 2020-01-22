@@ -11,21 +11,44 @@ type: input
 -->
 
 
+Subscribe to a NATS subject.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 input:
   nats:
-    prefetch_count: 32
-    queue: benthos_queue
-    subject: benthos_messages
     urls:
     - nats://127.0.0.1:4222
+    queue: benthos_queue
+    subject: benthos_messages
 ```
 
-Subscribe to a NATS subject. NATS is at-most-once, if you need at-least-once
-behaviour then look at NATS Stream.
+</TabItem>
+<TabItem value="advanced">
 
-The urls can contain username/password semantics. e.g.
-nats://derek:pass@localhost:4222
+```yaml
+input:
+  nats:
+    urls:
+    - nats://127.0.0.1:4222
+    queue: benthos_queue
+    subject: benthos_messages
+    prefetch_count: 32
+```
+
+</TabItem>
+</Tabs>
 
 ### Metadata
 
@@ -37,5 +60,30 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).
+
+## Fields
+
+### `urls`
+
+`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+```yaml
+# Examples
+
+urls:
+- nats://127.0.0.1:4222
+```
+
+### `queue`
+
+`string` The queue to consume from.
+
+### `subject`
+
+`string` A subject to consume from.
+
+### `prefetch_count`
+
+`number` The maximum number of messages to pull at a time.
 
 

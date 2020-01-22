@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeNSQ] = TypeSpec{
 		constructor: NewNSQ,
-		Description: `
+		Summary: `
 Subscribe to an NSQ instance topic and channel.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.NSQ, conf.NSQ.Batching)

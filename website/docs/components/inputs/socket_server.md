@@ -11,18 +11,43 @@ type: input
 -->
 
 
+Creates a server that receives messages over a (tcp/udp/unix) socket. Each
+connection is parsed as a continuous stream of line delimited messages.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 input:
   socket_server:
-    address: /tmp/benthos.sock
-    delimiter: ""
-    max_buffer: 1e+06
-    multipart: false
     network: unix
+    address: /tmp/benthos.sock
 ```
 
-Creates a server that receives messages over a (tcp/udp/unix) socket. Each
-connection is parsed as a continuous stream of line delimited messages.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+input:
+  socket_server:
+    network: unix
+    address: /tmp/benthos.sock
+    multipart: false
+    max_buffer: 1e+06
+    delimiter: ""
+```
+
+</TabItem>
+</Tabs>
 
 If multipart is set to false each line of data is read as a separate message. If
 multipart is set to true each line is read as a message part, and an empty line
@@ -33,5 +58,37 @@ If the delimiter field is left empty then line feed (\n) is used.
 The field `max_buffer` specifies the maximum amount of memory to
 allocate _per connection_ for buffering lines of data. If a line of data from a
 connection exceeds this value then the connection will be closed.
+
+## Fields
+
+### `network`
+
+`string` A network type to accept (unix|tcp|udp).
+
+Options are: `unix`, `tcp`, `udp`.
+
+### `address`
+
+`string` The address to listen from.
+
+```yaml
+# Examples
+
+address: /tmp/benthos.sock
+
+address: 0.0.0.0:6000
+```
+
+### `multipart`
+
+`bool` Whether messages should be consumed as multiple parts. If so, each line is consumed as a message parts and the full message ends with an empty line.
+
+### `max_buffer`
+
+`number` The maximum message buffer size. Must exceed the largest message to be consumed.
+
+### `delimiter`
+
+`string` The delimiter to use to detect the end of each message. If left empty line breaks are used.
 
 

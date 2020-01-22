@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -18,12 +19,14 @@ import (
 func init() {
 	Constructors[TypeReadUntil] = TypeSpec{
 		constructor: NewReadUntil,
+		Summary: `
+Reads messages from a child input until a consumed message passes a condition,
+at which point the input closes.`,
 		Description: `
-Reads from an input and tests a condition on each message. Messages are read
-continuously while the condition returns false, when the condition returns true
-the message that triggered the condition is sent out and the input is closed.
-Use this type to define inputs where the stream should end once a certain
-message appears.
+Messages are read continuously while the condition returns false, when the
+condition returns true the message that triggered the condition is sent out and
+the input is closed. Use this type to define inputs where the stream should end
+once a certain message appears.
 
 Sometimes inputs close themselves. For example, when the ` + "`file`" + ` input
 type reaches the end of a file it will shut down. By default this type will also
@@ -33,7 +36,7 @@ down until the condition is met then set ` + "`restart_input` to `true`." + `
 ### Metadata
 
 A metadata key ` + "`benthos_read_until` containing the value `final`" + ` is
-added to the first part of the message that triggers to input to stop.`,
+added to the first part of the message that triggers the input to stop.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			condSanit, err := condition.SanitiseConfig(conf.ReadUntil.Condition)
 			if err != nil {
@@ -50,6 +53,11 @@ added to the first part of the message that triggers to input to stop.`,
 				"restart_input": conf.ReadUntil.Restart,
 				"condition":     condSanit,
 			}, nil
+		},
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("input", "The child input to consume from."),
+			docs.FieldCommon("condition", "The [condition](/docs/components/conditions/about) to test messages against."),
+			docs.FieldCommon("restart_input", "Whether the input should be reopened if it closes itself before the condition has resolved to true."),
 		},
 	}
 }

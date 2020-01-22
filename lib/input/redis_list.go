@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,8 +13,13 @@ import (
 func init() {
 	Constructors[TypeRedisList] = TypeSpec{
 		constructor: NewRedisList,
-		Description: `
+		Summary: `
 Pops messages from the beginning of a Redis list using the BLPop command.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),
+			docs.FieldCommon("key", "The key of a list to read from."),
+			docs.FieldAdvanced("timeout", "The length of time to poll for new messages before reattempting."),
+		},
 	}
 }
 

@@ -1,15 +1,32 @@
 .cookbookListHeader {
   text-align: center;
   background-color: var(--ifm-background-surface-color);
+  padding-top: 60px;
+  padding-bottom: 40px;
 }
 
 .headerImg {
   height: 200px;
 }
 
+.headerImgMobile {
+  margin-bottom: 20px;
+  max-width: 200px;
+  display: none;
+}
+
 @media only screen and (max-width: 996px) {
+  .cookbookListHeader {
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+
   .headerImg {
     display: none;
+  }
+
+  .headerImgMobile {
+    display: inline;
   }
 }
 

@@ -11,30 +11,50 @@ type: input
 -->
 
 
+Receive messages from an Amazon SQS URL.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 input:
   sqs:
-    credentials:
-      id: ""
-      profile: ""
-      role: ""
-      role_external_id: ""
-      secret: ""
-      token: ""
-    delete_message: true
-    endpoint: ""
-    max_number_of_messages: 1
-    region: eu-west-1
-    timeout: 5s
     url: ""
+    region: eu-west-1
 ```
 
-Receive messages from an Amazon SQS URL, only the body is extracted into
-messages.
+</TabItem>
+<TabItem value="advanced">
 
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-`pipeline` section of a config.
+```yaml
+input:
+  sqs:
+    url: ""
+    delete_message: true
+    region: eu-west-1
+    endpoint: ""
+    credentials:
+      profile: ""
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
+      role_external_id: ""
+    timeout: 5s
+    max_number_of_messages: 1
+```
+
+</TabItem>
+</Tabs>
 
 ### Credentials
 
@@ -56,5 +76,59 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).
+
+## Fields
+
+### `url`
+
+`string` The SQS URL to consume from.
+
+### `delete_message`
+
+`bool` Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.
+
+### `region`
+
+`string` The AWS region to target.
+
+### `endpoint`
+
+`string` Allows you to specify a custom endpoint for the AWS API.
+
+### `credentials`
+
+`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+### `credentials.profile`
+
+`string` A profile from `~/.aws/credentials` to use.
+
+### `credentials.id`
+
+`string` The ID of credentials to use.
+
+### `credentials.secret`
+
+`string` The secret for the credentials being used.
+
+### `credentials.token`
+
+`string` The token for the credentials being used, required when using short term credentials.
+
+### `credentials.role`
+
+`string` A role ARN to assume.
+
+### `credentials.role_external_id`
+
+`string` An external ID to provide when assuming a role.
+
+### `timeout`
+
+`string` The period of time to wait before abandoning a request and trying again.
+
+### `max_number_of_messages`
+
+`number` The maximum number of messages to consume from each request.
 
 

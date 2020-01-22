@@ -89,20 +89,4 @@ clean:
 
 docs: $(APPS)
 	@go run $(GO_FLAGS) ./cmd/tools/benthos_config_gen/main.go
-	@go run $(GO_FLAGS) ./cmd/tools/benthos_docs_gen/main.go
-
-deploy-docs:
-	@git diff-index --quiet HEAD -- || ( echo "Failed: Branch must be clean"; false )
-	@mkdocs build -f ./.mkdocs.yml
-	@git fetch origin gh-pages
-	@git checkout gh-pages ./archive
-	@git reset HEAD
-	@mv ./archive ./site/
-	@git checkout gh-pages
-	@ls -1 | grep -v "site" | xargs rm -rf
-	@mv site/* .
-	@rmdir ./site
-	@git add -A
-	@git commit -m 'Deployed ${VERSION} with MkDocs'
-	@git push origin gh-pages
-	@git checkout master
+	@go run $(GO_FLAGS) -tags "$(TAGS)" ./cmd/tools/benthos_docs_gen/main.go

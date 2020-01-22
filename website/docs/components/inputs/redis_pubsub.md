@@ -11,17 +11,17 @@ type: input
 -->
 
 
+Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or
+PSUBSCRIBE commands.
+
 ```yaml
 input:
   redis_pubsub:
+    url: tcp://localhost:6379
     channels:
     - benthos_chan
-    url: tcp://localhost:6379
     use_patterns: false
 ```
-
-Redis supports a publish/subscribe model, it's possible to subscribe to multiple
-channels using this input.
 
 In order to subscribe to channels using the `PSUBSCRIBE` command set
 the field `use_patterns` to `true`, then you can include glob-style
@@ -33,5 +33,25 @@ patterns in your channel names. For example:
 
 Use `\` to escape special characters if you want to match them
 verbatim.
+
+## Fields
+
+### `url`
+
+`string` The URL of a Redis server to connect to.
+
+```yaml
+# Examples
+
+url: tcp://localhost:6379
+```
+
+### `channels`
+
+`array` A list of channels to consume from.
+
+### `use_patterns`
+
+`bool` Whether to use the PSUBSCRIBE command.
 
 

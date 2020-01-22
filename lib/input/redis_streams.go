@@ -13,10 +13,10 @@ import (
 func init() {
 	Constructors[TypeRedisStreams] = TypeSpec{
 		constructor: NewRedisStreams,
-		Description: `
+		Summary: `
 Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
-` + "`client_id`" + ` should be unique for each consumer of a group.
-
+` + "`client_id`" + ` should be unique for each consumer of a group.`,
+		Description: `
 The field ` + "`limit`" + ` specifies the maximum number of records to be
 received per request. When more than one record is returned they are batched and
 can be split into individual messages with the ` + "`split`" + ` processor.

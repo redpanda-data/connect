@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -16,9 +17,9 @@ import (
 func init() {
 	Constructors[TypeSocket] = TypeSpec{
 		constructor: NewSocket,
+		Summary: `
+Connects to a (tcp/unix) socket and consumes a continuous stream of messages.`,
 		Description: `
-Connects to a (tcp/unix) socket and consumes a continuous stream of messages.
-
 If multipart is set to false each line of data is read as a separate message. If
 multipart is set to true each line is read as a message part, and an empty line
 indicates the end of a message.
@@ -28,6 +29,15 @@ instance of this input can utilise any number of threads within a
 ` + "`pipeline`" + ` section of a config.
 
 If the delimiter field is left empty then line feed (\n) is used.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("network", "A network type to assume (unix|tcp).").HasOptions(
+				"unix", "tcp",
+			),
+			docs.FieldCommon("address", "The address to connect to.", "/tmp/benthos.sock", "127.0.0.1:6000"),
+			docs.FieldAdvanced("multipart", "Whether messages should be consumed as multiple parts. If so, each line is consumed as a message parts and the full message ends with an empty line."),
+			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
+			docs.FieldAdvanced("delimiter", "The delimiter to use to detect the end of each message. If left empty line breaks are used."),
+		},
 	}
 }
 

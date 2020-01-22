@@ -11,14 +11,59 @@ type: input
 -->
 
 
+Pops messages from the beginning of a Redis list using the BLPop command.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 input:
   redis_list:
-    key: benthos_list
-    timeout: 5s
     url: tcp://localhost:6379
+    key: benthos_list
 ```
 
-Pops messages from the beginning of a Redis list using the BLPop command.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+input:
+  redis_list:
+    url: tcp://localhost:6379
+    key: benthos_list
+    timeout: 5s
+```
+
+</TabItem>
+</Tabs>
+
+## Fields
+
+### `url`
+
+`string` The URL of a Redis server to connect to.
+
+```yaml
+# Examples
+
+url: tcp://localhost:6379
+```
+
+### `key`
+
+`string` The key of a list to read from.
+
+### `timeout`
+
+`string` The length of time to poll for new messages before reattempting.
 
 

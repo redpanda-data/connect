@@ -11,17 +11,42 @@ type: input
 -->
 
 
+Connects to a (tcp/unix) socket and consumes a continuous stream of messages.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 input:
   socket:
-    address: /tmp/benthos.sock
-    delimiter: ""
-    max_buffer: 1e+06
-    multipart: false
     network: unix
+    address: /tmp/benthos.sock
 ```
 
-Connects to a (tcp/unix) socket and consumes a continuous stream of messages.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+input:
+  socket:
+    network: unix
+    address: /tmp/benthos.sock
+    multipart: false
+    max_buffer: 1e+06
+    delimiter: ""
+```
+
+</TabItem>
+</Tabs>
 
 If multipart is set to false each line of data is read as a separate message. If
 multipart is set to true each line is read as a message part, and an empty line
@@ -32,5 +57,37 @@ instance of this input can utilise any number of threads within a
 `pipeline` section of a config.
 
 If the delimiter field is left empty then line feed (\n) is used.
+
+## Fields
+
+### `network`
+
+`string` A network type to assume (unix|tcp).
+
+Options are: `unix`, `tcp`.
+
+### `address`
+
+`string` The address to connect to.
+
+```yaml
+# Examples
+
+address: /tmp/benthos.sock
+
+address: 127.0.0.1:6000
+```
+
+### `multipart`
+
+`bool` Whether messages should be consumed as multiple parts. If so, each line is consumed as a message parts and the full message ends with an empty line.
+
+### `max_buffer`
+
+`number` The maximum message buffer size. Must exceed the largest message to be consumed.
+
+### `delimiter`
+
+`string` The delimiter to use to detect the end of each message. If left empty line breaks are used.
 
 
