@@ -21,7 +21,6 @@ input:
     consumer_group: foogroup
 
 pipeline:
-  threads: 4
   processors:
   - jmespath:
       query: '{ message: @, meta: { link_count: length(links) } }'
@@ -188,28 +187,25 @@ make docker-cgo
 ## Contributing
 
 Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come
-and chat in the [#benthos Gophers slack channel][benthos-slack-chan]
+and chat in either [the Gitter community][benthos-gitter] or the
+[#benthos Gophers slack channel][benthos-slack-chan]
 ([get an invite][gophers-slack-invite]), and watch your back.
 
-[inputs]: https://docs.benthos.dev/inputs/
-[processors]: https://docs.benthos.dev/processors/
-[outputs]: https://docs.benthos.dev/outputs/
-
-[metrics]: https://docs.benthos.dev/metrics/
-[tracers]: https://docs.benthos.dev/tracers/
+[inputs]: https://www.benthos.dev/docs/components/inputs/about
+[processors]: https://www.benthos.dev/docs/components/processors/about
+[outputs]: https://www.benthos.dev/docs/components/outputs/about
+[metrics]: https://www.benthos.dev/docs/components/metrics/about
+[tracers]: https://www.benthos.dev/docs/components/tracers/about
 [metrics-config]: config/metrics
-[config-interp]: https://docs.benthos.dev/config_interpolation/
+[config-interp]: https://www.benthos.dev/docs/configuration/interpolation
 [compose-examples]: resources/docker/compose_examples
-[streams-api]: https://docs.benthos.dev/api/streams/
-[streams-mode]: https://docs.benthos.dev/streams/
-[general-docs]: https://docs.benthos.dev
-[examples-docs]: https://docs.benthos.dev/examples/
+[streams-api]: https://www.benthos.dev/docs/guides/streams_mode/streams_api
+[streams-mode]: https://www.benthos.dev/docs/guides/streams_mode/about
+[general-docs]: https://www.benthos.dev/docs
 [env-config]: config/env/README.md
-[config-doc]: https://docs.benthos.dev/configuration/
-[serverless]: https://docs.benthos.dev/serverless/
-[cookbooks]: https://docs.benthos.dev/cookbooks/
-[docs-dir]: docs/README.md
-
+[config-doc]: https://www.benthos.dev/docs/configuration/about
+[serverless]: https://www.benthos.dev/docs/guides/serverless/about
+[cookbooks]: https://www.benthos.dev/cookbooks
 [releases]: https://github.com/Jeffail/benthos/releases
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
 
@@ -220,6 +216,7 @@ and chat in the [#benthos Gophers slack channel][benthos-slack-chan]
 [drone-badge]: https://cloud.drone.io/api/badges/Jeffail/benthos/status.svg
 [drone-url]: https://cloud.drone.io/Jeffail/benthos
 
+[benthos-gitter]: https://gitter.im/jeffail-benthos/community
 [benthos-slack-chan]: https://app.slack.com/client/T029RQSE6/CLWCBK7FY
 [gophers-slack-invite]: https://gophersinvite.herokuapp.com/
 

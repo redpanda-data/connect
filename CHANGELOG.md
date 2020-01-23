@@ -205,7 +205,7 @@ All notable changes to this project will be documented in this file.
 ## 3.0.0 - 2019-09-17
 
 This is a major version release, for more information and guidance on how to
-migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.benthos.dev/migration/v3/).
+migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://www.benthos.dev/docs/guides/migration/v3).
 
 ### Added
 
@@ -600,13 +600,13 @@ migrate please refer to [https://docs.benthos.dev/migration/v3/](https://docs.be
 ### Changed
 
 This is a major version released due to a series of minor breaking changes, you
-can read the [full migration guide here](https://docs.benthos.dev/migration/v2/).
+can read the [full migration guide here](https://www.benthos.dev/docs/guides/migration/v2).
 
 #### Configuration
 
 - Benthos now attempts to infer the `type` of config sections whenever the field
   is omitted, for more information please read this overview:
-  [Concise Configuration](https://docs.benthos.dev/configuration/#concise-configuration).
+  [Concise Configuration](https://www.benthos.dev/docs/configuration/about#concise-configuration).
 - Field `unsubscribe_on_close` of the `nats_stream` input is now `false` by
   default.
 
