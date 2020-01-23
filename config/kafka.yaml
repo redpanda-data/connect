@@ -25,6 +25,7 @@ input:
     partition: 0
     sasl:
       access_token: ""
+      enabled: false
       mechanism: ""
       password: ""
       token_cache: ""
@@ -71,6 +72,7 @@ output:
     round_robin_partitions: false
     sasl:
       access_token: ""
+      enabled: false
       mechanism: ""
       password: ""
       token_cache: ""

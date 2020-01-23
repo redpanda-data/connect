@@ -6,7 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/kafka"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
@@ -54,7 +54,7 @@ You can access these metadata fields using
 			docs.FieldDeprecated("max_batch_count"),
 			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}),
 			tls.FieldSpec(),
-			kafka.SASLFieldSpec(),
+			sasl.FieldSpec(),
 			docs.FieldCommon("topic", "A topic to consume from."),
 			docs.FieldCommon("partition", "A partition to consume from."),
 			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection."),

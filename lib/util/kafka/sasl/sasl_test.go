@@ -1,4 +1,4 @@
-package kafka
+package sasl
 
 import (
 	"testing"
@@ -37,8 +37,40 @@ func (c mockCache) Get(key string) ([]byte, error) {
 func TestApplyPlaintext(t *testing.T) {
 	conf := &sarama.Config{}
 
-	saslConf := SASLConfig{
+	saslConf := Config{
 		Mechanism: string(sarama.SASLTypePlaintext),
+		User:      "foo",
+		Password:  "bar",
+	}
+
+	err := saslConf.Apply(types.NoopMgr(), conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !conf.Net.SASL.Enable {
+		t.Errorf("SASL not enabled")
+	}
+
+	if conf.Net.SASL.Mechanism != sarama.SASLTypePlaintext {
+		t.Errorf("Wrong SASL mechanism: %v != %v", conf.Net.SASL.Mechanism, sarama.SASLTypePlaintext)
+	}
+
+	if conf.Net.SASL.User != "foo" {
+		t.Errorf("Wrong SASL user: %v != %v", conf.Net.SASL.User, "foo")
+	}
+
+	if conf.Net.SASL.Password != "bar" {
+		t.Errorf("Wrong SASL password: %v != %v", conf.Net.SASL.Password, "bar")
+	}
+}
+
+func TestApplyPlaintextDeprecated(t *testing.T) {
+	conf := &sarama.Config{}
+
+	saslConf := Config{
+		Enabled:   true,
+		Mechanism: "",
 		User:      "foo",
 		Password:  "bar",
 	}
@@ -68,7 +100,7 @@ func TestApplyPlaintext(t *testing.T) {
 func TestApplyOAuthBearerStaticProvider(t *testing.T) {
 	conf := &sarama.Config{}
 
-	saslConf := SASLConfig{
+	saslConf := Config{
 		Mechanism:   string(sarama.SASLTypeOAuth),
 		AccessToken: "foo",
 	}
@@ -99,7 +131,7 @@ func TestApplyOAuthBearerStaticProvider(t *testing.T) {
 func TestApplyOAuthBearerCacheProvider(t *testing.T) {
 	conf := &sarama.Config{}
 
-	saslConf := SASLConfig{
+	saslConf := Config{
 		Mechanism:  string(sarama.SASLTypeOAuth),
 		TokenCache: "token_provider",
 		TokenKey:   "jwt",
@@ -145,7 +177,7 @@ func TestApplyOAuthBearerCacheProvider(t *testing.T) {
 func TestApplyUnknownMechanism(t *testing.T) {
 	conf := &sarama.Config{}
 
-	saslConf := SASLConfig{
+	saslConf := Config{
 		Mechanism: "foo",
 	}
 

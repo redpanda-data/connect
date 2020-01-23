@@ -14,7 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/kafka"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
 )
@@ -36,7 +36,7 @@ type KafkaConfig struct {
 	// TODO: V4 Remove this.
 	MaxBatchCount int                `json:"max_batch_count" yaml:"max_batch_count"`
 	TLS           btls.Config        `json:"tls" yaml:"tls"`
-	SASL          kafka.SASLConfig   `json:"sasl" yaml:"sasl"`
+	SASL          sasl.Config        `json:"sasl" yaml:"sasl"`
 	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
@@ -57,6 +57,7 @@ func NewKafkaConfig() KafkaConfig {
 		TargetVersion:       sarama.V1_0_0_0.String(),
 		MaxBatchCount:       1,
 		TLS:                 btls.NewConfig(),
+		SASL:                sasl.NewConfig(),
 		Batching:            batchConf,
 	}
 }

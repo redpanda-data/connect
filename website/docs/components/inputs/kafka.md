@@ -162,15 +162,9 @@ tls:
 
 ### `sasl.mechanism`
 
-`string` The SASL authentication mechanism.
+`string` The SASL authentication mechanism, if left empty SASL authentication is not used.
 
-```yaml
-# Examples
-
-sasl.mechanism: PLAIN
-
-sasl.mechanism: OAUTHBEARER
-```
+Options are: `PLAIN`, `OAUTHBEARER`.
 
 ### `sasl.user`
 
@@ -194,15 +188,15 @@ sasl.password: ${PASSWORD}
 
 ### `sasl.access_token`
 
-`string` A static `OAUTHBEARER` access token.
+`string` A static `OAUTHBEARER` access token
 
 ### `sasl.token_cache`
 
-`string` The name of a `cache` resource to fetch` OAUTHBEARER` tokens from.
+`string` Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch `OAUTHBEARER` tokens from
 
 ### `sasl.token_key`
 
-`string` The cache key to use with `token_cache`.
+`string` Required when using a `token_cache`, the key to query the cache with for tokens.
 
 ### `topic`
 

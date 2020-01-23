@@ -1,4 +1,4 @@
-package kafka
+package sasl
 
 import (
 	"errors"
@@ -8,12 +8,14 @@ import (
 	"github.com/Shopify/sarama"
 )
 
+// SASL specific error types.
 var (
 	ErrUnsupportedSASLMechanism = errors.New("unsupported SASL mechanism")
 )
 
-// SASLConfig contains configuration for SASL based authentication.
-type SASLConfig struct {
+// Config contains configuration for SASL based authentication.
+type Config struct {
+	Enabled     bool   `json:"enabled" yaml:"enabled"` // DEPRECATED
 	Mechanism   string `json:"mechanism" yaml:"mechanism"`
 	User        string `json:"user" yaml:"user"`
 	Password    string `json:"password" yaml:"password"`
@@ -22,19 +24,29 @@ type SASLConfig struct {
 	TokenKey    string `json:"token_key" yaml:"token_key"`
 }
 
-func SASLFieldSpec() docs.FieldSpec {
+// NewConfig returns a new SASL config for Kafka with default values.
+func NewConfig() Config {
+	return Config{} // Well, that seemed pointless.
+}
+
+// FieldSpec returns specs for SASL fields.
+func FieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
-		docs.FieldCommon("mechanism", "The SASL authentication mechanism.", sarama.SASLTypePlaintext, sarama.SASLTypeOAuth),
+		docs.FieldDeprecated("enabled"),
+		docs.FieldCommon("mechanism", "The SASL authentication mechanism, if left empty SASL authentication is not used.").HasOptions(sarama.SASLTypePlaintext, sarama.SASLTypeOAuth),
 		docs.FieldCommon("user", "A `"+sarama.SASLTypePlaintext+"` username. It is recommended that you use environment variables to populate this field.", "${USER}"),
 		docs.FieldCommon("password", "A `"+sarama.SASLTypePlaintext+"` password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
-		docs.FieldCommon("access_token", "A static `"+sarama.SASLTypeOAuth+"` access token."),
-		docs.FieldCommon("token_cache", "The name of a `cache` resource to fetch` "+sarama.SASLTypeOAuth+"` tokens from."),
-		docs.FieldCommon("token_key", "The cache key to use with `token_cache`."),
+		docs.FieldAdvanced("access_token", "A static `"+sarama.SASLTypeOAuth+"` access token"),
+		docs.FieldAdvanced("token_cache", "Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch `"+sarama.SASLTypeOAuth+"` tokens from"),
+		docs.FieldAdvanced("token_key", "Required when using a `token_cache`, the key to query the cache with for tokens."),
 	)
 }
 
 // Apply applies the SASL authentication configuration to a Sarama config object.
-func (s SASLConfig) Apply(mgr types.Manager, conf *sarama.Config) error {
+func (s Config) Apply(mgr types.Manager, conf *sarama.Config) error {
+	if s.Enabled && len(s.Mechanism) == 0 {
+		s.Mechanism = sarama.SASLTypePlaintext
+	}
 	switch s.Mechanism {
 	case sarama.SASLTypeOAuth:
 		var tp sarama.AccessTokenProvider

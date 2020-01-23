@@ -130,6 +130,7 @@ input:
         partition: ${INPUT_KAFKA_PARTITION:0}
         sasl:
           access_token: ${INPUT_KAFKA_SASL_ACCESS_TOKEN}
+          enabled: ${INPUT_KAFKA_SASL_ENABLED:false}
           mechanism: ${INPUT_KAFKA_SASL_MECHANISM}
           password: ${INPUT_KAFKA_SASL_PASSWORD}
           token_cache: ${INPUT_KAFKA_SASL_TOKEN_CACHE}
@@ -161,6 +162,7 @@ input:
         max_processing_period: ${INPUT_KAFKA_BALANCED_MAX_PROCESSING_PERIOD:100ms}
         sasl:
           access_token: ${INPUT_KAFKA_BALANCED_SASL_ACCESS_TOKEN}
+          enabled: ${INPUT_KAFKA_BALANCED_SASL_ENABLED:false}
           mechanism: ${INPUT_KAFKA_BALANCED_SASL_MECHANISM}
           password: ${INPUT_KAFKA_BALANCED_SASL_PASSWORD}
           token_cache: ${INPUT_KAFKA_BALANCED_SASL_TOKEN_CACHE}
@@ -743,6 +745,7 @@ output:
         round_robin_partitions: ${OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS:false}
         sasl:
           access_token: ${OUTPUT_KAFKA_SASL_ACCESS_TOKEN}
+          enabled: ${OUTPUT_KAFKA_SASL_ENABLED:false}
           mechanism: ${OUTPUT_KAFKA_SASL_MECHANISM}
           password: ${OUTPUT_KAFKA_SASL_PASSWORD}
           token_cache: ${OUTPUT_KAFKA_SASL_TOKEN_CACHE}

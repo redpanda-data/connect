@@ -28,6 +28,7 @@ input:
     max_processing_period: 100ms
     sasl:
       access_token: ""
+      enabled: false
       mechanism: ""
       password: ""
       token_cache: ""

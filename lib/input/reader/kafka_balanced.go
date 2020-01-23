@@ -16,7 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/kafka"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
 )
@@ -54,9 +54,9 @@ type KafkaBalancedConfig struct {
 	StartFromOldest     bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
 	// TODO: V4 Remove this.
-	MaxBatchCount int              `json:"max_batch_count" yaml:"max_batch_count"`
-	TLS           btls.Config      `json:"tls" yaml:"tls"`
-	SASL          kafka.SASLConfig `json:"sasl" yaml:"sasl"`
+	MaxBatchCount int         `json:"max_batch_count" yaml:"max_batch_count"`
+	TLS           btls.Config `json:"tls" yaml:"tls"`
+	SASL          sasl.Config `json:"sasl" yaml:"sasl"`
 }
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
@@ -78,6 +78,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Batching:            batchConf,
 		MaxBatchCount:       1,
 		TLS:                 btls.NewConfig(),
+		SASL:                sasl.NewConfig(),
 	}
 }
 
