@@ -189,15 +189,15 @@ sasl.password: ${PASSWORD}
 
 ### `sasl.access_token`
 
-`string` A static `OAUTHBEARER` access token
+`string` A static `OAUTHBEARER` access token.
 
 ### `sasl.token_cache`
 
-`string` The name of a `cache` resource to fetch`OAUTHBEARER` tokens from
+`string` The name of a `cache` resource to fetch` OAUTHBEARER` tokens from.
 
 ### `sasl.token_key`
 
-`string` The cache key to use with `token_cache`
+`string` The cache key to use with `token_cache`.
 
 ### `topic`
 
