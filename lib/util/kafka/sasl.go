@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/Shopify/sarama"
 )
 
@@ -17,8 +18,19 @@ type SASLConfig struct {
 	User        string `json:"user" yaml:"user"`
 	Password    string `json:"password" yaml:"password"`
 	AccessToken string `json:"access_token" yaml:"access_token"`
-	TokenKey    string `json:"token_key" yaml:"token_key"`
 	TokenCache  string `json:"token_cache" yaml:"token_cache"`
+	TokenKey    string `json:"token_key" yaml:"token_key"`
+}
+
+func SASLFieldSpec() docs.FieldSpec {
+	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
+		docs.FieldCommon("mechanism", "The SASL authentication mechanism.", sarama.SASLTypePlaintext, sarama.SASLTypeOAuth),
+		docs.FieldCommon("user", "A `" + sarama.SASLTypePlaintext + "` username. It is recommended that you use environment variables to populate this field.", "${USER}"),
+		docs.FieldCommon("password", "A `" + sarama.SASLTypePlaintext + "` It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
+		docs.FieldCommon("access_token", "A static `" + sarama.SASLTypeOAuth + "` access token"),
+		docs.FieldCommon("token_cache", "The name of a `cache` resource to fetch`" + sarama.SASLTypeOAuth + "` tokens from"),
+		docs.FieldCommon("token_key", "The cache key to use with `token_cache`"),
+	)
 }
 
 // Apply applies the SASL authentication configuration to a Sarama config object.

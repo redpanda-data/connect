@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
@@ -25,28 +26,6 @@ group look at the ` + "`kafka_balanced`" + ` input type instead.
 Use the ` + "`batching`" + ` fields to configure an optional
 [batching policy](/docs/configuration/batching#batch-policy). Any other batching
 mechanism will stall with this input due its sequential transaction model.
-
-This input currently provides a single continuous feed of data, and therefore
-by default will only utilise a single processing thread and parallel output.
-Take a look at the
-[pipelines documentation](../pipeline.md#single-consumer-without-buffer) for
-guides on how to work around this.
-
-The field ` + "`max_processing_period`" + ` should be set above the maximum
-estimated time taken to process a message.
-
-The target version by default will be the oldest supported, as it is expected
-that the server will be backwards compatible. In order to support newer client
-features you should increase this version up to the known version of the target
-server.
-
-The ` + "`access_token`" + ` field under the ` + "`sasl`" + ` configuration can
-be used to specify an OAuth bearer token for SASL authentication. For more
-complex use cases, a custom build of Benthos can register a named access token
-provider via ` + "`reader.KafkaRegisterAccessTokenProvider`" + `and use it via
-the` + "`token_provider`" + ` field.
-
-` + tls.Documentation + `
 
 ### Metadata
 
@@ -75,7 +54,7 @@ You can access these metadata fields using
 			docs.FieldDeprecated("max_batch_count"),
 			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}),
 			tls.FieldSpec(),
-			saslFieldSpec(),
+			kafka.SASLFieldSpec(),
 			docs.FieldCommon("topic", "A topic to consume from."),
 			docs.FieldCommon("partition", "A partition to consume from."),
 			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection."),
