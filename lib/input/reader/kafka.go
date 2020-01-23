@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
 )
@@ -35,7 +36,7 @@ type KafkaConfig struct {
 	// TODO: V4 Remove this.
 	MaxBatchCount int                `json:"max_batch_count" yaml:"max_batch_count"`
 	TLS           btls.Config        `json:"tls" yaml:"tls"`
-	SASL          SASLConfig         `json:"sasl" yaml:"sasl"`
+	SASL          kafka.SASLConfig   `json:"sasl" yaml:"sasl"`
 	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
@@ -87,6 +88,7 @@ type Kafka struct {
 	conf      KafkaConfig
 	stats     metrics.Type
 	log       log.Modular
+	mgr       types.Manager
 
 	closeOnce  sync.Once
 	closedChan chan struct{}
@@ -94,7 +96,7 @@ type Kafka struct {
 
 // NewKafka creates a new Kafka input type.
 func NewKafka(
-	conf KafkaConfig, log log.Modular, stats metrics.Type,
+	conf KafkaConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (*Kafka, error) {
 	k := Kafka{
 		offset:     0,
@@ -102,6 +104,7 @@ func NewKafka(
 		stats:      stats,
 		mRcvErr:    stats.GetCounter("recv.error"),
 		log:        log,
+		mgr:        mgr,
 		closedChan: make(chan struct{}),
 	}
 
@@ -211,7 +214,7 @@ func (k *Kafka) ConnectWithContext(ctx context.Context) error {
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
 	}
-	if err := k.conf.SASL.ConfigureSaramaSASL(config); err != nil {
+	if err := k.conf.SASL.Apply(k.mgr, config); err != nil {
 		return err
 	}
 

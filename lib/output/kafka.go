@@ -65,7 +65,7 @@ part.`,
 
 // NewKafka creates a new Kafka output type.
 func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	k, err := writer.NewKafka(conf.Kafka, log, stats)
+	k, err := writer.NewKafka(conf.Kafka, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
 )
@@ -53,34 +54,9 @@ type KafkaBalancedConfig struct {
 	StartFromOldest     bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
 	// TODO: V4 Remove this.
-	MaxBatchCount int         `json:"max_batch_count" yaml:"max_batch_count"`
-	TLS           btls.Config `json:"tls" yaml:"tls"`
-	SASL          SASLConfig  `json:"sasl" yaml:"sasl"`
-}
-
-// SASLConfig contains configuration for SASL based authentication.
-type SASLConfig struct {
-	Enabled       bool   `json:"enabled" yaml:"enabled"`
-	User          string `json:"user" yaml:"user"`
-	Password      string `json:"password" yaml:"password"`
-	AccessToken   string `json:"access_token" yaml:"access_token"`
-	TokenProvider string `json:"token_provider" yaml:"token_provider"`
-}
-
-var kafkaAccessTokenProviders = map[string]sarama.AccessTokenProvider{}
-
-// KafkaRegisterAccessTokenProvider registers an access token provider callback
-// under the given name, to be specified in the Kafka SASL configuration.
-func KafkaRegisterAccessTokenProvider(name string, provider sarama.AccessTokenProvider) {
-	kafkaAccessTokenProviders[name] = provider
-}
-
-type staticAccessTokenProvider struct {
-	token string
-}
-
-func (s *staticAccessTokenProvider) Token() (*sarama.AccessToken, error) {
-	return &sarama.AccessToken{Token: s.token}, nil
+	MaxBatchCount int              `json:"max_batch_count" yaml:"max_batch_count"`
+	TLS           btls.Config      `json:"tls" yaml:"tls"`
+	SASL          kafka.SASLConfig `json:"sasl" yaml:"sasl"`
 }
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
@@ -138,17 +114,19 @@ type KafkaBalanced struct {
 	conf  KafkaBalancedConfig
 	stats metrics.Type
 	log   log.Modular
+	mgr   types.Manager
 }
 
 // NewKafkaBalanced creates a new KafkaBalanced input type.
 func NewKafkaBalanced(
-	conf KafkaBalancedConfig, log log.Modular, stats metrics.Type,
+	conf KafkaBalancedConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (*KafkaBalanced, error) {
 	k := KafkaBalanced{
 		conf:          conf,
 		stats:         stats,
 		groupCancelFn: func() {},
 		log:           log,
+		mgr:           mgr,
 		offsets:       map[string]map[int32]int64{},
 		mRebalanced:   stats.GetCounter("rebalanced"),
 	}
@@ -320,7 +298,7 @@ func (k *KafkaBalanced) Connect() error {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	if err := k.conf.SASL.ConfigureSaramaSASL(config); err != nil {
+	if err := k.conf.SASL.Apply(k.mgr, config); err != nil {
 		return err
 	}
 
@@ -478,34 +456,6 @@ func (k *KafkaBalanced) CloseAsync() {
 
 // WaitForClose blocks until the KafkaBalanced input has closed down.
 func (k *KafkaBalanced) WaitForClose(timeout time.Duration) error {
-	return nil
-}
-
-// ConfigureSaramaSASL sets up the Sarama SASL configuration based on the
-// given SASL options.
-func (s SASLConfig) ConfigureSaramaSASL(config *sarama.Config) error {
-	if !s.Enabled {
-		return nil
-	}
-
-	config.Net.SASL.Enable = true
-
-	switch {
-	case s.TokenProvider != "":
-		tokenProvider, ok := kafkaAccessTokenProviders[s.TokenProvider]
-		if !ok {
-			return errors.New("no access token provider available")
-		}
-		config.Net.SASL.Mechanism = "OAUTHBEARER"
-		config.Net.SASL.TokenProvider = tokenProvider
-	case s.AccessToken != "":
-		config.Net.SASL.Mechanism = "OAUTHBEARER"
-		config.Net.SASL.TokenProvider = &staticAccessTokenProvider{s.AccessToken}
-	default:
-		config.Net.SASL.User = s.User
-		config.Net.SASL.Password = s.Password
-	}
-
 	return nil
 }
 

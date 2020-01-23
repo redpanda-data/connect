@@ -117,7 +117,7 @@ func newKafkaBalancedHasBatchProcessor(
 	}
 
 	log.Warnln("Detected presence of a 'batch' processor, kafka_balanced input falling back to single threaded mode. To fix this use the 'batching' fields instead.")
-	k, err := reader.NewKafkaBalanced(conf.KafkaBalanced, log, stats)
+	k, err := reader.NewKafkaBalanced(conf.KafkaBalanced, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

@@ -99,7 +99,7 @@ func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 		log.Warnf("Field '%v.max_batch_count' is deprecated, use '%v.batching.count' instead.\n", conf.Type, conf.Type)
 		conf.Kafka.Batching.Count = conf.Kafka.MaxBatchCount
 	}
-	k, err := reader.NewKafka(conf.Kafka, log, stats)
+	k, err := reader.NewKafka(conf.Kafka, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

@@ -3,7 +3,6 @@ package writer
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -15,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/hash/murmur2"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -26,49 +26,24 @@ import (
 
 // KafkaConfig contains configuration fields for the Kafka output type.
 type KafkaConfig struct {
-	Addresses      []string    `json:"addresses" yaml:"addresses"`
-	ClientID       string      `json:"client_id" yaml:"client_id"`
-	Key            string      `json:"key" yaml:"key"`
-	Partitioner    string      `json:"partitioner" yaml:"partitioner"`
-	Topic          string      `json:"topic" yaml:"topic"`
-	Compression    string      `json:"compression" yaml:"compression"`
-	MaxMsgBytes    int         `json:"max_msg_bytes" yaml:"max_msg_bytes"`
-	Timeout        string      `json:"timeout" yaml:"timeout"`
-	AckReplicas    bool        `json:"ack_replicas" yaml:"ack_replicas"`
-	TargetVersion  string      `json:"target_version" yaml:"target_version"`
-	TLS            btls.Config `json:"tls" yaml:"tls"`
-	SASL           SASLConfig  `json:"sasl" yaml:"sasl"`
-	MaxInFlight    int         `json:"max_in_flight" yaml:"max_in_flight"`
+	Addresses      []string         `json:"addresses" yaml:"addresses"`
+	ClientID       string           `json:"client_id" yaml:"client_id"`
+	Key            string           `json:"key" yaml:"key"`
+	Partitioner    string           `json:"partitioner" yaml:"partitioner"`
+	Topic          string           `json:"topic" yaml:"topic"`
+	Compression    string           `json:"compression" yaml:"compression"`
+	MaxMsgBytes    int              `json:"max_msg_bytes" yaml:"max_msg_bytes"`
+	Timeout        string           `json:"timeout" yaml:"timeout"`
+	AckReplicas    bool             `json:"ack_replicas" yaml:"ack_replicas"`
+	TargetVersion  string           `json:"target_version" yaml:"target_version"`
+	TLS            btls.Config      `json:"tls" yaml:"tls"`
+	SASL           kafka.SASLConfig `json:"sasl" yaml:"sasl"`
+	MaxInFlight    int              `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
 
 	// TODO: V4 remove this.
 	RoundRobinPartitions bool `json:"round_robin_partitions" yaml:"round_robin_partitions"`
-}
-
-// SASLConfig contains configuration for SASL based authentication.
-type SASLConfig struct {
-	Enabled       bool   `json:"enabled" yaml:"enabled"`
-	User          string `json:"user" yaml:"user"`
-	Password      string `json:"password" yaml:"password"`
-	AccessToken   string `json:"access_token" yaml:"access_token"`
-	TokenProvider string `json:"token_provider" yaml:"token_provider"`
-}
-
-var kafkaAccessTokenProviders = map[string]sarama.AccessTokenProvider{}
-
-// KafkaRegisterAccessTokenProvider registers an access token provider callback
-// under the given name, to be specified in the Kafka SASL configuration.
-func KafkaRegisterAccessTokenProvider(name string, provider sarama.AccessTokenProvider) {
-	kafkaAccessTokenProviders[name] = provider
-}
-
-type staticAccessTokenProvider struct {
-	token string
-}
-
-func (s *staticAccessTokenProvider) Token() (*sarama.AccessToken, error) {
-	return &sarama.AccessToken{Token: s.token}, nil
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -103,6 +78,7 @@ func NewKafkaConfig() KafkaConfig {
 // Kafka is a writer type that writes messages into kafka.
 type Kafka struct {
 	log   log.Modular
+	mgr   types.Manager
 	stats metrics.Type
 
 	backoff backoff.BackOff
@@ -127,7 +103,7 @@ type Kafka struct {
 }
 
 // NewKafka creates a new Kafka writer type.
-func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, error) {
+func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*Kafka, error) {
 	compression, err := strToCompressionCodec(conf.Compression)
 	if err != nil {
 		return nil, err
@@ -145,6 +121,7 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 
 	k := Kafka{
 		log:   log,
+		mgr:   mgr,
 		stats: stats,
 
 		conf:        conf,
@@ -273,7 +250,7 @@ func (k *Kafka) Connect() error {
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
 	}
-	if err := k.conf.SASL.ConfigureSaramaSASL(config); err != nil {
+	if err := k.conf.SASL.Apply(k.mgr, config); err != nil {
 		return err
 	}
 
@@ -379,34 +356,6 @@ func (k *Kafka) CloseAsync() {
 
 // WaitForClose blocks until the Kafka writer has closed down.
 func (k *Kafka) WaitForClose(timeout time.Duration) error {
-	return nil
-}
-
-// ConfigureSaramaSASL sets up the Sarama SASL configuration based on the
-// given SASL options.
-func (s SASLConfig) ConfigureSaramaSASL(config *sarama.Config) error {
-	if !s.Enabled {
-		return nil
-	}
-
-	config.Net.SASL.Enable = true
-
-	switch {
-	case s.TokenProvider != "":
-		tokenProvider, ok := kafkaAccessTokenProviders[s.TokenProvider]
-		if !ok {
-			return errors.New("no access token provider available")
-		}
-		config.Net.SASL.Mechanism = "OAUTHBEARER"
-		config.Net.SASL.TokenProvider = tokenProvider
-	case s.AccessToken != "":
-		config.Net.SASL.Mechanism = "OAUTHBEARER"
-		config.Net.SASL.TokenProvider = &staticAccessTokenProvider{s.AccessToken}
-	default:
-		config.Net.SASL.User = s.User
-		config.Net.SASL.Password = s.Password
-	}
-
 	return nil
 }
 
