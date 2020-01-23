@@ -33,7 +33,7 @@ func NewConfig() Config {
 func FieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
 		docs.FieldDeprecated("enabled"),
-		docs.FieldCommon("mechanism", "The SASL authentication mechanism, if left empty SASL authentication is not used.").HasOptions(sarama.SASLTypePlaintext, sarama.SASLTypeOAuth),
+		docs.FieldCommon("mechanism", "The SASL authentication mechanism, if left empty SASL authentication is not used. Warning: SCRAM based methods within Benthos have not received a security audit.").HasOptions(sarama.SASLTypePlaintext, sarama.SASLTypeOAuth, sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512),
 		docs.FieldCommon("user", "A `"+sarama.SASLTypePlaintext+"` username. It is recommended that you use environment variables to populate this field.", "${USER}"),
 		docs.FieldCommon("password", "A `"+sarama.SASLTypePlaintext+"` password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
 		docs.FieldAdvanced("access_token", "A static `"+sarama.SASLTypeOAuth+"` access token"),
@@ -44,6 +44,7 @@ func FieldSpec() docs.FieldSpec {
 
 // Apply applies the SASL authentication configuration to a Sarama config object.
 func (s Config) Apply(mgr types.Manager, conf *sarama.Config) error {
+	conf.Net.TLS.Enable = true
 	if s.Enabled && len(s.Mechanism) == 0 {
 		s.Mechanism = sarama.SASLTypePlaintext
 	}
@@ -64,6 +65,14 @@ func (s Config) Apply(mgr types.Manager, conf *sarama.Config) error {
 			}
 		}
 		conf.Net.SASL.TokenProvider = tp
+	case sarama.SASLTypeSCRAMSHA256:
+		conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
+			return &XDGSCRAMClient{HashGeneratorFcn: SHA256}
+		}
+	case sarama.SASLTypeSCRAMSHA512:
+		conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
+			return &XDGSCRAMClient{HashGeneratorFcn: SHA512}
+		}
 	case sarama.SASLTypePlaintext:
 		conf.Net.SASL.User = s.User
 		conf.Net.SASL.Password = s.Password

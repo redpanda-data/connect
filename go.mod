@@ -77,6 +77,7 @@ require (
 	github.com/trivago/tgo v1.0.5 // indirect
 	github.com/uber/jaeger-client-go v2.21.1+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
+	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.uber.org/atomic v1.5.1 // indirect

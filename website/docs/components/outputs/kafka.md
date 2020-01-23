@@ -157,9 +157,9 @@ tls:
 
 ### `sasl.mechanism`
 
-`string` The SASL authentication mechanism, if left empty SASL authentication is not used.
+`string` The SASL authentication mechanism, if left empty SASL authentication is not used. Warning: SCRAM based methods within Benthos have not received a security audit.
 
-Options are: `PLAIN`, `OAUTHBEARER`.
+Options are: `PLAIN`, `OAUTHBEARER`, `SCRAM-SHA-256`, `SCRAM-SHA-512`.
 
 ### `sasl.user`
 
