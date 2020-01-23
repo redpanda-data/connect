@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `socket`, `socket_server` inputs.
 - New `socket` output.
+- Kafka connectors now support SASL using `OAUTHBEARER`.
 
 ### Changed
 
