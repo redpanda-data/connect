@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
@@ -45,7 +46,7 @@ part.`,
 			docs.FieldDeprecated("round_robin_partitions"),
 			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}),
 			tls.FieldSpec(),
-			saslFieldSpec(),
+			sasl.FieldSpec(),
 			docs.FieldCommon("topic", "The topic to publish messages to.").SupportsInterpolation(false),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
 			docs.FieldCommon("key", "The key to publish messages with.").SupportsInterpolation(false),
@@ -65,7 +66,7 @@ part.`,
 
 // NewKafka creates a new Kafka output type.
 func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	k, err := writer.NewKafka(conf.Kafka, log, stats)
+	k, err := writer.NewKafka(conf.Kafka, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

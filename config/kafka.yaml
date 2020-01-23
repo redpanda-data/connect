@@ -24,8 +24,12 @@ input:
     max_processing_period: 100ms
     partition: 0
     sasl:
+      access_token: ""
       enabled: false
+      mechanism: ""
       password: ""
+      token_cache: ""
+      token_key: ""
       user: ""
     start_from_oldest: true
     target_version: 1.0.0
@@ -67,8 +71,12 @@ output:
     partitioner: fnv1a_hash
     round_robin_partitions: false
     sasl:
+      access_token: ""
       enabled: false
+      mechanism: ""
       password: ""
+      token_cache: ""
+      token_key: ""
       user: ""
     target_version: 1.0.0
     timeout: 5s

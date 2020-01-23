@@ -6,19 +6,12 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
-
-func saslFieldSpec() docs.FieldSpec {
-	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
-		docs.FieldCommon("enabled", "Whether SASL authentication is enabled."),
-		docs.FieldCommon("user", "A plain text username. It is recommended that you use environment variables to populate this field.", "${USER}"),
-		docs.FieldCommon("password", "A plain text password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
-	)
-}
 
 func init() {
 	Constructors[TypeKafkaBalanced] = TypeSpec{
@@ -67,7 +60,7 @@ You can access these metadata fields using
 			docs.FieldDeprecated("max_batch_count"),
 			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}),
 			tls.FieldSpec(),
-			saslFieldSpec(),
+			sasl.FieldSpec(),
 			docs.FieldCommon("topics", "A list of topics to consume from. If an item of the list contains commas it will be expanded into multiple topics."),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
 			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection."),
@@ -117,7 +110,7 @@ func newKafkaBalancedHasBatchProcessor(
 	}
 
 	log.Warnln("Detected presence of a 'batch' processor, kafka_balanced input falling back to single threaded mode. To fix this use the 'batching' fields instead.")
-	k, err := reader.NewKafkaBalanced(conf.KafkaBalanced, log, stats)
+	k, err := reader.NewKafkaBalanced(conf.KafkaBalanced, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

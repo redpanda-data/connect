@@ -54,9 +54,12 @@ input:
       root_cas_file: ""
       skip_cert_verify: false
     sasl:
-      enabled: false
+      mechanism: ""
       user: ""
       password: ""
+      access_token: ""
+      token_cache: ""
+      token_key: ""
     topic: benthos_stream
     partition: 0
     consumer_group: benthos_consumer_group
@@ -157,13 +160,15 @@ tls:
 
 `object` Enables SASL authentication.
 
-### `sasl.enabled`
+### `sasl.mechanism`
 
-`bool` Whether SASL authentication is enabled.
+`string` The SASL authentication mechanism, if left empty SASL authentication is not used.
+
+Options are: `PLAIN`, `OAUTHBEARER`.
 
 ### `sasl.user`
 
-`string` A plain text username. It is recommended that you use environment variables to populate this field.
+`string` A `PLAIN` username. It is recommended that you use environment variables to populate this field.
 
 ```yaml
 # Examples
@@ -173,13 +178,25 @@ sasl.user: ${USER}
 
 ### `sasl.password`
 
-`string` A plain text password. It is recommended that you use environment variables to populate this field.
+`string` A `PLAIN` password. It is recommended that you use environment variables to populate this field.
 
 ```yaml
 # Examples
 
 sasl.password: ${PASSWORD}
 ```
+
+### `sasl.access_token`
+
+`string` A static `OAUTHBEARER` access token
+
+### `sasl.token_cache`
+
+`string` Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch `OAUTHBEARER` tokens from
+
+### `sasl.token_key`
+
+`string` Required when using a `token_cache`, the key to query the cache with for tokens.
 
 ### `topic`
 

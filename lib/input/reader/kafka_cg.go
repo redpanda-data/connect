@@ -306,10 +306,8 @@ func (k *KafkaCG) ConnectWithContext(ctx context.Context) error {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	if k.conf.SASL.Enabled {
-		config.Net.SASL.Enable = true
-		config.Net.SASL.User = k.conf.SASL.User
-		config.Net.SASL.Password = k.conf.SASL.Password
+	if err := k.conf.SASL.Apply(k.mgr, config); err != nil {
+		return err
 	}
 
 	// Start a new consumer group

@@ -16,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
 )
@@ -55,14 +56,7 @@ type KafkaBalancedConfig struct {
 	// TODO: V4 Remove this.
 	MaxBatchCount int         `json:"max_batch_count" yaml:"max_batch_count"`
 	TLS           btls.Config `json:"tls" yaml:"tls"`
-	SASL          SASLConfig  `json:"sasl" yaml:"sasl"`
-}
-
-// SASLConfig contains configuration for SASL based authentication.
-type SASLConfig struct {
-	Enabled  bool   `json:"enabled" yaml:"enabled"`
-	User     string `json:"user" yaml:"user"`
-	Password string `json:"password" yaml:"password"`
+	SASL          sasl.Config `json:"sasl" yaml:"sasl"`
 }
 
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
@@ -84,6 +78,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Batching:            batchConf,
 		MaxBatchCount:       1,
 		TLS:                 btls.NewConfig(),
+		SASL:                sasl.NewConfig(),
 	}
 }
 
@@ -120,17 +115,19 @@ type KafkaBalanced struct {
 	conf  KafkaBalancedConfig
 	stats metrics.Type
 	log   log.Modular
+	mgr   types.Manager
 }
 
 // NewKafkaBalanced creates a new KafkaBalanced input type.
 func NewKafkaBalanced(
-	conf KafkaBalancedConfig, log log.Modular, stats metrics.Type,
+	conf KafkaBalancedConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (*KafkaBalanced, error) {
 	k := KafkaBalanced{
 		conf:          conf,
 		stats:         stats,
 		groupCancelFn: func() {},
 		log:           log,
+		mgr:           mgr,
 		offsets:       map[string]map[int32]int64{},
 		mRebalanced:   stats.GetCounter("rebalanced"),
 	}
@@ -302,10 +299,8 @@ func (k *KafkaBalanced) Connect() error {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	if k.conf.SASL.Enabled {
-		config.Net.SASL.Enable = true
-		config.Net.SASL.User = k.conf.SASL.User
-		config.Net.SASL.Password = k.conf.SASL.Password
+	if err := k.conf.SASL.Apply(k.mgr, config); err != nil {
+		return err
 	}
 
 	// Start a new consumer group

@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/hash/murmur2"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -36,20 +37,13 @@ type KafkaConfig struct {
 	AckReplicas    bool        `json:"ack_replicas" yaml:"ack_replicas"`
 	TargetVersion  string      `json:"target_version" yaml:"target_version"`
 	TLS            btls.Config `json:"tls" yaml:"tls"`
-	SASL           SASLConfig  `json:"sasl" yaml:"sasl"`
+	SASL           sasl.Config `json:"sasl" yaml:"sasl"`
 	MaxInFlight    int         `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
 
 	// TODO: V4 remove this.
 	RoundRobinPartitions bool `json:"round_robin_partitions" yaml:"round_robin_partitions"`
-}
-
-// SASLConfig contains configuration for SASL based authentication.
-type SASLConfig struct {
-	Enabled  bool   `json:"enabled" yaml:"enabled"`
-	User     string `json:"user" yaml:"user"`
-	Password string `json:"password" yaml:"password"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -73,6 +67,7 @@ func NewKafkaConfig() KafkaConfig {
 		AckReplicas:          false,
 		TargetVersion:        sarama.V1_0_0_0.String(),
 		TLS:                  btls.NewConfig(),
+		SASL:                 sasl.NewConfig(),
 		MaxInFlight:          1,
 		Config:               rConf,
 		Batching:             batching,
@@ -84,6 +79,7 @@ func NewKafkaConfig() KafkaConfig {
 // Kafka is a writer type that writes messages into kafka.
 type Kafka struct {
 	log   log.Modular
+	mgr   types.Manager
 	stats metrics.Type
 
 	backoff backoff.BackOff
@@ -108,7 +104,7 @@ type Kafka struct {
 }
 
 // NewKafka creates a new Kafka writer type.
-func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, error) {
+func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*Kafka, error) {
 	compression, err := strToCompressionCodec(conf.Compression)
 	if err != nil {
 		return nil, err
@@ -126,6 +122,7 @@ func NewKafka(conf KafkaConfig, log log.Modular, stats metrics.Type) (*Kafka, er
 
 	k := Kafka{
 		log:   log,
+		mgr:   mgr,
 		stats: stats,
 
 		conf:        conf,
@@ -254,10 +251,8 @@ func (k *Kafka) Connect() error {
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
 	}
-	if k.conf.SASL.Enabled {
-		config.Net.SASL.Enable = true
-		config.Net.SASL.User = k.conf.SASL.User
-		config.Net.SASL.Password = k.conf.SASL.Password
+	if err := k.conf.SASL.Apply(k.mgr, config); err != nil {
+		return err
 	}
 
 	if k.conf.AckReplicas {

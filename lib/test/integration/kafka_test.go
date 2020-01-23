@@ -112,7 +112,7 @@ func TestKafkaIntegration(t *testing.T) {
 		outConf.TargetVersion = "2.1.0"
 		outConf.Addresses = []string{address}
 		outConf.Topic = "pls_ignore_just_testing_connection"
-		tmpOutput, serr := writer.NewKafka(outConf, log, metrics.Noop())
+		tmpOutput, serr := writer.NewKafka(outConf, types.NoopMgr(), log, metrics.Noop())
 		if serr != nil {
 			return serr
 		}
@@ -151,13 +151,13 @@ func createKafkaInputOutput(
 	defer done()
 
 	log := log.Noop()
-	if mInput, err = reader.NewKafkaCG(inConf, nil, log, metrics.Noop()); err != nil {
+	if mInput, err = reader.NewKafkaCG(inConf, types.NoopMgr(), log, metrics.Noop()); err != nil {
 		return
 	}
 	if err = mInput.ConnectWithContext(ctx); err != nil {
 		return
 	}
-	if mOutput, err = writer.NewKafka(outConf, log, metrics.Noop()); err != nil {
+	if mOutput, err = writer.NewKafka(outConf, types.NoopMgr(), log, metrics.Noop()); err != nil {
 		return
 	}
 	if err = mOutput.Connect(); err != nil {
@@ -181,7 +181,7 @@ func testKafkaStreamsALO(address string, t *testing.T) {
 	outConf.Topic = topic
 
 	outputCtr := func() (mOutput writer.Type, err error) {
-		if mOutput, err = writer.NewKafka(outConf, log.Noop(), metrics.Noop()); err != nil {
+		if mOutput, err = writer.NewKafka(outConf, types.NoopMgr(), log.Noop(), metrics.Noop()); err != nil {
 			return
 		}
 		err = mOutput.Connect()
