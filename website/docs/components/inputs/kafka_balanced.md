@@ -193,7 +193,7 @@ sasl.user: ${USER}
 
 ### `sasl.password`
 
-`string` A `PLAIN` It is recommended that you use environment variables to populate this field.
+`string` A `PLAIN` password. It is recommended that you use environment variables to populate this field.
 
 ```yaml
 # Examples

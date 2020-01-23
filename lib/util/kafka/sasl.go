@@ -25,10 +25,10 @@ type SASLConfig struct {
 func SASLFieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
 		docs.FieldCommon("mechanism", "The SASL authentication mechanism.", sarama.SASLTypePlaintext, sarama.SASLTypeOAuth),
-		docs.FieldCommon("user", "A `" + sarama.SASLTypePlaintext + "` username. It is recommended that you use environment variables to populate this field.", "${USER}"),
-		docs.FieldCommon("password", "A `" + sarama.SASLTypePlaintext + "` It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
-		docs.FieldCommon("access_token", "A static `" + sarama.SASLTypeOAuth + "` access token"),
-		docs.FieldCommon("token_cache", "The name of a `cache` resource to fetch`" + sarama.SASLTypeOAuth + "` tokens from"),
+		docs.FieldCommon("user", "A `"+sarama.SASLTypePlaintext+"` username. It is recommended that you use environment variables to populate this field.", "${USER}"),
+		docs.FieldCommon("password", "A `"+sarama.SASLTypePlaintext+"` password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
+		docs.FieldCommon("access_token", "A static `"+sarama.SASLTypeOAuth+"` access token"),
+		docs.FieldCommon("token_cache", "The name of a `cache` resource to fetch`"+sarama.SASLTypeOAuth+"` tokens from"),
 		docs.FieldCommon("token_key", "The cache key to use with `token_cache`"),
 	)
 }
