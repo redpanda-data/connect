@@ -41,6 +41,7 @@ var Constructors = map[string]TypeSpec{}
 // String constants representing each metric type.
 const (
 	TypeBlackList  = "blacklist"
+	TypeCloudWatch = "cloudwatch"
 	TypeHTTPServer = "http_server"
 	TypePrometheus = "prometheus"
 	TypeRename     = "rename"
@@ -56,6 +57,7 @@ const (
 type Config struct {
 	Type       string           `json:"type" yaml:"type"`
 	Blacklist  BlacklistConfig  `json:"blacklist" yaml:"blacklist"`
+	CloudWatch CloudWatchConfig `json:"cloudwatch" yaml:"cloudwatch"`
 	HTTP       HTTPConfig       `json:"http_server" yaml:"http_server"`
 	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Rename     RenameConfig     `json:"rename" yaml:"rename"`
@@ -69,6 +71,7 @@ func NewConfig() Config {
 	return Config{
 		Type:       "http_server",
 		Blacklist:  NewBlacklistConfig(),
+		CloudWatch: NewCloudWatchConfig(),
 		HTTP:       NewHTTPConfig(),
 		Prometheus: NewPrometheusConfig(),
 		Rename:     NewRenameConfig(),

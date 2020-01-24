@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New `socket` output.
 - Kafka connectors now support SASL using `OAUTHBEARER`, `SCRAM-SHA-256`,
   `SCRAM-SHA-512` mechanisms.
+- Experimental support for AWS CloudWatch metrics.
 
 ### Changed
 
