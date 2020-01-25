@@ -8,6 +8,10 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
+	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
+	"github.com/Jeffail/benthos/v3/lib/util/retries"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -23,20 +27,35 @@ Both the ` + "`id` and `index`" + ` fields can be dynamically set using function
 interpolations described [here](/docs/configuration/interpolation#functions). When
 sending batched messages these interpolations are performed per message part.
 
-### AWS Credentials
+### AWS
 
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).
-
-If the configured target is a managed AWS Elasticsearch cluster, you may need
-to set ` + "`sniff` and `healthcheck`" + ` to false for connections to succeed.`,
+It's possible to enable AWS connectivity with this output using the ` + "`aws`" + `
+fields. However, you may need to set ` + "`sniff` and `healthcheck`" + ` to
+false for connections to succeed.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.Elasticsearch, conf.Elasticsearch.Batching)
 		},
 		Async:   true,
 		Batches: true,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"http://localhost:9200"}),
+			docs.FieldCommon("index", "The index to place messages.").SupportsInterpolation(false),
+			docs.FieldAdvanced("pipeline", "An optional pipeline id to preprocess incoming documents.").SupportsInterpolation(false),
+			docs.FieldCommon("id", "The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").SupportsInterpolation(false),
+			docs.FieldCommon("type", "The document type."),
+			docs.FieldAdvanced("sniff", "Prompts Benthos to sniff for brokers to connect to when establishing a connection."),
+			docs.FieldAdvanced("healthcheck", "Whether to enable healthchecks."),
+			docs.FieldAdvanced("timeout", "The maximum time to wait before abandoning a request (and trying again)."),
+			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		}.Merge(retries.FieldSpecs()).Add(
+			auth.BasicAuthFieldSpec(),
+			batch.FieldSpec(),
+			docs.FieldAdvanced("aws", "Enables and customises connectivity to Amazon Elastic Service.").WithChildren(
+				docs.FieldSpecs{
+					docs.FieldCommon("enabled", "Whether to connect to Amazon Elastic Service."),
+				}.Merge(sess.FieldSpecs())...,
+			),
+		),
 	}
 }
 

@@ -253,7 +253,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			}
 			flattenedFields = append(flattenedFields, newV)
 			if len(v.Children) > 0 {
-				missingFields = append(missingFields, walkFields(v.Name+".", gConf.S(v.Name), v.Children)...)
+				missingFields = append(missingFields, walkFields(path+v.Name+".", gConf.S(v.Name), v.Children)...)
 			}
 		}
 		for k := range expectedFields {

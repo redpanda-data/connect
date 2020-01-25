@@ -116,6 +116,16 @@ func FieldDeprecated(name string) FieldSpec {
 // FieldSpecs is a slice of field specs for a component.
 type FieldSpecs []FieldSpec
 
+// Merge with another set of FieldSpecs.
+func (f FieldSpecs) Merge(specs FieldSpecs) FieldSpecs {
+	return append(f, specs...)
+}
+
+// Add more field specs.
+func (f FieldSpecs) Add(specs ...FieldSpec) FieldSpecs {
+	return append(f, specs...)
+}
+
 // ConfigCommon takes a sanitised configuration of a component, a map of field
 // docs, and removes all fields that aren't common or are deprecated.
 func (f FieldSpecs) ConfigCommon(config interface{}) (interface{}, error) {

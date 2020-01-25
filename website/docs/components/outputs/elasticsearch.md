@@ -11,47 +11,81 @@ type: output
 -->
 
 
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 output:
   elasticsearch:
-    aws:
-      credentials:
-        id: ""
-        profile: ""
-        role: ""
-        role_external_id: ""
-        secret: ""
-        token: ""
-      enabled: false
-      endpoint: ""
-      region: eu-west-1
+    urls:
+    - http://localhost:9200
+    index: benthos_index
+    pipeline: ""
+    id: ${!count:elastic_ids}-${!timestamp_unix}
+    type: doc
+    max_in_flight: 1
+    batching:
+      count: 1
+      byte_size: 0
+      period: ""
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  elasticsearch:
+    urls:
+    - http://localhost:9200
+    index: benthos_index
+    pipeline: ""
+    id: ${!count:elastic_ids}-${!timestamp_unix}
+    type: doc
+    sniff: true
+    healthcheck: true
+    timeout: 5s
+    max_in_flight: 1
+    max_retries: 0
     backoff:
       initial_interval: 1s
-      max_elapsed_time: 30s
       max_interval: 5s
+      max_elapsed_time: 30s
     basic_auth:
       enabled: false
       password: ""
       username: ""
     batching:
+      count: 1
       byte_size: 0
+      period: ""
       condition:
         static: false
         type: static
-      count: 1
-      period: ""
-    healthcheck: true
-    id: ${!count:elastic_ids}-${!timestamp_unix}
-    index: benthos_index
-    max_in_flight: 1
-    max_retries: 0
-    pipeline: ""
-    sniff: true
-    timeout: 5s
-    type: doc
-    urls:
-    - http://localhost:9200
+    aws:
+      enabled: false
+      region: eu-west-1
+      endpoint: ""
+      credentials:
+        profile: ""
+        id: ""
+        secret: ""
+        token: ""
+        role: ""
+        role_external_id: ""
 ```
+
+</TabItem>
+</Tabs>
 
 Publishes messages into an Elasticsearch index. If the index does not exist then
 it is created with a dynamic mapping.
@@ -60,15 +94,11 @@ Both the `id` and `index` fields can be dynamically set using function
 interpolations described [here](/docs/configuration/interpolation#functions). When
 sending batched messages these interpolations are performed per message part.
 
-### AWS Credentials
+### AWS
 
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).
-
-If the configured target is a managed AWS Elasticsearch cluster, you may need
-to set `sniff` and `healthcheck` to false for connections to succeed.
+It's possible to enable AWS connectivity with this output using the `aws`
+fields. However, you may need to set `sniff` and `healthcheck` to
+false for connections to succeed.
 
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
@@ -77,5 +107,182 @@ field `max_in_flight`.
 This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](/docs/configuration/batching).
+
+## Fields
+
+### `urls`
+
+`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+```yaml
+# Examples
+
+urls:
+- http://localhost:9200
+```
+
+### `index`
+
+`string` The index to place messages.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `pipeline`
+
+`string` An optional pipeline id to preprocess incoming documents.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `id`
+
+`string` The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `type`
+
+`string` The document type.
+
+### `sniff`
+
+`bool` Prompts Benthos to sniff for brokers to connect to when establishing a connection.
+
+### `healthcheck`
+
+`bool` Whether to enable healthchecks.
+
+### `timeout`
+
+`string` The maximum time to wait before abandoning a request (and trying again).
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+### `max_retries`
+
+`number` The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+
+### `backoff`
+
+`object` Control time intervals between retry attempts.
+
+### `backoff.initial_interval`
+
+`string` The initial period to wait between retry attempts.
+
+### `backoff.max_interval`
+
+`string` The maximum period to wait between retry attempts.
+
+### `backoff.max_elapsed_time`
+
+`string` The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+
+### `basic_auth`
+
+`object` Allows you to specify basic authentication.
+
+```yaml
+# Examples
+
+basic_auth:
+  enabled: true
+  password: bar
+  username: foo
+```
+
+### `batching`
+
+`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+
+```yaml
+# Examples
+
+batching:
+  byte_size: 5000
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  condition:
+    text:
+      arg: END BATCH
+      operator: contains
+  period: 1m
+```
+
+### `batching.count`
+
+`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+### `batching.byte_size`
+
+`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+### `batching.period`
+
+`string` A period in which an incomplete batch should be flushed regardless of its size.
+
+```yaml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.condition`
+
+`object` A [`condition`](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+### `aws`
+
+`object` Enables and customises connectivity to Amazon Elastic Service.
+
+### `aws.enabled`
+
+`bool` Whether to connect to Amazon Elastic Service.
+
+### `aws.region`
+
+`string` The AWS region to target.
+
+### `aws.endpoint`
+
+`string` Allows you to specify a custom endpoint for the AWS API.
+
+### `aws.credentials`
+
+`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+### `aws.credentials.profile`
+
+`string` A profile from `~/.aws/credentials` to use.
+
+### `aws.credentials.id`
+
+`string` The ID of credentials to use.
+
+### `aws.credentials.secret`
+
+`string` The secret for the credentials being used.
+
+### `aws.credentials.token`
+
+`string` The token for the credentials being used, required when using short term credentials.
+
+### `aws.credentials.role`
+
+`string` A role ARN to assume.
+
+### `aws.credentials.role_external_id`
+
+`string` An external ID to provide when assuming a role.
 
 

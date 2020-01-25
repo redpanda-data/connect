@@ -11,11 +11,11 @@ type: output
 -->
 
 
+Drops all messages.
+
 ```yaml
 output:
   drop: {}
 ```
-
-Drops all messages.
 
 

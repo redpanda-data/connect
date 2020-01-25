@@ -8,6 +8,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
+	"github.com/Jeffail/benthos/v3/lib/util/retries"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,9 +18,9 @@ import (
 func init() {
 	Constructors[TypeDynamoDB] = TypeSpec{
 		constructor: NewDynamoDB,
+		Summary: `
+Inserts items into a DynamoDB table.`,
 		Description: `
-Inserts items into a DynamoDB table.
-
 The field ` + "`string_columns`" + ` is a map of column names to string values,
 where the values are
 [function interpolated](/docs/configuration/interpolation#functions) per message of a
@@ -66,6 +69,33 @@ allowing you to transfer data across accounts. You can find out more
 		},
 		Async:   true,
 		Batches: true,
+		FieldSpecs: append(
+			append(docs.FieldSpecs{
+				docs.FieldCommon("table", "The table to store messages in."),
+				docs.FieldCommon("string_columns", "A map of column keys to string values to store.",
+					map[string]string{
+						"id":           "${!json_field:id}",
+						"title":        "${!json_field:body.title}",
+						"topic":        "${!metadata:kafka_topic}",
+						"full_content": "${!content}",
+					},
+				).SupportsInterpolation(false),
+				docs.FieldCommon("json_map_columns", "A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.",
+					map[string]string{
+						"user":           "path.to.user",
+						"whole_document": ".",
+					},
+					map[string]string{
+						"": ".",
+					},
+				),
+				docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the message is sent."),
+				docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
+				docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+				batch.FieldSpec(),
+			}, session.FieldSpecs()...),
+			retries.FieldSpecs()...,
+		),
 	}
 }
 

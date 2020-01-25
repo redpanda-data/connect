@@ -11,17 +11,18 @@ type: output
 -->
 
 
+Stores each message in a [cache](/docs/components/caches/about).
+
 ```yaml
 output:
   cache:
+    target: ""
     key: ${!count:items}-${!timestamp_unix_nano}
     max_in_flight: 1
-    target: ""
 ```
 
-Stores messages in a cache. Caches are configured within the
-[resources section](/docs/components/caches/about) and can target any of the following
-types:
+Caches are configured within the [resources section](/docs/components/caches/about)
+and can target any of the following types:
 
 - dynamodb
 - file
@@ -30,7 +31,7 @@ types:
 - redis
 - s3
 
-Like follows:
+The `target` field must point to a configured cache like follows:
 
 ``` yaml
 output:
@@ -54,5 +55,31 @@ When sending batched messages the interpolations are performed per message part.
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+## Fields
+
+### `target`
+
+`string` The target cache to store messages in.
+
+### `key`
+
+`string` The key to store messages by, function interpolation should be used in order to derive a unique key for each message.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+```yaml
+# Examples
+
+key: ${!count:items}-${!timestamp_unix_nano}
+
+key: ${!json_field:doc.id}
+
+key: ${!metadata:kafka_key}
+```
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 

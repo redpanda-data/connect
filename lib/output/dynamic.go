@@ -20,11 +20,12 @@ import (
 func init() {
 	Constructors[TypeDynamic] = TypeSpec{
 		constructor: NewDynamic,
+		Summary: `
+A special broker type where the outputs are identified by unique labels and can
+be created, changed and removed during runtime via a REST API.`,
 		Description: `
-The dynamic type is a special broker type where the outputs are identified by
-unique labels and can be created, changed and removed during runtime via a REST
-HTTP interface. The broker pattern used is always ` + "`fan_out`" + `, meaning
-each message will be delivered to each dynamic output.
+The broker pattern used is always ` + "`fan_out`" + `, meaning each message will
+be delivered to each dynamic output.
 
 To GET a JSON map of output identifiers with their current uptimes use the
 '/outputs' endpoint.
