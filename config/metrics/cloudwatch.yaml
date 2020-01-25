@@ -43,6 +43,7 @@ metrics:
       secret: ""
       token: ""
     endpoint: ""
+    flush_period: 100ms
     namespace: Benthos
     region: eu-west-1
 tracer:

@@ -950,6 +950,7 @@ metrics:
       secret: ${METRICS_CLOUDWATCH_CREDENTIALS_SECRET}
       token: ${METRICS_CLOUDWATCH_CREDENTIALS_TOKEN}
     endpoint: ${METRICS_CLOUDWATCH_ENDPOINT}
+    flush_period: ${METRICS_CLOUDWATCH_FLUSH_PERIOD:100ms}
     namespace: ${METRICS_CLOUDWATCH_NAMESPACE:Benthos}
     region: ${METRICS_CLOUDWATCH_REGION:eu-west-1}
   http_server:

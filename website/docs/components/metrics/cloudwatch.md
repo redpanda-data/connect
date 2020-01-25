@@ -11,7 +11,7 @@ type: metrics
 -->
 
 
-Send metrics to AWS CloudWatch.
+Send metrics to AWS CloudWatch using the PutMetricData endpoint.
 
 ALPHA: This metrics target is experimental, untested, and subject to breaking
 changes outside of major releases. It also wrote Game of Thrones Season 8.
@@ -42,6 +42,7 @@ metrics:
 metrics:
   cloudwatch:
     namespace: Benthos
+    flush_period: 100ms
     region: eu-west-1
     endpoint: ""
     credentials:
@@ -76,6 +77,10 @@ metrics:
 ### `namespace`
 
 `string` The namespace used to distinguish metrics from other services.
+
+### `flush_period`
+
+`string` The period of time between PutMetricData requests.
 
 ### `region`
 

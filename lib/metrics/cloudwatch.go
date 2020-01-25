@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -10,7 +11,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
+	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 )
 
 //------------------------------------------------------------------------------
@@ -19,7 +22,7 @@ func init() {
 	Constructors[TypeCloudWatch] = TypeSpec{
 		constructor: NewCloudWatch,
 		Summary: `
-Send metrics to AWS CloudWatch.
+Send metrics to AWS CloudWatch using the PutMetricData endpoint.
 
 ALPHA: This metrics target is experimental, untested, and subject to breaking
 changes outside of major releases. It also wrote Game of Thrones Season 8.`,
@@ -40,6 +43,7 @@ metrics:
 ` + "```" + ``,
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("namespace", "The namespace used to distinguish metrics from other services."),
+			docs.FieldAdvanced("flush_period", "The period of time between PutMetricData requests."),
 		}, session.FieldSpecs()...),
 	}
 }
@@ -50,44 +54,83 @@ metrics:
 type CloudWatchConfig struct {
 	session.Config `json:",inline" yaml:",inline"`
 	Namespace      string `json:"namespace" yaml:"namespace"`
+	FlushPeriod    string `json:"flush_period" yaml:"flush_period"`
 }
 
 // NewCloudWatchConfig creates an CloudWatchConfig struct with default values.
 func NewCloudWatchConfig() CloudWatchConfig {
 	return CloudWatchConfig{
-		Config:    session.NewConfig(),
-		Namespace: "Benthos",
+		Config:      session.NewConfig(),
+		Namespace:   "Benthos",
+		FlushPeriod: "100ms",
 	}
 }
 
 //------------------------------------------------------------------------------
 
-const maxCloudWatchValues = 250
+const maxCloudWatchMetrics = 20
+const maxCloudWatchValues = 150
+const maxCloudWatchDimensions = 10
+
+type cloudWatchDatum struct {
+	MetricName string
+	Unit       string
+	Dimensions []*cloudwatch.Dimension
+	Timestamp  time.Time
+	Value      int64
+	Values     map[int64]int64
+}
 
 type cloudWatchStat struct {
 	root       *CloudWatch
+	id         string
 	name       string
 	unit       string
 	dimensions []*cloudwatch.Dimension
 }
 
+// Trims a map of datum values to a ceiling. The primary goal here is to be fast
+// and efficient rather than accurately preserving the most common values.
+func trimValuesMap(m map[int64]int64) {
+	ceiling := maxCloudWatchValues
+
+	// Start off by randomly removing values that have been seen only once.
+	for k, v := range m {
+		if len(m) <= ceiling {
+			// If we reach our ceiling already then we're done.
+			return
+		}
+		if v == 1 {
+			delete(m, k)
+		}
+	}
+
+	// Next, randomly remove any values until ceiling is hit.
+	for k := range m {
+		if len(m) <= ceiling {
+			return
+		}
+		delete(m, k)
+	}
+}
+
 func (c *cloudWatchStat) appendValue(v int64) {
 	c.root.datumLock.Lock()
-	existing := c.root.datumses[c.name]
+	existing := c.root.datumses[c.id]
 	if existing == nil {
-		existing = &cloudwatch.MetricDatum{
-			MetricName: &c.name,
-			Unit:       &c.unit,
+		existing = &cloudWatchDatum{
+			MetricName: c.name,
+			Unit:       c.unit,
 			Dimensions: c.dimensions,
-			Values:     []*float64{aws.Float64(float64(v))},
+			Timestamp:  time.Now(),
+			Values:     map[int64]int64{v: 1},
 		}
-		c.root.datumses[c.name] = existing
+		c.root.datumses[c.id] = existing
 	} else {
-		existing.Values = append(existing.Values, aws.Float64(float64(v)))
-		if len(existing.Values) > maxCloudWatchValues {
-			// Trim first value if we're maxed out
-			c.root.log.Tracef("Hit max values for metric '%v'\n", c.name)
-			existing.Values = existing.Values[1:]
+		tally := existing.Values[v]
+		existing.Values[v] = tally + 1
+		if len(existing.Values) > maxCloudWatchValues*5 {
+			trimValuesMap(existing.Values)
 		}
 	}
 	c.root.datumLock.Unlock()
@@ -95,17 +138,18 @@ func (c *cloudWatchStat) appendValue(v int64) {
 
 func (c *cloudWatchStat) addValue(v int64) {
 	c.root.datumLock.Lock()
-	existing := c.root.datumses[c.name]
+	existing := c.root.datumses[c.id]
 	if existing == nil {
-		existing = &cloudwatch.MetricDatum{
-			MetricName: &c.name,
-			Unit:       &c.unit,
+		existing = &cloudWatchDatum{
+			MetricName: c.name,
+			Unit:       c.unit,
 			Dimensions: c.dimensions,
-			Value:      aws.Float64(float64(v)),
+			Timestamp:  time.Now(),
+			Value:      v,
 		}
-		c.root.datumses[c.name] = existing
+		c.root.datumses[c.id] = existing
 	} else {
-		existing.Value = aws.Float64(*existing.Value + float64(v))
+		existing.Value = existing.Value + v
 	}
 	c.root.datumLock.Unlock()
 }
@@ -124,7 +168,9 @@ func (c *cloudWatchStat) Decr(count int64) error {
 
 // Timing sets a timing metric.
 func (c *cloudWatchStat) Timing(delta int64) error {
-	c.appendValue(delta)
+	// Most granular value for timing metrics in cloudwatch is microseconds
+	// versus nanoseconds.
+	c.appendValue(delta / 1000)
 	return nil
 }
 
@@ -142,18 +188,23 @@ type cloudWatchStatVec struct {
 }
 
 func (c *cloudWatchStatVec) with(labelValues ...string) *cloudWatchStat {
-	dimensions := make([]*cloudwatch.Dimension, len(c.labelNames))
+	lDim := len(c.labelNames)
+	if lDim >= maxCloudWatchDimensions {
+		lDim = maxCloudWatchDimensions
+	}
+	dimensions := make([]*cloudwatch.Dimension, lDim)
 	for i, k := range c.labelNames {
-		if len(labelValues) <= i {
+		if len(labelValues) <= i || i >= maxCloudWatchDimensions {
 			break
 		}
 		dimensions[i] = &cloudwatch.Dimension{
-			Name:  &k,
-			Value: &labelValues[i],
+			Name:  aws.String(k),
+			Value: aws.String(labelValues[i]),
 		}
 	}
 	return &cloudWatchStat{
 		root:       c.root,
+		id:         c.name + fmt.Sprintf("%v", labelValues),
 		name:       c.name,
 		unit:       c.unit,
 		dimensions: dimensions,
@@ -189,13 +240,12 @@ func (c *cloudWatchGaugeVec) With(labelValues ...string) StatGauge {
 // CloudWatch is a stats object with capability to hold internal stats as a JSON
 // endpoint.
 type CloudWatch struct {
-	client *cloudwatch.CloudWatch
+	client cloudwatchiface.CloudWatchAPI
 
-	// Values in range of -2^360 to 2^360
-	// No more than 10 dimensions (tags)
-	// No more than 250 values
-	datumses  map[string]*cloudwatch.MetricDatum
+	datumses  map[string]*cloudWatchDatum
 	datumLock *sync.Mutex
+
+	flushPeriod time.Duration
 
 	ctx    context.Context
 	cancel func()
@@ -208,7 +258,7 @@ type CloudWatch struct {
 func NewCloudWatch(config Config, opts ...func(Type)) (Type, error) {
 	c := &CloudWatch{
 		config:    config.CloudWatch,
-		datumses:  map[string]*cloudwatch.MetricDatum{},
+		datumses:  map[string]*cloudWatchDatum{},
 		datumLock: &sync.Mutex{},
 		log:       log.Noop(),
 	}
@@ -221,6 +271,10 @@ func NewCloudWatch(config Config, opts ...func(Type)) (Type, error) {
 	sess, err := config.CloudWatch.GetSession()
 	if err != nil {
 		return nil, err
+	}
+
+	if c.flushPeriod, err = time.ParseDuration(config.CloudWatch.FlushPeriod); err != nil {
+		return nil, fmt.Errorf("failed to parse flush period: %v", err)
 	}
 
 	c.client = cloudwatch.New(sess)
@@ -236,9 +290,11 @@ func toCMName(dotSepName string) string {
 
 // GetCounter returns a stat counter object for a path.
 func (c *CloudWatch) GetCounter(path string) StatCounter {
+	name := toCMName(path)
 	return &cloudWatchStat{
 		root: c,
-		name: toCMName(path),
+		id:   name,
+		name: name,
 		unit: cloudwatch.StandardUnitCount,
 	}
 }
@@ -257,9 +313,11 @@ func (c *CloudWatch) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (c *CloudWatch) GetTimer(path string) StatTimer {
+	name := toCMName(path)
 	return &cloudWatchStat{
 		root: c,
-		name: toCMName(path),
+		id:   name,
+		name: name,
 		unit: cloudwatch.StandardUnitMicroseconds,
 	}
 }
@@ -278,9 +336,11 @@ func (c *CloudWatch) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (c *CloudWatch) GetGauge(path string) StatGauge {
+	name := toCMName(path)
 	return &cloudWatchStat{
 		root: c,
-		name: toCMName(path),
+		id:   name,
+		name: name,
 		unit: cloudwatch.StandardUnitNone,
 	}
 }
@@ -300,7 +360,7 @@ func (c *CloudWatch) GetGaugeVec(path string, n []string) StatGaugeVec {
 //------------------------------------------------------------------------------
 
 func (c *CloudWatch) loop() {
-	ticker := time.NewTicker(time.Millisecond * 100) // TODO
+	ticker := time.NewTicker(c.flushPeriod)
 	defer ticker.Stop()
 	for {
 		select {
@@ -312,37 +372,81 @@ func (c *CloudWatch) loop() {
 	}
 }
 
-// No more than 20 metrics each request
-// 40KB of data
-/*
-	* ErrCodeInvalidParameterValueException "InvalidParameterValue"
-	The value of an input parameter is bad or out-of-range.
+func valuesMapToSlices(m map[int64]int64) (values []*float64, counts []*float64) {
+	ceiling := maxCloudWatchValues
+	lM := len(m)
 
-	* ErrCodeMissingRequiredParameterException "MissingParameter"
-	An input parameter that is required is missing.
+	useCounts := false
+	if lM < ceiling {
+		values = make([]*float64, 0, lM)
+		counts = make([]*float64, 0, lM)
 
-	* ErrCodeInvalidParameterCombinationException "InvalidParameterCombination"
-	Parameters were used together that cannot be used together.
+		for k, v := range m {
+			values = append(values, aws.Float64(float64(k)))
+			counts = append(counts, aws.Float64(float64(v)))
+			if v > 1 {
+				useCounts = true
+			}
+		}
 
-	* ErrCodeInternalServiceFault "InternalServiceError"
-	Request processing has failed due to some unknown error, exception, or failure.
-*/
+		if !useCounts {
+			counts = nil
+		}
+		return
+	}
 
-const maxCloudWatchMetrics = 20
+	values = make([]*float64, 0, ceiling)
+	counts = make([]*float64, 0, ceiling)
+
+	// Try and make our target without taking values with one count.
+	for k, v := range m {
+		if len(values) == ceiling {
+			return
+		}
+		if v > 1 {
+			values = append(values, aws.Float64(float64(k)))
+			counts = append(counts, aws.Float64(float64(v)))
+			useCounts = true
+			delete(m, k)
+		}
+	}
+
+	// Otherwise take randomly.
+	for k, v := range m {
+		if len(values) == ceiling {
+			break
+		}
+		values = append(values, aws.Float64(float64(k)))
+		counts = append(counts, aws.Float64(float64(v)))
+	}
+
+	if !useCounts {
+		counts = nil
+	}
+	return
+}
 
 func (c *CloudWatch) flush() error {
 	c.datumLock.Lock()
 	datumMap := c.datumses
-	c.datumses = map[string]*cloudwatch.MetricDatum{}
+	c.datumses = map[string]*cloudWatchDatum{}
 	c.datumLock.Unlock()
 
 	datums := []*cloudwatch.MetricDatum{}
-	tNow := time.Now()
-
 	for _, v := range datumMap {
 		if v != nil {
-			v.Timestamp = &tNow
-			datums = append(datums, v)
+			d := cloudwatch.MetricDatum{
+				MetricName: &v.MetricName,
+				Dimensions: v.Dimensions,
+				Unit:       &v.Unit,
+				Timestamp:  &v.Timestamp,
+			}
+			if len(v.Values) > 0 {
+				d.Values, d.Counts = valuesMapToSlices(v.Values)
+			} else {
+				d.Value = aws.Float64(float64(v.Value))
+			}
+			datums = append(datums, &d)
 		}
 	}
 
@@ -351,15 +455,24 @@ func (c *CloudWatch) flush() error {
 		MetricData: datums,
 	}
 
+	throttled := false
 	for len(input.MetricData) > 0 {
-		if len(datums) > maxCloudWatchMetrics {
-			input.MetricData, datums = datums[:maxCloudWatchMetrics], datums[maxCloudWatchMetrics:]
-		} else {
-			datums = nil
+		if !throttled {
+			if len(datums) > maxCloudWatchMetrics {
+				input.MetricData, datums = datums[:maxCloudWatchMetrics], datums[maxCloudWatchMetrics:]
+			} else {
+				datums = nil
+			}
 		}
+		throttled = false
 
 		if _, err := c.client.PutMetricData(&input); err != nil {
-			c.log.Errorf("Failed to send metric data: %v\n", err)
+			if request.IsErrorThrottle(err) {
+				throttled = true
+				c.log.Warnln("Metrics request was throttled. Either increase flush period or reduce number of services sending metrics.")
+			} else {
+				c.log.Errorf("Failed to send metric data: %v\n", err)
+			}
 			select {
 			case <-time.After(time.Second):
 			case <-c.ctx.Done():
@@ -367,7 +480,9 @@ func (c *CloudWatch) flush() error {
 			}
 		}
 
-		input.MetricData = datums
+		if !throttled {
+			input.MetricData = datums
+		}
 	}
 
 	return nil

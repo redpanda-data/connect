@@ -73,6 +73,7 @@ require (
 	github.com/smira/go-statsd v1.3.1
 	github.com/spf13/cast v1.3.1
 	github.com/streadway/amqp v0.0.0-20200108173154-1c71cc93ed71
+	github.com/stretchr/testify v1.4.0
 	github.com/trivago/grok v1.0.0
 	github.com/trivago/tgo v1.0.5 // indirect
 	github.com/uber/jaeger-client-go v2.21.1+incompatible
