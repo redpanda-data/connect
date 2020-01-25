@@ -23,8 +23,6 @@ archives:
       - LICENSE
       - config/*
       - config/**/*
-      - docs/*
-      - docs/**/*
   - id: benthos-lambda
     builds: [ benthos-lambda ]
     format: zip
