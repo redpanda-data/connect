@@ -11,19 +11,34 @@ type: output
 -->
 
 
+Sends messages to a GCP Cloud Pub/Sub topic. Metadata from messages are sent as
+attributes.
+
 ```yaml
 output:
   gcp_pubsub:
-    max_in_flight: 1
     project: ""
     topic: ""
+    max_in_flight: 1
 ```
 
-Sends messages to a GCP Cloud Pub/Sub topic. Metadata from messages are sent as
-attributes.
 
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+## Fields
+
+### `project`
+
+`string` The project ID of the topic to publish to.
+
+### `topic`
+
+`string` The topic to publish to.
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 

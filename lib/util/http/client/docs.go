@@ -13,7 +13,7 @@ func FieldSpecs() docs.FieldSpecs {
 		docs.FieldCommon("verb", "A verb to connect with", "POST", "GET", "DELETE").HasType("string"),
 		docs.FieldCommon("headers", "A map of headers to add to the request.", map[string]interface{}{
 			"Content-Type": "application/octet-stream",
-		}).HasType("object"),
+		}).HasType("object").SupportsInterpolation(false),
 	}
 	httpSpecs = append(httpSpecs, auth.FieldSpecs()...)
 	httpSpecs = append(httpSpecs, tls.FieldSpec())

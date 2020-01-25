@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,10 +13,15 @@ import (
 func init() {
 	Constructors[TypeGCPPubSub] = TypeSpec{
 		constructor: NewGCPPubSub,
-		Description: `
+		Summary: `
 Sends messages to a GCP Cloud Pub/Sub topic. Metadata from messages are sent as
 attributes.`,
 		Async: true,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("project", "The project ID of the topic to publish to."),
+			docs.FieldCommon("topic", "The topic to publish to."),
+			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		},
 	}
 }
 

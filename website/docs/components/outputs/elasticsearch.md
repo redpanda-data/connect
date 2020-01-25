@@ -11,6 +11,9 @@ type: output
 -->
 
 
+Publishes messages into an Elasticsearch index. If the index does not exist then
+it is created with a dynamic mapping.
+
 
 import Tabs from '@theme/Tabs';
 
@@ -29,7 +32,6 @@ output:
     urls:
     - http://localhost:9200
     index: benthos_index
-    pipeline: ""
     id: ${!count:elastic_ids}-${!timestamp_unix}
     type: doc
     max_in_flight: 1
@@ -86,9 +88,6 @@ output:
 
 </TabItem>
 </Tabs>
-
-Publishes messages into an Elasticsearch index. If the index does not exist then
-it is created with a dynamic mapping.
 
 Both the `id` and `index` fields can be dynamically set using function
 interpolations described [here](/docs/configuration/interpolation#functions). When

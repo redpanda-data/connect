@@ -8,6 +8,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
+	"github.com/Jeffail/benthos/v3/lib/util/retries"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -29,6 +32,11 @@ allowing you to transfer data across accounts. You can find out more
 		},
 		Async:   true,
 		Batches: true,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("stream", "The stream to publish messages to."),
+			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			batch.FieldSpec(),
+		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
 	}
 }
 

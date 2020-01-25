@@ -16,22 +16,15 @@ import (
 
 //------------------------------------------------------------------------------
 
-func saslFieldSpec() docs.FieldSpec {
-	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
-		docs.FieldCommon("enabled", "Whether SASL authentication is enabled."),
-		docs.FieldCommon("user", "A plain text username. It is recommended that you use environment variables to populate this field.", "${USER}"),
-		docs.FieldCommon("password", "A plain text password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
-	)
-}
-
 func init() {
 	Constructors[TypeKafka] = TypeSpec{
 		constructor: NewKafka,
-		Description: `
+		Summary: `
 The kafka output type writes a batch of messages to Kafka brokers and waits for
-acknowledgement before propagating it back to the input. The config field
-` + "`ack_replicas`" + ` determines whether we wait for acknowledgement from all
-replicas or just a single broker.
+acknowledgement before propagating it back to the input.`,
+		Description: `
+The config field ` + "`ack_replicas`" + ` determines whether we wait for
+acknowledgement from all replicas or just a single broker.
 
 Both the ` + "`key` and `topic`" + ` fields can be dynamically set using
 function interpolations described [here](/docs/configuration/interpolation#functions).

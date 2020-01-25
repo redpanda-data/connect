@@ -11,6 +11,9 @@ type: output
 -->
 
 
+The kafka output type writes a batch of messages to Kafka brokers and waits for
+acknowledgement before propagating it back to the input.
+
 
 import Tabs from '@theme/Tabs';
 
@@ -87,10 +90,8 @@ output:
 </TabItem>
 </Tabs>
 
-The kafka output type writes a batch of messages to Kafka brokers and waits for
-acknowledgement before propagating it back to the input. The config field
-`ack_replicas` determines whether we wait for acknowledgement from all
-replicas or just a single broker.
+The config field `ack_replicas` determines whether we wait for
+acknowledgement from all replicas or just a single broker.
 
 Both the `key` and `topic` fields can be dynamically set using
 function interpolations described [here](/docs/configuration/interpolation#functions).

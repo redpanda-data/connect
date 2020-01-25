@@ -11,28 +11,52 @@ type: output
 -->
 
 
+Sends messages to an HTTP server.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 output:
   http_client:
-    backoff_on:
-    - 429
-    basic_auth:
-      enabled: false
-      password: ""
-      username: ""
-    batching:
-      byte_size: 0
-      condition:
-        static: false
-        type: static
-      count: 1
-      period: ""
-    copy_response_headers: false
-    drop_on: []
+    url: http://localhost:4195/post
+    verb: POST
     headers:
       Content-Type: application/octet-stream
+    rate_limit: ""
+    timeout: 5s
     max_in_flight: 1
-    max_retry_backoff: 300s
+    url: http://localhost:4195/post
+    verb: POST
+    headers:
+      Content-Type: application/octet-stream
+    rate_limit: ""
+    timeout: 5s
+    batching:
+      count: 1
+      byte_size: 0
+      period: ""
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  http_client:
+    url: http://localhost:4195/post
+    verb: POST
+    headers:
+      Content-Type: application/octet-stream
     oauth:
       access_token: ""
       access_token_secret: ""
@@ -40,29 +64,68 @@ output:
       consumer_secret: ""
       enabled: false
       request_url: ""
-    propagate_response: false
-    rate_limit: ""
-    retries: 3
-    retry_period: 1s
-    successful_on: []
-    timeout: 5s
-    tls:
-      client_certs: []
+    basic_auth:
       enabled: false
-      root_cas_file: ""
+      password: ""
+      username: ""
+    tls:
+      enabled: false
       skip_cert_verify: false
+      root_cas_file: ""
+      client_certs: []
+    copy_response_headers: false
+    rate_limit: ""
+    timeout: 5s
+    retry_period: 1s
+    max_retry_backoff: 300s
+    retries: 3
+    backoff_on:
+    - 429
+    drop_on: []
+    successful_on: []
+    propagate_response: false
+    max_in_flight: 1
     url: http://localhost:4195/post
     verb: POST
+    headers:
+      Content-Type: application/octet-stream
+    oauth:
+      access_token: ""
+      access_token_secret: ""
+      consumer_key: ""
+      consumer_secret: ""
+      enabled: false
+      request_url: ""
+    basic_auth:
+      enabled: false
+      password: ""
+      username: ""
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      root_cas_file: ""
+      client_certs: []
+    copy_response_headers: false
+    rate_limit: ""
+    timeout: 5s
+    retry_period: 1s
+    max_retry_backoff: 300s
+    retries: 3
+    backoff_on:
+    - 429
+    drop_on: []
+    successful_on: []
+    batching:
+      count: 1
+      byte_size: 0
+      period: ""
+      condition:
+        static: false
+        type: static
 ```
 
-Sends messages to an HTTP server. The request will be retried for each message
-whenever the response code is outside the range of 200 -> 299 inclusive. It is
-possible to list codes outside of this range in the `drop_on` field in
-order to prevent retry attempts.
-
-The period of time between retries is linear by default. Response codes that are
-within the `backoff_on` list will instead apply exponential backoff
-between retry attempts.
+</TabItem>
+</Tabs>
 
 When the number of retries expires the output will reject the message, the
 behaviour after this will depend on the pipeline but usually this simply means
@@ -72,7 +135,7 @@ The URL and header values of this type can be dynamically set using function
 interpolations described [here](/docs/configuration/interpolation#functions).
 
 The body of the HTTP request is the raw contents of the message payload. If the
-message has multiple parts the request will be sent according to
+message has multiple parts (is a batch) the request will be sent according to
 [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html)
 
 ### Propagating Responses
@@ -89,5 +152,320 @@ field `max_in_flight`.
 This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](/docs/configuration/batching).
+
+## Fields
+
+### `url`
+
+`string` The URL to connect to.
+
+### `verb`
+
+`string` A verb to connect with
+
+```yaml
+# Examples
+
+verb: POST
+
+verb: GET
+
+verb: DELETE
+```
+
+### `headers`
+
+`object` A map of headers to add to the request.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+```yaml
+# Examples
+
+headers:
+  Content-Type: application/octet-stream
+```
+
+### `oauth`
+
+`object` Allows you to specify open authentication.
+
+```yaml
+# Examples
+
+oauth:
+  access_token: baz
+  access_token_secret: bev
+  consumer_key: foo
+  consumer_secret: bar
+  enabled: true
+  request_url: http://thisisjustanexample.com/dontactuallyusethis
+```
+
+### `basic_auth`
+
+`object` Allows you to specify basic authentication.
+
+```yaml
+# Examples
+
+basic_auth:
+  enabled: true
+  password: bar
+  username: foo
+```
+
+### `tls`
+
+`object` Custom TLS settings can be used to override system defaults.
+
+### `tls.enabled`
+
+`bool` Whether custom TLS settings are enabled.
+
+### `tls.skip_cert_verify`
+
+`bool` Whether to skip server side certificate verification.
+
+### `tls.root_cas_file`
+
+`string` The path of a root certificate authority file to use.
+
+### `tls.client_certs`
+
+`array` A list of client certificates to use.
+
+```yaml
+# Examples
+
+client_certs:
+- cert: foo
+  key: bar
+
+client_certs:
+- cert_file: ./example.pem
+  key_file: ./example.key
+```
+
+### `copy_response_headers`
+
+`bool` Sets whether to copy the headers from the response to the resulting payload.
+
+### `rate_limit`
+
+`string` An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+
+### `timeout`
+
+`string` A static timeout to apply to requests.
+
+### `retry_period`
+
+`string` The base period to wait between failed requests.
+
+### `max_retry_backoff`
+
+`string` The maximum period to wait between failed requests.
+
+### `retries`
+
+`number` The maximum number of retry attempts to make.
+
+### `backoff_on`
+
+`array` A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
+
+### `drop_on`
+
+`array` A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
+
+### `successful_on`
+
+`array` A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
+
+### `propagate_response`
+
+`bool` Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input.
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+### `url`
+
+`string` The URL to connect to.
+
+### `verb`
+
+`string` A verb to connect with
+
+```yaml
+# Examples
+
+verb: POST
+
+verb: GET
+
+verb: DELETE
+```
+
+### `headers`
+
+`object` A map of headers to add to the request.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+```yaml
+# Examples
+
+headers:
+  Content-Type: application/octet-stream
+```
+
+### `oauth`
+
+`object` Allows you to specify open authentication.
+
+```yaml
+# Examples
+
+oauth:
+  access_token: baz
+  access_token_secret: bev
+  consumer_key: foo
+  consumer_secret: bar
+  enabled: true
+  request_url: http://thisisjustanexample.com/dontactuallyusethis
+```
+
+### `basic_auth`
+
+`object` Allows you to specify basic authentication.
+
+```yaml
+# Examples
+
+basic_auth:
+  enabled: true
+  password: bar
+  username: foo
+```
+
+### `tls`
+
+`object` Custom TLS settings can be used to override system defaults.
+
+### `tls.enabled`
+
+`bool` Whether custom TLS settings are enabled.
+
+### `tls.skip_cert_verify`
+
+`bool` Whether to skip server side certificate verification.
+
+### `tls.root_cas_file`
+
+`string` The path of a root certificate authority file to use.
+
+### `tls.client_certs`
+
+`array` A list of client certificates to use.
+
+```yaml
+# Examples
+
+client_certs:
+- cert: foo
+  key: bar
+
+client_certs:
+- cert_file: ./example.pem
+  key_file: ./example.key
+```
+
+### `copy_response_headers`
+
+`bool` Sets whether to copy the headers from the response to the resulting payload.
+
+### `rate_limit`
+
+`string` An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+
+### `timeout`
+
+`string` A static timeout to apply to requests.
+
+### `retry_period`
+
+`string` The base period to wait between failed requests.
+
+### `max_retry_backoff`
+
+`string` The maximum period to wait between failed requests.
+
+### `retries`
+
+`number` The maximum number of retry attempts to make.
+
+### `backoff_on`
+
+`array` A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
+
+### `drop_on`
+
+`array` A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
+
+### `successful_on`
+
+`array` A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
+
+### `batching`
+
+`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+
+```yaml
+# Examples
+
+batching:
+  byte_size: 5000
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  condition:
+    text:
+      arg: END BATCH
+      operator: contains
+  period: 1m
+```
+
+### `batching.count`
+
+`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+### `batching.byte_size`
+
+`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+### `batching.period`
+
+`string` A period in which an incomplete batch should be flushed regardless of its size.
+
+```yaml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.condition`
+
+`object` A [`condition`](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
 
 

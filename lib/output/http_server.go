@@ -17,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/gorilla/websocket"
 )
 
@@ -40,6 +41,15 @@ websocket of messages for each request respectively.
 
 When messages are batched the ` + "`path`" + ` endpoint encodes the batch
 according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("address", "An optional address to listen from. If left empty the service wide HTTP server is used."),
+			docs.FieldCommon("path", "The path from which discrete messages can be consumed."),
+			docs.FieldCommon("stream_path", "The path from which a continuous stream of messages can be consumed."),
+			docs.FieldCommon("ws_path", "The path from which websocket connections can be established."),
+			docs.FieldAdvanced("timeout", "The maximum time to wait before a blocking, inactive connection is dropped (only applies to the `path` endpoint)."),
+			docs.FieldAdvanced("cert_file", "An optional certificate file to use for TLS connections. Only applicable when an `address` is specified."),
+			docs.FieldAdvanced("key_file", "An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified."),
+		},
 	}
 }
 

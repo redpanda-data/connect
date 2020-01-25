@@ -11,35 +11,66 @@ type: output
 -->
 
 
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 output:
   kinesis:
-    backoff:
-      initial_interval: 1s
-      max_elapsed_time: 30s
-      max_interval: 5s
+    stream: ""
+    partition_key: ""
+    max_in_flight: 1
     batching:
+      count: 1
       byte_size: 0
+      period: ""
+    region: eu-west-1
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  kinesis:
+    stream: ""
+    partition_key: ""
+    hash_key: ""
+    max_in_flight: 1
+    batching:
+      count: 1
+      byte_size: 0
+      period: ""
       condition:
         static: false
         type: static
-      count: 1
-      period: ""
+    region: eu-west-1
+    endpoint: ""
     credentials:
-      id: ""
       profile: ""
-      role: ""
-      role_external_id: ""
+      id: ""
       secret: ""
       token: ""
-    endpoint: ""
-    hash_key: ""
-    max_in_flight: 1
+      role: ""
+      role_external_id: ""
     max_retries: 0
-    partition_key: ""
-    region: eu-west-1
-    stream: ""
+    backoff:
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
 ```
+
+</TabItem>
+</Tabs>
 
 Sends messages to a Kinesis stream.
 
@@ -62,5 +93,132 @@ field `max_in_flight`.
 This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](/docs/configuration/batching).
+
+## Fields
+
+### `stream`
+
+`string` The stream to publish messages to.
+
+### `partition_key`
+
+`string` A required key for partitioning messages.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `hash_key`
+
+`string` A optional hash key for partitioning messages.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+### `batching`
+
+`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+
+```yaml
+# Examples
+
+batching:
+  byte_size: 5000
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  condition:
+    text:
+      arg: END BATCH
+      operator: contains
+  period: 1m
+```
+
+### `batching.count`
+
+`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+### `batching.byte_size`
+
+`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+### `batching.period`
+
+`string` A period in which an incomplete batch should be flushed regardless of its size.
+
+```yaml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.condition`
+
+`object` A [`condition`](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+### `region`
+
+`string` The AWS region to target.
+
+### `endpoint`
+
+`string` Allows you to specify a custom endpoint for the AWS API.
+
+### `credentials`
+
+`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+### `credentials.profile`
+
+`string` A profile from `~/.aws/credentials` to use.
+
+### `credentials.id`
+
+`string` The ID of credentials to use.
+
+### `credentials.secret`
+
+`string` The secret for the credentials being used.
+
+### `credentials.token`
+
+`string` The token for the credentials being used, required when using short term credentials.
+
+### `credentials.role`
+
+`string` A role ARN to assume.
+
+### `credentials.role_external_id`
+
+`string` An external ID to provide when assuming a role.
+
+### `max_retries`
+
+`number` The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+
+### `backoff`
+
+`object` Control time intervals between retry attempts.
+
+### `backoff.initial_interval`
+
+`string` The initial period to wait between retry attempts.
+
+### `backoff.max_interval`
+
+`string` The maximum period to wait between retry attempts.
+
+### `backoff.max_elapsed_time`
+
+`string` The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
 
 

@@ -11,18 +11,23 @@ type: output
 -->
 
 
+Writes each individual message to a new file.
+
 ```yaml
 output:
   files:
     path: ${!count:files}-${!timestamp_unix_nano}.txt
 ```
 
-Writes each individual part of each message to a new file.
+In order for each message to create a new file the path must use function
+interpolations as described [here](/docs/configuration/interpolation#functions).
 
-Message parts only contain raw data, and therefore in order to create a unique
-file for each part you need to generate unique file names. This can be done by
-using function interpolations on the `path` field as described
-[here](/docs/configuration/interpolation#functions). When sending batched messages
-these interpolations are performed per message part.
+## Fields
+
+### `path`
+
+`string` The file to write to, if the file does not yet exist it will be created.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
 
 

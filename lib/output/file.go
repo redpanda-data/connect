@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -13,16 +14,30 @@ import (
 func init() {
 	Constructors[TypeFile] = TypeSpec{
 		constructor: NewFile,
+		Summary: `
+Writes messages in line delimited format to a file.`,
 		Description: `
-The file output type simply appends all messages to an output file. Single part
-messages are printed with a delimiter (defaults to '\n' if left empty).
-Multipart messages are written with each part delimited, with the final part
-followed by two delimiters, e.g. a multipart message [ "foo", "bar", "baz" ]
-would be written as:
+Each message written is followed by a delimiter (defaults to '\n' if left empty)
+and when sending multipart messages (message batches) the last message ends with
+double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
+` + "```" + `
 foo\n
 bar\n
-baz\n\n`,
+baz\n
+` + "```" + `
+
+Whereas a multipart message [ "foo", "bar", "baz" ] would be written as:
+
+` + "```" + `
+foo\n
+bar\n
+baz\n\n
+` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("path", "The file to write to, if the file does not yet exist it will be created."),
+			docs.FieldCommon("delimiter", "A custom delimiter to separate messages with. If left empty defaults to a line break."),
+		},
 	}
 }
 

@@ -11,20 +11,49 @@ type: output
 -->
 
 
+Pushes messages to an MQTT broker.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 output:
   mqtt:
-    client_id: benthos_output
-    max_in_flight: 1
-    password: ""
-    qos: 1
-    topic: benthos_topic
     urls:
     - tcp://localhost:1883
-    user: ""
+    qos: 1
+    topic: benthos_topic
+    client_id: benthos_output
+    max_in_flight: 1
 ```
 
-Pushes messages to an MQTT broker.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  mqtt:
+    urls:
+    - tcp://localhost:1883
+    qos: 1
+    topic: benthos_topic
+    client_id: benthos_output
+    user: ""
+    password: ""
+    max_in_flight: 1
+```
+
+</TabItem>
+</Tabs>
 
 The `topic` field can be dynamically set using function interpolations
 described [here](/docs/configuration/interpolation#functions). When sending batched
@@ -33,5 +62,44 @@ messages these interpolations are performed per message part.
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+## Fields
+
+### `urls`
+
+`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+```yaml
+# Examples
+
+urls:
+- http://localhost:9200
+```
+
+### `qos`
+
+`number` The QoS value to set for each message.
+
+Options are: `0`, `1`, `2`.
+
+### `topic`
+
+`string` The topic to publish messages to.
+
+### `client_id`
+
+`string` An identifier for the client.
+
+### `user`
+
+`string` A username to connect with.
+
+### `password`
+
+`string` A password to connect with.
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 

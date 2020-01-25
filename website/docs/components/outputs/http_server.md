@@ -11,17 +11,44 @@ type: output
 -->
 
 
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 output:
   http_server:
     address: ""
-    cert_file: ""
-    key_file: ""
     path: /get
     stream_path: /get/stream
-    timeout: 5s
     ws_path: /get/ws
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  http_server:
+    address: ""
+    path: /get
+    stream_path: /get/stream
+    ws_path: /get/ws
+    timeout: 5s
+    cert_file: ""
+    key_file: ""
+```
+
+</TabItem>
+</Tabs>
 
 Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
 2.0 is supported when using TLS, which is enabled when key and cert files are
@@ -37,5 +64,35 @@ websocket of messages for each request respectively.
 
 When messages are batched the `path` endpoint encodes the batch
 according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
+
+## Fields
+
+### `address`
+
+`string` An optional address to listen from. If left empty the service wide HTTP server is used.
+
+### `path`
+
+`string` The path from which discrete messages can be consumed.
+
+### `stream_path`
+
+`string` The path from which a continuous stream of messages can be consumed.
+
+### `ws_path`
+
+`string` The path from which websocket connections can be established.
+
+### `timeout`
+
+`string` The maximum time to wait before a blocking, inactive connection is dropped (only applies to the `path` endpoint).
+
+### `cert_file`
+
+`string` An optional certificate file to use for TLS connections. Only applicable when an `address` is specified.
+
+### `key_file`
+
+`string` An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified.
 
 

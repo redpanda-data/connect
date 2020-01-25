@@ -122,6 +122,8 @@ verb: DELETE
 
 `object` A map of headers to add to the request.
 
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
 ```yaml
 # Examples
 
