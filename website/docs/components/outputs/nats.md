@@ -11,17 +11,16 @@ type: output
 -->
 
 
+Publish to an NATS subject.
+
 ```yaml
 output:
   nats:
-    max_in_flight: 1
-    subject: benthos_messages
     urls:
     - nats://127.0.0.1:4222
+    subject: benthos_messages
+    max_in_flight: 1
 ```
-
-Publish to an NATS subject. NATS is at-most-once, so delivery is not guaranteed.
-For at-least-once behaviour with NATS look at NATS Stream.
 
 This output will interpolate functions within the subject field, you
 can find a list of functions [here](/docs/configuration/interpolation#functions).
@@ -29,5 +28,21 @@ can find a list of functions [here](/docs/configuration/interpolation#functions)
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+## Fields
+
+### `urls`
+
+`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+### `subject`
+
+`string` The subject to publish to.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 

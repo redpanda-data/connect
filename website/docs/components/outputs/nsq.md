@@ -11,22 +11,43 @@ type: output
 -->
 
 
+Publish to an NSQ topic.
+
 ```yaml
 output:
   nsq:
-    max_in_flight: 1
     nsqd_tcp_address: localhost:4150
     topic: benthos_messages
     user_agent: benthos_producer
+    max_in_flight: 1
 ```
 
-Publish to an NSQ topic. The `topic` field can be dynamically set
-using function interpolations described
-[here](/docs/configuration/interpolation#functions). When sending batched messages
-these interpolations are performed per message part.
+The `topic` field can be dynamically set using function interpolations
+described [here](/docs/configuration/interpolation#functions). When sending
+batched messages these interpolations are performed per message part.
 
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+## Fields
+
+### `nsqd_tcp_address`
+
+`string` The address of the target NSQD server.
+
+### `topic`
+
+`string` The topic to publish to.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `user_agent`
+
+`string` A user agent string to connect with.
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 

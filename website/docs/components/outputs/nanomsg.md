@@ -11,24 +11,54 @@ type: output
 -->
 
 
+Send messages over a Nanomsg socket.
+
 ```yaml
 output:
   nanomsg:
-    bind: false
-    max_in_flight: 1
-    poll_timeout: 5s
-    socket_type: PUSH
     urls:
     - tcp://localhost:5556
+    bind: false
+    socket_type: PUSH
+    poll_timeout: 5s
+    max_in_flight: 1
 ```
-
-The scalability protocols are common communication patterns. This output should
-be compatible with any implementation, but specifically targets Nanomsg.
 
 Currently only PUSH and PUB sockets are supported.
 
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+## Fields
+
+### `urls`
+
+`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+```yaml
+# Examples
+
+urls:
+- tcp://localhost:5556
+```
+
+### `bind`
+
+`bool` Whether the URLs listed should be bind (otherwise they are connected to).
+
+### `socket_type`
+
+`string` The socket type to send with.
+
+Options are: `PUSH`, `PUB`.
+
+### `poll_timeout`
+
+`string` The maximum period of time to wait for a message to send before the request is abandoned and reattempted.
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 

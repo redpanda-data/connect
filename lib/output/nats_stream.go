@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,9 +13,16 @@ import (
 func init() {
 	Constructors[TypeNATSStream] = TypeSpec{
 		constructor: NewNATSStream,
-		Description: `
+		Summary: `
 Publish to a NATS Stream subject.`,
 		Async: true,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs."),
+			docs.FieldCommon("cluster_id", "The cluster ID to publish to."),
+			docs.FieldCommon("subject", "The subject to publish to."),
+			docs.FieldCommon("client_id", "The client ID to connect with."),
+			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		},
 	}
 }
 

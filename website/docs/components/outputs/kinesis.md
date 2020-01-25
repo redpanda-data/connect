@@ -11,6 +11,8 @@ type: output
 -->
 
 
+Sends messages to a Kinesis stream.
+
 
 import Tabs from '@theme/Tabs';
 
@@ -71,8 +73,6 @@ output:
 
 </TabItem>
 </Tabs>
-
-Sends messages to a Kinesis stream.
 
 Both the `partition_key`(required) and `hash_key` (optional)
 fields can be dynamically set using function interpolations described

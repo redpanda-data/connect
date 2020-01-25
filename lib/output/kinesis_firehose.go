@@ -18,9 +18,9 @@ import (
 func init() {
 	Constructors[TypeKinesisFirehose] = TypeSpec{
 		constructor: NewKinesisFirehose,
+		Summary: `
+Sends messages to a Kinesis Firehose delivery stream.`,
 		Description: `
-Sends messages to a Kinesis Firehose delivery stream.
-
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS

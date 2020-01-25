@@ -73,7 +73,7 @@ field `max_in_flight`.
 # Examples
 
 urls:
-- http://localhost:9200
+- tcp://localhost:1883
 ```
 
 ### `qos`

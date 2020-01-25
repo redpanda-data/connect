@@ -11,6 +11,8 @@ type: output
 -->
 
 
+Sends messages to a Kinesis Firehose delivery stream.
+
 
 import Tabs from '@theme/Tabs';
 
@@ -68,8 +70,6 @@ output:
 
 </TabItem>
 </Tabs>
-
-Sends messages to a Kinesis Firehose delivery stream.
 
 ### Credentials
 

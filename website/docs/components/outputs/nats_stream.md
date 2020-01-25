@@ -11,21 +11,44 @@ type: output
 -->
 
 
+Publish to a NATS Stream subject.
+
 ```yaml
 output:
   nats_stream:
-    client_id: benthos_client
-    cluster_id: test-cluster
-    max_in_flight: 1
-    subject: benthos_messages
     urls:
     - nats://127.0.0.1:4222
+    cluster_id: test-cluster
+    subject: benthos_messages
+    client_id: benthos_client
+    max_in_flight: 1
 ```
 
-Publish to a NATS Stream subject.
 
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+## Fields
+
+### `urls`
+
+`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+### `cluster_id`
+
+`string` The cluster ID to publish to.
+
+### `subject`
+
+`string` The subject to publish to.
+
+### `client_id`
+
+`string` The client ID to connect with.
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
