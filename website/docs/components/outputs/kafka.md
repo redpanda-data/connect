@@ -49,10 +49,10 @@ output:
     addresses:
     - localhost:9092
     tls:
-      client_certs: []
       enabled: false
-      root_cas_file: ""
       skip_cert_verify: false
+      root_cas_file: ""
+      client_certs: []
     sasl:
       mechanism: ""
       user: ""
@@ -127,28 +127,34 @@ addresses:
 
 ### `tls`
 
-`object` Custom TLS settings can be used to override system defaults. This includes
-providing a collection of root certificate authorities, providing a list of
-client certificates to use for client verification and skipping certificate
-verification.
+`object` Custom TLS settings can be used to override system defaults.
 
-Client certificates can either be added by file or by raw contents.
+### `tls.enabled`
+
+`bool` Whether custom TLS settings are enabled.
+
+### `tls.skip_cert_verify`
+
+`bool` Whether to skip server side certificate verification.
+
+### `tls.root_cas_file`
+
+`string` The path of a root certificate authority file to use.
+
+### `tls.client_certs`
+
+`array` A list of client certificates to use.
 
 ```yaml
 # Examples
 
-tls:
-  client_certs:
-  - cert_file: ./example.pem
-    key_file: ./example.key
-  enabled: true
+client_certs:
+- cert: foo
+  key: bar
 
-tls:
-  client_certs:
-  - cert: foo
-    key: bar
-  enabled: true
-  skip_cert_verify: true
+client_certs:
+- cert_file: ./example.pem
+  key_file: ./example.key
 ```
 
 ### `sasl`
@@ -168,7 +174,7 @@ Options are: `PLAIN`, `OAUTHBEARER`, `SCRAM-SHA-256`, `SCRAM-SHA-512`.
 ```yaml
 # Examples
 
-sasl.user: ${USER}
+user: ${USER}
 ```
 
 ### `sasl.password`
@@ -178,7 +184,7 @@ sasl.user: ${USER}
 ```yaml
 # Examples
 
-sasl.password: ${PASSWORD}
+password: ${PASSWORD}
 ```
 
 ### `sasl.access_token`
@@ -279,11 +285,11 @@ batching:
 ```yaml
 # Examples
 
-batching.period: 1s
+period: 1s
 
-batching.period: 1m
+period: 1m
 
-batching.period: 500ms
+period: 500ms
 ```
 
 ### `batching.condition`

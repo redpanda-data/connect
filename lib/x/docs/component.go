@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"strings"
 	"text/template"
 
 	"github.com/Jeffail/benthos/v3/lib/util/config"
@@ -297,14 +298,18 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		}
 
 		var examples []string
-		for _, example := range v.Examples {
-			exampleBytes, err := config.MarshalYAML(map[string]interface{}{
-				v.Name: example,
-			})
-			if err != nil {
-				return nil, err
+		if len(v.Examples) > 0 {
+			nameSplit := strings.Split(v.Name, ".")
+			exampleName := nameSplit[len(nameSplit)-1]
+			for _, example := range v.Examples {
+				exampleBytes, err := config.MarshalYAML(map[string]interface{}{
+					exampleName: example,
+				})
+				if err != nil {
+					return nil, err
+				}
+				examples = append(examples, string(exampleBytes))
 			}
-			examples = append(examples, string(exampleBytes))
 		}
 
 		fieldCtx := fieldContext{

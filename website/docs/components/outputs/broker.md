@@ -11,23 +11,55 @@ type: output
 -->
 
 
+Allows you to route messages to multiple child outputs using a range of
+brokering [patterns](#patterns).
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 output:
   broker:
+    pattern: fan_out
+    outputs: []
     batching:
+      count: 1
       byte_size: 0
+      period: ""
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  broker:
+    copies: 1
+    pattern: fan_out
+    outputs: []
+    batching:
+      count: 1
+      byte_size: 0
+      period: ""
       condition:
         static: false
         type: static
-      count: 1
-      period: ""
-    copies: 1
-    outputs: []
-    pattern: fan_out
 ```
 
-The broker output type allows you to configure multiple output targets by
-listing them:
+</TabItem>
+</Tabs>
+
+[Processors](/docs/components/processors/about) can be listed to apply across
+individual outputs or all outputs:
 
 ``` yaml
 output:
@@ -39,21 +71,93 @@ output:
     - bar:
         bar_field_1: value2
         bar_field_2: value3
-    - baz:
-        baz_field_1: value4
-      # Processors only applied to messages sent to baz.
+      # Processors only applied to messages sent to bar.
       processors:
-      - type: baz_processor
+      - type: bar_processor
 
   # Processors applied to messages sent to all brokered outputs.
   processors:
   - type: some_processor
 ```
 
-The broker pattern determines the way in which messages are allocated to outputs
-and can be chosen from the following:
+## Batching
 
-`fan_out`
+It's possible to configure a [batch policy](/docs/configuration/batching#batch-policy) with a
+broker using the `batching` fields, allowing you to create batches
+after your processing stages. Some inputs do not support broker based batching
+and specify this in their documentation.
+
+## Fields
+
+### `copies`
+
+`number` The number of copies of each configured output to spawn.
+
+### `pattern`
+
+`string` The brokering pattern to use.
+
+Options are: `fan_out`, `fan_out_sequential`, `round_robin`, `greedy`, `try`.
+
+### `outputs`
+
+`array` A list of child outputs to broker.
+
+### `batching`
+
+`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+
+```yaml
+# Examples
+
+batching:
+  byte_size: 5000
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  condition:
+    text:
+      arg: END BATCH
+      operator: contains
+  period: 1m
+```
+
+### `batching.count`
+
+`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+### `batching.byte_size`
+
+`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+### `batching.period`
+
+`string` A period in which an incomplete batch should be flushed regardless of its size.
+
+```yaml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.condition`
+
+`object` A [`condition`](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+## Patterns
+
+The broker pattern determines the way in which messages are allocated and can be
+chosen from the following:
+
+### `fan_out`
 
 With the fan out pattern all outputs will be sent every message that passes
 through Benthos in parallel.
@@ -62,20 +166,20 @@ If an output applies back pressure it will block all subsequent messages, and if
 an output fails to send a message it will be retried continuously until
 completion or service shut down.
 
-`fan_out_sequential`
+### `fan_out_sequential`
 
 Similar to the fan out pattern except outputs are written to sequentially,
 meaning an output is only written to once the preceding output has confirmed
 receipt of the same message.
 
-`round_robin`
+### `round_robin`
 
 With the round robin pattern each message will be assigned a single output
 following their order. If an output applies back pressure it will block all
 subsequent messages. If an output fails to send a message then the message will
 be re-attempted with the next input, and so on.
 
-`greedy`
+### `greedy`
 
 The greedy pattern results in higher output throughput at the cost of
 potentially disproportionate message allocations to those outputs. Each message
@@ -84,7 +188,7 @@ messages as soon as they are able to process them. This results in certain
 faster outputs potentially processing more messages at the cost of slower
 outputs.
 
-`try`
+### `try`
 
 The try pattern attempts to send each message to only one output, starting from
 the first output on the list. If an output attempt fails then the broker
@@ -94,27 +198,4 @@ This pattern is useful for triggering events in the case where certain output
 targets have broken. For example, if you had an output type `http_client`
 but wished to reroute messages whenever the endpoint becomes unreachable you
 could use a try broker.
-
-### Batching
-
-It's possible to configure a [batch policy](/docs/configuration/batching#batch-policy) with a
-broker using the `batching` fields, allowing you to create batches
-after your processing stages. Some inputs do not support broker based batching
-and specify this in their documentation.
-
-### Utilising More Outputs
-
-When using brokered outputs with patterns such as round robin or greedy it is
-possible to have multiple messages in-flight at the same time. In order to fully
-utilise this you either need to have a greater number of input sources than
-output sources [or use a buffer](/docs/components/buffers/about).
-
-### Processors
-
-It is possible to configure [processors](/docs/components/processors/about) at the broker
-level, where they will be applied to _all_ child outputs, as well as on the
-individual child outputs. If you have processors at both the broker level _and_
-on child outputs then the broker processors will be applied _before_ the child
-nodes processors.
-
 

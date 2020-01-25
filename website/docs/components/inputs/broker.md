@@ -154,11 +154,11 @@ batching:
 ```yaml
 # Examples
 
-batching.period: 1s
+period: 1s
 
-batching.period: 1m
+period: 1m
 
-batching.period: 500ms
+period: 500ms
 ```
 
 ### `batching.condition`
