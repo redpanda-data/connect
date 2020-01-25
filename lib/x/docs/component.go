@@ -25,6 +25,9 @@ type ComponentSpec struct {
 	// Description of the component (in markdown).
 	Description string
 
+	// Footnotes of the component (in markdown).
+	Footnotes string
+
 	Fields FieldSpecs
 }
 
@@ -45,6 +48,7 @@ type componentContext struct {
 	Summary        string
 	Description    string
 	Fields         []fieldContext
+	Footnotes      string
 	CommonConfig   string
 	AdvancedConfig string
 }
@@ -135,6 +139,8 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 ` + "```" + `
 
 {{end -}}
+{{end}}{{if gt (len .Footnotes) 0 -}}
+{{.Footnotes}}
 {{end}}
 `
 
@@ -199,6 +205,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		Type:        c.Type,
 		Summary:     c.Summary,
 		Description: c.Description,
+		Footnotes:   c.Footnotes,
 	}
 
 	if tmpBytes, err := yaml.Marshal(fullConfigExample); err == nil {
@@ -223,6 +230,9 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 
 	if len(c.Description) > 0 && c.Description[0] == '\n' {
 		ctx.Description = c.Description[1:]
+	}
+	if len(c.Footnotes) > 0 && c.Footnotes[0] == '\n' {
+		ctx.Footnotes = c.Footnotes[1:]
 	}
 
 	flattenedFields := FieldSpecs{}

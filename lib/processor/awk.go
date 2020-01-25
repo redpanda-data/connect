@@ -36,8 +36,8 @@ is printed by the program) then the original message contents remain unchanged.
 
 Comes with a wide range of [custom functions](#awk-functions) for accessing
 message metadata, json fields, printing logs, etc. These functions can be
-overridden by functions within the program.
-
+overridden by functions within the program.`,
+		Footnotes: `
 ## Codecs
 
 A codec can be specified that determines how the contents of the message are fed

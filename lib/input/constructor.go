@@ -50,6 +50,7 @@ type TypeSpec struct {
 
 	Summary     string
 	Description string
+	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
 	Deprecated  bool
 }

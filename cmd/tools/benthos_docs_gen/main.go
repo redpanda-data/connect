@@ -80,6 +80,7 @@ func doInputs(docsDir string) {
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
 
@@ -101,6 +102,7 @@ func doBuffers(docsDir string) {
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
 
@@ -122,6 +124,7 @@ func doCaches(docsDir string) {
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
 
@@ -143,6 +146,7 @@ func doConditions(docsDir string) {
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
 
@@ -164,6 +168,7 @@ func doMetrics(docsDir string) {
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
 
@@ -188,6 +193,7 @@ func doOutputs(docsDir string) {
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
 		if v.Async {
@@ -218,6 +224,7 @@ func doProcessors(docsDir string) {
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
 
@@ -239,6 +246,7 @@ func doRateLimits(docsDir string) {
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
 
@@ -260,6 +268,7 @@ func doTracers(docsDir string) {
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
 

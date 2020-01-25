@@ -192,4 +192,3 @@ will be used.
 Prints a Benthos log message at a particular log level. The log level is
 optional, and if omitted the level `INFO` will be used.
 
-

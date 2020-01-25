@@ -29,6 +29,7 @@ type TypeSpec struct {
 
 	Summary     string
 	Description string
+	Footnotes   string
 
 	// Deprecated indicates whether this component is deprecated.
 	Deprecated bool

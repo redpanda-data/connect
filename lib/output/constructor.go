@@ -31,6 +31,7 @@ type TypeSpec struct {
 
 	Summary     string
 	Description string
+	Footnotes   string
 
 	// Async indicates whether this output benefits from sending multiple
 	// messages asynchronously over the protocol.
