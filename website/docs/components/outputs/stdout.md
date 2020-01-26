@@ -11,20 +11,36 @@ type: output
 -->
 
 
+The stdout output type prints messages to stdout.
+
 ```yaml
 output:
   stdout:
     delimiter: ""
 ```
 
-The stdout output type prints messages to stdout. Single part messages are
-printed with a delimiter (defaults to '\n' if left empty). Multipart messages
-are written with each part delimited, with the final part followed by two
-delimiters, e.g. a multipart message [ "foo", "bar", "baz" ] would be written
-as:
+Each message written is followed by a delimiter (defaults to '\n' if left empty)
+and when sending multipart messages (message batches) the last message ends with
+double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
+```
+foo\n
+bar\n
+baz\n
+```
+
+Whereas a multipart message [ "foo", "bar", "baz" ] would be written as:
+
+```
 foo\n
 bar\n
 baz\n\n
+```
+
+## Fields
+
+### `delimiter`
+
+`string` A custom delimiter to separate messages with. If left empty defaults to a line break.
 
 

@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -14,9 +15,16 @@ import (
 func init() {
 	Constructors[TypeZMQ4] = TypeSpec{
 		constructor: NewZMQ4,
-		Description: `
+		Summary: `
 The zmq4 output type attempts to send messages to a ZMQ4 port, currently only
 PUSH and PUB sockets are supported.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:5556"}),
+			docs.FieldCommon("bind", "Whether the URLs listed should be bind (otherwise they are connected to)."),
+			docs.FieldCommon("socket_type", "The socket type to send with.").HasOptions("PUSH", "PUB"),
+			docs.FieldAdvanced("high_water_mark", "The message high water mark to use."),
+			docs.FieldCommon("poll_timeout", "The maximum period of time to wait for a message to send before the request is abandoned and reattempted."),
+		},
 	}
 }
 

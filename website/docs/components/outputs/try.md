@@ -11,14 +11,14 @@ type: output
 -->
 
 
+Attempts to send each message to a child output, starting from the first output
+on the list. If an output attempt fails then the next output in the list is
+attempted, and so on.
+
 ```yaml
 output:
   try: []
 ```
-
-Attempts to send each message to only one output, starting from the first output
-on the list. If an output attempt fails then the next output in the list is
-attempted, and so on.
 
 This pattern is useful for triggering events in the case where certain output
 targets have broken. For example, if you had an output type `http_client`

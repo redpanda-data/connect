@@ -11,13 +11,13 @@ type: output
 -->
 
 
+Returns the final message payload back to the input origin of the message, where
+it is dealt with according to that specific input type.
+
 ```yaml
 output:
   sync_response: {}
 ```
-
-Returns the final message payload back to the input origin of the message, where
-it is dealt with according to that specific input type.
 
 For most inputs this mechanism is ignored entirely, in which case the sync
 response is dropped without penalty. It is therefore safe to use this output

@@ -31,12 +31,14 @@ var (
 func init() {
 	Constructors[TypeSwitch] = TypeSpec{
 		constructor: NewSwitch,
-		Description: `
+		Summary: `
 The switch output type allows you to configure multiple conditional output
-targets by listing child outputs paired with conditions. Conditional logic is
-currently applied per whole message batch. In order to multiplex per message of
-a batch use the ` + "[`broker`](/docs/components/outputs/broker)" + ` output with the pattern
-` + "`fan_out`" + `.
+targets by listing child outputs paired with conditions.`,
+		Description: `
+When [batching messages at the input level](/docs/configuration/batching/)
+conditional logic is applied across the entire batch. In order to multiplex per
+message of a batch use the ` + "[`broker`](/docs/components/outputs/broker)" + `
+output with the pattern ` + "`fan_out`" + `.
 
 In the following example, messages containing "foo" will be sent to both the
 ` + "`foo`" + ` and ` + "`baz`" + ` outputs. Messages containing "bar" will be

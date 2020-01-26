@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,12 +13,33 @@ import (
 func init() {
 	Constructors[TypeSocket] = TypeSpec{
 		constructor: NewSocket,
-		Description: `
+		Summary: `
 Sends messages as a continuous stream of line delimited data over a
-(tcp/udp/unix) socket by connecting to a server.
+(tcp/udp/unix) socket by connecting to a server.`,
+		Description: `
+Each message written is followed by a delimiter (defaults to '\n' if left empty)
+and when sending multipart messages (message batches) the last message ends with
+double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
-If batched messages are sent the final message of the batch will be followed by
-two line breaks in order to indicate the end of the batch.`,
+` + "```" + `
+foo\n
+bar\n
+baz\n
+` + "```" + `
+
+Whereas a multipart message [ "foo", "bar", "baz" ] would be written as:
+
+` + "```" + `
+foo\n
+bar\n
+baz\n\n
+` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("network", "The network type to connect as.").HasOptions(
+				"unix", "tcp", "udp",
+			),
+			docs.FieldCommon("address", "The address (or path) to connect to.", "/tmp/benthos.sock", "localhost:9000"),
+		},
 	}
 }
 

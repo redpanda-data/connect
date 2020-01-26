@@ -5,6 +5,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,8 +14,11 @@ import (
 func init() {
 	Constructors[TypeWebsocket] = TypeSpec{
 		constructor: NewWebsocket,
-		Description: `
+		Summary: `
 Sends messages to an HTTP server via a websocket connection.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("url", "The URL to connect to."),
+		}.Merge(auth.FieldSpecs()),
 	}
 }
 

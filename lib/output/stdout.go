@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -13,16 +14,29 @@ import (
 func init() {
 	Constructors[TypeSTDOUT] = TypeSpec{
 		constructor: NewSTDOUT,
+		Summary: `
+The stdout output type prints messages to stdout.`,
 		Description: `
-The stdout output type prints messages to stdout. Single part messages are
-printed with a delimiter (defaults to '\n' if left empty). Multipart messages
-are written with each part delimited, with the final part followed by two
-delimiters, e.g. a multipart message [ "foo", "bar", "baz" ] would be written
-as:
+Each message written is followed by a delimiter (defaults to '\n' if left empty)
+and when sending multipart messages (message batches) the last message ends with
+double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
+` + "```" + `
 foo\n
 bar\n
-baz\n\n`,
+baz\n
+` + "```" + `
+
+Whereas a multipart message [ "foo", "bar", "baz" ] would be written as:
+
+` + "```" + `
+foo\n
+bar\n
+baz\n\n
+` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("delimiter", "A custom delimiter to separate messages with. If left empty defaults to a line break."),
+		},
 	}
 }
 

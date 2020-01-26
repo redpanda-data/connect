@@ -14,10 +14,10 @@ func init() {
 		constructor: func(_ Config, _ types.Manager, logger log.Modular, stats metrics.Type) (Type, error) {
 			return NewWriter(TypeSyncResponse, roundtrip.Writer{}, logger, stats)
 		},
-		Description: `
+		Summary: `
 Returns the final message payload back to the input origin of the message, where
-it is dealt with according to that specific input type.
-
+it is dealt with according to that specific input type.`,
+		Description: `
 For most inputs this mechanism is ignored entirely, in which case the sync
 response is dropped without penalty. It is therefore safe to use this output
 even when combining input types that might not have support for sync responses.

@@ -2,7 +2,7 @@
 title: Error Handling
 ---
 
-A good captain understands that things can always go wrong and plans accordingly.
+It's always possible for things to go wrong, be a good captain and plan ahead.
 
 <div style={{textAlign: 'center'}}><img style={{maxWidth: '300px', marginBottom: '40px'}} src="/img/Blobpirate.svg" /></div>
 

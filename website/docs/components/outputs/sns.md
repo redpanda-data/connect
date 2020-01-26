@@ -11,24 +11,50 @@ type: output
 -->
 
 
+Sends messages to an AWS SNS topic.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 output:
   sns:
-    credentials:
-      id: ""
-      profile: ""
-      role: ""
-      role_external_id: ""
-      secret: ""
-      token: ""
-    endpoint: ""
+    topic_arn: ""
     max_in_flight: 1
     region: eu-west-1
-    timeout: 5s
-    topic_arn: ""
 ```
 
-Sends messages to an AWS SNS topic.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  sns:
+    topic_arn: ""
+    max_in_flight: 1
+    timeout: 5s
+    region: eu-west-1
+    endpoint: ""
+    credentials:
+      profile: ""
+      id: ""
+      secret: ""
+      token: ""
+      role: ""
+      role_external_id: ""
+```
+
+</TabItem>
+</Tabs>
 
 ### Credentials
 
@@ -42,5 +68,55 @@ allowing you to transfer data across accounts. You can find out more
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+## Fields
+
+### `topic_arn`
+
+`string` The topic to publish to.
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+### `timeout`
+
+`string` The maximum period to wait on an upload before abandoning it and reattempting.
+
+### `region`
+
+`string` The AWS region to target.
+
+### `endpoint`
+
+`string` Allows you to specify a custom endpoint for the AWS API.
+
+### `credentials`
+
+`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+### `credentials.profile`
+
+`string` A profile from `~/.aws/credentials` to use.
+
+### `credentials.id`
+
+`string` The ID of credentials to use.
+
+### `credentials.secret`
+
+`string` The secret for the credentials being used.
+
+### `credentials.token`
+
+`string` The token for the credentials being used, required when using short term credentials.
+
+### `credentials.role`
+
+`string` A role ARN to assume.
+
+### `credentials.role_external_id`
+
+`string` An external ID to provide when assuming a role.
 
 

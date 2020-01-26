@@ -11,13 +11,33 @@ type: output
 -->
 
 
+Sends messages to an HTTP server via a websocket connection.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 output:
   websocket:
-    basic_auth:
-      enabled: false
-      password: ""
-      username: ""
+    url: ws://localhost:4195/post/ws
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  websocket:
+    url: ws://localhost:4195/post/ws
     oauth:
       access_token: ""
       access_token_secret: ""
@@ -25,9 +45,48 @@ output:
       consumer_secret: ""
       enabled: false
       request_url: ""
-    url: ws://localhost:4195/post/ws
+    basic_auth:
+      enabled: false
+      password: ""
+      username: ""
 ```
 
-Sends messages to an HTTP server via a websocket connection.
+</TabItem>
+</Tabs>
+
+## Fields
+
+### `url`
+
+`string` The URL to connect to.
+
+### `oauth`
+
+`object` Allows you to specify open authentication.
+
+```yaml
+# Examples
+
+oauth:
+  access_token: baz
+  access_token_secret: bev
+  consumer_key: foo
+  consumer_secret: bar
+  enabled: true
+  request_url: http://thisisjustanexample.com/dontactuallyusethis
+```
+
+### `basic_auth`
+
+`object` Allows you to specify basic authentication.
+
+```yaml
+# Examples
+
+basic_auth:
+  enabled: true
+  password: bar
+  username: foo
+```
 
 

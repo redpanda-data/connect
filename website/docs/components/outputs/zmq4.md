@@ -11,18 +11,77 @@ type: output
 -->
 
 
+The zmq4 output type attempts to send messages to a ZMQ4 port, currently only
+PUSH and PUB sockets are supported.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 output:
   zmq4:
-    bind: true
-    high_water_mark: 0
-    poll_timeout: 5s
-    socket_type: PUSH
     urls:
     - tcp://*:5556
+    bind: true
+    socket_type: PUSH
+    poll_timeout: 5s
 ```
 
-The zmq4 output type attempts to send messages to a ZMQ4 port, currently only
-PUSH and PUB sockets are supported.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  zmq4:
+    urls:
+    - tcp://*:5556
+    bind: true
+    socket_type: PUSH
+    high_water_mark: 0
+    poll_timeout: 5s
+```
+
+</TabItem>
+</Tabs>
+
+## Fields
+
+### `urls`
+
+`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+```yaml
+# Examples
+
+urls:
+- tcp://localhost:5556
+```
+
+### `bind`
+
+`bool` Whether the URLs listed should be bind (otherwise they are connected to).
+
+### `socket_type`
+
+`string` The socket type to send with.
+
+Options are: `PUSH`, `PUB`.
+
+### `high_water_mark`
+
+`number` The message high water mark to use.
+
+### `poll_timeout`
+
+`string` The maximum period of time to wait for a message to send before the request is abandoned and reattempted.
 
 
