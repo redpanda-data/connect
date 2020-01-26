@@ -47,5 +47,6 @@ import ComponentSelect from '@theme/ComponentSelect';
 [processor.filter_parts]: /docs/components/processors/filter_parts
 [conditions]: /docs/components/conditions/about
 [output.broker]: /docs/components/outputs/broker
+[output.switch]: /docs/components/outputs/switch
 [output.retry]: /docs/components/outputs/retry
 [output.try]: /docs/components/outputs/try
