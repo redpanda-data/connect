@@ -24,12 +24,12 @@ output:
 Caches are configured within the [resources section](/docs/components/caches/about)
 and can target any of the following types:
 
-- dynamodb
-- file
-- memcached
-- memory
-- redis
-- s3
+- [`dynamodb`](/docs/components/caches/dynamodb/)
+- [`file`](/docs/components/caches/file/)
+- [`memcached`](/docs/components/caches/memcached/)
+- [`memory`](/docs/components/caches/memory/)
+- [`redis`](/docs/components/caches/redis/)
+- [`s3`](/docs/components/caches/s3/)
 
 The `target` field must point to a configured cache like follows:
 
@@ -51,6 +51,8 @@ resources:
 In order to create a unique `key` value per item you should use
 function interpolations described [here](/docs/configuration/interpolation#functions).
 When sending batched messages the interpolations are performed per message part.
+
+## Performance
 
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the

@@ -145,6 +145,8 @@ source by setting `propagate_response` to `true`. Only inputs that
 support [synchronous responses](/docs/guides/sync_responses) are able to make use of
 these propagated responses.
 
+## Performance
+
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.

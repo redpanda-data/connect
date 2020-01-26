@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/cenkalti/backoff"
 )
 
@@ -21,11 +22,11 @@ import (
 func init() {
 	Constructors[TypeRetry] = TypeSpec{
 		constructor: NewRetry,
-		Description: `
+		Summary: `
 Attempts to write messages to a child output and if the write fails for any
 reason the message is retried either until success or, if the retries or max
-elapsed time fields are non-zero, either is reached.
-
+elapsed time fields are non-zero, either is reached.`,
+		Description: `
 All messages in Benthos are always retried on an output error, but this would
 usually involve propagating the error back to the source of the message, whereby
 it would be reprocessed before reaching the output layer once again.
@@ -57,6 +58,9 @@ use the ` + "[`try`](/docs/components/outputs/try)" + ` output type.`,
 			confMap["output"] = outputSanit
 			return confMap, nil
 		},
+		FieldSpecs: retries.FieldSpecs().Add(
+			docs.FieldCommon("output", "A child output."),
+		),
 	}
 }
 

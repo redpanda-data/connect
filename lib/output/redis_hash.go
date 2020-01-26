@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,12 +13,12 @@ import (
 func init() {
 	Constructors[TypeRedisHash] = TypeSpec{
 		constructor: NewRedisHash,
+		Summary: `
+Sets Redis hash objects using the HMSET command.`,
 		Description: `
-Sets Redis hash objects using the HMSET command.
-
 The field ` + "`key`" + ` supports
-[interpolation functions](/docs/configuration/interpolation#functions) evaluated per
-message of a batch, allowing you to create a unique key for each message.
+[interpolation functions](/docs/configuration/interpolation#functions), allowing
+you to create a unique key for each message.
 
 The field ` + "`fields`" + ` allows you to specify an explicit map of field
 names to interpolated values, also evaluated per message of a batch:
@@ -48,6 +49,17 @@ The order of hash field extraction is as follows:
 
 Where latter stages will overwrite matching field names of a former stage.`,
 		Async: true,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),
+			docs.FieldCommon(
+				"key", "The key for each message, function interpolations should be used to create a unique key per message.",
+				"${!metadata:kafka_key}", "${!json_field:doc.id}", "${!count:msgs}",
+			).SupportsInterpolation(false),
+			docs.FieldCommon("walk_metadata", "Whether all metadata fields of messages should be walked and added to the list of hash fields to set."),
+			docs.FieldCommon("walk_json_object", "Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set."),
+			docs.FieldCommon("fields", "A map of key/value pairs to set as hash fields.").SupportsInterpolation(false),
+			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		},
 	}
 }
 

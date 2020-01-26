@@ -26,11 +26,12 @@ import (
 func init() {
 	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: NewHTTPServer,
-		Description: `
+		Summary: `
 Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
 2.0 is supported when using TLS, which is enabled when key and cert files are
-specified.
-
+specified.`,
+		Description: `
+Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
 You can leave the ` + "`address`" + ` config field blank in order to use the
 default service wide server address, but this will ignore TLS options.
 

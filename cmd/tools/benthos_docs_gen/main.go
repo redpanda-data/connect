@@ -196,6 +196,9 @@ func doOutputs(docsDir string) {
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
+		if v.Async || v.Batches {
+			spec.Description = spec.Description + "\n\n## Performance"
+		}
 		if v.Async {
 			spec.Description = spec.Description + "\n" + output.DocsAsync
 		}

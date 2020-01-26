@@ -99,6 +99,8 @@ It's possible to enable AWS connectivity with this output using the `aws`
 fields. However, you may need to set `sniff` and `healthcheck` to
 false for connections to succeed.
 
+## Performance
+
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.

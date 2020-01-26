@@ -11,20 +11,44 @@ type: output
 -->
 
 
-```yaml
-output:
-  retry:
-    backoff:
-      initial_interval: 500ms
-      max_elapsed_time: 0s
-      max_interval: 3s
-    max_retries: 0
-    output: {}
-```
-
 Attempts to write messages to a child output and if the write fails for any
 reason the message is retried either until success or, if the retries or max
 elapsed time fields are non-zero, either is reached.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+output:
+  retry:
+    output: {}
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  retry:
+    max_retries: 0
+    backoff:
+      initial_interval: 500ms
+      max_interval: 3s
+      max_elapsed_time: 0s
+    output: {}
+```
+
+</TabItem>
+</Tabs>
 
 All messages in Benthos are always retried on an output error, but this would
 usually involve propagating the error back to the source of the message, whereby
@@ -37,5 +61,31 @@ we want to avoid reapplying to the same message more than once in the pipeline.
 Rather than retrying the same output you may wish to retry the send using a
 different output target (a dead letter queue). In which case you should instead
 use the [`try`](/docs/components/outputs/try) output type.
+
+## Fields
+
+### `max_retries`
+
+`number` The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+
+### `backoff`
+
+`object` Control time intervals between retry attempts.
+
+### `backoff.initial_interval`
+
+`string` The initial period to wait between retry attempts.
+
+### `backoff.max_interval`
+
+`string` The maximum period to wait between retry attempts.
+
+### `backoff.max_elapsed_time`
+
+`string` The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+
+### `output`
+
+`object` A child output.
 
 

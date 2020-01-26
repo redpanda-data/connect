@@ -11,29 +11,60 @@ type: output
 -->
 
 
+Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't
+already exist) using the XADD command.
+
 ```yaml
 output:
   redis_streams:
-    body_key: body
-    max_in_flight: 1
-    max_length: 0
-    stream: benthos_stream
     url: tcp://localhost:6379
+    stream: benthos_stream
+    body_key: body
+    max_length: 0
+    max_in_flight: 1
 ```
 
-Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't
-already exist) using the XADD command. It's possible to specify a maximum length
-of the target stream by setting it to a value greater than 0, in which case this
-cap is applied only when Redis is able to remove a whole macro node, for
-efficiency.
+It's possible to specify a maximum length of the target stream by setting it to
+a value greater than 0, in which case this cap is applied only when Redis is
+able to remove a whole macro node, for efficiency.
 
 Redis stream entries are key/value pairs, as such it is necessary to specify the
 key to be set to the body of the message. All metadata fields of the message
 will also be set as key/value pairs, if there is a key collision between
 a metadata item and the body then the body takes precedence.
 
+## Performance
+
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+## Fields
+
+### `url`
+
+`string` The URL of a Redis server to connect to.
+
+```yaml
+# Examples
+
+url: tcp://localhost:6379
+```
+
+### `stream`
+
+`string` The stream to add messages to.
+
+### `body_key`
+
+`string` A key to set the raw body of the message to.
+
+### `max_length`
+
+`number` When greater than zero enforces a rough cap on the length of the target stream.
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 

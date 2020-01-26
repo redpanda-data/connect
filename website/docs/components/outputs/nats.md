@@ -25,6 +25,8 @@ output:
 This output will interpolate functions within the subject field, you
 can find a list of functions [here](/docs/configuration/interpolation#functions).
 
+## Performance
+
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.

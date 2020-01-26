@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,13 +13,18 @@ import (
 func init() {
 	Constructors[TypeRedisPubSub] = TypeSpec{
 		constructor: NewRedisPubSub,
-		Description: `
+		Summary: `
 Publishes messages through the Redis PubSub model. It is not possible to
-guarantee that messages have been received.
-
+guarantee that messages have been received.`,
+		Description: `
 This output will interpolate functions within the channel field, you
 can find a list of functions [here](/docs/configuration/interpolation#functions).`,
 		Async: true,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),
+			docs.FieldCommon("channel", "The channel to publish messages to.").SupportsInterpolation(false),
+			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		},
 	}
 }
 

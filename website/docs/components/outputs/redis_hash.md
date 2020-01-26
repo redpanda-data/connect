@@ -11,22 +11,22 @@ type: output
 -->
 
 
+Sets Redis hash objects using the HMSET command.
+
 ```yaml
 output:
   redis_hash:
-    fields: {}
-    key: ""
-    max_in_flight: 1
     url: tcp://localhost:6379
-    walk_json_object: false
+    key: ""
     walk_metadata: false
+    walk_json_object: false
+    fields: {}
+    max_in_flight: 1
 ```
 
-Sets Redis hash objects using the HMSET command.
-
 The field `key` supports
-[interpolation functions](/docs/configuration/interpolation#functions) evaluated per
-message of a batch, allowing you to create a unique key for each message.
+[interpolation functions](/docs/configuration/interpolation#functions), allowing
+you to create a unique key for each message.
 
 The field `fields` allows you to specify an explicit map of field
 names to interpolated values, also evaluated per message of a batch:
@@ -57,8 +57,56 @@ The order of hash field extraction is as follows:
 
 Where latter stages will overwrite matching field names of a former stage.
 
+## Performance
+
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+## Fields
+
+### `url`
+
+`string` The URL of a Redis server to connect to.
+
+```yaml
+# Examples
+
+url: tcp://localhost:6379
+```
+
+### `key`
+
+`string` The key for each message, function interpolations should be used to create a unique key per message.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+```yaml
+# Examples
+
+key: ${!metadata:kafka_key}
+
+key: ${!json_field:doc.id}
+
+key: ${!count:msgs}
+```
+
+### `walk_metadata`
+
+`bool` Whether all metadata fields of messages should be walked and added to the list of hash fields to set.
+
+### `walk_json_object`
+
+`bool` Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set.
+
+### `fields`
+
+`object` A map of key/value pairs to set as hash fields.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `max_in_flight`
+
+`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 

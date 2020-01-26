@@ -11,6 +11,10 @@ type: output
 -->
 
 
+Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
+2.0 is supported when using TLS, which is enabled when key and cert files are
+specified.
+
 
 import Tabs from '@theme/Tabs';
 
@@ -51,9 +55,6 @@ output:
 </Tabs>
 
 Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
-2.0 is supported when using TLS, which is enabled when key and cert files are
-specified.
-
 You can leave the `address` config field blank in order to use the
 default service wide server address, but this will ignore TLS options.
 

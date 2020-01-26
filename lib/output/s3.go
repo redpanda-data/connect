@@ -5,6 +5,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -12,16 +14,13 @@ import (
 func init() {
 	Constructors[TypeS3] = TypeSpec{
 		constructor: NewAmazonS3,
-		Description: `
+		Summary: `
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
-with the path specified with the ` + "`path`" + ` field.
-
+with the path specified with the ` + "`path`" + ` field.`,
+		Description: `
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#functions), which are
 calculated per message of a batch.
-
-The fields ` + "`content_type`, `content_encoding` and `storage_class`" + ` can
-also be set dynamically using function interpolation.
 
 ### Credentials
 
@@ -30,6 +29,24 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/aws).`,
 		Async: true,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("bucket", "The bucket to upload messages to."),
+			docs.FieldCommon(
+				"path", "The path of each message to upload.",
+				"${!count:files}-${!timestamp_unix_nano}.txt",
+				"${!metadata:kafka_key}.json",
+				"${!json_field:doc.namespace}/${!json_field:doc.id}.json",
+			).SupportsInterpolation(false),
+			docs.FieldCommon("content_type", "The content type to set for each object.").SupportsInterpolation(false),
+			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").SupportsInterpolation(false),
+			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
+				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
+			).SupportsInterpolation(false),
+			docs.FieldAdvanced("kms_key_id", "An optional server side encryption key."),
+			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."),
+			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
+		}.Merge(session.FieldSpecs()),
 	}
 }
 
