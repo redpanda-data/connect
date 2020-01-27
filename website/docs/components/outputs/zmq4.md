@@ -53,6 +53,19 @@ output:
 </TabItem>
 </Tabs>
 
+ZMQ4 is supported but currently depends on C bindings. Since this is an
+annoyance when building or using Benthos it is not compiled by default.
+
+There is a specific docker tag postfix `-cgo` for C builds containing
+ZMQ support.
+
+You can also build it into your project by getting libzmq installed on your
+machine, then build with the tag:
+
+```sh
+go install -tags "ZMQ4" github.com/Jeffail/benthos/v3/cmd/benthos
+```
+
 ## Fields
 
 ### `urls`

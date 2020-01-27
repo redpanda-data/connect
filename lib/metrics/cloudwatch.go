@@ -499,6 +499,7 @@ func (c *CloudWatch) SetLogger(log log.Modular) {
 // resources.
 func (c *CloudWatch) Close() error {
 	c.cancel()
+	c.flush()
 	return nil
 }
 
