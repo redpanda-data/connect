@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.9.0 - 2020-01-27
+
 ### Added
 
 - New `socket`, `socket_server` inputs.
