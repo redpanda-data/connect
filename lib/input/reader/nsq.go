@@ -2,6 +2,7 @@ package reader
 
 import (
 	"context"
+	"crypto/tls"
 	"io/ioutil"
 	llog "log"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	nsq "github.com/nsqio/go-nsq"
 )
 
@@ -25,6 +27,7 @@ type NSQConfig struct {
 	Topic           string             `json:"topic" yaml:"topic"`
 	Channel         string             `json:"channel" yaml:"channel"`
 	UserAgent       string             `json:"user_agent" yaml:"user_agent"`
+	TLS             btls.Config        `json:"tls" yaml:"tls"`
 	MaxInFlight     int                `json:"max_in_flight" yaml:"max_in_flight"`
 	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
@@ -39,6 +42,7 @@ func NewNSQConfig() NSQConfig {
 		Topic:           "benthos_messages",
 		Channel:         "benthos_stream",
 		UserAgent:       "benthos_consumer",
+		TLS:             btls.NewConfig(),
 		MaxInFlight:     100,
 		Batching:        batching,
 	}
@@ -53,6 +57,7 @@ type NSQ struct {
 
 	unAckMsgs []*nsq.Message
 
+	tlsConf         *tls.Config
 	addresses       []string
 	lookupAddresses []string
 	conf            NSQConfig
@@ -86,7 +91,12 @@ func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (*NSQ, error) {
 			}
 		}
 	}
-
+	if conf.TLS.Enabled {
+		var err error
+		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
+	}
 	return &n, nil
 }
 
@@ -123,6 +133,10 @@ func (n *NSQ) ConnectWithContext(ctx context.Context) (err error) {
 	cfg := nsq.NewConfig()
 	cfg.UserAgent = n.conf.UserAgent
 	cfg.MaxInFlight = n.conf.MaxInFlight
+	if n.tlsConf != nil {
+		cfg.TlsV1 = true
+		cfg.TlsConfig = n.tlsConf
+	}
 
 	var consumer *nsq.Consumer
 	if consumer, err = nsq.NewConsumer(n.conf.Topic, n.conf.Channel, cfg); err != nil {

@@ -2,6 +2,7 @@ package writer
 
 import (
 	"context"
+	"crypto/tls"
 	"io/ioutil"
 	llog "log"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	nsq "github.com/nsqio/go-nsq"
 )
 
@@ -19,10 +21,11 @@ import (
 
 // NSQConfig contains configuration fields for the NSQ output type.
 type NSQConfig struct {
-	Address     string `json:"nsqd_tcp_address" yaml:"nsqd_tcp_address"`
-	Topic       string `json:"topic" yaml:"topic"`
-	UserAgent   string `json:"user_agent" yaml:"user_agent"`
-	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
+	Address     string      `json:"nsqd_tcp_address" yaml:"nsqd_tcp_address"`
+	Topic       string      `json:"topic" yaml:"topic"`
+	UserAgent   string      `json:"user_agent" yaml:"user_agent"`
+	TLS         btls.Config `json:"tls" yaml:"tls"`
+	MaxInFlight int         `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewNSQConfig creates a new NSQConfig with default values.
@@ -31,6 +34,7 @@ func NewNSQConfig() NSQConfig {
 		Address:     "localhost:4150",
 		Topic:       "benthos_messages",
 		UserAgent:   "benthos_producer",
+		TLS:         btls.NewConfig(),
 		MaxInFlight: 1,
 	}
 }
@@ -43,6 +47,7 @@ type NSQ struct {
 
 	topicStr *text.InterpolatedString
 
+	tlsConf  *tls.Config
 	connMut  sync.RWMutex
 	producer *nsq.Producer
 
@@ -55,6 +60,12 @@ func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (*NSQ, error) {
 		log:      log,
 		conf:     conf,
 		topicStr: text.NewInterpolatedString(conf.Topic),
+	}
+	if conf.TLS.Enabled {
+		var err error
+		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
 	}
 	return &n, nil
 }
@@ -73,6 +84,10 @@ func (n *NSQ) Connect() error {
 
 	cfg := nsq.NewConfig()
 	cfg.UserAgent = n.conf.UserAgent
+	if n.tlsConf != nil {
+		cfg.TlsV1 = true
+		cfg.TlsConfig = n.tlsConf
+	}
 
 	producer, err := nsq.NewProducer(n.conf.Address, cfg)
 	if err != nil {

@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `delete_files` added to `files` input.
+- TLS fields added to `nsq` input and output.
 
 ### Changed
 

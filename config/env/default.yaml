@@ -270,6 +270,10 @@ input:
         max_in_flight: ${INPUT_NSQ_MAX_IN_FLIGHT:100}
         nsqd_tcp_addresses:
         - ${INPUT_NSQ_NSQD_TCP_ADDRESSES:localhost:4150}
+        tls:
+          enabled: ${INPUT_NSQ_TLS_ENABLED:false}
+          root_cas_file: ${INPUT_NSQ_TLS_ROOT_CAS_FILE}
+          skip_cert_verify: ${INPUT_NSQ_TLS_SKIP_CERT_VERIFY:false}
         topic: ${INPUT_NSQ_TOPIC:benthos_messages}
         user_agent: ${INPUT_NSQ_USER_AGENT:benthos_consumer}
       redis_list:
@@ -834,6 +838,10 @@ output:
       nsq:
         max_in_flight: ${OUTPUT_NSQ_MAX_IN_FLIGHT:1}
         nsqd_tcp_address: ${OUTPUT_NSQ_NSQD_TCP_ADDRESS:localhost:4150}
+        tls:
+          enabled: ${OUTPUT_NSQ_TLS_ENABLED:false}
+          root_cas_file: ${OUTPUT_NSQ_TLS_ROOT_CAS_FILE}
+          skip_cert_verify: ${OUTPUT_NSQ_TLS_SKIP_CERT_VERIFY:false}
         topic: ${OUTPUT_NSQ_TOPIC:benthos_messages}
         user_agent: ${OUTPUT_NSQ_USER_AGENT:benthos_producer}
       redis_hash:

@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
@@ -22,6 +23,7 @@ Subscribe to an NSQ instance topic and channel.`,
 			docs.FieldDeprecated("batching"),
 			docs.FieldCommon("nsqd_tcp_addresses", "A list of nsqd addresses to connect to."),
 			docs.FieldCommon("lookupd_http_addresses", "A list of nsqlookupd addresses to connect to."),
+			tls.FieldSpec(),
 			docs.FieldCommon("topic", "The topic to consume from."),
 			docs.FieldCommon("channel", "The channel to consume from."),
 			docs.FieldCommon("user_agent", "A user agent to assume when connecting."),

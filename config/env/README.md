@@ -258,6 +258,9 @@ INPUT_NSQ_CHANNEL                                    = benthos_stream
 INPUT_NSQ_LOOKUPD_HTTP_ADDRESSES                     = localhost:4161
 INPUT_NSQ_MAX_IN_FLIGHT                              = 100
 INPUT_NSQ_NSQD_TCP_ADDRESSES                         = localhost:4150
+INPUT_NSQ_TLS_ENABLED                                = false
+INPUT_NSQ_TLS_ROOT_CAS_FILE
+INPUT_NSQ_TLS_SKIP_CERT_VERIFY                       = false
 INPUT_NSQ_TOPIC                                      = benthos_messages
 INPUT_NSQ_USER_AGENT                                 = benthos_consumer
 INPUT_REDIS_LIST_KEY                                 = benthos_list
@@ -701,6 +704,9 @@ OUTPUT_NATS_SUBJECT                                   = benthos_messages
 OUTPUT_NATS_URLS                                      = nats://127.0.0.1:4222
 OUTPUT_NSQ_MAX_IN_FLIGHT                              = 1
 OUTPUT_NSQ_NSQD_TCP_ADDRESS                           = localhost:4150
+OUTPUT_NSQ_TLS_ENABLED                                = false
+OUTPUT_NSQ_TLS_ROOT_CAS_FILE
+OUTPUT_NSQ_TLS_SKIP_CERT_VERIFY                       = false
 OUTPUT_NSQ_TOPIC                                      = benthos_messages
 OUTPUT_NSQ_USER_AGENT                                 = benthos_producer
 OUTPUT_REDIS_HASH_KEY

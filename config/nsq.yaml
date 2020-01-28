@@ -20,6 +20,11 @@ input:
     max_in_flight: 100
     nsqd_tcp_addresses:
     - localhost:4150
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     topic: benthos_messages
     user_agent: benthos_consumer
 buffer:
@@ -33,6 +38,11 @@ output:
   nsq:
     max_in_flight: 1
     nsqd_tcp_address: localhost:4150
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     topic: benthos_messages
     user_agent: benthos_producer
 resources:

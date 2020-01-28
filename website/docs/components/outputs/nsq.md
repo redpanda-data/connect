@@ -13,6 +13,18 @@ type: output
 
 Publish to an NSQ topic.
 
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 output:
   nsq:
@@ -21,6 +33,26 @@ output:
     user_agent: benthos_producer
     max_in_flight: 1
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+output:
+  nsq:
+    nsqd_tcp_address: localhost:4150
+    topic: benthos_messages
+    user_agent: benthos_producer
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      root_cas_file: ""
+      client_certs: []
+    max_in_flight: 1
+```
+
+</TabItem>
+</Tabs>
 
 The `topic` field can be dynamically set using function interpolations
 described [here](/docs/configuration/interpolation#functions). When sending
@@ -47,6 +79,38 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 ### `user_agent`
 
 `string` A user agent string to connect with.
+
+### `tls`
+
+`object` Custom TLS settings can be used to override system defaults.
+
+### `tls.enabled`
+
+`bool` Whether custom TLS settings are enabled.
+
+### `tls.skip_cert_verify`
+
+`bool` Whether to skip server side certificate verification.
+
+### `tls.root_cas_file`
+
+`string` The path of a root certificate authority file to use.
+
+### `tls.client_certs`
+
+`array` A list of client certificates to use.
+
+```yaml
+# Examples
+
+client_certs:
+- cert: foo
+  key: bar
+
+client_certs:
+- cert_file: ./example.pem
+  key_file: ./example.key
+```
 
 ### `max_in_flight`
 

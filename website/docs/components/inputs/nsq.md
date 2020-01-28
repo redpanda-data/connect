@@ -13,6 +13,18 @@ type: input
 
 Subscribe to an NSQ instance topic and channel.
 
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 input:
   nsq:
@@ -26,6 +38,30 @@ input:
     max_in_flight: 100
 ```
 
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+input:
+  nsq:
+    nsqd_tcp_addresses:
+    - localhost:4150
+    lookupd_http_addresses:
+    - localhost:4161
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      root_cas_file: ""
+      client_certs: []
+    topic: benthos_messages
+    channel: benthos_stream
+    user_agent: benthos_consumer
+    max_in_flight: 100
+```
+
+</TabItem>
+</Tabs>
+
 ## Fields
 
 ### `nsqd_tcp_addresses`
@@ -35,6 +71,38 @@ input:
 ### `lookupd_http_addresses`
 
 `array` A list of nsqlookupd addresses to connect to.
+
+### `tls`
+
+`object` Custom TLS settings can be used to override system defaults.
+
+### `tls.enabled`
+
+`bool` Whether custom TLS settings are enabled.
+
+### `tls.skip_cert_verify`
+
+`bool` Whether to skip server side certificate verification.
+
+### `tls.root_cas_file`
+
+`string` The path of a root certificate authority file to use.
+
+### `tls.client_certs`
+
+`array` A list of client certificates to use.
+
+```yaml
+# Examples
+
+client_certs:
+- cert: foo
+  key: bar
+
+client_certs:
+- cert_file: ./example.pem
+  key_file: ./example.key
+```
 
 ### `topic`
 
