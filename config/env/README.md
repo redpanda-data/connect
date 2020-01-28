@@ -79,6 +79,7 @@ INPUT_AMQP_TLS_SKIP_CERT_VERIFY                      = false
 INPUT_AMQP_URL                                       = amqp://guest:guest@localhost:5672/
 INPUT_DYNAMIC_PREFIX
 INPUT_DYNAMIC_TIMEOUT                                = 5s
+INPUT_FILES_DELETE_FILES                             = false
 INPUT_FILES_PATH
 INPUT_FILE_DELIMITER
 INPUT_FILE_MAX_BUFFER                                = 1000000

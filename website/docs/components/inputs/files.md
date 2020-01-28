@@ -18,6 +18,7 @@ message.
 input:
   files:
     path: ""
+    delete_files: false
 ```
 
 The path can either point to a single file (resulting in only a single message)
@@ -40,5 +41,9 @@ You can access these metadata fields using
 ### `path`
 
 `string` A path to either a directory or a file.
+
+### `delete_files`
+
+`bool` Whether to delete files once they are consumed.
 
 

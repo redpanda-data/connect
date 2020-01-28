@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 
@@ -151,6 +152,69 @@ func TestFilesBadPath(t *testing.T) {
 
 	if _, err := NewFiles(conf); err == nil {
 		t.Error("Expected error from bad path")
+	}
+}
+
+func TestFilesDirectoryDelete(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "benthos_file_input_delete_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	var tmpFile *os.File
+	if tmpFile, err = ioutil.TempFile(tmpDir, "f1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tmpFile.Write([]byte("foo")); err != nil {
+		t.Fatal(err)
+	}
+	if err = tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	exp := map[string]struct{}{
+		"foo": {},
+	}
+	act := map[string]struct{}{}
+
+	conf := NewFilesConfig()
+	conf.Path = tmpDir
+	conf.DeleteFiles = true
+
+	var f Type
+	if f, err = NewFiles(conf); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = f.Connect(); err != nil {
+		t.Error(err)
+	}
+
+	var msg types.Message
+	if msg, err = f.Read(); err != nil {
+		t.Error(err)
+	} else {
+		resStr := string(msg.Get(0).Get())
+		if _, exists := act[resStr]; exists {
+			t.Errorf("Received duplicate message: %v", resStr)
+		}
+		act[resStr] = struct{}{}
+	}
+	if _, err = f.Read(); err != types.ErrTypeClosed {
+		t.Error(err)
+	}
+
+	if _, err := os.Stat(path.Join(tmpDir, "f1")); err != nil {
+		if !os.IsNotExist(err) {
+			t.Errorf("Expected deleted file, received: %v", err)
+		}
+	} else {
+		t.Error("Expected deleted file")
+	}
+
+	if !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
 

@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `delete_files` added to `files` input.
+
 ### Changed
 
 - The `redis_streams` input no longer flushes >1 fetched messages as a batch.

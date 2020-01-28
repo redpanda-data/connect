@@ -16,13 +16,15 @@ import (
 
 // FilesConfig contains configuration for the Files input type.
 type FilesConfig struct {
-	Path string `json:"path" yaml:"path"`
+	Path        string `json:"path" yaml:"path"`
+	DeleteFiles bool   `json:"delete_files" yaml:"delete_files"`
 }
 
 // NewFilesConfig creates a new FilesConfig with default values.
 func NewFilesConfig() FilesConfig {
 	return FilesConfig{
-		Path: "",
+		Path:        "",
+		DeleteFiles: false,
 	}
 }
 
@@ -31,11 +33,14 @@ func NewFilesConfig() FilesConfig {
 // Files is an input type that reads file contents at a path as messages.
 type Files struct {
 	targets []string
+	delete  bool
 }
 
 // NewFiles creates a new Files input type.
 func NewFiles(conf FilesConfig) (*Files, error) {
-	f := Files{}
+	f := Files{
+		delete: conf.DeleteFiles,
+	}
 
 	if info, err := os.Stat(conf.Path); err != nil {
 		return nil, err
@@ -74,17 +79,8 @@ func (f *Files) ConnectWithContext(ctx context.Context) (err error) {
 
 // ReadWithContext a new Files message.
 func (f *Files) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
-	msg, err := f.Read()
-	if err != nil {
-		return nil, nil, err
-	}
-	return msg, noopAsyncAckFn, nil
-}
-
-// Read a new Files message.
-func (f *Files) Read() (types.Message, error) {
 	if len(f.targets) == 0 {
-		return nil, types.ErrTypeClosed
+		return nil, nil, types.ErrTypeClosed
 	}
 
 	path := f.targets[0]
@@ -92,18 +88,31 @@ func (f *Files) Read() (types.Message, error) {
 
 	file, openerr := os.Open(path)
 	if openerr != nil {
-		return nil, fmt.Errorf("failed to read file '%v': %v", path, openerr)
+		return nil, nil, fmt.Errorf("failed to read file '%v': %v", path, openerr)
 	}
 	defer file.Close()
 
 	msgBytes, readerr := ioutil.ReadAll(file)
 	if readerr != nil {
-		return nil, readerr
+		return nil, nil, readerr
 	}
 
 	msg := message.New([][]byte{msgBytes})
 	msg.Get(0).Metadata().Set("path", path)
-	return msg, nil
+	return msg, func(ctx context.Context, res types.Response) error {
+		if f.delete {
+			if res.Error() == nil {
+				return os.Remove(path)
+			}
+		}
+		return nil
+	}, nil
+}
+
+// Read a new Files message.
+func (f *Files) Read() (types.Message, error) {
+	msg, _, err := f.ReadWithContext(context.Background())
+	return msg, err
 }
 
 // Acknowledge instructs whether unacknowledged messages have been successfully

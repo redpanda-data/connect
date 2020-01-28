@@ -49,6 +49,7 @@ input:
         multipart: ${INPUT_FILE_MULTIPART:false}
         path: ${INPUT_FILE_PATH}
       files:
+        delete_files: ${INPUT_FILES_DELETE_FILES:false}
         path: ${INPUT_FILES_PATH}
       gcp_pubsub:
         batching:

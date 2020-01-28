@@ -33,6 +33,7 @@ You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("path", "A path to either a directory or a file."),
+			docs.FieldCommon("delete_files", "Whether to delete files once they are consumed."),
 		},
 	}
 }
