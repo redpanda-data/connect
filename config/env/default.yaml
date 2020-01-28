@@ -293,7 +293,7 @@ input:
         start_from_oldest: ${INPUT_REDIS_STREAMS_START_FROM_OLDEST:true}
         streams:
         - ${INPUT_REDIS_STREAMS_STREAMS:benthos_stream}
-        timeout: ${INPUT_REDIS_STREAMS_TIMEOUT:5s}
+        timeout: ${INPUT_REDIS_STREAMS_TIMEOUT:1s}
         url: ${INPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
       s3:
         bucket: ${INPUT_S3_BUCKET}

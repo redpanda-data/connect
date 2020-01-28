@@ -53,15 +53,11 @@ input:
     consumer_group: benthos_group
     start_from_oldest: true
     commit_period: 1s
-    timeout: 5s
+    timeout: 1s
 ```
 
 </TabItem>
 </Tabs>
-
-The field `limit` specifies the maximum number of records to be
-received per request. When more than one record is returned they are batched and
-can be split into individual messages with the `split` processor.
 
 Redis stream entries are key/value pairs, as such it is necessary to specify the
 key that contains the body of the message. All other keys/value pairs are saved
@@ -83,7 +79,7 @@ as metadata fields.
 
 ### `limit`
 
-`number` The maximum number of messages to consume from a single request. When multiple messages are consumed they are processed as a [batch](/docs/configuration/batching).
+`number` The maximum number of messages to consume from a single request.
 
 ### `client_id`
 

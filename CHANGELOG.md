@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- The `redis_streams` input no longer flushes >1 fetched messages as a batch.
+
 ## 3.9.0 - 2020-01-27
 
 ### Added

@@ -275,7 +275,7 @@ INPUT_REDIS_STREAMS_CONSUMER_GROUP                   = benthos_group
 INPUT_REDIS_STREAMS_LIMIT                            = 10
 INPUT_REDIS_STREAMS_START_FROM_OLDEST                = true
 INPUT_REDIS_STREAMS_STREAMS                          = benthos_stream
-INPUT_REDIS_STREAMS_TIMEOUT                          = 5s
+INPUT_REDIS_STREAMS_TIMEOUT                          = 1s
 INPUT_REDIS_STREAMS_URL                              = tcp://localhost:6379
 INPUT_S3_BUCKET
 INPUT_S3_CREDENTIALS_ID

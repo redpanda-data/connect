@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis"
 )
@@ -49,16 +50,24 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		Batching:        batchConf,
 		StartFromOldest: true,
 		CommitPeriod:    "1s",
-		Timeout:         "5s",
+		Timeout:         "1s",
 	}
 }
 
 //------------------------------------------------------------------------------
 
+type pendingRedisStreamMsg struct {
+	payload types.Message
+	stream  string
+	id      string
+}
+
 // RedisStreams is an input type that reads Redis Streams messages.
 type RedisStreams struct {
-	client *redis.Client
-	cMut   sync.Mutex
+	client         *redis.Client
+	cMut           sync.Mutex
+	pendingMsgs    []pendingRedisStreamMsg
+	pendingMsgsMut sync.Mutex
 
 	timeout      time.Duration
 	commitPeriod time.Duration
@@ -68,9 +77,10 @@ type RedisStreams struct {
 
 	backlogs map[string]string
 
-	aMut       sync.Mutex
-	ackSend    map[string][]string // Acks that can be sent
-	ackPending map[string][]string // Acks that are pending
+	aMut    sync.Mutex
+	ackSend map[string][]string // Acks that can be sent
+
+	deprecatedAckFns []AsyncAckFn
 
 	stats metrics.Type
 	log   log.Modular
@@ -90,7 +100,6 @@ func NewRedisStreams(
 		log:        log,
 		backlogs:   make(map[string]string, len(conf.Streams)),
 		ackSend:    make(map[string][]string, len(conf.Streams)),
-		ackPending: make(map[string][]string, len(conf.Streams)),
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 	}
@@ -150,17 +159,6 @@ func (r *RedisStreams) loop() {
 	}
 }
 
-func (r *RedisStreams) addPendingAcks(stream string, ids ...string) {
-	r.aMut.Lock()
-	if acks, exists := r.ackPending[stream]; exists {
-		acks = append(acks, ids...)
-		r.ackPending[stream] = acks
-	} else {
-		r.ackPending[stream] = ids
-	}
-	r.aMut.Unlock()
-}
-
 func (r *RedisStreams) addAsyncAcks(stream string, ids ...string) {
 	r.aMut.Lock()
 	if acks, exists := r.ackSend[stream]; exists {
@@ -168,19 +166,6 @@ func (r *RedisStreams) addAsyncAcks(stream string, ids ...string) {
 		r.ackSend[stream] = acks
 	} else {
 		r.ackSend[stream] = ids
-	}
-	r.aMut.Unlock()
-}
-
-func (r *RedisStreams) scheduleAcks() {
-	r.aMut.Lock()
-	for k, v := range r.ackPending {
-		if acks, exists := r.ackSend[k]; exists {
-			acks = append(acks, v...)
-			r.ackSend[k] = acks
-		} else {
-			r.ackSend[k] = v
-		}
 	}
 	r.aMut.Unlock()
 }
@@ -258,21 +243,30 @@ func (r *RedisStreams) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (r *RedisStreams) read() (types.Message, map[string][]string, error) {
+func (r *RedisStreams) read() (pendingRedisStreamMsg, error) {
 	var client *redis.Client
+	var msg pendingRedisStreamMsg
 
 	r.cMut.Lock()
 	client = r.client
 	r.cMut.Unlock()
 
 	if client == nil {
-		return nil, nil, types.ErrNotConnected
+		return msg, types.ErrNotConnected
+	}
+
+	r.pendingMsgsMut.Lock()
+	defer r.pendingMsgsMut.Unlock()
+	if len(r.pendingMsgs) > 0 {
+		msg = r.pendingMsgs[0]
+		r.pendingMsgs = r.pendingMsgs[1:]
+		return msg, nil
 	}
 
 	strs := make([]string, len(r.conf.Streams)*2)
 	for i, str := range r.conf.Streams {
 		strs[i] = str
-		if bl := r.backlogs[str]; bl == "" {
+		if bl := r.backlogs[str]; bl != "" {
 			strs[len(r.conf.Streams)+i] = bl
 		} else {
 			strs[len(r.conf.Streams)+i] = ">"
@@ -289,15 +283,14 @@ func (r *RedisStreams) read() (types.Message, map[string][]string, error) {
 
 	if err != nil && err != redis.Nil {
 		if strings.Contains(err.Error(), "i/o timeout") {
-			return nil, nil, types.ErrTimeout
+			return msg, types.ErrTimeout
 		}
 		r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)
-		return nil, nil, types.ErrNotConnected
+		return msg, types.ErrNotConnected
 	}
 
-	pendingAcks := map[string][]string{}
-	msg := message.New(nil)
+	pendingMsgs := []pendingRedisStreamMsg{}
 	for _, strRes := range res {
 		if _, exists := r.backlogs[strRes.Stream]; exists {
 			if len(strRes.Messages) > 0 {
@@ -306,10 +299,7 @@ func (r *RedisStreams) read() (types.Message, map[string][]string, error) {
 				delete(r.backlogs, strRes.Stream)
 			}
 		}
-		ids := make([]string, 0, len(strRes.Messages))
 		for _, xmsg := range strRes.Messages {
-			ids = append(ids, xmsg.ID)
-
 			body, exists := xmsg.Values[r.conf.BodyKey]
 			if !exists {
 				continue
@@ -332,37 +322,50 @@ func (r *RedisStreams) read() (types.Message, map[string][]string, error) {
 				part.Metadata().Set(k, fmt.Sprintf("%v", v))
 			}
 
-			msg.Append(part)
-		}
-		if acks, exists := r.ackPending[strRes.Stream]; exists {
-			acks = append(acks, ids...)
-			pendingAcks[strRes.Stream] = acks
-		} else {
-			pendingAcks[strRes.Stream] = ids
+			nextMsg := pendingRedisStreamMsg{
+				payload: message.New(nil),
+				stream:  strRes.Stream,
+				id:      xmsg.ID,
+			}
+			nextMsg.payload.Append(part)
+			if msg.payload == nil {
+				msg = nextMsg
+			} else {
+				pendingMsgs = append(pendingMsgs, nextMsg)
+			}
 		}
 	}
 
-	if msg.Len() < 1 {
-		return nil, nil, types.ErrTimeout
+	r.pendingMsgs = pendingMsgs
+	if msg.payload == nil {
+		return msg, types.ErrTimeout
 	}
-
-	return msg, pendingAcks, nil
+	return msg, nil
 }
 
 // ReadWithContext attempts to pop a message from a Redis list.
 func (r *RedisStreams) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
-	msg, acks, err := r.read()
+	msg, err := r.read()
 	if err != nil {
-		return nil, nil, err
-	}
-	return msg, func(rctx context.Context, res types.Response) error {
-		if res.Error() != nil {
-			r.log.Errorf("Received error from message batch: %v, shutting down consumer.\n", res.Error())
-			r.CloseAsync()
-			return nil
+		if err == types.ErrTimeout {
+			// Allow for one more attempt in case we asked for backlog.
+			select {
+			case <-ctx.Done():
+			default:
+				msg, err = r.read()
+			}
 		}
-		for str, ids := range acks {
-			r.addAsyncAcks(str, ids...)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return msg.payload, func(rctx context.Context, res types.Response) error {
+		if res.Error() != nil {
+			r.pendingMsgsMut.Lock()
+			r.pendingMsgs = append(r.pendingMsgs, msg)
+			r.pendingMsgsMut.Unlock()
+		} else {
+			r.addAsyncAcks(msg.stream, msg.id)
 		}
 		return nil
 	}, nil
@@ -370,21 +373,21 @@ func (r *RedisStreams) ReadWithContext(ctx context.Context) (types.Message, Asyn
 
 // Read attempts to pop a message from a Redis list.
 func (r *RedisStreams) Read() (types.Message, error) {
-	msg, acks, err := r.read()
+	msg, ackFn, err := r.ReadWithContext(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	for str, ids := range acks {
-		r.addPendingAcks(str, ids...)
-	}
+	r.deprecatedAckFns = append(r.deprecatedAckFns, ackFn)
 	return msg, nil
 }
 
 // Acknowledge is a noop since Redis Lists do not support acknowledgements.
 func (r *RedisStreams) Acknowledge(err error) error {
-	if err == nil {
-		r.scheduleAcks()
+	res := response.NewError(err)
+	for _, p := range r.deprecatedAckFns {
+		p(context.Background(), res)
 	}
+	r.deprecatedAckFns = nil
 	return nil
 }
 
