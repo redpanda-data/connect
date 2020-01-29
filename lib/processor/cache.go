@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -17,46 +18,52 @@ import (
 func init() {
 	Constructors[TypeCache] = TypeSpec{
 		constructor: NewCache,
+		Summary: `
+Performs operations against a [cache resource](/docs/components/caches/about)
+for each message, allowing you to store or retrieve data within message payloads.`,
 		Description: `
-Performs operations against a [cache resource](/docs/components/caches/about) for each message of a
-batch, allowing you to store or retrieve data within message payloads.
-
 This processor will interpolate functions within the ` + "`key` and `value`" + `
-fields individually for each message of the batch. This allows you to specify
-dynamic keys and values based on the contents of the message payloads and
-metadata. You can find a list of functions
-[here](/docs/configuration/interpolation#functions).
+fields individually for each message. This allows you to specify dynamic keys
+and values based on the contents of the message payloads and metadata. You can
+find a list of functions [here](/docs/configuration/interpolation#functions).
 
-### Operators
+## Operators
 
-#### ` + "`set`" + `
+### ` + "`set`" + `
 
 Set a key in the cache to a value. If the key already exists the contents are
 overridden.
 
-#### ` + "`add`" + `
+### ` + "`add`" + `
 
 Set a key in the cache to a value. If the key already exists the action fails
 with a 'key already exists' error, which can be detected with
 [processor error handling](/docs/configuration/error_handling).
 
-#### ` + "`get`" + `
+### ` + "`get`" + `
 
 Retrieve the contents of a cached key and replace the original message payload
 with the result. If the key does not exist the action fails with an error, which
 can be detected with [processor error handling](/docs/configuration/error_handling).
 
-#### ` + "`delete`" + `
+### ` + "`delete`" + `
 
 Delete a key and its contents from the cache.  If the key does not exist the
-action is a no-op and will not fail with an error.
-
-### Examples
+action is a no-op and will not fail with an error.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("cache", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),
+			docs.FieldCommon("operator", "The [operation](#operators) to perform with the cache.").HasOptions("set", "add", "get", "delete"),
+			docs.FieldCommon("key", "A key to use with the cache.").SupportsInterpolation(false),
+			docs.FieldCommon("value", "A value to use with the cache (when applicable).").SupportsInterpolation(false),
+			partsFieldSpec,
+		},
+		Footnotes: `
+## Examples
 
 The ` + "`cache`" + ` processor can be used in combination with other processors
 in order to solve a variety of data stream problems.
 
-#### Deduplication
+### Deduplication
 
 Deduplication can be done using the add operator with a key extracted from the
 message payload, since it fails when a key already exists we can remove the
@@ -74,7 +81,7 @@ condition:
     type: processor_failed
 ` + "```" + `
 
-#### Hydration
+### Hydration
 
 It's possible to enrich payloads with content previously stored in a cache by
 using the [` + "`process_map`" + `](/docs/components/processors/process_map) processor:

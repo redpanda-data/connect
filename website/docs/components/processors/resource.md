@@ -11,13 +11,13 @@ type: processor
 -->
 
 
-```yaml
-resource: ""
-```
-
 Resource is a processor type that runs a processor resource by its name. This
 processor allows you to run the same configured processor resource in multiple
 places.
+
+```yaml
+resource: ""
+```
 
 Resource processors also have the advantage of name based metrics and logging.
 For example, the config:

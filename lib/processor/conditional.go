@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -16,17 +17,22 @@ import (
 func init() {
 	Constructors[TypeConditional] = TypeSpec{
 		constructor: NewConditional,
+		Summary: `
+Executes a set of child processors when a [condition](/docs/components/conditions/about)
+passes for a message batch, otherwise a different set of processors are applied.`,
 		Description: `
 Conditional is a processor that has a list of child ` + "`processors`," + `
-` + "`else_processors`" + `, and a condition. For each message batch, if the
+` + "`else_processors`, and a `condition`" + `. For each message batch, if the
 condition passes, the child ` + "`processors`" + ` will be applied, otherwise
-the ` + "`else_processors`" + ` are applied. This processor is useful for
-applying processors based on the content of message batches.
+the ` + "`else_processors`" + ` are applied.
 
 In order to conditionally process each message of a batch individually use this
-processor with the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.
-
-You can find a [full list of conditions here](/docs/components/conditions/about).`,
+processor with the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("condition", "The [`condition`](/docs/components/conditions/about) to check against messages."),
+			docs.FieldCommon("processors", "A list of processors to apply when the condition passes."),
+			docs.FieldCommon("else_processors", "A list of processors to apply when the condition does not pass."),
+		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			condSanit, err := condition.SanitiseConfig(conf.Conditional.Condition)
 			if err != nil {

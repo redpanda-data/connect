@@ -11,21 +11,47 @@ type: processor
 -->
 
 
+Parses messages into a structured format by attempting to apply a list of Grok
+patterns, if a pattern returns at least one value a resulting structured object
+is created according to the chosen output format.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 grok:
-  named_captures_only: true
-  output_format: json
-  parts: []
-  pattern_definitions: {}
   patterns: []
-  remove_empty_values: true
-  use_default_patterns: true
+  pattern_definitions: {}
+  output_format: json
 ```
 
-Parses message payloads by attempting to apply a list of Grok patterns, if a
-pattern returns at least one value a resulting structured object is created
-according to the chosen output format and will replace the payload. Currently
-only json is a valid output format.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+grok:
+  patterns: []
+  pattern_definitions: {}
+  output_format: json
+  named_captures_only: true
+  use_default_patterns: true
+  remove_empty_values: true
+  parts: []
+```
+
+</TabItem>
+</Tabs>
+
+Currently only json is a supported output format.
 
 Type hints within patterns are respected, therefore with the pattern
 `%{WORD:first},%{INT:second:int}` and a payload of `foo,1`
@@ -38,5 +64,42 @@ regular expression engine, which is guaranteed to run in time linear to the size
 of the input. However, this property often makes it less performant than pcre
 based implementations of grok. For more information see
 [https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).
+
+## Fields
+
+### `patterns`
+
+`array` A list of patterns to attempt against the incoming messages.
+
+### `pattern_definitions`
+
+`object` A map of pattern definitions that can be referenced within `patterns`.
+
+### `output_format`
+
+`string` The structured output format.
+
+Options are: `json`.
+
+### `named_captures_only`
+
+`bool` Whether to only capture values from named patterns.
+
+### `use_default_patterns`
+
+`bool` Whether to use a [default set of patterns](#default-patterns).
+
+### `remove_empty_values`
+
+`bool` Whether to remove values that are empty from the resulting structure.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

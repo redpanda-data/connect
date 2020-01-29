@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -16,10 +17,15 @@ import (
 func init() {
 	Constructors[TypeSample] = TypeSpec{
 		constructor: NewSample,
-		Description: `
-Retains a randomly sampled percentage of message batches (0 to 100) and drops
-all others. The random seed is static in order to sample deterministically, but
-can be set in config to allow parallel samples that are unique.`,
+		Summary: `
+Retains a pseudo-randomly sampled percentage of message batches (0 to 100) and
+drops all others. The random seed is static in order to sample
+deterministically, but can be set in config to allow parallel samples that are
+unique.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("retain", "The percentage of messages to keep."),
+			docs.FieldCommon("seed", "A seed for pseudo-random sampling."),
+		},
 	}
 }
 

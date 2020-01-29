@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/OneOfOne/xxhash"
 	"github.com/opentracing/opentracing-go"
 )
@@ -21,10 +22,9 @@ import (
 func init() {
 	Constructors[TypeHash] = TypeSpec{
 		constructor: NewHash,
+		Summary: `
+Hashes messages according to the selected algorithm.`,
 		Description: `
-Hashes messages according to the selected algorithm. Supported algorithms are:
-sha256, sha512, sha1, xxhash64.
-
 This processor is mostly useful when combined with the
 ` + "[`process_field`](/docs/components/processors/process_field)" + ` processor as it allows you to hash a
 specific field of a document like this:
@@ -37,6 +37,10 @@ process_field:
   - hash:
       algorithm: sha256
 ` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("algorithm", "The hash algorithm to use.").HasOptions("sha256", "sha512", "sha1", "xxhash64"),
+			partsFieldSpec,
+		},
 	}
 }
 

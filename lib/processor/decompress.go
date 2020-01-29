@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -22,9 +23,13 @@ import (
 func init() {
 	Constructors[TypeDecompress] = TypeSpec{
 		constructor: NewDecompress,
-		Description: `
+		Summary: `
 Decompresses messages according to the selected algorithm. Supported
 decompression types are: gzip, zlib, bzip2, flate.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "zlib", "bzip2", "flate"),
+			partsFieldSpec,
+		},
 	}
 }
 

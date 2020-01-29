@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -16,13 +17,16 @@ import (
 func init() {
 	Constructors[TypeThrottle] = TypeSpec{
 		constructor: NewThrottle,
-		Description: `
+		Summary: `
 Throttles the throughput of a pipeline to a maximum of one message batch per
 period. This throttle is per processing pipeline, and therefore four threads
-each with a throttle would result in four times the rate specified.
-
+each with a throttle would result in four times the rate specified.`,
+		Description: `
 The period should be specified as a time duration string. For example, '1s'
 would be 1 second, '10ms' would be 10 milliseconds, etc.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("period", "The period to throttle to."),
+		},
 	}
 }
 

@@ -11,14 +11,20 @@ type: processor
 -->
 
 
+Throttles the throughput of a pipeline according to a specified
+[`rate_limit`](/docs/components/rate_limits/about) resource. Rate limits are
+shared across components and therefore apply globally to all processing
+pipelines.
+
 ```yaml
 rate_limit:
   resource: ""
 ```
 
-Throttles the throughput of a pipeline according to a specified
-[`rate_limit`](/docs/components/rate_limits/about) resource. Rate limits are
-shared across components and therefore apply globally to all processing
-pipelines.
+## Fields
+
+### `resource`
+
+`string` The target [`rate_limit` resource](/docs/components/rate_limits/about).
 
 

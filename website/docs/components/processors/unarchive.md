@@ -11,15 +11,37 @@ type: processor
 -->
 
 
+Unarchives messages according to the selected archive format into multiple
+messages within a batch.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+unarchive:
+  format: binary
+```
+
+</TabItem>
+<TabItem value="advanced">
+
 ```yaml
 unarchive:
   format: binary
   parts: []
 ```
 
-Unarchives messages according to the selected archive format into multiple
-messages within a batch. Supported archive formats are:
-`tar`, `zip`, `binary`, `lines`, `json_documents`, `json_array` and `json_map`.
+</TabItem>
+</Tabs>
 
 When a message is unarchived the new messages replaces the original message in
 the batch. Messages that are selected but fail to unarchive (invalid format)
@@ -41,5 +63,22 @@ extracted filename.
 
 For the `json_map` format, a metadata field is added to each message
 called `archive_key` with the relevant key from the top-level map.
+
+## Fields
+
+### `format`
+
+`string` The unarchive format to use.
+
+Options are: `tar`, `zip`, `binary`, `lines`, `json_documents`, `json_array`, `json_map`.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

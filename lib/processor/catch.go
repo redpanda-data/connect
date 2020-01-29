@@ -15,6 +15,9 @@ import (
 func init() {
 	Constructors[TypeCatch] = TypeSpec{
 		constructor: NewCatch,
+		Summary: `
+Applies a list of child processors _only_ when a previous processing step has
+failed.`,
 		Description: `
 Behaves similarly to the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor, where a
 list of child processors are applied to individual messages of a batch. However,

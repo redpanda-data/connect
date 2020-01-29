@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -18,11 +19,11 @@ import (
 func init() {
 	Constructors[TypeNumber] = TypeSpec{
 		constructor: NewNumber,
-		Description: `
+		Summary: `
 Parses message contents into a 64-bit floating point number and performs an
 operator on it. In order to execute this processor on a sub field of a document
-use it with the ` + "[`process_field`](/docs/components/processors/process_field)" + ` processor.
-
+use it with the ` + "[`process_field`](/docs/components/processors/process_field)" + ` processor.`,
+		Description: `
 The value field can either be a number or a string type. If it is a string type
 then this processor will interpolate functions within it, you can find a list of
 functions [here](/docs/configuration/interpolation#functions).
@@ -45,15 +46,20 @@ Value interpolations are resolved once per message batch, in order to resolve it
 for each message of the batch place it within a
 ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.
 
-### Operators
+## Operators
 
-#### ` + "`add`" + `
+### ` + "`add`" + `
 
 Adds a value.
 
-#### ` + "`subtract`" + `
+### ` + "`subtract`" + `
 
 Subtracts a value.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("operator", "The [operator](#operators) to apply."),
+			docs.FieldCommon("value", "A value used by the operator.").SupportsInterpolation(true),
+			partsFieldSpec,
+		},
 	}
 }
 

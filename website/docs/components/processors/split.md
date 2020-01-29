@@ -11,20 +11,33 @@ type: processor
 -->
 
 
-```yaml
-split:
-  byte_size: 0
-  size: 1
-```
-
 Breaks message batches (synonymous with multiple part messages) into smaller
 batches. The size of the resulting batches are determined either by a discrete
 size or, if the field `byte_size` is non-zero, then by total size in
 bytes (which ever limit is reached first).
 
+```yaml
+split:
+  size: 1
+  byte_size: 0
+```
+
 If there is a remainder of messages after splitting a batch the remainder is
 also sent as a single batch. For example, if your target size was 10, and the
 processor received a batch of 95 message parts, the result would be 9 batches of
 10 messages followed by a batch of 5 messages.
+
+The functionality of this processor depends on being applied across messages
+that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
+
+## Fields
+
+### `size`
+
+`number` The target number of messages.
+
+### `byte_size`
+
+`number` An optional target of total message bytes.
 
 

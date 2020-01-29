@@ -11,15 +11,17 @@ type: processor
 -->
 
 
+Splits a batch of messages into N batches, where each resulting batch contains a
+group of messages determined by conditions that are applied per message of the
+original batch.
+
 ```yaml
 group_by: []
 ```
 
-Splits a batch of messages into N batches, where each resulting batch contains a
-group of messages determined by conditions that are applied per message of the
-original batch. Once the groups are established a list of processors are applied
-to their respective grouped batch, which can be used to label the batch as per
-their grouping.
+Once the groups are established a list of processors are applied to their
+respective grouped batch, which can be used to label the batch as per their
+grouping.
 
 Each group is configured in a list with a condition and a list of processors:
 
@@ -74,5 +76,8 @@ output:
 
 Since any message that isn't a foo is a bar, and bars do not require their own
 processing steps, we only need a single grouping configuration.
+
+The functionality of this processor depends on being applied across messages
+that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
 
 

@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -17,11 +18,11 @@ import (
 func init() {
 	Constructors[TypeSleep] = TypeSpec{
 		constructor: NewSleep,
-		Description: `
+		Summary: `
 Sleep for a period of time specified as a duration string. This processor will
 interpolate functions within the ` + "`duration`" + ` field, you can find a list
-of functions [here](/docs/configuration/interpolation#functions).
-
+of functions [here](/docs/configuration/interpolation#functions).`,
+		Description: `
 This processor executes once per message batch. In order to execute once for
 each message of a batch place it within a
 ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor:
@@ -31,6 +32,9 @@ for_each:
 - sleep:
     duration: ${!metadata:sleep_for}
 ` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("duration", "The duration of time to sleep for each execution."),
+		},
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	jmespath "github.com/jmespath/go-jmespath"
 	"github.com/opentracing/opentracing-go"
 )
@@ -16,12 +17,12 @@ import (
 func init() {
 	Constructors[TypeJMESPath] = TypeSpec{
 		constructor: NewJMESPath,
-		Description: `
+		Summary: `
 Parses a message as a JSON document and attempts to apply a JMESPath expression
 to it, replacing the contents of the part with the result. Please refer to the
 [JMESPath website](http://jmespath.org/) for information and tutorials regarding
-the syntax of expressions.
-
+the syntax of expressions.`,
+		Description: `
 For example, with the following config:
 
 ` + "``` yaml" + `
@@ -51,6 +52,10 @@ Then the resulting contents would be:
 It is possible to create boolean queries with JMESPath, in order to filter
 messages with boolean queries please instead use the
 ` + "[`jmespath`](/docs/components/conditions/jmespath)" + ` condition.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("query", "The JMESPath query to apply to messages."),
+			partsFieldSpec,
+		},
 	}
 }
 

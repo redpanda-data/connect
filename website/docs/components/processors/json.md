@@ -11,16 +11,41 @@ type: processor
 -->
 
 
+Parses messages as a JSON document, performs a mutation on the data, and then
+overwrites the previous contents with the new value.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 json:
   operator: clean
-  parts: []
   path: ""
   value: ""
 ```
 
-Parses messages as a JSON document, performs a mutation on the data, and then
-overwrites the previous contents with the new value.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+json:
+  operator: clean
+  path: ""
+  value: ""
+  parts: []
+```
+
+</TabItem>
+</Tabs>
 
 The field `path` is a [dot separated path](/docs/configuration/field_paths) which,
 for most operators, determines the field within the payload to be targeted. If
@@ -29,9 +54,36 @@ the path is empty or "." the root of the data will be targeted.
 This processor will interpolate functions within the 'value' field, you can find
 a list of functions [here](/docs/configuration/interpolation#functions).
 
-### Operators
+## Fields
 
-`append`
+### `operator`
+
+`string` The [operator](#operators) to apply to messages.
+
+Options are: `append`, `clean`, `copy`, `delete`, `explode`, `move`, `select`, `set`, `split`.
+
+### `path`
+
+`string` A [dot path](/docs/configuration/field_paths) specifying the target within the document to the apply the chosen operator to.
+
+### `value`
+
+`string` A value to use with the chosen operator (sometimes not applicable). This is a generic field that can be any type.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
+
+## Operators
+
+### `append`
 
 Appends a value to an array at a target dot path. If the path does not exist all
 objects in the path are created (unless there is a collision).
@@ -44,7 +96,7 @@ array. E.g. if the target is an array `[0,1]` and the value is also an
 array `[2,3]`, the result will be `[0,1,2,3]` as opposed to
 `[0,1,[2,3]]`.
 
-`clean`
+### `clean`
 
 Walks the JSON structure and deletes any fields where the value is:
 
@@ -53,19 +105,19 @@ Walks the JSON structure and deletes any fields where the value is:
 - An empty string
 - null
 
-`copy`
+### `copy`
 
 Copies the value of a target dot path (if it exists) to a location. The
 destination path is specified in the `value` field. If the destination
 path does not exist all objects in the path are created (unless there is a
 collision).
 
-`delete`
+### `delete`
 
 Removes a key identified by the dot path. If the path does not exist this is a
 no-op.
 
-`explode`
+### `explode`
 
 Explodes an array or object within a JSON document.
 
@@ -103,19 +155,19 @@ The respective results would be:
 {"foo":{"id":1,"value":2},"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}}}
 ```
 
-`move`
+### `move`
 
 Moves the value of a target dot path (if it exists) to a new location. The
 destination path is specified in the `value` field. If the destination
 path does not exist all objects in the path are created (unless there is a
 collision).
 
-`select`
+### `select`
 
 Reads the value found at a dot path and replaced the original contents entirely
 by the new value.
 
-`set`
+### `set`
 
 Sets the value of a field at a dot path. If the path does not exist all objects
 in the path are created (unless there is a collision).
@@ -137,10 +189,9 @@ json:
 The value will be converted into '{"foo":{"bar":5}}'. If the YAML object
 contains keys that aren't strings those fields will be ignored.
 
-`split`
+### `split`
 
 Splits a string field by a value and replaces the original string with an array
 containing the results of the split. This operator requires both the path value
 and the contents of the `value` field to be strings.
-
 

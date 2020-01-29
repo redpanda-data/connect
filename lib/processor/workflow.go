@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/opentracing/opentracing-go"
 )
@@ -19,6 +20,8 @@ import (
 func init() {
 	Constructors[TypeWorkflow] = TypeSpec{
 		constructor: NewWorkflow,
+		Summary: `
+Executes an automatically resolved workflow of processing stages.`,
 		Description: `
 Performs the same workflow stages as the ` + "[`process_dag`](/docs/components/processors/process_dag)" + `
 processor, but uses a record of workflow statuses stored in the path specified
@@ -46,6 +49,10 @@ stages will be skipped.
 
 You can read more about workflows in Benthos
 [in this document](/docs/configuration/workflows).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("meta_path", "A [dot path](/docs/configuration/field_paths) indicating where to store metadata about workflow execution within the message."),
+			docs.FieldCommon("stages", "A map of ids to [`process_map`](/docs/components/processors/process_map) processors that define each workflow step."),
+		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			sanitChildren := map[string]interface{}{}
 			for k, v := range conf.Workflow.Stages {

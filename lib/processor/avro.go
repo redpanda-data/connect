@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/linkedin/goavro/v2"
 	"github.com/opentracing/opentracing-go"
 )
@@ -16,25 +17,30 @@ import (
 func init() {
 	Constructors[TypeAvro] = TypeSpec{
 		constructor: NewAvro,
+		Summary: `
+Performs Avro based operations on messages based on a schema.`,
 		Description: `
 EXPERIMENTAL: This processor is considered experimental and is therefore subject
 to change outside of major version releases.
 
-Performs Avro based operations on messages based on a schema. Supported encoding
-types are textual, binary and single.
+## Operators
 
-### Operators
-
-#### ` + "`to_json`" + `
+### ` + "`to_json`" + `
 
 Converts Avro documents into a JSON structure. This makes it easier to
 manipulate the contents of the document within Benthos. The encoding field
 specifies how the source documents are encoded.
 
-#### ` + "`from_json`" + `
+### ` + "`from_json`" + `
 
 Attempts to convert JSON documents into Avro documents according to the
 specified encoding.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
+			docs.FieldCommon("encoding", "An Avro encoding format to use for conversions to and from a schema.").HasOptions("textual", "binary", "single"),
+			docs.FieldCommon("schema", "A full Avro schema to use."),
+			partsFieldSpec,
+		},
 	}
 }
 

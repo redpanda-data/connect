@@ -11,17 +11,41 @@ type: processor
 -->
 
 
-```yaml
-subprocess:
-  args: []
-  max_buffer: 65536
-  name: cat
-  parts: []
-```
-
 Subprocess is a processor that runs a process in the background and, for each
 message, will pipe its contents to the stdin stream of the process followed by a
 newline.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+subprocess:
+  name: cat
+  args: []
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+subprocess:
+  name: cat
+  args: []
+  max_buffer: 65536
+  parts: []
+```
+
+</TabItem>
+</Tabs>
 
 The subprocess must then either return a line over stdout or stderr. If a
 response is returned over stdout then its contents will replace the message. If
@@ -32,7 +56,7 @@ The field `max_buffer` defines the maximum response size able to be
 read from the subprocess. This value should be set significantly above the real
 expected maximum response size.
 
-#### Subprocess requirements
+## Subprocess requirements
 
 It is required that subprocesses flush their stdout and stderr pipes for each
 line.
@@ -40,10 +64,43 @@ line.
 Benthos will attempt to keep the process alive for as long as the pipeline is
 running. If the process exits early it will be restarted.
 
-#### Messages containing line breaks
+## Messages containing line breaks
 
 If a message contains line breaks each line of the message is piped to the
 subprocess and flushed, and a response is expected from the subprocess before
 another line is fed in.
+
+## Fields
+
+### `name`
+
+`string` The command to execute as a subprocess.
+
+```yaml
+# Examples
+
+name: cat
+
+name: sed
+
+name: awk
+```
+
+### `args`
+
+`array` A list of arguments to provide the command.
+
+### `max_buffer`
+
+`number` The maximum expected response size.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -18,11 +19,11 @@ import (
 func init() {
 	Constructors[TypeWhile] = TypeSpec{
 		constructor: NewWhile,
-		Description: `
+		Summary: `
 While is a processor that has a condition and a list of child processors. The
 child processors are executed continuously on a message batch for as long as the
-child condition resolves to true.
-
+child condition resolves to true.`,
+		Description: `
 The field ` + "`at_least_once`" + `, if true, ensures that the child processors
 are always executed at least one time (like a do .. while loop.)
 
@@ -35,6 +36,12 @@ execution there are more than 1 message batches the condition is checked against
 the first batch only.
 
 You can find a [full list of conditions here](/docs/components/conditions/about).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("at_least_once", "Whether to always run the child processors at least one time."),
+			docs.FieldAdvanced("max_loops", "An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops."),
+			docs.FieldCommon("condition", "A [condition](/docs/components/conditions/about) to test for each loop. If the condition fails the loop is stopped."),
+			docs.FieldCommon("processors", "A list of child processors to execute on each loop."),
+		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			condSanit, err := condition.SanitiseConfig(conf.While.Condition)
 			if err != nil {

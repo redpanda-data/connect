@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/lambda/client"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -18,11 +19,11 @@ import (
 func init() {
 	Constructors[TypeLambda] = TypeSpec{
 		constructor: NewLambda,
+		Summary: `
+Invokes an AWS lambda for each message. The contents of the message is the
+payload of the request, and the result of the invocation will become the new
+contents of the message.`,
 		Description: `
-Invokes an AWS lambda for each message part of a batch. The contents of the
-message part is the payload of the request, and the result of the invocation
-will become the new contents of the message.
-
 It is possible to perform requests per message of a batch in parallel by setting
 the ` + "`parallel`" + ` flag to ` + "`true`" + `. The ` + "`rate_limit`" + `
 field can be used to specify a rate limit [resource](/docs/components/rate_limits/about)
@@ -46,6 +47,9 @@ By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/aws).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("parallel", "Whether messages of a batch should be dispatched in parallel."),
+		}.Merge(client.FieldSpecs()),
 	}
 }
 

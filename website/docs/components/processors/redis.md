@@ -11,19 +11,45 @@ type: processor
 -->
 
 
+Performs actions against Redis that aren't possible using a
+[`cache`](/docs/components/processors/cache) processor. Actions are
+performed for each message of a batch, where the contents are replaced with the
+result.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 redis:
-  key: ""
-  operator: scard
-  parts: []
-  retries: 3
-  retry_period: 500ms
   url: tcp://localhost:6379
+  operator: scard
+  key: ""
 ```
 
-Performs actions against Redis that aren't possible using a
-[`cache`](/docs/components/processors/cache) processor. Actions are performed for each message of
-a batch, where the contents are replaced with the result.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+redis:
+  url: tcp://localhost:6379
+  operator: scard
+  key: ""
+  retries: 3
+  retry_period: 500ms
+  parts: []
+```
+
+</TabItem>
+</Tabs>
 
 The field `key` supports
 [interpolation functions](/docs/configuration/interpolation#functions) resolved
@@ -44,14 +70,49 @@ add a JSON field to your payload with the cardinality of their target sets with:
  ```
 
 
-### Operators
+## Operators
 
-#### `scard`
+### `scard`
 
 Returns the cardinality of a set, or 0 if the key does not exist.
 
-#### `sadd`
+### `sadd`
 
 Adds a new member to a set. Returns `1` if the member was added.
+
+## Fields
+
+### `url`
+
+`string` The URL of the target Redis instance.
+
+### `operator`
+
+`string` The [operator](#operators) to apply.
+
+Options are: `scard`, `sadd`.
+
+### `key`
+
+`string` A key to use for the target operator.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `retries`
+
+`number` The maximum number of retries before abandoning a request.
+
+### `retry_period`
+
+`string` The time to wait before consecutive retry attempts.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,10 +16,10 @@ import (
 func init() {
 	Constructors[TypeInsertPart] = TypeSpec{
 		constructor: NewInsertPart,
-		Description: `
+		Summary: `
 Insert a new message into a batch at an index. If the specified index is greater
-than the length of the existing batch it will be appended to the end.
-
+than the length of the existing batch it will be appended to the end.`,
+		Description: `
 The index can be negative, and if so the message will be inserted from the end
 counting backwards starting from -1. E.g. if index = -1 then the new message
 will become the last of the batch, if index = -2 then the new message will be
@@ -30,6 +31,10 @@ the batch.
 
 This processor will interpolate functions within the 'content' field, you can
 find a list of functions [here](/docs/configuration/interpolation#functions).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("index", "The index within the batch to insert the message at."),
+			docs.FieldCommon("content", "The content of the message being inserted.").SupportsInterpolation(true),
+		},
 	}
 }
 

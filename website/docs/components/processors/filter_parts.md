@@ -11,6 +11,9 @@ type: processor
 -->
 
 
+Tests each message against a [condition](/docs/components/conditions/about), if
+the condition fails then the message is dropped.
+
 ```yaml
 filter_parts:
   text:
@@ -20,10 +23,6 @@ filter_parts:
   type: text
 ```
 
-Tests each individual message of a batch against a condition, if the condition
-fails then the message is dropped. If the resulting batch is empty it will be
-dropped. You can find a [full list of conditions here](/docs/components/conditions/about), in this
-case each condition will be applied to a message as if it were a single message
-batch.
+You can find a [full list of conditions here](/docs/components/conditions/about).
 
 

@@ -11,13 +11,53 @@ type: processor
 -->
 
 
+Decompresses messages according to the selected algorithm. Supported
+decompression types are: gzip, zlib, bzip2, flate.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+decompress:
+  algorithm: gzip
+```
+
+</TabItem>
+<TabItem value="advanced">
+
 ```yaml
 decompress:
   algorithm: gzip
   parts: []
 ```
 
-Decompresses messages according to the selected algorithm. Supported
-decompression types are: gzip, zlib, bzip2, flate.
+</TabItem>
+</Tabs>
+
+## Fields
+
+### `algorithm`
+
+`string` The decompression algorithm to use.
+
+Options are: `gzip`, `zlib`, `bzip2`, `flate`.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

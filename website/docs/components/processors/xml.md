@@ -11,21 +11,44 @@ type: processor
 -->
 
 
+Parses messages as an XML document, performs a mutation on the data, and then
+overwrites the previous contents with the new value.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+xml:
+  operator: to_json
+```
+
+</TabItem>
+<TabItem value="advanced">
+
 ```yaml
 xml:
   operator: to_json
   parts: []
 ```
 
+</TabItem>
+</Tabs>
+
 EXPERIMENTAL: This processor is considered experimental and is therefore subject
 to change outside of major version releases.
 
-Parses messages as an XML document, performs a mutation on the data, and then
-overwrites the previous contents with the new value.
+## Operators
 
-### Operators
-
-#### `to_json`
+### `to_json`
 
 Converts an XML document into a JSON structure, where elements appear as keys of
 an object according to the following rules:
@@ -67,5 +90,22 @@ The resulting JSON structure would look like this:
   }
 }
 ```
+
+## Fields
+
+### `operator`
+
+`string` An XML [operation](#operators) to apply to messages.
+
+Options are: `to_json`.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

@@ -11,14 +11,36 @@ type: processor
 -->
 
 
+Hashes messages according to the selected algorithm.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+hash:
+  algorithm: sha256
+```
+
+</TabItem>
+<TabItem value="advanced">
+
 ```yaml
 hash:
   algorithm: sha256
   parts: []
 ```
 
-Hashes messages according to the selected algorithm. Supported algorithms are:
-sha256, sha512, sha1, xxhash64.
+</TabItem>
+</Tabs>
 
 This processor is mostly useful when combined with the
 [`process_field`](/docs/components/processors/process_field) processor as it allows you to hash a
@@ -32,5 +54,22 @@ process_field:
   - hash:
       algorithm: sha256
 ```
+
+## Fields
+
+### `algorithm`
+
+`string` The hash algorithm to use.
+
+Options are: `sha256`, `sha512`, `sha1`, `xxhash64`.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

@@ -11,54 +11,112 @@ type: processor
 -->
 
 
+Performs operations against a [cache resource](/docs/components/caches/about)
+for each message, allowing you to store or retrieve data within message payloads.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 cache:
   cache: ""
-  key: ""
   operator: set
-  parts: []
+  key: ""
   value: ""
 ```
 
-Performs operations against a [cache resource](/docs/components/caches/about) for each message of a
-batch, allowing you to store or retrieve data within message payloads.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+cache:
+  cache: ""
+  operator: set
+  key: ""
+  value: ""
+  parts: []
+```
+
+</TabItem>
+</Tabs>
 
 This processor will interpolate functions within the `key` and `value`
-fields individually for each message of the batch. This allows you to specify
-dynamic keys and values based on the contents of the message payloads and
-metadata. You can find a list of functions
-[here](/docs/configuration/interpolation#functions).
+fields individually for each message. This allows you to specify dynamic keys
+and values based on the contents of the message payloads and metadata. You can
+find a list of functions [here](/docs/configuration/interpolation#functions).
 
-### Operators
+## Operators
 
-#### `set`
+### `set`
 
 Set a key in the cache to a value. If the key already exists the contents are
 overridden.
 
-#### `add`
+### `add`
 
 Set a key in the cache to a value. If the key already exists the action fails
 with a 'key already exists' error, which can be detected with
 [processor error handling](/docs/configuration/error_handling).
 
-#### `get`
+### `get`
 
 Retrieve the contents of a cached key and replace the original message payload
 with the result. If the key does not exist the action fails with an error, which
 can be detected with [processor error handling](/docs/configuration/error_handling).
 
-#### `delete`
+### `delete`
 
 Delete a key and its contents from the cache.  If the key does not exist the
 action is a no-op and will not fail with an error.
 
-### Examples
+## Fields
+
+### `cache`
+
+`string` The [`cache` resource](/docs/components/caches/about) to target with this processor.
+
+### `operator`
+
+`string` The [operation](#operators) to perform with the cache.
+
+Options are: `set`, `add`, `get`, `delete`.
+
+### `key`
+
+`string` A key to use with the cache.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `value`
+
+`string` A value to use with the cache (when applicable).
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
+
+## Examples
 
 The `cache` processor can be used in combination with other processors
 in order to solve a variety of data stream problems.
 
-#### Deduplication
+### Deduplication
 
 Deduplication can be done using the add operator with a key extracted from the
 message payload, since it fails when a key already exists we can remove the
@@ -76,7 +134,7 @@ condition:
     type: processor_failed
 ```
 
-#### Hydration
+### Hydration
 
 It's possible to enrich payloads with content previously stored in a cache by
 using the [`process_map`](/docs/components/processors/process_map) processor:
@@ -91,5 +149,4 @@ using the [`process_map`](/docs/components/processors/process_map) processor:
     postmap:
       message.document: .
 ```
-
 

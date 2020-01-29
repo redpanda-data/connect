@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -18,10 +19,10 @@ import (
 func init() {
 	Constructors[TypeHTTP] = TypeSpec{
 		constructor: NewHTTP,
-		Description: `
+		Summary: `
 Performs an HTTP request using a message batch as the request body, and replaces
-the original message parts with the body of the response.
-
+the original message parts with the body of the response.`,
+		Description: `
 If the batch contains only a single message part then it will be sent as the
 body of the request. If the batch contains multiple messages then they will be
 sent as a multipart HTTP request using a ` + "`Content-Type: multipart`" + `
@@ -46,7 +47,7 @@ response back into the original payload instead of replacing it entirely, you
 can use the ` + "[`process_map`](/docs/components/processors/process_map)" + ` or
  ` + "[`process_field`](/docs/components/processors/process_field)" + ` processors.
 
-### Response Codes
+## Response Codes
 
 Benthos considers any response code between 200 and 299 inclusive to indicate a
 successful response, you can add more success status codes with the field
@@ -58,7 +59,7 @@ it will be retried after increasing intervals.
 When a request returns a response code within the ` + "`drop_on`" + ` field it
 will not be reattempted and is immediately considered a failed request.
 
-### Adding Metadata
+## Adding Metadata
 
 If the request returns a response code this processor sets a metadata field
 ` + "`http_status_code`" + ` on all resulting messages.
@@ -66,12 +67,17 @@ If the request returns a response code this processor sets a metadata field
 If the field ` + "`copy_response_headers` is set to `true`" + ` then any headers
 in the response will also be set in the resulting message as metadata.
  
-### Error Handling
+## Error Handling
 
 When all retry attempts for a message are exhausted the processor cancels the
 attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](/docs/configuration/error_handling).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request."),
+			docs.FieldCommon("max_parallel", "A limit on the maximum messages in flight when sending batched messages in parallel."),
+			docs.FieldCommon("request", "Controls how the HTTP request is made.").WithChildren(client.FieldSpecs()...),
+		},
 	}
 }
 

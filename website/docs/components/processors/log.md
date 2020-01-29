@@ -11,17 +11,17 @@ type: processor
 -->
 
 
+Prints a log event each time it processes a batch. Messages always remain
+unchanged. The log message can be set using function interpolations described
+[here](/docs/configuration/interpolation#functions) which allows you to log the
+contents and metadata of messages.
+
 ```yaml
 log:
-  fields: {}
   level: INFO
+  fields: {}
   message: ""
 ```
-
-Log is a processor that prints a log event each time it processes a batch. The
-batch is then sent onwards unchanged. The log message can be set using function
-interpolations described [here](/docs/configuration/interpolation#functions) which
-allows you to log the contents and metadata of a messages within a batch.
 
 In order to print a log message per message of a batch place it within a
 [`for_each`](/docs/components/processors/for_each) processor.
@@ -56,5 +56,25 @@ log:
     id: "${!json_field:id}"
     kafka_topic: "${!metadata:kafka_topic}"
 ```
+
+## Fields
+
+### `level`
+
+`string` The log level to use.
+
+Options are: `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`, `ALL`.
+
+### `fields`
+
+`object` A map of fields to print along with the log message.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+### `message`
+
+`string` The message to print.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
 
 

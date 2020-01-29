@@ -15,12 +15,12 @@ import (
 func init() {
 	Constructors[TypeTry] = TypeSpec{
 		constructor: NewTry,
-		Description: `
+		Summary: `
 Behaves similarly to the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor, where a
 list of child processors are applied to individual messages of a batch. However,
 if a processor fails for a message then that message will skip all following
-processors.
-
+processors.`,
+		Description: `
 For example, with the following config:
 
 ` + "``` yaml" + `

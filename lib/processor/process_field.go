@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/Jeffail/gabs/v2"
 )
 
@@ -19,24 +20,23 @@ import (
 func init() {
 	Constructors[TypeProcessField] = TypeSpec{
 		constructor: NewProcessField,
-		Description: `
+		Summary: `
 A processor that extracts the value of a field [dot path](/docs/configuration/field_paths)
-within payloads according to a specified codec, applies a list of processors to
-the extracted value and finally sets the field within the original payloads to
-the processed result.
-
-### Codecs
-
-#### ` + "`json` (default)" + `
-
-Parses the payload as a JSON document, extracts and sets the field using a dot
-notation path.
-
-The result, according to the config field ` + "`result_type`" + `, can be
-marshalled into any of the following types:
-` + "`string` (default), `int`, `float`, `bool`, `object` (including null)," + `
-` + " `array` and `discard`" + `. The discard type is a special case that
-discards the result of the processing steps entirely.
+within payloads according to a specified [codec](#codec), applies a list of
+processors to the extracted value and finally sets the field within the original
+payloads to the processed result.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("codec", "A [codec](#codec) to use in order to extract (and set) the target field.").HasOptions("json", "metadata"),
+			docs.FieldCommon("path", "A [dot path](/docs/configuration/field_paths) pointing to the target field."),
+			docs.FieldCommon(
+				"result_type", "The final data type to marshal the processing result into. The `discard` type is a special case that discards the result of the processing steps entirely.",
+			).HasOptions("string", "int", "float", "bool", "object", "discard"),
+			docs.FieldCommon("processors", "A list of child processors to execute on the extracted value."),
+			partsFieldSpec,
+		},
+		Description: `
+The result can be marshalled into a specific data type with the field
+[` + "`result_type`" + `](#result_type).
 
 It's therefore possible to use this codec without any child processors as a way
 of casting string values into other types. For example, with an input JSON
@@ -49,13 +49,18 @@ process_field:
   result_type: int
 ` + "```" + `
 
-#### ` + "`metadata`" + `
+## Codecs
 
-Extracts and sets a metadata value identified by the path field. If the field
-` + "`result_type` is set to `discard`" + ` then the result of the processing stages
-is discarded and the original metadata value is left unchanged.
+### ` + "`json`" + `
 
-### Usage
+Parses the payload as a JSON document, extracts and sets the field using a dot
+notation path.
+
+### ` + "`metadata`" + `
+
+Extracts and sets a metadata value identified by the path field.`,
+		Footnotes: `
+## Examples
 
 For example, with an input JSON document ` + "`{\"foo\":\"hello world\"}`" + `
 it's possible to uppercase the value of the field 'foo' by using the JSON codec

@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -17,10 +18,11 @@ import (
 func init() {
 	Constructors[TypeMetadata] = TypeSpec{
 		constructor: NewMetadata,
-		Description: `
+		Summary: `
 Performs operations on the metadata of a message. Metadata are key/value pairs
-that are associated with message parts of a batch. Metadata values can be
-referred to using configuration
+that are associated with messages.`,
+		Description: `
+Metadata values can be referred to using configuration
 [interpolation functions](/docs/configuration/interpolation#metadata),
 which allow you to set fields in certain outputs using these dynamic values.
 
@@ -41,26 +43,32 @@ for_each:
     value: ${!json_field:document.foo}
 ` + "```" + `
 
-### Operators
+## Operators
 
-#### ` + "`set`" + `
+### ` + "`set`" + `
 
 Sets the value of a metadata key.
 
-#### ` + "`delete`" + `
+### ` + "`delete`" + `
 
 Removes all metadata values from the message where the key matches the value
 provided. If the value field is left empty the key value will instead be used.
 
-#### ` + "`delete_all`" + `
+### ` + "`delete_all`" + `
 
 Removes all metadata values from the message.
 
-#### ` + "`delete_prefix`" + `
+### ` + "`delete_prefix`" + `
 
 Removes all metadata values from the message where the key is prefixed with the
 value provided. If the value field is left empty the key value will instead be
 used as the prefix.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("operator", "The operator to apply to messages.").HasOptions("set", "delete", "delete_all", "delete_prefix"),
+			docs.FieldCommon("key", "The metadata key to target with the chosen operator.").SupportsInterpolation(true),
+			docs.FieldCommon("value", "The metadata value to use with the chosen operator.").SupportsInterpolation(true),
+			partsFieldSpec,
+		},
 	}
 }
 

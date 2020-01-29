@@ -15,6 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	olog "github.com/opentracing/opentracing-go/log"
 )
 
@@ -23,11 +24,11 @@ import (
 func init() {
 	Constructors[TypeArchive] = TypeSpec{
 		constructor: NewArchive,
-		Description: `
+		Summary: `
 Archives all the messages of a batch into a single message according to the
 selected archive format. Supported archive formats are:
-` + "`tar`, `zip`, `binary`, `lines` and `json_array`." + `
-
+` + "`tar`, `zip`, `binary`, `lines` and `json_array`." + ``,
+		Description: `
 Some archive formats (such as tar, zip) treat each archive item (message part)
 as a file with a path. Since message parts only contain raw data a unique path
 must be generated for each part. This can be done by using function
@@ -40,6 +41,11 @@ the result to an array, which becomes the contents of the resulting message.
 
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.`,
+		UsesBatches: true,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("format", "The archiving format to apply.").HasOptions("tar", "zip", "binary", "lines", "json_array"),
+			docs.FieldCommon("path", "The path to set for each message in the archive (when applicable).").SupportsInterpolation(false),
+		},
 	}
 }
 

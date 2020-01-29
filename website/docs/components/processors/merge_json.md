@@ -11,16 +11,59 @@ type: processor
 -->
 
 
+Parses selected messages of a batch as JSON documents, attempts to merge them
+into one single JSON document and then writes it to a new message at the end of
+the batch.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 merge_json:
-  parts: []
   retain_parts: false
 ```
 
-Parses selected messages of a batch as JSON documents, attempts to merge them
-into one single JSON document and then writes it to a new message at the end of
-the batch. Merged parts are removed unless `retain_parts` is set to
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+merge_json:
+  retain_parts: false
+  parts: []
+```
+
+</TabItem>
+</Tabs>
+
+Merged parts are removed unless `retain_parts` is set to
 true. The new merged message will contain the metadata of the first part to be
 merged.
+
+The functionality of this processor depends on being applied across messages
+that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
+
+## Fields
+
+### `retain_parts`
+
+`bool` Whether messages that are merged should also have their original contents preserved.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

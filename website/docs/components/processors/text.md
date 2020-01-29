@@ -11,15 +11,40 @@ type: processor
 -->
 
 
+Performs text based mutations on payloads.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 text:
-  arg: ""
   operator: trim_space
-  parts: []
+  arg: ""
   value: ""
 ```
 
-Performs text based mutations on payloads.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+text:
+  operator: trim_space
+  arg: ""
+  value: ""
+  parts: []
+```
+
+</TabItem>
+</Tabs>
 
 This processor will interpolate functions within the `value` field,
 you can find a list of functions [here](/docs/configuration/interpolation#functions).
@@ -35,34 +60,61 @@ for_each:
     value: ${!json_field:document.content}
 ```
 
-### Operators
+## Fields
 
-#### `append`
+### `operator`
+
+`string` A text based [operation](#operators) to execute.
+
+Options are: `append`, `escape_url_query`, `unescape_url_query`, `find_regexp`, `prepend`, `quote`, `regexp_expand`, `replace`, `replace_regexp`, `set`, `strip_html`, `to_lower`, `to_upper`, `trim`, `trim_space`, `unquote`.
+
+### `arg`
+
+`string` An argument for the operator (not always applicable).
+
+### `value`
+
+`string` A value to use with the operator.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
+
+## Operators
+
+### `append`
 
 Appends text to the end of the payload.
 
-#### `escape_url_query`
+### `escape_url_query`
 
 Escapes text so that it is safe to place within the query section of a URL.
 
-#### `unescape_url_query`
+### `unescape_url_query`
 
 Unescapes text that has been url escaped.
 
-#### `find_regexp`
+### `find_regexp`
 
 Extract the matching section of the argument regular expression in a message.
 
-#### `prepend`
+### `prepend`
 
 Prepends text to the beginning of the payload.
 
-#### `quote`
+### `quote`
 
 Returns a doubled-quoted string, using escape sequences (\t, \n, \xFF, \u0100)
 for control characters and other non-printable characters.
 
-#### `regexp_expand`
+### `regexp_expand`
 
 Expands each matched occurrence of the argument regular expression according to
 a template specified with the `value` field, and replaces the message
@@ -95,42 +147,41 @@ option1=value1
 option2=value2
 ```
 
-#### `replace`
+### `replace`
 
 Replaces all occurrences of the argument in a message with a value.
 
-#### `replace_regexp`
+### `replace_regexp`
 
 Replaces all occurrences of the argument regular expression in a message with a
 value. Inside the value $ signs are interpreted as submatch expansions, e.g. $1
 represents the text of the first submatch.
 
-#### `set`
+### `set`
 
 Replace the contents of a message entirely with a value.
 
-#### `strip_html`
+### `strip_html`
 
 Removes all HTML tags from a message.
 
-#### `to_lower`
+### `to_lower`
 
 Converts all text into lower case.
 
-#### `to_upper`
+### `to_upper`
 
 Converts all text into upper case.
 
-#### `trim`
+### `trim`
 
 Removes all leading and trailing occurrences of characters within the arg field.
 
-#### `trim_space`
+### `trim_space`
 
 Removes all leading and trailing whitespace from the payload.
 
-#### `unquote`
+### `unquote`
 
 Unquotes a single, double, or back-quoted string literal
-
 

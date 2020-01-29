@@ -11,14 +11,25 @@ type: processor
 -->
 
 
+Retains a pseudo-randomly sampled percentage of message batches (0 to 100) and
+drops all others. The random seed is static in order to sample
+deterministically, but can be set in config to allow parallel samples that are
+unique.
+
 ```yaml
 sample:
   retain: 10
   seed: 0
 ```
 
-Retains a randomly sampled percentage of message batches (0 to 100) and drops
-all others. The random seed is static in order to sample deterministically, but
-can be set in config to allow parallel samples that are unique.
+## Fields
+
+### `retain`
+
+`number` The percentage of messages to keep.
+
+### `seed`
+
+`number` A seed for pseudo-random sampling.
 
 

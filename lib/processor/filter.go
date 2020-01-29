@@ -18,11 +18,11 @@ import (
 func init() {
 	Constructors[TypeFilter] = TypeSpec{
 		constructor: NewFilter,
-		Description: `
+		Summary: `
 Tests each message batch against a condition, if the condition fails then the
-batch is dropped. You can find a [full list of conditions here](/docs/components/conditions/about).
-
-In order to filter individual messages of a batch use the
+entire batch is dropped. You can find a [full list of conditions here](/docs/components/conditions/about).`,
+		Description: `
+In order to instead filter individual messages of a batch use the
 ` + "[`filter_parts`](/docs/components/processors/filter_parts)" + ` processor.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return condition.SanitiseConfig(conf.Filter.Config)

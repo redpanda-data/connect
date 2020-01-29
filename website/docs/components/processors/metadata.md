@@ -11,17 +11,43 @@ type: processor
 -->
 
 
+Performs operations on the metadata of a message. Metadata are key/value pairs
+that are associated with messages.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 metadata:
-  key: example
   operator: set
-  parts: []
+  key: example
   value: ${!hostname}
 ```
 
-Performs operations on the metadata of a message. Metadata are key/value pairs
-that are associated with message parts of a batch. Metadata values can be
-referred to using configuration
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+metadata:
+  operator: set
+  key: example
+  value: ${!hostname}
+  parts: []
+```
+
+</TabItem>
+</Tabs>
+
+Metadata values can be referred to using configuration
 [interpolation functions](/docs/configuration/interpolation#metadata),
 which allow you to set fields in certain outputs using these dynamic values.
 
@@ -42,25 +68,54 @@ for_each:
     value: ${!json_field:document.foo}
 ```
 
-### Operators
+## Operators
 
-#### `set`
+### `set`
 
 Sets the value of a metadata key.
 
-#### `delete`
+### `delete`
 
 Removes all metadata values from the message where the key matches the value
 provided. If the value field is left empty the key value will instead be used.
 
-#### `delete_all`
+### `delete_all`
 
 Removes all metadata values from the message.
 
-#### `delete_prefix`
+### `delete_prefix`
 
 Removes all metadata values from the message where the key is prefixed with the
 value provided. If the value field is left empty the key value will instead be
 used as the prefix.
+
+## Fields
+
+### `operator`
+
+`string` The operator to apply to messages.
+
+Options are: `set`, `delete`, `delete_all`, `delete_prefix`.
+
+### `key`
+
+`string` The metadata key to target with the chosen operator.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+### `value`
+
+`string` The metadata value to use with the chosen operator.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

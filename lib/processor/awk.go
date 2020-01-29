@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/benhoyt/goawk/interp"
 	"github.com/benhoyt/goawk/parser"
@@ -29,28 +30,37 @@ func init() {
 
 	Constructors[TypeAWK] = TypeSpec{
 		constructor: NewAWK,
+		Summary: `
+Executes an AWK program on messages. This processor is very powerful as it
+offers a range of [custom functions](#awk-functions) for querying and mutating
+message contents and metadata.`,
 		Description: `
-Executes an AWK program on messages by feeding contents as the input based on a
-codec and replaces the contents with the result. If the result is empty (nothing
-is printed by the program) then the original message contents remain unchanged.
+Works by feeding contents as the input based on a [codec](#codecs) and replaces
+the contents with the result. If the result is empty (nothing is printed by the
+program) then the original message contents remain unchanged.
 
 Comes with a wide range of [custom functions](#awk-functions) for accessing
 message metadata, json fields, printing logs, etc. These functions can be
 overridden by functions within the program.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("codec", "A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.").HasOptions("none", "text", "json"),
+			docs.FieldCommon("program", "An AWK program to execute"),
+			partsFieldSpec,
+		},
 		Footnotes: `
 ## Codecs
 
 A codec can be specified that determines how the contents of the message are fed
 into the program. This does not change the custom functions.
 
-` + "`none`" + `
+### ` + "`none`" + `
 
 An empty string is fed into the program. Functions can still be used in order to
 extract and mutate metadata and message contents. This is useful for when your
 program only uses functions and doesn't need the full text of the message to be
 parsed by the program.
 
-` + "`text`" + `
+### ` + "`text`" + `
 
 The full contents of the message are fed into the program as a string, allowing
 you to reference tokenised segments of the message with variables ($0, $1, etc).
@@ -59,7 +69,7 @@ Custom functions can still be used with this codec.
 This is the default codec as it behaves most similar to typical usage of the awk
 command line tool.
 
-` + "`json`" + `
+### ` + "`json`" + `
 
 No contents are fed into the program. Instead, variables are extracted from the
 message by walking the flattened JSON structure. Each value is converted into a

@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/OneOfOne/xxhash"
 	olog "github.com/opentracing/opentracing-go/log"
 )
@@ -21,11 +22,10 @@ import (
 func init() {
 	Constructors[TypeDedupe] = TypeSpec{
 		constructor: NewDedupe,
+		Summary: `
+Deduplicates message batches by caching selected (and optionally hashed)
+messages, dropping batches that are already cached.`,
 		Description: `
-Dedupes message batches by caching selected (and optionally hashed) messages,
-dropping batches that are already cached. The hash type can be chosen from:
-none or xxhash.
-
 This processor acts across an entire batch, in order to deduplicate individual
 messages within a batch use this processor with the
 ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.
@@ -54,7 +54,7 @@ always wrap the output within a ` + "[`retry`](/docs/components/outputs/retry)" 
 block. This ensures that during outages your messages aren't reprocessed after
 failures, which would result in messages being dropped.
 
-### Delivery Guarantees
+## Delivery Guarantees
 
 Performing deduplication on a stream using a distributed cache voids any
 at-least-once guarantees that it previously had. This is because the cache will
@@ -66,6 +66,13 @@ If you intend to preserve at-least-once delivery guarantees you can avoid this
 problem by using a memory based cache. This is a compromise that can achieve
 effective deduplication but parallel deployments of the pipeline as well as
 service restarts increase the chances of duplicates passing undetected.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("cache", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),
+			docs.FieldCommon("hash", "The hash type to used.").HasOptions("none", "xxhash"),
+			docs.FieldCommon("key", "An optional key to use for deduplication (instead of the entire message contents).").SupportsInterpolation(true),
+			docs.FieldCommon("drop_on_err", "Whether messages should be dropped when the cache returns an error."),
+			docs.FieldAdvanced("parts", "An array of message indexes within the batch to deduplicate based on. If left empty all messages included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching)."),
+		},
 	}
 }
 

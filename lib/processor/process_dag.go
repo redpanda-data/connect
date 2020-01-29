@@ -21,12 +21,12 @@ import (
 func init() {
 	Constructors[TypeProcessDAG] = TypeSpec{
 		constructor: NewProcessDAG,
-		Description: `
+		Summary: `
 A processor that manages a map of ` + "`process_map`" + ` processors and
 calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to
 their postmap targets for provided fields and their premap targets for required
-fields.
-
+fields.`,
+		Description: `
 The names of workflow stages may only contain alphanumeric, underscore and dash
 characters (they must match the regular expression ` + "`[a-zA-Z0-9_-]+`" + `).
 
@@ -40,9 +40,11 @@ a premap such as those used in conditions.
 
 This processor is extremely useful for performing a complex mesh of enrichments
 where network requests mean we desire maximum parallelism across those
-enrichments.
+enrichments.`,
+		Footnotes: `
+## Examples
 
-For example, if we had three target HTTP services that we wished to enrich each
+If we had three target HTTP services that we wished to enrich each
 document with - foo, bar and baz - where baz relies on the result of both foo
 and bar, we might express that relationship here like so:
 
@@ -57,6 +59,7 @@ process_dag:
           url: http://foo/enrich
     postmap:
       foo_result: .
+
   bar:
     premap:
       .: msg.sub.path
@@ -66,6 +69,7 @@ process_dag:
           url: http://bar/enrich
     postmap:
       bar_result: .
+
   baz:
     premap:
       foo_obj: foo_result

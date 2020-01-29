@@ -11,6 +11,8 @@ type: processor
 -->
 
 
+Executes an automatically resolved workflow of processing stages.
+
 ```yaml
 workflow:
   meta_path: meta.workflow
@@ -43,5 +45,15 @@ stages will be skipped.
 
 You can read more about workflows in Benthos
 [in this document](/docs/configuration/workflows).
+
+## Fields
+
+### `meta_path`
+
+`string` A [dot path](/docs/configuration/field_paths) indicating where to store metadata about workflow execution within the message.
+
+### `stages`
+
+`object` A map of ids to [`process_map`](/docs/components/processors/process_map) processors that define each workflow step.
 
 

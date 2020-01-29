@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -18,12 +19,12 @@ import (
 func init() {
 	Constructors[TypeParallel] = TypeSpec{
 		constructor: NewParallel,
-		Description: `
+		Summary: `
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message (similar to the
 ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor), but where each message is
-processed in parallel.
-
+processed in parallel.`,
+		Description: `
 The field ` + "`cap`" + `, if greater than zero, caps the maximum number of
 parallel processing threads.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
@@ -38,6 +39,11 @@ parallel processing threads.`,
 				"cap":        conf.Parallel.Cap,
 				"processors": procConfs,
 			}, nil
+		},
+		UsesBatches: true,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("cap", "The maximum number of messages to have processing at a given time."),
+			docs.FieldCommon("processors", "A list of child processors to apply."),
 		},
 	}
 }

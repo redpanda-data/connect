@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/go-redis/redis"
 	"github.com/opentracing/opentracing-go"
 )
@@ -20,11 +21,12 @@ import (
 func init() {
 	Constructors[TypeRedis] = TypeSpec{
 		constructor: NewRedis,
-		Description: `
+		Summary: `
 Performs actions against Redis that aren't possible using a
-` + "[`cache`](/docs/components/processors/cache)" + ` processor. Actions are performed for each message of
-a batch, where the contents are replaced with the result.
-
+` + "[`cache`](/docs/components/processors/cache)" + ` processor. Actions are
+performed for each message of a batch, where the contents are replaced with the
+result.`,
+		Description: `
 The field ` + "`key`" + ` supports
 [interpolation functions](/docs/configuration/interpolation#functions) resolved
 individually for each message of the batch.
@@ -44,15 +46,23 @@ add a JSON field to your payload with the cardinality of their target sets with:
  ` + "```" + `
 
 
-### Operators
+## Operators
 
-#### ` + "`scard`" + `
+### ` + "`scard`" + `
 
 Returns the cardinality of a set, or 0 if the key does not exist.
 
-#### ` + "`sadd`" + `
+### ` + "`sadd`" + `
 
 Adds a new member to a set. Returns ` + "`1`" + ` if the member was added.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("url", "The URL of the target Redis instance."),
+			docs.FieldCommon("operator", "The [operator](#operators) to apply.").HasOptions("scard", "sadd"),
+			docs.FieldCommon("key", "A key to use for the target operator.").SupportsInterpolation(false),
+			docs.FieldAdvanced("retries", "The maximum number of retries before abandoning a request."),
+			docs.FieldAdvanced("retry_period", "The time to wait before consecutive retry attempts."),
+			partsFieldSpec,
+		},
 	}
 }
 

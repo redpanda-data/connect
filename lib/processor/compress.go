@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -20,11 +21,16 @@ import (
 func init() {
 	Constructors[TypeCompress] = TypeSpec{
 		constructor: NewCompress,
-		Description: `
+		Summary: `
 Compresses messages according to the selected algorithm. Supported compression
-algorithms are: gzip, zlib, flate.
-
+algorithms are: gzip, zlib, flate.`,
+		Description: `
 The 'level' field might not apply to all algorithms.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("algorithm", "The compression algorithm to use.").HasOptions("gzip", "zlib", "flate"),
+			docs.FieldCommon("level", "The level of compression to use. May not be applicable to all algorithms."),
+			partsFieldSpec,
+		},
 	}
 }
 

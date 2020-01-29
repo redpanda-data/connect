@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/opentracing/opentracing-go"
@@ -20,11 +21,11 @@ import (
 func init() {
 	Constructors[TypeJSONSchema] = TypeSpec{
 		constructor: NewJSONSchema,
-		Description: `
+		Summary: `
 Checks messages against a provided JSONSchema definition but does not change the
 payload under any circumstances. If a message does not match the schema it can
-be caught using error handling methods outlined [here](/docs/configuration/error_handling).
-
+be caught using error handling methods outlined [here](/docs/configuration/error_handling).`,
+		Description: `
 Please refer to the [JSON Schema website](https://json-schema.org/) for
 information and tutorials regarding the syntax of the schema.
 
@@ -78,6 +79,11 @@ the fault. This gives you flexibility in how you may handle schema errors, but
 for a simpler use case you might instead wish to use the
 ` + "[`json_schema`](/docs/components/conditions/json_schema)" + ` condition with a
 ` + "[`filter`](/docs/components/processors/filter)" + `.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("schema", "A schema to apply. Use either this or the `schema_path` field."),
+			docs.FieldCommon("schema_path", "The path of a schema document to apply. Use either this or the `schema` field."),
+			partsFieldSpec,
+		},
 	}
 }
 

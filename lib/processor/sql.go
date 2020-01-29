@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	olog "github.com/opentracing/opentracing-go/log"
 
 	// SQL Drivers
@@ -24,10 +25,11 @@ import (
 func init() {
 	Constructors[TypeSQL] = TypeSpec{
 		constructor: NewSQL,
+		Summary: `
+Runs an SQL query against a target database for each message batch and, for
+queries that return rows, replaces the batch with the result according to a
+[codec](#result-codecs).`,
 		Description: `
-SQL is a processor that runs a query against a target database for each message
-batch and, for queries that return rows, replaces the batch with the result.
-
 If a query contains arguments they can be set as an array of strings supporting
 [interpolation functions](/docs/configuration/interpolation#functions) in the
 ` + "`args`" + ` field.
@@ -47,23 +49,7 @@ for_each:
     - ${!metadata:kafka_topic}
 ` + "```" + `
 
-### Result Codecs
-
-When a query returns rows they are serialised according to a chosen codec, and
-the batch contents are replaced with the serialised result.
-
-#### ` + "`none`" + `
-
-The result of the query is ignored and the message batch remains unchanged. If
-your query does not return rows then this is the appropriate codec.
-
-#### ` + "`json_array`" + `
-
-The resulting rows are serialised into an array of JSON objects, where each
-object represents a row, where the key is the column name and the value is that
-columns value in the row.
-
-### Drivers
+## Drivers
 
 The following is a list of supported drivers and their respective DSN formats:
 
@@ -72,6 +58,35 @@ The following is a list of supported drivers and their respective DSN formats:
 
 Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you
 can override this with the parameter ` + "`sslmode=disable`" + ` if required.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("driver", "A database [driver](#drivers) to use.").HasOptions("mysql", "postgres"),
+			docs.FieldCommon(
+				"dsn", "A Data Source Name to identify the target database.",
+				"foouser:foopassword@tcp(localhost:3306)/foodb",
+			),
+			docs.FieldCommon(
+				"query", "The query to run against the database.",
+				"INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);",
+			),
+			docs.FieldCommon("args", "A list of arguments for the query to be resolved for each message batch.").SupportsInterpolation(true),
+			docs.FieldCommon("result_codec", "A [codec](#result-codecs) to determine how resulting rows are converted into messages."),
+		},
+		Footnotes: `
+## Result Codecs
+
+When a query returns rows they are serialised according to a chosen codec, and
+the batch contents are replaced with the serialised result.
+
+### ` + "`none`" + `
+
+The result of the query is ignored and the message batch remains unchanged. If
+your query does not return rows then this is the appropriate codec.
+
+### ` + "`json_array`" + `
+
+The resulting rows are serialised into an array of JSON objects, where each
+object represents a row, where the key is the column name and the value is that
+columns value in the row.`,
 	}
 }
 

@@ -20,12 +20,14 @@ import (
 func init() {
 	Constructors[TypeGroupBy] = TypeSpec{
 		constructor: NewGroupBy,
-		Description: `
+		Summary: `
 Splits a batch of messages into N batches, where each resulting batch contains a
 group of messages determined by conditions that are applied per message of the
-original batch. Once the groups are established a list of processors are applied
-to their respective grouped batch, which can be used to label the batch as per
-their grouping.
+original batch.`,
+		Description: `
+Once the groups are established a list of processors are applied to their
+respective grouped batch, which can be used to label the batch as per their
+grouping.
 
 Each group is configured in a list with a condition and a list of processors:
 
@@ -102,6 +104,7 @@ processing steps, we only need a single grouping configuration.`,
 			}
 			return groups, nil
 		},
+		UsesBatches: true,
 	}
 }
 

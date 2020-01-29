@@ -11,6 +11,9 @@ type: processor
 -->
 
 
+Executes a set of child processors when a [condition](/docs/components/conditions/about)
+passes for a message batch, otherwise a different set of processors are applied.
+
 ```yaml
 conditional:
   condition:
@@ -19,19 +22,30 @@ conditional:
       operator: equals_cs
       part: 0
     type: text
-  else_processors: []
   processors: []
+  else_processors: []
 ```
 
 Conditional is a processor that has a list of child `processors`,
-`else_processors`, and a condition. For each message batch, if the
+`else_processors`, and a `condition`. For each message batch, if the
 condition passes, the child `processors` will be applied, otherwise
-the `else_processors` are applied. This processor is useful for
-applying processors based on the content of message batches.
+the `else_processors` are applied.
 
 In order to conditionally process each message of a batch individually use this
 processor with the [`for_each`](/docs/components/processors/for_each) processor.
 
-You can find a [full list of conditions here](/docs/components/conditions/about).
+## Fields
+
+### `condition`
+
+`object` The [`condition`](/docs/components/conditions/about) to check against messages.
+
+### `processors`
+
+`array` A list of processors to apply when the condition passes.
+
+### `else_processors`
+
+`array` A list of processors to apply when the condition does not pass.
 
 

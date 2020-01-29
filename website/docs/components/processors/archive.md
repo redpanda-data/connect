@@ -11,15 +11,15 @@ type: processor
 -->
 
 
+Archives all the messages of a batch into a single message according to the
+selected archive format. Supported archive formats are:
+`tar`, `zip`, `binary`, `lines` and `json_array`.
+
 ```yaml
 archive:
   format: binary
   path: ${!count:files}-${!timestamp_unix_nano}.txt
 ```
-
-Archives all the messages of a batch into a single message according to the
-selected archive format. Supported archive formats are:
-`tar`, `zip`, `binary`, `lines` and `json_array`.
 
 Some archive formats (such as tar, zip) treat each archive item (message part)
 as a file with a path. Since message parts only contain raw data a unique path
@@ -33,5 +33,22 @@ the result to an array, which becomes the contents of the resulting message.
 
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.
+
+The functionality of this processor depends on being applied across messages
+that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
+
+## Fields
+
+### `format`
+
+`string` The archiving format to apply.
+
+Options are: `tar`, `zip`, `binary`, `lines`, `json_array`.
+
+### `path`
+
+`string` The path to set for each message in the archive (when applicable).
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
 
 

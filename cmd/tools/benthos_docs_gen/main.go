@@ -230,6 +230,9 @@ func doProcessors(docsDir string) {
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 		}
+		if v.UsesBatches {
+			spec.Description = spec.Description + "\n" + processor.DocsUsesBatches
+		}
 
 		conf := processor.NewConfig()
 		conf.Type = k

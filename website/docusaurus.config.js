@@ -95,13 +95,10 @@ module.exports = {
     googleAnalytics: {
       trackingID: 'UA-135959729-1',
     },
-    /*
-    TODO
     algolia: {
-      apiKey: 'api-key',
-      indexName: 'index-name',
+      apiKey: '358e5d3135579871ceecd50c6cb7ce9e',
+      indexName: 'benthos',
     },
-    */
   },
   presets: [
     [

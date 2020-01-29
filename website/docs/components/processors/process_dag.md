@@ -11,14 +11,14 @@ type: processor
 -->
 
 
-```yaml
-process_dag: {}
-```
-
 A processor that manages a map of `process_map` processors and
 calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to
 their postmap targets for provided fields and their premap targets for required
 fields.
+
+```yaml
+process_dag: {}
+```
 
 The names of workflow stages may only contain alphanumeric, underscore and dash
 characters (they must match the regular expression `[a-zA-Z0-9_-]+`).
@@ -35,7 +35,9 @@ This processor is extremely useful for performing a complex mesh of enrichments
 where network requests mean we desire maximum parallelism across those
 enrichments.
 
-For example, if we had three target HTTP services that we wished to enrich each
+## Examples
+
+If we had three target HTTP services that we wished to enrich each
 document with - foo, bar and baz - where baz relies on the result of both foo
 and bar, we might express that relationship here like so:
 
@@ -50,6 +52,7 @@ process_dag:
           url: http://foo/enrich
     postmap:
       foo_result: .
+
   bar:
     premap:
       .: msg.sub.path
@@ -59,6 +62,7 @@ process_dag:
           url: http://bar/enrich
     postmap:
       bar_result: .
+
   baz:
     premap:
       foo_obj: foo_result
@@ -73,5 +77,4 @@ process_dag:
 
 With this config the DAG would determine that the children foo and bar can be
 executed in parallel, and once they are both finished we may proceed onto baz.
-
 

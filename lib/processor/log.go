@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,12 +16,12 @@ import (
 func init() {
 	Constructors[TypeLog] = TypeSpec{
 		constructor: NewLog,
+		Summary: `
+Prints a log event each time it processes a batch. Messages always remain
+unchanged. The log message can be set using function interpolations described
+[here](/docs/configuration/interpolation#functions) which allows you to log the
+contents and metadata of messages.`,
 		Description: `
-Log is a processor that prints a log event each time it processes a batch. The
-batch is then sent onwards unchanged. The log message can be set using function
-interpolations described [here](/docs/configuration/interpolation#functions) which
-allows you to log the contents and metadata of a messages within a batch.
-
 In order to print a log message per message of a batch place it within a
 ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.
 
@@ -54,6 +55,11 @@ log:
     id: "${!json_field:id}"
     kafka_topic: "${!metadata:kafka_topic}"
 ` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("level", "The log level to use.").HasOptions("FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL"),
+			docs.FieldCommon("fields", "A map of fields to print along with the log message.").SupportsInterpolation(true),
+			docs.FieldCommon("message", "The message to print.").SupportsInterpolation(true),
+		},
 	}
 }
 

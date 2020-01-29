@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -16,16 +17,21 @@ import (
 func init() {
 	Constructors[TypeHashSample] = TypeSpec{
 		constructor: NewHashSample,
-		Description: `
+		Summary: `
 Retains a percentage of message batches deterministically by hashing selected
-messages and checking the hash against a valid range, dropping all others.
-
+messages and checking the hash against a valid range, dropping all others.`,
+		Description: `
 For example, setting ` + "`retain_min` to `0.0` and `remain_max` to `50.0`" + `
 results in dropping half of the input stream, and setting ` + "`retain_min`" + `
 to ` + "`50.0` and `retain_max` to `100.1`" + ` will drop the _other_ half.
 
 In order to sample individual messages of a batch use this processor with the
 ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("retain_min", "The lower percentage of the sample range."),
+			docs.FieldCommon("retain_max", "The upper percentage of the sample range."),
+			docs.FieldAdvanced("parts", "An array of message indexes within the batch to sample based on. If left empty all messages included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching)."),
+		},
 	}
 }
 

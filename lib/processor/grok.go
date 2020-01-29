@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 	"github.com/trivago/grok"
 )
@@ -15,13 +16,16 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
+	// defaultPatternsObjBytes, _ := yaml.Marshal(grok.DefaultPatterns)
+
 	Constructors[TypeGrok] = TypeSpec{
 		constructor: NewGrok,
+		Summary: `
+Parses messages into a structured format by attempting to apply a list of Grok
+patterns, if a pattern returns at least one value a resulting structured object
+is created according to the chosen output format.`,
 		Description: `
-Parses message payloads by attempting to apply a list of Grok patterns, if a
-pattern returns at least one value a resulting structured object is created
-according to the chosen output format and will replace the payload. Currently
-only json is a valid output format.
+Currently only json is a supported output format.
 
 Type hints within patterns are respected, therefore with the pattern
 ` + "`%{WORD:first},%{INT:second:int}`" + ` and a payload of ` + "`foo,1`" + `
@@ -34,6 +38,26 @@ regular expression engine, which is guaranteed to run in time linear to the size
 of the input. However, this property often makes it less performant than pcre
 based implementations of grok. For more information see
 [https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("patterns", "A list of patterns to attempt against the incoming messages."),
+			docs.FieldCommon("pattern_definitions", "A map of pattern definitions that can be referenced within `patterns`."),
+			docs.FieldCommon("output_format", "The structured output format.").HasOptions("json"),
+			docs.FieldAdvanced("named_captures_only", "Whether to only capture values from named patterns."),
+			docs.FieldAdvanced("use_default_patterns", "Whether to use a [default set of patterns](#default-patterns)."),
+			docs.FieldAdvanced("remove_empty_values", "Whether to remove values that are empty from the resulting structure."),
+			partsFieldSpec,
+		},
+		/*
+			Footnotes: fmt.Sprintf(`
+				## Default Patterns
+
+				The following is a list of default patterns that can be used.
+
+				<div style={{maxWidth: '100px'}}>
+				`+"```"+`
+				%s
+				`+"```"+`
+				</div>`, defaultPatternsObjBytes),*/
 	}
 }
 

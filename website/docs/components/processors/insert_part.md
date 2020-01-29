@@ -11,14 +11,14 @@ type: processor
 -->
 
 
-```yaml
-insert_part:
-  content: ""
-  index: -1
-```
-
 Insert a new message into a batch at an index. If the specified index is greater
 than the length of the existing batch it will be appended to the end.
+
+```yaml
+insert_part:
+  index: -1
+  content: ""
+```
 
 The index can be negative, and if so the message will be inserted from the end
 counting backwards starting from -1. E.g. if index = -1 then the new message
@@ -31,5 +31,17 @@ the batch.
 
 This processor will interpolate functions within the 'content' field, you can
 find a list of functions [here](/docs/configuration/interpolation#functions).
+
+## Fields
+
+### `index`
+
+`number` The index within the batch to insert the message at.
+
+### `content`
+
+`string` The content of the message being inserted.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
 
 

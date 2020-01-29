@@ -11,27 +11,52 @@ type: processor
 -->
 
 
+Invokes an AWS lambda for each message. The contents of the message is the
+payload of the request, and the result of the invocation will become the new
+contents of the message.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 lambda:
-  credentials:
-    id: ""
-    profile: ""
-    role: ""
-    role_external_id: ""
-    secret: ""
-    token: ""
-  endpoint: ""
-  function: ""
   parallel: false
-  rate_limit: ""
+  function: ""
   region: eu-west-1
-  retries: 3
-  timeout: 5s
 ```
 
-Invokes an AWS lambda for each message part of a batch. The contents of the
-message part is the payload of the request, and the result of the invocation
-will become the new contents of the message.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+lambda:
+  parallel: false
+  function: ""
+  rate_limit: ""
+  region: eu-west-1
+  endpoint: ""
+  credentials:
+    profile: ""
+    id: ""
+    secret: ""
+    token: ""
+    role: ""
+    role_external_id: ""
+  timeout: 5s
+  retries: 3
+```
+
+</TabItem>
+</Tabs>
 
 It is possible to perform requests per message of a batch in parallel by setting
 the `parallel` flag to `true`. The `rate_limit`
@@ -56,5 +81,63 @@ By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/aws).
+
+## Fields
+
+### `parallel`
+
+`bool` Whether messages of a batch should be dispatched in parallel.
+
+### `function`
+
+`string` The function to invoke.
+
+### `rate_limit`
+
+`string` An optional [`rate_limit`](/docs/components/rate_limits/about) to throttle invocations by.
+
+### `region`
+
+`string` The AWS region to target.
+
+### `endpoint`
+
+`string` Allows you to specify a custom endpoint for the AWS API.
+
+### `credentials`
+
+`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+### `credentials.profile`
+
+`string` A profile from `~/.aws/credentials` to use.
+
+### `credentials.id`
+
+`string` The ID of credentials to use.
+
+### `credentials.secret`
+
+`string` The secret for the credentials being used.
+
+### `credentials.token`
+
+`string` The token for the credentials being used, required when using short term credentials.
+
+### `credentials.role`
+
+`string` A role ARN to assume.
+
+### `credentials.role_external_id`
+
+`string` An external ID to provide when assuming a role.
+
+### `timeout`
+
+`string` The maximum period of time to wait before abandoning an invocation.
+
+### `retries`
+
+`number` The maximum number of retry attempts for each message.
 
 

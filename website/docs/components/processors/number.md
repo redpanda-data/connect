@@ -11,16 +11,40 @@ type: processor
 -->
 
 
-```yaml
-number:
-  operator: add
-  parts: []
-  value: 0
-```
-
 Parses message contents into a 64-bit floating point number and performs an
 operator on it. In order to execute this processor on a sub field of a document
 use it with the [`process_field`](/docs/components/processors/process_field) processor.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+number:
+  operator: add
+  value: 0
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+number:
+  operator: add
+  value: 0
+  parts: []
+```
+
+</TabItem>
+</Tabs>
 
 The value field can either be a number or a string type. If it is a string type
 then this processor will interpolate functions within it, you can find a list of
@@ -44,14 +68,35 @@ Value interpolations are resolved once per message batch, in order to resolve it
 for each message of the batch place it within a
 [`for_each`](/docs/components/processors/for_each) processor.
 
-### Operators
+## Operators
 
-#### `add`
+### `add`
 
 Adds a value.
 
-#### `subtract`
+### `subtract`
 
 Subtracts a value.
+
+## Fields
+
+### `operator`
+
+`string` The [operator](#operators) to apply.
+
+### `value`
+
+`number` A value used by the operator.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

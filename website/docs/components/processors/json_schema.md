@@ -11,16 +11,40 @@ type: processor
 -->
 
 
+Checks messages against a provided JSONSchema definition but does not change the
+payload under any circumstances. If a message does not match the schema it can
+be caught using error handling methods outlined [here](/docs/configuration/error_handling).
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 json_schema:
-  parts: []
   schema: ""
   schema_path: ""
 ```
 
-Checks messages against a provided JSONSchema definition but does not change the
-payload under any circumstances. If a message does not match the schema it can
-be caught using error handling methods outlined [here](/docs/configuration/error_handling).
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+json_schema:
+  schema: ""
+  schema_path: ""
+  parts: []
+```
+
+</TabItem>
+</Tabs>
 
 Please refer to the [JSON Schema website](https://json-schema.org/) for
 information and tutorials regarding the syntax of the schema.
@@ -75,5 +99,24 @@ the fault. This gives you flexibility in how you may handle schema errors, but
 for a simpler use case you might instead wish to use the
 [`json_schema`](/docs/components/conditions/json_schema) condition with a
 [`filter`](/docs/components/processors/filter).
+
+## Fields
+
+### `schema`
+
+`string` A schema to apply. Use either this or the `schema_path` field.
+
+### `schema_path`
+
+`string` The path of a schema document to apply. Use either this or the `schema` field.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

@@ -11,6 +11,22 @@ type: processor
 -->
 
 
+While is a processor that has a condition and a list of child processors. The
+child processors are executed continuously on a message batch for as long as the
+child condition resolves to true.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 while:
   at_least_once: false
@@ -20,13 +36,27 @@ while:
       operator: equals_cs
       part: 0
     type: text
-  max_loops: 0
   processors: []
 ```
 
-While is a processor that has a condition and a list of child processors. The
-child processors are executed continuously on a message batch for as long as the
-child condition resolves to true.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+while:
+  at_least_once: false
+  max_loops: 0
+  condition:
+    text:
+      arg: ""
+      operator: equals_cs
+      part: 0
+    type: text
+  processors: []
+```
+
+</TabItem>
+</Tabs>
 
 The field `at_least_once`, if true, ensures that the child processors
 are always executed at least one time (like a do .. while loop.)
@@ -40,5 +70,23 @@ execution there are more than 1 message batches the condition is checked against
 the first batch only.
 
 You can find a [full list of conditions here](/docs/components/conditions/about).
+
+## Fields
+
+### `at_least_once`
+
+`bool` Whether to always run the child processors at least one time.
+
+### `max_loops`
+
+`number` An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops.
+
+### `condition`
+
+`object` A [condition](/docs/components/conditions/about) to test for each loop. If the condition fails the loop is stopped.
+
+### `processors`
+
+`array` A list of child processors to execute on each loop.
 
 

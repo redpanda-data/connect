@@ -16,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	olog "github.com/opentracing/opentracing-go/log"
 )
 
@@ -24,11 +25,11 @@ import (
 func init() {
 	Constructors[TypeSubprocess] = TypeSpec{
 		constructor: NewSubprocess,
-		Description: `
+		Summary: `
 Subprocess is a processor that runs a process in the background and, for each
 message, will pipe its contents to the stdin stream of the process followed by a
-newline.
-
+newline.`,
+		Description: `
 The subprocess must then either return a line over stdout or stderr. If a
 response is returned over stdout then its contents will replace the message. If
 a response is instead returned from stderr it will be logged and the message
@@ -38,7 +39,7 @@ The field ` + "`max_buffer`" + ` defines the maximum response size able to be
 read from the subprocess. This value should be set significantly above the real
 expected maximum response size.
 
-#### Subprocess requirements
+## Subprocess requirements
 
 It is required that subprocesses flush their stdout and stderr pipes for each
 line.
@@ -46,11 +47,17 @@ line.
 Benthos will attempt to keep the process alive for as long as the pipeline is
 running. If the process exits early it will be restarted.
 
-#### Messages containing line breaks
+## Messages containing line breaks
 
 If a message contains line breaks each line of the message is piped to the
 subprocess and flushed, and a response is expected from the subprocess before
 another line is fed in.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
+			docs.FieldCommon("args", "A list of arguments to provide the command."),
+			docs.FieldAdvanced("max_buffer", "The maximum expected response size."),
+			partsFieldSpec,
+		},
 	}
 }
 

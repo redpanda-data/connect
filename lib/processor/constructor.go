@@ -31,6 +31,10 @@ type TypeSpec struct {
 	Description string
 	Footnotes   string
 
+	// UsesBatches indicates whether this processors functionality is best
+	// applied on messages that are already batched.
+	UsesBatches bool
+
 	// Deprecated indicates whether this component is deprecated.
 	Deprecated bool
 	FieldSpecs docs.FieldSpecs

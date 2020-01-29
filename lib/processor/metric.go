@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -19,12 +20,13 @@ import (
 func init() {
 	Constructors[TypeMetric] = TypeSpec{
 		constructor: NewMetric,
+		Summary: `
+Expose custom metrics by extracting values from message batches.`,
 		Description: `
-Expose custom metrics by extracting values from message batches. This processor
-executes once per batch, in order to execute once per message place it within a
-` + "[`for_each`](/docs/components/processors/for_each)" + ` processor:
+This processor executes once per batch, in order to execute once per message
+place it within a ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 for_each:
 - metric:
     type: counter_by
@@ -38,21 +40,33 @@ configured metric aggregator.
 
 The ` + "`value`" + ` field can be set using function interpolations described
 [here](/docs/configuration/interpolation#functions) and is used according to the
-specific type.
+specific type.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("type", "The metric [type](#types) to create.").HasOptions(),
+			docs.FieldCommon("path", "The path of the metric to create."),
+			docs.FieldCommon(
+				"labels", "A map of label names and values that can be used to enrich metrics with aggregators such as Prometheus.",
+				map[string]string{
+					"type":  "${!json_field:doc.type}",
+					"topic": "${!metadata:kafka_topic}",
+				},
+			).SupportsInterpolation(true),
+			docs.FieldCommon("value", "For some metric types specifies a value to set, increment.").SupportsInterpolation(true),
+		},
+		Footnotes: `
+## Types
 
-### Types
-
-#### ` + "`counter`" + `
+### ` + "`counter`" + `
 
 Increments a counter by exactly 1, the contents of ` + "`value`" + ` are ignored
 by this type.
 
-#### ` + "`counter_parts`" + `
+### ` + "`counter_parts`" + `
 
 Increments a counter by the number of parts within the message batch, the
 contents of ` + "`value`" + ` are ignored by this type.
 
-#### ` + "`counter_by`" + `
+### ` + "`counter_by`" + `
 
 If the contents of ` + "`value`" + ` can be parsed as a positive integer value
 then the counter is incremented by this value.
@@ -60,14 +74,14 @@ then the counter is incremented by this value.
 For example, the following configuration will increment the value of the
 ` + "`count.custom.field` metric by the contents of `field.some.value`" + `:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 metric:
   type: counter_by
   path: count.custom.field
   value: ${!json_field:field.some.value}
 ` + "```" + `
 
-#### ` + "`gauge`" + `
+### ` + "`gauge`" + `
 
 If the contents of ` + "`value`" + ` can be parsed as a positive integer value
 then the gauge is set to this value.
@@ -75,23 +89,16 @@ then the gauge is set to this value.
 For example, the following configuration will set the value of the
 ` + "`gauge.custom.field` metric to the contents of `field.some.value`" + `:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 metric:
   type: gauge
   path: gauge.custom.field
   value: ${!json_field:field.some.value}
 ` + "```" + `
 
-#### ` + "`timing`" + `
+### ` + "`timing`" + `
 
-Equivalent to ` + "`gauge`" + ` where instead the metric is a timing.
-
-### Labels
-
-Some metrics aggregators, such as Prometheus, support arbitrary labels, in which
-case the ` + "`labels`" + ` field can be used in order to create them. Label
-values can also be set using function interpolations in order to dynamically
-populate them with context about the message.`,
+Equivalent to ` + "`gauge`" + ` where instead the metric is a timing.`,
 	}
 }
 

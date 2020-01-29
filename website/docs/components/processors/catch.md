@@ -11,6 +11,9 @@ type: processor
 -->
 
 
+Applies a list of child processors _only_ when a previous processing step has
+failed.
+
 ```yaml
 catch: []
 ```

@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,16 +16,21 @@ import (
 func init() {
 	Constructors[TypeSplit] = TypeSpec{
 		constructor: NewSplit,
-		Description: `
+		Summary: `
 Breaks message batches (synonymous with multiple part messages) into smaller
 batches. The size of the resulting batches are determined either by a discrete
 size or, if the field ` + "`byte_size`" + ` is non-zero, then by total size in
-bytes (which ever limit is reached first).
-
+bytes (which ever limit is reached first).`,
+		Description: `
 If there is a remainder of messages after splitting a batch the remainder is
 also sent as a single batch. For example, if your target size was 10, and the
 processor received a batch of 95 message parts, the result would be 9 batches of
 10 messages followed by a batch of 5 messages.`,
+		UsesBatches: true,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("size", "The target number of messages."),
+			docs.FieldCommon("byte_size", "An optional target of total message bytes."),
+		},
 	}
 }
 

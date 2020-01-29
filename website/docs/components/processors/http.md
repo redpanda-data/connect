@@ -11,22 +11,46 @@ type: processor
 -->
 
 
+Performs an HTTP request using a message batch as the request body, and replaces
+the original message parts with the body of the response.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 http:
-  max_parallel: 0
   parallel: false
+  max_parallel: 0
   request:
-    backoff_on:
-    - 429
-    basic_auth:
-      enabled: false
-      password: ""
-      username: ""
-    copy_response_headers: false
-    drop_on: []
+    url: http://localhost:4195/post
+    verb: POST
     headers:
       Content-Type: application/octet-stream
-    max_retry_backoff: 300s
+    rate_limit: ""
+    timeout: 5s
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+http:
+  parallel: false
+  max_parallel: 0
+  request:
+    url: http://localhost:4195/post
+    verb: POST
+    headers:
+      Content-Type: application/octet-stream
     oauth:
       access_token: ""
       access_token_secret: ""
@@ -34,22 +58,29 @@ http:
       consumer_secret: ""
       enabled: false
       request_url: ""
-    rate_limit: ""
-    retries: 3
-    retry_period: 1s
-    successful_on: []
-    timeout: 5s
-    tls:
-      client_certs: []
+    basic_auth:
       enabled: false
-      root_cas_file: ""
+      password: ""
+      username: ""
+    tls:
+      enabled: false
       skip_cert_verify: false
-    url: http://localhost:4195/post
-    verb: POST
+      root_cas_file: ""
+      client_certs: []
+    copy_response_headers: false
+    rate_limit: ""
+    timeout: 5s
+    retry_period: 1s
+    max_retry_backoff: 300s
+    retries: 3
+    backoff_on:
+    - 429
+    drop_on: []
+    successful_on: []
 ```
 
-Performs an HTTP request using a message batch as the request body, and replaces
-the original message parts with the body of the response.
+</TabItem>
+</Tabs>
 
 If the batch contains only a single message part then it will be sent as the
 body of the request. If the batch contains multiple messages then they will be
@@ -75,7 +106,7 @@ response back into the original payload instead of replacing it entirely, you
 can use the [`process_map`](/docs/components/processors/process_map) or
  [`process_field`](/docs/components/processors/process_field) processors.
 
-### Response Codes
+## Response Codes
 
 Benthos considers any response code between 200 and 299 inclusive to indicate a
 successful response, you can add more success status codes with the field
@@ -87,7 +118,7 @@ it will be retried after increasing intervals.
 When a request returns a response code within the `drop_on` field it
 will not be reattempted and is immediately considered a failed request.
 
-### Adding Metadata
+## Adding Metadata
 
 If the request returns a response code this processor sets a metadata field
 `http_status_code` on all resulting messages.
@@ -95,11 +126,153 @@ If the request returns a response code this processor sets a metadata field
 If the field `copy_response_headers` is set to `true` then any headers
 in the response will also be set in the resulting message as metadata.
  
-### Error Handling
+## Error Handling
 
 When all retry attempts for a message are exhausted the processor cancels the
 attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](/docs/configuration/error_handling).
+
+## Fields
+
+### `parallel`
+
+`bool` When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request.
+
+### `max_parallel`
+
+`number` A limit on the maximum messages in flight when sending batched messages in parallel.
+
+### `request`
+
+`object` Controls how the HTTP request is made.
+
+### `request.url`
+
+`string` The URL to connect to.
+
+### `request.verb`
+
+`string` A verb to connect with
+
+```yaml
+# Examples
+
+verb: POST
+
+verb: GET
+
+verb: DELETE
+```
+
+### `request.headers`
+
+`object` A map of headers to add to the request.
+
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+```yaml
+# Examples
+
+headers:
+  Content-Type: application/octet-stream
+```
+
+### `request.oauth`
+
+`object` Allows you to specify open authentication.
+
+```yaml
+# Examples
+
+oauth:
+  access_token: baz
+  access_token_secret: bev
+  consumer_key: foo
+  consumer_secret: bar
+  enabled: true
+  request_url: http://thisisjustanexample.com/dontactuallyusethis
+```
+
+### `request.basic_auth`
+
+`object` Allows you to specify basic authentication.
+
+```yaml
+# Examples
+
+basic_auth:
+  enabled: true
+  password: bar
+  username: foo
+```
+
+### `request.tls`
+
+`object` Custom TLS settings can be used to override system defaults.
+
+### `request.tls.enabled`
+
+`bool` Whether custom TLS settings are enabled.
+
+### `request.tls.skip_cert_verify`
+
+`bool` Whether to skip server side certificate verification.
+
+### `request.tls.root_cas_file`
+
+`string` The path of a root certificate authority file to use.
+
+### `request.tls.client_certs`
+
+`array` A list of client certificates to use.
+
+```yaml
+# Examples
+
+client_certs:
+- cert: foo
+  key: bar
+
+client_certs:
+- cert_file: ./example.pem
+  key_file: ./example.key
+```
+
+### `request.copy_response_headers`
+
+`bool` Sets whether to copy the headers from the response to the resulting payload.
+
+### `request.rate_limit`
+
+`string` An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+
+### `request.timeout`
+
+`string` A static timeout to apply to requests.
+
+### `request.retry_period`
+
+`string` The base period to wait between failed requests.
+
+### `request.max_retry_backoff`
+
+`string` The maximum period to wait between failed requests.
+
+### `request.retries`
+
+`number` The maximum number of retry attempts to make.
+
+### `request.backoff_on`
+
+`array` A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
+
+### `request.drop_on`
+
+`array` A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
+
+### `request.successful_on`
+
+`array` A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
 
 

@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	olog "github.com/opentracing/opentracing-go/log"
 )
 
@@ -18,13 +19,15 @@ import (
 func init() {
 	Constructors[TypeGroupByValue] = TypeSpec{
 		constructor: NewGroupByValue,
-		Description: `
+		Summary: `
 Splits a batch of messages into N batches, where each resulting batch contains a
 group of messages determined by a
 [function interpolated string](/docs/configuration/interpolation#functions) evaluated
-per message. This allows you to group messages using arbitrary fields within
-their content or metadata, process them individually, and send them to unique
-locations as per their group.
+per message.`,
+		Description: `
+This allows you to group messages using arbitrary fields within their content or
+metadata, process them individually, and send them to unique locations as per
+their group.
 
 For example, if we were consuming Kafka messages and needed to group them by
 their key, archive the groups, and send them to S3 with the key as part of the
@@ -44,6 +47,13 @@ output:
     bucket: TODO
     path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz
 ` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon(
+				"value", "The interpolated string to group based on.",
+				"${!metadata:kafka_key}", "${!json_field:foo.bar}-${!metadata:baz}",
+			).SupportsInterpolation(false),
+		},
+		UsesBatches: true,
 	}
 }
 

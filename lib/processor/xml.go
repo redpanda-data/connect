@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/clbanning/mxj"
 	"github.com/opentracing/opentracing-go"
 )
@@ -16,16 +17,16 @@ import (
 func init() {
 	Constructors[TypeXML] = TypeSpec{
 		constructor: NewXML,
+		Summary: `
+Parses messages as an XML document, performs a mutation on the data, and then
+overwrites the previous contents with the new value.`,
 		Description: `
 EXPERIMENTAL: This processor is considered experimental and is therefore subject
 to change outside of major version releases.
 
-Parses messages as an XML document, performs a mutation on the data, and then
-overwrites the previous contents with the new value.
+## Operators
 
-### Operators
-
-#### ` + "`to_json`" + `
+### ` + "`to_json`" + `
 
 Converts an XML document into a JSON structure, where elements appear as keys of
 an object according to the following rules:
@@ -67,6 +68,10 @@ The resulting JSON structure would look like this:
   }
 }
 ` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("operator", "An XML [operation](#operators) to apply to messages.").HasOptions("to_json"),
+			partsFieldSpec,
+		},
 	}
 }
 

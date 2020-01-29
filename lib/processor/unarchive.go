@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	olog "github.com/opentracing/opentracing-go/log"
 )
 
@@ -22,11 +23,10 @@ import (
 func init() {
 	Constructors[TypeUnarchive] = TypeSpec{
 		constructor: NewUnarchive,
-		Description: `
+		Summary: `
 Unarchives messages according to the selected archive format into multiple
-messages within a batch. Supported archive formats are:
-` + "`tar`, `zip`, `binary`, `lines`, `json_documents`, `json_array` and `json_map`." + `
-
+messages within a batch.`,
+		Description: `
 When a message is unarchived the new messages replaces the original message in
 the batch. Messages that are selected but fail to unarchive (invalid format)
 will remain unchanged in the message batch but will be flagged as having failed.
@@ -47,6 +47,12 @@ extracted filename.
 
 For the ` + "`json_map`" + ` format, a metadata field is added to each message
 called ` + "`archive_key`" + ` with the relevant key from the top-level map.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("format", "The unarchive format to use.").HasOptions(
+				"tar", "zip", "binary", "lines", "json_documents", "json_array", "json_map",
+			),
+			partsFieldSpec,
+		},
 	}
 }
 
