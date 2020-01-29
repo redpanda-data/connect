@@ -3,6 +3,7 @@ package condition
 import (
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -48,52 +49,32 @@ func NewJSONConfig() JSONConfig {
 	}
 }
 
-type jsonOperator func(c []byte) bool
+type jsonOperator func(c *gabs.Container) bool
 
 func jsonExistOperator(path string) jsonOperator {
-	return func(c []byte) bool {
-		jsonParsed, err := gabs.ParseJSON(c)
-		if err != nil {
-			return false
-		}
-		return jsonParsed.ExistsP(path)
+	return func(c *gabs.Container) bool {
+		return c.ExistsP(path)
 	}
 }
 
 func jsonContainsOperator(path string, arg interface{}) jsonOperator {
-	return func(c []byte) bool {
-		jsonParsed, err := gabs.ParseJSON(c)
-		if err != nil {
-			return false
-		}
-		switch arg.(type) {
-		case string:
-			for _, child := range jsonParsed.Path(path).Children() {
-				if _, ok := child.Data().(string); ok && child.Data().(string) == arg.(string) {
+	return func(c *gabs.Container) bool {
+		if _, ok := arg.(int); ok {
+			for _, child := range c.Path(path).Children() {
+				if reflect.DeepEqual(child.Data(), float64(arg.(int))) {
 					return true
 				}
 			}
-		case bool:
-			for _, child := range jsonParsed.Path(path).Children() {
-				if _, ok := child.Data().(bool); ok && child.Data().(bool) == arg.(bool) {
-					return true
-				}
-			}
-		case int:
-			for _, child := range jsonParsed.Path(path).Children() {
-				if _, ok := child.Data().(float64); ok && child.Data().(float64) == float64(arg.(int)) {
-					return true
-				}
-			}
-		case float64:
-			for _, child := range jsonParsed.Path(path).Children() {
-				if _, ok := child.Data().(float64); ok && child.Data().(float64) == arg.(float64) {
+		} else {
+			for _, child := range c.Path(path).Children() {
+				if reflect.DeepEqual(child.Data(), arg) {
 					return true
 				}
 			}
 		}
 		return false
 	}
+
 }
 
 func strToJSONOperator(op, path string, arg interface{}) (jsonOperator, error) {
@@ -148,13 +129,13 @@ func (c *JSON) Check(msg types.Message) bool {
 		return false
 	}
 
-	msgPart := msg.Get(index).Get()
-	if msgPart == nil {
+	msgPart, err := msg.Get(index).JSON()
+	if err != nil {
 		c.mFalse.Incr(1)
 		return false
 	}
 
-	res := c.operator(msgPart)
+	res := c.operator(gabs.Wrap(msgPart))
 	if res {
 		c.mTrue.Incr(1)
 	} else {
