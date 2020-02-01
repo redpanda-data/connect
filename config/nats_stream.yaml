@@ -15,6 +15,7 @@ input:
         static: false
       count: 1
       period: ""
+      processors: []
     client_id: benthos_client
     cluster_id: test-cluster
     durable_name: benthos_offset

@@ -71,6 +71,7 @@ input:
       condition:
         static: false
         type: static
+      processors: []
 ```
 
 </TabItem>
@@ -202,6 +203,22 @@ period: 500ms
 
 ### `batching.condition`
 
-`object` A [`condition`](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+`object` A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+### `batching.processors`
+
+`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit.
+
+```yaml
+# Examples
+
+processors:
+- archive:
+    format: lines
+
+processors:
+- archive:
+    format: json_array
+```
 
 

@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - Field `delete_files` added to `files` input.
 - TLS fields added to `nsq` input and output.
+- Field `processors` added to batching fields to easily accommodate aggregations
+  and archiving of batched messages.
 
 ### Changed
 

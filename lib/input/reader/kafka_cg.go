@@ -161,6 +161,8 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 	if err != nil {
 		return fmt.Errorf("failed to initialise batch policy: %v", err)
 	}
+	defer batchPolicy.CloseAsync()
+
 	var nextTimedBatchChan <-chan time.Time
 	flushBatch := func(topic string, partition int32, offset int64) bool {
 		nextTimedBatchChan = nil

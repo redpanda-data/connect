@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,9 +16,13 @@ import (
 func init() {
 	Constructors[TypeMemory] = TypeSpec{
 		constructor: NewMemory,
+		Summary: `
+Stores consumed messages in memory and acknowledges them at the input level.
+During shutdown Benthos will make a best attempt at flushing all remaining
+messages before exiting cleanly.`,
 		Description: `
-The memory buffer stores messages in RAM. During shutdown Benthos will make a
-best attempt at flushing all remaining messages before exiting cleanly.
+This buffer is appropriate when consuming messages from inputs that do not
+gracefully handle back pressure and where delivery guarantees aren't critical.
 
 This buffer has a configurable limit, where consumption will be stopped with
 back pressure upstream if the total size of messages in the buffer reaches this
@@ -29,6 +34,14 @@ significantly below the amount of RAM available.
 
 It is possible to batch up messages sent from this buffer using a
 [batch policy](/docs/configuration/batching#batch-policy).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("limit", "The maximum buffer size (in bytes) to allow before applying backpressure upstream."),
+			docs.FieldCommon("batch_policy", "Optionally configure a policy to flush buffered messages in batches.").WithChildren(
+				append(docs.FieldSpecs{
+					docs.FieldCommon("enabled", "Whether to batch messages as they are flushed."),
+				}, batch.FieldSpec().Children...)...,
+			),
+		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			bSanit, err := batch.SanitisePolicyConfig(batch.PolicyConfig(conf.Memory.BatchPolicy.PolicyConfig))
 			if err != nil {

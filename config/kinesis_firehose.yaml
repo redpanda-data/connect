@@ -30,6 +30,7 @@ output:
         static: false
       count: 1
       period: ""
+      processors: []
     credentials:
       id: ""
       profile: ""

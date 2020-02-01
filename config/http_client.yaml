@@ -66,6 +66,7 @@ output:
         static: false
       count: 1
       period: ""
+      processors: []
     copy_response_headers: false
     drop_on: []
     headers:

@@ -14,6 +14,7 @@ input:
         static: false
       count: 1
       period: ""
+      processors: []
     copies: 1
     inputs: []
 buffer:
@@ -32,6 +33,7 @@ output:
         static: false
       count: 1
       period: ""
+      processors: []
     copies: 1
     outputs: []
     pattern: fan_out

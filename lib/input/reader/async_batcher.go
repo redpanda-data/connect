@@ -137,7 +137,13 @@ func (p *AsyncBatcher) CloseAsync() {
 // WaitForClose blocks until either the reader is finished closing or a timeout
 // occurs.
 func (p *AsyncBatcher) WaitForClose(tout time.Duration) error {
-	return p.r.WaitForClose(tout)
+	tstop := time.Now().Add(tout)
+	err := p.r.WaitForClose(time.Until(tstop))
+	p.batcher.CloseAsync()
+	if err != nil {
+		return err
+	}
+	return p.batcher.WaitForClose(time.Until(tstop))
 }
 
 //------------------------------------------------------------------------------

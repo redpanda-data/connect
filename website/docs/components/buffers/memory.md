@@ -11,22 +11,56 @@ type: buffer
 -->
 
 
+Stores consumed messages in memory and acknowledges them at the input level.
+During shutdown Benthos will make a best attempt at flushing all remaining
+messages before exiting cleanly.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 buffer:
   memory:
+    limit: 524288000
     batch_policy:
+      enabled: false
+      count: 0
       byte_size: 0
+      period: ""
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+buffer:
+  memory:
+    limit: 524288000
+    batch_policy:
+      enabled: false
+      count: 0
+      byte_size: 0
+      period: ""
       condition:
         static: false
         type: static
-      count: 0
-      enabled: false
-      period: ""
-    limit: 524288000
+      processors: []
 ```
 
-The memory buffer stores messages in RAM. During shutdown Benthos will make a
-best attempt at flushing all remaining messages before exiting cleanly.
+</TabItem>
+</Tabs>
+
+This buffer is appropriate when consuming messages from inputs that do not
+gracefully handle back pressure and where delivery guarantees aren't critical.
 
 This buffer has a configurable limit, where consumption will be stopped with
 back pressure upstream if the total size of messages in the buffer reaches this
@@ -38,5 +72,61 @@ significantly below the amount of RAM available.
 
 It is possible to batch up messages sent from this buffer using a
 [batch policy](/docs/configuration/batching#batch-policy).
+
+## Fields
+
+### `limit`
+
+`number` The maximum buffer size (in bytes) to allow before applying backpressure upstream.
+
+### `batch_policy`
+
+`object` Optionally configure a policy to flush buffered messages in batches.
+
+### `batch_policy.enabled`
+
+`bool` Whether to batch messages as they are flushed.
+
+### `batch_policy.count`
+
+`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+### `batch_policy.byte_size`
+
+`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+### `batch_policy.period`
+
+`string` A period in which an incomplete batch should be flushed regardless of its size.
+
+```yaml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batch_policy.condition`
+
+`object` A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+### `batch_policy.processors`
+
+`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit.
+
+```yaml
+# Examples
+
+processors:
+- archive:
+    format: lines
+
+processors:
+- archive:
+    format: json_array
+```
 
 

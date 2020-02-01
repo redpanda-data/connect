@@ -65,6 +65,11 @@ func (m *Batcher) loop() {
 		for err != nil {
 			err = m.child.WaitForClose(time.Second)
 		}
+		m.batcher.CloseAsync()
+		err = m.batcher.WaitForClose(time.Second)
+		for err != nil {
+			err = m.batcher.WaitForClose(time.Second)
+		}
 		close(m.closedChan)
 	}()
 

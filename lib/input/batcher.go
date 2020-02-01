@@ -68,6 +68,11 @@ func (m *Batcher) loop() {
 		for err == types.ErrTimeout {
 			err = m.child.WaitForClose(time.Second)
 		}
+		m.batcher.CloseAsync()
+		err = m.batcher.WaitForClose(time.Second)
+		for err == types.ErrTimeout {
+			err = m.batcher.WaitForClose(time.Second)
+		}
 		close(m.messagesOut)
 		close(m.closedChan)
 	}()

@@ -27,8 +27,9 @@ type ParallelBatcher struct {
 	log   log.Modular
 	conf  Config
 
-	child   Type
-	batcher Batcher
+	child     Type
+	batcher   Batcher
+	closeAble types.Closable
 
 	messagesOut chan types.Transaction
 
@@ -54,6 +55,7 @@ func NewParallelBatcher(
 		closeChan:   make(chan struct{}),
 		closedChan:  make(chan struct{}),
 	}
+	m.closeAble, _ = batcher.(types.Closable)
 	return &m
 }
 
@@ -66,6 +68,11 @@ func (m *ParallelBatcher) outputLoop() {
 		err := m.child.WaitForClose(time.Second)
 		for err != nil {
 			err = m.child.WaitForClose(time.Second)
+		}
+		m.closeAble.CloseAsync()
+		err = m.closeAble.WaitForClose(time.Second)
+		for err != nil {
+			err = m.closeAble.WaitForClose(time.Second)
 		}
 		close(m.messagesOut)
 		close(m.closedChan)

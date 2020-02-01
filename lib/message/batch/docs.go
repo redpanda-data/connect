@@ -31,7 +31,24 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 			docs.FieldCommon("count", "A number of messages at which the batch should be flushed. If `0` disables count based batching."),
 			docs.FieldCommon("byte_size", "An amount of bytes at which the batch should be flushed. If `0` disables size based batching."),
 			docs.FieldCommon("period", "A period in which an incomplete batch should be flushed regardless of its size.", "1s", "1m", "500ms"),
-			docs.FieldAdvanced("condition", "A [`condition`](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed."),
+			docs.FieldAdvanced("condition", "A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed."),
+			docs.FieldAdvanced(
+				"processors", "A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit.",
+				[]map[string]interface{}{
+					{
+						"archive": map[string]interface{}{
+							"format": "lines",
+						},
+					},
+				},
+				[]map[string]interface{}{
+					{
+						"archive": map[string]interface{}{
+							"format": "json_array",
+						},
+					},
+				},
+			),
 		},
 	}
 }

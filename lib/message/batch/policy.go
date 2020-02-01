@@ -2,13 +2,13 @@ package batch
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -19,11 +19,18 @@ func SanitisePolicyConfig(policy PolicyConfig) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	procConfs := make([]interface{}, len(policy.Processors))
+	for i, pConf := range policy.Processors {
+		if procConfs[i], err = processor.SanitiseConfig(pConf); err != nil {
+			return nil, err
+		}
+	}
 	return map[string]interface{}{
-		"byte_size": policy.ByteSize,
-		"count":     policy.Count,
-		"condition": condSanit,
-		"period":    policy.Period,
+		"byte_size":  policy.ByteSize,
+		"count":      policy.Count,
+		"condition":  condSanit,
+		"period":     policy.Period,
+		"processors": procConfs,
 	}, nil
 }
 
@@ -31,10 +38,11 @@ func SanitisePolicyConfig(policy PolicyConfig) (interface{}, error) {
 
 // PolicyConfig contains configuration parameters for a batch policy.
 type PolicyConfig struct {
-	ByteSize  int              `json:"byte_size" yaml:"byte_size"`
-	Count     int              `json:"count" yaml:"count"`
-	Condition condition.Config `json:"condition" yaml:"condition"`
-	Period    string           `json:"period" yaml:"period"`
+	ByteSize   int                `json:"byte_size" yaml:"byte_size"`
+	Count      int                `json:"count" yaml:"count"`
+	Condition  condition.Config   `json:"condition" yaml:"condition"`
+	Period     string             `json:"period" yaml:"period"`
+	Processors []processor.Config `json:"processors" yaml:"processors"`
 }
 
 // NewPolicyConfig creates a default PolicyConfig.
@@ -43,10 +51,11 @@ func NewPolicyConfig() PolicyConfig {
 	cond.Type = "static"
 	cond.Static = false
 	return PolicyConfig{
-		ByteSize:  0,
-		Count:     0,
-		Condition: cond,
-		Period:    "",
+		ByteSize:   0,
+		Count:      0,
+		Condition:  cond,
+		Period:     "",
+		Processors: []processor.Config{},
 	}
 }
 
@@ -64,6 +73,9 @@ func (p PolicyConfig) IsNoop() bool {
 	if len(p.Period) > 0 {
 		return false
 	}
+	if len(p.Processors) > 0 {
+		return false
+	}
 	return true
 }
 
@@ -78,12 +90,12 @@ type Policy struct {
 	count     int
 	period    time.Duration
 	cond      condition.Type
+	procs     []types.Processor
 	sizeTally int
 	parts     []types.Part
 
 	triggered bool
 	lastBatch time.Time
-	mut       sync.Mutex
 
 	mSizeBatch   metrics.StatCounter
 	mCountBatch  metrics.StatCounter
@@ -100,13 +112,22 @@ func NewPolicy(
 ) (*Policy, error) {
 	cond, err := condition.New(conf.Condition, mgr, log.NewModule(".condition"), metrics.Namespaced(stats, "condition"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create condition: %v", err)
 	}
 	var period time.Duration
 	if len(conf.Period) > 0 {
 		if period, err = time.ParseDuration(conf.Period); err != nil {
 			return nil, fmt.Errorf("failed to parse duration string: %v", err)
 		}
+	}
+	var procs []types.Processor
+	for i, pconf := range conf.Processors {
+		prefix := fmt.Sprintf("%v", i)
+		proc, err := processor.New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create processor '%v': %v", i, err)
+		}
+		procs = append(procs, proc)
 	}
 	return &Policy{
 		log: log,
@@ -115,6 +136,7 @@ func NewPolicy(
 		count:    conf.Count,
 		period:   period,
 		cond:     cond,
+		procs:    procs,
 
 		lastBatch: time.Now(),
 
@@ -170,6 +192,31 @@ func (p *Policy) Flush() types.Message {
 	p.sizeTally = 0
 	p.lastBatch = time.Now()
 	p.triggered = false
+
+	if len(p.procs) > 0 {
+		resultMsgs, res := processor.ExecuteAll(p.procs, newMsg)
+		if res != nil {
+			if err := res.Error(); err != nil {
+				p.log.Errorf("Batch processors resulted in error: %v, the batch has been dropped.", err)
+			}
+			return nil
+		}
+		if len(resultMsgs) == 0 {
+			newMsg = nil
+		} else if len(resultMsgs) == 1 {
+			newMsg = resultMsgs[0]
+		} else {
+			var parts []types.Part
+			for _, m := range resultMsgs {
+				m.Iter(func(_ int, p types.Part) error {
+					parts = append(parts, p)
+					return nil
+				})
+			}
+			newMsg.SetAll(parts)
+		}
+	}
+
 	return newMsg
 }
 
@@ -187,6 +234,26 @@ func (p *Policy) UntilNext() time.Duration {
 		return -1
 	}
 	return time.Until(p.lastBatch.Add(p.period))
+}
+
+//------------------------------------------------------------------------------
+
+// CloseAsync shuts down the policy resources.
+func (p *Policy) CloseAsync() {
+	for _, c := range p.procs {
+		c.CloseAsync()
+	}
+}
+
+// WaitForClose blocks until the processor has closed down.
+func (p *Policy) WaitForClose(timeout time.Duration) error {
+	stopBy := time.Now().Add(timeout)
+	for _, c := range p.procs {
+		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------

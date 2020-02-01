@@ -45,6 +45,7 @@ output:
         static: false
       count: 1
       period: ""
+      processors: []
     healthcheck: true
     id: ${!count:elastic_ids}-${!timestamp_unix}
     index: benthos_index

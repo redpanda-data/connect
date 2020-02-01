@@ -16,6 +16,7 @@ input:
         static: false
       count: 1
       period: ""
+      processors: []
     client_id: benthos_kafka_input
     commit_period: 1s
     consumer_group: benthos_consumer_group
@@ -62,6 +63,7 @@ output:
         static: false
       count: 1
       period: ""
+      processors: []
     client_id: benthos_kafka_output
     compression: none
     key: ""
