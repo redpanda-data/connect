@@ -5,19 +5,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
-
-//------------------------------------------------------------------------------
-
-// Batcher is a component used to create batches of messages consumed from a
-// buffer implementation.
-type Batcher interface {
-	Add(part types.Part) bool
-	Flush() types.Message
-	UntilNext() time.Duration
-}
 
 //------------------------------------------------------------------------------
 
@@ -27,9 +18,8 @@ type ParallelBatcher struct {
 	log   log.Modular
 	conf  Config
 
-	child     Type
-	batcher   Batcher
-	closeAble types.Closable
+	child   Type
+	batcher *batch.Policy
 
 	messagesOut chan types.Transaction
 
@@ -40,7 +30,7 @@ type ParallelBatcher struct {
 
 // NewParallelBatcher creates a new Producer/Consumer around a buffer.
 func NewParallelBatcher(
-	batcher Batcher,
+	batcher *batch.Policy,
 	child Type,
 	log log.Modular,
 	stats metrics.Type,
@@ -55,7 +45,6 @@ func NewParallelBatcher(
 		closeChan:   make(chan struct{}),
 		closedChan:  make(chan struct{}),
 	}
-	m.closeAble, _ = batcher.(types.Closable)
 	return &m
 }
 
@@ -69,10 +58,10 @@ func (m *ParallelBatcher) outputLoop() {
 		for err != nil {
 			err = m.child.WaitForClose(time.Second)
 		}
-		m.closeAble.CloseAsync()
-		err = m.closeAble.WaitForClose(time.Second)
+		m.batcher.CloseAsync()
+		err = m.batcher.WaitForClose(time.Second)
 		for err != nil {
-			err = m.closeAble.WaitForClose(time.Second)
+			err = m.batcher.WaitForClose(time.Second)
 		}
 		close(m.messagesOut)
 		close(m.closedChan)

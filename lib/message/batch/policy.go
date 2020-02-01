@@ -180,6 +180,29 @@ func (p *Policy) Add(part types.Part) bool {
 // policy is currently empty.
 func (p *Policy) Flush() types.Message {
 	var newMsg types.Message
+
+	resultMsgs := p.FlushAny()
+	if len(resultMsgs) == 1 {
+		newMsg = resultMsgs[0]
+	} else if len(resultMsgs) > 1 {
+		newMsg = message.New(nil)
+		var parts []types.Part
+		for _, m := range resultMsgs {
+			m.Iter(func(_ int, p types.Part) error {
+				parts = append(parts, p)
+				return nil
+			})
+		}
+		newMsg.SetAll(parts)
+	}
+	return newMsg
+}
+
+// FlushAny clears all messages stored by this batch policy and returns any
+// number of discrete message batches. Returns nil if the policy is currently
+// empty.
+func (p *Policy) FlushAny() []types.Message {
+	var newMsg types.Message
 	if len(p.parts) > 0 {
 		if !p.triggered && p.period > 0 && time.Since(p.lastBatch) > p.period {
 			p.mPeriodBatch.Incr(1)
@@ -193,6 +216,10 @@ func (p *Policy) Flush() types.Message {
 	p.lastBatch = time.Now()
 	p.triggered = false
 
+	if newMsg == nil {
+		return nil
+	}
+
 	if len(p.procs) > 0 {
 		resultMsgs, res := processor.ExecuteAll(p.procs, newMsg)
 		if res != nil {
@@ -201,23 +228,10 @@ func (p *Policy) Flush() types.Message {
 			}
 			return nil
 		}
-		if len(resultMsgs) == 0 {
-			newMsg = nil
-		} else if len(resultMsgs) == 1 {
-			newMsg = resultMsgs[0]
-		} else {
-			var parts []types.Part
-			for _, m := range resultMsgs {
-				m.Iter(func(_ int, p types.Part) error {
-					parts = append(parts, p)
-					return nil
-				})
-			}
-			newMsg.SetAll(parts)
-		}
+		return resultMsgs
 	}
 
-	return newMsg
+	return []types.Message{newMsg}
 }
 
 // Count returns the number of currently buffered message parts within this
