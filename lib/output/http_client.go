@@ -29,7 +29,8 @@ interpolations described [here](/docs/configuration/interpolation#functions).
 
 The body of the HTTP request is the raw contents of the message payload. If the
 message has multiple parts (is a batch) the request will be sent according to
-[RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html)
+[RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This
+behaviour can be overridden by [archiving your batches](/docs/configuration/batching#post-batch-processing).
 
 ### Propagating Responses
 
@@ -45,7 +46,7 @@ these propagated responses.`,
 		FieldSpecs: client.FieldSpecs().Add(
 			docs.FieldAdvanced("propagate_response", "Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		).Merge(client.FieldSpecs()).Add(batch.FieldSpec()),
+		).Add(batch.FieldSpec()),
 	}
 }
 

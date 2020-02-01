@@ -237,14 +237,20 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 	}
 
 	flattenedFields := FieldSpecs{}
-	var walkFields func(path string, gObj *gabs.Container, f FieldSpecs) []string
-	walkFields = func(path string, gObj *gabs.Container, f FieldSpecs) []string {
+	var walkFields func(path string, gObj *gabs.Container, f FieldSpecs) ([]string, []string)
+	walkFields = func(path string, gObj *gabs.Container, f FieldSpecs) ([]string, []string) {
 		var missingFields []string
 		expectedFields := map[string]struct{}{}
 		for k := range gObj.ChildrenMap() {
 			expectedFields[k] = struct{}{}
 		}
+		seenFields := map[string]struct{}{}
+		var duplicateFields []string
 		for _, v := range f {
+			if _, seen := seenFields[v.Name]; seen {
+				duplicateFields = append(duplicateFields, v.Name)
+			}
+			seenFields[v.Name] = struct{}{}
 			newV := v
 			delete(expectedFields, v.Name)
 			newV.Children = nil
@@ -253,17 +259,21 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			}
 			flattenedFields = append(flattenedFields, newV)
 			if len(v.Children) > 0 {
-				missingFields = append(missingFields, walkFields(path+v.Name+".", gConf.S(v.Name), v.Children)...)
+				tmpMissing, tmpDuplicate := walkFields(path+v.Name+".", gConf.S(v.Name), v.Children)
+				missingFields = append(missingFields, tmpMissing...)
+				duplicateFields = append(duplicateFields, tmpDuplicate...)
 			}
 		}
 		for k := range expectedFields {
 			missingFields = append(missingFields, path+k)
 		}
-		return missingFields
+		return missingFields, duplicateFields
 	}
 	if len(c.Fields) > 0 {
-		if missing := walkFields("", gConf, c.Fields); len(missing) > 0 {
+		if missing, duplicates := walkFields("", gConf, c.Fields); len(missing) > 0 {
 			return nil, fmt.Errorf("spec missing fields: %v", missing)
+		} else if len(duplicates) > 0 {
+			return nil, fmt.Errorf("spec duplicate fields: %v", duplicates)
 		}
 	}
 

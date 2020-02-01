@@ -33,7 +33,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 			docs.FieldCommon("period", "A period in which an incomplete batch should be flushed regardless of its size.", "1s", "1m", "500ms"),
 			docs.FieldAdvanced("condition", "A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed."),
 			docs.FieldAdvanced(
-				"processors", "A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit.",
+				"processors", "A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.",
 				[]map[string]interface{}{
 					{
 						"archive": map[string]interface{}{
@@ -46,6 +46,11 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 						"archive": map[string]interface{}{
 							"format": "json_array",
 						},
+					},
+				},
+				[]map[string]interface{}{
+					{
+						"merge_json": struct{}{},
 					},
 				},
 			),

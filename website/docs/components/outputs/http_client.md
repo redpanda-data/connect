@@ -35,12 +35,6 @@ output:
     rate_limit: ""
     timeout: 5s
     max_in_flight: 1
-    url: http://localhost:4195/post
-    verb: POST
-    headers:
-      Content-Type: application/octet-stream
-    rate_limit: ""
-    timeout: 5s
     batching:
       count: 1
       byte_size: 0
@@ -85,36 +79,6 @@ output:
     successful_on: []
     propagate_response: false
     max_in_flight: 1
-    url: http://localhost:4195/post
-    verb: POST
-    headers:
-      Content-Type: application/octet-stream
-    oauth:
-      access_token: ""
-      access_token_secret: ""
-      consumer_key: ""
-      consumer_secret: ""
-      enabled: false
-      request_url: ""
-    basic_auth:
-      enabled: false
-      password: ""
-      username: ""
-    tls:
-      enabled: false
-      skip_cert_verify: false
-      root_cas_file: ""
-      client_certs: []
-    copy_response_headers: false
-    rate_limit: ""
-    timeout: 5s
-    retry_period: 1s
-    max_retry_backoff: 300s
-    retries: 3
-    backoff_on:
-    - 429
-    drop_on: []
-    successful_on: []
     batching:
       count: 1
       byte_size: 0
@@ -137,7 +101,8 @@ interpolations described [here](/docs/configuration/interpolation#functions).
 
 The body of the HTTP request is the raw contents of the message payload. If the
 message has multiple parts (is a batch) the request will be sent according to
-[RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html)
+[RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This
+behaviour can be overridden by [archiving your batches](/docs/configuration/batching#post-batch-processing).
 
 ### Propagating Responses
 
@@ -294,134 +259,6 @@ client_certs:
 
 `number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
-### `url`
-
-`string` The URL to connect to.
-
-### `verb`
-
-`string` A verb to connect with
-
-```yaml
-# Examples
-
-verb: POST
-
-verb: GET
-
-verb: DELETE
-```
-
-### `headers`
-
-`object` A map of headers to add to the request.
-
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
-
-```yaml
-# Examples
-
-headers:
-  Content-Type: application/octet-stream
-```
-
-### `oauth`
-
-`object` Allows you to specify open authentication.
-
-```yaml
-# Examples
-
-oauth:
-  access_token: baz
-  access_token_secret: bev
-  consumer_key: foo
-  consumer_secret: bar
-  enabled: true
-  request_url: http://thisisjustanexample.com/dontactuallyusethis
-```
-
-### `basic_auth`
-
-`object` Allows you to specify basic authentication.
-
-```yaml
-# Examples
-
-basic_auth:
-  enabled: true
-  password: bar
-  username: foo
-```
-
-### `tls`
-
-`object` Custom TLS settings can be used to override system defaults.
-
-### `tls.enabled`
-
-`bool` Whether custom TLS settings are enabled.
-
-### `tls.skip_cert_verify`
-
-`bool` Whether to skip server side certificate verification.
-
-### `tls.root_cas_file`
-
-`string` The path of a root certificate authority file to use.
-
-### `tls.client_certs`
-
-`array` A list of client certificates to use.
-
-```yaml
-# Examples
-
-client_certs:
-- cert: foo
-  key: bar
-
-client_certs:
-- cert_file: ./example.pem
-  key_file: ./example.key
-```
-
-### `copy_response_headers`
-
-`bool` Sets whether to copy the headers from the response to the resulting payload.
-
-### `rate_limit`
-
-`string` An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
-
-### `timeout`
-
-`string` A static timeout to apply to requests.
-
-### `retry_period`
-
-`string` The base period to wait between failed requests.
-
-### `max_retry_backoff`
-
-`string` The maximum period to wait between failed requests.
-
-### `retries`
-
-`number` The maximum number of retry attempts to make.
-
-### `backoff_on`
-
-`array` A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
-
-### `drop_on`
-
-`array` A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
-
-### `successful_on`
-
-`array` A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
-
 ### `batching`
 
 `object` Allows you to configure a [batching policy](/docs/configuration/batching).
@@ -473,7 +310,7 @@ period: 500ms
 
 ### `batching.processors`
 
-`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit.
+`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
 
 ```yaml
 # Examples
@@ -485,6 +322,9 @@ processors:
 processors:
 - archive:
     format: json_array
+
+processors:
+- merge_json: {}
 ```
 
 

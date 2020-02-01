@@ -41,7 +41,9 @@ single message batch, a continuous stream of line delimited messages, or a
 websocket of messages for each request respectively.
 
 When messages are batched the ` + "`path`" + ` endpoint encodes the batch
-according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).`,
+according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
+This behaviour can be overridden by
+[archiving your batches](/docs/configuration/batching#post-batch-processing).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("address", "An optional address to listen from. If left empty the service wide HTTP server is used."),
 			docs.FieldCommon("path", "The path from which discrete messages can be consumed."),

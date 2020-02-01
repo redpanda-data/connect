@@ -245,7 +245,7 @@ period: 500ms
 
 ### `batching.processors`
 
-`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit.
+`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
 
 ```yaml
 # Examples
@@ -257,6 +257,9 @@ processors:
 processors:
 - archive:
     format: json_array
+
+processors:
+- merge_json: {}
 ```
 
 ### `aws`

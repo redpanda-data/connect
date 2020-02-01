@@ -166,6 +166,23 @@ output:
       period: 100ms
 ```
 
+### Post-Batch Processing
+
+A batch policy also has a field `processors` which allows you to define an optional list of [processors][processors] to apply to each batch before it is flushed. This is a good place to aggregate or archive the batch into a compatible format for an output:
+
+```yaml
+output:
+  http_client:
+    url: http://localhost:4195/post
+    batching:
+      count: 10
+      processors:
+      - archive:
+          format: lines
+```
+
+The above config will batch up messages and then merge them into a line delimited format before sending it over HTTP. This is an easier format to parse than the default which would have been [rfc1342](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
+
 During shutdown any remaining messages waiting for a batch to complete will be flushed down the pipeline.
 
 [processors]: /docs/components/processors/about
