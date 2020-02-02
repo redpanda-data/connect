@@ -27,17 +27,17 @@ func init() {
 
 // GeoIPConfig contains configuration fields for the GeoIP processor.
 type GeoIPConfig struct {
-	Parts []int  `json:"parts" yaml:"parts"`
-	Arg   string `json:"arg" yaml:"arg"`
-	Base  string `json:"base" yaml:"base"`
+	Parts        []int  `json:"parts" yaml:"parts"`
+	DatabaseType string `json:"database_type" yaml:"database_type"`
+	Database     string `json:"database" yaml:"database"`
 }
 
 // NewGeoIPConfig returns a GeoIPConfig with default values.
 func NewGeoIPConfig() GeoIPConfig {
 	return GeoIPConfig{
-		Parts: []int{},
-		Arg:   "",
-		Base:  "",
+		Parts:        []int{},
+		DatabaseType: "",
+		Database:     "",
 	}
 }
 
@@ -111,12 +111,12 @@ func NewGeoIP(
 	}
 
 	var err error
-	g.handler, err = geoip2.Open(g.conf.GeoIP.Base)
+	g.handler, err = geoip2.Open(g.conf.GeoIP.Database)
 	if err != nil {
 		g.log.Debugf("Failed to open geoip database: %v\n", err)
 		return nil, err
 	}
-	if g.reader, err = getReader(g.conf.GeoIP.Arg); err != nil {
+	if g.reader, err = getReader(g.conf.GeoIP.DatabaseType); err != nil {
 		return nil, err
 	}
 
