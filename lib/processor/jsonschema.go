@@ -27,9 +27,11 @@ payload under any circumstances. If a message does not match the schema it can
 be caught using error handling methods outlined [here](/docs/configuration/error_handling).`,
 		Description: `
 Please refer to the [JSON Schema website](https://json-schema.org/) for
-information and tutorials regarding the syntax of the schema.
+information and tutorials regarding the syntax of the schema.`,
+		Footnotes: `
+## Examples
 
-For example, with the following JSONSchema document:
+With the following JSONSchema document:
 
 ` + "```json" + `
 {

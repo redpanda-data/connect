@@ -11,23 +11,71 @@ type: condition
 -->
 
 
+Parses a message as a JSON blob and attempts to apply a JMESPath expression to
+it, expecting a boolean result. If the response is true the condition passes,
+otherwise it does not.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 jmespath:
-  part: 0
   query: ""
 ```
 
-Parses a message part as a JSON blob and attempts to apply a JMESPath expression
-to it, expecting a boolean response. If the response is true the condition
-passes, otherwise it does not. Please refer to the
-[JMESPath website](http://jmespath.org/) for information and tutorials regarding
-the syntax of expressions.
+</TabItem>
+<TabItem value="advanced">
 
-For example, with the following config:
+```yaml
+jmespath:
+  query: ""
+  part: 0
+```
+
+</TabItem>
+</Tabs>
+
+Please refer to the [JMESPath website](http://jmespath.org/) for information and
+tutorials regarding the syntax of expressions.
+
+## Fields
+
+### `query`
+
+`string` A [JMESPath](http://jmespath.org/) query.
+
+```yaml
+# Examples
+
+query: foo == 'bar'
+
+query: length(doc.urls) > `0`
+```
+
+### `part`
+
+`number` The index of a message within a batch to test the condition against. This
+field is only applicable when batching messages
+[at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
+
+## Examples
+
+With the following config:
 
 ``` yaml
 jmespath:
-  part: 0
   query: a == 'foo'
 ```
 
@@ -44,5 +92,4 @@ Then the condition would pass.
 JMESPath is traditionally used for mutating JSON, in order to do this please
 instead use the [`jmespath`](/docs/components/processors/jmespath)
 processor.
-
 

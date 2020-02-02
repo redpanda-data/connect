@@ -56,4 +56,25 @@ added to the first part of the message that triggers the input to stop.
 
 `bool` Whether the input should be reopened if it closes itself before the condition has resolved to true.
 
+## Examples
+
+This input is useful when paired with the
+[`count`](/docs/components/conditions/count) condition, as it can be
+used to cut the input stream off once a certain number of messages have been
+read:
+
+```yaml
+# Only read 100 messages, and then exit.
+input:
+  read_until:
+    input:
+      kafka_balanced:
+        addresses: [ TODO ]
+        topics: [ foo, bar ]
+        consumer_group: foogroup
+      condition:
+        not:
+          count:
+            arg: 100
+```
 

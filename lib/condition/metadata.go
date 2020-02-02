@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	radix "github.com/armon/go-radix"
 	"github.com/spf13/cast"
 )
@@ -19,9 +20,10 @@ import (
 func init() {
 	Constructors[TypeMetadata] = TypeSpec{
 		constructor: NewMetadata,
-		Description: `
-Metadata is a condition that checks metadata keys of a message part against an
-operator from the following list:
+		Summary: `
+Checks a metadata key against an argument according to a chosen [operator](#operators).`,
+		Footnotes: `
+## Operators
 
 ### ` + "`enum`" + `
 
@@ -31,7 +33,6 @@ values.
 ` + "```yaml" + `
 metadata:
   operator: enum
-  part: 0
   key: foo
   arg:
     - bar
@@ -48,7 +49,6 @@ is case insensitive.
 ` + "```yaml" + `
 metadata:
   operator: equals
-  part: 0
   key: foo
   arg: bar
 ` + "```" + `
@@ -61,7 +61,6 @@ is case sensitive.
 ` + "```yaml" + `
 metadata:
   operator: equals_cs
-  part: 0
   key: foo
   arg: BAR
 ` + "```" + `
@@ -73,7 +72,6 @@ Checks whether a metadata key exists.
 ` + "```yaml" + `
 metadata:
   operator: exists
-  part: 0
   key: foo
 ` + "```" + `
 
@@ -86,7 +84,6 @@ be parsed into a number.
 ` + "```yaml" + `
 metadata:
   operator: greater_than
-  part: 0
   key: foo
   arg: 3
 ` + "```" + `
@@ -99,7 +96,6 @@ The arg field can either be a singular prefix string or a list of prefixes.
 ` + "```yaml" + `
 metadata:
   operator: has_prefix
-  part: 0
   key: foo
   arg:
     - foo
@@ -116,7 +112,6 @@ parsed into a number.
 ` + "```yaml" + `
 metadata:
   operator: less_than
-  part: 0
   key: foo
   arg: 3
 ` + "```" + `
@@ -129,7 +124,6 @@ expression (RE2 syntax).
 ` + "```yaml" + `
 metadata:
   operator: regexp_partial
-  part: 0
   key: foo
   arg: "1[a-z]2"
 ` + "```" + `
@@ -142,11 +136,16 @@ Checks whether the contents of a metadata key exactly matches a regular expressi
 ` + "```yaml" + `
 metadata:
   operator: regexp_partial
-  part: 0
   key: foo
   arg: "1[a-z]2"
 ` + "```" + `
 `,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("operator", "An [operator](#operators) to apply."),
+			docs.FieldCommon("key", "The key of the metadata field to check."),
+			docs.FieldCommon("arg", "An argument to check against. For some operators this field not be required."),
+			partFieldSpec,
+		},
 	}
 }
 

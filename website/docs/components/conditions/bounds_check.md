@@ -11,14 +11,57 @@ type: condition
 -->
 
 
+Checks a message against a set of bounds, if any bound fails then this condition
+resolves to false.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 bounds_check:
   max_part_size: 1.073741824e+09
-  max_parts: 100
   min_part_size: 1
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+bounds_check:
+  max_part_size: 1.073741824e+09
+  min_part_size: 1
+  max_parts: 100
   min_parts: 1
 ```
 
-Checks a message against a set of bounds.
+</TabItem>
+</Tabs>
+
+## Fields
+
+### `max_part_size`
+
+`number` The maximum size of a message to allow (in bytes)
+
+### `min_part_size`
+
+`number` The minimum size of a message to allow (in bytes)
+
+### `max_parts`
+
+`number` The maximum size of message batches to allow (in message count)
+
+### `min_parts`
+
+`number` The minimum size of message batches to allow (in message count)
 
 

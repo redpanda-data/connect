@@ -11,13 +11,47 @@ type: condition
 -->
 
 
+Returns true if a processing stage of a message has failed.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
+```yaml
+processor_failed: {}
+```
+
+</TabItem>
+<TabItem value="advanced">
+
 ```yaml
 processor_failed:
   part: 0
 ```
 
-Returns true if a processing stage of a message has failed. This condition is
-useful for dropping failed messages or creating dead letter queues, you can read
-more about these patterns [here](/docs/configuration/error_handling).
+</TabItem>
+</Tabs>
+
+This condition is useful for dropping failed messages or creating dead letter
+queues, you can read more about these patterns [here](/docs/configuration/error_handling).
+
+## Fields
+
+### `part`
+
+`number` The index of a message within a batch to test the condition against. This
+field is only applicable when batching messages
+[at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
 
 

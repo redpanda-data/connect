@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,25 +16,15 @@ import (
 func init() {
 	Constructors[TypeNumber] = TypeSpec{
 		constructor: NewNumber,
+		Summary: `
+Checks the contents of a message parsed as a 64-bit floating point number
+against a logical [operator](#operators) and an argument.`,
 		Description: `
-Number is a condition that checks the contents of a message parsed as a 64-bit
-floating point number against a logical operator and an argument.
-
-It's possible to use the ` + "[`check_field`](/docs/components/conditions/check_field)" + ` and
+This condition is useful when paired with the ` + "[`check_field`](/docs/components/conditions/check_field)" + ` and
 ` + "[`check_interpolation`](/docs/components/conditions/check_interpolation)" + ` conditions to check a
-number condition against arbitrary metadata or fields of messages. For example,
-you can test a number condition against the size of a message batch with:
-
-` + "``` yaml" + `
-check_interpolation:
-  value: ${!batch_size}
-  condition:
-    number:
-      operator: greater_than
-      arg: 1
-` + "```" + `
-
-Available logical operators are:
+number condition against arbitrary metadata or fields of messages.`,
+		Footnotes: `
+## Operators
 
 ### ` + "`equals`" + `
 
@@ -47,7 +38,25 @@ value cannot be parsed as a number.
 ### ` + "`less_than`" + `
 
 Checks whether the value is less than the argument. Returns false if the value
-cannot be parsed as a number.`,
+cannot be parsed as a number.
+
+## Examples
+
+You can test a number condition against the size of a message batch with:
+
+` + "``` yaml" + `
+check_interpolation:
+  value: ${!batch_size}
+  condition:
+    number:
+      operator: greater_than
+      arg: 1
+` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("operator", "An [operator](#operators) to apply."),
+			docs.FieldCommon("arg", "An argument to check against. For some operators this field not be required."),
+			partFieldSpec,
+		},
 	}
 }
 

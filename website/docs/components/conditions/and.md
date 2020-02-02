@@ -11,14 +11,16 @@ type: condition
 -->
 
 
+And is a condition that returns the logical AND of its children conditions.
+
 ```yaml
 and: []
 ```
 
-And is a condition that returns the logical AND of its children conditions:
+For example, the following resolves true if a message contains both 'foo' and
+'bar':
 
-``` yaml
-# True if message contains both 'foo' and 'bar'
+```yaml
 and:
   - text:
       operator: contains

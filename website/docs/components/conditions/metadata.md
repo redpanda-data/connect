@@ -11,16 +11,65 @@ type: condition
 -->
 
 
+Checks a metadata key against an argument according to a chosen [operator](#operators).
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 metadata:
-  arg: ""
-  key: ""
   operator: equals_cs
+  key: ""
+  arg: ""
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+metadata:
+  operator: equals_cs
+  key: ""
+  arg: ""
   part: 0
 ```
 
-Metadata is a condition that checks metadata keys of a message part against an
-operator from the following list:
+</TabItem>
+</Tabs>
+
+## Fields
+
+### `operator`
+
+`string` An [operator](#operators) to apply.
+
+### `key`
+
+`string` The key of the metadata field to check.
+
+### `arg`
+
+`string` An argument to check against. For some operators this field not be required.
+
+### `part`
+
+`number` The index of a message within a batch to test the condition against. This
+field is only applicable when batching messages
+[at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
+
+## Operators
 
 ### `enum`
 
@@ -30,7 +79,6 @@ values.
 ```yaml
 metadata:
   operator: enum
-  part: 0
   key: foo
   arg:
     - bar
@@ -47,7 +95,6 @@ is case insensitive.
 ```yaml
 metadata:
   operator: equals
-  part: 0
   key: foo
   arg: bar
 ```
@@ -60,7 +107,6 @@ is case sensitive.
 ```yaml
 metadata:
   operator: equals_cs
-  part: 0
   key: foo
   arg: BAR
 ```
@@ -72,7 +118,6 @@ Checks whether a metadata key exists.
 ```yaml
 metadata:
   operator: exists
-  part: 0
   key: foo
 ```
 
@@ -85,7 +130,6 @@ be parsed into a number.
 ```yaml
 metadata:
   operator: greater_than
-  part: 0
   key: foo
   arg: 3
 ```
@@ -98,7 +142,6 @@ The arg field can either be a singular prefix string or a list of prefixes.
 ```yaml
 metadata:
   operator: has_prefix
-  part: 0
   key: foo
   arg:
     - foo
@@ -115,7 +158,6 @@ parsed into a number.
 ```yaml
 metadata:
   operator: less_than
-  part: 0
   key: foo
   arg: 3
 ```
@@ -128,7 +170,6 @@ expression (RE2 syntax).
 ```yaml
 metadata:
   operator: regexp_partial
-  part: 0
   key: foo
   arg: "1[a-z]2"
 ```
@@ -141,10 +182,8 @@ Checks whether the contents of a metadata key exactly matches a regular expressi
 ```yaml
 metadata:
   operator: regexp_partial
-  part: 0
   key: foo
   arg: "1[a-z]2"
 ```
-
 
 

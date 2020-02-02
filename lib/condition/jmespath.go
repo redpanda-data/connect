@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	jmespath "github.com/jmespath/go-jmespath"
 )
 
@@ -14,18 +15,27 @@ import (
 func init() {
 	Constructors[TypeJMESPath] = TypeSpec{
 		constructor: NewJMESPath,
+		Summary: `
+Parses a message as a JSON blob and attempts to apply a JMESPath expression to
+it, expecting a boolean result. If the response is true the condition passes,
+otherwise it does not.`,
 		Description: `
-Parses a message part as a JSON blob and attempts to apply a JMESPath expression
-to it, expecting a boolean response. If the response is true the condition
-passes, otherwise it does not. Please refer to the
-[JMESPath website](http://jmespath.org/) for information and tutorials regarding
-the syntax of expressions.
+Please refer to the [JMESPath website](http://jmespath.org/) for information and
+tutorials regarding the syntax of expressions.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon(
+				"query", "A [JMESPath](http://jmespath.org/) query.",
+				"foo == 'bar'", "length(doc.urls) > `0`",
+			),
+			partFieldSpec,
+		},
+		Footnotes: `
+## Examples
 
-For example, with the following config:
+With the following config:
 
 ` + "``` yaml" + `
 jmespath:
-  part: 0
   query: a == 'foo'
 ` + "```" + `
 

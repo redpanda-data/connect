@@ -11,10 +11,10 @@ type: condition
 -->
 
 
+Always resolves to the same static boolean value.
+
 ```yaml
 static: true
 ```
-
-Static is a condition that always resolves to the same static boolean value.
 
 

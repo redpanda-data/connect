@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/Jeffail/gabs/v2"
 )
 
@@ -16,7 +17,7 @@ import (
 func init() {
 	Constructors[TypeCheckField] = TypeSpec{
 		constructor: NewCheckField,
-		Description: `
+		Summary: `
 Extracts the value of a field identified via [dot path](/docs/configuration/field_paths)
 within messages (currently only JSON format is supported) and then tests the
 extracted value against a child condition.`,
@@ -33,6 +34,19 @@ extracted value against a child condition.`,
 				"path":      conf.CheckField.Path,
 				"condition": condConf,
 			}, nil
+		},
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("path", "A [field path](/docs/configuration/field_paths) to check against the child condition."),
+			docs.FieldCommon("condition", "A child condition to test the field contents against."),
+			docs.FieldAdvanced(
+				"parts",
+				`An optional array of message indexes of a batch that the condition should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.`,
+			),
 		},
 	}
 }

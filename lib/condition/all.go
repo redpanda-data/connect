@@ -14,11 +14,11 @@ import (
 func init() {
 	Constructors[TypeAll] = TypeSpec{
 		constructor: NewAll,
-		Description: `
-All is a condition that tests a child condition against each message of a batch
+		Summary: `
+A condition that tests a child condition against each message of a batch
 individually. If all messages pass the child condition then this condition also
-passes.
-
+passes.`,
+		Description: `
 For example, if we wanted to check that all messages of a batch contain the word
 'foo' we could use this config:
 

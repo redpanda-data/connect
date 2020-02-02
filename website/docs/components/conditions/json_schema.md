@@ -11,20 +11,66 @@ type: condition
 -->
 
 
+Validates a message against the provided JSONSchema definition to retrieve a
+boolean response indicating whether the message matches the schema or not.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 json_schema:
-  part: 0
   schema: ""
   schema_path: ""
 ```
 
-Validates a message against the provided JSONSchema definition to retrieve a
-boolean response indicating whether the message matches the schema or not.
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+json_schema:
+  schema: ""
+  schema_path: ""
+  part: 0
+```
+
+</TabItem>
+</Tabs>
+
 If the response is true the condition passes, otherwise it does not. Please
 refer to the [JSON Schema website](https://json-schema.org/) for information and
 tutorials regarding the syntax of the schema.
 
-For example, with the following JSONSchema document:
+## Fields
+
+### `schema`
+
+`string` A schema to apply. Use either this or the `schema_path` field.
+
+### `schema_path`
+
+`string` The path of a schema document to apply. Use either this or the `schema` field.
+
+### `part`
+
+`number` The index of a message within a batch to test the condition against. This
+field is only applicable when batching messages
+[at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
+
+## Examples
+
+With the following JSONSchema document:
 
 ``` json
 {
@@ -54,7 +100,6 @@ And the following Benthos configuration:
 
 ``` yaml
 json_schema:
-  part: 0
   schema_path: "file://path_to_schema.json"
 ```
 
@@ -65,5 +110,4 @@ If the message being processed looked like:
 ```
 
 Then the condition would pass.
-
 

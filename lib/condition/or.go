@@ -13,11 +13,14 @@ import (
 func init() {
 	Constructors[TypeOr] = TypeSpec{
 		constructor: NewOr,
-		Description: `
-Or is a condition that returns the logical OR of its children conditions.
+		Summary: `
+Returns the logical OR of children conditions.`,
+		Footnotes: `
+## Examples
+
+The following snippet resolves to true if a message contains 'foo' or 'bar':
 
 ` + "``` yaml" + `
-# True if message contains 'foo' or 'bar'
 or:
   - text:
       operator: contains

@@ -4,6 +4,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -11,10 +12,14 @@ import (
 func init() {
 	Constructors[TypeProcessorFailed] = TypeSpec{
 		constructor: NewProcessorFailed,
+		Summary: `
+Returns true if a processing stage of a message has failed.`,
 		Description: `
-Returns true if a processing stage of a message has failed. This condition is
-useful for dropping failed messages or creating dead letter queues, you can read
-more about these patterns [here](/docs/configuration/error_handling).`,
+This condition is useful for dropping failed messages or creating dead letter
+queues, you can read more about these patterns [here](/docs/configuration/error_handling).`,
+		FieldSpecs: docs.FieldSpecs{
+			partFieldSpec,
+		},
 	}
 }
 

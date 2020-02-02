@@ -30,7 +30,6 @@ The field ` + "`init_values`" + ` can be used to prepopulate the memory cache
 with any number of key/value pairs which are exempt from TTLs:
 
 ` + "```yaml" + `
-type: memory
 memory:
   ttl: 60
   init_values:

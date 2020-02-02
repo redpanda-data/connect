@@ -11,15 +11,19 @@ type: condition
 -->
 
 
+Returns the logical XOR of children conditions, meaning it only resolves to
+true if _exactly_ one of its children conditions resolves to true.
+
 ```yaml
 xor: []
 ```
 
-Returns the logical XOR of its children conditions, meaning it only resolves to
-true if _exactly_ one of its children conditions resolves to true.
+## Examples
+
+The following snippet resolves to true if a message contains 'foo' or 'bar', but
+not both:
 
 ``` yaml
-# True if message contains 'foo' or 'bar', but not both
 xor:
   - text:
       operator: contains
@@ -28,5 +32,4 @@ xor:
       operator: contains
       arg: bar
 ```
-
 

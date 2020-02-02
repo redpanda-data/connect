@@ -11,14 +11,17 @@ type: condition
 -->
 
 
+Returns the logical OR of children conditions.
+
 ```yaml
 or: []
 ```
 
-Or is a condition that returns the logical OR of its children conditions.
+## Examples
+
+The following snippet resolves to true if a message contains 'foo' or 'bar':
 
 ``` yaml
-# True if message contains 'foo' or 'bar'
 or:
   - text:
       operator: contains
@@ -27,5 +30,4 @@ or:
       operator: contains
       arg: bar
 ```
-
 

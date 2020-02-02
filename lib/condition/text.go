@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	radix "github.com/armon/go-radix"
 	"github.com/spf13/cast"
 )
@@ -19,27 +20,15 @@ import (
 func init() {
 	Constructors[TypeText] = TypeSpec{
 		constructor: NewText,
+		Summary: `
+Checks the contents of a message as plain text against a logical
+[operator](#operators) and an argument.`,
 		Description: `
-Text is a condition that checks the contents of a message as plain text against
-a logical operator and an argument.
-
 It's possible to use the ` + "[`check_field`](/docs/components/conditions/check_field)" + ` and
 ` + "[`check_interpolation`](/docs/components/conditions/check_interpolation)" + ` conditions to check a
-text condition against arbitrary metadata or fields of messages. For example,
-you can test a text condition against a JSON field ` + "`foo.bar`" + ` with:
-
-` + "``` yaml" + `
-check_field:
-  path: foo.bar
-  condition:
-    text:
-      operator: enum
-      arg:
-      - foo
-      - bar
-` + "```" + `
-
-Available logical operators are:
+text condition against arbitrary metadata or fields of messages.`,
+		Footnotes: `
+## Operators
 
 ### ` + "`equals_cs`" + `
 
@@ -102,7 +91,27 @@ text:
   arg:
   - foo
   - bar
+` + "```" + `
+
+## Examples
+
+To test a text condition against a JSON field ` + "`foo.bar`" + ` you can use:
+
+` + "``` yaml" + `
+check_field:
+  path: foo.bar
+  condition:
+    text:
+      operator: enum
+      arg:
+      - foo
+      - bar
 ` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("operator", "An [operator](#operators) to apply."),
+			docs.FieldCommon("arg", "An argument to check against. For some operators this field not be required."),
+			partFieldSpec,
+		},
 	}
 }
 

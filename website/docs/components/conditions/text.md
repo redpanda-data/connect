@@ -11,33 +11,64 @@ type: condition
 -->
 
 
+Checks the contents of a message as plain text against a logical
+[operator](#operators) and an argument.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 text:
-  arg: ""
   operator: equals_cs
+  arg: ""
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+text:
+  operator: equals_cs
+  arg: ""
   part: 0
 ```
 
-Text is a condition that checks the contents of a message as plain text against
-a logical operator and an argument.
+</TabItem>
+</Tabs>
 
 It's possible to use the [`check_field`](/docs/components/conditions/check_field) and
 [`check_interpolation`](/docs/components/conditions/check_interpolation) conditions to check a
-text condition against arbitrary metadata or fields of messages. For example,
-you can test a text condition against a JSON field `foo.bar` with:
+text condition against arbitrary metadata or fields of messages.
 
-``` yaml
-check_field:
-  path: foo.bar
-  condition:
-    text:
-      operator: enum
-      arg:
-      - foo
-      - bar
-```
+## Fields
 
-Available logical operators are:
+### `operator`
+
+`string` An [operator](#operators) to apply.
+
+### `arg`
+
+`string` An argument to check against. For some operators this field not be required.
+
+### `part`
+
+`number` The index of a message within a batch to test the condition against. This
+field is only applicable when batching messages
+[at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
+
+## Operators
 
 ### `equals_cs`
 
@@ -102,4 +133,18 @@ text:
   - bar
 ```
 
+## Examples
+
+To test a text condition against a JSON field `foo.bar` you can use:
+
+``` yaml
+check_field:
+  path: foo.bar
+  condition:
+    text:
+      operator: enum
+      arg:
+      - foo
+      - bar
+```
 

@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -16,11 +17,11 @@ import (
 func init() {
 	Constructors[TypeCheckInterpolation] = TypeSpec{
 		constructor: NewCheckInterpolation,
-		Description: `
+		Summary: `
 Resolves a string containing
 [function interpolations](/docs/configuration/interpolation#functions) and then tests
-the result against a child condition.
-
+the result against a child condition.`,
+		Description: `
 For example, you could use this to test against the size of a message batch:
 
 ` + "``` yaml" + `
@@ -43,6 +44,15 @@ check_interpolation:
 				"value":     conf.CheckInterpolation.Value,
 				"condition": condConf,
 			}, nil
+		},
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon(
+				"value", "The value to check against the child condition.",
+				"${!json_field:doc.title}",
+				"${!metadata:kafka_topic}",
+				"${!json_field:doc.id}-${!metadata:kafka_key}",
+			).SupportsInterpolation(true),
+			docs.FieldCommon("condition", "A child condition to test the field contents against."),
 		},
 	}
 }

@@ -37,6 +37,28 @@ down until the condition is met then set ` + "`restart_input` to `true`." + `
 
 A metadata key ` + "`benthos_read_until` containing the value `final`" + ` is
 added to the first part of the message that triggers the input to stop.`,
+		Footnotes: `
+## Examples
+
+This input is useful when paired with the
+` + "[`count`](/docs/components/conditions/count)" + ` condition, as it can be
+used to cut the input stream off once a certain number of messages have been
+read:
+
+` + "```yaml" + `
+# Only read 100 messages, and then exit.
+input:
+  read_until:
+    input:
+      kafka_balanced:
+        addresses: [ TODO ]
+        topics: [ foo, bar ]
+        consumer_group: foogroup
+      condition:
+        not:
+          count:
+            arg: 100
+` + "```" + ``,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			condSanit, err := condition.SanitiseConfig(conf.ReadUntil.Condition)
 			if err != nil {

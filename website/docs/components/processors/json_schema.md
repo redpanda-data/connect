@@ -49,7 +49,28 @@ json_schema:
 Please refer to the [JSON Schema website](https://json-schema.org/) for
 information and tutorials regarding the syntax of the schema.
 
-For example, with the following JSONSchema document:
+## Fields
+
+### `schema`
+
+`string` A schema to apply. Use either this or the `schema_path` field.
+
+### `schema_path`
+
+`string` The path of a schema document to apply. Use either this or the `schema` field.
+
+### `parts`
+
+`array` An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
+
+## Examples
+
+With the following JSONSchema document:
 
 ```json
 {
@@ -99,24 +120,4 @@ the fault. This gives you flexibility in how you may handle schema errors, but
 for a simpler use case you might instead wish to use the
 [`json_schema`](/docs/components/conditions/json_schema) condition with a
 [`filter`](/docs/components/processors/filter).
-
-## Fields
-
-### `schema`
-
-`string` A schema to apply. Use either this or the `schema_path` field.
-
-### `schema_path`
-
-`string` The path of a schema document to apply. Use either this or the `schema` field.
-
-### `parts`
-
-`array` An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
 

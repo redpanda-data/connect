@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -13,8 +14,15 @@ import (
 func init() {
 	Constructors[TypeBoundsCheck] = TypeSpec{
 		constructor: NewBoundsCheck,
-		Description: `
-Checks a message against a set of bounds.`,
+		Summary: `
+Checks a message against a set of bounds, if any bound fails then this condition
+resolves to false.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("max_part_size", "The maximum size of a message to allow (in bytes)"),
+			docs.FieldCommon("min_part_size", "The minimum size of a message to allow (in bytes)"),
+			docs.FieldAdvanced("max_parts", "The maximum size of message batches to allow (in message count)"),
+			docs.FieldAdvanced("min_parts", "The minimum size of message batches to allow (in message count)"),
+		},
 	}
 }
 
