@@ -11,20 +11,77 @@ type: tracer
 -->
 
 
+Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
 tracer:
   jaeger:
     agent_address: localhost:6831
-    flush_interval: ""
-    sampler_manager_address: ""
-    sampler_param: 1
-    sampler_type: const
     service_name: benthos
-    tags: {}
+    sampler_type: const
+    flush_interval: ""
 ```
 
-Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.
+</TabItem>
+<TabItem value="advanced">
 
-Available sampler types are: const, probabilistic, ratelimiting and remote.
+```yaml
+tracer:
+  jaeger:
+    agent_address: localhost:6831
+    service_name: benthos
+    sampler_type: const
+    sampler_manager_address: ""
+    sampler_param: 1
+    tags: {}
+    flush_interval: ""
+```
+
+</TabItem>
+</Tabs>
+
+## Fields
+
+### `agent_address`
+
+`string` The address of a Jaeger agent to send tracing events to.
+
+### `service_name`
+
+`string` A name to provide for this service.
+
+### `sampler_type`
+
+`string` The sampler type to use.
+
+Options are: `const`, `probabilistic`, `ratelimiting`, `remote`.
+
+### `sampler_manager_address`
+
+`string` An optional address of a sampler manager.
+
+### `sampler_param`
+
+`number` A parameter to use for sampling. This field is unused for some sampling types.
+
+### `tags`
+
+`object` A map of tags to add to tracing spans.
+
+### `flush_interval`
+
+`string` The period of time between each flush of tracing spans.
 
 

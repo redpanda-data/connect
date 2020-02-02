@@ -11,11 +11,11 @@ type: tracer
 -->
 
 
+Do not send opentracing events anywhere.
+
 ```yaml
 tracer:
   none: {}
 ```
-
-Do not send opentracing events anywhere.
 
 

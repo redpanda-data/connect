@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -16,9 +17,14 @@ import (
 func init() {
 	Constructors[TypeLocal] = TypeSpec{
 		constructor: NewLocal,
-		Description: `
+		Summary: `
 The local rate limit is a simple X every Y type rate limit that can be shared
-across any number of components within the pipeline.`,
+across any number of components within the pipeline but does not support
+distributed rate limits across multiple running instances of Benthos.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("count", "The maximum number of requests to allow for a given period of time."),
+			docs.FieldCommon("interval", "The time window to limit requests by."),
+		},
 	}
 }
 

@@ -5,7 +5,7 @@ package tracer
 func init() {
 	Constructors[TypeNone] = TypeSpec{
 		constructor: NewNone,
-		Description: `
+		Summary: `
 Do not send opentracing events anywhere.`,
 	}
 }

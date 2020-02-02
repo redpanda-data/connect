@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 	"github.com/uber/jaeger-client-go"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
@@ -16,10 +17,19 @@ import (
 func init() {
 	Constructors[TypeJaeger] = TypeSpec{
 		constructor: NewJaeger,
-		Description: `
-Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.
-
-Available sampler types are: const, probabilistic, ratelimiting and remote.`,
+		Summary: `
+Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("agent_address", "The address of a Jaeger agent to send tracing events to."),
+			docs.FieldCommon("service_name", "A name to provide for this service."),
+			docs.FieldCommon("sampler_type", "The sampler type to use.").HasOptions(
+				"const", "probabilistic", "ratelimiting", "remote",
+			),
+			docs.FieldAdvanced("sampler_manager_address", "An optional address of a sampler manager."),
+			docs.FieldAdvanced("sampler_param", "A parameter to use for sampling. This field is unused for some sampling types."),
+			docs.FieldAdvanced("tags", "A map of tags to add to tracing spans."),
+			docs.FieldCommon("flush_interval", "The period of time between each flush of tracing spans."),
+		},
 	}
 }
 
