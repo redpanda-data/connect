@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
@@ -16,9 +17,16 @@ import (
 func init() {
 	Constructors[TypeMemcached] = TypeSpec{
 		constructor: NewMemcached,
-		Description: `
+		Summary: `
 Connects to a cluster of memcached services, a prefix can be specified to allow
 multiple cache types to share a memcached cluster under different namespaces.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("addresses", "A list of addresses of memcached servers to use."),
+			docs.FieldCommon("prefix", "An optional string to prefix item keys with in order to prevent collisions with similar services."),
+			docs.FieldCommon("ttl", "A TTL in seconds to set for items, after this period keys will be removed."),
+			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),
+			docs.FieldAdvanced("retry_period", "The duration to wait between retry attempts."),
+		},
 	}
 }
 

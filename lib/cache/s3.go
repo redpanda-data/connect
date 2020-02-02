@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -23,10 +24,10 @@ import (
 func init() {
 	Constructors[TypeS3] = TypeSpec{
 		constructor: NewS3,
+		Summary: `
+Stores each item in an S3 bucket as a file, where an item ID is the path of the
+item within the bucket.`,
 		Description: `
-The s3 cache stores each item in an S3 bucket as a file, where an item ID is
-the path of the item within the bucket.
-
 It is not possible to atomically upload S3 objects exclusively when the target
 does not already exist, therefore this cache is not suitable for deduplication.
 
@@ -36,6 +37,13 @@ By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/aws).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("bucket", "The S3 bucket to store items in."),
+			docs.FieldCommon("content_type", "The content type to set for each item."),
+			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."),
+			docs.FieldAdvanced("timeout", "The maximum period to wait on requests before abandoning it."),
+			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),
+		}.Merge(sess.FieldSpecs()),
 	}
 }
 

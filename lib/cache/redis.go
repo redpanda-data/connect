@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/go-redis/redis"
 )
 
@@ -16,9 +17,16 @@ import (
 func init() {
 	Constructors[TypeRedis] = TypeSpec{
 		constructor: NewRedis,
-		Description: `
+		Summary: `
 Use a Redis instance as a cache. The expiration can be set to zero or an empty
 string in order to set no expiration.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("url", "The URL of the target Redis server."),
+			docs.FieldCommon("prefix", "An optional string to prefix item keys with in order to prevent collisions with similar services."),
+			docs.FieldCommon("expiration", "An optional period after which cached items will expire."),
+			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),
+			docs.FieldAdvanced("retry_period", "The duration to wait between retry attempts."),
+		},
 	}
 }
 

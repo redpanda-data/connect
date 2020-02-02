@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -16,12 +17,15 @@ import (
 func init() {
 	Constructors[TypeFile] = TypeSpec{
 		constructor: NewFile,
+		Summary: `
+Stores each item in a directory as a file, where an item ID is the path relative
+to the configured directory.`,
 		Description: `
-The file cache stores each item in a directory as a file, where an item ID is
-the path relative to the configured directory.
-
 This type currently offers no form of item expiry or garbage collection, and is
 intended to be used for development and debugging purposes only.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("directory", "The directory within which to store items."),
+		},
 	}
 }
 

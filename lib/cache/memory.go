@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,12 +16,12 @@ import (
 func init() {
 	Constructors[TypeMemory] = TypeSpec{
 		constructor: NewMemory,
+		Summary: `
+Stores key/value pairs in a map held in memory. This cache is therefore reset
+every time the service restarts. Each item in the cache has a TTL set from the
+moment it was last edited, after which it will be removed during the next
+compaction.`,
 		Description: `
-The memory cache simply stores key/value pairs in a map held in memory. This
-cache is therefore reset every time the service restarts. Each item in the cache
-has a TTL set from the moment it was last edited, after which it will be removed
-during the next compaction.
-
 A compaction only occurs during a write where the time since the last compaction
 is above the compaction interval. It is therefore possible to obtain values of
 keys that have expired between compactions.
@@ -38,6 +39,18 @@ memory:
 
 These values can be overridden during execution, at which point the configured
 TTL is respected as usual.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("ttl", "The TTL of each item in seconds. After this period an item will be eligible for removal during the next compaction."),
+			docs.FieldCommon("compaction_interval", "The period of time to wait before each compaction, at which point expired items are removed."),
+			docs.FieldCommon(
+				"init_values", "A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.",
+				map[string]string{
+					"Nickelback":       "1995",
+					"Spice Girls":      "1994",
+					"The Human League": "1977",
+				},
+			),
+		},
 	}
 }
 

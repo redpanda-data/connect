@@ -11,17 +11,17 @@ type: cache
 -->
 
 
+Stores key/value pairs in a map held in memory. This cache is therefore reset
+every time the service restarts. Each item in the cache has a TTL set from the
+moment it was last edited, after which it will be removed during the next
+compaction.
+
 ```yaml
 memory:
+  ttl: 300
   compaction_interval: 60s
   init_values: {}
-  ttl: 300
 ```
-
-The memory cache simply stores key/value pairs in a map held in memory. This
-cache is therefore reset every time the service restarts. Each item in the cache
-has a TTL set from the moment it was last edited, after which it will be removed
-during the next compaction.
 
 A compaction only occurs during a write where the time since the last compaction
 is above the compaction interval. It is therefore possible to obtain values of
@@ -40,5 +40,28 @@ memory:
 
 These values can be overridden during execution, at which point the configured
 TTL is respected as usual.
+
+## Fields
+
+### `ttl`
+
+`number` The TTL of each item in seconds. After this period an item will be eligible for removal during the next compaction.
+
+### `compaction_interval`
+
+`string` The period of time to wait before each compaction, at which point expired items are removed.
+
+### `init_values`
+
+`object` A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.
+
+```yaml
+# Examples
+
+init_values:
+  Nickelback: "1995"
+  Spice Girls: "1994"
+  The Human League: "1977"
+```
 
 
