@@ -11,6 +11,8 @@ type: metrics
 -->
 
 
+Rename metric paths as they are registered.
+
 ```yaml
 metrics:
   rename:
@@ -18,36 +20,44 @@ metrics:
     child: {}
 ```
 
-Rename metric paths as they are registered.
-
 Metrics must be matched using dot notation even if the chosen output uses a
 different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
-even when sending metrics to Prometheus.
+even when sending metrics to Prometheus. A full list of metrics paths that
+Benthos registers can be found in [this list](/docs/components/metrics/about#paths).
+
+## Fields
 
 ### `by_regexp`
 
-An array of objects of the form:
-
-```yaml
-  - pattern: "foo\\.([a-z]*)\\.([a-z]*)"
-    value: "foo.$1"
-    to_label:
-      bar: $2
-```
-
-Where each pattern will be parsed as an RE2 regular expression, these
-expressions are tested against each metric path, where all occurrences will be
-replaced with the specified value. Inside the value $ signs are interpreted as
-submatch expansions, e.g. $1 represents the first submatch.
+`array` A list of objects, each specifying an RE2 regular expression which will be
+tested against each metric path registered. Each occurrence of the expression
+will be replaced with the specified value. Inside the value $ signs are
+interpreted as submatch expansions, e.g. $1 represents the first submatch.
 
 The field `to_label` may contain any number of key/value pairs to be
 added to a metric as labels, where the value may contain submatches from the
 provided pattern. This allows you to extract (left-most) matched segments of the
 renamed path into the label values.
 
-For example, in order to replace the paths 'foo.bar.0.zap' and 'foo.baz.1.zap'
-with 'zip.bar' and 'zip.baz' respectively, and store the respective values '0'
-and '1' under the label key 'index' we could use this config:
+```yaml
+# Examples
+
+by_regexp:
+- pattern: foo\.([a-z]*)\.([a-z]*)
+  to_label:
+    bar: $2
+  value: foo.$1
+```
+
+### `child`
+
+`object` A child metric type, this is where renamed metrics will be routed.
+
+## Examples
+
+In order to replace the paths 'foo.bar.0.zap' and 'foo.baz.1.zap' with 'zip.bar'
+and 'zip.baz' respectively, and store the respective values '0' and '1' under
+the label key 'index' we could use this config:
 
 ```yaml
 metrics:
@@ -68,9 +78,8 @@ labels. Therefore it's currently not possible to combine labels registered from
 the [`metric` processor](/docs/components/processors/metric) with labels
 set via renaming.
 
-### Debugging
+## Debugging
 
 In order to see logs breaking down which metrics are registered and whether they
 are renamed enable logging at the TRACE level.
-
 

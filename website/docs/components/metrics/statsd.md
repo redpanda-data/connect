@@ -11,18 +11,17 @@ type: metrics
 -->
 
 
+Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
+Supported tagging formats are 'legacy', 'none', 'datadog' and 'influxdb'.
+
 ```yaml
 metrics:
   statsd:
+    prefix: benthos
     address: localhost:4040
     flush_period: 100ms
-    network: udp
-    prefix: benthos
     tag_format: legacy
 ```
-
-Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
-Supported tagging formats are 'legacy', 'none', 'datadog' and 'influxdb'.
 
 The underlying client library has recently been updated in order to support
 tagging. The tag format 'legacy' is default and causes Benthos to continue using
@@ -34,5 +33,25 @@ to be updated when migrating to the new library.
 The 'network' field is deprecated and scheduled for removal. If you currently
 rely on sending Statsd metrics over TCP and want it to be supported long term
 please [raise an issue](https://github.com/Jeffail/benthos/issues).
+
+## Fields
+
+### `prefix`
+
+`string` A string prefix to add to all metrics.
+
+### `address`
+
+`string` The address to send metrics to.
+
+### `flush_period`
+
+`string` The time interval between metrics flushes.
+
+### `tag_format`
+
+`string` Metrics tagging is supported in a variety of formats. The format 'legacy' is a special case that forces Benthos to use a deprecated library for backwards compatibility.
+
+Options are: `none`, `datadog`, `influxdb`, `legacy`.
 
 

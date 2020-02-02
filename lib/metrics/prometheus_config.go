@@ -1,16 +1,25 @@
 package metrics
 
+import "github.com/Jeffail/benthos/v3/lib/x/docs"
+
 //------------------------------------------------------------------------------
 
 func init() {
 	Constructors[TypePrometheus] = TypeSpec{
 		constructor: NewPrometheus,
+		Summary: `
+Host endpoints (` + "`/metrics` and `/stats`" + `) for Prometheus scraping.`,
 		Description: `
-Host endpoints (` + "`/metrics` and `/stats`" + `) for Prometheus scraping.
 Metrics paths will differ from [the list](/docs/components/metrics/about#paths) in that dot separators will
-instead be underscores.
-
-### Push Gateway
+instead be underscores.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
+			docs.FieldAdvanced("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to."),
+			docs.FieldAdvanced("push_interval", "The period of time between each push when sending metrics to a Push Gateway."),
+			docs.FieldAdvanced("push_job_name", "An identifier for push jobs."),
+		},
+		Footnotes: `
+## Push Gateway
 
 The field ` + "`push_url`" + ` is optional and when set will trigger a push of
 metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/)

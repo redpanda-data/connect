@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/Jeffail/gabs/v2"
 )
 
@@ -16,15 +17,19 @@ import (
 func init() {
 	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: NewHTTP,
+		Summary: `
+Serves metrics as [JSON object](#object-format) with the service wide HTTP
+service at the endpoints ` + "`/stats` and `/metrics`" + `.`,
 		Description: `
-It is possible to expose metrics without an aggregator service by having Benthos
-serve them as a JSON object at the endpoints ` + "`/stats` and `/metrics`" + `.
-This is useful for quickly debugging a pipeline.
+This metrics type is useful for debugging as it provides a human readable format
+that you can parse with tools such as ` + "`jq`" + ``,
+		Footnotes: `
+## Object Format
 
-The object takes the form of a hierarchical representation of the dot paths for
-each metric combined. So, for example, if Benthos exposed two metric counters
-` + "`foo.bar` and `bar.baz`" + ` then the resulting object might look like
-this:
+The metrics object takes the form of a hierarchical representation of the dot
+paths for each metric combined. So, for example, if Benthos exposed two metric
+counters ` + "`foo.bar` and `bar.baz`" + ` then the resulting object might look
+like this:
 
 ` + "``` json" + `
 {
@@ -36,6 +41,9 @@ this:
 	}
 }
 ` + "```" + ``,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
+		},
 	}
 }
 

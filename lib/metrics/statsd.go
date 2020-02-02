@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	statsd "github.com/smira/go-statsd"
 )
 
@@ -13,10 +14,10 @@ import (
 func init() {
 	Constructors[TypeStatsd] = TypeSpec{
 		constructor: NewStatsd,
-		Description: `
+		Summary: `
 Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
-Supported tagging formats are 'legacy', 'none', 'datadog' and 'influxdb'.
-
+Supported tagging formats are 'legacy', 'none', 'datadog' and 'influxdb'.`,
+		Description: `
 The underlying client library has recently been updated in order to support
 tagging. The tag format 'legacy' is default and causes Benthos to continue using
 the old library in order to preserve backwards compatibility.
@@ -27,6 +28,15 @@ to be updated when migrating to the new library.
 The 'network' field is deprecated and scheduled for removal. If you currently
 rely on sending Statsd metrics over TCP and want it to be supported long term
 please [raise an issue](https://github.com/Jeffail/benthos/issues).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
+			docs.FieldCommon("address", "The address to send metrics to."),
+			docs.FieldCommon("flush_period", "The time interval between metrics flushes."),
+			docs.FieldCommon("tag_format", "Metrics tagging is supported in a variety of formats. The format 'legacy' is a special case that forces Benthos to use a deprecated library for backwards compatibility.").HasOptions(
+				"none", "datadog", "influxdb", "legacy",
+			),
+			docs.FieldDeprecated("network"),
+		},
 	}
 }
 

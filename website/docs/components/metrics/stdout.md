@@ -11,34 +11,36 @@ type: metrics
 -->
 
 
+Prints aggregated metrics as JSON objects to stdout.
+
 ```yaml
 metrics:
   stdout:
-    flush_metrics: false
     push_interval: ""
     static_fields:
       '@service': benthos
+    flush_metrics: false
 ```
 
 EXPERIMENTAL: This component is considered experimental and is therefore subject
 to change outside of major version releases.
 
-It is possible to expose metrics without an aggregator service while running in
-serverless mode by having Benthos output metrics as JSON objects to stdout.  This
-is useful if you do not have Prometheus or Statsd endpoints and you cannot query
-the Benthos API for statistics (due to the short lived nature of serverless
-invocations).
+When Benthos shuts down all aggregated metrics are printed. If a
+`push_interval` is specified then metrics are also printed
+periodically.
 
-A series of JSON objects are emitted (one per line) grouped by the
-input/processor/output instance.  Separation into individual JSON objects instead
-of a single monolithic object allows for easy ingestion into document stores such
-as Elasticsearch.
+## Fields
 
-If defined, metrics are pushed at the configured push_interval, otherwise they
-are emitted when Benthos closes.
+### `push_interval`
 
-flush_metrics dictates whether counter and timing metrics are reset to 0 after
-they are pushed out.
+`string` An optional period of time to continuously print metrics.
 
+### `static_fields`
+
+`object` A map of static fields to add to each flushed metric object.
+
+### `flush_metrics`
+
+`bool` Whether counters and timing metrics should be reset to 0 each time metrics are printed.
 
 

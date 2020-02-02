@@ -11,40 +11,42 @@ type: metrics
 -->
 
 
+Blacklist metric paths within Benthos so that they are not aggregated by a child
+metric target.
+
 ```yaml
 metrics:
   blacklist:
-    child: {}
     paths: []
     patterns: []
+    child: {}
 ```
-
-Blacklist metric paths within Benthos so that they are not aggregated by a child
-metric target.
 
 Blacklists can either be path prefixes or regular expression patterns, if either
 a path prefix or regular expression matches a metric path it will be excluded.
 
 Metrics must be matched using dot notation even if the chosen output uses a
 different form. For example, the path would be 'foo.bar' rather than 'foo_bar'
-even when sending metrics to Prometheus.
+even when sending metrics to Prometheus. A full list of metrics paths that
+Benthos registers can be found in
+[this list](/docs/components/metrics/about#paths).
 
-### Paths
+## Fields
 
-An entry in the `paths` field will check using prefix matching. This
-can be used, for example, to allow none of the child specific metrics paths from
-an output broker with the path `output.broker`.
+### `paths`
 
-### Patterns
+`array` A list of path prefixes to exclude. This can be used, for example, to allow none of the child specific metrics paths from an output broker with the path `output.broker`.
 
-An entry in the `patterns` field will be parsed as an RE2 regular
-expression and tested against each metric path. This can be used, for example,
-to allow none of the latency based metrics with the pattern
-`.*\.latency`.
+### `patterns`
 
-### Debugging
+`array` A list of RE2 regular expressions to exclude. This can be used, for example, to allow none of the latency based metrics with the pattern `.*\.latency`.
+
+### `child`
+
+`object` A child metric type, this is where non-blacklisted metrics will be routed.
+
+## Debugging
 
 In order to see logs breaking down which metrics are registered and whether they
 are blocked by your blacklists enable logging at the TRACE level.
-
 

@@ -11,20 +11,30 @@ type: metrics
 -->
 
 
+Serves metrics as [JSON object](#object-format) with the service wide HTTP
+service at the endpoints `/stats` and `/metrics`.
+
 ```yaml
 metrics:
   http_server:
     prefix: benthos
 ```
 
-It is possible to expose metrics without an aggregator service by having Benthos
-serve them as a JSON object at the endpoints `/stats` and `/metrics`.
-This is useful for quickly debugging a pipeline.
+This metrics type is useful for debugging as it provides a human readable format
+that you can parse with tools such as `jq`
 
-The object takes the form of a hierarchical representation of the dot paths for
-each metric combined. So, for example, if Benthos exposed two metric counters
-`foo.bar` and `bar.baz` then the resulting object might look like
-this:
+## Fields
+
+### `prefix`
+
+`string` A string prefix to add to all metrics.
+
+## Object Format
+
+The metrics object takes the form of a hierarchical representation of the dot
+paths for each metric combined. So, for example, if Benthos exposed two metric
+counters `foo.bar` and `bar.baz` then the resulting object might look
+like this:
 
 ``` json
 {
@@ -36,5 +46,4 @@ this:
 	}
 }
 ```
-
 
