@@ -55,7 +55,7 @@ type parserFormat func(body []byte) (map[string]interface{}, error)
 func parserRFC5424() parserFormat {
 	return func(body []byte) (map[string]interface{}, error) {
 		p := rfc5424.NewParser()
-		// parhaps we'd like to manually set BestEffoert option later
+		// TODO: Potentially expose this as a config field later.
 		be := true
 		res, err := p.Parse(body, &be)
 		if err != nil {
@@ -92,7 +92,7 @@ func getParseFormat(parser string) (parserFormat, error) {
 	case "syslog_rfc5424":
 		return parserRFC5424(), nil
 	}
-	return nil, fmt.Errorf("format of parser not recognised: %s", parser)
+	return nil, fmt.Errorf("format not recognised: %s", parser)
 }
 
 //------------------------------------------------------------------------------
@@ -117,12 +117,6 @@ type ParseLog struct {
 func NewParseLog(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	switch conf.ParseLog.Format {
-	case "syslog_rfc5424":
-	default:
-		return nil, fmt.Errorf("rfc not recognised: %v", conf.ParseLog.Format)
-	}
-
 	s := &ParseLog{
 		parts: conf.ParseLog.Parts,
 		conf:  conf,
@@ -153,13 +147,13 @@ func (s *ParseLog) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		dataMap, err := s.format(part.Get())
 		if err != nil {
 			s.mErr.Incr(1)
-			s.log.Debugf("Failed to parse part as %s: %v\n", s.conf.ParseLog.Format, err)
+			s.log.Debugf("Failed to parse message as %s: %v\n", s.conf.ParseLog.Format, err)
 			return err
 		}
 		if err := newMsg.Get(index).SetJSON(dataMap); err != nil {
 			s.mErrJSONS.Incr(1)
 			s.mErr.Incr(1)
-			s.log.Debugf("Failed to convert grok result into json: %v\n", err)
+			s.log.Debugf("Failed to convert log format result into json: %v\n", err)
 			return err
 		}
 
