@@ -87,7 +87,7 @@ Options are: `PULL`, `SUB`.
 
 ### `sub_filters`
 
-`array` A list of filters to use when connecting as a `SUB` socket.
+`array` A list of subcription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.
 
 ### `high_water_mark`
 
