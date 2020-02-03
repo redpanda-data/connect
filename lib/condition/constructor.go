@@ -48,6 +48,7 @@ var (
 	TypeCheckInterpolation = "check_interpolation"
 	TypeCount              = "count"
 	TypeJMESPath           = "jmespath"
+	TypeJSON               = "json"
 	TypeJSONSchema         = "json_schema"
 	TypeNot                = "not"
 	TypeNumber             = "number"
@@ -73,6 +74,7 @@ type Config struct {
 	CheckInterpolation CheckInterpolationConfig `json:"check_interpolation" yaml:"check_interpolation"`
 	Count              CountConfig              `json:"count" yaml:"count"`
 	JMESPath           JMESPathConfig           `json:"jmespath" yaml:"jmespath"`
+	JSON               JSONConfig               `json:"json" yaml:"json"`
 	JSONSchema         JSONSchemaConfig         `json:"json_schema" yaml:"json_schema"`
 	Not                NotConfig                `json:"not" yaml:"not"`
 	Number             NumberConfig             `json:"number" yaml:"number"`
@@ -96,6 +98,7 @@ func NewConfig() Config {
 		CheckInterpolation: NewCheckInterpolationConfig(),
 		Count:              NewCountConfig(),
 		JMESPath:           NewJMESPathConfig(),
+		JSON:               NewJSONConfig(),
 		Not:                NewNotConfig(),
 		Number:             NewNumberConfig(),
 		Metadata:           NewMetadataConfig(),
