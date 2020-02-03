@@ -199,6 +199,54 @@ func TestJSONCheck(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "equals int true",
+			fields: fields{
+				operator: "equals",
+				path:     "foo",
+				arg:      10.0,
+			},
+			arg: [][]byte{
+				[]byte(`{"foo":10}`),
+			},
+			want: true,
+		},
+		{
+			name: "equals int false",
+			fields: fields{
+				operator: "equals",
+				path:     "foo",
+				arg:      10,
+			},
+			arg: [][]byte{
+				[]byte(`{"foo":"10"}`),
+			},
+			want: false,
+		},
+		{
+			name: "equals string true",
+			fields: fields{
+				operator: "equals",
+				path:     "foo",
+				arg:      "Foo",
+			},
+			arg: [][]byte{
+				[]byte(`{"foo":"Foo"}`),
+			},
+			want: true,
+		},
+		{
+			name: "equals string false",
+			fields: fields{
+				operator: "equals",
+				path:     "foo",
+				arg:      "Foo",
+			},
+			arg: [][]byte{
+				[]byte(`{"foo":"foo"}`),
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -416,6 +416,11 @@ pipeline:
         jmespath:
           part: ${PROCESSOR_BATCH_CONDITION_JMESPATH_PART:0}
           query: ${PROCESSOR_BATCH_CONDITION_JMESPATH_QUERY}
+        json:
+          arg: ${PROCESSOR_BATCH_CONDITION_JSON_ARG}
+          operator: ${PROCESSOR_BATCH_CONDITION_JSON_OPERATOR:exists}
+          part: ${PROCESSOR_BATCH_CONDITION_JSON_PART:0}
+          path: ${PROCESSOR_BATCH_CONDITION_JSON_PATH}
         json_schema:
           part: ${PROCESSOR_BATCH_CONDITION_JSON_SCHEMA_PART:0}
           schema: ${PROCESSOR_BATCH_CONDITION_JSON_SCHEMA_SCHEMA}

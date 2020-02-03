@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Field `processors` added to batching fields to easily accommodate aggregations
   and archiving of batched messages.
 - New `parse_log` processor.
+- New `json` condition.
 
 ### Changed
 

@@ -39,6 +39,11 @@ pipeline:
         jmespath:
           part: 0
           query: ""
+        json:
+          arg: ""
+          operator: exists
+          part: 0
+          path: ""
         json_schema:
           part: 0
           schema: ""
