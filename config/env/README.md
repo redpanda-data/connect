@@ -478,6 +478,8 @@ PROCESSOR_METRIC_VALUE
 PROCESSOR_NUMBER_OPERATOR                            = add
 PROCESSOR_NUMBER_VALUE                               = 0
 PROCESSOR_PARALLEL_CAP                               = 0
+PROCESSOR_PARSE_LOG_CODEC                            = json
+PROCESSOR_PARSE_LOG_FORMAT                           = syslog_rfc5424
 PROCESSOR_RATE_LIMIT_RESOURCE
 PROCESSOR_REDIS_KEY
 PROCESSOR_REDIS_OPERATOR                             = scard

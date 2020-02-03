@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - TLS fields added to `nsq` input and output.
 - Field `processors` added to batching fields to easily accommodate aggregations
   and archiving of batched messages.
+- New `parse_log` processor.
 
 ### Changed
 

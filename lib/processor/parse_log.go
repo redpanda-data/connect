@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/influxdata/go-syslog/rfc5424"
 	"github.com/opentracing/opentracing-go"
 )
@@ -14,8 +15,18 @@ import (
 func init() {
 	Constructors[TypeParseLog] = TypeSpec{
 		constructor: NewParseLog,
-		Description: `
-` + "```" + ``,
+		Summary: `
+Parses common log [formats](#format) into structured data (JSON). This is easier
+and often much faster than ` + "[`grok`](/docs/components/processors/grok)" + `.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("format", "A common log format to parse.").HasOptions(
+				"syslog_rfc5424",
+			),
+			docs.FieldCommon("codec", "Specifies the structured format to parse a log into.").HasOptions(
+				"json",
+			),
+			partsFieldSpec,
+		},
 	}
 }
 

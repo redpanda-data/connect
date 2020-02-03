@@ -549,6 +549,9 @@ pipeline:
       value: ${PROCESSOR_NUMBER_VALUE:0}
     parallel:
       cap: ${PROCESSOR_PARALLEL_CAP:0}
+    parse_log:
+      codec: ${PROCESSOR_PARSE_LOG_CODEC:json}
+      format: ${PROCESSOR_PARSE_LOG_FORMAT:syslog_rfc5424}
     rate_limit:
       resource: ${PROCESSOR_RATE_LIMIT_RESOURCE}
     redis:
