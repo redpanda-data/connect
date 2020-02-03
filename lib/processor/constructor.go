@@ -105,6 +105,7 @@ const (
 	TypeNoop         = "noop"
 	TypeNumber       = "number"
 	TypeParallel     = "parallel"
+	TypeParseLog     = "parse_log"
 	TypeProcessBatch = "process_batch"
 	TypeProcessDAG   = "process_dag"
 	TypeProcessField = "process_field"
@@ -168,6 +169,7 @@ type Config struct {
 	Number       NumberConfig       `json:"number" yaml:"number"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
+	ParseLog     ParseLogConfig     `json:"parse_log" yaml:"parse_log"`
 	ProcessBatch ForEachConfig      `json:"process_batch" yaml:"process_batch"`
 	ProcessDAG   ProcessDAGConfig   `json:"process_dag" yaml:"process_dag"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
@@ -230,6 +232,7 @@ func NewConfig() Config {
 		Number:       NewNumberConfig(),
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),
+		ParseLog:     NewParseLogConfig(),
 		ProcessBatch: NewForEachConfig(),
 		ProcessDAG:   NewProcessDAGConfig(),
 		ProcessField: NewProcessFieldConfig(),
