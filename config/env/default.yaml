@@ -577,8 +577,6 @@ pipeline:
     subprocess:
       max_buffer: ${PROCESSOR_SUBPROCESS_MAX_BUFFER:65536}
       name: ${PROCESSOR_SUBPROCESS_NAME:cat}
-    syslog:
-      rfc: ${PROCESSOR_SYSLOG_RFC:rfc5424}
     text:
       arg: ${PROCESSOR_TEXT_ARG}
       operator: ${PROCESSOR_TEXT_OPERATOR:trim_space}
