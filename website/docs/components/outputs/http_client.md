@@ -127,6 +127,8 @@ Batches can be formed at both the input and output level. You can find out more
 
 `string` The URL to connect to.
 
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
 ### `verb`
 
 `string` A verb to connect with

@@ -151,6 +151,8 @@ can read about these patterns [here](/docs/configuration/error_handling).
 
 `string` The URL to connect to.
 
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
 ### `request.verb`
 
 `string` A verb to connect with

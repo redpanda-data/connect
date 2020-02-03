@@ -104,6 +104,8 @@ of a message.
 
 `string` The URL to connect to.
 
+This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
 ### `verb`
 
 `string` A verb to connect with

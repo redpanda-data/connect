@@ -9,7 +9,7 @@ import (
 // FieldSpecs returns a map of field specs for an HTTP type.
 func FieldSpecs() docs.FieldSpecs {
 	httpSpecs := docs.FieldSpecs{
-		docs.FieldCommon("url", "The URL to connect to.").HasType("string"),
+		docs.FieldCommon("url", "The URL to connect to.").HasType("string").SupportsInterpolation(false),
 		docs.FieldCommon("verb", "A verb to connect with", "POST", "GET", "DELETE").HasType("string"),
 		docs.FieldCommon("headers", "A map of headers to add to the request.", map[string]interface{}{
 			"Content-Type": "application/octet-stream",
