@@ -16,10 +16,10 @@ func init() {
 	Constructors[TypeParseLog] = TypeSpec{
 		constructor: NewParseLog,
 		Summary: `
-Parses common log [formats](#format) into structured data (JSON). This is easier
-and often much faster than ` + "[`grok`](/docs/components/processors/grok)" + `.`,
+Parses common log [formats](#formats) into [structured data](#codecs). This is
+easier and often much faster than ` + "[`grok`](/docs/components/processors/grok)" + `.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("format", "A common log format to parse.").HasOptions(
+			docs.FieldCommon("format", "A common log [format](#formats) to parse.").HasOptions(
 				"syslog_rfc5424",
 			),
 			docs.FieldCommon("codec", "Specifies the structured format to parse a log into.").HasOptions(
@@ -27,6 +27,27 @@ and often much faster than ` + "[`grok`](/docs/components/processors/grok)" + `.
 			),
 			partsFieldSpec,
 		},
+		Footnotes: `
+## Codecs
+
+Currently the only supported structured data codec is ` + "`json`" + `.
+
+## Formats
+
+### ` + "`syslog_rfc5424`" + `
+
+Makes a best effort to parses a log following the
+[Syslog rfc5424](https://tools.ietf.org/html/rfc5424) spec. The resulting
+structured document may contain any of the following fields:
+
+- ` + "`message`" + ` (string)
+- ` + "`timestamp`" + ` (string, RFC3339)
+- ` + "`hostname`" + ` (string)
+- ` + "`procid`" + ` (string)
+- ` + "`appname`" + ` (string)
+- ` + "`msgid`" + ` (string)
+- ` + "`structureddata`" + ` (object)
+`,
 	}
 }
 
@@ -66,7 +87,8 @@ func parserRFC5424() parserFormat {
 			resMap["message"] = *res.Message()
 		}
 		if res.Timestamp() != nil {
-			resMap["timestamp"] = *res.Timestamp()
+			resMap["timestamp"] = res.Timestamp().Format(time.RFC3339Nano)
+			// resMap["timestamp_unix"] = res.Timestamp().Unix()
 		}
 		if res.Hostname() != nil {
 			resMap["hostname"] = *res.Hostname()

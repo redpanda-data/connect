@@ -11,8 +11,8 @@ type: processor
 -->
 
 
-Parses common log [formats](#format) into structured data (JSON). This is easier
-and often much faster than [`grok`](/docs/components/processors/grok).
+Parses common log [formats](#formats) into [structured data](#codecs). This is
+easier and often much faster than [`grok`](/docs/components/processors/grok).
 
 
 import Tabs from '@theme/Tabs';
@@ -49,7 +49,7 @@ parse_log:
 
 ### `format`
 
-`string` A common log format to parse.
+`string` A common log [format](#formats) to parse.
 
 Options are: `syslog_rfc5424`.
 
@@ -67,5 +67,25 @@ batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+## Codecs
+
+Currently the only supported structured data codec is `json`.
+
+## Formats
+
+### `syslog_rfc5424`
+
+Makes a best effort to parses a log following the
+[Syslog rfc5424](https://tools.ietf.org/html/rfc5424) spec. The resulting
+structured document may contain any of the following fields:
+
+- `message` (string)
+- `timestamp` (string, RFC3339)
+- `hostname` (string)
+- `procid` (string)
+- `appname` (string)
+- `msgid` (string)
+- `structureddata` (object)
 
 
