@@ -44,7 +44,6 @@ func FieldSpec() docs.FieldSpec {
 
 // Apply applies the SASL authentication configuration to a Sarama config object.
 func (s Config) Apply(mgr types.Manager, conf *sarama.Config) error {
-	conf.Net.TLS.Enable = true
 	if s.Enabled && len(s.Mechanism) == 0 {
 		s.Mechanism = sarama.SASLTypePlaintext
 	}
