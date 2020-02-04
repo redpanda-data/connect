@@ -107,6 +107,24 @@ The respective results would be:
 {"foo":{"id":1,"value":2},"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}}}
 ` + "```" + `
 
+### ` + "`flatten_array`" + `
+
+Targets an array within the document and expands the contents of any elements
+that are arrays into the target array.
+
+### ` + "`fold_number_array`" + `
+
+Targets an array within the document and attempts to fold the elements into a
+single number. All elements must be a number.
+
+### ` + "`fold_string_array`" + `
+
+Targets an array within the document and attempts to fold the elements into a
+single string. All elements must be a string.
+
+If a string ` + "`value`" + ` is specified then concatenated strings will be
+delimited with its contents.
+
 ### ` + "`move`" + `
 
 Moves the value of a target dot path (if it exists) to a new location. The
@@ -148,7 +166,8 @@ containing the results of the split. This operator requires both the path value
 and the contents of the ` + "`value`" + ` field to be strings.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "The [operator](#operators) to apply to messages.").HasOptions(
-				"append", "clean", "copy", "delete", "explode", "move", "select", "set", "split",
+				"append", "clean", "copy", "delete", "explode", "flatten_array", "fold_number_array", "fold_string_array",
+				"move", "select", "set", "split",
 			),
 			docs.FieldCommon("path", "A [dot path](/docs/configuration/field_paths) specifying the target within the document to the apply the chosen operator to."),
 			docs.FieldCommon("value", "A value to use with the chosen operator (sometimes not applicable). This is a generic field that can be any type.").SupportsInterpolation(false),
@@ -377,6 +396,146 @@ func newExplodeOperator(path []string) (jsonOperator, error) {
 	}, nil
 }
 
+func foldStringArray(children []*gabs.Container, value json.RawMessage) (string, error) {
+	var delim string
+	if value != nil {
+		json.Unmarshal(value, &delim)
+	}
+	var b strings.Builder
+	for i, child := range children {
+		switch t := child.Data().(type) {
+		case string:
+			if i > 0 && len(delim) > 0 {
+				b.WriteString(delim)
+			}
+			b.WriteString(t)
+		default:
+			return "", fmt.Errorf("mismatched types found in array, expected string, found: %T", t)
+		}
+	}
+	return b.String(), nil
+}
+
+func foldArrayArray(children []*gabs.Container) ([]interface{}, error) {
+	var b []interface{}
+	for _, child := range children {
+		switch t := child.Data().(type) {
+		case []interface{}:
+			b = append(b, t...)
+		default:
+			b = append(b, t)
+		}
+	}
+	return b, nil
+}
+
+func foldNumberArray(children []*gabs.Container) (float64, error) {
+	var b float64
+	for _, child := range children {
+		switch t := child.Data().(type) {
+		case int:
+			b = b + float64(t)
+		case int64:
+			b = b + float64(t)
+		case float64:
+			b = b + float64(t)
+		case json.Number:
+			f, err := t.Float64()
+			if err != nil {
+				i, _ := t.Int64()
+				f = float64(i)
+			}
+			b = b + f
+		default:
+			return 0, fmt.Errorf("mismatched types found in array, expected number, found: %T", t)
+		}
+	}
+	return b, nil
+}
+
+func newFlattenArrayOperator(path []string) jsonOperator {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+		gPart := gabs.Wrap(body)
+		target := gPart
+		if len(path) > 0 {
+			target = gPart.Search(path...)
+		}
+
+		if _, isArray := target.Data().([]interface{}); !isArray {
+			return nil, fmt.Errorf("non-array value found at path: %T", target.Data())
+		}
+
+		children := target.Children()
+		if len(children) == 0 {
+			return body, nil
+		}
+
+		v, err := foldArrayArray(children)
+		if err != nil {
+			return nil, err
+		}
+
+		gPart.Set(v, path...)
+		return gPart.Data(), nil
+	}
+}
+
+func newFoldNumberArrayOperator(path []string) jsonOperator {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+		gPart := gabs.Wrap(body)
+		target := gPart
+		if len(path) > 0 {
+			target = gPart.Search(path...)
+		}
+
+		if _, isArray := target.Data().([]interface{}); !isArray {
+			return nil, fmt.Errorf("non-array value found at path: %T", target.Data())
+		}
+
+		var v float64
+		var err error
+
+		children := target.Children()
+		if len(children) > 0 {
+			v, err = foldNumberArray(children)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		gPart.Set(v, path...)
+		return gPart.Data(), nil
+	}
+}
+
+func newFoldStringArrayOperator(path []string) jsonOperator {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+		gPart := gabs.Wrap(body)
+		target := gPart
+		if len(path) > 0 {
+			target = gPart.Search(path...)
+		}
+
+		if _, isArray := target.Data().([]interface{}); !isArray {
+			return nil, fmt.Errorf("non-array value found at path: %T", target.Data())
+		}
+
+		var v string
+		var err error
+
+		children := target.Children()
+		if len(children) > 0 {
+			v, err = foldStringArray(children, value)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		gPart.Set(v, path...)
+		return gPart.Data(), nil
+	}
+}
+
 func newSelectOperator(path []string) jsonOperator {
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		gPart := gabs.Wrap(body)
@@ -555,6 +714,12 @@ func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperat
 	switch opStr {
 	case "set":
 		return newSetOperator(path), nil
+	case "flatten_array":
+		return newFlattenArrayOperator(path), nil
+	case "fold_number_array":
+		return newFoldNumberArrayOperator(path), nil
+	case "fold_string_array":
+		return newFoldStringArrayOperator(path), nil
 	case "select":
 		return newSelectOperator(path), nil
 	case "split":

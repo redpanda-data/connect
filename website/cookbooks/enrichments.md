@@ -11,9 +11,9 @@ etc.
 We will start off by configuring a single enrichment, then we will move onto a
 workflow of enrichments with a network of dependencies.
 
-Each enrichment will be performed in parallel across a batch of streamed
-documents. Workflow enrichments that do not depend on each other will also be
-performed in parallel, making this orchestration method very efficient.
+Each enrichment will be performed in parallel across a [pre-batched][batching]
+stream of documents. Workflow enrichments that do not depend on each other will
+also be performed in parallel, making this orchestration method very efficient.
 
 The imaginary problem we are going to solve is applying a set of NLP based
 enrichments to a feed of articles in order to detect fake news. We will be
@@ -22,7 +22,7 @@ and [output][outputs] combination.
 
 Articles are received over the topic `articles` and look like this:
 
-``` json
+```json
 {
   "type": "article",
   "article": {
@@ -35,17 +35,15 @@ Articles are received over the topic `articles` and look like this:
 
 ## First Enrichment
 
-To start us off we will configure a single enrichment in a pipeline.
-
 ### Claims Detector
 
-The first enrichment we are going to add to our pipeline is an imaginary
+To start us off we will configure a single enrichment, which is an imaginary
 'claims detector' service. This is an HTTP service that wraps a trained machine
 learning model to extract claims that are made within a body of text.
 
 The service expects a `POST` request with JSON payload of the form:
 
-``` json
+```json
 {
   "text": "The world was shocked this morning to find that all dogs have stopped barking."
 }
@@ -53,7 +51,7 @@ The service expects a `POST` request with JSON payload of the form:
 
 And returns a JSON payload of the form:
 
-``` json
+```json
 {
   "claims": [
     {
@@ -69,14 +67,14 @@ And returns a JSON payload of the form:
 ```
 
 Since each request only applies to a single document we will make this
-enrichment scale by deploying multiple instances and hitting those instances in
-parallel across our document batches.
+enrichment scale by deploying multiple HTTP services and hitting those instances
+in parallel across our document batches.
 
 In order to send a mapped request and map the response back into the original
 document we will use the [`process_map`][procmap-proc] processor, with a child
 [`http`][http-proc] processor.
 
-``` yaml
+```yaml
 input:
   kafka_balanced:
     addresses:
@@ -114,6 +112,31 @@ in parallel, but if we were instead using the [`lambda`][lambda-proc] or
 [`subprocess`][subproc-proc] processors to hit an enrichment we could wrap them
 within the [`parallel`][parallel-proc] processor for the same result.
 
+With this pipeline our documents will come out looking something like this:
+
+```json
+{
+  "type": "article",
+  "article": {
+    "id": "123foo",
+    "title": "Dogs Stop Barking",
+    "content": "The world was shocked this morning to find that all dogs have stopped barking."
+  },
+  "tmp": {
+    "claims": [
+      {
+        "entity": "world",
+        "claim": "shocked"
+      },
+      {
+        "entity": "dogs",
+        "claim": "NOT barking"
+      }
+    ]
+  }
+}
+```
+
 ## Enrichment Workflows
 
 Extracting the claims of an article isn't enough for us to detect fake news, for
@@ -128,7 +151,7 @@ in a single request, making better use of the host machines GPU.
 
 A request should take the following form:
 
-``` json
+```json
 [
   {
     "text": "The world was shocked this morning to find that all dogs have stopped barking."
@@ -138,7 +161,7 @@ A request should take the following form:
 
 And the response looks like this:
 
-``` json
+```json
 [
   {
     "hyperbole_rank": 0.73
@@ -159,7 +182,6 @@ and [`unarchive`][unarchive-proc] processors in our
     - archive:
         format: json_array
     - http:
-        parallel: false
         request:
           url: http://localhost:4198/hyperbole
           verb: POST
@@ -170,9 +192,11 @@ and [`unarchive`][unarchive-proc] processors in our
 ```
 
 The purpose of the `json_array` format `archive` processor is to take a batch of
-JSON documents and place them into a single document as an array. After the
-request is made we do the opposite with the `unarchive` processor in order to
-convert it back into a batch of the original size.
+JSON documents and place them into a single document as an array. Subsequently,
+we then send one single request for each batch.
+
+After the request is made we do the opposite with the `unarchive` processor in
+order to convert it back into a batch of the original size.
 
 ### Fake News Detector
 
@@ -183,7 +207,7 @@ fake news rank between 0 and 1.
 This service behaves similarly to the claims detector service and takes a
 document of the form:
 
-``` json
+```json
 {
   "text": "The world was shocked this morning to find that all dogs have stopped barking.",
   "hyperbole_rank": 0.73,
@@ -202,7 +226,7 @@ document of the form:
 
 And returns an object of the form:
 
-``` json
+```json
 {
   "fake_news_rank": 0.893
 }
@@ -212,7 +236,7 @@ We then wish to map the field `fake_news_rank` from that result into the
 original document at the path `article.fake_news_score`. Our
 [`process_map`][procmap-proc] block for this enrichment would look like this:
 
-``` yaml
+```yaml
 - process_map:
     premap:
       text: article.content
@@ -230,6 +254,37 @@ original document at the path `article.fake_news_score`. Our
 
 Note that in our `premap` we are targeting fields that are populated from the
 previous two enrichments.
+
+If we were to execute all three enrichments in order we'll end up with a
+document looking like this:
+
+```json
+{
+  "type": "article",
+  "article": {
+    "id": "123foo",
+    "title": "Dogs Stop Barking",
+    "content": "The world was shocked this morning to find that all dogs have stopped barking.",
+    "fake_news_rank": 0.76
+  },
+  "tmp": {
+    "hyperbole_rank": 0.34,
+    "claims": [
+      {
+        "entity": "world",
+        "claim": "shocked"
+      },
+      {
+        "entity": "dogs",
+        "claim": "NOT barking"
+      }
+    ]
+  }
+}
+```
+
+Since the contents of `tmp` won't be required downstream we can remove it after
+our enrichments with a [`json` processor][json-proc].
 
 ### Combining into a Workflow
 
@@ -286,7 +341,6 @@ pipeline:
         - archive:
             format: json_array
         - http:
-            parallel: false
             request:
               url: http://localhost:4198/hyperbole
               verb: POST
@@ -313,7 +367,7 @@ pipeline:
     - log:
         fields:
           content: "${!content}"
-        message: "Enrichments failed due to: ${!metadata:benthos_processing_failed}"
+        message: "Enrichments failed due to: ${!error}"
 
   - json:
       operator: delete
@@ -335,10 +389,12 @@ dropping the message entirely, etc. You can read more about error handling
 [inputs]: /docs/components/inputs/about
 [outputs]: /docs/components/outputs/about
 [error-handling]: /docs/configuration/error_handling
+[batching]: /docs/configuration/batching
 [workflows]: /docs/configuration/workflows
 [catch-proc]: /docs/components/processors/catch
 [archive-proc]: /docs/components/processors/archive
 [unarchive-proc]: /docs/components/processors/unarchive
+[json-proc]: /docs/components/processors/json
 [subproc-proc]: /docs/components/processors/subprocess
 [http-proc]: /docs/components/processors/http
 [lambda-proc]: /docs/components/processors/lambda

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -17,7 +18,10 @@ import (
 var errNoWASM = errors.New("component not supported in WASM builds")
 
 // KinesisBalancedConfig is configuration values for the input type.
-type KinesisBalancedConfig struct{}
+type KinesisBalancedConfig struct {
+	MaxBatchCount int                `json:"max_batch_count" yaml:"max_batch_count"`
+	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
+}
 
 // NewKinesisBalancedConfig creates a new Config with default values.
 func NewKinesisBalancedConfig() KinesisBalancedConfig {

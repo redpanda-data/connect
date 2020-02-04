@@ -41,15 +41,17 @@ group_by:
 
 Messages are added to the first group that passes and can only belong to a
 single group. Messages that do not pass the conditions of any group are placed
-in a final batch with no processors applied.
+in a final batch with no processors applied.`,
+		Footnotes: `
+## Examples
 
-For example, imagine we have a batch of messages that we wish to split into two
-groups - the foos and the bars - which should be sent to different output
-destinations based on those groupings. We also need to send the foos as a tar
-gzip archive. For this purpose we can use the ` + "`group_by`" + ` processor
-with a ` + "[`switch`](/docs/components/outputs/switch)" + ` output:
+Imagine we have a batch of messages that we wish to split into two groups - the
+foos and the bars - which should be sent to different output destinations based
+on those groupings. We also need to send the foos as a tar gzip archive. For
+this purpose we can use the ` + "`group_by`" + ` processor with a
+` + "[`switch`](/docs/components/outputs/switch)" + ` output:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 pipeline:
   processors:
   - group_by:

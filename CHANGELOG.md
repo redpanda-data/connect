@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
   and archiving of batched messages.
 - New `parse_log` processor.
 - New `json` condition.
+- Operators `flatten_array`, `fold_number_array` and `fold_string_array` added
+  to `json` processor.
 
 ### Changed
 

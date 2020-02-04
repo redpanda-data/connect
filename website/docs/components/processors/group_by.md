@@ -37,13 +37,18 @@ Messages are added to the first group that passes and can only belong to a
 single group. Messages that do not pass the conditions of any group are placed
 in a final batch with no processors applied.
 
-For example, imagine we have a batch of messages that we wish to split into two
-groups - the foos and the bars - which should be sent to different output
-destinations based on those groupings. We also need to send the foos as a tar
-gzip archive. For this purpose we can use the `group_by` processor
-with a [`switch`](/docs/components/outputs/switch) output:
+The functionality of this processor depends on being applied across messages
+that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
 
-``` yaml
+## Examples
+
+Imagine we have a batch of messages that we wish to split into two groups - the
+foos and the bars - which should be sent to different output destinations based
+on those groupings. We also need to send the foos as a tar gzip archive. For
+this purpose we can use the `group_by` processor with a
+[`switch`](/docs/components/outputs/switch) output:
+
+```yaml
 pipeline:
   processors:
   - group_by:
@@ -76,8 +81,4 @@ output:
 
 Since any message that isn't a foo is a bar, and bars do not require their own
 processing steps, we only need a single grouping configuration.
-
-The functionality of this processor depends on being applied across messages
-that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
-
 

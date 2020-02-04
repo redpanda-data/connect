@@ -60,7 +60,7 @@ a list of functions [here](/docs/configuration/interpolation#functions).
 
 `string` The [operator](#operators) to apply to messages.
 
-Options are: `append`, `clean`, `copy`, `delete`, `explode`, `move`, `select`, `set`, `split`.
+Options are: `append`, `clean`, `copy`, `delete`, `explode`, `flatten_array`, `fold_number_array`, `fold_string_array`, `move`, `select`, `set`, `split`.
 
 ### `path`
 
@@ -154,6 +154,24 @@ The respective results would be:
 [{"id":1,"value":"foo"},{"id":1,"value":"bar"},{"id":1,"value":"baz"}]
 {"foo":{"id":1,"value":2},"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}}}
 ```
+
+### `flatten_array`
+
+Targets an array within the document and expands the contents of any elements
+that are arrays into the target array.
+
+### `fold_number_array`
+
+Targets an array within the document and attempts to fold the elements into a
+single number. All elements must be a number.
+
+### `fold_string_array`
+
+Targets an array within the document and attempts to fold the elements into a
+single string. All elements must be a string.
+
+If a string `value` is specified then concatenated strings will be
+delimited with its contents.
 
 ### `move`
 

@@ -25,25 +25,6 @@ This allows you to group messages using arbitrary fields within their content or
 metadata, process them individually, and send them to unique locations as per
 their group.
 
-For example, if we were consuming Kafka messages and needed to group them by
-their key, archive the groups, and send them to S3 with the key as part of the
-path we could achieve that with the following:
-
-``` yaml
-pipeline:
-  processors:
-  - group_by_value:
-      value: ${!metadata:kafka_key}
-  - archive:
-      format: tar
-  - compress:
-      algorithm: gzip
-output:
-  s3:
-    bucket: TODO
-    path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz
-```
-
 The functionality of this processor depends on being applied across messages
 that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
 
@@ -63,4 +44,24 @@ value: ${!metadata:kafka_key}
 value: ${!json_field:foo.bar}-${!metadata:baz}
 ```
 
+## Examples
+
+If we were consuming Kafka messages and needed to group them by their key,
+archive the groups, and send them to S3 with the key as part of the path we
+could achieve that with the following:
+
+``` yaml
+pipeline:
+  processors:
+  - group_by_value:
+      value: ${!metadata:kafka_key}
+  - archive:
+      format: tar
+  - compress:
+      algorithm: gzip
+output:
+  s3:
+    bucket: TODO
+    path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz
+```
 

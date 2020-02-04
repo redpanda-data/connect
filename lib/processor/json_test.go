@@ -155,6 +155,205 @@ func TestJSONPartBounds(t *testing.T) {
 	}
 }
 
+func TestJSONFlattenArray(t *testing.T) {
+	type jTest struct {
+		name   string
+		path   string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "flatten ints 1",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":[0,[1,2],3,4]}}`,
+			output: `{"foo":{"bar":[0,1,2,3,4]}}`,
+		},
+		{
+			name:   "flatten numbers 1",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":[[0],[],1.5,[2,3,4]]}}`,
+			output: `{"foo":{"bar":[0,1.5,2,3,4]}}`,
+		},
+		{
+			name:   "flatten root numbers 1",
+			path:   ".",
+			input:  `[0,[1.5],2,[3],4]`,
+			output: `[0,1.5,2,3,4]`,
+		},
+		{
+			name:   "flatten strings 1",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":[["foo"],["bar","baz"]]}}`,
+			output: `{"foo":{"bar":["foo","bar","baz"]}}`,
+		},
+		{
+			name:   "flatten mixed 1",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":[["foo","bar"],[5],6,null]}}`,
+			output: `{"foo":{"bar":["foo","bar",5,6,null]}}`,
+		},
+		{
+			name:   "flatten empty",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":[]}}`,
+			output: `{"foo":{"bar":[]}}`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.JSON.Operator = "flatten_array"
+		conf.JSON.Parts = []int{0}
+		conf.JSON.Path = test.path
+		conf.JSON.Value = []byte(test.value)
+
+		jSet, err := NewJSON(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := jSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
+func TestJSONFoldStringArray(t *testing.T) {
+	type jTest struct {
+		name   string
+		path   string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "fold strings 1",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":["foo","bar","baz"]}}`,
+			output: `{"foo":{"bar":"foobarbaz"}}`,
+		},
+		{
+			name:   "fold strings 2",
+			path:   "foo.bar",
+			value:  `" "`,
+			input:  `{"foo":{"bar":["foo","bar","baz"]}}`,
+			output: `{"foo":{"bar":"foo bar baz"}}`,
+		},
+		{
+			name:   "fold empty",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":[]}}`,
+			output: `{"foo":{"bar":""}}`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.JSON.Operator = "fold_string_array"
+		conf.JSON.Parts = []int{0}
+		conf.JSON.Path = test.path
+		conf.JSON.Value = []byte(test.value)
+
+		jSet, err := NewJSON(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := jSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
+func TestJSONNumberArray(t *testing.T) {
+	type jTest struct {
+		name   string
+		path   string
+		value  string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "fold ints 1",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":[0,1,2,3,4]}}`,
+			output: `{"foo":{"bar":10}}`,
+		},
+		{
+			name:   "fold numbers 1",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":[0,1.5,2,3,4]}}`,
+			output: `{"foo":{"bar":10.5}}`,
+		},
+		{
+			name:   "fold root numbers 1",
+			path:   ".",
+			input:  `[0,1.5,2,3,4]`,
+			output: `10.5`,
+		},
+		{
+			name:   "fold numbers empty",
+			path:   "foo.bar",
+			input:  `{"foo":{"bar":[]}}`,
+			output: `{"foo":{"bar":0}}`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.JSON.Operator = "fold_number_array"
+		conf.JSON.Parts = []int{0}
+		conf.JSON.Path = test.path
+		conf.JSON.Value = []byte(test.value)
+
+		jSet, err := NewJSON(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := jSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestJSONAppend(t *testing.T) {
 	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}

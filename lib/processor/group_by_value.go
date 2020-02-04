@@ -27,11 +27,13 @@ per message.`,
 		Description: `
 This allows you to group messages using arbitrary fields within their content or
 metadata, process them individually, and send them to unique locations as per
-their group.
+their group.`,
+		Footnotes: `
+## Examples
 
-For example, if we were consuming Kafka messages and needed to group them by
-their key, archive the groups, and send them to S3 with the key as part of the
-path we could achieve that with the following:
+If we were consuming Kafka messages and needed to group them by their key,
+archive the groups, and send them to S3 with the key as part of the path we
+could achieve that with the following:
 
 ` + "``` yaml" + `
 pipeline:

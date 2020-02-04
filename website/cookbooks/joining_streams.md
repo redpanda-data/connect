@@ -5,7 +5,7 @@ description: How to hydrate documents by joining multiple streams.
 ---
 
 This cookbook demonstrates how to merge JSON events from parallel streams
-using content based rules and a cache of your choice.
+using content based rules and a [cache][caches] of your choice.
 
 The imaginary problem we are going to solve is hydrating a feed of article
 comments with information from their parent articles. We will be consuming and
@@ -14,7 +14,7 @@ writing to Kafka, but the example works with any [input][inputs] and
 
 Articles are received over the topic `articles` and look like this:
 
-``` json
+```json
 {
   "type": "article",
   "article": {
@@ -31,7 +31,7 @@ Articles are received over the topic `articles` and look like this:
 Comments can either be posted on an article or a parent comment, are received
 over the topic `comments`, and look like this:
 
-``` json
+```json
 {
   "type": "comment",
   "comment": {
@@ -49,7 +49,7 @@ Our goal is to end up with a single stream of comments, where information about
 the root article of the comment is attached to the event. The above comment
 should exit our pipeline looking like this:
 
-``` json
+```json
 {
   "type": "comment",
   "comment": {
@@ -82,7 +82,7 @@ the cache.
 In this example I'm targeting Redis, but you can choose any of the supported
 [cache targets][caches]. The TTL of cached articles is set to one week.
 
-``` yaml
+```yaml
 input:
   kafka_balanced:
     addresses:
@@ -128,7 +128,7 @@ In this config we make use of the [`process_map`][procmap-proc] processor as it
 allows us to reduce documents into smaller maps for caching and gives us greater
 control over how results are mapped back into the document.
 
-``` yaml
+```yaml
 input:
   kafka_balanced:
     addresses:
@@ -168,7 +168,7 @@ pipeline:
         # Dummy map since we don't need to map the result back.
         foo: will.never.exist
 
-# Sent resulting documents to our hydrated topic.
+# Send resulting documents to our hydrated topic.
 output:
   kafka:
     addresses:
@@ -206,7 +206,7 @@ We will use an input [`broker`][input-broker] so that we can consume both the
 
 Our config (omitting the caching sections for brevity) now looks like this:
 
-``` yaml
+```yaml
 input:
   broker:
     inputs:
@@ -225,8 +225,8 @@ input:
         consumer_group: benthos_comments_group
 
       processors:
-      # Calcuate time until next retry attempt and sleep for that duration.
       - for_each:
+        # Calcuate time until next retry attempt.
         - awk:
             program: |
              {
@@ -235,6 +235,10 @@ input:
                  delay_for = 0;
                metadata_set("delay_for_s", delay_for);
              }
+        # And sleep for that duration. This sleep blocks the topic
+        # 'comments_retry' but NOT 'comments', because both topics are consumed
+        # independently and these processors only apply to the 'comments_retry'
+        # input.
         - sleep:
             duration: "${!metadata:delay_for_s}s"
 
@@ -268,7 +272,7 @@ pipeline:
         key: last_attempted
         value: ${!timestamp_unix}
 
-# Sent resulting documents either to our hydrated topic or the retry topic.
+# Send resulting documents either to our hydrated topic or the retry topic.
 output:
   kafka:
     addresses:
@@ -280,6 +284,8 @@ resources:
     hydration_cache:
       {} # Omitted
 ```
+
+With this config we can deploy as many instances of Benthos as we need.
 
 [caches]: /docs/components/caches/about
 [inputs]: /docs/components/inputs/about
