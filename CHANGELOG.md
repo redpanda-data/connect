@@ -18,6 +18,10 @@ All notable changes to this project will be documented in this file.
 
 - The `redis_streams` input no longer flushes >1 fetched messages as a batch.
 
+### Fixed
+
+- Re-enabled Kafka connections using SASL without TLS.
+
 ## 3.9.0 - 2020-01-27
 
 ### Added
