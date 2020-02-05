@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.10.0 - 2020-02-05
+
 ### Added
 
 - Field `delete_files` added to `files` input.
