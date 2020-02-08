@@ -24,35 +24,63 @@ func init() {
 	Constructors[TypeUnarchive] = TypeSpec{
 		constructor: NewUnarchive,
 		Summary: `
-Unarchives messages according to the selected archive format into multiple
-messages within a batch.`,
+Unarchives messages according to the selected archive [format](#formats) into
+multiple messages within a [batch](/docs/configuration/batching).`,
 		Description: `
-When a message is unarchived the new messages replaces the original message in
+When a message is unarchived the new messages replace the original message in
 the batch. Messages that are selected but fail to unarchive (invalid format)
-will remain unchanged in the message batch but will be flagged as having failed.
-
-The ` + "`json_documents`" + ` format attempts to parse the message as a stream
-of concatenated JSON documents. Each parsed document is expanded into a new
-message.
-
-The ` + "`json_array`" + ` format attempts to parse the message as a JSON array
-and for each element of the array expands its contents into a new message.
-
-The ` + "`json_map`" + ` format attempts to parse the message as a JSON map
-and for each element of the map expands its contents into a new message.
+will remain unchanged in the message batch but will be flagged as having failed,
+allowing you to [error handle them](/docs/configuration/error_handling).
 
 For the unarchive formats that contain file information (tar, zip), a metadata
 field is added to each message called ` + "`archive_filename`" + ` with the
-extracted filename.
-
-For the ` + "`json_map`" + ` format, a metadata field is added to each message
-called ` + "`archive_key`" + ` with the relevant key from the top-level map.`,
+extracted filename.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("format", "The unarchive format to use.").HasOptions(
+			docs.FieldCommon("format", "The unarchive [format](#formats) to use.").HasOptions(
 				"tar", "zip", "binary", "lines", "json_documents", "json_array", "json_map",
 			),
 			partsFieldSpec,
 		},
+		Footnotes: `
+## Formats
+
+### ` + "`tar`" + `
+
+Extract messages from a unix standard tape archive.
+
+### ` + "`zip`" + `
+
+Extract messages from a zip file.
+
+### ` + "`binary`" + `
+
+Extract messages from a binary blob format consisting of:
+
+- Four bytes containing number of messages in the batch (in big endian)
+- For each message part:
+  + Four bytes containing the length of the message (in big endian)
+  + The content of message
+
+### ` + "`lines`" + `
+
+Extract the lines of a message each into their own message.
+
+### ` + "`json_documents`" + `
+
+Attempt to parse a message as a stream of concatenated JSON documents. Each
+parsed document is expanded into a new message.
+
+### ` + "`json_array`" + `
+
+Attempt to parse a message as a JSON array, and extract each element into its
+own message.
+
+### ` + "`json_map`" + `
+
+Attempt to parse the message as a JSON map and for each element of the map
+expands its contents into a new message. A metadata field is added to each
+message called ` + "`archive_key`" + ` with the relevant key from the top-level
+map.`,
 	}
 }
 

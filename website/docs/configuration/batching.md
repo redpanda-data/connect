@@ -2,7 +2,7 @@
 title: Message Batching
 ---
 
-Benthos is able to join sources and sinks with sometimes conflicting batching behaviours without sacrificing its strong delivery guarantees. It's also able to perform powerful processing functions across batches of messages such as grouping, archiving and reduction. Therefore, batching within Benthos is a mechanism that serves multiple purposes:
+Benthos is able to join sources and sinks with sometimes conflicting batching behaviours without sacrificing its strong delivery guarantees. It's also able to perform powerful [processing functions][windowing] across batches of messages such as grouping, archiving and reduction. Therefore, batching within Benthos is a mechanism that serves multiple purposes:
 
 1. [Performance (throughput)](#performance)
 2. [Grouped message processing](#grouped-message-processing)
@@ -99,6 +99,8 @@ output:
     bucket: TODO
     path: docs/${!metadata:kafka_partition}/${!count:files}-${!timestamp_unix_nano}.tar.gz
 ```
+
+For more examples of batched (or windowed) processing check out [this document][windowing].
 
 ## Compatibility
 
@@ -198,3 +200,4 @@ During shutdown any remaining messages waiting for a batch to complete will be f
 [output_broker]: /docs/components/outputs/broker
 [input_kafka]: /docs/components/inputs/kafka
 [function_interpolation]: /docs/configuration/interpolation#functions
+[windowing]: /docs/configuration/windowed_processing

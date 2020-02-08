@@ -12,8 +12,7 @@ type: processor
 
 
 Archives all the messages of a batch into a single message according to the
-selected archive format. Supported archive formats are:
-`tar`, `zip`, `binary`, `lines` and `json_array`.
+selected archive [format](#formats).
 
 ```yaml
 archive:
@@ -28,9 +27,6 @@ interpolations on the 'path' field as described
 [here](/docs/configuration/interpolation#functions). For types that aren't file based
 (such as binary) the file field is ignored.
 
-The `json_array` format attempts to JSON parse each message and append
-the result to an array, which becomes the contents of the resulting message.
-
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.
 
@@ -41,7 +37,7 @@ that are batched. You can find out more about batching [in this doc](/docs/confi
 
 ### `format`
 
-`string` The archiving format to apply.
+`string` The archiving [format](#formats) to apply.
 
 Options are: `tar`, `zip`, `binary`, `lines`, `json_array`.
 
@@ -51,4 +47,57 @@ Options are: `tar`, `zip`, `binary`, `lines`, `json_array`.
 
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
 
+```yaml
+# Examples
+
+path: ${!count:files}-${!timestamp_unix_nano}.txt
+
+path: ${!metadata:kafka_key}-${!json_field:id}.json
+```
+
+## Formats
+
+### `tar`
+
+Archive messages to a unix standard tape archive.
+
+### `zip`
+
+Archive messages to a zip file.
+
+### `binary`
+
+Archive messages to a binary blob format consisting of:
+
+- Four bytes containing number of messages in the batch (in big endian)
+- For each message part:
+  + Four bytes containing the length of the message (in big endian)
+  + The content of message
+
+### `lines`
+
+Join the raw contents of each message and insert a line break between each one.
+
+### `json_array`
+
+Attempt to parse each message as a JSON document and append the result to an
+array, which becomes the contents of the resulting message.
+
+## Examples
+
+If we had JSON messages in a batch each of the form:
+
+```json
+{"doc":{"id":"foo","body":"hello world 1"}}
+```
+
+And we wished to tar archive them, setting their filenames to their respective
+unique IDs (with the extension `.json`), our config might look like
+this:
+
+```yaml
+archive:
+  format: tar
+  path: ${!json_field:doc.id}.json
+```
 
