@@ -23,6 +23,7 @@ module.exports = {
         'configuration/about',
         'configuration/batching',
         'configuration/windowed_processing',
+        'configuration/metadata',
         'configuration/error_handling',
         'configuration/interpolation',
         'configuration/field_paths',

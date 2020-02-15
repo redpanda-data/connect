@@ -11,8 +11,8 @@ type: output
 -->
 
 
-Sends messages to a GCP Cloud Pub/Sub topic. Metadata from messages are sent as
-attributes.
+Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/metadata)
+from messages are sent as attributes.
 
 ```yaml
 output:
@@ -22,6 +22,8 @@ output:
     max_in_flight: 1
 ```
 
+For information on how to set up credentials check out
+[this guide](https://cloud.google.com/docs/authentication/production).
 
 ## Performance
 

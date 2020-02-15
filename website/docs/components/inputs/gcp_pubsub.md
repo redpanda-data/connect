@@ -22,6 +22,9 @@ input:
     max_outstanding_bytes: 1000000000
 ```
 
+For information on how to set up credentials check out
+[this guide](https://cloud.google.com/docs/authentication/production).
+
 ### Metadata
 
 This input adds the following metadata fields to each message:

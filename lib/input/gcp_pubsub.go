@@ -16,6 +16,9 @@ func init() {
 		Summary: `
 Consumes messages from a GCP Cloud Pub/Sub subscription.`,
 		Description: `
+For information on how to set up credentials check out
+[this guide](https://cloud.google.com/docs/authentication/production).
+
 ### Metadata
 
 This input adds the following metadata fields to each message:

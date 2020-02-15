@@ -1,0 +1,2 @@
+https://docs.benthos.dev/* https://www.benthos.dev/docs/:splat 301!
+/foo /bar
