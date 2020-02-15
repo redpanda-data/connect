@@ -12,6 +12,7 @@ const redirects = [
   ["/docs/processors", "/docs/components/processors/", true],
   ["/docs/rate_limits", "/docs/components/rate_limits/", true],
   ["/docs/tracers", "/docs/components/tracers/", true],
+  ["/docs/examples/kafka-delayed-retry", "/cookbooks/joining-streams/#adding-a-retry-queue", false],
   ["/docs/cookbooks/", "/cookbooks/", false],
   ["/docs/getting_started", "/docs/guides/getting_started", false],
   ["/docs/serverless", "/docs/guides/serverless/about", false],
