@@ -48,7 +48,7 @@ func TestParseLogCases(t *testing.T) {
 		conf := NewConfig()
 		conf.ParseLog.Format = test.format
 		conf.ParseLog.Codec = test.codec
-		conf.ParseLog.Parameters.SyslogBestEffort = test.bestEff
+		conf.ParseLog.BestEffort = test.bestEff
 		proc, err := NewParseLog(conf, nil, log.Noop(), metrics.Noop())
 		if err != nil {
 			t.Fatal(err)

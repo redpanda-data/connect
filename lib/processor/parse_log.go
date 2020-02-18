@@ -29,17 +29,16 @@ easier and often much faster than ` + "[`grok`](/docs/components/processors/grok
 			docs.FieldCommon("codec", "Specifies the structured format to parse a log into.").HasOptions(
 				"json",
 			),
-			docs.FieldAdvanced("parameters", "A list of parameters to fine-tune the parser's behaviour.").WithChildren(
-				docs.FieldAdvanced("syslog_best_effort", "Still returns parsed message if an error occurred."+
-					"Applied to `syslog_rfc3164` and `syslog_rfc5424` formats."),
-				docs.FieldAdvanced("syslog_rfc3339", "Allows syslog parser to expect timestamp to be rfc3339-formatted"+
-					"Applied to `syslog_rfc3164`."),
-				docs.FieldAdvanced("syslog_default_year", "Sets the strategy to decide the year for the Stamp timestamp of RFC 3164"+
-					"Applied to `syslog_rfc3164`. Could be `current` to set the system's current year or specific year."+
-					"Leave an empty string to not use such option at all."),
-				docs.FieldAdvanced("syslog_timezone", "Sets the strategy to decide the timezone to apply to the Stamp timestamp of RFC 3164"+
-					"Applied to `syslog_rfc3164`. Given value handled by [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) method."),
-			),
+			docs.FieldAdvanced("best_effort", "Still returns parsed message if an error occurred."+
+				"Applied to `syslog_rfc3164` and `syslog_rfc5424` formats."),
+			docs.FieldAdvanced("allow_rfc3339", "Allows syslog parser to expect timestamp to be rfc3339-formatted"+
+				"Applied to `syslog_rfc3164`."),
+			docs.FieldAdvanced("default_year", "Sets the strategy to decide the year for the Stamp timestamp of RFC 3164"+
+				"Applied to `syslog_rfc3164`. Could be `current` to set the system's current year or specific year."+
+				"Leave an empty string to not use such option at all."),
+			docs.FieldAdvanced("default_timezone", "Sets the strategy to decide the timezone to apply to the Stamp timestamp of RFC 3164"+
+				"Applied to `syslog_rfc3164`. Given value handled by [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) method."),
+
 			partsFieldSpec,
 		},
 		Footnotes: `
@@ -72,8 +71,8 @@ structured document may contain any of the following fields:
 Makes a best effort(default behaviour) to parse a log following the
 [Syslog rfc3164](https://tools.ietf.org/html/rfc3164) spec. Since 
 transfered information could be omitted by some vendors, parameters
-` + "`syslog_rfc3164_with_rfc3339`" + `,` + "`syslog_rfc3164_with_year`" + `,
-` + "`syslog_rfc3164_with_year`" + `,` + "`syslog_rfc3164_with_timezone`" + `
+` + "`allow_rfc3339`" + `,` + "`default_year`" + `,
+` + "`default_timezone`" + `,` + "`best_effort`" + `
 should be applied. The resulting structured document may contain any of 
 the following fields:
 
@@ -92,20 +91,15 @@ the following fields:
 
 //------------------------------------------------------------------------------
 
-// ParseLogParameters TODO
-type ParseLogParameters struct {
-	SyslogBestEffort   bool   `json:"syslog_best_effort" yaml:"syslog_best_effort"`
-	SyslogWith3339     bool   `json:"syslog_rfc3339" yaml:"syslog_rfc3339"`
-	SyslogWithYear     string `json:"syslog_default_year" yaml:"syslog_default_year"`
-	SyslogWithTimezone string `json:"syslog_timezone" yaml:"syslog_timezone"`
-}
-
 // ParseLogConfig contains configuration fields for the ParseLog processor.
 type ParseLogConfig struct {
-	Parts      []int              `json:"parts" yaml:"parts"`
-	Format     string             `json:"format" yaml:"format"`
-	Codec      string             `json:"codec" yaml:"codec"`
-	Parameters ParseLogParameters `json:"parameters" yaml:"parameters"`
+	Parts        []int  `json:"parts" yaml:"parts"`
+	Format       string `json:"format" yaml:"format"`
+	Codec        string `json:"codec" yaml:"codec"`
+	BestEffort   bool   `json:"best_effort" yaml:"best_effort"`
+	WithRFC3339  bool   `json:"allow_rfc3339" yaml:"allow_rfc3339"`
+	WithYear     string `json:"default_year" yaml:"default_year"`
+	WithTimezone string `json:"default_timezone" yaml:"default_timezone"`
 }
 
 // NewParseLogConfig returns a ParseLogConfig with default values.
@@ -115,12 +109,10 @@ func NewParseLogConfig() ParseLogConfig {
 		Format: "syslog_rfc5424",
 		Codec:  "json",
 
-		Parameters: ParseLogParameters{
-			SyslogBestEffort:   true,
-			SyslogWith3339:     true,
-			SyslogWithYear:     "current",
-			SyslogWithTimezone: "UTC",
-		},
+		BestEffort:   true,
+		WithRFC3339:  true,
+		WithYear:     "current",
+		WithTimezone: "UTC",
 	}
 }
 
@@ -253,14 +245,12 @@ func parserRFC3164(bestEffort, wrfc3339 bool, year, tz string) parserFormat {
 	}
 }
 
-func getParseFormat(parser string, params ParseLogParameters) (parserFormat, error) {
+func getParseFormat(parser string, bestEffort, rfc3339 bool, defYear, defTZ string) (parserFormat, error) {
 	switch parser {
 	case "syslog_rfc5424":
-		return parserRFC5424(params.SyslogBestEffort), nil
+		return parserRFC5424(bestEffort), nil
 	case "syslog_rfc3164":
-		return parserRFC3164(params.SyslogBestEffort, params.SyslogWith3339, params.SyslogWithYear,
-			params.SyslogWithTimezone), nil
-
+		return parserRFC3164(bestEffort, rfc3339, defYear, defTZ), nil
 	}
 	return nil, fmt.Errorf("format not recognised: %s", parser)
 }
@@ -299,7 +289,8 @@ func NewParseLog(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
-	if s.format, err = getParseFormat(conf.ParseLog.Format, conf.ParseLog.Parameters); err != nil {
+	if s.format, err = getParseFormat(conf.ParseLog.Format, conf.ParseLog.BestEffort, conf.ParseLog.WithRFC3339,
+		conf.ParseLog.WithYear, conf.ParseLog.WithTimezone); err != nil {
 		return nil, err
 	}
 	return s, nil
