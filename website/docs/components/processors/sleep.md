@@ -16,6 +16,7 @@ interpolate functions within the `duration` field, you can find a list
 of functions [here](/docs/configuration/interpolation#functions).
 
 ```yaml
+# Config fields, showing default values
 sleep:
   duration: 100us
 ```
@@ -34,6 +35,10 @@ for_each:
 
 ### `duration`
 
-`string` The duration of time to sleep for each execution.
+The duration of time to sleep for each execution.
+
+
+Type: `string`  
+Default: `"100us"`  
 
 

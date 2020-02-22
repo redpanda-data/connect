@@ -30,6 +30,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   kinesis_balanced:
     stream: ""
@@ -46,6 +47,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   kinesis_balanced:
     stream: ""
@@ -100,67 +102,131 @@ You can access these metadata fields using
 
 ### `stream`
 
-`string` The Kinesis stream to consume from.
+The Kinesis stream to consume from.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `dynamodb_table`
 
-`string` A DynamoDB table to use for offset storage.
+A DynamoDB table to use for offset storage.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `dynamodb_billing_mode`
 
-`string` A billing mode to set for the offset DynamoDB table.
+A billing mode to set for the offset DynamoDB table.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `dynamodb_read_provision`
 
-`number` The read capacity of the offset DynamoDB table.
+The read capacity of the offset DynamoDB table.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `dynamodb_write_provision`
 
-`number` The write capacity of the offset DynamoDB table.
+The write capacity of the offset DynamoDB table.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `start_from_oldest`
 
-`bool` Whether to consume from the oldest message when an offset does not yet exist for the stream.
+Whether to consume from the oldest message when an offset does not yet exist for the stream.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `region`
 
-`string` The AWS region to target.
+The AWS region to target.
+
+
+Type: `string`  
+Default: `"eu-west-1"`  
 
 ### `endpoint`
 
-`string` Allows you to specify a custom endpoint for the AWS API.
+Allows you to specify a custom endpoint for the AWS API.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials`
 
-`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+
+Type: `object`  
+Default: `{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""}`  
 
 ### `credentials.profile`
 
-`string` A profile from `~/.aws/credentials` to use.
+A profile from `~/.aws/credentials` to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.id`
 
-`string` The ID of credentials to use.
+The ID of credentials to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.secret`
 
-`string` The secret for the credentials being used.
+The secret for the credentials being used.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.token`
 
-`string` The token for the credentials being used, required when using short term credentials.
+The token for the credentials being used, required when using short term credentials.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.role`
 
-`string` A role ARN to assume.
+A role ARN to assume.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.role_external_id`
 
-`string` An external ID to provide when assuming a role.
+An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `batching`
 
-`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
 
 ```yaml
 # Examples
@@ -183,15 +249,27 @@ batching:
 
 ### `batching.count`
 
-`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `batching.byte_size`
 
-`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `batching.period`
 
-`string` A period in which an incomplete batch should be flushed regardless of its size.
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -205,11 +283,19 @@ period: 500ms
 
 ### `batching.condition`
 
-`object` A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+
+Type: `object`  
+Default: `{"static":false,"type":"static"}`  
 
 ### `batching.processors`
 
-`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples

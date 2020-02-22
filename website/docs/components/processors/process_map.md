@@ -29,6 +29,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 process_map:
   conditions: []
   premap: {}
@@ -42,6 +43,7 @@ process_map:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 process_map:
   conditions: []
   premap: {}
@@ -87,11 +89,19 @@ must NOT change the ordering (or count) of the messages (do not use a
 
 ### `conditions`
 
-`array` A list of [conditions](/docs/components/conditions/about) to test against messages. If any condition fails then the message will not be mapped and processed.
+A list of [conditions](/docs/components/conditions/about) to test against messages. If any condition fails then the message will not be mapped and processed.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `premap`
 
-`object` A map of source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original. An empty (or dot `.`) path indicates the root of the object. If a map source is not found then the message will not be processed, for optional sources use the field [`premap_optional`](#premap_optional).
+A map of source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original. An empty (or dot `.`) path indicates the root of the object. If a map source is not found then the message will not be processed, for optional sources use the field [`premap_optional`](#premap_optional).
+
+
+Type: `object`  
+Default: `{}`  
 
 ```yaml
 # Examples
@@ -106,15 +116,27 @@ premap:
 
 ### `premap_optional`
 
-`object` A map of optional source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original.
+A map of optional source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original.
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `processors`
 
-`array` A list of processors to apply to mapped payloads.
+A list of processors to apply to mapped payloads.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `postmap`
 
-`object` A map of destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload. An empty (or dot `.`) path indicates the root of the object. If a source is not found then the mapping is abandoned, for optional sources use the [`postmap_optional`](#postmap_optional) field.
+A map of destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload. An empty (or dot `.`) path indicates the root of the object. If a source is not found then the mapping is abandoned, for optional sources use the [`postmap_optional`](#postmap_optional) field.
+
+
+Type: `object`  
+Default: `{}`  
 
 ```yaml
 # Examples
@@ -125,16 +147,24 @@ postmap:
 
 ### `postmap_optional`
 
-`object` A map of optional destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload.
+A map of optional destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload.
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 ## Examples
 

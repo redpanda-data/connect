@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 tracer:
   jaeger:
     agent_address: localhost:6831
@@ -38,6 +39,7 @@ tracer:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 tracer:
   jaeger:
     agent_address: localhost:6831
@@ -56,32 +58,59 @@ tracer:
 
 ### `agent_address`
 
-`string` The address of a Jaeger agent to send tracing events to.
+The address of a Jaeger agent to send tracing events to.
+
+
+Type: `string`  
+Default: `"localhost:6831"`  
 
 ### `service_name`
 
-`string` A name to provide for this service.
+A name to provide for this service.
+
+
+Type: `string`  
+Default: `"benthos"`  
 
 ### `sampler_type`
 
-`string` The sampler type to use.
+The sampler type to use.
 
-Options are: `const`, `probabilistic`, `ratelimiting`, `remote`.
+
+Type: `string`  
+Default: `"const"`  
+Options: `const`, `probabilistic`, `ratelimiting`, `remote`.
 
 ### `sampler_manager_address`
 
-`string` An optional address of a sampler manager.
+An optional address of a sampler manager.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `sampler_param`
 
-`number` A parameter to use for sampling. This field is unused for some sampling types.
+A parameter to use for sampling. This field is unused for some sampling types.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `tags`
 
-`object` A map of tags to add to tracing spans.
+A map of tags to add to tracing spans.
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `flush_interval`
 
-`string` The period of time between each flush of tracing spans.
+The period of time between each flush of tracing spans.
+
+
+Type: `string`  
+Default: `""`  
 
 

@@ -15,6 +15,7 @@ Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't
 already exist) using the XADD command.
 
 ```yaml
+# Config fields, showing default values
 output:
   redis_streams:
     url: tcp://localhost:6379
@@ -43,7 +44,11 @@ field `max_in_flight`.
 
 ### `url`
 
-`string` The URL of a Redis server to connect to.
+The URL of a Redis server to connect to.
+
+
+Type: `string`  
+Default: `"tcp://localhost:6379"`  
 
 ```yaml
 # Examples
@@ -53,18 +58,34 @@ url: tcp://localhost:6379
 
 ### `stream`
 
-`string` The stream to add messages to.
+The stream to add messages to.
+
+
+Type: `string`  
+Default: `"benthos_stream"`  
 
 ### `body_key`
 
-`string` A key to set the raw body of the message to.
+A key to set the raw body of the message to.
+
+
+Type: `string`  
+Default: `"body"`  
 
 ### `max_length`
 
-`number` When greater than zero enforces a rough cap on the length of the target stream.
+When greater than zero enforces a rough cap on the length of the target stream.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

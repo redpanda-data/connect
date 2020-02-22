@@ -15,6 +15,7 @@ Returns the logical XOR of children conditions, meaning it only resolves to
 true if _exactly_ one of its children conditions resolves to true.
 
 ```yaml
+# Config fields, showing default values
 xor: []
 ```
 

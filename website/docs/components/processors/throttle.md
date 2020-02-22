@@ -16,6 +16,7 @@ period. This throttle is per processing pipeline, and therefore four threads
 each with a throttle would result in four times the rate specified.
 
 ```yaml
+# Config fields, showing default values
 throttle:
   period: 100us
 ```
@@ -27,6 +28,10 @@ would be 1 second, '10ms' would be 10 milliseconds, etc.
 
 ### `period`
 
-`string` The period to throttle to.
+The period to throttle to.
+
+
+Type: `string`  
+Default: `"100us"`  
 
 

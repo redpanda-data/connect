@@ -15,6 +15,7 @@ Noop is a no-op processor that does nothing, the message passes through
 unchanged. Why? That's a great question.
 
 ```yaml
+# Config fields, showing default values
 noop: null
 ```
 

@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 bounds_check:
   max_part_size: 1.073741824e+09
   min_part_size: 1
@@ -36,6 +37,7 @@ bounds_check:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 bounds_check:
   max_part_size: 1.073741824e+09
   min_part_size: 1
@@ -50,18 +52,34 @@ bounds_check:
 
 ### `max_part_size`
 
-`number` The maximum size of a message to allow (in bytes)
+The maximum size of a message to allow (in bytes)
+
+
+Type: `number`  
+Default: `1073741824`  
 
 ### `min_part_size`
 
-`number` The minimum size of a message to allow (in bytes)
+The minimum size of a message to allow (in bytes)
+
+
+Type: `number`  
+Default: `1`  
 
 ### `max_parts`
 
-`number` The maximum size of message batches to allow (in message count)
+The maximum size of message batches to allow (in message count)
+
+
+Type: `number`  
+Default: `100`  
 
 ### `min_parts`
 
-`number` The minimum size of message batches to allow (in message count)
+The minimum size of message batches to allow (in message count)
+
+
+Type: `number`  
+Default: `1`  
 
 

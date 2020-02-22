@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   nsq:
     nsqd_tcp_address: localhost:4150
@@ -38,6 +39,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   nsq:
     nsqd_tcp_address: localhost:4150
@@ -68,37 +70,68 @@ field `max_in_flight`.
 
 ### `nsqd_tcp_address`
 
-`string` The address of the target NSQD server.
+The address of the target NSQD server.
+
+
+Type: `string`  
+Default: `"localhost:4150"`  
 
 ### `topic`
 
-`string` The topic to publish to.
-
+The topic to publish to.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"benthos_messages"`  
 
 ### `user_agent`
 
-`string` A user agent string to connect with.
+A user agent string to connect with.
+
+
+Type: `string`  
+Default: `"benthos_producer"`  
 
 ### `tls`
 
-`object` Custom TLS settings can be used to override system defaults.
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
-`bool` Whether custom TLS settings are enabled.
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.skip_cert_verify`
 
-`bool` Whether to skip server side certificate verification.
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.root_cas_file`
 
-`string` The path of a root certificate authority file to use.
+The path of a root certificate authority file to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls.client_certs`
 
-`array` A list of client certificates to use.
+A list of client certificates to use.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -114,6 +147,10 @@ client_certs:
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

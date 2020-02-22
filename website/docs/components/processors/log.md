@@ -17,6 +17,7 @@ unchanged. The log message can be set using function interpolations described
 contents and metadata of messages.
 
 ```yaml
+# Config fields, showing default values
 log:
   level: INFO
   fields: {}
@@ -61,20 +62,29 @@ log:
 
 ### `level`
 
-`string` The log level to use.
+The log level to use.
 
-Options are: `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`, `ALL`.
+
+Type: `string`  
+Default: `"INFO"`  
+Options: `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`, `ALL`.
 
 ### `fields`
 
-`object` A map of fields to print along with the log message.
-
+A map of fields to print along with the log message.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `message`
 
-`string` The message to print.
-
+The message to print.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `string`  
+Default: `""`  
 
 

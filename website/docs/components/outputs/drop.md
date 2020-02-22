@@ -14,6 +14,7 @@ type: output
 Drops all messages.
 
 ```yaml
+# Config fields, showing default values
 output:
   drop: {}
 ```

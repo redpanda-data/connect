@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   retry:
     output: {}
@@ -37,6 +38,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   retry:
     max_retries: 0
@@ -66,26 +68,50 @@ use the [`try`](/docs/components/outputs/try) output type.
 
 ### `max_retries`
 
-`number` The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `backoff`
 
-`object` Control time intervals between retry attempts.
+Control time intervals between retry attempts.
+
+
+Type: `object`  
+Default: `{"initial_interval":"500ms","max_elapsed_time":"0s","max_interval":"3s"}`  
 
 ### `backoff.initial_interval`
 
-`string` The initial period to wait between retry attempts.
+The initial period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"500ms"`  
 
 ### `backoff.max_interval`
 
-`string` The maximum period to wait between retry attempts.
+The maximum period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"3s"`  
 
 ### `backoff.max_elapsed_time`
 
-`string` The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+
+
+Type: `string`  
+Default: `"0s"`  
 
 ### `output`
 
-`object` A child output.
+A child output.
+
+
+Type: `object`  
+Default: `{}`  
 
 

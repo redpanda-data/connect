@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   http_client:
     url: http://localhost:4195/post
@@ -45,6 +46,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   http_client:
     url: http://localhost:4195/post
@@ -125,13 +127,20 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `url`
 
-`string` The URL to connect to.
-
+The URL to connect to.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"http://localhost:4195/post"`  
 
 ### `verb`
 
-`string` A verb to connect with
+A verb to connect with
+
+
+Type: `string`  
+Default: `"POST"`  
 
 ```yaml
 # Examples
@@ -145,9 +154,12 @@ verb: DELETE
 
 ### `headers`
 
-`object` A map of headers to add to the request.
-
+A map of headers to add to the request.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `object`  
+Default: `{"Content-Type":"application/octet-stream"}`  
 
 ```yaml
 # Examples
@@ -158,7 +170,11 @@ headers:
 
 ### `oauth`
 
-`object` Allows you to specify open authentication.
+Allows you to specify open authentication.
+
+
+Type: `object`  
+Default: `{"access_token":"","access_token_secret":"","consumer_key":"","consumer_secret":"","enabled":false,"request_url":""}`  
 
 ```yaml
 # Examples
@@ -174,7 +190,11 @@ oauth:
 
 ### `basic_auth`
 
-`object` Allows you to specify basic authentication.
+Allows you to specify basic authentication.
+
+
+Type: `object`  
+Default: `{"enabled":false,"password":"","username":""}`  
 
 ```yaml
 # Examples
@@ -187,23 +207,43 @@ basic_auth:
 
 ### `tls`
 
-`object` Custom TLS settings can be used to override system defaults.
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
-`bool` Whether custom TLS settings are enabled.
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.skip_cert_verify`
 
-`bool` Whether to skip server side certificate verification.
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.root_cas_file`
 
-`string` The path of a root certificate authority file to use.
+The path of a root certificate authority file to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls.client_certs`
 
-`array` A list of client certificates to use.
+A list of client certificates to use.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -219,51 +259,99 @@ client_certs:
 
 ### `copy_response_headers`
 
-`bool` Sets whether to copy the headers from the response to the resulting payload.
+Sets whether to copy the headers from the response to the resulting payload.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `rate_limit`
 
-`string` An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `timeout`
 
-`string` A static timeout to apply to requests.
+A static timeout to apply to requests.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `retry_period`
 
-`string` The base period to wait between failed requests.
+The base period to wait between failed requests.
+
+
+Type: `string`  
+Default: `"1s"`  
 
 ### `max_retry_backoff`
 
-`string` The maximum period to wait between failed requests.
+The maximum period to wait between failed requests.
+
+
+Type: `string`  
+Default: `"300s"`  
 
 ### `retries`
 
-`number` The maximum number of retry attempts to make.
+The maximum number of retry attempts to make.
+
+
+Type: `number`  
+Default: `3`  
 
 ### `backoff_on`
 
-`array` A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
+A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
+
+
+Type: `array`  
+Default: `[429]`  
 
 ### `drop_on`
 
-`array` A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
+A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `successful_on`
 
-`array` A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
+A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `propagate_response`
 
-`bool` Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input.
+Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `batching`
 
-`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
 
 ```yaml
 # Examples
@@ -286,15 +374,27 @@ batching:
 
 ### `batching.count`
 
-`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `batching.byte_size`
 
-`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `batching.period`
 
-`string` A period in which an incomplete batch should be flushed regardless of its size.
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -308,11 +408,19 @@ period: 500ms
 
 ### `batching.condition`
 
-`object` A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+
+Type: `object`  
+Default: `{"static":false,"type":"static"}`  
 
 ### `batching.processors`
 
-`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples

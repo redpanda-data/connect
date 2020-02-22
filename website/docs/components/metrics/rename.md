@@ -14,6 +14,7 @@ type: metrics
 Rename metric paths as they are registered.
 
 ```yaml
+# Config fields, showing default values
 metrics:
   rename:
     by_regexp: []
@@ -29,7 +30,7 @@ Benthos registers can be found in [this list](/docs/components/metrics/about#pat
 
 ### `by_regexp`
 
-`array` A list of objects, each specifying an RE2 regular expression which will be
+A list of objects, each specifying an RE2 regular expression which will be
 tested against each metric path registered. Each occurrence of the expression
 will be replaced with the specified value. Inside the value $ signs are
 interpreted as submatch expansions, e.g. $1 represents the first submatch.
@@ -38,6 +39,10 @@ The field `to_label` may contain any number of key/value pairs to be
 added to a metric as labels, where the value may contain submatches from the
 provided pattern. This allows you to extract (left-most) matched segments of the
 renamed path into the label values.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -51,7 +56,11 @@ by_regexp:
 
 ### `child`
 
-`object` A child metric type, this is where renamed metrics will be routed.
+A child metric type, this is where renamed metrics will be routed.
+
+
+Type: `object`  
+Default: `{}`  
 
 ## Examples
 

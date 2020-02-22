@@ -12,6 +12,7 @@ type: input
 
 
 ```yaml
+# Config fields, showing default values
 input:
   inproc: ""
 ```

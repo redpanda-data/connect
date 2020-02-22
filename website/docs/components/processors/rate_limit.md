@@ -17,6 +17,7 @@ shared across components and therefore apply globally to all processing
 pipelines.
 
 ```yaml
+# Config fields, showing default values
 rate_limit:
   resource: ""
 ```
@@ -25,6 +26,10 @@ rate_limit:
 
 ### `resource`
 
-`string` The target [`rate_limit` resource](/docs/components/rate_limits/about).
+The target [`rate_limit` resource](/docs/components/rate_limits/about).
+
+
+Type: `string`  
+Default: `""`  
 
 

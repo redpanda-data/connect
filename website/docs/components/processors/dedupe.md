@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 dedupe:
   cache: ""
   hash: none
@@ -38,6 +39,7 @@ dedupe:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 dedupe:
   cache: ""
   hash: none
@@ -95,26 +97,44 @@ service restarts increase the chances of duplicates passing undetected.
 
 ### `cache`
 
-`string` The [`cache` resource](/docs/components/caches/about) to target with this processor.
+The [`cache` resource](/docs/components/caches/about) to target with this processor.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `hash`
 
-`string` The hash type to used.
+The hash type to used.
 
-Options are: `none`, `xxhash`.
+
+Type: `string`  
+Default: `"none"`  
+Options: `none`, `xxhash`.
 
 ### `key`
 
-`string` An optional key to use for deduplication (instead of the entire message contents).
-
+An optional key to use for deduplication (instead of the entire message contents).
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `drop_on_err`
 
-`bool` Whether messages should be dropped when the cache returns an error.
+Whether messages should be dropped when the cache returns an error.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `parts`
 
-`array` An array of message indexes within the batch to deduplicate based on. If left empty all messages included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching).
+An array of message indexes within the batch to deduplicate based on. If left empty all messages included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching).
+
+
+Type: `array`  
+Default: `[0]`  
 
 

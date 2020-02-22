@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   broker:
     pattern: fan_out
@@ -41,6 +42,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   broker:
     copies: 1
@@ -92,21 +94,36 @@ and specify this in their documentation.
 
 ### `copies`
 
-`number` The number of copies of each configured output to spawn.
+The number of copies of each configured output to spawn.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `pattern`
 
-`string` The brokering pattern to use.
+The brokering pattern to use.
 
-Options are: `fan_out`, `fan_out_sequential`, `round_robin`, `greedy`, `try`.
+
+Type: `string`  
+Default: `"fan_out"`  
+Options: `fan_out`, `fan_out_sequential`, `round_robin`, `greedy`, `try`.
 
 ### `outputs`
 
-`array` A list of child outputs to broker.
+A list of child outputs to broker.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `batching`
 
-`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
 
 ```yaml
 # Examples
@@ -129,15 +146,27 @@ batching:
 
 ### `batching.count`
 
-`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `batching.byte_size`
 
-`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `batching.period`
 
-`string` A period in which an incomplete batch should be flushed regardless of its size.
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -151,11 +180,19 @@ period: 500ms
 
 ### `batching.condition`
 
-`object` A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+
+Type: `object`  
+Default: `{"static":false,"type":"static"}`  
 
 ### `batching.processors`
 
-`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples

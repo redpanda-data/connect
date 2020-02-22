@@ -16,6 +16,7 @@ on the list. If an output attempt fails then the next output in the list is
 attempted, and so on.
 
 ```yaml
+# Config fields, showing default values
 output:
   try: []
 ```

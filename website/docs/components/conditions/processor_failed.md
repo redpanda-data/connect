@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 processor_failed: {}
 ```
 
@@ -33,6 +34,7 @@ processor_failed: {}
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 processor_failed:
   part: 0
 ```
@@ -47,11 +49,15 @@ queues, you can read more about these patterns [here](/docs/configuration/error_
 
 ### `part`
 
-`number` The index of a message within a batch to test the condition against. This
+The index of a message within a batch to test the condition against. This
 field is only applicable when batching messages
 [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `number`  
+Default: `0`  
 
 

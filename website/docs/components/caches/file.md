@@ -15,6 +15,7 @@ Stores each item in a directory as a file, where an item ID is the path relative
 to the configured directory.
 
 ```yaml
+# Config fields, showing default values
 file:
   directory: ""
 ```
@@ -26,6 +27,10 @@ intended to be used for development and debugging purposes only.
 
 ### `directory`
 
-`string` The directory within which to store items.
+The directory within which to store items.
+
+
+Type: `string`  
+Default: `""`  
 
 

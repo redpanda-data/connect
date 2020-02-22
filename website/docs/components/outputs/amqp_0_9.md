@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   amqp_0_9:
     url: amqp://guest:guest@localhost:5672/
@@ -39,6 +40,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   amqp_0_9:
     url: amqp://guest:guest@localhost:5672/
@@ -84,7 +86,11 @@ field `max_in_flight`.
 
 ### `url`
 
-`string` A URL to connect to.
+A URL to connect to.
+
+
+Type: `string`  
+Default: `"amqp://guest:guest@localhost:5672/"`  
 
 ```yaml
 # Examples
@@ -96,67 +102,125 @@ url: amqps://guest:guest@localhost:5672/
 
 ### `exchange`
 
-`string` An AMQP exchange to publish to.
+An AMQP exchange to publish to.
+
+
+Type: `string`  
+Default: `"benthos-exchange"`  
 
 ### `exchange_declare`
 
-`object` Optionally declare the target exchange (passive).
+Optionally declare the target exchange (passive).
+
+
+Type: `object`  
+Default: `{"durable":true,"enabled":false,"type":"direct"}`  
 
 ### `exchange_declare.enabled`
 
-`bool` Whether to declare the exchange.
+Whether to declare the exchange.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `exchange_declare.type`
 
-`string` The type of the exchange.
+The type of the exchange.
 
-Options are: `direct`, `fanout`, `topic`, `x-custom`.
+
+Type: `string`  
+Default: `"direct"`  
+Options: `direct`, `fanout`, `topic`, `x-custom`.
 
 ### `exchange_declare.durable`
 
-`bool` Whether the exchange should be durable.
+Whether the exchange should be durable.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `key`
 
-`string` The binding key to set for each message.
-
+The binding key to set for each message.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"benthos-key"`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `persistent`
 
-`bool` Whether message delivery should be persistent (transient by default).
+Whether message delivery should be persistent (transient by default).
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `mandatory`
 
-`bool` Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned.
+Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `immediate`
 
-`bool` Whether to set the immediate flag on published messages. When set if there are no ready consumers of a queue then the message is dropped instead of waiting.
+Whether to set the immediate flag on published messages. When set if there are no ready consumers of a queue then the message is dropped instead of waiting.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls`
 
-`object` Custom TLS settings can be used to override system defaults.
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
-`bool` Whether custom TLS settings are enabled.
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.skip_cert_verify`
 
-`bool` Whether to skip server side certificate verification.
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.root_cas_file`
 
-`string` The path of a root certificate authority file to use.
+The path of a root certificate authority file to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls.client_certs`
 
-`array` A list of client certificates to use.
+A list of client certificates to use.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples

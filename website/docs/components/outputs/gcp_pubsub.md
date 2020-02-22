@@ -15,6 +15,7 @@ Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/meta
 from messages are sent as attributes.
 
 ```yaml
+# Config fields, showing default values
 output:
   gcp_pubsub:
     project: ""
@@ -35,14 +36,26 @@ field `max_in_flight`.
 
 ### `project`
 
-`string` The project ID of the topic to publish to.
+The project ID of the topic to publish to.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `topic`
 
-`string` The topic to publish to.
+The topic to publish to.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

@@ -14,6 +14,7 @@ type: input
 Consumes messages from a GCP Cloud Pub/Sub subscription.
 
 ```yaml
+# Config fields, showing default values
 input:
   gcp_pubsub:
     project: ""
@@ -41,18 +42,34 @@ You can access these metadata fields using
 
 ### `project`
 
-`string` The project ID of the target subscription.
+The project ID of the target subscription.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `subscription`
 
-`string` The target subscription ID.
+The target subscription ID.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `max_outstanding_messages`
 
-`number` The maximum number of outstanding pending messages to be consumed at a given time.
+The maximum number of outstanding pending messages to be consumed at a given time.
+
+
+Type: `number`  
+Default: `1000`  
 
 ### `max_outstanding_bytes`
 
-`number` The maximum number of outstanding pending messages to be consumed measured in bytes.
+The maximum number of outstanding pending messages to be consumed measured in bytes.
+
+
+Type: `number`  
+Default: `1000000000`  
 
 

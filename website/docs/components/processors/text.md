@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 text:
   operator: trim_space
   arg: ""
@@ -36,6 +37,7 @@ text:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 text:
   operator: trim_space
   arg: ""
@@ -64,28 +66,42 @@ for_each:
 
 ### `operator`
 
-`string` A text based [operation](#operators) to execute.
+A text based [operation](#operators) to execute.
 
-Options are: `append`, `escape_url_query`, `unescape_url_query`, `find_regexp`, `prepend`, `quote`, `regexp_expand`, `replace`, `replace_regexp`, `set`, `strip_html`, `to_lower`, `to_upper`, `trim`, `trim_space`, `unquote`.
+
+Type: `string`  
+Default: `"trim_space"`  
+Options: `append`, `escape_url_query`, `unescape_url_query`, `find_regexp`, `prepend`, `quote`, `regexp_expand`, `replace`, `replace_regexp`, `set`, `strip_html`, `to_lower`, `to_upper`, `trim`, `trim_space`, `unquote`.
 
 ### `arg`
 
-`string` An argument for the operator (not always applicable).
+An argument for the operator (not always applicable).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `value`
 
-`string` A value to use with the operator.
-
+A value to use with the operator.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 ## Operators
 

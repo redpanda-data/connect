@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 while:
   at_least_once: false
   condition:
@@ -43,6 +44,7 @@ while:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 while:
   at_least_once: false
   max_loops: 0
@@ -75,18 +77,34 @@ You can find a [full list of conditions here](/docs/components/conditions/about)
 
 ### `at_least_once`
 
-`bool` Whether to always run the child processors at least one time.
+Whether to always run the child processors at least one time.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `max_loops`
 
-`number` An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops.
+An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `condition`
 
-`object` A [condition](/docs/components/conditions/about) to test for each loop. If the condition fails the loop is stopped.
+A [condition](/docs/components/conditions/about) to test for each loop. If the condition fails the loop is stopped.
+
+
+Type: `object`  
+Default: `{"text":{"arg":"","operator":"equals_cs","part":0},"type":"text"}`  
 
 ### `processors`
 
-`array` A list of child processors to execute on each loop.
+A list of child processors to execute on each loop.
+
+
+Type: `array`  
+Default: `[]`  
 
 

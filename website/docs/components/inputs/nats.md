@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   nats:
     urls:
@@ -38,6 +39,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   nats:
     urls:
@@ -65,7 +67,11 @@ You can access these metadata fields using
 
 ### `urls`
 
-`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["nats://127.0.0.1:4222"]`  
 
 ```yaml
 # Examples
@@ -76,14 +82,26 @@ urls:
 
 ### `queue`
 
-`string` The queue to consume from.
+The queue to consume from.
+
+
+Type: `string`  
+Default: `"benthos_queue"`  
 
 ### `subject`
 
-`string` A subject to consume from.
+A subject to consume from.
+
+
+Type: `string`  
+Default: `"benthos_messages"`  
 
 ### `prefetch_count`
 
-`number` The maximum number of messages to pull at a time.
+The maximum number of messages to pull at a time.
+
+
+Type: `number`  
+Default: `32`  
 
 

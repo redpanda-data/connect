@@ -17,6 +17,7 @@ size or, if the field `byte_size` is non-zero, then by total size in
 bytes (which ever limit is reached first).
 
 ```yaml
+# Config fields, showing default values
 split:
   size: 1
   byte_size: 0
@@ -34,10 +35,18 @@ that are batched. You can find out more about batching [in this doc](/docs/confi
 
 ### `size`
 
-`number` The target number of messages.
+The target number of messages.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `byte_size`
 
-`number` An optional target of total message bytes.
+An optional target of total message bytes.
+
+
+Type: `number`  
+Default: `0`  
 
 

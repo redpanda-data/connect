@@ -15,6 +15,7 @@ Sends messages as a continuous stream of line delimited data over a
 (tcp/udp/unix) socket by connecting to a server.
 
 ```yaml
+# Config fields, showing default values
 output:
   socket:
     network: unix
@@ -43,13 +44,20 @@ baz\n\n
 
 ### `network`
 
-`string` The network type to connect as.
+The network type to connect as.
 
-Options are: `unix`, `tcp`, `udp`.
+
+Type: `string`  
+Default: `"unix"`  
+Options: `unix`, `tcp`, `udp`.
 
 ### `address`
 
-`string` The address (or path) to connect to.
+The address (or path) to connect to.
+
+
+Type: `string`  
+Default: `"/tmp/benthos.sock"`  
 
 ```yaml
 # Examples

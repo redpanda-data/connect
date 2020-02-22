@@ -14,6 +14,7 @@ type: processor
 Expose custom metrics by extracting values from message batches.
 
 ```yaml
+# Config fields, showing default values
 metric:
   type: counter
   path: ""
@@ -44,17 +45,28 @@ specific type.
 
 ### `type`
 
-`string` The metric [type](#types) to create.
+The metric [type](#types) to create.
+
+
+Type: `string`  
+Default: `"counter"`  
 
 ### `path`
 
-`string` The path of the metric to create.
+The path of the metric to create.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `labels`
 
-`object` A map of label names and values that can be used to enrich metrics with aggregators such as Prometheus.
-
+A map of label names and values that can be used to enrich metrics with aggregators such as Prometheus.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `object`  
+Default: `{}`  
 
 ```yaml
 # Examples
@@ -66,9 +78,12 @@ labels:
 
 ### `value`
 
-`string` For some metric types specifies a value to set, increment.
-
+For some metric types specifies a value to set, increment.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `string`  
+Default: `""`  
 
 ## Types
 

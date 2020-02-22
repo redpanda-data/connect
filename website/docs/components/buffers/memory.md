@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 buffer:
   memory:
     limit: 524288000
@@ -42,6 +43,7 @@ buffer:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 buffer:
   memory:
     limit: 524288000
@@ -77,27 +79,51 @@ It is possible to batch up messages sent from this buffer using a
 
 ### `limit`
 
-`number` The maximum buffer size (in bytes) to allow before applying backpressure upstream.
+The maximum buffer size (in bytes) to allow before applying backpressure upstream.
+
+
+Type: `number`  
+Default: `524288000`  
 
 ### `batch_policy`
 
-`object` Optionally configure a policy to flush buffered messages in batches.
+Optionally configure a policy to flush buffered messages in batches.
+
+
+Type: `object`  
+Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":0,"enabled":false,"period":"","processors":[]}`  
 
 ### `batch_policy.enabled`
 
-`bool` Whether to batch messages as they are flushed.
+Whether to batch messages as they are flushed.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `batch_policy.count`
 
-`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `batch_policy.byte_size`
 
-`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `batch_policy.period`
 
-`string` A period in which an incomplete batch should be flushed regardless of its size.
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -111,11 +137,19 @@ period: 500ms
 
 ### `batch_policy.condition`
 
-`object` A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+
+Type: `object`  
+Default: `{"static":false,"type":"static"}`  
 
 ### `batch_policy.processors`
 
-`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples

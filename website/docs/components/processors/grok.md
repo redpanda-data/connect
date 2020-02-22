@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 grok:
   patterns: []
   pattern_definitions: {}
@@ -38,6 +39,7 @@ grok:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 grok:
   patterns: []
   pattern_definitions: {}
@@ -69,37 +71,64 @@ based implementations of grok. For more information see
 
 ### `patterns`
 
-`array` A list of patterns to attempt against the incoming messages.
+A list of patterns to attempt against the incoming messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `pattern_definitions`
 
-`object` A map of pattern definitions that can be referenced within `patterns`.
+A map of pattern definitions that can be referenced within `patterns`.
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `output_format`
 
-`string` The structured output format.
+The structured output format.
 
-Options are: `json`.
+
+Type: `string`  
+Default: `"json"`  
+Options: `json`.
 
 ### `named_captures_only`
 
-`bool` Whether to only capture values from named patterns.
+Whether to only capture values from named patterns.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `use_default_patterns`
 
-`bool` Whether to use a [default set of patterns](#default-patterns).
+Whether to use a [default set of patterns](#default-patterns).
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `remove_empty_values`
 
-`bool` Whether to remove values that are empty from the resulting structure.
+Whether to remove values that are empty from the resulting structure.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 

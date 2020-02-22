@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 xml:
   operator: to_json
 ```
@@ -35,6 +36,7 @@ xml:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 xml:
   operator: to_json
   parts: []
@@ -95,17 +97,24 @@ The resulting JSON structure would look like this:
 
 ### `operator`
 
-`string` An XML [operation](#operators) to apply to messages.
+An XML [operation](#operators) to apply to messages.
 
-Options are: `to_json`.
+
+Type: `string`  
+Default: `"to_json"`  
+Options: `to_json`.
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 

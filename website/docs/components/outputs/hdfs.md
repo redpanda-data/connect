@@ -14,6 +14,7 @@ type: output
 Sends message parts as files to a HDFS directory.
 
 ```yaml
+# Config fields, showing default values
 output:
   hdfs:
     hosts:
@@ -39,7 +40,11 @@ field `max_in_flight`.
 
 ### `hosts`
 
-`string` A list of hosts to connect to.
+A list of hosts to connect to.
+
+
+Type: `string`  
+Default: `["localhost:9000"]`  
 
 ```yaml
 # Examples
@@ -49,17 +54,28 @@ hosts: localhost:9000
 
 ### `user`
 
-`string` A user identifier.
+A user identifier.
+
+
+Type: `string`  
+Default: `"benthos_hdfs"`  
 
 ### `directory`
 
-`string` A directory to store message files within. If the directory does not exist it will be created.
+A directory to store message files within. If the directory does not exist it will be created.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `path`
 
-`string` The path to upload messages as, interpolation functions should be used in order to generate unique file paths.
-
+The path to upload messages as, interpolation functions should be used in order to generate unique file paths.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"${!count:files}-${!timestamp_unix_nano}.txt"`  
 
 ```yaml
 # Examples
@@ -69,6 +85,10 @@ path: ${!count:files}-${!timestamp_unix_nano}.txt
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

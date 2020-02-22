@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   http_client:
     url: http://localhost:4195/get
@@ -44,6 +45,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   http_client:
     url: http://localhost:4195/get
@@ -102,13 +104,20 @@ of a message.
 
 ### `url`
 
-`string` The URL to connect to.
-
+The URL to connect to.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"http://localhost:4195/get"`  
 
 ### `verb`
 
-`string` A verb to connect with
+A verb to connect with
+
+
+Type: `string`  
+Default: `"GET"`  
 
 ```yaml
 # Examples
@@ -122,9 +131,12 @@ verb: DELETE
 
 ### `headers`
 
-`object` A map of headers to add to the request.
-
+A map of headers to add to the request.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `object`  
+Default: `{"Content-Type":"application/octet-stream"}`  
 
 ```yaml
 # Examples
@@ -135,7 +147,11 @@ headers:
 
 ### `oauth`
 
-`object` Allows you to specify open authentication.
+Allows you to specify open authentication.
+
+
+Type: `object`  
+Default: `{"access_token":"","access_token_secret":"","consumer_key":"","consumer_secret":"","enabled":false,"request_url":""}`  
 
 ```yaml
 # Examples
@@ -151,7 +167,11 @@ oauth:
 
 ### `basic_auth`
 
-`object` Allows you to specify basic authentication.
+Allows you to specify basic authentication.
+
+
+Type: `object`  
+Default: `{"enabled":false,"password":"","username":""}`  
 
 ```yaml
 # Examples
@@ -164,23 +184,43 @@ basic_auth:
 
 ### `tls`
 
-`object` Custom TLS settings can be used to override system defaults.
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
-`bool` Whether custom TLS settings are enabled.
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.skip_cert_verify`
 
-`bool` Whether to skip server side certificate verification.
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.root_cas_file`
 
-`string` The path of a root certificate authority file to use.
+The path of a root certificate authority file to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls.client_certs`
 
-`array` A list of client certificates to use.
+A list of client certificates to use.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -196,67 +236,131 @@ client_certs:
 
 ### `copy_response_headers`
 
-`bool` Sets whether to copy the headers from the response to the resulting payload.
+Sets whether to copy the headers from the response to the resulting payload.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `rate_limit`
 
-`string` An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `timeout`
 
-`string` A static timeout to apply to requests.
+A static timeout to apply to requests.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `retry_period`
 
-`string` The base period to wait between failed requests.
+The base period to wait between failed requests.
+
+
+Type: `string`  
+Default: `"1s"`  
 
 ### `max_retry_backoff`
 
-`string` The maximum period to wait between failed requests.
+The maximum period to wait between failed requests.
+
+
+Type: `string`  
+Default: `"300s"`  
 
 ### `retries`
 
-`number` The maximum number of retry attempts to make.
+The maximum number of retry attempts to make.
+
+
+Type: `number`  
+Default: `3`  
 
 ### `backoff_on`
 
-`array` A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
+A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
+
+
+Type: `array`  
+Default: `[429]`  
 
 ### `drop_on`
 
-`array` A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
+A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `successful_on`
 
-`array` A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
+A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `payload`
 
-`string` An optional payload to deliver for each request.
+An optional payload to deliver for each request.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `stream`
 
-`object` Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.
+Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.
+
+
+Type: `object`  
+Default: `{"delimiter":"","enabled":false,"max_buffer":1000000,"multipart":false,"reconnect":true}`  
 
 ### `stream.enabled`
 
-`bool` Enables streaming mode.
+Enables streaming mode.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `stream.reconnect`
 
-`bool` Sets whether to re-establish the connection once it is lost.
+Sets whether to re-establish the connection once it is lost.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `stream.multipart`
 
-`bool` When running in stream mode sets whether an empty line indicates the end of a message batch, and only then is the batch flushed downstream.
+When running in stream mode sets whether an empty line indicates the end of a message batch, and only then is the batch flushed downstream.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `stream.max_buffer`
 
-`number` Must be larger than the largest line of the stream.
+Must be larger than the largest line of the stream.
+
+
+Type: `number`  
+Default: `1000000`  
 
 ### `stream.delimiter`
 
-`string` A string that indicates the end of a message within the stream. If left empty
+A string that indicates the end of a message within the stream. If left empty
 then line feed (\n) is used.
+
+
+Type: `string`  
+Default: `""`  
 
 

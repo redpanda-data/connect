@@ -16,6 +16,7 @@ queries that return rows, replaces the batch with the result according to a
 [codec](#result-codecs).
 
 ```yaml
+# Config fields, showing default values
 sql:
   driver: mysql
   dsn: ""
@@ -57,13 +58,20 @@ can override this with the parameter `sslmode=disable` if required.
 
 ### `driver`
 
-`string` A database [driver](#drivers) to use.
+A database [driver](#drivers) to use.
 
-Options are: `mysql`, `postgres`.
+
+Type: `string`  
+Default: `"mysql"`  
+Options: `mysql`, `postgres`.
 
 ### `dsn`
 
-`string` A Data Source Name to identify the target database.
+A Data Source Name to identify the target database.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -73,7 +81,11 @@ dsn: foouser:foopassword@tcp(localhost:3306)/foodb
 
 ### `query`
 
-`string` The query to run against the database.
+The query to run against the database.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -83,13 +95,20 @@ query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 
 ### `args`
 
-`array` A list of arguments for the query to be resolved for each message batch.
-
+A list of arguments for the query to be resolved for each message batch.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `result_codec`
 
-`string` A [codec](#result-codecs) to determine how resulting rows are converted into messages.
+A [codec](#result-codecs) to determine how resulting rows are converted into messages.
+
+
+Type: `string`  
+Default: `"none"`  
 
 ## Result Codecs
 

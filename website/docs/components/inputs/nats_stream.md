@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   nats_stream:
     urls:
@@ -43,6 +44,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   nats_stream:
     urls:
@@ -86,7 +88,11 @@ You can access these metadata fields using
 
 ### `urls`
 
-`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["nats://127.0.0.1:4222"]`  
 
 ```yaml
 # Examples
@@ -97,38 +103,74 @@ urls:
 
 ### `cluster_id`
 
-`string` The ID of the cluster to consume from.
+The ID of the cluster to consume from.
+
+
+Type: `string`  
+Default: `"test-cluster"`  
 
 ### `client_id`
 
-`string` A client ID to connect as.
+A client ID to connect as.
+
+
+Type: `string`  
+Default: `"benthos_client"`  
 
 ### `queue`
 
-`string` The queue to consume from.
+The queue to consume from.
+
+
+Type: `string`  
+Default: `"benthos_queue"`  
 
 ### `subject`
 
-`string` A subject to consume from.
+A subject to consume from.
+
+
+Type: `string`  
+Default: `"benthos_messages"`  
 
 ### `durable_name`
 
-`string` Preserve the state of your consumer under a durable name.
+Preserve the state of your consumer under a durable name.
+
+
+Type: `string`  
+Default: `"benthos_offset"`  
 
 ### `unsubscribe_on_close`
 
-`bool` Whether the subscription should be destroyed when this client disconnects.
+Whether the subscription should be destroyed when this client disconnects.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `start_from_oldest`
 
-`bool` If a position is not found for a queue, determines whether to consume from the oldest available message, otherwise messages are consumed from the latest.
+If a position is not found for a queue, determines whether to consume from the oldest available message, otherwise messages are consumed from the latest.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `max_inflight`
 
-`number` The maximum number of unprocessed messages to fetch at a given time.
+The maximum number of unprocessed messages to fetch at a given time.
+
+
+Type: `number`  
+Default: `1024`  
 
 ### `ack_wait`
 
-`string` An optional duration to specify at which a message that is yet to be acked will be automatically retried.
+An optional duration to specify at which a message that is yet to be acked will be automatically retried.
+
+
+Type: `string`  
+Default: `"30s"`  
 
 

@@ -12,6 +12,7 @@ type: output
 
 
 ```yaml
+# Config fields, showing default values
 output:
   inproc: ""
 ```

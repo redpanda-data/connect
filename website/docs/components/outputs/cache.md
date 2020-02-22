@@ -14,6 +14,7 @@ type: output
 Stores each message in a [cache](/docs/components/caches/about).
 
 ```yaml
+# Config fields, showing default values
 output:
   cache:
     target: ""
@@ -62,13 +63,20 @@ field `max_in_flight`.
 
 ### `target`
 
-`string` The target cache to store messages in.
+The target cache to store messages in.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `key`
 
-`string` The key to store messages by, function interpolation should be used in order to derive a unique key for each message.
-
+The key to store messages by, function interpolation should be used in order to derive a unique key for each message.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"${!count:items}-${!timestamp_unix_nano}"`  
 
 ```yaml
 # Examples
@@ -82,6 +90,10 @@ key: ${!metadata:kafka_key}
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

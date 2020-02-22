@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 decompress:
   algorithm: gzip
 ```
@@ -35,6 +36,7 @@ decompress:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 decompress:
   algorithm: gzip
   parts: []
@@ -47,17 +49,24 @@ decompress:
 
 ### `algorithm`
 
-`string` The decompression algorithm to use.
+The decompression algorithm to use.
 
-Options are: `gzip`, `zlib`, `bzip2`, `flate`.
+
+Type: `string`  
+Default: `"gzip"`  
+Options: `gzip`, `zlib`, `bzip2`, `flate`.
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 

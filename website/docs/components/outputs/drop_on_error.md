@@ -15,6 +15,7 @@ Attempts to write messages to a child output and if the write fails for any
 reason the message is dropped instead of being reattempted.
 
 ```yaml
+# Config fields, showing default values
 output:
   drop_on_error: {}
 ```

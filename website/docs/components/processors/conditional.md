@@ -15,6 +15,7 @@ Executes a set of child processors when a [condition](/docs/components/condition
 passes for a message batch, otherwise a different set of processors are applied.
 
 ```yaml
+# Config fields, showing default values
 conditional:
   condition:
     text:
@@ -38,14 +39,26 @@ processor with the [`for_each`](/docs/components/processors/for_each) processor.
 
 ### `condition`
 
-`object` The [`condition`](/docs/components/conditions/about) to check against messages.
+The [`condition`](/docs/components/conditions/about) to check against messages.
+
+
+Type: `object`  
+Default: `{"text":{"arg":"","operator":"equals_cs","part":0},"type":"text"}`  
 
 ### `processors`
 
-`array` A list of processors to apply when the condition passes.
+A list of processors to apply when the condition passes.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `else_processors`
 
-`array` A list of processors to apply when the condition does not pass.
+A list of processors to apply when the condition does not pass.
+
+
+Type: `array`  
+Default: `[]`  
 
 

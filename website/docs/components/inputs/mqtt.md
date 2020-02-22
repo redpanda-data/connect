@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   mqtt:
     urls:
@@ -39,6 +40,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   mqtt:
     urls:
@@ -74,32 +76,59 @@ You can access these metadata fields using
 
 ### `urls`
 
-`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["tcp://localhost:1883"]`  
 
 ### `topics`
 
-`array` A list of topics to consume from.
+A list of topics to consume from.
+
+
+Type: `array`  
+Default: `["benthos_topic"]`  
 
 ### `client_id`
 
-`string` An identifier for the client connection.
+An identifier for the client connection.
+
+
+Type: `string`  
+Default: `"benthos_input"`  
 
 ### `qos`
 
-`number` The level of delivery guarantee to enforce.
+The level of delivery guarantee to enforce.
 
-Options are: `0`, `1`, `2`.
+
+Type: `number`  
+Default: `1`  
+Options: `0`, `1`, `2`.
 
 ### `clean_session`
 
-`bool` Set whether the connection is non-persistent.
+Set whether the connection is non-persistent.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `user`
 
-`string` A username to assume for the connection.
+A username to assume for the connection.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `password`
 
-`string` A password to provide for the connection.
+A password to provide for the connection.
+
+
+Type: `string`  
+Default: `""`  
 
 

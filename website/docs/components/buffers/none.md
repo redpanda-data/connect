@@ -14,6 +14,7 @@ type: buffer
 Do not buffer messages. This is the default and most resilient configuration.
 
 ```yaml
+# Config fields, showing default values
 buffer:
   none: {}
 ```

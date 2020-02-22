@@ -17,6 +17,7 @@ case until a condition passes, whereby the processors of that case will be
 executed on the batch.
 
 ```yaml
+# Config fields, showing default values
 switch: []
 ```
 

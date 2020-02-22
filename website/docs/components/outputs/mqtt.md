@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   mqtt:
     urls:
@@ -40,6 +41,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   mqtt:
     urls:
@@ -69,7 +71,11 @@ field `max_in_flight`.
 
 ### `urls`
 
-`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["tcp://localhost:1883"]`  
 
 ```yaml
 # Examples
@@ -80,28 +86,51 @@ urls:
 
 ### `qos`
 
-`number` The QoS value to set for each message.
+The QoS value to set for each message.
 
-Options are: `0`, `1`, `2`.
+
+Type: `number`  
+Default: `1`  
+Options: `0`, `1`, `2`.
 
 ### `topic`
 
-`string` The topic to publish messages to.
+The topic to publish messages to.
+
+
+Type: `string`  
+Default: `"benthos_topic"`  
 
 ### `client_id`
 
-`string` An identifier for the client.
+An identifier for the client.
+
+
+Type: `string`  
+Default: `"benthos_output"`  
 
 ### `user`
 
-`string` A username to connect with.
+A username to connect with.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `password`
 
-`string` A password to connect with.
+A password to connect with.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

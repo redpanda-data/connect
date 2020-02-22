@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   http_server:
     address: ""
@@ -40,6 +41,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   http_server:
     address: ""
@@ -72,30 +74,58 @@ This behaviour can be overridden by
 
 ### `address`
 
-`string` An optional address to listen from. If left empty the service wide HTTP server is used.
+An optional address to listen from. If left empty the service wide HTTP server is used.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `path`
 
-`string` The path from which discrete messages can be consumed.
+The path from which discrete messages can be consumed.
+
+
+Type: `string`  
+Default: `"/get"`  
 
 ### `stream_path`
 
-`string` The path from which a continuous stream of messages can be consumed.
+The path from which a continuous stream of messages can be consumed.
+
+
+Type: `string`  
+Default: `"/get/stream"`  
 
 ### `ws_path`
 
-`string` The path from which websocket connections can be established.
+The path from which websocket connections can be established.
+
+
+Type: `string`  
+Default: `"/get/ws"`  
 
 ### `timeout`
 
-`string` The maximum time to wait before a blocking, inactive connection is dropped (only applies to the `path` endpoint).
+The maximum time to wait before a blocking, inactive connection is dropped (only applies to the `path` endpoint).
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `cert_file`
 
-`string` An optional certificate file to use for TLS connections. Only applicable when an `address` is specified.
+An optional certificate file to use for TLS connections. Only applicable when an `address` is specified.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `key_file`
 
-`string` An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified.
+An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified.
+
+
+Type: `string`  
+Default: `""`  
 
 

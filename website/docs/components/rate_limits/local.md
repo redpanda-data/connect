@@ -16,6 +16,7 @@ across any number of components within the pipeline but does not support
 distributed rate limits across multiple running instances of Benthos.
 
 ```yaml
+# Config fields, showing default values
 local:
   count: 1000
   interval: 1s
@@ -25,10 +26,18 @@ local:
 
 ### `count`
 
-`number` The maximum number of requests to allow for a given period of time.
+The maximum number of requests to allow for a given period of time.
+
+
+Type: `number`  
+Default: `1000`  
 
 ### `interval`
 
-`string` The time window to limit requests by.
+The time window to limit requests by.
+
+
+Type: `string`  
+Default: `"1s"`  
 
 

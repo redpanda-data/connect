@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   amqp_0_9:
     url: amqp://guest:guest@localhost:5672/
@@ -39,6 +40,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   amqp_0_9:
     url: amqp://guest:guest@localhost:5672/
@@ -95,7 +97,11 @@ You can access these metadata fields using
 
 ### `url`
 
-`string` A URL to connect to.
+A URL to connect to.
+
+
+Type: `string`  
+Default: `"amqp://guest:guest@localhost:5672/"`  
 
 ```yaml
 # Examples
@@ -107,12 +113,20 @@ url: amqps://guest:guest@localhost:5672/
 
 ### `queue`
 
-`string` An AMQP queue to consume from.
+An AMQP queue to consume from.
+
+
+Type: `string`  
+Default: `"benthos-queue"`  
 
 ### `queue_declare`
 
-`object` Allows you to passively declare the target queue. If the queue already exists
+Allows you to passively declare the target queue. If the queue already exists
 then the declaration passively verifies that they match the target fields.
+
+
+Type: `object`  
+Default: `{"durable":true,"enabled":false}`  
 
 ```yaml
 # Examples
@@ -124,7 +138,11 @@ queue_declare:
 
 ### `bindings_declare`
 
-`array` Allows you to passively declare bindings for the target queue.
+Allows you to passively declare bindings for the target queue.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -136,35 +154,67 @@ bindings_declare:
 
 ### `consumer_tag`
 
-`string` A consumer tag.
+A consumer tag.
+
+
+Type: `string`  
+Default: `"benthos-consumer"`  
 
 ### `prefetch_count`
 
-`number` The maximum number of pending messages to have consumed at a time.
+The maximum number of pending messages to have consumed at a time.
+
+
+Type: `number`  
+Default: `10`  
 
 ### `prefetch_size`
 
-`number` The maximum amount of pending messages measured in bytes to have consumed at a time.
+The maximum amount of pending messages measured in bytes to have consumed at a time.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `tls`
 
-`object` Custom TLS settings can be used to override system defaults.
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
-`bool` Whether custom TLS settings are enabled.
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.skip_cert_verify`
 
-`bool` Whether to skip server side certificate verification.
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.root_cas_file`
 
-`string` The path of a root certificate authority file to use.
+The path of a root certificate authority file to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls.client_certs`
 
-`array` A list of client certificates to use.
+A list of client certificates to use.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples

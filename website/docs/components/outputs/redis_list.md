@@ -15,6 +15,7 @@ Pushes messages onto the end of a Redis list (which is created if it doesn't
 already exist) using the RPUSH command.
 
 ```yaml
+# Config fields, showing default values
 output:
   redis_list:
     url: tcp://localhost:6379
@@ -33,7 +34,11 @@ field `max_in_flight`.
 
 ### `url`
 
-`string` The URL of a Redis server to connect to.
+The URL of a Redis server to connect to.
+
+
+Type: `string`  
+Default: `"tcp://localhost:6379"`  
 
 ```yaml
 # Examples
@@ -43,10 +48,18 @@ url: tcp://localhost:6379
 
 ### `key`
 
-`string` The key of a Redis list.
+The key of a Redis list.
+
+
+Type: `string`  
+Default: `"benthos_list"`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

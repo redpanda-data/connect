@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 avro:
   operator: to_json
   encoding: textual
@@ -36,6 +37,7 @@ avro:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 avro:
   operator: to_json
   encoding: textual
@@ -66,27 +68,41 @@ specified encoding.
 
 ### `operator`
 
-`string` The [operator](#operators) to execute
+The [operator](#operators) to execute
 
-Options are: `to_json`, `from_json`.
+
+Type: `string`  
+Default: `"to_json"`  
+Options: `to_json`, `from_json`.
 
 ### `encoding`
 
-`string` An Avro encoding format to use for conversions to and from a schema.
+An Avro encoding format to use for conversions to and from a schema.
 
-Options are: `textual`, `binary`, `single`.
+
+Type: `string`  
+Default: `"textual"`  
+Options: `textual`, `binary`, `single`.
 
 ### `schema`
 
-`string` A full Avro schema to use.
+A full Avro schema to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 

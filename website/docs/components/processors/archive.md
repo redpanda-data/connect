@@ -15,6 +15,7 @@ Archives all the messages of a batch into a single message according to the
 selected archive [format](#formats).
 
 ```yaml
+# Config fields, showing default values
 archive:
   format: binary
   path: ${!count:files}-${!timestamp_unix_nano}.txt
@@ -37,15 +38,21 @@ that are batched. You can find out more about batching [in this doc](/docs/confi
 
 ### `format`
 
-`string` The archiving [format](#formats) to apply.
+The archiving [format](#formats) to apply.
 
-Options are: `tar`, `zip`, `binary`, `lines`, `json_array`.
+
+Type: `string`  
+Default: `"binary"`  
+Options: `tar`, `zip`, `binary`, `lines`, `json_array`.
 
 ### `path`
 
-`string` The path to set for each message in the archive (when applicable).
-
+The path to set for each message in the archive (when applicable).
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"${!count:files}-${!timestamp_unix_nano}.txt"`  
 
 ```yaml
 # Examples

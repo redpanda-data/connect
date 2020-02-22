@@ -14,6 +14,7 @@ type: output
 Send messages over a Nanomsg socket.
 
 ```yaml
+# Config fields, showing default values
 output:
   nanomsg:
     urls:
@@ -36,7 +37,11 @@ field `max_in_flight`.
 
 ### `urls`
 
-`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["tcp://localhost:5556"]`  
 
 ```yaml
 # Examples
@@ -47,20 +52,35 @@ urls:
 
 ### `bind`
 
-`bool` Whether the URLs listed should be bind (otherwise they are connected to).
+Whether the URLs listed should be bind (otherwise they are connected to).
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `socket_type`
 
-`string` The socket type to send with.
+The socket type to send with.
 
-Options are: `PUSH`, `PUB`.
+
+Type: `string`  
+Default: `"PUSH"`  
+Options: `PUSH`, `PUB`.
 
 ### `poll_timeout`
 
-`string` The maximum period of time to wait for a message to send before the request is abandoned and reattempted.
+The maximum period of time to wait for a message to send before the request is abandoned and reattempted.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

@@ -36,6 +36,7 @@ type fieldContext struct {
 	Name          string
 	Type          string
 	Description   string
+	Default       string
 	Advanced      bool
 	Deprecated    bool
 	Interpolation FieldInterpolation
@@ -79,6 +80,7 @@ type: {{.Type}}
 {{end}}
 {{if eq .CommonConfig .AdvancedConfig -}}
 ` + "```yaml" + `
+# Config fields, showing default values
 {{.CommonConfig -}}
 ` + "```" + `
 {{else}}
@@ -94,6 +96,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ` + "```yaml" + `
+# Common config fields, showing default values
 {{.CommonConfig -}}
 ` + "```" + `
 
@@ -101,6 +104,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="advanced">
 
 ` + "```yaml" + `
+# All config fields, showing default values
 {{.AdvancedConfig -}}
 ` + "```" + `
 
@@ -117,19 +121,19 @@ import TabItem from '@theme/TabItem';
 {{range $i, $field := .Fields -}}
 ### ` + "`{{$field.Name}}`" + `
 
-` + "`{{$field.Type}}`" + ` {{$field.Description}}
-{{if gt (len $field.Options) 0}}
-Options are: {{range $j, $option := $field.Options -}}
-{{if ne $j 0}}, {{end}}` + "`" + `{{$option}}` + "`" + `{{end}}.
-{{end}}
+{{$field.Description}}
 {{if eq $field.Interpolation .InterpolationBatchWide -}}
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
-
 {{end -}}
 {{if eq $field.Interpolation .InterpolationIndividual -}}
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+{{end}}
 
-{{end -}}
+Type: ` + "`{{$field.Type}}`" + `  
+Default: ` + "`{{$field.Default}}`" + `  
+{{if gt (len $field.Options) 0}}Options: {{range $j, $option := $field.Options -}}
+{{if ne $j 0}}, {{end}}` + "`" + `{{$option}}` + "`" + `{{end}}.
+{{end}}
 {{if gt (len $field.Examples) 0 -}}
 ` + "```yaml" + `
 # Examples
@@ -286,16 +290,17 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			return nil, fmt.Errorf("unrecognised field '%v'", v.Name)
 		}
 
+		defaultValue := gConf.Path(v.Name)
+		if defaultValue.Data() == nil {
+			return nil, fmt.Errorf("field '%v' not found in config example", v.Name)
+		}
+
 		fieldType := v.Type
 		if len(fieldType) == 0 {
 			if len(v.Examples) > 0 {
 				fieldType = reflect.TypeOf(v.Examples[0]).Kind().String()
 			} else {
-				if c := gConf.Path(v.Name).Data(); c != nil {
-					fieldType = reflect.TypeOf(c).Kind().String()
-				} else {
-					return nil, fmt.Errorf("unable to infer type of '%v'", v.Name)
-				}
+				fieldType = reflect.TypeOf(defaultValue.Data()).Kind().String()
 			}
 		}
 		switch fieldType {
@@ -326,6 +331,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			Name:          v.Name,
 			Type:          fieldType,
 			Description:   v.Description,
+			Default:       defaultValue.String(),
 			Advanced:      v.Advanced,
 			Examples:      examples,
 			Options:       v.Options,

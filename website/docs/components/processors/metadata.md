@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 metadata:
   operator: set
   key: example
@@ -37,6 +38,7 @@ metadata:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 metadata:
   operator: set
   key: example
@@ -93,29 +95,42 @@ used as the prefix.
 
 ### `operator`
 
-`string` The operator to apply to messages.
+The operator to apply to messages.
 
-Options are: `set`, `delete`, `delete_all`, `delete_prefix`.
+
+Type: `string`  
+Default: `"set"`  
+Options: `set`, `delete`, `delete_all`, `delete_prefix`.
 
 ### `key`
 
-`string` The metadata key to target with the chosen operator.
-
+The metadata key to target with the chosen operator.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `string`  
+Default: `"example"`  
 
 ### `value`
 
-`string` The metadata value to use with the chosen operator.
-
+The metadata value to use with the chosen operator.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `string`  
+Default: `"${!hostname}"`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 

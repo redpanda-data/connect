@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 parse_log:
   format: syslog_rfc5424
   codec: json
@@ -36,6 +37,7 @@ parse_log:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 parse_log:
   format: syslog_rfc5424
   codec: json
@@ -53,40 +55,66 @@ parse_log:
 
 ### `format`
 
-`string` A common log [format](#formats) to parse.
+A common log [format](#formats) to parse.
 
-Options are: `syslog_rfc5424`, `syslog_rfc3164`.
+
+Type: `string`  
+Default: `"syslog_rfc5424"`  
+Options: `syslog_rfc5424`, `syslog_rfc3164`.
 
 ### `codec`
 
-`string` Specifies the structured format to parse a log into.
+Specifies the structured format to parse a log into.
 
-Options are: `json`.
+
+Type: `string`  
+Default: `"json"`  
+Options: `json`.
 
 ### `best_effort`
 
-`bool` Still returns partially parsed messages even if an error occurs.
+Still returns partially parsed messages even if an error occurs.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `allow_rfc3339`
 
-`bool` Also accept timestamps in rfc3339 format while parsing. Applicable to format `syslog_rfc3164`.
+Also accept timestamps in rfc3339 format while parsing. Applicable to format `syslog_rfc3164`.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `default_year`
 
-`string` Sets the strategy used to set the year for rfc3164 timestamps. Applicable to format `syslog_rfc3164`. When set to `current` the current year will be set, when set to an integer that value will be used. Leave this field empty to not set a default year at all.
+Sets the strategy used to set the year for rfc3164 timestamps. Applicable to format `syslog_rfc3164`. When set to `current` the current year will be set, when set to an integer that value will be used. Leave this field empty to not set a default year at all.
+
+
+Type: `string`  
+Default: `"current"`  
 
 ### `default_timezone`
 
-`string` Sets the strategy to decide the timezone for rfc3164 timestamps. Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format.
+Sets the strategy to decide the timezone for rfc3164 timestamps. Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format.
+
+
+Type: `string`  
+Default: `"UTC"`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 ## Codecs
 

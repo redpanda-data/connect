@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   redis_list:
     url: tcp://localhost:6379
@@ -36,6 +37,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   redis_list:
     url: tcp://localhost:6379
@@ -50,7 +52,11 @@ input:
 
 ### `url`
 
-`string` The URL of a Redis server to connect to.
+The URL of a Redis server to connect to.
+
+
+Type: `string`  
+Default: `"tcp://localhost:6379"`  
 
 ```yaml
 # Examples
@@ -60,10 +66,18 @@ url: tcp://localhost:6379
 
 ### `key`
 
-`string` The key of a list to read from.
+The key of a list to read from.
+
+
+Type: `string`  
+Default: `"benthos_list"`  
 
 ### `timeout`
 
-`string` The length of time to poll for new messages before reattempting.
+The length of time to poll for new messages before reattempting.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 

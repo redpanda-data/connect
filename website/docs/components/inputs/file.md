@@ -14,6 +14,7 @@ type: input
 Reads a file, where each line is processed as an individual message.
 
 ```yaml
+# Config fields, showing default values
 input:
   file:
     path: ""
@@ -26,21 +27,37 @@ input:
 
 ### `path`
 
-`string` A path pointing to a file on disk.
+A path pointing to a file on disk.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `multipart`
 
-`bool` If set `true` each line is read as a message part, and an empty line
+If set `true` each line is read as a message part, and an empty line
 indicates the end of a message batch, and only then is the batch flushed
 downstream.
 
+
+Type: `bool`  
+Default: `false`  
+
 ### `max_buffer`
 
-`number` Must be larger than the largest line of the target file.
+Must be larger than the largest line of the target file.
+
+
+Type: `number`  
+Default: `1000000`  
 
 ### `delimiter`
 
-`string` A string that indicates the end of a message within the target file. If left
+A string that indicates the end of a message within the target file. If left
 empty then line feed (\n) is used.
+
+
+Type: `string`  
+Default: `""`  
 
 

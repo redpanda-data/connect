@@ -14,6 +14,7 @@ type: output
 Sets Redis hash objects using the HMSET command.
 
 ```yaml
+# Config fields, showing default values
 output:
   redis_hash:
     url: tcp://localhost:6379
@@ -67,7 +68,11 @@ field `max_in_flight`.
 
 ### `url`
 
-`string` The URL of a Redis server to connect to.
+The URL of a Redis server to connect to.
+
+
+Type: `string`  
+Default: `"tcp://localhost:6379"`  
 
 ```yaml
 # Examples
@@ -77,9 +82,12 @@ url: tcp://localhost:6379
 
 ### `key`
 
-`string` The key for each message, function interpolations should be used to create a unique key per message.
-
+The key for each message, function interpolations should be used to create a unique key per message.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -93,20 +101,35 @@ key: ${!count:msgs}
 
 ### `walk_metadata`
 
-`bool` Whether all metadata fields of messages should be walked and added to the list of hash fields to set.
+Whether all metadata fields of messages should be walked and added to the list of hash fields to set.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `walk_json_object`
 
-`bool` Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set.
+Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `fields`
 
-`object` A map of key/value pairs to set as hash fields.
-
+A map of key/value pairs to set as hash fields.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

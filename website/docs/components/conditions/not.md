@@ -14,6 +14,7 @@ type: condition
 Returns the opposite (NOT) of a child condition.
 
 ```yaml
+# Config fields, showing default values
 not: {}
 ```
 

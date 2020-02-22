@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 dynamodb:
   table: ""
   hash_key: ""
@@ -39,6 +40,7 @@ dynamodb:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 dynamodb:
   table: ""
   hash_key: ""
@@ -83,82 +85,162 @@ allowing you to transfer data across accounts. You can find out more
 
 ### `table`
 
-`string` The table to store items in.
+The table to store items in.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `hash_key`
 
-`string` The key of the table column to store item keys within.
+The key of the table column to store item keys within.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `data_key`
 
-`string` The key of the table column to store item values within.
+The key of the table column to store item values within.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `consistent_read`
 
-`bool` Whether to use strongly consistent reads on Get commands.
+Whether to use strongly consistent reads on Get commands.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `ttl`
 
-`string` An optional TTL to set for items, calculated from the moment the item is cached.
+An optional TTL to set for items, calculated from the moment the item is cached.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `ttl_key`
 
-`string` The column key to place the TTL value within.
+The column key to place the TTL value within.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `region`
 
-`string` The AWS region to target.
+The AWS region to target.
+
+
+Type: `string`  
+Default: `"eu-west-1"`  
 
 ### `endpoint`
 
-`string` Allows you to specify a custom endpoint for the AWS API.
+Allows you to specify a custom endpoint for the AWS API.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials`
 
-`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+
+Type: `object`  
+Default: `{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""}`  
 
 ### `credentials.profile`
 
-`string` A profile from `~/.aws/credentials` to use.
+A profile from `~/.aws/credentials` to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.id`
 
-`string` The ID of credentials to use.
+The ID of credentials to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.secret`
 
-`string` The secret for the credentials being used.
+The secret for the credentials being used.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.token`
 
-`string` The token for the credentials being used, required when using short term credentials.
+The token for the credentials being used, required when using short term credentials.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.role`
 
-`string` A role ARN to assume.
+A role ARN to assume.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.role_external_id`
 
-`string` An external ID to provide when assuming a role.
+An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `max_retries`
 
-`number` The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+
+
+Type: `number`  
+Default: `3`  
 
 ### `backoff`
 
-`object` Control time intervals between retry attempts.
+Control time intervals between retry attempts.
+
+
+Type: `object`  
+Default: `{"initial_interval":"1s","max_elapsed_time":"30s","max_interval":"5s"}`  
 
 ### `backoff.initial_interval`
 
-`string` The initial period to wait between retry attempts.
+The initial period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"1s"`  
 
 ### `backoff.max_interval`
 
-`string` The maximum period to wait between retry attempts.
+The maximum period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `backoff.max_elapsed_time`
 
-`string` The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+
+
+Type: `string`  
+Default: `"30s"`  
 
 

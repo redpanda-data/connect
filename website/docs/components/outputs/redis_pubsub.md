@@ -15,6 +15,7 @@ Publishes messages through the Redis PubSub model. It is not possible to
 guarantee that messages have been received.
 
 ```yaml
+# Config fields, showing default values
 output:
   redis_pubsub:
     url: tcp://localhost:6379
@@ -35,7 +36,11 @@ field `max_in_flight`.
 
 ### `url`
 
-`string` The URL of a Redis server to connect to.
+The URL of a Redis server to connect to.
+
+
+Type: `string`  
+Default: `"tcp://localhost:6379"`  
 
 ```yaml
 # Examples
@@ -45,12 +50,19 @@ url: tcp://localhost:6379
 
 ### `channel`
 
-`string` The channel to publish messages to.
-
+The channel to publish messages to.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"benthos_chan"`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

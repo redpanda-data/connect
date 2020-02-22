@@ -17,6 +17,7 @@ deterministically, but can be set in config to allow parallel samples that are
 unique.
 
 ```yaml
+# Config fields, showing default values
 sample:
   retain: 10
   seed: 0
@@ -26,10 +27,18 @@ sample:
 
 ### `retain`
 
-`number` The percentage of messages to keep.
+The percentage of messages to keep.
+
+
+Type: `number`  
+Default: `10`  
 
 ### `seed`
 
-`number` A seed for pseudo-random sampling.
+A seed for pseudo-random sampling.
+
+
+Type: `number`  
+Default: `0`  
 
 

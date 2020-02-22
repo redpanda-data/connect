@@ -17,6 +17,7 @@ their postmap targets for provided fields and their premap targets for required
 fields.
 
 ```yaml
+# Config fields, showing default values
 process_dag: {}
 ```
 

@@ -14,6 +14,7 @@ type: condition
 Returns the logical OR of children conditions.
 
 ```yaml
+# Config fields, showing default values
 or: []
 ```
 

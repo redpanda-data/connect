@@ -14,6 +14,7 @@ type: output
 Publish to a NATS Stream subject.
 
 ```yaml
+# Config fields, showing default values
 output:
   nats_stream:
     urls:
@@ -35,22 +36,42 @@ field `max_in_flight`.
 
 ### `urls`
 
-`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["nats://127.0.0.1:4222"]`  
 
 ### `cluster_id`
 
-`string` The cluster ID to publish to.
+The cluster ID to publish to.
+
+
+Type: `string`  
+Default: `"test-cluster"`  
 
 ### `subject`
 
-`string` The subject to publish to.
+The subject to publish to.
+
+
+Type: `string`  
+Default: `"benthos_messages"`  
 
 ### `client_id`
 
-`string` The client ID to connect with.
+The client ID to connect with.
+
+
+Type: `string`  
+Default: `"benthos_client"`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

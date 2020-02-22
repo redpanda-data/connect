@@ -14,6 +14,7 @@ type: processor
 Executes an automatically resolved workflow of processing stages.
 
 ```yaml
+# Config fields, showing default values
 workflow:
   meta_path: meta.workflow
   stages: {}
@@ -50,10 +51,18 @@ You can read more about workflows in Benthos
 
 ### `meta_path`
 
-`string` A [dot path](/docs/configuration/field_paths) indicating where to store metadata about workflow execution within the message.
+A [dot path](/docs/configuration/field_paths) indicating where to store metadata about workflow execution within the message.
+
+
+Type: `string`  
+Default: `"meta.workflow"`  
 
 ### `stages`
 
-`object` A map of ids to [`process_map`](/docs/components/processors/process_map) processors that define each workflow step.
+A map of ids to [`process_map`](/docs/components/processors/process_map) processors that define each workflow step.
+
+
+Type: `object`  
+Default: `{}`  
 
 

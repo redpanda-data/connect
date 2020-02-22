@@ -16,6 +16,7 @@ configured condition resource in multiple processors, or as a branch of another
 condition.
 
 ```yaml
+# Config fields, showing default values
 resource: ""
 ```
 

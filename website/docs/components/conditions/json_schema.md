@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 json_schema:
   schema: ""
   schema_path: ""
@@ -36,6 +37,7 @@ json_schema:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 json_schema:
   schema: ""
   schema_path: ""
@@ -53,20 +55,32 @@ tutorials regarding the syntax of the schema.
 
 ### `schema`
 
-`string` A schema to apply. Use either this or the `schema_path` field.
+A schema to apply. Use either this or the `schema_path` field.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `schema_path`
 
-`string` The path of a schema document to apply. Use either this or the `schema` field.
+The path of a schema document to apply. Use either this or the `schema` field.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `part`
 
-`number` The index of a message within a batch to test the condition against. This
+The index of a message within a batch to test the condition against. This
 field is only applicable when batching messages
 [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `number`  
+Default: `0`  
 
 ## Examples
 

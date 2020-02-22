@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 subprocess:
   name: cat
   args: []
@@ -37,6 +38,7 @@ subprocess:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 subprocess:
   name: cat
   args: []
@@ -74,7 +76,11 @@ another line is fed in.
 
 ### `name`
 
-`string` The command to execute as a subprocess.
+The command to execute as a subprocess.
+
+
+Type: `string`  
+Default: `"cat"`  
 
 ```yaml
 # Examples
@@ -88,19 +94,31 @@ name: awk
 
 ### `args`
 
-`array` A list of arguments to provide the command.
+A list of arguments to provide the command.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `max_buffer`
 
-`number` The maximum expected response size.
+The maximum expected response size.
+
+
+Type: `number`  
+Default: `65536`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 

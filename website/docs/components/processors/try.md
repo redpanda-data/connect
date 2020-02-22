@@ -17,6 +17,7 @@ if a processor fails for a message then that message will skip all following
 processors.
 
 ```yaml
+# Config fields, showing default values
 try: []
 ```
 

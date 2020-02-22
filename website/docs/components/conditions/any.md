@@ -16,6 +16,7 @@ individually. If any message passes the child condition then this condition also
 passes.
 
 ```yaml
+# Config fields, showing default values
 any: {}
 ```
 

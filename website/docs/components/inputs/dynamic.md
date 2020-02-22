@@ -15,6 +15,7 @@ A special broker type where the inputs are identified by unique labels and can
 be created, changed and removed during runtime via a REST HTTP interface.
 
 ```yaml
+# Config fields, showing default values
 input:
   dynamic:
     inputs: {}
@@ -34,14 +35,26 @@ already exists it will be changed.
 
 ### `inputs`
 
-`object` A map of inputs to statically create.
+A map of inputs to statically create.
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `prefix`
 
-`string` A path prefix for HTTP endpoints that are registered.
+A path prefix for HTTP endpoints that are registered.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `timeout`
 
-`string` The server side timeout of HTTP requests.
+The server side timeout of HTTP requests.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 

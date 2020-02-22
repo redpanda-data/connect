@@ -15,6 +15,7 @@ A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message.
 
 ```yaml
+# Config fields, showing default values
 for_each: []
 ```
 

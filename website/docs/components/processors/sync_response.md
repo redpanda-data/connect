@@ -15,6 +15,7 @@ Adds the payload in its current state as a synchronous response to the input
 source, where it is dealt with according to that specific input type.
 
 ```yaml
+# Config fields, showing default values
 sync_response: {}
 ```
 

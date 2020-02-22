@@ -15,6 +15,7 @@ Reads messages from a child input until a consumed message passes a condition,
 at which point the input closes.
 
 ```yaml
+# Config fields, showing default values
 input:
   read_until:
     input: {}
@@ -46,15 +47,27 @@ added to the first part of the message that triggers the input to stop.
 
 ### `input`
 
-`object` The child input to consume from.
+The child input to consume from.
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `condition`
 
-`object` The [condition](/docs/components/conditions/about) to test messages against.
+The [condition](/docs/components/conditions/about) to test messages against.
+
+
+Type: `object`  
+Default: `{"text":{"arg":"","operator":"equals_cs","part":0},"type":"text"}`  
 
 ### `restart_input`
 
-`bool` Whether the input should be reopened if it closes itself before the condition has resolved to true.
+Whether the input should be reopened if it closes itself before the condition has resolved to true.
+
+
+Type: `bool`  
+Default: `false`  
 
 ## Examples
 

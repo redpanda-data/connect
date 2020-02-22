@@ -14,6 +14,7 @@ type: condition
 Always resolves to the same static boolean value.
 
 ```yaml
+# Config fields, showing default values
 static: true
 ```
 

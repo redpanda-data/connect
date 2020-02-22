@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   nanomsg:
     urls:
@@ -39,6 +40,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   nanomsg:
     urls:
@@ -58,24 +60,43 @@ Currently only PULL and SUB sockets are supported.
 
 ### `urls`
 
-`array` A list of URLs to connect to (or as). If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to (or as). If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["tcp://*:5555"]`  
 
 ### `bind`
 
-`bool` Whether the URLs provided should be connected to, or bound as.
+Whether the URLs provided should be connected to, or bound as.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `socket_type`
 
-`string` The socket type to use.
+The socket type to use.
 
-Options are: `PULL`, `SUB`.
+
+Type: `string`  
+Default: `"PULL"`  
+Options: `PULL`, `SUB`.
 
 ### `sub_filters`
 
-`array` A list of subcription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.
+A list of subcription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `poll_timeout`
 
-`string` The period to wait until a poll is abandoned and reattempted.
+The period to wait until a poll is abandoned and reattempted.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 

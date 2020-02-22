@@ -15,6 +15,7 @@ Reads files from a path, where each discrete file will be consumed as a single
 message.
 
 ```yaml
+# Config fields, showing default values
 input:
   files:
     path: ""
@@ -40,10 +41,18 @@ You can access these metadata fields using
 
 ### `path`
 
-`string` A path to either a directory or a file.
+A path to either a directory or a file.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `delete_files`
 
-`bool` Whether to delete files once they are consumed.
+Whether to delete files once they are consumed.
+
+
+Type: `bool`  
+Default: `false`  
 
 

@@ -29,6 +29,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 process_field:
   codec: json
   path: ""
@@ -40,6 +41,7 @@ process_field:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 process_field:
   codec: json
   path: ""
@@ -80,32 +82,50 @@ Extracts and sets a metadata value identified by the path field.
 
 ### `codec`
 
-`string` A [codec](#codec) to use in order to extract (and set) the target field.
+A [codec](#codec) to use in order to extract (and set) the target field.
 
-Options are: `json`, `metadata`.
+
+Type: `string`  
+Default: `"json"`  
+Options: `json`, `metadata`.
 
 ### `path`
 
-`string` A [dot path](/docs/configuration/field_paths) pointing to the target field.
+A [dot path](/docs/configuration/field_paths) pointing to the target field.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `result_type`
 
-`string` The final data type to marshal the processing result into. The `discard` type is a special case that discards the result of the processing steps entirely.
+The final data type to marshal the processing result into. The `discard` type is a special case that discards the result of the processing steps entirely.
 
-Options are: `string`, `int`, `float`, `bool`, `object`, `discard`.
+
+Type: `string`  
+Default: `"string"`  
+Options: `string`, `int`, `float`, `bool`, `object`, `discard`.
 
 ### `processors`
 
-`array` A list of child processors to execute on the extracted value.
+A list of child processors to execute on the extracted value.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 ## Examples
 

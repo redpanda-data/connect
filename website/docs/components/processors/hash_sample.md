@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 hash_sample:
   retain_min: 0
   retain_max: 10
@@ -36,6 +37,7 @@ hash_sample:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 hash_sample:
   retain_min: 0
   retain_max: 10
@@ -57,14 +59,26 @@ In order to sample individual messages of a batch use this processor with the
 
 ### `retain_min`
 
-`number` The lower percentage of the sample range.
+The lower percentage of the sample range.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `retain_max`
 
-`number` The upper percentage of the sample range.
+The upper percentage of the sample range.
+
+
+Type: `number`  
+Default: `10`  
 
 ### `parts`
 
-`array` An array of message indexes within the batch to sample based on. If left empty all messages included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching).
+An array of message indexes within the batch to sample based on. If left empty all messages included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching).
+
+
+Type: `array`  
+Default: `[0]`  
 
 

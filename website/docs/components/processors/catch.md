@@ -15,6 +15,7 @@ Applies a list of child processors _only_ when a previous processing step has
 failed.
 
 ```yaml
+# Config fields, showing default values
 catch: []
 ```
 

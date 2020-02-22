@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   kinesis:
     stream: ""
@@ -42,6 +43,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   kinesis:
     stream: ""
@@ -101,27 +103,45 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `stream`
 
-`string` The stream to publish messages to.
+The stream to publish messages to.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `partition_key`
 
-`string` A required key for partitioning messages.
-
+A required key for partitioning messages.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `hash_key`
 
-`string` A optional hash key for partitioning messages.
-
+A optional hash key for partitioning messages.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `batching`
 
-`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
 
 ```yaml
 # Examples
@@ -144,15 +164,27 @@ batching:
 
 ### `batching.count`
 
-`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `batching.byte_size`
 
-`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `batching.period`
 
-`string` A period in which an incomplete batch should be flushed regardless of its size.
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -166,11 +198,19 @@ period: 500ms
 
 ### `batching.condition`
 
-`object` A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+
+Type: `object`  
+Default: `{"static":false,"type":"static"}`  
 
 ### `batching.processors`
 
-`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -189,58 +229,114 @@ processors:
 
 ### `region`
 
-`string` The AWS region to target.
+The AWS region to target.
+
+
+Type: `string`  
+Default: `"eu-west-1"`  
 
 ### `endpoint`
 
-`string` Allows you to specify a custom endpoint for the AWS API.
+Allows you to specify a custom endpoint for the AWS API.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials`
 
-`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+
+Type: `object`  
+Default: `{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""}`  
 
 ### `credentials.profile`
 
-`string` A profile from `~/.aws/credentials` to use.
+A profile from `~/.aws/credentials` to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.id`
 
-`string` The ID of credentials to use.
+The ID of credentials to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.secret`
 
-`string` The secret for the credentials being used.
+The secret for the credentials being used.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.token`
 
-`string` The token for the credentials being used, required when using short term credentials.
+The token for the credentials being used, required when using short term credentials.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.role`
 
-`string` A role ARN to assume.
+A role ARN to assume.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.role_external_id`
 
-`string` An external ID to provide when assuming a role.
+An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `max_retries`
 
-`number` The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `backoff`
 
-`object` Control time intervals between retry attempts.
+Control time intervals between retry attempts.
+
+
+Type: `object`  
+Default: `{"initial_interval":"1s","max_elapsed_time":"30s","max_interval":"5s"}`  
 
 ### `backoff.initial_interval`
 
-`string` The initial period to wait between retry attempts.
+The initial period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"1s"`  
 
 ### `backoff.max_interval`
 
-`string` The maximum period to wait between retry attempts.
+The maximum period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `backoff.max_elapsed_time`
 
-`string` The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+
+
+Type: `string`  
+Default: `"30s"`  
 
 

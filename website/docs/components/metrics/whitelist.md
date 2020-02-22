@@ -15,6 +15,7 @@ Whitelist metric paths within Benthos so that only matching metric paths are
 aggregated by a child metric target.
 
 ```yaml
+# Config fields, showing default values
 metrics:
   whitelist:
     paths: []
@@ -35,15 +36,27 @@ Benthos registers can be found in
 
 ### `paths`
 
-`array` A list of path prefixes to include. This can be used, for example, to allow all of the child specific metrics paths from an output broker with the path `output.broker`.
+A list of path prefixes to include. This can be used, for example, to allow all of the child specific metrics paths from an output broker with the path `output.broker`.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `patterns`
 
-`array` A list of RE2 regular expressions to include. This can be used, for example, to allow all of the latency based metrics with the pattern `.*\.latency`.
+A list of RE2 regular expressions to include. This can be used, for example, to allow all of the latency based metrics with the pattern `.*\.latency`.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `child`
 
-`object` A child metric type, this is where whitelisted metrics will be routed.
+A child metric type, this is where whitelisted metrics will be routed.
+
+
+Type: `object`  
+Default: `{}`  
 
 ## Debugging
 

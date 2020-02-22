@@ -14,6 +14,7 @@ type: tracer
 Do not send opentracing events anywhere.
 
 ```yaml
+# Config fields, showing default values
 tracer:
   none: {}
 ```

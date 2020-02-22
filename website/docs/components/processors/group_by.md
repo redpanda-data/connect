@@ -16,6 +16,7 @@ group of messages determined by conditions that are applied per message of the
 original batch.
 
 ```yaml
+# Config fields, showing default values
 group_by: []
 ```
 

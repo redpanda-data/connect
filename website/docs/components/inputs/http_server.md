@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   http_server:
     address: ""
@@ -40,6 +41,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   http_server:
     address: ""
@@ -122,48 +124,91 @@ You can access these metadata fields using
 
 ### `address`
 
-`string` An alternative address to host from. If left empty the service wide address is used.
+An alternative address to host from. If left empty the service wide address is used.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `path`
 
-`string` The endpoint path to listen for POST requests.
+The endpoint path to listen for POST requests.
+
+
+Type: `string`  
+Default: `"/post"`  
 
 ### `ws_path`
 
-`string` The endpoint path to create websocket connections from.
+The endpoint path to create websocket connections from.
+
+
+Type: `string`  
+Default: `"/post/ws"`  
 
 ### `ws_welcome_message`
 
-`string` An optional message to deliver to fresh websocket connections.
+An optional message to deliver to fresh websocket connections.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `ws_rate_limit_message`
 
-`string` An optional message to delivery to websocket connections that are rate limited.
+An optional message to delivery to websocket connections that are rate limited.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `timeout`
 
-`string` Timeout for requests. If a consumed messages takes longer than this to be delivered the connection is closed, but the message may still be delivered.
+Timeout for requests. If a consumed messages takes longer than this to be delivered the connection is closed, but the message may still be delivered.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `rate_limit`
 
-`string` An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `cert_file`
 
-`string` Only valid with a custom `address`.
+Only valid with a custom `address`.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `key_file`
 
-`string` Only valid with a custom `address`.
+Only valid with a custom `address`.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `sync_response`
 
-`object` Customise messages returned via [synchronous responses](/docs/guides/sync_responses).
+Customise messages returned via [synchronous responses](/docs/guides/sync_responses).
+
+
+Type: `object`  
+Default: `{"headers":{"Content-Type":"application/octet-stream"}}`  
 
 ### `sync_response.headers`
 
-`object` Specify headers to return with synchronous responses.
-
+Specify headers to return with synchronous responses.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `object`  
+Default: `{"Content-Type":"application/octet-stream"}`  
 
 

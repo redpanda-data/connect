@@ -14,6 +14,7 @@ type: metrics
 Prints aggregated metrics as JSON objects to stdout.
 
 ```yaml
+# Config fields, showing default values
 metrics:
   stdout:
     push_interval: ""
@@ -33,14 +34,26 @@ periodically.
 
 ### `push_interval`
 
-`string` An optional period of time to continuously print metrics.
+An optional period of time to continuously print metrics.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `static_fields`
 
-`object` A map of static fields to add to each flushed metric object.
+A map of static fields to add to each flushed metric object.
+
+
+Type: `object`  
+Default: `{"@service":"benthos"}`  
 
 ### `flush_metrics`
 
-`bool` Whether counters and timing metrics should be reset to 0 each time metrics are printed.
+Whether counters and timing metrics should be reset to 0 each time metrics are printed.
+
+
+Type: `bool`  
+Default: `false`  
 
 

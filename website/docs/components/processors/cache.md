@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 cache:
   cache: ""
   operator: set
@@ -38,6 +39,7 @@ cache:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 cache:
   cache: ""
   operator: set
@@ -82,34 +84,51 @@ action is a no-op and will not fail with an error.
 
 ### `cache`
 
-`string` The [`cache` resource](/docs/components/caches/about) to target with this processor.
+The [`cache` resource](/docs/components/caches/about) to target with this processor.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `operator`
 
-`string` The [operation](#operators) to perform with the cache.
+The [operation](#operators) to perform with the cache.
 
-Options are: `set`, `add`, `get`, `delete`.
+
+Type: `string`  
+Default: `"set"`  
+Options: `set`, `add`, `get`, `delete`.
 
 ### `key`
 
-`string` A key to use with the cache.
-
+A key to use with the cache.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `value`
 
-`string` A value to use with the cache (when applicable).
-
+A value to use with the cache (when applicable).
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 ## Examples
 

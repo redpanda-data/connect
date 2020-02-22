@@ -17,6 +17,7 @@ group of messages determined by a
 per message.
 
 ```yaml
+# Config fields, showing default values
 group_by_value:
   value: ${!metadata:example}
 ```
@@ -32,9 +33,12 @@ that are batched. You can find out more about batching [in this doc](/docs/confi
 
 ### `value`
 
-`string` The interpolated string to group based on.
-
+The interpolated string to group based on.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"${!metadata:example}"`  
 
 ```yaml
 # Examples

@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 metrics:
   prometheus:
     prefix: benthos
@@ -35,6 +36,7 @@ metrics:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 metrics:
   prometheus:
     prefix: benthos
@@ -53,19 +55,35 @@ instead be underscores.
 
 ### `prefix`
 
-`string` A string prefix to add to all metrics.
+A string prefix to add to all metrics.
+
+
+Type: `string`  
+Default: `"benthos"`  
 
 ### `push_url`
 
-`string` An optional [Push Gateway URL](#push-gateway) to push metrics to.
+An optional [Push Gateway URL](#push-gateway) to push metrics to.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `push_interval`
 
-`string` The period of time between each push when sending metrics to a Push Gateway.
+The period of time between each push when sending metrics to a Push Gateway.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `push_job_name`
 
-`string` An identifier for push jobs.
+An identifier for push jobs.
+
+
+Type: `string`  
+Default: `"benthos_push"`  
 
 ## Push Gateway
 

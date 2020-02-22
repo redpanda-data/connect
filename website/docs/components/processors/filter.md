@@ -15,6 +15,7 @@ Tests each message batch against a condition, if the condition fails then the
 entire batch is dropped. You can find a [full list of conditions here](/docs/components/conditions/about).
 
 ```yaml
+# Config fields, showing default values
 filter:
   text:
     arg: ""

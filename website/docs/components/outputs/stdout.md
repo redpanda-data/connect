@@ -14,6 +14,7 @@ type: output
 The stdout output type prints messages to stdout.
 
 ```yaml
+# Config fields, showing default values
 output:
   stdout:
     delimiter: ""
@@ -41,6 +42,10 @@ baz\n\n
 
 ### `delimiter`
 
-`string` A custom delimiter to separate messages with. If left empty defaults to a line break.
+A custom delimiter to separate messages with. If left empty defaults to a line break.
+
+
+Type: `string`  
+Default: `""`  
 
 

@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 memcached:
   addresses:
   - localhost:11211
@@ -38,6 +39,7 @@ memcached:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 memcached:
   addresses:
   - localhost:11211
@@ -54,22 +56,42 @@ memcached:
 
 ### `addresses`
 
-`array` A list of addresses of memcached servers to use.
+A list of addresses of memcached servers to use.
+
+
+Type: `array`  
+Default: `["localhost:11211"]`  
 
 ### `prefix`
 
-`string` An optional string to prefix item keys with in order to prevent collisions with similar services.
+An optional string to prefix item keys with in order to prevent collisions with similar services.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `ttl`
 
-`number` A TTL in seconds to set for items, after this period keys will be removed.
+A TTL in seconds to set for items, after this period keys will be removed.
+
+
+Type: `number`  
+Default: `300`  
 
 ### `retries`
 
-`number` The maximum number of retry attempts to make before abandoning a request.
+The maximum number of retry attempts to make before abandoning a request.
+
+
+Type: `number`  
+Default: `3`  
 
 ### `retry_period`
 
-`string` The duration to wait between retry attempts.
+The duration to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"500ms"`  
 
 

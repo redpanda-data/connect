@@ -15,6 +15,7 @@ Counts messages starting from one, returning true until the counter reaches its
 target, at which point it will return false and reset the counter.
 
 ```yaml
+# Config fields, showing default values
 count:
   arg: 100
 ```
@@ -28,7 +29,11 @@ condition as a resource.
 
 ### `arg`
 
-`number` A number to count towards.
+A number to count towards.
+
+
+Type: `number`  
+Default: `100`  
 
 ## Examples
 

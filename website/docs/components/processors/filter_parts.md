@@ -15,6 +15,7 @@ Tests each message against a [condition](/docs/components/conditions/about), if
 the condition fails then the message is dropped.
 
 ```yaml
+# Config fields, showing default values
 filter_parts:
   text:
     arg: ""

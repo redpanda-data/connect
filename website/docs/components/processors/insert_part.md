@@ -15,6 +15,7 @@ Insert a new message into a batch at an index. If the specified index is greater
 than the length of the existing batch it will be appended to the end.
 
 ```yaml
+# Config fields, showing default values
 insert_part:
   index: -1
   content: ""
@@ -36,12 +37,19 @@ find a list of functions [here](/docs/configuration/interpolation#functions).
 
 ### `index`
 
-`number` The index within the batch to insert the message at.
+The index within the batch to insert the message at.
+
+
+Type: `number`  
+Default: `-1`  
 
 ### `content`
 
-`string` The content of the message being inserted.
-
+The content of the message being inserted.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `string`  
+Default: `""`  
 
 

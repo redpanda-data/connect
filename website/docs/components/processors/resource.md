@@ -16,6 +16,7 @@ processor allows you to run the same configured processor resource in multiple
 places.
 
 ```yaml
+# Config fields, showing default values
 resource: ""
 ```
 

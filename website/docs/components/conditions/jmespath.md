@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 jmespath:
   query: ""
 ```
@@ -36,6 +37,7 @@ jmespath:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 jmespath:
   query: ""
   part: 0
@@ -51,7 +53,11 @@ tutorials regarding the syntax of expressions.
 
 ### `query`
 
-`string` A [JMESPath](http://jmespath.org/) query.
+A [JMESPath](http://jmespath.org/) query.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -63,12 +69,16 @@ query: length(doc.urls) > `0`
 
 ### `part`
 
-`number` The index of a message within a batch to test the condition against. This
+The index of a message within a batch to test the condition against. This
 field is only applicable when batching messages
 [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `number`  
+Default: `0`  
 
 ## Examples
 

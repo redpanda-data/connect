@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 lambda:
   parallel: false
   function: ""
@@ -38,6 +39,7 @@ lambda:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 lambda:
   parallel: false
   function: ""
@@ -86,58 +88,114 @@ allowing you to transfer data across accounts. You can find out more
 
 ### `parallel`
 
-`bool` Whether messages of a batch should be dispatched in parallel.
+Whether messages of a batch should be dispatched in parallel.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `function`
 
-`string` The function to invoke.
+The function to invoke.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `rate_limit`
 
-`string` An optional [`rate_limit`](/docs/components/rate_limits/about) to throttle invocations by.
+An optional [`rate_limit`](/docs/components/rate_limits/about) to throttle invocations by.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `region`
 
-`string` The AWS region to target.
+The AWS region to target.
+
+
+Type: `string`  
+Default: `"eu-west-1"`  
 
 ### `endpoint`
 
-`string` Allows you to specify a custom endpoint for the AWS API.
+Allows you to specify a custom endpoint for the AWS API.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials`
 
-`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+
+Type: `object`  
+Default: `{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""}`  
 
 ### `credentials.profile`
 
-`string` A profile from `~/.aws/credentials` to use.
+A profile from `~/.aws/credentials` to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.id`
 
-`string` The ID of credentials to use.
+The ID of credentials to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.secret`
 
-`string` The secret for the credentials being used.
+The secret for the credentials being used.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.token`
 
-`string` The token for the credentials being used, required when using short term credentials.
+The token for the credentials being used, required when using short term credentials.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.role`
 
-`string` A role ARN to assume.
+A role ARN to assume.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.role_external_id`
 
-`string` An external ID to provide when assuming a role.
+An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `timeout`
 
-`string` The maximum period of time to wait before abandoning an invocation.
+The maximum period of time to wait before abandoning an invocation.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `retries`
 
-`number` The maximum number of retry attempts for each message.
+The maximum number of retry attempts for each message.
+
+
+Type: `number`  
+Default: `3`  
 
 

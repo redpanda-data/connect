@@ -17,6 +17,7 @@ though they were each a batch of one message (similar to the
 processed in parallel.
 
 ```yaml
+# Config fields, showing default values
 parallel:
   cap: 0
   processors: []
@@ -32,10 +33,18 @@ that are batched. You can find out more about batching [in this doc](/docs/confi
 
 ### `cap`
 
-`number` The maximum number of messages to have processing at a given time.
+The maximum number of messages to have processing at a given time.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `processors`
 
-`array` A list of child processors to apply.
+A list of child processors to apply.
+
+
+Type: `array`  
+Default: `[]`  
 
 

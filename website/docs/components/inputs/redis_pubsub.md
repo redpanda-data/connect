@@ -15,6 +15,7 @@ Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or
 PSUBSCRIBE commands.
 
 ```yaml
+# Config fields, showing default values
 input:
   redis_pubsub:
     url: tcp://localhost:6379
@@ -38,7 +39,11 @@ verbatim.
 
 ### `url`
 
-`string` The URL of a Redis server to connect to.
+The URL of a Redis server to connect to.
+
+
+Type: `string`  
+Default: `"tcp://localhost:6379"`  
 
 ```yaml
 # Examples
@@ -48,10 +53,18 @@ url: tcp://localhost:6379
 
 ### `channels`
 
-`array` A list of channels to consume from.
+A list of channels to consume from.
+
+
+Type: `array`  
+Default: `["benthos_chan"]`  
 
 ### `use_patterns`
 
-`bool` Whether to use the PSUBSCRIBE command.
+Whether to use the PSUBSCRIBE command.
+
+
+Type: `bool`  
+Default: `false`  
 
 

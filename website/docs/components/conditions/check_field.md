@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 check_field:
   path: ""
   condition: {}
@@ -37,6 +38,7 @@ check_field:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 check_field:
   path: ""
   condition: {}
@@ -50,19 +52,31 @@ check_field:
 
 ### `path`
 
-`string` A [field path](/docs/configuration/field_paths) to check against the child condition.
+A [field path](/docs/configuration/field_paths) to check against the child condition.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `condition`
 
-`object` A child condition to test the field contents against.
+A child condition to test the field contents against.
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the condition should apply to.
+An optional array of message indexes of a batch that the condition should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 

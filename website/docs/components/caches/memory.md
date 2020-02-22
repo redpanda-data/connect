@@ -17,6 +17,7 @@ moment it was last edited, after which it will be removed during the next
 compaction.
 
 ```yaml
+# Config fields, showing default values
 memory:
   ttl: 300
   compaction_interval: 60s
@@ -44,15 +45,27 @@ TTL is respected as usual.
 
 ### `ttl`
 
-`number` The TTL of each item in seconds. After this period an item will be eligible for removal during the next compaction.
+The TTL of each item in seconds. After this period an item will be eligible for removal during the next compaction.
+
+
+Type: `number`  
+Default: `300`  
 
 ### `compaction_interval`
 
-`string` The period of time to wait before each compaction, at which point expired items are removed.
+The period of time to wait before each compaction, at which point expired items are removed.
+
+
+Type: `string`  
+Default: `"60s"`  
 
 ### `init_values`
 
-`object` A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.
+A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.
+
+
+Type: `object`  
+Default: `{}`  
 
 ```yaml
 # Examples

@@ -15,6 +15,7 @@ Returns the final message payload back to the input origin of the message, where
 it is dealt with according to that specific input type.
 
 ```yaml
+# Config fields, showing default values
 output:
   sync_response: {}
 ```

@@ -16,6 +16,7 @@ Resolves a string containing
 the result against a child condition.
 
 ```yaml
+# Config fields, showing default values
 check_interpolation:
   value: ""
   condition: {}
@@ -36,9 +37,12 @@ check_interpolation:
 
 ### `value`
 
-`string` The value to check against the child condition.
-
+The value to check against the child condition.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -52,6 +56,10 @@ value: ${!json_field:doc.id}-${!metadata:kafka_key}
 
 ### `condition`
 
-`object` A child condition to test the field contents against.
+A child condition to test the field contents against.
+
+
+Type: `object`  
+Default: `{}`  
 
 

@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 http:
   parallel: false
   max_parallel: 0
@@ -43,6 +44,7 @@ http:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 http:
   parallel: false
   max_parallel: 0
@@ -137,25 +139,44 @@ can read about these patterns [here](/docs/configuration/error_handling).
 
 ### `parallel`
 
-`bool` When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request.
+When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `max_parallel`
 
-`number` A limit on the maximum messages in flight when sending batched messages in parallel.
+A limit on the maximum messages in flight when sending batched messages in parallel.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `request`
 
-`object` Controls how the HTTP request is made.
+Controls how the HTTP request is made.
+
+
+Type: `object`  
+Default: `{"backoff_on":[429],"basic_auth":{"enabled":false,"password":"","username":""},"copy_response_headers":false,"drop_on":[],"headers":{"Content-Type":"application/octet-stream"},"max_retry_backoff":"300s","oauth":{"access_token":"","access_token_secret":"","consumer_key":"","consumer_secret":"","enabled":false,"request_url":""},"rate_limit":"","retries":3,"retry_period":"1s","successful_on":[],"timeout":"5s","tls":{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false},"url":"http://localhost:4195/post","verb":"POST"}`  
 
 ### `request.url`
 
-`string` The URL to connect to.
-
+The URL to connect to.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"http://localhost:4195/post"`  
 
 ### `request.verb`
 
-`string` A verb to connect with
+A verb to connect with
+
+
+Type: `string`  
+Default: `"POST"`  
 
 ```yaml
 # Examples
@@ -169,9 +190,12 @@ verb: DELETE
 
 ### `request.headers`
 
-`object` A map of headers to add to the request.
-
+A map of headers to add to the request.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `object`  
+Default: `{"Content-Type":"application/octet-stream"}`  
 
 ```yaml
 # Examples
@@ -182,7 +206,11 @@ headers:
 
 ### `request.oauth`
 
-`object` Allows you to specify open authentication.
+Allows you to specify open authentication.
+
+
+Type: `object`  
+Default: `{"access_token":"","access_token_secret":"","consumer_key":"","consumer_secret":"","enabled":false,"request_url":""}`  
 
 ```yaml
 # Examples
@@ -198,7 +226,11 @@ oauth:
 
 ### `request.basic_auth`
 
-`object` Allows you to specify basic authentication.
+Allows you to specify basic authentication.
+
+
+Type: `object`  
+Default: `{"enabled":false,"password":"","username":""}`  
 
 ```yaml
 # Examples
@@ -211,23 +243,43 @@ basic_auth:
 
 ### `request.tls`
 
-`object` Custom TLS settings can be used to override system defaults.
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `request.tls.enabled`
 
-`bool` Whether custom TLS settings are enabled.
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `request.tls.skip_cert_verify`
 
-`bool` Whether to skip server side certificate verification.
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `request.tls.root_cas_file`
 
-`string` The path of a root certificate authority file to use.
+The path of a root certificate authority file to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `request.tls.client_certs`
 
-`array` A list of client certificates to use.
+A list of client certificates to use.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -243,38 +295,74 @@ client_certs:
 
 ### `request.copy_response_headers`
 
-`bool` Sets whether to copy the headers from the response to the resulting payload.
+Sets whether to copy the headers from the response to the resulting payload.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `request.rate_limit`
 
-`string` An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `request.timeout`
 
-`string` A static timeout to apply to requests.
+A static timeout to apply to requests.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `request.retry_period`
 
-`string` The base period to wait between failed requests.
+The base period to wait between failed requests.
+
+
+Type: `string`  
+Default: `"1s"`  
 
 ### `request.max_retry_backoff`
 
-`string` The maximum period to wait between failed requests.
+The maximum period to wait between failed requests.
+
+
+Type: `string`  
+Default: `"300s"`  
 
 ### `request.retries`
 
-`number` The maximum number of retry attempts to make.
+The maximum number of retry attempts to make.
+
+
+Type: `number`  
+Default: `3`  
 
 ### `request.backoff_on`
 
-`array` A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
+A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
+
+
+Type: `array`  
+Default: `[429]`  
 
 ### `request.drop_on`
 
-`array` A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
+A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `request.successful_on`
 
-`array` A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
+A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
+
+
+Type: `array`  
+Default: `[]`  
 
 

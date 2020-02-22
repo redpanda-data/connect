@@ -29,6 +29,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 redis:
   url: tcp://localhost:6379
   operator: scard
@@ -39,6 +40,7 @@ redis:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 redis:
   url: tcp://localhost:6379
   operator: scard
@@ -84,35 +86,57 @@ Adds a new member to a set. Returns `1` if the member was added.
 
 ### `url`
 
-`string` The URL of the target Redis instance.
+The URL of the target Redis instance.
+
+
+Type: `string`  
+Default: `"tcp://localhost:6379"`  
 
 ### `operator`
 
-`string` The [operator](#operators) to apply.
+The [operator](#operators) to apply.
 
-Options are: `scard`, `sadd`.
+
+Type: `string`  
+Default: `"scard"`  
+Options: `scard`, `sadd`.
 
 ### `key`
 
-`string` A key to use for the target operator.
-
+A key to use for the target operator.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `retries`
 
-`number` The maximum number of retries before abandoning a request.
+The maximum number of retries before abandoning a request.
+
+
+Type: `number`  
+Default: `3`  
 
 ### `retry_period`
 
-`string` The time to wait before consecutive retry attempts.
+The time to wait before consecutive retry attempts.
+
+
+Type: `string`  
+Default: `"500ms"`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 

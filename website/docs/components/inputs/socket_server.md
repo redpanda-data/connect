@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   socket_server:
     network: unix
@@ -37,6 +38,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   socket_server:
     network: unix
@@ -63,13 +65,20 @@ connection exceeds this value then the connection will be closed.
 
 ### `network`
 
-`string` A network type to accept (unix|tcp|udp).
+A network type to accept (unix|tcp|udp).
 
-Options are: `unix`, `tcp`, `udp`.
+
+Type: `string`  
+Default: `"unix"`  
+Options: `unix`, `tcp`, `udp`.
 
 ### `address`
 
-`string` The address to listen from.
+The address to listen from.
+
+
+Type: `string`  
+Default: `"/tmp/benthos.sock"`  
 
 ```yaml
 # Examples
@@ -81,14 +90,26 @@ address: 0.0.0.0:6000
 
 ### `multipart`
 
-`bool` Whether messages should be consumed as multiple parts. If so, each line is consumed as a message parts and the full message ends with an empty line.
+Whether messages should be consumed as multiple parts. If so, each line is consumed as a message parts and the full message ends with an empty line.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `max_buffer`
 
-`number` The maximum message buffer size. Must exceed the largest message to be consumed.
+The maximum message buffer size. Must exceed the largest message to be consumed.
+
+
+Type: `number`  
+Default: `1000000`  
 
 ### `delimiter`
 
-`string` The delimiter to use to detect the end of each message. If left empty line breaks are used.
+The delimiter to use to detect the end of each message. If left empty line breaks are used.
+
+
+Type: `string`  
+Default: `""`  
 
 

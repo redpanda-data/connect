@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 compress:
   algorithm: gzip
   level: -1
@@ -36,6 +37,7 @@ compress:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 compress:
   algorithm: gzip
   level: -1
@@ -51,21 +53,32 @@ The 'level' field might not apply to all algorithms.
 
 ### `algorithm`
 
-`string` The compression algorithm to use.
+The compression algorithm to use.
 
-Options are: `gzip`, `zlib`, `flate`.
+
+Type: `string`  
+Default: `"gzip"`  
+Options: `gzip`, `zlib`, `flate`.
 
 ### `level`
 
-`number` The level of compression to use. May not be applicable to all algorithms.
+The level of compression to use. May not be applicable to all algorithms.
+
+
+Type: `number`  
+Default: `-1`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 

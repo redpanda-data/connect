@@ -15,6 +15,7 @@ Serves metrics as [JSON object](#object-format) with the service wide HTTP
 service at the endpoints `/stats` and `/metrics`.
 
 ```yaml
+# Config fields, showing default values
 metrics:
   http_server:
     prefix: benthos
@@ -27,7 +28,11 @@ that you can parse with tools such as `jq`
 
 ### `prefix`
 
-`string` A string prefix to add to all metrics.
+A string prefix to add to all metrics.
+
+
+Type: `string`  
+Default: `"benthos"`  
 
 ## Object Format
 

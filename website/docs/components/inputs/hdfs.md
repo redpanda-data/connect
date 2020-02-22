@@ -15,6 +15,7 @@ Reads files from a HDFS directory, where each discrete file will be consumed as
 a single message payload.
 
 ```yaml
+# Config fields, showing default values
 input:
   hdfs:
     hosts:
@@ -39,14 +40,26 @@ You can access these metadata fields using
 
 ### `hosts`
 
-`array` A list of target host addresses to connect to.
+A list of target host addresses to connect to.
+
+
+Type: `array`  
+Default: `["localhost:9000"]`  
 
 ### `user`
 
-`string` A user ID to connect as.
+A user ID to connect as.
+
+
+Type: `string`  
+Default: `"benthos_hdfs"`  
 
 ### `directory`
 
-`string` The directory to consume from.
+The directory to consume from.
+
+
+Type: `string`  
+Default: `""`  
 
 

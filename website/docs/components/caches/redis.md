@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 redis:
   url: tcp://localhost:6379
   prefix: ""
@@ -37,6 +38,7 @@ redis:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 redis:
   url: tcp://localhost:6379
   prefix: ""
@@ -52,22 +54,42 @@ redis:
 
 ### `url`
 
-`string` The URL of the target Redis server.
+The URL of the target Redis server.
+
+
+Type: `string`  
+Default: `"tcp://localhost:6379"`  
 
 ### `prefix`
 
-`string` An optional string to prefix item keys with in order to prevent collisions with similar services.
+An optional string to prefix item keys with in order to prevent collisions with similar services.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `expiration`
 
-`string` An optional period after which cached items will expire.
+An optional period after which cached items will expire.
+
+
+Type: `string`  
+Default: `"24h"`  
 
 ### `retries`
 
-`number` The maximum number of retry attempts to make before abandoning a request.
+The maximum number of retry attempts to make before abandoning a request.
+
+
+Type: `number`  
+Default: `3`  
 
 ### `retry_period`
 
-`string` The duration to wait between retry attempts.
+The duration to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"500ms"`  
 
 

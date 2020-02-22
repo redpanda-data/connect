@@ -14,6 +14,7 @@ type: output
 Publish to an NATS subject.
 
 ```yaml
+# Config fields, showing default values
 output:
   nats:
     urls:
@@ -35,16 +36,27 @@ field `max_in_flight`.
 
 ### `urls`
 
-`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["nats://127.0.0.1:4222"]`  
 
 ### `subject`
 
-`string` The subject to publish to.
-
+The subject to publish to.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"benthos_messages"`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 

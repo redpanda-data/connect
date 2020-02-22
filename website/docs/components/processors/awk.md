@@ -28,6 +28,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 awk:
   codec: text
   program: BEGIN { x = 0 } { print $0, x; x++ }
@@ -37,6 +38,7 @@ awk:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 awk:
   codec: text
   program: BEGIN { x = 0 } { print $0, x; x++ }
@@ -58,22 +60,33 @@ overridden by functions within the program.
 
 ### `codec`
 
-`string` A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.
+A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.
 
-Options are: `none`, `text`, `json`.
+
+Type: `string`  
+Default: `"text"`  
+Options: `none`, `text`, `json`.
 
 ### `program`
 
-`string` An AWK program to execute
+An AWK program to execute
+
+
+Type: `string`  
+Default: `"BEGIN { x = 0 } { print $0, x; x++ }"`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 ## Codecs
 

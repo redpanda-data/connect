@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   kafka:
     addresses:
@@ -47,6 +48,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   kafka:
     addresses:
@@ -113,7 +115,11 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `addresses`
 
-`array` A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.
+A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.
+
+
+Type: `array`  
+Default: `["localhost:9092"]`  
 
 ```yaml
 # Examples
@@ -131,23 +137,43 @@ addresses:
 
 ### `tls`
 
-`object` Custom TLS settings can be used to override system defaults.
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
-`bool` Whether custom TLS settings are enabled.
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.skip_cert_verify`
 
-`bool` Whether to skip server side certificate verification.
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.root_cas_file`
 
-`string` The path of a root certificate authority file to use.
+The path of a root certificate authority file to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls.client_certs`
 
-`array` A list of client certificates to use.
+A list of client certificates to use.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -163,17 +189,28 @@ client_certs:
 
 ### `sasl`
 
-`object` Enables SASL authentication.
+Enables SASL authentication.
+
+
+Type: `object`  
+Default: `{"access_token":"","enabled":false,"mechanism":"","password":"","token_cache":"","token_key":"","user":""}`  
 
 ### `sasl.mechanism`
 
-`string` The SASL authentication mechanism, if left empty SASL authentication is not used. Warning: SCRAM based methods within Benthos have not received a security audit.
+The SASL authentication mechanism, if left empty SASL authentication is not used. Warning: SCRAM based methods within Benthos have not received a security audit.
 
-Options are: `PLAIN`, `OAUTHBEARER`, `SCRAM-SHA-256`, `SCRAM-SHA-512`.
+
+Type: `string`  
+Default: `""`  
+Options: `PLAIN`, `OAUTHBEARER`, `SCRAM-SHA-256`, `SCRAM-SHA-512`.
 
 ### `sasl.user`
 
-`string` A `PLAIN` username. It is recommended that you use environment variables to populate this field.
+A `PLAIN` username. It is recommended that you use environment variables to populate this field.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -183,7 +220,11 @@ user: ${USER}
 
 ### `sasl.password`
 
-`string` A `PLAIN` password. It is recommended that you use environment variables to populate this field.
+A `PLAIN` password. It is recommended that you use environment variables to populate this field.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -193,67 +234,119 @@ password: ${PASSWORD}
 
 ### `sasl.access_token`
 
-`string` A static `OAUTHBEARER` access token
+A static `OAUTHBEARER` access token
+
+
+Type: `string`  
+Default: `""`  
 
 ### `sasl.token_cache`
 
-`string` Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch `OAUTHBEARER` tokens from
+Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch `OAUTHBEARER` tokens from
+
+
+Type: `string`  
+Default: `""`  
 
 ### `sasl.token_key`
 
-`string` Required when using a `token_cache`, the key to query the cache with for tokens.
+Required when using a `token_cache`, the key to query the cache with for tokens.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `topic`
 
-`string` The topic to publish messages to.
-
+The topic to publish messages to.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"benthos_stream"`  
 
 ### `client_id`
 
-`string` An identifier for the client connection.
+An identifier for the client connection.
+
+
+Type: `string`  
+Default: `"benthos_kafka_output"`  
 
 ### `key`
 
-`string` The key to publish messages with.
-
+The key to publish messages with.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `partitioner`
 
-`string` The partitioning algorithm to use.
+The partitioning algorithm to use.
 
-Options are: `fnv1a_hash`, `murmur2_hash`, `random`, `round_robin`.
+
+Type: `string`  
+Default: `"fnv1a_hash"`  
+Options: `fnv1a_hash`, `murmur2_hash`, `random`, `round_robin`.
 
 ### `compression`
 
-`string` The compression algorithm to use.
+The compression algorithm to use.
 
-Options are: `none`, `snappy`, `lz4`, `gzip`.
+
+Type: `string`  
+Default: `"none"`  
+Options: `none`, `snappy`, `lz4`, `gzip`.
 
 ### `max_in_flight`
 
-`number` The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of parallel message batches to have in flight at any given time.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `ack_replicas`
 
-`bool` Ensure that messages have been copied across all replicas before acknowledging receipt.
+Ensure that messages have been copied across all replicas before acknowledging receipt.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `max_msg_bytes`
 
-`number` The maximum size in bytes of messages sent to the target topic.
+The maximum size in bytes of messages sent to the target topic.
+
+
+Type: `number`  
+Default: `1000000`  
 
 ### `timeout`
 
-`string` The maximum period of time to wait for message sends before abandoning the request and retrying.
+The maximum period of time to wait for message sends before abandoning the request and retrying.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `target_version`
 
-`string` The version of the Kafka protocol to use.
+The version of the Kafka protocol to use.
+
+
+Type: `string`  
+Default: `"1.0.0"`  
 
 ### `batching`
 
-`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
 
 ```yaml
 # Examples
@@ -276,15 +369,27 @@ batching:
 
 ### `batching.count`
 
-`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `batching.byte_size`
 
-`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `batching.period`
 
-`string` A period in which an incomplete batch should be flushed regardless of its size.
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -298,11 +403,19 @@ period: 500ms
 
 ### `batching.condition`
 
-`object` A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+
+Type: `object`  
+Default: `{"static":false,"type":"static"}`  
 
 ### `batching.processors`
 
-`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -321,22 +434,42 @@ processors:
 
 ### `max_retries`
 
-`number` The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `backoff`
 
-`object` Control time intervals between retry attempts.
+Control time intervals between retry attempts.
+
+
+Type: `object`  
+Default: `{"initial_interval":"3s","max_elapsed_time":"30s","max_interval":"10s"}`  
 
 ### `backoff.initial_interval`
 
-`string` The initial period to wait between retry attempts.
+The initial period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"3s"`  
 
 ### `backoff.max_interval`
 
-`string` The maximum period to wait between retry attempts.
+The maximum period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"10s"`  
 
 ### `backoff.max_elapsed_time`
 
-`string` The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+
+
+Type: `string`  
+Default: `"30s"`  
 
 

@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   nsq:
     nsqd_tcp_addresses:
@@ -42,6 +43,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   nsq:
     nsqd_tcp_addresses:
@@ -66,31 +68,59 @@ input:
 
 ### `nsqd_tcp_addresses`
 
-`array` A list of nsqd addresses to connect to.
+A list of nsqd addresses to connect to.
+
+
+Type: `array`  
+Default: `["localhost:4150"]`  
 
 ### `lookupd_http_addresses`
 
-`array` A list of nsqlookupd addresses to connect to.
+A list of nsqlookupd addresses to connect to.
+
+
+Type: `array`  
+Default: `["localhost:4161"]`  
 
 ### `tls`
 
-`object` Custom TLS settings can be used to override system defaults.
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
-`bool` Whether custom TLS settings are enabled.
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.skip_cert_verify`
 
-`bool` Whether to skip server side certificate verification.
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls.root_cas_file`
 
-`string` The path of a root certificate authority file to use.
+The path of a root certificate authority file to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls.client_certs`
 
-`array` A list of client certificates to use.
+A list of client certificates to use.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -106,18 +136,34 @@ client_certs:
 
 ### `topic`
 
-`string` The topic to consume from.
+The topic to consume from.
+
+
+Type: `string`  
+Default: `"benthos_messages"`  
 
 ### `channel`
 
-`string` The channel to consume from.
+The channel to consume from.
+
+
+Type: `string`  
+Default: `"benthos_stream"`  
 
 ### `user_agent`
 
-`string` A user agent to assume when connecting.
+A user agent to assume when connecting.
+
+
+Type: `string`  
+Default: `"benthos_consumer"`  
 
 ### `max_in_flight`
 
-`number` The maximum number of pending messages to consume at any given time.
+The maximum number of pending messages to consume at any given time.
+
+
+Type: `number`  
+Default: `100`  
 
 

@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 json:
   operator: clean
   path: ""
@@ -37,6 +38,7 @@ json:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 json:
   operator: clean
   path: ""
@@ -58,28 +60,42 @@ a list of functions [here](/docs/configuration/interpolation#functions).
 
 ### `operator`
 
-`string` The [operator](#operators) to apply to messages.
+The [operator](#operators) to apply to messages.
 
-Options are: `append`, `clean`, `copy`, `delete`, `explode`, `flatten_array`, `fold_number_array`, `fold_string_array`, `move`, `select`, `set`, `split`.
+
+Type: `string`  
+Default: `"clean"`  
+Options: `append`, `clean`, `copy`, `delete`, `explode`, `flatten_array`, `fold_number_array`, `fold_string_array`, `move`, `select`, `set`, `split`.
 
 ### `path`
 
-`string` A [dot path](/docs/configuration/field_paths) specifying the target within the document to the apply the chosen operator to.
+A [dot path](/docs/configuration/field_paths) specifying the target within the document to the apply the chosen operator to.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `value`
 
-`string` A value to use with the chosen operator (sometimes not applicable). This is a generic field that can be any type.
-
+A value to use with the chosen operator (sometimes not applicable). This is a generic field that can be any type.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 ## Operators
 

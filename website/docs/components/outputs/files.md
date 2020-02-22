@@ -14,6 +14,7 @@ type: output
 Writes each individual message to a new file.
 
 ```yaml
+# Config fields, showing default values
 output:
   files:
     path: ${!count:files}-${!timestamp_unix_nano}.txt
@@ -26,8 +27,11 @@ interpolations as described [here](/docs/configuration/interpolation#functions).
 
 ### `path`
 
-`string` The file to write to, if the file does not yet exist it will be created.
-
+The file to write to, if the file does not yet exist it will be created.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"${!count:files}-${!timestamp_unix_nano}.txt"`  
 
 

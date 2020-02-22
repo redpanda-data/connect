@@ -23,7 +23,7 @@ Some processors have conditions whereby they might fail. Benthos has mechanisms 
 
 ### Batching and Multiple Part Messages
 
-All Benthos processors support multiple part messages, which are synonymous with batches. Some processors such as [split][processor.split] are able to create, expand and break down batches.
+All Benthos processors support multiple part messages, which are synonymous with batches. This enables some cool [windowed processing][windowed_processing] capables.
 
 Many processors are able to perform their behaviours on specific parts of a message batch, or on all parts, and have a field `parts` for specifying an array of part indexes they should apply to. If the list of target parts is empty these processors will be applied to all message parts.
 
@@ -31,11 +31,15 @@ Part indexes can be negative, and if so the part will be selected from the end c
 
 Some processors such as [`filter`][processor.filter] and [`dedupe`][processor.dedupe] act across an entire batch, when instead we'd like to perform them on individual messages of a batch. In this case the [`for_each`][processor.for_each] processor can be used.
 
+You can read more about batching [in this document][batching].
+
 import ComponentSelect from '@theme/ComponentSelect';
 
 <ComponentSelect type="processors"></ComponentSelect>
 
 [error_handling]: /docs/configuration/error_handling
+[batching]: /docs/configuration/batching
+[windowed_processing]: /docs/configuration/windowed_processing
 [pipelines]: /docs/configuration/processing_pipelines
 [processor.split]: /docs/components/processors/split
 [processor.filter]: /docs/components/processors/filter

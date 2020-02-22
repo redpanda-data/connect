@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 decode:
   scheme: base64
 ```
@@ -34,6 +35,7 @@ decode:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 decode:
   scheme: base64
   parts: []
@@ -46,17 +48,24 @@ decode:
 
 ### `scheme`
 
-`string` The decoding scheme to use.
+The decoding scheme to use.
 
-Options are: `hex`, `base64`.
+
+Type: `string`  
+Default: `"base64"`  
+Options: `hex`, `base64`.
 
 ### `parts`
 
-`array` An optional array of message indexes of a batch that the processor should apply to.
+An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
 batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
 
 

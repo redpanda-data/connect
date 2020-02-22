@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 json:
   operator: exists
   path: ""
@@ -36,6 +37,7 @@ json:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 json:
   operator: exists
   path: ""
@@ -50,26 +52,41 @@ json:
 
 ### `operator`
 
-`string` A logical [operator](#operators) to check with.
+A logical [operator](#operators) to check with.
 
-Options are: `exists`, `equals`, `contains`.
+
+Type: `string`  
+Default: `"exists"`  
+Options: `exists`, `equals`, `contains`.
 
 ### `path`
 
-`string` The [path](/docs/configuration/field_paths) of a specific field within JSON documents to check.
+The [path](/docs/configuration/field_paths) of a specific field within JSON documents to check.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `arg`
 
-`string` An argument to check against. May not be applicable for all operators.
+An argument to check against. May not be applicable for all operators.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `part`
 
-`number` The index of a message within a batch to test the condition against. This
+The index of a message within a batch to test the condition against. This
 field is only applicable when batching messages
 [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `number`  
+Default: `0`  
 
 ## Operators
 

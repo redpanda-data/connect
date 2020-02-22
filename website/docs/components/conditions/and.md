@@ -14,6 +14,7 @@ type: condition
 And is a condition that returns the logical AND of its children conditions.
 
 ```yaml
+# Config fields, showing default values
 and: []
 ```
 

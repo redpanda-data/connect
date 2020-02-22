@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   redis_streams:
     url: tcp://localhost:6379
@@ -42,6 +43,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   redis_streams:
     url: tcp://localhost:6379
@@ -67,38 +69,74 @@ as metadata fields.
 
 ### `url`
 
-`string` The URL of a Redis server to connect to.
+The URL of a Redis server to connect to.
+
+
+Type: `string`  
+Default: `"tcp://localhost:6379"`  
 
 ### `body_key`
 
-`string` The field key to extract the raw message from. All other keys will be stored in the message as metadata.
+The field key to extract the raw message from. All other keys will be stored in the message as metadata.
+
+
+Type: `string`  
+Default: `"body"`  
 
 ### `streams`
 
-`array` A list of streams to consume from.
+A list of streams to consume from.
+
+
+Type: `array`  
+Default: `["benthos_stream"]`  
 
 ### `limit`
 
-`number` The maximum number of messages to consume from a single request.
+The maximum number of messages to consume from a single request.
+
+
+Type: `number`  
+Default: `10`  
 
 ### `client_id`
 
-`string` An identifier for the client connection.
+An identifier for the client connection.
+
+
+Type: `string`  
+Default: `"benthos_consumer"`  
 
 ### `consumer_group`
 
-`string` An identifier for the consumer group of the stream.
+An identifier for the consumer group of the stream.
+
+
+Type: `string`  
+Default: `"benthos_group"`  
 
 ### `start_from_oldest`
 
-`bool` If an offset is not found for a stream, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+If an offset is not found for a stream, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `commit_period`
 
-`string` The period of time between each commit of the current offset. Offsets are always committed during shutdown.
+The period of time between each commit of the current offset. Offsets are always committed during shutdown.
+
+
+Type: `string`  
+Default: `"1s"`  
 
 ### `timeout`
 
-`string` The length of time to poll for new messages before reattempting.
+The length of time to poll for new messages before reattempting.
+
+
+Type: `string`  
+Default: `"1s"`  
 
 

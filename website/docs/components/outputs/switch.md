@@ -15,6 +15,7 @@ The switch output type allows you to configure multiple conditional output
 targets by listing child outputs paired with conditions.
 
 ```yaml
+# Config fields, showing default values
 output:
   switch:
     outputs: []

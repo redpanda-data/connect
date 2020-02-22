@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   websocket:
     url: ws://localhost:4195/post/ws
@@ -35,6 +36,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   websocket:
     url: ws://localhost:4195/post/ws
@@ -58,11 +60,19 @@ output:
 
 ### `url`
 
-`string` The URL to connect to.
+The URL to connect to.
+
+
+Type: `string`  
+Default: `"ws://localhost:4195/post/ws"`  
 
 ### `oauth`
 
-`object` Allows you to specify open authentication.
+Allows you to specify open authentication.
+
+
+Type: `object`  
+Default: `{"access_token":"","access_token_secret":"","consumer_key":"","consumer_secret":"","enabled":false,"request_url":""}`  
 
 ```yaml
 # Examples
@@ -78,7 +88,11 @@ oauth:
 
 ### `basic_auth`
 
-`object` Allows you to specify basic authentication.
+Allows you to specify basic authentication.
+
+
+Type: `object`  
+Default: `{"enabled":false,"password":"","username":""}`  
 
 ```yaml
 # Examples

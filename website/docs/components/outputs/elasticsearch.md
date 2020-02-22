@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   elasticsearch:
     urls:
@@ -45,6 +46,7 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   elasticsearch:
     urls:
@@ -114,7 +116,11 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `urls`
 
-`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["http://localhost:9200"]`  
 
 ```yaml
 # Examples
@@ -125,65 +131,118 @@ urls:
 
 ### `index`
 
-`string` The index to place messages.
-
+The index to place messages.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"benthos_index"`  
 
 ### `pipeline`
 
-`string` An optional pipeline id to preprocess incoming documents.
-
+An optional pipeline id to preprocess incoming documents.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `id`
 
-`string` The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.
-
+The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.
 This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+
+
+Type: `string`  
+Default: `"${!count:elastic_ids}-${!timestamp_unix}"`  
 
 ### `type`
 
-`string` The document type.
+The document type.
+
+
+Type: `string`  
+Default: `"doc"`  
 
 ### `sniff`
 
-`bool` Prompts Benthos to sniff for brokers to connect to when establishing a connection.
+Prompts Benthos to sniff for brokers to connect to when establishing a connection.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `healthcheck`
 
-`bool` Whether to enable healthchecks.
+Whether to enable healthchecks.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `timeout`
 
-`string` The maximum time to wait before abandoning a request (and trying again).
+The maximum time to wait before abandoning a request (and trying again).
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `max_in_flight`
 
-`number` The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `max_retries`
 
-`number` The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `backoff`
 
-`object` Control time intervals between retry attempts.
+Control time intervals between retry attempts.
+
+
+Type: `object`  
+Default: `{"initial_interval":"1s","max_elapsed_time":"30s","max_interval":"5s"}`  
 
 ### `backoff.initial_interval`
 
-`string` The initial period to wait between retry attempts.
+The initial period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"1s"`  
 
 ### `backoff.max_interval`
 
-`string` The maximum period to wait between retry attempts.
+The maximum period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `backoff.max_elapsed_time`
 
-`string` The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+
+
+Type: `string`  
+Default: `"30s"`  
 
 ### `basic_auth`
 
-`object` Allows you to specify basic authentication.
+Allows you to specify basic authentication.
+
+
+Type: `object`  
+Default: `{"enabled":false,"password":"","username":""}`  
 
 ```yaml
 # Examples
@@ -196,7 +255,11 @@ basic_auth:
 
 ### `batching`
 
-`object` Allows you to configure a [batching policy](/docs/configuration/batching).
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
 
 ```yaml
 # Examples
@@ -219,15 +282,27 @@ batching:
 
 ### `batching.count`
 
-`number` A number of messages at which the batch should be flushed. If `0` disables count based batching.
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `batching.byte_size`
 
-`number` An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `batching.period`
 
-`string` A period in which an incomplete batch should be flushed regardless of its size.
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -241,11 +316,19 @@ period: 500ms
 
 ### `batching.condition`
 
-`object` A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+
+Type: `object`  
+Default: `{"static":false,"type":"static"}`  
 
 ### `batching.processors`
 
-`array` A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -264,46 +347,90 @@ processors:
 
 ### `aws`
 
-`object` Enables and customises connectivity to Amazon Elastic Service.
+Enables and customises connectivity to Amazon Elastic Service.
+
+
+Type: `object`  
+Default: `{"credentials":{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""},"enabled":false,"endpoint":"","region":"eu-west-1"}`  
 
 ### `aws.enabled`
 
-`bool` Whether to connect to Amazon Elastic Service.
+Whether to connect to Amazon Elastic Service.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `aws.region`
 
-`string` The AWS region to target.
+The AWS region to target.
+
+
+Type: `string`  
+Default: `"eu-west-1"`  
 
 ### `aws.endpoint`
 
-`string` Allows you to specify a custom endpoint for the AWS API.
+Allows you to specify a custom endpoint for the AWS API.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `aws.credentials`
 
-`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+
+Type: `object`  
+Default: `{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""}`  
 
 ### `aws.credentials.profile`
 
-`string` A profile from `~/.aws/credentials` to use.
+A profile from `~/.aws/credentials` to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `aws.credentials.id`
 
-`string` The ID of credentials to use.
+The ID of credentials to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `aws.credentials.secret`
 
-`string` The secret for the credentials being used.
+The secret for the credentials being used.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `aws.credentials.token`
 
-`string` The token for the credentials being used, required when using short term credentials.
+The token for the credentials being used, required when using short term credentials.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `aws.credentials.role`
 
-`string` A role ARN to assume.
+A role ARN to assume.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `aws.credentials.role_external_id`
 
-`string` An external ID to provide when assuming a role.
+An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
 
 

@@ -27,6 +27,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 number:
   operator: equals
   arg: 0
@@ -36,6 +37,7 @@ number:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 number:
   operator: equals
   arg: 0
@@ -53,20 +55,32 @@ number condition against arbitrary metadata or fields of messages.
 
 ### `operator`
 
-`string` An [operator](#operators) to apply.
+An [operator](#operators) to apply.
+
+
+Type: `string`  
+Default: `"equals"`  
 
 ### `arg`
 
-`number` An argument to check against. For some operators this field not be required.
+An argument to check against. For some operators this field not be required.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `part`
 
-`number` The index of a message within a batch to test the condition against. This
+The index of a message within a batch to test the condition against. This
 field is only applicable when batching messages
 [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.
+
+
+Type: `number`  
+Default: `0`  
 
 ## Operators
 

@@ -14,6 +14,7 @@ type: output
 Writes messages in line delimited format to a file.
 
 ```yaml
+# Config fields, showing default values
 output:
   file:
     path: ""
@@ -42,10 +43,18 @@ baz\n\n
 
 ### `path`
 
-`string` The file to write to, if the file does not yet exist it will be created.
+The file to write to, if the file does not yet exist it will be created.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `delimiter`
 
-`string` A custom delimiter to separate messages with. If left empty defaults to a line break.
+A custom delimiter to separate messages with. If left empty defaults to a line break.
+
+
+Type: `string`  
+Default: `""`  
 
 

@@ -26,6 +26,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   sqs:
     url: ""
@@ -36,6 +37,7 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   sqs:
     url: ""
@@ -81,54 +83,106 @@ You can access these metadata fields using
 
 ### `url`
 
-`string` The SQS URL to consume from.
+The SQS URL to consume from.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `delete_message`
 
-`bool` Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.
+Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `region`
 
-`string` The AWS region to target.
+The AWS region to target.
+
+
+Type: `string`  
+Default: `"eu-west-1"`  
 
 ### `endpoint`
 
-`string` Allows you to specify a custom endpoint for the AWS API.
+Allows you to specify a custom endpoint for the AWS API.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials`
 
-`object` Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+
+
+Type: `object`  
+Default: `{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""}`  
 
 ### `credentials.profile`
 
-`string` A profile from `~/.aws/credentials` to use.
+A profile from `~/.aws/credentials` to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.id`
 
-`string` The ID of credentials to use.
+The ID of credentials to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.secret`
 
-`string` The secret for the credentials being used.
+The secret for the credentials being used.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.token`
 
-`string` The token for the credentials being used, required when using short term credentials.
+The token for the credentials being used, required when using short term credentials.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.role`
 
-`string` A role ARN to assume.
+A role ARN to assume.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `credentials.role_external_id`
 
-`string` An external ID to provide when assuming a role.
+An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `timeout`
 
-`string` The period of time to wait before abandoning a request and trying again.
+The period of time to wait before abandoning a request and trying again.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `max_number_of_messages`
 
-`number` The maximum number of messages to consume from each request.
+The maximum number of messages to consume from each request.
+
+
+Type: `number`  
+Default: `1`  
 
 
