@@ -29,15 +29,14 @@ easier and often much faster than ` + "[`grok`](/docs/components/processors/grok
 			docs.FieldCommon("codec", "Specifies the structured format to parse a log into.").HasOptions(
 				"json",
 			),
-			docs.FieldAdvanced("best_effort", "Still returns parsed message if an error occurred."+
-				"Applied to `syslog_rfc3164` and `syslog_rfc5424` formats."),
-			docs.FieldAdvanced("allow_rfc3339", "Allows syslog parser to expect timestamp to be rfc3339-formatted"+
-				"Applied to `syslog_rfc3164`."),
-			docs.FieldAdvanced("default_year", "Sets the strategy to decide the year for the Stamp timestamp of RFC 3164"+
-				"Applied to `syslog_rfc3164`. Could be `current` to set the system's current year or specific year."+
-				"Leave an empty string to not use such option at all."),
-			docs.FieldAdvanced("default_timezone", "Sets the strategy to decide the timezone to apply to the Stamp timestamp of RFC 3164"+
-				"Applied to `syslog_rfc3164`. Given value handled by [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) method."),
+			docs.FieldAdvanced("best_effort", "Still returns partially parsed messages even if an error occurs."),
+			docs.FieldAdvanced("allow_rfc3339", "Also accept timestamps in rfc3339 format while parsing."+
+				" Applicable to format `syslog_rfc3164`."),
+			docs.FieldAdvanced("default_year", "Sets the strategy used to set the year for rfc3164 timestamps."+
+				" Applicable to format `syslog_rfc3164`. When set to `current` the current year will be set, when"+
+				" set to an integer that value will be used. Leave this field empty to not set a default year at all."),
+			docs.FieldAdvanced("default_timezone", "Sets the strategy to decide the timezone for rfc3164 timestamps."+
+				" Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format."),
 
 			partsFieldSpec,
 		},
@@ -50,9 +49,8 @@ Currently the only supported structured data codec is ` + "`json`" + `.
 
 ### ` + "`syslog_rfc5424`" + `
 
-Makes a best effort(default behaviour) to parse a log following the
-[Syslog rfc5424](https://tools.ietf.org/html/rfc5424) spec. The resulting
-structured document may contain any of the following fields:
+Attempts to parse a log following the [Syslog rfc5424](https://tools.ietf.org/html/rfc5424)
+spec. The resulting structured document may contain any of the following fields:
 
 - ` + "`message`" + ` (string)
 - ` + "`timestamp`" + ` (string, RFC3339)
@@ -68,13 +66,8 @@ structured document may contain any of the following fields:
 
 ### ` + "`syslog_rfc3164`" + `
 
-Makes a best effort(default behaviour) to parse a log following the
-[Syslog rfc3164](https://tools.ietf.org/html/rfc3164) spec. Since 
-transfered information could be omitted by some vendors, parameters
-` + "`allow_rfc3339`" + `,` + "`default_year`" + `,
-` + "`default_timezone`" + `,` + "`best_effort`" + `
-should be applied. The resulting structured document may contain any of 
-the following fields:
+Attempts to parse a log following the [Syslog rfc3164](https://tools.ietf.org/html/rfc3164)
+spec. The resulting structured document may contain any of the following fields:
 
 - ` + "`message`" + ` (string)
 - ` + "`timestamp`" + ` (string, RFC3339)
@@ -121,13 +114,13 @@ func NewParseLogConfig() ParseLogConfig {
 type parserFormat func(body []byte) (map[string]interface{}, error)
 
 func parserRFC5424(bestEffort bool) parserFormat {
-	return func(body []byte) (map[string]interface{}, error) {
-		var opts []syslog.MachineOption
-		if bestEffort {
-			opts = append(opts, rfc5424.WithBestEffort())
-		}
+	var opts []syslog.MachineOption
+	if bestEffort {
+		opts = append(opts, rfc5424.WithBestEffort())
+	}
+	p := rfc5424.NewParser(opts...)
 
-		p := rfc5424.NewParser(opts...)
+	return func(body []byte) (map[string]interface{}, error) {
 		resGen, err := p.Parse(body)
 		if err != nil {
 			return nil, err
@@ -174,37 +167,37 @@ func parserRFC5424(bestEffort bool) parserFormat {
 	}
 }
 
-func parserRFC3164(bestEffort, wrfc3339 bool, year, tz string) parserFormat {
+func parserRFC3164(bestEffort, wrfc3339 bool, year, tz string) (parserFormat, error) {
+	var opts []syslog.MachineOption
+	if bestEffort {
+		opts = append(opts, rfc3164.WithBestEffort())
+	}
+	if wrfc3339 {
+		opts = append(opts, rfc3164.WithRFC3339())
+	}
+	switch year {
+	case "current":
+		opts = append(opts, rfc3164.WithYear(rfc3164.CurrentYear{}))
+	case "":
+		// do nothing
+	default:
+		iYear, err := strconv.Atoi(year)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert year %s into integer:  %v", year, err)
+		}
+		opts = append(opts, rfc3164.WithYear(rfc3164.Year{YYYY: iYear}))
+	}
+	if tz != "" {
+		loc, err := time.LoadLocation(tz)
+		if err != nil {
+			return nil, fmt.Errorf("failed to lookup timezone %s - %v", loc, err)
+		}
+		opts = append(opts, rfc3164.WithTimezone(loc))
+	}
+
+	p := rfc3164.NewParser(opts...)
+
 	return func(body []byte) (map[string]interface{}, error) {
-		var opts []syslog.MachineOption
-		if bestEffort {
-			opts = append(opts, rfc3164.WithBestEffort())
-		}
-		if wrfc3339 {
-			opts = append(opts, rfc3164.WithRFC3339())
-		}
-		switch year {
-		case "current":
-			opts = append(opts, rfc3164.WithYear(rfc3164.CurrentYear{}))
-		case "":
-			// do nothing
-		default:
-			iYear, err := strconv.Atoi(year)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert year %s into integer:  %v", year, err)
-			}
-			opts = append(opts, rfc3164.WithYear(rfc3164.Year{YYYY: iYear}))
-		}
-		if tz != "" {
-			loc, err := time.LoadLocation(tz)
-			if err != nil {
-				return nil, fmt.Errorf("failed to lookup timezone %s - %v", loc, err)
-			}
-			opts = append(opts, rfc3164.WithTimezone(loc))
-		}
-
-		p := rfc3164.NewParser(opts...)
-
 		resGen, err := p.Parse(body)
 		if err != nil {
 			return nil, err
@@ -242,7 +235,7 @@ func parserRFC3164(bestEffort, wrfc3339 bool, year, tz string) parserFormat {
 		}
 
 		return resMap, nil
-	}
+	}, nil
 }
 
 func getParseFormat(parser string, bestEffort, rfc3339 bool, defYear, defTZ string) (parserFormat, error) {
@@ -250,7 +243,7 @@ func getParseFormat(parser string, bestEffort, rfc3339 bool, defYear, defTZ stri
 	case "syslog_rfc5424":
 		return parserRFC5424(bestEffort), nil
 	case "syslog_rfc3164":
-		return parserRFC3164(bestEffort, rfc3339, defYear, defTZ), nil
+		return parserRFC3164(bestEffort, rfc3339, defYear, defTZ)
 	}
 	return nil, fmt.Errorf("format not recognised: %s", parser)
 }

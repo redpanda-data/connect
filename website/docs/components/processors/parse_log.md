@@ -39,6 +39,10 @@ parse_log:
 parse_log:
   format: syslog_rfc5424
   codec: json
+  best_effort: true
+  allow_rfc3339: true
+  default_year: current
+  default_timezone: UTC
   parts: []
 ```
 
@@ -51,13 +55,29 @@ parse_log:
 
 `string` A common log [format](#formats) to parse.
 
-Options are: `syslog_rfc5424`.
+Options are: `syslog_rfc5424`, `syslog_rfc3164`.
 
 ### `codec`
 
 `string` Specifies the structured format to parse a log into.
 
 Options are: `json`.
+
+### `best_effort`
+
+`bool` Still returns partially parsed messages even if an error occurs.
+
+### `allow_rfc3339`
+
+`bool` Also accept timestamps in rfc3339 format while parsing. Applicable to format `syslog_rfc3164`.
+
+### `default_year`
+
+`string` Sets the strategy used to set the year for rfc3164 timestamps. Applicable to format `syslog_rfc3164`. When set to `current` the current year will be set, when set to an integer that value will be used. Leave this field empty to not set a default year at all.
+
+### `default_timezone`
+
+`string` Sets the strategy to decide the timezone for rfc3164 timestamps. Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format.
 
 ### `parts`
 
@@ -76,16 +96,34 @@ Currently the only supported structured data codec is `json`.
 
 ### `syslog_rfc5424`
 
-Makes a best effort to parses a log following the
-[Syslog rfc5424](https://tools.ietf.org/html/rfc5424) spec. The resulting
-structured document may contain any of the following fields:
+Attempts to parse a log following the [Syslog rfc5424](https://tools.ietf.org/html/rfc5424)
+spec. The resulting structured document may contain any of the following fields:
 
 - `message` (string)
 - `timestamp` (string, RFC3339)
+- `facility` (int)
+- `severity` (int)
+- `priority` (int)
+- `version` (int)
 - `hostname` (string)
 - `procid` (string)
 - `appname` (string)
 - `msgid` (string)
 - `structureddata` (object)
+
+### `syslog_rfc3164`
+
+Attempts to parse a log following the [Syslog rfc3164](https://tools.ietf.org/html/rfc3164)
+spec. The resulting structured document may contain any of the following fields:
+
+- `message` (string)
+- `timestamp` (string, RFC3339)
+- `facility` (int)
+- `severity` (int)
+- `priority` (int)
+- `hostname` (string)
+- `procid` (string)
+- `appname` (string)
+- `msgid` (string)
 
 

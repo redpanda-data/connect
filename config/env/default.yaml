@@ -555,7 +555,11 @@ pipeline:
     parallel:
       cap: ${PROCESSOR_PARALLEL_CAP:0}
     parse_log:
+      allow_rfc3339: ${PROCESSOR_PARSE_LOG_ALLOW_RFC3339:true}
+      best_effort: ${PROCESSOR_PARSE_LOG_BEST_EFFORT:true}
       codec: ${PROCESSOR_PARSE_LOG_CODEC:json}
+      default_timezone: ${PROCESSOR_PARSE_LOG_DEFAULT_TIMEZONE:UTC}
+      default_year: ${PROCESSOR_PARSE_LOG_DEFAULT_YEAR:current}
       format: ${PROCESSOR_PARSE_LOG_FORMAT:syslog_rfc5424}
     rate_limit:
       resource: ${PROCESSOR_RATE_LIMIT_RESOURCE}

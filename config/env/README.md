@@ -482,7 +482,11 @@ PROCESSOR_METRIC_VALUE
 PROCESSOR_NUMBER_OPERATOR                            = add
 PROCESSOR_NUMBER_VALUE                               = 0
 PROCESSOR_PARALLEL_CAP                               = 0
+PROCESSOR_PARSE_LOG_ALLOW_RFC3339                    = true
+PROCESSOR_PARSE_LOG_BEST_EFFORT                      = true
 PROCESSOR_PARSE_LOG_CODEC                            = json
+PROCESSOR_PARSE_LOG_DEFAULT_TIMEZONE                 = UTC
+PROCESSOR_PARSE_LOG_DEFAULT_YEAR                     = current
 PROCESSOR_PARSE_LOG_FORMAT                           = syslog_rfc5424
 PROCESSOR_RATE_LIMIT_RESOURCE
 PROCESSOR_REDIS_KEY

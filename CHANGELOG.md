@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- More options for the `parse_log` processor.
+
 ## 3.10.0 - 2020-02-05
 
 ### Added
