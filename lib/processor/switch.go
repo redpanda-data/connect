@@ -41,6 +41,35 @@ In order to switch each message of a batch individually use this processor with
 the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.
 
 You can find a [full list of conditions here](/docs/components/conditions/about).`,
+		Footnotes: `
+## Examples
+
+George is very noisy and lies quite often. For any messages received over the
+Kafka topic "from_george", which are messages from George, we want to lowercase
+everything he says and prefix it with "PROBABLY FALSE: ". For all other messages
+we want to uppercase them just to further spite him.
+
+` + "```yaml" + `
+pipeline:
+  processors:
+    - switch:
+      - condition:
+          metadata:
+            operator: equals
+            key: kafka_topic
+            arg: from_george
+        processors:
+        - text:
+            operator: to_lower
+        - text:
+            operator: prepend
+            value: "PROBABLY FALSE: "
+      - processors:
+        - text:
+            operator: to_upper
+` + "```" + `
+
+You're cool George but you're also a piece of work.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			switchSlice := []interface{}{}
 			for _, switchCase := range conf.Switch {
