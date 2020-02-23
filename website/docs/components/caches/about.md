@@ -27,6 +27,11 @@ pipeline:
         hash: xxhash
 ```
 
+It's possible to layer caches with read-through and write-through behaviour
+using the [`multilevel` cache][multilevel-cache].
+
 import ComponentSelect from '@theme/ComponentSelect';
 
 <ComponentSelect type="caches"></ComponentSelect>
+
+[multilevel-cache]: /docs/components/caches/multilevel

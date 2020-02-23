@@ -29,6 +29,7 @@ and can target any of the following types:
 - [`file`](/docs/components/caches/file/)
 - [`memcached`](/docs/components/caches/memcached/)
 - [`memory`](/docs/components/caches/memory/)
+- [`multilevel`](/docs/components/caches/multilevel/)
 - [`redis`](/docs/components/caches/redis/)
 - [`s3`](/docs/components/caches/s3/)
 

@@ -158,6 +158,15 @@ func New(
 		pipes:      map[string]<-chan types.Transaction{},
 	}
 
+	// Sometimes cache resources might refer to other cache resources. When they
+	// are constructed they will check with the manager to ensure the resource
+	// they point to is valid, but not use the cache. Since we cannot guarantee
+	// an order of initialisation we create placeholder caches during
+	// construction.
+	for k := range conf.Caches {
+		t.caches[k] = nil
+	}
+
 	for k, conf := range conf.Caches {
 		newCache, err := cache.New(conf, t, log.NewModule(".resource.cache."+k), metrics.Namespaced(stats, "resource.cache."+k))
 		if err != nil {
