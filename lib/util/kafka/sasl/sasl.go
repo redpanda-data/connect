@@ -68,10 +68,14 @@ func (s Config) Apply(mgr types.Manager, conf *sarama.Config) error {
 		conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
 			return &XDGSCRAMClient{HashGeneratorFcn: SHA256}
 		}
+		conf.Net.SASL.User = s.User
+		conf.Net.SASL.Password = s.Password
 	case sarama.SASLTypeSCRAMSHA512:
 		conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
 			return &XDGSCRAMClient{HashGeneratorFcn: SHA512}
 		}
+		conf.Net.SASL.User = s.User
+		conf.Net.SASL.Password = s.Password
 	case sarama.SASLTypePlaintext:
 		conf.Net.SASL.User = s.User
 		conf.Net.SASL.Password = s.Password
