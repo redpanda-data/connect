@@ -16,9 +16,8 @@ func init() {
 	Constructors[TypeJMESPath] = TypeSpec{
 		constructor: NewJMESPath,
 		Summary: `
-Parses a message as a JSON blob and attempts to apply a JMESPath expression to
-it, expecting a boolean result. If the response is true the condition passes,
-otherwise it does not.`,
+Executes a JMESPath query on JSON payloads, expecting a boolean result. If the
+result of the query is true then the condition passes, otherwise it does not.`,
 		Description: `
 Please refer to the [JMESPath website](http://jmespath.org/) for information and
 tutorials regarding the syntax of expressions.`,

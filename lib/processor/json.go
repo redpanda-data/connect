@@ -23,15 +23,12 @@ func init() {
 	Constructors[TypeJSON] = TypeSpec{
 		constructor: NewJSON,
 		Summary: `
-Parses messages as a JSON document, performs a mutation on the data, and then
-overwrites the previous contents with the new value.`,
+Performs mutation [operations](#operators) on JSON payloads.`,
 		Description: `
-The field ` + "`path`" + ` is a [dot separated path](/docs/configuration/field_paths) which,
-for most operators, determines the field within the payload to be targeted. If
-the path is empty or "." the root of the data will be targeted.
-
-This processor will interpolate functions within the 'value' field, you can find
-a list of functions [here](/docs/configuration/interpolation#functions).`,
+This processor is useful for applying high performance mutations on JSON data.
+For more advanced mapping use cases take a look at the
+` + "[`jmespath` processor](/docs/components/processors/jmespath)" + `, and also
+the ` + "[`awk` processor](/docs/components/processors/awk)" + `.`,
 		Footnotes: `
 ## Operators
 
@@ -199,8 +196,13 @@ and the contents of the ` + "`value`" + ` field to be strings.`,
 				"append", "clean", "copy", "delete", "explode", "flatten", "flatten_array", "fold_number_array",
 				"fold_string_array", "move", "select", "set", "split",
 			),
-			docs.FieldCommon("path", "A [dot path](/docs/configuration/field_paths) specifying the target within the document to the apply the chosen operator to."),
-			docs.FieldCommon("value", "A value to use with the chosen operator (sometimes not applicable). This is a generic field that can be any type.").SupportsInterpolation(false),
+			docs.FieldCommon("path", "A [dot path](/docs/configuration/field_paths) specifying the target within the document to the apply the chosen operator to.", "foo.bar", ".", "some_array.0.id"),
+			docs.FieldCommon(
+				"value",
+				"A value to use with the chosen operator (sometimes not applicable). This is a generic field that can be any type.",
+				"foo", "${!metadata:kafka_key}", false, 10,
+				map[string]interface{}{"topic": "${!metadata:kafka_topic}", "key": "${!metadata:kafka_key}"},
+			).SupportsInterpolation(false),
 			partsFieldSpec,
 		},
 	}

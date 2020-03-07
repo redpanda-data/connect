@@ -18,19 +18,23 @@ func init() {
 	Constructors[TypeJMESPath] = TypeSpec{
 		constructor: NewJMESPath,
 		Summary: `
-Parses a message as a JSON document and attempts to apply a JMESPath expression
-to it, replacing the contents of the part with the result. Please refer to the
-[JMESPath website](http://jmespath.org/) for information and tutorials regarding
-the syntax of expressions.`,
+Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces
+the message with the resulting document.`,
 		Description: `
-For example, with the following config:
+This processor is useful for performing large mappings in order to restructure
+JSON documents. In order to map documents using more advanced logic consider
+instead using the ` + "[`awk` processor](/docs/components/processors/awk)" + `.`,
+		Footnotes: `
+## Examples
+
+With the following query:
 
 ` + "``` yaml" + `
 jmespath:
   query: locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}
 ` + "```" + `
 
-If the initial contents of a message were:
+If the initial contents of a message were JSON document of the form:
 
 ` + "``` json" + `
 {
