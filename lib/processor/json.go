@@ -196,8 +196,8 @@ containing the results of the split. This operator requires both the path value
 and the contents of the ` + "`value`" + ` field to be strings.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "The [operator](#operators) to apply to messages.").HasOptions(
-				"append", "clean", "copy", "delete", "explode", "flatten_array", "fold_number_array", "fold_string_array",
-				"move", "select", "set", "split",
+				"append", "clean", "copy", "delete", "explode", "flatten", "flatten_array", "fold_number_array",
+				"fold_string_array", "move", "select", "set", "split",
 			),
 			docs.FieldCommon("path", "A [dot path](/docs/configuration/field_paths) specifying the target within the document to the apply the chosen operator to."),
 			docs.FieldCommon("value", "A value to use with the chosen operator (sometimes not applicable). This is a generic field that can be any type.").SupportsInterpolation(false),

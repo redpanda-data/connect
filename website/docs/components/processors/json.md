@@ -65,7 +65,7 @@ The [operator](#operators) to apply to messages.
 
 Type: `string`  
 Default: `"clean"`  
-Options: `append`, `clean`, `copy`, `delete`, `explode`, `flatten_array`, `fold_number_array`, `fold_string_array`, `move`, `select`, `set`, `split`.
+Options: `append`, `clean`, `copy`, `delete`, `explode`, `flatten`, `flatten_array`, `fold_number_array`, `fold_string_array`, `move`, `select`, `set`, `split`.
 
 ### `path`
 
