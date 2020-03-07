@@ -90,15 +90,18 @@ Default: `[]`
 
 ## Codecs
 
-A codec can be specified that determines how the contents of the message are fed
-into the program. This does not change the custom functions.
+The chosen codec determines how the contents of the message are fed into the
+program. Codecs only impact the input string and variables initialised for your
+program, they do not change the range of custom functions available.
 
 ### `none`
 
 An empty string is fed into the program. Functions can still be used in order to
-extract and mutate metadata and message contents. This is useful for when your
-program only uses functions and doesn't need the full text of the message to be
-parsed by the program.
+extract and mutate metadata and message contents.
+
+This is useful for when your program only uses functions and doesn't need the
+full text of the message to be parsed by the program, as it is significantly
+faster.
 
 ### `text`
 
@@ -111,9 +114,10 @@ command line tool.
 
 ### `json`
 
-No contents are fed into the program. Instead, variables are extracted from the
-message by walking the flattened JSON structure. Each value is converted into a
-variable by taking its full path, e.g. the object:
+An empty string is fed into the program, and variables are automatically
+initialised before execution of your program by walking the flattened JSON
+structure. Each value is converted into a variable by taking its full path,
+e.g. the object:
 
 ``` json
 {
@@ -137,14 +141,18 @@ Custom functions can also still be used with this codec.
 
 ## AWK Functions
 
-### `json_get(path)`
+### `json_get`
+
+Signature: `json_get(path)`
 
 Attempts to find a JSON value in the input message payload by a
 [dot separated path](/docs/configuration/field_paths) and returns it as a string.
 This function is always available even when the `json` codec is not
 used.
 
-### `json_set(path, value)`
+### `json_set`
+
+Signature: `json_set(path, value)`
 
 Attempts to set a JSON value in the input message payload identified by a
 [dot separated path](/docs/configuration/field_paths), the value argument will be interpreted
@@ -157,7 +165,9 @@ In order to set non-string values use one of the following typed varieties:
 - `json_set_float(path, value)`
 - `json_set_bool(path, value)`
 
-### `json_array_append(path, value)`
+### `json_array_append`
+
+Signature: `json_array_append(path, value)`
 
 Attempts to append a value to an array identified by a
 [dot separated path](/docs/configuration/field_paths). If the target does not
@@ -174,13 +184,17 @@ In order to append non-string values use one of the following typed varieties:
 - `json_array_append_float(path, value)`
 - `json_array_append_bool(path, value)`
 
-### `json_delete(path)`
+### `json_delete`
+
+Signature: `json_delete(path)`
 
 Attempts to delete a JSON field from the input message payload identified by a
 [dot separated path](/docs/configuration/field_paths). This function is always available even
 when the `json` codec is not used.
 
-### `create_json_object(key1, val1, key2, val2, ...)`
+### `create_json_object`
+
+Signature: `create_json_object(key1, val1, key2, val2, ...)`
 
 Generates a valid JSON object of key value pair arguments. The arguments are
 variadic, meaning any number of pairs can be listed. The value will always
@@ -192,7 +206,9 @@ Would result in this string:
 
 `{"a":"1","b":"2","c":"3"}`
 
-### `create_json_array(val1, val2, ...)`
+### `create_json_array`
+
+Signature: `create_json_array(val1, val2, ...)`
 
 Generates a valid JSON array of value arguments. The arguments are variadic,
 meaning any number of values can be listed. The value will always resolve to a
@@ -204,25 +220,35 @@ Would result in this string:
 
 `["1","2","3"]`
 
-### `metadata_set(key, value)`
+### `metadata_set`
+
+Signature: `metadata_set(key, value)`
 
 Set a metadata key for the message to a value. The value will always resolve to
 a string regardless of the value type.
 
-### `metadata_get(key) string`
+### `metadata_get`
+
+Signature: `metadata_get(key) string`
 
 Get the value of a metadata key from the message.
 
-### `timestamp_unix() int`
+### `timestamp_unix`
+
+Signature: `timestamp_unix() int`
 
 Returns the current unix timestamp (the number of seconds since 01-01-1970).
 
-### `timestamp_unix(date) int`
+### `timestamp_unix`
+
+Signature: `timestamp_unix(date) int`
 
 Attempts to parse a date string by detecting its format and returns the
 equivalent unix timestamp (the number of seconds since 01-01-1970).
 
-### `timestamp_unix(date, format) int`
+### `timestamp_unix`
+
+Signature: `timestamp_unix(date, format) int`
 
 Attempts to parse a date string according to a format and returns the equivalent
 unix timestamp (the number of seconds since 01-01-1970).
@@ -230,18 +256,24 @@ unix timestamp (the number of seconds since 01-01-1970).
 The format is defined by showing how the reference time, defined to be
 `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.
 
-### `timestamp_unix_nano() int`
+### `timestamp_unix_nano`
+
+Signature: `timestamp_unix_nano() int`
 
 Returns the current unix timestamp in nanoseconds (the number of nanoseconds
 since 01-01-1970).
 
-### `timestamp_unix_nano(date) int`
+### `timestamp_unix_nano`
+
+Signature: `timestamp_unix_nano(date) int`
 
 Attempts to parse a date string by detecting its format and returns the
 equivalent unix timestamp in nanoseconds (the number of nanoseconds since
 01-01-1970).
 
-### `timestamp_unix_nano(date, format) int`
+### `timestamp_unix_nano`
+
+Signature: `timestamp_unix_nano(date, format) int`
 
 Attempts to parse a date string according to a format and returns the equivalent
 unix timestamp in nanoseconds (the number of nanoseconds since 01-01-1970).
@@ -249,7 +281,9 @@ unix timestamp in nanoseconds (the number of nanoseconds since 01-01-1970).
 The format is defined by showing how the reference time, defined to be
 `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.
 
-### `timestamp_format(unix, format) string`
+### `timestamp_format`
+
+Signature: `timestamp_format(unix, format) string`
 
 Formats a unix timestamp. The format is defined by showing how the reference
 time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it
@@ -258,7 +292,9 @@ were the value.
 The format is optional, and if omitted RFC3339 (`2006-01-02T15:04:05Z07:00`)
 will be used.
 
-### `timestamp_format_nano(unixNano, format) string`
+### `timestamp_format_nano`
+
+Signature: `timestamp_format_nano(unixNano, format) string`
 
 Formats a unix timestamp in nanoseconds. The format is defined by showing how
 the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be
@@ -267,7 +303,9 @@ displayed if it were the value.
 The format is optional, and if omitted RFC3339 (`2006-01-02T15:04:05Z07:00`)
 will be used.
 
-### `print_log(message, level)`
+### `print_log`
+
+Signature: `print_log(message, level)`
 
 Prints a Benthos log message at a particular log level. The log level is
 optional, and if omitted the level `INFO` will be used.
