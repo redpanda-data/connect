@@ -354,6 +354,80 @@ func TestJSONNumberArray(t *testing.T) {
 	}
 }
 
+func TestJSONFlatten(t *testing.T) {
+	type jTest struct {
+		name   string
+		path   string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "flatten 1",
+			path:   ".",
+			input:  `{"foo":{"bar":"baz"}}`,
+			output: `{"foo.bar":"baz"}`,
+		},
+		{
+			name:   "flatten 2",
+			path:   ".",
+			input:  `{"foo":[{"bar":"1"},{"bar":"2"}]}`,
+			output: `{"foo.0.bar":"1","foo.1.bar":"2"}`,
+		},
+		{
+			name:   "flatten 3",
+			path:   "",
+			input:  `[{"bar":"1"},{"bar":"2"}]`,
+			output: `{"0.bar":"1","1.bar":"2"}`,
+		},
+		{
+			name:   "flatten 4",
+			path:   "",
+			input:  `[["1"],["2","3"]]`,
+			output: `{"0.0":"1","1.0":"2","1.1":"3"}`,
+		},
+		{
+			name:   "flatten nested 1",
+			path:   "inner",
+			input:  `{"inner":{"foo":{"bar":"baz"}}}`,
+			output: `{"inner":{"foo.bar":"baz"}}`,
+		},
+		{
+			name:   "flatten nested 2",
+			path:   "inner",
+			input:  `{"also":"this","inner":{"foo":[{"bar":"1"},{"bar":"2"}]}}`,
+			output: `{"also":"this","inner":{"foo.0.bar":"1","foo.1.bar":"2"}}`,
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.JSON.Operator = "flatten"
+		conf.JSON.Parts = []int{0}
+		conf.JSON.Path = test.path
+
+		jSet, err := NewJSON(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := jSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+
+		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestJSONAppend(t *testing.T) {
 	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	tStats := metrics.DudType{}

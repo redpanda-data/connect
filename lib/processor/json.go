@@ -107,10 +107,40 @@ The respective results would be:
 {"foo":{"id":1,"value":2},"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}}}
 ` + "```" + `
 
+### ` + "`flatten`" + `
+
+Flatten an array or object into an object of key/value pairs for each field,
+where the key is the full path of the structured field in
+[dot notation](/docs/configuration/field_paths).
+
+E.g. given the input document:
+
+` + "```json" + `
+{"foo":[{"bar":"1"},{"bar":"2"}]}
+` + "```" + `
+
+Performing ` + "`flatten`" + ` on the root would create:
+
+` + "```json" + `
+{"foo.0.bar":"1","foo.1.bar":"2"}
+` + "```" + `
+
 ### ` + "`flatten_array`" + `
 
 Targets an array within the document and expands the contents of any elements
 that are arrays into the target array.
+
+E.g. given the input document:
+
+` + "```json" + `
+{"foo":[["first"],["second","third"]]}
+` + "```" + `
+
+Performing ` + "`flatten_array`" + ` on the field 'foo' would create:
+
+` + "```json" + `
+{"foo":["first","second","third"]}
+` + "```" + `
 
 ### ` + "`fold_number_array`" + `
 
@@ -134,7 +164,7 @@ collision).
 
 ### ` + "`select`" + `
 
-Reads the value found at a dot path and replaced the original contents entirely
+Reads the value found at a dot path and replaces the original contents entirely
 by the new value.
 
 ### ` + "`set`" + `
@@ -453,6 +483,24 @@ func foldNumberArray(children []*gabs.Container) (float64, error) {
 	return b, nil
 }
 
+func newFlattenOperator(path []string) jsonOperator {
+	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+		gPart := gabs.Wrap(body)
+		target := gPart
+		if len(path) > 0 {
+			target = gPart.Search(path...)
+		}
+
+		v, err := target.Flatten()
+		if err != nil {
+			return nil, err
+		}
+
+		gPart.Set(v, path...)
+		return gPart.Data(), nil
+	}
+}
+
 func newFlattenArrayOperator(path []string) jsonOperator {
 	return func(body interface{}, value json.RawMessage) (interface{}, error) {
 		gPart := gabs.Wrap(body)
@@ -714,6 +762,8 @@ func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperat
 	switch opStr {
 	case "set":
 		return newSetOperator(path), nil
+	case "flatten":
+		return newFlattenOperator(path), nil
 	case "flatten_array":
 		return newFlattenArrayOperator(path), nil
 	case "fold_number_array":
