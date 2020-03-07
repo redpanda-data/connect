@@ -48,13 +48,17 @@ awk:
 </TabItem>
 </Tabs>
 
-Works by feeding contents as the input based on a [codec](#codecs) and replaces
-the contents with the result. If the result is empty (nothing is printed by the
-program) then the original message contents remain unchanged.
+Works by feeding message contents as the program input based on a chosen
+[codec](#codecs) and replaces the contents of each message with the result. If
+the result is empty (nothing is printed by the program) then the original
+message contents remain unchanged.
 
 Comes with a wide range of [custom functions](#awk-functions) for accessing
 message metadata, json fields, printing logs, etc. These functions can be
 overridden by functions within the program.
+
+Check out the [examples section](#examples) in order to see how this processor
+can be used.
 
 ## Fields
 
@@ -309,4 +313,57 @@ Signature: `print_log(message, level)`
 
 Prints a Benthos log message at a particular log level. The log level is
 optional, and if omitted the level `INFO` will be used.
+
+## Examples
+
+### JSON Mapping and Arithmetic
+
+Because AWK is a full programming language it's much easier to map documents and
+perform arithmetic with it than with other Benthos processors. For example, if
+we were expecting documents of the form:
+
+```json
+{"doc":{"val1":5,"val2":10},"id":"1","type":"add"}
+{"doc":{"val1":5,"val2":10},"id":"2","type":"multiply"}
+```
+
+And we wished to perform the arithmetic specified in the `type` field,
+on the values `val1` and `val2` and, finally, map the result into the
+document, we can solve that with a program like follows:
+
+```yaml
+pipeline:
+  processors:
+  - awk:
+      program: |
+        function map_add_vals() {
+          json_set_int("doc.result", json_get("doc.val1") + json_get("doc.val2"));
+        }
+        function map_multiply_vals() {
+          json_set_int("doc.result", json_get("doc.val1") * json_get("doc.val2"));
+        }
+        function map_unknown(type) {
+          json_set("error","unknown document type");
+          print_log("Document type not recognised: " type, "ERROR");
+        }
+        {
+          type = json_get("type");
+          if (type == "add")
+            map_add_vals();
+          else if (type == "multiply")
+            map_multiply_vals();
+          else
+            map_unknown(type);
+        }
+```
+
+Which would give us the following resulting documents:
+
+```json
+{"doc":{"result":15,"val1":5,"val2":10},"id":"1","type":"add"}
+{"doc":{"result":50,"val1":5,"val2":10},"id":"2","type":"multiply"}
+```
+
+Using functions allows us to separate our mapping logic, and we've also
+implemented a fallback mapper for when the document type is not recognised.
 
