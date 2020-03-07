@@ -140,8 +140,9 @@ Custom functions can also still be used with this codec.
 ### `json_get(path)`
 
 Attempts to find a JSON value in the input message payload by a
-[dot separated path](/docs/configuration/field_paths) and returns it as a string. This
-function is always available even when the `json` codec is not used.
+[dot separated path](/docs/configuration/field_paths) and returns it as a string.
+This function is always available even when the `json` codec is not
+used.
 
 ### `json_set(path, value)`
 
@@ -155,6 +156,23 @@ In order to set non-string values use one of the following typed varieties:
 - `json_set_int(path, value)`
 - `json_set_float(path, value)`
 - `json_set_bool(path, value)`
+
+### `json_array_append(path, value)`
+
+Attempts to append a value to an array identified by a
+[dot separated path](/docs/configuration/field_paths). If the target does not
+exist it will be created. If the target exists but is not already an array then
+it will be converted into one, with its original contents set to the first
+element of the array.
+
+The value argument will be interpreted as a string. This function is always
+available even when the `json` codec is not used.
+
+In order to append non-string values use one of the following typed varieties:
+
+- `json_array_append_int(path, value)`
+- `json_array_append_float(path, value)`
+- `json_array_append_bool(path, value)`
 
 ### `json_delete(path)`
 

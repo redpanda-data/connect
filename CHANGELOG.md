@@ -9,6 +9,12 @@ All notable changes to this project will be documented in this file.
 
 - Format `syslog_rfc3164` added to the `parse_log` processor.
 - New `multilevel` cache.
+- New `json_array_append` and typed variants added to `awk` processor.
+
+### Fixed
+
+- Kafka connectors now correctly set username and password for all SASL
+  strategies.
 
 ## 3.10.0 - 2020-02-05
 

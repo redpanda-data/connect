@@ -100,8 +100,9 @@ Custom functions can also still be used with this codec.
 ` + "### `json_get(path)`" + `
 
 Attempts to find a JSON value in the input message payload by a
-[dot separated path](/docs/configuration/field_paths) and returns it as a string. This
-function is always available even when the ` + "`json`" + ` codec is not used.
+[dot separated path](/docs/configuration/field_paths) and returns it as a string.
+This function is always available even when the ` + "`json`" + ` codec is not
+used.
 
 ` + "### `json_set(path, value)`" + `
 
@@ -115,6 +116,23 @@ In order to set non-string values use one of the following typed varieties:
 ` + "- `json_set_int(path, value)`" + `
 ` + "- `json_set_float(path, value)`" + `
 ` + "- `json_set_bool(path, value)`" + `
+
+` + "### `json_array_append(path, value)`" + `
+
+Attempts to append a value to an array identified by a
+[dot separated path](/docs/configuration/field_paths). If the target does not
+exist it will be created. If the target exists but is not already an array then
+it will be converted into one, with its original contents set to the first
+element of the array.
+
+The value argument will be interpreted as a string. This function is always
+available even when the ` + "`json`" + ` codec is not used.
+
+In order to append non-string values use one of the following typed varieties:
+
+` + "- `json_array_append_int(path, value)`" + `
+` + "- `json_array_append_float(path, value)`" + `
+` + "- `json_array_append_bool(path, value)`" + `
 
 ` + "### `json_delete(path)`" + `
 
@@ -409,6 +427,22 @@ var awkFunctionsMap = map[string]interface{}{
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
+	"json_array_append": func(path, value string) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
+	"json_array_append_int": func(path string, value int) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
+	"json_array_append_float": func(path string, value float64) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
+	"json_array_append_bool": func(path string, value bool) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
 	"json_delete": func(path string) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
@@ -545,6 +579,27 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		}
 		customFuncs["json_set_bool"] = func(path string, v bool) (int, error) {
 			return setJSON(path, v)
+		}
+		arrayAppendJSON := func(path string, v interface{}) (int, error) {
+			gPart, err := getJSON()
+			if err != nil {
+				return 0, err
+			}
+			gPart.ArrayAppendP(v, path)
+			part.SetJSON(gPart.Data())
+			return 0, nil
+		}
+		customFuncs["json_array_append"] = func(path, v string) (int, error) {
+			return arrayAppendJSON(path, v)
+		}
+		customFuncs["json_array_append_int"] = func(path string, v int) (int, error) {
+			return arrayAppendJSON(path, v)
+		}
+		customFuncs["json_array_append_float"] = func(path string, v float64) (int, error) {
+			return arrayAppendJSON(path, v)
+		}
+		customFuncs["json_array_append_bool"] = func(path string, v bool) (int, error) {
+			return arrayAppendJSON(path, v)
 		}
 		customFuncs["json_delete"] = func(path string) (int, error) {
 			gObj, err := getJSON()
