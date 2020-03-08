@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.11.0 - 2020-03-08
+
 ### Added
 
 - Format `syslog_rfc3164` added to the `parse_log` processor.
