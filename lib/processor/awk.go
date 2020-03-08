@@ -129,9 +129,9 @@ In order to set non-string values use one of the following typed varieties:
 ` + "- `json_set_float(path, value)`" + `
 ` + "- `json_set_bool(path, value)`" + `
 
-` + "### `json_array_append`" + `
+` + "### `json_append`" + `
 
-Signature: ` + "`json_array_append(path, value)`" + `
+Signature: ` + "`json_append(path, value)`" + `
 
 Attempts to append a value to an array identified by a
 [dot separated path](/docs/configuration/field_paths). If the target does not
@@ -144,9 +144,9 @@ available even when the ` + "`json`" + ` codec is not used.
 
 In order to append non-string values use one of the following typed varieties:
 
-` + "- `json_array_append_int(path, value)`" + `
-` + "- `json_array_append_float(path, value)`" + `
-` + "- `json_array_append_bool(path, value)`" + `
+` + "- `json_append_int(path, value)`" + `
+` + "- `json_append_float(path, value)`" + `
+` + "- `json_append_bool(path, value)`" + `
 
 ` + "### `json_delete`" + `
 
@@ -325,7 +325,44 @@ Which would give us the following resulting documents:
 ` + "```" + `
 
 Using functions allows us to separate our mapping logic, and we've also
-implemented a fallback mapper for when the document type is not recognised.`,
+implemented a fallback mapper for when the document type is not recognised.
+
+### Stuff With Arrays
+
+It's possible to iterate JSON arrays by appending an index value to the path,
+this can be used to do things like removing duplicates from arrays. For example,
+given the following input document:
+
+` + "```json" + `
+{"path":{"to":{"foos":["one","two","three","two","four"]}}}
+` + "```" + `
+
+We could create a new array ` + "`foos_unique` from `foos`" + ` with this:
+
+` + "```yaml" + `
+pipeline:
+  processors:
+  - awk:
+      program: |
+        {
+          i = 0;
+          ele = json_get("path.to.foos." i);
+          while (ele != "null") {
+            if ( ! ( ele in seen ) ) {
+              json_append("path.to.foos_unique", ele);
+              seen[ele] = 1;
+            }
+            i++;
+            ele = json_get("path.to.foos." i);
+          }
+        }
+` + "```" + `
+
+Which would give us the result:
+
+` + "```json" + `
+{"path":{"to":{"foos":["one","two","three","two","four"],"foos_unique":["one","two","three","four"]}}}
+` + "```" + ``,
 	}
 }
 
@@ -522,19 +559,19 @@ var awkFunctionsMap = map[string]interface{}{
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_array_append": func(path, value string) (int, error) {
+	"json_append": func(path, value string) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_array_append_int": func(path string, value int) (int, error) {
+	"json_append_int": func(path string, value int) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_array_append_float": func(path string, value float64) (int, error) {
+	"json_append_float": func(path string, value float64) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_array_append_bool": func(path string, value bool) (int, error) {
+	"json_append_bool": func(path string, value bool) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
@@ -684,16 +721,16 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			part.SetJSON(gPart.Data())
 			return 0, nil
 		}
-		customFuncs["json_array_append"] = func(path, v string) (int, error) {
+		customFuncs["json_append"] = func(path, v string) (int, error) {
 			return arrayAppendJSON(path, v)
 		}
-		customFuncs["json_array_append_int"] = func(path string, v int) (int, error) {
+		customFuncs["json_append_int"] = func(path string, v int) (int, error) {
 			return arrayAppendJSON(path, v)
 		}
-		customFuncs["json_array_append_float"] = func(path string, v float64) (int, error) {
+		customFuncs["json_append_float"] = func(path string, v float64) (int, error) {
 			return arrayAppendJSON(path, v)
 		}
-		customFuncs["json_array_append_bool"] = func(path string, v bool) (int, error) {
+		customFuncs["json_append_bool"] = func(path string, v bool) (int, error) {
 			return arrayAppendJSON(path, v)
 		}
 		customFuncs["json_delete"] = func(path string) (int, error) {

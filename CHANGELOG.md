@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Format `syslog_rfc3164` added to the `parse_log` processor.
 - New `multilevel` cache.
-- New `json_array_append` and typed variants added to `awk` processor.
+- New `json_append` and typed variants added to `awk` processor.
 - New `flatten` operator added to `json` processor.
 
 ### Fixed
