@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
   processor.
 - New `flatten` operator added to the `json` processor.
 
+### Changed
+
+- Processors that fail now set the opentracing tag `error` to `true`.
+
 ### Fixed
 
 - Kafka connectors now correctly set username and password for all SASL
