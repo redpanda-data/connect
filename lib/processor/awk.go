@@ -111,8 +111,6 @@ Signature: ` + "`json_get(path)`" + `
 
 Attempts to find a JSON value in the input message payload by a
 [dot separated path](/docs/configuration/field_paths) and returns it as a string.
-This function is always available even when the ` + "`json`" + ` codec is not
-used.
 
 ` + "### `json_set`" + `
 
@@ -120,8 +118,7 @@ Signature: ` + "`json_set(path, value)`" + `
 
 Attempts to set a JSON value in the input message payload identified by a
 [dot separated path](/docs/configuration/field_paths), the value argument will be interpreted
-as a string. This function is always available even when the ` + "`json`" + ` codec is not
-used.
+as a string.
 
 In order to set non-string values use one of the following typed varieties:
 
@@ -139,10 +136,8 @@ exist it will be created. If the target exists but is not already an array then
 it will be converted into one, with its original contents set to the first
 element of the array.
 
-The value argument will be interpreted as a string. This function is always
-available even when the ` + "`json`" + ` codec is not used.
-
-In order to append non-string values use one of the following typed varieties:
+The value argument will be interpreted as a string. In order to append
+non-string values use one of the following typed varieties:
 
 ` + "- `json_append_int(path, value)`" + `
 ` + "- `json_append_float(path, value)`" + `
@@ -153,8 +148,27 @@ In order to append non-string values use one of the following typed varieties:
 Signature: ` + "`json_delete(path)`" + `
 
 Attempts to delete a JSON field from the input message payload identified by a
-[dot separated path](/docs/configuration/field_paths). This function is always available even
-when the ` + "`json`" + ` codec is not used.
+[dot separated path](/docs/configuration/field_paths).
+
+` + "### `json_length`" + `
+
+Signature: ` + "`json_length(path)`" + `
+
+Returns the size of the string or array value of JSON field from the input
+message payload identified by a [dot separated path](/docs/configuration/field_paths).
+
+If the target field does not exist, or is not a string or array type, then zero
+is returned. In order to explicitly check the type of a field use ` + "`json_type`" + `.
+
+` + "### `json_type`" + `
+
+Signature: ` + "`json_type(path)`" + `
+
+Returns the type of a JSON field from the input message payload identified by a
+[dot separated path](/docs/configuration/field_paths).
+
+Possible values are: "string", "int", "float", "bool", "undefined", "null",
+"array", "object".
 
 ` + "### `create_json_object`" + `
 
@@ -345,15 +359,15 @@ pipeline:
   - awk:
       program: |
         {
-          i = 0;
-          ele = json_get("path.to.foos." i);
-          while (ele != "null") {
+          array_path = "path.to.foos"
+          array_len = json_length(array_path)
+
+          for (i = 0; i < array_len; i++) {
+            ele = json_get(array_path "." i)
             if ( ! ( ele in seen ) ) {
-              json_append("path.to.foos_unique", ele);
-              seen[ele] = 1;
+              json_append(array_path "_unique", ele)
+              seen[ele] = 1
             }
-            i++;
-            ele = json_get("path.to.foos." i);
           }
         }
 ` + "```" + `
@@ -579,6 +593,14 @@ var awkFunctionsMap = map[string]interface{}{
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
+	"json_length": func(path string) (int, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return 0, errors.New("not implemented")
+	},
+	"json_type": func(path string) (string, error) {
+		// Do nothing, this is a placeholder for compilation.
+		return "", errors.New("not implemented")
+	},
 	"create_json_object": func(vals ...string) string {
 		pairs := map[string]string{}
 		for i := 0; i < len(vals)-1; i += 2 {
@@ -741,6 +763,48 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			gObj.DeleteP(path)
 			part.SetJSON(gObj.Data())
 			return 0, nil
+		}
+		customFuncs["json_length"] = func(path string) (int, error) {
+			gObj, err := getJSON()
+			if err != nil {
+				return 0, err
+			}
+			switch t := gObj.Path(path).Data().(type) {
+			case string:
+				return len(t), nil
+			case []interface{}:
+				return len(t), nil
+			}
+			return 0, nil
+		}
+		customFuncs["json_type"] = func(path string) (string, error) {
+			gObj, err := getJSON()
+			if err != nil {
+				return "", err
+			}
+			if !gObj.ExistsP(path) {
+				return "undefined", nil
+			}
+			switch t := gObj.Path(path).Data().(type) {
+			case int:
+				return "int", nil
+			case float64:
+				return "float", nil
+			case json.Number:
+				return "float", nil
+			case string:
+				return "string", nil
+			case bool:
+				return "bool", nil
+			case []interface{}:
+				return "array", nil
+			case map[string]interface{}:
+				return "object", nil
+			case nil:
+				return "null", nil
+			default:
+				return "", fmt.Errorf("type not recognised: %T", t)
+			}
 		}
 
 		config := &interp.Config{
