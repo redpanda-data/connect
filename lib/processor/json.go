@@ -311,12 +311,12 @@ func NewJSONConfig() JSONConfig {
 
 //------------------------------------------------------------------------------
 
-type jsonOperator func(body interface{}, value json.RawMessage) (interface{}, error)
+type jsonOperator func(body interface{}, path []string, value json.RawMessage) (interface{}, error)
 
-func newSetOperator(path []string) jsonOperator {
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newSetOperator() jsonOperator {
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
+		var data interface{}
 		if len(path) == 0 {
-			var data interface{}
 			if value != nil {
 				if err := json.Unmarshal([]byte(value), &data); err != nil {
 					return nil, fmt.Errorf("failed to parse value: %v", err)
@@ -327,7 +327,6 @@ func newSetOperator(path []string) jsonOperator {
 
 		gPart := gabs.Wrap(body)
 
-		var data interface{}
 		if value != nil {
 			if err := json.Unmarshal([]byte(value), &data); err != nil {
 				return nil, fmt.Errorf("failed to parse value: %v", err)
@@ -339,13 +338,24 @@ func newSetOperator(path []string) jsonOperator {
 	}
 }
 
-func newMoveOperator(srcPath, destPath []string) (jsonOperator, error) {
-	if len(srcPath) == 0 && len(destPath) == 0 {
-		return nil, errors.New("an empty source and destination path is not valid for the move operator")
-	}
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newMoveOperator() (jsonOperator, error) {
+	return func(body interface{}, srcPath []string, value json.RawMessage) (interface{}, error) {
 		var gPart *gabs.Container
 		var gSrc interface{}
+
+		var destDotPath string
+		var destPath []string
+		if err := json.Unmarshal(value, &destDotPath); err != nil {
+			return nil, fmt.Errorf("failed to parse destination path from value: %v", err)
+		}
+		if len(destDotPath) > 0 {
+			destPath = gabs.DotPathToSlice(destDotPath)
+		}
+
+		if len(srcPath) == 0 && len(destPath) == 0 {
+			return nil, errors.New("an empty source and destination path is not valid for the move operator")
+		}
+
 		if len(srcPath) > 0 {
 			gPart = gabs.Wrap(body)
 			gSrc = gPart.S(srcPath...).Data()
@@ -367,14 +377,24 @@ func newMoveOperator(srcPath, destPath []string) (jsonOperator, error) {
 	}, nil
 }
 
-func newCopyOperator(srcPath, destPath []string) (jsonOperator, error) {
-	if len(srcPath) == 0 {
-		return nil, errors.New("an empty source path is not valid for the copy operator")
-	}
-	if len(destPath) == 0 {
-		return nil, errors.New("an empty destination path is not valid for the copy operator")
-	}
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newCopyOperator() (jsonOperator, error) {
+	return func(body interface{}, srcPath []string, value json.RawMessage) (interface{}, error) {
+		if len(srcPath) == 0 {
+			return nil, errors.New("an empty source path is not valid for the copy operator")
+		}
+
+		var destDotPath string
+		var destPath []string
+		if err := json.Unmarshal(value, &destDotPath); err != nil {
+			return nil, fmt.Errorf("failed to parse destination path from value: %v", err)
+		}
+		if len(destDotPath) > 0 {
+			destPath = gabs.DotPathToSlice(destDotPath)
+		}
+		if len(destPath) == 0 {
+			return nil, errors.New("an empty destination path is not valid for the copy operator")
+		}
+
 		gPart := gabs.Wrap(body)
 		gSrc := gPart.S(srcPath...).Data()
 		if gSrc == nil {
@@ -388,11 +408,12 @@ func newCopyOperator(srcPath, destPath []string) (jsonOperator, error) {
 	}, nil
 }
 
-func newExplodeOperator(path []string) (jsonOperator, error) {
-	if len(path) == 0 {
-		return nil, errors.New("explode operator requires a target path")
-	}
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newExplodeOperator() (jsonOperator, error) {
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
+		if len(path) == 0 {
+			return nil, errors.New("explode operator requires a target path")
+		}
+
 		target := gabs.Wrap(body).Search(path...)
 
 		switch t := target.Data().(type) {
@@ -485,8 +506,9 @@ func foldNumberArray(children []*gabs.Container) (float64, error) {
 	return b, nil
 }
 
-func newFlattenOperator(path []string) jsonOperator {
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newFlattenOperator() jsonOperator {
+
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
 		gPart := gabs.Wrap(body)
 		target := gPart
 		if len(path) > 0 {
@@ -503,8 +525,8 @@ func newFlattenOperator(path []string) jsonOperator {
 	}
 }
 
-func newFlattenArrayOperator(path []string) jsonOperator {
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newFlattenArrayOperator() jsonOperator {
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
 		gPart := gabs.Wrap(body)
 		target := gPart
 		if len(path) > 0 {
@@ -530,8 +552,8 @@ func newFlattenArrayOperator(path []string) jsonOperator {
 	}
 }
 
-func newFoldNumberArrayOperator(path []string) jsonOperator {
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newFoldNumberArrayOperator() jsonOperator {
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
 		gPart := gabs.Wrap(body)
 		target := gPart
 		if len(path) > 0 {
@@ -558,8 +580,8 @@ func newFoldNumberArrayOperator(path []string) jsonOperator {
 	}
 }
 
-func newFoldStringArrayOperator(path []string) jsonOperator {
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newFoldStringArrayOperator() jsonOperator {
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
 		gPart := gabs.Wrap(body)
 		target := gPart
 		if len(path) > 0 {
@@ -586,8 +608,8 @@ func newFoldStringArrayOperator(path []string) jsonOperator {
 	}
 }
 
-func newSelectOperator(path []string) jsonOperator {
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newSelectOperator() jsonOperator {
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
 		gPart := gabs.Wrap(body)
 		target := gPart
 		if len(path) > 0 {
@@ -605,8 +627,8 @@ func newSelectOperator(path []string) jsonOperator {
 	}
 }
 
-func newDeleteOperator(path []string) jsonOperator {
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newDeleteOperator() jsonOperator {
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
 		if len(path) == 0 {
 			return nil, nil
 		}
@@ -619,8 +641,8 @@ func newDeleteOperator(path []string) jsonOperator {
 	}
 }
 
-func newCleanOperator(path []string) jsonOperator {
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newCleanOperator() jsonOperator {
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
 		gRoot := gabs.Wrap(body)
 
 		var cleanValueFn func(g interface{}) interface{}
@@ -686,8 +708,8 @@ func newCleanOperator(path []string) jsonOperator {
 	}
 }
 
-func newAppendOperator(path []string) jsonOperator {
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newAppendOperator() jsonOperator {
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
 		gPart := gabs.Wrap(body)
 		var array []interface{}
 
@@ -721,8 +743,8 @@ func newAppendOperator(path []string) jsonOperator {
 	}
 }
 
-func newSplitOperator(path []string) jsonOperator {
-	return func(body interface{}, value json.RawMessage) (interface{}, error) {
+func newSplitOperator() jsonOperator {
+	return func(body interface{}, path []string, value json.RawMessage) (interface{}, error) {
 		gPart := gabs.Wrap(body)
 
 		var valueParsed string
@@ -750,44 +772,34 @@ func newSplitOperator(path []string) jsonOperator {
 	}
 }
 
-func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperator, error) {
-	var destPath []string
-	if opStr == "move" || opStr == "copy" {
-		var destDotPath string
-		if err := json.Unmarshal(value, &destDotPath); err != nil {
-			return nil, fmt.Errorf("failed to parse destination path from value: %v", err)
-		}
-		if len(destDotPath) > 0 {
-			destPath = gabs.DotPathToSlice(destDotPath)
-		}
-	}
+func getOperator(opStr string) (jsonOperator, error) {
 	switch opStr {
 	case "set":
-		return newSetOperator(path), nil
+		return newSetOperator(), nil
 	case "flatten":
-		return newFlattenOperator(path), nil
+		return newFlattenOperator(), nil
 	case "flatten_array":
-		return newFlattenArrayOperator(path), nil
+		return newFlattenArrayOperator(), nil
 	case "fold_number_array":
-		return newFoldNumberArrayOperator(path), nil
+		return newFoldNumberArrayOperator(), nil
 	case "fold_string_array":
-		return newFoldStringArrayOperator(path), nil
+		return newFoldStringArrayOperator(), nil
 	case "select":
-		return newSelectOperator(path), nil
+		return newSelectOperator(), nil
 	case "split":
-		return newSplitOperator(path), nil
+		return newSplitOperator(), nil
 	case "copy":
-		return newCopyOperator(path, destPath)
+		return newCopyOperator()
 	case "move":
-		return newMoveOperator(path, destPath)
+		return newMoveOperator()
 	case "delete":
-		return newDeleteOperator(path), nil
+		return newDeleteOperator(), nil
 	case "append":
-		return newAppendOperator(path), nil
+		return newAppendOperator(), nil
 	case "clean":
-		return newCleanOperator(path), nil
+		return newCleanOperator(), nil
 	case "explode":
-		return newExplodeOperator(path)
+		return newExplodeOperator()
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
@@ -800,6 +812,9 @@ type JSON struct {
 	interpolate bool
 	valueBytes  rawJSONValue
 	operator    jsonOperator
+
+	path *text.InterpolatedString
+	//isPathInterpolated bool
 
 	conf  Config
 	log   log.Modular
@@ -824,6 +839,7 @@ func NewJSON(
 		stats: stats,
 
 		valueBytes: conf.JSON.Value,
+		path:       text.NewInterpolatedString(conf.JSON.Path),
 
 		mCount:     stats.GetCounter("count"),
 		mErrJSONP:  stats.GetCounter("error.json_parse"),
@@ -835,13 +851,22 @@ func NewJSON(
 
 	j.interpolate = text.ContainsFunctionVariables(j.valueBytes)
 
-	splitPath := gabs.DotPathToSlice(conf.JSON.Path)
-	if len(conf.JSON.Path) == 0 || conf.JSON.Path == "." {
-		splitPath = []string{}
-	}
+	/*
+		var splitPath []string
+		if text.ContainsFunctionVariables([]byte(conf.JSON.Path)) {
+			//j.isPathInterpolated = true
+			splitPath = append(splitPath, conf.JSON.Path)
+		} else {
+			splitPath = gabs.DotPathToSlice(conf.JSON.Path)
+		}
+
+		if len(conf.JSON.Path) == 0 || conf.JSON.Path == "." {
+			splitPath = []string{}
+		}
+	*/
 
 	var err error
-	if j.operator, err = getOperator(conf.JSON.Operator, splitPath, json.RawMessage(j.valueBytes)); err != nil {
+	if j.operator, err = getOperator(conf.JSON.Operator); err != nil {
 		return nil, err
 	}
 	return j, nil
@@ -860,6 +885,15 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		valueBytes = text.ReplaceFunctionVariablesEscaped(msg, valueBytes)
 	}
 
+	path := p.path.Get(msg)
+
+	var paths []string
+	if len(path) == 0 || path == "." {
+		paths = []string{}
+	} else {
+		paths = gabs.DotPathToSlice(path)
+	}
+
 	proc := func(index int, span opentracing.Span, part types.Part) error {
 		jsonPart, err := part.JSON()
 		if err == nil {
@@ -873,7 +907,7 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		}
 
 		var data interface{}
-		if data, err = p.operator(jsonPart, json.RawMessage(valueBytes)); err != nil {
+		if data, err = p.operator(jsonPart, paths, json.RawMessage(valueBytes)); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)
 			return err
