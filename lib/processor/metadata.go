@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"encoding/json"
+	_ "encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -103,6 +105,25 @@ func newMetadataSetOperator() metadataOperator {
 	}
 }
 
+func newMetadataMultisetSetOperator() metadataOperator {
+	return func(m types.Metadata, rawKeys, rawValues string) error {
+		var keys, values []string
+		if err := json.Unmarshal([]byte(rawKeys), &keys); err != nil {
+			return fmt.Errorf("Key string is not a valid json array")
+		}
+		if err := json.Unmarshal([]byte(rawValues), &values); err != nil {
+			return fmt.Errorf("Value string is not a valid json array")
+		}
+		if len(keys) != len(values) {
+			return fmt.Errorf("the lengths of keys and values don't match")
+		}
+		for i := range keys {
+			m.Set(keys[i], values[i])
+		}
+		return nil
+	}
+}
+
 func newMetadataDeleteAllOperator() metadataOperator {
 	return func(m types.Metadata, key, value string) error {
 		m.Iter(func(k, _ string) error {
@@ -144,6 +165,8 @@ func getMetadataOperator(opStr string) (metadataOperator, error) {
 	switch opStr {
 	case "set":
 		return newMetadataSetOperator(), nil
+	case "multiset":
+		return newMetadataMultisetSetOperator(), nil
 	case "delete":
 		return newMetadataDeleteOperator(), nil
 	case "delete_all":

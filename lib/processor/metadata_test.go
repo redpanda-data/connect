@@ -81,6 +81,55 @@ func TestMetadataSet(t *testing.T) {
 	}
 }
 
+func TestMetadataMultiSet(t *testing.T) {
+	type mTest struct {
+		name     string
+		inputKey string
+		keys     []string
+		value    string
+		input    string
+		output   []string
+	}
+
+	tests := []mTest{
+		{
+			name:     "multiset 1",
+			inputKey: `["foo", "bar"]`,
+			keys:     []string{"foo", "bar"},
+			value:    `["42", "qaz"]`,
+			input:    `{"foo":{"bar":5}}`,
+			output:   []string{"42", "qaz"},
+		},
+	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Metadata.Operator = "multiset"
+		conf.Metadata.Key = test.inputKey
+		conf.Metadata.Value = test.value
+
+		mSet, err := NewMetadata(conf, nil, log.Noop(), metrics.Noop())
+		if err != nil {
+			t.Fatalf("Error for test '%v': %v", test.name, err)
+		}
+
+		inMsg := message.New(
+			[][]byte{
+				[]byte(test.input),
+			},
+		)
+		msgs, _ := mSet.ProcessMessage(inMsg)
+		if len(msgs) != 1 {
+			t.Fatalf("Test '%v' did not succeed", test.name)
+		}
+		for i, key := range test.keys {
+			if exp, act := test.output[i], msgs[0].Get(0).Metadata().Get(key); exp != act {
+				t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
+			}
+		}
+	}
+}
+
 func TestMetadataSetParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Metadata.Parts = []int{1}
