@@ -48,6 +48,16 @@ Checks whether the content contains the argument (case sensitive.)
 Checks whether the content contains the argument under unicode case-folding
 (case insensitive.)
 
+### ` + "`contains_cs_any`" + `
+
+Checks whether the content contains any of the list of arguments under unicode case-folding
+(case sensitive.)
+
+### ` + "`contains_any`" + `
+
+Checks whether the content contains any of the list of arguments under unicode case-folding
+(case insensitive.)
+
 ### ` + "`is`" + `
 
 Checks whether the content meets the characteristic of a type specified in 
@@ -166,6 +176,44 @@ func textContainsFoldOperator(arg []byte) textOperator {
 	return func(c []byte) bool {
 		return bytes.Contains(bytes.ToLower(c), argLower)
 	}
+}
+
+func textContainsAnyOperator(arg interface{}) (textOperator, error) {
+	entries, err := cast.ToStringSliceE(arg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse argument as string slice: %v", err)
+	}
+	var entriesBytes [][]byte
+	for _, entry := range entries {
+		entriesBytes = append(entriesBytes, []byte(entry))
+	}
+	return func(c []byte) bool {
+		for _, entry := range entriesBytes {
+			if bytes.Contains(c, entry) {
+				return true
+			}
+		}
+		return false
+	}, nil
+}
+
+func textContainsFoldAnyOperator(arg interface{}) (textOperator, error) {
+	entries, err := cast.ToStringSliceE(arg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse argument as string slice: %v", err)
+	}
+	var entriesBytes [][]byte
+	for _, entry := range entries {
+		entriesBytes = append(entriesBytes, bytes.ToLower([]byte(entry)))
+	}
+	return func(c []byte) bool {
+		for _, entry := range entriesBytes {
+			if bytes.Contains(bytes.ToLower(c), entry) {
+				return true
+			}
+		}
+		return false
+	}, nil
 }
 
 func textPrefixOperator(arg []byte) textOperator {
@@ -294,6 +342,10 @@ func strToTextOperator(str string, arg interface{}) (textOperator, error) {
 		return bytesArg(textContainsOperator)
 	case "contains":
 		return bytesArg(textContainsFoldOperator)
+	case "contains_any":
+		return textContainsFoldAnyOperator(arg)
+	case "contains_cs_any":
+		return textContainsAnyOperator(arg)
 	case "is":
 		return textIsOperator(arg)
 	case "prefix_cs":
