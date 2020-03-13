@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `gcp_pubsub` output now supports function interpolation on the field
+  `topic`.
+
 ## 3.11.0 - 2020-03-08
 
 ### Added

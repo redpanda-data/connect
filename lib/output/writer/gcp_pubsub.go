@@ -8,8 +8,10 @@ import (
 
 	"cloud.google.com/go/pubsub"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/text"
 )
 
 //------------------------------------------------------------------------------
@@ -37,8 +39,10 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 type GCPPubSub struct {
 	conf GCPPubSubConfig
 
-	client   *pubsub.Client
-	topic    *pubsub.Topic
+	client *pubsub.Client
+
+	topicID  *text.InterpolatedString
+	topics   map[string]*pubsub.Topic
 	topicMut sync.Mutex
 
 	log   log.Modular
@@ -58,10 +62,11 @@ func NewGCPPubSub(
 		return nil, err
 	}
 	return &GCPPubSub{
-		conf:   conf,
-		log:    log,
-		client: client,
-		stats:  stats,
+		conf:    conf,
+		log:     log,
+		client:  client,
+		stats:   stats,
+		topicID: text.NewInterpolatedString(conf.TopicID),
 	}, nil
 }
 
@@ -70,22 +75,38 @@ func NewGCPPubSub(
 func (c *GCPPubSub) ConnectWithContext(ctx context.Context) error {
 	c.topicMut.Lock()
 	defer c.topicMut.Unlock()
-	if c.topic != nil {
+	if c.topics != nil {
 		return nil
 	}
 
-	topic := c.client.Topic(c.conf.TopicID)
-	exists, err := topic.Exists(ctx)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return fmt.Errorf("topic '%v' does not exist", c.conf.TopicID)
-	}
-
-	c.topic = topic
+	c.topics = map[string]*pubsub.Topic{}
 	c.log.Infof("Sending GCP Cloud Pub/Sub messages to project '%v' and topic '%v'\n", c.conf.ProjectID, c.conf.TopicID)
 	return nil
+}
+
+func (c *GCPPubSub) getTopic(ctx context.Context, t string) (*pubsub.Topic, error) {
+	c.topicMut.Lock()
+	defer c.topicMut.Unlock()
+	if c.topics == nil {
+		return nil, types.ErrNotConnected
+	}
+	if t, exists := c.topics[t]; exists {
+		return t, nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+
+	topic := c.client.Topic(t)
+	exists, err := topic.Exists(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate topic '%v': %v", t, err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("topic '%v' does not exist", t)
+	}
+	c.topics[t] = topic
+	return topic, nil
 }
 
 // Connect attempts to establish a connection to the target GCP Pub/Sub topic.
@@ -97,17 +118,18 @@ func (c *GCPPubSub) Connect() error {
 
 // WriteWithContext attempts to write message contents to a target topic.
 func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) error {
-	c.topicMut.Lock()
-	topic := c.topic
-	c.topicMut.Unlock()
-
-	if c.topic == nil {
-		return types.ErrNotConnected
+	topics := make([]*pubsub.Topic, msg.Len())
+	if err := msg.Iter(func(i int, _ types.Part) error {
+		var tErr error
+		topics[i], tErr = c.getTopic(ctx, c.topicID.Get(message.Lock(msg, i)))
+		return tErr
+	}); err != nil {
+		return err
 	}
 
 	results := make([]*pubsub.PublishResult, msg.Len())
-
 	msg.Iter(func(i int, part types.Part) error {
+		topic := topics[i]
 		attr := map[string]string{}
 		part.Metadata().Iter(func(k, v string) error {
 			attr[k] = v
@@ -145,9 +167,11 @@ func (c *GCPPubSub) CloseAsync() {
 	go func() {
 		c.topicMut.Lock()
 		defer c.topicMut.Unlock()
-		if c.topic != nil {
-			c.topic.Stop()
-			c.topic = nil
+		if c.topics != nil {
+			for _, t := range c.topics {
+				t.Stop()
+			}
+			c.topics = nil
 		}
 	}()
 }

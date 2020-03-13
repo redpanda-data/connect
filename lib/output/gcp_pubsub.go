@@ -22,7 +22,7 @@ For information on how to set up credentials check out
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("project", "The project ID of the topic to publish to."),
-			docs.FieldCommon("topic", "The topic to publish to."),
+			docs.FieldCommon("topic", "The topic to publish to.").SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
 	}
