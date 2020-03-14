@@ -141,6 +141,72 @@ func TestTextCheck(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "contains_cs_any 1",
+			fields: fields{
+				operator: "contains_cs_any",
+				arg:      []string{"foo", "bar"},
+			},
+			arg: [][]byte{
+				[]byte("foobaz"),
+			},
+			want: true,
+		},
+		{
+			name: "contains_cs_any 2",
+			fields: fields{
+				operator: "contains_cs_any",
+				arg:      []string{"foo", "bar"},
+			},
+			arg: [][]byte{
+				[]byte("fobarbaz"),
+			},
+			want: true,
+		},
+		{
+			name: "contains_cs_any 3",
+			fields: fields{
+				operator: "contains_cs_any",
+				arg:      []string{"foo", "bar"},
+			},
+			arg: [][]byte{
+				[]byte("fobabaz"),
+			},
+			want: false,
+		},
+		{
+			name: "contains_any 1",
+			fields: fields{
+				operator: "contains_any",
+				arg:      []string{"fOo", "bar"},
+			},
+			arg: [][]byte{
+				[]byte("foobaz"),
+			},
+			want: true,
+		},
+		{
+			name: "contains_any 2",
+			fields: fields{
+				operator: "contains_any",
+				arg:      []string{"foo", "bar"},
+			},
+			arg: [][]byte{
+				[]byte("fobARbaz"),
+			},
+			want: true,
+		},
+		{
+			name: "contains_any 3",
+			fields: fields{
+				operator: "contains_any",
+				arg:      []string{"foo", "bar"},
+			},
+			arg: [][]byte{
+				[]byte("fobabaz"),
+			},
+			want: false,
+		},
+		{
 			name: "equals_cs foo pos from neg index",
 			fields: fields{
 				operator: "equals_cs",
