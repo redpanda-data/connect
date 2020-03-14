@@ -100,7 +100,15 @@ Checks whether the content contains the argument (case sensitive.)
 ### `contains`
 
 Checks whether the content contains the argument under unicode case-folding
-(case insensitive.)
+(case insensitive).
+
+### `contains_any_cs`
+
+Checks whether the content contains any of the list of arguments under unicode case-folding (case sensitive).
+
+### `contains_any`
+
+Checks whether the content contains any of the list of arguments under unicode case-folding (case insensitive).
 
 ### `is`
 

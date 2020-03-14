@@ -141,9 +141,9 @@ func TestTextCheck(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "contains_cs_any 1",
+			name: "contains_any_cs 1",
 			fields: fields{
-				operator: "contains_cs_any",
+				operator: "contains_any_cs",
 				arg:      []string{"foo", "bar"},
 			},
 			arg: [][]byte{
@@ -152,9 +152,9 @@ func TestTextCheck(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "contains_cs_any 2",
+			name: "contains_any_cs 2",
 			fields: fields{
-				operator: "contains_cs_any",
+				operator: "contains_any_cs",
 				arg:      []string{"foo", "bar"},
 			},
 			arg: [][]byte{
@@ -163,9 +163,9 @@ func TestTextCheck(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "contains_cs_any 3",
+			name: "contains_any_cs 3",
 			fields: fields{
-				operator: "contains_cs_any",
+				operator: "contains_any_cs",
 				arg:      []string{"foo", "bar"},
 			},
 			arg: [][]byte{

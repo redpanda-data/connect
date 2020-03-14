@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - The `gcp_pubsub` output now supports function interpolation on the field
   `topic`.
+- New `contains_any` and `contains_any_cs` operators added to the `text`
+  condition.
 
 ### Fixed
 

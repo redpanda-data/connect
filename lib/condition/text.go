@@ -46,17 +46,15 @@ Checks whether the content contains the argument (case sensitive.)
 ### ` + "`contains`" + `
 
 Checks whether the content contains the argument under unicode case-folding
-(case insensitive.)
+(case insensitive).
 
-### ` + "`contains_cs_any`" + `
+### ` + "`contains_any_cs`" + `
 
-Checks whether the content contains any of the list of arguments under unicode case-folding
-(case sensitive.)
+Checks whether the content contains any of the list of arguments under unicode case-folding (case sensitive).
 
 ### ` + "`contains_any`" + `
 
-Checks whether the content contains any of the list of arguments under unicode case-folding
-(case insensitive.)
+Checks whether the content contains any of the list of arguments under unicode case-folding (case insensitive).
 
 ### ` + "`is`" + `
 
@@ -344,7 +342,7 @@ func strToTextOperator(str string, arg interface{}) (textOperator, error) {
 		return bytesArg(textContainsFoldOperator)
 	case "contains_any":
 		return textContainsFoldAnyOperator(arg)
-	case "contains_cs_any":
+	case "contains_any_cs":
 		return textContainsAnyOperator(arg)
 	case "is":
 		return textIsOperator(arg)
