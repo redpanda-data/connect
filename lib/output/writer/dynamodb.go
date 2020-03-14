@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -229,7 +228,7 @@ func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) erro
 			}
 		}
 		for k, v := range d.strColumns {
-			s := v.Get(message.Lock(msg, i))
+			s := v.GetFor(msg, i)
 			items[k] = &dynamodb.AttributeValue{
 				S: &s,
 			}

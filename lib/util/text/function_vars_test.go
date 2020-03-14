@@ -301,6 +301,101 @@ func TestJSONFunction(t *testing.T) {
 	}
 }
 
+func TestJSONFunctionFor(t *testing.T) {
+	type testCase struct {
+		name   string
+		input  []string
+		index  int
+		arg    string
+		result string
+	}
+
+	tests := []testCase{
+		{
+			name: "json func 1",
+			input: []string{
+				`{"foo":{"bar":"baz1"}}`,
+				`{"foo":{"bar":"baz2"}}`,
+				`{"foo":{"bar":"baz3"}}`,
+			},
+			index:  0,
+			arg:    "foo.bar: ${!json_field:foo.bar}",
+			result: "foo.bar: baz1",
+		},
+		{
+			name: "json func 2",
+			input: []string{
+				`{"foo":{"bar":"baz1"}}`,
+				`{"foo":{"bar":"baz2"}}`,
+				`{"foo":{"bar":"baz3"}}`,
+			},
+			index:  1,
+			arg:    "foo.bar: ${!json_field:foo.bar}",
+			result: "foo.bar: baz2",
+		},
+		{
+			name: "json func 3",
+			input: []string{
+				`{"foo":{"bar":"baz1"}}`,
+				`{"foo":{"bar":"baz2"}}`,
+				`{"foo":{"bar":"baz3"}}`,
+			},
+			index:  2,
+			arg:    "foo.bar: ${!json_field:foo.bar}",
+			result: "foo.bar: baz3",
+		},
+		{
+			name: "json func 4",
+			input: []string{
+				`{"foo":{"bar":"baz1"}}`,
+				`{"foo":{"bar":"baz2"}}`,
+				`{"foo":{"bar":"baz3"}}`,
+			},
+			index:  3,
+			arg:    "foo.bar: ${!json_field:foo.bar}",
+			result: "foo.bar: null",
+		},
+		{
+			name: "json func 5",
+			input: []string{
+				`{"foo":{"bar":"baz1"}}`,
+				`{"foo":{"bar":"baz2"}}`,
+				`{"foo":{"bar":"baz3"}}`,
+			},
+			index:  -1,
+			arg:    "foo.bar: ${!json_field:foo.bar}",
+			result: "foo.bar: baz3",
+		},
+		{
+			name: "json func 6",
+			input: []string{
+				`{"foo":{"bar":"baz1"}}`,
+				`{"foo":{"bar":"baz2"}}`,
+				`{"foo":{"bar":"baz3"}}`,
+			},
+			index:  1,
+			arg:    "foo.bar: ${!json_field:foo.bar,0}",
+			result: "foo.bar: baz1",
+		},
+	}
+
+	for _, test := range tests {
+		exp := test.result
+		parts := [][]byte{}
+		for _, input := range test.input {
+			parts = append(parts, []byte(input))
+		}
+		act := string(ReplaceFunctionVariablesFor(
+			message.New(parts),
+			test.index,
+			[]byte(test.arg),
+		))
+		if act != exp {
+			t.Errorf("Wrong result for test '%v': %v != %v", test.name, act, exp)
+		}
+	}
+}
+
 func TestFunctionSwapping(t *testing.T) {
 	hostname, _ := os.Hostname()
 

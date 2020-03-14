@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -177,13 +176,12 @@ func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
 		}
 	}
 
-	lMsg := message.Lock(msg, i)
 	var groupID, dedupeID *string
 	if a.groupID != nil {
-		groupID = aws.String(a.groupID.Get(lMsg))
+		groupID = aws.String(a.groupID.GetFor(msg, i))
 	}
 	if a.dedupeID != nil {
-		dedupeID = aws.String(a.dedupeID.Get(lMsg))
+		dedupeID = aws.String(a.dedupeID.GetFor(msg, i))
 	}
 
 	return sqsAttributes{

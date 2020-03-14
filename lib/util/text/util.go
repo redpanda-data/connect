@@ -13,10 +13,16 @@ type InterpolatedString struct {
 
 // Get evaluates functions within the original string and returns the result.
 func (i *InterpolatedString) Get(msg Message) string {
+	return i.GetFor(msg, 0)
+}
+
+// GetFor evaluates functions within the original string and returns the result,
+// evaluated for a specific message part of the message.
+func (i *InterpolatedString) GetFor(msg Message, index int) string {
 	if !i.interpolate {
 		return i.str
 	}
-	return string(ReplaceFunctionVariables(msg, i.strBytes))
+	return string(ReplaceFunctionVariablesFor(msg, index, i.strBytes))
 }
 
 // NewInterpolatedString returns a type that evaluates function interpolations
@@ -44,10 +50,16 @@ type InterpolatedBytes struct {
 
 // Get evaluates functions within the byte slice and returns the result.
 func (i *InterpolatedBytes) Get(msg Message) []byte {
+	return i.GetFor(msg, 0)
+}
+
+// GetFor evaluates functions within the byte slice and returns the result,
+// evaluated for a specific message part of the message.
+func (i *InterpolatedBytes) GetFor(msg Message, index int) []byte {
 	if !i.interpolate {
 		return i.v
 	}
-	return ReplaceFunctionVariables(msg, i.v)
+	return ReplaceFunctionVariablesFor(msg, index, i.v)
 }
 
 // NewInterpolatedBytes returns a type that evaluates function interpolations

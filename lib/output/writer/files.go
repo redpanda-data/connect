@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
@@ -74,7 +73,7 @@ func (f *Files) WriteWithContext(ctx context.Context, msg types.Message) error {
 // Write attempts to write message contents to a directory as files.
 func (f *Files) Write(msg types.Message) error {
 	return msg.Iter(func(i int, p types.Part) error {
-		path := f.path.Get(message.Lock(msg, i))
+		path := f.path.GetFor(msg, i)
 
 		err := os.MkdirAll(filepath.Dir(path), os.FileMode(0777))
 		if err != nil {

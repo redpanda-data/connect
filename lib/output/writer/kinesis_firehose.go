@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -109,8 +108,6 @@ func (a *KinesisFirehose) toRecords(msg types.Message) ([]*firehose.Record, erro
 	entries := make([]*firehose.Record, msg.Len())
 
 	err := msg.Iter(func(i int, p types.Part) error {
-		message.Lock(msg, i)
-
 		entry := firehose.Record{
 			Data: p.Get(),
 		}

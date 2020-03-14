@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -290,11 +289,9 @@ func (k *Kafka) Write(msg types.Message) error {
 
 	msgs := []*sarama.ProducerMessage{}
 	msg.Iter(func(i int, p types.Part) error {
-		lMsg := message.Lock(msg, i)
-
-		key := k.key.Get(lMsg)
+		key := k.key.GetFor(msg, i)
 		nextMsg := &sarama.ProducerMessage{
-			Topic:   k.topic.Get(lMsg),
+			Topic:   k.topic.GetFor(msg, i),
 			Value:   sarama.ByteEncoder(p.Get()),
 			Headers: buildHeaders(version, p),
 		}

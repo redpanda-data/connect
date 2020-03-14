@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
@@ -123,8 +122,10 @@ func (r *RedisHash) Connect() error {
 
 //------------------------------------------------------------------------------
 
-func walkForHashFields(msg types.Message, fields map[string]interface{}) error {
-	jVal, err := msg.Get(0).JSON()
+func walkForHashFields(
+	msg types.Message, index int, fields map[string]interface{},
+) error {
+	jVal, err := msg.Get(index).JSON()
 	if err != nil {
 		return err
 	}
@@ -156,8 +157,7 @@ func (r *RedisHash) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		lMsg := message.Lock(msg, i)
-		key := r.keyStr.Get(lMsg)
+		key := r.keyStr.GetFor(msg, i)
 		fields := map[string]interface{}{}
 		if r.conf.WalkMetadata {
 			p.Metadata().Iter(func(k, v string) error {
@@ -166,14 +166,14 @@ func (r *RedisHash) Write(msg types.Message) error {
 			})
 		}
 		if r.conf.WalkJSONObject {
-			if err := walkForHashFields(lMsg, fields); err != nil {
+			if err := walkForHashFields(msg, i, fields); err != nil {
 				err = fmt.Errorf("failed to walk JSON object: %v", err)
 				r.log.Errorf("HMSET error: %v\n", err)
 				return err
 			}
 		}
 		for k, v := range r.fields {
-			fields[k] = v.Get(lMsg)
+			fields[k] = v.GetFor(msg, i)
 		}
 		if err := client.HMSet(key, fields).Err(); err != nil {
 			r.disconnect()

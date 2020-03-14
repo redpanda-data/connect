@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -243,10 +242,9 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
 			return nil
 		}
-		lMsg := message.Lock(msg, i)
-		requests[e.idStr.Get(lMsg)] = &pendingBulkIndex{
-			Index:    e.indexStr.Get(lMsg),
-			Pipeline: e.pipelineStr.Get(lMsg),
+		requests[e.idStr.GetFor(msg, i)] = &pendingBulkIndex{
+			Index:    e.indexStr.GetFor(msg, i),
+			Pipeline: e.pipelineStr.GetFor(msg, i),
 			Type:     e.conf.Type,
 			Doc:      jObj,
 		}

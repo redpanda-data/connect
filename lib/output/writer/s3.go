@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
@@ -144,20 +143,18 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 			return nil
 		})
 
-		lMsg := message.Lock(msg, i)
-
 		var contentEncoding *string
-		if ce := a.contentEncoding.Get(lMsg); len(ce) > 0 {
+		if ce := a.contentEncoding.GetFor(msg, i); len(ce) > 0 {
 			contentEncoding = aws.String(ce)
 		}
 
 		uploadInput := &s3manager.UploadInput{
 			Bucket:          &a.conf.Bucket,
-			Key:             aws.String(a.path.Get(lMsg)),
+			Key:             aws.String(a.path.GetFor(msg, i)),
 			Body:            bytes.NewReader(p.Get()),
-			ContentType:     aws.String(a.contentType.Get(lMsg)),
+			ContentType:     aws.String(a.contentType.GetFor(msg, i)),
 			ContentEncoding: contentEncoding,
-			StorageClass:    aws.String(a.storageClass.Get(lMsg)),
+			StorageClass:    aws.String(a.storageClass.GetFor(msg, i)),
 			Metadata:        metadata,
 		}
 

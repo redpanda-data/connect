@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
@@ -120,7 +119,7 @@ func (n *NSQ) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		return prod.Publish(n.topicStr.Get(message.Lock(msg, i)), p.Get())
+		return prod.Publish(n.topicStr.GetFor(msg, i), p.Get())
 	})
 }
 

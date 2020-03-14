@@ -26,9 +26,9 @@ type Message interface {
 
 //------------------------------------------------------------------------------
 
-func jsonFieldFunction(msg Message, arg string) []byte {
+func jsonFieldFunction(msg Message, index int, arg string) []byte {
 	args := strings.Split(arg, ",")
-	part := 0
+	part := index
 	if len(args) == 2 {
 		partB, err := strconv.ParseInt(args[1], 10, 64)
 		if err == nil {
@@ -52,12 +52,12 @@ func jsonFieldFunction(msg Message, arg string) []byte {
 	return gPart.Bytes()
 }
 
-func metadataFunction(msg Message, arg string) []byte {
+func metadataFunction(msg Message, index int, arg string) []byte {
 	if len(arg) == 0 {
 		return []byte("")
 	}
 	args := strings.Split(arg, ",")
-	part := 0
+	part := index
 	if len(args) == 2 {
 		partB, err := strconv.ParseInt(args[1], 10, 64)
 		if err == nil {
@@ -68,8 +68,8 @@ func metadataFunction(msg Message, arg string) []byte {
 	return []byte(meta.Get(args[0]))
 }
 
-func metadataMapFunction(msg Message, arg string) []byte {
-	part := 0
+func metadataMapFunction(msg Message, index int, arg string) []byte {
+	part := index
 	if len(arg) > 0 {
 		partB, err := strconv.ParseInt(arg, 10, 64)
 		if err == nil {
@@ -88,8 +88,8 @@ func metadataMapFunction(msg Message, arg string) []byte {
 	return result
 }
 
-func errorFunction(msg Message, arg string) []byte {
-	part := 0
+func errorFunction(msg Message, index int, arg string) []byte {
+	part := index
 	if len(arg) > 0 {
 		partB, err := strconv.ParseInt(arg, 10, 64)
 		if err == nil {
@@ -99,8 +99,8 @@ func errorFunction(msg Message, arg string) []byte {
 	return []byte(msg.Get(part).Metadata().Get(types.FailFlagKey))
 }
 
-func contentFunction(msg Message, arg string) []byte {
-	part := 0
+func contentFunction(msg Message, index int, arg string) []byte {
+	part := index
 	if len(arg) > 0 {
 		partB, err := strconv.ParseInt(arg, 10, 64)
 		if err == nil {
@@ -128,11 +128,11 @@ func init() {
 var counters = map[string]uint64{}
 var countersMux = &sync.Mutex{}
 
-var functionVars = map[string]func(msg Message, arg string) []byte{
-	"timestamp_unix_nano": func(_ Message, arg string) []byte {
+var functionVars = map[string]func(msg Message, index int, arg string) []byte{
+	"timestamp_unix_nano": func(_ Message, _ int, arg string) []byte {
 		return []byte(strconv.FormatInt(time.Now().UnixNano(), 10))
 	},
-	"timestamp_unix": func(_ Message, arg string) []byte {
+	"timestamp_unix": func(_ Message, _ int, arg string) []byte {
 		tNow := time.Now()
 		precision, _ := strconv.ParseInt(arg, 10, 64)
 		tStr := strconv.FormatInt(tNow.Unix(), 10)
@@ -145,26 +145,26 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 		}
 		return []byte(tStr)
 	},
-	"timestamp": func(_ Message, arg string) []byte {
+	"timestamp": func(_ Message, _ int, arg string) []byte {
 		if len(arg) == 0 {
 			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
 		}
 		return []byte(time.Now().Format(arg))
 	},
-	"timestamp_utc": func(_ Message, arg string) []byte {
+	"timestamp_utc": func(_ Message, _ int, arg string) []byte {
 		if len(arg) == 0 {
 			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
 		}
 		return []byte(time.Now().In(time.UTC).Format(arg))
 	},
-	"hostname": func(_ Message, arg string) []byte {
+	"hostname": func(_ Message, _ int, arg string) []byte {
 		hn, _ := os.Hostname()
 		return []byte(hn)
 	},
-	"echo": func(_ Message, arg string) []byte {
+	"echo": func(_ Message, _ int, arg string) []byte {
 		return []byte(arg)
 	},
-	"count": func(_ Message, arg string) []byte {
+	"count": func(_ Message, _ int, arg string) []byte {
 		countersMux.Lock()
 		defer countersMux.Unlock()
 
@@ -185,10 +185,10 @@ var functionVars = map[string]func(msg Message, arg string) []byte{
 	"json_field":           jsonFieldFunction,
 	"metadata":             metadataFunction,
 	"metadata_json_object": metadataMapFunction,
-	"batch_size": func(m Message, _ string) []byte {
+	"batch_size": func(m Message, _ int, _ string) []byte {
 		return strconv.AppendInt(nil, int64(m.Len()), 10)
 	},
-	"uuid_v4": func(_ Message, _ string) []byte {
+	"uuid_v4": func(_ Message, _ int, _ string) []byte {
 		u4, err := uuid.NewV4()
 		if err != nil {
 			panic(err)
@@ -220,7 +220,20 @@ func escapeBytes(in []byte) []byte {
 // Some functions are able to extract contents and metadata from a message, and
 // so a message must be supplied.
 func ReplaceFunctionVariables(msg Message, inBytes []byte) []byte {
-	return replaceFunctionVariables(msg, false, inBytes)
+	return ReplaceFunctionVariablesFor(msg, 0, inBytes)
+}
+
+// ReplaceFunctionVariablesFor will search a blob of data for the pattern
+// `${!foo}`, where `foo` is a function name.
+//
+// For each aforementioned pattern found in the blob the contents of the
+// respective function will be run and will replace the pattern.
+//
+// Some functions are able to extract contents and metadata from a message, and
+// so a message must be supplied along with the specific index of the message
+// part that this function should be resolved for.
+func ReplaceFunctionVariablesFor(msg Message, index int, inBytes []byte) []byte {
+	return replaceFunctionVariables(msg, index, false, inBytes)
 }
 
 // ReplaceFunctionVariablesEscaped will search a blob of data for the pattern
@@ -235,28 +248,46 @@ func ReplaceFunctionVariables(msg Message, inBytes []byte) []byte {
 // Some functions are able to extract contents and metadata from a message, and
 // so a message must be supplied.
 func ReplaceFunctionVariablesEscaped(msg Message, inBytes []byte) []byte {
-	return replaceFunctionVariables(msg, true, inBytes)
+	return ReplaceFunctionVariablesEscapedFor(msg, 0, inBytes)
 }
 
-func replaceFunctionVariables(msg Message, escape bool, inBytes []byte) []byte {
+// ReplaceFunctionVariablesEscapedFor will search a blob of data for the pattern
+// `${!foo}`, where `foo` is a function name.
+//
+// For each aforementioned pattern found in the blob the contents of the
+// respective function will be run and will replace the pattern.
+//
+// The contents of the swapped pattern is escaped such that it can be safely
+// injected within the contents of a JSON object.
+//
+// Some functions are able to extract contents and metadata from a message, and
+// so a message must be supplied along with the specific index of the message
+// part that this function should be resolved for.
+func ReplaceFunctionVariablesEscapedFor(msg Message, index int, inBytes []byte) []byte {
+	return replaceFunctionVariables(msg, index, true, inBytes)
+}
+
+func replaceFunctionVariables(
+	msg Message, index int, escape bool, inBytes []byte,
+) []byte {
 	replaced := functionRegex.ReplaceAllFunc(inBytes, func(content []byte) []byte {
 		if len(content) > 4 {
 			if colonIndex := bytes.IndexByte(content, ':'); colonIndex == -1 {
 				targetFunc := string(content[3 : len(content)-1])
 				if ftor, exists := functionVars[targetFunc]; exists {
 					if escape {
-						return escapeBytes(ftor(msg, ""))
+						return escapeBytes(ftor(msg, index, ""))
 					}
-					return ftor(msg, "")
+					return ftor(msg, index, "")
 				}
 			} else {
 				targetFunc := string(content[3:colonIndex])
 				argVal := string(content[colonIndex+1 : len(content)-1])
 				if ftor, exists := functionVars[targetFunc]; exists {
 					if escape {
-						return escapeBytes(ftor(msg, argVal))
+						return escapeBytes(ftor(msg, index, argVal))
 					}
-					return ftor(msg, argVal)
+					return ftor(msg, index, argVal)
 				}
 			}
 		}

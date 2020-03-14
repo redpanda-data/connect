@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
@@ -98,7 +97,7 @@ func (n *NATS) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		subject := n.subjectStr.Get(message.Lock(msg, i))
+		subject := n.subjectStr.GetFor(msg, i)
 		n.log.Debugf("Writing NATS message to topic %s", subject)
 		err := conn.Publish(subject, p.Get())
 		if err == nats.ErrConnectionClosed {

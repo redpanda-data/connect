@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -133,11 +132,9 @@ func (a *Kinesis) toRecords(msg types.Message) ([]*kinesis.PutRecordsRequestEntr
 	entries := make([]*kinesis.PutRecordsRequestEntry, msg.Len())
 
 	err := msg.Iter(func(i int, p types.Part) error {
-		m := message.Lock(msg, i)
-
 		entry := kinesis.PutRecordsRequestEntry{
 			Data:         p.Get(),
-			PartitionKey: aws.String(a.partitionKey.Get(m)),
+			PartitionKey: aws.String(a.partitionKey.GetFor(msg, i)),
 		}
 
 		if len(entry.Data) > mebibyte {
@@ -145,7 +142,7 @@ func (a *Kinesis) toRecords(msg types.Message) ([]*kinesis.PutRecordsRequestEntr
 			return types.ErrMessageTooLarge
 		}
 
-		if hashKey := a.hashKey.Get(m); hashKey != "" {
+		if hashKey := a.hashKey.GetFor(msg, i); hashKey != "" {
 			entry.ExplicitHashKey = aws.String(hashKey)
 		}
 

@@ -8,7 +8,6 @@ import (
 
 	"cloud.google.com/go/pubsub"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
@@ -121,7 +120,7 @@ func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) err
 	topics := make([]*pubsub.Topic, msg.Len())
 	if err := msg.Iter(func(i int, _ types.Part) error {
 		var tErr error
-		topics[i], tErr = c.getTopic(ctx, c.topicID.Get(message.Lock(msg, i)))
+		topics[i], tErr = c.getTopic(ctx, c.topicID.GetFor(msg, i))
 		return tErr
 	}); err != nil {
 		return err

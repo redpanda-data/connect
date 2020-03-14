@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 - The `gcp_pubsub` output now supports function interpolation on the field
   `topic`.
 
+### Fixed
+
+- Outputs that resolve function interpolations now correctly resolve the
+  `batch_size` function.
+
 ## 3.11.0 - 2020-03-08
 
 ### Added

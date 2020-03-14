@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
@@ -87,7 +86,7 @@ func (c *Cache) Write(msg types.Message) error {
 	}
 	items := map[string][]byte{}
 	msg.Iter(func(i int, p types.Part) error {
-		items[c.key.Get(message.Lock(msg, i))] = p.Get()
+		items[c.key.GetFor(msg, i)] = p.Get()
 		return nil
 	})
 	if len(items) > 0 {

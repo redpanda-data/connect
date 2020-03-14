@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
@@ -121,7 +120,7 @@ func (r *RedisPubSub) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		channel := r.channelStr.Get(message.Lock(msg, i))
+		channel := r.channelStr.GetFor(msg, i)
 		if err := client.Publish(channel, p.Get()).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)

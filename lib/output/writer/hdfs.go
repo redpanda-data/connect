@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
@@ -109,7 +108,7 @@ func (h *HDFS) Write(msg types.Message) error {
 	return msg.Iter(func(i int, p types.Part) error {
 		path := h.conf.Path
 		if h.interpolatePath {
-			path = string(text.ReplaceFunctionVariables(message.Lock(msg, i), h.pathBytes))
+			path = string(text.ReplaceFunctionVariablesFor(msg, i, h.pathBytes))
 		}
 		filePath := filepath.Join(h.conf.Directory, path)
 
