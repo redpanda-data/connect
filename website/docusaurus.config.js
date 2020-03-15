@@ -24,7 +24,8 @@ module.exports = {
   },
   themeConfig: {
     prism: {
-      theme: require('./src/plugins/prism_themes/monokai'),
+      theme: require('prism-react-renderer/themes/github'),
+      darkTheme: require('./src/plugins/prism_themes/monokai'),
     },
     image: 'img/logo_hero.svg',
     navbar: {
