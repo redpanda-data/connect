@@ -1475,3 +1475,64 @@ func TestJSONDelete(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkJSONMove(b *testing.B) {
+	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	tStats := metrics.DudType{}
+
+	metadata := map[string]string{
+		"old": "foo.bar",
+		"new": "qux.zaq",
+	}
+
+	conf := NewConfig()
+
+	conf.JSON.Parts = []int{0}
+	conf.JSON.Operator = "move"
+	conf.JSON.Path = `${!metadata:old}`
+	conf.JSON.Value = rawJSONValue(`"${!metadata:new}"`)
+
+	conf.AWK.Parts = []int{0}
+	conf.AWK.Codec = "json"
+	conf.AWK.Program = "{ print foo }"
+
+	jSet, err := NewJSON(conf, nil, tLog, tStats)
+	if err != nil {
+		b.Fatalf("Error for test '%v': %v", "bench", err)
+	}
+
+	aSet, err := NewAWK(conf, nil, tLog, tStats)
+	if err != nil {
+		b.Fatalf("Error for test '%v': %v", "bench", err)
+	}
+
+	inMsg := message.New(
+		[][]byte{
+			[]byte(`{"foo":{"bar":42}}`),
+		},
+	)
+
+	procs := []struct {
+		name string
+		tp   Type
+	}{
+		{"awk", aSet},
+		{"json", jSet},
+	}
+
+	for k, v := range metadata {
+		inMsg.Get(0).Metadata().Set(k, v)
+	}
+
+	for _, pr := range procs {
+		b.Run(pr.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				msgs, _ := pr.tp.ProcessMessage(inMsg)
+				if len(msgs) != 1 {
+					b.Fatal("Benchmark did not succeed")
+				}
+			}
+		})
+	}
+
+}
