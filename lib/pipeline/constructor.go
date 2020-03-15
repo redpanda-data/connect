@@ -91,7 +91,7 @@ func New(
 		}
 		return NewProcessor(log, stats, processors...), nil
 	}
-	if conf.Threads <= 1 {
+	if conf.Threads == 1 {
 		return procCtor(&procs)
 	}
 	return NewPool(procCtor, conf.Threads, log, stats)

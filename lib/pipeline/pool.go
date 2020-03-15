@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"runtime"
 	"sync/atomic"
 	"time"
 
@@ -36,6 +37,10 @@ func NewPool(
 	log log.Modular,
 	stats metrics.Type,
 ) (*Pool, error) {
+	if threads <= 0 {
+		threads = runtime.NumCPU()
+	}
+
 	p := &Pool{
 		running:     1,
 		workers:     make([]types.Pipeline, threads),

@@ -4,9 +4,7 @@ title: Processing Pipelines
 
 Within a Benthos configuration, in between `input` and `output`, is a `pipeline` section. This section describes an array of [processors][processors] that are to be applied to *all* messages, and are not bound to any particular input or output.
 
-If you have processors that are heavy on CPU and aren't specific to a certain input or output they are best suited for the pipeline section. It is advantageous to use the pipeline section as it allows you to set an explicit number of parallel threads of execution which should ideally match the number of available logical CPU cores.
-
-By default almost all Benthos sources will utilise as many processing threads as have been configured, which makes horizontal scaling easy. For example, imagine we are consuming from a source `foo`. Our goal is to consume the stream as fast as possible, perform mutations on the JSON payload using the [`jmespath` processor][jmespath-processor], and write the resulting stream to a sink `bar`, we can do that with:
+If you have processors that are heavy on CPU and aren't specific to a certain input or output they are best suited for the pipeline section. It is advantageous to use the pipeline section as it allows you to set an explicit number of parallel threads of execution:
 
 ```yaml
 input:
@@ -22,7 +20,11 @@ output:
   type: bar
 ```
 
-However, this configuration would not be optimal if our input isn't able to utilise >1 processing threads, which will be mentioned in its documentation ([`kafka`][kafka-input], for example). It's also possible that the input source isn't able to provide enough traffic to fully saturate our processing threads. The following patterns can help you to achieve a distribution of work across these processing threads even under those circumstances.
+If the field `threads` is set to `0` (or omitted) it will automatically match the number of logical CPUs available.
+
+By default almost all Benthos sources will utilise as many processing threads as have been configured, which makes horizontal scaling easy. However, this configuration would not be optimal if our input isn't able to utilise >1 processing threads, which will be mentioned in its documentation ([`kafka`][kafka-input], for example).
+
+It's also possible that the input source isn't able to provide enough traffic to fully saturate our processing threads. The following patterns can help you to achieve a distribution of work across these processing threads even under those circumstances.
 
 ### Multiple Consumers
 
