@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 
 import styles from './styles.module.css';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
@@ -15,6 +15,18 @@ function CodeSnippet(props) {
     },
   } = useDocusaurusContext();
 
+  const [mounted, setMounted] = useState(false);
+  // The Prism theme on SSR is always the default theme but the site theme
+  // can be in a different mode. React hydration doesn't update DOM styles
+  // that come from SSR. Hence force a re-render after mounting to apply the
+  // current relevant styles. There will be a flash seen of the original
+  // styles seen using this current approach but that's probably ok. Fixing
+  // the flash will require changing the theming approach and is not worth it
+  // at this point.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const {isDarkTheme} = useThemeContext();
   const lightModeTheme = prism.theme || monokai;
   const darkModeTheme = prism.darkTheme || lightModeTheme;
@@ -26,7 +38,7 @@ function CodeSnippet(props) {
   } = props;
 
   return (
-    <Highlight {...defaultProps} theme={prismTheme} code={snippet} language={lang}>
+    <Highlight {...defaultProps} key={mounted} theme={prismTheme} code={snippet} language={lang}>
       {({ className, style, tokens, getLineProps, getTokenProps }) => (
         <pre className={`${className} ${styles.codeSnippet}`} style={style}>
           {tokens.map((line, i) => (
